@@ -1,0 +1,53 @@
+@page
+@model ParishLive.Web.Pages.Audit.IndexModel
+@using System.Globalization
+@{
+    ViewData["Title"] = L["Nav.Audit"].Value;
+    (string Pill, string Label) Category(string entityType) => entityType switch
+    {
+        "Reservation" => ("p-primary", L["Nav.Reservations"].Value),
+        "Notice" => ("p-note", L["Nav.Notices"].Value),
+        _ => ("p-neut", entityType)
+    };
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Nav.Oversight"]</div>
+    <h1>@L["Nav.Audit"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+    <p class="muted" style="margin-top:10px;max-width:60ch">@L["Audit.Sub"]</p>
+  </div>
+
+  @if (!Model.CanView)
+  {
+    <div class="panel"><div class="cbody muted">@L["Audit.Forbidden"]</div></div>
+  }
+  else if (Model.Items.Count == 0)
+  {
+    <div class="panel"><div class="cbody muted">@L["Audit.Empty"]</div></div>
+  }
+  else
+  {
+    <div class="panel">
+      <div class="tbl-wrap">
+        <table class="reg">
+          <thead>
+            <tr><th>@L["Audit.When"]</th><th>@L["Audit.Who"]</th><th>@L["Audit.What"]</th></tr>
+          </thead>
+          <tbody>
+          @foreach (var e in Model.Items)
+          {
+            var cat = Category(e.EntityType);
+            <tr>
+              <td class="muted num" style="white-space:nowrap">@e.OccurredAtUtc.ToString("d MMM yyyy · HH:mm", CultureInfo.CurrentCulture)</td>
+              <td>@e.Actor</td>
+              <td><span class="pill @cat.Pill">@cat.Label</span> @e.Summary</td>
+            </tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

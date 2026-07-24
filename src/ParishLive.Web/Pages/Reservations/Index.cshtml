@@ -1,0 +1,47 @@
+@page
+@model ParishLive.Web.Pages.Reservations.IndexModel
+@{
+    ViewData["Title"] = L["Nav.Reservations"].Value;
+    string Pill(string code) => code switch
+    {
+        "Approved" => "p-ok",
+        "Rejected" => "p-stop",
+        "ForwardedToPriest" => "p-primary",
+        "UnderSecretaryReview" => "p-note",
+        "InformationRequired" or "ReturnedForCorrection" => "p-warn",
+        _ => "p-neut"
+    };
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Ctx.Parish"]</div>
+    <h1>@L["Nav.Reservations"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h3>@L["Nav.Reservations"]</h3></div>
+    @if (Model.Items.Count == 0)
+    {
+      <div class="cbody muted">@L["Res.Empty"]</div>
+    }
+    else
+    {
+      <div class="tbl-wrap">
+        <table class="reg">
+          <tbody>
+          @foreach (var r in Model.Items)
+          {
+            <tr>
+              <td><a class="plink" href="/Reservations/Detail?id=@r.Id">@r.Title</a><div class="g-sub muted" style="font-size:11.5px">@r.GroupName · @r.VenueName</div></td>
+              <td class="muted num">@r.StartUtc.ToString("ddd d MMM · HH:mm")</td>
+              <td><span class="pill @Pill(r.StateCode)">@r.StateName</span></td>
+            </tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

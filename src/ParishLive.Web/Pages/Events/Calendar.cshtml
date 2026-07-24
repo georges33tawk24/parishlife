@@ -1,0 +1,53 @@
+@page
+@model ParishLive.Web.Pages.Events.CalendarModel
+@using System.Globalization
+@{
+    ViewData["Title"] = L["Nav.Events"].Value;
+    var culture = CultureInfo.CurrentCulture;
+    var monthLabel = new DateTime(Model.Year, Model.Month, 1).ToString("MMMM yyyy", culture);
+    var dayNames = culture.DateTimeFormat.AbbreviatedDayNames; // [Sun..Sat]
+    int[] order = { 1, 2, 3, 4, 5, 6, 0 };                     // Monday-first
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Ctx.Parish"]</div>
+    <h1>@L["Nav.Events"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="viewswitch">
+    <a class="vs-off" href="/Events">@L["Events.List"]</a>
+    <span class="vs-on">@L["Events.Calendar"]</span>
+  </div>
+
+  <div class="cal">
+    <div class="cal-head">
+      <a class="cal-nav" href="/Events/Calendar?year=@Model.Prev.Year&month=@Model.Prev.Month" aria-label="Previous month">‹</a>
+      <div class="cal-title">@monthLabel</div>
+      <a class="cal-nav" href="/Events/Calendar?year=@Model.Next.Year&month=@Model.Next.Month" aria-label="Next month">›</a>
+    </div>
+    <div class="cal-grid">
+      @foreach (var i in order)
+      {
+        <div class="cal-dow">@dayNames[i]</div>
+      }
+      @foreach (var week in Model.Weeks)
+      {
+        @foreach (var cell in week)
+        {
+          <div class="cal-cell@(cell.Day is null ? " empty" : "")@(cell.IsToday ? " today" : "")">
+            @if (cell.Day is int day)
+            {
+              <div class="cal-day">@day</div>
+              @foreach (var e in cell.Events)
+              {
+                <span class="cal-ev" title="@e.Title"><b>@e.StartUtc.ToString("HH:mm")</b> @e.Title</span>
+              }
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+</div>

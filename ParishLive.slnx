@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ParishLive.Application/ParishLive.Application.csproj" />
+    <Project Path="src/ParishLive.Domain/ParishLive.Domain.csproj" />
+    <Project Path="src/ParishLive.Infrastructure/ParishLive.Infrastructure.csproj" />
+    <Project Path="src/ParishLive.Web/ParishLive.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ParishLive.IntegrationTests/ParishLive.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

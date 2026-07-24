@@ -1,0 +1,71 @@
+@page
+@model ParishLive.Web.Pages.Events.IndexModel
+@using System.Globalization
+@{
+    ViewData["Title"] = L["Nav.Events"].Value;
+    var culture = CultureInfo.CurrentCulture;
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Ctx.Parish"]</div>
+    <h1>@L["Nav.Events"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  @if (Model.Message is not null)
+  {
+    <div class="errbox" style="background:var(--ok-bg);color:var(--ok-ink);border-color:color-mix(in srgb,var(--ok) 30%,transparent)">@Model.Message</div>
+  }
+
+  <div class="viewswitch">
+    <span class="vs-on">@L["Events.List"]</span>
+    <a class="vs-off" href="/Events/Calendar">@L["Events.Calendar"]</a>
+  </div>
+
+  @if (Model.Upcoming.Count == 0)
+  {
+    <div class="panel"><div class="cbody muted">@L["Events.Empty"]</div></div>
+  }
+  else
+  {
+    <div class="evlist">
+      @foreach (var e in Model.Upcoming)
+      {
+        <div class="ev">
+          <div class="ev-date">
+            <span class="ev-d">@e.StartUtc.Day</span>
+            <span class="ev-m">@e.StartUtc.ToString("MMM", culture)</span>
+          </div>
+          <div class="ev-body">
+            <div class="ev-t">@e.Title</div>
+            <div class="ev-meta">
+              @if (e.GroupName is not null) { <span>@e.GroupName</span> }
+              @if (e.VenueName is not null) { <span>· @e.VenueName</span> }
+              <span>· @e.StartUtc.ToString("ddd d MMM · HH:mm", culture)</span>
+            </div>
+            <div class="ev-reg">
+              @if (e.Capacity is int cap) { @L["Events.RegistrationsCap", e.Registrations, cap] }
+              else { @L["Events.Registrations", e.Registrations] }
+            </div>
+          </div>
+          <div class="ev-act">
+            @if (e.RegistrationOpen)
+            {
+              @if (e.IsRegistered)
+              {
+                <span class="pill p-ok"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3.2L13 5"/></svg>@L["Events.Registered"]</span>
+              }
+              else
+              {
+                <form method="post">
+                  <button type="submit" asp-page-handler="Register" asp-route-id="@e.Id" class="btn btn-p">@L["Events.Register"]</button>
+                </form>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

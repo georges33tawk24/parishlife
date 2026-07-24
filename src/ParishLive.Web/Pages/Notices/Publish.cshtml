@@ -1,0 +1,46 @@
+@page
+@model ParishLive.Web.Pages.Notices.PublishModel
+@using ParishLive.Domain.Enums
+@{
+    ViewData["Title"] = L["Notice.NewHeading"].Value;
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Nav.Notices"]</div>
+    <h1>@L["Notice.NewHeading"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="panel" style="max-width:660px">
+    <div class="cbody">
+      @if (Model.Error is not null)
+      {
+        <div class="errbox">@Model.Error</div>
+      }
+      <form method="post" class="nform">
+        <div class="field">
+          <label asp-for="Form.Title">@L["Notice.NewTitle"]</label>
+          <input asp-for="Form.Title" class="ftext" />
+          <span asp-validation-for="Form.Title" class="fval"></span>
+        </div>
+        <div class="field">
+          <label asp-for="Form.Body">@L["Notice.NewBody"]</label>
+          <textarea asp-for="Form.Body" class="ftext" rows="5"></textarea>
+          <span asp-validation-for="Form.Body" class="fval"></span>
+        </div>
+        <div class="frow">
+          <div class="field">
+            <label asp-for="Form.Priority">@L["Notice.FieldPriority"]</label>
+            <select asp-for="Form.Priority" asp-items="Html.GetEnumSelectList<NoticePriority>()" class="ftext"></select>
+          </div>
+          <div class="field">
+            <label asp-for="Form.Audience">@L["Notice.FieldAudience"]</label>
+            <select asp-for="Form.Audience" asp-items="Html.GetEnumSelectList<NoticeAudience>()" class="ftext"></select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-p">@L["Notice.PublishBtn"]</button>
+      </form>
+    </div>
+  </div>
+</div>

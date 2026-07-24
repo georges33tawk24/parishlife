@@ -1,0 +1,30 @@
+@page
+@model ParishLive.Web.Pages.People.IndexModel
+@{
+    ViewData["Title"] = L["Nav.Members"].Value;
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Ctx.Parish"]</div>
+    <h1>@L["Nav.Members"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h3>@L["Nav.Members"]</h3></div>
+    <div class="tbl-wrap">
+      <table class="reg">
+        <tbody>
+        @foreach (var m in Model.Members)
+        {
+          <tr>
+            <td><a class="plink" href="/People/Profile?id=@m.Id">@m.Name</a></td>
+            <td class="muted">@L["SysRole." + m.Role]</td>
+          </tr>
+        }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

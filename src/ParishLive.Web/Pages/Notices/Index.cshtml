@@ -1,0 +1,47 @@
+@page
+@model ParishLive.Web.Pages.Notices.IndexModel
+@using System.Globalization
+@using ParishLive.Domain.Enums
+@{
+    ViewData["Title"] = L["Nav.Notices"].Value;
+    string PriorityPill(NoticePriority p) => p switch
+    {
+        NoticePriority.Urgent => "p-stop",
+        NoticePriority.High => "p-warn",
+        _ => "p-neut"
+    };
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@L["Ctx.Parish"]</div>
+    <h1>@L["Nav.Notices"]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  @if (Model.CanPublish)
+  {
+    <div><a class="btn btn-p" href="/Notices/Publish">@L["Notice.PublishBtn"]</a></div>
+  }
+
+  @if (Model.Items.Count == 0)
+  {
+    <div class="panel"><div class="cbody muted">@L["Notices.Empty"]</div></div>
+  }
+  else
+  {
+    <div class="evlist">
+      @foreach (var n in Model.Items)
+      {
+        <div class="notice-card">
+          <div class="nc-head">
+            <span class="pill @PriorityPill(n.Priority)">@L["Priority." + n.Priority]</span>
+            <span class="nc-meta">@n.PublishedBy · @n.PublishedAtUtc.ToString("d MMM yyyy", CultureInfo.CurrentCulture)</span>
+          </div>
+          <div class="nc-title">@n.Title</div>
+          <div class="nc-body">@n.Body</div>
+        </div>
+      }
+    </div>
+  }
+</div>

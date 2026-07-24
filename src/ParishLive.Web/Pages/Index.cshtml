@@ -1,0 +1,78 @@
+@page
+@model ParishLive.Web.Pages.IndexModel
+@using System.Globalization
+@{
+    ViewData["Title"] = L["Nav.Dashboard"].Value;
+    var today = DateTimeOffset.Now.ToString("dddd, d MMMM yyyy", CultureInfo.CurrentCulture);
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rubric rub">@today</div>
+    <h1>@L["Dash.Hello", Model.GreetingName]</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <section class="focal" aria-labelledby="focal-h">
+    <div class="fh">
+      <div class="ft"><h2 id="focal-h">@L["Dec.Title"]</h2><span class="cnt">@L["Dec.Sub", Model.AwaitingCount]</span></div>
+      <a class="lk" href="/Reservations">@L["Btn.AllReservations"] <svg class="ico" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M9 6l6 6-6 6"/></svg></a>
+    </div>
+    @if (Model.Decisions.Count == 0)
+    {
+      <div class="cbody muted">@L["Dash.NoDecisions"]</div>
+    }
+    else
+    {
+      @foreach (var d in Model.Decisions)
+      {
+        <div class="entry">
+          <div><div class="en-g">@d.GroupName</div><div class="en-p">@d.Title · @d.VenueName</div></div>
+          <div class="en-w"><span class="pl">@d.StartUtc.ToString("ddd d MMM")</span> · @d.StartUtc.ToString("HH:mm")</div>
+          <div class="en-a"><a class="btn btn-p" href="/Reservations/Detail?id=@d.Id">@L["Btn.Review"]</a></div>
+        </div>
+      }
+    }
+  </section>
+
+  <div class="strip">
+    <div class="fig"><div class="n num">@Model.MembersCount</div><div class="lab">@L["Stat.Members"]</div></div>
+    <div class="fig"><div class="n num">@Model.GroupsCount</div><div class="lab">@L["Stat.Groups"]</div></div>
+    <div class="fig"><div class="n num">@Model.EventsCount</div><div class="lab">@L["Stat.Events"]</div></div>
+    <div class="fig"><div class="n num">@Model.AwaitingCount</div><div class="lab">@L["Dash.Awaiting"]</div></div>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="ph"><h3>@L["Notices.Title"]</h3></div>
+      @if (Model.Notices.Count == 0)
+      {
+        <div class="cbody muted">—</div>
+      }
+      else
+      {
+        @foreach (var n in Model.Notices)
+        {
+          <div class="no"><span class="pr@(n.Priority != ParishLive.Domain.Enums.NoticePriority.Normal ? " hi" : "")"></span><div><div class="nt">@n.Title</div><div class="nm"><span>@n.PublishedBy · @n.PublishedAtUtc.ToString("d MMM yyyy")</span></div></div></div>
+        }
+      }
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h3>@L["Activity.Title"]</h3></div>
+      @if (Model.Activity.Count == 0)
+      {
+        <div class="cbody muted">—</div>
+      }
+      else
+      {
+        <ul class="tl">
+          @foreach (var a in Model.Activity)
+          {
+            <li class="li"><span class="nd nd-ok"></span><div><div class="r"><span class="a">@a.Verb · @a.Title</span><span class="t num">@a.At.ToString("d MMM HH:mm")</span></div><div class="w">@a.Actor</div></div></li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+</div>

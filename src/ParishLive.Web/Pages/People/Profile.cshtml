@@ -1,0 +1,45 @@
+@page
+@model ParishLive.Web.Pages.People.ProfileModel
+@{
+    ViewData["Title"] = Model.Found ? Model.Name : L["Profile.NotFound"].Value;
+}
+
+<div class="content">
+@if (!Model.Found)
+{
+  <div class="panel"><div class="cbody" style="padding:18px">@L["Profile.NotFound"]</div></div>
+}
+else
+{
+  <div class="mast">
+    <div class="rubric rub">@L["Profile.ParishRole"]: @L["SysRole." + Model.ParishRole]</div>
+    <h1>@Model.Name</h1>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h3>@L["Profile.Current"]</h3><span class="ph-count">@Model.Current.Count</span></div>
+    @foreach (var r in Model.Current)
+    {
+      <div class="role-row">
+        <div class="rr-main"><span class="rr-group">@r.Group</span><span class="rr-pill">@L["Role." + r.Role]</span></div>
+        <div class="rr-when">@L["Profile.Since"] <span class="num">@r.Start.ToString("MMM yyyy")</span></div>
+      </div>
+    }
+  </div>
+
+  @if (Model.Past.Count > 0)
+  {
+    <div class="panel">
+      <div class="ph"><h3>@L["Profile.Past"]</h3></div>
+      @foreach (var r in Model.Past)
+      {
+        <div class="role-row past">
+          <div class="rr-main"><span class="rr-group">@r.Group</span><span class="rr-pill">@L["Role." + r.Role]</span></div>
+          <div class="rr-when num">@r.Start.ToString("MMM yyyy") – @(r.End!.Value.ToString("MMM yyyy"))</div>
+        </div>
+      }
+    </div>
+  }
+}
+</div>

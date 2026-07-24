@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Ctx.Switch" xml:space="preserve"><value>تبديل الرعية أو الدور</value></data>
+  <data name="Ctx.Parish" xml:space="preserve"><value>رعية مار جرجس</value></data>
+  <data name="Ctx.Org" xml:space="preserve"><value>أبرشية بيروت</value></data>
+  <data name="Nav.Parish" xml:space="preserve"><value>الرعية</value></data>
+  <data name="Nav.Dashboard" xml:space="preserve"><value>لوحة القيادة</value></data>
+  <data name="Nav.Reservations" xml:space="preserve"><value>الحجوزات</value></data>
+  <data name="Nav.Events" xml:space="preserve"><value>الفعاليات</value></data>
+  <data name="Nav.Groups" xml:space="preserve"><value>المجموعات واللجان</value></data>
+  <data name="Nav.Members" xml:space="preserve"><value>الأعضاء</value></data>
+  <data name="Nav.Locations" xml:space="preserve"><value>الأماكن</value></data>
+  <data name="Nav.Communicate" xml:space="preserve"><value>التواصل</value></data>
+  <data name="Nav.Notices" xml:space="preserve"><value>الإعلانات</value></data>
+  <data name="Nav.Messages" xml:space="preserve"><value>الرسائل</value></data>
+  <data name="Nav.Documents" xml:space="preserve"><value>المستندات</value></data>
+  <data name="Nav.Oversight" xml:space="preserve"><value>الإشراف</value></data>
+  <data name="Nav.Reports" xml:space="preserve"><value>التقارير</value></data>
+  <data name="Nav.Audit" xml:space="preserve"><value>سجل التدقيق</value></data>
+  <data name="Nav.Settings" xml:space="preserve"><value>الإعدادات</value></data>
+  <data name="Account.Name" xml:space="preserve"><value>الأب الياس خوري</value></data>
+  <data name="Account.Role" xml:space="preserve"><value>كاهن الرعية</value></data>
+  <data name="Account.SignIn" xml:space="preserve"><value>تسجيل الدخول</value></data>
+  <data name="Account.SignOut" xml:space="preserve"><value>تسجيل الخروج</value></data>
+  <data name="Bar.Search" xml:space="preserve"><value>ابحث في الأعضاء والمجموعات والحجوزات…</value></data>
+  <data name="Bar.Notifications" xml:space="preserve"><value>الإشعارات</value></data>
+  <data name="Bar.Theme" xml:space="preserve"><value>تبديل السمة الفاتحة والداكنة</value></data>
+  <data name="Mast.Today" xml:space="preserve"><value>الخميس، ٢٣ تموز ٢٠٢٦ · الزمن العادي</value></data>
+  <data name="Mast.Greeting" xml:space="preserve"><value>صباح الخير، أبونا الياس.</value></data>
+  <data name="Dec.Title" xml:space="preserve"><value>بانتظار قرارك</value></data>
+  <data name="Dec.Sub" xml:space="preserve"><value>{0} بانتظار إجرائك</value></data>
+  <data name="Btn.AllReservations" xml:space="preserve"><value>كل الحجوزات</value></data>
+  <data name="Entry.YouthName" xml:space="preserve"><value>مجموعة الشبيبة</value></data>
+  <data name="Entry.YouthSub" xml:space="preserve"><value>عشاء خيري · قاعة الرعية · ٨٠ ضيفاً</value></data>
+  <data name="Entry.YouthWhen" xml:space="preserve"><value>الجمعة ٢٥ تموز · ٦:٠٠ م</value></data>
+  <data name="Entry.ChoirName" xml:space="preserve"><value>الجوقة</value></data>
+  <data name="Entry.ChoirSub" xml:space="preserve"><value>بروفة عيد الانتقال · المسرح · ٤٠ مرنّماً</value></data>
+  <data name="Entry.ChoirWhen" xml:space="preserve"><value>السبت ٢٦ تموز · ٧:٣٠ م</value></data>
+  <data name="Entry.FundName" xml:space="preserve"><value>لجنة جمع التبرعات</value></data>
+  <data name="Entry.FundSub" xml:space="preserve"><value>جلسة تخطيط · غرفة الاجتماعات · ١٢ شخصاً</value></data>
+  <data name="Entry.FundWhen" xml:space="preserve"><value>الاثنين ٢٨ تموز · ٨:٠٠ م</value></data>
+  <data name="Btn.Review" xml:space="preserve"><value>مراجعة</value></data>
+  <data name="Btn.Approve" xml:space="preserve"><value>موافقة</value></data>
+  <data name="Stat.Members" xml:space="preserve"><value>الأعضاء</value></data>
+  <data name="Stat.MembersSub" xml:space="preserve"><value>انضمّ ١٢ هذا الشهر</value></data>
+  <data name="Stat.Groups" xml:space="preserve"><value>مجموعات نشطة</value></data>
+  <data name="Stat.GroupsSub" xml:space="preserve"><value>ضمن ٩ لجان</value></data>
+  <data name="Stat.Events" xml:space="preserve"><value>فعاليات قادمة</value></data>
+  <data name="Stat.EventsSub" xml:space="preserve"><value>خلال ٣٠ يوماً</value></data>
+  <data name="Stat.Reservations" xml:space="preserve"><value>حجوزات</value></data>
+  <data name="Stat.ReservationsSub" xml:space="preserve"><value>حُجزت هذا الأسبوع</value></data>
+  <data name="Notices.Title" xml:space="preserve"><value>أحدث الإعلانات</value></data>
+  <data name="Notices.Publish" xml:space="preserve"><value>نشر</value></data>
+  <data name="Notice1" xml:space="preserve"><value>نشر جدول قدّاس عيد الانتقال</value></data>
+  <data name="Notice1Meta" xml:space="preserve"><value>أولوية عالية · قبل ساعتين</value></data>
+  <data name="Notice2" xml:space="preserve"><value>اجتماع مجلس الرعية — الخميس ٨:٠٠ م</value></data>
+  <data name="Notice2Meta" xml:space="preserve"><value>إلى اللجان · أمس</value></data>
+  <data name="Notice3" xml:space="preserve"><value>فتح باب التسجيل للتعليم المسيحي</value></data>
+  <data name="Notice3Meta" xml:space="preserve"><value>لكل الأعضاء · قبل يومين</value></data>
+  <data name="Activity.Title" xml:space="preserve"><value>آخر النشاطات</value></data>
+  <data name="Act1" xml:space="preserve"><value>الموافقة على حجز الجوقة · المسرح</value></data>
+  <data name="Act1Sub" xml:space="preserve"><value>أنت · أُضيف إلى روزنامة الرعية</value></data>
+  <data name="Act2" xml:space="preserve"><value>تعيين م. حدّاد أميناً</value></data>
+  <data name="Act2Time" xml:space="preserve"><value>الأربعاء ١٦:٤٠</value></data>
+  <data name="Act2Sub" xml:space="preserve"><value>أنت · سُجّل تغيير الدور</value></data>
+  <data name="Act3" xml:space="preserve"><value>إعادة طلب الكشافة — ينقصه التاريخ</value></data>
+  <data name="Act3Time" xml:space="preserve"><value>الأربعاء ١٦:٠٢</value></data>
+  <data name="Act3Sub" xml:space="preserve"><value>م. حدّاد · الأمين</value></data>
+  <data name="Profile.ParishRole" xml:space="preserve"><value>الدور في الرعية</value></data>
+  <data name="Profile.Current" xml:space="preserve"><value>الأدوار الحالية في المجموعات</value></data>
+  <data name="Profile.Past" xml:space="preserve"><value>أدوار سابقة — السجل</value></data>
+  <data name="Profile.Since" xml:space="preserve"><value>منذ</value></data>
+  <data name="Profile.NotFound" xml:space="preserve"><value>لا يوجد شخص بهذا المعرّف في هذه الرعية.</value></data>
+  <data name="SysRole.Priest" xml:space="preserve"><value>كاهن الرعية</value></data>
+  <data name="SysRole.Secretary" xml:space="preserve"><value>أمين</value></data>
+  <data name="SysRole.Member" xml:space="preserve"><value>عضو</value></data>
+  <data name="SysRole.Archbishop" xml:space="preserve"><value>رئيس الأساقفة</value></data>
+  <data name="SysRole.ArchdioceseAdmin" xml:space="preserve"><value>مسؤول الأبرشية</value></data>
+  <data name="Role.President" xml:space="preserve"><value>رئيس</value></data>
+  <data name="Role.VicePresident" xml:space="preserve"><value>نائب الرئيس</value></data>
+  <data name="Role.Secretary" xml:space="preserve"><value>أمين السر</value></data>
+  <data name="Role.Historian" xml:space="preserve"><value>مؤرّخ</value></data>
+  <data name="Role.Treasurer" xml:space="preserve"><value>أمين الصندوق</value></data>
+  <data name="Role.SpiritualLeader" xml:space="preserve"><value>مسؤول روحية</value></data>
+  <data name="Role.FormationRep" xml:space="preserve"><value>وكيل تنشئة</value></data>
+  <data name="Role.CommitteeMember" xml:space="preserve"><value>عضو لجنة</value></data>
+  <data name="Role.RegularMember" xml:space="preserve"><value>عضو</value></data>
+  <data name="Res.Details" xml:space="preserve"><value>تفاصيل الطلب</value></data>
+  <data name="Res.Decision" xml:space="preserve"><value>قرارك</value></data>
+  <data name="Res.History" xml:space="preserve"><value>سجل الموافقات</value></data>
+  <data name="Res.Note" xml:space="preserve"><value>ملاحظة أو سبب</value></data>
+  <data name="Res.NoteHint" xml:space="preserve"><value>يُسجَّل في السجل ويُرسَل إلى مقدّم الطلب.</value></data>
+  <data name="Res.Venue" xml:space="preserve"><value>المكان</value></data>
+  <data name="Res.When" xml:space="preserve"><value>الموعد</value></data>
+  <data name="Res.Group" xml:space="preserve"><value>المجموعة</value></data>
+  <data name="Res.Attendees" xml:space="preserve"><value>الحضور</value></data>
+  <data name="Res.RequestedBy" xml:space="preserve"><value>مقدّم الطلب</value></data>
+  <data name="Res.Status" xml:space="preserve"><value>الحالة</value></data>
+  <data name="Res.Empty" xml:space="preserve"><value>لا توجد حجوزات بعد.</value></data>
+  <data name="Dash.Hello" xml:space="preserve"><value>أهلاً بعودتك، {0}.</value></data>
+  <data name="Dash.Awaiting" xml:space="preserve"><value>بانتظارك</value></data>
+  <data name="Dash.NoDecisions" xml:space="preserve"><value>لا شيء بانتظار قرارك — كل شيء منجز.</value></data>
+  <data name="Events.Register" xml:space="preserve"><value>سجّل</value></data>
+  <data name="Events.Registered" xml:space="preserve"><value>مُسجّل</value></data>
+  <data name="Events.Calendar" xml:space="preserve"><value>التقويم</value></data>
+  <data name="Events.List" xml:space="preserve"><value>قائمة</value></data>
+  <data name="Events.Empty" xml:space="preserve"><value>لا فعاليات قادمة.</value></data>
+  <data name="Events.Registrations" xml:space="preserve"><value>{0} مسجّل</value></data>
+  <data name="Events.RegistrationsCap" xml:space="preserve"><value>{0} من {1} مسجّل</value></data>
+  <data name="Events.Today" xml:space="preserve"><value>اليوم</value></data>
+  <data name="Notices.Empty" xml:space="preserve"><value>لا إعلانات بعد.</value></data>
+  <data name="Notice.NewTitle" xml:space="preserve"><value>العنوان</value></data>
+  <data name="Notice.NewBody" xml:space="preserve"><value>النص</value></data>
+  <data name="Notice.FieldPriority" xml:space="preserve"><value>الأولوية</value></data>
+  <data name="Notice.FieldAudience" xml:space="preserve"><value>الجمهور</value></data>
+  <data name="Notice.PublishBtn" xml:space="preserve"><value>نشر الإعلان</value></data>
+  <data name="Notice.NewHeading" xml:space="preserve"><value>إعلان جديد</value></data>
+  <data name="Priority.Normal" xml:space="preserve"><value>عادية</value></data>
+  <data name="Priority.High" xml:space="preserve"><value>أولوية عالية</value></data>
+  <data name="Priority.Urgent" xml:space="preserve"><value>عاجل</value></data>
+  <data name="Audit.Sub" xml:space="preserve"><value>سجل بالإجراءات المهمة في هذه الرعية — من فعل ماذا ومتى.</value></data>
+  <data name="Audit.Empty" xml:space="preserve"><value>لا توجد إجراءات مسجّلة بعد.</value></data>
+  <data name="Audit.Forbidden" xml:space="preserve"><value>ليست لديك صلاحية الاطّلاع على سجل التدقيق.</value></data>
+  <data name="Audit.When" xml:space="preserve"><value>الوقت</value></data>
+  <data name="Audit.Who" xml:space="preserve"><value>المُنفِّذ</value></data>
+  <data name="Audit.What" xml:space="preserve"><value>الإجراء</value></data>
+</root>

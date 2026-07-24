@@ -1,0 +1,97 @@
+@page
+@model ParishLive.Web.Pages.Reservations.DetailModel
+@{
+    var r = Model.R!;
+    ViewData["Title"] = r.Title;
+    string Pill(string code) => code switch
+    {
+        "Approved" => "p-ok",
+        "Rejected" => "p-stop",
+        "ForwardedToPriest" => "p-primary",
+        "UnderSecretaryReview" => "p-note",
+        "InformationRequired" or "ReturnedForCorrection" => "p-warn",
+        _ => "p-neut"
+    };
+    string Btn(string action) => action switch { "Approve" => "btn-p", "Reject" => "btn-d", _ => "btn-g" };
+}
+
+<div class="content">
+  <div class="mast">
+    <div class="rtop" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h1 style="margin:0">@r.Title</h1>
+      <span class="pill @Pill(r.StateCode)">@r.StateName</span>
+    </div>
+    <div class="rubric rub" style="margin-top:8px">@L["Res.RequestedBy"]: @r.RequestedByName</div>
+    <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
+  </div>
+
+  <div class="grid2">
+    <div class="stack">
+      <div class="panel">
+        <div class="ph"><h3>@L["Res.Details"]</h3></div>
+        <div class="dl">
+          <div class="row"><span class="k">@L["Res.Group"]</span><span class="v">@r.GroupName</span></div>
+          <div class="row"><span class="k">@L["Res.Venue"]</span><span class="v">@r.VenueName</span></div>
+          <div class="row"><span class="k">@L["Res.When"]</span><span class="v num">@r.StartUtc.ToString("ddd d MMM yyyy · HH:mm") – @r.EndUtc.ToString("HH:mm")</span></div>
+          <div class="row"><span class="k">@L["Res.Attendees"]</span><span class="v num">@r.ExpectedAttendees</span></div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(r.Description))
+        {
+          <div class="desc">@r.Description</div>
+        }
+      </div>
+
+      <div class="panel">
+        <div class="ph"><h3>@L["Res.History"]</h3></div>
+        <ul class="htl">
+          @foreach (var h in r.History)
+          {
+            <li class="hi">
+              <span class="nd"></span>
+              <div>
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+                  <span class="ha">@h.ActionName <span class="hw" style="font-weight:400">→ @h.ToState</span></span>
+                  <span class="ht">@h.At.ToString("d MMM HH:mm")</span>
+                </div>
+                <div class="hw">@h.ActorName</div>
+                @if (!string.IsNullOrWhiteSpace(h.Note)) { <div class="hn">@h.Note</div> }
+              </div>
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <div class="ph"><h3>@L["Res.Decision"]</h3></div>
+        <div class="decide">
+          @if (Model.Error is not null)
+          {
+            <div class="errbox">@Model.Error</div>
+          }
+          @if (r.Actions.Count == 0)
+          {
+            <p class="hint">@r.StateName</p>
+          }
+          else
+          {
+            <form method="post">
+              <div class="note-field">
+                <label for="note">@L["Res.Note"]</label>
+                <textarea id="note" name="Note" placeholder="@L["Res.Note"]">@Model.Note</textarea>
+                <div class="hint">@L["Res.NoteHint"]</div>
+              </div>
+              <div class="actbar">
+                @foreach (var a in r.Actions)
+                {
+                  <button type="submit" name="action" value="@a.ActionCode" class="btn @Btn(a.ActionCode)">@a.ActionName</button>
+                }
+              </div>
+            </form>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Ctx.Switch" xml:space="preserve"><value>Switch parish or role</value></data>
+  <data name="Ctx.Parish" xml:space="preserve"><value>St. George Parish</value></data>
+  <data name="Ctx.Org" xml:space="preserve"><value>Archdiocese of Beirut</value></data>
+  <data name="Nav.Parish" xml:space="preserve"><value>Parish</value></data>
+  <data name="Nav.Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Nav.Reservations" xml:space="preserve"><value>Reservations</value></data>
+  <data name="Nav.Events" xml:space="preserve"><value>Events</value></data>
+  <data name="Nav.Groups" xml:space="preserve"><value>Groups &amp; Committees</value></data>
+  <data name="Nav.Members" xml:space="preserve"><value>Members</value></data>
+  <data name="Nav.Locations" xml:space="preserve"><value>Locations</value></data>
+  <data name="Nav.Communicate" xml:space="preserve"><value>Communicate</value></data>
+  <data name="Nav.Notices" xml:space="preserve"><value>Notices</value></data>
+  <data name="Nav.Messages" xml:space="preserve"><value>Messages</value></data>
+  <data name="Nav.Documents" xml:space="preserve"><value>Documents</value></data>
+  <data name="Nav.Oversight" xml:space="preserve"><value>Oversight</value></data>
+  <data name="Nav.Reports" xml:space="preserve"><value>Reports</value></data>
+  <data name="Nav.Audit" xml:space="preserve"><value>Audit log</value></data>
+  <data name="Nav.Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Account.Name" xml:space="preserve"><value>Fr. Elias Khoury</value></data>
+  <data name="Account.Role" xml:space="preserve"><value>Parish Priest</value></data>
+  <data name="Account.SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Account.SignOut" xml:space="preserve"><value>Sign out</value></data>
+  <data name="Bar.Search" xml:space="preserve"><value>Search members, groups, reservations…</value></data>
+  <data name="Bar.Notifications" xml:space="preserve"><value>Notifications</value></data>
+  <data name="Bar.Theme" xml:space="preserve"><value>Toggle light and dark theme</value></data>
+  <data name="Mast.Today" xml:space="preserve"><value>Thursday, 23 July 2026 · Ordinary Time</value></data>
+  <data name="Mast.Greeting" xml:space="preserve"><value>Good morning, Fr. Elias.</value></data>
+  <data name="Dec.Title" xml:space="preserve"><value>Needs your decision</value></data>
+  <data name="Dec.Sub" xml:space="preserve"><value>{0} awaiting your action</value></data>
+  <data name="Btn.AllReservations" xml:space="preserve"><value>All reservations</value></data>
+  <data name="Entry.YouthName" xml:space="preserve"><value>Youth Group</value></data>
+  <data name="Entry.YouthSub" xml:space="preserve"><value>Fundraising dinner · Parish Hall · 80 guests</value></data>
+  <data name="Entry.YouthWhen" xml:space="preserve"><value>Fri 25 Jul · 18:00</value></data>
+  <data name="Entry.ChoirName" xml:space="preserve"><value>Choir</value></data>
+  <data name="Entry.ChoirSub" xml:space="preserve"><value>Assumption rehearsal · Theatre · 40 singers</value></data>
+  <data name="Entry.ChoirWhen" xml:space="preserve"><value>Sat 26 Jul · 19:30</value></data>
+  <data name="Entry.FundName" xml:space="preserve"><value>Fundraising Committee</value></data>
+  <data name="Entry.FundSub" xml:space="preserve"><value>Planning session · Meeting Room · 12 people</value></data>
+  <data name="Entry.FundWhen" xml:space="preserve"><value>Mon 28 Jul · 20:00</value></data>
+  <data name="Btn.Review" xml:space="preserve"><value>Review</value></data>
+  <data name="Btn.Approve" xml:space="preserve"><value>Approve</value></data>
+  <data name="Stat.Members" xml:space="preserve"><value>Members</value></data>
+  <data name="Stat.MembersSub" xml:space="preserve"><value>12 joined this month</value></data>
+  <data name="Stat.Groups" xml:space="preserve"><value>Active groups</value></data>
+  <data name="Stat.GroupsSub" xml:space="preserve"><value>across 9 committees</value></data>
+  <data name="Stat.Events" xml:space="preserve"><value>Upcoming events</value></data>
+  <data name="Stat.EventsSub" xml:space="preserve"><value>next 30 days</value></data>
+  <data name="Stat.Reservations" xml:space="preserve"><value>Reservations</value></data>
+  <data name="Stat.ReservationsSub" xml:space="preserve"><value>booked this week</value></data>
+  <data name="Notices.Title" xml:space="preserve"><value>Recent notices</value></data>
+  <data name="Notices.Publish" xml:space="preserve"><value>Publish</value></data>
+  <data name="Notice1" xml:space="preserve"><value>Assumption Mass schedule published</value></data>
+  <data name="Notice1Meta" xml:space="preserve"><value>High priority · 2 hours ago</value></data>
+  <data name="Notice2" xml:space="preserve"><value>Parish council meeting — Thursday 20:00</value></data>
+  <data name="Notice2Meta" xml:space="preserve"><value>To committees · Yesterday</value></data>
+  <data name="Notice3" xml:space="preserve"><value>Catechism registration now open</value></data>
+  <data name="Notice3Meta" xml:space="preserve"><value>All members · 2 days ago</value></data>
+  <data name="Activity.Title" xml:space="preserve"><value>Latest activity</value></data>
+  <data name="Act1" xml:space="preserve"><value>Approved Choir · Theatre booking</value></data>
+  <data name="Act1Sub" xml:space="preserve"><value>You · added to parish calendar</value></data>
+  <data name="Act2" xml:space="preserve"><value>Appointed M. Haddad as Secretary</value></data>
+  <data name="Act2Time" xml:space="preserve"><value>Wed 16:40</value></data>
+  <data name="Act2Sub" xml:space="preserve"><value>You · role change logged</value></data>
+  <data name="Act3" xml:space="preserve"><value>Returned Scouts request — needs date</value></data>
+  <data name="Act3Time" xml:space="preserve"><value>Wed 16:02</value></data>
+  <data name="Act3Sub" xml:space="preserve"><value>M. Haddad · Secretary</value></data>
+  <data name="Profile.ParishRole" xml:space="preserve"><value>Parish role</value></data>
+  <data name="Profile.Current" xml:space="preserve"><value>Current group roles</value></data>
+  <data name="Profile.Past" xml:space="preserve"><value>Past roles — history</value></data>
+  <data name="Profile.Since" xml:space="preserve"><value>since</value></data>
+  <data name="Profile.NotFound" xml:space="preserve"><value>No such person in this parish.</value></data>
+  <data name="SysRole.Priest" xml:space="preserve"><value>Parish Priest</value></data>
+  <data name="SysRole.Secretary" xml:space="preserve"><value>Secretary</value></data>
+  <data name="SysRole.Member" xml:space="preserve"><value>Member</value></data>
+  <data name="SysRole.Archbishop" xml:space="preserve"><value>Archbishop</value></data>
+  <data name="SysRole.ArchdioceseAdmin" xml:space="preserve"><value>Archdiocese Admin</value></data>
+  <data name="Role.President" xml:space="preserve"><value>President</value></data>
+  <data name="Role.VicePresident" xml:space="preserve"><value>Vice President</value></data>
+  <data name="Role.Secretary" xml:space="preserve"><value>Secretary</value></data>
+  <data name="Role.Historian" xml:space="preserve"><value>Historian</value></data>
+  <data name="Role.Treasurer" xml:space="preserve"><value>Treasurer</value></data>
+  <data name="Role.SpiritualLeader" xml:space="preserve"><value>Spiritual Leader</value></data>
+  <data name="Role.FormationRep" xml:space="preserve"><value>Formation Rep</value></data>
+  <data name="Role.CommitteeMember" xml:space="preserve"><value>Committee Member</value></data>
+  <data name="Role.RegularMember" xml:space="preserve"><value>Member</value></data>
+  <data name="Res.Details" xml:space="preserve"><value>Request details</value></data>
+  <data name="Res.Decision" xml:space="preserve"><value>Your decision</value></data>
+  <data name="Res.History" xml:space="preserve"><value>Approval history</value></data>
+  <data name="Res.Note" xml:space="preserve"><value>Note or reason</value></data>
+  <data name="Res.NoteHint" xml:space="preserve"><value>Recorded on the history and sent to the requester.</value></data>
+  <data name="Res.Venue" xml:space="preserve"><value>Location</value></data>
+  <data name="Res.When" xml:space="preserve"><value>When</value></data>
+  <data name="Res.Group" xml:space="preserve"><value>Group</value></data>
+  <data name="Res.Attendees" xml:space="preserve"><value>Attendees</value></data>
+  <data name="Res.RequestedBy" xml:space="preserve"><value>Requested by</value></data>
+  <data name="Res.Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Res.Empty" xml:space="preserve"><value>No reservations yet.</value></data>
+  <data name="Dash.Hello" xml:space="preserve"><value>Welcome back, {0}.</value></data>
+  <data name="Dash.Awaiting" xml:space="preserve"><value>Awaiting you</value></data>
+  <data name="Dash.NoDecisions" xml:space="preserve"><value>Nothing awaiting your decision — you're all caught up.</value></data>
+  <data name="Events.Register" xml:space="preserve"><value>Register</value></data>
+  <data name="Events.Registered" xml:space="preserve"><value>Registered</value></data>
+  <data name="Events.Calendar" xml:space="preserve"><value>Calendar</value></data>
+  <data name="Events.List" xml:space="preserve"><value>List</value></data>
+  <data name="Events.Empty" xml:space="preserve"><value>No upcoming events.</value></data>
+  <data name="Events.Registrations" xml:space="preserve"><value>{0} registered</value></data>
+  <data name="Events.RegistrationsCap" xml:space="preserve"><value>{0} of {1} registered</value></data>
+  <data name="Events.Today" xml:space="preserve"><value>Today</value></data>
+  <data name="Notices.Empty" xml:space="preserve"><value>No notices yet.</value></data>
+  <data name="Notice.NewTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="Notice.NewBody" xml:space="preserve"><value>Message</value></data>
+  <data name="Notice.FieldPriority" xml:space="preserve"><value>Priority</value></data>
+  <data name="Notice.FieldAudience" xml:space="preserve"><value>Audience</value></data>
+  <data name="Notice.PublishBtn" xml:space="preserve"><value>Publish notice</value></data>
+  <data name="Notice.NewHeading" xml:space="preserve"><value>New notice</value></data>
+  <data name="Priority.Normal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Priority.High" xml:space="preserve"><value>High priority</value></data>
+  <data name="Priority.Urgent" xml:space="preserve"><value>Urgent</value></data>
+  <data name="Audit.Sub" xml:space="preserve"><value>A record of important actions in this parish — who did what, and when.</value></data>
+  <data name="Audit.Empty" xml:space="preserve"><value>No actions recorded yet.</value></data>
+  <data name="Audit.Forbidden" xml:space="preserve"><value>You don't have access to the audit log.</value></data>
+  <data name="Audit.When" xml:space="preserve"><value>When</value></data>
+  <data name="Audit.Who" xml:space="preserve"><value>Who</value></data>
+  <data name="Audit.What" xml:space="preserve"><value>Action</value></data>
+</root>
