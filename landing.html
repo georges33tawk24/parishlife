@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ParishLife — church management for parishes in Lebanon</title>
+<meta name="description" content="ParishLife keeps people, sacraments, attendance and the collection in one place — bilingual Arabic/English, dual currency USD/LBP, and it keeps working through a power cut.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23415A77'/%3E%3Ctext x='16' y='23' font-family='Inter,sans-serif' font-size='19' font-weight='600' fill='%23F4F1DE' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/parishlife.css">
+<link rel="stylesheet" href="assets/landing.css">
+</head>
+<body>
+
+<!-- icon sprite — paths lifted from the design system app shell, 20px @ 1.5 stroke -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="ic-base" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></g>
+</defs>
+<symbol id="ic-dash" viewBox="0 0 20 20"><path d="M3.4 3.4h5.8v5.8H3.4zM10.8 3.4h5.8v3.6h-5.8zM10.8 8.6h5.8v8h-5.8zM3.4 10.8h5.8v5.8H3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-people" viewBox="0 0 20 20"><path d="M7 6.4a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 17c0-3.2 2.7-5 6-5s6 1.8 6 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-family" viewBox="0 0 20 20"><path d="M4.4 6.6a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0M11.6 7.4a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M2.6 16.4c0-2.5 1.9-4 4.2-4s4.2 1.5 4.2 4M13.4 12.6c2.2 0 4 1.4 4 3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-sacr" viewBox="0 0 20 20"><path d="M4.4 3.6h7.6l3.6 3.2v9.6H4.4zM12 3.6v3.2h3.6M7.2 10.4h5.6M7.2 13.2h3.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-attend" viewBox="0 0 20 20"><path d="M3.6 3.6h12.8v12.8H3.6zM6.8 10.2l2.6 2.6 4.2-4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-give" viewBox="0 0 20 20"><path d="M3.4 10a6.6 6.6 0 1 0 13.2 0a6.6 6.6 0 1 0 -13.2 0M10 6.2v7.6M7.8 8.2h4.4M7.8 11.8h4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-fin" viewBox="0 0 20 20"><path d="M3.6 16.4h12.8M5.4 16.4V9.6M9.4 16.4V5M13.4 16.4v-4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-events" viewBox="0 0 20 20"><path d="M4 5.2h12v11.2H4zM4 8.8h12M7.4 3.4v3.2M12.6 3.4v3.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-groups" viewBox="0 0 20 20"><path d="M4.2 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M11.4 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M7.8 13.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+<symbol id="ic-vol" viewBox="0 0 20 20"><path d="M7.2 6.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0M4.4 16.8v-1.4a3 3 0 0 1 3-3h5.2a3 3 0 0 1 3 3v1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-msg" viewBox="0 0 20 20"><path d="M3.4 4.4h13.2v8.6H8.2L4.8 16.2V13H3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-reports" viewBox="0 0 20 20"><path d="M5 3.6h6.4l3.6 3.4v9.4H5zM11.4 3.6V7h3.6M7.8 10.8h4.4M7.8 13.4h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-settings" viewBox="0 0 20 20"><path d="M3.6 7h12.8M3.6 13h12.8M7.6 4.8v4.4M12.4 10.8v4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-checkin" viewBox="0 0 20 20"><path d="M10 3.6v8.8M6.6 9l3.4 3.4L13.4 9M4 16.4h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-notes" viewBox="0 0 20 20"><path d="M5 3.6h10v12.8H5zM7.8 7.2h4.4M7.8 10h4.4M7.8 12.8h2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-check" viewBox="0 0 16 16"><path d="M3 8.4l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-warn" viewBox="0 0 20 20"><path d="M10 3.2 17.4 16H2.6zM10 8.2v3.4M10 13.6v.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-bell" viewBox="0 0 20 20"><path d="M5.4 8.4a4.6 4.6 0 1 1 9.2 0c0 3 1.4 4.2 1.4 4.2H4S5.4 11.4 5.4 8.4M8.4 15.4a1.8 1.8 0 0 0 3.2 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-search" viewBox="0 0 20 20"><path d="M4.2 9.4a5.2 5.2 0 1 0 10.4 0a5.2 5.2 0 1 0 -10.4 0M13.4 13.4 16.6 16.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <span class="mark" aria-hidden="true">P</span>
+      <span class="name" data-ar="حياة الرعية">ParishLife</span>
+    </a>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="#how" data-ar="كيف يعمل">How it works</a>
+      <a href="#modules" data-ar="الوحدات">Modules</a>
+      <a href="#roles" data-ar="الأدوار">Roles</a>
+      <a href="#lebanon" data-ar="من أجل لبنان">Built for Lebanon</a>
+      <a href="#pricing" data-ar="الأسعار">Pricing</a>
+    </nav>
+    <div class="langtoggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ar" aria-pressed="false" lang="ar">ع</button>
+    </div>
+    <a class="btn btn-primary" href="#book" data-ar="احجز عرضاً">Book a walkthrough</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ─────────────────────────── hero ─────────────────────────── -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow" style="max-width:420px"><span data-ar="حياة الرعية · ParishLife">ParishLife · حياة الرعية</span></p>
+    <h1 class="hero-title" style="margin-top:20px" data-ar="سجلّ رعيّتك، محفوظ كما تعمل رعيّتك فعلاً.">Your parish register, kept the way your parish actually works.</h1>
+    <p class="lede" style="margin-top:24px" data-ar="يجمع «حياة الرعية» المؤمنين والأسرار والحضور والتقدمات في مكان واحد — بالعربية والإنكليزية، بالدولار والليرة. ويتابع التسجيل حين تنقطع الكهرباء.">ParishLife keeps people, sacraments, attendance and the collection in one place — in Arabic and in English, in dollars and in lira. And it keeps recording when the power goes out.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary btn-lg" href="#book" data-ar="احجز عرضاً تجريبياً">Book a walkthrough</a>
+      <a class="btn btn-secondary btn-lg" href="#how" data-ar="شاهد كيف يعمل">See how it works</a>
+    </div>
+
+    <div class="facts">
+      <div class="fact">
+        <div class="k">EN&nbsp;/&nbsp;<span lang="ar">ع</span></div>
+        <div class="v" data-ar="كل شاشة مرسومة بالاتجاهين، لا ترجمة لاحقة.">Every screen drawn in both directions, not translated later.</div>
+      </div>
+      <div class="fact">
+        <div class="k" dir="ltr">$&nbsp;/&nbsp;L.L</div>
+        <div class="v" data-ar="كل مبلغ بالعملتين، مع السعر الذي أنتجه.">Every amount in both currencies, with the rate that produced it.</div>
+      </div>
+      <div class="fact">
+        <div class="k">5</div>
+        <div class="v" data-ar="أدوار: كاهن، أمين سرّ، أمين صندوق، مسؤول خدمة، متطوّع.">roles: priest, secretary, treasurer, ministry leader, volunteer.</div>
+      </div>
+      <div class="fact">
+        <div class="k" data-ar="بلا إنترنت">Offline</div>
+        <div class="v" data-ar="يتابع التسجيل خلال انقطاع التيار ويزامن لاحقاً.">Keeps recording through a cut, syncs when the line returns.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────── product screenshot ────────────────────── -->
+<section style="padding-bottom:96px">
+  <div class="wrap">
+    <div class="shot">
+      <div class="shot-bar"><i></i><i></i><i></i><span class="mono">parishlife.app / saint-elias</span></div>
+      <div class="shell">
+        <aside class="shell-rail">
+          <div class="shell-parish">
+            <span class="mark" aria-hidden="true">P</span>
+            <span>
+              <b data-ar="مار الياس">Saint Elias</b>
+              <small data-ar="الحدث · ماروني">Hadath · Maronite</small>
+            </span>
+          </div>
+          <div class="navgroup" data-ar="عام">General</div>
+          <div class="navitem on"><svg width="17" height="17"><use href="#ic-dash"/></svg><span data-ar="لوحة القيادة">Dashboard</span></div>
+          <div class="navgroup" data-ar="السجلات">Records</div>
+          <div class="navitem"><svg width="17" height="17"><use href="#ic-people"/></svg><span data-ar="المؤمنون">People</span><span class="badge tnum">1,380</span></div>
+          <div class="navitem"><svg width="17" height="17"><use href="#ic-family"/></svg><span data-ar="العائلات">Families</span><span class="badge tnum">412</span></div>
+          <div class="navitem"><svg width="17" height="17"><use href="#ic-sacr"/></svg><span data-ar="الأسرار">Sacraments</span><span class="badge tnum">3</span></div>
+          <div class="navgroup" data-ar="حياة الرعية">Parish life</div>
+          <div class="navitem"><svg width="17" height="17"><use href="#ic-attend"/></svg><span data-ar="الحضور">Attendance</span></div>
+          <div class="navitem"><svg width="17" height="17"><use href="#ic-give"/></svg><span data-ar="التقدمات">Giving</span></div>
+          <div class="syncline"><span class="dot"></span><span data-ar="تمّت مزامنة كل التغييرات">All changes synced</span></div>
+        </aside>
+        <div class="shell-main">
+          <div class="shell-top">
+            <span></span>
+            <div class="shell-search"><svg width="14" height="14"><use href="#ic-search"/></svg><span data-ar="ابحث عن شخص أو سجل">Search people, records, pages</span><kbd>⌘K</kbd></div>
+            <div class="shell-right"><span class="shell-bell"><svg width="16" height="16"><use href="#ic-bell"/></svg><i></i></span><span class="avatar">AK</span></div>
+          </div>
+          <div class="shell-body">
+            <div class="shell-head">
+              <div>
+                <h4 data-ar="المؤمنون">Parishioners</h4>
+                <p><span dir="ltr" class="tnum">1,380</span> <span data-ar="سجلاً · ٤١٢ عائلة · آخر تحديث اليوم">records · 412 families · updated today</span></p>
+              </div>
+              <span class="pill pill-success" style="margin-inline-start:auto"><span class="dot"></span><span data-ar="جلسة العدّ ٢١٤ مفتوحة">Counting session 214 open</span></span>
+              <a class="btn btn-primary" style="min-height:32px;padding:0 14px;font-size:13px" href="#book" data-ar="مؤمن جديد">New parishioner</a>
+            </div>
+            <div class="mtable">
+              <div class="th">
+                <span data-ar="الاسم">Name</span>
+                <span data-ar="البلدة">Town</span>
+                <span class="num" data-ar="آخر تقدمة">Last gift</span>
+                <span class="num">L.L</span>
+              </div>
+              <div class="tr">
+                <span class="who"><span class="avatar">GH</span><span><b>Georges Haddad</b><small>جورج حدّاد</small></span></span>
+                <span class="dim" data-ar="الحدث">Hadath</span>
+                <span class="num">$50.00</span><span class="num dim">4,475,000</span>
+              </div>
+              <div class="tr">
+                <span class="who"><span class="avatar">RN</span><span><b>Rita Nassar</b><small>ريتا نصّار</small></span></span>
+                <span class="dim" data-ar="بعبدا">Baabda</span>
+                <span class="num">$120.00</span><span class="num dim">10,740,000</span>
+              </div>
+              <div class="tr">
+                <span class="who"><span class="avatar">MH</span><span><b>Maya Haddad</b><small>مايا حدّاد</small></span></span>
+                <span class="dim" data-ar="الحدث">Hadath</span>
+                <span class="num"><span class="pill" data-ar="زائرة">Visitor</span></span><span class="num dim">—</span>
+              </div>
+              <div class="tr">
+                <span class="who"><span class="avatar">NS</span><span><b>Nabil Saade</b><small>نبيل سعادة</small></span></span>
+                <span class="dim" data-ar="الحدث">Hadath</span>
+                <span class="num">$80.00</span><span class="num dim">7,160,000</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="t-caption dimmer" style="margin-top:12px;text-align:center" data-ar="لقطة من الواجهة — الشريط الجانبي والجدول وأشرطة التصفية كلها تنعكس بالعربية.">The real shell. Switch to ع above — the rail, the table and the filters all mirror.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ────────────────────── the parish office ────────────────────── -->
+<section class="section" id="why">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="لماذا">Why</span></p>
+    <h2 class="t-display" style="margin-top:20px;max-width:20ch" data-ar="مكتب الرعية كما هو فعلاً، لا كما تفترضه البرامج.">The parish office as it actually is — not as software assumes it is.</h2>
+    <div class="grid g4" style="margin-top:40px">
+      <div class="card card-flat">
+        <h3 data-ar="سجلّان، أبجديّتان">Two registers, two alphabets</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="سجلّ المعمودية بالعربية. لائحة الهواتف التي يبحث فيها المكتب بالحروف اللاتينية. معظم البرامج تجبرك على الاختيار.">The baptism book is written in Arabic. The phone list the office searches is in Latin letters. Most software makes you pick one.</p>
+      </div>
+      <div class="card card-flat">
+        <h3 data-ar="تقدمة تُعدّ نقداً">A collection counted in cash</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="مظاريف وعملتان وسعر صرف تغيّر منذ الأحد الماضي. جداول «إكسل» تفقد السعر.">Envelopes, two currencies, and a rate that moved since last Sunday. A spreadsheet loses the rate the moment you overwrite the cell.</p>
+      </div>
+      <div class="card card-flat">
+        <h3 data-ar="ثلاث ساعات كهرباء">Three hours of state power</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="ينقطع الاتصال في منتصف الإدخال. ما كُتب أصلاً يجب ألّا يضيع.">The connection drops in the middle of an entry. What was already typed should not disappear with it.</p>
+      </div>
+      <div class="card card-flat">
+        <h3 data-ar="متطوّع واحد وحاسوب واحد">One volunteer, one laptop</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="من يكون في المكتب يوم الثلاثاء يجب أن يستطيع استعماله بلا تدريب، على شاشة قديمة وإضاءة ضعيفة.">Whoever is in the office on Tuesday has to be able to use it untrained, on an eight-year-old monitor in poor light.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ────────────────────── three pillars ────────────────────── -->
+<section class="section-lg" id="how">
+  <div class="wrap stack" style="gap:72px">
+
+    <div class="grid g2" style="align-items:center;gap:64px">
+      <div>
+        <p class="eyebrow" style="max-width:200px"><span data-ar="٠١ — ثنائي اللغة">01 — Bilingual</span></p>
+        <h2 class="t-heading" style="margin-top:20px" data-ar="ثنائي اللغة في السجلّ نفسه، لا في الترجمة.">Bilingual in the record itself, not in a translation layer.</h2>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="الاسم العربي هو ما تطبعه الشهادة. الحرف اللاتيني هو ما يبحث به المكتب. الاثنان محفوظان على كل سجلّ دائماً، والاثنان يظهران دائماً — لغة الواجهة تقرّر فقط أيّهما يتصدّر.">The Arabic name is what the certificate prints. The Latin transliteration is what the office searches by. Both are stored on every record, always, and both are always shown — the interface language only decides which one leads.</p>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="وبالعربية ينعكس كل شيء: جهة الشريط الجانبي، ترتيب أعمدة الجدول، محور الرسم البياني، حافة دخول الدرج، وأسهم التنقّل. الساعات والشعارات وأزرار التشغيل لا تنعكس أبداً.">In Arabic everything mirrors: the sidebar side, the table column order, the chart axis, the drawer entry edge, every chevron. Clocks, logos and the play triangle never flip.</p>
+      </div>
+      <div class="card" style="padding:32px">
+        <div class="row" style="gap:16px">
+          <span class="avatar" style="width:56px;height:56px;font-size:19px">GH</span>
+          <div>
+            <div style="font:600 26px/1.5 var(--arabic)">جورج حدّاد</div>
+            <div class="t-ui dim" style="margin-top:2px">Georges Haddad</div>
+          </div>
+        </div>
+        <hr class="rule" style="margin:20px 0">
+        <div class="t-caption dimmer" style="letter-spacing:.06em;text-transform:uppercase" data-ar="اسم الشهادة">Certificate name</div>
+        <div style="font:600 18px/1.6 var(--arabic);margin-top:4px">جورج الياس حدّاد</div>
+        <div class="t-caption dimmer" style="letter-spacing:.06em;text-transform:uppercase;margin-top:16px" data-ar="مفتاح البحث">Search key</div>
+        <div class="t-ui" style="margin-top:4px">Georges Haddad · Georges Hadad · جورج حداد</div>
+      </div>
+    </div>
+
+    <div class="grid g2" style="align-items:center;gap:64px">
+      <div class="card" style="padding:32px">
+        <div class="t-caption dimmer" style="letter-spacing:.06em;text-transform:uppercase" data-ar="جلسة العدّ ٢١٤ — المجموع">Counting session 214 — total</div>
+        <div class="amount" style="margin-top:12px" dir="ltr">
+          <div class="usd">$1,250.00</div>
+          <div class="lbp">L.L 111,875,000</div>
+          <div class="rate">at 89,500 · set 4 Oct 2026</div>
+        </div>
+        <hr class="rule" style="margin:20px 0">
+        <div class="stack" style="gap:10px">
+          <div class="field"><span class="prefix">USD</span><span class="value" dir="ltr">1,250.00</span></div>
+          <div class="field"><span class="prefix">L.L</span><span class="value" dir="ltr">111,875,000</span></div>
+        </div>
+        <div class="alert alert-warning" style="margin-top:16px">
+          <svg width="18" height="18"><use href="#ic-warn"/></svg>
+          <span><b data-ar="السعر عمره ٦ أيام">Rate is 6 days old</b><span data-ar="أعِد ضبطه قبل إقفال الجلسة كي تحمل الإيصالات السعر الصحيح.">Set it again before you close the session so the receipts carry the right figure.</span></span>
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow" style="max-width:200px"><span data-ar="٠٢ — العملة">02 — Currency</span></p>
+        <h2 class="t-heading" style="margin-top:20px" data-ar="كل مبلغ يحمل معه السعر الذي أنتجه.">Every amount carries the rate that produced it.</h2>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="الدولار يتصدّر بالحجم الكامل، والليرة تتبعه بخط أحادي المسافة تحته. والسعر الذي أنتج الرقم يسافر معه، لأنّ سعر الشهر الماضي رقم آخر.">USD leads at full size, lira follows in mono beneath it. The rate that produced the figure travels with it — because last month's rate is a different number, and a receipt reprinted next year has to still be true.</p>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="يُضبط السعر مرة واحدة في الشريط العلوي. الإيصالات والكشوفات والتقارير تُحتسب كلها منه، ويحذّرك النظام حين يتقادم.">The rate is set once in the top bar. Receipts, statements, pledge balances and the budget all derive from it, and the system tells you when it has gone stale rather than quietly using it.</p>
+      </div>
+    </div>
+
+    <div class="grid g2" style="align-items:center;gap:64px">
+      <div>
+        <p class="eyebrow" style="max-width:200px"><span data-ar="٠٣ — الصمود">03 — Resilience</span></p>
+        <h2 class="t-heading" style="margin-top:20px" data-ar="مكتوب على مقاس انقطاع الكهرباء، لا رغماً عنه.">Written for the power cut, not in spite of it.</h2>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="حين ينقطع الاتصال يتابع الإدخال على الجهاز أمامك. تُصطفّ التغييرات، ويقول الشريط ذلك بكلام واضح لا برمز صغير، ثم تُزامن كلها عند عودة الخط.">When the connection drops, entry continues on the machine in front of you. Changes queue, the banner says so in plain words rather than a small grey icon, and everything syncs when the line comes back.</p>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="ثلاث حالات فقط، وكلّها في هيكل التطبيق لا داخل كل شاشة: غير متصل، مسوّدة محفوظة، تغييرات في الانتظار.">Three states, all of them in the shell rather than per screen: offline, draft saved, changes queued. Nobody has to learn a fourth.</p>
+      </div>
+      <div class="stack" style="gap:12px">
+        <div class="alert alert-info">
+          <svg width="18" height="18"><use href="#ic-warn"/></svg>
+          <span><b data-ar="أنت غير متصل بالإنترنت.">You are offline.</b><span data-ar="يتم حفظ العمل على هذا الحاسوب وسيُزامَن عند عودة الاتصال.">Work is being saved on this computer and will sync when the connection returns.</span></span>
+        </div>
+        <div class="card row" style="gap:10px;padding:16px 20px">
+          <span class="pill pill-info"><span class="dot"></span><span data-ar="مسوّدة محفوظة">Draft saved</span></span>
+          <span class="t-caption dimmer mono" data-ar="قبل ١٤ ثانية">14 seconds ago</span>
+        </div>
+        <div class="card row" style="gap:10px;padding:16px 20px">
+          <span class="pill pill-warning"><span class="dot"></span><span data-ar="٣ تغييرات في الانتظار">3 changes queued</span></span>
+          <span class="t-caption dimmer" data-ar="تُرسل عند عودة الاتصال">will send when the line returns</span>
+        </div>
+        <div class="card row" style="gap:10px;padding:16px 20px">
+          <span class="pill pill-success"><span class="dot"></span><span data-ar="تمّت مزامنة كل التغييرات">All changes synced</span></span>
+          <span class="t-caption dimmer mono" data-ar="آخر مزامنة ١٩:١٤">last sync 19:14</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ────────────────────── modules ────────────────────── -->
+<section class="section" id="modules">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="الوحدات">Modules</span></p>
+    <h2 class="t-display" style="margin-top:20px;max-width:22ch" data-ar="كل ما تحتفظ به الرعية، في مكان واحد.">Everything a parish keeps, in one place.</h2>
+    <div class="grid g3" style="margin-top:40px">
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-people"/></svg></span><span><b data-ar="المؤمنون">People</b><p data-ar="اسم عربي ولاتيني، عنوان بالمحافظة والقضاء والبلدة، هاتف ‎+961‎، طقس، وحالة زائر أو منتسب.">Arabic and Latin names, governorate–district–town address, +961 phone, rite, visitor or member status.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-family"/></svg></span><span><b data-ar="العائلات">Families</b><p data-ar="أسر مترابطة بمنزل واحد ومظروف واحد، مع أطفال يحملون الاسمين.">Households linked to one home and one envelope number, with children carried under both names.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-sacr"/></svg></span><span><b data-ar="الأسرار">Sacraments</b><p data-ar="معمودية وميرون ومناولة وإكليل ودفن — مع شهادات تُطبع على مقاس A4 وتوقيع الكاهن.">Baptism, chrismation, communion, marriage, burial — with A4 certificates the priest signs before they print.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-attend"/></svg></span><span><b data-ar="الحضور">Attendance</b><p data-ar="عدّ القداس، وتسجيل أطفال التعليم المسيحي برمز وليّ الأمر، ومحطة كشك كاملة الشاشة.">Mass counts, catechism check-in with a guardian code, and a full-screen kiosk station for the volunteer on the door.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-events"/></svg></span><span><b data-ar="الأحداث">Events</b><p data-ar="رزنامة تحمل طبقة أعياد الطقس، ونقطة ذهبية على كل يوم عيد.">A calendar carrying the feast overlay for your rite — a gold dot on a date always means feast day.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-groups"/></svg></span><span><b data-ar="المجموعات">Groups</b><p data-ar="جوقة، تعليم مسيحي، أخويّات، شبيبة — لكلٍّ مسؤولها ولائحته وحضوره.">Choir, catechism, sodalities, youth — each with its own leader, roster and attendance.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-vol"/></svg></span><span><b data-ar="المتطوّعون">Volunteers</b><p data-ar="لوحة مناوبات بطلبات تبديل، وتذكير يصل عبر واتساب قبل الخدمة.">A rota board with swap requests, and a reminder that reaches people on WhatsApp before their turn.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-msg"/></svg></span><span><b data-ar="المراسلة">Messaging</b><p data-ar="واتساب أولاً، ثم رسالة قصيرة، ثم بريد إلكتروني — بالترتيب نفسه الذي تستعمله الرعية أصلاً.">WhatsApp first, SMS as fallback, email last — the order a Lebanese parish already uses.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-give"/></svg></span><span><b data-ar="التقدمات">Giving</b><p data-ar="جلسات عدّ بمظاريف مرقّمة، ونقد غير مسمّى، وتعهّدات، وكشوفات سنوية بالعملتين.">Counting sessions with numbered envelopes, unattributed cash, pledges, and year-end statements in both currencies.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-fin"/></svg></span><span><b data-ar="المالية">Finance</b><p data-ar="صناديق ومصاريف وموازنة مقابل فعلي ومطابقة — كلها تحمل سعر الصرف.">Funds, expenses, budget versus actual and reconciliation — every line stamped with its rate.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-reports"/></svg></span><span><b data-ar="التقارير">Reports</b><p data-ar="تقارير للأبرشية وللمجلس، تُصدَّر إلى PDF وExcel بأيّ من اللغتين.">Eparchy and council reports, exported to PDF or Excel in either language.</p></span></div>
+      <div class="module"><span class="ico"><svg width="20" height="20"><use href="#ic-checkin"/></svg></span><span><b data-ar="بوّابة المؤمنين">Member portal</b><p data-ar="تحدّث العائلات عنوانها وهاتفها بنفسها، وتطلب شهادة، من دون أن تدخل إلى سجلّات غيرها.">Families update their own address and phone and request a certificate, without reaching anyone else's record.</p></span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ────────────────────── roles ────────────────────── -->
+<section class="section" id="roles">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="الأدوار">Roles</span></p>
+    <h2 class="t-display" style="margin-top:20px;max-width:24ch" data-ar="الوحدات الممنوعة غائبة، لا مطفأة.">Modules a role cannot use are absent, not greyed out.</h2>
+    <p class="lede" style="margin-top:16px" data-ar="أمين الصندوق لا يرى الملاحظات الرعوية. أمين السرّ لا يرى المال. مسؤول الخدمة يرى مجموعته فقط. الشريط الجانبي نفسه، وخمسة منتجات مختلفة.">The treasurer does not see pastoral notes. The secretary does not see money. A ministry leader sees only the people in the groups they lead. Same rail, five different products.</p>
+
+    <div class="roletabs" style="margin-top:32px" id="roletabs"></div>
+    <div class="rolebody">
+      <div class="rolerail" id="rolerail"></div>
+      <div class="card" style="padding:28px">
+        <div class="row" style="gap:14px">
+          <span class="avatar" style="width:44px;height:44px;font-size:15px" id="roleinitials">AK</span>
+          <div><div class="t-sub" id="roleuser">Fr. Antoine Khoury</div><div class="t-ui dim" id="rolename">Parish priest</div></div>
+        </div>
+        <hr class="rule" style="margin:20px 0">
+        <p class="t-body dim" id="rolenote"></p>
+        <div class="stack" style="gap:6px;margin-top:20px">
+          <div class="t-caption dimmer" style="letter-spacing:.06em;text-transform:uppercase" data-ar="الشاشة الأولى">Lands on</div>
+          <div class="t-sub" id="roletitle"></div>
+          <div class="t-ui dim" id="rolesub"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────── lebanon ────────────────────── -->
+<section class="section-lg panel-dark" id="lebanon">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="من أجل لبنان">Built for Lebanon</span></p>
+    <h2 class="t-display" style="margin-top:20px;max-width:26ch" data-ar="ليست توطيناً لاحقاً — بل رموز في نموذج البيانات نفسه.">These are not localisation afterthoughts. They are tokens in the data model.</h2>
+    <div class="grid g2" style="margin-top:48px;gap:24px">
+
+      <div class="card">
+        <h3 class="t-sub" data-ar="الطقس">Rite</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="يُضبط مرة واحدة في معالج الإعداد، ثم يرشّح لائحة الأسرار وقوالب الشهادات وطبقة الأعياد على كل رزنامة.">Set once in the setup wizard, then it filters the sacrament list, the certificate templates and the feast overlay on every calendar.</p>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:16px">
+          <span class="chip chip-on" data-ar="ماروني">Maronite</span>
+          <span class="chip" data-ar="روم أرثوذكس">Greek Orthodox</span>
+          <span class="chip" data-ar="روم كاثوليك">Melkite</span>
+          <span class="chip" data-ar="أرمني">Armenian</span>
+          <span class="chip" data-ar="سرياني">Syriac</span>
+          <span class="chip" data-ar="لاتيني">Latin</span>
+          <span class="chip" data-ar="إنجيلي">Evangelical</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="t-sub" data-ar="العنوان والهاتف">Address &amp; phone</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="تسلسل محافظة ← قضاء ← بلدة، ثم سطر حرّ للبناية وسطر لمَعلَم. لا حقل رمز بريدي في أيّ مكان من المنتج.">A governorate → district → town cascade, then a free building line and a landmark line. No postal code field exists anywhere in the product.</p>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:16px">
+          <span class="chip" data-ar="جبل لبنان">Mount Lebanon</span><span class="dimmer">→</span>
+          <span class="chip" data-ar="بعبدا">Baabda</span><span class="dimmer">→</span>
+          <span class="chip chip-on" data-ar="الحدث">Hadath</span>
+        </div>
+        <div class="t-ui dim" style="margin-top:12px" data-ar="بناية خوري، الطابق الثالث — خلف البلدية">Imm. Khoury, 3rd floor — behind the municipality</div>
+        <div class="field" style="margin-top:12px;max-width:240px" dir="ltr"><span class="prefix">+961</span><span class="value">3 421 887</span></div>
+      </div>
+
+      <div class="card">
+        <h3 class="t-sub" data-ar="ترتيب القنوات">Channel order</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="واتساب هو الافتراضي لأنّه ما تستعمله الرعية أصلاً. الرسالة القصيرة احتياط، والبريد الإلكتروني أخيراً.">WhatsApp is the default because it is what the parish already uses. SMS is the fallback. Email is last, and for most parishes it is never used at all.</p>
+        <div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap">
+          <span class="chip chip-on">WhatsApp <span class="t-caption" style="margin-inline-start:6px;opacity:.7" data-ar="افتراضي">default</span></span>
+          <span class="chip">SMS <span class="t-caption" style="margin-inline-start:6px;opacity:.7" data-ar="احتياط">fallback</span></span>
+          <span class="chip" data-ar="بريد إلكتروني — أخيراً">Email — last</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="t-sub" data-ar="الاتجاه">Direction</h3>
+        <p class="t-body dim" style="margin-top:8px" data-ar="العربية تعكس كل شيء: جهة الشريط، ترتيب الأعمدة، محور الرسم، حافة الدرج، الأسهم، امتلاء شريط التقدّم. الساعات والشعارات وأزرار الوسائط ومثلّث التشغيل لا تنعكس أبداً.">Arabic mirrors everything: sidebar side, table column order, chart axis, drawer entry edge, chevrons, progress fill. Clocks, logos, media controls and the play triangle never flip.</p>
+        <div class="row" style="gap:8px;margin-top:16px">
+          <span class="chip mono" dir="ltr">dir=ltr</span>
+          <span class="chip chip-on mono" dir="ltr">dir=rtl</span>
+        </div>
+        <p class="t-caption" style="margin-top:12px;color:rgba(244,241,222,.6)" data-ar="الأرقام والمبالغ تبقى من اليسار إلى اليمين في الحالتين.">Numerals and amounts stay left-to-right in both directions.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────── pricing ────────────────────── -->
+<section class="section-lg" id="pricing">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="الأسعار">Pricing</span></p>
+    <h2 class="t-display" style="margin-top:20px;max-width:22ch" data-ar="تُسعَّر بالدولار، وتُدفع بأيّ من العملتين.">Priced in dollars, payable in either currency.</h2>
+    <p class="lede" style="margin-top:16px" data-ar="السعر يظهر بالعملتين على سعر الرعية نفسه المستعمل داخل النظام. لا رسوم إعداد، ولا عقد سنوي.">Shown in both currencies at the same parish rate the system uses inside. No setup fee, no annual lock-in.</p>
+
+    <div class="grid g3" style="margin-top:40px">
+      <div class="card plan">
+        <div>
+          <div class="t-ui dim" data-ar="رعية صغيرة">Small parish</div>
+          <div class="amount" style="margin-top:10px" dir="ltr"><div class="usd">$19<span class="t-ui dim" style="font-weight:400">/mo</span></div><div class="lbp">L.L 1,700,500</div><div class="rate">at 89,500</div></div>
+        </div>
+        <p class="t-body dim" data-ar="حتى ٥٠٠ سجلّ. مستعمل واحد أو اثنان.">Up to 500 records. One or two people in the office.</p>
+        <ul>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="المؤمنون والعائلات والأسرار">People, families, sacraments</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="الشهادات على مقاس A4">A4 certificate printing</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="العمل بلا إنترنت والمزامنة">Offline working and sync</span></li>
+        </ul>
+        <a class="btn btn-secondary" href="#book" data-ar="ابدأ">Start</a>
+      </div>
+
+      <div class="card plan featured">
+        <div>
+          <div class="row" style="gap:10px">
+            <span class="t-ui dim" data-ar="رعية">Parish</span>
+            <span class="pill pill-info"><span class="dot"></span><span data-ar="الأكثر اختياراً">Most parishes</span></span>
+          </div>
+          <div class="amount" style="margin-top:10px" dir="ltr"><div class="usd">$49<span class="t-ui dim" style="font-weight:400">/mo</span></div><div class="lbp">L.L 4,385,500</div><div class="rate">at 89,500</div></div>
+        </div>
+        <p class="t-body dim" data-ar="سجلّات غير محدودة، وخمسة أدوار، وكل الوحدات.">Unlimited records, all five roles, every module.</p>
+        <ul>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="كل ما في الباقة الصغيرة">Everything in Small parish</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="التقدمات والمالية وجلسات العدّ">Giving, finance, counting sessions</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="مراسلة واتساب والمناوبات">WhatsApp messaging and rotas</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="بوّابة المؤمنين">Member portal</span></li>
+        </ul>
+        <a class="btn btn-primary" href="#book" data-ar="احجز عرضاً">Book a walkthrough</a>
+      </div>
+
+      <div class="card plan">
+        <div>
+          <div class="t-ui dim" data-ar="أبرشية">Eparchy</div>
+          <div class="amount" style="margin-top:10px"><div class="usd" data-ar="حسب الطلب">Let's talk</div><div class="lbp" style="font-family:var(--sans)" data-ar="عدة رعايا وتقارير موحّدة">several parishes, consolidated reporting</div></div>
+        </div>
+        <p class="t-body dim" data-ar="لوحة موحّدة للأبرشية، وقوالب شهادات مشتركة، ودعم بالعربية.">One dashboard across parishes, shared certificate templates, support in Arabic.</p>
+        <ul>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="كل ما في باقة الرعية">Everything in Parish</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="تقارير موحّدة عبر الرعايا">Cross-parish reporting</span></li>
+          <li><svg width="15" height="15"><use href="#ic-check"/></svg><span data-ar="ترحيل السجلّات الورقية">Paper register migration</span></li>
+        </ul>
+        <a class="btn btn-secondary" href="#book" data-ar="تواصل معنا">Contact us</a>
+      </div>
+    </div>
+    <p class="t-caption dimmer" style="margin-top:20px" data-ar="تُحتسب مبالغ الليرة على سعر الرعية وتتغيّر معه.">Lira figures are computed at the parish rate and move with it.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ────────────────────── faq ────────────────────── -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <p class="eyebrow"><span data-ar="أسئلة متكرّرة">Questions</span></p>
+    <h2 class="t-display" style="margin-top:20px" data-ar="ما تسأله كل رعية قبل أن تبدأ.">What every parish asks first.</h2>
+    <div class="faq" style="margin-top:32px">
+      <details open>
+        <summary data-ar="هل يعمل من دون إنترنت؟">Does it work without internet?</summary>
+        <p data-ar="نعم. يتابع الإدخال على الجهاز نفسه خلال الانقطاع، وتُصطفّ التغييرات مع لافتة واضحة، ثم تُزامن عند عودة الخط. الشيء الوحيد الذي ينتظر الاتصال هو إرسال الرسائل.">Yes. Entry continues on the machine itself during a cut, changes queue behind a banner that says so plainly, and everything syncs when the line returns. The only thing that waits for a connection is sending messages.</p>
+      </details>
+      <details>
+        <summary data-ar="هل نستطيع الاحتفاظ بسجلّاتنا الورقية؟">Can we keep our paper registers?</summary>
+        <p data-ar="نعم، والكثير من الرعايا تفعل. تطبع ParishLife على مقاس A4 بترقيم السجلّ نفسه، فيبقى الدفتر هو الأصل القانوني ويكون النظام هو ما تبحث فيه وتُصدر منه التقارير.">Yes, and many parishes do. ParishLife prints A4 pages carrying the same register numbering, so the bound book stays the legal original while the system is what you search and report from.</p>
+      </details>
+      <details>
+        <summary data-ar="ماذا يحصل حين يتغيّر سعر الصرف؟">What happens when the exchange rate moves?</summary>
+        <p data-ar="السجلّات القديمة لا تتغيّر. كل مبلغ محفوظ مع السعر الذي أنتجه، فإعادة طباعة إيصال من العام الماضي تعطي الرقم نفسه. السعر الجديد يسري على ما هو آتٍ فقط، ويحذّرك النظام حين يتقادم السعر.">Past records do not change. Every amount is stored with the rate that produced it, so a receipt reprinted next year gives the same figure. A new rate applies only going forward, and the system warns you when the rate has gone stale instead of quietly using it.</p>
+      </details>
+      <details>
+        <summary data-ar="من يرى ماذا؟">Who can see what?</summary>
+        <p data-ar="خمسة أدوار. الكاهن وحده يرى الملاحظات الرعوية ويوقّع الشهادات ويغيّر سعر الصرف. أمين السرّ لا يرى المال إطلاقاً. أمين الصندوق يرى المال ولا يرى الملاحظات. مسؤول الخدمة يرى مجموعته فقط. المتطوّع يرى محطة تسجيل واحدة بلا تنقّل. ما لا يحقّ للدور رؤيته غائب عن الشريط، لا مطفأ.">Five roles. Only the priest sees pastoral notes, signs certificates and changes the rate. The secretary never sees money. The treasurer sees money but not notes. A ministry leader sees only their own groups. A volunteer gets one check-in station with no navigation at all. What a role may not use is absent from the rail, not greyed out.</p>
+      </details>
+      <details>
+        <summary data-ar="هل يستطيع المؤمنون رؤية سجلّاتهم؟">Can parishioners see their own records?</summary>
+        <p data-ar="عبر بوّابة المؤمنين: تحدّث العائلة عنوانها وهاتفها وأفرادها، وتطلب شهادة، وترى كشف تقدماتها. لا تصل إلى سجلّ أحد آخر، وكل تعديل يمرّ على المكتب قبل اعتماده.">Through the member portal a family updates its own address, phone and members, requests a certificate and sees its own giving statement. It reaches no one else's record, and every change is reviewed by the office before it lands.</p>
+      </details>
+      <details>
+        <summary data-ar="أين تُحفظ البيانات، وهل نستطيع تصديرها؟">Where is the data kept, and can we export it?</summary>
+        <p data-ar="نسخة كاملة على حاسوب الرعية ونسخة مشفّرة على الخادم. التصدير متاح دائماً إلى Excel وPDF بأيّ من اللغتين، من دون طلب ومن دون رسم. السجلّات ملك الرعية.">A full copy on the parish computer and an encrypted copy on the server. Export to Excel or PDF in either language is always available, without asking and without a fee. The records belong to the parish.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────── cta ────────────────────── -->
+<section class="section-lg panel-dark" id="book">
+  <div class="wrap" style="text-align:center">
+    <h2 class="t-display" style="max-width:20ch;margin-inline:auto" data-ar="أعدّ رعيّتك في بعد ظهر واحد.">Set your parish up in one afternoon.</h2>
+    <p class="lede" style="margin:16px auto 0;max-width:56ch" data-ar="نمشي معك في الإعداد: الطقس، والأدوار، وسعر الصرف، وأول مئة سجلّ من دفترك. بالعربية أو بالإنكليزية.">We walk you through setup together: the rite, the roles, the rate, and the first hundred records out of your book. In Arabic or in English.</p>
+    <div class="row" style="gap:12px;justify-content:center;margin-top:32px;flex-wrap:wrap">
+      <a class="btn btn-on-dark btn-lg" href="mailto:hello@parishlife.app" data-ar="احجز عرضاً تجريبياً">Book a walkthrough</a>
+      <a class="btn btn-outline-dark btn-lg" href="https://wa.me/9613421887" data-ar="راسلنا على واتساب">Message us on WhatsApp</a>
+    </div>
+    <p class="t-caption" style="margin-top:20px;color:rgba(244,241,222,.6)" data-ar="٣٠ دقيقة · بلا التزام · نحضر لك بياناتك التجريبية مسبقاً.">30 minutes · no commitment · we bring your sample data already loaded.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="grid g4">
+      <div>
+        <div class="brand"><span class="mark" aria-hidden="true">P</span><span class="name">ParishLife</span></div>
+        <div style="font:600 20px/1.6 var(--arabic);color:var(--text-3);margin-top:6px">حياة الرعية</div>
+        <p class="t-caption dimmer" style="margin-top:12px;max-width:30ch" data-ar="إدارة رعايا مبنية في لبنان، للرعايا في لبنان.">Parish management built in Lebanon, for parishes in Lebanon.</p>
+      </div>
+      <div>
+        <h5 data-ar="المنتج">Product</h5>
+        <a href="#modules" data-ar="الوحدات">Modules</a>
+        <a href="#roles" data-ar="الأدوار">Roles</a>
+        <a href="#pricing" data-ar="الأسعار">Pricing</a>
+        <a href="#faq" data-ar="أسئلة متكرّرة">Questions</a>
+      </div>
+      <div>
+        <h5 data-ar="الرعية">Parish</h5>
+        <a href="#book" data-ar="احجز عرضاً">Book a walkthrough</a>
+        <a href="#lebanon" data-ar="من أجل لبنان">Built for Lebanon</a>
+        <a href="#how" data-ar="العمل بلا إنترنت">Working offline</a>
+      </div>
+      <div>
+        <h5 data-ar="تواصل">Contact</h5>
+        <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
+        <a href="https://wa.me/9613421887" dir="ltr">+961 3 421 887</a>
+        <a href="#" data-ar="بيروت، لبنان">Beirut, Lebanon</a>
+      </div>
+    </div>
+    <hr class="rule" style="margin:32px 0 20px">
+    <div class="row" style="gap:24px;flex-wrap:wrap">
+      <span class="t-caption dimmer">© 2026 ParishLife</span>
+      <span class="t-caption dimmer" data-ar="الخصوصية">Privacy</span>
+      <span class="t-caption dimmer" data-ar="الشروط">Terms</span>
+      <span class="t-caption dimmer mono" style="margin-inline-start:auto">Inter · IBM Plex Sans Arabic · 8px grid</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/landing.js"></script>
+</body>
+</html>
