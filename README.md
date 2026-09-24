@@ -78,7 +78,9 @@ permissions all change — what a role may not use is *absent from the rail*, no
 out. A secretary has no Giving entry at all; a ministry leader sees only her own groups
 and teams; a volunteer gets a check-in station with no navigation.
 
-**Bilingual, both directions.** The language switch in the avatar menu mirrors the whole interface:
+**Bilingual, both directions.** Language is the second item in the avatar menu — top right
+in English, top left in Arabic, where it reads «اللغة» — and is also under My account
+(«حسابي») and on the sign-in screen (EN / ع). Switching mirrors the whole interface:
 rail side, table column order, chevrons, drawer entry edge. Numerals and amounts stay
 left-to-right in both, and Arabic runs one size larger with looser leading. Every
 string is a `t(english, arabic)` pair at its call site; French is a third argument and
@@ -115,10 +117,14 @@ Sunday slide deck and the ready-made parish designs as SVG. A click sweep of eve
 control on every route, and of every control inside the dialog it opens — about 2,000
 clicks across the five roles — finds no placeholder and no dead button.
 
-**Status badges.** Every status pill carries an icon as well as a colour — a tick for
-approved, a clock for pending, a cross for declined, a lock for private — so the state
-reads without relying on colour alone. The mapping lives in one place (`STATUS` and
-`TONE_ICON` in `assets/ui.js`, glyphs `st-*` in `assets/icons.js`).
+**Status badges.** Every status pill carries an icon as well as a colour, so the state
+reads without relying on colour alone. The icons are the seven from the Status Badges UI
+Kit (Figma community), taken exactly as drawn: Success for approved, paid and ready;
+Failed for declined and rejected; Pending for pending, unfilled and conflicts; In review
+for anything awaiting approval or a signature; Progress for open and draft; Submitted for
+sent; Expire for scheduled and expiring. Paused is not in the kit, so it is drawn on the
+kit's ring to match; private and restricted keep the lock. The mapping lives in one place
+(`STATUS` and `TONE_ICON` in `assets/ui.js`, glyphs `st-*` in `assets/icons.js`).
 
 **Dropdowns.** Every `<select class="select">` becomes the design system's own list on a
 mouse or trackpad: arrow keys, Home/End, type-ahead, Enter and Esc work, lists longer

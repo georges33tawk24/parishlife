@@ -641,10 +641,10 @@ export function styleguide(tab = '') {
         </div>
         <div class="divider"></div>
         <div class="row" style="gap:10px;flex-wrap:wrap">
-          ${status('approved')}${status('pending')}${status('conflict')}${status('draft')}${status('unfilled')}${status('failed')}</div>
+          ${status('approved')}${status('failed')}${status('pending')}${status('awaiting-approval')}${status('open')}${status('sent')}${status('scheduled')}${pill(L('Paused', 'متوقّف'), 'warning', 'st-pause')}</div>
         <p class="t-caption dim" style="margin-top:14px">${L(
-          'Status is never carried by colour alone: every pill pairs a dot with a word, every alert pairs a tint with an icon and a heading.',
-          'الحالة لا تُحمَل باللون وحده أبداً: كل شارة تجمع نقطة وكلمة، وكل تنبيه يجمع لوناً وأيقونة وعنواناً.')}</p>`)}
+          'Status is never carried by colour alone: every status pill pairs an icon with a word, every alert pairs a tint with an icon and a heading.',
+          'الحالة لا تُحمَل باللون وحده أبداً: كل شارة حالة تجمع أيقونة وكلمة، وكل تنبيه يجمع لوناً وأيقونة وعنواناً.')}</p>`)}
 
       ${spec(L('Type', 'الخطّ'), L('Six sizes, two families', 'ستة أحجام وعائلتان'), `
         <div class="tablescroll"><table class="tbl">

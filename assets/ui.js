@@ -50,7 +50,8 @@ export function who(p, { avatarCls = '' } = {}) {
 }
 
 /* Status badges: a toned pill carries the icon for what it means (the Status Badges UI Kit set:
-   Success, Failed, Pending, In review, Progress, Submitted, Expire); a neutral one keeps the dot.
+   Success, Failed, Pending, In review, Progress, Submitted, Expire, plus a Paused drawn to match);
+   a neutral one keeps the dot.
    mark: true for the tone's icon, an icon name to choose one, false for none. */
 const TONE_ICON = { success: 'st-ok', warning: 'st-alert', danger: 'st-no', info: 'info' };
 export const pill = (label, tone = '', mark = true) => {
@@ -58,7 +59,7 @@ export const pill = (label, tone = '', mark = true) => {
   return `<span class="pill ${tone ? 'pill-' + tone : ''}">${ic ? icon(ic, 14, 'sticon') : mark ? '<span class="dot"></span>' : ''}${esc(label)}</span>`;
 };
 
-/** Status is never carried by colour alone: every pill pairs a dot with a word. */
+/** Status is never carried by colour alone: every pill pairs an icon with a word. */
 const STATUS = {
   approved:      ['Approved', 'موافَق عليه', 'success', 'st-ok'],
   registered:    ['Registered', 'مسجَّل', 'success', 'st-ok'],
