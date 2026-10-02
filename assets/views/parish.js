@@ -984,7 +984,7 @@ export function volunteers(tab = '') {
         <span><i class="rdot pending"></i>${L('awaiting reply', 'بانتظار الردّ')}</span>
         <span><i class="rdbl"></i>${L('double-booked', 'حجز مزدوج')}</span>
         <span><i class="rota-swap" aria-hidden="true">${L('Swap', 'تبديل')}</i>${L('swap request', 'طلب تبديل')}</span>
-        <span class="dim">${L('On a phone, tap an empty place to invite someone.', 'على الهاتف، اضغط مركزاً شاغراً لدعوة أحد.')}</span></p>`,
+        <span class="dim rota-hint">${L('On a phone, tap an empty place to invite someone.', 'على الهاتف، اضغط مركزاً شاغراً لدعوة أحد.')}</span></p>`,
       { more: teams.length > 2 ? `<span class="row rota-nav" style="gap:6px">${C.iconBtn('chevL', L('Scroll to earlier teams', 'الفرق السابقة'), 'data-rota-scroll="-1"')}${C.iconBtn('chevR', L('Scroll to more teams', 'المزيد من الفرق'), 'data-rota-scroll="1"')}</span>` : '' })}
     ${C.inlineAlert('info', L('Late cancellations trigger a shortlist', 'الاعتذار المتأخر يُطلق لائحة بدلاء'),
       L('ParishLife proposes volunteers who are free, trained for that team and not already serving twice that week. A human always picks.',
@@ -1027,11 +1027,15 @@ volunteers.mount = host => {
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`
   })));
   host.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () => volDrawer(b.dataset.vol)));
-  const rb = host.querySelector('.rota-board');
+  const rb = host.querySelector('.rota-board'), back = host.querySelector('[data-rota-scroll="-1"]'), more = host.querySelector('[data-rota-scroll="1"]');
   host.querySelectorAll('[data-rota-scroll]').forEach(b => b.addEventListener('click', () => {
     const step = (rb.querySelector('.rota-col')?.offsetWidth || 280) + 14, way = document.documentElement.dir === 'rtl' ? -1 : 1;
     rb.scrollBy({ left: +b.dataset.rotaScroll * step * way, behavior: 'smooth' });
   }));
+  /* the arrows rest at either end of the row (scrollLeft runs negative in Arabic) */
+  const ends = () => { if (!rb || !back) return; const x = Math.abs(rb.scrollLeft), max = rb.scrollWidth - rb.clientWidth;
+    back.disabled = x <= 2; more.disabled = x >= max - 2; };
+  rb?.addEventListener('scroll', ends, { passive: true }); ends();
 
 };
 

@@ -37,11 +37,11 @@ const pair = (k, ak, en, enAr, ar, arAr, { req = true, full = false } = {}) => [
 
 export const FIELD_TYPES = { text: ['Text', 'نص'], choice: ['Choice', 'اختيار'], person: ['Person', 'شخص'], date: ['Date', 'تاريخ'], file: ['File', 'ملف'] };
 
-export /* who headed a household before its form changed it, so the save can re-anchor relationships */
+/* who headed a household before its form changed it, so the save can re-anchor relationships */
 const priorHead = new WeakMap();
 const HEAD_INVERSE = { spouse: 'spouse', child: 'parent', son: 'parent', daughter: 'parent', parent: 'child', father: 'child', mother: 'child', sibling: 'sibling' };
 
-const ENT = {
+export const ENT = {
   field: {
     list: () => D.FORM_FIELDS, name: f => L(f.label, f.labelAr),
     nw: ['Add a field', 'إضافة حقل'], ed: ['Edit field', 'تعديل الحقل'], del: ['Remove this field?', 'إزالة هذا الحقل؟'],
@@ -308,7 +308,7 @@ const ENT = {
         set: (x, v) => { x.steps = v.split('\n').map(s => s.trim()).filter(Boolean); x.stepsAr = x.steps.slice(); } }],
     blank: () => ({ id: uid('w'), name: '', ar: '', open: 0, avg: '—', avgAr: '—',
       steps: ['Request', 'Review', 'Decision', 'Done'], stepsAr: ['الطلب', 'المراجعة', 'القرار', 'تمّ'] }),
-    canDelete: w => w.open > 0 || D.RUNS.some(r => r.wf === w.id) ? L('Requests are still running through it. Pause it instead.', 'ما زالت طلبات تمرّ فيه. أوقفه مؤقتاً بدلاً من ذلك.') : true
+    canDelete: w => D.RUNS.some(r => r.wf === w.id) ? L('Tasks are still open in it. Finish or cancel them, or pause the workflow instead.', 'ما زالت فيه مهام مفتوحة. أنجزها أو ألغِها، أو أوقف المسار مؤقتاً بدلاً من ذلك.') : true
   },
 
   issue: {

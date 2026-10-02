@@ -1182,7 +1182,7 @@ export function formNew() {
             ${KINDS.map(([k, lab]) => `<option value="${k}">${esc(lab)}</option>`).join('')}</select>
             <span class="help">${L('Masses are not registered for, so they are not offered here.', 'لا يُسجَّل للقداديس، لذلك لا تظهر هنا.')}</span></div>
           <div id="ne_clash"></div>
-          <div class="row" style="gap:8px;justify-content:flex-end;margin-top:12px">
+          <div class="inlinecard-acts">
             <button type="button" class="btn btn-secondary btn-dense" id="ne_cancel">${L('Cancel', 'إلغاء')}</button>
             <button type="button" class="btn btn-primary btn-dense" id="ne_ok">${icon('check', 15)}${L('Use this event', 'استعمل هذا الحدث')}</button></div>
         </div>` : ''}
@@ -1206,12 +1206,18 @@ export function formNew() {
       sel.addEventListener('change', context);
       if (box) {
         const v = q => el.querySelector(q).value;
+        /* the room is checked against the calendar, room bookings (with their set-up time) and maintenance blocks */
         const showClash = () => {
           const d = v('#ne_d'), from = v('#ne_from'), to = v('#ne_to'), room = v('#ne_v');
-          const c = d && D.EVENTS.find(x => x.venue === room && x.d === d && hm(x.t) < hm(to) && hm(from) < (x.to ? hm(x.to) : hm(x.t) + (x.kind === 'mass' ? 60 : 90)));
+          const block = d && D.MAINTENANCE.find(m => m.venue === room && m.from <= d && d <= m.to);
+          const ev = d && D.EVENTS.find(x => x.venue === room && x.d === d && x.kind !== 'pending' && hm(x.t) < hm(to) && hm(from) < (x.to ? hm(x.to) : hm(x.t) + (x.kind === 'mass' ? 60 : 90)));
+          const res = d && D.RESERVATIONS.find(r => r.venue === room && r.date === d && r.status !== 'rejected' && hm(r.from) - (+r.setup || 0) < hm(to) && hm(from) < hm(r.to));
+          const c = ev ? { title: L(ev.title, ev.titleAr || ev.title), at: ev.t } : res ? { title: L(res.title, res.titleAr || res.title), at: res.from } : null;
           el.querySelector('#ne_clash').innerHTML = !d ? ''
+            : d < today ? C.inlineAlert('warning', L('That day has passed', 'هذا اليوم مضى'), L('Choose today or a later date.', 'اختر اليوم أو تاريخاً لاحقاً.'))
             : hm(from) >= hm(to) ? C.inlineAlert('warning', L('The event ends before it starts', 'ينتهي الحدث قبل أن يبدأ'), L('Check the two times.', 'تحقّق من الوقتين.'))
-            : c ? C.inlineAlert('warning', L(`${place(room)} is taken`, `${place(room)} محجوزة`), L(`${c.title} is there from ${c.t}. Pick another room or time.`, `${c.titleAr || c.title} فيها من ${c.t}. اختر قاعة أو وقتاً آخر.`))
+            : block ? C.inlineAlert('warning', L(`${place(room)} is closed for maintenance`, `${place(room)} مغلقة للصيانة`), L(`${block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. Pick another room or day.`, `${block.whyAr || block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. اختر قاعة أو يوماً آخر.`))
+            : c ? C.inlineAlert('warning', L(`${place(room)} is taken`, `${place(room)} محجوزة`), L(`${c.title} is there from ${c.at}. Pick another room or time.`, `${c.title} فيها من ${c.at}. اختر قاعة أو وقتاً آخر.`))
             : C.inlineAlert('success', L('The room is free', 'القاعة متاحة'), L(`${place(room)} is free at that time.`, `${place(room)} متاحة في ذلك الوقت.`));
         };
         ['#ne_d', '#ne_from', '#ne_to', '#ne_v'].forEach(q => el.querySelector(q).addEventListener('change', showClash));
@@ -1219,7 +1225,8 @@ export function formNew() {
         opener.addEventListener('click', () => toggle(box.hidden));
         el.querySelector('#ne_cancel').addEventListener('click', () => toggle(false));
         el.querySelector('#ne_ok').addEventListener('click', () => {
-          if (![need(el, '#ne_t', L('Give the event a title', 'أعطِ الحدث عنواناً')), need(el, '#ne_d', L('Choose the date', 'اختر التاريخ')),
+          if (![need(el, '#ne_t', L('Give the event a title', 'أعطِ الحدث عنواناً')),
+                need(el, '#ne_d', L('Choose today or a later date', 'اختر اليوم أو تاريخاً لاحقاً'), d => !!d && d >= today),
                 need(el, '#ne_to', L('Ends before it starts', 'ينتهي قبل أن يبدأ'), to => hm(to) > hm(v('#ne_from')))].every(Boolean)) return;
           const title = v('#ne_t').trim();
           draft = { title, titleAr: title, d: v('#ne_d'), t: v('#ne_from'), to: v('#ne_to'), venue: v('#ne_v'), kind: v('#ne_k') };
@@ -1578,12 +1585,17 @@ export function composeToPerson() {
 /* ═════════════ admin, eparchy, settings ═════════════ */
 AUDIENCES.eparchy = ['All parishes in the eparchy', 'كل رعايا الأبرشية', 3];
 
-export function confirmAction({ title, body, cta, danger = false, then, back = L('Cancel', 'إلغاء') }) {
+/* onBack runs when the person steps back with the back button (not Esc), for example to reopen
+   the drawer the question was asked from. */
+export function confirmAction({ title, body, cta, danger = false, then, back = L('Cancel', 'إلغاء'), onBack }) {
   openModal({
     title, body: `<p class="t-body dim" style="font-size:14px;line-height:22px">${esc(body)}</p>`,
-    foot: `<button class="btn btn-secondary" data-close>${esc(back)}</button>
+    foot: `<button class="btn btn-secondary" data-close id="cf_back">${esc(back)}</button>
       <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="cf_go" style="margin-inline-start:auto">${esc(cta)}</button>`,
-    onMount(el) { el.querySelector('#cf_go').addEventListener('click', () => { closeOverlays(); then(); }); }
+    onMount(el) {
+      el.querySelector('#cf_go').addEventListener('click', () => { closeOverlays(); then(); });
+      if (onBack) el.querySelector('#cf_back').addEventListener('click', onBack);
+    }
   });
 }
 

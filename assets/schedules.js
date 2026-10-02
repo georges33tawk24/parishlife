@@ -123,7 +123,7 @@ export function printWeekDialog() {
 }
 
 /* ---------------- the priests' Mass schedule (clergy only) ---------------- */
-const RANGES = () => [['week', L('This week', 'هذا الأسبوع')], ['month', L('This month', 'هذا الشهر')], ['next', L('Next 4 weeks', 'الأسابيع الأربعة المقبلة')]];
+const RANGES = () => [['week', L('This week', 'هذا الأسبوع')], ['month', L('This month', 'هذا الشهر')], ['next', L('Next 4 weeks', '4 أسابيع مقبلة')]];
 function rangeOf(r) {
   if (r === 'week') { const a = weekOf(0); return [a, addDays(a, 6), span(a, addDays(a, 6))]; }
   if (r === 'next') return [TODAY, addDays(TODAY, 27), span(TODAY, addDays(TODAY, 27))];
@@ -138,7 +138,7 @@ function priestRows(list, forPrint) {
     ? `<section class="ps-day"><h2><span>${esc(fmtLong(d))}</span>${FEASTS[d] ? `<small>${esc(L(...FEASTS[d]))}</small>` : ''}</h2><table>
         ${es.map(e => { const pr = priestsOf(e); return `<tr><td class="tm">${esc(e.t)}${e.to ? `–${esc(e.to)}` : ''}</td><td><b>${esc(L(e.title, e.titleAr || e.title))}</b></td>
           <td class="wh">${esc(placeOf(e.venue))}</td><td style="width:30%">${pr.length ? esc(pr.map(nameOf).join(', ')) : `<span class="warn">${L('Not assigned', 'لم يُعيَّن')}</span>`}</td></tr>`; }).join('')}</table></section>`
-    : es.map(e => { const pr = priestsOf(e); return `<tr><td class="mono dim" style="white-space:nowrap">${esc(fmtDate(d))} · ${esc(e.t)}</td><td><b>${esc(L(e.title, e.titleAr || e.title))}</b></td>
+    : es.map(e => { const pr = priestsOf(e); return `<tr><td class="ps-when"><span class="mono">${esc(fmtDate(d))}</span><small>${esc(e.t)}${e.to ? `–${esc(e.to)}` : ''}</small></td><td><b>${esc(L(e.title, e.titleAr || e.title))}</b></td>
         <td class="dim hide-sm">${esc(placeOf(e.venue))}</td><td>${pr.length ? esc(pr.map(nameOf).join(', ')) : `<span class="pill pill-warning"><span class="dot"></span>${L('Not assigned', 'لم يُعيَّن')}</span>`}</td></tr>`; }).join('')).join('');
 }
 
@@ -146,7 +146,7 @@ export function priestScheduleDialog() {
   let r = 'month';
   const body = () => { const list = massesIn(r), open = list.filter(e => !priestsOf(e).length).length;
     return `<p class="t-caption dim" style="margin:0 0 10px">${list.length ? L(`${list.length} Mass${list.length === 1 ? '' : 'es'}${open ? ` · ${open} without a priest` : ' · every one has a priest'}`, `${list.length} قداديس${open ? ` · ${open} بلا كاهن` : ' · لكلّ منها كاهن'}`) : ''}</p>
-      ${list.length ? `<div class="tablewrap"><div class="tablescroll"><table class="tbl"><thead><tr><th>${L('When', 'الموعد')}</th><th>${L('Mass', 'القدّاس')}</th><th class="hide-sm">${L('Where', 'المكان')}</th><th>${L('Priest', 'الكاهن')}</th></tr></thead>
+      ${list.length ? `<div class="tablewrap"><div class="tablescroll"><table class="tbl ps-table"><thead><tr><th>${L('When', 'الموعد')}</th><th>${L('Mass', 'القدّاس')}</th><th class="hide-sm">${L('Where', 'المكان')}</th><th>${L('Priest', 'الكاهن')}</th></tr></thead>
         <tbody>${priestRows(list, false)}</tbody></table></div></div>` : `<p class="t-caption dim">${L('No Masses in this period.', 'لا قداديس في هذه الفترة.')}</p>`}`; };
   openModal({ wide: true,
     title: L('Priest schedule', 'جدول الكهنة'),

@@ -1,6 +1,6 @@
 /* Module 5 — facilities, equipment, reservations, maintenance, issues, rentals. */
 import { t, isAr, num, usd, fmtDate, fmtLong, month, dayShort } from '../i18n.js';
-import { is, bus, S } from '../store.js';
+import { is, bus, S, me } from '../store.js';
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, stat,
          searchField, openDrawer, openModal, closeOverlays, toast, avatar, tabBar } from '../ui.js';
 import * as C from '../components.js';
@@ -29,8 +29,8 @@ export function facilities(tab = '') {
                      ['loan', L('On loan', 'معار'), e => e.out > 0], ['service', L('Needs attention', 'يحتاج عناية'), attention]];
     const keep = (FILTERS.find(([k]) => k === f) || FILTERS[0])[2];
     return head + `<div class="tabbody">
-      <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
-        <div class="grow" style="max-width:300px">${C.searchClear(L('Search equipment', 'ابحث في التجهيزات'), 'eqsearch', 'data-find')}</div>
+      <div class="toolbar eqbar" style="margin-bottom:14px">
+        <div class="grow">${C.searchClear(L('Search equipment', 'ابحث في التجهيزات'), 'eqsearch', 'data-find')}</div>
         <span class="seg" role="group" aria-label="${L('Show', 'عرض')}">${FILTERS.map(([k, lab, test]) =>
           `<button type="button" aria-pressed="${f === k}" data-act="eq-filter:${k}">${esc(lab)}<span class="segn">${EQUIPMENT.filter(test).length}</span></button>`).join('')}</span>
       </div>
@@ -139,7 +139,7 @@ function heldOn(vid, date) {
 }
 function freeGaps(items) {
   const gaps = []; let at = OPEN[0];
-  for (const it of items) { const start = Math.max(OPEN[0], it.from - it.buffer); if (start - at >= 30) gaps.push([at, start]); at = Math.max(at, it.to); }
+  for (const it of [...items].sort((x, y) => (x.from - x.buffer) - (y.from - y.buffer))) {   /* set-up time starts the hold */ const start = Math.max(OPEN[0], it.from - it.buffer); if (start - at >= 30) gaps.push([at, start]); at = Math.max(at, it.to); }
   if (OPEN[1] - at >= 30) gaps.push([at, OPEN[1]]);
   return gaps;
 }
@@ -153,7 +153,7 @@ function availabilityDrawer(vid) {
   const render = () => {
     const y = shown.getFullYear(), m = shown.getMonth(), first = new Date(y, m, 1), n = new Date(y, m + 1, 0).getDate();
     const cells = [...Array(first.getDay()).fill(null), ...Array.from({ length: n }, (_, i) => new Date(y, m, i + 1))];
-    const block = blockOn(vid, day), items = block ? [] : heldOn(vid, day), gaps = block ? [] : freeGaps(items);
+    const block = blockOn(vid, day), items = block ? [] : heldOn(vid, day), gaps = block ? [] : freeGaps(items), past = day < isoD(TODAY);
     const pct = x => `${((Math.min(Math.max(x, OPEN[0]), OPEN[1]) - OPEN[0]) / (OPEN[1] - OPEN[0]) * 100).toFixed(2)}%`;
     const width = (a, b) => `${((Math.min(b, OPEN[1]) - Math.max(a, OPEN[0])) / (OPEN[1] - OPEN[0]) * 100).toFixed(2)}%`;
     const rows = block ? [] : [...items.map(it => ({ at: it.from - it.buffer, it })), ...gaps.map(g => ({ at: g[0], g }))].sort((p, q) => p.at - q.at);
@@ -163,7 +163,7 @@ function availabilityDrawer(vid) {
         <div class="avail-cal-h">${C.iconBtn('chevL', L('Previous month', 'الشهر السابق'), 'data-avm="-1"')}<b>${esc(month(m))} ${y}</b>${C.iconBtn('chevR', L('Next month', 'الشهر التالي'), 'data-avm="1"')}</div>
         <div class="avail-grid" role="grid">${[0, 1, 2, 3, 4, 5, 6].map(i => `<span class="dh">${esc(dayShort(i))}</span>`).join('')}
           ${cells.map(d => { if (!d) return '<span></span>'; const k = isoD(d), bl = blockOn(vid, k), busy = !bl && heldOn(vid, k).length;
-            return `<button type="button" class="ad${k === day ? ' on' : ''}${k === isoD(TODAY) ? ' today' : ''}${bl ? ' blocked' : ''}" data-avday="${k}" aria-pressed="${k === day}"
+            return `<button type="button" class="ad${k === day ? ' on' : ''}${k === isoD(TODAY) ? ' today' : ''}${k < isoD(TODAY) ? ' past' : ''}${bl ? ' blocked' : ''}" data-avday="${k}" aria-pressed="${k === day}"
               aria-label="${esc(fmtLong(d))}${bl ? ' · ' + L('blocked', 'مغلقة') : busy ? ` · ${busy} ${L('booked', 'محجوز')}` : ''}">${d.getDate()}${busy ? '<i></i>' : ''}</button>`; }).join('')}</div>
         <div class="avail-legend"><span><i class="lg busy"></i>${L('something booked', 'محجوز جزئياً')}</span><span><i class="lg blocked"></i>${L('blocked', 'مغلقة')}</span></div>
         <label class="avail-jump"><span class="t-caption dim">${L('Or go straight to a date', 'أو اذهب إلى تاريخ')}</span><input class="input" type="date" id="av_date" value="${day}"></label>
@@ -175,11 +175,12 @@ function availabilityDrawer(vid) {
         : `<div class="avail-strip" aria-hidden="true">${items.map(it => `${it.buffer ? `<span class="seg buf" style="inset-inline-start:${pct(it.from - it.buffer)};width:${width(it.from - it.buffer, it.from)}"></span>` : ''}
             <span class="seg ${it.state}" style="inset-inline-start:${pct(it.from)};width:${width(it.from, it.to)}" title="${esc(it.title)}"></span>`).join('')}</div>
           <div class="avail-scale" aria-hidden="true">${[7, 11, 15, 19, 23].map(h => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div>
+          ${past ? `<p class="t-caption dim" style="margin:10px 0 0">${icon('info', 14)} ${L('This day has passed — it is shown for reference and cannot be booked.', 'مضى هذا اليوم — يُعرض للاطّلاع ولا يمكن الحجز فيه.')}</p>` : ''}
           <p class="t-caption dim" style="margin:10px 0 8px">${items.length ? L(`${items.length} booking${items.length === 1 ? '' : 's'} · ${gaps.length} free slot${gaps.length === 1 ? '' : 's'} between 07:00 and 23:00`, `${items.length} حجوزات · ${gaps.length} أوقات متاحة بين 07:00 و23:00`) : L('Free all day, 07:00 – 23:00.', 'متاحة طوال اليوم، 07:00 – 23:00.')}</p>
           <ol class="avail-list">${rows.map(({ it, g }) => it
-            ? `<li class="held"><span class="tm mono">${hhmm(it.from)}–${hhmm(it.to)}</span><span class="grow"><b>${esc(it.title)}</b>${it.buffer ? `<small>${L(`plus ${it.buffer} min to set up before`, `مع ${it.buffer} د للتجهيز قبلها`)}</small>` : it.ref ? `<small class="mono">${esc(it.ref)}</small>` : ''}</span>${pill(S2[it.state][0], S2[it.state][1])}</li>`
+            ? `<li class="held"><span class="tm mono">${hhmm(it.from)}–${hhmm(it.to)}</span><span class="grow"><b>${esc(it.title)}</b>${it.buffer ? `<small>${L(`plus ${it.buffer} min to set up before`, `مع ${it.buffer} د للتجهيز قبلها`)}</small>` : it.ref ? `<small class="mono">${esc(it.ref)}</small>` : ''}<span class="avail-state">${pill(S2[it.state][0], S2[it.state][1])}</span></span></li>`
             : `<li class="free"><span class="tm mono">${hhmm(g[0])}–${hhmm(g[1])}</span><span class="grow"><b>${L('Free', 'متاحة')}</b><small>${length(g[1] - g[0])}</small></span>
-                <button type="button" class="btn btn-secondary btn-dense" data-avbook="${hhmm(g[0])}|${hhmm(Math.min(g[1], g[0] + 120))}">${icon('plus', 14)}${L('Book', 'احجز')}</button></li>`).join('')}</ol>`}
+                ${past ? '' : `<button type="button" class="btn btn-secondary btn-dense" data-avbook="${hhmm(g[0])}|${hhmm(Math.min(g[1], g[0] + 120))}">${icon('plus', 14)}${L('Book', 'احجز')}</button>`}</li>`).join('')}</ol>`}
       </div></div>`;
   };
   openDrawer({ large: true,
@@ -193,7 +194,7 @@ function availabilityDrawer(vid) {
       const paint = () => {
         el.querySelector('#avbody').innerHTML = render();
         const blocked = !!blockOn(vid, day), foot = el.querySelector('#av_book');
-        foot.disabled = blocked; foot.querySelector('span').textContent = L(`Book on ${fmtDate(day)}`, `احجز في ${fmtDate(day)}`);
+        foot.disabled = blocked || day < isoD(TODAY); foot.querySelector('span').textContent = L(`Book on ${fmtDate(day)}`, `احجز في ${fmtDate(day)}`);
         const go = d => { day = d; shown = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, 1); S.ui.availDay = d; paint(); };
         el.querySelectorAll('[data-avday]').forEach(b => b.addEventListener('click', () => go(b.dataset.avday)));
         el.querySelectorAll('[data-avm]').forEach(b => b.addEventListener('click', () => { shown = new Date(shown.getFullYear(), shown.getMonth() + +b.dataset.avm, 1); paint(); }));
@@ -245,9 +246,12 @@ function blockDrawer(vid) {
       ['#bk_f', '#bk_t'].forEach(q => el.querySelector(q).addEventListener('change', show));
       show();
       el.querySelector('#doblock').addEventListener('click', () => {
-        if (!f() || !t2() || f() > t2()) return show();
+        const typed = el.querySelector('#mstaff').value.trim(), found = typed && PEOPLE.find(p => p.lat === typed || p.ar === typed);
+        if (![F.need(el, '#bk_f', L('Choose the first day', 'اختر اليوم الأول')), F.need(el, '#bk_t', L('Choose the last day', 'اختر اليوم الأخير')),
+              F.need(el, '#mstaff', L('Choose someone from the list, or leave it empty', 'اختر شخصاً من اللائحة، أو اتركه فارغاً'), () => !typed || !!found)].every(Boolean)) return;
+        if (f() > t2()) return show();
         const why = el.querySelector('#bk_w').value.trim() || L('Maintenance', 'صيانة');
-        const typed = el.querySelector('#mstaff').value.trim(), staff = PEOPLE.find(p => p.lat === typed || p.ar === typed)?.id || 'p15';
+        const staff = found ? found.id : me().id;
         const entry = { venue: vid, from: f(), to: t2(), why, whyAr: why, by: staff };
         MAINTENANCE.unshift(entry);
         closeOverlays(); bus.refresh();

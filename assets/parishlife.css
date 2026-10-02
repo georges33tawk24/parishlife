@@ -422,10 +422,10 @@ table.tbl .shrink{width:1%;white-space:nowrap}
   background:var(--surface);flex:none
 }
 .modal{
-  position:fixed;z-index:95;inset:0;display:grid;place-items:center;padding:24px;pointer-events:none
+  position:fixed;z-index:95;inset:0;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:24px;pointer-events:none
 }
 .modal .sheet{
-  width:min(100%,560px);max-height:calc(100vh - 48px);background:var(--surface);
+  width:min(100%,560px);min-width:0;justify-self:center;max-height:calc(100vh - 48px);background:var(--surface);
   border-radius:var(--r-modal);box-shadow:var(--e3);display:flex;flex-direction:column;
   opacity:0;transform:translateY(8px) scale(.99);transition:all var(--t-std) var(--ease);pointer-events:auto
 }

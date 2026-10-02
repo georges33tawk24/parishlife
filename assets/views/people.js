@@ -94,7 +94,7 @@ function familyTree(h, focus) {
     return baseOf(m) !== anchor.id ? `${lab} · ${first(baseOf(m))}` : lab;
   };
   const node = m => `<a class="ft-node ${m.id === focus ? 'me' : ''}" href="#/person/${m.id}/family">
-      ${avatar(m, 'avatar-lg')}<b>${esc(label(m))}</b><small class="ar">${esc(m.ar || '')}</small>
+      ${avatar(m, 'avatar-lg')}<b dir="auto">${esc(label(m))}</b><small class="ar" dir="auto">${esc(m.ar || '')}</small>
       <span class="ft-role">${esc(roleOf(m))}${/^\d{4}/.test(m.born || '') ? ` · <span class="mono">${m.born.slice(0, 4)}</span>` : ''}</span>
       ${m.id === focus ? `<span class="ft-here">${t('This record', 'هذا السجل')}</span>` : ''}</a>`;
   const cellOf = id => isGhost(id)
@@ -469,7 +469,7 @@ export function personView(id, tab = '') {
         <nav class="crumbs"><a href="#/people">${t('People', 'المؤمنون')}</a><span class="sep">/</span><span>${esc(label(p))}</span></nav>
         <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(label(p))}
           ${status(p.status)}<span class="pill">${esc(riteLabel(p.rite))}</span></h1>
-        <div class="meta"><span style="font-family:${isAr() ? 'var(--sans)' : 'var(--arabic)'}">${esc(isAr() ? p.lat : p.ar)}</span>
+        <div class="meta"><span style="font-family:var(--arabic)" dir="auto">${esc(p.ar || '')}</span>
           ${house?.envelope ? ` · ${t('Offering-envelope identifier', 'رمز مظروف العطاء')} <span class="mono">${esc(house.envelope)}</span>` : ''} · ${esc(t(p.town, p.townAr))}</div>
       </div>
       <div class="acts"><button class="btn btn-secondary" data-act="compose:${p.id}">${icon('msg', 17)}${t('Message', 'مراسلة')}</button>
@@ -644,7 +644,7 @@ function printPeopleDirectory() {
     css:'h1{font:600 20px/28px Inter,sans-serif;margin:0 0 4px}p{margin:0 0 14px;color:#765039}table{width:100%;border-collapse:collapse}th,td{text-align:start;padding:7px 9px;border-bottom:1px solid #DCEEFF}th{background:#EAF4FF;font:600 10px/14px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em}',
     body:`<h1>${t('Parish people directory','دليل مؤمني الرعية')}</h1><p>${t('Only people who opted in are included.','يشمل فقط من وافقوا على الإدراج.')} · ${listed.length}</p>
     <table><thead><tr>${[t('English name','الاسم بالإنكليزية'),t('Arabic name','الاسم بالعربية'),t('Household','العائلة'),t('Town','البلدة'),t('Phone','الهاتف')].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
-    ${listed.map(p=>`<tr><td>${esc(p.lat)}</td><td>${esc(p.ar)}</td><td>${esc(hh(p.hh)?.name||'')}</td><td>${esc(p.town||'')}</td><td dir="ltr">${esc(p.phone==='—'?'':p.phone)}</td></tr>`).join('')}</tbody></table>` });
+    ${listed.map(p=>{const h=hh(p.hh);return `<tr><td dir="auto">${esc(p.lat)}</td><td dir="auto">${esc(p.ar)}</td><td>${esc(h?t(h.name,h.ar||h.name):'')}</td><td>${esc(t(p.town||'',p.townAr||p.town||''))}</td><td dir="ltr">${esc(p.phone==='—'?'':p.phone)}</td></tr>`;}).join('')}</tbody></table>` });
 }
 
 function editPersonGroups(id) {

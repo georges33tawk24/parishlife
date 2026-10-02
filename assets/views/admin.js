@@ -95,7 +95,8 @@ assignments.mount = async host => {
 /* ═══════════ 15 · forms & workflows ═══════════ */
 const WTABS = () => [['', 'Workflows', 'المسارات'], ['runs', 'Open tasks', 'المهام المفتوحة', RUNS.length],
                ['builder', 'Form builder', 'بناء الاستمارة'], ['log', 'Activity log', 'سجل النشاط']];
-const wfSteps = w => (isAr() ? w.stepsAr : w.steps) || w?.steps || [];
+const wfSteps = w => (w && (isAr() ? w.stepsAr : w.steps)) || w?.steps || [];
+const nameIn = p => p ? L(p.lat, p.ar || p.lat) : '';
 const RULE_OPS = { '=': ['is', 'هو'], '≠': ['is not', 'ليس'] };
 
 export function forms(tab = '') {
@@ -110,7 +111,7 @@ export function forms(tab = '') {
   }) + tabBar('forms', WTABS(), tab);
 
   if (tab === 'runs') {
-    const only = WORKFLOWS.find(w => w.id === S.ui.runWf), runs = only ? RUNS.filter(r => r.wf === only.id) : RUNS;
+    const only = WORKFLOWS.find(w => w.id === S.ui.runWf), runs = RUNS.filter(r => WORKFLOWS.some(w => w.id === r.wf) && (!only || r.wf === only.id));
     const late = runs.filter(r => r.overdue).length;
     return head + `${only ? `<div class="toolbar" style="margin-bottom:14px">
         <span class="chip chip-on" style="gap:6px">${icon('filter', 14)}${esc(L(only.name, only.ar))}</span>
@@ -121,7 +122,7 @@ export function forms(tab = '') {
                { label: L('Current step', 'الخطوة الحالية') }, { label: L('Responsible', 'المسؤول'), cls: 'hide-sm' },
                { label: L('Due', 'الموعد'), sort: true }, { label: '', cls: 'shrink' }],
         rows: runs.map(r => { const w = WORKFLOWS.find(x => x.id === r.wf), steps = wfSteps(w);
-          return { cells: [
+          return { cls: 'clickable', attrs: `data-run="${r.id}" tabindex="0"`, cells: [
             `<b>${esc(L(w.name, w.ar))}</b>`,
             r.subject ? who(person(r.subject)) : `<span class="dim">${L('Parish expense', 'مصروف الرعية')}</span>`,
             `<span style="display:block;min-width:150px"><b style="font-weight:500">${esc(steps[r.step] || '')}</b>
@@ -129,7 +130,7 @@ export function forms(tab = '') {
               <span class="meter" style="margin-top:6px"><i style="width:${Math.round(r.step / r.total * 100)}%"></i></span></span>`,
             who(person(r.owner)),
             r.overdue ? pill(`${fmtDate(r.due)} · ${L('late', 'متأخرة')}`, 'danger') : `<span class="mono dim">${fmtDate(r.due)}</span>`,
-            `<button class="btn btn-secondary btn-dense" data-run="${r.id}">${L('Open', 'فتح')}</button>`]}; }),
+            `<span class="btn btn-secondary btn-dense" aria-hidden="true">${L('Open', 'فتح')}</span>`]}; }),   /* the whole row opens the task */
         empty: empty('check', L('No open tasks', 'لا مهام مفتوحة'), only ? L('Nothing is waiting in this workflow.', 'لا شيء ينتظر في هذا المسار.') : L('Every request has been dealt with.', 'عولجت كل الطلبات.'))
       })}
       ${late ? C.inlineAlert('warning', late === 1 ? L('One task is late', 'مهمّة واحدة متأخرة') : L(`${late} tasks are late`, `${late} مهام متأخرة`),
@@ -206,28 +207,42 @@ export function forms(tab = '') {
         'لا تُنجَز الخطوات الرعوية والحمائية والمالية والتأديبية تلقائياً مهما بدت روتينية. للأتمتة أن تُحضّر العمل لا أن تقرّره.'))}`;
 }
 
+/* One open task: its steps, who is responsible, and the next action. Also reopened after
+   "Keep the task" in the cancel confirmation. */
+export function openRun(id) {
+  const r = RUNS.find(x => x.id === id), w = r && WORKFLOWS.find(x => x.id === r.wf);
+  if (!w) return;
+  const steps = wfSteps(w), owner = person(r.owner);
+  openDrawer({
+    title: L(w.name, w.ar),
+    sub: r.subject ? esc(nameIn(person(r.subject))) : L('Parish expense', 'مصروف الرعية'),
+    body: `<ol class="runsteps">${steps.map((st, i) => `<li class="${i < r.step ? 'done' : i === r.step ? 'now' : ''}">
+        <span class="dot" aria-hidden="true">${i < r.step ? icon('check', 13) : i + 1}</span>
+        <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? L('Done', 'أُنجزت') : i === r.step ? L('Current step', 'الخطوة الحالية') : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
+      <div class="divider"></div>
+      <dl class="dl"><dt>${L('Responsible', 'المسؤول')}</dt><dd>${esc(nameIn(owner) || '—')}</dd>
+        <dt>${L('Due', 'الموعد')}</dt><dd>${fmtDate(r.due)}${r.overdue ? ` · <span style="color:var(--danger-ink);font-weight:600">${L('late', 'متأخرة')}</span>` : ''}</dd>
+        <dt>${L('If it runs late', 'إن تأخّرت')}</dt><dd>${L('Fr. Antoine Khoury is reminded after 2 days', 'يُذكَّر الأب أنطوان خوري بعد يومين')}</dd></dl>
+      <div style="margin-top:18px">${C.textarea({ label: L('Note for the next person (optional)', 'ملاحظة لمن يتابع (اختياري)'), id: 'runnote', max: 300 })}</div>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
+      <button class="btn btn-danger-quiet" data-act="wf-cancel:${r.id}">${L('Cancel task', 'إلغاء المهمّة')}</button>
+      <button class="btn btn-primary" id="run_go" style="margin-inline-start:auto" data-act="run-step:${r.id}">${icon('check', 16)}${r.step + 1 >= r.total ? L('Finish task', 'إنهاء المهمّة') : L('Mark step done', 'إنجاز الخطوة')}</button>`,
+    onMount(el) {
+      C.wire(el);
+      /* start on the steps, not in the note: on a phone, focusing the note would scroll past them and
+         open the keyboard. Focus rests on the dialog itself, so no key press completes a step by accident. */
+      el.querySelector('.drawer-body').scrollTop = 0;
+      el.tabIndex = -1; el.focus({ preventScroll: true });
+    }
+  });
+}
+
 forms.mount = host => {
   C.wire(host); wireTables(host);
-  host.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', () => {
-    const r = RUNS.find(x => x.id === b.dataset.run), w = WORKFLOWS.find(x => x.id === r.wf);
-    const steps = wfSteps(w), owner = person(r.owner);
-    openDrawer({
-      title: L(w.name, w.ar),
-      sub: r.subject ? esc(person(r.subject)?.lat || '') : L('Parish expense', 'مصروف الرعية'),
-      body: `<ol class="runsteps">${steps.map((st, i) => `<li class="${i < r.step ? 'done' : i === r.step ? 'now' : ''}">
-          <span class="dot" aria-hidden="true">${i < r.step ? icon('check', 13) : i + 1}</span>
-          <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? L('Done', 'أُنجزت') : i === r.step ? L('Current step', 'الخطوة الحالية') : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
-        <div class="divider"></div>
-        <dl class="dl"><dt>${L('Responsible', 'المسؤول')}</dt><dd>${esc(owner?.lat || '—')}</dd>
-          <dt>${L('Due', 'الموعد')}</dt><dd>${fmtDate(r.due)}${r.overdue ? ` · <span style="color:var(--danger-ink);font-weight:600">${L('late', 'متأخرة')}</span>` : ''}</dd>
-          <dt>${L('If it runs late', 'إن تأخّرت')}</dt><dd>${L('Fr. Antoine Khoury is reminded after 2 days', 'يُذكَّر الأب أنطوان خوري بعد يومين')}</dd></dl>
-        <div style="margin-top:18px">${C.textarea({ label: L('Note for the next person (optional)', 'ملاحظة لمن يتابع (اختياري)'), id: 'runnote', max: 300 })}</div>`,
-      foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-        <button class="btn btn-danger-quiet" data-act="wf-cancel:${r.id}">${L('Cancel task', 'إلغاء المهمّة')}</button>
-        <button class="btn btn-primary" style="margin-inline-start:auto" data-act="run-step:${r.id}">${icon('check', 16)}${r.step + 1 >= r.total ? L('Finish task', 'إنهاء المهمّة') : L('Mark step done', 'إنجاز الخطوة')}</button>`,
-      onMount(el) { C.wire(el); }
-    });
-  }));
+  host.querySelectorAll('tr[data-run]').forEach(tr => {
+    tr.addEventListener('click', () => openRun(tr.dataset.run));
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRun(tr.dataset.run); } });
+  });
 };
 
 /* ═══════════ 16 · reporting ═══════════ */

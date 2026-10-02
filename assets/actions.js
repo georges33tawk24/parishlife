@@ -257,7 +257,9 @@ export const VERBS = {
        finished ? L(`${w?.name || ''}${p ? ` for ${p.lat}` : ''} is complete.`, `اكتمل «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}.`)
                 : L(`Next: ${steps[r.step] || ''}`, `التالي: ${stepsAr[r.step] || ''}`),
        { action: { label: L('Undo', 'تراجع'), fn: () => {
-         r.step = before.step; if (finished) D.RUNS.splice(before.at, 0, r);
+         /* by id: a failed save reloads the parish, and the task may already be back */
+         const live = D.RUNS.find(x => x.id === r.id);
+         if (live) live.step = before.step; else D.RUNS.splice(Math.min(before.at, D.RUNS.length), 0, Object.assign(r, { step: before.step }));
          const i = D.RUN_LOG.indexOf(entry); if (i >= 0) D.RUN_LOG.splice(i, 1); refresh(); } } });
   },
   'issue-assign': (btn, id) => {
@@ -411,11 +413,13 @@ export const VERBS = {
                     F.confirmAction({ title: L('Cancel this task?', 'إلغاء هذه المهمّة؟'),
                       body: L('Steps already done stay done and nothing more is sent. The task leaves the open list.', 'تبقى الخطوات المنجزة ولا يُرسل شيء بعدها. وتخرج المهمّة من لائحة المهام المفتوحة.'),
                       cta: L('Cancel task', 'إلغاء المهمّة'), back: L('Keep the task', 'إبقاء المهمّة'), danger: true,
-                      then: () => { const at = D.RUNS.indexOf(r); D.RUNS.splice(at, 1);
+                      onBack: () => import('./views/admin.js').then(m => m.openRun(id)),
+                      then: () => { const live = find(D.RUNS, id), at = D.RUNS.indexOf(live); if (at < 0) return; D.RUNS.splice(at, 1);
                         const entry = [stamp(), `${w?.name || ''} cancelled${p ? ` for ${p.lat}` : ''}`, `أُلغي «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}`, 'err'];
                         D.RUN_LOG.unshift(entry); closeOverlays(); refresh();
                         toast(L('Task cancelled', 'أُلغيت المهمّة'), L(w?.name || '', w?.ar || ''), 'warning', { action: { label: L('Undo', 'تراجع'), fn: () => {
-                          D.RUNS.splice(at, 0, r); const i = D.RUN_LOG.indexOf(entry); if (i >= 0) D.RUN_LOG.splice(i, 1); refresh(); } } }); } }); },
+                          if (!D.RUNS.some(x => x.id === id)) D.RUNS.splice(Math.min(at, D.RUNS.length), 0, live);
+                          const i = D.RUN_LOG.indexOf(entry); if (i >= 0) D.RUN_LOG.splice(i, 1); refresh(); } } }); } }); },
   'dom-add-field':() => CR.create('field'),
   'dom-add-rule': () => F.ruleAdd(),
   'rule-del':     (b, id) => { const i = D.FORM_RULES.findIndex(r => r.id === id); if (i < 0) return; const [r] = D.FORM_RULES.splice(i, 1); refresh();
