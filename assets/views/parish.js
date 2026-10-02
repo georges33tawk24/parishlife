@@ -15,7 +15,7 @@ import { eligibleEvents, eventById, selectedRegistration, selectRegistration, re
   selectableCheckinEvents, selectCheckinEvent, selectedCheckin, ensureCheckinSession, eventVenue } from '../event-workflows.js';
 import { EVENTS, EVENT_DETAIL, PEOPLE, FEASTS, GROUPS, GROUP_DETAIL, groupInfo, eventInfo, ROTA, REGISTRATIONS, REG_FORM, REGISTRANTS, REFUNDS,
          CHECKIN, PICKUP, INCIDENTS, VENUES, TODAY, VOLUNTEERS, SIGNUP_SHEETS,
-         SERVICE_REQUESTS, SERVICE_TEMPLATES, EVENT_TEMPLATES,
+         SERVICE_REQUESTS, SERVICE_TEMPLATES, EVENT_TEMPLATES, MUSIC,
          person, venue, group, initials } from '../data.js';
 
 /* Month shown on the calendar: October 2026 moved by the prev / next buttons. */
@@ -397,6 +397,20 @@ const STABS = () => [['', 'This plan', 'هذه الخدمة'], ['requests', 'Req
                ['templates', 'Templates', 'القوالب']];
 
 export function services(tab = '', planId = '') {
+  if(is('leader')) {
+    const meetings=GROUPS.flatMap(g=>groupInfo(g.id).meetings.map(m=>({g,m}))).sort((a,b)=>(a.m.d+a.m.t).localeCompare(b.m.d+b.m.t));
+    return pageHead({crumbs:[{label:L('My ministry','خدمتي')},{label:L('Service planning','تخطيط الخدمة')}],
+      title:L('Ministry planning','تخطيط الخدمة'),sub:L('Plan your group meetings and the music for each one.','خطّط لاجتماعات مجموعتك والموسيقى لكل اجتماع.'),
+      actions:`<button class="btn btn-primary" data-leader-meeting-new ${GROUPS.length?'':'disabled'}>${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button>`})+
+      `<div class="toolbar" style="margin:16px 0"><span class="t-caption dim">${L('Choose a group meeting to manage its details and attendance.','اختر اجتماع مجموعة لإدارة التفاصيل والحضور.')}</span></div>
+      ${table({cols:[{label:L('Meeting','الاجتماع')},{label:L('When','الموعد')},{label:L('Group / place','المجموعة / المكان')},
+        {label:L('Music','الموسيقى')},{label:'',cls:'shrink'}],rows:meetings.map(({g,m})=>({cells:[
+          `<b>${esc(m.title||L('Ministry meeting','اجتماع الخدمة'))}</b>`,`${fmtDate(m.d)} · ${esc(m.t)}`,
+          `${esc(L(g.name,g.ar))}${m.place?` · ${esc(m.place)}`:''}`,
+          (m.hymns||[]).map(id=>MUSIC.find(item=>item.id===id)).filter(Boolean).map(h=>esc(L(h.title,h.ar))).join(', ')||'—',
+          `<a class="btn btn-secondary btn-dense" href="#/groups/${esc(g.id)}/meetings">${L('Open meeting','افتح الاجتماع')}</a>`]}))})}
+      ${!meetings.length?empty('calendar',L('No meetings yet','لا اجتماعات بعد'),L('Schedule one from your group page.','جدول اجتماعاً من صفحة مجموعتك.')):''}`;
+  }
   const savedPlan = tab === 'plan' ? allPlans().find(p => p.id === planId) : null;
   if (tab === 'plan' && !savedPlan) return pageHead({title:L('Plan not found','الخطة غير موجودة'),crumbs:[{label:L('Service planning','تخطيط الخدم'),href:'#/services'}]}) +
     `<a class="btn btn-secondary" href="#/services">${L('All plans','كل الخطط')}</a>`;
@@ -488,6 +502,15 @@ export function services(tab = '', planId = '') {
 }
 services.mount = host => {
   C.wire(host); wireTables(host);
+  if(is('leader')){
+    host.querySelector('[data-leader-meeting-new]')?.addEventListener('click',()=>{
+      if(GROUPS.length===1)return F.meetingNew(GROUPS[0].id);
+      openModal({title:L('Choose ministry','اختر الخدمة'),body:`<div class="formrow"><label class="label" for="leader_group">${L('Group','المجموعة')}</label>
+        <select class="select" id="leader_group">${GROUPS.map(g=>`<option value="${esc(g.id)}">${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>`,
+        foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="leader_group_go">${L('Continue','متابعة')}</button>`,
+        onMount(el){el.querySelector('#leader_group_go').addEventListener('click',()=>{const gid=el.querySelector('#leader_group').value;closeOverlays();F.meetingNew(gid);});}});
+    });return;
+  }
   const redraw = () => { if (S.route === 'services' && S.params[0] === 'plan') { host.innerHTML=services(...S.params); services.mount(host); } };
   host.querySelector('[data-plan-new]')?.addEventListener('click',()=>F.servicePlanNew());
   host.querySelector('[data-plan-edit]')?.addEventListener('click',()=>editPlanDetails(redraw));
@@ -613,7 +636,7 @@ export function groups(id, tab) {
 }
 
 const GTABS = () => [['', 'Overview', 'نظرة عامة'], ['roster', 'Roster', 'اللائحة'], ['attendance', 'Attendance', 'الحضور'], ['meetings', 'Meetings', 'الاجتماعات'],
-               ['posts', 'Posts & files', 'المنشورات والملفات'], ['belongings', 'Belongings', 'المقتنيات'],
+               ['posts', 'Posts & files', 'المنشورات والملفات'], ['belongings', 'Resources', 'الموارد'],
                ['tasks', 'Tasks', 'المهام'], ['formation', 'Formation', 'التنشئة'], ['history', 'History', 'السجل']];
 
 function groupGone() {
@@ -625,8 +648,8 @@ function groupGone() {
 function meetingAttendance(m) {
   const values = Object.values(m.attendance || {});
   if (values.length) return {
-    present: values.filter(value => value === 'present').length,
-    excused: values.filter(value => value === 'excused').length,
+    present: Math.max(m.present || 0, values.filter(value => value === 'present').length),
+    excused: values.filter(value => value === 'excused').length + (m.absent || []).filter(([pid]) => !(pid in (m.attendance || {}))).length,
     absent: values.filter(value => value === 'absent').length
   };
   return { present: m.present || 0, excused: (m.absent || []).length, absent: 0 };
@@ -641,18 +664,20 @@ function meetingCard(g, m) {
   return `<section class="meeting-card">
     <div class="meeting-date"><strong>${esc(new Intl.DateTimeFormat(isAr() ? 'ar-LB' : 'en-US', { day: 'numeric' }).format(date))}</strong><span>${esc(monthLabel)}</span></div>
     <div class="meeting-content">
-      <div class="meeting-heading"><div><p class="meeting-eyebrow">${L('Group meeting','اجتماع المجموعة')}</p>
-        <h3>${fmtLong(date)}</h3><p class="meeting-time">${icon('events',15)}<span dir="ltr">${esc(m.t || '—')}</span></p></div>
+      <div class="meeting-heading"><div><p class="meeting-eyebrow">${fmtLong(date)}</p>
+        <h3>${esc(m.title||L('Group meeting','اجتماع المجموعة'))}</h3><p class="meeting-time">${icon('events',15)}<span dir="ltr">${esc(m.t || '—')}${m.end?`–${esc(m.end)}`:''}</span>${m.place?` · ${esc(m.place)}`:''}</p></div>
         <div class="meeting-heading-actions">${m.done ? status('closed') : upcoming ? status('scheduled') : pill(L('Attendance needed','الحضور مطلوب'),'warning')}
           ${C.iconBtn('edit',L('Edit meeting','تعديل الاجتماع'),`data-meeting-edit="${esc(meetingId(m))}"`)}</div></div>
       <div class="meeting-summary">${m.done
         ? `${attendanceTag('present',counts.present)}${attendanceTag('excused',counts.excused)}${attendanceTag('absent',counts.absent)}`
         : upcoming ? `<span class="meeting-rsvp"><b>${Number(rsvp.yes)||0}</b>${L('Going','سيحضرون')}</span><span class="meeting-rsvp"><b>${Number(rsvp.no)||0}</b>${L('Not going','لن يحضروا')}</span><span class="meeting-rsvp"><b>${Number(rsvp.none)||0}</b>${L('No reply','بلا ردّ')}</span>`
         : `<span class="t-caption dim">${L('Record attendance to close this meeting.','سجّل الحضور لإقفال هذا الاجتماع.')}</span>`}</div>
+      ${m.description?`<p class="meeting-description">${esc(m.description)}</p>`:''}
+      ${m.hymns?.length?`<p class="meeting-description">${L('Music','الموسيقى')}: ${m.hymns.map(id=>MUSIC.find(h=>h.id===id)).filter(Boolean).map(h=>esc(L(h.title,h.ar))).join(', ')}</p>`:''}
       ${m.done && m.absent?.length ? `<details class="meeting-details"><summary>${L('Excused absence details','تفاصيل الغياب بعذر')}</summary>
         ${m.absent.map(([pid,en,ar])=>`<p>${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))} · ${esc(L(en,ar))}</p>`).join('')}</details>` : ''}
       <div class="meeting-actions">${upcoming ? `<button class="btn btn-secondary btn-dense" data-act="remind:group">${L('Send reminder','إرسال تذكير')}</button>` : ''}
-        <a class="btn btn-primary btn-dense" href="#/groups/${esc(g.id)}/attendance">${m.done ? L('Review attendance','مراجعة الحضور') : L('Take attendance','تسجيل الحضور')}</a></div>
+        <button class="btn btn-primary btn-dense" data-meeting-review="${esc(meetingId(m))}">${m.done ? L('Review attendance','مراجعة الحضور') : L('Take attendance','تسجيل الحضور')}</button></div>
     </div></section>`;
 }
 
@@ -704,7 +729,7 @@ function groupDetail(id, tab) {
       cols: [{ label: L('Member', 'العضو'), sort: true }, { label: L('Role', 'الدور'), cls: 'hide-sm' },
              { label: L('Joined', 'انتسب'), cls: 'hide-md' }, { label: L('Attendance', 'الحضور'), cls: 'num' }, { label: '', cls: 'shrink' }],
       rows: d.roster.map(r => ({ cells: [
-        who(person(r.p)),
+        `<button type="button" class="btn btn-ghost btn-dense" data-attendance-history="${esc(r.p)}">${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</button>`,
         `<span class="dim">${esc(L(r.role, r.roleAr))}</span>`,
         `<span class="mono dim">${r.joined}</span>`,
         `<span class="num">${memberAttendancePct(d.meetings,r.p)}</span>`,
@@ -727,7 +752,7 @@ function groupDetail(id, tab) {
 
     posts: () => `<div class="splitview">
       <div class="stack" style="gap:16px">
-        ${panel(L('Announcements', 'الإعلانات'), d.posts.map(p => `<div style="padding:4px 0">
+        ${panel(L('Announcements', 'الإعلانات'), d.posts.map(p => `<div class="group-announcement">
           <div class="row" style="gap:10px">${avatar(person(p.by), 'avatar-sm')}
             <span><b style="font:500 13px/18px var(--sans)">${esc(isAr() ? person(p.by).ar : person(p.by).lat)}</b>
             <small class="t-caption dim" style="display:block">${fmtDate(p.at)}</small></span></div>
@@ -741,16 +766,22 @@ function groupDetail(id, tab) {
           ${C.iconBtn('export', L('Open', 'فتح'), `data-act="doc:${isAr() ? ar : en}"`)}</div>`).join('') + `<div class="divider"></div>${C.dropzone('gfiles')}`)}
       </div></div>`,
 
-    belongings: () => `${C.inlineAlert('info', L('Physical belongings, linked to resource management', 'مقتنيات مادية، مرتبطة بإدارة الموارد'),
-        L('What the group owns and where it is kept, so a handover does not lose the cupboard key.',
-          'ما تملكه المجموعة وأين يُحفظ، كي لا يضيع مفتاح الخزانة عند التسليم.'))}
-      <div style="margin-top:16px">${table({
-        cols: [{ label: L('Item', 'الصنف') }, { label: L('Quantity', 'العدد'), cls: 'num' },
-               { label: L('Kept in', 'محفوظ في') }, { label: '', cls: 'shrink' }],
-        rows: d.belongings.map(([en, ar, n, we, wa]) => ({ cells: [
-          `<b>${esc(L(en, ar))}</b>`, `<span class="num">${n}</span>`, `<span class="dim">${esc(L(we, wa))}</span>`,
-          `<button class="btn btn-secondary btn-dense" data-go="facilities">${L('In resources', 'في الموارد')}</button>`]}))
-      })}</div>`,
+    belongings: () => `<div class="toolbar"><p class="t-caption dim">${L('Track ministry-owned items and who has borrowed them.','تابع مقتنيات الخدمة ومن استعارها.')}</p>
+      <button class="btn btn-primary btn-dense" data-resource-new>${icon('plus',15)}${L('Add item','إضافة صنف')}</button></div>
+      ${table({cols:[{label:L('Item','الصنف')},{label:L('Available / total','المتاح / الكل'),cls:'num'},
+        {label:L('Stored at','محفوظ في')},{label:'',cls:'shrink'}],
+        rows:d.belongings.map(r=>{const lent=d.resourceLoans.filter(l=>l.resourceId===r.id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0);
+          return {cells:[`<b>${esc(L(r.name,r.ar))}</b>`,`<span class="num">${r.qty-lent} / ${r.qty}</span>`,
+            esc(L(r.location,r.locationAr)||'—'),`<div class="row" style="gap:5px">${C.iconBtn('edit',L('Edit','تعديل'),`data-resource-edit="${esc(r.id)}"`)}
+            ${C.iconBtn('trash',L('Delete','حذف'),`data-resource-delete="${esc(r.id)}"`)}
+            <button class="btn btn-secondary btn-dense" data-resource-lend="${esc(r.id)}" ${r.qty-lent<1?'disabled':''}>${L('Lend','إعارة')}</button></div>`]};})})}
+      <h3 style="margin:24px 0 10px">${L('Loans','الإعارات')}</h3>
+      ${table({cols:[{label:L('Item','الصنف')},{label:L('Borrower','المستعير')},{label:L('Quantity','العدد'),cls:'num'},
+        {label:L('Due date','تاريخ الإرجاع')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],
+        rows:d.resourceLoans.slice().reverse().map(l=>({cells:[esc(L(d.belongings.find(r=>r.id===l.resourceId)?.name||'—',d.belongings.find(r=>r.id===l.resourceId)?.ar||'—')),
+          esc(l.borrower),String(l.qty),fmtDate(l.due),l.returnedAt?pill(L('Returned','أُعيد'),'success'):
+            l.due<iso(new Date())?pill(L('Overdue','متأخر'),'danger'):pill(L('On loan','مُعار'),'warning'),
+          l.returnedAt?'':`<button class="btn btn-secondary btn-dense" data-resource-return="${esc(l.id)}">${L('Mark returned','تسجيل الإرجاع')}</button>`]}))})}`,
 
     tasks: () => `<div style="max-width:760px">${panel(L('Tasks and follow-ups', 'المهام والمتابعات'),
       d.tasks.map((tk, ki) => `<div class="listrow" style="padding-inline:0">
@@ -761,17 +792,28 @@ function groupDetail(id, tab) {
       `<button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="task-add">${icon('plus', 15)}${L('Add task', 'إضافة مهمة')}</button>`,
       { tight: false })}</div>`,
 
-    formation: () => `${C.inlineAlert('info', L('Voluntary formation, never a ranking', 'تنشئة اختيارية، لا ترتيب'),
-        L('Milestones record training that was completed. They do not measure anyone’s faith or worth, and nobody is ranked by them.',
-          'تسجّل المحطات تدريباً أُنجز. وهي لا تقيس إيمان أحد أو قيمته، ولا يُرتَّب بها أحد.'))}
-      <div style="margin-top:16px">${table({
-        cols: [{ label: L('Milestone', 'المحطة') }, { label: L('Completed by', 'أنجزها'), cls: 'num' }, { label: '', cls: 'shrink' }],
-        rows: d.milestones.map(([en, ar, n], mi) => ({ cells: [
-          `<b>${esc(L(en, ar))}</b>`,
-          `<span style="display:block;min-width:140px"><span class="t-caption dim tnum">${n} / ${g.members}</span>
-            <span class="meter" style="margin-top:6px"><i style="width:${Math.round(n / g.members * 100)}%"></i></span></span>`,
-          `<button class="btn btn-secondary btn-dense" data-act="milestone:${mi}">${L('Record', 'تسجيل')}</button>`]}))
-      })}</div>`,
+    formation: () => `${C.inlineAlert('info',L('Formation records, not rankings','سجلات تنشئة، لا تصنيفات'),
+      L('Record each member’s completion date and notes. Earlier totals without names remain labelled as historical.','سجّل تاريخ إنجاز كل عضو وملاحظاته. تبقى المجاميع القديمة غير المرتبطة بأسماء موسومة كتاريخية.'))}
+      <div class="toolbar" style="margin:16px 0"><span class="t-caption dim">${d.milestones.length} ${L('milestones','محطات')}</span>
+        <button class="btn btn-primary btn-dense" data-formation-new>${icon('plus',15)}${L('Add milestone','إضافة محطة')}</button></div>
+      <div class="stack" style="gap:14px">${d.milestones.filter(m=>!m.archived).map(m=>{
+        const names=Object.entries(m.completions||{}).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+        return panel(L(m.name,m.ar),`<p class="t-caption dim">${esc(m.description||'')}</p>
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">${pill(`${names.length} ${L('named completions','إنجازات بالأسماء')}`,'success')}
+          ${m.legacyCount?pill(`${m.legacyCount} ${L('historical, unassigned','تاريخية بلا أسماء')}`,'warning'):''}</div>
+          ${names.length?names.map(([pid,record])=>`<div class="listrow" style="padding-inline:0"><span class="grow"><b>${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))}</b>
+            <small>${fmtDate(record.date)}${record.notes?` · ${esc(record.notes)}`:''}</small></span>
+            ${C.iconBtn('edit',L('Edit completion','تعديل الإنجاز'),`data-formation-record="${esc(m.id)}|${esc(pid)}"`)}
+            ${C.iconBtn('trash',L('Remove completion','حذف الإنجاز'),`data-formation-remove="${esc(m.id)}|${esc(pid)}"`)}</div>`).join(''):
+            `<p class="t-caption dim">${L('No named completions yet.','لا إنجازات بأسماء بعد.')}</p>`}`,
+          {more:`<button class="btn btn-ghost btn-dense" data-formation-edit="${esc(m.id)}">${L('Edit','تعديل')}</button>
+            <button class="btn btn-ghost btn-dense" data-formation-delete="${esc(m.id)}">${L('Delete','حذف')}</button>
+            <button class="btn btn-primary btn-dense" data-formation-record="${esc(m.id)}">${L('Record completion','تسجيل إنجاز')}</button>`});
+      }).join('')||empty('doc',L('No formation milestones','لا محطات تنشئة'),L('Add the first training milestone.','أضف أول محطة تدريب.'))}</div>
+      ${d.roster.length&&d.milestones.length?`<h3 style="margin:24px 0 10px">${L('Member progress','تقدّم الأعضاء')}</h3>${table({
+        cols:[{label:L('Member','العضو')},{label:L('Completed','المنجَز'),cls:'num'},{label:L('Still open','المتبقي'),cls:'num'}],
+        rows:d.roster.map(r=>{const active=d.milestones.filter(m=>!m.archived),count=active.filter(m=>m.completions?.[r.p]).length;
+          return {cells:[esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p)),`${count} / ${active.length}`,String(active.length-count)]};})})}`:''}`,
 
     history: () => `<div style="max-width:720px">${panel(L('Membership and leadership history', 'سجل العضوية والمسؤوليات'), `
       <div class="timeline">${d.history.map(([en, ar, when]) => `<div class="tl-item">
@@ -795,6 +837,47 @@ const attendanceTag = (value, count) => {
   const option = ATTENDANCE_OPTIONS.find(([key]) => key === value) || ATTENDANCE_OPTIONS[0];
   return `<span class="attendance-tag attendance-${value || 'unrecorded'}"><span class="attendance-dot"></span>${count == null ? '' : `<b>${count}</b>`}${esc(L(option[1],option[2]))}</span>`;
 };
+function chooseAttendance(anchor, meeting, pid, afterSave = () => {}) {
+  openMenu(anchor, ATTENDANCE_OPTIONS.map(([value,en,ar]) => ({
+    label:L(en,ar), tone:value || 'unrecorded', fn:() => {
+      meeting.attendance ||= {};
+      if (value) meeting.attendance[pid] = value;
+      else delete meeting.attendance[pid];
+      if (value) meeting.done = true;
+      bus.refresh();
+      afterSave();
+    }
+  })), {width:190});
+}
+
+function meetingReview(mid) {
+  const g = group(S.params[0]), d = groupInfo(S.params[0]);
+  const meeting = d.meetings.find(m => meetingId(m) === mid);
+  if (!g || !meeting) return;
+  const rosterIds = d.roster.map(r => r.p);
+  const peopleIds = [...rosterIds, ...Object.keys(meeting.attendance || {}).filter(pid => !rosterIds.includes(pid))];
+  const categories = [
+    ['present',L('Came','حضروا')], ['excused',L('Excused','معذورون')],
+    ['absent',L('Did not come','لم يحضروا')], ['',L('No answer','بلا جواب')]
+  ];
+  openModal({wide:true,title:L('Meeting attendance','حضور الاجتماع'),
+    sub:`${esc(L(g.name,g.ar))} · ${fmtDate(meeting.d)} · ${esc(meeting.t)}`,
+    body:`${meeting.present && !Object.values(meeting.attendance||{}).includes('present') ? C.inlineAlert('info',
+      L('Historical total without names','مجموع سابق من دون أسماء'),
+      L(`${meeting.present} people were recorded as present in the old summary. Their names were not stored, so they are not assigned to a column.`,
+        `سُجّل حضور ${meeting.present} أشخاص في الملخّص السابق من دون حفظ أسمائهم، لذلك لم يُوزّعوا على الأعمدة.`)) : ''}
+      <div class="meeting-review-grid">${categories.map(([value,label]) => {
+        const ids = peopleIds.filter(pid => attendanceValue(meeting,pid) === value);
+        return `<section class="meeting-review-column attendance-${value||'unrecorded'}"><h3>${esc(label)} <span>${ids.length}</span></h3>
+          <div class="meeting-review-list">${ids.length ? ids.map(pid => `<button type="button" data-review-person="${esc(pid)}">
+            ${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))}${icon('chevD',14)}</button>`).join('') : `<p>${L('No people here','لا أشخاص هنا')}</p>`}</div></section>`;
+      }).join('')}</div>
+      <p class="t-caption dim" style="margin-top:14px">${L('Select a person to change their attendance. Changes save immediately.','اختر شخصاً لتغيير حالة حضوره. تُحفظ التغييرات فوراً.')}</p>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button>`,
+    onMount(el){el.querySelectorAll('[data-review-person]').forEach(button => button.addEventListener('click',
+      () => chooseAttendance(button,meeting,button.dataset.reviewPerson,() => meetingReview(mid))));}
+  });
+}
 
 function memberAttendancePct(meetings,pid) {
   const values=meetings.map(m=>attendanceValue(m,pid)).filter(Boolean);
@@ -814,7 +897,16 @@ function attendanceMatrix(g,d) {
   const recorded=counts.present+counts.excused+counts.absent;
   const [year,mo]=period.split('-').map(Number);
   const periodLabel=new Intl.DateTimeFormat(isAr()?'ar-LB':'en-US',{month:'long',year:'numeric'}).format(new Date(year,mo-1,1));
-  return `<div class="toolbar" style="margin:16px 0;gap:8px;flex-wrap:wrap">
+  const held=d.meetings.filter(m=>m.done);
+  const overall=held.reduce((total,m)=>{const count=meetingAttendance(m);for(const key of ['present','excused','absent'])total[key]+=count[key];return total;},{present:0,excused:0,absent:0});
+  const known=overall.present+overall.excused+overall.absent;
+  return `<div class="stats" style="margin:20px 0 12px">
+    ${stat(L('Meetings held','اجتماعات أُقيمت'),held.length,L('all recorded meetings','كل الاجتماعات المسجّلة'))}
+    ${stat(L('Present overall','الحاضرون إجمالاً'),overall.present,L('recorded attendance','حضور مسجّل'))}
+    ${stat(L('Excused overall','المعذورون إجمالاً'),overall.excused,L('recorded attendance','حضور مسجّل'))}
+    ${stat(L('Absent overall','الغائبون إجمالاً'),overall.absent,L('recorded attendance','حضور مسجّل'))}
+    ${stat(L('Attendance rate','نسبة الحضور'),known?`${Math.round(overall.present/known*100)}%`:'—',L('of known responses','من الردود المعروفة'))}
+  </div><div class="toolbar" style="margin:16px 0;gap:8px;flex-wrap:wrap">
     <div class="row" style="gap:6px">${C.iconBtn('chevL',L('Previous month','الشهر السابق'),'data-attendance-shift="-1"')}
       <b style="min-width:130px;text-align:center">${esc(periodLabel)}</b>
       ${C.iconBtn('chevR',L('Next month','الشهر التالي'),'data-attendance-shift="1"')}</div>
@@ -836,16 +928,34 @@ function attendanceMatrix(g,d) {
           <th class="attendance-name" scope="row" style="position:sticky;inset-inline-start:0;z-index:1;background:var(--surface);padding:9px 10px;text-align:start;border-top:1px solid var(--border)">
             <button class="btn btn-ghost btn-dense" data-attendance-history="${esc(r.p)}" style="text-align:start">${esc(L(p?.lat||r.p,p?.ar||r.p))}</button>
             ${r.former?`<small class="dim" style="display:block">${L('Former member','عضو سابق')}</small>`:''}</th>
-          ${meetings.map(m=>{const value=attendanceValue(m,r.p);return `<td style="padding:6px;border-top:1px solid var(--border);text-align:center">
-            <select class="select attendance-cell" data-attendance="${esc(meetingId(m))}|${esc(r.p)}" data-status="${value||'unrecorded'}" ${r.former?'disabled':''}
-              aria-label="${esc(L(p?.lat||r.p,p?.ar||r.p))} — ${fmtDate(m.d)}" style="min-width:118px;font-weight:600">
-              ${ATTENDANCE_OPTIONS.map(([v,en,ar])=>`<option value="${v}" ${value===v?'selected':''}>${L(en,ar)}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}</tbody>
+           ${meetings.map(m=>{const value=attendanceValue(m,r.p);return `<td style="padding:6px;border-top:1px solid var(--border);text-align:center">
+             <button type="button" class="attendance-choice attendance-${value||'unrecorded'}" data-attendance="${esc(meetingId(m))}|${esc(r.p)}" ${r.former?'disabled':''}
+               aria-label="${esc(L(p?.lat||r.p,p?.ar||r.p))} — ${fmtDate(m.d)}: ${esc(L(...(ATTENDANCE_OPTIONS.find(x=>x[0]===value)||ATTENDANCE_OPTIONS[0]).slice(1)))}">
+               ${attendanceTag(value)}${icon('chevD',14)}</button></td>`;}).join('')}</tr>`;}).join('')}</tbody>
       </table></div>`}
     <p class="t-caption dim" style="margin-top:10px">${L('Each cell belongs to a group member and meeting. Changes save as you select a status.','كل خانة مرتبطة بعضو واجتماع. تُحفظ التغييرات عند اختيار الحالة.')}</p>`;
 }
 
 groups.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelector('[data-resource-new]')?.addEventListener('click',()=>resourceForm());
+  host.querySelectorAll('[data-resource-edit]').forEach(b=>b.addEventListener('click',()=>resourceForm(b.dataset.resourceEdit)));
+  host.querySelectorAll('[data-resource-delete]').forEach(b=>b.addEventListener('click',()=>resourceDelete(b.dataset.resourceDelete)));
+  host.querySelectorAll('[data-resource-lend]').forEach(b=>b.addEventListener('click',()=>resourceLend(b.dataset.resourceLend)));
+  host.querySelectorAll('[data-resource-return]').forEach(b=>b.addEventListener('click',()=>{
+    const loan=groupInfo(S.params[0]).resourceLoans.find(l=>l.id===b.dataset.resourceReturn);
+    if(loan){loan.returnedAt=iso(new Date());bus.refresh();toast(L('Item returned','أُعيد الصنف'),'','success');}
+  }));
+  host.querySelector('[data-formation-new]')?.addEventListener('click',()=>formationForm());
+  host.querySelectorAll('[data-formation-edit]').forEach(b=>b.addEventListener('click',()=>formationForm(b.dataset.formationEdit)));
+  host.querySelectorAll('[data-formation-delete]').forEach(b=>b.addEventListener('click',()=>formationDelete(b.dataset.formationDelete)));
+  host.querySelectorAll('[data-formation-record]').forEach(b=>b.addEventListener('click',()=>{
+    const [mid,pid='']=b.dataset.formationRecord.split('|');formationRecord(mid,pid);
+  }));
+  host.querySelectorAll('[data-formation-remove]').forEach(b=>b.addEventListener('click',()=>{
+    const [mid,pid]=b.dataset.formationRemove.split('|'),m=groupInfo(S.params[0]).milestones.find(x=>x.id===mid);
+    if(m?.completions?.[pid]){delete m.completions[pid];bus.refresh();toast(L('Completion removed','حُذف الإنجاز'),'','success');}
+  }));
   host.querySelectorAll('[data-attendance-shift]').forEach(b=>b.addEventListener('click',()=>{
     const d=groupInfo(S.params[0]).meetings.slice().sort((a,b)=>b.d.localeCompare(a.d))[0]?.d?.slice(0,7) || iso(TODAY).slice(0,7);
     const [y,m]=(S.ui.attendancePeriod || d).split('-').map(Number), next=new Date(y,m-1+Number(b.dataset.attendanceShift),1);
@@ -855,23 +965,22 @@ groups.mount = host => {
     const query=e.target.value.trim().toLowerCase();
     host.querySelectorAll('[data-attendance-member]').forEach(row=>{row.hidden=!row.dataset.attendanceMember.includes(query);});
   });
-  host.querySelectorAll('[data-attendance]').forEach(select=>select.addEventListener('change',()=>{
-    const [mid,pid]=select.dataset.attendance.split('|'), meeting=groupInfo(S.params[0]).meetings.find(m=>meetingId(m)===mid);
-    if(!meeting)return; meeting.attendance ||= {};
-    if(select.value)meeting.attendance[pid]=select.value;else delete meeting.attendance[pid];
-    select.dataset.status=select.value || 'unrecorded';
-    if(Object.keys(meeting.attendance).length)meeting.done=true;
-    bus.refresh();
-    toast(L('Attendance saved','حُفظ الحضور'),`${fmtDate(meeting.d)} · ${L(select.value || 'Not recorded',
-      {'present':'حاضر','excused':'معذور','absent':'غائب'}[select.value] || 'غير مسجّل')}`,'success');
+  host.querySelectorAll('[data-attendance]').forEach(button=>button.addEventListener('click',()=>{
+    const [mid,pid]=button.dataset.attendance.split('|'), meeting=groupInfo(S.params[0]).meetings.find(m=>meetingId(m)===mid);
+    if(meeting)chooseAttendance(button,meeting,pid);
   }));
   host.querySelectorAll('[data-attendance-history]').forEach(b=>b.addEventListener('click',()=>{
     const pid=b.dataset.attendanceHistory,p=person(pid),rows=groupInfo(S.params[0]).meetings.slice().sort((a,c)=>c.d.localeCompare(a.d));
-    openDrawer({title:L(p?.lat||pid,p?.ar||pid),sub:L('Group attendance history','سجل حضور المجموعة'),
-      body:rows.map(m=>`<div class="listrow" style="padding-inline:0"><span class="grow">${fmtDate(m.d)} · ${esc(m.t)}</span>
+    const values=rows.map(m=>attendanceValue(m,pid)).filter(Boolean);
+    const present=values.filter(v=>v==='present').length,excused=values.filter(v=>v==='excused').length,absent=values.filter(v=>v==='absent').length;
+    openDrawer({title:L(p?.lat||pid,p?.ar||pid),sub:L('Individual attendance tracking','متابعة الحضور الفردي'),
+      body:`<div class="attendance-person-stats">${attendanceTag('present',present)}${attendanceTag('excused',excused)}${attendanceTag('absent',absent)}
+        <span class="t-caption dim">${values.length?`${Math.round(present/values.length*100)}%`:'—'} ${L('present among recorded meetings','حاضر من الاجتماعات المسجّلة')}</span></div>`+
+        rows.map(m=>`<div class="listrow" style="padding-inline:0"><span class="grow">${fmtDate(m.d)} · ${esc(m.t)}</span>
         ${attendanceTag(attendanceValue(m,pid))}</div>`).join('') || `<p>${L('No meetings yet','لا اجتماعات بعد')}</p>`,
       foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button>`});
   }));
+  host.querySelectorAll('[data-meeting-review]').forEach(b=>b.addEventListener('click',()=>meetingReview(b.dataset.meetingReview)));
   host.querySelectorAll('[data-meeting-edit]').forEach(b=>b.addEventListener('click',()=>F.meetingEdit(b.dataset.meetingEdit)));
   host.querySelectorAll('[data-task]').forEach(c => c.addEventListener('change', () => VERBS['task-toggle'](c, c.dataset.task)));
   host.querySelector('#qr')?.addEventListener('click', () => openModal({
@@ -894,11 +1003,113 @@ groups.mount = host => {
   }));
 };
 
+function resourceForm(id='') {
+  const d=groupInfo(S.params[0]),r=d.belongings.find(x=>x.id===id),lent=id?d.resourceLoans.filter(l=>l.resourceId===id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0):0;
+  openDrawer({title:r?L('Edit item','تعديل الصنف'):L('Add item','إضافة صنف'),body:`
+    ${C.field({label:L('Name','الاسم'),id:'rs_name',value:r?.name||'',req:true})}
+    ${C.field({label:L('Arabic name','الاسم العربي'),id:'rs_ar',value:r?.ar||''})}
+    <div class="formgrid">${C.field({label:L('Total quantity','العدد الكلي'),id:'rs_qty',type:'number',value:r?.qty??1})}
+      ${C.field({label:L('Stored at','محفوظ في'),id:'rs_location',value:r?.location||''})}</div>
+    ${C.field({label:L('Location (Arabic)','المكان بالعربي'),id:'rs_location_ar',value:r?.locationAr||''})}
+    ${lent?`<p class="help">${lent} ${L('currently on loan; total quantity cannot be lower.','معار حالياً؛ لا يمكن تقليل العدد الكلي إلى أقل من ذلك.')}</p>`:''}`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="rs_save">${L('Save item','حفظ الصنف')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#rs_save').addEventListener('click',()=>{
+      if(!F.need(el,'#rs_name',L('Enter an item name','أدخل اسم الصنف')))return;
+      const qty=Number(el.querySelector('#rs_qty').value);
+      if(!Number.isInteger(qty)||qty<lent||qty<0)return toast(L('Invalid quantity','عدد غير صالح'),L(`At least ${lent} items are needed to cover active loans.`,`يلزم ${lent} صنفاً لتغطية الإعارات الحالية.`),'warning');
+      const target=r||{id:`res-${Date.now().toString(36)}`};Object.assign(target,{name:el.querySelector('#rs_name').value.trim(),
+        ar:el.querySelector('#rs_ar').value.trim(),qty,location:el.querySelector('#rs_location').value.trim(),locationAr:el.querySelector('#rs_location_ar').value.trim()});
+      if(!r)d.belongings.push(target);closeOverlays();bus.refresh();toast(L('Item saved','حُفظ الصنف'),'','success');
+    });}});
+}
+
+function resourceDelete(id) {
+  const d=groupInfo(S.params[0]),r=d.belongings.find(x=>x.id===id);if(!r)return;
+  if(d.resourceLoans.some(l=>l.resourceId===id))return toast(L('Item has loan history','للصنف سجل إعارات'),L('Keep the item so its loan history stays attached.','أبق الصنف كي يظل سجل الإعارات مرتبطاً به.'),'warning');
+  openModal({title:L('Delete item?','حذف الصنف؟'),body:`<p>${esc(L(r.name,r.ar))}</p>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="rs_delete">${L('Delete','حذف')}</button>`,
+    onMount(el){el.querySelector('#rs_delete').addEventListener('click',()=>{d.belongings.splice(d.belongings.indexOf(r),1);closeOverlays();bus.refresh();});}});
+}
+
+function resourceLend(id) {
+  const d=groupInfo(S.params[0]),r=d.belongings.find(x=>x.id===id);if(!r)return;
+  const available=r.qty-d.resourceLoans.filter(l=>l.resourceId===id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0);
+  openDrawer({title:L('Lend item','إعارة صنف'),sub:esc(L(r.name,r.ar)),body:`
+    ${C.field({label:L('Borrower name','اسم المستعير'),id:'loan_name',req:true})}
+    <div class="formgrid">${C.field({label:L('Quantity','العدد'),id:'loan_qty',type:'number',value:1})}
+      ${C.field({label:L('Due date','تاريخ الإرجاع'),id:'loan_due',type:'date',value:iso(new Date()),req:true})}</div>
+    <p class="help">${available} ${L('available','متاح')}</p>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="loan_save">${L('Record loan','تسجيل الإعارة')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#loan_save').addEventListener('click',()=>{
+      if(!F.need(el,'#loan_name',L('Enter the borrower','أدخل اسم المستعير'))||!F.need(el,'#loan_due',L('Choose a due date','اختر تاريخ الإرجاع')))return;
+      const qty=Number(el.querySelector('#loan_qty').value),due=el.querySelector('#loan_due').value;
+      if(!Number.isInteger(qty)||qty<1||qty>available||due<iso(new Date()))return toast(L('Check quantity and due date','تحقّق من العدد والتاريخ'),'','warning');
+      d.resourceLoans.push({id:`loan-${Date.now().toString(36)}`,resourceId:id,borrower:el.querySelector('#loan_name').value.trim(),qty,
+        checkedOutAt:iso(new Date()),due,returnedAt:''});closeOverlays();bus.refresh();toast(L('Loan recorded','سُجّلت الإعارة'),'','success');
+    });}});
+}
+
+function formationForm(id='') {
+  const d=groupInfo(S.params[0]),m=d.milestones.find(x=>x.id===id);
+  openDrawer({title:m?L('Edit milestone','تعديل المحطة'):L('Add milestone','إضافة محطة'),body:`
+    ${C.field({label:L('Milestone name','اسم المحطة'),id:'fm_name',value:m?.name||'',req:true})}
+    ${C.field({label:L('Arabic name','الاسم العربي'),id:'fm_ar',value:m?.ar||''})}
+    ${C.textarea({label:L('Description or learning goal','الوصف أو هدف التعلم'),id:'fm_description',value:m?.description||'',max:500})}`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="fm_save">${L('Save milestone','حفظ المحطة')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#fm_save').addEventListener('click',()=>{
+      if(!F.need(el,'#fm_name',L('Name the milestone','سمّ المحطة')))return;
+      const target=m||{id:`fm-${Date.now().toString(36)}`,legacyCount:0,completions:{}};
+      Object.assign(target,{name:el.querySelector('#fm_name').value.trim(),ar:el.querySelector('#fm_ar').value.trim(),
+        description:el.querySelector('#fm_description').value.trim()});if(!m)d.milestones.push(target);
+      closeOverlays();bus.refresh();toast(L('Milestone saved','حُفظت المحطة'),'','success');
+    });}});
+}
+
+function formationDelete(id) {
+  const d=groupInfo(S.params[0]),m=d.milestones.find(x=>x.id===id);if(!m)return;
+  if(m.legacyCount||Object.keys(m.completions||{}).length)return toast(L('Milestone has history','للمحطة سجل'),
+    L('Remove individual completions first. Historical totals are preserved.','احذف الإنجازات الفردية أولاً. وتبقى المجاميع التاريخية محفوظة.'),'warning');
+  openModal({title:L('Delete milestone?','حذف المحطة؟'),body:`<p>${esc(L(m.name,m.ar))}</p>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="fm_delete">${L('Delete','حذف')}</button>`,
+    onMount(el){el.querySelector('#fm_delete').addEventListener('click',()=>{d.milestones.splice(d.milestones.indexOf(m),1);closeOverlays();bus.refresh();});}});
+}
+
+function formationRecord(id,pid='') {
+  const d=groupInfo(S.params[0]),m=d.milestones.find(x=>x.id===id);if(!m)return;
+  const saved=m.completions?.[pid];
+  openDrawer({title:L('Record completion','تسجيل إنجاز'),sub:esc(L(m.name,m.ar)),body:`
+    <div class="formrow"><label class="label" for="fr_person">${L('Member','العضو')}</label><select class="select" id="fr_person" ${pid?'disabled':''}>
+      <option value="">${L('Choose member','اختر عضواً')}</option>${d.roster.map(r=>`<option value="${esc(r.p)}" ${r.p===pid?'selected':''}>${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</option>`).join('')}</select></div>
+    ${C.field({label:L('Completed on','تاريخ الإنجاز'),id:'fr_date',type:'date',value:saved?.date||iso(new Date()),req:true})}
+    ${C.textarea({label:L('Notes (optional)','ملاحظات (اختياري)'),id:'fr_notes',value:saved?.notes||'',max:500})}`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="fr_save">${L('Save completion','حفظ الإنجاز')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#fr_save').addEventListener('click',()=>{
+      const member=el.querySelector('#fr_person').value,date=el.querySelector('#fr_date').value;
+      if(!member||!date)return toast(L('Choose a member and date','اختر عضواً وتاريخاً'),'','warning');
+      m.completions[member]={date,notes:el.querySelector('#fr_notes').value.trim()};closeOverlays();bus.refresh();toast(L('Completion saved','حُفظ الإنجاز'),'','success');
+    });}});
+}
+
 /* ═══════════════ 8 · volunteers ═══════════════ */
 const VTABS = () => [['', 'Rota', 'المناوبات'], ['people', 'Volunteers', 'المتطوّعون', VOLUNTEERS.length],
                ['sheets', 'Sign-up sheets', 'لوائح التطوّع', SIGNUP_SHEETS.length], ['hours', 'Hours', 'الساعات']];
 
 export function volunteers(tab = '') {
+  if(is('leader')) {
+    const managed=GROUPS, unique=[...new Set(managed.flatMap(g=>groupInfo(g.id).roster.map(r=>r.p)))];
+    const held=managed.flatMap(g=>groupInfo(g.id).meetings.filter(m=>m.done));
+    return pageHead({crumbs:[{label:L('My ministry','خدمتي')},{label:L('Volunteers','المتطوّعون')}],
+      title:L('Ministry volunteers','متطوعو الخدمة'),sub:L('Members and attendance in the groups you lead.','الأعضاء والحضور في المجموعات التي تقودها.')})+
+      `<div class="stats" style="margin:20px 0">${stat(L('Members','الأعضاء'),unique.length,L('across my groups','في مجموعاتي'))}
+        ${stat(L('Groups','المجموعات'),managed.length,L('I lead','أقودها'))}
+        ${stat(L('Meetings held','اجتماعات أُقيمت'),held.length,L('across my groups','في مجموعاتي'))}</div>
+      ${managed.map(g=>{const d=groupInfo(g.id);return panel(L(g.name,g.ar),
+        `${table({cols:[{label:L('Member','العضو')},{label:L('Role','الدور')},{label:L('Attendance','الحضور'),cls:'num'}],
+          rows:d.roster.map(r=>({cells:[esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p)),esc(L(r.role,r.roleAr)),memberAttendancePct(d.meetings,r.p)]}))})}`,
+        {more:`<a class="btn btn-secondary btn-dense" href="#/groups/${esc(g.id)}/roster">${L('Open roster','افتح اللائحة')}</a>
+          <button class="btn btn-primary btn-dense" data-leader-add="${esc(g.id)}">${L('Add member','إضافة عضو')}</button>`});}).join('')||
+          empty('groups',L('No groups assigned','لا مجموعات مخصصة'),L('Ask the parish office to assign a ministry.','اطلب من مكتب الرعية تخصيص خدمة.'))}`;
+  }
   const teams = is('leader') ? ROTA.teams.filter(tm => tm.leader === 'p3') : ROTA.teams;
   const head = pageHead({
     crumbs: [{ label: L('Parish life', 'حياة الرعية') }, { label: L('Volunteers', 'المتطوّعون') }],
@@ -1021,6 +1232,7 @@ export function volunteers(tab = '') {
 
 volunteers.mount = host => {
   C.wire(host); wireTables(host);
+  if(is('leader')){host.querySelectorAll('[data-leader-add]').forEach(b=>b.addEventListener('click',()=>F.memberAdd(b.dataset.leaderAdd)));return;}
   /* HTML drag and drop: a tray chip or a board card onto an open place (or a card onto a card to swap). */
   const board = host.querySelector('.rota-board')?.closest('.panel');
   if (board) {
@@ -1341,20 +1553,6 @@ export function checkin(tab = '') {
       ${stat(L('Late pickups', 'تأخّر في الاستلام'), 0, L('none today', 'لا شيء اليوم'))}
     </div>
     ${panel(L('Participants checked in', 'المشتركون الحاضرون'), rows||`<p class="help">${L('No one has checked in yet.','لم يسجّل أحد وصوله بعد.')}</p>`, { tight: true })}
-    ${panel(L('How a family can check in', 'كيف تسجّل العائلة'), `
-      <div class="grid g4" style="gap:12px">
-        ${[['checkin', L('Staffed kiosk', 'كشك بموظّف'), L('A volunteer on the door, with the keypad', 'متطوّع على الباب مع لوحة الأرقام')],
-           ['qr', L('QR from the registration', 'رمز من التسجيل'), L('Opens the right session directly', 'يفتح الجلسة الصحيحة مباشرة')],
-           ['card', L('Reusable card', 'بطاقة قابلة لإعادة الاستعمال'), L('Printed once, carried by the family', 'تُطبع مرّة وتحملها العائلة')],
-           ['doc', L('Manual roster', 'لائحة يدوية'), L('Paper, when the power is out', 'ورقية عند انقطاع الكهرباء')]]
-          .map(([ic, a, b]) => `<div class="card card-flat" style="padding:14px">
-            <span style="color:var(--primary)">${icon(ic, 20)}</span>
-            <b style="display:block;font:500 13px/18px var(--sans);margin-top:8px">${esc(a)}</b>
-            <small class="t-caption dim" style="display:block;margin-top:2px">${esc(b)}</small></div>`).join('')}
-      </div>
-      <p class="t-caption dim" style="margin-top:14px">${L(
-        'A scanned code or a card identifies the child. It never authorises release on its own — a person on the door matches the guardian credential every time.',
-        'الرمز الممسوح أو البطاقة تُعرّف الطفل فقط. ولا تُجيز التسليم وحدها أبداً — إذ يطابق شخص على الباب بيانات وليّ الأمر في كل مرة.')}</p>`)}
     ${C.inlineAlert('warning', L('A volunteer sees only their assigned room, and only during the session', 'يرى المتطوّع صفّه المسند فقط وخلال الجلسة فقط'),
       L('Every release, exception and override is recorded with the name of whoever approved it.',
         'كل تسليم واستثناء وتجاوز يُسجَّل باسم من وافق عليه.'))}`;

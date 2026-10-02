@@ -105,6 +105,48 @@ class ParishPersistenceTests(unittest.TestCase):
             self.patch('leader', 'GROUP_DETAIL', {other: state['GROUP_DETAIL'].get(other, {})})
         self.assertEqual(raised.exception.status, 403)
 
+    def test_ministry_resource_loans_preserve_inventory_and_history(self):
+        _, state = self.state()
+        detail = copy.deepcopy(state['GROUP_DETAIL']['g1'])
+        resource = detail['belongings'][0]
+        detail['resourceLoans'].append(dict(id='loan-test', resourceId=resource['id'], borrower='Choir member',
+                                            qty=1, checkedOutAt='2026-10-02', due='2026-10-09', returnedAt=''))
+        self.patch('leader', 'GROUP_DETAIL', {'g1': detail})
+        self.assertEqual(self.state()[1]['GROUP_DETAIL']['g1']['resourceLoans'][0]['borrower'], 'Choir member')
+        detail['resourceLoans'][-1]['qty'] = resource['qty'] + 1
+        with self.assertRaises(server.Problem):
+            self.patch('leader', 'GROUP_DETAIL', {'g1': detail})
+        detail['resourceLoans'][-1]['qty'] = 1
+        detail['resourceLoans'][-1]['returnedAt'] = '2026-10-05'
+        self.patch('leader', 'GROUP_DETAIL', {'g1': detail})
+        self.assertEqual(self.state()[1]['GROUP_DETAIL']['g1']['resourceLoans'][0]['returnedAt'], '2026-10-05')
+
+    def test_formation_completion_is_named_dated_and_group_scoped(self):
+        _, state = self.state()
+        detail = copy.deepcopy(state['GROUP_DETAIL']['g1'])
+        milestone = detail['milestones'][0]
+        member = detail['roster'][0]['p']
+        milestone['completions'][member] = dict(date='2026-10-02', notes='Completed workshop')
+        self.patch('leader', 'GROUP_DETAIL', {'g1': detail})
+        saved = self.state()[1]
+        self.assertEqual(saved['GROUP_DETAIL']['g1']['milestones'][0]['completions'][member]['notes'], 'Completed workshop')
+        self.assertGreaterEqual(saved['GROUP_DETAIL']['g1']['milestones'][0]['legacyCount'], 0)
+        outsider = next(p['id'] for p in state['PEOPLE'] if p['id'] not in {r['p'] for r in detail['roster']})
+        milestone['completions'][outsider] = dict(date='2026-10-02', notes='')
+        with self.assertRaises(server.Problem):
+            self.patch('leader', 'GROUP_DETAIL', {'g1': detail})
+
+    def test_music_links_require_correct_https_provider(self):
+        _, state = self.state()
+        music = copy.deepcopy(state['MUSIC'])
+        music[0]['youtubeUrl'] = 'https://www.youtube.com/watch?v=example'
+        music[0]['anghamiUrl'] = 'https://play.anghami.com/song/example'
+        self.patch('leader', 'MUSIC', music)
+        self.assertEqual(self.state()[1]['MUSIC'][0]['youtubeUrl'], music[0]['youtubeUrl'])
+        music[0]['youtubeUrl'] = 'javascript:alert(1)'
+        with self.assertRaises(server.Problem):
+            self.patch('leader', 'MUSIC', music)
+
     def test_service_plan_changes_do_not_mutate_its_template(self):
         _, state = self.state()
         template = copy.deepcopy(state['SERVICE_TEMPLATES'][0])

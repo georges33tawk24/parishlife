@@ -440,6 +440,7 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .meeting-heading h3{font:600 17px/24px var(--sans);margin:2px 0 4px}
 .meeting-eyebrow{font:600 11px/16px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--brown);margin:0}
 .meeting-time{display:flex;align-items:center;gap:6px;margin:0;color:var(--text-2);font:500 13px/20px var(--sans)}
+.meeting-description{margin:10px 0 0;color:var(--text-2);font:400 13px/20px var(--sans)}
 .meeting-heading-actions{display:flex;align-items:center;gap:8px}
 .meeting-summary{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
 .meeting-details{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--primary-subtle);font:400 12px/18px var(--sans)}
@@ -458,6 +459,40 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .attendance-table .attendance-cell[data-status="present"]{background:#E8F7ED;border-color:#82C89B;color:#17633A}
 .attendance-table .attendance-cell[data-status="excused"]{background:#FFF3CC;border-color:#E5BC39;color:#754F08}
 .attendance-table .attendance-cell[data-status="absent"]{background:#FDE9E8;border-color:#E89A96;color:#9D2823}
+.attendance-choice{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:132px;padding:4px 7px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;color:var(--text)}
+.attendance-choice .attendance-tag{border:0;background:transparent;padding:3px}
+.attendance-choice.attendance-present{background:#E8F7ED;border-color:#82C89B;color:#17633A}
+.attendance-choice.attendance-excused{background:#FFF3CC;border-color:#E5BC39;color:#754F08}
+.attendance-choice.attendance-absent{background:#FDE9E8;border-color:#E89A96;color:#9D2823}
+.attendance-choice:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.attendance-choice:disabled{opacity:.7;cursor:default}
+.menu .attendance-option-present{background:#E8F7ED;color:#17633A}
+.menu .attendance-option-excused{background:#FFF3CC;color:#754F08}
+.menu .attendance-option-absent{background:#FDE9E8;color:#9D2823}
+.menu .attendance-option-unrecorded{background:var(--primary-subtle);color:var(--primary)}
+.menu [class*="attendance-option-"]{margin:3px 4px;width:calc(100% - 8px);border-radius:7px}
+.meeting-review-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}
+.meeting-review-column{min-width:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+.meeting-review-column h3{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0;padding:10px 12px;font:600 13px/19px var(--sans);border-bottom:1px solid currentColor}
+.meeting-review-column h3 span{font-weight:700}
+.meeting-review-list{min-height:100px;max-height:360px;overflow:auto;padding:8px}
+.meeting-review-list button{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;padding:8px;margin-bottom:5px;text-align:start;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);cursor:pointer;font:500 12px/18px var(--sans)}
+.meeting-review-list button:hover{border-color:var(--primary)}
+.meeting-review-list p{padding:8px;margin:0;font:400 12px/18px var(--sans);color:var(--text-2)}
+.attendance-person-stats{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.repeat-days{margin:16px 0 0;padding:0;border:0}
+.repeat-days[hidden]{display:none}
+.repeat-days legend{font:600 13px/20px var(--sans);margin-bottom:8px}
+.repeat-day-list{display:flex;gap:8px;flex-wrap:wrap}
+.repeat-day{position:relative;cursor:pointer}
+.repeat-day input{position:absolute;width:1px;height:1px;opacity:0}
+.repeat-day span{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--border-strong);border-radius:50%;background:var(--primary-subtle);color:var(--primary);font:600 12px/16px var(--sans);transition:background var(--t-micro),color var(--t-micro)}
+.repeat-day input:checked+span{background:var(--primary);border-color:var(--primary);color:#FFFFFF}
+.repeat-day input:focus-visible+span{outline:2px solid var(--yellow);outline-offset:2px}
+.group-announcement{padding:12px 0}
+.group-announcement+.group-announcement{border-top:2px solid var(--border-strong);margin-top:10px;padding-top:20px}
+@media (max-width:800px){.meeting-review-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.meeting-review-grid{grid-template-columns:1fr}.meeting-review-list{min-height:0;max-height:220px}}
 @media (max-width:700px){.meeting-card{grid-template-columns:60px minmax(0,1fr)}.meeting-content{padding:14px}.meeting-date strong{font-size:23px}.meeting-actions .btn{flex:1;justify-content:center}}
 [data-service-row][draggable=true]{cursor:grab}
 [data-service-row].dragging{opacity:.55;cursor:grabbing}
@@ -947,3 +982,35 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 @media (max-width:760px){body:has(.drawer.open) .toasts,body:has(.modal.open) .toasts{top:16px;bottom:auto;inset-inline:16px}}
 .drawer:focus{outline:none}   /* focus may rest on the dialog itself; its content shows the focus ring */
+/* Member portal uses the existing shell with compact, readable content cards. */
+.member-page{max-width:1100px;margin:0 auto;padding-bottom:40px}
+.member-head{margin:0 0 22px}
+.member-head h1{font:600 clamp(25px,3vw,34px)/1.2 var(--sans);margin:0 0 8px;color:var(--text)}
+.member-head p{color:var(--text-2);margin:0;line-height:1.5}
+.member-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.member-home-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}
+.member-card{background:var(--surface,#fff);border:1px solid var(--line,#e6e9ee);border-radius:14px;padding:20px;min-width:0;overflow-wrap:anywhere;margin-bottom:14px}
+.member-grid .member-card{margin:0}
+.member-card h2{font:600 17px/1.35 var(--sans);margin:0 0 12px;color:var(--text)}
+.member-card h3{font:600 15px/1.35 var(--sans);margin:0 0 10px}
+.member-card p{line-height:1.5;margin:8px 0 14px;color:var(--text-2)}
+.member-card strong{font:650 22px/1.3 var(--sans)}
+.member-row,.member-simple-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.member-simple-row{border-top:1px solid var(--line,#e6e9ee);padding:10px 0;align-items:center}
+.member-simple-row:first-of-type{border-top:0}
+.member-row>div{min-width:0}
+.member-row small{white-space:nowrap;color:var(--text-2)}
+.member-badge{display:inline-block;background:#edf2fb;color:#3d4161;border-radius:999px;padding:3px 9px;font:600 11px/1.3 var(--sans);white-space:nowrap}
+.member-actions,.member-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:16px 0}
+.member-toolbar .input{max-width:300px}
+.member-toolbar .select{width:auto;min-width:150px}
+.member-list{display:block}
+.member-empty{border:1px dashed var(--line,#d9dfea);border-radius:12px;padding:22px;background:var(--surface,#fff);color:var(--text-2);margin:12px 0}
+.member-empty p{margin:0 0 12px}
+.member-profile{display:grid;grid-template-columns:minmax(130px,1fr) 2fr;gap:9px 16px;margin:16px 0}
+.member-profile dt{color:var(--text-2)}
+.member-profile dd{margin:0;font-weight:500;overflow-wrap:anywhere}
+.member-toggle{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-top:1px solid var(--line,#e6e9ee);cursor:pointer}
+.member-toggle input{width:18px;height:18px;accent-color:#3d4161}
+.member-code{font:700 24px/1.3 var(--mono,monospace);letter-spacing:.03em;user-select:all;background:#edf2fb;padding:16px;border-radius:8px}
+@media(max-width:640px){.member-card{padding:16px}.member-row{flex-wrap:wrap}.member-toolbar .input,.member-toolbar .select{max-width:none;width:100%}.member-profile{grid-template-columns:1fr}.member-profile dt{margin-top:6px}}

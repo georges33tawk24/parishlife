@@ -219,9 +219,24 @@ export const ENT = {
       { k: 'part', label: L('Part of the liturgy', 'الجزء من الليتورجيا'), type: 'select',
         options: () => ['Entrance', 'Trisagion', 'Offertory', 'Communion', 'Veneration', 'Recessional'].map(x => [x, x]) },
       { k: 'key', label: L('Key', 'المقام'), ph: 'D minor', dir: 'ltr' },
+      { k: 'youtubeUrl', label: L('YouTube link (optional)', 'رابط يوتيوب (اختياري)'), type: 'url', full: true, ph:'https://www.youtube.com/watch?v=...' },
+      { k: 'anghamiUrl', label: L('Anghami link (optional)', 'رابط أنغامي (اختياري)'), type: 'url', full: true, ph:'https://play.anghami.com/...' },
+      { k: 'otherUrl', label: L('Other music link (optional)', 'رابط موسيقي آخر (اختياري)'), type: 'url', full: true, ph:'https://...' },
       { k: 'lang', label: L('Language', 'اللغة'), type: 'select',
         options: () => [['Arabic', 'Arabic', 'عربي'], ['Syriac', 'Syriac', 'سرياني'], ['English', 'English', 'إنكليزي'], ['French', 'French', 'فرنسي']] }],
-    blank: () => ({ id: uid('m'), title: '', ar: '', occasion: '', occasionAr: '', part: 'Entrance', key: '', lang: 'Arabic', sheet: false, audio: false }),
+    blank: () => ({ id: uid('m'), title: '', ar: '', occasion: '', occasionAr: '', part: 'Entrance', key: '', lang: 'Arabic',
+      youtubeUrl:'',anghamiUrl:'',otherUrl:'',sheet: false, audio: false }),
+    check: vals => {
+      for(const key of ['youtubeUrl','anghamiUrl','otherUrl'])if(vals[key]){
+        let url;try{url=new URL(vals[key]);}catch{return [key,L('Enter a valid link','أدخل رابطاً صالحاً')];}
+        if(url.protocol!=='https:')return [key,L('Use an HTTPS link','استخدم رابط HTTPS')];
+        if(key==='youtubeUrl'&&!['youtube.com','www.youtube.com','m.youtube.com','youtu.be'].includes(url.hostname.toLowerCase()))
+          return [key,L('Use a YouTube link','استخدم رابط يوتيوب')];
+        if(key==='anghamiUrl'&&!(url.hostname.toLowerCase()==='anghami.com'||url.hostname.toLowerCase().endsWith('.anghami.com')))
+          return [key,L('Use an Anghami link','استخدم رابط أنغامي')];
+      }
+      return null;
+    },
     delNote: ['It is taken out of every setlist too.', 'وتُزال من كل لائحة ترانيم أيضاً.'], home: 'music',
     onDelete: m => { const had = D.SETLISTS.filter(s => s.items.includes(m.id)).map(s => [s, s.items.indexOf(m.id)]);
       had.forEach(([s, i]) => s.items.splice(i, 1)); return () => had.forEach(([s, i]) => s.items.splice(i, 0, m.id)); }

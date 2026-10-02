@@ -19,6 +19,14 @@ const H = (en, ar) => ['h', en, ar];
 const L = id => ['l', id];
 
 export const ROLES = {
+  member: {
+    en:'Ministry member', ar:'عضو خدمة', who:null,
+    noteEn:'Your ministries, meetings and personal parish life.',
+    noteAr:'خدماتك واجتماعاتك وحياتك الرعوية.',
+    nav:[L('memberhome'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
+      L('mymessages'), L('myfeed'), L('myresources'), L('mycommitments'), L('mynotes'),
+      L('myprofile'), L('myconcerns'), L('membernotifications')]
+  },
   bishop: {
     en:'Bishop', ar:'المطران', who:'p17',
     noteEn:'Read-only oversight of parishes and their activities.',
@@ -33,7 +41,7 @@ export const ROLES = {
       H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'), L('notes'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
-      H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'),
+      H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'), L('memberhub'),
       H('Money','المال'), L('giving'), L('finance'),
       H('Administration','الإدارة'), L('eparchy'), L('forms'), L('reports'), L('audit'), L('settings'), L('styleguide')]
   },
@@ -45,7 +53,7 @@ export const ROLES = {
       H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
-      H('Communicate','التواصل'), L('messaging'), L('notices'), L('portal'),
+      H('Communicate','التواصل'), L('messaging'), L('notices'), L('portal'), L('memberhub'),
       H('Administration','الإدارة'), L('forms'), L('reports')]
   },
   treasurer: {
@@ -64,7 +72,7 @@ export const ROLES = {
     nav:[L('dashboard'),
       H('My ministry','خدمتي'), L('groups'), L('volunteers'), L('checkin'), L('music'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'),
-      H('Communicate','التواصل'), L('messaging')]
+      H('Communicate','التواصل'), L('messaging'), L('memberhub')]
   },
   volunteer: {
     en:'Volunteer', ar:'متطوّع', who:'p16',
@@ -75,6 +83,7 @@ export const ROLES = {
 };
 
 export const MOBILE_NAV = {
+  member:    ['memberhome','mymeetings','mymessages','mycalendar','myprofile'],
   bishop: ['oversight'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],

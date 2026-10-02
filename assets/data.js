@@ -394,8 +394,17 @@ export const GROUP_DETAIL = {
 };
 
 /** A group's working detail; a group created in the app starts with an empty one rather than borrowing another's. */
-export const groupInfo = id => GROUP_DETAIL[id] || (GROUP_DETAIL[id] = { assistant: null, roles: [], requests: [], meetings: [], posts: [], files: [],
-  belongings: [], tasks: [], milestones: [], history: [], roster: [], budget: { fund: 'general', allocated: 0, spent: 0 } });
+export const groupInfo = id => {
+  const detail = GROUP_DETAIL[id] || (GROUP_DETAIL[id] = { assistant: null, roles: [], requests: [], meetings: [], posts: [], files: [],
+    belongings: [], resourceLoans: [], tasks: [], milestones: [], history: [], roster: [], budget: { fund: 'general', allocated: 0, spent: 0 } });
+  detail.belongings = (detail.belongings || []).map((item,index) => Array.isArray(item)
+    ? { id:`resource-${id}-${index+1}`, name:item[0], ar:item[1], qty:item[2], location:item[3], locationAr:item[4] } : item);
+  detail.resourceLoans ||= [];
+  detail.milestones = (detail.milestones || []).map((item,index) => Array.isArray(item)
+    ? { id:`formation-${id}-${index+1}`, name:item[0], ar:item[1], description:'', legacyCount:item[2], completions:{} } : item);
+  detail.milestones.forEach(item => { item.completions ||= {}; item.legacyCount ||= 0; });
+  return detail;
+};
 
 /* ---------- 4 · events ---------- */
 export const EVENT_DETAIL = {

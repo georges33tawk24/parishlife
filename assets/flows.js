@@ -7,7 +7,7 @@ import { icon, esc, toast, openDrawer, openModal, closeOverlays, avatar, who, st
          openMenu, closeMenu } from './ui.js';
 import * as C from './components.js';
 import * as D from './data.js';
-import { currentPlan, copyOrder } from './planning.js';
+import { currentPlan, copyOrder, allPlans, normalizePlanOrder } from './planning.js';
 import { openPastoralForm } from './views/notes.js';
 import { download } from './actions.js';
 import { persist } from './persist.js';
@@ -764,32 +764,54 @@ export function memberAdd(gid = curGroup()) {
   });
 }
 
-export function meetingNew() {
+export function meetingNew(gid=curGroup()) {
+  const detail=D.groupInfo(gid);
+  const now=new Date(),todayKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   openDrawer({
     title: L('Schedule a meeting', 'جدولة اجتماع'),
-    body: `<div class="formgrid">${C.field({ label: L('Date', 'التاريخ'), type: 'date', value: new Date().toISOString().slice(0,10), id: 'm_d' })}
-        ${C.field({ label: L('Time', 'الوقت'), type: 'time', value: '19:00', id: 'm_t' })}</div>
+    body: `${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'m_title',value:L('Ministry meeting','اجتماع الخدمة'),req:true})}
+      ${C.textarea({label:L('Description or agenda','الوصف أو جدول الأعمال'),id:'m_description',max:500})}
+      <div class="formgrid">${C.field({ label: L('First date', 'التاريخ الأول'), type: 'date', value: todayKey, id: 'm_d' })}
+        ${C.field({ label: L('Starts at', 'يبدأ عند'), type: 'time', value: '19:00', id: 'm_t' })}</div>
+      <div class="formgrid">${C.field({label:L('Ends at','ينتهي عند'),type:'time',value:'20:00',id:'m_end'})}
+        ${C.field({label:L('Place (optional)','المكان (اختياري)'),id:'m_place'})}</div>
       <div class="formgrid"><div class="formrow"><label class="label" for="m_repeat">${L('Repeats', 'التكرار')}</label><select class="select" id="m_repeat">
         <option value="0">${L('Once', 'مرّة')}</option><option value="7">${L('Every week', 'كل أسبوع')}</option>
         <option value="14">${L('Every two weeks', 'كل أسبوعين')}</option></select></div>
-        ${C.stepper({label:L('Number of meetings','عدد الاجتماعات'),value:4,id:'m_count'})}</div>`,
+        ${C.stepper({label:L('Total number of meetings','إجمالي عدد الاجتماعات'),value:4,id:'m_count'})}</div>
+      <fieldset class="repeat-days" id="m_days" hidden><legend>${L('Repeat on','يتكرّر في')}</legend>
+        <div class="repeat-day-list">${[[1,'M','الإثنين'],[2,'T','الثلاثاء'],[3,'W','الأربعاء'],[4,'TH','الخميس'],[5,'F','الجمعة'],[6,'SA','السبت'],[0,'S','الأحد']]
+          .map(([day,en,ar])=>`<label class="repeat-day"><input type="checkbox" value="${day}" aria-label="${L(['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day],ar)}"><span>${L(en,ar)}</span></label>`).join('')}</div>
+        <p class="help">${L('The count is the total number of meetings, across all selected days. The first meeting is on or after the chosen date.','العدد هو إجمالي الاجتماعات في كل الأيام المختارة. يبدأ أول اجتماع في التاريخ المحدّد أو بعده.')}</p></fieldset>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="m_go" style="margin-inline-start:auto">${L('Schedule', 'جدولة')}</button>`,
     onMount(el) {
       C.wire(el);
       const count=el.querySelector('#m_count'); count.closest('.formrow').hidden=true;
-      el.querySelector('#m_repeat').addEventListener('change',()=>{count.closest('.formrow').hidden=el.querySelector('#m_repeat').value==='0';});
+      const days=el.querySelector('#m_days');
+      const selectStartDay=()=>{if(days.querySelector('input:checked'))return;const raw=val(el,'#m_d');if(!raw)return;
+        const d=new Date(`${raw}T12:00:00`);if(!Number.isNaN(d.getTime()))days.querySelector(`input[value="${d.getDay()}"]`).checked=true;};
+      el.querySelector('#m_repeat').addEventListener('change',()=>{const repeating=el.querySelector('#m_repeat').value!=='0';count.closest('.formrow').hidden=!repeating;days.hidden=!repeating;if(repeating)selectStartDay();});
+      el.querySelector('#m_d').addEventListener('change',()=>{if(!days.hidden){days.querySelectorAll('input').forEach(box=>box.checked=false);selectStartDay();}});
       el.querySelector('#m_go').addEventListener('click', () => {
-        if(!need(el,'#m_d',L('Choose a date','اختر التاريخ')) || !need(el,'#m_t',L('Choose a time','اختر الوقت')))return;
-        const date=val(el,'#m_d'),time=val(el,'#m_t'),interval=Number(val(el,'#m_repeat')),
+        if(!need(el,'#m_title',L('Name the meeting','سمّ الاجتماع')) || !need(el,'#m_d',L('Choose a date','اختر التاريخ')) || !need(el,'#m_t',L('Choose a time','اختر الوقت')))return;
+        const date=val(el,'#m_d'),time=val(el,'#m_t'),end=val(el,'#m_end'),interval=Number(val(el,'#m_repeat')),
           count=interval?Math.min(52,Math.max(1,Number(val(el,'#m_count'))||4)):1;
-        const starts=new Date(`${date}T12:00:00`), added=[];
-        for(let i=0;i<count;i++){
-          const next=new Date(starts);next.setDate(starts.getDate()+i*interval);
-          const d=next.toISOString().slice(0,10);
-          if(gd().meetings.some(m=>m.d===d&&m.t===time))continue;
-          const meeting={id:`mt${Date.now().toString(36)}-${i}`,d,t:time,rsvp:{yes:0,no:0,none:gd().roster.length},done:false,attendance:{}};
-          gd().meetings.push(meeting);added.push(meeting);
+        if(end&&end<=time)return toast(L('End time must follow start time','يجب أن يكون وقت النهاية بعد البداية'),'','warning');
+        const selected=new Set([...days.querySelectorAll('input:checked')].map(box=>Number(box.value)));
+        if(interval&&!selected.size)return toast(L('Choose at least one weekday','اختر يوماً واحداً على الأقل'),'','warning');
+        const starts=new Date(`${date}T12:00:00`),weekStart=new Date(starts),added=[];
+        weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
+        for(let i=0;added.length<count&&i<730;i++){
+          const next=new Date(starts);next.setDate(starts.getDate()+i);
+          const d=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`;
+          const weeks=Math.floor((Date.UTC(next.getFullYear(),next.getMonth(),next.getDate())-Date.UTC(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()))/604800000);
+          if(interval&&(!selected.has(next.getDay())||weeks%(interval/7)!==0))continue;
+          if(detail.meetings.some(m=>m.d===d&&m.t===time))continue;
+          const meeting={id:`mt${Date.now().toString(36)}-${i}`,d,t:time,end,title:val(el,'#m_title'),
+            description:val(el,'#m_description'),place:val(el,'#m_place'),rsvp:{yes:0,no:0,none:detail.roster.length},done:false,attendance:{}};
+          detail.meetings.push(meeting);added.push(meeting);
+          if(!interval)break;
         }
         if(!added.length)return toast(L('Meeting already exists','الاجتماع موجود'),L('Choose another date or time.','اختر تاريخاً أو وقتاً آخر.'),'warning');
         S.ui.attendancePeriod=date.slice(0,7);
@@ -802,16 +824,22 @@ export function meetingNew() {
 export function meetingEdit(id) {
   const meeting=gd().meetings.find(m=>(m.id || `mt-${m.d}-${m.t}`)===id);if(!meeting)return;
   openDrawer({title:L('Edit meeting','تعديل الاجتماع'),
-    body:`<div class="formgrid">${C.field({label:L('Date','التاريخ'),type:'date',id:'me_date',value:meeting.d})}
-      ${C.field({label:L('Time','الوقت'),type:'time',id:'me_time',value:meeting.t})}</div>
+    body:`${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'me_title',value:meeting.title||L('Ministry meeting','اجتماع الخدمة'),req:true})}
+      ${C.textarea({label:L('Description or agenda','الوصف أو جدول الأعمال'),id:'me_description',value:meeting.description||'',max:500})}
+      <div class="formgrid">${C.field({label:L('Date','التاريخ'),type:'date',id:'me_date',value:meeting.d})}
+      ${C.field({label:L('Starts at','يبدأ عند'),type:'time',id:'me_time',value:meeting.t})}</div>
+      <div class="formgrid">${C.field({label:L('Ends at','ينتهي عند'),type:'time',id:'me_end',value:meeting.end||''})}
+      ${C.field({label:L('Place (optional)','المكان (اختياري)'),id:'me_place',value:meeting.place||''})}</div>
       <p class="t-caption dim">${L('Changing this date keeps its attendance linked to the meeting.','تغيير التاريخ يبقي الحضور مرتبطاً بالاجتماع.')}</p>`,
     foot:`<button class="btn btn-danger-quiet" id="me_delete">${L('Delete meeting','حذف الاجتماع')}</button>
       <button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="me_save">${L('Save','حفظ')}</button>`,
     onMount(el){C.wire(el);el.querySelector('#me_save').addEventListener('click',()=>{
-      const d=val(el,'#me_date'),t=val(el,'#me_time');
-      if(!d||!t)return toast(L('Choose a date and time','اختر التاريخ والوقت'),'','warning');
+      const d=val(el,'#me_date'),t=val(el,'#me_time'),end=val(el,'#me_end');
+      if(!need(el,'#me_title',L('Name the meeting','سمّ الاجتماع'))||!d||!t)return toast(L('Choose a title, date and time','اختر عنواناً وتاريخاً ووقتاً'),'','warning');
+      if(end&&end<=t)return toast(L('End time must follow start time','يجب أن يكون وقت النهاية بعد البداية'),'','warning');
       if(gd().meetings.some(x=>x!==meeting&&x.d===d&&x.t===t))return toast(L('Meeting already exists','الاجتماع موجود'),'','warning');
-      meeting.d=d;meeting.t=t;S.ui.attendancePeriod=d.slice(0,7);closeOverlays();refresh();ok(L('Meeting updated','حُدّث الاجتماع'));
+      Object.assign(meeting,{d,t,end,title:val(el,'#me_title'),description:val(el,'#me_description'),place:val(el,'#me_place')});
+      S.ui.attendancePeriod=d.slice(0,7);closeOverlays();refresh();ok(L('Meeting updated','حُدّث الاجتماع'));
     });
     el.querySelector('#me_delete').addEventListener('click',()=>{closeOverlays();openModal({title:L('Delete meeting and attendance?','حذف الاجتماع والحضور؟'),
       body:`<p>${fmtDate(meeting.d)} · ${esc(meeting.t)}</p><p class="t-caption dim">${L('Recorded attendance for this date will also be deleted.','سيُحذف أيضاً الحضور المسجّل لهذا التاريخ.')}</p>`,
@@ -824,7 +852,7 @@ export function meetingEdit(id) {
 export function postAdd(btn) {
   const body = btn.closest('.panel')?.querySelector('.rte-body')?.innerText.trim();
   if (!body) return toast(L('Write something first', 'اكتب شيئاً أولاً'), '', 'warning');
-  gd().posts.unshift({ by: 'p3', at: today, body, bodyAr: body });
+  gd().posts.unshift({ by: me()?.id || 'p3', at: new Date().toISOString().slice(0,10), body, bodyAr: body });
   refresh(); ok(L('Posted to the group', 'نُشر في المجموعة'), L('Members are notified in the app.', 'يُبلَّغ الأعضاء داخل التطبيق.'));
 }
 
@@ -840,7 +868,7 @@ export function taskAdd() {
       C.wire(el);
       el.querySelector('#tk_go').addEventListener('click', () => {
         if (!need(el, '#tk_w', L('Name the task', 'سمّ المهمة'))) return; const w = val(el, '#tk_w');
-        gd().tasks.unshift({ what: w, whatAr: w, who: 'p3', due: val(el, '#tk_d'), done: false });
+        gd().tasks.unshift({ what: w, whatAr: w, who: me()?.id || 'p3', due: val(el, '#tk_d'), done: false });
         closeOverlays(); refresh(); ok(L('Task added', 'أُضيفت المهمة'), w);
       });
     }
@@ -850,9 +878,13 @@ export function taskAdd() {
 export function milestoneRecord(i) {
   const m = gd().milestones[+i]; if (!m) return;
   pickPerson({
-    title: L('Record completion', 'تسجيل إنجاز'), sub: esc(L(m[0], m[1])),
+    title: L('Record completion', 'تسجيل إنجاز'), sub: esc(L(m.name, m.ar)),
     cta: L('Record', 'تسجيل'),
-    onPick: p => { m[2] += 1; refresh(); ok(L('Milestone recorded', 'سُجّلت المحطة'), `${nameOf(p)} · ${L(m[0], m[1])}`); }
+    onPick: p => {
+      if(!gd().roster.some(member=>member.p===p.id))return toast(L('Choose a group member','اختر عضواً من المجموعة'),'','warning');
+      m.completions ||= {};m.completions[p.id]={date:new Date().toISOString().slice(0,10),notes:''};
+      refresh(); ok(L('Milestone recorded', 'سُجّلت المحطة'), `${nameOf(p)} · ${L(m.name, m.ar)}`);
+    }
   });
 }
 
@@ -1073,10 +1105,28 @@ export function serviceTemplateDelete(id) {
 
 export function addToService(mid) {
   const m = D.MUSIC.find(x => x.id === mid); if (!m) return;
-  const item = { dur: '4', t: `Hymn — ${m.title}`, ar: `لحن — ${m.ar}`, note: `Key: ${m.key}`, noteAr: `المقام: ${m.key}`, who: 'g1' };
-  D.SERVICE.order.splice(D.SERVICE.order.length - 1, 0, item);
-  ok(L('Added to Sunday Mass 10:30', 'أُضيف إلى قدّاس الأحد ١٠:٣٠'), `${m.title} · ${m.key}`,
-     { action: { label: L('Open plan', 'فتح الخطة'), fn: () => go('services') } });
+  const leader=is('leader');
+  const targets=leader?D.GROUPS.flatMap(g=>D.groupInfo(g.id).meetings.map(meeting=>({id:`${g.id}|${meeting.id}`,
+    label:`${D.group(g.id)?.name||g.id} · ${meeting.d} ${meeting.t} · ${meeting.title||'Meeting'}`}))):
+    allPlans().map(plan=>({id:plan.id,label:`${plan.title} · ${plan.date} ${plan.time||''}`}));
+  if(!targets.length)return toast(L('Schedule a meeting first','جدول اجتماعاً أولاً'),'','warning');
+  openModal({title:L('Choose where to add this hymn','اختر الخدمة لإضافة الترنيمة'),sub:esc(L(m.title,m.ar)),
+    body:`<div class="formrow"><label class="label" for="music_target">${L('Service or meeting','الخدمة أو الاجتماع')}</label>
+      <select class="select" id="music_target"><option value="">${L('Choose one','اختر واحدة')}</option>
+      ${targets.map(target=>`<option value="${esc(target.id)}">${esc(target.label)}</option>`).join('')}</select></div>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button>
+      <button class="btn btn-primary" id="music_add">${L('Add hymn','إضافة الترنيمة')}</button>`,
+    onMount(el){el.querySelector('#music_add').addEventListener('click',()=>{
+      const selected=el.querySelector('#music_target').value;
+      if(!selected)return toast(L('Choose a service or meeting','اختر خدمة أو اجتماعاً'),'','warning');
+      if(leader){const [gid,meetingId]=selected.split('|'),meeting=D.groupInfo(gid).meetings.find(x=>x.id===meetingId);
+        if(!meeting)return;meeting.hymns||=[];if(meeting.hymns.includes(mid))return toast(L('Hymn already added','الترنيمة مضافة مسبقاً'),'','warning');
+        meeting.hymns.push(mid);
+      }else{const plan=allPlans().find(x=>x.id===selected);if(!plan)return;
+        plan.order.push({dur:'4',t:`Hymn — ${m.title}`,ar:`لحن — ${m.ar}`,note:m.key?`Key: ${m.key}`:'',
+          noteAr:m.key?`المقام: ${m.key}`:'',who:'g1',hymnId:mid});normalizePlanOrder(plan,'reflow');}
+      closeOverlays();refresh();ok(L('Hymn added','أُضيفت الترنيمة'),L(m.title,m.ar));
+    });}});
 }
 
 /* ═════════════ music ═════════════ */

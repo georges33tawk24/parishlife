@@ -22,9 +22,25 @@ import * as Money     from './views/money.js';
 import * as Comms     from './views/comms.js';
 import * as Admin     from './views/admin.js';
 import * as Oversight from './views/oversight.js';
+import * as Member from './views/member.js';
+import { M } from './member-data.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
+  memberhome: { ico:'dash', en:'Home', ar:'الرئيسية', view:Member.home },
+  myministries: { ico:'groups', en:'My Ministries', ar:'خدماتي', view:Member.ministries },
+  mymeetings: { ico:'events', en:'Meetings', ar:'الاجتماعات', view:Member.meetings },
+  mycalendar: { ico:'events', en:'Calendar', ar:'الرزنامة', view:Member.calendar },
+  myattendance: { ico:'attend', en:'Attendance', ar:'الحضور', view:Member.attendancePage },
+  mymessages: { ico:'msg', en:'Messages', ar:'الرسائل', view:Member.messages },
+  myfeed: { ico:'bell', en:'Announcements & Posts', ar:'الإعلانات والمنشورات', view:Member.feed },
+  myresources: { ico:'doc', en:'Resources', ar:'الموارد', view:Member.resources },
+  mycommitments: { ico:'vol', en:'My Commitments', ar:'التزاماتي', view:Member.commitments },
+  mynotes: { ico:'notes', en:'My Notes', ar:'ملاحظاتي', view:Member.notes },
+  myprofile: { ico:'people', en:'My Profile', ar:'ملفي', view:Member.profile },
+  myconcerns: { ico:'shield', en:'Submit a Concern', ar:'تقديم ملاحظة', view:Member.concerns },
+  membernotifications: { ico:'bell', en:'Notifications', ar:'الإشعارات', view:Member.notificationsPage },
+  memberhub: { ico:'msg', en:'Member communication', ar:'التواصل مع الأعضاء', view:Member.hub },
   oversight:    { ico:'portal', en:'Parish oversight', ar:'الإشراف على الرعايا', view:Oversight.oversight },
   dashboard:    { ico:'dash',     en:'Dashboard',        ar:'لوحة القيادة',        view:Dashboard.dashboard },
   people:       { ico:'people',   en:'People',           ar:'المؤمنون',            view:People.people,      badge:() => num(D.PEOPLE.length) },
@@ -43,7 +59,9 @@ export const ROUTES = {
   calendar:     { ico:'events',   en:'Calendar',         ar:'الرزنامة',            view:Parish.calendar },
   services:     { ico:'service',  en:'Service planning', ar:'تخطيط الخدم',         view:Parish.services },
   groups:       { ico:'groups',   en:'Groups',           ar:'المجموعات',           view:Parish.groups,      badge:() => D.GROUPS.length },
-  volunteers:   { ico:'vol',      en:'Volunteers',       ar:'المتطوّعون',           view:Parish.volunteers,  badge:() => D.ROTA.teams.flatMap(t => t.filled).filter(f => !f.p || f.s === 'declined').length },
+  volunteers:   { ico:'vol',      en:'Volunteers',       ar:'المتطوّعون',           view:Parish.volunteers,
+    badge:() => S.role==='leader' ? new Set(D.GROUPS.flatMap(g=>D.groupInfo(g.id).roster.map(r=>r.p))).size :
+      D.ROTA.teams.flatMap(t => t.filled).filter(f => !f.p || f.s === 'declined').length },
   registrations:{ ico:'registr',  en:'Registrations',    ar:'التسجيلات',           view:Parish.registrations },
   checkin:      { ico:'checkin',  en:'Check-in',         ar:'التسجيل عند الباب',   view:Parish.checkin },
 
@@ -85,7 +103,7 @@ function railHTML() {
     if (!rt) return '';
     const on = S.route === n[1];
     return `<a class="navitem ${on ? 'on' : ''}" href="#/${n[1]}" ${on ? 'aria-current="page"' : ''}>
-      ${icon(rt.ico, 18)}<span class="nl">${esc(t(rt.en, rt.ar))}</span>
+      ${icon(rt.ico, 18)}<span class="nl">${esc(S.role==='leader'&&n[1]==='services'?t('Ministry planning','تخطيط الخدمة'):t(rt.en, rt.ar))}</span>
       <span class="nb" ${rt.badge?.() ? '' : 'hidden'}>${esc(String(rt.badge?.() || ''))}</span></a>`;
   }).join('');
 
@@ -324,8 +342,8 @@ const closePalette = () => paletteEl?.classList.remove('open');
 
 function renderPalette(q) {
   const res = paletteEl.querySelector('#cmdres');
-  const acts = S.role === 'bishop' ? [] : ACTIONS.filter(a => matches(a[0] + ' ' + a[1], q));
-  const ppl = (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
+  const acts = ['bishop','member'].includes(S.role) ? [] : ACTIONS.filter(a => matches(a[0] + ' ' + a[1], q));
+  const ppl = S.role === 'member' ? [] : (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
   const pages = Object.entries(ROUTES).filter(([id, r]) => !r.hidden && allowed(id) && matches(r.en + ' ' + r.ar, q)).slice(0, 5);
 
   const mark = (s2) => q ? esc(s2).replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark>$1</mark>') : esc(s2);
@@ -350,6 +368,7 @@ function renderPalette(q) {
 /* ---------------- notifications ---------------- */
 const NOTES = D.NOTIFICATIONS;
 function notifications(e) {
+  if (S.role === 'member') { go('membernotifications'); return; }
   openPopover(e.currentTarget, `
     <div class="pop-h"><b>${t('Notifications', 'الإشعارات')}</b>
       <button class="btn btn-ghost btn-dense" id="markread" style="margin-inline-start:auto">${t('Mark all read', 'تعليم الكل كمقروء')}</button></div>
@@ -377,6 +396,18 @@ function notifications(e) {
 /* ---------------- user menu ---------------- */
 function userMenu(e) {
   const r = role(), p = me();
+  if (S.role === 'member') {
+    openPopover(e.currentTarget, `<div class="pop-user">${avatar(p, 'avatar-lg')}<span><b>${esc(p.lat)}</b><small>${t('Ministry member', 'عضو خدمة')}</small></span></div><div class="pop-b">
+      <button class="mi" data-u="profile">${icon('people',17)}<span>${t('My profile', 'ملفي')}</span></button>
+      <button class="mi" data-u="lang">${icon('msg',17)}<span>${t('Language', 'اللغة')}</span></button>
+      <button class="mi danger" data-u="signout">${icon('arrowR',17)}<span>${t('Sign out', 'تسجيل الخروج')}</span></button></div>`,
+      { width:290, onMount(el) { el.querySelectorAll('[data-u]').forEach(b => b.addEventListener('click', () => {
+        closeMenu(); if (b.dataset.u === 'profile') go('myprofile');
+        else if (b.dataset.u === 'lang') { setLang(lang === 'ar' ? 'en' : 'ar'); renderAll(); }
+        else signOut();
+      })); } });
+    return;
+  }
   openPopover(e.currentTarget, `
     <div class="pop-user">${avatar(p, 'avatar-lg')}
       <span><b>${esc(isAr() ? p.ar : p.lat)}</b><small>${esc(t(r.en, r.ar))} · ${esc(t(PARISH.name, PARISH.nameAr))}, ${esc(t(PARISH.town, PARISH.townAr))}</small></span></div>

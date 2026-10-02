@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'var' / 'parishlife.sqlite3'
 GEOGRAPHY = json.loads((ROOT / 'backend' / 'geography.json').read_text(encoding='utf-8'))['governorates']
-ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'volunteer'}
+ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'volunteer', 'member'}
 CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
@@ -102,6 +102,16 @@ def migrate_state(d):
         for index, meeting in enumerate(detail.get('meetings', [])):
             meeting.setdefault('id', f'meeting-{gid}-{index+1}-{meeting.get("d", "date")}')
             meeting.setdefault('attendance', {entry[0]: 'excused' for entry in meeting.get('absent', []) if entry})
+        detail['belongings'] = [dict(id=f'resource-{gid}-{index+1}', name=item[0], ar=item[1], qty=item[2],
+            location=item[3], locationAr=item[4]) if isinstance(item, list) else item
+            for index, item in enumerate(detail.get('belongings', []))]
+        detail.setdefault('resourceLoans', [])
+        detail['milestones'] = [dict(id=f'formation-{gid}-{index+1}', name=item[0], ar=item[1],
+            description='', legacyCount=item[2], completions={}) if isinstance(item, list) else item
+            for index, item in enumerate(detail.get('milestones', []))]
+        for milestone in detail['milestones']:
+            milestone.setdefault('completions', {})
+            milestone.setdefault('legacyCount', 0)
     hh = {h['id']: h for h in d['HOUSEHOLDS']}
     persons = {p['id']: p for p in d['PEOPLE'] + d['ARCHIVED']}
     families = {f['id']: f for f in d['FAMILIES']}
@@ -220,6 +230,34 @@ def init_db():
           FOREIGN KEY(parish_id,request_id) REFERENCES sacramental_register(parish_id,record_id),
           FOREIGN KEY(parish_id,source_record_id) REFERENCES sacramental_register(parish_id,record_id));
         CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS member_private(parish_id TEXT NOT NULL REFERENCES parishes(id),
+          user_id TEXT NOT NULL REFERENCES users(id), data TEXT NOT NULL, PRIMARY KEY(parish_id,user_id));
+        CREATE TABLE IF NOT EXISTS member_content(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
+          group_id TEXT, kind TEXT NOT NULL, author_id TEXT NOT NULL REFERENCES users(id),
+          recipient_id TEXT REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL, category TEXT NOT NULL DEFAULT '',
+          event_id TEXT, attachment TEXT, pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS member_concerns(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
+          reference TEXT UNIQUE NOT NULL, user_id TEXT REFERENCES users(id), category TEXT NOT NULL,
+          group_id TEXT, event_id TEXT, subject TEXT NOT NULL, description TEXT NOT NULL,
+          happened_at TEXT, people_involved TEXT, attachment TEXT, follow_up TEXT,
+          status TEXT NOT NULL, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS member_concern_updates(id TEXT PRIMARY KEY,
+          concern_id TEXT NOT NULL REFERENCES member_concerns(id), actor_id TEXT REFERENCES users(id),
+          status TEXT NOT NULL, public_text TEXT NOT NULL DEFAULT '', internal_text TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS complaint_reviewers(parish_id TEXT NOT NULL REFERENCES parishes(id),
+          user_id TEXT NOT NULL REFERENCES users(id), permissions TEXT NOT NULL,
+          PRIMARY KEY(parish_id,user_id));
+        CREATE TABLE IF NOT EXISTS member_profile_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
+          user_id TEXT NOT NULL REFERENCES users(id), field TEXT NOT NULL, requested_value TEXT NOT NULL,
+          status TEXT NOT NULL, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS member_commitments(parish_id TEXT NOT NULL REFERENCES parishes(id),
+          user_id TEXT NOT NULL REFERENCES users(id), content_id TEXT NOT NULL REFERENCES member_content(id),
+          status TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(parish_id,user_id,content_id));
+        CREATE TABLE IF NOT EXISTS member_rsvp(parish_id TEXT NOT NULL REFERENCES parishes(id),
+          user_id TEXT NOT NULL REFERENCES users(id), group_id TEXT NOT NULL, meeting_id TEXT NOT NULL,
+          status TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL,
+          PRIMARY KEY(parish_id,user_id,meeting_id));
         ''')
         c.execute("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')")
         seed = json.loads((ROOT / 'backend' / 'seed.json').read_text(encoding='utf-8'))
@@ -289,13 +327,14 @@ def parishes(c, u):
     assigned = {r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (u['id'],))}
     role_names = {'bishop': ('Archdiocese oversight', 'إشراف الأبرشية'), 'priest': ('Assigned parish priest', 'كاهن معيّن'),
                   'secretary': ('Parish secretary', 'أمانة سرّ الرعية'), 'treasurer': ('Parish treasurer', 'أمين صندوق الرعية'),
-                  'leader': ('Ministry leader', 'مسؤول خدمة'), 'volunteer': ('Volunteer', 'متطوّع')}
+                  'leader': ('Ministry leader', 'مسؤول خدمة'), 'volunteer': ('Volunteer', 'متطوّع'),
+                  'member': ('Ministry member', 'عضو خدمة')}
     result = []
     for r in rows:
         if u['role'] != 'bishop' and r['id'] not in assigned: continue
         p = json.loads(r['metadata']); p['role'], p['roleAr'] = role_names[u['role']]
         state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['id'],)).fetchone()
-        if state:
+        if state and u['role'] != 'member':
             data = json.loads(state['data']); p['people'] = len(data['PEOPLE']); p['households'] = len(data['HOUSEHOLDS'])
             p['sacramentsYear'] = sum(1 for s in data['SACRAMENTS'] if str(s.get('date', '')).startswith(str(dt.date.today().year)) and s.get('kind') != 'certificate' and s.get('status') in {'registered', 'issued'})
         result.append(p)
@@ -328,7 +367,7 @@ def oversight(c, u, pid=None):
 
 
 def visible(c, u, pid, d):
-    require(u['role'] != 'bishop', 'Use the read-only bishop oversight view.', 403)
+    require(u['role'] not in {'bishop', 'member'}, 'Use your dedicated portal.', 403)
     d = copy.deepcopy(d)
     all_people = d['PEOPLE']
     d['PARISH'].update(people=len(d['PEOPLE']), households=len(d['HOUSEHOLDS']), groups=len(d['GROUPS']))
@@ -356,7 +395,9 @@ def visible(c, u, pid, d):
         ids = ({u['person_id']}
                | {r['p'] for g in gs for r in d['GROUP_DETAIL'].get(g, {}).get('roster', [])}
                | {member for g in gs for meeting in d['GROUP_DETAIL'].get(g, {}).get('meetings', [])
-                  for member in meeting.get('attendance', {})}
+                   for member in meeting.get('attendance', {})}
+               | {member for g in gs for milestone in d['GROUP_DETAIL'].get(g, {}).get('milestones', [])
+                   for member in milestone.get('completions', {})}
                | {u['person_id']})
         d['PEOPLE'] = [dict(id=p['id'], lat=p['lat'], ar=p['ar'], tags=[], hh=None, phone='—', born='', status=p['status']) for p in d['PEOPLE'] if p['id'] in ids]
         for k in ('ARCHIVED', 'HOUSEHOLDS', 'SACRAMENTS', 'CORRECTIONS', 'FAMILIES', 'BRANCHES', 'PORTAL_REQUESTS', 'REQUEST_HISTORY'):
@@ -364,6 +405,9 @@ def visible(c, u, pid, d):
         d['PERSON_EXTRA'] = {}
         d['GROUPS'] = [g for g in d['GROUPS'] if g['id'] in gs]
         d['GROUP_DETAIL'] = {g: v for g, v in d['GROUP_DETAIL'].items() if g in gs}
+        d['VOLUNTEERS'] = [v for v in d['VOLUNTEERS'] if v.get('p') in ids]
+        d['ROTA']['teams'] = []
+        d['SIGNUP_SHEETS'] = []
     if u['role'] not in {'priest', 'secretary'}:
         member_groups = {gid for gid, detail in d['GROUP_DETAIL'].items()
                          if any(member.get('p') == u['person_id'] for member in detail.get('roster', []))}
@@ -394,6 +438,10 @@ def visible(c, u, pid, d):
 
 
 def validate(d):
+    def iso_date(value):
+        if not isinstance(value, str): return False
+        try: return dt.date.fromisoformat(value).isoformat() == value
+        except ValueError: return False
     def index(key):
         rows = d[key]
         require(isinstance(rows, list) and all(isinstance(x, dict) and isinstance(x.get('id'), str) for x in rows), 'Invalid ' + key)
@@ -441,6 +489,50 @@ def validate(d):
             require(isinstance(attendance, dict) and set(attendance) <= set(pp) and
                     all(value in {'present', 'excused', 'absent'} for value in attendance.values()),
                     'Attendance must reference people in this parish and valid statuses.')
+        resources = detail.get('belongings', [])
+        require(isinstance(resources, list) and all(isinstance(r, dict) and isinstance(r.get('id'), str)
+                and r.get('id') and isinstance(r.get('name'), str) and r['name'].strip()
+                and isinstance(r.get('qty'), int) and r['qty'] >= 0 for r in resources)
+                and len({r['id'] for r in resources}) == len(resources), 'Invalid ministry resources.')
+        resource_ids = {r['id'] for r in resources}
+        loans = detail.get('resourceLoans', [])
+        require(isinstance(loans, list) and all(isinstance(l, dict) and isinstance(l.get('id'), str) and l['id']
+                and l.get('resourceId') in resource_ids
+                and isinstance(l.get('borrower'), str) and l['borrower'].strip()
+                and isinstance(l.get('qty'), int) and l['qty'] > 0
+                and iso_date(l.get('due')) and iso_date(l.get('checkedOutAt'))
+                and l['due'] >= l['checkedOutAt'] and (not l.get('returnedAt') or iso_date(l['returnedAt']))
+                for l in loans) and len({l['id'] for l in loans}) == len(loans),
+                'Invalid ministry resource loan.')
+        for resource in resources:
+            require(sum(l['qty'] for l in loans if l['resourceId'] == resource['id'] and not l.get('returnedAt'))
+                    <= resource['qty'], 'A ministry resource cannot be loaned beyond its quantity.')
+        milestones = detail.get('milestones', [])
+        require(isinstance(milestones, list) and all(isinstance(m, dict) and isinstance(m.get('id'), str)
+                and m.get('id') and isinstance(m.get('name'), str) and m['name'].strip()
+                and isinstance(m.get('completions'), dict) and set(m['completions']) <= set(pp)
+                and all(isinstance(record, dict) and iso_date(record.get('date'))
+                        and isinstance(record.get('notes', ''), str) for record in m['completions'].values())
+                and isinstance(m.get('legacyCount', 0), int) and m.get('legacyCount', 0) >= 0
+                for m in milestones) and len({m['id'] for m in milestones}) == len(milestones),
+                'Invalid ministry formation milestone.')
+        for meeting in detail.get('meetings', []):
+            hymn_ids = meeting.get('hymns', [])
+            require(isinstance(hymn_ids, list) and all(isinstance(mid, str) for mid in hymn_ids)
+                    and len(set(hymn_ids)) == len(hymn_ids)
+                    and set(hymn_ids) <= {item['id'] for item in d['MUSIC']}, 'Meeting music must use hymns in the library.')
+    for hymn in d['MUSIC']:
+        for field, hosts in (('youtubeUrl', {'youtube.com', 'youtu.be'}),
+                             ('anghamiUrl', {'anghami.com'}), ('otherUrl', None)):
+            value = hymn.get(field, '')
+            if not value: continue
+            require(isinstance(value, str), 'Invalid music link.')
+            try: url = urlsplit(value)
+            except ValueError: raise Problem('Invalid music link.')
+            hostname = (url.hostname or '').lower()
+            require(url.scheme == 'https' and hostname and not url.username and not url.password
+                    and (hosts is None or any(hostname == host or hostname.endswith('.' + host) for host in hosts)),
+                    'Music links must use HTTPS and the selected provider.')
     plans = index('SERVICE_PLANS')
     require(d['SERVICE'].get('id') not in plans, 'Service plan IDs must be unique.')
     for plan in [d['SERVICE'], *plans.values()]:
@@ -512,7 +604,7 @@ def validate(d):
 
 
 def writable(role, key):
-    if role == 'bishop': return False
+    if role in {'bishop', 'member'}: return False
     if key in READONLY: return False
     if role in CLERGY: return True
     if key in {'NOTIFICATIONS', 'PREFS'}: return True
@@ -524,7 +616,7 @@ def writable(role, key):
 
 def save_patch(c, u, pid, payload):
     access(c, u, pid)
-    require(u['role'] != 'bishop', 'Bishop oversight is read-only. Parish staff manage parish records.', 403)
+    require(u['role'] not in {'bishop', 'member'}, 'Parish staff access required.', 403)
     row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
     require(payload.get('revision') == row['revision'], 'Another user changed this parish. Reload before saving.', 409)
     old = json.loads(row['data']); d = copy.deepcopy(old)
@@ -590,6 +682,11 @@ def save_patch(c, u, pid, payload):
                 previous_ids = set(earlier.get(meeting.get('id'), {}).get('attendance', {}))
                 added_ids = set(meeting.get('attendance', {})) - previous_ids
                 require(added_ids <= current_members, 'New attendance may be recorded only for current group members.')
+            earlier_milestones = {item.get('id'): item for item in old['GROUP_DETAIL'].get(gid, {}).get('milestones', [])}
+            for item in detail.get('milestones', []):
+                previous_ids = set(earlier_milestones.get(item.get('id'), {}).get('completions', {}))
+                added_ids = set(item.get('completions', {})) - previous_ids
+                require(added_ids <= current_members, 'New formation completions require current group members.')
     # Register lifecycle and immutable history only change through the workflow API.
     previous = {s['id']: s for s in old['SACRAMENTS']}
     current = {s['id']: s for s in d['SACRAMENTS']}
@@ -848,6 +945,332 @@ def workflow(c, u, pid, q):
     audit(c, u, pid, action, q)
 
 
+CONCERN_CATEGORIES = {'Ministry activities', 'Leadership', 'Meetings', 'Events', 'Facilities',
+    'Behaviour or conduct', 'Safety', 'Communication', 'Financial concerns',
+    'Harassment or inappropriate behaviour', 'Administrative issues', 'Suggestions', 'Other'}
+CONCERN_STATUSES = {'Submitted', 'Under Review', 'Additional Information Requested', 'Referred', 'Resolved', 'Closed'}
+
+
+def member_context(c, u, pid):
+    access(c, u, pid)
+    require(u['role'] != 'bishop' and u['person_id'], 'A linked parish person is required for this portal.', 403)
+    d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()['data'])
+    person = next((p for p in d['PEOPLE'] if p['id'] == u['person_id']), None)
+    require(person is not None, 'Your person record is not active in this parish.', 403)
+    gids = {g['id'] for g in d['GROUPS'] if any(r.get('p') == u['person_id']
+            for r in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', []))}
+    return d, person, gids
+
+
+def member_private(c, u, pid):
+    row = c.execute('SELECT data FROM member_private WHERE parish_id=? AND user_id=?', (pid, u['id'])).fetchone()
+    data = json.loads(row['data']) if row else {}
+    for key, default in (('notes', []), ('rsvp', {}), ('commitments', {}), ('readIds', []), ('archivedIds', []),
+                         ('preferences', {'email': True, 'inSystem': True, 'meetings': True,
+                                          'announcements': True, 'messages': True})):
+        data.setdefault(key, default)
+    return data
+
+
+def save_member_private(c, u, pid, data):
+    c.execute('INSERT INTO member_private VALUES(?,?,?) ON CONFLICT(parish_id,user_id) DO UPDATE SET data=excluded.data',
+              (pid, u['id'], json.dumps(data, ensure_ascii=False)))
+
+
+def member_groups(d, gids):
+    return [dict(id=g['id'], name=g['name'], ar=g.get('ar', ''), category=g.get('cat', ''),
+                 position=next((r.get('role') for r in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])
+                                if r.get('p') == d.get('_viewer')), 'Member'))
+            for g in d['GROUPS'] if g['id'] in gids]
+
+
+def member_meetings(d, gids, person_id, private):
+    people = {p['id']: p for p in d['PEOPLE']}
+    result = []
+    for g in d['GROUPS']:
+        if g['id'] not in gids: continue
+        for m in d['GROUP_DETAIL'].get(g['id'], {}).get('meetings', []):
+            attendance = m.get('attendance', {}).get(person_id)
+            if not attendance:
+                attendance = 'excused' if any(row and row[0] == person_id for row in m.get('absent', [])) else ('unrecorded' if m.get('done') else 'upcoming')
+            result.append(dict(id=m['id'], groupId=g['id'], group=g['name'], title=m.get('title') or g['name'] + ' meeting',
+                               date=m.get('d', ''), time=m.get('t', ''), location=m.get('place') or m.get('location', ''),
+                               description=m.get('description', ''), organizer=people.get(g.get('leader'), {}).get('lat', ''),
+                               attendance=attendance, rsvpEnabled=m.get('rsvpEnabled', True),
+                               rsvp=private['rsvp'].get(m['id'], {}), resources=[]))
+    return sorted(result, key=lambda x: (x['date'], x['time']))
+
+
+def member_attachment(value):
+    if not value: return None
+    require(isinstance(value, dict), 'Invalid attachment.')
+    name, mime, data = value.get('name'), value.get('mime'), value.get('data')
+    require(isinstance(name, str) and 0 < len(name) <= 120 and mime in
+            {'application/pdf', 'image/png', 'image/jpeg', 'text/plain'} and
+            isinstance(data, str) and len(data) <= 1_500_000 and data.startswith('data:' + mime + ';base64,'),
+            'Attachment must be a PDF, image or text file under 1 MB.')
+    return json.dumps({'name': name, 'mime': mime, 'data': data})
+
+
+def complaint_permissions(c, u, pid):
+    row = c.execute('SELECT permissions FROM complaint_reviewers WHERE parish_id=? AND user_id=?',
+                    (pid, u['id'])).fetchone()
+    return set(json.loads(row['permissions'])) if row else set()
+
+
+def concern_public(c, concern, viewer_id=None, reviewer_permissions=None):
+    permissions = reviewer_permissions or set()
+    own = viewer_id and concern['user_id'] == viewer_id
+    result = {k: concern[k] for k in ('id', 'reference', 'category', 'group_id', 'event_id', 'subject',
+              'description', 'happened_at', 'people_involved', 'follow_up', 'status', 'created_at')}
+    result['anonymous'] = concern['user_id'] is None
+    if own or 'Review' in permissions:
+        result['attachment'] = json.loads(concern['attachment']) if concern['attachment'] else None
+    if concern['user_id'] and 'ViewIdentity' in permissions:
+        result['identity'] = concern['user_id']
+    updates = c.execute('SELECT status,public_text,internal_text,created_at FROM member_concern_updates WHERE concern_id=? ORDER BY created_at',
+                        (concern['id'],)).fetchall()
+    result['updates'] = [dict(status=r['status'], text=r['public_text'], at=r['created_at'],
+                              **({'internal': r['internal_text']} if 'ViewSensitive' in permissions else {})) for r in updates]
+    return result
+
+
+def reviewer_conflict(u, person, concern):
+    involved = (concern['people_involved'] or '').casefold()
+    names = {u['name'], u['username'], person.get('lat', ''), person.get('ar', '')}
+    return any(len(name.strip()) >= 4 and name.casefold() in involved for name in names if name)
+
+
+def member_view(c, u, pid):
+    d, person, gids = member_context(c, u, pid)
+    private = member_private(c, u, pid)
+    d['_viewer'] = person['id']
+    managed_groups = {g['id'] for g in d['GROUPS'] if u['role'] in {'priest', 'secretary'} or
+                      (u['role'] == 'leader' and u['person_id'] in {g.get('leader'), g.get('assistant')})}
+    groups = member_groups(d, gids | managed_groups)
+    meetings = member_meetings(d, gids, person['id'], private)
+    visible_events = []
+    for e in d['EVENTS']:
+        detail = d['EVENT_DETAIL'].get(e['id'], {})
+        visibility = detail.get('visibility', 'public')
+        if visibility != 'public' and not (visibility == 'groups' and gids.intersection(detail.get('visibleGroupIds', []))): continue
+        visible_events.append({**{k: e.get(k) for k in ('id', 'd', 't', 'title', 'titleAr', 'kind')},
+                               'description': detail.get('desc', ''), 'location': next((v.get('name', '') for v in d.get('VENUES', []) if v.get('id') == e.get('venue')), '')})
+    content = []
+    for r in c.execute('SELECT * FROM member_content WHERE parish_id=? ORDER BY created_at DESC', (pid,)):
+        if r['group_id'] and r['group_id'] not in gids | managed_groups: continue
+        if r['kind'] == 'message' and r['recipient_id'] not in (None, u['id']) and r['author_id'] != u['id']: continue
+        if r['kind'] == 'message' and not r['recipient_id'] and r['author_id'] == u['id']: continue
+        content.append(dict(id=r['id'], kind=r['kind'], groupId=r['group_id'], recipientId=r['recipient_id'],
+                            authorId=r['author_id'], title=r['title'], body=r['body'], category=r['category'],
+                            eventId=r['event_id'], attachment=json.loads(r['attachment']) if r['attachment'] else None,
+                            pinned=bool(r['pinned']), at=r['created_at'],
+                            read=r['id'] in private['readIds'], archived=r['id'] in private['archivedIds']))
+    concerns = [concern_public(c, r, u['id']) for r in c.execute(
+        'SELECT * FROM member_concerns WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', (pid, u['id']))]
+    perms = complaint_permissions(c, u, pid)
+    review = []
+    if 'Review' in perms:
+        review = [concern_public(c, r, reviewer_permissions=perms) for r in c.execute(
+            'SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', (pid,))
+                  if not reviewer_conflict(u, person, r)]
+        if 'ViewIdentity' in perms:
+            for item in review:
+                if item.get('identity'):
+                    account = c.execute('SELECT name,person_id FROM users WHERE id=?', (item['identity'],)).fetchone()
+                    owner = next((p for p in d['PEOPLE'] if p['id'] == account['person_id']), {}) if account else {}
+                    item['identity'] = {'name': account['name'] if account else '', 'phone': owner.get('phone', '')}
+        audit(c, u, pid, 'complaints.view', f'{len(review)} cases')
+    own = {k: person.get(k, '') for k in ('id', 'lat', 'ar', 'phone', 'born', 'town', 'townAr', 'status')}
+    own['email'] = d.get('PERSON_EXTRA', {}).get(person['id'], {}).get('email', '')
+    own['address'] = next((h.get('address', '') for h in d['HOUSEHOLDS'] if person['id'] in h.get('members', [])), '')
+    requests = [dict(r) for r in c.execute('SELECT id,field,requested_value,status,created_at FROM member_profile_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', (pid, u['id']))]
+    volunteer_review = [dict(r) for r in c.execute('SELECT mc.content_id,mc.user_id,mc.status,mc.created_at,c.title,c.group_id,u.name FROM member_commitments mc JOIN member_content c ON c.id=mc.content_id JOIN users u ON u.id=mc.user_id WHERE mc.parish_id=? ORDER BY mc.created_at DESC', (pid,))
+                        if r['group_id'] in managed_groups]
+    profile_review = [dict(r) for r in c.execute('SELECT pr.*,u.name FROM member_profile_requests pr JOIN users u ON u.id=pr.user_id WHERE pr.parish_id=? ORDER BY pr.created_at DESC', (pid,))] if u['role'] in {'priest', 'secretary'} else []
+    return dict(parish={k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
+                person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
+                notes=private['notes'], commitments=private['commitments'], preferences=private['preferences'],
+                concerns=concerns, review=review, complaintPermissions=sorted(perms), profileRequests=requests,
+                volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups))
+
+
+def member_action(c, u, pid, q):
+    d, person, gids = member_context(c, u, pid)
+    private = member_private(c, u, pid)
+    op = q.get('op')
+    group_id = q.get('groupId')
+    if op == 'note':
+        note_id = q.get('id')
+        if q.get('delete'):
+            private['notes'] = [n for n in private['notes'] if n['id'] != note_id]
+        else:
+            fields = {k: q.get(k, '') for k in ('title', 'body', 'category', 'reminder', 'meetingId')}
+            require(all(isinstance(v, str) for v in fields.values()) and len(fields['title'].strip()) in range(1, 121)
+                    and len(fields['body']) <= 10000 and len(fields['category']) <= 60, 'Invalid note.')
+            tags = q.get('tags', [])
+            require(isinstance(tags, list) and len(tags) <= 10 and all(isinstance(t, str) and len(t) <= 32 for t in tags), 'Invalid tags.')
+            if fields['meetingId']:
+                require(any(m['id'] == fields['meetingId'] for m in member_meetings(d, gids, person['id'], private)), 'Meeting not available.', 403)
+            existing = next((n for n in private['notes'] if n['id'] == note_id), None) if note_id else None
+            item = dict(id=existing['id'] if existing else secrets.token_hex(12), **fields, tags=tags,
+                        pinned=bool(q.get('pinned')), updatedAt=NOW())
+            if existing: private['notes'][private['notes'].index(existing)] = item
+            else: private['notes'].append(item)
+        save_member_private(c, u, pid, private)
+    elif op == 'rsvp':
+        meeting = next((m for m in member_meetings(d, gids, person['id'], private) if m['id'] == q.get('meetingId')), None)
+        require(meeting and meeting['rsvpEnabled'] and meeting['date'] >= TODAY(), 'RSVP is not available for this meeting.', 403)
+        require(q.get('status') in {'yes', 'no'}, 'Choose attending or unable to attend.')
+        reason = q.get('reason', '')
+        require(isinstance(reason, str) and len(reason) <= 500, 'Reason is too long.')
+        private['rsvp'][meeting['id']] = dict(status=q['status'], reason=reason, at=NOW())
+        save_member_private(c, u, pid, private)
+        c.execute('INSERT INTO member_rsvp VALUES(?,?,?,?,?,?,?) ON CONFLICT(parish_id,user_id,meeting_id) DO UPDATE SET status=excluded.status,reason=excluded.reason,created_at=excluded.created_at',
+                  (pid, u['id'], meeting['groupId'], meeting['id'], q['status'], reason, NOW()))
+    elif op == 'preference':
+        require(q.get('key') in {'email', 'inSystem', 'meetings', 'announcements', 'messages'} and type(q.get('value')) is bool, 'Invalid preference.')
+        private['preferences'][q['key']] = q['value']; save_member_private(c, u, pid, private)
+    elif op in {'read', 'archive'}:
+        row = c.execute('SELECT * FROM member_content WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(row and (not row['group_id'] or row['group_id'] in gids) and
+                (row['kind'] != 'message' or row['recipient_id'] in (None, u['id']) or row['author_id'] == u['id']), 'Item not available.', 403)
+        key = 'readIds' if op == 'read' else 'archivedIds'
+        if row['id'] not in private[key]: private[key].append(row['id'])
+        save_member_private(c, u, pid, private)
+    elif op == 'readAll':
+        for r in c.execute('SELECT id,group_id,kind,recipient_id,author_id FROM member_content WHERE parish_id=?', (pid,)):
+            if (not r['group_id'] or r['group_id'] in gids) and (r['kind'] != 'message' or r['recipient_id'] in (None, u['id']) or r['author_id'] == u['id']):
+                if r['id'] not in private['readIds']: private['readIds'].append(r['id'])
+        save_member_private(c, u, pid, private)
+    elif op == 'volunteer':
+        row = c.execute("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='opportunity'", (q.get('id'), pid)).fetchone()
+        require(row and (not row['group_id'] or row['group_id'] in gids), 'Opportunity not available.', 403)
+        require(q.get('status') in {'interested', 'volunteer', 'withdrawn'}, 'Invalid choice.')
+        private['commitments'][row['id']] = dict(status=q['status'], at=NOW())
+        save_member_private(c, u, pid, private)
+        c.execute('INSERT INTO member_commitments VALUES(?,?,?,?,?) ON CONFLICT(parish_id,user_id,content_id) DO UPDATE SET status=excluded.status,created_at=excluded.created_at',
+                  (pid, u['id'], row['id'], q['status'], NOW()))
+    elif op == 'confirmVolunteer':
+        row = c.execute('SELECT mc.*,c.group_id FROM member_commitments mc JOIN member_content c ON c.id=mc.content_id WHERE mc.parish_id=? AND mc.user_id=? AND mc.content_id=?',
+                        (pid, q.get('userId'), q.get('id'))).fetchone()
+        require(row and any(g['id'] == row['group_id'] and (u['role'] in {'priest', 'secretary'} or
+                u['person_id'] in {g.get('leader'), g.get('assistant')}) for g in d['GROUPS']), 'Leadership permission required.', 403)
+        require(q.get('status') in {'confirmed', 'declined'}, 'Invalid confirmation.')
+        c.execute('UPDATE member_commitments SET status=? WHERE parish_id=? AND user_id=? AND content_id=?',
+                  (q['status'], pid, row['user_id'], row['content_id']))
+        target = c.execute('SELECT data FROM member_private WHERE parish_id=? AND user_id=?', (pid, row['user_id'])).fetchone()
+        if target:
+            target_data = json.loads(target['data'])
+            if row['content_id'] in target_data.get('commitments', {}):
+                target_data['commitments'][row['content_id']]['status'] = q['status']
+                c.execute('UPDATE member_private SET data=? WHERE parish_id=? AND user_id=?',
+                          (json.dumps(target_data, ensure_ascii=False), pid, row['user_id']))
+        audit(c, u, pid, 'volunteer.confirm', row['content_id'])
+    elif op == 'profileRequest':
+        require(q.get('field') in {'name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture'}, 'Invalid field.')
+        value = q.get('value')
+        require(isinstance(value, str) and 0 < len(value.strip()) <= 500, 'Enter the requested update.')
+        c.execute('INSERT INTO member_profile_requests VALUES(?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), pid, u['id'], q['field'], value.strip(), 'Submitted', NOW()))
+        audit(c, u, pid, 'profile.update-request', q['field'])
+    elif op == 'profileReview':
+        require(u['role'] in {'priest', 'secretary'}, 'Parish office permission required.', 403)
+        require(q.get('status') in {'Reviewed', 'Needs Information', 'Closed'}, 'Invalid request status.')
+        row = c.execute('SELECT id FROM member_profile_requests WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(row is not None, 'Request not found.', 404)
+        c.execute('UPDATE member_profile_requests SET status=? WHERE id=?', (q['status'], row['id']))
+        audit(c, u, pid, 'profile.request-reviewed', row['id'])
+    elif op == 'publish':
+        require(u['role'] in {'priest', 'secretary', 'leader'}, 'Publishing permission required.', 403)
+        require(q.get('kind') in {'post', 'announcement', 'resource', 'opportunity'}, 'Invalid content type.')
+        if group_id:
+            require(any(g['id'] == group_id and (u['role'] in {'priest', 'secretary'} or
+                    u['person_id'] in {g.get('leader'), g.get('assistant')}) for g in d['GROUPS']), 'Leadership of this ministry required.', 403)
+        else: require(u['role'] in {'priest', 'secretary'}, 'Parish publishing permission required.', 403)
+        title, body = q.get('title'), q.get('body', '')
+        require(isinstance(title, str) and 0 < len(title.strip()) <= 160 and isinstance(body, str) and len(body) <= 10000, 'Invalid content.')
+        attachment = member_attachment(q.get('attachment'))
+        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), pid, group_id, q['kind'], u['id'], None, title.strip(), body,
+                   str(q.get('category', ''))[:60], q.get('eventId'), attachment, int(bool(q.get('pinned'))), NOW()))
+        audit(c, u, pid, 'member.publish', q['kind'])
+    elif op == 'message':
+        require(group_id in gids, 'Ministry membership required.', 403)
+        group = next(g for g in d['GROUPS'] if g['id'] == group_id)
+        recipient = c.execute('SELECT id FROM users WHERE person_id=? AND role IN (\'leader\',\'priest\',\'secretary\')',
+                              (group.get('leader'),)).fetchone()
+        require(recipient is not None, 'This ministry has no available messaging contact.', 403)
+        body = q.get('body', '')
+        require(isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a message under 5000 characters.')
+        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), pid, group_id, 'message', u['id'], recipient['id'],
+                   'Message to ' + group['name'], body.strip(), '', None, None, 0, NOW()))
+    elif op == 'messageReply':
+        original = c.execute("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='message'", (q.get('id'), pid)).fetchone()
+        require(original and original['recipient_id'] == u['id'] and
+                (original['group_id'] in gids or u['role'] in {'priest', 'secretary'}),
+                'Message not available for reply.', 403)
+        require(u['role'] in {'leader', 'priest', 'secretary'}, 'Ministry communication permission required.', 403)
+        body = q.get('body', '')
+        require(isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a message under 5000 characters.')
+        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), pid, original['group_id'], 'message', u['id'], original['author_id'],
+                   'Re: ' + original['title'], body.strip(), '', None, None, 0, NOW()))
+    elif op == 'concern':
+        require(q.get('category') in CONCERN_CATEGORIES, 'Choose a concern category.')
+        if group_id: require(group_id in gids, 'Ministry not available.', 403)
+        subject, description = q.get('subject'), q.get('description')
+        require(isinstance(subject, str) and 0 < len(subject.strip()) <= 160 and
+                isinstance(description, str) and 0 < len(description.strip()) <= 10000, 'Enter a subject and description.')
+        anonymous = q.get('anonymous') is True
+        follow_up = q.get('followUp', 'none')
+        require(anonymous or follow_up in {'system', 'email', 'phone', 'none'}, 'Invalid follow-up choice.')
+        ref = 'CMP-' + secrets.token_hex(8).upper()
+        c.execute('INSERT INTO member_concerns VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), pid, ref, None if anonymous else u['id'], q['category'], group_id,
+                   q.get('eventId'), subject.strip(), description.strip(), str(q.get('happenedAt', ''))[:40],
+                   str(q.get('peopleInvolved', ''))[:500], member_attachment(q.get('attachment')),
+                   None if anonymous else follow_up, 'Submitted', NOW()))
+        audit(c, u, pid, 'concern.submitted', 'anonymous' if anonymous else ref)
+        return {'reference': ref}
+    elif op == 'concernLookup':
+        ref = q.get('reference', '')
+        require(isinstance(ref, str) and len(ref) <= 40, 'Invalid reference.')
+        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND reference=? AND user_id IS NULL', (pid, ref)).fetchone()
+        require(row is not None, 'Reference not found.', 404)
+        result = concern_public(c, row)
+        for field in ('description', 'people_involved', 'attachment', 'group_id', 'event_id', 'happened_at'):
+            result.pop(field, None)
+        return {'concern': result}
+    elif op == 'concernFollowUp':
+        ref, message = q.get('reference', ''), q.get('message', '')
+        require(isinstance(ref, str) and len(ref) <= 40 and isinstance(message, str) and 0 < len(message.strip()) <= 5000,
+                'Enter a valid reference and message.')
+        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND reference=? AND user_id IS NULL', (pid, ref)).fetchone()
+        require(row is not None, 'Reference not found.', 404)
+        c.execute('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), row['id'], None, row['status'], 'Submitted additional information: ' + message.strip(), '', NOW()))
+        audit(c, u, pid, 'concern.anonymous-follow-up', 'anonymous')
+    elif op == 'concernUpdate':
+        perms = complaint_permissions(c, u, pid)
+        require('Review' in perms and ('Respond' in perms or 'Resolve' in perms), 'Complaint reviewer permission required.', 403)
+        row = c.execute('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(row is not None, 'Case not found.', 404)
+        require(not reviewer_conflict(u, person, row), 'A different reviewer must handle a case involving you.', 403)
+        status = q.get('status')
+        require(status in CONCERN_STATUSES and (status not in {'Resolved', 'Closed'} or 'Resolve' in perms), 'Status permission required.', 403)
+        public_text, internal_text = q.get('publicText', ''), q.get('internalText', '')
+        require(isinstance(public_text, str) and len(public_text) <= 5000 and isinstance(internal_text, str) and len(internal_text) <= 5000, 'Update is too long.')
+        c.execute('UPDATE member_concerns SET status=? WHERE id=?', (status, row['id']))
+        c.execute('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)',
+                  (secrets.token_hex(12), row['id'], u['id'], status, public_text, internal_text, NOW()))
+        audit(c, u, pid, 'concern.updated', row['reference'] + ' ' + status)
+    else:
+        raise Problem(400, 'Unknown member action.')
+    return {'ok': True}
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -927,6 +1350,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 pid, endpoint = parts[2:]; access(c, u, pid)
                 if endpoint == 'oversight' and self.command == 'GET':
                     return self.reply(200, oversight(c, u, pid))
+                if endpoint == 'member':
+                    if self.command == 'GET': return self.reply(200, member_view(c, u, pid))
+                    if self.command == 'POST':
+                        result = member_action(c, u, pid, q); c.commit(); return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
                 if endpoint == 'state' and self.command == 'GET':
                     row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
                     return self.reply(200, {'revision': row['revision'], 'd': visible(c, u, pid, json.loads(row['data']))})
@@ -950,8 +1378,23 @@ def main():
     parser.add_argument('--name')
     parser.add_argument('--person-id')
     parser.add_argument('--parish', action='append', default=[])
+    parser.add_argument('--grant-complaints', help='Username to grant explicit complaint reviewer permissions')
+    parser.add_argument('--complaint-permission', action='append', default=[],
+                        help='Review, Assign, Respond, Resolve, ViewIdentity or ViewSensitive')
     args = parser.parse_args(); init_db()
-    require(not (args.create_user and args.assign_user), 'Choose one account operation.')
+    require(sum(bool(x) for x in (args.create_user, args.assign_user, args.grant_complaints)) <= 1, 'Choose one account operation.')
+    if args.grant_complaints:
+        require(args.parish and args.complaint_permission, 'Specify a parish and at least one complaint permission.')
+        permitted = {'Review', 'Assign', 'Respond', 'Resolve', 'ViewIdentity', 'ViewSensitive'}
+        require(set(args.complaint_permission) <= permitted, 'Unknown complaint permission.')
+        with connect() as c:
+            user = c.execute('SELECT * FROM users WHERE username=?', (args.grant_complaints,)).fetchone()
+            require(user is not None, 'Account not found.')
+            for pid in args.parish:
+                access(c, user, pid)
+                c.execute('INSERT INTO complaint_reviewers VALUES(?,?,?) ON CONFLICT(parish_id,user_id) DO UPDATE SET permissions=excluded.permissions',
+                          (pid, user['id'], json.dumps(sorted(set(args.complaint_permission)))))
+        print('Complaint reviewer permissions saved.'); return
     if args.assign_user:
         require(args.parish, 'Specify at least one --parish.')
         with connect() as c:

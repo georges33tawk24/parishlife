@@ -293,6 +293,10 @@ const transposeKey = (key, by) => { const m = String(key || '').match(/^([A-G][b
 
 const HTABS = () => [['', 'Lyrics', 'الكلمات'], ['chords', 'Chords', 'الأوتار'], ['notes', 'Instrument notes', 'ملاحظات الآلات'],
                ['versions', 'Versions', 'الإصدارات'], ['rights', 'Rights', 'الحقوق']];
+const safeMusicLink = (value, host) => {
+  try { const url=new URL(value);return url.protocol==='https:'&&(!host||url.hostname===host||url.hostname.endsWith(`.${host}`))?url.href:''; }
+  catch { return ''; }
+};
 
 function hymn(id, tab) {
   const m = MUSIC.find(x => x.id === id);
@@ -300,6 +304,8 @@ function hymn(id, tab) {
     ${empty('music', L('This hymn is no longer in the library', 'هذا اللحن لم يعد في المكتبة'), L('It may have been deleted.', 'ربما حُذف.'),
       `<a class="btn btn-primary btn-dense" href="#/music">${L('Music library', 'مكتبة الألحان')}</a>`)}`;
   const d = musicInfo(m), shift = (S.ui.transpose || {})[m.id] || 0;
+  const musicLinks=[['YouTube',safeMusicLink(m.youtubeUrl,'youtube.com')||safeMusicLink(m.youtubeUrl,'youtu.be')],
+    ['Anghami',safeMusicLink(m.anghamiUrl,'anghami.com')],['Other link',safeMusicLink(m.otherUrl,'')]].filter(([,url])=>url);
   const head = `<div class="pagehead"><div class="entityhead" style="width:100%"><div class="id">
       <nav class="crumbs"><a href="#/music">${L('Music library', 'مكتبة الألحان')}</a><span class="sep">/</span><span>${esc(m.title)}</span></nav>
       <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(m.title)}
@@ -316,7 +322,9 @@ function hymn(id, tab) {
         <tbody>${d.lyrics.length ? '' : `<tr><td colspan="3" class="dim">${L('No lyrics entered yet.', 'لا كلمات بعد.')}</td></tr>`}${d.lyrics.map(r => `<tr><td style="font-size:16px">${esc(r[0])}</td>
           <td style="font-family:var(--arabic);font-size:16px">${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`,
         { tight: true, more: `<button class="btn btn-ghost btn-dense" data-act="hymn-text:${m.id}|lyrics">${icon(d.lyrics.length ? 'edit' : 'plus', 15)}${d.lyrics.length ? L('Edit', 'تعديل') : L('Add lyrics', 'إضافة الكلمات')}</button>` })}
-      <div class="sidecol">${panel(L('Personal annotations', 'ملاحظات شخصية'),
+      <div class="sidecol">${musicLinks.length?panel(L('Listen online','استمع عبر الإنترنت'),musicLinks.map(([label,url])=>
+        `<a class="btn btn-secondary btn-dense" href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="margin:4px">${esc(label)}</a>`).join('')):''}
+      ${panel(L('Personal annotations', 'ملاحظات شخصية'),
         d.annotations.map(([p, en, ar]) => `<div class="listrow" style="padding-inline:0;align-items:flex-start">
           ${avatar(person(p), 'avatar-sm')}<span class="grow t-caption">${esc(L(en, ar))}</span></div>`).join('')
         + `<div class="divider"></div>${C.textarea({ label: L('Add your own', 'أضف ملاحظتك'), id: 'hann', max: 200 })}`)}

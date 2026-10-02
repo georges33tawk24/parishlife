@@ -316,7 +316,7 @@ export function closeMenu() {
 function menuItems(items) {
   return items.map((it, i) => it.sep ? '<div class="sep"></div>'
     : it.head ? `<div class="head">${esc(it.head)}</div>`
-    : `<button type="button" class="${it.danger ? 'danger' : ''} ${it.sub ? 'hassub' : ''}" data-mi="${i}" role="menuitem">
+    : `<button type="button" class="${it.danger ? 'danger' : ''} ${it.sub ? 'hassub' : ''} ${['present','excused','absent','unrecorded'].includes(it.tone) ? `attendance-option-${it.tone}` : ''}" data-mi="${i}" role="menuitem">
         ${it.icon ? icon(it.icon, 16) : ''}<span style="flex:1">${esc(it.label)}</span>
         ${it.hint ? `<span class="t-caption dimmer">${esc(it.hint)}</span>` : ''}
         ${it.sub ? icon('chevR', 14) : ''}</button>`).join('');

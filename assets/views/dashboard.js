@@ -198,8 +198,9 @@ function treasurer() {
 
 function leader() {
   const mine = GROUPS.filter(g => g.leader === me().id || g.assistant === me().id);
-  const swaps = ROTA.teams.flatMap(tm => tm.filled).filter(f => f.swap).length;
   const meetings = mine.flatMap(g => GROUP_DETAIL[g.id]?.meetings || []);
+  const upcoming = mine.flatMap(g => (GROUP_DETAIL[g.id]?.meetings || []).filter(m => !m.done && m.d >= new Date().toISOString().slice(0,10)).map(m => ({g,m})))
+    .sort((a,b) => (a.m.d+a.m.t).localeCompare(b.m.d+b.m.t));
   const recorded = meetings.reduce((count,meeting)=>count+Object.keys(meeting.attendance||{}).length,0);
   const cards = mine.map(g => `<a class="panel card-link" href="#/groups/${g.id}" style="display:block">
       <div class="panel-b">
@@ -214,18 +215,21 @@ function leader() {
     ${pageHead({
       crumbs: [{ label: t('My ministry', 'خدمتي') }, { label: t('Dashboard', 'لوحة القيادة') }],
       title: t('My groups', 'مجموعاتي'),
-      sub: t(`${mine.reduce((a, g) => a + g.members, 0)} members · ${swaps} swap request${swaps === 1 ? '' : 's'} waiting`, `${mine.reduce((a, g) => a + g.members, 0)} عضواً · ${swaps} طلبات تبديل بالانتظار`),
+      sub: t(`${mine.reduce((a, g) => a + g.members, 0)} members · ${upcoming.length} upcoming meetings`, `${mine.reduce((a, g) => a + g.members, 0)} عضواً · ${upcoming.length} اجتماعات قادمة`),
       actions: `<button class="btn btn-secondary" data-go="messaging">${icon('msg', 17)}${t('Message my group', 'مراسلة مجموعتي')}</button>
         <a class="btn btn-primary" href="#/groups${mine[0]?`/${esc(mine[0].id)}/attendance`:''}">${icon('attend', 17)}${t('Group attendance', 'حضور المجموعة')}</a>`
     })}
     <div class="stats">
       ${mine.slice(0, 2).map(g => stat(t(g.name, g.ar), g.members, g.meets ? t(g.meets, g.meetsAr) : t('no fixed meeting', 'بلا اجتماع ثابت'))).join('')}
-      ${stat(t('Swap requests', 'طلبات التبديل'), swaps, swaps ? t('waiting on you', 'بانتظارك') : t('none waiting', 'لا شيء بالانتظار'))}
+      ${stat(t('Upcoming meetings', 'الاجتماعات القادمة'), upcoming.length, t('in my groups', 'في مجموعاتي'))}
       ${stat(t('Recorded group attendance', 'حضور المجموعات المسجّل'), recorded, `${meetings.length} ${t('meetings','اجتماعات')}`)}
     </div>
     ${sectionH(t('My groups', 'مجموعاتي'))}
     <div class="gridcards">${cards}</div>
-    <div class="grid g2">${rotaGaps()}${todayPanel()}</div>
+    <div class="grid g2">${panel(t('Next ministry meetings','اجتماعات الخدمة القادمة'),upcoming.slice(0,5).map(({g,m})=>
+      `<a class="listrow" href="#/groups/${esc(g.id)}/meetings"><span class="grow"><b>${esc(m.title||t('Ministry meeting','اجتماع الخدمة'))}</b>
+      <small>${esc(t(g.name,g.ar))} · ${fmtDate(m.d)} ${esc(m.t)}</small></span>${icon('chevR',16)}</a>`).join('')||
+      `<p class="t-caption dim">${t('No meetings scheduled yet.','لا اجتماعات مجدولة بعد.')}</p>`)}${todayPanel()}</div>
     <p class="t-caption dim" style="margin-top:20px">${t(
       'A ministry leader sees only the people in the groups they lead. The parish list, giving and other groups are not in the rail at all.',
       'مسؤول الخدمة يرى فقط أفراد مجموعاته. لائحة الرعية والتقدمات والمجموعات الأخرى ليست في الشريط إطلاقاً.')}</p>`;
