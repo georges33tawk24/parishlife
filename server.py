@@ -169,6 +169,8 @@ def migrate_state(d):
     for s in d['SACRAMENTS']:
         s.setdefault('history', [])
         s.setdefault('revision', 1)
+        if s.get('kind') != 'certificate' and not isinstance(s.get('preparation', []), list):
+            s['preparation'] = []
         if s.get('kind') != 'certificate' and s.get('status') == 'awaiting-signature' and str(s.get('date', ''))[:10] > TODAY():
             s['status'] = 'scheduled'
         if s.get('kind') != 'certificate' and s.get('status') == 'approved':
@@ -596,7 +598,8 @@ def save_patch(c, u, pid, payload):
         if sid in previous:
             require(s == previous[sid], 'Use the approval or correction workflow to change a register entry.')
         else:
-            require(s.get('status') in {'draft', 'scheduled', 'awaiting-signature'}, 'New entries must await review.')
+            require(s.get('kind') == 'certificate' and s.get('status') in {'draft', 'scheduled', 'awaiting-signature'},
+                    'Create sacrament requests through the review process.')
             require(not any(s.get(k) for k in PROTECTED - {'status', 'revision'}), 'Approval metadata is server-managed.')
             if s.get('kind') == 'certificate':
                 source = previous.get(s.get('sourceRecordId'))
@@ -629,7 +632,79 @@ def workflow(c, u, pid, q):
     d = json.loads(row['data']); action = q.get('action'); sid = q.get('id')
     s = next((s for s in d['SACRAMENTS'] if s['id'] == sid), None)
     at = NOW()
-    if action == 'update-entry':
+    if action == 'create-sacrament-request':
+        require(s is None and isinstance(sid, str) and sid.startswith('sc') and len(sid) <= 48,
+                'Choose a unique request reference.')
+        require(q.get('kind') in {'baptism', 'confirmation', 'communion', 'marriage', 'funeral'},
+                'Choose a sacrament.')
+        require(any(p['id'] == q.get('person') for p in d['PEOPLE']), 'Choose a parishioner.')
+        require(not any(x['id'] == sid for x in d['SACRAMENTS']), 'Request already exists.')
+        requested_date = str(q.get('date') or '').strip()
+        if requested_date:
+            try: dt.date.fromisoformat(requested_date)
+            except ValueError: raise Problem(400, 'Enter a valid preferred date.')
+        notes = str(q.get('notes') or '').strip()
+        require(len(notes) <= 500, 'Keep request notes within 500 characters.')
+        prefix = f'SRQ/{TODAY()[:4]}/'
+        number = max([int(x['reg'][len(prefix):]) for x in d['SACRAMENTS']
+                      if str(x.get('reg', '')).startswith(prefix) and str(x['reg'][len(prefix):]).isdigit()] or [0]) + 1
+        d['SACRAMENTS'].insert(0, dict(id=sid, kind=q['kind'], reg=f'{prefix}{number:03d}',
+            person=q['person'], date=requested_date, requestedDate=requested_date, requestedAt=at, requestNotes=notes,
+            status='requested', preparation=[], history=[dict(action='sacrament requested', by=u['name'], at=at)], revision=1))
+    elif action == 'review-sacrament-request':
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] == 'requested',
+                'Only a new sacrament request can be reviewed by the office.')
+        s['status'] = 'office-reviewed'
+        s.setdefault('history', []).append(dict(action='office review completed', by=u['name'], at=at))
+    elif action == 'approve-sacrament-request':
+        require(u['role'] in CLERGY, 'Only a priest can accept a sacrament request.', 403)
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] in {'requested', 'office-reviewed'},
+                'This request is no longer awaiting priest approval.')
+        s['status'] = 'preparing'
+        s.update(requestApprovedBy=u['name'], requestApprovedAt=at)
+        s.setdefault('history', []).append(dict(action='request accepted for preparation', by=u['name'], at=at))
+    elif action == 'decline-sacrament-request':
+        require(u['role'] in CLERGY, 'Only a priest can decline a sacrament request.', 403)
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] in {'requested', 'office-reviewed'},
+                'This request is no longer awaiting priest approval.')
+        reason = str(q.get('reason') or '').strip()
+        require(0 < len(reason) <= 500, 'Enter a reason for declining this request.')
+        s['status'] = 'rejected'
+        s.setdefault('history', []).append(dict(action='request declined', by=u['name'], at=at, reason=reason))
+    elif action == 'update-preparation':
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] in {'preparing', 'scheduled'},
+                'Only accepted preparations can be edited.')
+        checklist = q.get('checklist')
+        requirements = d.get('PREP_REQUIREMENTS', {}).get(s['kind'], [])
+        require(isinstance(checklist, list) and len(checklist) == len(requirements)
+                and all(type(value) is bool for value in checklist), 'Complete the preparation checklist.')
+        date = str(q.get('date') or '').strip()
+        if date:
+            try: dt.date.fromisoformat(date)
+            except ValueError: raise Problem(400, 'Enter a valid celebration date.')
+        s['date'] = date
+        s['preparation'] = checklist
+        if s['status'] == 'scheduled' and (not date or any(not checklist[index] for index, item in enumerate(requirements) if item[2])):
+            s['status'] = 'preparing'
+        s['revision'] = s.get('revision', 1) + 1
+        s.setdefault('history', []).append(dict(action='preparation updated', by=u['name'], at=at))
+    elif action == 'complete-preparation':
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] == 'preparing',
+                'Only active preparation can be completed.')
+        requirements = d.get('PREP_REQUIREMENTS', {}).get(s['kind'], [])
+        require(bool(s.get('date')) and len(s.get('preparation', [])) == len(requirements)
+                and all(s['preparation'][index] for index, item in enumerate(requirements) if item[2]),
+                'Set a celebration date and complete every required preparation item.')
+        s['status'] = 'scheduled'
+        s.setdefault('history', []).append(dict(action='preparation completed', by=u['name'], at=at))
+    elif action == 'cancel-preparation':
+        require(s is not None and s.get('kind') != 'certificate' and s['status'] in {'preparing', 'scheduled'},
+                'Only active preparation can be cancelled.')
+        reason = str(q.get('reason') or '').strip()
+        require(0 < len(reason) <= 500, 'Enter a cancellation reason.')
+        s['status'] = 'cancelled'
+        s.setdefault('history', []).append(dict(action='preparation cancelled', by=u['name'], at=at, reason=reason))
+    elif action == 'update-entry':
         require(s is not None and s.get('kind') != 'certificate' and s.get('status') in {'draft', 'scheduled'},
                 'Only a planned or unsubmitted sacrament can be edited. Approved entries need a correction request.')
         fields = q.get('fields')
@@ -644,7 +719,8 @@ def workflow(c, u, pid, q):
             if key == 'celebrant' and value:
                 require(any(p['id'] == value and p.get('status') == 'clergy' for p in d['PEOPLE']), 'Choose a parish celebrant.')
             s[key] = value.strip()
-        s['status'] = 'scheduled' if str(s['date'])[:10] > TODAY() else 'draft'
+        # Editing the plan must not silently mark an uncelebrated sacrament as celebrated.
+        s['status'] = 'scheduled' if s['status'] == 'scheduled' or str(s['date'])[:10] > TODAY() else 'draft'
         s['revision'] = s.get('revision', 1) + 1
         s.setdefault('history', []).append(dict(action='details updated', by=u['name'], at=at, fields=sorted(fields)))
     elif action == 'create-certificate-request':
@@ -662,7 +738,7 @@ def workflow(c, u, pid, q):
                     and source['status'] in {'registered', 'issued'}, 'Choose an official entry for this parishioner.')
         if planned_id:
             require(planned is not None and planned['kind'] != 'certificate' and planned['person'] == person_id
-                    and planned['status'] in {'draft', 'scheduled', 'awaiting-signature'},
+                    and planned['status'] in {'requested', 'office-reviewed', 'preparing', 'draft', 'scheduled', 'awaiting-signature'},
                     'Choose a pending sacrament for this parishioner.')
         request_id = str(q.get('requestId', ''))
         require(request_id == sid and request_id.startswith('sc') and len(request_id) <= 48
@@ -715,6 +791,13 @@ def workflow(c, u, pid, q):
                         reason = str(q.get('reason', '')).strip()
                         require(0 < len(reason) <= 500, 'Enter a rejection reason of 500 characters or less.')
                     s['status'] = ('approved' if s.get('kind') == 'certificate' else 'registered') if action == 'approve' else 'rejected'
+                    if action == 'approve' and s.get('kind') != 'certificate' and s['reg'].startswith('SRQ/'):
+                        prefixes = {'baptism': 'B', 'confirmation': 'K', 'communion': 'C', 'marriage': 'M', 'funeral': 'F'}
+                        prefix = f"{prefixes[s['kind']]}/{str(s['date'])[:4]}/"
+                        number = max([int(x['reg'][len(prefix):]) for x in d['SACRAMENTS']
+                                      if str(x.get('reg', '')).startswith(prefix) and str(x['reg'][len(prefix):]).isdigit()] or [0]) + 1
+                        s['requestReference'] = s['reg']
+                        s['reg'] = f'{prefix}{number:03d}'
                     if action == 'approve': s.update(approvedBy=u['name'], approvedAt=at)
                     else: s.update(reviewedBy=u['name'], reviewedAt=at)
                     if action == 'approve' and s.get('kind') != 'certificate':

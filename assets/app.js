@@ -30,15 +30,15 @@ export const ROUTES = {
   people:       { ico:'people',   en:'People',           ar:'المؤمنون',            view:People.people,      badge:() => num(D.PEOPLE.length) },
   person:       { ico:'people',   en:'Person',           ar:'سجلّ شخص',            view:People.personView,  hidden:true },
   households:   { ico:'family',   en:'Households',       ar:'العائلات',            view:People.households,  badge:() => D.HOUSEHOLDS.length },
-  sacraments:   { ico:'sacr',     en:'Sacraments',       ar:'الأسرار',             view:Records.sacraments, badge:() => D.SACRAMENTS.filter(x => x.status === 'awaiting-signature').length },
+  sacraments:   { ico:'sacr',     en:'Sacraments',       ar:'الأسرار',             view:Records.sacraments, badge:() => D.SACRAMENTS.filter(x => x.kind !== 'certificate' && x.status === 'registered').length },
   requests:     { ico:'doc',      en:'Requests',         ar:'الطلبات',             view:Records.requests, badge:() => D.SACRAMENTS.filter(x => x.kind === 'certificate'
       ? ['draft','awaiting-signature','approved'].includes(x.status)
-      : ['draft','completed','awaiting-signature'].includes(x.status)).length
+      : ['requested','office-reviewed','awaiting-signature'].includes(x.status)).length
       + D.CORRECTIONS.filter(x => x.status === 'awaiting-approval').length
       + D.RESERVATIONS.filter(x => x.status === 'pending').length
       + D.SERVICE_REQUESTS.filter(x => ['pending','awaiting-approval'].includes(x.status)).length
       + D.PORTAL_REQUESTS.length + D.REGISTRATIONS.filter(x => x.waiting > 0).length },
-  certificate:  { ico:'doc',      en:'Certificate',      ar:'شهادة',               view:Records.certificate, hidden:true },
+  certificate:  { ico:'doc',      en:'Record',           ar:'قيد',                 view:Records.certificate, hidden:true },
   notes:        { ico:'notes',    en:'Pastoral notes',   ar:'ملاحظات رعوية',       view:Pastoral.notes },
 
   calendar:     { ico:'events',   en:'Calendar',         ar:'الرزنامة',            view:Parish.calendar },

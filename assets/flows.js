@@ -585,7 +585,7 @@ export function recordChooser() {
     sub: L('What are you adding?', 'ماذا تضيف؟'),
     body: `<div class="grid g2" style="gap:10px">
       ${[['people', L('Parishioner', 'مؤمن'), 'people', 'newperson'], ['family', L('Household', 'عائلة'), 'households', 'hhnew'],
-         ['sacr', L('Register entry', 'قيد في السجل'), 'sacraments', 'newrec'], ['events', L('Event', 'حدث'), 'calendar', 'evnew'],
+         ['sacr', L('Sacrament request', 'طلب سرّ'), 'requests', 'newsacreq'], ['events', L('Event', 'حدث'), 'calendar', 'evnew'],
          ['rooms', L('Room request', 'طلب قاعة'), 'reservations', 'newres'], ['give', L('Counting session', 'جلسة عدّ'), 'giving', 'addenv']]
         .map(([ic, lab, route, trigger]) => `<button class="card card-flat" data-choose="${route}|${trigger}"
           style="cursor:pointer;text-align:start;padding:16px;display:flex;gap:12px;align-items:center">

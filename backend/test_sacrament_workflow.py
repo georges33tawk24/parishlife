@@ -103,11 +103,64 @@ class SacramentWorkflowTests(unittest.TestCase):
     def test_planned_details_are_editable_until_submission(self):
         self.act('secretary', 'update-entry', 'sc1', fields={
             'date': '2026-09-27', 'celebrant': 'p17', 'place': 'Saint Elias'})
-        self.assertEqual(self.record('sc1')['status'], 'draft')
+        self.assertEqual(self.record('sc1')['status'], 'scheduled')
         self.assertEqual(self.record('sc1')['place'], 'Saint Elias')
         self.act('secretary', 'submit', 'sc1')
         with self.assertRaises(server.Problem):
             self.act('secretary', 'update-entry', 'sc1', fields={'place': 'Elsewhere'})
+
+    def test_priest_can_accept_family_request_without_secretary_review(self):
+        self.act('secretary', 'create-sacrament-request', 'sc-family',
+                 kind='baptism', person='p20', date='2026-10-12', notes='Requested by family')
+        self.assertEqual(self.record('sc-family')['status'], 'requested')
+        with self.assertRaises(server.Problem):
+            self.act('secretary', 'complete-preparation', 'sc-family')
+        with self.assertRaises(server.Problem):
+            self.act('secretary', 'approve-sacrament-request', 'sc-family')
+        self.act('priest', 'approve-sacrament-request', 'sc-family')
+        self.assertEqual(self.record('sc-family')['status'], 'preparing')
+        requirements = self.state()[1]['PREP_REQUIREMENTS']['baptism']
+        with self.assertRaises(server.Problem):
+            self.act('secretary', 'complete-preparation', 'sc-family')
+        self.act('secretary', 'update-preparation', 'sc-family', date='2026-10-12',
+                 checklist=[bool(item[2]) for item in requirements])
+        self.act('secretary', 'complete-preparation', 'sc-family')
+        self.assertEqual(self.record('sc-family')['status'], 'scheduled')
+        server.TODAY = lambda: '2026-10-12'
+        self.act('secretary', 'submit', 'sc-family')
+        self.act('priest', 'approve', 'sc-family', verified=True)
+        record = self.record('sc-family')
+        self.assertEqual(record['status'], 'registered')
+        self.assertEqual(record['requestReference'], 'SRQ/2026/001')
+        self.assertTrue(record['reg'].startswith('B/2026/'))
+
+    def test_secretary_review_and_priest_decline_leave_history(self):
+        self.act('secretary', 'create-sacrament-request', 'sc-decline',
+                 kind='communion', person='p19')
+        self.act('secretary', 'review-sacrament-request', 'sc-decline')
+        self.assertEqual(self.record('sc-decline')['status'], 'office-reviewed')
+        self.act('priest', 'decline-sacrament-request', 'sc-decline', reason='Needs discussion')
+        record = self.record('sc-decline')
+        self.assertEqual(record['status'], 'rejected')
+        self.assertEqual(record['history'][-1]['reason'], 'Needs discussion')
+        with self.assertRaises(server.Problem):
+            self.act('priest', 'approve-sacrament-request', 'sc-decline')
+
+    def test_editing_a_completed_checklist_reopens_preparation(self):
+        self.act('secretary', 'create-sacrament-request', 'sc-reopened',
+                 kind='baptism', person='p20')
+        self.act('priest', 'approve-sacrament-request', 'sc-reopened')
+        requirements = self.state()[1]['PREP_REQUIREMENTS']['baptism']
+        checklist = [bool(item[2]) for item in requirements]
+        self.act('secretary', 'update-preparation', 'sc-reopened', date='2026-10-12', checklist=checklist)
+        self.act('secretary', 'complete-preparation', 'sc-reopened')
+        required_index = next(index for index, item in enumerate(requirements) if item[2])
+        checklist[required_index] = False
+        self.act('secretary', 'update-preparation', 'sc-reopened', date='2026-10-12', checklist=checklist)
+        self.assertEqual(self.record('sc-reopened')['status'], 'preparing')
+        server.TODAY = lambda: '2026-10-12'
+        with self.assertRaises(server.Problem):
+            self.act('secretary', 'submit', 'sc-reopened')
 
 
 if __name__ == '__main__':
