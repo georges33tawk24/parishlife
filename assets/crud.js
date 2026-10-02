@@ -37,7 +37,11 @@ const pair = (k, ak, en, enAr, ar, arAr, { req = true, full = false } = {}) => [
 
 export const FIELD_TYPES = { text: ['Text', 'نص'], choice: ['Choice', 'اختيار'], person: ['Person', 'شخص'], date: ['Date', 'تاريخ'], file: ['File', 'ملف'] };
 
-export const ENT = {
+export /* who headed a household before its form changed it, so the save can re-anchor relationships */
+const priorHead = new WeakMap();
+const HEAD_INVERSE = { spouse: 'spouse', child: 'parent', son: 'parent', daughter: 'parent', parent: 'child', father: 'child', mother: 'child', sibling: 'sibling' };
+
+const ENT = {
   field: {
     list: () => D.FORM_FIELDS, name: f => L(f.label, f.labelAr),
     nw: ['Add a field', 'إضافة حقل'], ed: ['Edit field', 'تعديل الحقل'], del: ['Remove this field?', 'إزالة هذا الحقل؟'],
@@ -68,14 +72,22 @@ export const ENT = {
         set:(record,v)=>{record.members=[...new Set(v)];} },
       { k:'head', label:L('Household contact / head (optional)', 'المسؤول عن العائلة (اختياري)'), type:'select', full:true,
         options:()=>[['','Not set','غير محدّد'], ...x.members.map(id=>D.person(id)).filter(Boolean).map(p=>[p.id,p.lat,p.ar])],
-        set:(record,v)=>{record.head=v||null;} }],
+        set:(record,v)=>{priorHead.set(record, record.head); record.head=v||null;} }],
     blank: () => ({ id: uid('h'), name: '', ar: '', head: null, members: [], family: null, branch: null, town: '', townAr: '',
       envelope: '', address: '', addressAr: '' }),
     check: (v, x) => v.envelope && D.HOUSEHOLDS.some(h => h !== x && h.envelope === v.envelope)
       ? ['envelope', L('Another household already uses this offering-envelope identifier', 'رمز مظروف العطاء مستخدم لعائلة أخرى')]
       : v.head && !v.members.includes(v.head) ? ['head', L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')] : null,
     prepare: x => {
-      const selected = new Set(x.members);
+      const selected = new Set(x.members), was = priorHead.get(x); priorHead.delete(x);
+      /* A new head must not scramble the family: relationships recorded against the old head keep
+         naming them, and the old head is described from the new head's side (a spouse stays a spouse). */
+      if (was && x.head && was !== x.head && selected.has(was)) {
+        const nh = D.person(x.head), oh = D.person(was);
+        for (const p of D.PEOPLE) if (selected.has(p.id) && p.id !== was && p.id !== x.head && !p.relativeTo) p.relativeTo = was;
+        const inverse = !nh.relativeTo || nh.relativeTo === was ? HEAD_INVERSE[nh.rel] : null;
+        if (oh) { oh.rel = inverse || 'relative'; oh.relativeTo = x.head; }
+      }
       for (const p of D.PEOPLE) {
         if (p.hh===x.id && !selected.has(p.id)) { p.hh=null; if (p.rel==='head') p.rel='relative'; p.relativeTo=null; }
         if (selected.has(p.id)) { p.hh=x.id; p.rel=p.id===x.head?'head':p.rel==='head'?'relative':p.rel||'relative'; if (p.id===x.head) p.relativeTo=null; }

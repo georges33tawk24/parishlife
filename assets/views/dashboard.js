@@ -90,7 +90,7 @@ function priest() {
     ${pageHead({
       crumbs: [{ label: t('Home', 'الرئيسية') }, { label: t('Dashboard', 'لوحة القيادة') }],
       title: greet(), sub: sundayLine(),
-      actions: `<button class="btn btn-secondary" data-act="print">${icon('print', 17)}${t('Print my week', 'اطبع أسبوعي')}</button>
+      actions: `<button class="btn btn-secondary" data-act="print-week">${icon('print', 17)}${t('Print my week', 'اطبع أسبوعي')}</button>
         <button class="btn btn-primary" data-act="record-new">${icon('plus', 17)}${t('New record', 'سجل جديد')}</button>`
     })}
     <div class="stats">

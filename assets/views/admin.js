@@ -94,34 +94,47 @@ assignments.mount = async host => {
 
 /* ═══════════ 15 · forms & workflows ═══════════ */
 const WTABS = () => [['', 'Workflows', 'المسارات'], ['runs', 'Open tasks', 'المهام المفتوحة', RUNS.length],
-               ['builder', 'Form builder', 'بناء الاستمارة'], ['log', 'Execution log', 'سجل التنفيذ']];
+               ['builder', 'Form builder', 'بناء الاستمارة'], ['log', 'Activity log', 'سجل النشاط']];
+const wfSteps = w => (isAr() ? w.stepsAr : w.steps) || w?.steps || [];
+const RULE_OPS = { '=': ['is', 'هو'], '≠': ['is not', 'ليس'] };
 
 export function forms(tab = '') {
+  if (tab !== 'runs') S.ui.runWf = '';          // the queue filter belongs to the visit that set it
   const head = pageHead({
     crumbs: [{ label: L('Administration', 'الإدارة') }, { label: L('Forms & workflows', 'الاستمارات والمسارات') }],
-    title: L('Forms, workflows and automation', 'الاستمارات والمسارات والأتمتة'),
-    sub: L('A request becomes a tracked task with an owner, a due date and a visible outcome.',
-           'يتحوّل الطلب إلى مهمّة متابَعة لها مسؤول ومهلة ونتيجة ظاهرة.'),
+    title: L('Forms and workflows', 'الاستمارات ومسارات العمل'),
+    sub: L('Each request moves through set steps. Every step has a person responsible and a due date, so nothing is forgotten.',
+           'يمرّ كل طلب بخطوات محدّدة، ولكل خطوة شخص مسؤول وموعد، فلا يُنسى شيء.'),
     actions: `${tab === 'builder' ? '' : `<button class="btn btn-secondary" data-go="forms/builder">${icon('doc', 17)}${L('Form templates', 'قوالب الاستمارات')}</button>`}
       <button class="btn btn-primary" data-act="wf-new">${icon('plus', 17)}${L('New workflow', 'مسار جديد')}</button>`
   }) + tabBar('forms', WTABS(), tab);
 
-  if (tab === 'runs') return head + `${table({
-      cols: [{ label: L('Workflow', 'المسار'), sort: true }, { label: L('Subject', 'الموضوع') },
-             { label: L('Step', 'الخطوة') }, { label: L('Owner', 'المسؤول'), cls: 'hide-sm' },
-             { label: L('Due', 'المهلة'), sort: true }, { label: '', cls: 'shrink' }],
-      rows: RUNS.map(r => { const w = WORKFLOWS.find(x => x.id === r.wf);
-        return { cells: [
-          `<b>${esc(L(w.name, w.ar))}</b>`,
-          r.subject ? who(person(r.subject)) : `<span class="dim">${L('Parish expense', 'مصروف الرعية')}</span>`,
-          `<span style="display:block;min-width:120px"><span class="t-caption dim tnum">${r.step} / ${r.total}</span>
-            <span class="meter" style="margin-top:6px"><i style="width:${Math.round(r.step / r.total * 100)}%"></i></span></span>`,
-          who(person(r.owner)),
-          r.overdue ? pill(`${fmtDate(r.due)} · ${L('overdue', 'متأخرة')}`, 'danger') : `<span class="mono dim">${fmtDate(r.due)}</span>`,
-          `<button class="btn btn-secondary btn-dense" data-run="${r.id}">${L('Open', 'فتح')}</button>`]}; })
-    })}
-    ${C.inlineAlert('warning', L('One task is past its due date', 'مهمّة واحدة تجاوزت مهلتها'),
-      L('Escalation is a reminder to a named person, never an automatic decision.', 'التصعيد تذكير لشخص مسمّى، لا قرار تلقائي.'))}`;
+  if (tab === 'runs') {
+    const only = WORKFLOWS.find(w => w.id === S.ui.runWf), runs = only ? RUNS.filter(r => r.wf === only.id) : RUNS;
+    const late = runs.filter(r => r.overdue).length;
+    return head + `${only ? `<div class="toolbar" style="margin-bottom:14px">
+        <span class="chip chip-on" style="gap:6px">${icon('filter', 14)}${esc(L(only.name, only.ar))}</span>
+        <span class="t-caption dim">${runs.length} ${L('open', 'مفتوحة')}</span>
+        <button class="btn btn-ghost btn-dense" data-act="wf-queue:">${L('Show every workflow', 'عرض كل المسارات')}</button></div>` : ''}
+      ${table({
+        cols: [{ label: L('Workflow', 'المسار'), sort: true }, { label: L('For', 'لـ') },
+               { label: L('Current step', 'الخطوة الحالية') }, { label: L('Responsible', 'المسؤول'), cls: 'hide-sm' },
+               { label: L('Due', 'الموعد'), sort: true }, { label: '', cls: 'shrink' }],
+        rows: runs.map(r => { const w = WORKFLOWS.find(x => x.id === r.wf), steps = wfSteps(w);
+          return { cells: [
+            `<b>${esc(L(w.name, w.ar))}</b>`,
+            r.subject ? who(person(r.subject)) : `<span class="dim">${L('Parish expense', 'مصروف الرعية')}</span>`,
+            `<span style="display:block;min-width:150px"><b style="font-weight:500">${esc(steps[r.step] || '')}</b>
+              <span class="t-caption dim tnum" style="display:block">${L(`Step ${Math.min(r.step + 1, r.total)} of ${r.total}`, `الخطوة ${Math.min(r.step + 1, r.total)} من ${r.total}`)}</span>
+              <span class="meter" style="margin-top:6px"><i style="width:${Math.round(r.step / r.total * 100)}%"></i></span></span>`,
+            who(person(r.owner)),
+            r.overdue ? pill(`${fmtDate(r.due)} · ${L('late', 'متأخرة')}`, 'danger') : `<span class="mono dim">${fmtDate(r.due)}</span>`,
+            `<button class="btn btn-secondary btn-dense" data-run="${r.id}">${L('Open', 'فتح')}</button>`]}; }),
+        empty: empty('check', L('No open tasks', 'لا مهام مفتوحة'), only ? L('Nothing is waiting in this workflow.', 'لا شيء ينتظر في هذا المسار.') : L('Every request has been dealt with.', 'عولجت كل الطلبات.'))
+      })}
+      ${late ? C.inlineAlert('warning', late === 1 ? L('One task is late', 'مهمّة واحدة متأخرة') : L(`${late} tasks are late`, `${late} مهام متأخرة`),
+        L('The person responsible is reminded. Nothing is ever decided automatically.', 'يُذكَّر الشخص المسؤول. ولا يُتّخذ أي قرار تلقائياً.')) : ''}`;
+  }
 
   if (tab === 'builder') return head + `<div class="splitview">
       <div>${panel(L('Certificate request form', 'استمارة طلب شهادة'), `
@@ -131,69 +144,65 @@ export function forms(tab = '') {
               ${f.note ? `<small style="white-space:normal">${esc(L(f.note, f.noteAr))}</small>` : ''}</span>
             <span class="chip">${esc(L(...(FIELD_TYPES[f.type] || [f.type, f.type])))}</span>${CR.recBtn('field', f.id, L('Field options', 'خيارات الحقل'))}</div>`).join('')
           || `<p class="t-caption dim">${L('No fields yet — add the first one.', 'لا حقول بعد — أضف الأول.')}</p>`}
-        <button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="dom-add-field">${icon('plus', 15)}${L('Add field', 'إضافة حقل')}</button>`)}
-        ${C.inlineAlert('info', L('Fixed field types first', 'أنواع حقول ثابتة أولاً'),
-          L('A drag-and-drop designer is deliberately deferred until these forms have been tested on real requests.',
-            'مصمّم السحب والإفلات مؤجَّل عن قصد حتى تُختبَر هذه الاستمارات على طلبات حقيقية.'))}
+        <button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="dom-add-field">${icon('plus', 15)}${L('Add field', 'إضافة حقل')}</button>
+        <p class="t-caption dim" style="margin-top:12px">${L('Fields marked * must be filled in before the request can be sent.', 'يجب ملء الحقول المعلَّمة بـ* قبل إرسال الطلب.')}</p>`)}
       </div>
       <div class="sidecol">
-        ${panel(L('Conditional logic', 'المنطق الشرطي'), `${FORM_RULES.map(r => { const a = FORM_FIELDS.find(f => f.id === r.show), b = FORM_FIELDS.find(f => f.id === r.when);
-          return `<div class="card card-flat rule" style="font:400 13px/20px var(--sans);margin-bottom:10px">
-            <span><b>${L('Show', 'أظهر')}</b> ${esc(a ? L(a.label, a.labelAr) : '—')}<br>
-            <b>${L('when', 'حين')}</b> ${esc(b ? L(b.label, b.labelAr) : '—')} <b>${esc(r.op)}</b> ${esc(L(r.value, r.valueAr))}</span>
+        ${panel(L('Show a field only when…', 'أظهر الحقل فقط حين…'), `${FORM_RULES.map(r => { const a = FORM_FIELDS.find(f => f.id === r.show), b = FORM_FIELDS.find(f => f.id === r.when);
+          return `<div class="rulecard"><span class="grow">${L('Show', 'أظهر')} <b>${esc(a ? L(a.label, a.labelAr) : '—')}</b>
+            ${L('only when', 'فقط حين يكون')} <b>${esc(b ? L(b.label, b.labelAr) : '—')}</b> ${esc(L(...(RULE_OPS[r.op] || [r.op, r.op])))} <b>${esc(L(r.value, r.valueAr))}</b></span>
             ${C.iconBtn('close', L('Remove rule', 'إزالة القاعدة'), `data-act="rule-del:${r.id}"`)}</div>`; }).join('')
           || `<p class="t-caption dim">${L('No rules — every field always shows.', 'لا قواعد — كل الحقول تظهر دائماً.')}</p>`}
-          <button class="btn btn-secondary btn-dense" style="margin-top:12px" data-act="dom-add-rule">${icon('plus', 15)}${L('Add rule', 'إضافة قاعدة')}</button>`)}
-        ${panel(L('Validation', 'التحقّق'), `<div class="stack" style="gap:10px">
+          <button class="btn btn-secondary btn-dense" style="margin-top:4px" data-act="dom-add-rule">${icon('plus', 15)}${L('Add rule', 'إضافة قاعدة')}</button>`)}
+        ${panel(L('Checks before sending', 'تحقّق قبل الإرسال'), `<div class="stack" style="gap:10px">
           ${C.checkRow(L('Required fields must be filled', 'الحقول المطلوبة إلزامية'), { checked: true })}
           ${C.checkRow(L('Attachments limited to 10 MB', 'المرفقات حتى ١٠ ميغابايت'), { checked: true })}
-          ${C.checkRow(L('Reject a second identical request within 7 days', 'رفض طلب مطابق خلال ٧ أيام'), { checked: true })}</div>`)}
+          ${C.checkRow(L('Refuse the same request twice within 7 days', 'رفض الطلب نفسه مرّتين خلال ٧ أيام'), { checked: true })}</div>`)}
       </div></div>`;
 
-  if (tab === 'log') return head + `${panel(L('Execution history', 'سجل التنفيذ'), `
+  if (tab === 'log') return head + `${panel(L('What happened, newest first', 'ما جرى، الأحدث أولاً'), `
       <div class="timeline">${RUN_LOG.map(([when, en, ar, kind]) => `<div class="tl-item ${kind === 'err' ? 'accent' : ''}">
         <div class="when">${esc(when)}</div>
-        <div class="what">${esc(L(en, ar))}${kind === 'err' ? ` ${pill(L('Retried', 'أُعيدت'), 'warning')}` : ''}</div></div>`).join('')}</div>`)}
+        <div class="what">${esc(L(en, ar))}${kind === 'err' && /retry|محاولة/i.test(en + ar) ? ` ${pill(L('Retried', 'أُعيدت'), 'warning')}` : ''}</div></div>`).join('')}</div>`)}
     <div class="grid g2">
-      ${panel(L('Controls', 'التحكّم'), `<div class="row" style="gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-dense" data-act="wf-pause">${WORKFLOWS[0]?.paused ? L('Resume workflow', 'استئناف المسار') : L('Pause this workflow', 'إيقاف المسار مؤقتاً')}</button>
-        <button class="btn btn-secondary btn-dense" data-act="wf-retry">${L('Retry failed steps', 'إعادة الخطوات الفاشلة')}</button>
-        <button class="btn btn-danger-quiet btn-dense" data-act="wf-cancel">${L('Cancel run', 'إلغاء التنفيذ')}</button></div>
+      ${panel(L('Pause or resume a workflow', 'إيقاف مسار أو استئنافه'), `${WORKFLOWS.map(w => `<div class="listrow" style="padding-inline:0">
+          <span class="grow"><b>${esc(L(w.name, w.ar))}</b><small>${w.paused ? L('Paused — no new requests start', 'متوقّف — لا تبدأ طلبات جديدة') : L('Running', 'يعمل')}</small></span>
+          <button class="btn btn-secondary btn-dense" data-act="wf-pause:${w.id}">${w.paused ? L('Resume', 'استئناف') : L('Pause', 'إيقاف مؤقّت')}</button></div>`).join('')}
+        <div class="row" style="gap:8px;margin-top:14px"><button class="btn btn-secondary btn-dense" data-act="wf-retry">${L('Retry messages that failed', 'إعادة إرسال الرسائل الفاشلة')}</button></div>
         <p class="t-caption dim" style="margin-top:12px">${L(
-          'A retry never re-sends a message that already went out — the run history is what prevents the duplicate, not the operator’s memory.',
-          'الإعادة لا تُرسل رسالة سبق إرسالها — سجل التنفيذ هو ما يمنع التكرار، لا ذاكرة المستخدم.')}</p>`)}
-      ${panel(L('Error handling', 'معالجة الأخطاء'), `<dl class="dl">
-        <dt>${L('Retries', 'المحاولات')}</dt><dd>3 ${L('with backoff', 'مع تباعد')}</dd>
-        <dt>${L('On final failure', 'عند الفشل النهائي')}</dt><dd>${L('Stop and notify the owner', 'التوقّف وإبلاغ المسؤول')}</dd>
-        <dt>${L('Sensitive steps', 'الخطوات الحسّاسة')}</dt><dd>${L('Always wait for a person', 'تنتظر إنساناً دائماً')}</dd></dl>`)}
+          'Retrying never sends a message twice: anything already delivered is skipped.',
+          'إعادة المحاولة لا تُرسل رسالة مرّتين: ما وصل سابقاً يُتخطّى.')}</p>`)}
+      ${panel(L('When something goes wrong', 'حين يتعطّل شيء'), `<dl class="dl">
+        <dt>${L('A message fails', 'فشل رسالة')}</dt><dd>${L('Tried again up to 3 times, a little later each time', 'تُعاد حتى ٣ مرّات، بفاصل أطول كل مرّة')}</dd>
+        <dt>${L('It still fails', 'إن استمرّ الفشل')}</dt><dd>${L('The workflow stops and tells the person responsible', 'يتوقّف المسار ويُبلغ المسؤول')}</dd>
+        <dt>${L('Sensitive steps', 'الخطوات الحسّاسة')}</dt><dd>${L('Always wait for a person', 'تنتظر شخصاً دائماً')}</dd></dl>`)}
     </div>`;
 
   const cards = WORKFLOWS.map(w => {
-    const steps = (isAr() ? w.stepsAr : w.steps) || [];
+    const steps = wfSteps(w), open = RUNS.filter(r => r.wf === w.id).length;
     return `<section class="panel"><div class="panel-b">
       <div class="row" style="gap:10px;align-items:flex-start">
         <span class="avatar avatar-lg">${icon('forms', 20)}</span>
         <div style="flex:1;min-width:0"><b style="display:block;font:600 16px/22px var(--sans)">${esc(L(w.name, w.ar))}</b>
-          <small class="t-caption dim">${L('average', 'المتوسط')} ${esc(L(w.avg, w.avgAr))}</small></div>
-        ${w.paused ? pill(L('Paused', 'متوقّف'), 'warning', 'st-pause') : ''}<span class="badge ${w.open ? '' : 'badge-quiet'}">${w.open}</span>${CR.recBtn('workflow', w.id)}</div>
+          <small class="t-caption dim">${L('usually takes', 'يستغرق عادةً')} ${esc(L(w.avg, w.avgAr))}</small></div>
+        ${w.paused ? pill(L('Paused', 'متوقّف'), 'warning', 'st-pause') : ''}<span class="badge ${open ? '' : 'badge-quiet'}" title="${L('Open tasks', 'مهام مفتوحة')}">${open}</span>${CR.recBtn('workflow', w.id)}</div>
       <div class="divider"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center">
-        ${steps.map((st, i) => `<span class="t-caption" style="color:${i < 2 ? 'var(--text)' : 'var(--text-3)'}">${esc(st)}</span>
-          ${i < steps.length - 1 ? `<span class="dimmer">${icon('arrowR', 13)}</span>` : ''}`).join('')}</div>
-      <button class="btn btn-secondary" style="width:100%;margin-top:14px;min-height:34px;font-size:13px"
-        data-go="forms/runs">${L('Open queue', 'فتح الطابور')}</button>
+      <ol class="wfsteps">${steps.map((st, i) => `<li><span class="n">${i + 1}</span>${esc(st)}</li>`).join('')}</ol>
+      <button class="btn btn-secondary" style="width:100%;margin-top:14px;min-height:34px;font-size:13px" data-act="wf-queue:${w.id}">
+        ${open ? L(`See ${open} open task${open === 1 ? '' : 's'}`, `عرض المهام المفتوحة (${open})`) : L('No open tasks', 'لا مهام مفتوحة')}</button>
     </div></section>`;
   }).join('');
+  const late = RUNS.filter(r => r.overdue), lateW = late[0] && WORKFLOWS.find(w => w.id === late[0].wf);
 
   return head + `<div class="stats">
-      ${stat(L('Open tasks', 'مهام مفتوحة'), WORKFLOWS.reduce((a, w) => a + w.open, 0), L('across 5 workflows', 'في ٥ مسارات'))}
-      ${stat(L('Overdue', 'متأخرة'), 1, `<span class="down">${L('a certificate request, 4 days', 'طلب شهادة، ٤ أيام')}</span>`)}
-      ${stat(L('Closed this month', 'أُقفلت هذا الشهر'), 27, L('median 2 days', 'الوسيط يومان'))}
-      ${stat(L('Automations', 'أتمتة'), 4, L('all with a human review step', 'كلّها بخطوة مراجعة بشرية'))}
+      ${stat(L('Open tasks', 'مهام مفتوحة'), RUNS.length, L(`in ${new Set(RUNS.map(r => r.wf)).size} workflows`, `في ${new Set(RUNS.map(r => r.wf)).size} مسارات`))}
+      ${stat(L('Late', 'متأخرة'), late.length, late.length ? `<span class="down">${esc(L(lateW?.name || '', lateW?.ar || ''))} · ${fmtDate(late[0].due)}</span>` : L('nothing is late', 'لا شيء متأخر'))}
+      ${stat(L('Finished this month', 'أُنجزت هذا الشهر'), 27, L('usually within 2 days', 'عادةً خلال يومين'))}
+      ${stat(L('Automatic steps', 'خطوات تلقائية'), 4, L('a person always checks the result', 'يراجع شخصٌ النتيجة دائماً'))}
     </div>
     <div class="gridcards">${cards}</div>
     ${C.inlineAlert('info', L('Sensitive decisions always stop for a person', 'القرارات الحسّاسة تتوقّف دائماً عند شخص'),
-      L('Pastoral, safeguarding, financial and disciplinary steps are never auto-completed, however routine they look. Automation may prepare the work; it may not decide it.',
+      L('Pastoral, safeguarding, financial and disciplinary steps are never completed automatically, however routine they look. Automation may prepare the work; it never decides it.',
         'لا تُنجَز الخطوات الرعوية والحمائية والمالية والتأديبية تلقائياً مهما بدت روتينية. للأتمتة أن تُحضّر العمل لا أن تقرّره.'))}`;
 }
 
@@ -201,21 +210,21 @@ forms.mount = host => {
   C.wire(host); wireTables(host);
   host.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', () => {
     const r = RUNS.find(x => x.id === b.dataset.run), w = WORKFLOWS.find(x => x.id === r.wf);
-    const steps = (isAr() ? w.stepsAr : w.steps) || [];
+    const steps = wfSteps(w), owner = person(r.owner);
     openDrawer({
       title: L(w.name, w.ar),
-      sub: r.subject ? esc(isAr() ? person(r.subject).ar : person(r.subject).lat) : L('Parish expense', 'مصروف الرعية'),
-      body: `<div class="timeline">${steps.map((st, i) => `<div class="tl-item ${i < r.step ? 'accent' : ''}">
-          <div class="when">${i < r.step ? L('done', 'أُنجزت') : i === r.step ? L('now', 'الآن') : L('waiting', 'بانتظار')}</div>
-          <div class="what"><b>${esc(st)}</b></div></div>`).join('')}</div>
+      sub: r.subject ? esc(person(r.subject)?.lat || '') : L('Parish expense', 'مصروف الرعية'),
+      body: `<ol class="runsteps">${steps.map((st, i) => `<li class="${i < r.step ? 'done' : i === r.step ? 'now' : ''}">
+          <span class="dot" aria-hidden="true">${i < r.step ? icon('check', 13) : i + 1}</span>
+          <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? L('Done', 'أُنجزت') : i === r.step ? L('Current step', 'الخطوة الحالية') : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
         <div class="divider"></div>
-        <dl class="dl"><dt>${L('Owner', 'المسؤول')}</dt><dd>${esc(isAr() ? person(r.owner).ar : person(r.owner).lat)}</dd>
-          <dt>${L('Due', 'المهلة')}</dt><dd class="mono">${fmtDate(r.due)}</dd>
-          <dt>${L('Escalates to', 'يُصعَّد إلى')}</dt><dd>${L('Fr. Antoine Khoury after 2 days', 'الأب أنطوان خوري بعد يومين')}</dd></dl>
-        ${C.textarea({ label: L('Note on this step', 'ملاحظة على هذه الخطوة'), id: 'runnote', max: 300 })}`,
+        <dl class="dl"><dt>${L('Responsible', 'المسؤول')}</dt><dd>${esc(owner?.lat || '—')}</dd>
+          <dt>${L('Due', 'الموعد')}</dt><dd>${fmtDate(r.due)}${r.overdue ? ` · <span style="color:var(--danger-ink);font-weight:600">${L('late', 'متأخرة')}</span>` : ''}</dd>
+          <dt>${L('If it runs late', 'إن تأخّرت')}</dt><dd>${L('Fr. Antoine Khoury is reminded after 2 days', 'يُذكَّر الأب أنطوان خوري بعد يومين')}</dd></dl>
+        <div style="margin-top:18px">${C.textarea({ label: L('Note for the next person (optional)', 'ملاحظة لمن يتابع (اختياري)'), id: 'runnote', max: 300 })}</div>`,
       foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-        <button class="btn btn-danger-quiet" data-act="wf-cancel">${L('Cancel run', 'إلغاء')}</button>
-        <button class="btn btn-primary" style="margin-inline-start:auto" data-act="run-step:${r.id}">${L('Complete step', 'إنجاز الخطوة')}</button>`,
+        <button class="btn btn-danger-quiet" data-act="wf-cancel:${r.id}">${L('Cancel task', 'إلغاء المهمّة')}</button>
+        <button class="btn btn-primary" style="margin-inline-start:auto" data-act="run-step:${r.id}">${icon('check', 16)}${r.step + 1 >= r.total ? L('Finish task', 'إنهاء المهمّة') : L('Mark step done', 'إنجاز الخطوة')}</button>`,
       onMount(el) { C.wire(el); }
     });
   }));

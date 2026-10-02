@@ -268,6 +268,7 @@ export const skeletonRows = (n = 4) => Array.from({ length: n }, () => `<div cla
 
 /* ---------------- charts ---------------- */
 export function sparkline(values, { w = 240, h = 40, tone = 'var(--primary)' } = {}) {
+  if (!values || values.length < 2) return '';      /* no trend to draw (e.g. giving hidden from this role) */
   const max = Math.max(...values), min = Math.min(...values), span = max - min || 1;
   const pts = values.map((v, i) => [i / (values.length - 1) * w, h - ((v - min) / span) * (h - 6) - 3]);
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');

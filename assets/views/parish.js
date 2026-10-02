@@ -8,6 +8,7 @@ import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { VERBS } from '../actions.js';
 import * as F from '../flows.js';
+import { printWeekDialog, priestScheduleDialog } from '../schedules.js';
 import { allPlans, currentPlan, workingPlan, planDirty, savePlanDraft, normalizePlanOrder, planTotalMinutes,
   meetingId, attendanceCounts, attendanceValue } from '../planning.js';
 import { eligibleEvents, eventById, selectedRegistration, selectRegistration, registrantsFor, linkedEvent,
@@ -155,7 +156,7 @@ export function calendar(tab = '') {
 
 calendar.mount = host => {
   C.wire(host); wireTables(host);
-  host.querySelector('#priest-schedule')?.addEventListener('click', printPriestSchedule);
+  host.querySelector('#priest-schedule')?.addEventListener('click', priestScheduleDialog);
   host.querySelectorAll('[data-ev]').forEach(el => el.addEventListener('click', () => eventDrawer(el.dataset.ev)));
   host.querySelector('[data-split="newev"]')?.addEventListener('click', () => eventDrawer(null, true));
   host.querySelector('#newday')?.addEventListener('click', () => eventDrawer(null, true, { d: S.ui.calDay || iso(TODAY) }));
@@ -186,31 +187,8 @@ calendar.mount = host => {
         <button class="btn btn-secondary btn-dense" data-act="ics">${L('Google Calendar', 'رزنامة غوغل')}</button>
         <button class="btn btn-secondary btn-dense" data-act="ics">${L('Outlook', 'أوتلوك')}</button></div>`
   }));
-  host.querySelector('#printweek')?.addEventListener('click', () => openModal({
-    title: L('Print my week', 'اطبع أسبوعي'),
-    sub: L('One readable sheet of Masses, meetings, room bookings and assigned volunteers — for the staff who prefer paper.',
-           'ورقة واحدة بالقداديس والاجتماعات وحجوزات القاعات والمتطوّعين — لمن يفضّل الورق.'),
-    body: `<div class="stack" style="gap:10px">
-      ${C.checkRow(L('Masses and services', 'القداديس والخدم'), { checked: true })}
-      ${C.checkRow(L('Room bookings', 'حجوزات القاعات'), { checked: true })}
-      ${C.checkRow(L('Assigned volunteers', 'المتطوّعون المسندون'), { checked: true })}
-      ${C.checkRow(L('Private group meetings', 'اجتماعات المجموعات الخاصة'))}</div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-primary" data-act="print">${L('Print', 'طباعة')}</button>`
-  }));
+  host.querySelector('#printweek')?.addEventListener('click', printWeekDialog);
 };
-
-function printPriestSchedule() {
-  if(!is('priest'))return;
-  const masses=EVENTS.filter(e=>e.kind==='mass').slice().sort(byTime);
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${L('Priest schedule','جدول الكهنة')}</title>
-    <style>body{font:14px Arial,sans-serif;margin:28px;color:#3D4161}h1{color:#3D4161}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #DCEEFF}th{background:#DCEEFF}</style></head><body>
-    <h1>${L('Priest schedule','جدول الكهنة')}</h1><table><thead><tr>${['Date','Time','Mass','Location','Assigned priests'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
-    ${masses.map(e=>`<tr><td>${esc(e.d)}</td><td>${esc(e.t)}–${esc(e.to||'')}</td><td>${esc(e.title)}</td><td>${esc(venue(e.venue)?.name||'')}</td>
-      <td>${esc((EVENT_DETAIL[e.id]?.priestIds||[]).map(id=>person(id)?.lat||id).join(', ')||'Unassigned')}</td></tr>`).join('')}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`;
-  const win=window.open('','_blank');if(!win)return toast(L('Allow a print window','اسمح بنافذة الطباعة'),'','warning');
-  win.document.open();win.document.write(html);win.document.close();
-}
 
 function useEventTemplate(id) {
   const tpl = EVENT_TEMPLATES.find(x => x.id === id);
@@ -972,12 +950,12 @@ export function volunteers(tab = '') {
         : dbl ? L(`Also on ${also.team}`, `أيضاً في ${also.teamAr}`)
         : f.s === 'pending' ? L('Awaiting confirmation', 'بانتظار التأكيد') : L(p.town, p.townAr);
       return `<div class="rota-card ${f.s}${dbl ? ' dbl' : ''}" draggable="true" data-slot="${at}" data-accept="${f.s === 'declined' ? 'any' : 'card'}">
-        ${avatar(p, 'avatar-xs')}
-        <span class="rc-t"><b title="${esc(isAr() ? p.ar : p.lat)}">${esc(isAr() ? p.ar : p.lat.replace(/^(\S+)\s+(\S).*$/, '$1 $2.'))}</b><small>${esc(sub)}</small></span>
+        ${avatar(p, 'avatar-sm')}
+        <span class="rc-t"><b title="${esc(isAr() ? p.ar : p.lat)}">${esc(isAr() ? p.ar : p.lat)}</b><small>${esc(sub)}</small></span>
         ${f.swap ? `<button class="rota-swap" data-act="rota-swap:${at}">${L('Swap', 'تبديل')}</button>` : ''}
         ${f.s === 'declined' ? '' : `<span class="rdot ${f.s}" role="img" aria-label="${f.s === 'accepted' ? L('Confirmed', 'مؤكَّد') : L('Awaiting reply', 'بانتظار الردّ')}"></span>`}
         ${f.s === 'declined' ? `<button class="rota-sub" data-sub="${p.id}">${L('Shortlist substitutes', 'اقتراح بدلاء')}</button>` : ''}
-        <span class="row" style="gap:4px"><button class="btn btn-ghost btn-dense" data-act="rota-fill:${at}">${L('Replace','استبدال')}</button>
+        <span class="rc-acts"><button class="btn btn-secondary btn-dense" data-act="rota-fill:${at}">${L('Replace','استبدال')}</button>
         <button class="btn btn-ghost btn-dense" data-act="rota-remove:${at}">${L('Remove','إزالة')}</button></span>
       </div>`;
     }).join('');
@@ -1001,12 +979,13 @@ export function volunteers(tab = '') {
     </div>
     ${panel(`${fmtLong(ROTA.date)} · ${L(ROTA.service, ROTA.serviceAr)}`, `
       <div class="rota-wrap"><div class="rota-tray"><span class="overline">${L('Drag onto a place', 'اسحب إلى مركز')}</span>${tray}</div>
-      <div class="rota-board${teams.length < 3 ? ' few' : ''}">${cols}</div></div>
+      <div class="rota-board${teams.length < 3 ? ' few' : ''}" tabindex="0" aria-label="${L('Teams — scroll sideways for more', 'الفرق — مرّر جانبياً للمزيد')}">${cols}</div></div>
       <p class="rota-legend"><span><i class="rdot accepted"></i>${L('confirmed', 'مؤكَّد')}</span>
         <span><i class="rdot pending"></i>${L('awaiting reply', 'بانتظار الردّ')}</span>
         <span><i class="rdbl"></i>${L('double-booked', 'حجز مزدوج')}</span>
         <span><i class="rota-swap" aria-hidden="true">${L('Swap', 'تبديل')}</i>${L('swap request', 'طلب تبديل')}</span>
-        <span class="dim">${L('On a phone, tap an empty place to invite someone.', 'على الهاتف، اضغط مركزاً شاغراً لدعوة أحد.')}</span></p>`)}
+        <span class="dim">${L('On a phone, tap an empty place to invite someone.', 'على الهاتف، اضغط مركزاً شاغراً لدعوة أحد.')}</span></p>`,
+      { more: teams.length > 2 ? `<span class="row rota-nav" style="gap:6px">${C.iconBtn('chevL', L('Scroll to earlier teams', 'الفرق السابقة'), 'data-rota-scroll="-1"')}${C.iconBtn('chevR', L('Scroll to more teams', 'المزيد من الفرق'), 'data-rota-scroll="1"')}</span>` : '' })}
     ${C.inlineAlert('info', L('Late cancellations trigger a shortlist', 'الاعتذار المتأخر يُطلق لائحة بدلاء'),
       L('ParishLife proposes volunteers who are free, trained for that team and not already serving twice that week. A human always picks.',
         'يقترح «حياة الرعية» متطوّعين متفرّغين ومدرَّبين لهذا الفريق وغير مناوبين مرّتين في الأسبوع نفسه. والاختيار دائماً بشري.'))}`;
@@ -1048,6 +1027,11 @@ volunteers.mount = host => {
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`
   })));
   host.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () => volDrawer(b.dataset.vol)));
+  const rb = host.querySelector('.rota-board');
+  host.querySelectorAll('[data-rota-scroll]').forEach(b => b.addEventListener('click', () => {
+    const step = (rb.querySelector('.rota-col')?.offsetWidth || 280) + 14, way = document.documentElement.dir === 'rtl' ? -1 : 1;
+    rb.scrollBy({ left: +b.dataset.rotaScroll * step * way, behavior: 'smooth' });
+  }));
 
 };
 

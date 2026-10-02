@@ -418,7 +418,7 @@ table.tbl .shrink{width:1%;white-space:nowrap}
 .drawer-head h3,.modal-head h3{font:600 20px/28px var(--sans);letter-spacing:-.01em}
 .drawer-body,.modal-body{padding:24px;overflow-y:auto;flex:1}
 .drawer-foot,.modal-foot{
-  display:flex;align-items:center;gap:var(--s2);padding:16px 24px;border-top:1px solid var(--border);
+  display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);padding:16px 24px;border-top:1px solid var(--border);
   background:var(--surface);flex:none
 }
 .modal{

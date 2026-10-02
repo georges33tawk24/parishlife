@@ -56,6 +56,15 @@ export function fmtLong(d) {
   if (Number.isNaN(x.getTime())) return '—';
   return `${day(x.getDay())} ${x.getDate()} ${month(x.getMonth())}`;
 }
+/** A date as a printed document gives it, in the document's language whatever the screen's is:
+    17 May 2015 · 17 أيار 2015 · 17/05/2015 for a bilingual sheet, which both readers can follow. */
+export function fmtDateIn(d, language) {
+  if (!d) return '—';
+  const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
+  if (language === 'ar' || language === 'en') return `${x.getDate()} ${MONTHS[x.getMonth()][language === 'ar' ? 1 : 0]} ${x.getFullYear()}`;
+  return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`;
+}
 export const fmtTime = s => s;   // stored already as "10:30"
 
 /* Search compares folded text: case, Latin accents (Rahmé → rahme), Arabic hamza seats, tashkeel,

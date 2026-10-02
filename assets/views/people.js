@@ -9,6 +9,7 @@ import * as CR from '../crud.js';
 import * as F from '../flows.js';
 import { download, wireActions } from '../actions.js';
 import { persist } from '../persist.js';
+import { printSheet } from '../print.js';
 import { readAddressCascade } from '../geography.js';
 import * as D from '../data.js';
 import { PEOPLE, ARCHIVED, PHOTOS, HOUSEHOLDS, GROUPS, SACRAMENTS, PLEDGES, BATCH, PERSON_EXTRA, DUPLICATES,
@@ -17,35 +18,93 @@ import { PEOPLE, ARCHIVED, PHOTOS, HOUSEHOLDS, GROUPS, SACRAMENTS, PLEDGES, BATC
 const label = p => p?.lat || p?.ar || '';
 const relLabel = (m, h) => t(...F.RELS.find(r => r[0] === F.relOf(m, h)).slice(1));
 
-/* The household drawn as a family tree: parents above the couple, brothers and sisters beside
-   them, children and grandchildren below on connecting lines, anyone else alongside. */
+/* The household drawn as a family tree. Every member's relationship is read relative to the person
+   it names ("Related to"), or to the head when it names no one, and turned into parent and partner
+   links. The tree is then drawn from the head's oldest recorded ancestor down: couples side by side
+   on a ring, children beneath them, grandchildren beneath their own parent. Brothers and sisters
+   whose parents are not in the household hang from a marker that says so, rather than from nothing.
+   Guardians and other relatives, and anyone a link cannot place, stand alongside — nobody is dropped. */
 function familyTree(h, focus) {
-  const ms = h.members.map(person).filter(Boolean), by = r => ms.filter(m => F.relOf(m, h) === r);
+  const ms = h.members.map(person).filter(Boolean);
   if (!ms.length) return empty('family', t('No one in this household yet', 'لا أحد في هذه العائلة بعد'), t('Add the first member.', 'أضف الفرد الأول.'));
-  const head = by('head')[0], spouses = by('spouse'), spouse = spouses[0];
-  const parents = [...by('parent'), ...by('father'), ...by('mother')], sibs = by('sibling'),
-    kids = [...by('child'), ...by('son'), ...by('daughter')], grand = by('grandchild');
-  const side = [...by('guardian'), ...by('relative'), ...spouses.slice(1)];
-  const short = m => ({ head: t('Head', 'ربّ العائلة') })[F.relOf(m, h)] || relLabel(m, h);
+  const byId = new Map(ms.map(m => [m.id, m]));
+  const anchor = byId.get(h.head) || ms.find(m => m.rel === 'head') || ms[0];
+  const NORM = { son: 'child', daughter: 'child', father: 'parent', mother: 'parent' };
+  const relOf = m => m === anchor ? 'head' : NORM[m.rel] || (!m.rel || m.rel === 'head' ? 'relative' : m.rel);
+  const baseOf = m => byId.has(m.relativeTo) && m.relativeTo !== m.id ? m.relativeTo : anchor.id;
+  const parents = new Map(), kidsOf = new Map(), partner = new Map(), ghosts = new Map(), side = [];
+  const isGhost = id => ghosts.has(id), realParents = id => (parents.get(id) || []).filter(x => !isGhost(x));
+  const link = (parent, kid) => {
+    if (!kidsOf.has(parent)) kidsOf.set(parent, []);
+    if (!parents.has(kid)) parents.set(kid, []);
+    if (!kidsOf.get(parent).includes(kid)) kidsOf.get(parent).push(kid);
+    if (!parents.get(kid).includes(parent)) parents.get(kid).push(parent);
+  };
+  const pair = (x, y) => { partner.set(x, y); partner.set(y, x); };
+  const ghost = (kind, base) => { const id = `ghost:${kind}:${base}`; ghosts.set(id, kind); return id; };
+  const others = ms.filter(m => m !== anchor);
+  /* first the direct links: partners, children, parents */
+  for (const m of others) {
+    const r = relOf(m), b = baseOf(m);
+    if (r === 'spouse') partner.has(b) || partner.has(m.id) ? side.push(m) : pair(b, m.id);
+    else if (r === 'child') link(b, m.id);
+    else if (r === 'parent') realParents(b).length < 2 ? link(m.id, b) : side.push(m);
+  }
+  for (const ps of parents.values()) if (ps.length === 2 && !partner.has(ps[0]) && !partner.has(ps[1])) pair(ps[0], ps[1]);
+  /* then the links that hang off those: brothers and sisters, grandchildren */
+  for (const m of others) {
+    const r = relOf(m), b = baseOf(m);
+    if (r === 'sibling') {
+      if (realParents(b).length) link(realParents(b)[0], m.id);
+      else if (b === anchor.id || !partner.has(b)) { const g = ghost('parents', b); link(g, b); link(g, m.id); }
+      else side.push(m);
+    } else if (r === 'grandchild') {
+      const kids = (kidsOf.get(b) || []).filter(k => !isGhost(k));
+      if (kids.length === 1) link(kids[0], m.id); else { const g = ghost('child', b); link(b, g); link(g, m.id); }
+    } else if (!['spouse', 'child', 'parent'].includes(r)) side.push(m);
+  }
+  /* lay the tree out from the head's oldest recorded ancestor, then anyone not reached yet */
+  const born = id => byId.get(id)?.born || '9999';
+  const placed = new Set();
+  const unit = id => {
+    placed.add(id);
+    const pt = partner.has(id) && !placed.has(partner.get(id)) ? partner.get(id) : null;
+    if (pt) placed.add(pt);
+    const kids = [...new Set([...(kidsOf.get(id) || []), ...(pt ? kidsOf.get(pt) || [] : [])])]
+      .filter(k => !placed.has(k)).sort((x, y) => born(x).localeCompare(born(y)));
+    kids.forEach(k => placed.add(k));
+    return { id, pt, kids: kids.map(k => { placed.delete(k); return unit(k); }) };
+  };
+  let top = anchor.id;
+  for (const seen = new Set(); (parents.get(top) || []).length && !seen.has(top); ) { seen.add(top); top = parents.get(top)[0]; }
+  const sideIds = new Set(side.map(m => m.id));
+  const forest = [unit(top)];
+  for (const id of [...byId.keys(), ...ghosts.keys()]) {
+    if (placed.has(id) || sideIds.has(id) || (parents.get(id) || []).length || realParents(partner.get(id) || '').length) continue;
+    const u = unit(id);
+    if (u.kids.length || u.pt) forest.push(u);                 /* a second family line of its own */
+    else if (!isGhost(id)) { side.push(byId.get(id)); sideIds.add(id); }   /* linked to no one drawn: stand alongside */
+  }
+  for (const m of ms) if (!placed.has(m.id) && !sideIds.has(m.id)) { side.push(m); sideIds.add(m.id); }
+
+  const first = id => ((isAr() ? byId.get(id)?.ar : byId.get(id)?.lat) || byId.get(id)?.lat || '').split(' ')[0];
+  const roleOf = m => {
+    if (m === anchor) return h.head === m.id ? t('Head', 'ربّ العائلة') : relLabel(m, h);
+    const lab = t(...(F.RELS.find(r => r[0] === (m.rel && m.rel !== 'head' ? m.rel : 'relative')) || F.RELS.at(-1)).slice(1));
+    return baseOf(m) !== anchor.id ? `${lab} · ${first(baseOf(m))}` : lab;
+  };
   const node = m => `<a class="ft-node ${m.id === focus ? 'me' : ''}" href="#/person/${m.id}/family">
-      ${avatar(m, 'avatar-lg')}<b>${esc(label(m))}</b><small class="${isAr() ? '' : 'ar'}">${esc(isAr() ? m.lat : m.ar)}</small>
-      <span class="ft-role">${esc(short(m))}${/^\d{4}/.test(m.born || '') ? ` · <span class="mono">${m.born.slice(0, 4)}</span>` : ''}</span>
+      ${avatar(m, 'avatar-lg')}<b>${esc(label(m))}</b><small class="ar">${esc(m.ar || '')}</small>
+      <span class="ft-role">${esc(roleOf(m))}${/^\d{4}/.test(m.born || '') ? ` · <span class="mono">${m.born.slice(0, 4)}</span>` : ''}</span>
       ${m.id === focus ? `<span class="ft-here">${t('This record', 'هذا السجل')}</span>` : ''}</a>`;
-  const couple = (a, b, down) => `<div class="ft-couple ${down ? 'has-kids' : ''}">${a ? node(a) : ''}${a && b
-    ? `<span class="ft-bond" role="img" aria-label="${t('married', 'متزوّجان')}">${icon('rings', 16)}</span>` : ''}${b ? node(b) : ''}</div>`;
-  const branch = (cells, cls = '') => `<div class="ft-branch ${cls}"><div class="ft-row">${cells.join('')}</div></div>`;
-  const cell = (html, cls = '') => `<div class="ft-cell ${cls}">${html}</div>`;
-  /* the couple, with its children and grandchildren hanging beneath it */
-  const lead = head || spouse || ms.find(m => !side.includes(m));
-  const family = `<div class="ft-family">${head || spouse ? couple(head, spouse, kids.length || grand.length) : node(lead)}
-      ${kids.length ? branch(kids.map(m => cell(node(m)))) : ''}${grand.length ? branch(grand.map(m => cell(node(m)))) : ''}</div>`;
-  const core = sibs.length
-    ? branch([cell(family, head && spouse ? 'ft-pair' : ''), ...sibs.map(m => cell(node(m)))], parents.length ? '' : 'ft-nostem')
-    : family;
-  return `<div class="ftree"><div class="ft-canvas">
-      ${parents.length ? `<div class="ft-up">${parents.length === 2 ? couple(parents[0], parents[1], true) : `<div class="ft-row">${parents.map(node).join('')}</div>`}</div>` : ''}
-      ${core}
-    </div>
+  const cellOf = id => isGhost(id)
+    ? `<span class="ft-ghost">${ghosts.get(id) === 'parents' ? t('Parents not recorded in this household', 'الوالدان غير مسجّلين في هذه العائلة') : t('Parent not recorded in this household', 'الوالد غير مسجّل في هذه العائلة')}</span>`
+    : node(byId.get(id));
+  const draw = u => `<div class="ft-family">
+      <div class="ft-couple ${u.kids.length ? 'has-kids' : ''}">${cellOf(u.id)}${u.pt ? `<span class="ft-bond" role="img" aria-label="${t('married', 'متزوّجان')}">${icon('rings', 16)}</span>${cellOf(u.pt)}` : ''}</div>
+      ${u.kids.length ? `<div class="ft-branch"><div class="ft-row">${u.kids.map(k => `<div class="ft-cell ${k.pt ? 'ft-pair' : ''}">${draw(k)}</div>`).join('')}</div></div>` : ''}
+    </div>`;
+  return `<div class="ftree"><div class="ft-canvas"><div class="ft-forest">${forest.map(draw).join('')}</div></div>
     ${side.length ? `<div class="ft-side"><span class="overline">${t('Also in the household', 'أيضاً في العائلة')}</span>
       <div class="ft-row">${side.map(node).join('')}</div></div>` : ''}</div>`;
 }
@@ -579,15 +638,13 @@ personView.mount = (host, id) => {
 
 function printPeopleDirectory() {
   const listed=PEOPLE.filter(p=>PERSON_EXTRA[p.id]?.directory).sort((a,b)=>a.lat.localeCompare(b.lat));
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${t('Parish people directory','دليل مؤمني الرعية')}</title>
-    <style>body{font:14px Arial,sans-serif;margin:28px;color:#3D4161}h1{color:#3D4161}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #DCEEFF}th{background:#DCEEFF}@media print{button{display:none}}</style></head><body>
-    <h1>${t('Parish people directory','دليل مؤمني الرعية')}</h1><p>${t('Only people who opted in are included.','يشمل فقط من وافقوا على الإدراج.')}</p>
-    <table><thead><tr>${['English name','Arabic name','Household','Town','Phone'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
-    ${listed.map(p=>`<tr><td>${esc(p.lat)}</td><td>${esc(p.ar)}</td><td>${esc(hh(p.hh)?.name||'')}</td><td>${esc(p.town||'')}</td><td>${esc(p.phone==='—'?'':p.phone)}</td></tr>`).join('')}</tbody></table>
-    <script>window.onload=()=>window.print()<\/script></body></html>`;
-  const win=window.open('','_blank');
-  if(!win)return toast(t('Allow a print window','اسمح بنافذة الطباعة'),t('Your browser blocked the directory print window.','منع المتصفح نافذة طباعة الدليل.'),'warning');
-  win.document.open();win.document.write(html);win.document.close();
+  if(!listed.length)return toast(t('Nobody to print yet','لا أحد للطباعة بعد'),t('Only people who opted in to the directory are printed.','لا يُطبع إلا من وافق على الإدراج في الدليل.'),'warning');
+  /* printed from a hidden frame, so the page stays where it is and no new tab opens */
+  printSheet({ title:t('Parish people directory','دليل مؤمني الرعية'), margin:'14mm',
+    css:'h1{font:600 20px/28px Inter,sans-serif;margin:0 0 4px}p{margin:0 0 14px;color:#765039}table{width:100%;border-collapse:collapse}th,td{text-align:start;padding:7px 9px;border-bottom:1px solid #DCEEFF}th{background:#EAF4FF;font:600 10px/14px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em}',
+    body:`<h1>${t('Parish people directory','دليل مؤمني الرعية')}</h1><p>${t('Only people who opted in are included.','يشمل فقط من وافقوا على الإدراج.')} · ${listed.length}</p>
+    <table><thead><tr>${[t('English name','الاسم بالإنكليزية'),t('Arabic name','الاسم بالعربية'),t('Household','العائلة'),t('Town','البلدة'),t('Phone','الهاتف')].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
+    ${listed.map(p=>`<tr><td>${esc(p.lat)}</td><td>${esc(p.ar)}</td><td>${esc(hh(p.hh)?.name||'')}</td><td>${esc(p.town||'')}</td><td dir="ltr">${esc(p.phone==='—'?'':p.phone)}</td></tr>`).join('')}</tbody></table>` });
 }
 
 function editPersonGroups(id) {

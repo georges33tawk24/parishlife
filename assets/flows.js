@@ -2,7 +2,7 @@
    confirm changes the in-memory parish, re-renders and says what happened.
    Reversible changes carry Undo, as sheet 04 asks. */
 import { t, isAr, num, usd, fmtDate, fmtLong, matches } from './i18n.js';
-import { S, bus, go, me } from './store.js';
+import { S, bus, go, me, is } from './store.js';
 import { icon, esc, toast, openDrawer, openModal, closeOverlays, avatar, who, status, pill,
          openMenu, closeMenu } from './ui.js';
 import * as C from './components.js';
@@ -1152,12 +1152,40 @@ export function sheetOpen(id) {
 
 /* ═════════════ registration ═════════════ */
 export function formNew() {
+  /* An event that is not in the calendar yet can be described right here; it is created together
+     with the form, so cancelling the drawer leaves nothing half-made behind. */
+  const canMakeEvent = is('priest', 'secretary');
+  let draft = null;
+  const place = id => { const v = D.venue(id); return v ? L(v.name, v.ar || v.name) : ''; };
+  const hm = x => { const [h, m] = String(x || '0:0').split(':').map(Number); return h * 60 + m; };
+  const options = () => `<option value="">${L('Select an event', 'اختر حدثاً')}</option>
+    ${draft ? `<option value="__new__">${L('New', 'جديد')}: ${esc(draft.title)} · ${esc(draft.d)} · ${esc(place(draft.venue))}</option>` : ''}
+    ${eligibleEvents().map(e => `<option value="${esc(e.id)}">${esc(L(e.title, e.titleAr))} · ${esc(e.d)} · ${esc(place(e.venue))}</option>`).join('')}`;
+  const KINDS = [['event', L('Parish event', 'حدث رعوي')], ['group', L('Group activity', 'نشاط مجموعة')], ['sacr', L('Sacrament celebration', 'احتفال بسرّ')]];
   openDrawer({
     title: L('New registration form', 'استمارة تسجيل جديدة'),
-    sub:L('Registration signs someone up for a selected event. Check-in records their arrival at that event.','التسجيل يضيف شخصاً إلى حدث محدّد، والتسجيل عند الباب يثبت وصوله إليه.'),
-    body: `<div class="formrow"><label class="label" for="rf_e">${L('Event','الحدث')}<span class="req">*</span></label><select class="select" id="rf_e">
-      <option value="">${L('Select an event','اختر حدثاً')}</option>${eligibleEvents().map(e=>`<option value="${esc(e.id)}">${esc(L(e.title,e.titleAr))} · ${esc(e.d)} · ${esc(D.venue(e.venue)?.name||'')}</option>`).join('')}</select></div>
-      <div class="help" id="rf_context">${L('Choose the event before creating its registration form.','اختر الحدث قبل إنشاء استمارة التسجيل الخاصة به.')}</div>
+    sub: L('Registration signs someone up for a selected event. Check-in records their arrival at that event.', 'التسجيل يضيف شخصاً إلى حدث محدّد، والتسجيل عند الباب يثبت وصوله إليه.'),
+    body: `<div class="formrow"><label class="label" for="rf_e">${L('Event', 'الحدث')}<span class="req">*</span></label><select class="select" id="rf_e">${options()}</select></div>
+      <div class="help" id="rf_context">${L('Choose the event before creating its registration form.', 'اختر الحدث قبل إنشاء استمارة التسجيل الخاصة به.')}</div>
+      ${canMakeEvent ? `<button type="button" class="btn btn-ghost btn-dense" id="rf_newev" aria-expanded="false" aria-controls="rf_evbox" style="margin:2px 0 14px;padding-inline:8px">
+          ${icon('plus', 15)}<span>${L('The event isn’t listed — create it here', 'الحدث غير موجود؟ أنشئه هنا')}</span></button>
+        <div class="inlinecard" id="rf_evbox" hidden>
+          <div class="inlinecard-h"><b>${L('New event', 'حدث جديد')}</b>
+            <span class="t-caption dim">${L('It is added to the calendar when you create this form.', 'يُضاف إلى الرزنامة حين تُنشئ هذه الاستمارة.')}</span></div>
+          ${C.field({ label: L('Event title', 'عنوان الحدث'), req: true, id: 'ne_t', ph: L('Youth retreat', 'خلوة الشبيبة') })}
+          <div class="formgrid">${C.field({ label: L('Date', 'التاريخ'), type: 'date', req: true, id: 'ne_d', value: '' })}
+            <div class="formrow"><label class="label" for="ne_v">${L('Room', 'القاعة')}</label><select class="select" id="ne_v">
+              ${D.VENUES.map(v => `<option value="${esc(v.id)}">${esc(place(v.id))}</option>`).join('')}</select></div></div>
+          <div class="formgrid">${C.field({ label: L('From', 'من'), type: 'time', id: 'ne_from', value: '18:00' })}
+            ${C.field({ label: L('To', 'إلى'), type: 'time', id: 'ne_to', value: '20:00' })}</div>
+          <div class="formrow"><label class="label" for="ne_k">${L('Kind of event', 'نوع الحدث')}</label><select class="select" id="ne_k">
+            ${KINDS.map(([k, lab]) => `<option value="${k}">${esc(lab)}</option>`).join('')}</select>
+            <span class="help">${L('Masses are not registered for, so they are not offered here.', 'لا يُسجَّل للقداديس، لذلك لا تظهر هنا.')}</span></div>
+          <div id="ne_clash"></div>
+          <div class="row" style="gap:8px;justify-content:flex-end;margin-top:12px">
+            <button type="button" class="btn btn-secondary btn-dense" id="ne_cancel">${L('Cancel', 'إلغاء')}</button>
+            <button type="button" class="btn btn-primary btn-dense" id="ne_ok">${icon('check', 15)}${L('Use this event', 'استعمل هذا الحدث')}</button></div>
+        </div>` : ''}
       <div class="formgrid">${C.stepper({ label: L('Capacity', 'السعة'), value: 60, id: 'rf_cap' })}
         ${C.field({ label: L('Closes', 'يقفل'), type: 'date', value: '2026-11-30', id: 'rf_dl' })}</div>
       ${C.currencyField({ label: L('Fee', 'الرسم'), value: '0.00', id: 'rf_fee' })}
@@ -1168,15 +1196,53 @@ export function formNew() {
       <button class="btn btn-primary" id="rf_go" style="margin-inline-start:auto">${L('Create form', 'إنشاء الاستمارة')}</button>`,
     onMount(el) {
       C.wire(el);
-      el.querySelector('#rf_e').addEventListener('change',()=>{const e=eventById(val(el,'#rf_e'));
-        el.querySelector('#rf_context').textContent=e?`${L(e.title,e.titleAr)} · ${e.d} ${e.t} · ${L(D.venue(e.venue)?.name||'',D.venue(e.venue)?.ar||'')}`:
-          L('Choose the event before creating its registration form.','اختر الحدث قبل إنشاء استمارة التسجيل الخاصة به.');});
+      const sel = el.querySelector('#rf_e'), box = el.querySelector('#rf_evbox'), opener = el.querySelector('#rf_newev');
+      const context = () => {
+        const e = sel.value === '__new__' ? draft : eventById(sel.value);
+        el.querySelector('#rf_context').textContent = e
+          ? `${sel.value === '__new__' ? L('New event, created with this form', 'حدث جديد يُنشأ مع هذه الاستمارة') + ' — ' : ''}${L(e.title, e.titleAr || e.title)} · ${e.d} ${e.t}${e.to ? `–${e.to}` : ''} · ${place(e.venue)}`
+          : L('Choose the event before creating its registration form.', 'اختر الحدث قبل إنشاء استمارة التسجيل الخاصة به.');
+      };
+      sel.addEventListener('change', context);
+      if (box) {
+        const v = q => el.querySelector(q).value;
+        const showClash = () => {
+          const d = v('#ne_d'), from = v('#ne_from'), to = v('#ne_to'), room = v('#ne_v');
+          const c = d && D.EVENTS.find(x => x.venue === room && x.d === d && hm(x.t) < hm(to) && hm(from) < (x.to ? hm(x.to) : hm(x.t) + (x.kind === 'mass' ? 60 : 90)));
+          el.querySelector('#ne_clash').innerHTML = !d ? ''
+            : hm(from) >= hm(to) ? C.inlineAlert('warning', L('The event ends before it starts', 'ينتهي الحدث قبل أن يبدأ'), L('Check the two times.', 'تحقّق من الوقتين.'))
+            : c ? C.inlineAlert('warning', L(`${place(room)} is taken`, `${place(room)} محجوزة`), L(`${c.title} is there from ${c.t}. Pick another room or time.`, `${c.titleAr || c.title} فيها من ${c.t}. اختر قاعة أو وقتاً آخر.`))
+            : C.inlineAlert('success', L('The room is free', 'القاعة متاحة'), L(`${place(room)} is free at that time.`, `${place(room)} متاحة في ذلك الوقت.`));
+        };
+        ['#ne_d', '#ne_from', '#ne_to', '#ne_v'].forEach(q => el.querySelector(q).addEventListener('change', showClash));
+        const toggle = open => { box.hidden = !open; opener.setAttribute('aria-expanded', String(open)); if (open) el.querySelector('#ne_t').focus(); };
+        opener.addEventListener('click', () => toggle(box.hidden));
+        el.querySelector('#ne_cancel').addEventListener('click', () => toggle(false));
+        el.querySelector('#ne_ok').addEventListener('click', () => {
+          if (![need(el, '#ne_t', L('Give the event a title', 'أعطِ الحدث عنواناً')), need(el, '#ne_d', L('Choose the date', 'اختر التاريخ')),
+                need(el, '#ne_to', L('Ends before it starts', 'ينتهي قبل أن يبدأ'), to => hm(to) > hm(v('#ne_from')))].every(Boolean)) return;
+          const title = v('#ne_t').trim();
+          draft = { title, titleAr: title, d: v('#ne_d'), t: v('#ne_from'), to: v('#ne_to'), venue: v('#ne_v'), kind: v('#ne_k') };
+          sel.innerHTML = options(); sel.value = '__new__'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+          opener.querySelector('span').textContent = L('Change the new event', 'عدّل الحدث الجديد');
+          toggle(false); context();
+        });
+      }
       el.querySelector('#rf_go').addEventListener('click', () => {
-        const e=eventById(val(el,'#rf_e'));if(!e)return toast(L('Select an eligible event','اختر حدثاً صالحاً'),'','warning');
-        const form={id:'rg'+Date.now(),eventId:e.id,event:e.title,eventAr:e.titleAr,open:true,cap:+val(el,'#rf_cap')||60,
-          taken:0,fee:parseFloat(val(el,'#rf_fee'))||0,deadline:val(el,'#rf_dl'),waiting:0,fields:[],discounts:[],installments:[]};
-        D.REGISTRATIONS.unshift(form);selectRegistration(form.id);
-        closeOverlays();refresh();ok(L('Form created and open','أُنشئت الاستمارة وفُتحت'),L(e.title,e.titleAr));
+        let e = sel.value === '__new__' ? draft : eventById(sel.value);
+        if (!e) return toast(L('Select an eligible event', 'اختر حدثاً صالحاً'), canMakeEvent ? L('Or create the event here first.', 'أو أنشئ الحدث هنا أولاً.') : '', 'warning');
+        if (e === draft) {
+          e = { id: 'ev' + Date.now().toString(36), ...draft };
+          D.EVENTS.push(e);
+          const cat = { event: ['Parish life', 'حياة الرعية'], group: ['Formation', 'التنشئة'], sacr: ['Sacrament', 'سرّ'] }[e.kind];
+          D.EVENT_DETAIL[e.id] = { ...D.eventInfo(e), cat: cat[0], catAr: cat[1], cap: +val(el, '#rf_cap') || 60, visibility: 'public', visibleGroupIds: [], priestIds: [] };
+        }
+        const form = { id: 'rg' + Date.now(), eventId: e.id, event: e.title, eventAr: e.titleAr, open: true, cap: +val(el, '#rf_cap') || 60,
+          taken: 0, fee: parseFloat(val(el, '#rf_fee')) || 0, deadline: val(el, '#rf_dl'), waiting: 0, fields: [], discounts: [], installments: [] };
+        D.REGISTRATIONS.unshift(form); selectRegistration(form.id);
+        closeOverlays(); refresh();
+        ok(sel.value === '__new__' ? L('Event and form created', 'أُنشئ الحدث والاستمارة') : L('Form created and open', 'أُنشئت الاستمارة وفُتحت'),
+           `${L(e.title, e.titleAr)} · ${e.d}`);
       });
     }
   });
@@ -1512,10 +1578,10 @@ export function composeToPerson() {
 /* ═════════════ admin, eparchy, settings ═════════════ */
 AUDIENCES.eparchy = ['All parishes in the eparchy', 'كل رعايا الأبرشية', 3];
 
-export function confirmAction({ title, body, cta, danger = false, then }) {
+export function confirmAction({ title, body, cta, danger = false, then, back = L('Cancel', 'إلغاء') }) {
   openModal({
     title, body: `<p class="t-body dim" style="font-size:14px;line-height:22px">${esc(body)}</p>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
+    foot: `<button class="btn btn-secondary" data-close>${esc(back)}</button>
       <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="cf_go" style="margin-inline-start:auto">${esc(cta)}</button>`,
     onMount(el) { el.querySelector('#cf_go').addEventListener('click', () => { closeOverlays(); then(); }); }
   });

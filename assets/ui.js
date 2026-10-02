@@ -285,7 +285,7 @@ export function openModal(opts) {
   ensureOverlays();
   lastFocus = document.activeElement;
   gen++;
-  modalEl.innerHTML = `<div class="sheet">${shell('modal', opts)}</div>`;
+  modalEl.innerHTML = `<div class="sheet${opts.wide ? ' sheet-wide' : ''}">${shell('modal', opts)}</div>`;
   void modalEl.offsetWidth;
   scrimEl.classList.add('open'); modalEl.classList.add('open');
   modalEl.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeOverlays));

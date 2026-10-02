@@ -1,12 +1,12 @@
 /* Module 5 — facilities, equipment, reservations, maintenance, issues, rentals. */
-import { t, isAr, num, usd, fmtDate } from '../i18n.js';
+import { t, isAr, num, usd, fmtDate, fmtLong, month, dayShort } from '../i18n.js';
 import { is, bus, S } from '../store.js';
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, stat,
          searchField, openDrawer, openModal, closeOverlays, toast, avatar, tabBar } from '../ui.js';
 import * as C from '../components.js';
 import * as CR from '../crud.js';
 import * as F from '../flows.js';
-import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, person, venue, group, resClash, resStatus } from '../data.js';
+import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, EVENTS, PEOPLE, TODAY, person, venue, group, resClash, resStatus } from '../data.js';
 
 const L = (en, ar) => t(en, ar);
 const STAGES = [['Requested', 'الطلب'], ['Secretary review', 'مراجعة أمانة السرّ'], ['Priest approval', 'موافقة الكاهن'], ['Approved', 'موافَق عليه']];
@@ -19,24 +19,40 @@ export function facilities(tab = '') {
     title: L('Facilities and resources', 'المرافق والموارد'),
     sub: L('Churches, halls, rooms, the kitchen, the courtyard and the field — with capacity, accessibility and usage policy.',
            'كنائس وقاعات وغرف ومطبخ وساحة وملعب — مع السعة وإمكانية الوصول وقواعد الاستعمال.'),
-    actions: `<button class="btn btn-secondary" id="block">${icon('warn', 17)}${L('Block for maintenance', 'إغلاق للصيانة')}</button>
-      <button class="btn btn-primary" id="newvenue">${icon('plus', 17)}${L('Add facility', 'إضافة مرفق')}</button>`
+    actions: `<button class="btn btn-primary" id="newvenue">${icon('plus', 17)}${L('Add facility', 'إضافة مرفق')}</button>`
   }) + tabBar('facilities', FTABS(), tab);
 
-  if (tab === 'equipment') return head + `<div class="tabbody">${table({
-      cols: [{ label: L('Item', 'الصنف'), sort: true }, { label: L('Total', 'الإجمالي'), cls: 'num hide-sm' },
-             { label: L('On loan', 'معار'), cls: 'num hide-sm' }, { label: L('Available', 'متاح'), cls: 'num' },
-             { label: L('Custody', 'العهدة'), cls: 'hide-md' }, { label: L('Condition', 'الحالة'), cls: 'shrink' }, { label: '', cls: 'shrink' }],
-      rows: EQUIPMENT.map(e => ({ cells: [
-        `<b>${esc(L(e.name, e.ar))}</b>`, `<span class="num">${e.qty}</span>`, `<span class="num">${e.out}</span>`,
-        `<span class="num">${e.qty - e.out}</span>`,
-        `<span class="dim">${e.out ? L('Choir · until 9 Oct', 'الجوقة · حتى ٩ ت١') : L('In store', 'في المستودع')}</span>`,
-        e.cond === 'needs service' ? pill(L('Needs service', 'تحتاج صيانة'), 'warning')
-          : e.cond === 'fair' ? pill(L('Fair', 'مقبولة'), 'warning') : pill(L('Good', 'جيدة'), 'success'),
-        `<span class="row" style="gap:6px;justify-content:flex-end"><button class="btn btn-secondary btn-dense" id="loan-${e.id}" ${e.qty - e.out > 0 ? '' : 'disabled'}>${L('Loan out', 'إعارة')}</button>${CR.recBtn('equipment', e.id)}</span>`]})),
-      empty: empty('rooms', L('No equipment recorded', 'لا تجهيزات مسجّلة'), L('Add what the parish lends out — microphones, projectors, chairs.', 'أضف ما تعيره الرعية — مايكروفونات، أجهزة عرض، كراسي.'))
-    })}
-    <button class="btn btn-secondary" style="margin-top:16px" data-act="rec-new:equipment">${icon('plus', 17)}${L('Add equipment', 'إضافة تجهيز')}</button></div>`;
+  if (tab === 'equipment') {
+    /* narrow the list by name, and by whether it can go out today, is out, or needs attention */
+    const f = S.ui.eqFilter || 'all', attention = e => e.cond === 'needs service' || e.cond === 'fair';
+    const FILTERS = [['all', L('All', 'الكل'), () => true], ['available', L('Available now', 'متاح الآن'), e => e.qty - e.out > 0],
+                     ['loan', L('On loan', 'معار'), e => e.out > 0], ['service', L('Needs attention', 'يحتاج عناية'), attention]];
+    const keep = (FILTERS.find(([k]) => k === f) || FILTERS[0])[2];
+    return head + `<div class="tabbody">
+      <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+        <div class="grow" style="max-width:300px">${C.searchClear(L('Search equipment', 'ابحث في التجهيزات'), 'eqsearch', 'data-find')}</div>
+        <span class="seg" role="group" aria-label="${L('Show', 'عرض')}">${FILTERS.map(([k, lab, test]) =>
+          `<button type="button" aria-pressed="${f === k}" data-act="eq-filter:${k}">${esc(lab)}<span class="segn">${EQUIPMENT.filter(test).length}</span></button>`).join('')}</span>
+      </div>
+      ${table({
+        cols: [{ label: L('Item', 'الصنف'), sort: true }, { label: L('Total', 'الإجمالي'), cls: 'num hide-sm' },
+               { label: L('On loan', 'معار'), cls: 'num hide-sm' }, { label: L('Available', 'متاح'), cls: 'num' },
+               { label: L('Custody', 'العهدة'), cls: 'hide-md' }, { label: L('Condition', 'الحالة'), cls: 'shrink' }, { label: '', cls: 'shrink' }],
+        rows: EQUIPMENT.filter(keep).map(e => ({ attrs: 'data-find-item', cells: [
+          `<b>${esc(L(e.name, e.ar))}</b>`, `<span class="num">${e.qty}</span>`, `<span class="num">${e.out}</span>`,
+          `<span class="num">${e.qty - e.out}</span>`,
+          `<span class="dim">${e.out ? L('Choir · until 9 Oct', 'الجوقة · حتى ٩ ت١') : L('In store', 'في المستودع')}</span>`,
+          e.cond === 'needs service' ? pill(L('Needs service', 'تحتاج صيانة'), 'warning')
+            : e.cond === 'fair' ? pill(L('Fair', 'مقبولة'), 'warning') : pill(L('Good', 'جيدة'), 'success'),
+          `<span class="row" style="gap:6px;justify-content:flex-end"><button class="btn btn-secondary btn-dense" id="loan-${e.id}" ${e.qty - e.out > 0 ? '' : 'disabled'}>${L('Loan out', 'إعارة')}</button>${CR.recBtn('equipment', e.id)}</span>`]})),
+        empty: EQUIPMENT.length
+          ? empty('filter', L('Nothing in this view', 'لا شيء في هذا العرض'), L('Choose another filter to see the rest of the equipment.', 'اختر مرشّحاً آخر لرؤية بقية التجهيزات.'),
+              `<button class="btn btn-secondary btn-dense" data-act="eq-filter:all">${L('Show all equipment', 'عرض كل التجهيزات')}</button>`)
+          : empty('rooms', L('No equipment recorded', 'لا تجهيزات مسجّلة'), L('Add what the parish lends out — microphones, projectors, chairs.', 'أضف ما تعيره الرعية — مايكروفونات، أجهزة عرض، كراسي.'))
+      })}
+      <div class="find-empty" hidden>${empty('search', L('No equipment matches', 'لا تجهيزات مطابقة'), L('Try another name, in English or Arabic.', 'جرّب اسماً آخر، بالعربية أو بالإنكليزية.'))}</div>
+      <button class="btn btn-secondary" style="margin-top:16px" data-act="rec-new:equipment">${icon('plus', 17)}${L('Add equipment', 'إضافة تجهيز')}</button></div>`;
+  }
 
   if (tab === 'maintenance') return head + `<div class="tabbody">
     ${table({
@@ -47,7 +63,7 @@ export function facilities(tab = '') {
         `<span class="mono dim">${fmtDate(m.from)}</span>`, `<span class="mono dim">${fmtDate(m.to)}</span>`,
         `<span class="dim">${esc(L(m.why, m.whyAr))}</span>`,
         `<button class="btn btn-secondary btn-dense" data-act="block-cancel:${mi}">${L('Cancel block', 'إلغاء الإغلاق')}</button>`]})),
-      empty: empty('rooms', L('No rooms are blocked', 'لا قاعات مُغلقة'), L('Block a room for works or cleaning from its facility page.', 'أغلق قاعة للأشغال أو التنظيف من صفحة المرفق.'))
+      empty: empty('rooms', L('No rooms are blocked', 'لا قاعات مُغلقة'), L('Block a room for works or cleaning with the button on its card in Rooms.', 'أغلق قاعة للأشغال أو التنظيف من الزرّ على بطاقتها في القاعات.'))
     })}
     ${C.inlineAlert('info', L('A block stops bookings; it does not close the room', 'الإغلاق يمنع الحجز ولا يقفل القاعة'),
       L('Facility status and time-based availability are separate. A fully booked hall is still open; a blocked one refuses new requests and warns about approved ones inside the window.',
@@ -89,9 +105,11 @@ export function facilities(tab = '') {
       ${MAINTENANCE.filter(m => m.venue === v.id).map(m => pill(L(`Blocked ${fmtDate(m.from)} – ${fmtDate(m.to)}`, `مغلقة ${fmtDate(m.from)} – ${fmtDate(m.to)}`), 'danger')).join('')}</div>
     <div class="divider"></div>
     <div class="row" style="gap:6px">
-      <button class="btn btn-secondary" style="flex:1;min-height:34px;font-size:13px" data-avail="${v.id}">${L('Availability', 'التوفّر')}</button>
-      <button class="btn btn-secondary" style="flex:1;min-height:34px;font-size:13px" data-act="book-room:${v.id}">${L('Book', 'حجز')}</button>
-    </div></div></section>`).join('');
+      <button class="btn btn-secondary" style="flex:1;min-height:34px;font-size:13px" data-avail="${v.id}">${icon('events', 15)}${L('Availability', 'التوفّر')}</button>
+      <button class="btn btn-secondary" style="flex:1;min-height:34px;font-size:13px" data-act="book-room:${v.id}">${icon('plus', 15)}${L('Book', 'حجز')}</button>
+    </div>
+    <button class="btn btn-ghost roomblock" data-block="${v.id}">${icon('warn', 15)}${L('Block for maintenance', 'إغلاق للصيانة')}</button>
+    </div></section>`).join('');
 
   return head + `<div style="margin-top:20px" class="gridcards">${cards || empty('rooms', L('No rooms yet', 'لا قاعات بعد'), L('Add the church, the hall and every room people can book.', 'أضف الكنيسة والقاعة وكل مكان يمكن حجزه.'))}</div>
     <p class="t-caption dim" style="margin-top:16px">${L(
@@ -99,50 +117,151 @@ export function facilities(tab = '') {
       'تحمل كل قاعة سعتها وإمكانية الوصول والصور وقواعد الاستعمال، فلا يحتاج الطلب إلى مكالمة هاتفية.')}</p>`;
 }
 
-facilities.mount = host => {
-  C.wire(host); wireTables(host);
-  host.querySelector('#block')?.addEventListener('click', () => openDrawer({
-    title: L('Block a room for maintenance', 'إغلاق قاعة للصيانة'),
-    sub: L('New requests are refused for the period, and anything already approved inside it is listed for you.',
-           'تُرفض الطلبات الجديدة خلال المدة، وتُعرَض عليك الحجوزات الموافَق عليها داخلها.'),
-    body: `<div class="formrow"><label class="label">${L('Room', 'القاعة')}</label>
-        <select class="select" id="bk_v">${VENUES.map(v => `<option value="${v.id}">${esc(L(v.name, v.ar))}</option>`).join('')}</select></div>
-      <div class="formgrid">${C.field({ label: L('From', 'من'), type: 'date', value: '2026-10-20', id: 'bk_f' })}
-        ${C.field({ label: L('To', 'إلى'), type: 'date', value: '2026-10-24', id: 'bk_t' })}</div>
+/* ---------- availability: pick any day, see what holds the room and what is still free ---------- */
+const mins = hm => { const [h, m] = String(hm || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+const hhmm = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+const isoD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const OPEN = [7 * 60, 23 * 60];                        /* the parish day the timeline shows */
+const blockOn = (vid, date) => MAINTENANCE.find(m => m.venue === vid && m.from <= date && date <= m.to);
+const length = n => n >= 60 ? L(`${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60} min` : ''}`, `${Math.floor(n / 60)} س${n % 60 ? ` ${n % 60} د` : ''}`) : L(`${n} min`, `${n} د`);
+
+/* what holds the room that day: room requests (with their set-up time) and calendar events; a
+   request and the event it was made for are the same thing and are listed once */
+function heldOn(vid, date) {
+  const res = RESERVATIONS.filter(r => r.venue === vid && r.date === date && r.status !== 'rejected');
+  const items = res.map(r => ({ from: mins(r.from), to: mins(r.to), buffer: +r.setup || 0, title: L(r.title, r.titleAr || r.title), state: resStatus(r), ref: r.ref }));
+  for (const e of EVENTS.filter(x => x.venue === vid && x.d === date && x.kind !== 'pending')) {
+    if (res.some(r => mins(r.from) === mins(e.t))) continue;
+    const len = e.to ? mins(e.to) - mins(e.t) : e.kind === 'mass' ? 60 : e.kind === 'sacr' ? 90 : 120;
+    items.push({ from: mins(e.t), to: mins(e.t) + len, buffer: 0, title: L(e.title, e.titleAr || e.title), state: e.kind === 'mass' ? 'mass' : 'event' });
+  }
+  return items.sort((x, y) => x.from - y.from);
+}
+function freeGaps(items) {
+  const gaps = []; let at = OPEN[0];
+  for (const it of items) { const start = Math.max(OPEN[0], it.from - it.buffer); if (start - at >= 30) gaps.push([at, start]); at = Math.max(at, it.to); }
+  if (OPEN[1] - at >= 30) gaps.push([at, OPEN[1]]);
+  return gaps;
+}
+const STATE = () => ({ approved: [L('Approved', 'موافَق عليه'), 'success'], pending: [L('Pending — holds the slot', 'معلّق — يحجز الوقت'), 'warning'],
+  conflict: [L('Clashes with another request', 'يتعارض مع طلب آخر'), 'danger'], mass: [L('Mass', 'قدّاس'), 'info'], event: [L('Calendar event', 'حدث في الرزنامة'), 'info'] });
+
+function availabilityDrawer(vid) {
+  const v = venue(vid); if (!v) return;
+  let day = S.ui.availDay || isoD(TODAY);
+  let shown = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, 1);
+  const render = () => {
+    const y = shown.getFullYear(), m = shown.getMonth(), first = new Date(y, m, 1), n = new Date(y, m + 1, 0).getDate();
+    const cells = [...Array(first.getDay()).fill(null), ...Array.from({ length: n }, (_, i) => new Date(y, m, i + 1))];
+    const block = blockOn(vid, day), items = block ? [] : heldOn(vid, day), gaps = block ? [] : freeGaps(items);
+    const pct = x => `${((Math.min(Math.max(x, OPEN[0]), OPEN[1]) - OPEN[0]) / (OPEN[1] - OPEN[0]) * 100).toFixed(2)}%`;
+    const width = (a, b) => `${((Math.min(b, OPEN[1]) - Math.max(a, OPEN[0])) / (OPEN[1] - OPEN[0]) * 100).toFixed(2)}%`;
+    const rows = block ? [] : [...items.map(it => ({ at: it.from - it.buffer, it })), ...gaps.map(g => ({ at: g[0], g }))].sort((p, q) => p.at - q.at);
+    const S2 = STATE();
+    return `<div class="avail">
+      <div class="avail-cal">
+        <div class="avail-cal-h">${C.iconBtn('chevL', L('Previous month', 'الشهر السابق'), 'data-avm="-1"')}<b>${esc(month(m))} ${y}</b>${C.iconBtn('chevR', L('Next month', 'الشهر التالي'), 'data-avm="1"')}</div>
+        <div class="avail-grid" role="grid">${[0, 1, 2, 3, 4, 5, 6].map(i => `<span class="dh">${esc(dayShort(i))}</span>`).join('')}
+          ${cells.map(d => { if (!d) return '<span></span>'; const k = isoD(d), bl = blockOn(vid, k), busy = !bl && heldOn(vid, k).length;
+            return `<button type="button" class="ad${k === day ? ' on' : ''}${k === isoD(TODAY) ? ' today' : ''}${bl ? ' blocked' : ''}" data-avday="${k}" aria-pressed="${k === day}"
+              aria-label="${esc(fmtLong(d))}${bl ? ' · ' + L('blocked', 'مغلقة') : busy ? ` · ${busy} ${L('booked', 'محجوز')}` : ''}">${d.getDate()}${busy ? '<i></i>' : ''}</button>`; }).join('')}</div>
+        <div class="avail-legend"><span><i class="lg busy"></i>${L('something booked', 'محجوز جزئياً')}</span><span><i class="lg blocked"></i>${L('blocked', 'مغلقة')}</span></div>
+        <label class="avail-jump"><span class="t-caption dim">${L('Or go straight to a date', 'أو اذهب إلى تاريخ')}</span><input class="input" type="date" id="av_date" value="${day}"></label>
+      </div>
+      <div class="avail-day">
+        <div class="avail-day-h"><div><span class="overline">${day === isoD(TODAY) ? L('Today', 'اليوم') : L('Selected day', 'اليوم المحدّد')}</span><h4>${esc(fmtLong(day))} ${day.slice(0, 4)}</h4></div>
+          <span class="row" style="gap:6px">${C.iconBtn('chevL', L('Previous day', 'اليوم السابق'), 'data-avd="-1"')}<button type="button" class="btn btn-secondary btn-dense" data-avd="0">${L('Today', 'اليوم')}</button>${C.iconBtn('chevR', L('Next day', 'اليوم التالي'), 'data-avd="1"')}</span></div>
+        ${block ? C.inlineAlert('warning', L('Blocked for maintenance', 'مغلقة للصيانة'), L(`${block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. No new requests are accepted on this day.`, `${block.whyAr || block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. لا تُقبل طلبات جديدة في هذا اليوم.`))
+        : `<div class="avail-strip" aria-hidden="true">${items.map(it => `${it.buffer ? `<span class="seg buf" style="inset-inline-start:${pct(it.from - it.buffer)};width:${width(it.from - it.buffer, it.from)}"></span>` : ''}
+            <span class="seg ${it.state}" style="inset-inline-start:${pct(it.from)};width:${width(it.from, it.to)}" title="${esc(it.title)}"></span>`).join('')}</div>
+          <div class="avail-scale" aria-hidden="true">${[7, 11, 15, 19, 23].map(h => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div>
+          <p class="t-caption dim" style="margin:10px 0 8px">${items.length ? L(`${items.length} booking${items.length === 1 ? '' : 's'} · ${gaps.length} free slot${gaps.length === 1 ? '' : 's'} between 07:00 and 23:00`, `${items.length} حجوزات · ${gaps.length} أوقات متاحة بين 07:00 و23:00`) : L('Free all day, 07:00 – 23:00.', 'متاحة طوال اليوم، 07:00 – 23:00.')}</p>
+          <ol class="avail-list">${rows.map(({ it, g }) => it
+            ? `<li class="held"><span class="tm mono">${hhmm(it.from)}–${hhmm(it.to)}</span><span class="grow"><b>${esc(it.title)}</b>${it.buffer ? `<small>${L(`plus ${it.buffer} min to set up before`, `مع ${it.buffer} د للتجهيز قبلها`)}</small>` : it.ref ? `<small class="mono">${esc(it.ref)}</small>` : ''}</span>${pill(S2[it.state][0], S2[it.state][1])}</li>`
+            : `<li class="free"><span class="tm mono">${hhmm(g[0])}–${hhmm(g[1])}</span><span class="grow"><b>${L('Free', 'متاحة')}</b><small>${length(g[1] - g[0])}</small></span>
+                <button type="button" class="btn btn-secondary btn-dense" data-avbook="${hhmm(g[0])}|${hhmm(Math.min(g[1], g[0] + 120))}">${icon('plus', 14)}${L('Book', 'احجز')}</button></li>`).join('')}</ol>`}
+      </div></div>`;
+  };
+  openDrawer({ large: true,
+    title: L(`Availability — ${v.name}`, `التوفّر — ${v.ar || v.name}`),
+    sub: `${esc(L(v.kind, v.kindAr || v.kind))} · ${L('seats', 'يتّسع لـ')} ${v.cap}${v.access ? ' · ' + L('step-free access', 'مدخل بلا درج') : ''}`,
+    body: `<div id="avbody">${render()}</div>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
+      <button class="btn btn-primary" id="av_book" style="margin-inline-start:auto">${icon('plus', 16)}<span></span></button>`,
+    onMount(el) {
+      const book = (from, to) => { S.ui.availDay = day; CR.create('reservation', { venue: vid, date: day, ...(from ? { from, to } : {}) }); };
+      const paint = () => {
+        el.querySelector('#avbody').innerHTML = render();
+        const blocked = !!blockOn(vid, day), foot = el.querySelector('#av_book');
+        foot.disabled = blocked; foot.querySelector('span').textContent = L(`Book on ${fmtDate(day)}`, `احجز في ${fmtDate(day)}`);
+        const go = d => { day = d; shown = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, 1); S.ui.availDay = d; paint(); };
+        el.querySelectorAll('[data-avday]').forEach(b => b.addEventListener('click', () => go(b.dataset.avday)));
+        el.querySelectorAll('[data-avm]').forEach(b => b.addEventListener('click', () => { shown = new Date(shown.getFullYear(), shown.getMonth() + +b.dataset.avm, 1); paint(); }));
+        el.querySelectorAll('[data-avd]').forEach(b => b.addEventListener('click', () => {
+          const n = +b.dataset.avd, d = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + n); go(n ? isoD(d) : isoD(TODAY)); }));
+        el.querySelector('#av_date')?.addEventListener('change', e => { if (e.target.value) go(e.target.value); });
+        el.querySelectorAll('[data-avbook]').forEach(b => b.addEventListener('click', () => { const [f, t2] = b.dataset.avbook.split('|'); book(f, t2); }));
+      };
+      el.querySelector('#av_book').addEventListener('click', () => book());
+      paint();
+    } });
+}
+
+/* Block one room: pick the dates and the reason; anything already booked inside them is listed,
+   because those people need to be told and moved. */
+function blockDrawer(vid) {
+  const v = venue(vid); if (!v) return;
+  const start = isoD(TODAY), end = isoD(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 2));
+  const inside = (from, to) => [
+    ...RESERVATIONS.filter(r => r.venue === vid && r.status !== 'rejected' && r.date >= from && r.date <= to)
+      .map(r => ({ d: r.date, t: r.from, title: L(r.title, r.titleAr || r.title), state: r.status, who: person(r.by) })),
+    ...EVENTS.filter(e => e.venue === vid && e.kind !== 'pending' && e.d >= from && e.d <= to
+      && !RESERVATIONS.some(r => r.venue === vid && r.date === e.d && r.from === e.t))
+      .map(e => ({ d: e.d, t: e.t, title: L(e.title, e.titleAr || e.title), state: e.kind === 'mass' ? 'mass' : 'event' }))
+  ].sort((x, y) => (x.d + x.t).localeCompare(y.d + y.t));
+  openDrawer({
+    title: L(`Block ${v.name} for maintenance`, `إغلاق ${v.ar || v.name} للصيانة`),
+    sub: L('New requests for this room are refused for those dates. Anything already booked inside them is listed below.',
+           'تُرفض طلبات هذه القاعة الجديدة في تلك الأيام، وتُعرض أدناه الحجوزات القائمة داخلها.'),
+    body: `<div class="formgrid">${C.field({ label: L('From', 'من'), type: 'date', value: start, id: 'bk_f', req: true })}
+        ${C.field({ label: L('To', 'إلى'), type: 'date', value: end, id: 'bk_t', req: true })}</div>
       ${C.field({ label: L('Reason', 'السبب'), id: 'bk_w', ph: L('Damp treatment on the north wall', 'معالجة الرطوبة في الجدار الشمالي') })}
       ${C.personPicker(L('Responsible staff', 'المسؤول'), 'mstaff')}
-      ${C.inlineAlert('warning', L('One approved booking falls inside this window', 'حجز موافَق عليه واحد داخل هذه المدة'),
-        L('Legion of Mary, 20 October 16:30. They will need to be told and moved.', 'فيلق مريم، ٢٠ تشرين الأول ١٦:٣٠. يجب إبلاغهم ونقلهم.'))}`,
+      <div id="bk_inside"></div>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-primary" id="doblock" style="margin-inline-start:auto">${L('Block the room', 'إغلاق القاعة')}</button>`,
+      <button class="btn btn-primary" id="doblock" style="margin-inline-start:auto">${icon('warn', 16)}${L('Block the room', 'إغلاق القاعة')}</button>`,
     onMount(el) {
       C.wire(el);
+      const f = () => el.querySelector('#bk_f').value, t2 = () => el.querySelector('#bk_t').value;
+      const show = () => {
+        const list = f() && t2() && f() <= t2() ? inside(f(), t2()) : [];
+        el.querySelector('#bk_inside').innerHTML = !f() || !t2() ? ''
+          : f() > t2() ? C.inlineAlert('warning', L('The block ends before it starts', 'ينتهي الإغلاق قبل أن يبدأ'), L('Check the two dates.', 'تحقّق من التاريخين.'))
+          : !list.length ? C.inlineAlert('success', L('Nothing is booked in those dates', 'لا حجوزات في تلك الأيام'), L(`${v.name} is free to close.`, `يمكن إغلاق ${v.ar || v.name}.`))
+          : C.inlineAlert('warning', list.length === 1 ? L('One booking falls inside these dates', 'حجز واحد يقع داخل هذه الأيام') : L(`${list.length} bookings fall inside these dates`, `${list.length} حجوزات تقع داخل هذه الأيام`),
+              L('Tell the people concerned and move them to another room or day.', 'أبلغ المعنيّين وانقلهم إلى قاعة أو يوم آخر.'))
+            + `<ul class="blocklist">${list.map(x => `<li><span class="mono dim">${fmtDate(x.d)} · ${esc(x.t)}</span><b>${esc(x.title)}</b>${x.who ? `<small>${esc(L(x.who.lat, x.who.ar))}</small>` : ''}</li>`).join('')}</ul>`;
+      };
+      ['#bk_f', '#bk_t'].forEach(q => el.querySelector(q).addEventListener('change', show));
+      show();
       el.querySelector('#doblock').addEventListener('click', () => {
-        const v = el.querySelector('#bk_v').value, why = el.querySelector('#bk_w').value.trim() || L('Maintenance', 'صيانة');
-        MAINTENANCE.unshift({ venue: v, from: el.querySelector('#bk_f').value, to: el.querySelector('#bk_t').value, why, whyAr: why, by: 'p15' });
+        if (!f() || !t2() || f() > t2()) return show();
+        const why = el.querySelector('#bk_w').value.trim() || L('Maintenance', 'صيانة');
+        const typed = el.querySelector('#mstaff').value.trim(), staff = PEOPLE.find(p => p.lat === typed || p.ar === typed)?.id || 'p15';
+        const entry = { venue: vid, from: f(), to: t2(), why, whyAr: why, by: staff };
+        MAINTENANCE.unshift(entry);
         closeOverlays(); bus.refresh();
-        toast(L('Room blocked', 'أُغلقت القاعة'), `${L(venue(v).name, venue(v).ar)} · ${why}`, 'success',
-          { action: { label: L('Undo', 'تراجع'), fn: () => { MAINTENANCE.shift(); bus.refresh(); } } });
+        toast(L('Room blocked', 'أُغلقت القاعة'), `${L(v.name, v.ar || v.name)} · ${fmtDate(f())} – ${fmtDate(t2())}`, 'success',
+          { action: { label: L('Undo', 'تراجع'), fn: () => { const i = MAINTENANCE.indexOf(entry); if (i >= 0) MAINTENANCE.splice(i, 1); bus.refresh(); } } });
       });
     }
-  }));
-  host.querySelectorAll('[data-avail]').forEach(b => b.addEventListener('click', () => openDrawer({
-    large: true,
-    title: L('Availability', 'التوفّر'),
-    sub: L('Setup and cleanup buffers are part of the booking, so nothing can be scheduled inside them.',
-           'وقتا التحضير والتنظيف جزء من الحجز، فلا يُجدوَل شيء داخلهما.'),
-    body: `<div class="a4frame" style="padding:14px">
-      ${['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'].map((h, i) => `
-        <div style="display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center;margin-bottom:6px">
-          <span class="mono t-caption dim">${h}</span>
-          <span style="height:30px;border-radius:6px;background:${i === 2 || i === 3 ? 'var(--primary-subtle)' : i === 5 ? 'repeating-linear-gradient(135deg,var(--warning-subtle),var(--warning-subtle) 5px,#DCEEFF 5px,#DCEEFF 10px)' : 'var(--surface)'};
-            border:1px solid var(--border);display:flex;align-items:center;padding:0 10px;font:500 12px/1 var(--sans);
-            color:${i === 2 || i === 3 ? 'var(--primary)' : i === 5 ? 'var(--warning-ink)' : 'var(--text-3)'}">
-            ${i === 2 ? L('Parish lunch — approved', 'غداء الرعية — موافَق') : i === 3 ? L('…including cleanup buffer', '…مع وقت التنظيف') :
-              i === 5 ? L('Choir rehearsal — pending, holds the slot', 'تمرين الجوقة — معلّق، يحجز الوقت') : L('Free', 'متاح')}</span>
-        </div>`).join('')}</div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`
-  })));
+  });
+}
+
+facilities.mount = host => {
+  C.wire(host); wireTables(host);
+  host.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => blockDrawer(b.dataset.block)));
+  host.querySelectorAll('[data-avail]').forEach(b => b.addEventListener('click', () => availabilityDrawer(b.dataset.avail)));
   host.querySelector('#newvenue')?.addEventListener('click', () => CR.create('venue'));
   host.querySelector('#newissue')?.addEventListener('click', () => CR.create('issue'));
   host.querySelectorAll('[id^="loan-"]').forEach(b => b.addEventListener('click', () => { const eq = EQUIPMENT.find(x => 'loan-' + x.id === b.id); openModal({

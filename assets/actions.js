@@ -58,12 +58,14 @@ function exportNearest(btn) {
 const picked = () => [...document.querySelectorAll('#view [data-row]:checked')]
   .map(c => c.closest('tr')?.dataset.riP).filter(Boolean);
 const find = (arr, id) => arr.find(x => x.id === id);
+const stamp = () => { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
 const ok = (title, body = '', opts) => toast(title, body, 'success', opts);
 
 /* ---------- the verbs ---------- */
 export const VERBS = {
 
   print: () => window.print(),
+  'print-week': () => import('./schedules.js').then(m => m.printWeekDialog()),
   export: exportNearest,
 
   'export-json': () => {
@@ -103,16 +105,6 @@ export const VERBS = {
     try { await serverWorkflow('issue', id, { verified: true }); closeOverlays(); refresh();
       ok(L('Signed and issued', 'وُقّعت وصدرت'), L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`));
     } catch (e) { toast(L('Could not issue certificate', 'تعذّر إصدار الشهادة'), e.message, 'danger'); }
-  },
-  'corr-approve': async (btn, id) => {
-    try { await serverWorkflow('correction-approve', id); refresh();
-      ok(L('Correction approved', 'اعتُمد التصحيح'), L('The original entry is preserved beside it.', 'القيد الأصلي محفوظ إلى جانبه.'));
-    } catch (e) { toast(L('Could not approve correction', 'تعذّرت الموافقة على التصحيح'), e.message, 'danger'); }
-  },
-  'corr-reject': async (btn, id) => {
-    try { await serverWorkflow('correction-reject', id); refresh();
-      ok(L('Correction rejected', 'رُفض التصحيح'), L('The original entry remains unchanged.', 'يبقى القيد الأصلي بلا تغيير.'));
-    } catch (e) { toast(L('Could not reject correction', 'تعذّر رفض التصحيح'), e.message, 'danger'); }
   },
 
   /* giving & finance -------------------------------------------- */
@@ -247,11 +239,26 @@ export const VERBS = {
 
 
   /* workflows --------------------------------------------------- */
+  /* A task moves one step at a time; the last step finishes it and takes it off the open list. */
   'run-step': (btn, id) => {
     const r = find(D.RUNS, id); if (!r) return;
-    if (r.step < r.total) r.step += 1;
+    const w = find(D.WORKFLOWS, r.wf), steps = w?.steps || [], stepsAr = w?.stepsAr || steps, p = r.subject ? D.person(r.subject) : null;
+    const note = document.querySelector('.drawer.open #runnote')?.value.trim() || '';
+    const before = { step: r.step, at: D.RUNS.indexOf(r) };
+    const doneEn = steps[r.step] || '', doneAr = stepsAr[r.step] || doneEn;
+    r.step = Math.min(r.total, r.step + 1);
+    const finished = r.step >= r.total;
+    if (finished) D.RUNS.splice(before.at, 1);
+    const entry = [stamp(), `${w?.name || ''}: “${doneEn}” done${p ? ` for ${p.lat}` : ''}${finished ? ' — task finished' : ''}${note ? ` — ${note}` : ''}`,
+      `${w?.ar || ''}: أُنجزت «${doneAr}»${p ? ` لـ ${p.ar}` : ''}${finished ? ' — اكتملت المهمّة' : ''}${note ? ` — ${note}` : ''}`, 'ok'];
+    D.RUN_LOG.unshift(entry);
     closeOverlays(); refresh();
-    ok(L('Step completed', 'أُنجزت الخطوة'), `${r.step} / ${r.total}`);
+    ok(finished ? L('Task finished', 'اكتملت المهمّة') : L('Step done', 'أُنجزت الخطوة'),
+       finished ? L(`${w?.name || ''}${p ? ` for ${p.lat}` : ''} is complete.`, `اكتمل «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}.`)
+                : L(`Next: ${steps[r.step] || ''}`, `التالي: ${stepsAr[r.step] || ''}`),
+       { action: { label: L('Undo', 'تراجع'), fn: () => {
+         r.step = before.step; if (finished) D.RUNS.splice(before.at, 0, r);
+         const i = D.RUN_LOG.indexOf(entry); if (i >= 0) D.RUN_LOG.splice(i, 1); refresh(); } } });
   },
   'issue-assign': (btn, id) => {
     const i = find(D.ISSUES, id); if (!i) return;
@@ -271,6 +278,7 @@ export const VERBS = {
     ok(L('Data snapshot downloaded', 'نُزّلت صورة البيانات'), L('An administrator manages database backups and restores.', 'يدير المسؤول النسخ الاحتياطية لقاعدة البيانات واستعادتها.')); },
   'rec-new':      (b, kind) => CR.create(kind),
   'book-room':    (b, vid) => CR.create('reservation', { venue: vid }),
+  'eq-filter':    (b, f) => { S.ui.eqFilter = f || 'all'; refresh(); },
   'res-filter':   (b, f) => { S.ui.resFilter = f; refresh(); },
   'rec-edit':     (b, a) => { const [k, id] = a.split('|'); CR.edit(k, id); },
   'rec-del':      (b, a) => { const [k, id] = a.split('|'); CR.remove(k, id); },
@@ -319,7 +327,6 @@ export const VERBS = {
   'cal-day':      (b, a) => F.calDay(+a),
   view:           (b, a) => { const [k, v] = a.split('|'); S.ui[k] = +v; refresh(); },
   'people-env':   () => { S.ui.peopleEnv = !S.ui.peopleEnv; S.ui.peoplePage = 0; refresh(); },
-  'sac-clear':    () => { S.ui.sacKind = S.ui.sacYear = ''; refresh(); },
   'music-clear':  () => { S.ui.music = {}; refresh(); },
   transpose:      (b, a) => { const [id, n] = a.split('|'); S.ui.transpose = { ...S.ui.transpose, [id]: +n }; refresh(); },
   'cal-kind':     (b, k) => { const off = S.ui.calOff || []; S.ui.calOff = off.includes(k) ? off.filter(x => x !== k) : [...off, k]; refresh(); },
@@ -392,17 +399,23 @@ export const VERBS = {
   'eparchy-msg':  () => F.compose('eparchy', { title: L('Eparchy announcement', 'إعلان أبرشي') }),
   'parish-switch':(b, id) => F.parishSwitch(id),
   'wf-new':       () => CR.create('workflow'),
-  'wf-pause':     () => { const w = D.WORKFLOWS[0]; if (!w) return; w.paused = !w.paused; refresh();
-                    toast(w.paused ? L('Workflow paused', 'أُوقف المسار مؤقتاً') : L('Workflow resumed', 'استُؤنف المسار'),
-                      w.paused ? L('Nothing new starts until you resume. Runs in progress wait.', 'لا يبدأ شيء جديد حتى الاستئناف. والجاري ينتظر.') : '',
+  'wf-pause':     (b, id) => { const w = find(D.WORKFLOWS, id); if (!w) return; w.paused = !w.paused; refresh();
+                    toast(w.paused ? L(`${w.name} paused`, `أُوقف «${w.ar}» مؤقتاً`) : L(`${w.name} resumed`, `استُؤنف «${w.ar}»`),
+                      w.paused ? L('No new requests start in it until you resume. Tasks already open wait where they are.', 'لا تبدأ فيه طلبات جديدة حتى الاستئناف. والمهام المفتوحة تنتظر مكانها.') : '',
                       w.paused ? 'warning' : 'success'); },
+  'wf-queue':     (b, id) => { S.ui.runWf = id || ''; if (location.hash !== '#/forms/runs') location.hash = '#/forms/runs'; else refresh(); },
   'wf-retry':     () => { D.RUN_LOG.unshift(['2026-10-04 19:32', 'Retry 2 of 3 — WhatsApp gateway answered', 'محاولة ٢ من ٣ — استجابت بوابة واتساب', 'ok']);
                     refresh(); ok(L('Failed steps retried', 'أُعيدت الخطوات الفاشلة'), L('The message went through on the second attempt.', 'نجحت الرسالة في المحاولة الثانية.')); },
-  'wf-cancel':    () => F.confirmAction({ title: L('Cancel this run?', 'إلغاء هذا التنفيذ؟'),
-                    body: L('Steps already done stay done. Nothing further is sent.', 'الخطوات المنجزة تبقى. ولا يُرسل شيء بعدها.'),
-                    cta: L('Cancel run', 'إلغاء التنفيذ'), danger: true,
-                    then: () => { D.RUN_LOG.unshift(['2026-10-04 19:33', 'Run cancelled by Fr. Antoine', 'ألغى الأب أنطوان التنفيذ', 'err']); refresh();
-                      toast(L('Run cancelled', 'أُلغي التنفيذ'), '', 'warning'); } }),
+  'wf-cancel':    (b, id) => { const r = find(D.RUNS, id); if (!r) return;
+                    const w = find(D.WORKFLOWS, r.wf), p = r.subject ? D.person(r.subject) : null;
+                    F.confirmAction({ title: L('Cancel this task?', 'إلغاء هذه المهمّة؟'),
+                      body: L('Steps already done stay done and nothing more is sent. The task leaves the open list.', 'تبقى الخطوات المنجزة ولا يُرسل شيء بعدها. وتخرج المهمّة من لائحة المهام المفتوحة.'),
+                      cta: L('Cancel task', 'إلغاء المهمّة'), back: L('Keep the task', 'إبقاء المهمّة'), danger: true,
+                      then: () => { const at = D.RUNS.indexOf(r); D.RUNS.splice(at, 1);
+                        const entry = [stamp(), `${w?.name || ''} cancelled${p ? ` for ${p.lat}` : ''}`, `أُلغي «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}`, 'err'];
+                        D.RUN_LOG.unshift(entry); closeOverlays(); refresh();
+                        toast(L('Task cancelled', 'أُلغيت المهمّة'), L(w?.name || '', w?.ar || ''), 'warning', { action: { label: L('Undo', 'تراجع'), fn: () => {
+                          D.RUNS.splice(at, 0, r); const i = D.RUN_LOG.indexOf(entry); if (i >= 0) D.RUN_LOG.splice(i, 1); refresh(); } } }); } }); },
   'dom-add-field':() => CR.create('field'),
   'dom-add-rule': () => F.ruleAdd(),
   'rule-del':     (b, id) => { const i = D.FORM_RULES.findIndex(r => r.id === id); if (i < 0) return; const [r] = D.FORM_RULES.splice(i, 1); refresh();
