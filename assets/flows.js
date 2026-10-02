@@ -780,7 +780,7 @@ export function meetingNew(gid=curGroup()) {
         <option value="14">${L('Every two weeks', 'كل أسبوعين')}</option></select></div>
         ${C.stepper({label:L('Total number of meetings','إجمالي عدد الاجتماعات'),value:4,id:'m_count'})}</div>
       <fieldset class="repeat-days" id="m_days" hidden><legend>${L('Repeat on','يتكرّر في')}</legend>
-        <div class="repeat-day-list">${[[1,'M','الإثنين'],[2,'T','الثلاثاء'],[3,'W','الأربعاء'],[4,'TH','الخميس'],[5,'F','الجمعة'],[6,'SA','السبت'],[0,'S','الأحد']]
+        <div class="repeat-day-list">${[[0,'S','الأحد'],[1,'M','الإثنين'],[2,'T','الثلاثاء'],[3,'W','الأربعاء'],[4,'TH','الخميس'],[5,'F','الجمعة'],[6,'SA','السبت']]
           .map(([day,en,ar])=>`<label class="repeat-day"><input type="checkbox" value="${day}" aria-label="${L(['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day],ar)}"><span>${L(en,ar)}</span></label>`).join('')}</div>
         <p class="help">${L('The count is the total number of meetings, across all selected days. The first meeting is on or after the chosen date.','العدد هو إجمالي الاجتماعات في كل الأيام المختارة. يبدأ أول اجتماع في التاريخ المحدّد أو بعده.')}</p></fieldset>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
