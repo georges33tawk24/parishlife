@@ -19,7 +19,8 @@ const upcoming = () => M.meetings.filter(m => m.date >= new Date().toISOString()
 const attendance = () => {
   const past = M.meetings.filter(m => m.date < new Date().toISOString().slice(0, 10) && !['upcoming','unrecorded'].includes(m.attendance));
   const attended = past.filter(m => ['present', 'attended', 'late'].includes(m.attendance)).length;
-  return { past, attended, percent: past.length ? Math.round(attended / past.length * 100) : null };
+  const counted = past.filter(m => m.attendance !== 'excused');
+  return { past, attended, percent: counted.length ? Math.round(attended / counted.length * 100) : null };
 };
 const status = value => `<span class="member-badge">${txt(value)}</span>`;
 const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind === kind && filter(x));
@@ -59,7 +60,7 @@ export function attendancePage() {
   const stats = attendance();
   return `<div class="member-page">${title(L('My attendance', 'حضوري'), L('A personal record to help you stay informed.', 'سجل شخصي لمساعدتك على المتابعة.'))}
     <div class="member-grid">${card(`<h2>${L('Attendance', 'الحضور')}</h2><strong>${stats.percent === null ? '—' : stats.percent + '%'}</strong><p>${stats.attended} ${L('attended', 'حضور')} · ${stats.past.filter(m => m.attendance === 'absent').length} ${L('absent', 'غياب')} · ${stats.past.filter(m => m.attendance === 'excused').length} ${L('excused', 'غياب معذور')} · ${stats.past.filter(m => m.attendance === 'late').length} ${L('late', 'تأخير')}</p>`)}</div>
-    <div class="member-toolbar"><select class="select" data-filter="group"><option value="">${L('All ministries', 'كل الخدمات')}</option>${M.groups.map(g => `<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select><select class="select" data-filter="status"><option value="">${L('All statuses', 'كل الحالات')}</option>${['present','absent','excused','late','upcoming'].map(x => `<option>${x}</option>`).join('')}</select><input class="input" type="date" data-filter="from" aria-label="${L('From date', 'من تاريخ')}"><input class="input" type="date" data-filter="to" aria-label="${L('To date', 'حتى تاريخ')}"></div>
+    <div class="member-toolbar"><select class="select" data-filter="group"><option value="">${L('All ministries', 'كل الخدمات')}</option>${M.groups.map(g => `<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select><select class="select" data-filter="status"><option value="">${L('All statuses', 'كل الحالات')}</option>${['present','absent','excused','late','unrecorded','upcoming'].map(x => `<option>${x}</option>`).join('')}</select><input class="input" type="date" data-filter="from" aria-label="${L('From date', 'من تاريخ')}"><input class="input" type="date" data-filter="to" aria-label="${L('To date', 'حتى تاريخ')}"></div>
     <div class="member-list">${[...M.meetings].reverse().map(m => `<div class="member-card member-filter-row" data-group="${txt(m.groupId)}" data-status="${txt(m.attendance)}" data-date="${txt(m.date)}"><div class="member-row"><div><h2>${txt(m.title)}</h2><p>${txt(m.group)} · ${date(m.date)} · ${txt(m.time)}</p></div>${status(m.attendance)}</div></div>`).join('') || blank(L('Attendance will appear after your first ministry meeting.', 'يظهر سجل الحضور بعد أول اجتماع لخدمتك.'))}</div></div>`;
 }
 
@@ -128,7 +129,7 @@ export function notificationsPage() {
 }
 
 export function hub() {
-  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>
+  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${session.user?.role !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
     ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2>${M.content.filter(x=>x.kind==='message' && x.recipientId===session.user?.id).map(x=>`<div class="member-simple-row"><span>${txt(groupName(x.groupId))} · ${txt(x.body)}</span><button class="btn btn-secondary btn-dense" data-reply-message="${txt(x.id)}">${L('Reply', 'رد')}</button></div>`).join('') || blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))}`)}
     ${card(`<h2>${L('Volunteer responses', 'ردود المتطوعين')}</h2>${M.volunteerReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.title)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-confirm-volunteer="${txt(x.content_id)}" data-user="${txt(x.user_id)}">${L('Confirm', 'تأكيد')}</button></div>`).join('') || blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))}`)}
     ${M.profileReview.length ? card(`<h2>${L('Profile update requests', 'طلبات تحديث الملفات')}</h2>${M.profileReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.field)}: ${txt(x.requested_value)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-profile-review="${txt(x.id)}">${L('Mark reviewed', 'تعليم كمراجَع')}</button></div>`).join('')}`) : ''}
