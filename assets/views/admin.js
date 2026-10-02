@@ -7,9 +7,10 @@ import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { deleteGuard, newPersonDrawer } from './people.js';
 import { savedAt, savedSize } from '../persist.js';
+import { api } from '../api.js';
 import { WORKFLOWS, RUNS, RUN_LOG, AUDIT, FUNDS, RATE, PARISH, PARISHES, EPARCHY_NEWS, GROUPS, BATCH,
          SESSIONS, SECURITY_ALERTS, RETENTION, WEBHOOKS, PERMISSIONS, ATTENDANCE_SERIES,
-         GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, person } from '../data.js';
+         GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, GROUP_DETAIL, REGISTRATIONS, REGISTRANTS, CHECKIN, EVENTS, person } from '../data.js';
 import { FIELD_TYPES } from '../crud.js';
 
 const L = (en, ar) => t(en, ar);
@@ -21,8 +22,7 @@ export function eparchy(tab = '') {
     title: L(PARISH.eparchy, PARISH.eparchyAr),
     sub: L('Aggregated across the parishes you hold a role in. Restricted parish records are never exposed here by default.',
            'مجمَّع عبر الرعايا التي لك دور فيها. ولا تُكشف السجلات المقيّدة هنا افتراضياً.'),
-    actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${L('Export', 'تصدير')}</button>
-      <button class="btn btn-primary" data-act="eparchy-msg">${icon('bell', 17)}${L('Eparchy announcement', 'إعلان أبرشي')}</button>`
+    actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${L('Export', 'تصدير')}</button>`
   }) + tabBar('eparchy', [['', 'Parishes', 'الرعايا'], ['news', 'Announcements', 'الإعلانات'], ['aggregate', 'Aggregates', 'التجميعات']], tab);
 
   if (tab === 'news') return head + table({
@@ -35,10 +35,9 @@ export function eparchy(tab = '') {
   });
 
   if (tab === 'aggregate') return head + `<div class="grid g2">
-      ${C.kpi({ k: L('People across parishes', 'المؤمنون عبر الرعايا'), v: num(PARISHES.reduce((a, p) => a + p.people, 0)),
-                sub: `${PARISHES.length} ${L('parishes', 'رعايا')}`, delta: L('+2.1% this year', '+٢٫١٪ هذه السنة'), spark: ATTENDANCE_SERIES })}
-      ${C.kpi({ k: L('Sacraments registered, 2026', 'الأسرار المسجَّلة ٢٠٢٦'), v: '118', sub: L('across all registers', 'في كل السجلات'),
-                delta: L('+9 on 2025', '+٩ عن ٢٠٢٥') })}
+      ${C.kpi({ k: L('People across accessible parishes', 'المؤمنون في الرعايا المتاحة'), v: num(PARISHES.reduce((a, p) => a + p.people, 0)),
+                sub: `${PARISHES.length} ${L('parishes', 'رعايا')}` })}
+      ${C.kpi({ k: L(`Sacraments registered, ${new Date().getFullYear()}`, `الأسرار المسجَّلة ${new Date().getFullYear()}`), v: num(PARISHES.reduce((a, p) => a + (p.sacramentsYear || 0), 0)), sub: L('across accessible registers', 'في السجلات المتاحة') })}
     </div>
     ${panel(L('Parishioners by parish', 'المؤمنون حسب الرعية'), C.barChart(
       PARISHES.map(p => ({ label: L(p.name, p.ar), v: p.people, max: 2200, text: num(p.people) }))))}
@@ -64,6 +63,34 @@ export function eparchy(tab = '') {
         'المجموعات والمرافق والأحداث والسجلات المالية كلها مملوكة لرعية، وانتساب الشخص يُسجَّل صراحةً لا استنتاجاً.'))}`;
 }
 eparchy.mount = host => { C.wire(host); wireTables(host); };
+
+export function assignments() {
+  if (!is('bishop')) return empty('shield', L('Bishop access required', 'تتطلّب صلاحية المطران'), L('Only the bishop can assign parish priests.', 'المطران وحده يعيّن كهنة الرعايا.'));
+  return pageHead({ crumbs: [{ label: L('Archdiocese', 'الأبرشية') }, { label: L('Priest assignments', 'تعيينات الكهنة') }],
+    title: L('Priest assignments', 'تعيينات الكهنة'),
+    sub: L('Assign, replace, or reassign priests to parishes within this archdiocese. A removed assignment ends access immediately.', 'عيّن الكهنة أو استبدلهم أو أعد تعيينهم في رعايا هذه الأبرشية. وينتهي الوصول فور إزالة التعيين.') }) +
+    `<div id="assignment-body" class="tabbody"><p class="dim">${L('Loading assignments…', 'جارٍ تحميل التعيينات…')}</p></div>`;
+}
+assignments.mount = async host => {
+  const body = host.querySelector('#assignment-body'); if (!body) return;
+  try {
+    const data = await api('assignments');
+    body.innerHTML = data.priests.length ? data.priests.map(priest => `<section class="panel" style="margin-bottom:16px" data-priest="${esc(priest.id)}">
+      <div class="panel-h"><h3>${esc(priest.name)}</h3></div><div class="panel-b"><div class="stack" style="gap:10px">${data.parishes.map(p =>
+        `<label class="check"><input type="checkbox" value="${esc(p.id)}" ${priest.parishes.includes(p.id) ? 'checked' : ''}><span>${esc(L(p.name, p.ar))} · ${esc(L(p.town, p.townAr))}</span></label>`).join('')}</div>
+        <button class="btn btn-primary" style="margin-top:16px" data-save-priest="${esc(priest.id)}">${L('Save assignments', 'حفظ التعيينات')}</button></div></section>`).join('')
+      : empty('people', L('No priest accounts yet', 'لا حسابات كهنة بعد'), L('Create a priest account on the server, then assign its parishes here.', 'أنشئ حساب كاهن على الخادم ثم عيّن رعاياه هنا.'));
+    body.querySelectorAll('[data-save-priest]').forEach(button => button.addEventListener('click', async () => {
+      const priest = button.dataset.savePriest, section = button.closest('[data-priest]');
+      const parishes = [...section.querySelectorAll('input:checked')].map(input => input.value);
+      button.disabled = true;
+      try { await api('assignments', 'PUT', { priest, parishes });
+        toast(L('Priest assignments saved', 'حُفظت تعيينات الكاهن'), L('Access now follows this list.', 'يتبع الوصول هذه القائمة الآن.'), 'success');
+      } catch (e) { toast(L('Could not save assignments', 'تعذّر حفظ التعيينات'), e.message, 'danger'); }
+      finally { button.disabled = false; }
+    }));
+  } catch (e) { body.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; }
+};
 
 /* ═══════════ 15 · forms & workflows ═══════════ */
 const WTABS = () => [['', 'Workflows', 'المسارات'], ['runs', 'Open tasks', 'المهام المفتوحة', RUNS.length],
@@ -196,8 +223,8 @@ forms.mount = host => {
 
 /* ═══════════ 16 · reporting ═══════════ */
 const REPORTS = [
-  ['attendance', 'attend', 'Attendance and visitors', 'الحضور والزوّار', 'Mass counts, catechism attendance, visitor follow-up', 'عدّ القداديس وحضور التعليم ومتابعة الزوّار'],
-  ['membership', 'people', 'Membership changes', 'تغيّرات الانتساب', 'Joins, transfers in and out, archived records', 'الانضمام والانتقال والسجلات المؤرشفة'],
+  ['attendance', 'attend', 'Group meeting attendance', 'حضور اجتماعات المجموعات', 'Recorded attendance at group meetings and activities only', 'حضور مسجّل في اجتماعات المجموعات وأنشطتها فقط'],
+  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and archived parish records', 'سجلات الرعية الحالية والمؤرشفة'],
   ['groups', 'groups', 'Group participation', 'مشاركة المجموعات', 'Roster size, attendance rate, course completion', 'حجم اللائحة ونسبة الحضور وإتمام الدورات'],
   ['volunteers', 'vol', 'Volunteer workload', 'عبء المتطوّعين', 'Availability, conflicts, who is serving too often', 'التوفّر والتعارضات ومن يخدم كثيراً'],
   ['facilities', 'rooms', 'Facility utilisation', 'استخدام المرافق', 'Hours booked, refusals, equipment loans', 'ساعات الحجز والرفض وإعارات التجهيزات'],
@@ -224,8 +251,8 @@ export function reports(id = '') {
             <small class="t-caption dim" style="display:block;margin-top:3px">${esc(L(se, sa))}</small></span>
           <span class="dimmer">${icon('chevR', 16)}</span></div></div></a>`).join('')}</div>
     ${C.inlineAlert('info', L('What these numbers are, and are not', 'ما هي هذه الأرقام وما ليست'),
-      L('An attendance count is a count of people in the building, taken by an usher. It is not a measure of faith, personal worth or pastoral need, and ParishLife does not rank anyone by it. Groups smaller than five are never broken out.',
-        'عدّ الحضور هو عدد الحاضرين في المبنى، يسجّله مُرشد. وليس مقياساً للإيمان أو القيمة أو الحاجة الرعوية، ولا يرتّب «حياة الرعية» أحداً به. ولا تُفصَّل المجموعات الأصغر من خمسة أبداً.'))}`;
+      L('Individual attendance reports cover group meetings and activities. Event check-in requires a selected eligible event. Individual attendance at Masses and feast-day liturgies is not recorded.',
+        'تشمل تقارير الحضور اجتماعات المجموعات وأنشطتها. يتطلّب تسجيل الوصول حدثاً مؤهّلاً محدداً. لا يُسجّل حضور الأفراد في القداديس وليتورجيات الأعياد.'))}`;
 }
 
 /* The period scales what is counted over time (visitors, gifts, hours, joins); averages move a little.
@@ -255,15 +282,10 @@ function reportDetail(slug) {
   const given = funds.reduce((n, f) => n + f.actual, 0);
 
   const body = {
-    attendance: () => `<div class="grid g2">
-        ${C.kpi({ k: L('Average Sunday attendance', 'متوسط حضور الأحد'), v: num(av(284)), sub: L('across 3 Masses', 'في ٣ قداديس'),
-                  delta: L('+4% on last year', '+٤٪ عن العام الماضي'), spark: ATTENDANCE_SERIES })}
-        ${C.kpi({ k: L('First-time visitors', 'زوّار لأول مرة'), v: num(Math.max(1, sc(31))), sub: inPeriod,
-                  delta: `${num(Math.round(sc(31) * 0.58))} ${L('followed up', 'جرت متابعتهم')}`, dir: 'up' })}
-      </div>
-      ${panel(L('By Mass', 'حسب القدّاس'), C.barChart([[L('Sunday 10:30', 'الأحد ١٠:٣٠'), 284, 420], [L('Sunday 08:00', 'الأحد ٠٨:٠٠'), 131, 420],
-        [L('Sunday 18:00', 'الأحد ١٨:٠٠'), 96, 120], [L('Weekday average', 'متوسط أيام الأسبوع'), 38, 120]]
-        .map(([label, v, max]) => ({ label, v: Math.min(av(v), max), max, text: `${num(Math.min(av(v), max))} / ${num(max)}` }))))}`,
+    attendance: () => panel(L('Group meetings and activities', 'اجتماعات المجموعات وأنشطتها'), table({
+      cols:[{label:L('Group','المجموعة')},{label:L('Meeting','الاجتماع')},{label:L('Present','حاضر')},{label:L('Excused','معذور')},{label:L('Absent','غائب')}],
+      rows:GROUPS.flatMap(g=>(GROUP_DETAIL[g.id]?.meetings||[]).filter(m=>m.d>=from&&m.d<=new Date().toISOString().slice(0,10)).map(m=>{const values=Object.values(m.attendance||{});return {cells:[esc(L(g.name,g.ar)),fmtDate(m.d),values.filter(v=>v==='present').length,values.filter(v=>v==='excused').length,values.filter(v=>v==='absent').length]};}))
+    })),
     giving: () => `<div class="grid g2">
         ${C.kpi({ k: `${L('Given', 'المعطى')} ${inPeriod}`, v: usd(sc(given)), sub: `L.L ${num(sc(given) * RATE.value)}`,
                   delta: fund ? L(fund.name, fund.ar) : L('All funds', 'كل الصناديق'), spark: GIVING_SERIES })}
@@ -276,12 +298,12 @@ function reportDetail(slug) {
       GROUPS.slice(0, 6).map(g => ({ label: L(g.name, g.ar), v: g.members, max: 45, text: String(g.members) })))),
     budget: () => panel(`${L('Budget against actual', 'الموازنة مقابل الفعلي')} · ${inPeriod}`,
       C.barChart(funds.map(f => ({ label: L(f.name, f.ar), v: sc(f.actual), max: sc(f.budget), text: `${usd(sc(f.actual))} / ${usd(sc(f.budget))}` })))),
-    capacity: () => panel(L('Registered against attended', 'المسجَّل مقابل الحاضر'), C.barChart([
-      { label: L('Youth retreat', 'خلوة الشبيبة'), v: 29, max: 33, text: '29 / 33' },
-      { label: L('Parish lunch', 'غداء الرعية'), v: 127, max: 141, text: '127 / 141' },
-      { label: L('Catechism year', 'سنة التعليم'), v: 186, max: 198, text: '186 / 198' }])),
-    membership: () => panel(`${L('Membership movement', 'حركة الانتساب')} · ${inPeriod}`, bars([
-      [L('Joined', 'انضمّوا'), 64], [L('Transferred in', 'انتقلوا إلينا'), 11], [L('Transferred out', 'انتقلوا عنّا'), 8], [L('Archived', 'أُرشفوا'), 7]], 80)),
+    capacity: () => panel(L('Event registration and check-in','التسجيل في الأحداث والوصول إليها'), table({
+      cols:[{label:L('Event','الحدث')},{label:L('Registered','مسجّل')},{label:L('Checked in','سجّل وصوله')}],
+      rows:REGISTRATIONS.filter(r=>EVENTS.some(e=>e.id===r.eventId&&e.kind!=='mass'&&!e.liturgy&&!e.feastLiturgy)).map(r=>({cells:[esc(L(r.event,r.eventAr)),REGISTRANTS.filter(p=>p.registrationId===r.id).length,(CHECKIN.sessions?.[r.eventId]?.rows||[]).length]}))
+    })),
+    membership: () => panel(`${L('Membership records', 'سجلات الانتساب')} · ${inPeriod}`, bars([
+      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Archived records', 'السجلات المؤرشفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
     facilities: () => panel(`${L('Room utilisation', 'استخدام القاعات')} · ${inPeriod}`, C.barChart([
       [L('Parish Hall', 'قاعة الرعية'), 68], [L('Meeting Room 1', 'قاعة اجتماعات ١'), 41], [L('Catechism Room A', 'صف التعليم أ'), 88], [L('Courtyard', 'ساحة الكنيسة'), 22]]
       .map(([label, v]) => ({ label, v: Math.min(av(v), 100), max: 100, text: `${Math.min(av(v), 100)}%` }))))
@@ -345,7 +367,7 @@ export function audit() {
       cols: [{ label: L('When', 'الوقت'), cls: 'hide-sm', sort: true }, { label: L('Who', 'من'), cls: 'hide-md' },
              { label: L('What', 'ماذا') }, { label: L('Kind', 'النوع'), cls: 'shrink' }],
       rows: AUDIT.filter(a => !kind || a.kind === ONLY[kind]).map(a => ({ attrs: 'data-find-item', cells: [
-        `<span class="mono dim" dir="ltr">${a.at}</span>`, who(person(a.who)), esc(L(a.what, a.whatAr)),
+        `<span class="mono dim" dir="ltr">${a.at}</span>`, a.who && person(a.who) ? who(person(a.who)) : esc(a.actorName || '—'), esc(L(a.what, a.whatAr)),
         pill(KINDS[a.kind][0], KINDS[a.kind][1])]})),
       empty: empty('shield', L('Nothing of this kind was recorded', 'لم يُسجَّل شيء من هذا النوع'), L('Choose All to see every event.', 'اختر «الكل» لرؤية كل الأحداث.'))
     })}
@@ -500,16 +522,16 @@ export function settings(tab = '') {
       }), { tight: true })}</div>
       <div class="sidecol">
         ${panel(L('Where this parish is saved', 'أين تُحفظ هذه الرعية'), `<p class="t-body dim" style="font-size:14px;line-height:22px">${L(
-          'Everything you add, change or delete is saved in this browser straight away and is still here after a reload. Another browser or computer keeps its own copy — move the parish with a backup file.',
-          'كل ما تضيفه أو تعدّله أو تحذفه يُحفظ في هذا المتصفّح فوراً ويبقى بعد إعادة التحميل. ولكل متصفّح أو حاسوب آخر نسخته — انقل الرعية بملف نسخة احتياطية.')}</p>
+          'Changes are saved to the parish database on the server and are available to authorized accounts after a reload or from another computer.',
+          'تُحفظ التغييرات في قاعدة بيانات الرعية على الخادم، وتبقى متاحة للحسابات المخوّلة بعد إعادة التحميل أو من حاسوب آخر.')}</p>
           <dl class="dl" style="margin-top:12px">
             <dt>${L('Last saved', 'آخر حفظ')}</dt><dd class="mono">${savedAt() ? new Date(savedAt()).toLocaleString(isAr() ? 'ar-LB' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : L('Not yet — nothing has changed', 'ليس بعد — لم يتغيّر شيء')}</dd>
             <dt>${L('Size', 'الحجم')}</dt><dd class="mono">${Math.max(1, Math.round(savedSize() / 1024))} KB</dd></dl>
           <div class="row" style="gap:8px;margin-top:14px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-dense" data-act="data-export">${icon('export', 15)}${L('Download a backup', 'تنزيل نسخة احتياطية')}</button>
-            <button class="btn btn-secondary btn-dense" data-act="data-import">${icon('doc', 15)}${L('Restore from a backup', 'استرجاع من نسخة')}</button></div>
+            <button class="btn btn-secondary btn-dense" data-act="data-export">${icon('export', 15)}${L('Download data snapshot', 'تنزيل صورة من البيانات')}</button>
+          </div>
           <div class="divider"></div>
-          <button class="btn btn-danger-quiet btn-dense" data-act="data-reset">${icon('trash', 15)}${L('Reset to the sample parish', 'العودة إلى الرعية النموذجية')}</button>`)}
+          <p class="help">${L('Restoring a database backup requires a reviewed administrator operation.', 'استعادة نسخة قاعدة البيانات تتطلب إجراءً إدارياً مُراجعاً.')}</p>`)}
         ${panel(L('Permanent deletion', 'الحذف النهائي'), `<p class="t-body dim" style="font-size:14px">${L(
           'Permanent deletion is a reviewed request, not a button. The reviewer is shown exactly what would be lost before they can confirm, and sacramental records are never deletable.',
           'الحذف النهائي طلب يُراجَع لا زرّ. ويُعرَض على المراجع ما سيُفقَد قبل التأكيد، وسجلات الأسرار غير قابلة للحذف أبداً.')}</p>
@@ -623,21 +645,20 @@ export function styleguide(tab = '') {
 
   const T = {
     '': () => `
-      ${spec(L('Colour', 'اللون'), L('Six brand colours; everything else is derived', 'ستة ألوان أساسية وما عداها مشتقّ'), `
+      ${spec(L('Colour', 'اللون'), L('Shades of blue, brown and yellow throughout the product', 'درجات الأزرق والبني والأصفر في جميع أجزاء التطبيق'), `
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Ink', 'حبر'), '#0D1B2A', L('Rail, dark panels', 'الشريط واللوحات الداكنة'))}
-          ${swatch(L('Navy', 'كحلي'), '#1B263B', L('Body text, primary hover', 'نص المتن، تمرير الزرّ'))}
-          ${swatch(L('Slate', 'أزرق رمادي'), '#415A77', L('Primary action, links, focus', 'الفعل الأساسي والروابط والتركيز'))}
-          ${swatch(L('Sage', 'مريمي'), '#778D7A', L('Sync dot, quiet marks', 'نقطة المزامنة والعلامات الهادئة'))}
-          ${swatch(L('Sand', 'رملي'), '#D4C4A8', L('Marker on dark, fills', 'العلامة على الداكن والتعبئة'))}
-          ${swatch(L('Cream', 'كريمي'), '#F4F1DE', L('Page ground', 'أرضية الصفحة'))}
+          ${swatch(L('Navy', 'كحلي'), '#3D4161', L('Actions, rail and body text', 'الأفعال والشريط ونص المتن'))}
+          ${swatch(L('Light blue', 'أزرق فاتح'), '#DCEEFF', L('Soft fills and blue accents', 'التعبئة الناعمة واللمسات الزرقاء'))}
+          ${swatch(L('White', 'أبيض'), '#FFFFFF', L('Cards, forms and print', 'البطاقات والاستمارات والطباعة'))}
+          ${swatch(L('Yellow', 'أصفر'), '#F4CF56', L('Buttons, selected navigation and highlights', 'الأزرار والتنقّل المحدّد والإبراز'))}
+          ${swatch(L('Brown', 'بني'), '#765039', L('Secondary text, accents and charts', 'النص الثانوي واللمسات والرسوم'))}
         </div>
         <div class="divider"></div>
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Surface', 'سطح'), '#FFFFFF', L('Cards, tables, drawers', 'البطاقات والجداول والأدراج'))}
-          ${swatch(L('Muted', 'مكتوم'), '#EAE6D2', L('Table headers, hover rows', 'رؤوس الجداول وصفوف التمرير'))}
-          ${swatch(L('Border', 'حدّ'), '#DDD8C2', L('1px hairlines', 'خطوط ١ بكسل'))}
-          ${swatch(L('Accent', 'لهجة'), '#7E6435', L('Eyebrows, feast markers on light', 'العناوين الفوقية وعلامات الأعياد'))}
+          ${swatch(L('Page blue', 'أزرق الصفحة'), '#EAF4FF', L('Page background', 'خلفية الصفحة'))}
+          ${swatch(L('Soft yellow', 'أصفر ناعم'), '#FFF5CC', L('Table headers and summary cards', 'رؤوس الجداول وبطاقات الملخّص'))}
+          ${swatch(L('Blue accent', 'أزرق بارز'), '#8EC5F4', L('Charts and small marks', 'الرسوم والعلامات الصغيرة'))}
+          ${swatch(L('Blue border', 'حدّ أزرق'), '#9BC6EC', L('Control outlines', 'حدود الضوابط'))}
         </div>
         <div class="divider"></div>
         <div class="row" style="gap:10px;flex-wrap:wrap">
@@ -648,7 +669,7 @@ export function styleguide(tab = '') {
 
       ${spec(L('Type', 'الخطّ'), L('Six sizes, two families', 'ستة أحجام وعائلتان'), `
         <div class="tablescroll"><table class="tbl">
-          <thead><tr><th>${L('Token', 'الرمز')}</th><th>${L('Inter / Latin', 'إنتر / لاتيني')}</th>
+          <thead><tr><th>${L('Token', 'الرمز')}</th><th>${L('Inter / English', 'إنتر / إنكليزي')}</th>
             <th>${L('Plex Arabic', 'بلكس عربي')}</th><th>${L('Spec', 'المواصفة')}</th></tr></thead>
           <tbody>${[['t-display', 'Saint Elias', 'مار الياس', '32 / 40 / 600'],
                     ['t-heading', 'Baptism register', 'سجل المعمودية', '24 / 32 / 600'],
@@ -728,13 +749,13 @@ export function styleguide(tab = '') {
 
       ${spec(L('Text fields', 'الحقول النصّية'), L('40px · 6px radius · label above, helper below', '٤٠ بكسل · استدارة ٦ · التسمية فوق والمساعدة تحت'), `
         <div class="formgrid">
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), req: true, value: 'Georges Haddad',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), req: true, value: 'Georges Haddad',
                       help: L('As it appears on the ID card.', 'كما يظهر على الهوية.') })}
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), req: true, value: 'G', state: 'error',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), req: true, value: 'G', state: 'error',
                       help: L('Enter at least 2 characters.', 'أدخل حرفين على الأقل.'), helpTone: 'help-error' })}
           ${C.field({ label: L('Envelope number', 'رقم المظروف'), value: '0142', state: 'ok',
                       help: L('Available.', 'متاح.'), helpTone: 'help-ok', tail: `<span style="color:var(--success)">${icon('check', 16)}</span>` })}
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), value: 'Georges Haddad', state: 'disabled',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), value: 'Georges Haddad', state: 'disabled',
                       help: L('Locked while the record is archived.', 'مقفل ما دام السجل مؤرشفاً.') })}
           ${C.field({ label: L('Envelope number', 'رقم المظروف'), value: '0142', state: 'loading',
                       help: L('Checking if this envelope is free…', 'يجري التحقّق من توفّر المظروف…') })}
@@ -746,7 +767,7 @@ export function styleguide(tab = '') {
           ${C.stepper({ label: L('Seats in the hall', 'المقاعد في القاعة'), value: 120, id: 'sgst',
             help: L('Steppers are 38px wide so a thumb can hit them.', 'أزرار الزيادة ٣٨ بكسل ليصلها الإبهام.') })}
           <div class="formrow"><label class="label">${L('Find a parishioner', 'ابحث عن مؤمن')}</label>
-            ${C.searchClear(L('Searches Arabic and Latin name at once', 'يبحث في الاسمين معاً'), 'sgsc')}</div>
+            ${C.searchClear(L('Searches Arabic and English name at once', 'يبحث في الاسمين معاً'), 'sgsc')}</div>
         </div>`)}
 
       ${spec(L('Choosing', 'الاختيار'), L('Every option row is 44px', 'كل صف خيار ٤٤ بكسل'), `
@@ -962,7 +983,7 @@ export function styleguide(tab = '') {
         <div class="grid g3" style="gap:16px">
           ${C.kpi({ k: L('Given this month', 'المعطى هذا الشهر'), v: usd(8420), sub: `L.L ${num(8420 * RATE.value)}`,
                     delta: L('+12% vs Sept', '+١٢٪ عن أيلول'), spark: GIVING_SERIES })}
-          ${C.kpi({ k: L('Sunday attendance', 'حضور الأحد'), v: '412', sub: L('across 3 Masses', 'في ٣ قداديس'), spark: ATTENDANCE_SERIES })}
+          ${C.kpi({ k: L('Group meeting attendance', 'حضور اجتماعات المجموعات'), v: '86%', sub: L('illustrative component data', 'بيانات توضيحية للمكوّن'), spark: ATTENDANCE_SERIES })}
           ${C.kpi({ k: L('Volunteers active', 'متطوّعون نشطون'), v: '96', sub: L('this quarter', 'هذا الفصل'),
                     delta: L('−4 on last quarter', '−٤ عن الفصل الماضي'), dir: 'down' })}
         </div>
@@ -1037,7 +1058,7 @@ styleguide.mount = host => {
     large: true, title: L('Large drawer — 720', 'درج كبير — ٧٢٠'),
     sub: L('Used where a form needs two columns or a preview sits beside the fields.', 'يُستعمل حين تحتاج الاستمارة عمودين أو معاينة إلى جانب الحقول.'),
     body: `<div class="formgrid">${C.field({ label: L('Arabic name', 'الاسم العربي'), ar: true, dir: 'rtl' })}
-      ${C.field({ label: L('Transliteration', 'الحرف اللاتيني') })}</div>${C.addressCascade()}`,
+      ${C.field({ label: L('English name', 'الاسم الإنكليزي') })}</div>${C.addressCascade()}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`,
     onMount(el) { C.wire(el); }
   }));

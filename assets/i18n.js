@@ -45,11 +45,15 @@ export const dayShort = i => t(DAYS[i][0].slice(0, 3), DAYS[i][1].replace('ال'
 
 /** 4 Oct 2026 / ٤ تشرين الأول ٢٠٢٦ — digits stay Western either way. */
 export function fmtDate(d) {
+  if (!d) return '—';
   const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
   return `${x.getDate()} ${monthShort(x.getMonth())} ${x.getFullYear()}`;
 }
 export function fmtLong(d) {
+  if (!d) return '—';
   const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
   return `${day(x.getDay())} ${x.getDate()} ${month(x.getMonth())}`;
 }
 export const fmtTime = s => s;   // stored already as "10:30"

@@ -3,14 +3,14 @@
 /* ---------- top bar ---------- */
 .topbar{
   position:sticky;top:0;z-index:50;height:var(--h-topbar);
-  background:rgba(244,241,222,.9);backdrop-filter:blur(10px);
+  background:rgba(255,255,255,.9);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--border)
 }
 .topbar .wrap{height:100%;display:flex;align-items:center;gap:var(--s4)}
 .brand{display:flex;align-items:center;gap:10px;color:var(--text)}
 .brand:hover{color:var(--text)}
 .mark{
-  width:32px;height:32px;border-radius:9px;background:var(--primary);color:#F4F1DE;
+  width:32px;height:32px;border-radius:9px;background:var(--yellow);color:var(--ink);
   display:grid;place-items:center;font:600 16px/1 var(--sans);flex:none
 }
 .brand .name{font:600 17px/1 var(--sans);letter-spacing:-.02em}
@@ -25,7 +25,7 @@
   border:0;background:none;cursor:pointer;padding:5px 12px;border-radius:999px;
   font:500 13px/1 var(--sans);color:var(--text-2)
 }
-.langtoggle button[aria-pressed=true]{background:var(--primary);color:#F4F1DE}
+.langtoggle button[aria-pressed=true]{background:var(--primary);color:#FFFFFF}
 
 /* ---------- hero ---------- */
 .hero{padding-block:80px var(--s7)}
@@ -54,31 +54,31 @@
 .shot-bar span{margin-inline-start:8px;font:400 11px/1 var(--mono);color:var(--text-3)}
 .shell{display:flex;min-height:420px;font-size:13px}
 .shell-rail{
-  width:212px;flex:none;background:var(--ink);color:var(--sand);
+  width:212px;flex:none;background:var(--ink);color:var(--light-blue);
   border-inline-end:1px solid var(--ink);padding:14px 10px;display:flex;flex-direction:column
 }
-.shell-parish{display:flex;align-items:center;gap:9px;padding:0 6px 14px;border-bottom:1px solid rgba(244,241,222,.14);margin-bottom:12px}
-.shell-parish .mark{width:28px;height:28px;border-radius:8px;font-size:14px;background:var(--sand);color:var(--ink)}
-.shell-parish b{display:block;font:600 13px/1.3 var(--sans);color:#F4F1DE}
-.shell-parish small{display:block;font:400 11px/1.4 var(--sans);color:rgba(244,241,222,.6)}
-.navgroup{font:500 10px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:rgba(212,196,168,.66);padding:12px 8px 6px}
+.shell-parish{display:flex;align-items:center;gap:9px;padding:0 6px 14px;border-bottom:1px solid rgba(255,255,255,.14);margin-bottom:12px}
+.shell-parish .mark{width:28px;height:28px;border-radius:8px;font-size:14px;background:var(--yellow);color:var(--ink)}
+.shell-parish b{display:block;font:600 13px/1.3 var(--sans);color:#FFFFFF}
+.shell-parish small{display:block;font:400 11px/1.4 var(--sans);color:rgba(255,255,255,.6)}
+.navgroup{font:500 10px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:rgba(220,238,255,.66);padding:12px 8px 6px}
 .navitem{
   display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r-input);
-  font:500 13px/18px var(--sans);color:rgba(244,241,222,.8);position:relative
+  font:500 13px/18px var(--sans);color:rgba(255,255,255,.8);position:relative
 }
-.navitem svg{flex:none;color:rgba(212,196,168,.72)}
+.navitem svg{flex:none;color:rgba(220,238,255,.72)}
 .navitem .badge{
-  margin-inline-start:auto;font:500 11px/1 var(--mono);color:rgba(244,241,222,.55);
+  margin-inline-start:auto;font:500 11px/1 var(--mono);color:rgba(255,255,255,.55);
   font-variant-numeric:tabular-nums
 }
-.navitem.on{background:var(--primary);color:#F4F1DE}
-.navitem.on svg{color:var(--sand)}
+.navitem.on{background:var(--yellow);color:var(--brown-dark)}
+.navitem.on svg{color:var(--ink)}
 .navitem.on::before{
   content:"";position:absolute;inset-inline-start:-10px;top:6px;bottom:6px;width:3px;
-  border-radius:0 3px 3px 0;background:var(--sand)
+  border-radius:0 3px 3px 0;background:var(--yellow)
 }
 [dir=rtl] .navitem.on::before{border-radius:3px 0 0 3px}
-.navitem.on .badge{color:var(--sand)}
+.navitem.on .badge{color:var(--ink)}
 .shell-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
 /* the app's top bar: search centred, notifications and the account hard right */
 .shell-top{
@@ -125,21 +125,24 @@
 /* ---------- sync / offline strip ---------- */
 .syncline{
   display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:12px;
-  border-top:1px solid rgba(244,241,222,.14);font:400 11px/16px var(--sans);color:rgba(244,241,222,.66)
+  border-top:1px solid rgba(255,255,255,.14);font:400 11px/16px var(--sans);color:rgba(255,255,255,.66)
 }
-.syncline .dot{width:7px;height:7px;border-radius:999px;background:var(--sage);flex:none}
+.syncline .dot{width:7px;height:7px;border-radius:999px;background:var(--blue-accent);flex:none}
 
 /* ---------- dark panel ---------- */
-.panel-dark{background:var(--ink);color:#F4F1DE}
-.panel-dark .lede,.panel-dark .dim{color:rgba(244,241,222,.78)}
-.panel-dark .eyebrow{color:var(--accent)}
-.panel-dark .eyebrow::after{background:rgba(244,241,222,.22)}
-.panel-dark .rule{background:rgba(244,241,222,.16)}
-.panel-dark .card{background:rgba(244,241,222,.05);border-color:rgba(244,241,222,.18);box-shadow:none;color:#F4F1DE}
-.panel-dark .card .dim{color:rgba(244,241,222,.7)}
-.panel-dark .chip{background:transparent;border-color:rgba(244,241,222,.28);color:rgba(244,241,222,.82)}
+.panel-dark{background:var(--ink);color:#FFFFFF}
+.panel-dark .lede,.panel-dark .dim{color:rgba(255,255,255,.78)}
+.panel-dark .dimmer{color:var(--light-blue)}
+.panel-dark .eyebrow{color:var(--yellow)}
+.panel-dark .eyebrow::after{background:rgba(255,255,255,.22)}
+.panel-dark .rule{background:rgba(255,255,255,.16)}
+.panel-dark .card{background:var(--light-blue);border-color:var(--light-blue);box-shadow:none;color:var(--ink)}
+.panel-dark .card .dim,.panel-dark .card .dimmer{color:var(--ink)}
+.panel-dark .chip{background:transparent;border-color:var(--ink);color:var(--ink)}
 .panel-dark .field{color:var(--text)}  /* white field keeps dark ink on a dark panel */
-.panel-dark .chip-on{background:#F4F1DE;color:var(--ink);border-color:#F4F1DE}
+.panel-dark .chip-on{background:var(--ink);color:#FFFFFF;border-color:var(--ink)}
+.panel-dark .btn-primary{background:var(--yellow);color:var(--ink)}
+.panel-dark .btn-primary:hover{background:var(--yellow-hover);color:var(--ink)}
 
 /* ---------- module grid ---------- */
 .module{
@@ -163,7 +166,7 @@
   background:var(--ink);border:1px solid var(--ink);border-radius:var(--r-card);
   padding:12px 10px;box-shadow:var(--e1)
 }
-.rolerail .badge{background:rgba(244,241,222,.16);color:var(--sand)}
+.rolerail .badge{background:rgba(255,255,255,.16);color:var(--light-blue)}
 
 /* ---------- pricing ---------- */
 .plan{display:flex;flex-direction:column;gap:var(--s3);height:100%}

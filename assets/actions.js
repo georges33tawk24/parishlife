@@ -7,7 +7,8 @@ import { toast, closeOverlays, esc } from './ui.js';
 import * as D from './data.js';
 import * as F from './flows.js';
 import * as CR from './crud.js';
-import { backupJSON, restoreBackup, resetData } from './persist.js';
+import { backupJSON, workflow as serverWorkflow } from './persist.js';
+import { selectedCheckin } from './event-workflows.js';
 
 const L = (en, ar) => t(en, ar);
 const refresh = () => bus.refresh();
@@ -97,16 +98,21 @@ export const VERBS = {
   },
 
   /* sacraments -------------------------------------------------- */
-  'sacr-sign': (btn, id) => {
+  'sacr-sign': async (btn, id) => {
     const s = find(D.SACRAMENTS, id); if (!s) return;
-    s.status = 'registered';
-    closeOverlays(); refresh();
-    ok(L('Signed and issued', 'وُقّعت وصدرت'), L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`));
+    try { await serverWorkflow('issue', id, { verified: true }); closeOverlays(); refresh();
+      ok(L('Signed and issued', 'وُقّعت وصدرت'), L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`));
+    } catch (e) { toast(L('Could not issue certificate', 'تعذّر إصدار الشهادة'), e.message, 'danger'); }
   },
-  'corr-approve': (btn, id) => {
-    const c = find(D.CORRECTIONS, id); if (!c) return;
-    c.status = 'approved'; refresh();
-    ok(L('Correction approved', 'اعتُمد التصحيح'), L('The original entry is preserved beside it.', 'القيد الأصلي محفوظ إلى جانبه.'));
+  'corr-approve': async (btn, id) => {
+    try { await serverWorkflow('correction-approve', id); refresh();
+      ok(L('Correction approved', 'اعتُمد التصحيح'), L('The original entry is preserved beside it.', 'القيد الأصلي محفوظ إلى جانبه.'));
+    } catch (e) { toast(L('Could not approve correction', 'تعذّرت الموافقة على التصحيح'), e.message, 'danger'); }
+  },
+  'corr-reject': async (btn, id) => {
+    try { await serverWorkflow('correction-reject', id); refresh();
+      ok(L('Correction rejected', 'رُفض التصحيح'), L('The original entry remains unchanged.', 'يبقى القيد الأصلي بلا تغيير.'));
+    } catch (e) { toast(L('Could not reject correction', 'تعذّر رفض التصحيح'), e.message, 'danger'); }
   },
 
   /* giving & finance -------------------------------------------- */
@@ -145,12 +151,20 @@ export const VERBS = {
     const ar = el?.querySelector('#arname')?.value?.trim();
     const lat = el?.querySelector('#latname')?.value?.trim();
     if (!ar || !lat) { toast(L('Both names are required', 'الاسمان مطلوبان'),
-      L('The Arabic name is what a certificate prints; the Latin one is the search key.',
+      L('The Arabic name is what a certificate prints; the English one is the search key.',
         'الاسم العربي هو ما تطبعه الشهادة، واللاتيني مفتاح البحث.'), 'warning'); return; }
     const id = 'p' + Date.now().toString(36);
     D.PEOPLE.unshift({ id, lat, ar, town: 'Hadath', townAr: 'الحدث', rite: 'Maronite',
       status: 'member', phone: el?.querySelector('#newphone')?.value?.trim() || '—',
       born: el?.querySelector('input[type=date]')?.value || '1990-01-01', hh: null, tags: [] });
+    el?.querySelectorAll('input[id^="newgroup-"]:checked').forEach(input => {
+      const gid = input.id.slice('newgroup-'.length), group = find(D.GROUPS, gid);
+      if (!group) return;
+      const detail = D.GROUP_DETAIL[gid] || (D.GROUP_DETAIL[gid] = { roster: [], assistant: null, roles: [], requests: [], meetings: [], posts: [], files: [] });
+      detail.roster ||= [];
+      if (!detail.roster.some(r => r.p === id)) detail.roster.push({ p: id, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 });
+      group.members = detail.roster.length;
+    });
     if (D.PHOTOS.new) { D.PHOTOS[id] = D.PHOTOS.new; delete D.PHOTOS.new; }
     closeOverlays(); refresh();
     document.querySelector(`#view tr[data-ri-p="${id}"]`)?.classList.add('flash');
@@ -166,18 +180,13 @@ export const VERBS = {
     ok(L('Marked as not a duplicate', 'عُلّم كغير مكرّر'), L('They will not be suggested again.', 'لن يُقترحا مجدداً.'),
        { action: { label: L('Undo', 'تراجع'), fn: () => { D.DUPLICATES.splice(+i, 0, d); refresh(); } } });
   },
-  'transfer-approve': (btn, id) => {
-    const tr = find(D.TRANSFERS, id); if (!tr) return;
-    tr.status = 'approved'; refresh();
-    ok(L('Transfer approved', 'اعتُمد الانتقال'), L('The historical link to the old parish is kept.', 'الرابط التاريخي بالرعية السابقة محفوظ.'));
-  },
   restore: (btn, id) => F.restorePerson(id),
 
 
   /* groups ------------------------------------------------------ */
   'join-approve': (btn, pid) => {
     const gid = (S.route === 'groups' && S.params[0]) || 'g1', g = D.groupInfo(gid); g.requests = g.requests.filter(r => r.p !== pid);
-    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 }); const grp = D.group(gid); if (grp) grp.members += 1; }
+    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 }); const grp = D.group(gid); if (grp && S.role !== 'leader') grp.members += 1; }
     refresh(); ok(L('Added to the group', 'أُضيف إلى المجموعة'), L('They are on the roster and will be messaged.', 'أصبح على اللائحة وستصله الرسائل.'));
   },
   'join-decline': (btn, pid) => {
@@ -204,11 +213,12 @@ export const VERBS = {
   /* check-in ---------------------------------------------------- */
   checkout: (btn, pid) => {
     const p = D.person(pid);
-    D.CHECKIN.rows = D.CHECKIN.rows.filter(r => r.p !== pid);
-    D.CHECKIN.present -= 1;
+    const active=selectedCheckin();if(!active)return;
+    active.rows = active.rows.filter(r => r.p !== pid);
+    active.present = active.rows.length;
     refresh();
-    ok(L('Checked out', 'سُجّل الخروج'), L(`${p ? p.lat : ''} released to their guardian, and it is in the log.`,
-      `${p ? p.ar : ''} سُلّم إلى وليّ أمره، وسُجّل ذلك.`));
+    ok(L('Checked out', 'سُجّل الخروج'), L(`${p ? p.lat : ''} was removed from this event’s present roster.`,
+      `أُزيل ${p ? p.ar : ''} من لائحة الحاضرين لهذا الحدث.`));
   },
 
   /* communication ----------------------------------------------- */
@@ -252,24 +262,13 @@ export const VERBS = {
 
   /* create, edit and delete any record kind registered in crud.js ------ */
   'hh-view':      (b, v) => { S.ui.hhView = v; refresh(); },
+  'request-filter': (b, v) => { S.ui.requestFilter = v; refresh(); },
   'wh-toggle':    (b, i) => { const w = D.WEBHOOKS[+i]; if (!w) return; w.active = b.checked; refresh();
                     ok(w.active ? L('Webhook on', 'الخطّاف مفعّل') : L('Webhook paused', 'الخطّاف متوقّف'), w.url); },
   'auto-toggle':  (b, i) => { const a = D.AUTOMATIONS[+i]; if (!a) return; a.active = b.checked; refresh();
                     ok(a.active ? L('Automation on', 'الأتمتة مفعّلة') : L('Automation paused', 'الأتمتة متوقّفة'), L(a.what || a.name || '', a.whatAr || a.ar || '')); },
-  /* the parish lives in this browser: a backup file moves it, reset starts again ---- */
-  'data-export':  () => { download(`parishlife-backup-${new Date().toISOString().slice(0, 10)}.json`, backupJSON(), 'application/json');
-                    ok(L('Backup downloaded', 'نُزّلت النسخة الاحتياطية'), L('Keep it somewhere safe; it holds the whole parish.', 'احفظها في مكان آمن؛ فيها الرعية كلها.')); },
-  'data-import':  () => { const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'application/json,.json' });
-                    inp.addEventListener('change', async () => {
-                      const f = inp.files[0]; if (!f) return;
-                      try { restoreBackup(await f.text()); } catch { return toast(L('That file is not a ParishLife backup', 'هذا الملف ليس نسخة احتياطية من «حياة الرعية»'), L('Choose a file downloaded from this page.', 'اختر ملفاً نُزّل من هذه الصفحة.'), 'danger'); }
-                      ok(L('Backup restored', 'استُرجعت النسخة'), L('Loading it now…', 'جارٍ تحميلها…')); setTimeout(() => location.reload(), 700);
-                    });
-                    inp.click(); },
-  'data-reset':   () => F.confirmAction({ title: L('Reset to the sample parish?', 'العودة إلى الرعية النموذجية؟'), danger: true, cta: L('Reset', 'إعادة الضبط'),
-                    body: L('Everything added, edited or deleted in this browser is replaced by the original sample data. Download a backup first if you want to keep it.',
-                            'كل ما أُضيف أو عُدّل أو حُذف في هذا المتصفّح يُستبدل بالبيانات النموذجية الأصلية. نزّل نسخة احتياطية أولاً إن أردت الاحتفاظ بها.'),
-                    then: () => { resetData(); location.reload(); } }),
+  'data-export': () => { download(`parishlife-snapshot-${new Date().toISOString().slice(0, 10)}.json`, backupJSON(), 'application/json');
+    ok(L('Data snapshot downloaded', 'نُزّلت صورة البيانات'), L('An administrator manages database backups and restores.', 'يدير المسؤول النسخ الاحتياطية لقاعدة البيانات واستعادتها.')); },
   'rec-new':      (b, kind) => CR.create(kind),
   'book-room':    (b, vid) => CR.create('reservation', { venue: vid }),
   'res-filter':   (b, f) => { S.ui.resFilter = f; refresh(); },
@@ -279,15 +278,16 @@ export const VERBS = {
 
   /* flows: every one opens a designed surface and completes for real */
   compose:        (b, a) => F.compose(a || 'all'),
-  greet:          (b, i) => { const x = D.ANNIVERSARIES[+i] || D.ANNIVERSARIES[0];
+  greet:          (b, i) => { const x = D.anniversaryItems()[+i]; if (!x) return;
                     F.compose('all', { title: L('Anniversary greeting', 'تهنئة بالذكرى'),
                       subject: `${x.years} years — ${x.couple}`,
-                      body: `Dear ${x.couple}, the parish of Saint Elias celebrates ${x.years} years of your marriage with you.`,
-                      bodyAr: `الأعزّاء ${x.ar}، تحتفل رعية مار الياس معكم بمرور ${x.years} سنة على زواجكم.` }); },
+                      body: `Dear ${x.couple}, our parish remembers your ${x.kind} anniversary with you.`,
+                      bodyAr: `الأعزّاء ${x.ar}، تحتفل رعيتنا معكم بذكرى ${x.kind}.` }); },
   remind:         (b, a) => F.remind(a || 'rota'),
   broadcast:      () => F.broadcast(),
   invite:         (b, a) => F.invite(a || 'rota'),
   'rota-fill':    (b, a) => F.invite('rota', a),
+  'rota-remove':  (b, a) => F.rotaRemove(a),
   'rota-swap':    (b, a) => F.rotaSwap(b, a),
   share:          (b, a) => F.share({ title: a || document.title }),
   'share-cert':   () => F.share({ title: L('Certificate', 'شهادة'), text: L('Your certificate from Saint Elias', 'شهادتك من مار الياس') }),
@@ -373,10 +373,6 @@ export const VERBS = {
   'archive-specimen': () => toast(L('Georges Haddad was archived', 'أُرشف جورج حدّاد'),
                     L('Removed from lists and messaging. Records kept.', 'أُزيل من اللوائح والمراسلة. والسجلات محفوظة.'), '',
                     { action: { label: L('Undo', 'تراجع'), fn: () => ok(L('Restored', 'استُرجع')) } }),
-  'note-save':    (b, pid) => { const ta = document.getElementById('pnote'); const body = ta?.value.trim();
-                    if (!body) { toast(L('Write the note first', 'اكتب الملاحظة أولاً'), '', 'warning'); return; }
-                    D.NOTES.unshift({ id: 'nt' + Date.now(), p: pid, at: '4 Oct 2026', body, bodyAr: body });
-                    refresh(); ok(L('Note saved', 'حُفظت الملاحظة'), L('Priest only.', 'للكاهن فقط.')); },
   page:           (b, a) => { S.ui.peoplePage = Math.max(0, S.ui.peoplePage + (a === 'next' ? 1 : -1)); refresh(); },
   'pdf':          () => { toast(L('Choose “Save as PDF” in the print dialog', 'اختر «حفظ كـPDF» في نافذة الطباعة'), '', 'success'); setTimeout(() => window.print(), 400); },
 
@@ -385,7 +381,7 @@ export const VERBS = {
                     { title: ids.length === 1 ? L('Message 1 person', 'مراسلة شخص واحد') : L(`Message ${ids.length || 14} people`, `مراسلة ${ids.length || 14} أشخاص`) }); },
   'bulk-group':   b => F.bulkGroup(b, picked()),
   'bulk-export':  () => { const ids = picked();
-                    const rows = [['Latin name', 'Arabic name', 'Town', 'Phone', 'Status'],
+                    const rows = [['English name', 'Arabic name', 'Town', 'Phone', 'Status'],
                       ...(ids.length ? ids : D.PEOPLE.slice(0, 14).map(p => p.id)).map(D.person).filter(Boolean)
                         .map(x => [x.lat, x.ar, x.town, x.phone, x.status])];
                     download(`parishlife-selected-${rows.length - 1}.csv`, csv(rows));

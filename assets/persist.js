@@ -1,81 +1,78 @@
-/* The parish is kept in this browser — there is no server.
-   Every change the interface makes goes through the arrays and objects in
-   data.js. After each change the whole set is written to localStorage, and on
-   start it is read back into those same objects before anything renders, so a
-   record you add, edit or delete is still there after a reload. */
+/* Shared objects remain the view model; SQLite is the authoritative store. */
 import * as D from './data.js';
-
-const KEY = 'pl-data';
-const VERSION = 1;   // bump only if data.js changes shape so much that an old save cannot be read
-const REV = 3;       // bump when data.js gains fields that an existing save should pick up (see migrate)
-/* sample values that were wrong in an earlier REV: [collection, id, field, wrong, right] — only replaced if still wrong */
-const FIXES = [['MUSIC', 'm6', 'title', 'Salamun Lak\u0650', 'Salamun Laki']];
-const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
-const revive = (k, v) => typeof v === 'string' && ISO.test(v) ? new Date(v) : v;
+import { session, parishAPI } from './api.js';
 const KEYS = Object.keys(D).filter(k => k !== 'TODAY' && D[k] && typeof D[k] === 'object' && !(D[k] instanceof Date));
-
-/** Copy a saved parish into the live objects, in place, so every module that imported them sees it. */
-function apply(saved) {
-  for (const k of KEYS) {
-    if (!(k in saved.d)) continue;                    // a collection added since the save keeps its defaults
-    const cur = D[k], val = saved.d[k];
-    if (Array.isArray(cur)) cur.splice(0, cur.length, ...val);
-    else { Object.keys(cur).forEach(x => delete cur[x]); Object.assign(cur, val); }
-  }
-}
-
-/* Once per REV: records the save shares with the sample data (same id) take any field the sample
-   has and the save lacks — a new relationship, a new flag — without touching what the user changed. */
-function migrate(saved) {
-  const fill = (to, from) => { for (const k of Object.keys(from)) if (!(k in to)) to[k] = structuredClone(from[k]); };
-  for (const k of KEYS) {
-    const seed = D[k], was = saved.d[k];
-    if (!was) continue;
-    if (Array.isArray(seed) && Array.isArray(was)) {
-      const byId = new Map(seed.filter(x => x && typeof x === 'object' && x.id).map(x => [x.id, x]));
-      was.forEach(x => { if (x && typeof x === 'object' && byId.has(x.id)) fill(x, byId.get(x.id)); });
-    } else if (!Array.isArray(seed) && typeof was === 'object') fill(was, seed);
-  }
-  for (const [k, id, f, wrong, right] of FIXES) { const x = saved.d[k]?.find?.(r => r.id === id); if (x?.[f] === wrong) x[f] = right; }
-  saved.rev = REV;
-}
-
-export function hydrate() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY), revive);
-    if (saved?.v === VERSION && saved.d) { if (saved.rev !== REV) migrate(saved); apply(saved); return true; }
-  } catch { /* storage blocked or unreadable: start from the sample parish */ }
-  return false;
-}
-
-const snapshot = () => ({ v: VERSION, rev: REV, at: new Date().toISOString(), d: Object.fromEntries(KEYS.map(k => [k, D[k]])) });
-
+const snapshot = () => JSON.parse(JSON.stringify(Object.fromEntries(KEYS.map(k => [k, D[k]]))));
+let baseline = {}, running = null, again = false, lastSaved = null, recovery = null;
 export let saveFailed = false;
-let frozen = false;   // set just before a reload that must not write the old parish back (reset, restore)
+function applyKey(k, value) {
+  if (Array.isArray(D[k])) {
+    const existing = new Map(D[k].filter(x => x && typeof x === 'object' && x.id != null).map(x => [x.id, x]));
+    D[k].splice(0, D[k].length, ...value.map(x => {
+      const old = x && typeof x === 'object' ? existing.get(x.id) : null;
+      if (!old) return x;
+      Object.keys(old).forEach(field => delete old[field]); Object.assign(old, x); return old;
+    }));
+  } else { Object.keys(D[k]).forEach(x => delete D[k][x]); Object.assign(D[k], value); }
+}
+export function applyData(data) {
+  for (const k of KEYS) {
+    const value = data[k] ?? (Array.isArray(D[k]) ? [] : {});
+    applyKey(k, value);
+  }
+  if (typeof D.RATE.setOn === 'string') D.RATE.setOn = new Date(D.RATE.setOn);
+}
+export async function hydrate() {
+  if (session.user?.role === 'bishop') {
+    applyData({ PARISHES: session.parishes, PARISH: { name: 'Archdiocese oversight', nameAr: 'إشراف الأبرشية', town: 'Read-only', townAr: 'للقراءة فقط', rite: '', riteAr: '' } });
+    baseline = snapshot(); saveFailed = false; return true;
+  }
+  const data = await parishAPI('state');
+  applyData(data.d); session.revision = data.revision;
+  baseline = snapshot(); saveFailed = false;
+  return true;
+}
 export function persist() {
-  if (frozen) return true;
-  try { localStorage.setItem(KEY, JSON.stringify(snapshot())); saveFailed = false; }
-  catch { saveFailed = true; }                        // private mode or quota: the session still works in memory
-  return !saveFailed;
+  if (session.user?.role === 'bishop') return Promise.resolve(true);
+  if (!session.user || !session.parishId) return Promise.resolve(false);
+  again = true;
+  if (running) return running;
+  running = Promise.resolve().then(async () => {
+    try {
+      while (again) {
+        again = false;
+        const current = snapshot();
+        const changes = Object.fromEntries(KEYS.filter(k => JSON.stringify(current[k]) !== JSON.stringify(baseline[k])).map(k => [k, current[k]]));
+        if (!Object.keys(changes).length) continue;
+        const data = await parishAPI('state', 'PUT', { revision: session.revision, changes });
+        session.revision = data.revision;
+        const changedDuringSave = JSON.stringify(snapshot()) !== JSON.stringify(current);
+        baseline = JSON.parse(JSON.stringify(data.d));
+        if (!changedDuringSave) {
+          for (const k of KEYS) if (JSON.stringify(current[k]) !== JSON.stringify(data.d[k])) applyKey(k, data.d[k]);
+        }
+        else again = true;
+        lastSaved = new Date().toISOString();
+      }
+      saveFailed = false; return true;
+    } catch (error) {
+      saveFailed = true; again = false; recovery = snapshot();
+      try { await hydrate(); } catch { applyData(baseline); }
+      saveFailed = true;
+      document.dispatchEvent(new CustomEvent('parish-save-error', { detail: error.message }));
+      return false;
+    } finally { running = null; }
+  });
+  return running;
 }
-
-export function savedAt() {
-  try { return JSON.parse(localStorage.getItem(KEY))?.at || null; } catch { return null; }
+export const recoveryJSON = () => JSON.stringify({ v: 2, parish: session.parishId, d: recovery }, null, 2);
+export const savedAt = () => lastSaved;
+export const savedSize = () => JSON.stringify(baseline).length;
+export const backupJSON = () => JSON.stringify({ v: 2, parish: session.parishId, at: new Date().toISOString(), d: snapshot() }, null, 2);
+export function restoreBackup() { throw new Error('Restore requires an administrator-reviewed database migration. Browser backups cannot replace approved records.'); }
+export function resetData() { throw new Error('Server records cannot be reset from the browser.'); }
+export async function workflow(action, id, extra = {}) {
+  if (!await persist()) throw new Error('Resolve the pending save before continuing.');
+  await parishAPI('workflow', 'POST', { action, id, revision: session.revision, ...extra });
+  await hydrate();
 }
-
-/** A backup file is the same snapshot, so it can be read back with restoreBackup. */
-export const backupJSON = () => JSON.stringify(snapshot(), null, 1);
-
-export function restoreBackup(text) {
-  const saved = JSON.parse(text, revive);
-  if (saved?.v !== VERSION || !saved.d || typeof saved.d !== 'object' || !Array.isArray(saved.d.PEOPLE)) throw new Error('not a ParishLife backup');
-  frozen = true;
-  localStorage.setItem(KEY, JSON.stringify(saved));
-}
-
-export function resetData() {
-  frozen = true;
-  try { localStorage.removeItem(KEY); } catch { /* nothing saved */ }
-}
-
-export const savedSize = () => { try { return (localStorage.getItem(KEY) || '').length; } catch { return 0; } };

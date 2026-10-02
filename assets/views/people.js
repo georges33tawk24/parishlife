@@ -1,5 +1,4 @@
-/* Module 2 — People and households, plus the register hygiene tools the
-   roadmap asks for: duplicates, import, transfers and controlled archival. */
+/* Module 2 — people, households, duplicates, import and controlled archival. */
 import { t, isAr, num, fmtDate, usd, matches } from '../i18n.js';
 import { is, canSee, go, S, bus } from '../store.js';
 import { icon, pageHead, sectionH, panel, who, status, amount, pill, esc, table, wireTables, empty,
@@ -9,10 +8,13 @@ import * as C from '../components.js';
 import * as CR from '../crud.js';
 import * as F from '../flows.js';
 import { download, wireActions } from '../actions.js';
+import { persist } from '../persist.js';
+import { readAddressCascade } from '../geography.js';
+import * as D from '../data.js';
 import { PEOPLE, ARCHIVED, PHOTOS, HOUSEHOLDS, GROUPS, SACRAMENTS, PLEDGES, BATCH, PERSON_EXTRA, DUPLICATES,
-         IMPORT_PREVIEW, TRANSFERS, VOLUNTEERS, TODAY, person, initials } from '../data.js';
+         IMPORT_PREVIEW, VOLUNTEERS, TODAY, FAMILIES, BRANCHES, GROUP_DETAIL, NOTES, FUNDS, person, initials } from '../data.js';
 
-const label = p => isAr() ? p.ar : p.lat;
+const label = p => p?.lat || p?.ar || '';
 const relLabel = (m, h) => t(...F.RELS.find(r => r[0] === F.relOf(m, h)).slice(1));
 
 /* The household drawn as a family tree: parents above the couple, brothers and sisters beside
@@ -21,7 +23,8 @@ function familyTree(h, focus) {
   const ms = h.members.map(person).filter(Boolean), by = r => ms.filter(m => F.relOf(m, h) === r);
   if (!ms.length) return empty('family', t('No one in this household yet', 'لا أحد في هذه العائلة بعد'), t('Add the first member.', 'أضف الفرد الأول.'));
   const head = by('head')[0], spouses = by('spouse'), spouse = spouses[0];
-  const parents = by('parent'), sibs = by('sibling'), kids = by('child'), grand = by('grandchild');
+  const parents = [...by('parent'), ...by('father'), ...by('mother')], sibs = by('sibling'),
+    kids = [...by('child'), ...by('son'), ...by('daughter')], grand = by('grandchild');
   const side = [...by('guardian'), ...by('relative'), ...spouses.slice(1)];
   const short = m => ({ head: t('Head', 'ربّ العائلة') })[F.relOf(m, h)] || relLabel(m, h);
   const node = m => `<a class="ft-node ${m.id === focus ? 'me' : ''}" href="#/person/${m.id}/family">
@@ -47,10 +50,41 @@ function familyTree(h, focus) {
       <div class="ft-row">${side.map(node).join('')}</div></div>` : ''}</div>`;
 }
 const hh = id => HOUSEHOLDS.find(h => h.id === id);
-const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', Latin: 'لاتيني', Syriac: 'سرياني' };
+const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', 'Roman Catholic': 'لاتيني', Syriac: 'سرياني' };
 const riteLabel = r => t(r, RITE_AR[r] || r);
+const filteredPeople = () => PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status))
+  && (!S.ui.peopleTown || x.town === S.ui.peopleTown) && (!S.ui.peopleRite || x.rite === S.ui.peopleRite)
+  && (!S.ui.peopleEnv || hh(x.hh)?.envelope)
+  && matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, S.ui.peopleQ || ''));
+const csvCell = value => `"${String(value ?? '').replace(/"/g,'""')}"`;
+function peopleExport() {
+  const selected = [...document.querySelectorAll('#view tr[data-ri-p] [data-row]:checked')].map(c=>c.closest('tr').dataset.riP);
+  const options = [['english','English name','الاسم الإنكليزي'],['arabic','Arabic name','الاسم العربي'],['phone','Phone','الهاتف'],
+    ['town','Town','البلدة'],['rite','Rite','الطقس'],['status','Status','الحالة'],['household','Household','العائلة'],
+    ['envelope','Offering-envelope identifier','رمز مظروف العطاء'],['birth','Date of birth','تاريخ الولادة']];
+  openModal({title:t('Export people','تصدير المؤمنين'),sub:t('Choose the records and fields in this CSV file.','اختر السجلات والحقول لهذا الملف.'),
+    body:`<div class="formrow"><label class="label" for="ex_scope">${t('Scope','النطاق')}</label><select class="select" id="ex_scope">
+      ${selected.length ? `<option value="selected">${t(`Selected people on this page (${selected.length})`,`المحدّدون في هذه الصفحة (${selected.length})`)}</option>` : ''}
+      <option value="filtered">${t(`Current filtered results (${filteredPeople().length})`,`نتائج المرشّح الحالي (${filteredPeople().length})`)}</option>
+      <option value="all">${t(`All active people (${PEOPLE.length})`,`جميع المؤمنين النشطين (${PEOPLE.length})`)}</option></select></div>
+      <div class="label" style="margin:16px 0 8px">${t('Fields to include','الحقول المطلوبة')}</div>
+      <div class="choice-grid">${options.map(([key,en,ar],i)=>`<label class="row"><input type="checkbox" data-export-field="${key}" ${i<6?'checked':''}><span>${t(en,ar)}</span></label>`).join('')}</div>`,
+    foot:`<button class="btn btn-secondary" data-close>${t('Cancel','إلغاء')}</button><button class="btn btn-primary" id="export-confirm">${t('Download CSV','تنزيل CSV')}</button>`,
+    onMount(el){el.querySelector('#export-confirm').addEventListener('click',()=>{
+      const chosen=[...el.querySelectorAll('[data-export-field]:checked')].map(c=>c.dataset.exportField);
+      if (!chosen.length) return toast(t('Choose at least one field','اختر حقلاً واحداً على الأقل'),'','warning');
+      const scope=el.querySelector('#ex_scope').value;
+      const rows=(scope==='all'?PEOPLE:scope==='filtered'?filteredPeople():PEOPLE.filter(p=>selected.includes(p.id)));
+      const values={english:p=>p.lat,arabic:p=>p.ar,phone:p=>p.phone,town:p=>p.town,rite:p=>p.rite,status:p=>p.status,
+        household:p=>hh(p.hh)?.name||'',envelope:p=>hh(p.hh)?.envelope||'',birth:p=>p.born};
+      download(`parishlife-people-${scope}.csv`,[chosen.map(k=>csvCell(options.find(x=>x[0]===k)[1])).join(','),
+        ...rows.map(p=>chosen.map(k=>csvCell(values[k](p))).join(','))].join('\r\n'));
+      closeOverlays();toast(t('People exported','صُدّر المؤمنون'),`${rows.length} ${t('records','سجلّاً')}`,'success');
+    });}
+  });
+}
 const TABS = () => [['', 'All people', 'كل المؤمنين'], ['duplicates', 'Duplicates', 'التكرارات', DUPLICATES.length],
-              ['import', 'Import', 'استيراد'], ['transfers', 'Transfers', 'الانتقالات', TRANSFERS.length],
+              ['import', 'Import', 'استيراد'],
               ['archived', 'Archived', 'المؤرشفون', ARCHIVED.length]];
 
 /* ---------------- list ---------------- */
@@ -59,19 +93,18 @@ export function people(tab = '') {
     crumbs: [{ label: t('Records', 'السجلات'), href: '#/people' }, { label: t('People', 'المؤمنون') }],
     title: t('Parishioners', 'المؤمنون'),
     sub: `<span dir="ltr" class="tnum">${num(PEOPLE.length)}</span> ${t(`records · ${HOUSEHOLDS.length} households · updated today`, `سجلاً · ${HOUSEHOLDS.length} عائلة · حُدّثت اليوم`)}`,
-    actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${t('Export', 'تصدير')}</button>
+    actions: `<button class="btn btn-secondary" id="people-directory">${icon('print',17)}${t('Print directory','طباعة الدليل')}</button>
+      <button class="btn btn-secondary" id="people-export">${icon('export', 17)}${t('Export people', 'تصدير المؤمنين')}</button>
       ${C.splitBtn(t('New parishioner', 'مؤمن جديد'), 'newp')}`
   }) + tabBar('people', TABS(), tab);
 
   if (tab === 'duplicates') return head + duplicates();
   if (tab === 'import') return head + importView();
-  if (tab === 'transfers') return head + transfers();
   if (tab === 'archived') return head + archived();
 
   /* Real pagination over what is loaded — ten rows a page, as a secretary scans a page at a time. */
   const q = S.ui.peopleQ || '', town = S.ui.peopleTown || '', rite = S.ui.peopleRite || '';
-  const visible = PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status)) && (!town || x.town === town) && (!rite || x.rite === rite)
-    && (!S.ui.peopleEnv || hh(x.hh)?.envelope) && matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, q));
+  const visible = filteredPeople();
   const PER = 10, pages = Math.max(1, Math.ceil(visible.length / PER));
   S.ui.peoplePage = Math.min(S.ui.peoplePage, pages - 1);
   const from = S.ui.peoplePage * PER, pageRows = visible.slice(from, from + PER);
@@ -80,7 +113,7 @@ export function people(tab = '') {
     detail: `<div class="grid g3" style="gap:20px">
         <dl class="dl"><dt>${t('Household', 'العائلة')}</dt><dd>${hh(p.hh) ? esc(t(hh(p.hh).name, hh(p.hh).ar)) : '—'}</dd>
           <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono">+961 ${p.phone}</dd></dl>
-        <dl class="dl"><dt>${t('Groups', 'المجموعات')}</dt><dd>${p.tags.slice(0, 2).join(', ') || '—'}</dd>
+        <dl class="dl"><dt>${t('Groups', 'المجموعات')}</dt><dd>${GROUPS.filter(g => GROUP_DETAIL[g.id]?.roster?.some(r => r.p === p.id)).map(g => esc(t(g.name, g.ar))).join(', ') || '—'}</dd>
           <dt>${t('Born', 'الولادة')}</dt><dd class="mono">${p.born}</dd></dl>
         <div><a class="btn btn-secondary btn-dense" href="#/person/${p.id}">${t('Open record', 'فتح السجل')}</a></div>
       </div>`,
@@ -103,8 +136,9 @@ export function people(tab = '') {
         ${[...new Map(PEOPLE.map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => `<option value="${esc(en)}" ${town === en ? 'selected' : ''}>${esc(t(en, ar))}</option>`).join('')}</select>
       <select class="select" style="width:auto" id="prite" aria-label="${t('Rite', 'الطقس')}"><option value="">${t('All rites', 'كل الطقوس')}</option>
         ${[...new Set(PEOPLE.map(x => x.rite))].sort().map(r => `<option value="${esc(r)}" ${rite === r ? 'selected' : ''}>${esc(riteLabel(r))}</option>`).join('')}</select>
-      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" style="margin-inline-start:auto">${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Envelope holders', 'أصحاب المظاريف')}</button>
+      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" style="margin-inline-start:auto">${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
     </div>
+    ${S.ui.peopleEnv ? `<p class="help" style="margin-bottom:12px">${t('A numbered giving envelope belongs to a household. It connects counted gifts and statements to that household; its members are listed for lookup, not as individual donors.', 'المظروف المرقّم للعطاء يتبع العائلة المنزلية. يربط التقدمات وكشوفها بها؛ ويظهر أفرادها للبحث لا لأن كل فرد متبرّع.')}</p>` : ''}
     ${table({
       pick: true,
       cols: [{ label: t('Name', 'الاسم'), sort: true }, { label: t('Household', 'العائلة'), cls: 'hide-md', sort: true },
@@ -134,13 +168,14 @@ export function personMenu(anchor, pid) {
     { label: t('Edit record', 'تعديل السجل'), icon: 'edit', fn: () => F.personEdit(pid) },
     { label: t('Message', 'مراسلة'), icon: 'msg', fn: () => F.compose(pid) },
     { label: t('Find duplicates', 'البحث عن تكرار'), icon: 'family', fn: () => go('people/duplicates') },
-    { label: t('Certificate', 'شهادة'), icon: 'doc', sub: [
+    ...(canSee('sacraments') ? [{ label: t('Certificate', 'شهادة'), icon: 'doc', sub: [
       { label: t('Arabic — A4', 'عربي — A4'), fn: () => cert('arabic') },
       { label: t('English — A4', 'إنكليزي — A4'), fn: () => cert('english') },
-      { label: t('Bilingual — A4', 'ثنائي — A4'), fn: () => cert('bilingual') }] },
-    { label: t('Archive', 'أرشفة'), icon: 'trash', fn: () => { F.archivePeople([pid]); if (S.route === 'person') go('people'); } },
+      { label: t('Bilingual — A4', 'ثنائي — A4'), fn: () => cert('bilingual') }] }] : []),
+    ...(ARCHIVED.includes(p)?[{ label:t('Restore to active list','استرجاع إلى اللائحة النشطة'),icon:'box',fn:()=>F.restorePerson(pid) }]:
+      [{ label: t('Archive — hide from active list', 'أرشفة — إخفاء من اللائحة النشطة'), icon: 'box', fn: () => { F.archivePeople([pid]); if (S.route === 'person') go('people'); } }]),
     { sep: true },
-    { label: t('Delete permanently', 'حذف نهائي'), icon: 'trash', danger: true, fn: () => deleteGuard(p) }
+    { label: t('Delete permanently — cannot be undone', 'حذف نهائي — لا تراجع'), icon: 'trash', danger: true, fn: () => deleteGuard(p) }
   ], { width: 230 });
 }
 
@@ -148,29 +183,49 @@ export function personMenu(anchor, pid) {
 /** Typed confirmation before a permanent delete. dry: the style-guide specimen, which
     shows the whole flow but leaves the register untouched. */
 export function deleteGuard(p, { dry = false } = {}) {
+  const mentions = (value, id) => value === id || (Array.isArray(value) && value.some(x=>mentions(x,id))) ||
+    (value && typeof value === 'object' && Object.entries(value).some(([key, item])=>key===id||mentions(item,id)));
+  const excluded=new Set(['PEOPLE','ARCHIVED','PERSON_EXTRA','PHOTOS','PREFS','HOUSEHOLDS','GROUP_DETAIL','NOTES','SACRAMENTS','PLEDGES','BATCH']);
+  const otherLinks=Object.entries(D).filter(([key,value])=>!excluded.has(key)&&typeof value==='object'&&value!==null&&mentions(value,p.id)).length+
+    PEOPLE.concat(ARCHIVED).filter(other=>other.id!==p.id&&mentions(other,p.id)).length;
+  const links=[
+    [t('Sacrament records','سجلات الأسرار'),SACRAMENTS.filter(s=>s.person===p.id).length],
+    [t('Households','العائلات'),HOUSEHOLDS.filter(h=>h.members.includes(p.id)).length],
+    [t('Group memberships','عضويات المجموعات'),Object.values(GROUP_DETAIL).filter(d=>d.roster?.some(r=>r.p===p.id)).length],
+    [t('Pastoral items','بنود رعوية'),NOTES.filter(n=>n.p===p.id).length],
+    [t('Offering and pledge records','سجلات العطاء والتعهد'),PLEDGES.filter(x=>x.p===p.id).length+BATCH.lines.filter(x=>x.p===p.id).length],
+    [t('Other linked records','سجلات مرتبطة أخرى'),otherLinks]
+  ];
+  const blocked=!dry&&links.some(([,count])=>count);
   openModal({
-    title: t('Permanently delete this record?', 'حذف هذا السجل نهائياً؟'),
-    sub: t('This cannot be undone. You will lose:', 'لا يمكن التراجع. ستفقد:'),
-    body: `<div class="stack">${[[t('Sacrament records', 'سجلات الأسرار'), String(SACRAMENTS.filter(s => s.person === p.id).length)],
-        [t('Contributions since 2019', 'المساهمات منذ ٢٠١٩'), '148 · $3,420'], [t('Attendance entries', 'قيود الحضور'), '211'],
-        [t('Pastoral notes', 'ملاحظات رعوية'), '6']].map(([a, b]) => `<div class="listrow" style="padding-inline:0">
+    title: blocked?t('Cannot permanently delete this linked record','لا يمكن حذف هذا السجل المرتبط نهائياً'):t('Permanently delete this record?', 'حذف هذا السجل نهائياً؟'),
+    sub: blocked?t('Archive it to remove it from active lists while preserving its history.','أرشفه لإزالته من اللوائح النشطة مع الحفاظ على تاريخه.'):
+      t('This cannot be undone. Review the record before deleting.','لا يمكن التراجع. راجع السجل قبل حذفه.'),
+    body: `<div class="stack">${links.map(([a, b]) => `<div class="listrow" style="padding-inline:0">
         <span class="grow">${esc(a)}</span><b class="mono">${esc(b)}</b></div>`).join('')}</div>
-      <div class="formrow" style="margin-top:16px"><label class="label">${t('Type', 'اكتب')} <b>${esc(p.lat)}</b> ${t('to confirm', 'للتأكيد')}</label>
+      ${blocked?'':`<div class="formrow" style="margin-top:16px"><label class="label">${t('Type', 'اكتب')} <b>${esc(p.lat)}</b> ${t('to confirm', 'للتأكيد')}</label>
         <input class="input" id="dg_in" autocomplete="off"></div>
-      <span class="help help-error" id="dg_help">${t('The name does not match yet.', 'الاسم لا يطابق بعد.')}</span>`,
+      <span class="help help-error" id="dg_help">${t('The name does not match yet.', 'الاسم لا يطابق بعد.')}</span>`}`,
     foot: `<button class="btn btn-secondary" data-close>${t('Keep record', 'الاحتفاظ بالسجل')}</button>
-      <button class="btn btn-danger" id="dg_go" disabled style="margin-inline-start:auto">${t('Delete permanently', 'حذف نهائي')}</button>`,
+      ${blocked?'':`<button class="btn btn-danger" id="dg_go" disabled style="margin-inline-start:auto">${t('Delete permanently', 'حذف نهائي')}</button>`}`,
     onMount(el) {
+      if(blocked)return;
       const inp = el.querySelector('#dg_in'), b = el.querySelector('#dg_go'), h = el.querySelector('#dg_help');
       inp.addEventListener('input', () => {
         const okk = inp.value.trim() === p.lat; b.disabled = !okk;
         h.classList.toggle('help-error', !okk); h.classList.toggle('help-ok', okk);
         h.textContent = okk ? t('Match.', 'مطابق.') : t('The name does not match yet.', 'الاسم لا يطابق بعد.');
       });
-      b.addEventListener('click', () => {
+      b.addEventListener('click', async () => {
+        b.disabled=true;
         closeOverlays();
         if (dry) return toast(t('Confirmed', 'تمّ التأكيد'), t('Style-guide specimen — the register is untouched.', 'نموذج من دليل التصميم — السجل لم يُمَسّ.'));
-        PEOPLE.splice(PEOPLE.indexOf(p), 1);
+        const source=PEOPLE.includes(p)?PEOPLE:ARCHIVED;
+        const index=source.indexOf(p);
+        if(index<0)return toast(t('Record changed','تغيّر السجل'),t('Reload and review the current record before deleting.','أعد التحميل وراجع السجل الحالي قبل الحذف.'),'warning');
+        source.splice(index, 1);
+        delete PERSON_EXTRA[p.id];delete PHOTOS[p.id];
+        if(!await persist())return;
         if (S.route === 'person') go('people'); else bus.refresh();
         toast(t('Record deleted', 'حُذف السجل'), p.lat, 'danger');
       });
@@ -180,7 +235,12 @@ export function deleteGuard(p, { dry = false } = {}) {
 
 people.mount = host => {
   C.wire(host);
-  host.querySelector('#perm')?.addEventListener('click', permDeletion);
+  host.querySelector('#people-export')?.addEventListener('click', peopleExport);
+  host.querySelector('#people-directory')?.addEventListener('click', printPeopleDirectory);
+  host.querySelectorAll('[data-delete-archived]').forEach(button=>button.addEventListener('click',()=>{
+    const archived=ARCHIVED.find(person=>person.id===button.dataset.deleteArchived);
+    if(archived)deleteGuard(archived);
+  }));
   wireTables(host, {
     onBulk(n) {
       const h = host.querySelector('#bulkhost');
@@ -198,7 +258,7 @@ people.mount = host => {
     { label: t('New parishioner', 'مؤمن جديد'), icon: 'people', fn: newPersonDrawer },
     { label: t('New household', 'عائلة جديدة'), icon: 'family', fn: () => CR.create('household') },
     { label: t('Import CSV', 'استيراد CSV'), icon: 'export', fn: () => go('people/import') },
-    { label: t('New certificate request', 'طلب شهادة جديد'), icon: 'doc', fn: () => go('forms/runs') }
+    ...(canSee('requests') ? [{ label: t('New certificate request', 'طلب شهادة جديد'), icon: 'doc', fn: () => go('requests') }] : [])
   ], { width: 240 }));
   host.querySelector('[data-filter]')?.addEventListener('click', e => {
     const btn = e.currentTarget, current = S.ui.peopleStatus || ['member', 'visitor'];
@@ -309,92 +369,30 @@ function importView() {
     </div></div>`;
 }
 
-/* ---------------- transfers ---------------- */
-function transfers() {
-  return `<div class="tabbody">
-    ${table({
-      cols: [{ label: t('Person', 'الشخص') }, { label: t('From', 'من'), cls: 'hide-sm' }, { label: t('To', 'إلى'), cls: 'hide-sm' },
-             { label: t('Effective', 'اعتباراً من'), cls: 'hide-md' }, { label: t('Status', 'الحالة'), cls: 'shrink' }, { label: '', cls: 'shrink' }],
-      rows: TRANSFERS.map(tr => ({ cells: [
-        who(person(tr.p)),
-        `<span class="dim">${esc(t(tr.from, tr.fromAr))}</span>`,
-        `<span class="dim">${esc(t(tr.to, tr.toAr))}</span>`,
-        `<span class="mono">${fmtDate(tr.effective)}</span>`,
-        status(tr.status),
-        tr.status === 'awaiting-approval'
-          ? `<button class="btn btn-primary btn-dense" data-act="transfer-approve:${tr.id}">${t('Approve', 'موافقة')}</button>` : ''
-      ]}))
-    })}
-    <p class="t-caption dim" style="margin-top:16px">${t(
-      'A transfer keeps the historical link to the old parish, so a certificate issued there still resolves. Sacramental records never move; a reference does.',
-      'الانتقال يحفظ الرابط التاريخي بالرعية السابقة، فتبقى الشهادة الصادرة عنها صالحة. سجلات الأسرار لا تنتقل، بل ينتقل مرجع إليها.')}</p></div>`;
-}
-
 /* ---------------- archived ---------------- */
 function archived() {
-  const until = d => { const x = new Date(d); x.setDate(x.getDate() + 30); return x.toISOString().slice(0, 10); };
   return `<div class="tabbody">
-    ${C.inlineAlert('info', t('Archived records are restorable for 30 days', 'السجلات المؤرشفة قابلة للاسترجاع ٣٠ يوماً'),
-      t('After that a permanent deletion has to be requested and reviewed. Sacramental records are never deleted.',
-        'بعدها يجب طلب حذف نهائي ومراجعته. سجلات الأسرار لا تُحذف أبداً.'))}
+    ${C.inlineAlert('info', t('Archived records remain restorable', 'تبقى السجلات المؤرشفة قابلة للاسترجاع'),
+      t('Archive removes a person from active lists and preserves linked history. Permanent deletion requires an unlinked record and typed confirmation.',
+        'تزيل الأرشفة الشخص من اللوائح النشطة وتحفظ السجلات المرتبطة به. يتطلّب الحذف النهائي سجلاً بلا روابط وتأكيداً بكتابة الاسم.'))}
     ${table({
       cols: [{ label: t('Name', 'الاسم') }, { label: t('Archived', 'أُرشف') }, { label: t('By', 'بواسطة'), cls: 'hide-sm' },
-             { label: t('Restorable until', 'قابل للاسترجاع حتى'), cls: 'hide-sm' }, { label: '', cls: 'shrink' }],
+             { label: '', cls: 'shrink' }],
       rows: ARCHIVED.map(p => ({ cells: [
-        `<b>${esc(isAr() ? p.ar : p.lat)}</b>${p.deletionRequested ? ` ${pill(t('Deletion requested', 'طُلب الحذف'), 'danger')}` : ''}`,
+        `<a href="#/person/${esc(p.id)}"><b>${esc(isAr() ? p.ar : p.lat)}</b></a>`,
         `<span class="mono dim">${fmtDate(p.archived)}</span>`,
         `<span class="dim">${esc(isAr() ? person(p.archivedBy)?.ar || '—' : person(p.archivedBy)?.lat || '—')}</span>`,
-        `<span class="mono">${fmtDate(until(p.archived))}</span>`,
-        `<button class="btn btn-secondary btn-dense" data-act="restore:${p.id}">${t('Restore', 'استرجاع')}</button>`
+        `<span class="row" style="gap:6px"><button class="btn btn-secondary btn-dense" data-act="restore:${p.id}">${t('Restore', 'استرجاع')}</button>
+          <button class="btn btn-danger-quiet btn-dense" data-delete-archived="${esc(p.id)}">${t('Review deletion', 'مراجعة الحذف')}</button></span>`
       ]})),
-      empty: empty('people', t('Nobody is archived', 'لا أحد مؤرشف'), t('Archive someone from their row menu; they can be restored here for 30 days.', 'أرشف شخصاً من قائمة صفّه؛ ويمكن استرجاعه هنا خلال ٣٠ يوماً.'))
+      empty: empty('people', t('Nobody is archived', 'لا أحد مؤرشف'), t('Archive someone from their row menu; they can be restored here.', 'أرشف شخصاً من قائمة صفّه؛ ويمكن استرجاعه هنا.'))
     })}
-    ${ARCHIVED.length ? panel(t('Permanent deletion', 'الحذف النهائي'), `
-      <p class="t-body dim" style="font-size:14px;line-height:22px">${t(
-        'Permanent deletion is a reviewed request, not a button. The reviewer is shown exactly what would be lost before they can confirm.',
-        'الحذف النهائي طلب يُراجَع، لا زرّ. ويُعرَض على المراجع بالضبط ما سيُفقَد قبل أن يؤكّد.')}</p>
-      <button class="btn btn-danger-quiet" style="margin-top:14px" id="perm">${icon('trash', 17)}${t('See what a deletion would remove', 'اعرض ما سيحذفه')}</button>`) : ''}</div>`;
-}
-
-/* Permanent deletion of an archived record is a reviewed request: show what would go,
-   what the registers keep, and send it to the priest rather than deleting on the spot. */
-function permDeletion() {
-  const who = ARCHIVED.filter(p => !p.deletionRequested);
-  if (!who.length) return toast(t('Every archived record already has a request', 'لكل سجل مؤرشف طلب أصلاً'), t('The priest reviews them.', 'يراجعها الكاهن.'));
-  openModal({
-    title: t('What a deletion would remove', 'ما سيحذفه الحذف النهائي'),
-    sub: t('Nothing is removed from here. The request goes to the parish priest, who sees this same list.',
-           'لا يُحذف شيء من هنا. يذهب الطلب إلى كاهن الرعية ويرى اللائحة نفسها.'),
-    body: `<div class="formrow"><label class="label" for="pd_who">${t('Archived record', 'السجل المؤرشف')}</label>
-        <select class="select" id="pd_who">${who.map((p, i) => `<option value="${i}">${esc(isAr() ? p.ar : p.lat)}</option>`).join('')}</select></div>
-      <div class="stack">${[
-        [t('Profile, contact details and household link', 'الملف وبيانات الاتصال والرابط العائلي'), t('Removed', 'يُحذف'), 'danger'],
-        [t('Group memberships and attendance', 'الانتساب للمجموعات والحضور'), t('Removed', 'يُحذف'), 'danger'],
-        [t('Giving history', 'سجل التقدمات'), t('Kept, anonymised', 'يُحفظ بلا اسم'), 'warning'],
-        [t('Sacramental records', 'سجلات الأسرار'), t('Kept — never deleted', 'تُحفظ — لا تُحذف أبداً'), 'success']]
-        .map(([a, b, tone]) => `<div class="listrow" style="padding-inline:0"><span class="grow">${esc(a)}</span>${pill(b, tone)}</div>`).join('')}</div>
-      <p class="help" style="margin-top:12px">${t('Giving stays in the accounts so the books still balance; only the name is removed.',
-        'تبقى التقدمات في الحسابات كي يبقى الميزان صحيحاً؛ يُزال الاسم فقط.')}</p>
-      <div style="margin-top:16px">${C.checkRow(t('The person, or their family, asked for this in writing', 'طلب الشخص أو عائلته ذلك كتابةً'), { id: 'pd_ok' })}</div>`,
-    foot: `<button class="btn btn-secondary" data-close>${t('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-danger" id="pd_go" disabled style="margin-inline-start:auto">${t('Request deletion', 'طلب الحذف')}</button>`,
-    onMount(el) {
-      const ok = el.querySelector('#pd_ok'), go_ = el.querySelector('#pd_go');
-      ok.addEventListener('change', () => { go_.disabled = !ok.checked; });
-      go_.addEventListener('click', () => {
-        const p = who[+el.querySelector('#pd_who').value];
-        p.deletionRequested = true;
-        closeOverlays(); bus.refresh();
-        toast(t('Deletion requested', 'طُلب الحذف'), t(`${p.lat} · sent to Fr. Antoine for review`, `${p.ar} · أُرسل إلى الأب أنطوان للمراجعة`), 'success',
-          { action: { label: t('Undo', 'تراجع'), fn: () => { delete p.deletionRequested; bus.refresh(); } } });
-      });
-    }
-  });
+    </div>`;
 }
 
 /* ---------------- person detail ---------------- */
-const PTABS = pid => [['', 'Profile', 'الملف'], ['family', 'Family', 'العائلة'], ['sacraments', 'Sacraments', 'الأسرار', SACRAMENTS.filter(x => x.person === pid).length],
-               ['attendance', 'Attendance', 'الحضور'], ['giving', 'Giving', 'التقدمات'],
+const PTABS = pid => [['', 'Profile', 'الملف'], ['family', 'Family', 'العائلة'], ['groups', 'Groups', 'المجموعات'], ['sacraments', 'Sacraments', 'الأسرار', SACRAMENTS.filter(x => x.person === pid).length],
+               ['attendance', 'Group attendance', 'حضور المجموعات'], ['giving', 'Giving', 'التقدمات'],
                ['notes', 'Notes', 'ملاحظات'], ['files', 'Files', 'ملفات'], ['consent', 'Consent', 'الموافقات']];
 
 export function personView(id, tab = '') {
@@ -404,7 +402,7 @@ export function personView(id, tab = '') {
     `<a class="btn btn-primary" href="#/people">${t('Back to people', 'العودة إلى المؤمنين')}</a>`);
 
   const house = hh(p.hh), x = PERSON_EXTRA[p.id] || {};
-  const tabs = PTABS(p.id).filter(tb => (tb[0] !== 'giving' || canSee('giving')) && (tb[0] !== 'notes' || is('priest')));
+  const tabs = PTABS(p.id).filter(tb => (tb[0] !== 'giving' || canSee('giving')) && (tb[0] !== 'notes' || is('priest')) && (tb[0] !== 'groups' || canSee('groups')) && (tb[0] !== 'sacraments' || canSee('sacraments')));
 
   const head = `<div class="pagehead"><div class="entityhead" style="width:100%">
       <span style="margin-top:22px;display:flex">${avatar(p, 'avatar-xl')}</span>
@@ -413,7 +411,7 @@ export function personView(id, tab = '') {
         <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(label(p))}
           ${status(p.status)}<span class="pill">${esc(riteLabel(p.rite))}</span></h1>
         <div class="meta"><span style="font-family:${isAr() ? 'var(--sans)' : 'var(--arabic)'}">${esc(isAr() ? p.lat : p.ar)}</span>
-          ${house ? ` · ${t('Envelope', 'مظروف')} <span class="mono">${house.envelope}</span>` : ''} · ${esc(t(p.town, p.townAr))}</div>
+          ${house?.envelope ? ` · ${t('Offering-envelope identifier', 'رمز مظروف العطاء')} <span class="mono">${esc(house.envelope)}</span>` : ''} · ${esc(t(p.town, p.townAr))}</div>
       </div>
       <div class="acts"><button class="btn btn-secondary" data-act="compose:${p.id}">${icon('msg', 17)}${t('Message', 'مراسلة')}</button>
         <button class="btn btn-secondary" data-act="print">${icon('print', 17)}${t('Print card', 'طباعة بطاقة')}</button>
@@ -426,9 +424,8 @@ export function personView(id, tab = '') {
     '': () => `<div class="splitview">
       <div class="stack" style="gap:16px">
         ${panel(t('Record', 'السجل'), `<dl class="dl">
+          <dt>${t('English name', 'الاسم الإنكليزي')}</dt><dd>${esc(p.lat)}</dd>
           <dt>${t('Arabic name', 'الاسم العربي')}</dt><dd style="font-family:var(--arabic);font-size:16px">${esc(p.ar)}</dd>
-          <dt>${t('Transliteration', 'الحرف اللاتيني')}</dt><dd>${esc(p.lat)}</dd>
-          <dt>${t('Preferred name', 'الاسم المفضّل')}</dt><dd>${esc(x.preferred || p.lat.split(' ')[0])}</dd>
           <dt>${t('Born', 'الولادة')}</dt><dd class="mono" dir="ltr">${p.born}</dd>
           <dt>${t('Rite', 'الطقس')}</dt><dd>${esc(riteLabel(p.rite))}</dd>
           <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono" dir="ltr">${p.phone === '—' ? '—' : '+961 ' + p.phone}</dd>
@@ -439,10 +436,13 @@ export function personView(id, tab = '') {
           <dt>${t('Directory', 'الدليل')}</dt><dd>${x.directory ? t('Listed, by consent', 'مدرَج بموافقته') : t('Not listed', 'غير مدرَج')}</dd>
         </dl>`)}
         ${panel(t('Skills and important dates', 'المهارات والتواريخ المهمّة'), `
-          <div class="row" style="gap:6px;flex-wrap:wrap">${(x.skills || ['—']).map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-secondary btn-dense" id="edit-profile-extra">${icon('edit',15)}${t('Edit skills and dates','تعديل المهارات والتواريخ')}</button></div>
+          <h4 class="t-ui">${t('Skills','المهارات')}</h4>
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${(x.skills || []).length ? x.skills.map(s => `<span class="chip">${esc(s)}</span>`).join('') : `<span class="dim">${t('No skills recorded.','لا مهارات مسجّلة.')}</span>`}</div>
           <div class="divider"></div>
+          <h4 class="t-ui">${t('Important dates','التواريخ المهمّة')}</h4>
           ${(x.dates || []).map(([en, ar, d]) => `<div class="listrow" style="padding-inline:0">
-            <span class="grow"><b>${esc(t(en, ar))}</b></span><span class="mono dim">${fmtDate(d)}</span></div>`).join('')
+            <span class="grow"><b>${esc(t(en, ar))}</b></span><span class="mono dim">${d ? fmtDate(d) : '—'}</span></div>`).join('')
             || `<p class="t-caption dim">${t('No dates recorded.', 'لا تواريخ مسجّلة.')}</p>`}
           ${(x.fields || []).length ? `<div class="divider"></div><div class="ac-group" style="padding-inline:0">${t('Parish fields', 'حقول الرعية')}</div>
             ${x.fields.map(([en, ar, v]) => `<div class="listrow" style="padding-inline:0"><span class="grow">${esc(t(en, ar))}</span><b>${esc(v)}</b></div>`).join('')}` : ''}`)}
@@ -452,14 +452,6 @@ export function personView(id, tab = '') {
           `<a class="listrow" href="#/person/${m.id}">${who(m)}<span class="grow"></span>
             ${m.id === house.head ? pill(t('Head', 'ربّ العائلة'), 'info') : ''}</a>`).join('')
           : empty('family', t('No household', 'لا عائلة'), t('Recorded on their own.', 'مسجّل بمفرده.')), { tight: !!house })}
-        ${panel(t('Activity', 'النشاط'), `<div class="timeline">
-          <div class="tl-item accent"><div class="when">4 Oct 2026 · 19:12</div>
-            <div class="what">${t('Rita Nassar recorded $50.00 in session 214', 'سجّلت ريتا نصّار 50.00$ في الجلسة ٢١٤')}</div></div>
-          <div class="tl-item"><div class="when">2 Oct 2026 · 11:40</div>
-            <div class="what">${t('Baptism certificate printed in Arabic — Book 12, page 84', 'طُبعت إفادة المعمودية بالعربية — دفتر ١٢، صفحة ٨٤')}</div></div>
-          <div class="tl-item"><div class="when">28 Sep 2026</div>
-            <div class="what">${t('Phone number changed from 03 421 880 · by the secretary', 'تغيّر رقم الهاتف من 03 421 880 · بواسطة أمانة السرّ')}</div></div>
-        </div>`)}
       </div></div>`,
 
     family: () => house ? `<div class="splitview"><div>
@@ -502,56 +494,46 @@ export function personView(id, tab = '') {
       }) : empty('sacr', t('No sacramental record', 'لا سجل أسرار'), t('Nothing registered in this parish.', 'لا شيء مسجّل في هذه الرعية.'));
     },
 
-    attendance: () => `<div class="splitview">
-      ${panel(t('Attendance, last 12 months', 'الحضور، آخر ١٢ شهراً'), C.barChart([
-        { label: t('Sunday Mass', 'قدّاس الأحد'), v: 41, max: 52, text: '41 / 52' },
-        { label: t('Feast days', 'الأعياد'), v: 7, max: 9, text: '7 / 9' },
-        { label: t('Parish events', 'أحداث الرعية'), v: 5, max: 11, text: '5 / 11' }]))}
-      <div class="sidecol">${panel(t('Recent', 'الأخيرة'), `
-        ${['4 Oct 2026 · Mass 10:30', '27 Sep 2026 · Mass 10:30', '20 Sep 2026 · Mass 08:00'].map(d =>
-          `<div class="listrow" style="padding-inline:0"><span class="grow mono t-caption">${d}</span>${icon('check', 15, 'dimmer')}</div>`).join('')}`, { tight: true })}</div></div>`,
+    groups: () => {
+      const memberships = new Set(Object.entries(GROUP_DETAIL).filter(([, d]) => d.roster?.some(r => r.p === p.id)).map(([gid]) => gid));
+      return panel(t('Parish groups', 'مجموعات الرعية'), `<div class="row" style="justify-content:flex-end"><button class="btn btn-secondary btn-dense" id="edit-person-groups">${icon('edit',15)}${t('Edit memberships','تعديل العضويات')}</button></div>
+        ${GROUPS.filter(g=>memberships.has(g.id)).map(g=>`<div class="listrow"><b class="grow">${esc(t(g.name,g.ar))}</b><span class="dim">${esc(t(g.cat,g.catAr))}</span></div>`).join('') || `<p class="dim">${t('No group memberships.','لا عضوية في مجموعات.')}</p>`}`, {tight:true});
+    },
+
+    attendance: () => {
+      const entries=GROUPS.flatMap(g=>(GROUP_DETAIL[g.id]?.meetings||[]).filter(m=>m.attendance?.[p.id]).map(m=>({group:g,meeting:m,mark:m.attendance[p.id]})));
+      return panel(t('Group meeting attendance','حضور اجتماعات المجموعات'), entries.length ? table({cols:[{label:t('Group','المجموعة')},{label:t('Meeting','الاجتماع')},{label:t('Date','التاريخ')},{label:t('Attendance','الحضور')}],
+        rows:entries.map(({group,meeting,mark})=>({cells:[esc(t(group.name,group.ar)),esc(t(meeting.title||meeting.topic||'Meeting',meeting.titleAr||meeting.topicAr||'اجتماع')),fmtDate(meeting.date||meeting.d),status(mark)]}))})
+        : empty('groups',t('No group attendance recorded','لا حضور مجموعات مسجّلاً'),t('Attendance is recorded only at group meetings and activities.','يسجّل الحضور فقط في اجتماعات المجموعات وأنشطتها.')),{tight:true});
+    },
 
     giving: () => {
-      const pledge = PLEDGES.find(z => z.p === p.id), gift = BATCH.lines.find(l => l.p === p.id);
+      const pledge = PLEDGES.find(z => z.p === p.id), gifts = BATCH.lines.filter(l => l.p === p.id);
       return `<div class="splitview"><div class="stack" style="gap:16px">
-        ${panel(t('This year', 'هذه السنة'), `<div class="grid g2" style="gap:16px">
-          ${C.kpi({ k: t('Given this year', 'المعطى هذه السنة'), v: usd(1240), sub: 'L.L 110,980,000',
-                    delta: t('+12% vs 2025', '+١٢٪ عن ٢٠٢٥'), spark: [40, 55, 38, 62, 58, 71, 60, 68, 52, 64, 79, 70] })}
-          ${C.kpi({ k: t('Envelope', 'المظروف'), v: house?.envelope ?? '—', sub: t('since 2019', 'منذ ٢٠١٩') })}
-        </div>`)}
+        ${panel(t('Offering-envelope identifier', 'رمز مظروف العطاء'), `<b class="mono">${esc(house?.envelope||'—')}</b>
+          <p class="help">${t('This optional identifier belongs to the household. Membership does not make each person a donor.','هذا الرمز الاختياري يتبع العائلة. انتماء الشخص إليها لا يجعله متبرّعاً.')}</p>`)}
         ${panel(t('Contributions', 'المساهمات'), table({
-          cols: [{ label: t('Date', 'التاريخ') }, { label: t('Fund', 'الصندوق') }, { label: 'USD', cls: 'num' }, { label: '', cls: 'shrink' }],
-          rows: [['2026-10-04', t('General fund', 'الصندوق العام'), 50], ['2026-09-27', t('General fund', 'الصندوق العام'), 50],
-                 ['2026-09-20', t('Church restoration', 'ترميم الكنيسة'), 300]].map(r => ({ cells: [
-            `<span class="mono dim">${fmtDate(r[0])}</span>`, `<span class="dim">${esc(r[1])}</span>`,
-            `<span class="num">${usd(r[2])}</span>`,
-            `<button class="btn btn-secondary btn-dense" data-act="receipt:R-2026-${String(880 + r[2]).slice(-4)}|${p.id}|${r[2]}">${t('Receipt', 'إيصال')}</button>`]}))
+          cols: [{ label: t('Date', 'التاريخ') }, { label: t('Fund', 'الصندوق') }, { label: 'USD', cls: 'num' }, { label: 'L.L', cls: 'num' }],
+          rows: gifts.map(line => ({ cells: [
+            `<span class="mono dim">${fmtDate(BATCH.date)}</span>`, `<span class="dim">${esc(t(FUNDS.find(f=>f.id===line.fund)?.name||line.fund,FUNDS.find(f=>f.id===line.fund)?.ar||line.fund))}</span>`,
+            `<span class="num">${line.usd?usd(line.usd):'—'}</span>`, `<span class="num">${line.lbp?num(line.lbp):'—'}</span>`]})),
+          empty:empty('giving',t('No attributed gifts in the current counting session','لا تقدمات منسوبة في جلسة العدّ الحالية'),
+            t('Only gifts explicitly attributed to this person appear here.','تظهر هنا فقط التقدمات المنسوبة إلى هذا الشخص صراحةً.'))
         }), { tight: true })}
       </div>
       <div class="sidecol">
         ${pledge ? panel(t('Pledge', 'التعهّد'), `<div class="amount" dir="ltr"><span class="usd">${usd(pledge.paid)}</span>
           <span class="lbp">${t('of', 'من')} ${usd(pledge.pledged)}</span></div>
           <span class="meter" style="margin-top:10px"><i style="width:${Math.round(pledge.paid / pledge.pledged * 100)}%"></i></span>`) : ''}
-        ${panel(t('Statement', 'الكشف'), `<p class="t-caption dim">${t(
-          'A yearly statement can be produced in either language. It is a record of what was given, not a tax document.',
-          'يمكن إصدار كشف سنوي بأيّ من اللغتين. وهو سجل بما أُعطي، لا مستند ضريبي.')}</p>
-          <button class="btn btn-secondary btn-dense" style="margin-top:10px" data-act="statement:${p.id}">${icon('doc', 15)}${t('Generate statement', 'إصدار كشف')}</button>`)}
+        ${panel(t('Counting-session statement', 'كشف جلسة العدّ'), `<p class="t-caption dim">${t(
+          'Shows only gifts recorded for this person in the current counting session. It is not a full-year or tax statement.',
+          'يعرض فقط التقدمات المسجّلة لهذا الشخص في جلسة العدّ الحالية. ليس كشف سنة كاملة ولا مستنداً ضريبياً.')}</p>
+          <button class="btn btn-secondary btn-dense" style="margin-top:10px" data-act="statement:${p.id}">${icon('doc', 15)}${t('Download statement', 'تنزيل الكشف')}</button>`)}
       </div></div>`;
     },
 
-    notes: () => `${C.inlineAlert('info', t('Priest only', 'للكاهن فقط'),
-      t('Pastoral notes are separate from staff notes, and the content of a confession is never recorded anywhere in ParishLife.',
-        'الملاحظات الرعوية منفصلة عن ملاحظات الموظفين، ولا يُسجَّل مضمون الاعتراف في أي مكان من «حياة الرعية».'))}
-      <div style="margin-top:16px">${panel(t('Notes', 'الملاحظات'), `
-        <div class="timeline"><div class="tl-item accent"><div class="when">12 Sep 2026</div>
-          <div class="what">${t('Visited at home after the hospital stay. Asked for the parish to remember his mother at Sunday Mass.',
-            'زيارة منزلية بعد الخروج من المستشفى. طلب ذكر والدته في قدّاس الأحد.')}</div></div>
-        <div class="tl-item"><div class="when">3 Jun 2026</div>
-          <div class="what">${t('Council seat renewed for two years.', 'جُدّد مقعده في المجلس سنتين.')}</div></div></div>
-        <div class="divider"></div>
-        ${C.textarea({ label: t('Add a note', 'إضافة ملاحظة'), max: 500, id: 'pnote',
-          help: t('Visible to the priest only.', 'تظهر للكاهن وحده.') })}
-        <button class="btn btn-primary btn-dense" data-act="note-save:${p.id}">${t('Save note', 'حفظ الملاحظة')}</button>`)}</div>`,
+    notes: () => `<div class="tabbody">${panel(t('Pastoral notes', 'الملاحظات الرعوية'),
+      NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`)}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Pastoral Notes.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
 
     files: () => `<div style="max-width:720px">${panel(t('Attachments', 'المرفقات'), `
       ${['Baptism extract 2019.pdf', 'ID card scan.jpg', 'Consent form 2026.pdf'].map((f, i) => `
@@ -563,10 +545,10 @@ export function personView(id, tab = '') {
 
     consent: () => `<div style="max-width:720px">${panel(t('Consent', 'الموافقات'), `
       <div class="stack" style="gap:12px">
-        ${(x.consent || [['Parish announcements on WhatsApp', 'إعلانات الرعية على واتساب', true],
-                          ['Printed parish directory', 'الدليل المطبوع', true],
-                          ['Photos in parish media', 'الصور في وسائل الرعية', false]])
-          .map(([en, ar, on], i) => C.switchRow(t(en, ar), { checked: on, pref: `consent.${p.id}.${i}` })).join('')}
+        ${C.switchRow(t('Parish announcements on WhatsApp','إعلانات الرعية على واتساب'),{checked:x.consent?.[0]?.[2]??false,pref:`consent.${p.id}.0`})}
+        <label class="switch"><input type="checkbox" id="directory-consent" ${x.directory?'checked':''}><span>${t('Printed parish people directory','دليل مؤمني الرعية المطبوع')}</span></label>
+        <p class="help">${t('Includes names in English and Arabic, household, town, and phone only. Changes affect the next printed directory.','يشمل الاسمين الإنكليزي والعربي والعائلة والبلدة والهاتف فقط. تسري التغييرات على الدليل المطبوع التالي.')}</p>
+        ${C.switchRow(t('Photos in parish media','الصور في وسائل الرعية'),{checked:x.consent?.[2]?.[2]??false,pref:`consent.${p.id}.2`})}
       </div>
       <div class="divider"></div>
       <div class="ac-group" style="padding-inline:0">${t('Consent history', 'سجل الموافقات')}</div>
@@ -585,13 +567,80 @@ export function personView(id, tab = '') {
 personView.mount = (host, id) => {
   C.wire(host); wireTables(host);
   host.querySelector('[data-pkebab]')?.addEventListener('click', e => personMenu(e.currentTarget, id));
+  host.querySelector('#edit-person-groups')?.addEventListener('click',()=>editPersonGroups(id));
+  host.querySelector('#edit-profile-extra')?.addEventListener('click',()=>editProfileExtra(id));
+  host.querySelector('#directory-consent')?.addEventListener('change',async e=>{
+    const x=PERSON_EXTRA[id] ||= {};x.directory=e.target.checked;
+    if(x.consent?.[1])x.consent[1][2]=x.directory;
+    if(await persist())toast(t('Directory preference saved','حُفظ خيار الدليل'),'','success');
+    else e.target.checked=!!PERSON_EXTRA[id]?.directory;
+  });
 };
+
+function printPeopleDirectory() {
+  const listed=PEOPLE.filter(p=>PERSON_EXTRA[p.id]?.directory).sort((a,b)=>a.lat.localeCompare(b.lat));
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${t('Parish people directory','دليل مؤمني الرعية')}</title>
+    <style>body{font:14px Arial,sans-serif;margin:28px;color:#3D4161}h1{color:#3D4161}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #DCEEFF}th{background:#DCEEFF}@media print{button{display:none}}</style></head><body>
+    <h1>${t('Parish people directory','دليل مؤمني الرعية')}</h1><p>${t('Only people who opted in are included.','يشمل فقط من وافقوا على الإدراج.')}</p>
+    <table><thead><tr>${['English name','Arabic name','Household','Town','Phone'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
+    ${listed.map(p=>`<tr><td>${esc(p.lat)}</td><td>${esc(p.ar)}</td><td>${esc(hh(p.hh)?.name||'')}</td><td>${esc(p.town||'')}</td><td>${esc(p.phone==='—'?'':p.phone)}</td></tr>`).join('')}</tbody></table>
+    <script>window.onload=()=>window.print()<\/script></body></html>`;
+  const win=window.open('','_blank');
+  if(!win)return toast(t('Allow a print window','اسمح بنافذة الطباعة'),t('Your browser blocked the directory print window.','منع المتصفح نافذة طباعة الدليل.'),'warning');
+  win.document.open();win.document.write(html);win.document.close();
+}
+
+function editPersonGroups(id) {
+  const before=new Set(Object.entries(GROUP_DETAIL).filter(([,d])=>d.roster?.some(r=>r.p===id)).map(([gid])=>gid));
+  openModal({title:t('Edit group memberships','تعديل عضويات المجموعات'),
+    sub:t('Choose groups, then review the changes before saving.','اختر المجموعات ثم راجع التغييرات قبل الحفظ.'),
+    body:`<div class="choice-grid">${GROUPS.map(g=>`<label class="row"><input type="checkbox" value="${g.id}" data-group-choice ${before.has(g.id)?'checked':''}><span>${esc(t(g.name,g.ar))}</span></label>`).join('')}</div>`,
+    foot:`<button class="btn btn-secondary" data-close>${t('Cancel','إلغاء')}</button><button class="btn btn-primary" id="group-review">${t('Review changes','مراجعة التغييرات')}</button>`,
+    onMount(el){el.querySelector('#group-review').addEventListener('click',()=>{
+      const after=new Set([...el.querySelectorAll('[data-group-choice]:checked')].map(x=>x.value));
+      const added=GROUPS.filter(g=>after.has(g.id)&&!before.has(g.id));
+      const removed=GROUPS.filter(g=>before.has(g.id)&&!after.has(g.id));
+      if (!added.length&&!removed.length) {closeOverlays();return;}
+      openModal({title:t('Confirm membership changes','تأكيد تغييرات العضوية'),body:`<p>${t('Add','إضافة')}: ${added.map(g=>esc(t(g.name,g.ar))).join(', ')||'—'}</p>
+        <p>${t('Remove','إزالة')}: ${removed.map(g=>esc(t(g.name,g.ar))).join(', ')||'—'}</p>
+        <p class="help">${t('This changes group rosters; earlier meeting attendance is preserved.','تتغيّر لوائح المجموعات وتبقى سجلات الحضور السابقة محفوظة.')}</p>`,
+        foot:`<button class="btn btn-secondary" data-close>${t('Keep memberships','إبقاء العضويات')}</button><button class="btn btn-primary" id="group-confirm">${t('Save memberships','حفظ العضويات')}</button>`,
+        onMount(confirm){confirm.querySelector('#group-confirm').addEventListener('click',async()=>{
+          for(const g of added){const d=GROUP_DETAIL[g.id] ||= {roster:[],assistant:null,roles:[],requests:[],meetings:[],posts:[],files:[]};d.roster ||= [];
+            if(!d.roster.some(r=>r.p===id))d.roster.push({p:id,role:'Member',roleAr:'عضو',joined:new Date().getFullYear().toString(),att:0});g.members=d.roster.length;}
+          for(const g of removed){const d=GROUP_DETAIL[g.id];if(d){d.roster=d.roster.filter(r=>r.p!==id);g.members=d.roster.length;}}
+          if(!await persist())return;
+          closeOverlays();bus.refresh();toast(t('Memberships saved','حُفظت العضويات'),'','success');
+        });}
+      });
+    });}
+  });
+}
+
+function editProfileExtra(id) {
+  const x=PERSON_EXTRA[id]||{};
+  const dates=x.dates||[];
+  openModal({title:t('Skills and important dates','المهارات والتواريخ المهمّة'),
+    body:`${C.field({label:t('Skills, separated by commas','المهارات، مفصولة بفواصل'),id:'extra-skills',value:(x.skills||[]).join(', ')})}
+      <div class="stack" id="extra-dates">${[...dates, ['', '', '']].map(([en,ar,d],i)=>`<div class="formgrid" data-date-row>
+      ${C.field({label:t('Date label (English)','تسمية التاريخ (إنكليزي)'),value:en||'',id:`extra-en-${i}`})}
+      ${C.field({label:t('Date label (Arabic)','تسمية التاريخ (عربي)'),value:ar||'',id:`extra-ar-${i}`})}
+      ${C.field({label:t('Date','التاريخ'),type:'date',value:d||'',id:`extra-date-${i}`})}</div>`).join('')}</div>`,
+    foot:`<button class="btn btn-secondary" data-close>${t('Cancel','إلغاء')}</button><button class="btn btn-primary" id="extra-save">${t('Save','حفظ')}</button>`,
+    onMount(el){el.querySelector('#extra-save').addEventListener('click',async()=>{
+      const skills=el.querySelector('#extra-skills').value.split(',').map(s=>s.trim()).filter(Boolean);
+      const nextDates=[...el.querySelectorAll('[data-date-row]')].map(row=>[...row.querySelectorAll('input')].map(i=>i.value.trim())).filter(([en,ar,d])=>en||ar||d);
+      if(nextDates.some(([en,ar,d])=>!en||!d))return toast(t('Complete each date label and date','أكمل تسمية كل تاريخ وتاريخه'),'','warning');
+      PERSON_EXTRA[id]={...x,skills,dates:nextDates};
+      if(!await persist())return;
+      closeOverlays();bus.refresh();toast(t('Profile details saved','حُفظت تفاصيل الملف'),'','success');
+    });}
+  });
+}
 
 /* ---------------- households ---------------- */
 export function households() {
-  const open = h => h.head
-    ? `<a class="btn btn-ghost btn-dense" href="#/person/${h.head}/family">${t('Open', 'فتح')}</a>`
-    : `<button class="btn btn-ghost btn-dense" data-act="rec-edit:household|${h.id}">${t('Set the head', 'حدّد ربّ العائلة')}</button>`;
+  const open = h => `<a class="btn btn-ghost btn-dense" href="#/household/${h.id}">${t('Open household', 'فتح العائلة')}</a>`;
   const cards = HOUSEHOLDS.map(h => {
     const members = h.members.map(person).filter(Boolean);
     return `<section class="panel" data-find-item><div class="panel-b">
@@ -599,7 +648,7 @@ export function households() {
         <span class="avatar avatar-lg">${esc(t(h.name, h.ar).slice(0, 2))}</span>
         <div style="flex:1;min-width:0">
           <b style="display:block;font:600 16px/22px var(--sans)">${esc(t(h.name, h.ar))}</b>
-          <small class="t-caption dim">${esc(t(h.town, h.townAr))} · ${t('envelope', 'مظروف')} <span class="mono">${esc(h.envelope || '—')}</span></small>
+          <small class="t-caption dim">${esc(t(h.town, h.townAr))}${h.envelope ? ` · ${t('Offering envelope', 'مظروف العطاء')} <span class="mono">${esc(h.envelope)}</span>` : ''}</small>
         </div>${CR.recBtn('household', h.id)}</div>
       <p class="t-caption dim" style="margin-top:12px">${esc(t(h.address, h.addressAr) || t('No address yet', 'لا عنوان بعد'))}</p>
       <div class="divider"></div>
@@ -610,7 +659,7 @@ export function households() {
       </div></div></section>`;
   }).join('');
   const tableView = table({
-    cols: [{ label: t('Family', 'العائلة'), sort: true }, { label: t('Town', 'البلدة'), cls: 'hide-sm' }, { label: t('Envelope', 'المظروف'), cls: 'shrink' },
+    cols: [{ label: t('Family', 'العائلة'), sort: true }, { label: t('Town', 'البلدة'), cls: 'hide-sm' }, { label: t('Offering envelope', 'مظروف العطاء'), cls: 'shrink' },
            { label: t('Members', 'الأفراد'), cls: 'num' }, { label: '', cls: 'shrink' }],
     rows: HOUSEHOLDS.map(h => ({ attrs: 'data-find-item', cells: [`<b>${esc(t(h.name, h.ar))}</b>`, `<span class="dim">${esc(t(h.town, h.townAr))}</span>`,
       `<span class="mono">${esc(h.envelope || '—')}</span>`, `<span class="num">${h.members.length}</span>`,
@@ -622,8 +671,8 @@ export function households() {
   return `${pageHead({
       crumbs: [{ label: t('Records', 'السجلات') }, { label: t('Households', 'العائلات') }],
       title: t('Households', 'العائلات'),
-      sub: t(`${HOUSEHOLDS.length} households · linked by home and envelope number, not by an assumption about family shape`,
-             `${HOUSEHOLDS.length} عائلة · مرتبطة بالمنزل ورقم المظروف، لا بافتراض شكل العائلة`),
+      sub: t(`${HOUSEHOLDS.length} households · select existing people and enter their shared address once`,
+             `${HOUSEHOLDS.length} عائلة · اختر الأشخاص المسجّلين وأدخل عنوانهم المشترك مرة واحدة`),
       actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${t('Export', 'تصدير')}</button>
         <button class="btn btn-primary" data-act="household-new">${icon('plus', 17)}${t('New household', 'عائلة جديدة')}</button>`
     })}
@@ -634,9 +683,34 @@ export function households() {
         <button aria-pressed="${S.ui.hhView === 'table'}" data-act="hh-view:table">${t('Table', 'جدول')}</button></span>
     </div>
     ${S.ui.hhView === 'table' ? tableView : HOUSEHOLDS.length ? `<div class="gridcards">${cards}</div>` : tableView}
+    <p class="help" style="margin-top:18px">${t('New households reuse existing people. Review suggested surname matches, select several members, and enter one shared address. No people or households are merged automatically. An offering-envelope identifier is optional.','تستخدم العائلات الجديدة أشخاصاً مسجّلين. راجع اقتراحات اسم العائلة، واختر عدة أفراد، وأدخل عنواناً مشتركاً واحداً. لا تُدمج السجلات تلقائياً. رمز مظروف العطاء اختياري.')}</p>
     <div class="find-empty" hidden>${empty('search', t('No household matches', 'لا عائلة مطابقة'), t('Try part of the family name or the envelope number.', 'جرّب جزءاً من اسم العائلة أو رقم المظروف.'))}</div>`;
 }
 households.mount = host => { C.wire(host); wireTables(host); };
+
+export function householdView(id = '') {
+  const h = HOUSEHOLDS.find(x => x.id === id);
+  if (!h) return empty('family', t('Household not found', 'العائلة غير موجودة'),
+    t('This household may have been removed.', 'ربما أزيلت هذه العائلة.'),
+    `<a class="btn btn-primary" href="#/households">${t('Back to households', 'العودة إلى العائلات')}</a>`);
+  const members = h.members.map(person).filter(Boolean);
+  return pageHead({
+    crumbs: [{ label: t('Households', 'العائلات'), href: '#/households' }, { label: t(h.name, h.ar) }],
+    title: t(h.name, h.ar),
+    sub: t(`${members.length} household members`, `${members.length} أفراد`),
+    actions: CR.recBtn('household', h.id)
+  }) + `<div class="splitview"><div class="stack" style="gap:16px">
+    ${panel(t('Members and relationships', 'الأفراد وصلاتهم'), members.map(m =>
+      `<a class="listrow" href="#/person/${m.id}">${who(m)}<span class="grow"></span><span class="dim">${esc(relLabel(m, h))}</span></a>`).join('') ||
+      empty('family', t('No members', 'لا أفراد'), t('Add a member from a person record.', 'أضف فرداً من سجلّه.')), { tight: true })}
+    </div>
+    <div class="sidecol">${panel(t('Household details', 'تفاصيل العائلة'), `<dl class="dl">
+      <dt>${t('Head', 'ربّ العائلة')}</dt><dd>${h.head ? `<a href="#/person/${h.head}">${esc(label(person(h.head)))}</a>` : '—'}</dd>
+      <dt>${t('Giving envelope number', 'رقم مظروف العطاء')}</dt><dd>${esc(h.envelope || '—')}</dd>
+      <dt>${t('Address', 'العنوان')}</dt><dd>${esc(t(h.address, h.addressAr))}</dd>
+      <dt>${t('Town', 'البلدة')}</dt><dd>${esc(t(h.town, h.townAr))}</dd></dl>`)}</div></div>`;
+}
+householdView.mount = host => { C.wire(host); };
 
 /* ---------------- new-person drawer ---------------- */
 export function newPersonDrawer() {
@@ -646,34 +720,64 @@ export function newPersonDrawer() {
     title: t('New parishioner', 'مؤمن جديد'),
     sub: t('Both names are required. The Arabic name is what a certificate prints.',
            'الاسمان مطلوبان. الاسم العربي هو ما تطبعه الشهادة.'),
-    body: `${C.namePair()}${C.riteSelect()}${C.phoneField({ id: 'newphone' })}
-      <div class="formgrid">
-        ${C.field({ label: t('Preferred name', 'الاسم المفضّل'), opt: true, ph: 'Georges' })}
-        ${C.field({ label: t('Date of birth', 'تاريخ الولادة'), type: 'date', value: '1968-03-14' })}
-      </div>
+    body: `${C.namePair()}${C.riteSelect()}${C.phoneField({ id: 'newphone', value:'', required:false })}
+      <div class="formgrid">${C.field({ label: t('Date of birth', 'تاريخ الولادة'), type: 'date', id:'newborn' })}</div>
       <div class="divider"></div>
       <h4 class="t-ui" style="margin-bottom:12px">${t('Address', 'العنوان')}</h4>
       ${C.addressCascade()}
       <div class="divider"></div>
       <div class="formgrid">
-        <div class="formrow"><label class="label">${t('Blood type', 'زمرة الدم')}<span class="opt">${t('(for emergencies)', '(للطوارئ)')}</span></label>
-          <select class="select"><option>—</option><option>O+</option><option>O−</option><option>A+</option><option>B+</option><option>AB+</option></select></div>
+        <div class="formrow"><label class="label" for="newblood">${t('Blood type', 'زمرة الدم')}<span class="opt">${t('(for emergencies)', '(للطوارئ)')}</span></label>
+          <select class="select" id="newblood"><option value="">—</option><option>O+</option><option>O−</option><option>A+</option><option>B+</option><option>AB+</option></select></div>
         <div class="formrow"><label class="label">${t('Language', 'اللغة')}</label>
-          <select class="select"><option>${t('Arabic', 'العربية')}</option><option>${t('English', 'الإنكليزية')}</option><option>${t('French', 'الفرنسية')}</option></select></div>
+          <select class="select" id="newlang"><option value="ar">${t('Arabic', 'العربية')}</option><option value="en">${t('English', 'الإنكليزية')}</option><option value="fr">${t('French', 'الفرنسية')}</option></select></div>
       </div>
-      ${C.chipField(t('Groups', 'المجموعات'), [t('Choir', 'الجوقة')])}
+      <div class="formrow"><label class="label">${t('Assign to existing groups', 'إسناد إلى مجموعات قائمة')}</label><div class="choice-grid">${GROUPS.map(g => `<label class="row"><input type="checkbox" id="newgroup-${g.id}"><span>${esc(t(g.name, g.ar))}</span></label>`).join('')}</div><span class="help">${t('Only existing groups can be assigned during registration.', 'يمكن الإسناد إلى المجموعات القائمة فقط عند التسجيل.')}</span></div>
       ${C.avatarUpload('new')}
       <div class="divider"></div>
       <div class="stack" style="gap:10px">
-        ${C.checkRow(t('Send parish announcements on WhatsApp', 'إرسال إعلانات الرعية على واتساب'), { checked: true })}
-        ${C.checkRow(t('Include in the printed parish directory', 'إدراج في الدليل المطبوع'))}
+        ${C.checkRow(t('Send parish announcements on WhatsApp', 'إرسال إعلانات الرعية على واتساب'), { id:'announce-optin' })}
+        <label class="row"><input type="checkbox" id="directory-optin"><span>${t('Include in the printed parish directory', 'إدراج في دليل الرعية المطبوع')}</span></label>
+        <p class="help">${t('This controls the printed parish people directory: English and Arabic names, household, town, and phone. It does not change private records or other exports.','يتحكّم هذا بدليل مؤمني الرعية المطبوع: الاسمان الإنكليزي والعربي والعائلة والبلدة والهاتف. لا يغيّر السجلات الخاصة أو الصادرات الأخرى.')}</p>
       </div>`,
     foot: `<button class="btn btn-secondary" data-close>${t('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-secondary" data-act="person-add">${t('Save & add next', 'حفظ وإضافة التالي')}</button>
-      <button class="btn btn-primary" data-act="person-add" style="margin-inline-start:auto">${t('Save parishioner', 'حفظ المؤمن')}</button>`,
+      <button class="btn btn-secondary" id="person-save-next">${t('Save & add next', 'حفظ وإضافة التالي')}</button>
+      <button class="btn btn-primary" id="person-save" style="margin-inline-start:auto">${t('Save parishioner', 'حفظ المؤمن')}</button>`,
     onMount(el) {
       C.wire(el);
-      /* wired by data-act */
+      let saving=false;
+      async function save(addNext){
+        if(saving)return;
+        const lat=el.querySelector('#latname')?.value.trim(),ar=el.querySelector('#arname')?.value.trim();
+        if(!lat||!ar)return toast(t('Both names are required','الاسمان مطلوبان'),'','warning');
+        const address=readAddressCascade(el);
+        if((address.governorate||address.district||address.town)&&(!address.governorate||!address.district||!address.town))
+          return toast(t('Complete the address hierarchy','أكمل تسلسل العنوان'),'','warning');
+        saving=true;el.querySelectorAll('#person-save,#person-save-next').forEach(b=>b.disabled=true);
+        const id='p'+Date.now().toString(36);
+        const rec={id,lat,ar,town:address.town||'',townAr:address.townAr||'',rite:el.querySelector('#newrite')?.value||'Maronite',
+          status:'member',phone:el.querySelector('#newphone')?.value.trim()||'—',born:el.querySelector('#newborn')?.value||'',hh:null,tags:[]};
+        PEOPLE.unshift(rec);
+        const announcement=!!el.querySelector('#announce-optin')?.checked,directory=!!el.querySelector('#directory-optin')?.checked;
+        PERSON_EXTRA[id]={address,directory,blood:el.querySelector('#newblood')?.value||'',lang:el.querySelector('#newlang')?.value||'ar',
+          channel:announcement?'whatsapp':'',skills:[],dates:[],consent:[
+            ['Parish announcements on WhatsApp','إعلانات الرعية على واتساب',announcement],
+            ['Printed parish directory','الدليل المطبوع',directory],
+            ['Photos in parish media','الصور في وسائل الرعية',false]]};
+        el.querySelectorAll('input[id^="newgroup-"]:checked').forEach(input=>{
+          const gid=input.id.slice(9),g=GROUPS.find(x=>x.id===gid);
+          const detail=GROUP_DETAIL[gid] ||= {roster:[],assistant:null,roles:[],requests:[],meetings:[],posts:[],files:[]};
+          detail.roster ||= [];if(!detail.roster.some(r=>r.p===id))detail.roster.push({p:id,role:'Member',roleAr:'عضو',joined:new Date().getFullYear().toString(),att:0});
+          if(g)g.members=detail.roster.length;
+        });
+        if(PHOTOS.new){PHOTOS[id]=PHOTOS.new;delete PHOTOS.new;}
+        if(!await persist()){saving=false;el.querySelectorAll('#person-save,#person-save-next').forEach(b=>b.disabled=false);return;}
+        D.PARISH.people=PEOPLE.length;
+        closeOverlays();toast(t('Parishioner saved','حُفظ المؤمن'),`${lat} · ${ar}`,'success');
+        if(addNext){bus.refresh();newPersonDrawer();}else go('person/'+id);
+      }
+      el.querySelector('#person-save').addEventListener('click',()=>save(false));
+      el.querySelector('#person-save-next').addEventListener('click',()=>save(true));
     }
   });
 }

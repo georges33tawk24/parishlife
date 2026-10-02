@@ -1,12 +1,13 @@
 /* Session state and role metadata. Kept out of app.js so views can read the
    current role without importing the router back (and creating a cycle). */
 import { person } from './data.js';
+import { session } from './api.js';
 
 const load = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 export const save = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
 export const S = {
-  role: load('pl-role', 'priest'),
+  role: 'priest',
   collapsed: load('pl-rail', '0') === '1',
   offline: false,
   route: 'dashboard',
@@ -18,12 +19,18 @@ const H = (en, ar) => ['h', en, ar];
 const L = id => ['l', id];
 
 export const ROLES = {
+  bishop: {
+    en:'Bishop', ar:'المطران', who:'p17',
+    noteEn:'Read-only oversight of parishes and their activities.',
+    noteAr:'إشراف للقراءة فقط على الرعايا وأنشطتها.',
+    nav:[L('oversight')]
+  },
   priest: {
     en:'Parish priest', ar:'كاهن الرعية', who:'p17',
-    noteEn:'Full access, and the only role that sees pastoral notes, signs certificates and sets the exchange rate.',
-    noteAr:'صلاحية كاملة، والدور الوحيد الذي يرى الملاحظات الرعوية ويوقّع الشهادات ويضبط سعر الصرف.',
+    noteEn:'Access to assigned parishes, including pastoral notes and certificate approval.',
+    noteAr:'صلاحية للرعايا المعيّنة، بما فيها الملاحظات الرعوية واعتماد الشهادات.',
     nav:[L('dashboard'),
-      H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('notes'),
+      H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'), L('notes'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
       H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'),
@@ -32,10 +39,10 @@ export const ROLES = {
   },
   secretary: {
     en:'Secretary', ar:'أمينة السرّ', who:'p4',
-    noteEn:'People, records, events and messaging. Giving and finance are not in the rail at all — hiding beats greying out.',
+    noteEn:'People, records, events and messaging. Giving and finance do not appear in the rail.',
     noteAr:'المؤمنون والسجلات والأحداث والمراسلة. التقدمات والمالية غائبة كلياً عن الشريط — الإخفاء أفضل من الإطفاء.',
     nav:[L('dashboard'),
-      H('Records','السجلات'), L('people'), L('households'), L('sacraments'),
+      H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
       H('Communicate','التواصل'), L('messaging'), L('notices'), L('portal'),
@@ -68,6 +75,7 @@ export const ROLES = {
 };
 
 export const MOBILE_NAV = {
+  bishop: ['oversight'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],
   treasurer: ['dashboard','giving','finance','reports'],
@@ -75,8 +83,8 @@ export const MOBILE_NAV = {
   volunteer: ['checkin','children']
 };
 
-export const role = () => ROLES[S.role];
-export const me = () => person(role().who);
+export const role = () => ROLES[S.role] || ROLES.priest;
+export const me = () => person(session.user?.person_id || role().who) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
 export const is = (...roles) => roles.includes(S.role);
 export const canSee = id => role().nav.some(n => n[0] === 'l' && n[1] === id);
 export const go = h => { location.hash = h.startsWith('#') ? h : '#/' + h; };

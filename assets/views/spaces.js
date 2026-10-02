@@ -135,7 +135,7 @@ facilities.mount = host => {
       ${['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'].map((h, i) => `
         <div style="display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center;margin-bottom:6px">
           <span class="mono t-caption dim">${h}</span>
-          <span style="height:30px;border-radius:6px;background:${i === 2 || i === 3 ? 'var(--primary-subtle)' : i === 5 ? 'repeating-linear-gradient(135deg,var(--warning-subtle),var(--warning-subtle) 5px,#E9DFC4 5px,#E9DFC4 10px)' : 'var(--surface)'};
+          <span style="height:30px;border-radius:6px;background:${i === 2 || i === 3 ? 'var(--primary-subtle)' : i === 5 ? 'repeating-linear-gradient(135deg,var(--warning-subtle),var(--warning-subtle) 5px,#DCEEFF 5px,#DCEEFF 10px)' : 'var(--surface)'};
             border:1px solid var(--border);display:flex;align-items:center;padding:0 10px;font:500 12px/1 var(--sans);
             color:${i === 2 || i === 3 ? 'var(--primary)' : i === 5 ? 'var(--warning-ink)' : 'var(--text-3)'}">
             ${i === 2 ? L('Parish lunch — approved', 'غداء الرعية — موافَق') : i === 3 ? L('…including cleanup buffer', '…مع وقت التنظيف') :

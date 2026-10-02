@@ -41,10 +41,10 @@ export const avatar = (p, cls = '', key = p?.id) => PHOTOS[key]
   ? `<span class="avatar has-photo ${cls}" style="background-image:url(${PHOTOS[key]})" aria-hidden="true"></span>`
   : `<span class="avatar ${cls}" aria-hidden="true">${esc(initials(p))}</span>`;
 
-/** Bilingual name pair — the Arabic record leads in Arabic, the Latin in English. */
+/** Personal names always show English first, followed by Arabic. */
 export function who(p, { avatarCls = '' } = {}) {
   if (!p) return `<span class="dimmer">—</span>`;
-  const lead = isAr() ? p.ar : p.lat, sub = isAr() ? p.lat : p.ar;
+  const lead = p.lat, sub = p.ar;
   return `<span class="who">${avatar(p, avatarCls)}<span class="truncate">
     <b>${esc(lead)}</b><small>${esc(sub)}</small></span></span>`;
 }
@@ -63,12 +63,14 @@ export const pill = (label, tone = '', mark = true) => {
 const STATUS = {
   approved:      ['Approved', 'موافَق عليه', 'success', 'st-ok'],
   registered:    ['Registered', 'مسجَّل', 'success', 'st-ok'],
+  issued:        ['Issued', 'صدرت', 'success', 'st-ok'],
   accepted:      ['Accepted', 'مقبول', 'success', 'st-ok'],
   sent:          ['Sent', 'أُرسلت', 'success', 'st-sent'],
   paid:          ['Paid', 'مدفوع', 'success', 'st-ok'],
   closed:        ['Closed', 'مقفلة', 'success', 'st-ok'],
   member:        ['Member', 'منتسب', 'success', 'st-ok'],
   ready:         ['Ready', 'جاهز', 'success', 'st-ok'],
+  completed:     ['Completed', 'مكتمل', 'success', 'st-ok'],
   open:          ['Open', 'مفتوحة', 'info', 'st-open'],
   scheduled:     ['Scheduled', 'مجدوَل', 'info', 'st-wait'],
   draft:         ['Draft', 'مسوّدة', 'info', 'st-open'],
@@ -80,6 +82,7 @@ const STATUS = {
   unfilled:      ['Unfilled', 'شاغر', 'warning', 'st-alert'],
   conflict:      ['Conflict', 'تعارض', 'danger', 'st-alert'],
   rejected:      ['Rejected', 'مرفوض', 'danger', 'st-no'],
+  cancelled:     ['Cancelled', 'ملغى', 'danger', 'st-no'],
   declined:      ['Declined', 'اعتذر', 'danger', 'st-no'],
   failed:        ['Failed', 'فشل الإرسال', 'danger', 'st-no']
 };
@@ -87,6 +90,7 @@ export function status(key) {
   const s = STATUS[key];
   return s ? pill(t(s[0], s[1]), s[2], s[3]) : pill(key);
 }
+export const statusLabel = key => STATUS[key] ? t(STATUS[key][0], STATUS[key][1]) : key;
 
 /** USD leads at full size, LBP follows in mono, and the rate travels with it. */
 export function amount(dollars, { showRate = false, cls = '' } = {}) {

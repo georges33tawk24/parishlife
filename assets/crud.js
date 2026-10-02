@@ -9,6 +9,8 @@ import { icon, esc, toast, openDrawer, closeOverlays, openMenu } from './ui.js';
 import * as C from './components.js';
 import * as D from './data.js';
 import { need, confirmAction } from './flows.js';
+import { persist } from './persist.js';
+import { eligibleEvents, eventById } from './event-workflows.js';
 
 const L = (en, ar) => t(en, ar);
 const refresh = () => bus.refresh();
@@ -27,7 +29,7 @@ const towns = () => TOWNS.map(([en, ar]) => [en, en, ar]);
 const pairOf = (opts, v) => opts.find(o => o[0] === v) || opts[0];
 const bool = { get: k => x => x[k] ? 'yes' : 'no', set: k => (x, v) => { x[k] = v === 'yes'; } };
 
-/* a bilingual name: Latin (or English) first, Arabic second; the Arabic falls back to the first when left empty */
+/* A bilingual name: English first, Arabic second. */
 const pair = (k, ak, en, enAr, ar, arAr, { req = true, full = false } = {}) => [
   { k, label: L(en, enAr), req, full },
   { k: ak, label: L(ar, arAr), dir: 'rtl', ar: true, fallback: k, full, opt: true }
@@ -52,17 +54,41 @@ export const ENT = {
   household: {
     list: () => D.HOUSEHOLDS, name: h => L(h.name, h.ar),
     nw: ['New household', 'عائلة جديدة'], ed: ['Edit household', 'تعديل العائلة'], del: ['Delete this household?', 'حذف هذه العائلة؟'],
-    sub: ['Linked by home and envelope number — no shape is assumed.', 'مرتبطة بالمنزل ورقم المظروف — بلا افتراض لشكلها.'],
-    fields: () => [...pair('name', 'ar', 'Family name (Latin)', 'اسم العائلة (لاتيني)', 'Family name (Arabic)', 'اسم العائلة (عربي)'),
-      { k: 'envelope', label: L('Envelope number', 'رقم المظروف'), dir: 'ltr' },
-      { k: 'town', label: L('Town', 'البلدة'), type: 'select', options: towns, set: (x, v) => { x.town = v; x.townAr = pairOf(TOWNS, v)[1]; } },
-      { k: 'head', label: L('Head of household', 'ربّ العائلة'), type: 'select', options: () => [['', 'Not set', 'غير محدّد'], ...people()],
-        set: (x, v) => { x.head = v || null; if (v && !x.members.includes(v)) x.members.push(v); const p = D.person(v); if (p) p.hh = x.id; } },
-      ...pair('address', 'addressAr', 'Address', 'العنوان', 'Address (Arabic)', 'العنوان (عربي)', { req: false })],
-    blank: () => ({ id: uid('h'), name: '', ar: '', head: null, members: [], town: 'Hadath', townAr: 'الحدث',
-      envelope: String(300 + D.HOUSEHOLDS.length).padStart(4, '0'), address: '', addressAr: '' }),
+    sub: ['Select several existing people, enter the shared address once, and optionally add an offering-envelope identifier.', 'اختر عدة أشخاص مسجّلين وأدخل العنوان المشترك مرة واحدة، ويمكن إضافة رمز مظروف العطاء اختيارياً.'],
+    fields: x => [...pair('name', 'ar', 'Household name (English)', 'اسم العائلة (إنكليزي)', 'Household name (Arabic)', 'اسم العائلة (عربي)'),
+      { k: 'envelope', label: L('Offering-envelope identifier (optional)', 'رمز مظروف العطاء (اختياري)'), dir: 'ltr',
+        help: L('Use only if this household receives numbered offering envelopes. Leave blank otherwise.', 'استعمله فقط إذا كانت العائلة تتسلّم مظاريف عطاء مرقّمة؛ وإلا فاتركه فارغاً.') },
+      { k: 'town', label: L('Town', 'البلدة'), type: 'select', req:true,
+        options: () => [['', 'Select town', 'اختر البلدة'], ...(x.town && !TOWNS.some(([v])=>v===x.town)?[[x.town, x.town, x.townAr||x.town]]:[]), ...towns()],
+        set: (record, v) => { record.town = v; record.townAr = TOWNS.find(([name])=>name===v)?.[1] || record.townAr || v; } },
+      ...pair('address', 'addressAr', 'Shared address (English)', 'العنوان المشترك (إنكليزي)', 'Shared address (Arabic)', 'العنوان المشترك (عربي)', { req: false }),
+      { k:'members', label:L('Choose existing members', 'اختر الأفراد المسجّلين'), type:'multi', full:true,
+        help:L('People with the same surname appear first. Review selections; no records are merged automatically.', 'يظهر أصحاب اسم العائلة نفسه أولاً. راجع الاختيارات؛ لا تُدمج السجلات تلقائياً.'),
+        options:()=>D.PEOPLE.filter(p=>!p.hh||p.hh===x.id).sort((a,b)=>Number(b.lat.toLowerCase().includes(x.name.toLowerCase()))-Number(a.lat.toLowerCase().includes(x.name.toLowerCase()))||a.lat.localeCompare(b.lat)).map(p=>[p.id,p.lat,p.ar]),
+        set:(record,v)=>{record.members=[...new Set(v)];} },
+      { k:'head', label:L('Household contact / head (optional)', 'المسؤول عن العائلة (اختياري)'), type:'select', full:true,
+        options:()=>[['','Not set','غير محدّد'], ...x.members.map(id=>D.person(id)).filter(Boolean).map(p=>[p.id,p.lat,p.ar])],
+        set:(record,v)=>{record.head=v||null;} }],
+    blank: () => ({ id: uid('h'), name: '', ar: '', head: null, members: [], family: null, branch: null, town: '', townAr: '',
+      envelope: '', address: '', addressAr: '' }),
     check: (v, x) => v.envelope && D.HOUSEHOLDS.some(h => h !== x && h.envelope === v.envelope)
-      ? ['envelope', L('Another household already has this envelope number', 'رقم المظروف مستعمل لعائلة أخرى')] : null,
+      ? ['envelope', L('Another household already uses this offering-envelope identifier', 'رمز مظروف العطاء مستخدم لعائلة أخرى')]
+      : v.head && !v.members.includes(v.head) ? ['head', L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')] : null,
+    prepare: x => {
+      const selected = new Set(x.members);
+      for (const p of D.PEOPLE) {
+        if (p.hh===x.id && !selected.has(p.id)) { p.hh=null; if (p.rel==='head') p.rel='relative'; p.relativeTo=null; }
+        if (selected.has(p.id)) { p.hh=x.id; p.rel=p.id===x.head?'head':p.rel==='head'?'relative':p.rel||'relative'; if (p.id===x.head) p.relativeTo=null; }
+      }
+    },
+    onMount: el => {
+      const head = el.querySelector('#cf_head'), memberInputs = [...el.querySelectorAll('#cf_members input')];
+      const sync = () => { const keep=head.value, chosen=memberInputs.filter(i=>i.checked);
+        head.innerHTML=`<option value="">${L('Not set','غير محدّد')}</option>`+chosen.map(i=>`<option value="${esc(i.value)}">${esc(D.person(i.value)?.lat||i.value)}</option>`).join('');
+        head.value=chosen.some(i=>i.value===keep)?keep:'';
+      };
+      memberInputs.forEach(i=>i.addEventListener('change',sync)); sync();
+    },
     delNote: ['The people stay in the register; they are simply no longer grouped as a household.',
               'يبقى الأشخاص في السجل؛ لكنهم لا يعودون مجموعين كعائلة.'],
     onDelete: h => { const was = D.PEOPLE.filter(p => p.hh === h.id); was.forEach(p => { p.hh = null; });
@@ -176,7 +202,7 @@ export const ENT = {
   hymn: {
     list: () => D.MUSIC, name: m => L(m.title, m.ar),
     nw: ['New hymn', 'ترنيمة جديدة'], ed: ['Edit hymn', 'تعديل الترنيمة'], del: ['Delete this hymn?', 'حذف هذه الترنيمة؟'],
-    fields: () => [...pair('title', 'ar', 'Title (Latin)', 'العنوان (لاتيني)', 'Title (Arabic)', 'العنوان (عربي)'),
+    fields: () => [...pair('title', 'ar', 'Title (English)', 'العنوان (إنكليزي)', 'Title (Arabic)', 'العنوان (عربي)'),
       ...pair('occasion', 'occasionAr', 'Occasion', 'المناسبة', 'Occasion (Arabic)', 'المناسبة (عربي)', { req: false }),
       { k: 'part', label: L('Part of the liturgy', 'الجزء من الليتورجيا'), type: 'select',
         options: () => ['Entrance', 'Trisagion', 'Offertory', 'Communion', 'Veneration', 'Recessional'].map(x => [x, x]) },
@@ -235,13 +261,18 @@ export const ENT = {
   registration: {
     list: () => D.REGISTRATIONS, name: r => L(r.event, r.eventAr),
     nw: ['New registration form', 'استمارة تسجيل جديدة'], ed: ['Edit registration', 'تعديل التسجيل'], del: ['Delete this registration?', 'حذف هذا التسجيل؟'],
-    fields: () => [...pair('event', 'eventAr', 'Event', 'الحدث', 'Arabic title', 'العنوان بالعربية', { full: true }),
+    sub:['Registration signs people up for one selected event. Check-in records arrival at that same event.','التسجيل يضيف الأشخاص إلى حدث محدّد، والتسجيل عند الباب يثبت وصولهم إلى الحدث نفسه.'],
+    fields: () => [{k:'eventId',label:L('Event','الحدث'),type:'select',req:true,full:true,
+        options:()=>[['', 'Select an event', 'اختر حدثاً'],...eligibleEvents().map(e=>[e.id,`${e.title} · ${e.d} ${e.t}`,`${e.titleAr} · ${e.d} ${e.t}`])]},
       { k: 'cap', label: L('Places', 'المقاعد'), type: 'number', min: 1, req: true },
       { k: 'fee', label: L('Fee (USD)', 'الرسم (دولار)'), type: 'number', min: 0 },
       { k: 'deadline', label: L('Closes', 'يقفل'), type: 'date', req: true },
       { k: 'open', label: L('Open for registration', 'مفتوح للتسجيل'), type: 'select', options: yesNo, get: bool.get('open'), set: bool.set('open') }],
-    blank: () => ({ id: uid('rg'), event: '', eventAr: '', open: true, cap: 40, taken: 0, fee: 0, deadline: '2026-10-31', waiting: 0 }),
-    check: (v, x) => +v.cap < (x.taken || 0) ? ['cap', L(`${x.taken} people are already registered`, `${x.taken} مسجّلون أصلاً`)] : null,
+    blank: () => ({ id: uid('rg'), eventId:'',event: '', eventAr: '', open: true, cap: 40, taken: 0, fee: 0, deadline: '', waiting: 0,fields:[],discounts:[],installments:[] }),
+    check: (v, x) => !eventById(v.eventId)||!eligibleEvents().some(e=>e.id===v.eventId)
+      ? ['eventId',L('Choose an eligible event','اختر حدثاً صالحاً')]
+      : +v.cap < (x.taken || 0) ? ['cap', L(`${x.taken} people are already registered`, `${x.taken} مسجّلون أصلاً`)] : null,
+    prepare:x=>{const event=eventById(x.eventId);x.event=event.title;x.eventAr=event.titleAr;},
     canDelete: r => r.taken > 0 ? L('People have registered. Close it instead, so their records and refunds stay traceable.',
       'هناك مسجّلون. أقفله بدل حذفه كي تبقى سجلاتهم والمبالغ المستردّة قابلة للتتبّع.') : true
   },
@@ -311,13 +342,13 @@ function fieldHTML(f, x) {
       `<option value="${esc(ov)}" ${String(ov) === String(v) ? 'selected' : ''}>${esc(L(en, ar ?? en))}</option>`).join('')}</select></div>`;
   if (f.type === 'textarea') return `<div class="formrow"${span}>${label}
     <textarea class="textarea" id="${id}" rows="5">${esc(v)}</textarea></div>`;
-  if (f.type === 'multi') return `<div class="formrow"${span}>${label}<div class="stack cf-multi" id="${id}" style="gap:8px">
+  if (f.type === 'multi') return `<div class="formrow"${span}>${label}<div class="cf-multi" id="${id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px">
     ${f.options().map(([ov, en, ar]) => `<label class="check"><input type="checkbox" value="${esc(ov)}" ${(raw || []).includes(ov) ? 'checked' : ''}>
-      <span>${esc(L(en, ar ?? en))}</span></label>`).join('') || `<span class="help">${L('Nothing to choose from yet.', 'لا شيء للاختيار بعد.')}</span>`}</div></div>`;
+      <span>${esc(L(en, ar ?? en))}</span></label>`).join('') || `<span class="help">${L('Nothing to choose from yet.', 'لا شيء للاختيار بعد.')}</span>`}</div>${f.help?`<span class="help">${esc(f.help)}</span>`:''}</div>`;
   return `<div class="formrow"${span}>${label}<div class="fieldwrap">
     <input class="input" id="${id}" type="${f.type || 'text'}" value="${esc(v)}" ${f.ph ? `placeholder="${esc(f.ph)}"` : ''}
       ${f.dir ? `dir="${f.dir}"` : ''} ${f.ar ? 'style="font-family:var(--arabic)"' : ''}
-      ${f.type === 'number' ? `inputmode="decimal" min="${f.min ?? 0}" step="any"` : ''} ${f.disabled ? 'disabled' : ''}></div></div>`;
+      ${f.type === 'number' ? `inputmode="decimal" min="${f.min ?? 0}" step="any"` : ''} ${f.disabled ? 'disabled' : ''}></div>${f.help?`<span class="help">${esc(f.help)}</span>`:''}</div>`;
 }
 
 function read(el, fields) {
@@ -377,9 +408,28 @@ function form(kind, x, isNew) {
       <button class="btn btn-primary" id="cf_save">${isNew ? L('Create', 'إنشاء') : L('Save changes', 'حفظ التعديلات')}</button>`,
     onMount(el) {
       C.wire(el);
-      const save = () => {
+      ent.onMount?.(el, x, isNew);
+      const save = async () => {
+        const saveButton = el.querySelector('#cf_save');
+        if (saveButton.disabled) return;
         const vals = read(el, fields);
         if (!valid(el, fields, ent, vals, x)) return;
+        if (kind === 'household') {
+          saveButton.disabled = true;
+          const before = structuredClone(x);
+          apply(ent, x, fields, vals);
+          if (isNew) ent.list().unshift(x);
+          refresh();
+          if (!await persist()) {
+            if (isNew) { const i=ent.list().indexOf(x); if (i>=0) ent.list().splice(i,1); }
+            else { Object.keys(x).forEach(k=>delete x[k]); Object.assign(x,before); }
+            saveButton.disabled = false;
+            return toast(L('Household was not saved','لم تُحفظ العائلة'),L('Review the fields and try again.','راجع الحقول وحاول من جديد.'),'danger');
+          }
+          closeOverlays(); refresh(); flash(kind,keyOf(ent,x));
+          toast(isNew?L('Household created','أُنشئت العائلة'):L('Changes saved','حُفظت التعديلات'),ent.name(x),'success');
+          return;
+        }
         const before = structuredClone(x);
         apply(ent, x, fields, vals);
         closeOverlays();

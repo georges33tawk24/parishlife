@@ -41,7 +41,7 @@ export function messaging(tab = '') {
 
   if (tab === 'templates') return head + `<div class="tabbody">
     <div class="gridcards">${TEMPLATES.map((tp, ti) => `<button class="panel" style="cursor:pointer;text-align:start;border:1px solid var(--border)" data-act="design:${ti}">
-      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--sand);
+      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--light-blue);
         font:600 14px/1 var(--sans);text-align:center;padding:10px">
         <span><span style="display:block;font-size:11px;opacity:.7;letter-spacing:.1em;text-transform:uppercase">${esc(L(PARISH.name, PARISH.nameAr))}</span>
         ${esc(L(tp.name, tp.ar))}</span></div>
@@ -225,7 +225,7 @@ notices.mount = host => {
 };
 
 /* ═══════════ 13 · music ═══════════ */
-const LANG_AR = { Arabic: 'عربي', Syriac: 'سرياني', English: 'إنكليزي', French: 'فرنسي', Latin: 'لاتيني' };
+const LANG_AR = { Arabic: 'عربي', Syriac: 'سرياني', English: 'إنكليزي', French: 'فرنسي', 'Roman liturgical': 'طقسي روماني' };
 const PART_AR = { Entrance: 'الدخول', Trisagion: 'التقديسات', Offertory: 'التقدمة', Communion: 'المناولة', Veneration: 'السجود للصليب', Recessional: 'الختام' };
 
 export function music(id, tab = '') {
@@ -471,7 +471,7 @@ export function portal(tab = '') {
     <div class="sidecol">
       ${panel(L('Phone preview', 'معاينة على الهاتف'), `
         <div style="border:8px solid var(--ink);border-radius:26px;overflow:hidden;background:var(--bg)">
-          <div style="background:var(--ink);color:var(--sand);padding:14px;text-align:center">
+          <div style="background:var(--ink);color:var(--light-blue);padding:14px;text-align:center">
             <div style="font:600 15px/20px var(--arabic)">${esc(PARISH.nameAr)}</div>
             <div style="font:400 10px/14px var(--sans);opacity:.7">${esc(PARISH.town)}</div></div>
           <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
