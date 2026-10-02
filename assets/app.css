@@ -423,6 +423,42 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .attendance-table .attendance-cell{min-width:118px}
 .attendance-table tbody tr:hover .attendance-name,.attendance-table tbody tr:hover td{background:var(--primary-subtle)}
 @media (max-width:700px){.attendance-table .attendance-name{min-width:140px;max-width:180px}.attendance-table .attendance-cell{min-width:104px}}
+
+/* Ministry meetings and attendance use the same clear status language. */
+.meeting-overview{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:20px 0 24px}
+.meeting-overview h2{font:600 21px/28px var(--sans);margin:0 0 4px}
+.meeting-overview p{margin:0}
+.meeting-section{display:grid;gap:12px;margin-bottom:28px}
+.meeting-section-title{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.meeting-section-title h3{font:600 15px/22px var(--sans);margin:0}
+.meeting-card{display:grid;grid-template-columns:76px minmax(0,1fr);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--e1);overflow:hidden}
+.meeting-date{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:16px 8px;background:var(--yellow-subtle);border-inline-end:1px solid var(--yellow);color:var(--brown-dark)}
+.meeting-date strong{font:650 27px/30px var(--sans)}
+.meeting-date span{font:600 12px/18px var(--sans);text-transform:uppercase;letter-spacing:.04em}
+.meeting-content{min-width:0;padding:16px 18px}
+.meeting-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.meeting-heading h3{font:600 17px/24px var(--sans);margin:2px 0 4px}
+.meeting-eyebrow{font:600 11px/16px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--brown);margin:0}
+.meeting-time{display:flex;align-items:center;gap:6px;margin:0;color:var(--text-2);font:500 13px/20px var(--sans)}
+.meeting-heading-actions{display:flex;align-items:center;gap:8px}
+.meeting-summary{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.meeting-details{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--primary-subtle);font:400 12px/18px var(--sans)}
+.meeting-details summary{cursor:pointer;font-weight:600}
+.meeting-details p{margin:8px 0 0}
+.meeting-rsvp{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--primary-subtle);font:500 12px/18px var(--sans)}
+.meeting-rsvp b{font:650 15px/18px var(--sans)}
+.meeting-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+.attendance-legend{display:flex;gap:6px;flex-wrap:wrap}
+.attendance-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid var(--border);background:var(--primary-subtle);color:var(--primary);white-space:nowrap;font:600 12px/18px var(--sans)}
+.attendance-tag b{font:700 13px/18px var(--sans)}
+.attendance-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.attendance-present{background:#E8F7ED;border-color:#82C89B;color:#17633A}
+.attendance-excused{background:#FFF3CC;border-color:#E5BC39;color:#754F08}
+.attendance-absent{background:#FDE9E8;border-color:#E89A96;color:#9D2823}
+.attendance-table .attendance-cell[data-status="present"]{background:#E8F7ED;border-color:#82C89B;color:#17633A}
+.attendance-table .attendance-cell[data-status="excused"]{background:#FFF3CC;border-color:#E5BC39;color:#754F08}
+.attendance-table .attendance-cell[data-status="absent"]{background:#FDE9E8;border-color:#E89A96;color:#9D2823}
+@media (max-width:700px){.meeting-card{grid-template-columns:60px minmax(0,1fr)}.meeting-content{padding:14px}.meeting-date strong{font-size:23px}.meeting-actions .btn{flex:1;justify-content:center}}
 [data-service-row][draggable=true]{cursor:grab}
 [data-service-row].dragging{opacity:.55;cursor:grabbing}
 [data-service-row].drop-target{outline:2px dashed var(--primary);outline-offset:-2px}

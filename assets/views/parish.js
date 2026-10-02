@@ -622,6 +622,40 @@ function groupGone() {
       `<a class="btn btn-primary btn-dense" href="#/groups">${L('All groups', 'كل المجموعات')}</a>`)}`;
 }
 
+function meetingAttendance(m) {
+  const values = Object.values(m.attendance || {});
+  if (values.length) return {
+    present: values.filter(value => value === 'present').length,
+    excused: values.filter(value => value === 'excused').length,
+    absent: values.filter(value => value === 'absent').length
+  };
+  return { present: m.present || 0, excused: (m.absent || []).length, absent: 0 };
+}
+
+function meetingCard(g, m) {
+  const date = new Date(`${m.d}T12:00:00`);
+  const monthLabel = new Intl.DateTimeFormat(isAr() ? 'ar-LB' : 'en-US', { month: 'short' }).format(date);
+  const upcoming = !m.done && m.d >= iso(new Date());
+  const rsvp = m.rsvp || {};
+  const counts = meetingAttendance(m);
+  return `<section class="meeting-card">
+    <div class="meeting-date"><strong>${esc(new Intl.DateTimeFormat(isAr() ? 'ar-LB' : 'en-US', { day: 'numeric' }).format(date))}</strong><span>${esc(monthLabel)}</span></div>
+    <div class="meeting-content">
+      <div class="meeting-heading"><div><p class="meeting-eyebrow">${L('Group meeting','اجتماع المجموعة')}</p>
+        <h3>${fmtLong(date)}</h3><p class="meeting-time">${icon('events',15)}<span dir="ltr">${esc(m.t || '—')}</span></p></div>
+        <div class="meeting-heading-actions">${m.done ? status('closed') : upcoming ? status('scheduled') : pill(L('Attendance needed','الحضور مطلوب'),'warning')}
+          ${C.iconBtn('edit',L('Edit meeting','تعديل الاجتماع'),`data-meeting-edit="${esc(meetingId(m))}"`)}</div></div>
+      <div class="meeting-summary">${m.done
+        ? `${attendanceTag('present',counts.present)}${attendanceTag('excused',counts.excused)}${attendanceTag('absent',counts.absent)}`
+        : upcoming ? `<span class="meeting-rsvp"><b>${Number(rsvp.yes)||0}</b>${L('Going','سيحضرون')}</span><span class="meeting-rsvp"><b>${Number(rsvp.no)||0}</b>${L('Not going','لن يحضروا')}</span><span class="meeting-rsvp"><b>${Number(rsvp.none)||0}</b>${L('No reply','بلا ردّ')}</span>`
+        : `<span class="t-caption dim">${L('Record attendance to close this meeting.','سجّل الحضور لإقفال هذا الاجتماع.')}</span>`}</div>
+      ${m.done && m.absent?.length ? `<details class="meeting-details"><summary>${L('Excused absence details','تفاصيل الغياب بعذر')}</summary>
+        ${m.absent.map(([pid,en,ar])=>`<p>${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))} · ${esc(L(en,ar))}</p>`).join('')}</details>` : ''}
+      <div class="meeting-actions">${upcoming ? `<button class="btn btn-secondary btn-dense" data-act="remind:group">${L('Send reminder','إرسال تذكير')}</button>` : ''}
+        <a class="btn btn-primary btn-dense" href="#/groups/${esc(g.id)}/attendance">${m.done ? L('Review attendance','مراجعة الحضور') : L('Take attendance','تسجيل الحضور')}</a></div>
+    </div></section>`;
+}
+
 function groupDetail(id, tab) {
   const g = group(id);
   if (!g) return groupGone();
@@ -679,28 +713,17 @@ function groupDetail(id, tab) {
 
     attendance: () => attendanceMatrix(g,d),
 
-    meetings: () => `<div class="stack" style="gap:16px">
-      ${d.meetings.map(m => `<section class="panel"><div class="panel-h">
-        <h3>${fmtLong(new Date(m.d))} · ${m.t}</h3>
-        <span class="row" style="gap:8px">${m.done ? status('closed') : status('scheduled')}
-          ${C.iconBtn('edit',L('Edit meeting','تعديل الاجتماع'),`data-meeting-edit="${esc(meetingId(m))}"`)}</span></div>
-        <div class="panel-b">${m.done
-          ? `<div class="row" style="gap:24px;flex-wrap:wrap">
-              <div><div class="t-caption dim">${L('Present', 'حاضر')}</div><div style="font:600 22px/28px var(--sans)">${Object.keys(m.attendance||{}).length ? Object.values(m.attendance).filter(x=>x==='present').length : m.present || 0}</div></div>
-              <div style="flex:1;min-width:200px"><div class="t-caption dim">${L('Absent, with a reason', 'غائب بعذر')}</div>
-                ${(m.absent||[]).map(([p, en, ar]) => `<div class="row" style="gap:8px;margin-top:6px">${avatar(person(p), 'avatar-sm')}
-                  <span class="t-caption">${esc(isAr() ? person(p).ar : person(p).lat)} — ${esc(L(en, ar))}</span></div>`).join('')}</div>
-            </div>`
-          : `<div class="grid g3" style="gap:10px">
-              ${[[L('Yes', 'نعم'), m.rsvp.yes], [L('No', 'لا'), m.rsvp.no], [L('No reply', 'بلا ردّ'), m.rsvp.none]]
-                .map(([k, v]) => `<div class="card card-flat" style="padding:12px"><div class="t-caption dim">${esc(k)}</div>
-                  <div style="font:600 20px/26px var(--sans)">${v}</div></div>`).join('')}</div>
-             <div class="row" style="gap:8px;margin-top:14px">
-               <button class="btn btn-secondary btn-dense" data-act="remind:group">${L('Send a reminder', 'إرسال تذكير')}</button>
-               <a class="btn btn-primary btn-dense" href="#/groups/${esc(g.id)}/attendance">${L('Take attendance', 'تسجيل الحضور')}</a></div>`}
-        </div></section>`).join('')}
-      <button class="btn btn-secondary" data-act="meeting-new">${icon('plus', 17)}${L('Schedule a recurring meeting', 'جدولة اجتماع متكرّر')}</button>
-    </div>`,
+    meetings: () => {
+      const today = iso(new Date());
+      const upcoming = d.meetings.filter(m => !m.done && m.d >= today).sort(byTime);
+      const earlier = d.meetings.filter(m => m.done || m.d < today).sort((a,b) => byTime(b,a));
+      return `<div class="meeting-overview"><div><h2>${L('Ministry meetings','اجتماعات الخدمة')}</h2>
+        <p class="t-caption dim">${L('Plan meetings, follow replies, and record attendance in one place.','خطّط للاجتماعات وتابع الردود وسجّل الحضور في مكان واحد.')}</p></div>
+        <button class="btn btn-primary" data-act="meeting-new">${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button></div>
+        ${!d.meetings.length ? empty('calendar',L('No meetings yet','لا اجتماعات بعد'),L('Add the first meeting for this ministry.','أضف أول اجتماع لهذه الخدمة.')) : ''}
+        ${upcoming.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Upcoming','القادمة')}</h3><span class="badge badge-quiet">${upcoming.length}</span></div>${upcoming.map(m=>meetingCard(g,m)).join('')}</section>` : ''}
+        ${earlier.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Earlier meetings','الاجتماعات السابقة')}</h3><span class="badge badge-quiet">${earlier.length}</span></div>${earlier.map(m=>meetingCard(g,m)).join('')}</section>` : ''}`;
+    },
 
     posts: () => `<div class="splitview">
       <div class="stack" style="gap:16px">
@@ -768,6 +791,10 @@ function groupDetail(id, tab) {
 const ATTENDANCE_OPTIONS = [
   ['', 'Not recorded', 'غير مسجّل'], ['present','Present','حاضر'], ['excused','Excused','معذور'], ['absent','Absent','غائب']
 ];
+const attendanceTag = (value, count) => {
+  const option = ATTENDANCE_OPTIONS.find(([key]) => key === value) || ATTENDANCE_OPTIONS[0];
+  return `<span class="attendance-tag attendance-${value || 'unrecorded'}"><span class="attendance-dot"></span>${count == null ? '' : `<b>${count}</b>`}${esc(L(option[1],option[2]))}</span>`;
+};
 
 function memberAttendancePct(meetings,pid) {
   const values=meetings.map(m=>attendanceValue(m,pid)).filter(Boolean);
@@ -792,7 +819,8 @@ function attendanceMatrix(g,d) {
       <b style="min-width:130px;text-align:center">${esc(periodLabel)}</b>
       ${C.iconBtn('chevR',L('Next month','الشهر التالي'),'data-attendance-shift="1"')}</div>
     <input class="input" type="search" data-attendance-search placeholder="${esc(L('Find a member','ابحث عن عضو'))}" aria-label="${esc(L('Find a member','ابحث عن عضو'))}" style="max-width:230px">
-    <span class="t-caption dim">${recorded}/${meetings.length*d.roster.length + formerIds.reduce((n,pid)=>n+meetings.filter(m=>attendanceValue(m,pid)).length,0)} ${L('recorded','مسجّل')} · ${counts.present} ${L('present','حاضر')} · ${counts.excused} ${L('excused','معذور')} · ${counts.absent} ${L('absent','غائب')}</span>
+    <span class="t-caption dim">${recorded}/${meetings.length*d.roster.length + formerIds.reduce((n,pid)=>n+meetings.filter(m=>attendanceValue(m,pid)).length,0)} ${L('recorded','مسجّل')}</span>
+    <span class="attendance-legend">${attendanceTag('present',counts.present)}${attendanceTag('excused',counts.excused)}${attendanceTag('absent',counts.absent)}</span>
     <button class="btn btn-primary btn-dense" data-act="meeting-new">${icon('plus',15)}${L('Add meeting','إضافة اجتماع')}</button>
   </div>
   ${!meetings.length ? empty('calendar',L('No meetings this month','لا اجتماعات هذا الشهر'),L('Add a meeting or choose another month.','أضف اجتماعاً أو اختر شهراً آخر.')) :
@@ -841,7 +869,7 @@ groups.mount = host => {
     const pid=b.dataset.attendanceHistory,p=person(pid),rows=groupInfo(S.params[0]).meetings.slice().sort((a,c)=>c.d.localeCompare(a.d));
     openDrawer({title:L(p?.lat||pid,p?.ar||pid),sub:L('Group attendance history','سجل حضور المجموعة'),
       body:rows.map(m=>`<div class="listrow" style="padding-inline:0"><span class="grow">${fmtDate(m.d)} · ${esc(m.t)}</span>
-        ${pill(L(...(ATTENDANCE_OPTIONS.find(x=>x[0]===attendanceValue(m,pid))||ATTENDANCE_OPTIONS[0]).slice(1)))}</div>`).join('') || `<p>${L('No meetings yet','لا اجتماعات بعد')}</p>`,
+        ${attendanceTag(attendanceValue(m,pid))}</div>`).join('') || `<p>${L('No meetings yet','لا اجتماعات بعد')}</p>`,
       foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button>`});
   }));
   host.querySelectorAll('[data-meeting-edit]').forEach(b=>b.addEventListener('click',()=>F.meetingEdit(b.dataset.meetingEdit)));
