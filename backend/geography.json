@@ -1,0 +1,28 @@
+{
+  "source": [
+    "https://dglac.gov.lb/web/guest/municipalities",
+    "https://www.ppa.gov.lb/en/tenders/details/12588/plan",
+    "https://www.dglac.gov.lb/documents/20124/38880/%D9%86%D8%B3%D8%AE%D8%A9%20%D9%85%D8%B1%D8%B3%D9%88%D9%85%20%202019.pdf/1997bbe8-3c51-c404-2352-1b671f0a5b72"
+  ],
+  "scope": "Verified parish-area localities only; sector data not available.",
+  "governorates": [
+    {
+      "id": "Mount Lebanon",
+      "ar": "جبل لبنان",
+      "districts": [
+        {
+          "id": "Baabda",
+          "ar": "بعبدا",
+          "towns": [
+            { "id": "Hadath", "ar": "الحدث", "sectors": [] },
+            { "id": "Baabda", "ar": "بعبدا", "sectors": [] },
+            { "id": "Hazmieh", "ar": "الحازمية", "sectors": [] },
+            { "id": "Louaizeh", "ar": "اللويزة", "sectors": [] },
+            { "id": "Furn el Chebbak", "ar": "فرن الشباك", "sectors": [] },
+            { "id": "Ain el Remmaneh", "ar": "عين الرمانة", "sectors": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -4,17 +4,18 @@ import { t, isAr, num, usd, fmtLong, fmtDate } from '../i18n.js';
 import { S, role, me, is } from '../store.js';
 import { icon, pageHead, sectionH, stat, panel, who, status, amount, pill, esc, table, empty } from '../ui.js';
 import { PARISH, TODAY, RATE, EVENTS, SACRAMENTS, RESERVATIONS, BATCH, EXPENSES, FUNDS, PEOPLE, HOUSEHOLDS, PORTAL_REQUESTS,
-         GROUPS, ROTA, AUDIT, NOTICES, ANNIVERSARIES, CHECKIN, person, venue, group, resStatus, resClash } from '../data.js';
+         GROUPS, GROUP_DETAIL, ROTA, AUDIT, NOTICES, anniversaryItems, CHECKIN, person, venue, group, resStatus, resClash } from '../data.js';
 
 const greet = () => {
   const p = me(), name = isAr() ? p.ar.split(' ')[0] : p.lat.split(' ')[0];
   return t(`Good evening, ${name}`, `مساء الخير يا ${name}`);
 };
-const sundayLine = () =>
-  `${esc(fmtLong(TODAY))} · ${t('three Masses, one counting session', 'ثلاثة قداديس وجلسة عدّ واحدة')}`;
+const sundayLine = () => `${esc(fmtLong(new Date()))} · ${esc(t(PARISH.name, PARISH.nameAr))}`;
 
-const todayEvents = () => EVENTS.filter(e => e.d === '2026-10-04').sort((a, b) => a.t.localeCompare(b.t));
-const awaitingSig = () => SACRAMENTS.filter(s => s.status === 'awaiting-signature');
+const todayEvents = () => EVENTS.filter(e => e.d === new Date().toISOString().slice(0, 10)).sort((a, b) => a.t.localeCompare(b.t));
+const awaitingSig = () => SACRAMENTS.filter(s => s.status === 'awaiting-signature' &&
+  (s.kind !== 'certificate' || SACRAMENTS.some(source => source.id === s.sourceRecordId &&
+    source.person === s.person && ['registered','issued'].includes(source.status))));
 const pendingRes  = () => RESERVATIONS.filter(r => r.status === 'pending');
 /* "2 baptisms, 1 marriage" from whatever is waiting, in both languages */
 const kinds = list => { const m = new Map(); list.forEach(s => m.set(s.kind, [(m.get(s.kind)?.[0] || 0) + 1, s.kindAr]));
@@ -27,10 +28,10 @@ function todayPanel() {
   const rows = todayEvents().map(e => `<a class="listrow" href="#/calendar">
       <span class="mono dim" style="width:46px;flex:none">${e.t}</span>
       <span class="grow"><b>${esc(t(e.title, e.titleAr))}</b>
-        <small>${esc(t(venue(e.venue).name, venue(e.venue).ar))}</small></span>
+        <small>${esc(t(venue(e.venue)?.name || '', venue(e.venue)?.ar || ''))}</small></span>
       ${e.kind === 'pending' ? status('pending') : ''}
     </a>`).join('');
-  return panel(t('Today at Saint Elias', 'اليوم في مار الياس'), rows,
+  return panel(t(`Today at ${PARISH.name}`, `اليوم في ${PARISH.nameAr}`), rows,
     { more: `<a href="#/calendar">${t('Whole week', 'الأسبوع كلّه')}</a>`, tight: true });
 }
 
@@ -38,7 +39,7 @@ function activityPanel(limit = 5) {
   const rows = AUDIT.slice(0, limit).map(a => {
     const p = person(a.who);
     return `<div class="tl-item ${a.kind === 'error' || a.kind === 'sensitive' ? 'accent' : ''}">
-      <div class="when">${a.at.slice(11)} · ${esc(isAr() ? p.ar : p.lat)}</div>
+      <div class="when">${esc(a.at?.slice(11) || '')} · ${esc(a.actorName || (p ? (isAr() ? p.ar : p.lat) : 'System'))}</div>
       <div class="what">${esc(t(a.what, a.whatAr))}</div></div>`;
   }).join('');
   return panel(t('Recent activity', 'النشاط الأخير'), `<div class="timeline">${rows}</div>`,
@@ -46,18 +47,18 @@ function activityPanel(limit = 5) {
 }
 
 function rotaGaps() {
-  const gaps = ROTA.teams.flatMap(tm => tm.filled
-    .map(f => ({ tm, f }))
+  const gaps = ROTA.teams.flatMap((tm,ti) => tm.filled
+    .map((f,si) => ({ tm, f, at:`${ti}|${si}` }))
     .filter(x => x.f.s === 'open' || x.f.s === 'declined'));
   if (!gaps.length) return panel(t('This Sunday’s rota', 'مناوبة هذا الأحد'),
     empty('check', t('Every place is filled', 'كل المراكز مملوءة'), t('No substitutes needed.', 'لا حاجة إلى بدلاء.')));
-  const rows = gaps.map(({ tm, f }) => `<div class="listrow">
+  const rows = gaps.map(({ tm, f, at }) => `<div class="listrow">
       <span class="grow"><b>${esc(t(tm.team, tm.teamAr))}</b>
         <small>${f.s === 'declined'
           ? t(`${person(f.p).lat} declined`, `${person(f.p).ar} اعتذر`)
           : t('No one assigned', 'لا أحد مُسند')}</small></span>
       ${status(f.s === 'declined' ? 'declined' : 'unfilled')}
-      <button class="btn btn-secondary btn-dense" data-act="invite:rota">
+      <button class="btn btn-secondary btn-dense" data-act="rota-fill:${at}">
         ${t('Find substitute', 'ابحث عن بديل')}</button>
     </div>`).join('');
   return panel(t('This Sunday’s rota needs people', 'مناوبة هذا الأحد تحتاج أشخاصاً'), rows,
@@ -77,19 +78,19 @@ function priest() {
 
   const resRows = pendingRes().map(r => `<a class="listrow" href="#/reservations">
       <span class="grow"><b>${esc(t(r.title, r.titleAr))}</b>
-        <small>${esc(t(venue(r.venue).name, venue(r.venue).ar))} · ${fmtDate(r.date)} · ${r.from}–${r.to}</small></span>
+        <small>${esc(t(venue(r.venue)?.name || '', venue(r.venue)?.ar || ''))} · ${fmtDate(r.date)} · ${r.from}–${r.to}</small></span>
       ${status(resStatus(r))}</a>`).join('');
 
-  const annRows = ANNIVERSARIES.map(a => `<div class="listrow">
+  const annRows = anniversaryItems().slice(0, 6).map(a => `<div class="listrow">
       <span class="grow"><b>${esc(isAr() ? a.ar : a.couple)}</b>
-        <small>${t(`${a.years} years · ${fmtDate(a.on)}`, `${a.years} سنة · ${fmtDate(a.on)}`)}</small></span>
+        <small>${t(`${a.kind} · ${a.years} years · ${fmtDate(a.on)}`, `${a.kind} · ${a.years} سنة · ${fmtDate(a.on)}`)}</small></span>
       <span class="pill">${a.years}</span></div>`).join('');
 
   return `
     ${pageHead({
       crumbs: [{ label: t('Home', 'الرئيسية') }, { label: t('Dashboard', 'لوحة القيادة') }],
       title: greet(), sub: sundayLine(),
-      actions: `<button class="btn btn-secondary" data-act="print">${icon('print', 17)}${t('Print my week', 'اطبع أسبوعي')}</button>
+      actions: `<button class="btn btn-secondary" data-act="print-week">${icon('print', 17)}${t('Print my week', 'اطبع أسبوعي')}</button>
         <button class="btn btn-primary" data-act="record-new">${icon('plus', 17)}${t('New record', 'سجل جديد')}</button>`
     })}
     <div class="stats">
@@ -104,7 +105,7 @@ function priest() {
       ${todayPanel()}
       ${panel(t('Reservations to decide', 'حجوزات بانتظار قرارك'), resRows,
         { more: `<a href="#/reservations">${t('All reservations', 'كل الحجوزات')}</a>`, tight: true })}
-      ${panel(t('Wedding anniversaries', 'ذكريات الإكليل'), annRows,
+      ${panel(t('Sacramental anniversaries', 'ذكريات الأسرار'), annRows,
         { more: `<a href="#/sacraments/anniversaries">${t('All', 'الكل')}</a>`, tight: true })}
       ${rotaGaps()}
       ${activityPanel(4)}
@@ -112,12 +113,13 @@ function priest() {
 }
 
 function secretary() {
-  const certs = SACRAMENTS.filter(s => s.status === 'awaiting-signature' || s.kind === 'certificate');
+  const certs = SACRAMENTS.filter(s => s.kind === 'certificate' && s.status !== 'issued');
   const rows = certs.map(s => {
     const p = person(s.person);
-    return `<a class="listrow" href="#/sacraments">${who(p)}
+    return `<a class="listrow" href="#/certificate/${esc(s.id)}">${who(p)}
       <span class="grow"><b>${esc(t(s.kind[0].toUpperCase() + s.kind.slice(1), s.kindAr))}</b>
-      <small class="mono">${s.reg}</small></span>${status(s.status)}</a>`;
+      <small class="mono">${s.reg}</small></span>${!s.sourceRecordId&&!['rejected','cancelled'].includes(s.status)
+        ?pill(t('Waiting for official entry','بانتظار قيد رسمي'),'warning'):status(s.status)}</a>`;
   }).join('');
   const noticeRows = NOTICES.map(n => `<a class="listrow" href="#/notices">
       <span class="grow"><b>${esc(t(n.title, n.ar))}</b><small>${fmtDate(n.at)} · ${esc(t(n.audience, n.audienceAr))}</small></span>
@@ -126,7 +128,7 @@ function secretary() {
   return `
     ${pageHead({
       crumbs: [{ label: t('Home', 'الرئيسية') }, { label: t('Dashboard', 'لوحة القيادة') }],
-      title: t('Good morning, Rita', 'صباح الخير يا ريتا'),
+      title: greet(),
       sub: t(`${certs.length} certificate requests · ${PORTAL_REQUESTS.length} requests from the portal`, `${certs.length} طلبات شهادات · ${PORTAL_REQUESTS.length} طلبات من البوّابة`),
       actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${t('Export', 'تصدير')}</button>
         <button class="btn btn-primary" data-go="people">${icon('plus', 17)}${t('New parishioner', 'مؤمن جديد')}</button>`
@@ -165,7 +167,7 @@ function treasurer() {
     ${pageHead({
       crumbs: [{ label: t('Home', 'الرئيسية') }, { label: t('Giving overview', 'نظرة على التقدمات') }],
       title: t('Giving overview', 'نظرة على التقدمات'),
-      sub: t('Session 214 is open · rate set today by Fr. Antoine', 'الجلسة ٢١٤ مفتوحة · السعر ضُبط اليوم من الأب أنطوان'),
+      sub: `${esc(t(BATCH.ref, BATCH.refAr))} · ${status(BATCH.status)} · ${t('rate set', 'ضُبط السعر')} ${fmtDate(RATE.setOn)}`,
       actions: `<button class="btn btn-secondary" data-go="finance">${icon('fin', 17)}${t('Finance', 'المالية')}</button>
         <button class="btn btn-primary" data-go="giving">${icon('plus', 17)}${t('Open counting session', 'فتح جلسة عدّ')}</button>`
     })}
@@ -195,8 +197,10 @@ function treasurer() {
 }
 
 function leader() {
-  const mine = GROUPS.filter(g => g.leader === 'p3');
+  const mine = GROUPS.filter(g => g.leader === me().id || g.assistant === me().id);
   const swaps = ROTA.teams.flatMap(tm => tm.filled).filter(f => f.swap).length;
+  const meetings = mine.flatMap(g => GROUP_DETAIL[g.id]?.meetings || []);
+  const recorded = meetings.reduce((count,meeting)=>count+Object.keys(meeting.attendance||{}).length,0);
   const cards = mine.map(g => `<a class="panel card-link" href="#/groups/${g.id}" style="display:block">
       <div class="panel-b">
         <div class="row" style="gap:10px">
@@ -209,15 +213,15 @@ function leader() {
   return `
     ${pageHead({
       crumbs: [{ label: t('My ministry', 'خدمتي') }, { label: t('Dashboard', 'لوحة القيادة') }],
-      title: t('Choir & Catechism G4', 'الجوقة وتعليم مسيحي ٤'),
+      title: t('My groups', 'مجموعاتي'),
       sub: t(`${mine.reduce((a, g) => a + g.members, 0)} members · ${swaps} swap request${swaps === 1 ? '' : 's'} waiting`, `${mine.reduce((a, g) => a + g.members, 0)} عضواً · ${swaps} طلبات تبديل بالانتظار`),
       actions: `<button class="btn btn-secondary" data-go="messaging">${icon('msg', 17)}${t('Message my group', 'مراسلة مجموعتي')}</button>
-        <button class="btn btn-primary" data-go="checkin">${icon('attend', 17)}${t('Take attendance', 'تسجيل الحضور')}</button>`
+        <a class="btn btn-primary" href="#/groups${mine[0]?`/${esc(mine[0].id)}/attendance`:''}">${icon('attend', 17)}${t('Group attendance', 'حضور المجموعة')}</a>`
     })}
     <div class="stats">
       ${mine.slice(0, 2).map(g => stat(t(g.name, g.ar), g.members, g.meets ? t(g.meets, g.meetsAr) : t('no fixed meeting', 'بلا اجتماع ثابت'))).join('')}
       ${stat(t('Swap requests', 'طلبات التبديل'), swaps, swaps ? t('waiting on you', 'بانتظارك') : t('none waiting', 'لا شيء بالانتظار'))}
-      ${stat(t('Attendance last week', 'الحضور الأسبوع الماضي'), '86%', `<span class="up">${t('+4 on the month', '+٤ عن الشهر')}</span>`)}
+      ${stat(t('Recorded group attendance', 'حضور المجموعات المسجّل'), recorded, `${meetings.length} ${t('meetings','اجتماعات')}`)}
     </div>
     ${sectionH(t('My groups', 'مجموعاتي'))}
     <div class="gridcards">${cards}</div>

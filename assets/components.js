@@ -5,6 +5,7 @@ import { icon } from './icons.js';
 import { t, isAr, num, usd, lbp, fmtDate, month, dayShort, matches } from './i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from './data.js';
 import { persist } from './persist.js';
+import { renderAddressCascade, wireAddressCascades } from './geography.js';
 import { esc, avatar, who, toast, openPopover, closeMenu } from './ui.js';
 
 /* ---------------- buttons ---------------- */
@@ -86,13 +87,13 @@ export const splitCurrency = () => `<div class="formrow">
   </div>
   <span class="help">${t('Total recorded:', 'المسجَّل إجمالاً:')} <b class="mono">$1,250.00</b> ${t('equivalent.', 'ما يعادل.')}</span></div>`;
 
-export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421 887', state = '', id = 'ph' } = {}) {
+export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421 887', state = '', id = 'ph', required = true } = {}) {
   const ok = state !== 'error';
   return `<div class="formrow">
-    <label class="label" for="${id}">${esc(label)}<span class="req">*</span></label>
+    <label class="label" for="${id}">${esc(label)}${required?'<span class="req">*</span>':''}</label>
     <div class="field" style="${ok ? '' : 'border-color:var(--danger)'}"><span class="prefix">+961</span>
       <input id="${id}" class="value" value="${esc(value)}" dir="ltr" style="border:0;background:none;width:100%" data-phone>
-      ${ok ? `<span style="display:flex;align-items:center;padding-inline-end:10px">
+      ${ok && value ? `<span style="display:flex;align-items:center;padding-inline-end:10px">
         <span class="pill pill-success"><span class="dot"></span>${t('on WhatsApp', 'على واتساب')}</span></span>` : ''}</div>
     <span class="help ${ok ? '' : 'help-error'}" data-phonehelp>${ok
       ? t('Leading zero is dropped automatically. 03, 70, 71, 76, 78, 79, 81 are recognised as mobile.',
@@ -100,44 +101,22 @@ export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421
       : t('A Lebanese mobile has 7 digits after the prefix.', 'الخلوي اللبناني ٧ أرقام بعد المقدّمة.')}</span></div>`;
 }
 
-export const addressCascade = () => `
-  <div class="formgrid">
-    <div class="formrow"><label class="label">${t('Governorate', 'المحافظة')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Mount Lebanon', 'جبل لبنان')}</option><option>${t('Beirut', 'بيروت')}</option>
-        <option>${t('North', 'الشمال')}</option><option>${t('South', 'الجنوب')}</option><option>${t('Bekaa', 'البقاع')}</option>
-        <option>${t('Nabatieh', 'النبطية')}</option><option>${t('Baalbek-Hermel', 'بعلبك-الهرمل')}</option>
-        <option>${t('Akkar', 'عكار')}</option></select></div>
-    <div class="formrow"><label class="label">${t('District', 'القضاء')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Baabda', 'بعبدا')}</option><option>${t('Metn', 'المتن')}</option>
-        <option>${t('Aley', 'عاليه')}</option><option>${t('Kesrouan', 'كسروان')}</option></select></div>
-    <div class="formrow"><label class="label">${t('Town', 'البلدة')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Hadath', 'الحدث')}</option><option>${t('Hazmieh', 'الحازمية')}</option>
-        <option>${t('Louaizeh', 'اللويزة')}</option></select></div>
-    <div class="formrow"><label class="label">${t('Sector', 'المنطقة')}<span class="opt">${t('(optional)', '(اختياري)')}</span></label>
-      <select class="select"><option>${t('Pick a town first', 'اختر البلدة أولاً')}</option></select></div>
-  </div>
-  ${field({ label: t('Building', 'البناية'), ph: t('Imm. Khoury, 3rd floor', 'بناية خوري، الطابق الثالث') })}
-  ${field({ label: t('Landmark', 'مَعلَم'), ph: t('Behind the municipality', 'خلف البلدية'),
-            help: t('How a visitor would actually find the house. There is no postal code field.',
-                    'كيف يجد الزائر البيت فعلاً. لا حقل رمز بريدي.') })}`;
+export const addressCascade = options => renderAddressCascade(options);
 
 export const namePair = () => `
   <div class="formgrid">
-    <div class="formrow"><label class="label">${t('Arabic name', 'الاسم العربي')}<span class="req">*</span></label>
-      <input class="input" id="arname" dir="rtl" style="font-family:var(--arabic)" placeholder="جورج حدّاد"></div>
-    <div class="formrow"><label class="label">${t('Transliteration', 'الحرف اللاتيني')}<span class="req">*</span>
-      <span class="pill" style="margin-inline-start:6px">auto</span></label>
+    <div class="formrow"><label class="label" for="latname">${t('English name', 'الاسم الإنكليزي')}<span class="req">*</span></label>
       <input class="input" id="latname" dir="ltr" placeholder="Georges Haddad"></div>
+    <div class="formrow"><label class="label" for="arname">${t('Arabic name', 'الاسم العربي')}<span class="req">*</span></label>
+      <input class="input" id="arname" dir="rtl" style="font-family:var(--arabic)" placeholder="جورج حدّاد"></div>
   </div>
-  <span class="help" style="margin:-8px 0 16px;display:block">${t(
-    'Typing Arabic proposes a transliteration; the secretary can always override it.',
-    'الكتابة بالعربية تقترح تحويلاً بالحروف اللاتينية، ويمكن لأمانة السرّ تعديله دائماً.')}</span>`;
+`;
 
-export const riteSelect = () => `<div class="formrow">
+export const riteSelect = ({id='newrite'} = {}) => `<div class="formrow">
   <label class="label">${t('Rite', 'الطقس')}<span class="req">*</span></label>
-  <select class="select">${[['Maronite','ماروني'],['Greek Orthodox','روم أرثوذكس'],['Melkite','روم كاثوليك'],
-    ['Armenian','أرمني'],['Syriac','سرياني'],['Latin','لاتيني'],['Evangelical','إنجيلي']]
-    .map(r => `<option>${esc(t(...r))}</option>`).join('')}</select>
+  <select class="select" id="${esc(id)}">${[['Maronite','ماروني'],['Greek Orthodox','روم أرثوذكس'],['Melkite','روم كاثوليك'],
+    ['Armenian','أرمني'],['Syriac','سرياني'],['Roman Catholic','روم كاثوليك غربي'],['Evangelical','إنجيلي']]
+    .map(r => `<option value="${esc(r[0])}">${esc(t(...r))}</option>`).join('')}</select>
   <span class="help">${t('Changing the rite changes the sacraments available and the feast calendar. Existing records keep the rite they were entered under.',
     'تغيير الطقس يغيّر الأسرار المتاحة ورزنامة الأعياد. والسجلات القائمة تحتفظ بالطقس الذي أُدخلت به.')}</span></div>`;
 
@@ -223,8 +202,8 @@ export const avatarUpload = (key = 'specimen') => {
       <button class="btn btn-secondary btn-dense" data-act="avatar-upload:${key}">${icon('export', 16)}${ph ? t('Change photo', 'تغيير الصورة') : t('Upload photo', 'رفع صورة')}</button>
       ${ph ? `<button class="btn btn-ghost btn-dense" data-act="avatar-remove:${key}">${t('Remove', 'إزالة')}</button>` : ''}</div>
     <p class="help" style="margin-top:8px;max-width:38ch">${t(
-      'Initials are the fallback and are generated from the Latin name. Square crop, 1:1, minimum 200px.',
-      'الأحرف الأولى هي البديل وتُولَّد من الاسم اللاتيني. قصّ مربّع ١:١، ٢٠٠ بكسل كحدّ أدنى.')}</p></div></div>`;
+      'Initials are the fallback and are generated from the English name. Square crop, 1:1, minimum 200px.',
+      'الأحرف الأولى هي البديل وتُولَّد من الاسم الإنكليزي. قصّ مربّع ١:١، ٢٠٠ بكسل كحدّ أدنى.')}</p></div></div>`;
 };
 
 /* ---------------- rich text ---------------- */
@@ -289,6 +268,7 @@ export const skeletonRows = (n = 4) => Array.from({ length: n }, () => `<div cla
 
 /* ---------------- charts ---------------- */
 export function sparkline(values, { w = 240, h = 40, tone = 'var(--primary)' } = {}) {
+  if (!values || values.length < 2) return '';      /* no trend to draw (e.g. giving hidden from this role) */
   const max = Math.max(...values), min = Math.min(...values), span = max - min || 1;
   const pts = values.map((v, i) => [i / (values.length - 1) * w, h - ((v - min) / span) * (h - 6) - 3]);
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
@@ -314,6 +294,8 @@ export const barChart = rows => `<div class="barchart">${rows.map(r => {
 }).join('')}</div>`;
 
 export function donut(segments, { size = 132 } = {}) {
+  const chartPalette = ['var(--primary)', 'var(--yellow)', 'var(--brown)', 'var(--blue-accent)'];
+  segments = segments.map((segment, index) => ({ ...segment, color: chartPalette[index % chartPalette.length] }));
   const total = segments.reduce((a, s) => a + s.v, 0);
   const r = size / 2 - 11, c = 2 * Math.PI * r;
   let off = 0;
@@ -346,6 +328,7 @@ function wireDp(dp) {
 }
 
 export function wire(host) {
+  wireAddressCascades(host);
   /* switches with a pref key are saved the moment they change */
   const saved = (key, v, what) => { PREFS[key] = v; persist(); toast(t('Setting saved', 'حُفظ الإعداد'), what.trim().replace(/\s+/g, ' '), 'success'); };
   host.querySelectorAll('select[data-pref]').forEach(sel => {
@@ -445,18 +428,6 @@ export function wire(host) {
       help.textContent = ok ? t('Leading zero is dropped automatically.', 'يُحذف الصفر تلقائياً.')
                             : t('A Lebanese mobile has 7 digits after the prefix.', 'الخلوي اللبناني ٧ أرقام بعد المقدّمة.'); }
   }));
-
-  /* transliteration proposal — deliberately naive, the office always overrides */
-  const ar2lat = { 'ا':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh','د':'d','ذ':'dh','ر':'r','ز':'z',
-    'س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z','ع':'a','غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m',
-    'ن':'n','ه':'h','و':'ou','ي':'i','ى':'a','ة':'e','أ':'a','إ':'i','آ':'a','ؤ':'o','ئ':'i',' ':' ' };
-  const arn = host.querySelector('#arname'), latn = host.querySelector('#latname');
-  if (arn && latn) arn.addEventListener('input', () => {
-    if (latn.dataset.touched) return;
-    latn.value = [...arn.value].map(ch => ar2lat[ch] ?? '').join('')
-      .replace(/\b\w/g, m => m.toUpperCase());
-  });
-  latn?.addEventListener('input', () => { latn.dataset.touched = '1'; });
 
   /* person autocomplete */
   host.querySelectorAll('[data-ac]').forEach(ac => {

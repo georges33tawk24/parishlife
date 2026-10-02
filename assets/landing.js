@@ -60,7 +60,7 @@
     },
     secretary: {
       en: 'Secretary', ar: 'أمينة السرّ', user: 'Rita Nassar', userAr: 'ريتا نصّار', initials: 'RN',
-      noteEn: 'People, records, events and messaging. Giving is not in the rail at all — hiding beats greying out.',
+      noteEn: 'People, records, events and messaging. Giving is not in the rail at all — hidden modules do not appear.',
       noteAr: 'المؤمنون والسجلّات والأحداث والمراسلة. التقدمات غائبة كلياً عن الشريط — الإخفاء أفضل من الإطفاء.',
       titleEn: 'Good morning, Rita', titleAr: 'صباح الخير يا ريتا',
       subEn: '4 certificate requests · 2 new registrations from the portal',
