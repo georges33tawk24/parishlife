@@ -15,9 +15,11 @@ const card = (body, cls = '') => `<section class="member-card ${cls}">${body}</s
 const link = (route, label) => `<a class="btn btn-secondary btn-dense" href="#/${route}">${txt(label)}</a>`;
 const groupName = id => M.groups.find(g => g.id === id)?.name || M.parish.name || '';
 const sorted = rows => [...rows].sort((a, b) => (a.date || a.d || a.at || '').localeCompare(b.date || b.d || b.at || ''));
-const upcoming = () => M.meetings.filter(m => m.date >= new Date().toISOString().slice(0, 10));
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayKey = () => dayKey(new Date());
+const upcoming = () => M.meetings.filter(m => m.date >= todayKey());
 const attendance = () => {
-  const past = M.meetings.filter(m => m.date < new Date().toISOString().slice(0, 10) && !['upcoming','unrecorded'].includes(m.attendance));
+  const past = M.meetings.filter(m => m.date < todayKey() && !['upcoming','unrecorded'].includes(m.attendance));
   const attended = past.filter(m => ['present', 'attended', 'late'].includes(m.attendance)).length;
   const counted = past.filter(m => m.attendance !== 'excused');
   return { past, attended, percent: counted.length ? Math.round(attended / counted.length * 100) : null };
@@ -27,7 +29,7 @@ const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind 
 
 export function home() {
   const next = upcoming()[0], stats = attendance();
-  const unread = M.content.filter(x => !x.read && !x.archived && ['message', 'announcement'].includes(x.kind)).length;
+  const unread = M.content.filter(x => !x.read && !x.archived && ['message', 'announcement', 'discussion'].includes(x.kind)).length;
   const commitments = Object.values(M.commitments).filter(x => ['confirmed', 'volunteer', 'interested'].includes(x.status)).length;
   const nextBody = next
     ? `<strong>${txt(next.title)}</strong><p>${txt(next.group)} · ${date(next.date)} · ${txt(next.time)} · ${txt(next.location || 'Location to be confirmed')}</p>${link('mymeetings', L('View meeting', 'عرض الاجتماع'))}`
@@ -37,11 +39,11 @@ export function home() {
     <div class="member-grid member-home-grid">
       ${card(`<h2>${L('Next meeting', 'الاجتماع المقبل')}</h2>${nextBody}`)}
       ${card(`<h2>${L('My ministries', 'خدماتي')}</h2>${M.groups.length ? M.groups.map(g => `<div class="member-simple-row"><b>${txt(g.name)}</b>${status(g.position || L('Member', 'عضو'))}</div>`).join('') : blank(L('You are not currently in a ministry.', 'لست منضمّاً إلى خدمة حالياً.'))}${link('myministries', L('View ministries', 'عرض الخدمات'))}`)}
-      ${card(`<h2>${L('Upcoming', 'القادم')}</h2>${sorted([...upcoming(), ...M.events.filter(e => e.d >= new Date().toISOString().slice(0, 10))]).slice(0, 4).map(e => `<div class="member-simple-row"><span>${txt(e.title)}</span><small>${date(e.date || e.d)}</small></div>`).join('') || blank(L('Nothing on your calendar yet.', 'لا مواعيد في رزنامتك حالياً.'))}${link('mycalendar', L('Open calendar', 'فتح الرزنامة'))}`)}
-      ${card(`<h2>${L('Announcements', 'الإعلانات')}</h2>${contentRows('announcement').slice(0, 2).map(x => `<p><b>${txt(x.title)}</b><br><small>${txt(groupName(x.groupId))}</small></p>`).join('') || blank(L('No new announcements.', 'لا إعلانات جديدة.'))}${link('myfeed', L('Read updates', 'قراءة المستجدات'))}`)}
+      ${card(`<h2>${L('Upcoming', 'القادم')}</h2>${sorted([...upcoming(), ...M.events.filter(e => e.d >= todayKey())]).slice(0, 4).map(e => `<div class="member-simple-row"><span>${txt(e.title)}</span><small>${date(e.date || e.d)}</small></div>`).join('') || blank(L('Nothing on your calendar yet.', 'لا مواعيد في رزنامتك حالياً.'))}${link('mycalendar', L('Open calendar', 'فتح الرزنامة'))}`)}
+      ${card(`<h2>${L('Announcements', 'الإعلانات')}</h2>${M.content.filter(x=>['announcement','post'].includes(x.kind)).slice(0, 2).map(x => `<p><b>${txt(x.title)}</b><br><small>${txt(groupName(x.groupId))}</small></p>`).join('') || blank(L('No new announcements.', 'لا إعلانات جديدة.'))}${link('myfeed', L('Read updates', 'قراءة المستجدات'))}`)}
       ${card(`<h2>${L('My attendance', 'حضوري')}</h2><strong>${stats.percent === null ? '—' : stats.percent + '%'}</strong><p>${stats.attended} ${L('attended', 'حضور')} · ${stats.past.filter(x => x.attendance === 'excused').length} ${L('excused', 'غياب معذور')}</p>${link('myattendance', L('View history', 'عرض السجل'))}`)}
       ${card(`<h2>${L('Messages & commitments', 'الرسائل والالتزامات')}</h2><p>${unread} ${L('unread communications', 'رسائل غير مقروءة')} · ${commitments} ${L('active commitments', 'التزامات حالية')}</p>${link('mymessages', L('Messages', 'الرسائل'))} ${link('mycommitments', L('Commitments', 'الالتزامات'))}`)}
-    </div><div class="member-actions">${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
+    </div><div class="member-actions">${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
 }
 
 export function ministries() {
@@ -66,27 +68,31 @@ export function attendancePage() {
 
 export function calendar() {
   const mode = S.ui.memberCalendarMode || 'agenda';
-  const items = sorted([...M.events.map(e => ({ ...e, date:e.d, source:'Parish' })),
-    ...M.meetings.map(m => ({ ...m, source:'Ministry' })),
+  const items = sorted([...M.events.map(e => ({ ...e, date:e.d, source:e.kind === 'mass' ? 'Liturgy' : 'Parish' })),
+    ...M.meetings.map(m => ({ ...m, source:'Meetings' })),
     ...M.notes.filter(n => n.reminder).map(n => ({ id:n.id, title:n.title, date:n.reminder, source:'Reminder' }))]);
   const today = new Date(), offset = S.ui.memberCalendarOffset || 0;
-  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const end = new Date(start.getFullYear(), start.getMonth() + (mode === 'week' ? 0 : 1), mode === 'week' ? start.getDate() + 7 : 0);
-  const shown = mode === 'agenda' ? items.filter(x => x.date >= today.toISOString().slice(0, 10)).slice(0, 30) : items.filter(x => x.date >= start.toISOString().slice(0, 10) && x.date <= end.toISOString().slice(0, 10));
+  const start = mode === 'week' ? new Date(today.getFullYear(),today.getMonth(),today.getDate()-((today.getDay()+6)%7)+offset*7)
+    : new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const end = mode === 'week' ? new Date(start.getFullYear(),start.getMonth(),start.getDate()+7)
+    : new Date(start.getFullYear(), start.getMonth()+1, 1);
+  const shown = mode === 'agenda' ? items.filter(x => x.date >= dayKey(today)).slice(0, 30)
+    : items.filter(x => x.date >= dayKey(start) && x.date < dayKey(end));
   return `<div class="member-page">${title(L('My calendar', 'رزنامتي'), L('Ministry meetings, parish events and personal reminders.', 'اجتماعات الخدمة والمناسبات الرعوية والتذكيرات الشخصية.'))}
-    <div class="member-toolbar"><div class="seg" role="group" aria-label="${L('Calendar view', 'عرض الرزنامة')}">${[['agenda','Agenda','قائمة'],['week','Week','أسبوع'],['month','Month','شهر']].map(([id,en,ar]) => `<button data-calendar-mode="${id}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div><button class="btn btn-secondary btn-dense" data-calendar-offset="-1">‹</button><span>${txt(start.toLocaleDateString(undefined,{month:'long',year:'numeric'}))}</span><button class="btn btn-secondary btn-dense" data-calendar-offset="1">›</button><select class="select" data-filter="source"><option value="">${L('All activities', 'كل الأنشطة')}</option><option>Ministry</option><option>Parish</option><option>Reminder</option></select></div>
+    <div class="member-toolbar"><div class="seg" role="group" aria-label="${L('Calendar view', 'عرض الرزنامة')}">${[['agenda','Agenda','قائمة'],['week','Week','أسبوع'],['month','Month','شهر']].map(([id,en,ar]) => `<button data-calendar-mode="${id}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>${mode === 'agenda' ? '' : `<button class="btn btn-secondary btn-dense" data-calendar-offset="-1">‹</button><span>${txt(mode === 'week' ? date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))) : start.toLocaleDateString(undefined,{month:'long',year:'numeric'}))}</span><button class="btn btn-secondary btn-dense" data-calendar-offset="1">›</button>`}<select class="select" data-filter="source"><option value="">${L('All activities', 'كل الأنشطة')}</option><option>Meetings</option><option>Parish</option><option>Liturgy</option><option>Reminder</option></select></div>
     <div class="member-list">${shown.map(x => `<div class="member-card member-filter-row" data-source="${txt(x.source)}"><div class="member-row"><div><h2>${txt(x.title)}</h2><p>${date(x.date)} · ${txt(x.time || x.t || '')} · ${txt(x.location || '')}</p></div>${status(x.source)}</div></div>`).join('') || blank(L('No activities in this view.', 'لا أنشطة في هذا العرض.'))}</div></div>`;
 }
 
 export function messages() {
-  const rows = M.content.filter(x => ['message', 'announcement'].includes(x.kind) && !x.archived);
+  const rows = M.content.filter(x => ['message', 'announcement', 'discussion'].includes(x.kind));
   const filter = S.ui.memberMessageFilter || 'inbox';
-  const selected = rows.filter(x => filter === 'all' || filter === 'sent' && x.authorId === session.user?.id ||
-    filter === 'announcements' && x.kind === 'announcement' || filter === 'inbox' && x.authorId !== session.user?.id);
+  const selected = rows.filter(x => filter === 'archived' ? x.archived : !x.archived &&
+    (filter === 'all' || filter === 'sent' && x.authorId === session.user?.id ||
+     filter === 'announcements' && x.kind === 'announcement' || filter === 'inbox' && x.authorId !== session.user?.id));
   return `<div class="member-page">${title(L('Messages', 'الرسائل'), L('Announcements are one-way; conversations can receive replies.', 'الإعلانات باتجاه واحد، ويمكن الرد على المحادثات.'))}
-    <div class="member-actions"><button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button></div>
-    <div class="member-toolbar"><div class="seg" role="group">${[['inbox','Inbox','الوارد'],['sent','Sent','المرسل'],['announcements','Announcements','الإعلانات'],['all','All','الكل']].map(([id,en,ar]) => `<button data-message-filter="${id}" aria-pressed="${filter === id}">${L(en,ar)}</button>`).join('')}</div><input class="input" type="search" data-member-search placeholder="${L('Search communications', 'البحث في الرسائل')}"></div>
-    <div class="member-list">${selected.map(x => `<div class="member-card member-search-row" data-search="${txt(x.title + ' ' + x.body)}"><div class="member-row"><div><h2>${txt(x.title)} ${!x.read ? status(L('Unread', 'غير مقروء')) : ''}</h2><p>${txt(groupName(x.groupId))} · ${date(x.at)}</p></div>${status(x.kind === 'announcement' ? L('Announcement', 'إعلان') : L('Message', 'رسالة'))}</div><p>${txt(x.body)}</p>${x.attachment ? `<a class="btn btn-secondary btn-dense" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download attachment', 'تنزيل المرفق')}</a>` : ''}<div class="member-actions"><button class="btn btn-secondary btn-dense" data-member-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button><button class="btn btn-secondary btn-dense" data-member-archive="${txt(x.id)}">${L('Archive', 'أرشفة')}</button></div></div>`).join('') || blank(L('No communications in this view.', 'لا رسائل في هذا العرض.'))}</div></div>`;
+    ${M.groups.length ? `<div class="member-actions"><button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button></div>` : ''}
+    <div class="member-toolbar"><div class="seg" role="group">${[['inbox','Inbox','الوارد'],['sent','Sent','المرسل'],['announcements','Announcements','الإعلانات'],['archived','Archived','الأرشيف'],['all','All','الكل']].map(([id,en,ar]) => `<button data-message-filter="${id}" aria-pressed="${filter === id}">${L(en,ar)}</button>`).join('')}</div><input class="input" type="search" data-member-search placeholder="${L('Search communications', 'البحث في الرسائل')}"></div>
+    <div class="member-list">${selected.map(x => `<div class="member-card member-search-row" data-search="${txt(x.title + ' ' + x.body)}"><div class="member-row"><div><h2>${txt(x.title)} ${!x.read ? status(L('Unread', 'غير مقروء')) : ''}</h2><p>${txt(groupName(x.groupId))} · ${date(x.at)}</p></div>${status(x.kind === 'announcement' ? L('Announcement', 'إعلان') : x.kind === 'discussion' ? L('Group conversation', 'محادثة جماعية') : L('Message', 'رسالة'))}</div><p>${txt(x.body)}</p>${x.attachment ? `<a class="btn btn-secondary btn-dense" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download attachment', 'تنزيل المرفق')}</a>` : ''}<div class="member-actions">${x.kind === 'discussion' ? `<button class="btn btn-primary btn-dense" data-discussion="${txt(x.id)}">${L('Open conversation', 'فتح المحادثة')}</button>` : ''}${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-member-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}<button class="btn btn-secondary btn-dense" data-member-archive="${txt(x.id)}" data-archive-op="${x.archived ? 'unarchive' : 'archive'}">${x.archived ? L('Restore', 'استعادة') : L('Archive', 'أرشفة')}</button></div></div>`).join('') || blank(L('No communications in this view.', 'لا رسائل في هذا العرض.'))}</div></div>`;
 }
 
 export function feed() {
@@ -97,6 +103,11 @@ export function feed() {
 export function resources() {
   const rows = contentRows('resource');
   return `<div class="member-page">${title(L('Resources', 'الموارد'), L('Documents and materials shared with your ministries.', 'ملفات ومواد مشتركة مع خدماتك.'))}<div class="member-toolbar"><select class="select" data-filter="group"><option value="">${L('All ministries', 'كل الخدمات')}</option>${M.groups.map(g => `<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select><input class="input" type="search" data-member-search placeholder="${L('Search resources', 'البحث في الموارد')}"></div><div class="member-list">${rows.map(x => `<div class="member-card member-filter-row member-search-row" data-group="${txt(x.groupId)}" data-search="${txt(x.title + ' ' + x.body + ' ' + x.category)}"><h2>${txt(x.title)}</h2><p>${txt(groupName(x.groupId))} · ${txt(x.category)} · ${date(x.at)}</p><p>${txt(x.body)}</p>${x.attachment ? `<a class="btn btn-secondary btn-dense" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download', 'تنزيل')}</a>` : ''}</div>`).join('') || blank(L('No resources have been shared yet.', 'لا موارد مشتركة حالياً.'))}</div></div>`;
+}
+
+export function formation() {
+  return `<div class="member-page">${title(L('Formation', 'التنشئة'), L('Training and faith-development materials from your ministries.', 'مواد التدريب والتنشئة من خدماتك.'))}
+    <div class="member-list">${M.formation.map(x=>card(`<h2>${txt(x.name)}</h2><p>${txt(groupName(x.groupId))}</p><p>${txt(x.description)}</p>${status(x.completion?.date ? L('Completed', 'مكتمل') + ' · ' + date(x.completion.date) : L('Available', 'متاح'))}`)).join('') || blank(L('No formation material is assigned to your ministries.', 'لا مواد تنشئة مخصصة لخدماتك حالياً.'))}</div></div>`;
 }
 
 export function commitments() {
@@ -113,7 +124,7 @@ export function notes() {
 export function profile() {
   const p = M.person;
   return `<div class="member-page">${title(L('My profile', 'ملفي'), L('Your official record is maintained by the parish office.', 'يحتفظ مكتب الرعية بسجلك الرسمي.'))}${card(`<h2>${txt(p.lat)}</h2><p>${txt(p.ar)}</p><dl class="member-profile"><dt>${L('Parish membership', 'العضوية الرعوية')}</dt><dd>${txt(p.status)}</dd><dt>${L('Phone', 'الهاتف')}</dt><dd>${txt(p.phone || '—')}</dd><dt>${L('Email', 'البريد الإلكتروني')}</dt><dd>${txt(p.email || '—')}</dd><dt>${L('Address', 'العنوان')}</dt><dd>${txt(p.address || '—')}</dd><dt>${L('Date of birth', 'تاريخ الميلاد')}</dt><dd>${date(p.born)}</dd><dt>${L('Ministries', 'الخدمات')}</dt><dd>${M.groups.map(g=>txt(g.name)).join(', ') || '—'}</dd></dl><button class="btn btn-primary" data-profile-request>${L('Request information update', 'طلب تحديث المعلومات')}</button>`)}
-    ${card(`<h2>${L('Notification preferences', 'تفضيلات الإشعارات')}</h2>${[['email','Email notifications','إشعارات البريد'],['inSystem','In-system notifications','إشعارات النظام'],['meetings','Meeting reminders','تذكيرات الاجتماعات'],['announcements','Announcements','الإعلانات'],['messages','Ministry messages','رسائل الخدمة']].map(([key,en,ar]) => `<label class="member-toggle"><span>${L(en,ar)}</span><input type="checkbox" data-preference="${key}" ${M.preferences[key] ? 'checked' : ''}></label>`).join('')}`)}
+    ${card(`<h2>${L('Notification preferences', 'تفضيلات الإشعارات')}</h2>${[['email','Email notifications','إشعارات البريد'],['inSystem','In-system notifications','إشعارات النظام'],['meetings','Meeting updates and reminders','تحديثات وتذكيرات الاجتماعات'],['announcements','Announcements','الإعلانات'],['messages','Ministry messages','رسائل الخدمة']].map(([key,en,ar]) => `<label class="member-toggle"><span>${L(en,ar)}</span><input type="checkbox" data-preference="${key}" ${M.preferences[key] ? 'checked' : ''}></label>`).join('')}<p class="help">${L('Email delivery is not connected yet. Your email choice is saved for future use; in-system reminders appear when you open the portal.', 'لم يُربط إرسال البريد بعد. يُحفظ اختيارك للمستقبل؛ وتظهر التذكيرات داخل النظام عند فتح البوابة.')}</p>`)}
     ${M.profileRequests.length ? card(`<h2>${L('Update requests', 'طلبات التحديث')}</h2>${M.profileRequests.map(x=>`<div class="member-simple-row"><span>${txt(x.field)} · ${txt(x.requested_value)}</span>${status(x.status)}</div>`).join('')}`) : ''}</div>`;
 }
 
@@ -124,8 +135,8 @@ export function concerns() {
 }
 
 export function notificationsPage() {
-  const rows = M.content.filter(x => !x.archived).slice(0, 30);
-  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions"><button class="btn btn-secondary" data-member-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div><p>${txt(groupName(x.groupId))}</p><button class="btn btn-secondary btn-dense" data-member-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
+  const rows = M.notifications;
+  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions">${rows.some(x=>!x.read) ? `<button class="btn btn-secondary" data-notification-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>` : ''}${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div><p>${txt(x.body)}</p><div class="member-actions">${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-notification-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}${link(x.route, L('Open', 'فتح'))}</div>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
 }
 
 export function hub() {
@@ -133,14 +144,16 @@ export function hub() {
     ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2>${M.content.filter(x=>x.kind==='message' && x.recipientId===session.user?.id).map(x=>`<div class="member-simple-row"><span>${txt(groupName(x.groupId))} · ${txt(x.body)}</span><button class="btn btn-secondary btn-dense" data-reply-message="${txt(x.id)}">${L('Reply', 'رد')}</button></div>`).join('') || blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))}`)}
     ${card(`<h2>${L('Volunteer responses', 'ردود المتطوعين')}</h2>${M.volunteerReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.title)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-confirm-volunteer="${txt(x.content_id)}" data-user="${txt(x.user_id)}">${L('Confirm', 'تأكيد')}</button></div>`).join('') || blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))}`)}
     ${M.profileReview.length ? card(`<h2>${L('Profile update requests', 'طلبات تحديث الملفات')}</h2>${M.profileReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.field)}: ${txt(x.requested_value)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-profile-review="${txt(x.id)}">${L('Mark reviewed', 'تعليم كمراجَع')}</button></div>`).join('')}`) : ''}
-    ${M.complaintPermissions.includes('Review') ? card(`<h2>${L('Concern review', 'مراجعة الطلبات السرية')}</h2><p>${L('Only explicitly appointed reviewers can see these cases.', 'هذه الحالات متاحة فقط للمراجعين المعيّنين صراحةً.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Review', 'مراجعة')}</button></div>`).join('') || blank(L('No cases assigned to this parish.', 'لا حالات مسجّلة في هذه الرعية.'))}`) : ''}</div>`;
+    ${M.complaintPermissions.includes('Review') ? card(`<h2>${L('Concern review', 'مراجعة الطلبات السرية')}</h2><p>${L('Only explicitly appointed reviewers can see these cases.', 'هذه الحالات متاحة فقط للمراجعين المعيّنين صراحةً.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Review', 'مراجعة')}</button></div>`).join('') || blank(L('No cases assigned to this parish.', 'لا حالات مسجّلة في هذه الرعية.'))}`) : ''}
+    ${M.complaintPermissions.includes('ManageCategories') ? card(`<h2>${L('Concern categories', 'فئات الملاحظات')}</h2><button class="btn btn-secondary btn-dense" data-category-add>${L('Add category', 'إضافة فئة')}</button>${M.categories.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} ${status(x.active ? L('Active', 'نشطة') : L('Hidden', 'مخفية'))}</span><button class="btn btn-secondary btn-dense" data-category-toggle="${txt(x.name)}" data-active="${!x.active}">${x.active ? L('Hide', 'إخفاء') : L('Activate', 'تفعيل')}</button></div>`).join('')}`) : ''}</div>`;
 }
 
 async function run(op, values, success = L('Saved', 'حُفظ')) {
   try {
     const result = await memberAction(op, values);
     if (session.user?.role === 'member') await hydrate(); else await loadMember();
-    closeOverlays(); bus.refresh();
+    closeOverlays();
+    if (session.user?.role === 'member') bus.renderAll(); else bus.refresh();
     if (success) toast(success, '', 'success');
     return result;
   } catch (error) { toast(L('Could not save', 'تعذّر الحفظ'), error.message, 'danger'); return null; }
@@ -162,7 +175,8 @@ function meetingDrawer(m) {
   openDrawer({ title:m.title, sub:`${m.group} · ${date(m.date)} · ${m.time}`, body:`
     <p>${txt(m.description || L('No additional details yet.', 'لا تفاصيل إضافية حالياً.'))}</p>
     <dl class="member-profile"><dt>${L('Location', 'المكان')}</dt><dd>${txt(m.location || '—')}</dd><dt>${L('Organizer', 'المنظّم')}</dt><dd>${txt(m.organizer || '—')}</dd><dt>${L('Attendance', 'الحضور')}</dt><dd>${txt(m.attendance)}</dd><dt>${L('My reply', 'ردّي')}</dt><dd>${txt(m.rsvp?.status || '—')}</dd></dl>
-    ${m.rsvpEnabled && m.date >= new Date().toISOString().slice(0,10) ? `${area(L('Optional absence reason', 'سبب الغياب الاختياري'), 'absence-reason', m.rsvp?.reason || '')}<div class="member-actions"><button class="btn btn-primary" data-rsvp="yes">${L('I will attend', 'سأحضر')}</button><button class="btn btn-secondary" data-rsvp="no">${L('Cannot attend', 'لا أستطيع الحضور')}</button></div>` : ''}`,
+    ${m.resources?.length ? `<h3>${L('Meeting resources', 'موارد الاجتماع')}</h3>${m.resources.map(r=>`<p>${txt(r.title)} ${r.attachment ? `<a download="${txt(r.attachment.name)}" href="${txt(r.attachment.data)}">${L('Download', 'تنزيل')}</a>` : ''}</p>`).join('')}` : ''}
+    ${m.rsvpEnabled && m.date >= todayKey() ? `${area(L('Optional absence reason', 'سبب الغياب الاختياري'), 'absence-reason', m.rsvp?.reason || '')}<div class="member-actions"><button class="btn btn-primary" data-rsvp="yes">${L('I will attend', 'سأحضر')}</button><button class="btn btn-secondary" data-rsvp="no">${L('Cannot attend', 'لا أستطيع الحضور')}</button></div>` : ''}`,
     foot:`<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`,
     onMount(el) { el.querySelectorAll('[data-rsvp]').forEach(b => b.addEventListener('click', () => run('rsvp', { meetingId:m.id, status:b.dataset.rsvp, reason:val(el,'absence-reason') }))); }
   });
@@ -208,11 +222,10 @@ function messageDrawer() {
   });
 }
 
-const categories = ['Ministry activities','Leadership','Meetings','Events','Facilities','Behaviour or conduct','Safety','Communication','Financial concerns','Harassment or inappropriate behaviour','Administrative issues','Suggestions','Other'];
 function concernDrawer() {
   openDrawer({ title:L('Submit a Concern', 'تقديم ملاحظة أو قلق'),
     sub:L('Your concern is visible only to explicitly authorized reviewers.', 'تُعرض ملاحظتك فقط على المراجعين المخوّلين صراحةً.'),
-    body:`<div class="formrow"><label class="label" for="concern-category">${L('Category', 'الفئة')}</label><select class="select" id="concern-category">${categories.map(x=>`<option>${x}</option>`).join('')}</select></div>
+    body:`<div class="formrow"><label class="label" for="concern-category">${L('Category', 'الفئة')}</label><select class="select" id="concern-category">${M.categories.filter(x=>x.active).map(x=>`<option>${txt(x.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-group">${L('Related ministry (optional)', 'الخدمة المرتبطة (اختياري)')}</label><select class="select" id="concern-group"><option value="">—</option>${M.groups.map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-event">${L('Related event or meeting (optional)', 'المناسبة أو الاجتماع المرتبط (اختياري)')}</label><select class="select" id="concern-event"><option value="">—</option>${[...M.events,...M.meetings].map(x=>`<option value="${txt(x.id)}">${txt(x.title)}</option>`).join('')}</select></div>
       ${field(L('Subject', 'الموضوع'),'concern-subject')}${area(L('Description', 'الوصف'),'concern-description')}
@@ -239,32 +252,49 @@ function concernDrawer() {
 
 function publishDrawer() {
   openDrawer({ title:L('Publish to members', 'النشر للأعضاء'),
-    body:`<div class="formrow"><label class="label" for="publish-kind">${L('Type', 'النوع')}</label><select class="select" id="publish-kind">${[['post','Post'],['announcement','Announcement'],['resource','Resource'],['opportunity','Volunteer opportunity']].map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select></div>
+    body:`<div class="formrow"><label class="label" for="publish-kind">${L('Type', 'النوع')}</label><select class="select" id="publish-kind">${[['post','Post'],['announcement','Announcement'],['resource','Resource'],['opportunity','Volunteer opportunity'],['discussion','Group conversation']].map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="publish-group">${L('Audience', 'الجمهور')}</label><select class="select" id="publish-group">${session.user?.role === 'priest' || session.user?.role === 'secretary' ? `<option value="">${L('Parish', 'الرعية')}</option>` : ''}${M.groups.filter(g=>M.managedGroups.includes(g.id)).map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
+      <div class="formrow"><label class="label" for="publish-meeting">${L('Linked meeting (optional)', 'اجتماع مرتبط (اختياري)')}</label><select class="select" id="publish-meeting"><option value="">—</option>${M.meetings.map(m=>`<option value="${txt(m.id)}" data-group="${txt(m.groupId)}">${txt(m.title)} · ${date(m.date)}</option>`).join('')}</select></div>
       ${field(L('Title', 'العنوان'),'publish-title')}${area(L('Content', 'المحتوى'),'publish-body')}${field(L('Category or tags', 'الفئة أو الوسوم'),'publish-category')}
       <div class="formrow"><label class="label" for="publish-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق اختياري بحد ١ ميغابايت')}</label><input class="input" id="publish-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div><label class="member-toggle"><span>${L('Pin post', 'تثبيت المنشور')}</span><input type="checkbox" id="publish-pinned"></label>`,
-    foot:footer(L('Publish', 'نشر')), onMount(el) { el.querySelector('#member-save').addEventListener('click', async () => {
+    foot:footer(L('Publish', 'نشر')), onMount(el) {
+      const group = el.querySelector('#publish-group'), meeting = el.querySelector('#publish-meeting');
+      const sync = () => { meeting.value = ''; meeting.querySelectorAll('option[data-group]').forEach(option => { option.hidden = option.dataset.group !== group.value; }); };
+      group.addEventListener('change', sync); sync();
+      el.querySelector('#member-save').addEventListener('click', async () => {
       try { await run('publish',{kind:val(el,'publish-kind'),groupId:val(el,'publish-group') || null,
-        title:val(el,'publish-title'),body:val(el,'publish-body'),category:val(el,'publish-category'),
+        title:val(el,'publish-title'),body:val(el,'publish-body'),category:val(el,'publish-category'),eventId:val(el,'publish-meeting') || null,
         pinned:el.querySelector('#publish-pinned').checked,attachment:await attachment(el)}); }
       catch(error) { toast(L('Could not publish', 'تعذّر النشر'), error.message, 'danger'); }
-    }); }
+      }); }
   });
 }
 
 function reviewDrawer(x) {
+  const canResolve = M.complaintPermissions.includes('Resolve');
+  const canRespond = (M.complaintPermissions.includes('Respond') || canResolve) &&
+    (canResolve || !['Resolved','Closed'].includes(x.status));
+  const statuses = ['Submitted','Under Review','Additional Information Requested','Referred',
+    ...(canResolve ? ['Resolved','Closed'] : [])];
   openDrawer({title:x.reference, sub:`${x.status} · ${x.category}`,
     body:`<h3>${txt(x.subject)}</h3><p>${txt(x.description)}</p><p>${L('People involved', 'الأشخاص المعنيون')}: ${txt(x.people_involved || '—')}</p>${x.identity ? `<p>${L('Identity', 'الهوية')}: ${txt(x.identity.name)} · ${txt(x.identity.phone)}</p>` : ''}${x.attachment ? `<a class="btn btn-secondary" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download evidence', 'تنزيل المرفق')}</a>` : ''}
-      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}</p>`).join('')}
-      <div class="formrow"><label class="label" for="review-status">${L('Public status', 'الحالة العامة')}</label><select class="select" id="review-status">${['Submitted','Under Review','Additional Information Requested','Referred','Resolved','Closed'].map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Public response', 'الرد العام'),'review-public')}${area(L('Internal note', 'ملاحظة داخلية'),'review-internal')}`,
-    foot:footer(L('Save update', 'حفظ التحديث')), onMount(el) { el.querySelector('#member-save').addEventListener('click',()=>run('concernUpdate',{id:x.id,status:val(el,'review-status'),publicText:val(el,'review-public'),internalText:val(el,'review-internal')})); }
+      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}${y.internal ? `<br><small>${L('Internal note', 'ملاحظة داخلية')}: ${txt(y.internal)}</small>` : ''}</p>`).join('')}
+      ${M.complaintPermissions.includes('Assign') ? `<div class="formrow"><label class="label" for="review-assignee">${L('Assign to independent reviewer', 'تعيين مراجع مستقل')}</label><select class="select" id="review-assignee"><option value="">${L('Choose reviewer', 'اختر مراجعاً')}</option>${M.reviewers.map(r=>`<option value="${txt(r.id)}" ${x.assignedTo===r.id?'selected':''}>${txt(r.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-dense" id="assign-reviewer">${L('Assign', 'تعيين')}</button></div>` : ''}
+      ${canRespond ? `<div class="formrow"><label class="label" for="review-status">${L('Public status', 'الحالة العامة')}</label><select class="select" id="review-status">${statuses.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Public response', 'الرد العام'),'review-public')}${area(L('Internal note', 'ملاحظة داخلية'),'review-internal')}` : ''}`,
+    foot:canRespond ? footer(L('Save update', 'حفظ التحديث')) : `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`, onMount(el) {
+      el.querySelector('#member-save')?.addEventListener('click',()=>run('concernUpdate',{id:x.id,status:val(el,'review-status'),publicText:val(el,'review-public'),internalText:val(el,'review-internal')}));
+      el.querySelector('#assign-reviewer')?.addEventListener('click',()=>run('concernAssign',{id:x.id,reviewerId:val(el,'review-assignee')}));
+    }
   });
 }
 
+function discussionDrawer(x) {
+  openDrawer({title:x.title, sub:groupName(x.groupId), body:`<p>${txt(x.body)}</p>
+    <div class="member-list">${x.replies.map(r=>`<div class="member-card"><b>${txt(r.author)}</b><small> · ${date(r.at)}</small><p>${txt(r.body)}</p></div>`).join('') || blank(L('No replies yet.', 'لا ردود بعد.'))}</div>${area(L('Your reply', 'ردّك'),'discussion-body')}`,
+    foot:footer(L('Reply', 'رد')),onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('discussionReply',{id:x.id,body:val(el,'discussion-body')}));}});
+}
+
 export function mount(host) {
-  if (S.route === 'memberhub' && !S.ui.memberHubLoaded) {
-    S.ui.memberHubLoaded = true; loadMember().then(()=>bus.refresh()).catch(e=>toast(L('Could not load member data', 'تعذّر تحميل بيانات الأعضاء'),e.message,'danger'));
-  }
   host.querySelectorAll('[data-meeting]').forEach(b=>b.addEventListener('click',()=>{ const m=M.meetings.find(x=>x.id===b.dataset.meeting); if(m) meetingDrawer(m); }));
   host.querySelectorAll('[data-note-edit]').forEach(b=>b.addEventListener('click',()=>noteDrawer(M.notes.find(x=>x.id===b.dataset.noteEdit))));
   host.querySelector('[data-note-new]')?.addEventListener('click',()=>noteDrawer());
@@ -275,17 +305,23 @@ export function mount(host) {
   host.querySelector('[data-publish]')?.addEventListener('click',publishDrawer);
   host.querySelectorAll('[data-preference]').forEach(b=>b.addEventListener('change',()=>run('preference',{key:b.dataset.preference,value:b.checked},'')));
   host.querySelectorAll('[data-member-read]').forEach(b=>b.addEventListener('click',()=>run('read',{id:b.dataset.memberRead},'')));
-  host.querySelectorAll('[data-member-archive]').forEach(b=>b.addEventListener('click',()=>run('archive',{id:b.dataset.memberArchive},'')));
+  host.querySelectorAll('[data-member-archive]').forEach(b=>b.addEventListener('click',()=>run(b.dataset.archiveOp,{id:b.dataset.memberArchive},'')));
   host.querySelector('[data-member-read-all]')?.addEventListener('click',()=>run('readAll',{},''));
+  host.querySelector('[data-notification-read-all]')?.addEventListener('click',()=>run('notificationReadAll',{},''));
+  host.querySelectorAll('[data-notification-read]').forEach(b=>b.addEventListener('click',()=>run('notificationRead',{id:b.dataset.notificationRead},'')));
   host.querySelectorAll('[data-volunteer]').forEach(b=>b.addEventListener('click',()=>run('volunteer',{id:b.dataset.volunteer,status:b.dataset.status})));
   host.querySelectorAll('[data-confirm-volunteer]').forEach(b=>b.addEventListener('click',()=>run('confirmVolunteer',{id:b.dataset.confirmVolunteer,userId:b.dataset.user,status:'confirmed'})));
   host.querySelectorAll('[data-profile-review]').forEach(b=>b.addEventListener('click',()=>run('profileReview',{id:b.dataset.profileReview,status:'Reviewed'})));
   host.querySelectorAll('[data-review-concern]').forEach(b=>b.addEventListener('click',()=>{ const x=M.review.find(x=>x.id===b.dataset.reviewConcern); if(x) reviewDrawer(x); }));
+  host.querySelector('[data-category-add]')?.addEventListener('click',()=>openDrawer({title:L('Add concern category', 'إضافة فئة للملاحظات'),body:field(L('Category name', 'اسم الفئة'),'category-name'),foot:footer(L('Add category', 'إضافة فئة')),
+    onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('categoryManage',{name:val(el,'category-name'),active:true}));}}));
+  host.querySelectorAll('[data-category-toggle]').forEach(b=>b.addEventListener('click',()=>run('categoryManage',{name:b.dataset.categoryToggle,active:b.dataset.active==='true'})));
   host.querySelectorAll('[data-reply-message]').forEach(b=>b.addEventListener('click',()=>{
     const x=M.content.find(x=>x.id===b.dataset.replyMessage); if(!x) return;
     openDrawer({title:L('Reply to member', 'الرد على العضو'),body:`<p>${txt(x.body)}</p>${area(L('Reply', 'الرد'),'reply-body')}`,
       foot:footer(L('Send reply', 'إرسال الرد')),onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('messageReply',{id:x.id,body:val(el,'reply-body')}));}});
   }));
+  host.querySelectorAll('[data-discussion]').forEach(b=>b.addEventListener('click',()=>{ const x=M.content.find(x=>x.id===b.dataset.discussion); if(x) discussionDrawer(x); }));
   host.querySelector('[data-concern-lookup]')?.addEventListener('click',async()=>{
     const box=host.querySelector('#anonymous-result');
     try { const result=await memberAction('concernLookup',{reference:host.querySelector('#anonymous-reference').value.trim()}); const x=result.concern;
@@ -298,7 +334,7 @@ export function mount(host) {
     } catch(error) { box.textContent=error.message; }
   });
   host.querySelectorAll('[data-message-filter]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberMessageFilter=b.dataset.messageFilter; bus.refresh(); }));
-  host.querySelectorAll('[data-calendar-mode]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberCalendarMode=b.dataset.calendarMode; bus.refresh(); }));
+  host.querySelectorAll('[data-calendar-mode]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberCalendarMode=b.dataset.calendarMode; S.ui.memberCalendarOffset=0; bus.refresh(); }));
   host.querySelectorAll('[data-calendar-offset]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberCalendarOffset=(S.ui.memberCalendarOffset||0)+Number(b.dataset.calendarOffset); bus.refresh(); }));
   const filter=()=>{
     const filters=Object.fromEntries([...host.querySelectorAll('[data-filter]')].map(x=>[x.dataset.filter,x.value]));
@@ -314,4 +350,4 @@ export function mount(host) {
   host.querySelectorAll('[data-member-search], [data-note-search]').forEach(x=>x.addEventListener('input',filter));
 }
 
-for (const view of [home,ministries,meetings,attendancePage,calendar,messages,feed,resources,commitments,notes,profile,concerns,notificationsPage,hub]) view.mount=mount;
+for (const view of [home,ministries,meetings,attendancePage,calendar,messages,feed,resources,formation,commitments,notes,profile,concerns,notificationsPage,hub]) view.mount=mount;

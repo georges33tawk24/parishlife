@@ -2,6 +2,7 @@
    current role without importing the router back (and creating a cycle). */
 import { person } from './data.js';
 import { session } from './api.js';
+import { M } from './member-data.js';
 
 const load = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 export const save = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -92,7 +93,11 @@ export const MOBILE_NAV = {
   volunteer: ['checkin','children']
 };
 
-export const role = () => ROLES[S.role] || ROLES.priest;
+export const role = () => S.role === 'member'
+  ? { ...ROLES.member, nav:[...ROLES.member.nav,
+      ...(M.formation.length ? [L('myformation')] : []),
+      ...(M.complaintPermissions.some(x=>['Review','ManageCategories'].includes(x)) ? [L('memberhub')] : [])] }
+  : ROLES[S.role] || ROLES.priest;
 export const me = () => person(session.user?.person_id || role().who) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
 export const is = (...roles) => roles.includes(S.role);
 export const canSee = id => role().nav.some(n => n[0] === 'l' && n[1] === id);

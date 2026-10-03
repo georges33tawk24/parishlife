@@ -23,7 +23,7 @@ import * as Comms     from './views/comms.js';
 import * as Admin     from './views/admin.js';
 import * as Oversight from './views/oversight.js';
 import * as Member from './views/member.js';
-import { M } from './member-data.js';
+import { M, loadMember } from './member-data.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
@@ -35,6 +35,7 @@ export const ROUTES = {
   mymessages: { ico:'msg', en:'Messages', ar:'الرسائل', view:Member.messages },
   myfeed: { ico:'bell', en:'Announcements & Posts', ar:'الإعلانات والمنشورات', view:Member.feed },
   myresources: { ico:'doc', en:'Resources', ar:'الموارد', view:Member.resources },
+  myformation: { ico:'doc', en:'Formation', ar:'التنشئة', view:Member.formation },
   mycommitments: { ico:'vol', en:'My Commitments', ar:'التزاماتي', view:Member.commitments },
   mynotes: { ico:'notes', en:'My Notes', ar:'ملاحظاتي', view:Member.notes },
   myprofile: { ico:'people', en:'My Profile', ar:'ملفي', view:Member.profile },
@@ -92,7 +93,12 @@ export { S as state, ROLES, me, go };
 /* Detail views (a person, a certificate, the design system) are reachable from
    whatever module linked to them, so they ride on their parent's permission. */
 const DETAIL_PARENT = { person: 'people', household: 'households', certificate: 'sacraments', children: 'checkin' };
-export const allowed = id => canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id]));
+const PERSONAL_ROUTES = new Set(['memberhome','myministries','mymeetings','mycalendar','myattendance',
+  'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
+  'myconcerns','membernotifications']);
+const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
+export const allowed = id => canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+  (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
 function railHTML() {
@@ -140,7 +146,7 @@ function topbarHTML() {
     </div>
     <div class="topbar-right">
       ${S.role === 'bishop' ? '' : `<button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
-        ${icon('bell', 19)}<span class="dotmark"></span></button>`}
+        ${icon('bell', 19)}${S.role !== 'member' || M.notifications.some(n=>!n.read) ? '<span class="dotmark"></span>' : ''}</button>`}
       <button class="userbtn" id="userbtn" aria-label="${t('Account', 'الحساب')}">
         ${avatar(p)}
         <span class="txt"><span class="un">${esc(isAr() ? p.ar : p.lat)}</span>
@@ -250,6 +256,17 @@ function renderView({ keepScroll = false } = {}) {
   const rt = ROUTES[S.route] || ROUTES.dashboard;
   const host = document.getElementById('view');
   const well = document.getElementById('well'), y = well?.scrollTop || 0;
+  if (MEMBER_ROUTES.has(S.route) && M.loadedFor !== `${session.user?.id}:${session.parishId}`) {
+    host.innerHTML = `<div class="member-page member-empty"><p>${t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')}</p></div>`;
+    document.title = `${t(rt.en, rt.ar)} · ParishLife`;
+    const key = `${session.user?.id}:${session.parishId}`;
+    if (M.loadingFor !== key) {
+      M.loadingFor = key;
+      loadMember().then(() => { M.loadingFor = null; if (MEMBER_ROUTES.has(S.route)) renderView(); })
+        .catch(error => { M.loadingFor = null; toast(t('Could not load member data', 'تعذّر تحميل بيانات الأعضاء'), error.message, 'danger'); });
+    }
+    return;
+  }
   host.innerHTML = rt.view(...S.params) || '';
   (rt.mount || rt.view.mount)?.(host, ...S.params);
   host.querySelectorAll('[data-go]').forEach(el =>
@@ -413,6 +430,7 @@ function userMenu(e) {
       <span><b>${esc(isAr() ? p.ar : p.lat)}</b><small>${esc(t(r.en, r.ar))} · ${esc(t(PARISH.name, PARISH.nameAr))}, ${esc(t(PARISH.town, PARISH.townAr))}</small></span></div>
     <div class="pop-b">
       <button class="mi" data-u="account">${icon('people', 17)}<span>${t('My account', 'حسابي')}</span></button>
+      ${session.user?.person_id ? `<button class="mi" data-u="member">${icon('groups', 17)}<span>${t('My parish life', 'حياتي الرعوية')}</span></button>` : ''}
       <button class="mi" data-u="lang">${icon('msg', 17)}<span>${t('Language', 'اللغة')}</span>
         <span class="mhint">${lang === 'ar' ? 'العربية' : 'English'}</span></button>
       ${S.role === 'bishop' ? '' : `<button class="mi" data-u="rate">${icon('give', 17)}<span>${t('Exchange rate', 'سعر الصرف')}</span>
@@ -433,6 +451,7 @@ function userMenu(e) {
         else if (u === 'assignments') location.hash = '#/assignments';
         else if (u === 'settings') location.hash = '#/settings';
         else if (u === 'account') accountDrawer();
+        else if (u === 'member') go('memberhome');
         else if (u === 'signout') signOut();
       }));
   } });

@@ -1,11 +1,12 @@
-import { parishAPI } from './api.js';
+import { parishAPI, session } from './api.js';
 
 export const M = { parish: {}, person: {}, groups: [], meetings: [], events: [], content: [], notes: [],
   commitments: {}, preferences: {}, concerns: [], review: [], complaintPermissions: [],
-  profileRequests: [], volunteerReview: [], profileReview: [], managedGroups: [] };
+  profileRequests: [], volunteerReview: [], profileReview: [], managedGroups: [], formation: [], reviewers: [], categories: [], notifications: [] };
 
 export async function loadMember() {
   Object.assign(M, await parishAPI('member'));
+  M.loadedFor = `${session.user?.id}:${session.parishId}`;
   return M;
 }
 
