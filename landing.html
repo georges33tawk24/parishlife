@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ParishLife — church management for parishes in Lebanon</title>
 <meta name="description" content="ParishLife keeps people, sacraments, attendance and the collection in one place — bilingual Arabic/English, dual currency USD/LBP, and it keeps working through a power cut.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23415A77'/%3E%3Ctext x='16' y='23' font-family='Inter,sans-serif' font-size='19' font-weight='600' fill='%23F4F1DE' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%233D4161'/%3E%3Ctext x='16' y='23' font-family='Inter,sans-serif' font-size='19' font-weight='600' fill='%23FFFFFF' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
@@ -257,7 +257,7 @@
       <div>
         <p class="eyebrow" style="max-width:200px"><span data-ar="٠٣ — الصمود">03 — Resilience</span></p>
         <h2 class="t-heading" style="margin-top:20px" data-ar="مكتوب على مقاس انقطاع الكهرباء، لا رغماً عنه.">Written for the power cut, not in spite of it.</h2>
-        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="حين ينقطع الاتصال يتابع الإدخال على الجهاز أمامك. تُصطفّ التغييرات، ويقول الشريط ذلك بكلام واضح لا برمز صغير، ثم تُزامن كلها عند عودة الخط.">When the connection drops, entry continues on the machine in front of you. Changes queue, the banner says so in plain words rather than a small grey icon, and everything syncs when the line comes back.</p>
+        <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="حين ينقطع الاتصال يتابع الإدخال على الجهاز أمامك. تُصطفّ التغييرات، ويقول الشريط ذلك بكلام واضح لا برمز صغير، ثم تُزامن كلها عند عودة الخط.">When the connection drops, entry continues on the machine in front of you. Changes queue, the banner says so in plain words rather than a small icon, and everything syncs when the line comes back.</p>
         <p class="t-body dim" style="margin-top:16px;max-width:52ch" data-ar="ثلاث حالات فقط، وكلّها في هيكل التطبيق لا داخل كل شاشة: غير متصل، مسوّدة محفوظة، تغييرات في الانتظار.">Three states, all of them in the shell rather than per screen: offline, draft saved, changes queued. Nobody has to learn a fourth.</p>
       </div>
       <div class="stack" style="gap:12px">
@@ -313,7 +313,7 @@
 <section class="section" id="roles">
   <div class="wrap">
     <p class="eyebrow"><span data-ar="الأدوار">Roles</span></p>
-    <h2 class="t-display" style="margin-top:20px;max-width:24ch" data-ar="الوحدات الممنوعة غائبة، لا مطفأة.">Modules a role cannot use are absent, not greyed out.</h2>
+    <h2 class="t-display" style="margin-top:20px;max-width:24ch" data-ar="الوحدات الممنوعة غائبة، لا مطفأة.">Modules a role cannot use are absent, not dimmed.</h2>
     <p class="lede" style="margin-top:16px" data-ar="أمين الصندوق لا يرى الملاحظات الرعوية. أمين السرّ لا يرى المال. مسؤول الخدمة يرى مجموعته فقط. الشريط الجانبي نفسه، وخمسة منتجات مختلفة.">The treasurer does not see pastoral notes. The secretary does not see money. A ministry leader sees only the people in the groups they lead. Same rail, five different products.</p>
 
     <div class="roletabs" style="margin-top:32px" id="roletabs"></div>
@@ -386,7 +386,7 @@
           <span class="chip mono" dir="ltr">dir=ltr</span>
           <span class="chip chip-on mono" dir="ltr">dir=rtl</span>
         </div>
-        <p class="t-caption" style="margin-top:12px;color:rgba(244,241,222,.6)" data-ar="الأرقام والمبالغ تبقى من اليسار إلى اليمين في الحالتين.">Numerals and amounts stay left-to-right in both directions.</p>
+        <p class="t-caption" style="margin-top:12px;color:var(--ink)" data-ar="الأرقام والمبالغ تبقى من اليسار إلى اليمين في الحالتين.">Numerals and amounts stay left-to-right in both directions.</p>
       </div>
 
     </div>
@@ -473,7 +473,7 @@
       </details>
       <details>
         <summary data-ar="من يرى ماذا؟">Who can see what?</summary>
-        <p data-ar="خمسة أدوار. الكاهن وحده يرى الملاحظات الرعوية ويوقّع الشهادات ويغيّر سعر الصرف. أمين السرّ لا يرى المال إطلاقاً. أمين الصندوق يرى المال ولا يرى الملاحظات. مسؤول الخدمة يرى مجموعته فقط. المتطوّع يرى محطة تسجيل واحدة بلا تنقّل. ما لا يحقّ للدور رؤيته غائب عن الشريط، لا مطفأ.">Five roles. Only the priest sees pastoral notes, signs certificates and changes the rate. The secretary never sees money. The treasurer sees money but not notes. A ministry leader sees only their own groups. A volunteer gets one check-in station with no navigation at all. What a role may not use is absent from the rail, not greyed out.</p>
+        <p data-ar="خمسة أدوار. الكاهن وحده يرى الملاحظات الرعوية ويوقّع الشهادات ويغيّر سعر الصرف. أمين السرّ لا يرى المال إطلاقاً. أمين الصندوق يرى المال ولا يرى الملاحظات. مسؤول الخدمة يرى مجموعته فقط. المتطوّع يرى محطة تسجيل واحدة بلا تنقّل. ما لا يحقّ للدور رؤيته غائب عن الشريط، لا مطفأ.">Five roles. Only the priest sees pastoral notes, signs certificates and changes the rate. The secretary never sees money. The treasurer sees money but not notes. A ministry leader sees only their own groups. A volunteer gets one check-in station with no navigation at all. What a role may not use is absent from the rail, not dimmed.</p>
       </details>
       <details>
         <summary data-ar="هل يستطيع المؤمنون رؤية سجلّاتهم؟">Can parishioners see their own records?</summary>
@@ -496,7 +496,7 @@
       <a class="btn btn-on-dark btn-lg" href="mailto:hello@parishlife.app" data-ar="احجز عرضاً تجريبياً">Book a walkthrough</a>
       <a class="btn btn-outline-dark btn-lg" href="https://wa.me/9613421887" data-ar="راسلنا على واتساب">Message us on WhatsApp</a>
     </div>
-    <p class="t-caption" style="margin-top:20px;color:rgba(244,241,222,.6)" data-ar="٣٠ دقيقة · بلا التزام · نحضر لك بياناتك التجريبية مسبقاً.">30 minutes · no commitment · we bring your sample data already loaded.</p>
+    <p class="t-caption" style="margin-top:20px;color:rgba(255,255,255,.6)" data-ar="٣٠ دقيقة · بلا التزام · نحضر لك بياناتك التجريبية مسبقاً.">30 minutes · no commitment · we bring your sample data already loaded.</p>
   </div>
 </section>
 

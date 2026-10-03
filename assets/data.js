@@ -1,7 +1,7 @@
 /* Demo data for Saint Elias Parish, Hadath — Maronite, Archeparchy of Beirut.
    Frontend only: nothing here is fetched, and edits live in memory for the
    session. Every name is stored as a pair because the Arabic name is the record
-   of truth for certificates and the Latin one is what the office searches by. */
+   of truth for certificates and the English one is what the office searches by. */
 
 export const TODAY = new Date(2026, 9, 4);      // Sunday 4 October 2026
 export const RATE = { value: 89500, setOn: new Date(2026, 9, 4), setBy: 'Fr. Antoine Khoury' };
@@ -60,6 +60,10 @@ export const HOUSEHOLDS = [
   { id:'h5', name:'Sfeir', ar:'صفير', head:'p7', members:['p7'], town:'Hadath', townAr:'الحدث', envelope:'0031', address:'Main street, above the bakery', addressAr:'الشارع العام، فوق الفرن' },
   { id:'h12', name:'Saade', ar:'سعادة', head:'p15', members:['p15'], town:'Hadath', townAr:'الحدث', envelope:'0096', address:'Church square', addressAr:'ساحة الكنيسة' }
 ];
+
+// Normalized family identity and branch records are filled from SQLite on login.
+export const FAMILIES = [];
+export const BRANCHES = [];
 
 /* ---------- groups & ministries ---------- */
 export const GROUPS = [
@@ -139,7 +143,7 @@ export const FEASTS = {
 /* ---------- liturgical service plan ---------- */
 export const SERVICE = {
   id:'s1', title:'Sunday Mass 10:30', titleAr:'قدّاس الأحد ١٠:٣٠',
-  date:'2026-10-04', venue:'v1', celebrant:'p17', coordinator:'p4',
+  date:'2026-10-04', time:'10:30', venue:'v1', celebrant:'p17', coordinator:'p4',
   language:'Arabic & Syriac', languageAr:'عربي وسرياني', status:'ready',
   order:[
     { dur:'5', t:'Entrance hymn — Qadishat Aloho', ar:'نشيد الدخول — قاديشات آلوهو', note:'Choir, organ only', noteAr:'الجوقة، أرغن فقط', who:'g1' },
@@ -154,6 +158,8 @@ export const SERVICE = {
     { dur:'3', t:'Final blessing & recessional', ar:'البركة الختامية والخروج', note:'', who:'p17' }
   ]
 };
+/* Additional plans live alongside the long-standing Sunday plan, whose ID remains stable for links. */
+export const SERVICE_PLANS = [];
 
 /* ---------- sacramental records ---------- */
 export const SACRAMENTS = [
@@ -172,6 +178,19 @@ export const ANNIVERSARIES = [
   { couple:'Joseph & the late Thérèse Sfeir', ar:'جوزيف وتريز صفير', years:50, on:'2026-10-27' },
   { couple:'Tony & Carla Gemayel', ar:'طوني وكارلا الجميّل', years:10, on:'2026-11-03' }
 ];
+
+export function anniversaryItems() {
+  const today = new Date(), todayKey = today.toISOString().slice(0, 10);
+  const records = SACRAMENTS.filter(s => ['baptism', 'confirmation', 'communion', 'marriage'].includes(s.kind)
+    && ['registered', 'issued'].includes(s.status) && /^\d{4}-\d{2}-\d{2}$/.test(s.date) && s.date < todayKey).map(s => {
+    const originalYear = Number(s.date.slice(0, 4));
+    let year = today.getFullYear(), on = `${year}${s.date.slice(4)}`;
+    if (on < todayKey) { year += 1; on = `${year}${s.date.slice(4)}`; }
+    const p = person(s.person);
+    return { couple: p?.lat || s.reg, ar: p?.ar || s.reg, years: year - originalYear, on, kind: s.kind, reg: s.reg, source: 'register', person: s.person };
+  });
+  return [...ANNIVERSARIES.map(a => ({ ...a, kind: 'marriage', source: 'legacy' })), ...records].sort((a, b) => a.on.localeCompare(b.on));
+}
 
 /* ---------- volunteers & rota ---------- */
 export const ROTA = {
@@ -248,7 +267,7 @@ export const MUSIC = [
   { id:'m4', title:'Lakal Majd', ar:'لك المجد', occasion:'Ordinary', occasionAr:'زمن عادي', part:'Communion', key:'G major', lang:'Arabic', sheet:true, audio:true },
   { id:'m5', title:'Ya Mar Elias', ar:'يا مار الياس', occasion:'Patron feast', occasionAr:'عيد الشفيع', part:'Recessional', key:'F major', lang:'Arabic', sheet:false, audio:true },
   { id:'m6', title:'Salamun Laki', ar:'سلامٌ لكِ', occasion:'Marian', occasionAr:'مريمي', part:'Entrance', key:'C major', lang:'Arabic', sheet:true, audio:true },
-  { id:'m7', title:'Ave Maria (Arcadelt)', ar:'السلام عليك يا مريم', occasion:'Wedding', occasionAr:'إكليل', part:'Communion', key:'F major', lang:'Latin', sheet:true, audio:false },
+  { id:'m7', title:'Ave Maria (Arcadelt)', ar:'السلام عليك يا مريم', occasion:'Wedding', occasionAr:'إكليل', part:'Communion', key:'F major', lang:'Roman liturgical', sheet:true, audio:false },
   { id:'m8', title:'Bshoubho', ar:'بشوبحو', occasion:'Nativity', occasionAr:'الميلاد', part:'Entrance', key:'D major', lang:'Syriac', sheet:true, audio:true }
 ];
 
@@ -318,14 +337,11 @@ export const EPARCHY_NEWS = [
   { title:'Clergy retreat, Annaya, 2–4 December', ar:'رياضة روحية للإكليروس، عنّايا، ٢–٤ كانون الأول', at:'2026-09-21', shared:false }
 ];
 
-export const TRANSFERS = [
-  { id:'tr1', p:'p10', from:'Saint Charbel, Louaizeh', fromAr:'مار شربل، اللويزة', to:'Saint Elias, Hadath', toAr:'مار الياس، الحدث', effective:'2026-10-15', status:'awaiting-approval' },
-  { id:'tr2', p:'p6', from:'Saint Elias, Hadath', fromAr:'مار الياس، الحدث', to:'Saint Sauveur, Hazmieh', toAr:'المخلّص، الحازمية', effective:'2026-09-01', status:'approved' }
-];
+
 
 /* ---------- 2 · people extras ---------- */
 export const PERSON_EXTRA = {
-  p1: { preferred:'Georges', lang:'ar', channel:'whatsapp', blood:'O+', skills:['Accounting','Driving'],
+  p1: { lang:'ar', channel:'whatsapp', blood:'O+', skills:['Accounting','Driving'],
         dates:[['Baptism','معمودية','1968-04-20'],['Marriage','إكليل','2001-10-19']],
         consent:[['Parish announcements on WhatsApp','إعلانات الرعية على واتساب',true],
                  ['Printed parish directory','الدليل المطبوع',true],['Photos in parish media','الصور في وسائل الرعية',false]],
@@ -343,7 +359,7 @@ export const DUPLICATES = [
 
 export const IMPORT_PREVIEW = {
   total: 412, ok: 388, warn: 19, err: 5,
-  cols: [['Arabic name','الاسم العربي','ok'],['Latin name','الاسم اللاتيني','ok'],['Phone','الهاتف','warn'],
+  cols: [['Arabic name','الاسم العربي','ok'],['English name','الاسم الإنكليزي','ok'],['Phone','الهاتف','warn'],
          ['Town','البلدة','ok'],['Rite','الطقس','ok'],['Postal code','الرمز البريدي','skip']],
   issues: [['Row 41','الصف ٤١','Phone has 6 digits after +961','الهاتف ٦ أرقام بعد 961+'],
            ['Row 88','الصف ٨٨','Rite “Maronit” not recognised','الطقس «Maronit» غير معروف'],
@@ -356,9 +372,9 @@ export const GROUP_DETAIL = {
     assistant:'p12',
     roles:[['p3','Leader','مسؤولة'],['p12','Assistant & sound','مساعد وصوت'],['p6','Section lead — soprano','مسؤولة قسم — سوبرانو']],
     requests:[{ p:'p10', at:'2026-10-02' },{ p:'p8', at:'2026-09-29' }],
-    meetings:[{ d:'2026-10-09', t:'19:00', rsvp:{ yes:18, no:3, none:3 }, done:false },
-              { d:'2026-10-02', t:'19:00', present:21, absent:[['p12','Work travel','سفر عمل']], done:true },
-              { d:'2026-09-25', t:'19:00', present:19, absent:[['p6','Illness','مرض']], done:true }],
+    meetings:[{ id:'mt1', d:'2026-10-09', t:'19:00', rsvp:{ yes:18, no:3, none:3 }, done:false, attendance:{} },
+              { id:'mt2', d:'2026-10-02', t:'19:00', present:21, absent:[['p12','Work travel','سفر عمل']], done:true, attendance:{} },
+              { id:'mt3', d:'2026-09-25', t:'19:00', present:19, absent:[['p6','Illness','مرض']], done:true, attendance:{} }],
     posts:[{ by:'p3', at:'2026-10-03', body:'Christmas programme is fixed. Two extra rehearsals in December.', bodyAr:'تحدّد برنامج الميلاد. تمرينان إضافيان في كانون الأول.' }],
     files:[['Christmas 2026 programme.pdf','برنامج الميلاد ٢٠٢٦.pdf','240 KB'],
            ['Qadishat Aloho — SATB.pdf','قاديشات آلوهو — SATB.pdf','180 KB']],
@@ -378,8 +394,19 @@ export const GROUP_DETAIL = {
 };
 
 /** A group's working detail; a group created in the app starts with an empty one rather than borrowing another's. */
-export const groupInfo = id => GROUP_DETAIL[id] || (GROUP_DETAIL[id] = { assistant: null, roles: [], requests: [], meetings: [], posts: [], files: [],
-  belongings: [], tasks: [], milestones: [], history: [], roster: [], budget: { fund: 'general', allocated: 0, spent: 0 } });
+export const groupInfo = id => {
+  const detail = GROUP_DETAIL[id] || (GROUP_DETAIL[id] = { assistant: null, roles: [], requests: [], meetings: [], posts: [], files: [],
+    belongings: [], resourceLoans: [], tasks: [], milestones: [], history: [], roster: [], budget: { fund: 'general', allocated: 0, spent: 0 } });
+  detail.belongings = (detail.belongings || []).map((item,index) => Array.isArray(item)
+    ? { id:`resource-${id}-${index+1}`, name:item[0], ar:item[1], qty:item[2], location:item[3], locationAr:item[4] } : item);
+  detail.resourceLoans ||= [];
+  detail.automations ||= [];
+  detail.messagingRules ||= [];
+  detail.milestones = (detail.milestones || []).map((item,index) => Array.isArray(item)
+    ? { id:`formation-${id}-${index+1}`, name:item[0], ar:item[1], description:'', legacyCount:item[2], completions:{} } : item);
+  detail.milestones.forEach(item => { item.completions ||= {}; item.legacyCount ||= 0; });
+  return detail;
+};
 
 /* ---------- 4 · events ---------- */
 export const EVENT_DETAIL = {
@@ -396,16 +423,19 @@ export const EVENT_DETAIL = {
 };
 
 /** An event's working detail; one created in the app gets its own, empty, instead of borrowing the parish lunch's. */
-export const eventInfo = e => EVENT_DETAIL[e.id] || (EVENT_DETAIL[e.id] = {
-  organizer: e.kind === 'mass' || e.kind === 'sacr' ? 'p17' : 'p4', tz: 'Asia/Beirut',
-  cat: { mass: 'Worship', group: 'Formation', sacr: 'Sacraments' }[e.kind] || 'Parish life',
-  catAr: { mass: 'العبادة', group: 'التنشئة', sacr: 'الأسرار' }[e.kind] || 'حياة الرعية',
-  tags: [], desc: '', descAr: '', bring: [], tasks: [], rsvp: { yes: 0, no: 0, maybe: 0, none: 0 }, cap: 0, waiting: 0 });
+export const eventInfo = e => EVENT_DETAIL[e.id] || {
+  organizer: null, tz: 'Asia/Beirut', cat: '', catAr: '', tags: [], desc: '', descAr: '', bring: [], tasks: [], files: [],
+  rsvp: { yes: 0, no: 0, maybe: 0, none: 0 }, cap: 0, waiting: 0, repeat: 'none', invited: [],
+  visibility: 'public', visibleGroupIds: [], priestIds: [], participants: [], subtype: '' };
 
 export const EVENT_TEMPLATES = [
-  ['Sunday Mass','قدّاس الأحد','service'],['Baptism','معمودية','sacr'],['Wedding','إكليل','sacr'],
-  ['Funeral','جنّاز','sacr'],['Prayer meeting','لقاء صلاة','groups'],['Retreat','خلوة','events'],
-  ['Feast celebration','احتفال عيد','events']
+  { id:'et1', name:'Sunday Mass', nameAr:'قدّاس الأحد', icon:'service', kind:'mass', venue:'v1', duration:60, description:'', capacity:0 },
+  { id:'et2', name:'Baptism', nameAr:'معمودية', icon:'sacr', kind:'sacr', venue:'v1', duration:60, description:'', capacity:0 },
+  { id:'et3', name:'Wedding', nameAr:'إكليل', icon:'sacr', kind:'sacr', venue:'v1', duration:90, description:'', capacity:0 },
+  { id:'et4', name:'Funeral', nameAr:'جنّاز', icon:'sacr', kind:'sacr', venue:'v1', duration:60, description:'', capacity:0 },
+  { id:'et5', name:'Prayer meeting', nameAr:'لقاء صلاة', icon:'groups', kind:'group', venue:'v3', duration:60, description:'', capacity:0 },
+  { id:'et6', name:'Retreat', nameAr:'خلوة', icon:'events', kind:'event', venue:'v3', duration:180, description:'', capacity:0 },
+  { id:'et7', name:'Feast celebration', nameAr:'احتفال عيد', icon:'events', kind:'event', venue:'v3', duration:120, description:'', capacity:0 }
 ];
 
 /* ---------- 5 · facilities extras ---------- */
@@ -427,9 +457,25 @@ export const SERVICE_REQUESTS = [
   { id:'sr3', kind:'Funeral', kindAr:'جنّاز', by:'p13', date:'2026-09-28', prep:'complete', status:'approved' },
   { id:'sr4', kind:'Retreat', kindAr:'خلوة', by:'p9', date:'2026-11-06', prep:'awaiting venue', prepAr:'بانتظار القاعة', status:'pending' }
 ];
+const serviceRows = rows => rows.map(([t, ar, dur, who]) => ({ t, ar, dur:String(dur), who, note:'', noteAr:'' }));
+const serviceTemplate = (id, name, ar, order, language = 'Arabic & Syriac') => ({
+  id, name, ar, venue:'v1', language, languageAr:language === 'Bilingual' ? 'ثنائي اللغة' : 'عربي وسرياني',
+  celebrant:'p17', coordinator:'p4', order
+});
 export const SERVICE_TEMPLATES = [
-  ['Sunday Mass — Arabic','قدّاس الأحد — عربي',10],['Sunday Mass — bilingual','قدّاس الأحد — ثنائي اللغة',10],
-  ['Wedding','إكليل',14],['Baptism','معمودية',8],['Funeral','جنّاز',9],['Feast of the patron','عيد الشفيع',12]
+  serviceTemplate('st1', 'Sunday Mass — Arabic', 'قدّاس الأحد — عربي', SERVICE.order.map(item => ({ ...item }))),
+  serviceTemplate('st2', 'Sunday Mass — bilingual', 'قدّاس الأحد — ثنائي اللغة', SERVICE.order.map(item => ({ ...item })), 'Bilingual'),
+  serviceTemplate('st3', 'Wedding', 'إكليل', serviceRows([
+    ['Entrance hymn','نشيد الدخول',5,'g1'], ['Opening prayer','صلاة الافتتاح',3,'p17'],
+    ['Readings and Gospel','القراءات والإنجيل',10,'p17'], ['Marriage rite','رتبة الإكليل',20,'p17'],
+    ['Final blessing','البركة الختامية',4,'p17']])),
+  serviceTemplate('st4', 'Baptism', 'معمودية', serviceRows([
+    ['Welcome and opening prayer','الاستقبال وصلاة الافتتاح',5,'p17'], ['Readings','القراءات',8,'p6'],
+    ['Baptismal rite','رتبة المعمودية',20,'p17'], ['Final blessing','البركة الختامية',4,'p17']])),
+  serviceTemplate('st5', 'Funeral', 'جنّاز', serviceRows([
+    ['Entrance procession','موكب الدخول',5,'g1'], ['Readings and Gospel','القراءات والإنجيل',10,'p17'],
+    ['Homily','العظة',10,'p17'], ['Commendation','صلاة الوداع',8,'p17'], ['Final hymn','نشيد الختام',4,'g1']])),
+  serviceTemplate('st6', 'Feast of the patron', 'عيد الشفيع', SERVICE.order.map(item => ({ ...item })))
 ];
 
 /* ---------- 7 · sacrament extras ---------- */
@@ -582,10 +628,10 @@ export const RUN_LOG = [
 export const ATTENDANCE_SERIES = [268, 291, 254, 302, 288, 311, 276, 284];
 export const GIVING_SERIES = [5200, 6100, 4800, 7300, 6900, 8420, 7100, 8100, 6400, 7700, 9100, 8420];
 export const PAYMENT_MIX = [
-  { label:'Cash', labelAr:'نقداً', v:54, color:'#415A77' },
-  { label:'OMT / Whish', labelAr:'OMT / ويش', v:30, color:'#778D7A' },
-  { label:'Card', labelAr:'بطاقة', v:13, color:'#D4C4A8' },
-  { label:'Bank transfer', labelAr:'تحويل مصرفي', v:3, color:'#C3BCA2' }
+  { label:'Cash', labelAr:'نقداً', v:54, color:'#3D4161' },
+  { label:'OMT / Whish', labelAr:'OMT / ويش', v:30, color:'#8EC5F4' },
+  { label:'Card', labelAr:'بطاقة', v:13, color:'#DCEEFF' },
+  { label:'Bank transfer', labelAr:'تحويل مصرفي', v:3, color:'#9BC6EC' }
 ];
 
 /* ---------- 17 · security ---------- */
@@ -632,6 +678,7 @@ export const PORTAL_REQUESTS = [
   { id:'pq2', kind:'family', what:'New family registration — Daou', whatAr:'تسجيل عائلة جديدة — ضو', at:'2026-10-02',
     now:'', nowAr:'', to:'Daou household, Ain el Remmaneh — 2 adults, 1 child', toAr:'عائلة ضو، عين الرمانة — راشدان وطفل', name:'Daou', nameAr:'ضو', town:'Ain el Remmaneh', townAr:'عين الرمانة' }
 ];
+export const REQUEST_HISTORY = [];
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

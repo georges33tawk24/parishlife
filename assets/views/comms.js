@@ -6,11 +6,11 @@ import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTab
 import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { MESSAGES, TEMPLATES, NOTICES, MUSIC, MUSIC_DETAIL, SETLISTS, AUTOMATIONS, PRAYERS,
-         PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, musicInfo, person, venue } from '../data.js';
+         PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, GROUPS, groupInfo, musicInfo, person, venue } from '../data.js';
 
 const L = (en, ar) => t(en, ar);
 const CHANNEL = { whatsapp: ['WhatsApp', 'واتساب'], sms: ['SMS', 'رسالة قصيرة'], email: ['Email', 'بريد إلكتروني'] };
-const MTABS = () => [['', 'Messages', 'الرسائل'], ['automations', 'Automations', 'الأتمتة', AUTOMATIONS.filter(a => a.active).length],
+const MTABS = () => [['', 'Messages', 'الرسائل'], ['automations', 'Automations', 'الأتمتة', is('leader')?GROUPS.flatMap(g=>groupInfo(g.id).automations).filter(a=>a.active).length:AUTOMATIONS.filter(a => a.active).length],
                ['templates', 'Designs', 'التصاميم'], ['preferences', 'Rules', 'القواعد']];
 
 /* ═══════════ 11 · communication ═══════════ */
@@ -23,6 +23,14 @@ export function messaging(tab = '') {
     actions: `${tab === 'templates' ? '' : `<button class="btn btn-secondary" data-go="messaging/templates">${icon('doc', 17)}${L('Ready-made designs', 'تصاميم جاهزة')}</button>`}
       ${C.splitBtn(L('New message', 'رسالة جديدة'), 'newmsg')}`
   }) + tabBar('messaging', MTABS(), tab);
+
+  if(is('leader')&&(tab==='automations'||tab==='preferences')){
+    const automation=tab==='automations',key=automation?'automations':'messagingRules';
+    const rows=GROUPS.flatMap(g=>groupInfo(g.id)[key].map((item,index)=>({g,item,index})));
+    return head+`<div class="tabbody"><div class="toolbar ministry-section-heading"><h2>${automation?L('Group automations','أتمتة المجموعة'):L('Group messaging rules','قواعد مراسلة المجموعة')}</h2><button class="btn btn-primary btn-dense" data-message-config-new="${key}">${icon('plus',15)}${L('Add','إضافة')}</button></div>
+      ${table({cols:[{label:L('Group','المجموعة')},{label:automation?L('Automation','الأتمتة'):L('Rule','القاعدة')},{label:automation?L('Trigger','المحفّز'):L('Condition / action','الشرط / الإجراء')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],rows:rows.map(({g,item,index})=>({cells:[esc(L(g.name,g.ar)),`<b>${esc(L(item.name,item.nameAr||item.name))}</b>`,`<span>${esc(L(item.trigger,item.triggerAr||item.trigger))}${!automation&&item.action?`<small style="display:block">${esc(L(item.action,item.actionAr||item.action))}</small>`:''}</span>`,item.active?pill(L('Active','مفعّلة'),'success'):pill(L('Paused','متوقّفة'),'warning'),`<div class="row"><button class="btn btn-secondary btn-dense" data-message-config-edit="${key}|${esc(g.id)}|${index}">${L('Edit','تعديل')}</button><button class="btn-icon" data-message-config-delete="${key}|${esc(g.id)}|${index}" aria-label="${L('Delete','حذف')}">${icon('trash',16)}</button></div>`]}))})}
+      <p class="help">${L('These settings are saved for your ministry. External message delivery and timed execution require a connected service.','تُحفظ هذه الإعدادات لخدمتك. يتطلب إرسال الرسائل وتنفيذها المجدول خدمة موصولة.')}</p></div>`;
+  }
 
   if (tab === 'automations') return head + `<div class="tabbody">${table({
       cols: [{ label: L('Automation', 'الأتمتة') }, { label: L('Runs', 'تعمل'), cls: 'hide-sm' },
@@ -41,7 +49,7 @@ export function messaging(tab = '') {
 
   if (tab === 'templates') return head + `<div class="tabbody">
     <div class="gridcards">${TEMPLATES.map((tp, ti) => `<button class="panel" style="cursor:pointer;text-align:start;border:1px solid var(--border)" data-act="design:${ti}">
-      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--sand);
+      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--light-blue);
         font:600 14px/1 var(--sans);text-align:center;padding:10px">
         <span><span style="display:block;font-size:11px;opacity:.7;letter-spacing:.1em;text-transform:uppercase">${esc(L(PARISH.name, PARISH.nameAr))}</span>
         ${esc(L(tp.name, tp.ar))}</span></div>
@@ -106,6 +114,9 @@ export function messaging(tab = '') {
 
 messaging.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelector('[data-message-config-new]')?.addEventListener('click',b=>messageConfigForm(b.currentTarget.dataset.messageConfigNew));
+  host.querySelectorAll('[data-message-config-edit]').forEach(b=>b.addEventListener('click',()=>{const [key,gid,index]=b.dataset.messageConfigEdit.split('|');messageConfigForm(key,gid,Number(index));}));
+  host.querySelectorAll('[data-message-config-delete]').forEach(b=>b.addEventListener('click',()=>{const [key,gid,index]=b.dataset.messageConfigDelete.split('|'),items=groupInfo(gid)[key],item=items[Number(index)];if(!item)return;openModal({title:L('Delete item?','حذف العنصر؟'),body:`<p>${esc(item.name)}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="mc_delete">${L('Delete','حذف')}</button>`,onMount(el){el.querySelector('#mc_delete').addEventListener('click',()=>{items.splice(Number(index),1);closeOverlays();bus.refresh();});}});}));
   host.querySelectorAll('[data-fail]').forEach(b => b.addEventListener('click', () => {
     const m = MESSAGES.find(x => x.id === b.dataset.fail); if (!m) return;
     openDrawer({
@@ -153,6 +164,11 @@ messaging.mount = host => {
       <button data-act="compose:group">${icon('groups', 16)}${L('Message a group', 'مراسلة مجموعة')}</button>
       <button data-act="broadcast">${icon('bell', 16)}${L('Emergency broadcast', 'بثّ طارئ')}</button></div>` }));
 };
+
+function messageConfigForm(key,gid='',index=-1){
+  const automation=key==='automations',item=gid?groupInfo(gid)[key]?.[index]:null;
+  openDrawer({title:item?L('Edit item','تعديل العنصر'):automation?L('Add automation','إضافة أتمتة'):L('Add messaging rule','إضافة قاعدة مراسلة'),body:`<div class="formrow"><label class="label" for="mc_group">${L('Group','المجموعة')}</label><select class="select" id="mc_group" ${item?'disabled':''}>${GROUPS.map(g=>`<option value="${esc(g.id)}" ${g.id===gid?'selected':''}>${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>${C.field({label:L('Name','الاسم'),id:'mc_name',value:item?.name||'',req:true})}${C.field({label:L('Arabic name','الاسم العربي'),id:'mc_name_ar',value:item?.nameAr||''})}${C.field({label:automation?L('Trigger','المحفّز'):L('Condition','الشرط'),id:'mc_trigger',value:item?.trigger||'',req:true})}${C.field({label:L('Arabic description','الوصف العربي'),id:'mc_trigger_ar',value:item?.triggerAr||''})}${automation?'':C.field({label:L('Action','الإجراء'),id:'mc_action',value:item?.action||'',req:true})}${automation?'':C.field({label:L('Arabic action','الإجراء بالعربية'),id:'mc_action_ar',value:item?.actionAr||''})}<label class="check"><input type="checkbox" id="mc_active" ${item?.active!==false?'checked':''}><span>${L('Active','مفعّل')}</span></label>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="mc_save">${L('Save','حفظ')}</button>`,onMount(el){C.wire(el);el.querySelector('#mc_save').addEventListener('click',()=>{const name=el.querySelector('#mc_name').value.trim(),trigger=el.querySelector('#mc_trigger').value.trim(),action=el.querySelector('#mc_action')?.value.trim()||'';if(!name||!trigger||(!automation&&!action))return toast(L('Complete the name, condition and action','أكمل الاسم والشرط والإجراء'),'','warning');const target=item||{id:`mc-${Date.now().toString(36)}`,sent:0};Object.assign(target,{name,nameAr:el.querySelector('#mc_name_ar').value.trim()||name,trigger,triggerAr:el.querySelector('#mc_trigger_ar').value.trim()||trigger,active:el.querySelector('#mc_active').checked});if(!automation)Object.assign(target,{action,actionAr:el.querySelector('#mc_action_ar').value.trim()||action});if(!item)groupInfo(el.querySelector('#mc_group').value)[key].push(target);closeOverlays();bus.refresh();});}});
+}
 
 /* ═══════════ notices & bulletin ═══════════ */
 export function notices() {
@@ -225,7 +241,7 @@ notices.mount = host => {
 };
 
 /* ═══════════ 13 · music ═══════════ */
-const LANG_AR = { Arabic: 'عربي', Syriac: 'سرياني', English: 'إنكليزي', French: 'فرنسي', Latin: 'لاتيني' };
+const LANG_AR = { Arabic: 'عربي', Syriac: 'سرياني', English: 'إنكليزي', French: 'فرنسي', 'Roman liturgical': 'طقسي روماني' };
 const PART_AR = { Entrance: 'الدخول', Trisagion: 'التقديسات', Offertory: 'التقدمة', Communion: 'المناولة', Veneration: 'السجود للصليب', Recessional: 'الختام' };
 
 export function music(id, tab = '') {
@@ -293,6 +309,10 @@ const transposeKey = (key, by) => { const m = String(key || '').match(/^([A-G][b
 
 const HTABS = () => [['', 'Lyrics', 'الكلمات'], ['chords', 'Chords', 'الأوتار'], ['notes', 'Instrument notes', 'ملاحظات الآلات'],
                ['versions', 'Versions', 'الإصدارات'], ['rights', 'Rights', 'الحقوق']];
+const safeMusicLink = (value, host) => {
+  try { const url=new URL(value);return url.protocol==='https:'&&(!host||url.hostname===host||url.hostname.endsWith(`.${host}`))?url.href:''; }
+  catch { return ''; }
+};
 
 function hymn(id, tab) {
   const m = MUSIC.find(x => x.id === id);
@@ -300,6 +320,8 @@ function hymn(id, tab) {
     ${empty('music', L('This hymn is no longer in the library', 'هذا اللحن لم يعد في المكتبة'), L('It may have been deleted.', 'ربما حُذف.'),
       `<a class="btn btn-primary btn-dense" href="#/music">${L('Music library', 'مكتبة الألحان')}</a>`)}`;
   const d = musicInfo(m), shift = (S.ui.transpose || {})[m.id] || 0;
+  const musicLinks=[['YouTube',safeMusicLink(m.youtubeUrl,'youtube.com')||safeMusicLink(m.youtubeUrl,'youtu.be')],
+    ['Anghami',safeMusicLink(m.anghamiUrl,'anghami.com')],['Other link',safeMusicLink(m.otherUrl,'')]].filter(([,url])=>url);
   const head = `<div class="pagehead"><div class="entityhead" style="width:100%"><div class="id">
       <nav class="crumbs"><a href="#/music">${L('Music library', 'مكتبة الألحان')}</a><span class="sep">/</span><span>${esc(m.title)}</span></nav>
       <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(m.title)}
@@ -316,7 +338,9 @@ function hymn(id, tab) {
         <tbody>${d.lyrics.length ? '' : `<tr><td colspan="3" class="dim">${L('No lyrics entered yet.', 'لا كلمات بعد.')}</td></tr>`}${d.lyrics.map(r => `<tr><td style="font-size:16px">${esc(r[0])}</td>
           <td style="font-family:var(--arabic);font-size:16px">${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`,
         { tight: true, more: `<button class="btn btn-ghost btn-dense" data-act="hymn-text:${m.id}|lyrics">${icon(d.lyrics.length ? 'edit' : 'plus', 15)}${d.lyrics.length ? L('Edit', 'تعديل') : L('Add lyrics', 'إضافة الكلمات')}</button>` })}
-      <div class="sidecol">${panel(L('Personal annotations', 'ملاحظات شخصية'),
+      <div class="sidecol">${musicLinks.length?panel(L('Listen online','استمع عبر الإنترنت'),musicLinks.map(([label,url])=>
+        `<a class="btn btn-secondary btn-dense" href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="margin:4px">${esc(label)}</a>`).join('')):''}
+      ${panel(L('Personal annotations', 'ملاحظات شخصية'),
         d.annotations.map(([p, en, ar]) => `<div class="listrow" style="padding-inline:0;align-items:flex-start">
           ${avatar(person(p), 'avatar-sm')}<span class="grow t-caption">${esc(L(en, ar))}</span></div>`).join('')
         + `<div class="divider"></div>${C.textarea({ label: L('Add your own', 'أضف ملاحظتك'), id: 'hann', max: 200 })}`)}
@@ -471,7 +495,7 @@ export function portal(tab = '') {
     <div class="sidecol">
       ${panel(L('Phone preview', 'معاينة على الهاتف'), `
         <div style="border:8px solid var(--ink);border-radius:26px;overflow:hidden;background:var(--bg)">
-          <div style="background:var(--ink);color:var(--sand);padding:14px;text-align:center">
+          <div style="background:var(--ink);color:var(--light-blue);padding:14px;text-align:center">
             <div style="font:600 15px/20px var(--arabic)">${esc(PARISH.nameAr)}</div>
             <div style="font:400 10px/14px var(--sans);opacity:.7">${esc(PARISH.town)}</div></div>
           <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
