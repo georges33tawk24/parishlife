@@ -263,6 +263,34 @@ class ParishPersistenceTests(unittest.TestCase):
         with self.assertRaises(server.Problem):
             self.patch('secretary','CHECKIN',session)
 
+    def test_leader_checkin_and_pickup_are_scoped_and_restrictions_preserved(self):
+        revision, state = self.state()
+        event = next(e for e in state['EVENTS'] if e['kind'] == 'event' and
+                     state['EVENT_DETAIL'].get(e['id'], {}).get('visibility', 'public') == 'public')
+        form = dict(id='leader-checkin-form',eventId=event['id'],event=event['title'],eventAr=event['titleAr'],
+                    cap=10,taken=2,fee=0,deadline='2026-12-01',waiting=0,open=True,
+                    fields=[],discounts=[],installments=[])
+        participants = [dict(id='leader-reg-'+p,registrationId=form['id'],p=p,paid=0,status='pending',
+                             consent=True,transport='own') for p in ('p19','p20')]
+        with server.connect() as c:
+            server.save_patch(c,self.users['secretary'],'p-elias',dict(revision=revision,changes={
+                'REGISTRATIONS':state['REGISTRATIONS']+[form],
+                'REGISTRANTS':state['REGISTRANTS']+participants}))
+        with server.connect() as c:
+            scoped = server.visible(c,self.users['leader'],'p-elias',self.state()[1])
+        checkin = scoped['CHECKIN']
+        checkin['sessions'][event['id']] = dict(eventId=event['id'],rows=[dict(p='p19',**{'in':'09:00'},
+            out=None,pickupRequired=False,code='')],present=1,expected=2,awaitingGuardian=0,room=event['venue'])
+        self.patch('leader','CHECKIN',checkin)
+        self.assertEqual(self.state()[1]['CHECKIN']['sessions'][event['id']]['rows'][0]['p'],'p19')
+        pickup = scoped['PICKUP']
+        pickup['p19']['required'] = False
+        self.patch('leader','PICKUP',pickup)
+        self.assertFalse(self.state()[1]['PICKUP']['p19']['required'])
+        pickup['p20']['restricted'] = []
+        with self.assertRaises(server.Problem):
+            self.patch('leader','PICKUP',pickup)
+
     def test_address_cascade_must_match_verified_parent(self):
         _, state = self.state()
         extra = copy.deepcopy(state['PERSON_EXTRA'])

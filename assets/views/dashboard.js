@@ -1,7 +1,9 @@
 /* Dashboard — one per role. The priest lands on what needs a signature, the
    treasurer on what is open in the safe, the volunteer on the door. */
 import { t, isAr, num, usd, fmtLong, fmtDate } from '../i18n.js';
-import { S, role, me, is } from '../store.js';
+import { S, role, me, is, bus } from '../store.js';
+import { session } from '../api.js';
+import { M, loadMember } from '../member-data.js';
 import { icon, pageHead, sectionH, stat, panel, who, status, amount, pill, esc, table, empty } from '../ui.js';
 import { PARISH, TODAY, RATE, EVENTS, SACRAMENTS, RESERVATIONS, BATCH, EXPENSES, FUNDS, PEOPLE, HOUSEHOLDS, PORTAL_REQUESTS,
          GROUPS, GROUP_DETAIL, ROTA, AUDIT, NOTICES, anniversaryItems, CHECKIN, person, venue, group, resStatus, resClash } from '../data.js';
@@ -223,6 +225,7 @@ function leader() {
       ${mine.slice(0, 2).map(g => stat(t(g.name, g.ar), g.members, g.meets ? t(g.meets, g.meetsAr) : t('no fixed meeting', 'بلا اجتماع ثابت'))).join('')}
       ${stat(t('Upcoming meetings', 'الاجتماعات القادمة'), upcoming.length, t('in my groups', 'في مجموعاتي'))}
       ${stat(t('Recorded group attendance', 'حضور المجموعات المسجّل'), recorded, `${meetings.length} ${t('meetings','اجتماعات')}`)}
+      ${stat(t('Complaints received','الشكاوى الواردة'),M.loadedFor===`${session.user?.id}:${session.parishId}`?M.leaderConcerns.length:'…',`<a href="#/memberhub">${t('View group complaints','عرض شكاوى المجموعة')}</a>`)}
     </div>
     ${sectionH(t('My groups', 'مجموعاتي'))}
     <div class="gridcards">${cards}</div>
@@ -242,3 +245,7 @@ export function dashboard() {
   if (is('leader')) return leader();
   return '';
 }
+dashboard.mount = host => {
+  if(is('leader')&&M.loadedFor!==`${session.user?.id}:${session.parishId}`)
+    loadMember().then(()=>{if(S.route==='dashboard')bus.refresh();}).catch(()=>{});
+};

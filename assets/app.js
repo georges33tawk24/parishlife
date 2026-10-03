@@ -60,6 +60,7 @@ export const ROUTES = {
   calendar:     { ico:'events',   en:'Calendar',         ar:'الرزنامة',            view:Parish.calendar },
   services:     { ico:'service',  en:'Service planning', ar:'تخطيط الخدم',         view:Parish.services },
   groups:       { ico:'groups',   en:'Groups',           ar:'المجموعات',           view:Parish.groups,      badge:() => D.GROUPS.length },
+  attendance:   { ico:'attend',   en:'Attendance',       ar:'الحضور',              view:Parish.ministryAttendance },
   volunteers:   { ico:'vol',      en:'Volunteers',       ar:'المتطوّعون',           view:Parish.volunteers,
     badge:() => S.role==='leader' ? new Set(D.GROUPS.flatMap(g=>D.groupInfo(g.id).roster.map(r=>r.p))).size :
       D.ROTA.teams.flatMap(t => t.filled).filter(f => !f.p || f.s === 'declined').length },

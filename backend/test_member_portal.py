@@ -38,6 +38,16 @@ class MemberPortalTests(unittest.TestCase):
         with server.connect() as c:
             return server.member_view(c, self.users[who], 'p-elias')
 
+    def test_leader_receives_only_non_sensitive_group_complaints(self):
+        self.action('choir', 'concern', category='Suggestions', groupId='g1', subject='Practice timing',
+                    description='Please start earlier', anonymous=True)
+        self.action('choir', 'concern', category='Safety', groupId='g1', subject='Sensitive case',
+                    description='Needs independent review', anonymous=True)
+        view = self.view('leader')
+        self.assertEqual([item['subject'] for item in view['leaderConcerns']], ['Practice timing'])
+        self.assertNotIn('identity', view['leaderConcerns'][0])
+        self.assertNotIn('Review', view['complaintPermissions'])
+
     def test_member_has_memberships_without_staff_access(self):
         member = self.view('choir')
         self.assertIn('g1', {g['id'] for g in member['groups']})

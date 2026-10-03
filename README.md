@@ -16,6 +16,10 @@ To create an additional account, run `& $parishPython server.py --create-user bi
 
 Complaint review is never implied by priest, secretary, leader, or member access. An operator must explicitly grant it, for example `& $parishPython server.py --grant-complaints safeguarding --parish p-elias --complaint-permission Review --complaint-permission Respond --complaint-permission ViewSensitive`. Add `Resolve` to close cases and `ViewIdentity` only when the reviewer needs identified submitter details. A named reviewer is excluded from cases that list them among the people involved. Choose another authorized reviewer for those cases.
 
+Ministry leaders can see read-only, non-sensitive complaints linked to groups they lead in **Complaints received**. This view excludes cases involving the leader, does not reveal submitter identity or attachments, and logs each access. Review, responses, and sensitive cases still require explicit reviewer permissions.
+
+Leaders can save group messaging automation and rule configurations. They are records for planning; no timed runner or external message delivery is connected.
+
 The first start creates `var/parishlife.sqlite3` from `backend/seed.json`. Saint Elias contains sample data; the other sample parishes start with independent empty records. The `var/` directory is ignored by Git. Back up the database file with the server stopped or with SQLite's backup facility. The browser's Data snapshot export is a review artifact, not a database restore path.
 
 ## Architecture

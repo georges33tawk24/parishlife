@@ -219,11 +219,28 @@ export const ENT = {
       { k: 'part', label: L('Part of the liturgy', 'الجزء من الليتورجيا'), type: 'select',
         options: () => ['Entrance', 'Trisagion', 'Offertory', 'Communion', 'Veneration', 'Recessional'].map(x => [x, x]) },
       { k: 'key', label: L('Key', 'المقام'), ph: 'D minor', dir: 'ltr' },
+      { k: 'linkType', label: L('Add a link', 'إضافة رابط'), type: 'select', full: true,
+        get: () => '', set: () => {},
+        options: () => [['', 'Choose a link type', 'اختر نوع الرابط'],['youtubeUrl','YouTube','YouTube'],['anghamiUrl','Anghami','Anghami'],['otherUrl','Other link','رابط آخر']] },
       { k: 'youtubeUrl', label: L('YouTube link (optional)', 'رابط يوتيوب (اختياري)'), type: 'url', full: true, ph:'https://www.youtube.com/watch?v=...' },
       { k: 'anghamiUrl', label: L('Anghami link (optional)', 'رابط أنغامي (اختياري)'), type: 'url', full: true, ph:'https://play.anghami.com/...' },
       { k: 'otherUrl', label: L('Other music link (optional)', 'رابط موسيقي آخر (اختياري)'), type: 'url', full: true, ph:'https://...' },
       { k: 'lang', label: L('Language', 'اللغة'), type: 'select',
         options: () => [['Arabic', 'Arabic', 'عربي'], ['Syriac', 'Syriac', 'سرياني'], ['English', 'English', 'إنكليزي'], ['French', 'French', 'فرنسي']] }],
+    onMount: el => {
+      const chooser = el.querySelector('#cf_linkType');
+      const keys = ['youtubeUrl', 'anghamiUrl', 'otherUrl'];
+      const shown = new Set(keys.filter(key => el.querySelector(`#cf_${key}`)?.value.trim()));
+      const update = () => {
+        if (keys.includes(chooser.value)) shown.add(chooser.value);
+        keys.forEach(key => {
+          const field = el.querySelector(`#cf_${key}`)?.closest('.formrow');
+          if (field) field.hidden = !shown.has(key);
+        });
+      };
+      chooser.addEventListener('change', update);
+      update();
+    },
     blank: () => ({ id: uid('m'), title: '', ar: '', occasion: '', occasionAr: '', part: 'Entrance', key: '', lang: 'Arabic',
       youtubeUrl:'',anghamiUrl:'',otherUrl:'',sheet: false, audio: false }),
     check: vals => {

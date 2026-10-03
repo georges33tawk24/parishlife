@@ -71,7 +71,7 @@ export const ROLES = {
     noteEn:'Scoped to the groups she leads. Every list opens already filtered to her people — the parish list, giving and other groups are not in the rail.',
     noteAr:'محصورة بالمجموعات التي تقودها. كل لائحة تفتح مرشّحة على أفرادها — لائحة الرعية والتقدمات والمجموعات الأخرى ليست في الشريط.',
     nav:[L('dashboard'),
-      H('My ministry','خدمتي'), L('groups'), L('volunteers'), L('checkin'), L('music'),
+      H('My ministry','خدمتي'), L('groups'), L('attendance'), L('volunteers'), L('checkin'), L('music'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'),
       H('Communicate','التواصل'), L('messaging'), L('memberhub')]
   },

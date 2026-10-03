@@ -769,7 +769,8 @@ export function meetingNew(gid=curGroup()) {
   const now=new Date(),todayKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   openDrawer({
     title: L('Schedule a meeting', 'جدولة اجتماع'),
-    body: `${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'m_title',value:L('Ministry meeting','اجتماع الخدمة'),req:true})}
+    body: `<div class="formrow"><label class="label" for="m_kind">${L('Meeting for','الاجتماع لـ')}</label><select class="select" id="m_kind"><option value="group">${L('All group members','جميع أعضاء المجموعة')}</option><option value="committee">${L('Committee / people in charge','اللجنة / المسؤولون')}</option></select></div>
+      ${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'m_title',value:L('Ministry meeting','اجتماع الخدمة'),req:true})}
       ${C.textarea({label:L('Description or agenda','الوصف أو جدول الأعمال'),id:'m_description',max:500})}
       <div class="formgrid">${C.field({ label: L('First date', 'التاريخ الأول'), type: 'date', value: todayKey, id: 'm_d' })}
         ${C.field({ label: L('Starts at', 'يبدأ عند'), type: 'time', value: '19:00', id: 'm_t' })}</div>
@@ -808,7 +809,7 @@ export function meetingNew(gid=curGroup()) {
           const weeks=Math.floor((Date.UTC(next.getFullYear(),next.getMonth(),next.getDate())-Date.UTC(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()))/604800000);
           if(interval&&(!selected.has(next.getDay())||weeks%(interval/7)!==0))continue;
           if(detail.meetings.some(m=>m.d===d&&m.t===time))continue;
-          const meeting={id:`mt${Date.now().toString(36)}-${i}`,d,t:time,end,title:val(el,'#m_title'),
+          const meeting={id:`mt${Date.now().toString(36)}-${i}`,d,t:time,end,title:val(el,'#m_title'),kind:val(el,'#m_kind'),
             description:val(el,'#m_description'),place:val(el,'#m_place'),rsvp:{yes:0,no:0,none:detail.roster.length},done:false,attendance:{}};
           detail.meetings.push(meeting);added.push(meeting);
           if(!interval)break;
@@ -824,7 +825,8 @@ export function meetingNew(gid=curGroup()) {
 export function meetingEdit(id) {
   const meeting=gd().meetings.find(m=>(m.id || `mt-${m.d}-${m.t}`)===id);if(!meeting)return;
   openDrawer({title:L('Edit meeting','تعديل الاجتماع'),
-    body:`${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'me_title',value:meeting.title||L('Ministry meeting','اجتماع الخدمة'),req:true})}
+    body:`<div class="formrow"><label class="label" for="me_kind">${L('Meeting for','الاجتماع لـ')}</label><select class="select" id="me_kind"><option value="group" ${meeting.kind!=='committee'?'selected':''}>${L('All group members','جميع أعضاء المجموعة')}</option><option value="committee" ${meeting.kind==='committee'?'selected':''}>${L('Committee / people in charge','اللجنة / المسؤولون')}</option></select></div>
+      ${C.field({label:L('Meeting title','عنوان الاجتماع'),id:'me_title',value:meeting.title||L('Ministry meeting','اجتماع الخدمة'),req:true})}
       ${C.textarea({label:L('Description or agenda','الوصف أو جدول الأعمال'),id:'me_description',value:meeting.description||'',max:500})}
       <div class="formgrid">${C.field({label:L('Date','التاريخ'),type:'date',id:'me_date',value:meeting.d})}
       ${C.field({label:L('Starts at','يبدأ عند'),type:'time',id:'me_time',value:meeting.t})}</div>
@@ -838,7 +840,7 @@ export function meetingEdit(id) {
       if(!need(el,'#me_title',L('Name the meeting','سمّ الاجتماع'))||!d||!t)return toast(L('Choose a title, date and time','اختر عنواناً وتاريخاً ووقتاً'),'','warning');
       if(end&&end<=t)return toast(L('End time must follow start time','يجب أن يكون وقت النهاية بعد البداية'),'','warning');
       if(gd().meetings.some(x=>x!==meeting&&x.d===d&&x.t===t))return toast(L('Meeting already exists','الاجتماع موجود'),'','warning');
-      Object.assign(meeting,{d,t,end,title:val(el,'#me_title'),description:val(el,'#me_description'),place:val(el,'#me_place')});
+      Object.assign(meeting,{d,t,end,kind:val(el,'#me_kind'),title:val(el,'#me_title'),description:val(el,'#me_description'),place:val(el,'#me_place')});
       S.ui.attendancePeriod=d.slice(0,7);closeOverlays();refresh();ok(L('Meeting updated','حُدّث الاجتماع'));
     });
     el.querySelector('#me_delete').addEventListener('click',()=>{closeOverlays();openModal({title:L('Delete meeting and attendance?','حذف الاجتماع والحضور؟'),
@@ -1392,8 +1394,9 @@ export function scan() {
         if(!registrant)return toast(L('Reference not registered for this event','الرقم غير مسجّل لهذا الحدث'),'','warning');
         const session=ensureCheckinSession(event.id);
         if(session.rows.some(r=>r.p===registrant.p))return toast(L('Already checked in','مسجّل مسبقاً'),'','warning');
-        const code=String(1000+Math.floor(Math.random()*9000));
-        session.rows.push({p:registrant.p,in:new Date().toTimeString().slice(0,5),out:null,guardian:'—',code,alert:''});
+        const pickup=D.PICKUP[registrant.p],required=pickup?.required!==false&&!!pickup;
+        const code=required?String(1000+Math.floor(Math.random()*9000)):'';
+        session.rows.push({p:registrant.p,in:new Date().toTimeString().slice(0,5),out:null,guardian:pickup?.approved?.[0]?.[0]||'—',pickupRequired:required,code,alert:''});
         session.present=session.rows.length;
         closeOverlays();refresh();ok(L('Checked in','سُجّل الدخول'),`${nameOf(D.person(registrant.p))} · ${L(event.title,event.titleAr)}`);
       };
@@ -1412,11 +1415,12 @@ export function checkinManual() {
     sub: `${L(event.title,event.titleAr)} · ${event.d} ${event.t} · ${L(D.venue(event.venue)?.name||'',D.venue(event.venue)?.ar||'')}`,
     cta: L('Check in', 'تسجيل الدخول'), exclude: selectedCheckin()?.rows.map(r=>r.p)||[],allow:allowed,
     onPick: p => {
-      const code = String(1000 + Math.floor(Math.random() * 9000));
+      const pickup=D.PICKUP[p.id],required=pickup?.required!==false&&!!pickup;
+      const code = required?String(1000 + Math.floor(Math.random() * 9000)):'';
       const session=ensureCheckinSession(event.id);if(!session||session.rows.some(r=>r.p===p.id))return;
-      session.rows.push({p:p.id,in:new Date().toTimeString().slice(0,5),out:null,guardian:'—',code,alert:''});
+      session.rows.push({p:p.id,in:new Date().toTimeString().slice(0,5),out:null,guardian:pickup?.approved?.[0]?.[0]||'—',pickupRequired:required,code,alert:''});
       session.present=session.rows.length;refresh();
-      ok(L('Checked in', 'سُجّل الدخول'), `${nameOf(p)} · ${L('code', 'الرمز')} ${code}`);
+      ok(L('Checked in', 'سُجّل الدخول'), `${nameOf(p)}${required?` · ${L('pickup code', 'رمز الاستلام')} ${code}`:` · ${L('No pickup required','لا حاجة إلى استلام')}`}`);
     }
   });
 }
@@ -1435,6 +1439,7 @@ export function pickupAdd(pid) {
       C.wire(el);
       el.querySelector('#pk_go').addEventListener('click', () => {
         if (!need(el, '#pk_en', L('Enter a name', 'أدخل اسماً'))) return; const en = val(el, '#pk_en');
+        D.PICKUP[pid] ||= {approved:[],restricted:[],required:true};
         D.PICKUP[pid].approved.push([en, val(el, '#pk_ar') || en, el.querySelector('#pk_r').value]);
         closeOverlays(); refresh(); ok(L('Authorised to collect', 'مفوَّض بالاستلام'), en);
       });

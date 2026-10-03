@@ -426,7 +426,50 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 
 /* Ministry meetings and attendance use the same clear status language. */
 .meeting-overview{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:20px 0 24px}
-.meeting-overview h2{font:600 21px/28px var(--sans);margin:0 0 4px}
+.stats.attendance-stats{grid-template-columns:minmax(150px,1fr) minmax(220px,1.3fr) minmax(150px,1fr);gap:12px;max-width:800px}
+.attendance-stats .stat{padding:10px 14px;gap:2px;box-shadow:none}
+.attendance-stats .stat .v{font:600 22px/28px var(--sans)}
+.attendance-stats .stat .d{font-size:11px;line-height:16px}
+.attendance-breakdown{display:grid;gap:1px;margin-top:3px;font:500 11px/16px var(--sans)}
+.attendance-breakdown>div{display:grid;grid-template-columns:1fr 32px 40px;gap:8px;align-items:center}
+.attendance-breakdown b,.attendance-breakdown small{text-align:end;font-size:11px;font-variant-numeric:tabular-nums}
+.attendance-breakdown small{color:var(--text-2)}
+.ministry-calendar-scroll{overflow-x:auto;margin:16px 0;border-radius:var(--r-card)}
+.cal.ministry-calendar{min-width:630px;background:var(--muted);padding:8px;box-shadow:var(--e1)}
+.ministry-calendar .cal-head>div{border:0;padding:8px 10px 12px}
+.ministry-calendar .cal-grid{gap:6px}
+.ministry-calendar .cal-day{min-width:0;min-height:118px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-input);padding:8px}
+.ministry-calendar .cal-day.out{background:var(--surface)}
+.ministry-calendar .cal-day.out .dn{color:var(--text-3)}
+.ministry-calendar .ministry-calendar-event{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;height:auto;min-height:32px;border:0;text-align:start;white-space:normal;cursor:pointer;padding:5px 6px;border-radius:5px;flex-shrink:0}
+.ministry-calendar-event span{font:600 11px/15px var(--sans);overflow-wrap:anywhere}
+.ministry-calendar-event small{font:400 10px/14px var(--sans)}
+.ministry-calendar-event:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.gridcards.formation-cards{grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr));align-items:stretch}
+.formation-cards>.panel{display:flex;flex-direction:column}
+.formation-cards .panel-b{flex:1;display:flex;flex-direction:column}
+.formation-card-actions{margin-top:auto;padding-top:16px}
+.formation-progress>summary{cursor:pointer;font:600 14px/20px var(--sans)}
+.formation-progress>summary .more{display:flex;align-items:center;gap:8px}
+.formation-progress[open]>summary .more svg{transform:rotate(180deg)}
+.ministry-content>.toolbar:first-child,.ministry-content>.alert:first-child,.ministry-content>.splitview:first-child{margin-top:16px}
+.formation-cards .panel-h{align-items:flex-start;gap:8px}
+.formation-cards .panel-h h3{min-width:0;overflow-wrap:anywhere}
+.formation-cards .panel-h .more{display:flex;gap:4px}
+.ministry-filters{margin:16px 0;gap:8px}
+.ministry-filters>.input{flex:1 1 200px;width:auto;max-width:360px}
+.ministry-filters>.select,.ministry-filters>.select-wrap{flex:0 1 210px;width:210px}
+.ministry-section-heading{margin:20px 0 16px;justify-content:space-between;gap:12px}
+.ministry-section-heading h2,.ministry-content>h3{font:600 16px/24px var(--sans)}
+.resource-cards .panel-b{display:flex;flex-direction:column;gap:12px;height:100%;font:400 13px/20px var(--sans)}
+.resource-name{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font:600 14px/22px var(--sans)}
+.resource-name [lang=ar]{font-weight:500}
+.resource-cards .panel-b>.row{margin-top:auto;border-top:1px solid var(--border);padding-top:12px}
+.formation-member-choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;max-height:260px;overflow:auto}
+.group-upload{display:flex;flex-direction:column;gap:8px}
+.group-upload .files{order:-1}
+@media (max-width:600px){.stats.attendance-stats{grid-template-columns:1fr 1fr;gap:8px}.attendance-stats>.stat:nth-child(2){grid-column:1/-1;grid-row:2}.attendance-breakdown{grid-template-columns:repeat(3,1fr);gap:12px}.attendance-breakdown>div{grid-template-columns:1fr auto;gap:2px}.attendance-breakdown small{grid-column:1/-1;text-align:start}.ministry-filters>.input,.ministry-filters>.select,.ministry-filters>.select-wrap{max-width:none}}
+.meeting-overview h2{font:600 16px/24px var(--sans);margin:0 0 4px}
 .meeting-overview p{margin:0}
 .meeting-section{display:grid;gap:12px;margin-bottom:28px}
 .meeting-section-title{display:flex;align-items:center;gap:8px;margin-bottom:2px}

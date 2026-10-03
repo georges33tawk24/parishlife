@@ -400,6 +400,8 @@ export const groupInfo = id => {
   detail.belongings = (detail.belongings || []).map((item,index) => Array.isArray(item)
     ? { id:`resource-${id}-${index+1}`, name:item[0], ar:item[1], qty:item[2], location:item[3], locationAr:item[4] } : item);
   detail.resourceLoans ||= [];
+  detail.automations ||= [];
+  detail.messagingRules ||= [];
   detail.milestones = (detail.milestones || []).map((item,index) => Array.isArray(item)
     ? { id:`formation-${id}-${index+1}`, name:item[0], ar:item[1], description:'', legacyCount:item[2], completions:{} } : item);
   detail.milestones.forEach(item => { item.completions ||= {}; item.legacyCount ||= 0; });

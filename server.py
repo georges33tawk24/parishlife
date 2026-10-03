@@ -439,6 +439,9 @@ def visible(c, u, pid, d):
         allowed_forms = {form['id'] for form in d['REGISTRATIONS']}
         d['REGISTRANTS'] = [row for row in d['REGISTRANTS'] if row.get('registrationId') in allowed_forms]
         if u['role'] in {'leader', 'volunteer'}:
+            participant_ids = {row.get('p') for row in d['REGISTRANTS']}
+            d['PICKUP'] = {person_id: info for person_id, info in d['PICKUP'].items() if person_id in participant_ids}
+        if u['role'] in {'leader', 'volunteer'}:
             existing = {person['id'] for person in d['PEOPLE']}
             allowed_people = {row['p'] for row in d['REGISTRANTS']}
             d['PEOPLE'].extend(dict(id=person['id'], lat=person['lat'], ar=person['ar'], tags=[], hh=None,
@@ -627,7 +630,7 @@ def writable(role, key):
     if key in {'NOTIFICATIONS', 'PREFS'}: return True
     if role == 'secretary': return key in OFFICE
     if role == 'treasurer': return key in FINANCE | {'RATE'}
-    if role == 'leader': return key in {'GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS'}
+    if role == 'leader': return key in {'GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS', 'CHECKIN', 'PICKUP'}
     return False
 
 
@@ -646,6 +649,21 @@ def save_patch(c, u, pid, payload):
             permitted = {g['id'] for g in old['GROUPS'] if g.get('leader') == u['person_id'] or g.get('assistant') == u['person_id']}
             require(set(value) <= permitted, 'Group is outside your ministry.', 403)
             d[key].update(value)
+        elif key == 'CHECKIN' and u['role'] == 'leader':
+            scoped = visible(c, u, pid, old)
+            permitted = set(scoped['CHECKIN'].get('sessions', {})) | {form.get('eventId') for form in scoped['REGISTRATIONS']}
+            require(set(value.get('sessions', {})) <= permitted, 'Event is outside your check-in scope.', 403)
+            for event_id, event_session in value.get('sessions', {}).items():
+                d['CHECKIN']['sessions'][event_id] = event_session
+        elif key == 'PICKUP' and u['role'] == 'leader':
+            scoped = visible(c, u, pid, old)
+            permitted = {row.get('p') for row in scoped['REGISTRANTS']}
+            require(set(value) <= permitted, 'Person is outside your check-in scope.', 403)
+            for person_id, info in value.items():
+                previous = old['PICKUP'].get(person_id, {})
+                require(info.get('restricted', []) == previous.get('restricted', []), 'A leader cannot change pickup restrictions.', 403)
+                require(not info.get('restricted') or info.get('required') is not False, 'Restricted pickup remains required.', 403)
+                d['PICKUP'][person_id] = info
         else: d[key] = value
     removed_people = ({person['id'] for person in old['PEOPLE'] + old['ARCHIVED']} -
                       {person['id'] for person in d['PEOPLE'] + d['ARCHIVED']})
@@ -1211,6 +1229,13 @@ def member_view(c, u, pid):
                     owner = next((p for p in d['PEOPLE'] if p['id'] == account['person_id']), {}) if account else {}
                     item['identity'] = {'name': account['name'] if account else '', 'phone': owner.get('phone', '')}
         for item in review: complaint_log(c, item['id'], u['id'], 'view')
+    leader_concerns = []
+    if u['role'] == 'leader':
+        leader_concerns = [concern_public(c, r) for r in c.execute(
+            'SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', (pid,))
+            if r['group_id'] in managed_groups and not sensitive_concern(r['category'])
+            and not reviewer_conflict(u, person, r)]
+        for item in leader_concerns: complaint_log(c, item['id'], u['id'], 'ministry-view')
     own = {k: person.get(k, '') for k in ('id', 'lat', 'ar', 'phone', 'born', 'town', 'townAr', 'status')}
     own['email'] = d.get('PERSON_EXTRA', {}).get(person['id'], {}).get('email', '')
     own['address'] = next((h.get('address', '') for h in d['HOUSEHOLDS'] if person['id'] in h.get('members', [])), '')
@@ -1240,7 +1265,7 @@ def member_view(c, u, pid):
     return dict(parish={k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
                 person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
                 notes=private['notes'], commitments=private['commitments'], preferences=private['preferences'],
-                concerns=concerns, review=review, complaintPermissions=sorted(perms), profileRequests=requests,
+                concerns=concerns, review=review, leaderConcerns=leader_concerns, complaintPermissions=sorted(perms), profileRequests=requests,
                 volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups),
                 formation=formation, reviewers=reviewers, categories=categories, notifications=notifications)
 

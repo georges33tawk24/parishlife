@@ -23,6 +23,8 @@ const calMonth = () => { const d = new Date(2026, 9 + S.ui.calOffset, 1); return
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const L = (en, ar) => t(en, ar);
 const byTime = (a, b) => (a.d + a.t).localeCompare(b.d + b.t);
+const meetingKind = m => m.kind === 'committee' ? L('Committee / people in charge','اللجنة / المسؤولون') : L('Whole group','المجموعة كاملة');
+const MINISTRY_ROLES=[['President','رئيس'],['Vice President','نائب رئيس'],['Secretary','أمين السرّ'],['Treasurer','أمين الصندوق'],['Responsible of Apostolic Mission','وكيل الرسالة'],['Responsible for Christian Education','وكيل التنشئة والثقافة المسيحية'],['Social Media Manager','وكيل الإعلام'],['Consultant','مستشار'],['Advisor','موجّه'],['Group Monitor','مسؤول فريق'],['Trainer','مدرّب في معهد التنشئة والتدريب'],['Trainee','طالب في معهد التنشئة والتدريب'],['Member','عضو']];
 /* the kinds of entry the calendar can show; the chips switch each on and off */
 const CAL_KINDS = [['mass', 'Masses', 'القداديس'], ['event', 'Parish events', 'أحداث الرعية'], ['group', 'Groups', 'المجموعات'],
                    ['sacr', 'Sacraments', 'الأسرار'], ['pending', 'Reservations', 'الحجوزات']];
@@ -403,12 +405,12 @@ export function services(tab = '', planId = '') {
       title:L('Ministry planning','تخطيط الخدمة'),sub:L('Plan your group meetings and the music for each one.','خطّط لاجتماعات مجموعتك والموسيقى لكل اجتماع.'),
       actions:`<button class="btn btn-primary" data-leader-meeting-new ${GROUPS.length?'':'disabled'}>${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button>`})+
       `<div class="toolbar" style="margin:16px 0"><span class="t-caption dim">${L('Choose a group meeting to manage its details and attendance.','اختر اجتماع مجموعة لإدارة التفاصيل والحضور.')}</span></div>
-      ${table({cols:[{label:L('Meeting','الاجتماع')},{label:L('When','الموعد')},{label:L('Group / place','المجموعة / المكان')},
-        {label:L('Music','الموسيقى')},{label:'',cls:'shrink'}],rows:meetings.map(({g,m})=>({cells:[
+      ${GROUPS.map(g=>panel(L(g.name,g.ar),table({cols:[{label:L('Meeting','الاجتماع')},{label:L('When','الموعد')},{label:L('Type / place','النوع / المكان')},
+        {label:L('Music','الموسيقى')},{label:'',cls:'shrink'}],rows:meetings.filter(row=>row.g.id===g.id).map(({m})=>({cells:[
           `<b>${esc(m.title||L('Ministry meeting','اجتماع الخدمة'))}</b>`,`${fmtDate(m.d)} · ${esc(m.t)}`,
-          `${esc(L(g.name,g.ar))}${m.place?` · ${esc(m.place)}`:''}`,
+          `${esc(meetingKind(m))}${m.place?` · ${esc(m.place)}`:''}`,
           (m.hymns||[]).map(id=>MUSIC.find(item=>item.id===id)).filter(Boolean).map(h=>esc(L(h.title,h.ar))).join(', ')||'—',
-          `<a class="btn btn-secondary btn-dense" href="#/groups/${esc(g.id)}/meetings">${L('Open meeting','افتح الاجتماع')}</a>`]}))})}
+          `<a class="btn btn-secondary btn-dense" href="#/groups/${esc(g.id)}/meetings">${L('Open meeting','افتح الاجتماع')}</a>`]}))}),{tight:true})).join('')}
       ${!meetings.length?empty('calendar',L('No meetings yet','لا اجتماعات بعد'),L('Schedule one from your group page.','جدول اجتماعاً من صفحة مجموعتك.')):''}`;
   }
   const savedPlan = tab === 'plan' ? allPlans().find(p => p.id === planId) : null;
@@ -505,10 +507,9 @@ services.mount = host => {
   if(is('leader')){
     host.querySelector('[data-leader-meeting-new]')?.addEventListener('click',()=>{
       if(GROUPS.length===1)return F.meetingNew(GROUPS[0].id);
-      openModal({title:L('Choose ministry','اختر الخدمة'),body:`<div class="formrow"><label class="label" for="leader_group">${L('Group','المجموعة')}</label>
-        <select class="select" id="leader_group">${GROUPS.map(g=>`<option value="${esc(g.id)}">${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>`,
-        foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="leader_group_go">${L('Continue','متابعة')}</button>`,
-        onMount(el){el.querySelector('#leader_group_go').addEventListener('click',()=>{const gid=el.querySelector('#leader_group').value;closeOverlays();F.meetingNew(gid);});}});
+      openModal({title:L('Choose ministry','اختر الخدمة'),body:`<div class="gridcards">${GROUPS.map(g=>`<button class="panel card-link" style="cursor:pointer;text-align:start;padding:18px" data-leader-group="${esc(g.id)}"><b>${esc(L(g.name,g.ar))}</b></button>`).join('')}</div>`,
+        foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button>`,
+        onMount(el){el.querySelectorAll('[data-leader-group]').forEach(button=>button.addEventListener('click',()=>{closeOverlays();F.meetingNew(button.dataset.leaderGroup);}));}});
     });return;
   }
   const redraw = () => { if (S.route === 'services' && S.params[0] === 'plan') { host.innerHTML=services(...S.params); services.mount(host); } };
@@ -600,10 +601,8 @@ function editPlanItem(index,redraw) {
 function personOptions() { return PEOPLE.filter(p=>p.status!=='visitor').map(p=>[p.id,L(p.lat,p.ar)]); }
 
 /* ═══════════════ 3 · groups ═══════════════ */
-export function groups(id, tab) {
-  if (id) return groupDetail(id, tab || '');
-  const mine = GROUPS; // the API has already scoped leaders to their own groups
-  const cards = mine.map(g => {
+function groupCards(items, tab = '') {
+  return items.map(g => {
     const leader = person(g.leader);
     const visTone = g.vis === 'confidential' ? 'danger' : g.vis === 'private' ? 'warning' : '';
     const visLabel = g.vis === 'confidential' ? L('Confidential', 'سرّي') : g.vis === 'private' ? L('Private', 'خاص') : L('Public', 'عام');
@@ -611,7 +610,7 @@ export function groups(id, tab) {
       <div class="row" style="gap:10px;align-items:flex-start">
         <span class="avatar avatar-lg">${icon('groups', 20)}</span>
         <div style="flex:1;min-width:0">
-          <a class="stretch" href="#/groups/${g.id}"><b style="display:block;font:600 16px/22px var(--sans)">${esc(L(g.name, g.ar))}</b></a>
+          <a class="stretch" href="#/groups/${esc(g.id)}${tab ? `/${tab}` : ''}"><b style="display:block;font:600 16px/22px var(--sans)">${esc(L(g.name, g.ar))}</b></a>
           <small class="t-caption dim">${esc(L(g.cat, g.catAr))}${g.meets ? ` · ${esc(L(g.meets, g.meetsAr))}` : ''}</small></div>
         ${!is('leader') ? CR.recBtn('group', g.id) : ''}</div>
       <div class="divider"></div>
@@ -619,6 +618,11 @@ export function groups(id, tab) {
         <span class="badge badge-quiet" title="${L('members', 'أعضاء')}">${g.members}</span></span></div>
     </div></section>`;
   }).join('');
+}
+
+export function groups(id, tab) {
+  if (id) return groupDetail(id, tab || '');
+  const cards = groupCards(GROUPS); // the API has already scoped leaders to their own groups
 
   return `${pageHead({
       crumbs: [{ label: is('leader') ? L('My ministry', 'خدمتي') : L('Parish life', 'حياة الرعية') }, { label: L('Groups', 'المجموعات') }],
@@ -665,7 +669,7 @@ function meetingCard(g, m) {
     <div class="meeting-date"><strong>${esc(new Intl.DateTimeFormat(isAr() ? 'ar-LB' : 'en-US', { day: 'numeric' }).format(date))}</strong><span>${esc(monthLabel)}</span></div>
     <div class="meeting-content">
       <div class="meeting-heading"><div><p class="meeting-eyebrow">${fmtLong(date)}</p>
-        <h3>${esc(m.title||L('Group meeting','اجتماع المجموعة'))}</h3><p class="meeting-time">${icon('events',15)}<span dir="ltr">${esc(m.t || '—')}${m.end?`–${esc(m.end)}`:''}</span>${m.place?` · ${esc(m.place)}`:''}</p></div>
+        <h3>${esc(m.title||L('Group meeting','اجتماع المجموعة'))}</h3><p class="meeting-time">${esc(meetingKind(m))} · ${icon('events',15)}<span dir="ltr">${esc(m.t || '—')}${m.end?`–${esc(m.end)}`:''}</span>${m.place?` · ${esc(m.place)}`:''}</p></div>
         <div class="meeting-heading-actions">${m.done ? status('closed') : upcoming ? status('scheduled') : pill(L('Attendance needed','الحضور مطلوب'),'warning')}
           ${C.iconBtn('edit',L('Edit meeting','تعديل الاجتماع'),`data-meeting-edit="${esc(meetingId(m))}"`)}</div></div>
       <div class="meeting-summary">${m.done
@@ -724,57 +728,67 @@ function groupDetail(id, tab) {
             <a class="btn btn-secondary btn-dense" style="margin-top:10px" href="#/groups/${esc(g.id)}/attendance">${L('Open attendance','فتح الحضور')}</a>`; })())}
       </div></div>`,
 
-    roster: () => table({
+    roster: () => `<div class="toolbar" style="margin:16px 0;gap:8px;flex-wrap:wrap">
+      <div class="search" style="max-width:300px">${icon('search',16)}<input class="input" type="search" data-roster-search placeholder="${L('Search members','ابحث عن الأعضاء')}" aria-label="${L('Search members','البحث عن الأعضاء')}"></div><button class="btn btn-secondary btn-dense" data-roster-search-button>${L('Search','بحث')}</button>
+      <select class="select" data-roster-filter aria-label="${L('Filter roster','تصفية اللائحة')}" style="max-width:230px"><option value="all">${L('All roles','كل الأدوار')}</option><option value="leaders">${L('People in charge','المسؤولون')}</option><option value="members">${L('Members','الأعضاء')}</option></select></div>
+      <div data-roster-list>${table({
       pick: true,
       cols: [{ label: L('Member', 'العضو'), sort: true }, { label: L('Role', 'الدور'), cls: 'hide-sm' },
              { label: L('Joined', 'انتسب'), cls: 'hide-md' }, { label: L('Attendance', 'الحضور'), cls: 'num' }, { label: '', cls: 'shrink' }],
-      rows: d.roster.map(r => ({ cells: [
+      rows: d.roster.filter(r=>{const q=(S.ui.rosterQuery||'').toLocaleLowerCase(),p=person(r.p),mode=S.ui.rosterFilter||'all',lead=r.role!=='Member';return (!q||`${p?.lat||''} ${p?.ar||''} ${r.role||''}`.toLocaleLowerCase().includes(q))&&(mode==='all'||(mode==='leaders')===lead);}).map(r => ({ cells: [
         `<button type="button" class="btn btn-ghost btn-dense" data-attendance-history="${esc(r.p)}">${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</button>`,
         `<span class="dim">${esc(L(r.role, r.roleAr))}</span>`,
         `<span class="mono dim">${r.joined}</span>`,
         `<span class="num">${memberAttendancePct(d.meetings,r.p)}</span>`,
-        `<span class="rowacts">${!is('leader') ? C.iconBtn('msg', L('Message', 'مراسلة'), `data-act="compose:${r.p}"`) : ''}${C.iconBtn('dots', L('More', 'المزيد'), `data-act="member-menu:${r.p}"`)}</span>`]}))
-    }),
+        `<span class="rowacts"><button class="btn btn-secondary btn-dense" data-roster-formation="${esc(r.p)}">${L('Formation','التنشئة')}</button>${!is('leader') ? C.iconBtn('msg', L('Message', 'مراسلة'), `data-act="compose:${r.p}"`) : ''}${C.iconBtn('dots', L('More', 'المزيد'), `data-act="member-menu:${r.p}"`)}</span>`]}))
+    })}</div>`,
 
     attendance: () => attendanceMatrix(g,d),
 
     meetings: () => {
       const today = iso(new Date());
-      const upcoming = d.meetings.filter(m => !m.done && m.d >= today).sort(byTime);
-      const earlier = d.meetings.filter(m => m.done || m.d < today).sort((a,b) => byTime(b,a));
+      const direction=S.ui.meetingReverse?-1:1;
+      const upcoming = d.meetings.filter(m => !m.done && m.d >= today).sort((a,b)=>direction*byTime(a,b));
+      const earlier = d.meetings.filter(m => m.done || m.d < today).sort((a,b)=>direction*byTime(a,b));
+      const calendar=S.ui.meetingView==='calendar';
+      const monthKey=S.ui.meetingMonth||today.slice(0,7),[year,monthNumber]=monthKey.split('-').map(Number);
+      const first=new Date(year,monthNumber-1,1),days=new Date(year,monthNumber,0).getDate(),offset=first.getDay();
+      const monthLabel=new Intl.DateTimeFormat(isAr()?'ar-LB':'en-US',{month:'long',year:'numeric'}).format(first);
       return `<div class="meeting-overview"><div><h2>${L('Ministry meetings','اجتماعات الخدمة')}</h2>
         <p class="t-caption dim">${L('Plan meetings, follow replies, and record attendance in one place.','خطّط للاجتماعات وتابع الردود وسجّل الحضور في مكان واحد.')}</p></div>
-        <button class="btn btn-primary" data-act="meeting-new">${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-dense" data-meeting-order title="${L('Reverse meeting date order','عكس ترتيب الاجتماعات')}"><span aria-hidden="true">⇅</span>${L(S.ui.meetingReverse?'Newest first':'Oldest first',S.ui.meetingReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
+        <div class="seg"><button data-meeting-view="list" aria-pressed="${!calendar}">${L('List','قائمة')}</button><button data-meeting-view="calendar" aria-pressed="${calendar}">${L('Calendar','رزنامة')}</button></div>
+        <button class="btn btn-primary" data-act="meeting-new">${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button></div></div>
         ${!d.meetings.length ? empty('calendar',L('No meetings yet','لا اجتماعات بعد'),L('Add the first meeting for this ministry.','أضف أول اجتماع لهذه الخدمة.')) : ''}
-        ${upcoming.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Upcoming','القادمة')}</h3><span class="badge badge-quiet">${upcoming.length}</span></div>${upcoming.map(m=>meetingCard(g,m)).join('')}</section>` : ''}
-        ${earlier.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Earlier meetings','الاجتماعات السابقة')}</h3><span class="badge badge-quiet">${earlier.length}</span></div>${earlier.map(m=>meetingCard(g,m)).join('')}</section>` : ''}`;
+        ${calendar?`<div class="toolbar"><button class="btn btn-secondary btn-dense" data-meeting-month="-1" aria-label="${L('Previous month','الشهر السابق')}">${icon('chevL',16)}</button><b>${esc(monthLabel)}</b><button class="btn btn-secondary btn-dense" data-meeting-month="1" aria-label="${L('Next month','الشهر التالي')}">${icon('chevR',16)}</button></div>
+        <div class="ministry-calendar-scroll"><div class="cal ministry-calendar"><div class="cal-head">${Array.from({length:7},(_,i)=>`<div>${esc(new Intl.DateTimeFormat(isAr()?'ar-LB':'en-US',{weekday:'short'}).format(new Date(2026,9,4+i)))}</div>`).join('')}</div><div class="cal-grid">${Array.from({length:Math.ceil((offset+days)/7)*7},(_,i)=>{
+          const day=new Date(year,monthNumber-1,i-offset+1),date=iso(day),outside=day.getMonth()!==monthNumber-1;
+          const items=d.meetings.filter(m=>m.d===date).sort(byTime);
+          return `<div class="cal-day${outside?' out':''}${date===today?' today':''}"><span class="dn">${day.getDate()}</span>${items.map(m=>`<button class="cal-ev ministry-calendar-event" data-meeting-edit="${esc(meetingId(m))}" title="${esc(m.title||L('Group meeting','اجتماع المجموعة'))}"><span>${esc(m.title||L('Group meeting','اجتماع المجموعة'))}</span><small>${esc(m.t)} · ${esc(meetingKind(m))}</small></button>`).join('')}</div>`;
+        }).join('')}</div></div></div>`:
+        `${upcoming.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Upcoming','القادمة')}</h3><span class="badge badge-quiet">${upcoming.length}</span></div>${upcoming.map(m=>meetingCard(g,m)).join('')}</section>` : ''}
+        ${earlier.length ? `<section class="meeting-section"><div class="meeting-section-title"><h3>${L('Earlier meetings','الاجتماعات السابقة')}</h3><span class="badge badge-quiet">${earlier.length}</span></div>${earlier.map(m=>meetingCard(g,m)).join('')}</section>` : ''}`}`;
     },
 
     posts: () => `<div class="splitview">
       <div class="stack" style="gap:16px">
-        ${panel(L('Announcements', 'الإعلانات'), d.posts.map(p => `<div class="group-announcement">
+        ${panel(L('Announcements', 'الإعلانات'), `${C.richText('')}
+           <button class="btn btn-primary btn-dense" style="margin:12px 0" data-act="post-add">${L('Post', 'نشر')}</button><div class="divider"></div>`+d.posts.map(p => `<div class="group-announcement">
           <div class="row" style="gap:10px">${avatar(person(p.by), 'avatar-sm')}
             <span><b style="font:500 13px/18px var(--sans)">${esc(isAr() ? person(p.by).ar : person(p.by).lat)}</b>
             <small class="t-caption dim" style="display:block">${fmtDate(p.at)}</small></span></div>
-          <p class="t-body" style="font-size:14px;margin-top:10px">${esc(L(p.body, p.bodyAr))}</p></div>`).join('') +
-          `<div class="divider"></div>${C.richText('')}
-           <button class="btn btn-primary btn-dense" style="margin-top:12px" data-act="post-add">${L('Post', 'نشر')}</button>`)}
+          <p class="t-body" style="font-size:14px;margin-top:10px">${esc(L(p.body, p.bodyAr))}</p></div>`).join(''))}
       </div>
       <div class="sidecol">${panel(L('Files and learning resources', 'الملفات وموارد التنشئة'),
         d.files.map(([en, ar, size]) => `<div class="listrow" style="padding-inline:0">${icon('doc', 17, 'dimmer')}
           <span class="grow"><b>${esc(isAr() ? ar : en)}</b><small class="mono">${size}</small></span>
-          ${C.iconBtn('export', L('Open', 'فتح'), `data-act="doc:${isAr() ? ar : en}"`)}</div>`).join('') + `<div class="divider"></div>${C.dropzone('gfiles')}`)}
+          ${C.iconBtn('export', L('Open', 'فتح'), `data-act="doc:${isAr() ? ar : en}"`)}</div>`).join('')+`<div class="divider"></div><div class="group-upload">${C.dropzone('gfiles')}</div>`)}
       </div></div>`,
 
     belongings: () => `<div class="toolbar"><p class="t-caption dim">${L('Track ministry-owned items and who has borrowed them.','تابع مقتنيات الخدمة ومن استعارها.')}</p>
       <button class="btn btn-primary btn-dense" data-resource-new>${icon('plus',15)}${L('Add item','إضافة صنف')}</button></div>
-      ${table({cols:[{label:L('Item','الصنف')},{label:L('Available / total','المتاح / الكل'),cls:'num'},
-        {label:L('Stored at','محفوظ في')},{label:'',cls:'shrink'}],
-        rows:d.belongings.map(r=>{const lent=d.resourceLoans.filter(l=>l.resourceId===r.id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0);
-          return {cells:[`<b>${esc(L(r.name,r.ar))}</b>`,`<span class="num">${r.qty-lent} / ${r.qty}</span>`,
-            esc(L(r.location,r.locationAr)||'—'),`<div class="row" style="gap:5px">${C.iconBtn('edit',L('Edit','تعديل'),`data-resource-edit="${esc(r.id)}"`)}
-            ${C.iconBtn('trash',L('Delete','حذف'),`data-resource-delete="${esc(r.id)}"`)}
-            <button class="btn btn-secondary btn-dense" data-resource-lend="${esc(r.id)}" ${r.qty-lent<1?'disabled':''}>${L('Lend','إعارة')}</button></div>`]};})})}
+      <div class="toolbar ministry-filters"><input class="input" type="search" data-resource-search placeholder="${L('Search items and locations','البحث في الأصناف والأماكن')}" value="${esc(S.ui.resourceQuery||'')}"><button class="btn btn-secondary btn-dense" data-resource-search-button>${L('Search','بحث')}</button><select class="select" data-resource-filter aria-label="${L('Filter resources','تصفية الموارد')}"><option value="all">${L('All items','كل الأصناف')}</option><option value="available">${L('Available','متاح')}</option><option value="loaned">${L('On loan','مُعار')}</option></select></div>
+      <div class="gridcards resource-cards">${d.belongings.filter(r=>{const q=(S.ui.resourceQuery||'').toLocaleLowerCase(),lent=d.resourceLoans.filter(l=>l.resourceId===r.id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0),filter=S.ui.resourceFilter||'all';return `${r.name} ${r.ar} ${r.location} ${r.locationAr}`.toLocaleLowerCase().includes(q)&&(filter==='all'||filter==='available'&&r.qty>lent||filter==='loaned'&&lent>0);}).map(r=>{const lent=d.resourceLoans.filter(l=>l.resourceId===r.id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0);return `<section class="panel"><div class="panel-b"><h3 class="resource-name"><span>${esc(r.name)}</span><span class="dim" lang="ar" dir="rtl">${esc(r.ar||'')}</span></h3><p><b>${r.qty-lent} / ${r.qty}</b> ${L('available','متاح')}</p><p>${L('Stored at','محفوظ في')}: <span>${esc(r.location||'—')}</span> <span class="dim" lang="ar" dir="rtl">${esc(r.locationAr||'')}</span></p><div class="row" style="gap:6px;flex-wrap:wrap">${C.iconBtn('edit',L('Edit','تعديل'),`data-resource-edit="${esc(r.id)}"`)}${C.iconBtn('trash',L('Delete','حذف'),`data-resource-delete="${esc(r.id)}"`)}<button class="btn btn-secondary btn-dense" data-resource-lend="${esc(r.id)}" ${r.qty-lent<1?'disabled':''}>${L('Lend','إعارة')}</button></div></div></section>`;}).join('')||`<p class="help">${L('No matching resources.','لا موارد مطابقة.')}</p>`}</div>
       <h3 style="margin:24px 0 10px">${L('Loans','الإعارات')}</h3>
       ${table({cols:[{label:L('Item','الصنف')},{label:L('Borrower','المستعير')},{label:L('Quantity','العدد'),cls:'num'},
         {label:L('Due date','تاريخ الإرجاع')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],
@@ -783,37 +797,31 @@ function groupDetail(id, tab) {
             l.due<iso(new Date())?pill(L('Overdue','متأخر'),'danger'):pill(L('On loan','مُعار'),'warning'),
           l.returnedAt?'':`<button class="btn btn-secondary btn-dense" data-resource-return="${esc(l.id)}">${L('Mark returned','تسجيل الإرجاع')}</button>`]}))})}`,
 
-    tasks: () => `<div style="max-width:760px">${panel(L('Tasks and follow-ups', 'المهام والمتابعات'),
-      d.tasks.map((tk, ki) => `<div class="listrow" style="padding-inline:0">
-        <label class="check" style="min-height:0"><input type="checkbox" data-task="${ki}" ${tk.done ? 'checked' : ''}><span class="sr">done</span></label>
-        <span class="grow"><b style="${tk.done ? 'text-decoration:line-through;color:var(--text-2)' : ''}">${esc(L(tk.what, tk.whatAr))}</b>
-          <small class="mono">${L('due', 'حتى')} ${fmtDate(tk.due)}</small></span>
-        ${avatar(person(tk.who), 'avatar-sm')}</div>`).join('') +
-      `<button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="task-add">${icon('plus', 15)}${L('Add task', 'إضافة مهمة')}</button>`,
-      { tight: false })}</div>`,
+    tasks: () => `<div class="ministry-tasks"><div class="toolbar ministry-section-heading"><h2>${L('Notes, tasks and follow-ups','الملاحظات والمهام والمتابعات')}</h2><button class="btn btn-primary btn-dense" data-group-task-new>${icon('plus',15)}${L('Add item','إضافة عنصر')}</button></div>
+      <div class="toolbar ministry-filters"><input class="input" type="search" data-group-task-search placeholder="${L('Search notes and tasks','البحث في الملاحظات والمهام')}" value="${esc(S.ui.groupTaskQuery||'')}"><select class="select" data-group-task-filter><option value="all">${L('All','الكل')}</option><option value="pinned">${L('Pinned','مثبّتة')}</option><option value="pending">${L('Pending tasks','مهام معلّقة')}</option><option value="done">${L('Completed','مكتملة')}</option></select></div>
+      ${panel('',d.tasks.map((tk,ki)=>({...tk,index:ki})).filter(tk=>{const q=(S.ui.groupTaskQuery||'').toLocaleLowerCase(),filter=S.ui.groupTaskFilter||'all';return `${tk.what} ${tk.whatAr||''}`.toLocaleLowerCase().includes(q)&&(filter==='all'||filter==='pinned'&&tk.pinned||filter==='pending'&&!tk.done&&tk.kind!=='note'||filter==='done'&&tk.done);}).sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||(a.due||'9999').localeCompare(b.due||'9999')).map(tk=>`<div class="listrow pastoral-row" style="padding-inline:0"><button class="btn-icon" data-group-task-done="${tk.index}" ${tk.kind==='note'?'disabled':''} aria-label="${L('Toggle complete','تغيير حالة الإنجاز')}">${icon(tk.kind==='note'?'notes':'check',17)}</button><span class="grow"><b style="${tk.done?'text-decoration:line-through':''}">${esc(L(tk.what,tk.whatAr||tk.what))}</b><small>${tk.kind==='note'?L('Note','ملاحظة'):L('Task','مهمة')}${tk.due?` · ${L('Due','حتى')} ${fmtDate(tk.due)}`:''}${tk.who?` · ${esc(person(tk.who)?.lat||'')}`:''}</small></span><button class="btn-icon" data-group-task-pin="${tk.index}" aria-pressed="${!!tk.pinned}" aria-label="${L(tk.pinned?'Unpin':'Pin',tk.pinned?'إلغاء التثبيت':'تثبيت')}">${icon('pin',17)}</button><button class="btn btn-secondary btn-dense" data-group-task-edit="${tk.index}">${L('Edit','تعديل')}</button><button class="btn-icon" data-group-task-delete="${tk.index}" aria-label="${L('Delete','حذف')}">${icon('trash',16)}</button></div>`).join('')||`<p class="help">${L('No matching items.','لا عناصر مطابقة.')}</p>`,{tight:true})}</div>`,
 
     formation: () => `${C.inlineAlert('info',L('Formation records, not rankings','سجلات تنشئة، لا تصنيفات'),
       L('Record each member’s completion date and notes. Earlier totals without names remain labelled as historical.','سجّل تاريخ إنجاز كل عضو وملاحظاته. تبقى المجاميع القديمة غير المرتبطة بأسماء موسومة كتاريخية.'))}
       <div class="toolbar" style="margin:16px 0"><span class="t-caption dim">${d.milestones.length} ${L('milestones','محطات')}</span>
         <button class="btn btn-primary btn-dense" data-formation-new>${icon('plus',15)}${L('Add milestone','إضافة محطة')}</button></div>
-      <div class="stack" style="gap:14px">${d.milestones.filter(m=>!m.archived).map(m=>{
+      ${d.roster.length&&d.milestones.length?`<details class="panel formation-progress" style="margin:12px 0"><summary class="panel-h"><b>${L('Member progress','تقدّم الأعضاء')}</b><span class="more">${L('View members','عرض الأعضاء')} ${icon('chevD',14)}</span></summary><div class="panel-b">${table({
+        cols:[{label:L('Member','العضو')},{label:L('Completed','المنجَز'),cls:'num'},{label:L('Still open','المتبقي'),cls:'num'}],
+        rows:d.roster.map(r=>{const active=d.milestones.filter(m=>!m.archived),count=active.filter(m=>m.completions?.[r.p]).length;
+          return {cells:[esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p)),`${count} / ${active.length}`,String(active.length-count)]};})})}</div></details>`:''}
+      <div class="gridcards formation-cards">${d.milestones.filter(m=>!m.archived).map(m=>{
         const names=Object.entries(m.completions||{}).sort((a,b)=>a[1].date.localeCompare(b[1].date));
         return panel(L(m.name,m.ar),`<p class="t-caption dim">${esc(m.description||'')}</p>
           <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">${pill(`${names.length} ${L('named completions','إنجازات بالأسماء')}`,'success')}
           ${m.legacyCount?pill(`${m.legacyCount} ${L('historical, unassigned','تاريخية بلا أسماء')}`,'warning'):''}</div>
-          ${names.length?names.map(([pid,record])=>`<div class="listrow" style="padding-inline:0"><span class="grow"><b>${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))}</b>
+          ${names.length?`<details><summary>${L('View completions','عرض الإنجازات')} · ${names.length}</summary>`+names.map(([pid,record])=>`<div class="listrow" style="padding-inline:0"><span class="grow"><b>${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))}</b>
             <small>${fmtDate(record.date)}${record.notes?` · ${esc(record.notes)}`:''}</small></span>
             ${C.iconBtn('edit',L('Edit completion','تعديل الإنجاز'),`data-formation-record="${esc(m.id)}|${esc(pid)}"`)}
-            ${C.iconBtn('trash',L('Remove completion','حذف الإنجاز'),`data-formation-remove="${esc(m.id)}|${esc(pid)}"`)}</div>`).join(''):
-            `<p class="t-caption dim">${L('No named completions yet.','لا إنجازات بأسماء بعد.')}</p>`}`,
-          {more:`<button class="btn btn-ghost btn-dense" data-formation-edit="${esc(m.id)}">${L('Edit','تعديل')}</button>
-            <button class="btn btn-ghost btn-dense" data-formation-delete="${esc(m.id)}">${L('Delete','حذف')}</button>
-            <button class="btn btn-primary btn-dense" data-formation-record="${esc(m.id)}">${L('Record completion','تسجيل إنجاز')}</button>`});
-      }).join('')||empty('doc',L('No formation milestones','لا محطات تنشئة'),L('Add the first training milestone.','أضف أول محطة تدريب.'))}</div>
-      ${d.roster.length&&d.milestones.length?`<h3 style="margin:24px 0 10px">${L('Member progress','تقدّم الأعضاء')}</h3>${table({
-        cols:[{label:L('Member','العضو')},{label:L('Completed','المنجَز'),cls:'num'},{label:L('Still open','المتبقي'),cls:'num'}],
-        rows:d.roster.map(r=>{const active=d.milestones.filter(m=>!m.archived),count=active.filter(m=>m.completions?.[r.p]).length;
-          return {cells:[esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p)),`${count} / ${active.length}`,String(active.length-count)]};})})}`:''}`,
+            ${C.iconBtn('trash',L('Remove completion','حذف الإنجاز'),`data-formation-remove="${esc(m.id)}|${esc(pid)}"`)}</div>`).join('')+'</details>':
+            `<p class="t-caption dim">${L('No named completions yet.','لا إنجازات بأسماء بعد.')}</p>`}
+          <div class="formation-card-actions"><button class="btn btn-secondary btn-dense" data-formation-record="${esc(m.id)}">${icon('plus',15)}${L('Record completion','تسجيل إنجاز')}</button></div>`,
+          {more:`${C.iconBtn('edit',L('Edit milestone','تعديل المحطة'),`data-formation-edit="${esc(m.id)}"`)}${C.iconBtn('trash',L('Delete milestone','حذف المحطة'),`data-formation-delete="${esc(m.id)}"`)}`});
+      }).join('')||empty('doc',L('No formation milestones','لا محطات تنشئة'),L('Add the first training milestone.','أضف أول محطة تدريب.'))}</div>`,
 
     history: () => `<div style="max-width:720px">${panel(L('Membership and leadership history', 'سجل العضوية والمسؤوليات'), `
       <div class="timeline">${d.history.map(([en, ar, when]) => `<div class="tl-item">
@@ -827,7 +835,7 @@ function groupDetail(id, tab) {
       <button class="btn btn-secondary btn-dense" style="margin-top:12px" data-act="handover">${L('Start a handover', 'بدء تسليم')}</button>`)}</div>`
   };
 
-  return head + (T[tab] || T[''])();
+  return head + `<div class="ministry-content">${(T[tab] || T[''])()}</div>`;
 }
 
 const ATTENDANCE_OPTIONS = [
@@ -848,6 +856,11 @@ function chooseAttendance(anchor, meeting, pid, afterSave = () => {}) {
       afterSave();
     }
   })), {width:190});
+}
+
+export function ministryAttendance(){
+  return pageHead({crumbs:[{label:L('My ministry','خدمتي')},{label:L('Attendance','الحضور')}],title:L('Attendance','الحضور'),sub:L('Open the attendance register for each group you lead.','افتح سجل الحضور لكل مجموعة تقودها.')})+
+    `<div class="gridcards">${groupCards(GROUPS, 'attendance')}</div>`;
 }
 
 function meetingReview(mid) {
@@ -888,7 +901,7 @@ function attendanceMatrix(g,d) {
   if(S.ui.attendanceGroup!==g.id){S.ui.attendanceGroup=g.id;S.ui.attendancePeriod=null;}
   const latest=d.meetings.slice().sort((a,b)=>b.d.localeCompare(a.d))[0]?.d?.slice(0,7) || iso(TODAY).slice(0,7);
   const period=S.ui.attendancePeriod || latest;
-  const meetings=d.meetings.filter(m=>m.d.startsWith(period)).sort((a,b)=>b.d.localeCompare(a.d));
+  const meetings=d.meetings.filter(m=>m.d.startsWith(period)).sort((a,b)=>(S.ui.attendanceReverse?-1:1)*byTime(a,b));
   const rosterIds=new Set(d.roster.map(r=>r.p));
   const formerIds=[...new Set(meetings.flatMap(m=>Object.keys(m.attendance||{})).filter(pid=>!rosterIds.has(pid)))];
   const visibleRoster=[...d.roster,...formerIds.map(p=>({p,former:true}))];
@@ -900,17 +913,16 @@ function attendanceMatrix(g,d) {
   const held=d.meetings.filter(m=>m.done);
   const overall=held.reduce((total,m)=>{const count=meetingAttendance(m);for(const key of ['present','excused','absent'])total[key]+=count[key];return total;},{present:0,excused:0,absent:0});
   const known=overall.present+overall.excused+overall.absent;
-  return `<div class="stats" style="margin:20px 0 12px">
+  return `<div class="stats attendance-stats" style="margin:20px 0 12px">
     ${stat(L('Meetings held','اجتماعات أُقيمت'),held.length,L('all recorded meetings','كل الاجتماعات المسجّلة'))}
-    ${stat(L('Present overall','الحاضرون إجمالاً'),overall.present,L('recorded attendance','حضور مسجّل'))}
-    ${stat(L('Excused overall','المعذورون إجمالاً'),overall.excused,L('recorded attendance','حضور مسجّل'))}
-    ${stat(L('Absent overall','الغائبون إجمالاً'),overall.absent,L('recorded attendance','حضور مسجّل'))}
+    <div class="stat"><span class="k">${L('Attendance breakdown','تفصيل الحضور')}</span><div class="attendance-breakdown">${[['present','Present','حاضر'],['excused','Excused','معذور'],['absent','Absent','غائب']].map(([key,en,ar])=>`<div><span>${L(en,ar)}</span><b>${overall[key]}</b><small>${known?Math.round(overall[key]/known*100):0}%</small></div>`).join('')}</div></div>
     ${stat(L('Attendance rate','نسبة الحضور'),known?`${Math.round(overall.present/known*100)}%`:'—',L('of known responses','من الردود المعروفة'))}
   </div><div class="toolbar" style="margin:16px 0;gap:8px;flex-wrap:wrap">
     <div class="row" style="gap:6px">${C.iconBtn('chevL',L('Previous month','الشهر السابق'),'data-attendance-shift="-1"')}
       <b style="min-width:130px;text-align:center">${esc(periodLabel)}</b>
       ${C.iconBtn('chevR',L('Next month','الشهر التالي'),'data-attendance-shift="1"')}</div>
     <input class="input" type="search" data-attendance-search placeholder="${esc(L('Find a member','ابحث عن عضو'))}" aria-label="${esc(L('Find a member','ابحث عن عضو'))}" style="max-width:230px">
+    <button class="btn btn-secondary btn-dense" data-attendance-order aria-label="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}" title="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}"><span aria-hidden="true">⇅</span>${L(S.ui.attendanceReverse?'Newest first':'Oldest first',S.ui.attendanceReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
     <span class="t-caption dim">${recorded}/${meetings.length*d.roster.length + formerIds.reduce((n,pid)=>n+meetings.filter(m=>attendanceValue(m,pid)).length,0)} ${L('recorded','مسجّل')}</span>
     <span class="attendance-legend">${attendanceTag('present',counts.present)}${attendanceTag('excused',counts.excused)}${attendanceTag('absent',counts.absent)}</span>
     <button class="btn btn-primary btn-dense" data-act="meeting-new">${icon('plus',15)}${L('Add meeting','إضافة اجتماع')}</button>
@@ -938,6 +950,21 @@ function attendanceMatrix(g,d) {
 
 groups.mount = host => {
   C.wire(host); wireTables(host);
+  const bindFilter=(selector,key)=>{const el=host.querySelector(selector);if(!el)return;el.value=S.ui[key]||el.value;el.addEventListener(el.tagName==='INPUT'?'input':'change',()=>{const caret=el.tagName==='INPUT'?el.selectionStart:0;S.ui[key]=el.value;bus.refresh();if(el.tagName==='INPUT'){const next=host.querySelector(selector);next?.focus();next?.setSelectionRange(caret,caret);}});};
+  bindFilter('[data-roster-search]','rosterQuery');bindFilter('[data-roster-filter]','rosterFilter');
+  host.querySelector('[data-roster-search-button]')?.addEventListener('click',()=>host.querySelector('[data-roster-search]')?.focus());
+  bindFilter('[data-resource-search]','resourceQuery');bindFilter('[data-resource-filter]','resourceFilter');
+  host.querySelector('[data-resource-search-button]')?.addEventListener('click',()=>host.querySelector('[data-resource-search]')?.focus());
+  bindFilter('[data-group-task-search]','groupTaskQuery');bindFilter('[data-group-task-filter]','groupTaskFilter');
+  host.querySelector('[data-attendance-order]')?.addEventListener('click',()=>{S.ui.attendanceReverse=!S.ui.attendanceReverse;bus.refresh();});
+  host.querySelector('[data-meeting-order]')?.addEventListener('click',()=>{S.ui.meetingReverse=!S.ui.meetingReverse;bus.refresh();});
+  host.querySelectorAll('[data-meeting-view]').forEach(b=>b.addEventListener('click',()=>{S.ui.meetingView=b.dataset.meetingView;bus.refresh();}));
+  host.querySelectorAll('[data-meeting-month]').forEach(b=>b.addEventListener('click',()=>{const [y,m]=(S.ui.meetingMonth||iso(new Date()).slice(0,7)).split('-').map(Number),date=new Date(y,m-1+Number(b.dataset.meetingMonth),1);S.ui.meetingMonth=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;bus.refresh();}));
+  host.querySelectorAll('[data-roster-formation]').forEach(b=>b.addEventListener('click',()=>{const d=groupInfo(S.params[0]),pid=b.dataset.rosterFormation,p=person(pid);openDrawer({title:L(p?.lat||pid,p?.ar||pid),sub:L('Formation progress','تقدّم التنشئة'),body:d.milestones.filter(m=>!m.archived).map(m=>`<div class="listrow"><span class="grow"><b>${esc(L(m.name,m.ar))}</b><small>${m.completions?.[pid]?`${L('Completed','مكتمل')} · ${fmtDate(m.completions[pid].date)}`:L('Not completed','لم يكتمل')}</small></span></div>`).join('')||`<p>${L('No formation milestones yet.','لا محطات تنشئة بعد.')}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button>`});}));
+  host.querySelector('[data-group-task-new]')?.addEventListener('click',()=>groupTaskForm());
+  host.querySelectorAll('[data-group-task-edit]').forEach(b=>b.addEventListener('click',()=>groupTaskForm(Number(b.dataset.groupTaskEdit))));
+  for(const [selector,field] of [['[data-group-task-pin]','pinned'],['[data-group-task-done]','done']])host.querySelectorAll(selector).forEach(b=>b.addEventListener('click',()=>{const item=groupInfo(S.params[0]).tasks[Number(b.dataset.groupTaskPin??b.dataset.groupTaskDone)];if(item){item[field]=!item[field];bus.refresh();}}));
+  host.querySelectorAll('[data-group-task-delete]').forEach(b=>b.addEventListener('click',()=>{const d=groupInfo(S.params[0]),i=Number(b.dataset.groupTaskDelete),item=d.tasks[i];if(item)openModal({title:L('Delete item?','حذف العنصر؟'),body:`<p>${esc(L(item.what,item.whatAr||item.what))}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="group-task-confirm">${L('Delete','حذف')}</button>`,onMount(el){el.querySelector('#group-task-confirm').addEventListener('click',()=>{d.tasks.splice(i,1);closeOverlays();bus.refresh();});}});}));
   host.querySelector('[data-resource-new]')?.addEventListener('click',()=>resourceForm());
   host.querySelectorAll('[data-resource-edit]').forEach(b=>b.addEventListener('click',()=>resourceForm(b.dataset.resourceEdit)));
   host.querySelectorAll('[data-resource-delete]').forEach(b=>b.addEventListener('click',()=>resourceDelete(b.dataset.resourceDelete)));
@@ -1002,6 +1029,11 @@ groups.mount = host => {
     onMount(el) { C.wire(el); }
   }));
 };
+
+function groupTaskForm(index=-1){
+  const d=groupInfo(S.params[0]),item=d.tasks[index];
+  openDrawer({title:item?L('Edit item','تعديل العنصر'):L('Add note or task','إضافة ملاحظة أو مهمة'),body:`<div class="formrow"><label class="label" for="gt_kind">${L('Type','النوع')}</label><select class="select" id="gt_kind"><option value="task" ${item?.kind!=='note'?'selected':''}>${L('Task','مهمة')}</option><option value="note" ${item?.kind==='note'?'selected':''}>${L('Note','ملاحظة')}</option></select></div>${C.field({label:L('Text','النص'),id:'gt_what',value:item?.what||'',req:true})}${C.field({label:L('Arabic text','النص العربي'),id:'gt_ar',value:item?.whatAr||''})}<div class="formgrid"><div class="formrow"><label class="label" for="gt_who">${L('Owner','المسؤول')}</label><select class="select" id="gt_who"><option value="">—</option>${d.roster.map(r=>`<option value="${esc(r.p)}" ${item?.who===r.p?'selected':''}>${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</option>`).join('')}</select></div>${C.field({label:L('Due date','تاريخ الاستحقاق'),id:'gt_due',type:'date',value:item?.due||''})}</div>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="gt_save">${L('Save','حفظ')}</button>`,onMount(el){C.wire(el);el.querySelector('#gt_save').addEventListener('click',()=>{const what=el.querySelector('#gt_what').value.trim();if(!what)return toast(L('Enter text','أدخل النص'),'','warning');const target=item||{};Object.assign(target,{kind:el.querySelector('#gt_kind').value,what,whatAr:el.querySelector('#gt_ar').value.trim()||what,who:el.querySelector('#gt_who').value,due:el.querySelector('#gt_due').value,done:target.done||false,pinned:target.pinned||false});if(!item)d.tasks.unshift(target);closeOverlays();bus.refresh();});}});
+}
 
 function resourceForm(id='') {
   const d=groupInfo(S.params[0]),r=d.belongings.find(x=>x.id===id),lent=id?d.resourceLoans.filter(l=>l.resourceId===id&&!l.returnedAt).reduce((n,l)=>n+l.qty,0):0;
@@ -1078,15 +1110,14 @@ function formationRecord(id,pid='') {
   const d=groupInfo(S.params[0]),m=d.milestones.find(x=>x.id===id);if(!m)return;
   const saved=m.completions?.[pid];
   openDrawer({title:L('Record completion','تسجيل إنجاز'),sub:esc(L(m.name,m.ar)),body:`
-    <div class="formrow"><label class="label" for="fr_person">${L('Member','العضو')}</label><select class="select" id="fr_person" ${pid?'disabled':''}>
-      <option value="">${L('Choose member','اختر عضواً')}</option>${d.roster.map(r=>`<option value="${esc(r.p)}" ${r.p===pid?'selected':''}>${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</option>`).join('')}</select></div>
+    <fieldset class="formrow"><legend class="label">${L('Members','الأعضاء')}</legend><div class="formation-member-choices">${d.roster.filter(r=>!pid||r.p===pid).map(r=>`<label class="check"><input type="checkbox" name="fr_person" value="${esc(r.p)}" ${r.p===pid?'checked':''}><span>${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</span></label>`).join('')}</div></fieldset>
     ${C.field({label:L('Completed on','تاريخ الإنجاز'),id:'fr_date',type:'date',value:saved?.date||iso(new Date()),req:true})}
     ${C.textarea({label:L('Notes (optional)','ملاحظات (اختياري)'),id:'fr_notes',value:saved?.notes||'',max:500})}`,
     foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="fr_save">${L('Save completion','حفظ الإنجاز')}</button>`,
     onMount(el){C.wire(el);el.querySelector('#fr_save').addEventListener('click',()=>{
-      const member=el.querySelector('#fr_person').value,date=el.querySelector('#fr_date').value;
-      if(!member||!date)return toast(L('Choose a member and date','اختر عضواً وتاريخاً'),'','warning');
-      m.completions[member]={date,notes:el.querySelector('#fr_notes').value.trim()};closeOverlays();bus.refresh();toast(L('Completion saved','حُفظ الإنجاز'),'','success');
+      const members=[...el.querySelectorAll('[name="fr_person"]:checked')].map(box=>box.value),date=el.querySelector('#fr_date').value;
+      if(!members.length||!date)return toast(L('Choose members and date','اختر الأعضاء والتاريخ'),'','warning');
+      for(const member of members)m.completions[member]={date,notes:el.querySelector('#fr_notes').value.trim()};closeOverlays();bus.refresh();toast(L('Completion saved','حُفظ الإنجاز'),'','success');
     });}});
 }
 
@@ -1104,7 +1135,9 @@ export function volunteers(tab = '') {
         ${stat(L('Groups','المجموعات'),managed.length,L('I lead','أقودها'))}
         ${stat(L('Meetings held','اجتماعات أُقيمت'),held.length,L('across my groups','في مجموعاتي'))}</div>
       ${managed.map(g=>{const d=groupInfo(g.id);return panel(L(g.name,g.ar),
-        `${table({cols:[{label:L('Member','العضو')},{label:L('Role','الدور')},{label:L('Attendance','الحضور'),cls:'num'}],
+        `<div class="toolbar"><b>${L('Role assignments','إسناد الأدوار')}</b><button class="btn btn-primary btn-dense" data-role-assign="${esc(g.id)}">${icon('plus',15)}${L('Assign role','إسناد دور')}</button></div>
+        ${d.roles.map(([pid,en,ar],i)=>`<div class="listrow"><span class="grow">${esc(L(person(pid)?.lat||pid,person(pid)?.ar||pid))}<small>${esc(L(en,ar))}</small></span><button class="btn-icon" data-role-remove="${esc(g.id)}|${i}" aria-label="${L('Remove assignment','إزالة الإسناد')}">${icon('trash',16)}</button></div>`).join('')}
+        <div class="divider"></div>${table({cols:[{label:L('Member','العضو')},{label:L('Role','الدور')},{label:L('Attendance','الحضور'),cls:'num'}],
           rows:d.roster.map(r=>({cells:[esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p)),esc(L(r.role,r.roleAr)),memberAttendancePct(d.meetings,r.p)]}))})}`,
         {more:`<a class="btn btn-secondary btn-dense" href="#/groups/${esc(g.id)}/roster">${L('Open roster','افتح اللائحة')}</a>
           <button class="btn btn-primary btn-dense" data-leader-add="${esc(g.id)}">${L('Add member','إضافة عضو')}</button>`});}).join('')||
@@ -1232,7 +1265,12 @@ export function volunteers(tab = '') {
 
 volunteers.mount = host => {
   C.wire(host); wireTables(host);
-  if(is('leader')){host.querySelectorAll('[data-leader-add]').forEach(b=>b.addEventListener('click',()=>F.memberAdd(b.dataset.leaderAdd)));return;}
+  if(is('leader')){
+    host.querySelectorAll('[data-leader-add]').forEach(b=>b.addEventListener('click',()=>F.memberAdd(b.dataset.leaderAdd)));
+    host.querySelectorAll('[data-role-assign]').forEach(b=>b.addEventListener('click',()=>ministryRoleForm(b.dataset.roleAssign)));
+    host.querySelectorAll('[data-role-remove]').forEach(b=>b.addEventListener('click',()=>{const [gid,index]=b.dataset.roleRemove.split('|'),d=groupInfo(gid);d.roles.splice(Number(index),1);bus.refresh();}));
+    return;
+  }
   /* HTML drag and drop: a tray chip or a board card onto an open place (or a card onto a card to swap). */
   const board = host.querySelector('.rota-board')?.closest('.panel');
   if (board) {
@@ -1278,6 +1316,11 @@ volunteers.mount = host => {
   rb?.addEventListener('scroll', ends, { passive: true }); ends();
 
 };
+
+function ministryRoleForm(gid){
+  const d=groupInfo(gid);
+  openDrawer({title:L('Assign ministry role','إسناد دور في الخدمة'),sub:esc(L(group(gid)?.name||'',group(gid)?.ar||'')),body:`<div class="formrow"><label class="label" for="role_name">${L('Role','الدور')}</label><select class="select" id="role_name">${MINISTRY_ROLES.map(([en,ar])=>`<option value="${esc(en)}">${esc(L(en,ar))}</option>`).join('')}</select></div><div class="formrow"><label class="label" for="role_person">${L('Group member','عضو المجموعة')}</label><select class="select" id="role_person">${d.roster.map(r=>`<option value="${esc(r.p)}">${esc(L(person(r.p)?.lat||r.p,person(r.p)?.ar||r.p))}</option>`).join('')}</select></div>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="role_save">${L('Assign','إسناد')}</button>`,onMount(el){C.wire(el);el.querySelector('#role_save').addEventListener('click',()=>{const pid=el.querySelector('#role_person').value,en=el.querySelector('#role_name').value,ar=MINISTRY_ROLES.find(([name])=>name===en)?.[1]||en;if(!pid)return toast(L('Choose a group member','اختر عضواً من المجموعة'),'','warning');if(d.roles.some(([personId,role])=>personId===pid&&role===en))return toast(L('Already assigned','الدور مسند مسبقاً'),'','warning');d.roles.push([pid,en,ar]);closeOverlays();bus.refresh();toast(L('Role assigned','أُسند الدور'),'','success');});}});
+}
 
 function volDrawer(id) {
   const v = VOLUNTEERS.find(x => x.p === id), p = person(id);
@@ -1496,10 +1539,12 @@ export function checkin(tab = '') {
       L('A restricted entry means do not release, whatever code is presented. Call a member of staff.',
         'القيد المقيَّد يعني عدم التسليم مهما كان الرمز المقدَّم. نادِ أحد الموظّفين.'))}
     <div class="stack" style="gap:16px;margin-top:16px">
-      ${Object.entries(PICKUP).filter(([pid])=>eventParticipants.has(pid)).map(([pid, v]) => `<section class="panel"><div class="panel-h">
+      ${[...eventParticipants].map(pid=>{const v=PICKUP[pid]||{approved:[],restricted:[],required:false};return `<section class="panel"><div class="panel-h">
         ${who(person(pid))}<span style="margin-inline-start:auto"></span>
-        ${v.restricted.length ? pill(L('Restricted', 'مقيّد'), 'danger', 'lock') : pill(L('Standard', 'عادي'), 'success')}</div>
+        ${v.restricted.length ? pill(L('Restricted', 'مقيّد'), 'danger', 'lock') : v.required===false||!PICKUP[pid]?pill(L('No pickup needed','لا حاجة إلى استلام'),'success'):pill(L('Pickup required','يتطلب الاستلام'),'warning')}</div>
         <div class="panel-b">
+          <label class="check"><input type="checkbox" data-pickup-required="${esc(pid)}" ${v.required!==false&&!!PICKUP[pid]?'checked':''} ${v.restricted.length?'disabled':''}><span>${L('Requires an authorised pickup','يتطلب استلاماً من شخص مفوّض')}</span></label>
+          ${v.required===false||!PICKUP[pid]?`<p class="help">${L('This participant can check out without a pickup code.','يمكن لهذا المشترك تسجيل الخروج بلا رمز استلام.')}</p>`:''}
           <div class="ac-group" style="padding-inline:0">${L('Approved to collect', 'مفوَّضون بالاستلام')}</div>
           ${v.approved.map(([en, ar, rel], ai) => `<div class="listrow" style="padding-inline:0">
             <span class="grow"><b>${esc(isAr() ? ar : en)}</b><small>${esc(rel)}</small></span>
@@ -1507,7 +1552,7 @@ export function checkin(tab = '') {
           ${v.restricted.length ? `<div class="divider"></div>
             ${v.restricted.map(([en, ar]) => C.inlineAlert('danger', L('Do not release', 'لا تُسلّم'), L(en, ar))).join('')}` : ''}
           <button class="btn btn-secondary btn-dense" style="margin-top:12px" data-act="pickup-add:${pid}">${icon('plus', 15)}${L('Add an authorised person', 'إضافة شخص مفوَّض')}</button>
-        </div></section>`).join('') || `<p class="help">${L('No pickup authorisations are recorded for registered people at this event.','لا توجد تفويضات استلام مسجّلة للمشتركين في هذا الحدث.')}</p>`}
+        </div></section>`;}).join('') || `<p class="help">${L('No registered participants at this event.','لا مشتركون مسجّلون في هذا الحدث.')}</p>`}
     </div></div>`;
 
   if (tab === 'incidents') return head + `<div class="tabbody">
@@ -1542,15 +1587,14 @@ export function checkin(tab = '') {
     return `<div class="listrow">${who(p)}
       <span class="grow">${r.alert ? `<span class="pill pill-danger"><span class="dot"></span>${esc(r.alert)}</span>` : ''}</span>
       <span class="mono dim" dir="ltr">${L('in', 'دخول')} ${r.in}</span>
-      <span class="t-caption dim">${r.guardian&&r.guardian!=='—'?`${L('Guardian', 'وليّ الأمر')}: ${esc(r.guardian)} · `:''}<b class="mono">${r.code}</b></span>
+      <span class="t-caption dim">${r.code?`${r.guardian&&r.guardian!=='—'?`${L('Pickup','الاستلام')}: ${esc(r.guardian)} · `:''}<b class="mono">${esc(r.code)}</b>`:L('No pickup needed','لا حاجة إلى استلام')}</span>
       <button class="btn btn-secondary btn-dense" data-act="checkout:${r.p}">${L('Check out', 'تسجيل خروج')}</button></div>`;
   }).join('');
 
   return head + `<div class="stats" style="margin:20px 0 24px">
       ${stat(L('Present now', 'الحاضرون الآن'), session.rows.length, `${L('registered','مسجّل')} ${expected}`)}
-      ${stat(L('Awaiting guardian', 'بانتظار وليّ الأمر'), session.awaitingGuardian, L('still in the room', 'ما زالوا في الصف'))}
-      ${stat(L('Medical alerts', 'تنبيهات طبية'), session.rows.filter(r=>r.alert).length, L('visible to this event’s staff only', 'تظهر لموظّفي هذا الحدث فقط'))}
-      ${stat(L('Late pickups', 'تأخّر في الاستلام'), 0, L('none today', 'لا شيء اليوم'))}
+      ${stat(L('Awaiting pickup', 'بانتظار الاستلام'), session.rows.filter(r=>!!r.code).length, L('pickup code issued','صدر رمز استلام'))}
+      ${stat(L('No pickup needed', 'لا حاجة إلى استلام'), session.rows.filter(r=>!r.code).length, L('may check out normally','يمكنهم تسجيل الخروج مباشرةً'))}
     </div>
     ${panel(L('Participants checked in', 'المشتركون الحاضرون'), rows||`<p class="help">${L('No one has checked in yet.','لم يسجّل أحد وصوله بعد.')}</p>`, { tight: true })}
     ${C.inlineAlert('warning', L('A volunteer sees only their assigned room, and only during the session', 'يرى المتطوّع صفّه المسند فقط وخلال الجلسة فقط'),
@@ -1560,6 +1604,7 @@ export function checkin(tab = '') {
 
 checkin.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelectorAll('[data-pickup-required]').forEach(box=>box.addEventListener('change',()=>{const pid=box.dataset.pickupRequired;PICKUP[pid] ||= {approved:[],restricted:[],required:false};if(PICKUP[pid].restricted?.length&& !box.checked){box.checked=true;return;}PICKUP[pid].required=box.checked;const row=selectedCheckin()?.rows.find(r=>r.p===pid);if(row){row.pickupRequired=box.checked;row.code=box.checked?(row.code||String(1000+Math.floor(Math.random()*9000))):'';}bus.refresh();}));
   host.querySelector('#checkin-event')?.addEventListener('change',e=>{selectCheckinEvent(e.target.value);bus.refresh();});
   host.querySelector('#tags')?.addEventListener('click', () => openModal({
     title: L('Print name tags', 'طباعة بطاقات الأسماء'),

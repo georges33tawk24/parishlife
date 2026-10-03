@@ -1,7 +1,7 @@
 import { parishAPI, session } from './api.js';
 
 export const M = { parish: {}, person: {}, groups: [], meetings: [], events: [], content: [], notes: [],
-  commitments: {}, preferences: {}, concerns: [], review: [], complaintPermissions: [],
+  commitments: {}, preferences: {}, concerns: [], review: [], leaderConcerns: [], complaintPermissions: [],
   profileRequests: [], volunteerReview: [], profileReview: [], managedGroups: [], formation: [], reviewers: [], categories: [], notifications: [] };
 
 export async function loadMember() {
