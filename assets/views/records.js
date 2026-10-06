@@ -176,14 +176,29 @@ sacraments.mount = host => {
     title:L('New sacrament request','طلب سرّ جديد'),
     sub:L('Record the family request. The secretary may review it, or the priest may decide directly. Preparation begins only after priest approval.','سجّل طلب العائلة. يمكن للأمينة مراجعته، أو للكاهن اتخاذ القرار مباشرة. يبدأ التحضير فقط بعد موافقته.'),
     body:`<div class="formrow"><label class="label" for="srq_kind">${L('Sacrament','السرّ')}</label><select class="select" id="srq_kind">${Object.entries(KIND).filter(([k])=>k!=='certificate').map(([k,v])=>`<option value="${k}">${esc(L(v[0],v[1]))}</option>`).join('')}</select></div>
-      <div class="formrow"><label class="label" for="srq_person">${L('Person receiving the sacrament','الشخص الذي سيقبل السرّ')}</label><select class="select" id="srq_person">${PEOPLE.map(p=>`<option value="${esc(p.id)}">${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div>
+      <div class="formrow" id="srq-existing"><label class="label" for="srq_person">${L('Person receiving the sacrament','الشخص الذي سيقبل السرّ')}</label><select class="select" id="srq_person"><option value="">${L('Choose a person','اختر شخصاً')}</option>${PEOPLE.map(p=>`<option value="${esc(p.id)}">${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div>
+      <label class="check" id="srq-child-choice"><input type="checkbox" id="srq-new-child"><span>${L('Baptism for a child not yet in People','معمودية لطفل غير مسجّل بعد في المؤمنين')}</span></label>
+      <div id="srq-child-fields" hidden class="stack" style="gap:12px;margin:14px 0">${C.field({label:L('Child’s full name (English)','اسم الطفل الكامل (إنكليزي)'),id:'srq-child-lat',req:true})}
+        ${C.field({label:L('Child’s full name (Arabic)','اسم الطفل الكامل (عربي)'),id:'srq-child-ar',req:true})}
+        ${C.field({label:L('Child’s birth date','تاريخ ميلاد الطفل'),id:'srq-child-born',type:'date',req:true})}
+        <div class="formgrid">${C.field({label:L('Father’s name (optional)','اسم الأب (اختياري)'),id:'srq-child-father'})}${C.field({label:L('Mother’s name (optional)','اسم الأم (اختياري)'),id:'srq-child-mother'})}</div>
+        <p class="help">${L('Submitting creates a linked child record without a login account. If the child is already listed, select that person instead.','يُنشئ التقديم سجل طفل مرتبطاً دون حساب دخول. إذا كان الطفل مسجّلاً، اختر سجله بدلاً من ذلك.')}</p></div>
       ${C.field({label:L('Preferred date (optional)','التاريخ المفضّل (اختياري)'),id:'srq_date',type:'date'})}
       ${C.textarea({label:L('Family request / notes','طلب العائلة / ملاحظات'),id:'srq_notes',max:500})}`,
     foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="srq_save">${L('Submit request','تقديم الطلب')}</button>`,
-    onMount(el) { C.wire(el); el.querySelector('#srq_save').addEventListener('click',async()=>{
+    onMount(el) { C.wire(el);
+      const mode=()=>{const baptism=el.querySelector('#srq_kind').value==='baptism';el.querySelector('#srq-child-choice').hidden=!baptism;if(!baptism)el.querySelector('#srq-new-child').checked=false;
+        const manual=baptism&&el.querySelector('#srq-new-child').checked;el.querySelector('#srq-child-fields').hidden=!manual;el.querySelector('#srq-existing').hidden=manual;};
+      el.querySelector('#srq_kind').addEventListener('change',mode);el.querySelector('#srq-new-child').addEventListener('change',mode);mode();
+      el.querySelector('#srq_save').addEventListener('click',async()=>{
+      const manual=el.querySelector('#srq-new-child').checked,personId=el.querySelector('#srq_person').value;
+      if(!manual&&!personId)return toast(L('Choose a person','اختر شخصاً'),'','warning');
+      const child=manual?{lat:el.querySelector('#srq-child-lat').value.trim(),ar:el.querySelector('#srq-child-ar').value.trim(),
+        born:el.querySelector('#srq-child-born').value,father:el.querySelector('#srq-child-father').value.trim(),mother:el.querySelector('#srq-child-mother').value.trim()}:null;
+      if(manual&&(!child.lat||!child.ar||!child.born))return toast(L('Complete the child’s names and birth date','أكمل اسمَي الطفل وتاريخ ميلاده'),'','warning');
       const id='sc'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       const btn=el.querySelector('#srq_save'); btn.disabled=true;
-      try { await serverWorkflow('create-sacrament-request',id,{kind:el.querySelector('#srq_kind').value,person:el.querySelector('#srq_person').value,date:el.querySelector('#srq_date').value,notes:el.querySelector('#srq_notes').value.trim()}); closeOverlays(); location.hash='#/requests'; bus.refresh(); toast(L('Request submitted','قُدّم الطلب'),L('It is ready for office review or a direct priest decision.','الطلب جاهز لمراجعة المكتب أو لقرار الكاهن المباشر.'),'success'); }
+      try { await serverWorkflow('create-sacrament-request',id,{kind:el.querySelector('#srq_kind').value,person:manual?undefined:personId,child:child||undefined,date:el.querySelector('#srq_date').value,notes:el.querySelector('#srq_notes').value.trim()}); closeOverlays(); location.hash='#/requests'; bus.refresh(); toast(L('Request submitted','قُدّم الطلب'),L('It is ready for office review or a direct priest decision.','الطلب جاهز لمراجعة المكتب أو لقرار الكاهن المباشر.'),'success'); }
       catch(e) { btn.disabled=false; toast(L('Could not submit request','تعذّر تقديم الطلب'),e.message,'danger'); }
     }); }
   }));
@@ -234,7 +249,7 @@ const progressPanel = s => {
 /* ---------- the document itself: one A4 vector sheet ----------
    The same drawing is the thumbnail, the full-size view, the printed page and the PNG and SVG
    downloads, so they can never disagree. Units are millimetres on an A4 page. */
-const INK = '#3D4161', BROWN = '#765039', RULE = '#B7D8F4';
+const INK = '#233B32', SECONDARY = '#607068', RULE = '#DCE2DB';
 const EN_FONT = "Inter,'Helvetica Neue','Segoe UI',Arial,sans-serif";
 const AR_FONT = "'IBM Plex Sans Arabic','Geeza Pro','Segoe UI',Tahoma,Arial,sans-serif";
 const ANY_FONT = "Inter,'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif";
@@ -256,26 +271,26 @@ function certificateSVG(s, lang = 'bilingual') {
   const out = [];
   /* frame, corner marks and the seal */
   out.push(`<rect width="210" height="297" fill="#FFFFFF"/>
-    <rect x="8" y="8" width="194" height="281" fill="none" stroke="${BROWN}" stroke-width=".6"/>
-    <rect x="11" y="11" width="188" height="275" fill="none" stroke="${BROWN}" stroke-width=".25" opacity=".55"/>
-    ${[[11, 11], [199, 11], [11, 286], [199, 286]].map(([cx, cy]) => `<rect x="${cx - 1.4}" y="${cy - 1.4}" width="2.8" height="2.8" fill="${BROWN}" opacity=".7" transform="rotate(45 ${cx} ${cy})"/>`).join('')}
-    <circle cx="105" cy="33" r="10" fill="none" stroke="${BROWN}" stroke-width=".7"/>
-    <path d="M105 26.5v13M98.5 33h13" stroke="${BROWN}" stroke-width="1.5" stroke-linecap="round"/>`);
+    <rect x="8" y="8" width="194" height="281" fill="none" stroke="${SECONDARY}" stroke-width=".6"/>
+    <rect x="11" y="11" width="188" height="275" fill="none" stroke="${SECONDARY}" stroke-width=".25" opacity=".55"/>
+    ${[[11, 11], [199, 11], [11, 286], [199, 286]].map(([cx, cy]) => `<rect x="${cx - 1.4}" y="${cy - 1.4}" width="2.8" height="2.8" fill="${SECONDARY}" opacity=".7" transform="rotate(45 ${cx} ${cy})"/>`).join('')}
+    <circle cx="105" cy="33" r="10" fill="none" stroke="${SECONDARY}" stroke-width=".7"/>
+    <path d="M105 26.5v13M98.5 33h13" stroke="${SECONDARY}" stroke-width="1.5" stroke-linecap="round"/>`);
   /* who issues it */
   y = 55;
-  if (ar) { out.push(arT(105, y, PARISH.eparchyAr, { size: 7.2, weight: 600, fill: BROWN }), arT(105, y + 8.5, `${PARISH.nameAr} — ${PARISH.townAr}`, { size: 4.8, fill: BROWN })); y += 20; }
-  if (en) { out.push(tx(105, y, PARISH.eparchy, { size: 5.4, weight: 600, spacing: .5, upper: true }), tx(105, y + 6.5, `${PARISH.name} — ${PARISH.town}`, { size: 3.9, fill: BROWN })); y += 15; }
-  out.push(`<path d="M80 ${y} H101 M109 ${y} H130" stroke="${BROWN}" stroke-width=".3"/><rect x="103.3" y="${y - 1.7}" width="3.4" height="3.4" fill="none" stroke="${BROWN}" stroke-width=".3" transform="rotate(45 105 ${y})"/>`);
+  if (ar) { out.push(arT(105, y, PARISH.eparchyAr, { size: 7.2, weight: 600, fill: SECONDARY }), arT(105, y + 8.5, `${PARISH.nameAr} — ${PARISH.townAr}`, { size: 4.8, fill: SECONDARY })); y += 20; }
+  if (en) { out.push(tx(105, y, PARISH.eparchy, { size: 5.4, weight: 600, spacing: .5, upper: true }), tx(105, y + 6.5, `${PARISH.name} — ${PARISH.town}`, { size: 3.9, fill: SECONDARY })); y += 15; }
+  out.push(`<path d="M80 ${y} H101 M109 ${y} H130" stroke="${SECONDARY}" stroke-width=".3"/><rect x="103.3" y="${y - 1.7}" width="3.4" height="3.4" fill="none" stroke="${SECONDARY}" stroke-width=".3" transform="rotate(45 105 ${y})"/>`);
   /* what it certifies, and for whom */
   y += 15;
   if (ar) { out.push(arT(105, y, KIND[record.kind]?.[1] || '', { size: 8, weight: 600 })); y += 8.5; }
-  if (en) { out.push(tx(105, y, KIND[record.kind]?.[0] || '', { size: 4.4, spacing: 1.1, upper: true, fill: BROWN })); y += 6; }
+  if (en) { out.push(tx(105, y, KIND[record.kind]?.[0] || '', { size: 4.4, spacing: 1.1, upper: true, fill: SECONDARY })); y += 6; }
   y += 6;
-  if (both) out.push(tx(26, y, 'This certifies that', { size: 3.6, anchor: 'start', fill: BROWN }), arT(184, y, 'نشهد بأنّ', { size: 4, anchor: 'start', fill: BROWN }));
-  else out.push(ar ? arT(105, y, 'نشهد بأنّ', { size: 4, fill: BROWN }) : tx(105, y, 'This certifies that', { size: 3.6, fill: BROWN }));
+  if (both) out.push(tx(26, y, 'This certifies that', { size: 3.6, anchor: 'start', fill: SECONDARY }), arT(184, y, 'نشهد بأنّ', { size: 4, anchor: 'start', fill: SECONDARY }));
+  else out.push(ar ? arT(105, y, 'نشهد بأنّ', { size: 4, fill: SECONDARY }) : tx(105, y, 'This certifies that', { size: 3.6, fill: SECONDARY }));
   y += 15;
   if (ar) { out.push(arT(105, y, p.ar, { size: 11, weight: 600 })); y += 10; }
-  if (en) { out.push(tx(105, y, p.lat, { size: 5.6, spacing: .25, fill: BROWN })); y += 6; }
+  if (en) { out.push(tx(105, y, p.lat, { size: 5.6, spacing: .25, fill: SECONDARY })); y += 6; }
   /* the facts, each on a ruled line: English label, value, Arabic label */
   const rows = [
     [record.date > today() ? 'Scheduled for' : 'Celebrated on', record.date > today() ? 'مجدول في' : 'تاريخ الاحتفال', fmtDateIn(record.date, dl)],
@@ -286,9 +301,9 @@ function certificateSVG(s, lang = 'bilingual') {
   y += 10;
   for (const [enL, arL, val] of rows) {
     const vo = { size: 4.6, weight: 600, font: ANY_FONT, rtl: hasArabic(val) };
-    if (both) out.push(tx(26, y, enL, { size: 3.9, anchor: 'start', fill: BROWN }), tx(105, y, val, vo), arT(184, y, arL, { size: 4.3, anchor: 'start', fill: BROWN }));
-    else if (en) out.push(tx(26, y, enL, { size: 4, anchor: 'start', fill: BROWN }), tx(184, y, val, { ...vo, anchor: hasArabic(val) ? 'start' : 'end' }));
-    else out.push(arT(184, y, arL, { size: 4.5, anchor: 'start', fill: BROWN }), tx(26, y, val, { ...vo, anchor: hasArabic(val) ? 'end' : 'start' }));
+    if (both) out.push(tx(26, y, enL, { size: 3.9, anchor: 'start', fill: SECONDARY }), tx(105, y, val, vo), arT(184, y, arL, { size: 4.3, anchor: 'start', fill: SECONDARY }));
+    else if (en) out.push(tx(26, y, enL, { size: 4, anchor: 'start', fill: SECONDARY }), tx(184, y, val, { ...vo, anchor: hasArabic(val) ? 'start' : 'end' }));
+    else out.push(arT(184, y, arL, { size: 4.5, anchor: 'start', fill: SECONDARY }), tx(26, y, val, { ...vo, anchor: hasArabic(val) ? 'end' : 'start' }));
     out.push(`<path d="M26 ${y + 2.6} H184" stroke="${RULE}" stroke-width=".25" stroke-dasharray=".8 1.2"/>`);
     y += step;
   }
@@ -297,18 +312,18 @@ function certificateSVG(s, lang = 'bilingual') {
   const cap = (enL, arL) => lang === 'arabic' ? arL : lang === 'english' ? enL.toUpperCase() : `${enL.toUpperCase()} · ${arL}`;
   [[57, 26, cap('Book', 'الدفتر'), record.book || '—'], [88, 26, cap('Page', 'الصفحة'), record.page || '—'], [119, 34, cap('Entry', 'القيد'), record.reg]].forEach(([x, w, lbl, val]) => {
     out.push(`<rect x="${x}" y="${boxY}" width="${w}" height="15" rx="1.2" fill="none" stroke="${RULE}" stroke-width=".4"/>`,
-      tx(x + w / 2, boxY + 5, lbl, { size: lang === 'arabic' ? 3.2 : 2.5, spacing: lang === 'arabic' ? 0 : .3, fill: BROWN, font: ANY_FONT, rtl: lang === 'arabic' }), tx(x + w / 2, boxY + 11.6, val, { size: 4.4, weight: 600, font: MONO_FONT }));
+      tx(x + w / 2, boxY + 5, lbl, { size: lang === 'arabic' ? 3.2 : 2.5, spacing: lang === 'arabic' ? 0 : .3, fill: SECONDARY, font: ANY_FONT, rtl: lang === 'arabic' }), tx(x + w / 2, boxY + 11.6, val, { size: 4.4, weight: 600, font: MONO_FONT }));
   });
   /* signature and seal */
   const sigY = 260;
   out.push(`<path d="M26 ${sigY} H86" stroke="${INK}" stroke-width=".3"/>
-    <circle cx="160" cy="${sigY - 5}" r="11.5" fill="none" stroke="${BROWN}" stroke-width=".35" stroke-dasharray="1.2 1.2" opacity=".8"/>`);
+    <circle cx="160" cy="${sigY - 5}" r="11.5" fill="none" stroke="${SECONDARY}" stroke-width=".35" stroke-dasharray="1.2 1.2" opacity=".8"/>`);
   if (docIssued(s) && s.issuedBy) out.push(tx(56, sigY - 3, s.issuedBy, { size: 4, font: ANY_FONT }));
-  if (en) out.push(tx(56, sigY + 5, 'Parish priest', { size: 3.4, fill: BROWN }));
-  if (ar) out.push(arT(56, sigY + (en ? 10 : 5), 'كاهن الرعية', { size: 3.8, fill: BROWN }));
-  out.push(tx(160, sigY - 4, ar && !en ? 'الختم' : 'SEAL', { size: ar && !en ? 3.6 : 2.8, spacing: ar && !en ? 0 : .4, fill: BROWN, font: ANY_FONT, opacity: .85, rtl: ar && !en }));
-  if (docIssued(s)) out.push(tx(105, 283, `${en ? 'Issued' : 'صدرت في'} ${fmtDateIn(zoned(s.issuedAt) || String(s.issuedAt || '').slice(0, 10), dl)}`, { size: 3, fill: BROWN, font: ANY_FONT, rtl: !en }));
-  else out.push(`<g transform="rotate(-28 105 150)" opacity=".1">${en ? tx(105, ar ? 146 : 154, 'UNISSUED PREVIEW', { size: 13, weight: 700, spacing: 2, fill: BROWN }) : ''}${ar ? arT(105, en ? 162 : 154, 'معاينة غير صادرة', { size: 12, weight: 700, fill: BROWN }) : ''}</g>`);
+  if (en) out.push(tx(56, sigY + 5, 'Parish priest', { size: 3.4, fill: SECONDARY }));
+  if (ar) out.push(arT(56, sigY + (en ? 10 : 5), 'كاهن الرعية', { size: 3.8, fill: SECONDARY }));
+  out.push(tx(160, sigY - 4, ar && !en ? 'الختم' : 'SEAL', { size: ar && !en ? 3.6 : 2.8, spacing: ar && !en ? 0 : .4, fill: SECONDARY, font: ANY_FONT, opacity: .85, rtl: ar && !en }));
+  if (docIssued(s)) out.push(tx(105, 283, `${en ? 'Issued' : 'صدرت في'} ${fmtDateIn(zoned(s.issuedAt) || String(s.issuedAt || '').slice(0, 10), dl)}`, { size: 3, fill: SECONDARY, font: ANY_FONT, rtl: !en }));
+  else out.push(`<g transform="rotate(-28 105 150)" opacity=".1">${en ? tx(105, ar ? 146 : 154, 'UNISSUED PREVIEW', { size: 13, weight: 700, spacing: 2, fill: SECONDARY }) : ''}${ar ? arT(105, en ? 162 : 154, 'معاينة غير صادرة', { size: 12, weight: 700, fill: SECONDARY }) : ''}</g>`);
   const label = `${KIND[record.kind]?.[0] || ''} — ${p.lat}`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" width="210mm" height="297mm" role="img" aria-label="${esc(label)}">${out.join('')}</svg>`;
 }
@@ -387,6 +402,9 @@ const HIST = { 'sacrament requested': ['Request received', 'استُلم الط�
   'office review completed': ['Reviewed by the office', 'راجعه المكتب'], 'request accepted for preparation': ['Accepted by the priest', 'قبله الكاهن'],
   'request declined': ['Declined', 'رُفض'], 'preparation updated': ['Preparation updated', 'حُدّث التحضير'], 'preparation completed': ['Preparation completed', 'اكتمل التحضير'],
   'preparation cancelled': ['Preparation cancelled', 'أُلغي التحضير'], 'details updated': ['Details updated', 'حُدّثت التفاصيل'],
+  'request amendment proposed': ['Request amendment proposed', 'اقتُرح تعديل الطلب'],
+  'request amendment approved': ['Request amendment approved', 'اعتُمد تعديل الطلب'],
+  'request amendment rejected': ['Request amendment rejected', 'رُفض تعديل الطلب'],
   'submitted for clergy review': ['Sent to the priest', 'أُرسل إلى الكاهن'], submit: ['Sent to the priest for approval', 'أُرسل إلى الكاهن للاعتماد'],
   'sacrament celebrated': ['Celebrated', 'احتُفل به'], approve: ['Approved', 'اعتُمد'], issue: ['Signed and issued', 'وُقّع وصدر'], reject: ['Rejected', 'رُفض'],
   cancelled: ['Cancelled', 'أُلغي'], 'source linked': ['Register entry linked', 'رُبط القيد'], correction: ['Corrected', 'صُحّح'] };
@@ -404,6 +422,7 @@ export function certificate(id, lang = 'bilingual') {
   const p = person(record.person) || { lat: '', ar: '' }, cel = person(record.celebrant);
   const asRequest = s.kind === 'certificate' || ['requested','office-reviewed','rejected','cancelled'].includes(s.status);
   const hasDoc = !!source && (s.kind === 'certificate' || official(s));
+  const proposed = s.kind !== 'certificate' && !hasDoc && !!s.date && ['preparing','scheduled','draft','awaiting-signature'].includes(s.status);
 
   const purpose = s.kind === 'certificate' ? s.purpose || s.godparents : '';
   const planned = s.kind === 'certificate' && s.requestedSacramentId ? SACRAMENTS.find(x => x.id === s.requestedSacramentId) : null;
@@ -428,12 +447,13 @@ export function certificate(id, lang = 'bilingual') {
       record.externalReference ? [L('Their reference', 'مرجعها'), esc(record.externalReference)] : null
     ];
   const details = panel(L('Details', 'التفاصيل'), `<dl class="dl">${dlRows.filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
-    ${s.requestNotes ? `<p class="t-caption" style="margin-top:14px"><b>${L('From the family', 'من العائلة')}:</b> ${esc(s.requestNotes)}</p>` : ''}`);
+    ${s.requestNotes ? `<p class="t-caption" style="margin-top:14px"><b>${L('From the family', 'من العائلة')}:</b> ${esc(s.requestNotes)}</p>` : ''}
+    ${s.pendingAmendment?`<div class="alert alert-warning" style="margin-top:14px"><b>${L('Amendment awaiting priest decision','تعديل بانتظار قرار الكاهن')}</b><br>${esc(s.pendingAmendment.reason)}<br>${L('Requested date','التاريخ المطلوب')}: ${esc(s.pendingAmendment.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(s.pendingAmendment.notes||'—')}</div>`:''}`);
 
   const people = [[L('Request accepted by', 'قبل الطلب'), s.requestApprovedBy, s.requestApprovedAt], [L('Approved by', 'اعتمده'), s.approvedBy, s.approvedAt], [L('Issued by', 'أصدره'), s.issuedBy, s.issuedAt]].filter(([, by]) => by);
   const activity = panel(L('Activity', 'النشاط'), `${people.length ? `<dl class="dl" style="margin-bottom:14px">${people.map(([k, by, at]) => `<dt>${k}</dt><dd>${esc(by)}<small class="dim" style="display:block">${esc(when(at))}</small></dd>`).join('')}</dl>` : ''}
     ${(s.history || []).length ? `<div class="timeline">${s.history.slice().reverse().map(h => `<div class="tl-item"><div class="when">${esc(when(h.at))}</div>
-        <div class="what">${esc(histLabel(h.action))}${h.by ? ` · ${esc(h.by)}` : ''}${h.source ? ` · <span class="mono" dir="ltr">${esc(h.source)}</span>` : ''}${h.reason ? `<small class="dim" style="display:block">${esc(h.reason)}</small>` : ''}</div></div>`).join('')}</div>`
+        <div class="what">${esc(histLabel(h.action))}${h.by ? ` · ${esc(h.by)}` : ''}${h.source ? ` · <span class="mono" dir="ltr">${esc(h.source)}</span>` : ''}${h.reason ? `<small class="dim" style="display:block">${esc(h.reason)}</small>` : ''}${h.before&&h.after?`<small class="dim" style="display:block">${L('Date','التاريخ')}: ${esc(h.before.date||'—')} → ${esc(h.after.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(h.before.notes||'—')} → ${esc(h.after.notes||'—')}</small>`:''}</div></div>`).join('')}</div>`
       : `<p class="t-caption dim">${L('Nothing recorded yet.', 'لا شيء مسجَّل بعد.')}</p>`}`);
 
   return `${pageHead({
@@ -462,6 +482,8 @@ export function certificate(id, lang = 'bilingual') {
             ? `<button class="btn btn-primary" id="submit">${icon('send', 17)}${s.status === 'scheduled' ? L('Confirm celebrated and send for approval','تأكيد الاحتفال وإرساله للاعتماد') : L('Send to the priest','إرسال إلى الكاهن')}</button>`
             : ''}
         ${s.kind !== 'certificate' && ['draft','scheduled'].includes(s.status) && is('secretary','priest') ? `<button class="btn btn-secondary" id="editentry">${icon('edit',17)}${L('Edit details','تعديل التفاصيل')}</button>` : ''}
+        ${s.kind !== 'certificate' && s.requestApprovedAt && ['preparing','scheduled','draft','awaiting-signature'].includes(s.status) && is('secretary','priest') && !s.pendingAmendment ? `<button class="btn btn-secondary" id="amendrequest">${L('Propose request amendment','اقتراح تعديل الطلب')}</button>`:''}
+        ${s.pendingAmendment && is('priest') ? `<button class="btn btn-primary" id="approveamend">${L('Approve amendment','اعتماد التعديل')}</button><button class="btn btn-secondary" id="rejectamend">${L('Reject amendment','رفض التعديل')}</button>`:''}
         ${s.status === 'awaiting-signature' && is('priest') ? `<button class="btn btn-secondary" id="reject">${L('Reject','رفض')}</button>` : ''}
         ${s.kind === 'certificate' && ['draft','awaiting-signature'].includes(s.status) && is('secretary','priest') ? `<button class="btn btn-ghost" id="cancelrequest">${L('Cancel request','إلغاء الطلب')}</button>` : ''}`
     })}
@@ -469,7 +491,8 @@ export function certificate(id, lang = 'bilingual') {
     ${s.kind !== 'certificate' && s.status === 'scheduled' && s.date > today() ? C.inlineAlert('info', L('Scheduled, not celebrated yet', 'مجدول ولم يُحتفل به بعد'), L(`On or after ${fmtDate(s.date)}, confirm it was celebrated and send it to the priest for approval.`, `في ${fmtDate(s.date)} أو بعده، أكّد الاحتفال وأرسله إلى الكاهن للاعتماد.`)) : ''}
     <div class="recordview">
       <div class="recordmain">
-        ${hasDoc ? docCard(s, lang) : panel(s.kind === 'certificate' ? L('Certificate', 'الشهادة') : L('Register entry', 'قيد السجل'),
+        ${hasDoc ? docCard(s, lang) : proposed ? panel(L('Proposed register preview · not official','معاينة القيد المقترح · غير رسمي'),
+          `<div class="doccard-b"><div class="docthumb" aria-label="${L('Proposed register entry','القيد المقترح')}">${certificateSVG(s,lang)}</div><div class="docmeta"><p class="alert alert-warning">${L('For checking details before celebration only. This is not an official register entry or certificate. The priest must approve the celebrated sacrament before it becomes official.','لمراجعة التفاصيل قبل الاحتفال فقط. هذا ليس قيداً رسمياً أو شهادة. يجب أن يعتمد الكاهن السر المحتفل به ليصبح رسمياً.')}</p></div></div>`) : panel(s.kind === 'certificate' ? L('Certificate', 'الشهادة') : L('Register entry', 'قيد السجل'),
           `<div class="docempty">${icon('doc', 22)}<p>${s.kind === 'certificate' && ['cancelled','rejected'].includes(s.status) ? L('This request was closed, so no certificate was made.', 'أُغلق هذا الطلب، فلم تُنشأ شهادة.')
             : s.kind === 'certificate' ? (s.requestedSacramentId ? L('This certificate is for a sacrament that has not been celebrated and approved yet. It links itself as soon as the priest approves that entry; the certificate can then be previewed here.', 'هذه الشهادة لسرّ لم يُحتفل به ولم يُعتمد بعد. ترتبط به تلقائياً حين يعتمد الكاهن قيده، ثم يمكن معاينتها هنا.')
               : eligibleSources(s.person).length ? L('Link the approved entry this certificate is taken from; it can then be previewed here and the priest can approve it.', 'اربط القيد المعتمد الذي تؤخذ منه هذه الشهادة؛ ثم يمكن معاينتها هنا ويعتمدها الكاهن.')
@@ -489,6 +512,25 @@ certificate.mount = (host, id, lang = 'bilingual') => {
   host.querySelectorAll('[data-docview]').forEach(b => b.addEventListener('click', () => viewDoc(doc, lang)));
   host.querySelector('[data-docdl]')?.addEventListener('click', e => downloadMenu(e.currentTarget, doc, () => lang));
   host.querySelector('[data-docprint]')?.addEventListener('click', () => printDoc(doc, lang));
+  host.querySelector('#amendrequest')?.addEventListener('click',()=>openDrawer({
+    title:L('Propose a request amendment','اقتراح تعديل الطلب'),
+    sub:L('The accepted request stays unchanged until a priest approves this amendment. The reason and decision remain in its history.','يبقى الطلب المقبول بلا تغيير حتى يعتمد الكاهن التعديل. يبقى السبب والقرار في السجل.'),
+    body:`${C.field({label:L('Requested date','التاريخ المطلوب'),id:'amend_date',type:'date',value:doc.requestedDate||''})}
+      ${C.textarea({label:L('Family request / notes','طلب العائلة / ملاحظات'),id:'amend_notes',value:doc.requestNotes||'',max:500})}
+      ${C.textarea({label:L('Reason for amendment','سبب التعديل'),id:'amend_reason',max:500})}`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="amend_save">${L('Send for priest decision','إرسال لقرار الكاهن')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#amend_save').addEventListener('click',async()=>{
+      if(!need(el,'#amend_reason',L('Enter a reason','أدخل السبب')))return;
+      try{await serverWorkflow('propose-request-amendment',id,{date:el.querySelector('#amend_date').value,
+        notes:el.querySelector('#amend_notes').value.trim(),reason:el.querySelector('#amend_reason').value.trim()});closeOverlays();bus.refresh();
+        toast(L('Amendment proposed','اقتُرح التعديل'),'','success');}catch(e){toast(L('Could not propose amendment','تعذّر اقتراح التعديل'),e.message,'danger');}
+    });}
+  }));
+  host.querySelector('#approveamend')?.addEventListener('click',async()=>{try{await serverWorkflow('approve-request-amendment',id);bus.refresh();toast(L('Amendment approved','اعتُمد التعديل'),'','success');}catch(e){toast(L('Could not approve amendment','تعذّر اعتماد التعديل'),e.message,'danger');}});
+  host.querySelector('#rejectamend')?.addEventListener('click',()=>openModal({title:L('Reject request amendment?','رفض تعديل الطلب؟'),
+    body:C.textarea({label:L('Reason (optional)','السبب (اختياري)'),id:'amend_reject_reason',max:500}),
+    foot:`<button class="btn btn-secondary" data-close>${L('Keep pending','إبقاء معلقاً')}</button><button class="btn btn-primary" id="amend_reject_confirm">${L('Reject amendment','رفض التعديل')}</button>`,
+    onMount(el){C.wire(el);el.querySelector('#amend_reject_confirm').addEventListener('click',async()=>{try{await serverWorkflow('reject-request-amendment',id,{reason:el.querySelector('#amend_reject_reason').value.trim()});closeOverlays();bus.refresh();}catch(e){toast(L('Could not reject amendment','تعذّر رفض التعديل'),e.message,'danger');}});}}));
   host.querySelector('#officereview')?.addEventListener('click',async()=>{
     try { await serverWorkflow('review-sacrament-request',id); bus.refresh(); toast(L('Office review completed','اكتملت مراجعة المكتب'),L('The priest can now decide.','يمكن للكاهن اتخاذ القرار الآن.'),'success'); }
     catch(e) { toast(L('Review could not be saved','تعذّر حفظ المراجعة'),e.message,'danger'); }

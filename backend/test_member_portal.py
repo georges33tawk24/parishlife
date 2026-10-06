@@ -61,6 +61,29 @@ class MemberPortalTests(unittest.TestCase):
                 server.save_patch(c, self.users['choir'], 'p-elias',
                                   dict(revision=1, changes={'GROUPS': state['GROUPS']}))
 
+    def test_member_without_a_ministry_can_use_parish_wide_opportunities(self):
+        with server.connect() as c:
+            state = json.loads(c.execute("SELECT data FROM states WHERE parish_id='p-elias'").fetchone()['data'])
+            for detail in state['GROUP_DETAIL'].values():
+                detail['roster'] = [row for row in detail.get('roster', []) if row.get('p') != 'p6']
+            c.execute("UPDATE states SET data=? WHERE parish_id='p-elias'", (json.dumps(state),))
+        self.action('priest', 'publish', kind='opportunity', title='Help at the parish fair', body='All members welcome')
+        view = self.view('choir')
+        self.assertEqual(view['groups'], [])
+        self.assertIn('Help at the parish fair', [item['title'] for item in view['content']])
+
+    def test_legacy_volunteer_login_is_retired_on_startup(self):
+        self.assertNotIn('volunteer', server.ROLES)
+        with server.connect() as c:
+            c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)',
+                      ('legacy-volunteer', 'old-volunteer', 'Old Volunteer', 'volunteer', 'beirut', 'p16', 'test-hash'))
+            c.execute('INSERT INTO sessions VALUES(?,?,?,?)',
+                      ('old-session', 'legacy-volunteer', 'test-csrf', 9999999999))
+        server.init_db()
+        with server.connect() as c:
+            self.assertEqual(c.execute("SELECT role FROM users WHERE id='legacy-volunteer'").fetchone()['role'], 'disabled')
+            self.assertIsNone(c.execute("SELECT 1 FROM sessions WHERE user_id='legacy-volunteer'").fetchone())
+
     def test_private_notes_are_owner_only_even_to_priest(self):
         self.action('choir', 'note', title='Private', body='Personal reflection', category='Spiritual', tags=['hope'])
         self.assertEqual(self.view('choir')['notes'][0]['body'], 'Personal reflection')
@@ -69,6 +92,18 @@ class MemberPortalTests(unittest.TestCase):
         with server.connect() as c:
             state = json.loads(c.execute("SELECT data FROM states WHERE parish_id='p-elias'").fetchone()['data'])
             self.assertNotIn('Personal reflection', json.dumps(state))
+
+    def test_private_todo_is_owner_only_and_can_be_completed(self):
+        self.action('choir', 'todo', title='Prepare rehearsal', due='2026-10-12')
+        task = self.view('choir')['todos'][0]
+        self.assertFalse(task['done'])
+        self.assertEqual(self.view('other')['todos'], [])
+        self.action('choir', 'todo', id=task['id'], done=True)
+        self.assertTrue(self.view('choir')['todos'][0]['done'])
+        with self.assertRaises(server.Problem):
+            self.action('other', 'todo', id=task['id'], done=False)
+        self.action('choir', 'todo', id=task['id'], delete=True)
+        self.assertEqual(self.view('choir')['todos'], [])
 
     def test_ministry_content_and_rsvp_are_scoped(self):
         self.action('leader', 'publish', kind='post', groupId='g1', title='Choir update', body='Practice on Friday')
@@ -85,8 +120,11 @@ class MemberPortalTests(unittest.TestCase):
     def test_anonymous_concern_and_explicit_review_grant(self):
         result = self.action('choir', 'concern', category='Safety', groupId='g1', subject='Unsafe step',
                              description='A step needs repair', anonymous=True)
-        reference = result['reference']
-        self.assertEqual(self.view('choir')['concerns'], [])
+        case_id = result['id']
+        mine = self.view('choir')['concerns']
+        self.assertEqual([x['id'] for x in mine], [case_id])
+        self.assertTrue(mine[0]['anonymous'])
+        self.assertEqual(self.view('other')['concerns'], [])
         self.assertEqual(self.view('priest')['review'], [])
         with server.connect() as c:
             c.execute('INSERT INTO complaint_reviewers VALUES(?,?,?)',
@@ -97,11 +135,13 @@ class MemberPortalTests(unittest.TestCase):
         self.assertNotIn('identity', review[0])
         self.action('priest', 'concernUpdate', id=review[0]['id'], status='Under Review',
                     publicText='We are checking the step.')
-        looked_up = self.action('other', 'concernLookup', reference=reference)['concern']
-        self.assertEqual(looked_up['status'], 'Under Review')
-        self.assertNotIn('description', looked_up)
-        self.action('other', 'concernFollowUp', reference=reference, message='Near the entrance')
-        self.assertEqual(len(self.action('choir', 'concernLookup', reference=reference)['concern']['updates']), 2)
+        self.assertEqual(self.view('choir')['concerns'][0]['status'], 'Under Review')
+        with self.assertRaises(server.Problem):
+            self.action('other', 'concernFollowUp', id=case_id, message='Unauthorized')
+        with self.assertRaises(server.Problem):
+            self.action('other', 'concernLookup', reference='unused')
+        self.action('choir', 'concernFollowUp', id=case_id, message='Near the entrance')
+        self.assertEqual(len(self.view('choir')['concerns'][0]['updates']), 2)
         with server.connect() as c:
             self.assertFalse(any('concern' in row['action'] for row in c.execute('SELECT action FROM audit')))
             self.assertIsNone(c.execute("SELECT actor_id FROM complaint_audit WHERE action='submitted'").fetchone()['actor_id'])
@@ -227,6 +267,18 @@ class MemberPortalTests(unittest.TestCase):
         message = next(x for x in self.view('leader')['content'] if x['kind'] == 'message')
         self.action('leader', 'messageReply', id=message['id'], body='Yes, I will check.')
         self.assertTrue(any(x['body'] == 'Yes, I will check.' for x in self.view('choir')['content']))
+
+    def test_staff_in_app_message_is_scoped_and_delivered(self):
+        self.action('priest', 'staffMessage', recipientPersonId='p6', title='Choir update', body='Please check the schedule.')
+        received = [item for item in self.view('choir')['content'] if item['kind'] == 'message']
+        self.assertTrue(any(item['title'] == 'Choir update' for item in received))
+        self.assertFalse(any(item['title'] == 'Choir update' for item in self.view('other')['content']))
+        self.action('leader', 'staffMessage', recipientPersonId='p6', title='Practice', body='See you Friday.')
+        with self.assertRaises(server.Problem) as denied:
+            self.action('leader', 'staffMessage', recipientPersonId='p5', title='Outside group', body='No.')
+        self.assertEqual(denied.exception.status, 403)
+        with self.assertRaises(server.Problem):
+            self.action('choir', 'staffMessage', recipientPersonId='p5', title='No access', body='No.')
 
     def test_unlinked_parish_office_can_publish_without_member_identity(self):
         office = dict(id='test-office', username='office', name='Parish Office', role='secretary',

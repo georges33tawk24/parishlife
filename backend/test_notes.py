@@ -36,7 +36,7 @@ class PastoralStateTests(unittest.TestCase):
 
     def test_non_clergy_cannot_write_pastoral_items(self):
         self.assertTrue(writable('priest', 'NOTES'))
-        for role in ('bishop', 'secretary', 'treasurer', 'leader', 'volunteer'):
+        for role in ('bishop', 'secretary', 'treasurer', 'leader', 'member'):
             self.assertFalse(writable(role, 'NOTES'))
 
     def test_attendance_cannot_reference_a_person_outside_the_parish(self):

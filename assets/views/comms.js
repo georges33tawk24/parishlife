@@ -5,8 +5,11 @@ import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTab
          searchField, openDrawer, openModal, closeOverlays, toast, tabBar, avatar } from '../ui.js';
 import * as C from '../components.js';
 import * as CR from '../crud.js';
+import { persist } from '../persist.js';
+import { printSheet } from '../print.js';
+import * as F from '../flows.js';
 import { MESSAGES, TEMPLATES, NOTICES, MUSIC, MUSIC_DETAIL, SETLISTS, AUTOMATIONS, PRAYERS,
-         PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, GROUPS, groupInfo, musicInfo, person, venue } from '../data.js';
+         PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, GROUPS, CONTENT, groupInfo, musicInfo, person, venue } from '../data.js';
 
 const L = (en, ar) => t(en, ar);
 const CHANNEL = { whatsapp: ['WhatsApp', 'واتساب'], sms: ['SMS', 'رسالة قصيرة'], email: ['Email', 'بريد إلكتروني'] };
@@ -18,8 +21,8 @@ export function messaging(tab = '') {
   const head = pageHead({
     crumbs: [{ label: L('Communicate', 'التواصل') }, { label: L('Messaging', 'المراسلة') }],
     title: L('Communication centre', 'مركز التواصل'),
-    sub: L('One service for every module. In-app and email first, WhatsApp where the parish already uses it, SMS as the fallback.',
-           'خدمة واحدة لكل الوحدات. داخل التطبيق والبريد أولاً، وواتساب حيث تستعمله الرعية، والرسالة القصيرة احتياطاً.'),
+    sub: L('Publish updates and send messages inside ParishLife. External email, WhatsApp and SMS delivery are not connected.',
+           'انشر المستجدات وأرسل الرسائل داخل ParishLife. إرسال البريد وواتساب والرسائل القصيرة غير موصول.'),
     actions: `${tab === 'templates' ? '' : `<button class="btn btn-secondary" data-go="messaging/templates">${icon('doc', 17)}${L('Ready-made designs', 'تصاميم جاهزة')}</button>`}
       ${C.splitBtn(L('New message', 'رسالة جديدة'), 'newmsg')}`
   }) + tabBar('messaging', MTABS(), tab);
@@ -33,23 +36,22 @@ export function messaging(tab = '') {
   }
 
   if (tab === 'automations') return head + `<div class="tabbody">${table({
-      cols: [{ label: L('Automation', 'الأتمتة') }, { label: L('Runs', 'تعمل'), cls: 'hide-sm' },
-             { label: L('Sent', 'أُرسلت'), cls: 'num' }, { label: L('Active', 'مفعّلة'), cls: 'shrink' }],
+      cols: [{ label: L('Automation plan', 'خطة الأتمتة') }, { label: L('Trigger', 'المحفّز'), cls: 'hide-sm' },
+             { label: L('Saved state', 'الحالة المحفوظة'), cls: 'shrink' }],
       rows: AUTOMATIONS.map((a, ai) => ({ cells: [
         `<b>${esc(L(a.what, a.whatAr))}</b>`, `<span class="dim">${esc(L(a.on, a.onAr))}</span>`,
-        `<span class="num">${num(a.sent)}</span>`,
         `<label class="switch"><input type="checkbox" ${a.active ? 'checked' : ''} data-act="auto-toggle:${ai}"><span class="sr">${L('Active', 'مفعّل')}</span></label>`]}))
     })}
-    ${C.inlineAlert('info', L('Birthdays only where consent was given', 'أعياد الميلاد بموافقة فقط'),
-      L('A greeting is never sent to someone who has not agreed to it, and every automation stops at a human before anything sensitive is decided.',
-        'لا تُرسَل تهنئة لمن لم يوافق، وكل أتمتة تتوقّف عند إنسان قبل أي قرار حسّاس.'))}
+    ${C.inlineAlert('info', L('Plans only', 'خطط فقط'),
+      L('No scheduled runner or external delivery service is connected. These switches save a plan; they do not send messages.',
+        'لا يوجد مشغّل مجدول أو خدمة إرسال خارجية موصولة. تحفظ المفاتيح الخطة ولا ترسل رسائل.'))}
     <p class="t-caption dim" style="margin-top:14px">${L(
-      'Repeated sends are prevented by the run history: a confirmation that has already gone out is not sent twice when a record is edited.',
-      'يمنع سجل التنفيذ الإرسال المكرّر: التأكيد الذي أُرسل لا يُرسَل مرّتين عند تعديل السجل.')}</p></div>`;
+      'These are stored automation plans. No scheduled runner or external delivery service is connected.',
+      'هذه خطط أتمتة محفوظة. لا يوجد مشغّل مجدول أو خدمة إرسال خارجية موصولة.')}</p></div>`;
 
   if (tab === 'templates') return head + `<div class="tabbody">
     <div class="gridcards">${TEMPLATES.map((tp, ti) => `<button class="panel" style="cursor:pointer;text-align:start;border:1px solid var(--border)" data-act="design:${ti}">
-      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--light-blue);
+      <div style="height:110px;background:var(--ink);display:grid;place-items:center;color:var(--on-dark);
         font:600 14px/1 var(--sans);text-align:center;padding:10px">
         <span><span style="display:block;font-size:11px;opacity:.7;letter-spacing:.1em;text-transform:uppercase">${esc(L(PARISH.name, PARISH.nameAr))}</span>
         ${esc(L(tp.name, tp.ar))}</span></div>
@@ -57,32 +59,13 @@ export function messaging(tab = '') {
         <small class="t-caption dim" style="display:block;margin-top:2px">${L('Fill the date and location', 'املأ التاريخ والمكان')}</small></div>
     </button>`).join('')}</div>
     <p class="t-caption dim" style="margin-top:16px">${L(
-      'Each design already carries the parish name and logo. Fill in the date and location and download a finished announcement for printing or sharing.',
-      'كل تصميم يحمل اسم الرعية وشعارها. املأ التاريخ والمكان ونزّل إعلاناً جاهزاً للطباعة أو المشاركة.')}</p></div>`;
+      'Each design carries the parish name. Fill in the date and location, then download an SVG, PNG, or JPEG announcement.',
+      'يحمل كل تصميم اسم الرعية. املأ التاريخ والمكان، ثم نزّل الإعلان بصيغة SVG أو PNG أو JPEG.')}</p></div>`;
 
   if (tab === 'preferences') return head + `<div style="margin-top:20px" class="grid g2">
-    ${panel(L('Channel order', 'ترتيب القنوات'), `
-      <div class="row" style="gap:10px;flex-wrap:wrap">
-        <span class="chip chip-on">${L('In-app', 'داخل التطبيق')}</span>${icon('arrowR', 16, 'dimmer')}
-        <span class="chip chip-on">${L('Email', 'بريد')}</span>${icon('arrowR', 16, 'dimmer')}
-        <span class="chip chip-on">WhatsApp</span>${icon('arrowR', 16, 'dimmer')}
-        <span class="chip">SMS</span></div>
-      <p class="t-caption dim" style="margin-top:14px">${L(
-        'Each person’s own preference overrides the default order. A delivery failure retries once on the next channel down, then stops and reports.',
-        'تفضيل كل شخص يتقدّم على الترتيب الافتراضي. وعند الفشل تُعاد المحاولة مرّة على القناة التالية ثم تتوقّف وتُبلّغ.')}</p>`)}
-    ${panel(L('Quiet hours and urgency', 'ساعات الهدوء والإلحاح'), `
-      <div class="stack" style="gap:12px">
-        ${C.switchRow(L('Quiet hours 21:00 – 07:00', 'ساعات هدوء ٢١:٠٠ – ٠٧:٠٠'), { checked: true, pref: 'msg.quiet' })}
-        ${C.switchRow(L('Urgent broadcasts ignore quiet hours', 'البثّ العاجل يتجاوز ساعات الهدوء'), { checked: true, pref: 'msg.urgent' })}
-        ${C.switchRow(L('Parish-wide sends need approval', 'الإرسال العام يحتاج موافقة'), { checked: true, pref: 'msg.approval' })}</div>`)}
-    ${panel(L('Safeguarding', 'الحماية'), `<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px">
-      ${[[L('No unrestricted adult-to-child private messaging', 'لا مراسلة خاصة غير مقيّدة بين بالغ وقاصر'), 'shield'],
-         [L('Group discussions are moderated, with a named moderator', 'نقاشات المجموعات مُدارة بمشرف مسمّى'), 'groups'],
-         [L('Messages to a minor copy their guardian', 'الرسائل إلى قاصر تُنسَخ إلى وليّ أمره'), 'family']]
-        .map(([x, i]) => `<li class="row" style="gap:10px;align-items:flex-start">${icon(i, 17, 'dimmer')}<span class="t-caption">${esc(x)}</span></li>`).join('')}</ul>`)}
-    ${panel(L('Opt-outs', 'طلبات الإيقاف'), `${stat(L('People who opted out', 'من أوقفوا الاستلام'), 7, L('respected on every send', 'يُحترم في كل إرسال'))}
-      <p class="t-caption dim" style="margin-top:12px">${L('An opt-out is honoured even when a leader sends to a whole group.',
-        'يُحترم طلب الإيقاف حتى حين يرسل مسؤول إلى مجموعة كاملة.')}</p>`)}
+    ${panel(L('Available now','المتاح الآن'),`<p>${L('ParishLife delivers in-app messages to named account holders and publishes group or parish updates to authorized member feeds.','يرسل ParishLife رسائل داخل التطبيق إلى حسابات محدّدة وينشر مستجدات المجموعات والرعية للأعضاء المخوّلين.')}</p>
+      <a class="btn btn-secondary btn-dense" style="margin-top:12px" href="#/memberhub">${L('Review in-app communication','مراجعة التواصل داخل التطبيق')}</a>`)}
+    ${panel(L('External delivery','الإرسال الخارجي'),`<p>${L('Email, WhatsApp, SMS, timed automations, delivery retries, and emergency broadcasts require a connected service. This installation does not send them.','يتطلب البريد وواتساب والرسائل القصيرة والأتمتة المجدولة وإعادة المحاولة والبثّ الطارئ خدمة موصولة. لا يرسلها هذا التثبيت.')}</p>`)}
   </div>`;
 
   const rows = MESSAGES.map(m => ({ cells: [
@@ -92,18 +75,13 @@ export function messaging(tab = '') {
     `<span class="num dim">${num(m.reach)}</span>`,
     `<span class="dim mono" dir="ltr">${m.when}</span>`,
     status(m.status),
-    `<span class="row" style="gap:6px;justify-content:flex-end">${m.status === 'failed' ? `<button class="btn btn-secondary btn-dense" data-fail="${m.id}">${L('See list', 'اللائحة')}</button>` : ''}${CR.recBtn('message', m.id)}</span>`
+    `<span class="row" style="gap:6px;justify-content:flex-end">${CR.recBtn('message', m.id)}</span>`
   ]}));
-  const next = MESSAGES.filter(m => m.status === 'scheduled').sort((a, b) => a.when.localeCompare(b.when))[0];
-  const failed = MESSAGES.filter(m => m.status === 'failed');
-
-  return head + `<div class="stats" style="margin:20px 0 24px">
-      ${stat(L('Sent this month', 'أُرسلت هذا الشهر'), MESSAGES.filter(m => m.status === 'sent').length,
-        L(`across ${new Set(MESSAGES.filter(m => m.status === 'sent').map(m => m.channel)).size} channels`, `عبر ${new Set(MESSAGES.filter(m => m.status === 'sent').map(m => m.channel)).size} قنوات`))}
-      ${stat(L('Scheduled', 'مجدولة'), MESSAGES.filter(m => m.status === 'scheduled').length, next ? L(`next: ${next.when}`, `التالية: ${next.when}`) : L('nothing scheduled', 'لا شيء مجدوَل'))}
-      ${stat(L('Delivery failures', 'حالات فشل'), failed.length, failed.length ? `<span class="down">${L('retry them on SMS', 'أعد إرسالها عبر SMS')}</span>` : L('everything delivered', 'وصل كل شيء'))}
-      ${stat(L('Opted out', 'أوقفوا الاستلام'), 7, L('respected on every send', 'يُحترم في كل إرسال'))}
-    </div>
+  return head + `<div style="margin:20px 0">${C.inlineAlert('info',L('In-app communication is available','التواصل داخل التطبيق متاح'),
+      L('Use Member communication to review delivered messages and published updates. The records below are historical channel entries; this app cannot verify or retry their external delivery.',
+        'استخدم التواصل مع الأعضاء لمراجعة الرسائل والمستجدات المنشورة. القيود أدناه تاريخية؛ لا يستطيع التطبيق تأكيد إرسالها خارجياً أو إعادة المحاولة.'))}
+      <a class="btn btn-secondary" style="margin-top:12px" href="#/memberhub">${L('Open member communication','فتح التواصل مع الأعضاء')}</a></div>
+    <h2>${L('Historical channel records','قيود القنوات التاريخية')}</h2>
     ${table({
       cols: [{ label: L('Subject', 'الموضوع'), sort: true }, { label: L('Audience', 'الجمهور'), cls: 'hide-sm' },
              { label: L('Channel', 'القناة'), cls: 'shrink hide-sm' }, { label: L('Reach', 'العدد'), cls: 'num hide-md' },
@@ -116,47 +94,8 @@ messaging.mount = host => {
   C.wire(host); wireTables(host);
   host.querySelector('[data-message-config-new]')?.addEventListener('click',b=>messageConfigForm(b.currentTarget.dataset.messageConfigNew));
   host.querySelectorAll('[data-message-config-edit]').forEach(b=>b.addEventListener('click',()=>{const [key,gid,index]=b.dataset.messageConfigEdit.split('|');messageConfigForm(key,gid,Number(index));}));
-  host.querySelectorAll('[data-message-config-delete]').forEach(b=>b.addEventListener('click',()=>{const [key,gid,index]=b.dataset.messageConfigDelete.split('|'),items=groupInfo(gid)[key],item=items[Number(index)];if(!item)return;openModal({title:L('Delete item?','حذف العنصر؟'),body:`<p>${esc(item.name)}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="mc_delete">${L('Delete','حذف')}</button>`,onMount(el){el.querySelector('#mc_delete').addEventListener('click',()=>{items.splice(Number(index),1);closeOverlays();bus.refresh();});}});}));
-  host.querySelectorAll('[data-fail]').forEach(b => b.addEventListener('click', () => {
-    const m = MESSAGES.find(x => x.id === b.dataset.fail); if (!m) return;
-    openDrawer({
-      title: L(`“${m.subject}” did not reach everyone`, `«${m.subjectAr}» لم تصل إلى الجميع`),
-      sub: L('These numbers are not reachable on that channel. SMS can be tried next.', 'هذه الأرقام غير متاحة على تلك القناة. ويمكن تجربة الرسالة القصيرة.'),
-      body: ['p1', 'p13', 'p5', 'p7'].map(id => `<div class="listrow">${who(person(id))}
-        <span class="grow"></span>${pill(L('Not reachable', 'غير متاح'), 'warning')}</div>`).join(''),
-      foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-        <button class="btn btn-primary" data-act="msg-retry:${m.id}" style="margin-inline-start:auto">${L('Retry all on SMS', 'إعادة الكل عبر SMS')}</button>`
-    });
-  }));
-  const compose = () => openDrawer({
-    large: true,
-    title: L('New message', 'رسالة جديدة'),
-    sub: L('Recipients are filtered by what you are allowed to see.', 'يُرشَّح المستلمون بحسب ما يحقّ لك الاطّلاع عليه.'),
-    body: `<div class="formrow"><label class="label">${L('Send to', 'إرسال إلى')}<span class="req">*</span></label>
-        <select class="select"><option>${L('All households', 'كل العائلات')}</option>
-          <option>${L('Saint Elias Choir', 'جوقة مار الياس')}</option>
-          <option>${L('Catechism parents', 'أهالي التعليم المسيحي')}</option>
-          <option>${L('Volunteers on this Sunday’s rota', 'متطوّعو مناوبة هذا الأحد')}</option>
-          <option>${L('Participants in an event', 'المشتركون في حدث')}</option>
-          <option>${L('One person', 'شخص واحد')}</option></select></div>
-      <div class="formgrid">
-        <div class="formrow"><label class="label">${L('Channel', 'القناة')}</label>
-          <select class="select"><option>${L('Follow each person’s preference', 'اتّبع تفضيل كل شخص')}</option>
-            <option>${L('In-app only', 'داخل التطبيق فقط')}</option><option>WhatsApp</option><option>SMS</option>
-            <option>${L('Email', 'بريد إلكتروني')}</option></select></div>
-        ${C.field({ label: L('When', 'الموعد'), type: 'datetime-local', value: '2026-10-12T15:00' })}
-      </div>
-      ${C.textarea({ label: L('Message — English', 'الرسالة — إنكليزي'), id: 'msgen', max: 480,
-        ph: 'Parish lunch this Sunday after the 10:30 Mass.' })}
-      ${C.textarea({ label: L('Message — Arabic', 'الرسالة — عربي'), id: 'msgar', max: 480, ar: true,
-        ph: 'غداء الرعية هذا الأحد بعد قدّاس ١٠:٣٠.',
-        help: L('Each person receives the version matching their recorded language.', 'يتلقّى كل شخص النسخة الموافقة للغته المسجّلة.') })}
-      ${C.inlineAlert('info', L(`${HOUSEHOLDS.length} households, 7 opted out`, `${HOUSEHOLDS.length} عائلة، ٧ أوقفوا الاستلام`),
-        L('A parish-wide send needs the priest to approve it before it leaves.', 'الإرسال العام يحتاج موافقة الكاهن قبل مغادرته.'))}`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Save draft', 'حفظ كمسوّدة')}</button>
-      <button class="btn btn-primary" data-act="msg-send" style="margin-inline-start:auto">${L('Request approval', 'طلب الموافقة')}</button>`,
-    onMount(el) { C.wire(el); /* wired by data-act */ }
-  });
+  host.querySelectorAll('[data-message-config-delete]').forEach(b=>b.addEventListener('click',()=>{const [key,gid,index]=b.dataset.messageConfigDelete.split('|'),items=groupInfo(gid)[key],item=items[Number(index)];if(!item)return;openModal({title:L('Delete item?','حذف العنصر؟'),body:`<p>${esc(item.name)}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-danger" id="mc_delete">${L('Delete','حذف')}</button>`,onMount(el){el.querySelector('#mc_delete').addEventListener('click',async()=>{items.splice(Number(index),1);if(!await persist())return;closeOverlays();bus.refresh();});}});}));
+  const compose = () => F.compose('all');
   host.querySelector('[data-split="newmsg"]')?.addEventListener('click', compose);
   host.querySelector('[data-splitmenu="newmsg"]')?.addEventListener('click', () =>
     openModal({ title: L('Send', 'إرسال'), body: `<div class="menu" style="position:static;box-shadow:none;border:0;padding:0">
@@ -167,7 +106,7 @@ messaging.mount = host => {
 
 function messageConfigForm(key,gid='',index=-1){
   const automation=key==='automations',item=gid?groupInfo(gid)[key]?.[index]:null;
-  openDrawer({title:item?L('Edit item','تعديل العنصر'):automation?L('Add automation','إضافة أتمتة'):L('Add messaging rule','إضافة قاعدة مراسلة'),body:`<div class="formrow"><label class="label" for="mc_group">${L('Group','المجموعة')}</label><select class="select" id="mc_group" ${item?'disabled':''}>${GROUPS.map(g=>`<option value="${esc(g.id)}" ${g.id===gid?'selected':''}>${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>${C.field({label:L('Name','الاسم'),id:'mc_name',value:item?.name||'',req:true})}${C.field({label:L('Arabic name','الاسم العربي'),id:'mc_name_ar',value:item?.nameAr||''})}${C.field({label:automation?L('Trigger','المحفّز'):L('Condition','الشرط'),id:'mc_trigger',value:item?.trigger||'',req:true})}${C.field({label:L('Arabic description','الوصف العربي'),id:'mc_trigger_ar',value:item?.triggerAr||''})}${automation?'':C.field({label:L('Action','الإجراء'),id:'mc_action',value:item?.action||'',req:true})}${automation?'':C.field({label:L('Arabic action','الإجراء بالعربية'),id:'mc_action_ar',value:item?.actionAr||''})}<label class="check"><input type="checkbox" id="mc_active" ${item?.active!==false?'checked':''}><span>${L('Active','مفعّل')}</span></label>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="mc_save">${L('Save','حفظ')}</button>`,onMount(el){C.wire(el);el.querySelector('#mc_save').addEventListener('click',()=>{const name=el.querySelector('#mc_name').value.trim(),trigger=el.querySelector('#mc_trigger').value.trim(),action=el.querySelector('#mc_action')?.value.trim()||'';if(!name||!trigger||(!automation&&!action))return toast(L('Complete the name, condition and action','أكمل الاسم والشرط والإجراء'),'','warning');const target=item||{id:`mc-${Date.now().toString(36)}`,sent:0};Object.assign(target,{name,nameAr:el.querySelector('#mc_name_ar').value.trim()||name,trigger,triggerAr:el.querySelector('#mc_trigger_ar').value.trim()||trigger,active:el.querySelector('#mc_active').checked});if(!automation)Object.assign(target,{action,actionAr:el.querySelector('#mc_action_ar').value.trim()||action});if(!item)groupInfo(el.querySelector('#mc_group').value)[key].push(target);closeOverlays();bus.refresh();});}});
+  openDrawer({title:item?L('Edit item','تعديل العنصر'):automation?L('Add automation','إضافة أتمتة'):L('Add messaging rule','إضافة قاعدة مراسلة'),body:`<div class="formrow"><label class="label" for="mc_group">${L('Group','المجموعة')}</label><select class="select" id="mc_group" ${item?'disabled':''}>${GROUPS.map(g=>`<option value="${esc(g.id)}" ${g.id===gid?'selected':''}>${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>${C.field({label:L('Name','الاسم'),id:'mc_name',value:item?.name||'',req:true})}${C.field({label:L('Arabic name','الاسم العربي'),id:'mc_name_ar',value:item?.nameAr||''})}${C.field({label:automation?L('Trigger','المحفّز'):L('Condition','الشرط'),id:'mc_trigger',value:item?.trigger||'',req:true})}${C.field({label:L('Arabic description','الوصف العربي'),id:'mc_trigger_ar',value:item?.triggerAr||''})}${automation?'':C.field({label:L('Action','الإجراء'),id:'mc_action',value:item?.action||'',req:true})}${automation?'':C.field({label:L('Arabic action','الإجراء بالعربية'),id:'mc_action_ar',value:item?.actionAr||''})}<label class="check"><input type="checkbox" id="mc_active" ${item?.active!==false?'checked':''}><span>${L('Active','مفعّل')}</span></label>`,foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="mc_save">${L('Save','حفظ')}</button>`,onMount(el){C.wire(el);el.querySelector('#mc_save').addEventListener('click',async()=>{const name=el.querySelector('#mc_name').value.trim(),trigger=el.querySelector('#mc_trigger').value.trim(),action=el.querySelector('#mc_action')?.value.trim()||'';if(!name||!trigger||(!automation&&!action))return toast(L('Complete the name, condition and action','أكمل الاسم والشرط والإجراء'),'','warning');const target=item||{id:`mc-${Date.now().toString(36)}`,sent:0};Object.assign(target,{name,nameAr:el.querySelector('#mc_name_ar').value.trim()||name,trigger,triggerAr:el.querySelector('#mc_trigger_ar').value.trim()||trigger,active:el.querySelector('#mc_active').checked});if(!automation)Object.assign(target,{action,actionAr:el.querySelector('#mc_action_ar').value.trim()||action});if(!item)groupInfo(el.querySelector('#mc_group').value)[key].push(target);if(!await persist())return;closeOverlays();bus.refresh();});}});
 }
 
 /* ═══════════ notices & bulletin ═══════════ */
@@ -189,21 +128,12 @@ export function notices() {
     <div class="splitview">
       ${panel(L('Published notices', 'الإعلانات المنشورة'), rows, { tight: true })}
       <div class="sidecol">
-        ${panel(L('This week’s Masses', 'قداديس هذا الأسبوع'), EVENTS.filter(m => m.kind === 'mass').map(m => `
-          <div class="listrow" style="padding-inline:0"><span class="mono dim" style="width:46px;flex:none">${m.t}</span>
-            <span class="grow"><b>${esc(L(m.title, m.titleAr))}</b><small>${esc(L(venue(m.venue).name, venue(m.venue).ar))}</small></span></div>`).join('')
-          + `<div class="divider"></div><div class="listrow" style="padding-inline:0;border-bottom:0">
-             <span class="mono dim" style="width:46px;flex:none">17:00</span>
-             <span class="grow"><b>${L('Confessions', 'الاعترافات')}</b><small>${L('Saturday, crypt chapel', 'السبت، الكنيسة السفلى')}</small></span></div>`,
+        ${panel(L('Upcoming Masses', 'القداديس المقبلة'), EVENTS.filter(m => m.kind === 'mass' && m.d >= new Date().toISOString().slice(0,10)).slice(0,8).map(m => `
+          <div class="listrow" style="padding-inline:0"><span class="mono dim" style="width:94px;flex:none">${esc(m.d)} · ${esc(m.t)}</span>
+            <span class="grow"><b>${esc(L(m.title, m.titleAr))}</b><small>${esc(L(venue(m.venue)?.name||'', venue(m.venue)?.ar||''))}</small></span></div>`).join('')||`<p class="help">${L('No upcoming Masses in the calendar.','لا قداديس مقبلة في الرزنامة.')}</p>`,
           { tight: true })}
-        ${panel(L('The permanent parish QR', 'رمز الرعية الدائم'), `
-          <div style="display:grid;place-items:center;padding:8px 0">
-            <div style="width:128px;height:128px;border:1px solid var(--border);border-radius:var(--r-card);
-              display:grid;place-items:center;background:var(--muted);color:var(--text-3)">${icon('qr', 56)}</div></div>
-          <p class="t-caption dim" style="margin-top:10px">${L(
-            'Print it once and put it at the church door. It always opens the latest Mass schedule, announcements, readings and events — staff update the information without reprinting the code.',
-            'اطبعه مرّة واحدة وضعه عند باب الكنيسة. يفتح دائماً أحدث مواعيد القداديس والإعلانات والقراءات والأحداث — ويحدّث الموظّفون المعلومات من دون إعادة طباعة الرمز.')}</p>
-          <button class="btn btn-secondary" style="width:100%;margin-top:12px" data-act="print">${icon('print', 17)}${L('Print the code', 'طباعة الرمز')}</button>`)}
+        ${panel(L('Public parish page', 'صفحة الرعية العامة'), `<p class="t-caption dim">${L('Published parish content and public calendar events appear on this page.','يظهر في هذه الصفحة محتوى الرعية المنشور وأحداث الرزنامة العامة.')}</p>
+          <a class="btn btn-secondary" style="margin-top:12px" href="public.html?parish=${encodeURIComponent(PARISH.id||'')}" target="_blank" rel="noopener">${icon('link',17)}${L('Open public page','فتح الصفحة العامة')}</a>`)}
       </div></div>`;
 }
 
@@ -213,29 +143,39 @@ notices.mount = host => {
   host.querySelector('#bulletin')?.addEventListener('click', () => openDrawer({
     large: true,
     title: L('Weekly bulletin', 'النشرة الأسبوعية'),
-    sub: L('Built from what is already in the calendar and the notice board.', 'مبنيّة مما هو أصلاً في الرزنامة ولوحة الإعلانات.'),
-    body: `<div class="a4bar">${C.bgroup([L('Print A4', 'طباعة A4'), L('Phone version', 'نسخة للهاتف')], 0)}</div>
-      <div class="a4" style="max-width:none;aspect-ratio:auto;padding:32px;align-items:stretch;text-align:start">
-        <div style="text-align:center">
-          <div class="ttl">${esc(L(PARISH.name, PARISH.nameAr))} — ${esc(L(PARISH.town, PARISH.townAr))}</div>
-          <div class="ttl-ar">النشرة الأسبوعية · 4–11 October 2026</div></div>
-        <div style="margin-top:24px">
-          <h4 style="font:600 12px/18px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--text-2)">${L('Masses', 'القداديس')}</h4>
-          ${EVENTS.filter(e => e.kind === 'mass').map(m => `<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">
-            <span class="mono" style="width:52px">${m.t}</span><span>${esc(L(m.title, m.titleAr))}</span></div>`).join('')}
-          <h4 style="margin-top:20px;font:600 12px/18px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--text-2)">${L('Mass intentions', 'نوايا القداديس')}</h4>
-          <div style="padding:6px 0;border-bottom:1px solid var(--border)">${L('For the repose of Sarkis Yammine', 'لراحة نفس سركيس يمين')}</div>
-          <div style="padding:6px 0;border-bottom:1px solid var(--border)">${L('In thanksgiving — Haddad family', 'شكراً — عائلة حدّاد')}</div>
-          <h4 style="margin-top:20px;font:600 12px/18px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--text-2)">${L('Announcements', 'الإعلانات')}</h4>
-          ${NOTICES.map(n => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${esc(L(n.title, n.ar))}</div>`).join('')}
-        </div></div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-      <button class="btn btn-secondary" data-act="share:Weekly bulletin">${L('Share phone version', 'مشاركة نسخة الهاتف')}</button>
-      <button class="btn btn-primary" data-act="print" style="margin-inline-start:auto">${L('Print', 'طباعة')}</button>`,
+    sub: L('Edit the welcome text and intentions; the current public Masses and parish notices are included automatically.', 'حرّر كلمة الترحيب والنوايا؛ تُضاف القداديس العامة وإعلانات الرعية الحالية تلقائياً.'),
+    body: `<div class="formgrid"><div class="formrow"><label class="label" for="bulletin-en">English introduction</label><textarea class="input" id="bulletin-en" rows="3">${esc(CONTENT.bulletin?.en||'')}</textarea></div>
+      <div class="formrow"><label class="label" for="bulletin-ar">المقدمة بالعربية</label><textarea class="input" id="bulletin-ar" rows="3" dir="rtl">${esc(CONTENT.bulletin?.ar||'')}</textarea></div></div>
+      <div class="formgrid"><div class="formrow"><label class="label" for="intentions-en">Mass intentions (English, one per line)</label><textarea class="input" id="intentions-en" rows="3">${esc(CONTENT.intentions?.en||'')}</textarea></div>
+      <div class="formrow"><label class="label" for="intentions-ar">نوايا القداديس (عربي، سطر لكل نيّة)</label><textarea class="input" id="intentions-ar" rows="3" dir="rtl">${esc(CONTENT.intentions?.ar||'')}</textarea></div></div>
+      <div class="a4bar">${C.bgroup([L('A4 preview', 'معاينة A4'), L('Phone preview', 'معاينة الهاتف')], 0)}</div><div class="a4" id="bulletin-preview" style="max-width:none;aspect-ratio:auto;padding:32px;align-items:stretch;text-align:start"></div>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button><button class="btn btn-secondary" id="bulletin-save">${L('Save content', 'حفظ المحتوى')}</button>
+      <button class="btn btn-primary" id="bulletin-print" style="margin-inline-start:auto">${L('Print', 'طباعة')}</button>`,
     onMount(el) {
       C.wire(el);
-      const page = el.querySelector('.a4');   // the same bulletin, laid out for a phone screen
+      const page = el.querySelector('#bulletin-preview');
+      const render=()=>{
+        const now=new Date(),end=new Date(now);end.setDate(now.getDate()+6);
+        const from=now.toISOString().slice(0,10),through=end.toISOString().slice(0,10);
+        const langText=(en,ar)=>isAr()?ar||en:en||ar;
+        const intro=langText(el.querySelector('#bulletin-en').value,el.querySelector('#bulletin-ar').value);
+        const intentions=langText(el.querySelector('#intentions-en').value,el.querySelector('#intentions-ar').value).split('\n').map(x=>x.trim()).filter(Boolean);
+        const masses=EVENTS.filter(e=>e.kind==='mass'&&e.d>=from&&e.d<=through).sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+        const notices=NOTICES.filter(n=>n.audience==='Parish'&&!n.groupId&&n.at>=from&&n.at<=through);
+        page.innerHTML=`<div style="text-align:center"><div class="ttl">${esc(L(PARISH.name,PARISH.nameAr))}</div><div class="ttl-ar">${L('Weekly bulletin','النشرة الأسبوعية')} · ${esc(from)} – ${esc(through)}</div></div>
+          ${intro?`<p style="margin-top:18px;white-space:pre-wrap">${esc(intro)}</p>`:''}
+          <h4>${L('Masses','القداديس')}</h4>${masses.map(m=>`<div class="listrow"><span class="mono">${esc(m.d)} · ${esc(m.t)}</span><span>${esc(L(m.title,m.titleAr))}</span></div>`).join('')||`<p>${L('No Masses scheduled this week.','لا قداديس مجدولة هذا الأسبوع.')}</p>`}
+          ${intentions.length?`<h4>${L('Mass intentions','نوايا القداديس')}</h4>${intentions.map(text=>`<div class="listrow">${esc(text)}</div>`).join('')}`:''}
+          <h4>${L('Parish notices','إعلانات الرعية')}</h4>${notices.map(n=>`<div class="listrow">${esc(L(n.title,n.ar))}</div>`).join('')||`<p>${L('No parish notices this week.','لا إعلانات للرعية هذا الأسبوع.')}</p>`}`;
+      };
+      el.querySelectorAll('#bulletin-en,#bulletin-ar,#intentions-en,#intentions-ar').forEach(input=>input.addEventListener('input',render));render();
       el.querySelectorAll('.a4bar button').forEach((b, i) => b.addEventListener('click', () => page.classList.toggle('phone', i === 1)));
+      el.querySelector('#bulletin-save').addEventListener('click',async()=>{
+        CONTENT.bulletin={en:el.querySelector('#bulletin-en').value.trim(),ar:el.querySelector('#bulletin-ar').value.trim(),published:false};
+        CONTENT.intentions={en:el.querySelector('#intentions-en').value.trim(),ar:el.querySelector('#intentions-ar').value.trim(),published:false};
+        if(!await persist())return;toast(L('Bulletin content saved','حُفظ محتوى النشرة'),'','success');
+      });
+      el.querySelector('#bulletin-print').addEventListener('click',()=>printSheet({title:L('Weekly bulletin','النشرة الأسبوعية'),body:page.innerHTML,margin:'12mm'}));
     }
   }));
 };
@@ -258,7 +198,7 @@ export function music(id, tab = '') {
     `<span class="dim">${esc(L(m.part, PART_AR[m.part] || m.part))}</span>`,
     `<span class="mono">${esc(m.key)}</span>`,
     `<span class="chip">${esc(L(m.lang, LANG_AR[m.lang] || m.lang))}</span>`,
-    `<span class="row" style="gap:6px">${m.sheet ? icon('doc', 17, 'dimmer') : ''}${m.audio ? icon('music', 17, 'dimmer') : ''}</span>`,
+    `<span class="row" style="gap:6px">${musicInfo(m).lyrics?.length||musicInfo(m).chords?icon('doc',17,'dimmer'):''}${m.youtubeUrl||m.anghamiUrl||m.otherUrl?icon('music',17,'dimmer'):''}</span>`,
     `<span class="row" style="gap:6px;justify-content:flex-end"><button class="btn btn-secondary btn-dense" data-act="to-service:${m.id}">${L('Add to service', 'أضف إلى الخدمة')}</button>${CR.recBtn('hymn', m.id)}</span>`
   ]}));
 
@@ -327,8 +267,8 @@ function hymn(id, tab) {
       <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(m.title)}
         ${m.key ? `<span class="pill">${esc(m.key)}</span>` : ''}<span class="pill">${esc(L(m.lang, LANG_AR[m.lang] || m.lang))}</span></h1>
       <div class="meta" style="font-family:var(--arabic)">${[m.ar, L(m.occasion, m.occasionAr), L(m.part, PART_AR[m.part] || m.part)].filter(Boolean).map(esc).join(' · ')}</div></div>
-      <div class="acts"><button class="btn btn-secondary" data-act="play:${m.id}">${icon('play', 17)}${L('Play', 'استماع')}</button>
-        <button class="btn btn-secondary" data-act="print">${icon('print', 17)}${L('Print sheet', 'طباعة النوتة')}</button>
+      <div class="acts">${musicLinks.length?`<button class="btn btn-secondary" data-act="play:${m.id}">${icon('play', 17)}${L('Listen online', 'استمع عبر الإنترنت')}</button>`:''}
+        <button class="btn btn-secondary" data-hymn-print="${esc(m.id)}">${icon('print', 17)}${L('Print sheet', 'طباعة النوتة')}</button>
         <button class="btn btn-primary" data-act="to-service:${m.id}">${icon('plus', 17)}${L('Add to service', 'أضف إلى الخدمة')}</button></div>
     </div></div>${tabBar('music/' + m.id, HTABS(), tab)}`;
 
@@ -364,10 +304,7 @@ function hymn(id, tab) {
         <span class="chip" style="flex:none">${esc(L(inst, instAr))}</span>
         <span class="grow">${esc(L(en, ar))}</span>${C.iconBtn('edit', L('Edit', 'تعديل'), `data-act="inst-edit:${m.id}|${ni}"`)}</div>`).join('')
       || `<p class="dim" style="padding:18px;margin:0">${L('No instrument notes yet.', 'لا ملاحظات آلات بعد.')}</p>`, { tight: true })}
-      <div class="tabbody">${panel(L('Arrangements', 'التوزيعات'), `
-        ${['SATB with organ', 'Unison with oud', 'Solo'].map((a, i) => `<div class="listrow" style="padding-inline:0">
-          ${icon('doc', 17, 'dimmer')}<span class="grow"><b>${esc(a)}</b><small class="mono">PDF · ${[180, 96, 64][i]} KB</small></span>
-          ${C.iconBtn('export', L('Download', 'تنزيل'), `data-act="doc:${a}.pdf"`)}</div>`).join('')}`, { tight: true })}</div></div>`,
+      </div>`,
 
     versions: () => `<div style="max-width:760px">${panel(L('Version history', 'سجل الإصدارات'), `
       ${d.versions.length ? '' : `<p class="dim" style="margin:0">${L('No earlier versions.', 'لا إصدارات سابقة.')}</p>`}<div class="timeline">${d.versions.map(([en, ar, when, by], i) => `<div class="tl-item ${i === 0 ? 'accent' : ''}">
@@ -400,6 +337,19 @@ function hymn(id, tab) {
 
 music.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelector('[data-hymn-print]')?.addEventListener('click',e=>{
+    const m=MUSIC.find(item=>item.id===e.currentTarget.dataset.hymnPrint);if(!m)return;
+    const detail=musicInfo(m),hasLyrics=!!detail.lyrics?.length,hasChords=!!detail.chords;
+    if(!hasLyrics&&!hasChords)return toast(L('No lyrics or chords to print','لا كلمات أو أوتار للطباعة'),'','warning');
+    openModal({title:L('Print hymn sheet','طباعة ورقة اللحن'),body:`<p>${esc(L(m.title,m.ar))}</p><div class="formrow"><label class="label" for="hymn-print-choice">${L('Include','تضمين')}</label><select class="select" id="hymn-print-choice">
+      ${hasLyrics?`<option value="lyrics">${L('Lyrics','الكلمات')}</option>`:''}${hasChords?`<option value="chords">${L('Chords','الأوتار')}</option>`:''}${hasLyrics&&hasChords?`<option value="both">${L('Lyrics and chords','الكلمات والأوتار')}</option>`:''}</select></div>`,
+      foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="hymn-print-go">${L('Print','طباعة')}</button>`,
+      onMount(el){el.querySelector('#hymn-print-go').addEventListener('click',()=>{
+        const choice=el.querySelector('#hymn-print-choice').value,lyrics=detail.lyrics.map(row=>row.filter(Boolean).map(esc).join(' · ')).join('<br>');
+        const body=`<h1>${esc(L(m.title,m.ar))}</h1>${choice!=='chords'?`<section><h2>${L('Lyrics','الكلمات')}</h2><p>${lyrics}</p></section>`:''}${choice!=='lyrics'?`<section><h2>${L('Chords','الأوتار')}</h2><pre>${esc(detail.chords)}</pre></section>`:''}`;
+        printSheet({title:L(m.title,m.ar),body,margin:'15mm'});
+      });}});
+  });
   host.querySelectorAll('[data-mfilter]').forEach(sel => sel.addEventListener('change', () => {
     S.ui.music = { ...(S.ui.music || {}), [sel.dataset.mfilter]: sel.value }; bus.refresh();
   }));
@@ -421,17 +371,55 @@ music.mount = host => {
 };
 
 /* ═══════════ 14 · portal ═══════════ */
-const PTABS = () => [['', 'Content', 'المحتوى'], ['requests', 'Self-service', 'الخدمة الذاتية', PORTAL_REQUESTS.length],
+const portalSections=[
+  ['welcome','Welcome message','رسالة الترحيب','Introduce your parish in a few welcoming words.','عرّف برعيتك بكلمات ترحيبية موجزة.'],
+  ['history','History & patron saint','التاريخ والشفيع','Share the story and identity of your parish.','شارك تاريخ رعيتك وهويتها.'],
+  ['massTimes','Mass & confession','القداديس والاعتراف','Help visitors plan their next visit.','ساعد الزوّار على التخطيط لزيارتهم المقبلة.'],
+  ['contact','Contact & visiting','التواصل والزيارة','Make it easy to find and contact the parish.','سهّل الوصول إلى الرعية والتواصل معها.']
+];
+function portalContent(){
+  const hasText=c=>!!(c.en?.trim()||c.ar?.trim());
+  const published=portalSections.filter(([key])=>{const c=CONTENT[key]||{};return hasText(c)&&c.published!==false;}).length;
+  const drafts=portalSections.filter(([key])=>{const c=CONTENT[key]||{};return hasText(c)&&c.published===false;}).length;
+  return `<div class="cms-content">
+    <section class="cms-overview" aria-labelledby="cms-overview-title">
+      <div class="cms-overview-copy"><span class="cms-eyebrow">${L('Your public presence','حضورك العام')}</span>
+        <h2 id="cms-overview-title">${esc(L(PARISH.name,PARISH.nameAr))}</h2>
+        <p>${L('A welcoming first visit starts here. Keep your parish story, service times and visiting details easy to find.','تبدأ الزيارة الأولى هنا. اجعل تاريخ رعيتك ومواعيد الخدمات ومعلومات الزيارة سهلة الوصول.')}</p>
+      </div>
+      <dl class="cms-summary"><div><dt>${L('Published','منشور')}</dt><dd>${num(published)}</dd></div><div><dt>${L('Drafts','مسودات')}</dt><dd>${num(drafts)}</dd></div><div><dt>${L('Empty','فارغ')}</dt><dd>${num(portalSections.length-published-drafts)}</dd></div></dl>
+    </section>
+    <div class="cms-section-heading"><div><span class="cms-eyebrow">${L('01 / Website content','01 / محتوى الموقع')}</span><h2>${L('Make every section feel welcoming.','اجعل كل قسم يرحّب بالزوّار.')}</h2></div>
+      <p>${L('Edit in English and Arabic. Only published sections are visible to visitors.','حرّر بالإنكليزية والعربية. يرى الزوّار الأقسام المنشورة فقط.')}</p></div>
+    <div class="cms-section-grid">${portalSections.map(([key,en,ar,desc,descAr],index)=>{
+      const c=CONTENT[key]||{},filled=hasText(c),state=!filled?'empty':c.published===false?'draft':'published';
+      const preview=L(c.en||'',c.ar||'')||c.en||c.ar||'';
+      return `<article class="cms-section-card" aria-labelledby="cms-${key}-title">
+        <div class="cms-card-top"><span class="cms-section-number" aria-hidden="true">${String(index+1).padStart(2,'0')}</span><span class="cms-state cms-state-${state}"><span aria-hidden="true"></span>${state==='published'?L('Published','منشور'):state==='draft'?L('Draft · private','مسودة · خاصة'):L('Not started','لم يبدأ بعد')}</span></div>
+        <h3 id="cms-${key}-title">${L(en,ar)}</h3><p class="cms-card-description">${L(desc,descAr)}</p>
+        <p class="cms-content-preview${filled?'':' cms-content-empty'}" dir="auto">${esc(preview||L('Add this section to welcome visitors to your parish.','أضف هذا القسم للترحيب بزوّار رعيتك.'))}</p>
+        <div class="cms-card-footer"><div class="cms-languages" aria-label="${L('Content languages','لغات المحتوى')}"><span class="${c.en?.trim()?'is-ready':''}" title="${c.en?.trim()?L('English content ready','المحتوى الإنكليزي جاهز'):L('English content missing','المحتوى الإنكليزي غير مضاف')}">${icon(c.en?.trim()?'check':'plus',12)}English</span><span class="${c.ar?.trim()?'is-ready':''}" lang="ar" title="${c.ar?.trim()?L('Arabic content ready','المحتوى العربي جاهز'):L('Arabic content missing','المحتوى العربي غير مضاف')}">${icon(c.ar?.trim()?'check':'plus',12)}العربية</span></div>
+          <button class="cms-edit" data-act="content-edit:${key}" aria-label="${esc(L('Edit '+en,'تعديل '+ar))}">${filled?L('Edit section','تعديل القسم'):L('Add content','إضافة محتوى')}${icon('arrowR',16)}</button></div>
+      </article>`;
+    }).join('')}</div>
+    <aside class="cms-publishing-note">${icon('info',18)}<p>${L('Save a draft while you work. A draft section stays off the public page until you publish it. Add both languages before publishing.','احفظ مسودة أثناء العمل. يبقى القسم المسودة خارج الصفحة العامة حتى تنشره. أضف اللغتين قبل النشر.')}</p></aside>
+    <section class="cms-related" aria-labelledby="cms-related-title"><div><span class="cms-eyebrow">${L('02 / Parish updates','02 / مستجدات الرعية')}</span><h2 id="cms-related-title">${L('Keep your community up to date.','أبقِ جماعتك على اطّلاع.')}</h2><p>${L('Public events and announcements are managed in their own spaces.','تُدار الأحداث العامة والإعلانات في أقسامها الخاصة.')}</p></div>
+      <div class="cms-related-links"><a href="#/calendar">${icon('events',21)}<span><strong>${L('Public calendar','الرزنامة العامة')}</strong><small>${L('Service times and upcoming events','مواعيد الخدمات والأحداث المقبلة')}</small></span>${icon('arrowR',18)}</a>
+      <a href="#/memberhub">${icon('bell',21)}<span><strong>${L('Announcements','الإعلانات')}</strong><small>${L('News and updates for your community','أخبار ومستجدات جماعتك')}</small></span>${icon('arrowR',18)}</a></div>
+    </section>
+  </div>`;
+}
+const PTABS = () => [['', 'Website content', 'محتوى الموقع'], ['requests', 'Self-service', 'الخدمة الذاتية', PORTAL_REQUESTS.length],
                ['prayers', 'Prayer requests', 'نوايا الصلاة', PRAYERS.filter(p => p.status === 'awaiting-approval').length]];
 
 export function portal(tab = '') {
   const head = pageHead({
     crumbs: [{ label: L('Communicate', 'التواصل') }, { label: L('Member portal', 'بوّابة المؤمنين') }],
-    title: L('Parish content and member portal', 'محتوى الرعية وبوّابة المؤمنين'),
-    sub: L('What a family sees when they open the parish link — and what they may change themselves.',
-           'ما تراه العائلة عند فتح رابط الرعية — وما يمكنها تعديله بنفسها.'),
-    actions: `<button class="btn btn-secondary" data-act="portal-open">${icon('link', 17)}${L('Open public page', 'فتح الصفحة العامة')}</button>
-      <button class="btn btn-primary" data-act="content-edit">${icon('edit', 17)}${L('Edit content', 'تعديل المحتوى')}</button>`
+    title: tab ? L('Parish content and member portal', 'محتوى الرعية وبوّابة المؤمنين') : L('Your parish website', 'موقع رعيتك'),
+    sub: L('A clear, welcoming place for parish life. Manage your public content and member requests.',
+           'مساحة واضحة ومرحّبة لحياة الرعية. أدر المحتوى العام وطلبات الأعضاء.'),
+    actions: `<button class="btn btn-secondary" data-act="portal-open">${icon('link', 17)}${L('View public page', 'عرض الصفحة العامة')}</button>
+      <button class="btn btn-primary" data-act="content-edit:welcome">${icon('edit', 17)}${L('Edit welcome', 'تعديل الترحيب')}</button>`
   }) + tabBar('portal', PTABS(), tab);
 
   if (tab === 'requests') return head + `<div style="margin-top:20px" class="splitview">
@@ -476,35 +464,6 @@ export function portal(tab = '') {
       empty: empty('notes', L('No prayer requests', 'لا طلبات صلاة'), L('Requests members send from the portal appear here for moderation.', 'الطلبات المرسلة من البوّابة تظهر هنا للمراجعة.'))
     })}</div></div>`;
 
-  return head + `<div style="margin-top:20px" class="splitview">
-    <div class="stack" style="gap:16px">
-      ${panel(L('Published', 'منشور'), `<div class="stack" style="gap:0">
-        ${[[L('Parish history and the patron saint story', 'تاريخ الرعية وقصة الشفيع'), L('updated 12 Aug 2026', 'حُدّث ١٢ آب ٢٠٢٦')],
-           [L('Clergy and staff', 'الإكليروس والموظّفون'), L('4 entries', '٤ مدخلات')],
-           [L('Mass and confession times, with locations', 'مواعيد القداديس والاعتراف مع الأماكن'), L('synced from the calendar', 'متزامنة مع الرزنامة')],
-           [L('Public events and livestream links', 'الأحداث العامة وروابط البثّ'), L('3 upcoming', '٣ قادمة')],
-           [L('Homily recordings', 'تسجيلات العظات'), L('18 recordings', '١٨ تسجيلاً')],
-           [L('Approved parish documents and reusable slides', 'مستندات الرعية والعروض القابلة لإعادة الاستعمال'), L('11 files', '١١ ملفاً')],
-           [L('Bible and missal — licensed or linked', 'الكتاب المقدس والقدّاس — مرخّص أو بالرابط'), L('linked only', 'بالرابط فقط')],
-           [L('Contact details', 'معلومات التواصل'), esc(PARISH.phone)]]
-          .map(([a, b]) => `<div class="listrow" style="padding-inline:0">
-            <span class="grow"><b>${esc(a)}</b><small>${esc(b)}</small></span>
-            <span class="pill pill-success"><span class="dot"></span>${L('Live', 'منشور')}</span>
-            ${C.iconBtn('edit', L('Edit', 'تعديل'), 'data-act="content-edit"')}</div>`).join('')}</div>`)}
-    </div>
-    <div class="sidecol">
-      ${panel(L('Phone preview', 'معاينة على الهاتف'), `
-        <div style="border:8px solid var(--ink);border-radius:26px;overflow:hidden;background:var(--bg)">
-          <div style="background:var(--ink);color:var(--light-blue);padding:14px;text-align:center">
-            <div style="font:600 15px/20px var(--arabic)">${esc(PARISH.nameAr)}</div>
-            <div style="font:400 10px/14px var(--sans);opacity:.7">${esc(PARISH.town)}</div></div>
-          <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
-            ${[[L('Mass times', 'مواعيد القداديس'), 'events'], [L('Announcements', 'الإعلانات'), 'bell'],
-               [L('Request a certificate', 'طلب شهادة'), 'doc'], [L('My family', 'عائلتي'), 'family'],
-               [L('Prayer request', 'نيّة صلاة'), 'msg']]
-              .map(([x, i]) => `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
-                padding:9px 10px;display:flex;gap:8px;align-items:center;font:500 11px/16px var(--sans)">
-                ${icon(i, 14)}${esc(x)}</div>`).join('')}</div></div>`)}
-    </div></div>`;
+  return `<div class="cms-page">${head}${portalContent()}</div>`;
 }
 portal.mount = host => { C.wire(host); wireTables(host); };

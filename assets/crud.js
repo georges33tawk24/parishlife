@@ -288,9 +288,12 @@ export const ENT = {
     fields: () => [...pair('title', 'ar', 'Title', 'العنوان', 'Arabic title', 'العنوان بالعربية', { full: true }),
       { k: 'pri', label: L('Priority', 'الأولوية'), type: 'select', options: () => [['normal', 'Normal', 'عادية'], ['urgent', 'Urgent', 'عاجلة']] },
       { k: 'audience', label: L('Audience', 'الجمهور'), type: 'select',
-        options: () => [['Parish', 'Parish', 'الرعية'], ['Parents', 'Parents', 'الأهالي'], ['Youth', 'Youth', 'الشبيبة'], ['Volunteers', 'Volunteers', 'المتطوّعون']],
-        set: (x, v) => { x.audience = v; x.audienceAr = { Parish: 'الرعية', Parents: 'الأهالي', Youth: 'الشبيبة', Volunteers: 'المتطوّعون' }[v]; } }],
-    blank: () => ({ id: uid('n'), title: '', ar: '', pri: 'normal', by: 'p4', at: '2026-10-04', audience: 'Parish', audienceAr: 'الرعية' }),
+        options: () => [['Parish', 'Parish', 'الرعية'], ['Parents', 'Parents', 'الأهالي'], ['Youth', 'Youth', 'الشبيبة'], ['Volunteers', 'Volunteers', 'المتطوّعون'],
+          ...D.GROUPS.map(g=>[`group:${g.id}`,`Group: ${g.name}`,`مجموعة: ${g.ar}`])],
+        get: x => x.groupId ? `group:${x.groupId}` : x.audience,
+        set: (x, v) => { x.groupId=v.startsWith('group:')?v.slice(6):null;x.audience=x.groupId?'Group':v;
+          x.audienceAr=x.groupId?(D.GROUPS.find(g=>g.id===x.groupId)?.ar||'مجموعة'):{ Parish: 'الرعية', Parents: 'الأهالي', Youth: 'الشبيبة', Volunteers: 'المتطوّعون' }[v]; } }],
+    blank: () => ({ id: uid('n'), title: '', ar: '', pri: 'normal', by: 'p4', at: new Date().toISOString().slice(0,10), audience: 'Parish', audienceAr: 'الرعية', groupId:null }),
     delNote: ['It comes off the board and out of this week’s bulletin.', 'يُزال عن اللوحة ومن نشرة هذا الأسبوع.']
   },
 
@@ -356,7 +359,7 @@ export const ENT = {
   volunteer: {
     key: 'p', list: () => D.VOLUNTEERS, name: v => L(D.person(v.p)?.lat || '—', D.person(v.p)?.ar || '—'),
     nw: ['Add a volunteer', 'إضافة متطوّع'], ed: ['Edit volunteer', 'تعديل المتطوّع'], del: ['Remove this volunteer?', 'إزالة هذا المتطوّع؟'],
-    sub: ['A volunteer does not need a login. Add them by hand and reach them on WhatsApp.', 'المتطوّع لا يحتاج حساباً. أضفه يدوياً وتواصل معه على واتساب.'],
+    sub: ['Add a parishioner to the rota. If they need to sign in, give them a member account; ministry membership is optional.', 'أضف مؤمناً إلى المناوبة. إذا احتاج إلى الدخول، أنشئ له حساب عضو؛ الانضمام إلى خدمة اختياري.'],
     fields: (x, isNew) => [
       isNew ? { k: 'p', label: L('Parishioner', 'المؤمن'), type: 'select', full: true,
                 options: () => people().filter(([id]) => !D.VOLUNTEERS.some(v => v.p === id)) }
@@ -528,4 +531,4 @@ export function menu(anchor, kind, id, extra = []) {
 
 /** The ⋯ button a view puts on a row or card. */
 export const recBtn = (kind, id, label = L('Actions', 'إجراءات')) =>
-  `<button class="btn-icon dense rec" data-tip="${esc(label)}" aria-label="${esc(label)}" aria-haspopup="menu" data-act="rec-menu:${kind}|${id}">${icon('dots', 17)}</button>`;
+  `<button class="btn-icon dense rec" aria-label="${esc(label)}" aria-haspopup="menu" data-act="rec-menu:${kind}|${id}">${icon('dots', 17)}</button>`;

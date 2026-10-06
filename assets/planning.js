@@ -71,6 +71,7 @@ export const attendanceValue = (meeting, personId) => meeting.attendance?.[perso
 export const attendanceCounts = (meetings, roster) => {
   const counts = { present: 0, excused: 0, absent: 0, unrecorded: 0 };
   for (const meeting of meetings) for (const member of roster) {
+    if(meeting.participants?.length && !meeting.participants.includes(member.p))continue;
     const value = attendanceValue(meeting, member.p);
     counts[value || 'unrecorded'] += 1;
   }

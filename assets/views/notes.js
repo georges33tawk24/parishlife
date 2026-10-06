@@ -4,7 +4,7 @@ import { S, is, bus } from '../store.js';
 import { NOTES, PEOPLE, person } from '../data.js';
 import { icon } from '../icons.js';
 import { persist } from '../persist.js';
-import { pageHead, panel, pill, who, esc, empty, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
+import { pageHead, panel, table, pill, who, esc, empty, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 
 const L = (en, ar) => t(en, ar);
 const priorities = [
@@ -37,16 +37,17 @@ export function notes() {
   const row = n => {
     const p = n.p ? person(n.p) : null;
     const search = `${n.body} ${n.bodyAr || ''} ${p?.lat || ''} ${p?.ar || ''}`.toLocaleLowerCase();
-    return `<div class="listrow pastoral-row ${n.done ? 'is-done' : ''}" data-note="${esc(n.id)}" data-search="${esc(search)}">
-      ${n.kind === 'task' ? `<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done ? L('Reopen task', 'إعادة فتح المهمة') : L('Complete task', 'إكمال المهمة')}" aria-pressed="${!!n.done}">${icon('check', 17)}</button>` : icon('notes', 19, 'dimmer')}
-      <div class="grow"><div class="row" style="gap:8px;flex-wrap:wrap"><b>${esc(label(n))}</b>
-        ${n.priority === 'urgent' ? pill(L('High', 'عالية'), 'danger') : n.priority === 'attention' ? pill(L('Medium', 'متوسطة'), 'warning') : ''}
-        ${n.kind === 'task' && n.done ? pill(L('Completed', 'مكتملة'), 'success') : ''}</div>
-        <small>${esc(kind(n))}${p ? ` · ${esc(p.lat)} · ${esc(p.ar)}` : ''}${n.kind==='task' && n.assignee ? ` · ${L('Assigned to','المكلّف')} ${esc(person(n.assignee)?.lat || '—')}` : ''}${n.kind==='task' && n.due ? ` · ${L('Due', 'حتى')} ${fmtDate(n.due)}` : ''}${n.at ? ` · ${fmtDate(n.at)}` : ''}</small></div>
-      <button class="btn-icon" data-note-pin="${esc(n.id)}" aria-label="${n.pinned ? L('Unpin', 'إلغاء التثبيت') : L('Pin', 'تثبيت')}" aria-pressed="${!!n.pinned}">${icon('pin', 17)}</button>
-      <button class="btn btn-secondary btn-dense" data-note-edit="${esc(n.id)}">${L('Edit', 'تعديل')}</button>
-    </div>`;
+    return {attrs:`data-note="${esc(n.id)}" data-search="${esc(search)}"`,cells:[
+      p?`<a href="#/person/${esc(p.id)}">${esc(p.lat)}</a>`:'—',
+      `<b>${esc(label(n))}</b>${n.kind==='task'&&n.assignee?`<small>${L('Assigned to','المكلّف')} ${esc(person(n.assignee)?.lat||'—')}</small>`:''}`,
+      n.priority==='urgent'?pill(L('High','عالية'),'danger'):n.priority==='attention'?pill(L('Medium','متوسطة'),'warning'):pill(L('Low','منخفضة')),
+      n.kind==='task'?n.due?fmtDate(n.due):'—':n.at?fmtDate(n.at):'—',
+      n.kind==='task'?pill(n.done?L('Completed','مكتملة'):L('Pending','معلّقة'),n.done?'success':'warning'):'—',
+      `<span class="rowacts">${n.kind==='task'?`<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done?L('Reopen task','إعادة فتح المهمة'):L('Complete task','إكمال المهمة')}">${icon('check',17)}</button>`:''}
+        <button class="btn-icon" data-note-pin="${esc(n.id)}" aria-label="${n.pinned?L('Unpin','إلغاء التثبيت'):L('Pin','تثبيت')}" aria-pressed="${!!n.pinned}">${icon('pin',17)}</button>
+        <button class="btn btn-secondary btn-dense" data-note-edit="${esc(n.id)}">${L('Edit','تعديل')}</button></span>`]};
   };
+  const columns=[{label:L('Person','الشخص')},{label:L('Content','المحتوى')},{label:L('Priority','الأولوية')},{label:L('Due or recorded','الاستحقاق أو التسجيل')},{label:L('Status','الحالة')},{label:''}];
   return `${pageHead({
     crumbs: [{ label: L('Records', 'السجلات') }, { label: L('Pastoral notes', 'ملاحظات رعوية') }],
     title: L('Pastoral notes & tasks', 'الملاحظات والمهام الرعوية'),
@@ -71,8 +72,9 @@ export function notes() {
         .map(([key,en,ar]) => `<option value="${key}" ${sort === key ? 'selected' : ''}>${L(en,ar)}</option>`).join('')}
     </select>
   </div>
-  ${panel('', rows.length ? `<div id="note-list">${rows.map(row).join('')}</div><p class="help" id="note-no-search" hidden>${L('No matching items.', 'لا عناصر مطابقة.')}</p>`
-    : empty('notes', L('Nothing in this view', 'لا عناصر في هذا العرض'), L('Create a note or task, or choose another filter.', 'أنشئ ملاحظة أو مهمة، أو اختر مرشّحاً آخر.')), { tight: true })}`;
+  ${panel(L('Notes','الملاحظات'),table({cols:columns,rows:rows.filter(n=>n.kind!=='task').map(row),empty:empty('notes',L('No notes in this view','لا ملاحظات في هذا العرض'),L('Create a note or change the filter.','أنشئ ملاحظة أو غيّر المرشّح.'))}),{tight:true})}
+  ${panel(L('Tasks','المهام'),table({cols:columns,rows:rows.filter(n=>n.kind==='task').map(row),empty:empty('notes',L('No tasks in this view','لا مهام في هذا العرض'),L('Create a task or change the filter.','أنشئ مهمة أو غيّر المرشّح.'))}),{tight:true})}
+  <p class="help" id="note-no-search" hidden>${L('No matching items.', 'لا عناصر مطابقة.')}</p>`;
 }
 
 export function openPastoralForm(item = null, type = 'note', initialPerson = null) {
@@ -116,9 +118,10 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         title: L('Delete this pastoral item?', 'حذف هذا العنصر الرعوي؟'),
         sub: L('This removes it from the parish record.', 'سيُحذف من سجل الرعية.'),
         foot: `<button class="btn btn-secondary" data-close>${L('Keep', 'إبقاء')}</button><button class="btn btn-danger" id="pastoral-confirm-delete">${L('Delete', 'حذف')}</button>`,
-        onMount(dialog) { dialog.querySelector('#pastoral-confirm-delete').addEventListener('click', () => {
+        onMount(dialog) { dialog.querySelector('#pastoral-confirm-delete').addEventListener('click', async () => {
           const index = NOTES.findIndex(n => n.id === item.id);
           if (index >= 0) NOTES.splice(index, 1);
+          if(!await persist())return;
           closeOverlays(); bus.refresh(); toast(L('Deleted', 'حُذف'), '', 'success');
         }); }
       }));
@@ -136,13 +139,13 @@ notes.mount = host => {
     host.querySelectorAll('[data-note]').forEach(row => { row.hidden = !row.dataset.search.includes(query); if (!row.hidden) shown++; });
     const none = host.querySelector('#note-no-search'); if (none) none.hidden = shown > 0;
   });
-  host.querySelectorAll('[data-note-done]').forEach(b => b.addEventListener('click', () => {
+  host.querySelectorAll('[data-note-done]').forEach(b => b.addEventListener('click', async () => {
     const item = NOTES.find(n => n.id === b.dataset.noteDone); if (!item || item.kind !== 'task') return;
-    item.done = !item.done; bus.refresh(); toast(item.done ? L('Task completed', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), '', 'success');
+    item.done = !item.done;if(!await persist())return; bus.refresh(); toast(item.done ? L('Task completed', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), '', 'success');
   }));
-  host.querySelectorAll('[data-note-pin]').forEach(b => b.addEventListener('click', () => {
+  host.querySelectorAll('[data-note-pin]').forEach(b => b.addEventListener('click', async () => {
     const item = NOTES.find(n => n.id === b.dataset.notePin); if (!item) return;
-    item.pinned = !item.pinned; bus.refresh();
+    item.pinned = !item.pinned;if(!await persist())return;bus.refresh();
   }));
   host.querySelectorAll('[data-note-edit]').forEach(b => b.addEventListener('click', () => {
     const item = NOTES.find(n => n.id === b.dataset.noteEdit); if (item) openPastoralForm(item);

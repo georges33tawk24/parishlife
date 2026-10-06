@@ -43,6 +43,8 @@ export const ROUTES = {
   membernotifications: { ico:'bell', en:'Notifications', ar:'الإشعارات', view:Member.notificationsPage },
   memberhub: { ico:'msg', en:'Member communication', ar:'التواصل مع الأعضاء', view:Member.hub },
   oversight:    { ico:'portal', en:'Parish oversight', ar:'الإشراف على الرعايا', view:Oversight.oversight },
+  bishopeparchy:{ ico:'portal', en:'Eparchy', ar:'الأبرشية', view:Oversight.eparchy },
+  bishopmap:    { ico:'events', en:'Parish map', ar:'خريطة الرعايا', view:Oversight.mapView },
   dashboard:    { ico:'dash',     en:'Dashboard',        ar:'لوحة القيادة',        view:Dashboard.dashboard },
   people:       { ico:'people',   en:'People',           ar:'المؤمنون',            view:People.people,      badge:() => num(D.PEOPLE.length) },
   person:       { ico:'people',   en:'Person',           ar:'سجلّ شخص',            view:People.personView,  hidden:true },
@@ -82,8 +84,6 @@ export const ROUTES = {
   reports:      { ico:'reports',  en:'Reports',          ar:'التقارير',            view:Admin.reports },
   audit:        { ico:'shield',   en:'Audit trail',      ar:'سجل التدقيق',         view:Admin.audit },
   settings:     { ico:'settings', en:'Settings',         ar:'الإعدادات',           view:Admin.settings },
-  children:     { ico:'family',   en:'Participants checked in', ar:'المشتركون الحاضرون',    view:Parish.checkin,
-                  badge:() => Object.values(D.CHECKIN.sessions||{}).reduce((n, session) => n + (session.rows?.length||0), 0) },
   eparchy:      { ico:'portal',   en:'Eparchy',          ar:'الأبرشية',            view:Admin.eparchy },
   assignments:  { ico:'shield',   en:'Priest assignments', ar:'تعيينات الكهنة', view:Admin.assignments },
   household:    { ico:'family',   en:'Household',         ar:'العائلة',             view:People.householdView, hidden:true },
@@ -93,7 +93,7 @@ export const ROUTES = {
 export { S as state, ROLES, me, go };
 /* Detail views (a person, a certificate, the design system) are reachable from
    whatever module linked to them, so they ride on their parent's permission. */
-const DETAIL_PARENT = { person: 'people', household: 'households', certificate: 'sacraments', children: 'checkin' };
+const DETAIL_PARENT = { person: 'people', household: 'households', certificate: 'sacraments' };
 const PERSONAL_ROUTES = new Set(['memberhome','myministries','mymeetings','mycalendar','myattendance',
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
@@ -207,7 +207,7 @@ function loginScreen(error = '') {
   app.className = 'signin';
   app.innerHTML = `<div class="signin-art"><div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
     <div><h1>${t('Parish administration for your community.', 'إدارة الرعية لخدمة جماعتكم.')}</h1><p style="font-family:var(--arabic)">حياة الرعية</p></div>
-    <div class="swatches"><i style="background:#3D4161;border:1px solid #DCEEFF"></i><i style="background:#DCEEFF"></i><i style="background:#FFFFFF"></i><i style="background:var(--yellow)"></i><i style="background:var(--brown)"></i></div></div>
+    <div class="swatches"><i style="background:#233B32;border:1px solid #EDF0E8"></i><i style="background:#EDF0E8"></i><i style="background:#FFFFFF"></i><i style="background:var(--selection)"></i><i style="background:var(--text-2)"></i></div></div>
     <div class="signin-form"><form id="signform" novalidate><h2>${t('Sign in', 'تسجيل الدخول')}</h2>
       <p class="dim" style="margin:6px 0 24px">${t('Use the account created by your administrator.', 'استخدم الحساب الذي أنشأه المسؤول.')}</p>
       ${error ? `<div class="alert alert-danger" role="alert">${esc(error)}</div>` : ''}
@@ -324,7 +324,7 @@ const ACTIONS = [
   ['Request a room', 'طلب قاعة', 'rooms', '#/reservations'],
   ['Take attendance', 'تسجيل الحضور', 'attend', '#/checkin'],
   ['Build this week\u2019s bulletin', 'بناء نشرة الأسبوع', 'doc', '#/notices'],
-  ['Print my week', 'اطبع أسبوعي', 'print', '#/calendar'],
+  ['Print my schedule', 'اطبع جدولي', 'print', '#/calendar'],
   ['Open the audit trail', 'فتح سجل التدقيق', 'shield', '#/audit']
 ];
 
@@ -362,6 +362,8 @@ function renderPalette(q) {
   const res = paletteEl.querySelector('#cmdres');
   const acts = ['bishop','member'].includes(S.role) ? [] : ACTIONS.filter(a => matches(a[0] + ' ' + a[1], q));
   const ppl = S.role === 'member' ? [] : (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
+  const households = q && canSee('households') ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town||''} ${h.envelope||''}`,q)).slice(0,5) : [];
+  const records = q && canSee('sacraments') ? D.SACRAMENTS.filter(r => matches(`${r.reg||''} ${r.kind||''} ${D.person(r.person)?.lat||''}`,q)).slice(0,5) : [];
   const pages = Object.entries(ROUTES).filter(([id, r]) => !r.hidden && allowed(id) && matches(r.en + ' ' + r.ar, q)).slice(0, 5);
 
   const mark = (s2) => q ? esc(s2).replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark>$1</mark>') : esc(s2);
@@ -375,7 +377,11 @@ function renderPalette(q) {
     (ppl.length ? `<div class="ac-group">${q ? t('People', 'المؤمنون') : t('Recent', 'الأخيرة')}</div>` + ppl.map(p =>
       `<button class="ac-opt" data-href="#/person/${p.id}">${avatar(p, 'avatar-sm')}
         <span><b>${mark(isAr() ? p.ar : p.lat)}</b><small>${esc(isAr() ? p.lat : p.ar)} · ${t('Parishioner', 'مؤمن')}</small></span></button>`).join('') : '') +
-    (!acts.length && !pages.length && !ppl.length ? `<div class="ac-none">${t('Nothing matches.', 'لا نتيجة.')}</div>` : '');
+    (households.length ? `<div class="ac-group">${t('Households','العائلات')}</div>` + households.map(h=>
+      `<button class="ac-opt" data-href="#/household/${esc(h.id)}">${icon('family',17)}<span><b>${mark(isAr()?h.ar:h.name)}</b><small>${t('Household','عائلة')} · ${esc(h.town||'')}</small></span></button>`).join('') : '') +
+    (records.length ? `<div class="ac-group">${t('Sacrament records','سجلات الأسرار')}</div>` + records.map(r=>
+      `<button class="ac-opt" data-href="#/certificate/${esc(r.id)}">${icon('sacr',17)}<span><b>${mark(r.reg||r.kind)}</b><small>${t('Record','قيد')} · ${esc(D.person(r.person)?.lat||'')}</small></span></button>`).join('') : '') +
+    (!acts.length && !pages.length && !ppl.length && !households.length && !records.length ? `<div class="ac-none">${t('Nothing matches.', 'لا نتيجة.')}</div>` : '');
 
   res.querySelector('.ac-opt')?.setAttribute('aria-selected', 'true');
   res.querySelectorAll('[data-href]').forEach(b => b.addEventListener('click', () => {
@@ -464,6 +470,10 @@ function accountDrawer() {
     title: t('My account', 'حسابي'), sub: `${esc(isAr() ? p.ar : p.lat)} · ${esc(t(r.en, r.ar))}`,
     body: `<div class="row" style="gap:14px;margin-bottom:18px">${avatar(p, 'avatar-xl')}
         <div><b style="font:600 17px/24px var(--sans)">${esc(p.lat)}</b><div style="font:400 15px/24px var(--arabic);color:var(--text-2)">${esc(p.ar)}</div></div></div>
+      <dl class="dl" style="margin-bottom:20px"><dt>${t('Username','اسم المستخدم')}</dt><dd>${esc(session.user?.username||'—')}</dd>
+        <dt>${t('Access','الصلاحية')}</dt><dd>${esc(t(r.en,r.ar))}${S.role==='bishop'?` · ${t('Read-only','للقراءة فقط')}`:''}</dd>
+        <dt>${t('Parishes visible','الرعايا المتاحة')}</dt><dd>${session.parishes.length}</dd>
+        ${S.role==='bishop'?`<dt>${t('Scope','النطاق')}</dt><dd>${t('Archdiocese oversight; private member notes and pastoral records are excluded.','إشراف الأبرشية؛ لا يشمل ملاحظات الأعضاء الخاصة أو السجلات الرعوية السرية.')}</dd>`:''}</dl>
       <div class="ac-group" style="padding-inline:0">${t('Language', 'اللغة')}</div>
       <div class="langswap" role="group">
         <button data-lang="en" aria-pressed="${lang === 'en'}">English</button>
@@ -519,7 +529,7 @@ function parishSwitcher() {
         <span><b>${esc(t(x.name, x.ar))}</b><small>${esc(t(x.town, x.townAr))} · ${esc(t(x.role, x.roleAr))}</small></span>
         ${x.name === PARISH.name ? `<span style="margin-inline-start:auto;color:var(--primary)">${icon('check', 16)}</span>` : ''}</button>`).join('')}
       <div class="divider"></div>
-      ${S.role === 'bishop' ? `<a class="listrow" href="#/eparchy" style="padding-inline:0">${icon('portal', 17, 'dimmer')}
+      ${S.role === 'bishop' ? `<a class="listrow" href="#/bishopeparchy" style="padding-inline:0">${icon('portal', 17, 'dimmer')}
         <span class="grow"><b>${t('Eparchy view', 'عرض الأبرشية')}</b>
           <small>${t('All parishes in this archdiocese', 'كل رعايا هذه الأبرشية')}</small></span>${icon('chevR', 15)}</a>` : ''}`,
     foot: `<button class="btn btn-secondary" data-close>${t('Close', 'إغلاق')}</button>`,

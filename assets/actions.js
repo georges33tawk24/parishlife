@@ -7,8 +7,9 @@ import { toast, closeOverlays, esc } from './ui.js';
 import * as D from './data.js';
 import * as F from './flows.js';
 import * as CR from './crud.js';
-import { backupJSON, workflow as serverWorkflow } from './persist.js';
+import { backupJSON, persist, workflow as serverWorkflow } from './persist.js';
 import { selectedCheckin } from './event-workflows.js';
+import { session } from './api.js';
 
 const L = (en, ar) => t(en, ar);
 const refresh = () => bus.refresh();
@@ -214,20 +215,9 @@ export const VERBS = {
   },
 
   /* communication ----------------------------------------------- */
-  'msg-send': () => {
-    const el = document.querySelector('.drawer');
-    const subject = el?.querySelector('#msgen')?.value?.trim() || L('Parish announcement', 'إعلان رعوي');
-    D.MESSAGES.unshift({ id: 'mg' + Date.now(), subject, subjectAr: subject,
-      audience: 'All households', audienceAr: 'كل العائلات', channel: 'whatsapp',
-      status: 'scheduled', when: '2026-10-12 15:00', reach: 412 });
-    closeOverlays(); refresh();
-    ok(L('Sent for approval', 'أُرسلت للموافقة'), L('The priest approves a parish-wide send before it leaves.', 'يوافق الكاهن على الإرسال العام قبل مغادرته.'));
-  },
-  'msg-retry': (btn, id) => {
-    const m = find(D.MESSAGES, id); if (!m) return;
-    m.status = 'sent'; refresh();
-    ok(L('Retried on SMS', 'أُعيدت عبر SMS'), L('14 of the 18 went through.', 'نجحت ١٤ من ١٨.'));
-  },
+  'msg-send': () => F.compose('all'),
+  'msg-retry': () => toast(L('External delivery is not connected','الإرسال الخارجي غير موصول'),
+    L('No SMS was sent. Use the established contact method outside ParishLife.','لم تُرسل رسالة قصيرة. استخدم وسيلة التواصل المعتمدة خارج ParishLife.'),'warning'),
   'notice-add': () => CR.create('notice'),
   'prayer-publish': (btn, id) => {
     const p = find(D.PRAYERS, id); if (!p) return;
@@ -274,8 +264,9 @@ export const VERBS = {
   'request-filter': (b, v) => { S.ui.requestFilter = v; refresh(); },
   'wh-toggle':    (b, i) => { const w = D.WEBHOOKS[+i]; if (!w) return; w.active = b.checked; refresh();
                     ok(w.active ? L('Webhook on', 'الخطّاف مفعّل') : L('Webhook paused', 'الخطّاف متوقّف'), w.url); },
-  'auto-toggle':  (b, i) => { const a = D.AUTOMATIONS[+i]; if (!a) return; a.active = b.checked; refresh();
-                    ok(a.active ? L('Automation on', 'الأتمتة مفعّلة') : L('Automation paused', 'الأتمتة متوقّفة'), L(a.what || a.name || '', a.whatAr || a.ar || '')); },
+  'auto-toggle':  async (b, i) => { const a = D.AUTOMATIONS[+i]; if (!a) return; a.active = b.checked;
+                    if(!await persist())return;refresh();
+                    ok(a.active ? L('Automation plan enabled', 'فُعّلت خطة الأتمتة') : L('Automation plan paused', 'أُوقفت خطة الأتمتة'), L(a.what || a.name || '', a.whatAr || a.ar || '')); },
   'data-export': () => { download(`parishlife-snapshot-${new Date().toISOString().slice(0, 10)}.json`, backupJSON(), 'application/json');
     ok(L('Data snapshot downloaded', 'نُزّلت صورة البيانات'), L('An administrator manages database backups and restores.', 'يدير المسؤول النسخ الاحتياطية لقاعدة البيانات واستعادتها.')); },
   'rec-new':      (b, kind) => CR.create(kind),
@@ -357,7 +348,7 @@ export const VERBS = {
   'venue-new':    () => CR.create('venue'),
   'issue-new':    () => CR.create('issue'),
   'content-edit': (b, a) => F.contentEdit(a),
-  'portal-open':  () => window.open('landing.html', '_blank', 'noopener'),
+  'portal-open':  () => window.open(`public.html?parish=${encodeURIComponent(session.parishId || '')}`, '_blank', 'noopener'),
   'line-edit':    (b, a) => F.lineEdit(a),
   'line-reverse': (b, a) => F.lineReverse(a),
   'svc-request':  (b, a) => F.svcRequestOpen(a),

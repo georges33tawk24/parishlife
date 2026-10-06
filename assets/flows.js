@@ -11,6 +11,8 @@ import { currentPlan, copyOrder, allPlans, normalizePlanOrder } from './planning
 import { openPastoralForm } from './views/notes.js';
 import { download } from './actions.js';
 import { persist } from './persist.js';
+import { safeRichText } from './rich-text.js';
+import { memberAction } from './member-data.js';
 import { readAddressCascade } from './geography.js';
 import { eligibleEvents, eventById, selectedRegistration, selectRegistration, selectableCheckinEvents,
   selectedCheckin, ensureCheckinSession, linkedEvent, registrantsFor } from './event-workflows.js';
@@ -32,7 +34,7 @@ export function need(el, sel, msg, ok = v => !!v) {
   inp.addEventListener('input', () => { inp.removeAttribute('aria-invalid'); h.remove(); }, { once: true });
   return false;
 }
-const today = '2026-10-04';
+const today = new Date().toLocaleDateString('sv-SE');
 /** The group whose page is open (its flows act on it, not on the choir). */
 const curGroup = () => (S.route === 'groups' && S.params[0]) || 'g1';
 const gd = () => D.groupInfo(curGroup());
@@ -48,105 +50,51 @@ const AUDIENCES = {
 };
 
 export function compose(audience = 'all', { subject = '', body = '', bodyAr = '', title } = {}) {
+  if(audience==='eparchy')return toast(L('Eparchy delivery is not connected','خدمة الإرسال إلى الأبرشية غير موصولة'),
+    L('Use the Eparchy contact outside this application.','تواصل مع الأبرشية خارج هذا التطبيق.'),'warning');
   const person = D.person(audience);
-  const [aen, aar, reach] = person ? [person.lat, person.ar, 1] : (AUDIENCES[audience] || AUDIENCES.all);
+  const groupAudience=audience==='group';
+  const [aen, aar] = person ? [person.lat, person.ar] : groupAudience
+    ? [D.group(curGroup())?.name||'Ministry',D.group(curGroup())?.ar||'الخدمة'] : [L('All members','كل الأعضاء'),L('All members','كل الأعضاء')];
   openDrawer({
     large: true,
     title: title || L('New message', 'رسالة جديدة'),
-    sub: L('Recipients are filtered by what you are allowed to see.', 'يُرشَّح المستلمون بحسب ما يحقّ لك الاطّلاع عليه.'),
+    sub: L('Delivered inside ParishLife to accounts in this parish. External channels are not connected.',
+      'تصل داخل ParishLife إلى الحسابات في هذه الرعية. القنوات الخارجية غير موصولة.'),
     body: `<div class="formrow"><label class="label">${L('Send to', 'إرسال إلى')}</label>
-        <div class="chipfield" style="cursor:default"><span class="tag">${person ? avatar(person, 'avatar-sm') : icon('groups', 14)}
-          ${esc(L(aen, aar))}</span><span class="t-caption dim" style="margin-inline-start:auto">${num(reach)}
-          ${reach === 1 ? L('person', 'شخص') : L('people', 'شخصاً')}</span></div></div>
-      <div class="formgrid">
-        <div class="formrow"><label class="label">${L('Channel', 'القناة')}</label>
-          <select class="select" id="mchan"><option>${L('Follow each person’s preference', 'اتّبع تفضيل كل شخص')}</option>
-            <option>${L('In-app only', 'داخل التطبيق فقط')}</option><option>WhatsApp</option><option>SMS</option>
-            <option>${L('Email', 'بريد إلكتروني')}</option></select></div>
-        ${C.field({ label: L('When', 'الموعد'), type: 'datetime-local', value: '2026-10-04T19:30', id: 'mwhen' })}
-      </div>
+      ${groupAudience?`<select class="select" id="mgroup">${D.GROUPS.map(g=>`<option value="${esc(g.id)}" ${g.id===curGroup()?'selected':''}>${esc(L(g.name,g.ar))}</option>`).join('')}</select>`:
+        `<div class="chipfield" style="cursor:default"><span class="tag">${person ? avatar(person, 'avatar-sm') : icon('groups', 14)} ${esc(L(aen, aar))}</span></div>`}</div>
       ${C.field({ label: L('Subject', 'الموضوع'), value: subject, id: 'msubj', req: true })}
       ${C.textarea({ label: L('Message — English', 'الرسالة — إنكليزي'), id: 'msgen', max: 480, value: body })}
-      ${C.textarea({ label: L('Message — Arabic', 'الرسالة — عربي'), id: 'msgar', max: 480, ar: true, value: bodyAr,
-        help: L('Each person receives the version matching their recorded language.', 'يتلقّى كل شخص النسخة الموافقة للغته.') })}
-      ${reach > 50 ? C.inlineAlert('info', L('A parish-wide send needs approval', 'الإرسال العام يحتاج موافقة'),
-        L('It waits for the priest before it leaves. Opt-outs and quiet hours are respected.', 'ينتظر الكاهن قبل مغادرته. وتُحترم طلبات الإيقاف وساعات الهدوء.')) : ''}`,
+      ${C.textarea({ label: L('Message — Arabic', 'الرسالة — عربي'), id: 'msgar', max: 480, ar: true, value: bodyAr })}
+      <p class="help">${L('Both versions appear together in the recipient’s in-app message or update.','تظهر النسختان معاً في رسالة المستلِم أو المستجد داخل التطبيق.')}</p>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-secondary" id="mdraft">${L('Save draft', 'حفظ مسوّدة')}</button>
-      <button class="btn btn-primary" id="msend" style="margin-inline-start:auto">${icon('msg', 16)}
-        ${reach > 50 ? L('Request approval', 'طلب الموافقة') : L('Send', 'إرسال')}</button>`,
+      <button class="btn btn-primary" id="msend" style="margin-inline-start:auto">${icon('msg', 16)}${L('Send in app', 'إرسال داخل التطبيق')}</button>`,
     onMount(el) {
       C.wire(el);
-      const push = st => {
-        const subj = val(el, '#msubj') || L('Parish message', 'رسالة رعوية');
-        D.MESSAGES.unshift({ id: 'mg' + Date.now(), subject: subj, subjectAr: subj, audience: aen, audienceAr: aar,
-          channel: 'whatsapp', status: st, when: st === 'draft' ? '—' : '2026-10-04 19:30', reach });
-        closeOverlays(); refresh();
-        return D.MESSAGES[0];
-      };
-      el.querySelector('#msend').addEventListener('click', () => {
-        const m = push(reach > 50 ? 'scheduled' : 'sent');
-        ok(reach > 50 ? L('Sent for approval', 'أُرسلت للموافقة') : L('Message sent', 'أُرسلت الرسالة'),
-           `${L(aen, aar)} · ${num(reach)}`,
-           { action: { label: L('Undo', 'تراجع'), fn: () => { D.MESSAGES.splice(D.MESSAGES.indexOf(m), 1); refresh(); } } });
+      el.querySelector('#msend').addEventListener('click', async () => {
+        const subject=val(el,'#msubj'),english=val(el,'#msgen'),arabic=val(el,'#msgar');
+        if(!need(el,'#msubj',L('Enter a subject','أدخل الموضوع'))||!english&&!arabic)
+          return toast(L('Enter a subject and message','أدخل الموضوع والرسالة'),'','warning');
+        const message=[english,arabic].filter(Boolean).join('\n\n');
+        try{
+          if(person)await memberAction('staffMessage',{recipientPersonId:person.id,title:subject,body:message});
+          else await memberAction('publish',{kind:'announcement',groupId:groupAudience?val(el,'#mgroup'):null,title:subject,body:message});
+          closeOverlays();ok(L('Delivered in ParishLife','أُرسلت داخل ParishLife'),esc(L(aen,aar)));
+        }catch(error){toast(L('Message was not delivered','لم تُرسَل الرسالة'),error.message,'danger');}
       });
-      el.querySelector('#mdraft').addEventListener('click', () => { push('draft'); ok(L('Draft saved', 'حُفظت المسوّدة')); });
     }
   });
 }
 
 export function remind(context = 'rota') {
-  const [aen, aar, reach] = AUDIENCES[context] || AUDIENCES.rota;
-  openModal({
-    title: L('Send a reminder', 'إرسال تذكير'),
-    sub: `${esc(L(aen, aar))} · ${num(reach)} ${L('people', 'شخصاً')}`,
-    body: `<div class="card card-flat" style="font:400 14px/22px var(--sans)">
-        ${L('A reminder for Sunday 4 October, 10:30 at the Upper Church. Reply 1 to confirm or 2 if you cannot come.',
-            'تذكير بيوم الأحد ٤ تشرين الأول، الساعة ١٠:٣٠ في الكنيسة العليا. ردّ ١ للتأكيد أو ٢ إذا تعذّر حضورك.')}</div>
-      <div class="stack" style="gap:10px;margin-top:16px">
-        ${C.checkRow(L('Skip people who already confirmed', 'تجاوز من أكّد'), { checked: true })}
-        ${C.checkRow(L('Respect quiet hours (21:00–07:00)', 'احترام ساعات الهدوء (٢١:٠٠–٠٧:٠٠)'), { checked: true })}</div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-primary" id="rgo" style="margin-inline-start:auto">${icon('bell', 16)}${L('Send reminder', 'إرسال التذكير')}</button>`,
-    onMount(el) {
-      C.wire(el);
-      el.querySelector('#rgo').addEventListener('click', () => {
-        D.MESSAGES.unshift({ id: 'mg' + Date.now(), subject: 'Reminder', subjectAr: 'تذكير', audience: aen, audienceAr: aar,
-          channel: 'whatsapp', status: 'sent', when: '2026-10-04 19:30', reach });
-        closeOverlays(); refresh();
-        ok(L('Reminder sent', 'أُرسل التذكير'), `${num(reach)} ${L('people', 'شخصاً')} · WhatsApp`);
-      });
-    }
-  });
+  toast(L('External reminders are not connected','التذكيرات الخارجية غير موصولة'),
+    L('Use in-app announcements for the group, or contact people outside ParishLife.','استخدم المستجدات داخل التطبيق للمجموعة، أو تواصل خارج ParishLife.'),'warning');
 }
 
 export function broadcast() {
-  openModal({
-    title: L('Emergency broadcast', 'بثّ طارئ'),
-    sub: L('Reaches every guardian of a child checked in right now, on every channel, ignoring quiet hours.',
-           'يصل إلى كل وليّ أمر لطفل مسجَّل الآن، على كل القنوات، متجاوزاً ساعات الهدوء.'),
-    body: `${C.textarea({ label: L('Message', 'الرسالة'), id: 'bmsg', max: 300,
-        value: L('Please come to the church courtyard now to collect your child. Everyone is safe.',
-                 'يُرجى الحضور إلى ساحة الكنيسة الآن لاستلام أولادكم. الجميع بخير.') })}
-      <div class="formrow"><label class="label">${L('Type', 'اكتب')} <b class="mono">SEND</b> ${L('to confirm', 'للتأكيد')}</label>
-        <input class="input mono" id="btyped" autocomplete="off" dir="ltr"></div>
-      ${C.inlineAlert('warning', L('A second person must approve', 'يجب أن يوافق شخص ثانٍ'),
-        L('Rita Nassar will be asked to confirm on her phone before anything leaves.', 'ستُطلب موافقة ريتا نصّار على هاتفها قبل أي إرسال.'))}`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-danger" id="bgo" disabled style="margin-inline-start:auto">${icon('bell', 16)}${L('Send broadcast', 'إرسال البثّ')}</button>`,
-    onMount(el) {
-      C.wire(el);
-      const go2 = el.querySelector('#bgo');
-      el.querySelector('#btyped').addEventListener('input', e => { go2.disabled = e.target.value.trim().toUpperCase() !== 'SEND'; });
-      go2.addEventListener('click', () => {
-        D.MESSAGES.unshift({ id: 'mg' + Date.now(), subject: 'Emergency broadcast', subjectAr: 'بثّ طارئ',
-          audience: 'Guardians', audienceAr: 'أولياء الأمور', channel: 'sms', status: 'pending', when: '2026-10-04 19:30', reach: 26 });
-        closeOverlays(); refresh();
-        toast(L('Waiting for the second approver', 'بانتظار الموافِق الثاني'),
-              L('Rita Nassar has been asked to confirm. It sends the moment she does.', 'طُلب من ريتا نصّار التأكيد. يُرسَل فور موافقتها.'), 'warning');
-      });
-    }
-  });
+  toast(L('Emergency broadcast is not connected','البثّ الطارئ غير موصول'),
+    L('Use the parish’s established emergency contact procedure. No message was sent from this application.','استخدم إجراء الطوارئ المعتمد في الرعية. لم يُرسَل شيء من التطبيق.'),'warning');
 }
 
 /** A person picker in a drawer — invitations, new members, substitutes. */
@@ -370,41 +318,22 @@ export function share({ title, url = location.href, text = '' }) {
 
 const docShell = (title, inner) => `<!doctype html><html lang="${isAr() ? 'ar' : 'en'}" dir="${isAr() ? 'rtl' : 'ltr'}"><head>
   <meta charset="utf-8"><title>${esc(title)}</title>
-  <style>body{font:14px/1.6 Inter,system-ui,sans-serif;color:#3D4161;background:#FFFFFF;margin:0;padding:32px}
-  .page{max-width:720px;margin:0 auto 24px;background:#FFFFFF;border:1px solid #DCEEFF;padding:40px;page-break-after:always}
-  h1{font-size:20px;margin:0 0 4px} .muted{color:#3D4161} table{width:100%;border-collapse:collapse;margin-top:16px}
-  th,td{padding:8px 10px;border-bottom:1px solid #DCEEFF;text-align:start} th{background:#EAF4FF;font-size:11px;
+  <style>body{font:14px/1.6 Inter,system-ui,sans-serif;color:#233B32;background:#FFFFFF;margin:0;padding:32px}
+  .page{max-width:720px;margin:0 auto 24px;background:#FFFFFF;border:1px solid #EDF0E8;padding:40px;page-break-after:always}
+  h1{font-size:20px;margin:0 0 4px} .muted{color:#233B32} table{width:100%;border-collapse:collapse;margin-top:16px}
+  th,td{padding:8px 10px;border-bottom:1px solid #EDF0E8;text-align:start} th{background:#F7F7F2;font-size:11px;
   text-transform:uppercase;letter-spacing:.06em} .num{text-align:end;font-family:ui-monospace,monospace}
-  .rule{border-top:2px solid #3D4161;margin:14px 0} @media print{body{background:#FFFFFF;padding:0}.page{border:0}}</style>
+  .rule{border-top:2px solid #233B32;margin:14px 0} @media print{body{background:#FFFFFF;padding:0}.page{border:0}}</style>
   </head><body>${inner}</body></html>`;
 
 /** Preview a document the parish holds, with print and download. */
 export function previewDoc(name, kind = 'file') {
   openDrawer({
-    large: true, title: name,
-    sub: L('Restricted documents open here, and opening one is logged.', 'المستندات المقيّدة تُفتح هنا، وفتحها يُسجَّل.'),
-    body: `<div class="a4frame"><div class="a4bar">${pill(kind === 'pdf' ? 'PDF' : L('Document', 'مستند'))}
-        <span class="zoom">A4 · 100%</span></div>
-      <div style="display:flex;justify-content:center"><div class="a4" style="max-width:420px;align-items:stretch;text-align:start">
-        <div class="ttl" style="text-align:center">${esc(L(D.PARISH.name, D.PARISH.nameAr))}</div>
-        <div class="t-caption dim" style="text-align:center">${esc(name)}</div>
-        <div style="margin-top:22px;display:flex;flex-direction:column;gap:9px">
-          ${[92, 78, 88, 64, 95, 71, 83, 58, 90, 45].map(w => `<span style="height:7px;border-radius:4px;background:var(--muted);width:${w}%"></span>`).join('')}
-        </div>
-        <div class="sig"><div>${L('Recorded by the office', 'سجّلها المكتب')}</div><div>${fmtDate(today)}</div></div>
-      </div></div></div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-      <button class="btn btn-secondary" id="dpprint">${icon('print', 16)}${L('Print', 'طباعة')}</button>
-      <button class="btn btn-primary" id="dpdl" style="margin-inline-start:auto">${icon('export', 16)}${L('Download', 'تنزيل')}</button>`,
-    onMount(el) {
-      el.querySelector('#dpprint').addEventListener('click', () => { closeOverlays(); setTimeout(() => window.print(), 250); });
-      el.querySelector('#dpdl').addEventListener('click', () => {
-        download(name.replace(/\.\w+$/, '') + '.html', docShell(name, `<div class="page"><h1>${esc(name)}</h1>
-          <p class="muted">${esc(L(D.PARISH.name, D.PARISH.nameAr))} · ${fmtDate(today)}</p><div class="rule"></div>
-          <p>${L('Copy held in the parish file store.', 'نسخة محفوظة في مخزن ملفات الرعية.')}</p></div>`), 'text/html');
-        ok(L('Downloaded', 'تمّ التنزيل'), name);
-      });
-    }
+    title: name,
+    body: C.inlineAlert('warning', L('Digital file unavailable', 'الملف الرقمي غير متاح'),
+      L('This legacy record contains a filename but no stored file. Ask the office for the original, or upload it to the appropriate person or group record.',
+        'يحتوي السجل القديم على اسم الملف فقط دون نسخة محفوظة. اطلب الأصل من المكتب أو ارفعه إلى سجل الشخص أو المجموعة المناسب.')),
+    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`
   });
 }
 
@@ -530,33 +459,33 @@ export function slides() {
   const deck = plan.order.map((o, i) => `<section class="s"><div class="k">${i + 1} / ${plan.order.length}</div>
     <h2>${esc(o.t)}</h2><p class="ar">${esc(o.ar)}</p></section>`).join('');
   download(file, `<!doctype html><html><head><meta charset="utf-8"><title>Slides</title>
-    <style>body{margin:0;font-family:Inter,system-ui,sans-serif;background:#3D4161}
+    <style>body{margin:0;font-family:Inter,system-ui,sans-serif;background:#233B32}
     .s{height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
-      color:#FFFFFF;border-bottom:1px solid #3D4161;page-break-after:always;padding:0 8vw}
-    .k{color:#DCEEFF;font:500 14px ui-monospace,monospace;letter-spacing:.1em}
-    h2{font-size:5vw;margin:.4em 0 .2em;font-weight:600}.ar{font-size:4vw;color:#DCEEFF;margin:0}</style></head>
+      color:#FFFFFF;border-bottom:1px solid #233B32;page-break-after:always;padding:0 8vw}
+    .k{color:#EDF0E8;font:500 14px ui-monospace,monospace;letter-spacing:.1em}
+    h2{font-size:5vw;margin:.4em 0 .2em;font-weight:600}.ar{font-size:4vw;color:#EDF0E8;margin:0}</style></head>
     <body><section class="s"><div class="k">${esc(D.PARISH.name.toUpperCase())}</div><h2>${esc(L(plan.title, plan.titleAr))}</h2>
     <p class="ar">${esc(D.PARISH.nameAr)}</p></section>${deck}</body></html>`, 'text/html');
   closeOverlays();
   ok(L('Slides generated', 'تمّ توليد الشرائح'), `${plan.order.length + 1} ${L('slides', 'شريحة')}`);
 }
 
-/** Ready-made parish design: fill date and place, see it live, download a real SVG. */
+/** Ready-made parish design: fill date and place, then export the rendered design. */
 export function designTemplate(i) {
   const tp = D.TEMPLATES[+i] || D.TEMPLATES[0];
   const svg = (date, place) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
-    <rect width="600" height="800" fill="#3D4161"/><rect x="28" y="28" width="544" height="744" fill="none" stroke="#DCEEFF" stroke-opacity=".45"/>
-    <text x="300" y="130" fill="#DCEEFF" font-family="Inter,Arial" font-size="18" letter-spacing="4" text-anchor="middle">${esc(D.PARISH.name.toUpperCase())}</text>
-    <text x="300" y="170" fill="#DCEEFF" fill-opacity=".7" font-family="Arial" font-size="22" text-anchor="middle">${esc(D.PARISH.nameAr)}</text>
+    <rect width="600" height="800" fill="#233B32"/><rect x="28" y="28" width="544" height="744" fill="none" stroke="#EDF0E8" stroke-opacity=".45"/>
+    <text x="300" y="130" fill="#EDF0E8" font-family="Inter,Arial" font-size="18" letter-spacing="4" text-anchor="middle">${esc(D.PARISH.name.toUpperCase())}</text>
+    <text x="300" y="170" fill="#EDF0E8" fill-opacity=".7" font-family="Arial" font-size="22" text-anchor="middle">${esc(D.PARISH.nameAr)}</text>
     <text x="300" y="380" fill="#FFFFFF" font-family="Inter,Arial" font-size="52" font-weight="600" text-anchor="middle">${esc(tp.name)}</text>
     <text x="300" y="440" fill="#FFFFFF" fill-opacity=".8" font-family="Arial" font-size="34" text-anchor="middle">${esc(tp.ar)}</text>
-    <line x1="220" y1="500" x2="380" y2="500" stroke="#DCEEFF"/>
+    <line x1="220" y1="500" x2="380" y2="500" stroke="#EDF0E8"/>
     <text x="300" y="560" fill="#FFFFFF" font-family="Inter,Arial" font-size="26" text-anchor="middle">${esc(date)}</text>
     <text x="300" y="600" fill="#FFFFFF" fill-opacity=".75" font-family="Inter,Arial" font-size="20" text-anchor="middle">${esc(place)}</text>
-    <text x="300" y="720" fill="#DCEEFF" fill-opacity=".6" font-family="Inter,Arial" font-size="14" text-anchor="middle">Hadath · Maronite</text></svg>`;
+    <text x="300" y="720" fill="#EDF0E8" fill-opacity=".6" font-family="Inter,Arial" font-size="14" text-anchor="middle">Hadath · Maronite</text></svg>`;
   openDrawer({
     large: true, title: L(tp.name, tp.ar),
-    sub: L('The parish name and logo are already on it. Fill the rest and download.', 'اسم الرعية وشعارها عليه. املأ الباقي ونزّله.'),
+    sub: L('The parish name is already on it. Fill in the date and place, then download.', 'اسم الرعية موجود. املأ التاريخ والمكان ثم نزّل التصميم.'),
     body: `<div class="grid g2" style="gap:20px;align-items:start">
         <div>${C.field({ label: L('Date and time', 'التاريخ والوقت'), value: L('Thursday 24 December, 23:00', 'الخميس ٢٤ كانون الأول، ٢٣:٠٠'), id: 'dgdate' })}
           ${C.field({ label: L('Place', 'المكان'), value: L('Upper Church, Saint Elias', 'الكنيسة العليا، مار الياس'), id: 'dgplace' })}
@@ -564,15 +493,35 @@ export function designTemplate(i) {
         <div id="dgprev" style="border-radius:var(--r-card);overflow:hidden;box-shadow:var(--e2)"></div>
       </div>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-      <button class="btn btn-primary" id="dgdl" style="margin-inline-start:auto">${icon('export', 16)}${L('Download', 'تنزيل')}</button>`,
+      <select class="select" id="dgformat" aria-label="${L('Download format','صيغة التنزيل')}" style="width:auto;margin-inline-start:auto"><option value="svg">SVG</option><option value="png">PNG</option><option value="jpeg">JPEG</option></select>
+      <button class="btn btn-primary" id="dgdl">${icon('export', 16)}${L('Download', 'تنزيل')}</button>`,
     onMount(el) {
       const prev = el.querySelector('#dgprev');
       const draw = () => { prev.innerHTML = svg(val(el, '#dgdate'), val(el, '#dgplace')).replace('width="600" height="800"', 'width="100%"'); };
       el.querySelectorAll('#dgdate,#dgplace').forEach(i2 => i2.addEventListener('input', draw)); draw();
-      el.querySelector('#dgdl').addEventListener('click', () => {
-        const fname = `${tp.name.toLowerCase().replace(/\s+/g, '-')}.svg`;
-        download(fname, svg(val(el, '#dgdate'), val(el, '#dgplace')), 'image/svg+xml');
-        ok(L('Design downloaded', 'نُزّل التصميم'), fname);
+      el.querySelector('#dgdl').addEventListener('click', async () => {
+        const format=val(el,'#dgformat'),base=tp.name.toLowerCase().replace(/\s+/g,'-');
+        const artwork=svg(val(el,'#dgdate'),val(el,'#dgplace'));
+        if(format==='svg'){
+          download(`${base}.svg`,artwork,'image/svg+xml');
+          ok(L('Design downloaded','نُزّل التصميم'),`${base}.svg`);
+          return;
+        }
+        const url=URL.createObjectURL(new Blob([artwork],{type:'image/svg+xml;charset=utf-8'}));
+        try{
+          const img=new Image();img.src=url;await img.decode();
+          const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1600;
+          const context=canvas.getContext('2d');
+          if(format==='jpeg'){context.fillStyle='#FFFFFF';context.fillRect(0,0,canvas.width,canvas.height);}
+          context.drawImage(img,0,0,canvas.width,canvas.height);
+          const type=format==='jpeg'?'image/jpeg':'image/png';
+          const blob=await new Promise(resolve=>canvas.toBlob(resolve,type,.94));
+          if(!blob)throw new Error('Could not render the image.');
+          const link=document.createElement('a'),output=URL.createObjectURL(blob);
+          link.href=output;link.download=`${base}.${format}`;link.click();setTimeout(()=>URL.revokeObjectURL(output),1000);
+          ok(L('Design downloaded','نُزّل التصميم'),link.download);
+        }catch(error){toast(L('Could not export image','تعذّر تصدير الصورة'),error.message,'danger');}
+        finally{URL.revokeObjectURL(url);}
       });
     }
   });
@@ -613,6 +562,7 @@ export function personEdit(id) {
             .map(([v, en, ar]) => `<option value="${v}" ${p.status === v ? 'selected' : ''}>${esc(L(en, ar))}</option>`).join('')}</select></div>
       </div>
       ${C.phoneField({ value: p.phone === '—' ? '' : p.phone, id: 'e_ph' })}
+      ${C.field({ label: L('Line of work','المهنة'), value: D.PERSON_EXTRA[p.id]?.occupation||'', id: 'e_occupation' })}
       <div class="formrow"><label class="label">${L('Photo', 'الصورة')}</label>${C.avatarUpload(p.id)}</div>
       ${C.addressCascade({value:{ town:p.town, ...(D.PERSON_EXTRA[p.id]?.address || {}) }})}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
@@ -624,7 +574,7 @@ export function personEdit(id) {
         e.currentTarget.disabled = true;
         const target = D.person(id), address=readAddressCascade(el);
         Object.assign(target,{ar:val(el,'#e_ar'),lat:val(el,'#e_lat'),born:val(el,'#e_born'),status:el.querySelector('#e_st').value,phone:val(el,'#e_ph')||'—',town:address.town,townAr:address.townAr});
-        D.PERSON_EXTRA[id] ||= {}; D.PERSON_EXTRA[id].address=address;
+        D.PERSON_EXTRA[id] ||= {}; D.PERSON_EXTRA[id].address=address; D.PERSON_EXTRA[id].occupation=val(el,'#e_occupation').slice(0,120);
         if (!await persist()) { el.querySelector('#e_save').disabled=false; return; }
         closeOverlays(); refresh(); ok(L('Record saved', 'حُفظ السجل'), `${target.lat} · ${target.ar}`);
       });
@@ -753,12 +703,12 @@ export function memberAdd(gid = curGroup()) {
     onMount(el){el.querySelector('#group-member-search').addEventListener('input',e=>{
       const q=e.target.value.trim().toLowerCase();el.querySelectorAll('[data-member-name]').forEach(row=>row.hidden=!row.dataset.memberName.includes(q));
     });
-      el.querySelector('#group-members-add').addEventListener('click',()=>{
+      el.querySelector('#group-members-add').addEventListener('click',async()=>{
         const selected=[...el.querySelectorAll('[data-member-choice]:checked')].map(c=>c.value);
         if(!selected.length)return toast(L('Select at least one person','اختر شخصاً واحداً على الأقل'),'','warning');
         for(const pid of selected)if(!d.roster.some(r=>r.p===pid))d.roster.push({p:pid,role:'Member',roleAr:'عضو',joined:new Date().getFullYear().toString(),att:0});
-        const g=D.group(gid);if(g&&S.role!=='leader')g.members=d.roster.length;
-        closeOverlays();refresh();ok(L('Members added','أُضيف الأعضاء'),`${selected.length}`);
+        const g=D.group(gid);if(g&&S.role!=='leader')g.members=(Number(g.members)||0)+selected.length;
+        if(!await persist())return;closeOverlays();refresh();ok(L('Members added','أُضيف الأعضاء'),`${selected.length}`);
       });
     }
   });
@@ -783,7 +733,9 @@ export function meetingNew(gid=curGroup()) {
       <fieldset class="repeat-days" id="m_days" hidden><legend>${L('Repeat on','يتكرّر في')}</legend>
         <div class="repeat-day-list">${[[0,'S','الأحد'],[1,'M','الإثنين'],[2,'T','الثلاثاء'],[3,'W','الأربعاء'],[4,'TH','الخميس'],[5,'F','الجمعة'],[6,'SA','السبت']]
           .map(([day,en,ar])=>`<label class="repeat-day"><input type="checkbox" value="${day}" aria-label="${L(['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day],ar)}"><span>${L(en,ar)}</span></label>`).join('')}</div>
-        <p class="help">${L('The count is the total number of meetings, across all selected days. The first meeting is on or after the chosen date.','العدد هو إجمالي الاجتماعات في كل الأيام المختارة. يبدأ أول اجتماع في التاريخ المحدّد أو بعده.')}</p></fieldset>`,
+        <p class="help">${L('The count is the total number of meetings. Choose no more weekdays than meetings.','العدد هو إجمالي الاجتماعات. اختر أياماً لا تتجاوز عدد الاجتماعات.')}</p></fieldset>
+      <label class="check" style="margin-top:16px"><input type="checkbox" id="m_specific"><span>${L('Invite specific group members','دعوة أعضاء محدّدين من المجموعة')}</span></label>
+      <fieldset class="formrow" id="m_people" hidden><legend class="label">${L('Participants','المشاركون')}</legend><div class="choice-grid">${detail.roster.map(r=>`<label class="check"><input type="checkbox" value="${esc(r.p)}"><span>${esc(L(D.person(r.p)?.lat||r.p,D.person(r.p)?.ar||r.p))}</span></label>`).join('')}</div></fieldset>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="m_go" style="margin-inline-start:auto">${L('Schedule', 'جدولة')}</button>`,
     onMount(el) {
@@ -793,14 +745,20 @@ export function meetingNew(gid=curGroup()) {
       const selectStartDay=()=>{if(days.querySelector('input:checked'))return;const raw=val(el,'#m_d');if(!raw)return;
         const d=new Date(`${raw}T12:00:00`);if(!Number.isNaN(d.getTime()))days.querySelector(`input[value="${d.getDay()}"]`).checked=true;};
       el.querySelector('#m_repeat').addEventListener('change',()=>{const repeating=el.querySelector('#m_repeat').value!=='0';count.closest('.formrow').hidden=!repeating;days.hidden=!repeating;if(repeating)selectStartDay();});
+      el.querySelector('#m_specific').addEventListener('change',e=>{el.querySelector('#m_people').hidden=!e.target.checked;});
+      days.querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{const total=Math.max(1,Number(count.value)||1);
+        if([...days.querySelectorAll('input:checked')].length>total){box.checked=false;toast(L('Too many weekdays','أيام كثيرة'),L('The number of weekdays cannot exceed the total meeting count.','لا يجوز أن يتجاوز عدد الأيام إجمالي الاجتماعات.'),'warning');}}));
       el.querySelector('#m_d').addEventListener('change',()=>{if(!days.hidden){days.querySelectorAll('input').forEach(box=>box.checked=false);selectStartDay();}});
-      el.querySelector('#m_go').addEventListener('click', () => {
+      el.querySelector('#m_go').addEventListener('click', async () => {
         if(!need(el,'#m_title',L('Name the meeting','سمّ الاجتماع')) || !need(el,'#m_d',L('Choose a date','اختر التاريخ')) || !need(el,'#m_t',L('Choose a time','اختر الوقت')))return;
         const date=val(el,'#m_d'),time=val(el,'#m_t'),end=val(el,'#m_end'),interval=Number(val(el,'#m_repeat')),
           count=interval?Math.min(52,Math.max(1,Number(val(el,'#m_count'))||4)):1;
         if(end&&end<=time)return toast(L('End time must follow start time','يجب أن يكون وقت النهاية بعد البداية'),'','warning');
         const selected=new Set([...days.querySelectorAll('input:checked')].map(box=>Number(box.value)));
         if(interval&&!selected.size)return toast(L('Choose at least one weekday','اختر يوماً واحداً على الأقل'),'','warning');
+        if(interval&&selected.size>count)return toast(L('Too many weekdays','أيام كثيرة'),L('Choose no more weekdays than meetings.','اختر أياماً لا تتجاوز عدد الاجتماعات.'),'warning');
+        const participants=el.querySelector('#m_specific').checked?[...el.querySelectorAll('#m_people input:checked')].map(input=>input.value):[];
+        if(el.querySelector('#m_specific').checked&&!participants.length)return toast(L('Choose at least one participant','اختر مشاركاً واحداً على الأقل'),'','warning');
         const starts=new Date(`${date}T12:00:00`),weekStart=new Date(starts),added=[];
         weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
         for(let i=0;added.length<count&&i<730;i++){
@@ -810,13 +768,13 @@ export function meetingNew(gid=curGroup()) {
           if(interval&&(!selected.has(next.getDay())||weeks%(interval/7)!==0))continue;
           if(detail.meetings.some(m=>m.d===d&&m.t===time))continue;
           const meeting={id:`mt${Date.now().toString(36)}-${i}`,d,t:time,end,title:val(el,'#m_title'),kind:val(el,'#m_kind'),
-            description:val(el,'#m_description'),place:val(el,'#m_place'),rsvp:{yes:0,no:0,none:detail.roster.length},done:false,attendance:{}};
+            description:val(el,'#m_description'),place:val(el,'#m_place'),participants:[...participants],rsvp:{yes:0,no:0,none:participants.length||detail.roster.length},done:false,attendance:{}};
           detail.meetings.push(meeting);added.push(meeting);
           if(!interval)break;
         }
         if(!added.length)return toast(L('Meeting already exists','الاجتماع موجود'),L('Choose another date or time.','اختر تاريخاً أو وقتاً آخر.'),'warning');
         S.ui.attendancePeriod=date.slice(0,7);
-        closeOverlays();refresh();ok(L(added.length===1?'Meeting scheduled':`${added.length} meetings scheduled`,added.length===1?'جُدول الاجتماع':`جُدولت ${added.length} اجتماعات`),`${fmtDate(date)} · ${time}`);
+        if(!await persist())return;closeOverlays();refresh();ok(L(added.length===1?'Meeting scheduled':`${added.length} meetings scheduled`,added.length===1?'جُدول الاجتماع':`جُدولت ${added.length} اجتماعات`),`${fmtDate(date)} · ${time}`);
       });
     }
   });
@@ -832,30 +790,36 @@ export function meetingEdit(id) {
       ${C.field({label:L('Starts at','يبدأ عند'),type:'time',id:'me_time',value:meeting.t})}</div>
       <div class="formgrid">${C.field({label:L('Ends at','ينتهي عند'),type:'time',id:'me_end',value:meeting.end||''})}
       ${C.field({label:L('Place (optional)','المكان (اختياري)'),id:'me_place',value:meeting.place||''})}</div>
+      <label class="check" style="margin-top:16px"><input type="checkbox" id="me_specific" ${meeting.participants?.length?'checked':''}><span>${L('Invite specific group members','دعوة أعضاء محدّدين من المجموعة')}</span></label>
+      <fieldset class="formrow" id="me_people" ${meeting.participants?.length?'':'hidden'}><legend class="label">${L('Participants','المشاركون')}</legend><div class="choice-grid">${gd().roster.map(r=>`<label class="check"><input type="checkbox" value="${esc(r.p)}" ${meeting.participants?.includes(r.p)?'checked':''}><span>${esc(L(D.person(r.p)?.lat||r.p,D.person(r.p)?.ar||r.p))}</span></label>`).join('')}</div></fieldset>
       <p class="t-caption dim">${L('Changing this date keeps its attendance linked to the meeting.','تغيير التاريخ يبقي الحضور مرتبطاً بالاجتماع.')}</p>`,
     foot:`<button class="btn btn-danger-quiet" id="me_delete">${L('Delete meeting','حذف الاجتماع')}</button>
       <button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="me_save">${L('Save','حفظ')}</button>`,
-    onMount(el){C.wire(el);el.querySelector('#me_save').addEventListener('click',()=>{
+    onMount(el){C.wire(el);el.querySelector('#me_specific').addEventListener('change',e=>{el.querySelector('#me_people').hidden=!e.target.checked;});el.querySelector('#me_save').addEventListener('click',async()=>{
       const d=val(el,'#me_date'),t=val(el,'#me_time'),end=val(el,'#me_end');
       if(!need(el,'#me_title',L('Name the meeting','سمّ الاجتماع'))||!d||!t)return toast(L('Choose a title, date and time','اختر عنواناً وتاريخاً ووقتاً'),'','warning');
       if(end&&end<=t)return toast(L('End time must follow start time','يجب أن يكون وقت النهاية بعد البداية'),'','warning');
       if(gd().meetings.some(x=>x!==meeting&&x.d===d&&x.t===t))return toast(L('Meeting already exists','الاجتماع موجود'),'','warning');
-      Object.assign(meeting,{d,t,end,kind:val(el,'#me_kind'),title:val(el,'#me_title'),description:val(el,'#me_description'),place:val(el,'#me_place')});
-      S.ui.attendancePeriod=d.slice(0,7);closeOverlays();refresh();ok(L('Meeting updated','حُدّث الاجتماع'));
+      const participants=el.querySelector('#me_specific').checked?[...el.querySelectorAll('#me_people input:checked')].map(x=>x.value):[];
+      if(el.querySelector('#me_specific').checked&&!participants.length)return toast(L('Choose at least one participant','اختر مشاركاً واحداً على الأقل'),'','warning');
+      Object.assign(meeting,{d,t,end,kind:val(el,'#me_kind'),title:val(el,'#me_title'),description:val(el,'#me_description'),place:val(el,'#me_place'),participants});
+      if(!await persist())return;S.ui.attendancePeriod=d.slice(0,7);closeOverlays();refresh();ok(L('Meeting updated','حُدّث الاجتماع'));
     });
     el.querySelector('#me_delete').addEventListener('click',()=>{closeOverlays();openModal({title:L('Delete meeting and attendance?','حذف الاجتماع والحضور؟'),
       body:`<p>${fmtDate(meeting.d)} · ${esc(meeting.t)}</p><p class="t-caption dim">${L('Recorded attendance for this date will also be deleted.','سيُحذف أيضاً الحضور المسجّل لهذا التاريخ.')}</p>`,
       foot:`<button class="btn btn-secondary" data-close>${L('Keep meeting','إبقاء الاجتماع')}</button><button class="btn btn-danger" id="me_confirm">${L('Delete','حذف')}</button>`,
-      onMount(mod){mod.querySelector('#me_confirm').addEventListener('click',()=>{gd().meetings.splice(gd().meetings.indexOf(meeting),1);closeOverlays();refresh();ok(L('Meeting deleted','حُذف الاجتماع'));});}});});
+      onMount(mod){mod.querySelector('#me_confirm').addEventListener('click',async()=>{gd().meetings.splice(gd().meetings.indexOf(meeting),1);if(!await persist())return;closeOverlays();refresh();ok(L('Meeting deleted','حُذف الاجتماع'));});}});});
     }
   });
 }
 
-export function postAdd(btn) {
-  const body = btn.closest('.panel')?.querySelector('.rte-body')?.innerText.trim();
+export async function postAdd(btn) {
+  const editor=btn.closest('.panel')?.querySelector('.rte-body');
+  const body = editor?.innerText.trim();
   if (!body) return toast(L('Write something first', 'اكتب شيئاً أولاً'), '', 'warning');
-  gd().posts.unshift({ by: me()?.id || 'p3', at: new Date().toISOString().slice(0,10), body, bodyAr: body });
-  refresh(); ok(L('Posted to the group', 'نُشر في المجموعة'), L('Members are notified in the app.', 'يُبلَّغ الأعضاء داخل التطبيق.'));
+  if(body.length>12000)return toast(L('Post is too long','المنشور طويل جداً'),L('Keep it under 12,000 characters.','اجعله أقل من ١٢٬٠٠٠ حرف.'),'warning');
+  gd().posts.unshift({ by: me()?.id || 'p3', at: new Date().toISOString().slice(0,10), body, bodyAr: body, html:safeRichText(editor.innerHTML) });
+  if(!await persist())return;refresh();ok(L('Posted to the group', 'نُشر في المجموعة'));
 }
 
 export function taskAdd() {
@@ -891,22 +855,36 @@ export function milestoneRecord(i) {
 }
 
 export function handover() {
+  const group=D.GROUPS.find(x=>x.id===curGroup()),detail=group&&D.groupInfo(group.id);
+  if(!group||!detail||is('leader'))return;
+  const outgoing=group.leader,people=detail.roster.filter(row=>row.p!==outgoing).map(row=>D.person(row.p)).filter(Boolean);
+  if(!people.length)return toast(L('Add another member first','أضف عضواً آخر أولاً'),'','warning');
+  const due=new Date().toLocaleDateString('sv-SE');
   openDrawer({
     title: L('Leadership handover', 'تسليم المسؤولية'),
-    sub: L('The role moves; open tasks follow it; permissions are reviewed automatically.', 'ينتقل الدور؛ وتتبعه المهام؛ وتُراجَع الصلاحيات تلقائياً.'),
-    body: `<div class="formrow"><label class="label">${L('From', 'من')}</label>${who(D.person('p3'))}</div>
-      ${C.personPicker(L('To', 'إلى'), 'ho_to')}
-      ${C.field({ label: L('Effective from', 'اعتباراً من'), type: 'date', value: '2026-11-01', id: 'ho_d' })}
-      ${C.inlineAlert('info', L(`${gd().tasks.filter(x => !x.done).length} open tasks move with the role`, `${gd().tasks.filter(x => !x.done).length} مهام مفتوحة تنتقل مع الدور`),
-        L('Nothing stays attached to the outgoing leader by accident.', 'لا يبقى شيء عالقاً بالمسؤول السابق.'))}`,
+    sub: esc(L(group.name,group.ar)),
+    body: `<div class="formrow"><label class="label">${L('Current leader', 'المسؤول الحالي')}</label>${who(D.person(outgoing))}</div>
+      <div class="formrow"><label class="label" for="ho_to">${L('New leader','المسؤول الجديد')}</label><select class="select" id="ho_to"><option value="">${L('Choose an existing member','اختر عضواً موجوداً')}</option>${people.map(p=>`<option value="${esc(p.id)}">${esc(L(p.lat,p.ar))}</option>`).join('')}</select></div>
+      <p class="help">${L('This change takes effect immediately.','يسري هذا التغيير فوراً.')}</p>
+      ${C.inlineAlert('info', L(`${detail.tasks.filter(x => !x.done&&x.who===outgoing).length} open tasks will move`, `${detail.tasks.filter(x => !x.done&&x.who===outgoing).length} مهام مفتوحة ستنتقل`),
+        L('The member record and attendance history stay with each person.','يبقى سجل العضوية والحضور مرتبطاً بكل شخص.'))}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="ho_go" style="margin-inline-start:auto">${L('Start handover', 'بدء التسليم')}</button>`,
     onMount(el) {
       C.wire(el);
-      el.querySelector('#ho_go').addEventListener('click', () => {
-        const to = val(el, '#ho_to') || L('the new leader', 'المسؤول الجديد');
-        gd().history.unshift([`Handover to ${to} scheduled`, `جُدول التسليم إلى ${to}`, val(el, '#ho_d')]);
-        closeOverlays(); refresh(); ok(L('Handover scheduled', 'جُدول التسليم'), `${to} · ${fmtDate(val(el, '#ho_d'))}`);
+      el.querySelector('#ho_go').addEventListener('click', async () => {
+        const to=val(el,'#ho_to'),next=D.person(to);
+        if(!next||!detail.roster.some(row=>row.p===to))return toast(L('Choose a group member','اختر عضواً في المجموعة'),'','warning');
+        group.leader=to;
+        if(group.assistant===to){group.assistant=null;detail.assistant=null;}
+        for(const row of detail.roster){if(row.p===outgoing&&row.role==='Leader'){row.role='Member';row.roleAr='عضو';}
+          if(row.p===to){row.role='Leader';row.roleAr='مسؤول';}}
+        detail.roles=detail.roles.filter(([pid,role])=>pid!==to&&!(pid===outgoing&&role==='Leader'));
+        detail.roles.unshift([to,'Leader','مسؤول']);
+        for(const task of detail.tasks)if(!task.done&&task.who===outgoing)task.who=to;
+        detail.history.unshift([`Leadership transferred from ${D.person(outgoing)?.lat||outgoing} to ${next.lat}`,
+          `انتقلت المسؤولية من ${D.person(outgoing)?.ar||outgoing} إلى ${next.ar||next.lat}`,due]);
+        if(!await persist())return;closeOverlays();refresh();ok(L('Handover completed','اكتمل التسليم'),nameOf(next));
       });
     }
   });
@@ -915,7 +893,7 @@ export function handover() {
 /* ═════════════ calendar & services ═════════════ */
 export function calShift(n) { S.ui.calOffset = n === 0 ? 0 : S.ui.calOffset + n; refresh(); }
 export function calDay(n) {
-  const [y, m, d] = (S.ui.calDay || '2026-10-04').split('-').map(Number);
+  const [y, m, d] = (S.ui.calDay || today).split('-').map(Number);
   const x = n ? new Date(y, m - 1, d + n) : new Date(D.TODAY);
   S.ui.calDay = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   refresh();
@@ -1132,31 +1110,12 @@ export function addToService(mid) {
 }
 
 /* ═════════════ music ═════════════ */
-let playTimer;
 export function play(mid) {
-  const m = D.MUSIC.find(x => x.id === mid) || D.MUSIC[0];
-  document.querySelector('.player')?.remove(); clearInterval(playTimer);
-  const el = document.createElement('div');
-  el.className = 'player';
-  el.innerHTML = `<button class="iconbtn" data-pp aria-label="${L('Pause', 'إيقاف')}">${icon('pause', 18)}</button>
-    <span class="pmeta"><b>${esc(m.title)}</b><small style="font-family:var(--arabic)">${esc(m.ar)} · ${esc(m.key)}</small></span>
-    <span class="ptrack"><i></i></span><span class="ptime mono">0:00 / 3:12</span>
-    <button class="iconbtn" data-px aria-label="${L('Close', 'إغلاق')}">${icon('close', 16)}</button>`;
-  document.body.append(el);
-  let s = 0, playing = true; const total = 192;
-  const tick = () => {
-    if (!playing) return;
-    s = Math.min(total, s + 1);
-    el.querySelector('.ptrack i').style.width = `${s / total * 100}%`;
-    el.querySelector('.ptime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / 3:12`;
-    if (s >= total) clearInterval(playTimer);
-  };
-  playTimer = setInterval(tick, 1000);
-  el.querySelector('[data-pp]').addEventListener('click', e => {
-    playing = !playing;
-    e.currentTarget.innerHTML = icon(playing ? 'pause' : 'play', 18);
-  });
-  el.querySelector('[data-px]').addEventListener('click', () => { clearInterval(playTimer); el.remove(); });
+  const m = D.MUSIC.find(x => x.id === mid);if(!m)return;
+  const links=[m.youtubeUrl,m.anghamiUrl,m.otherUrl].filter(Boolean);
+  const safe=links.find(value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}});
+  if(safe)window.open(safe,'_blank','noopener,noreferrer');
+  else toast(L('No playable recording linked','لا تسجيل مرتبط للتشغيل'),L('Add a real YouTube, Anghami, or recording link to this hymn.','أضف رابط يوتيوب أو أنغامي أو تسجيل حقيقي لهذا اللحن.'),'warning');
 }
 
 export function setlistOpen(id) {
@@ -1178,26 +1137,23 @@ export function setlistOpen(id) {
 
 /* ═════════════ volunteers ═════════════ */
 export function sheetOpen(id) {
-  const s = D.SIGNUP_SHEETS.find(x => x.id === id) || D.SIGNUP_SHEETS[0];
-  const names = ['p6', 'p8', 'p14', 'p5', 'p16', 'p9', 'p12', 'p11', 'p4', 'p7', 'p2', 'p3'].slice(0, s.taken);
+  const s = D.SIGNUP_SHEETS.find(x => x.id === id);if(!s)return;
+  const assigned=s.people||[],legacy=Math.max(0,(s.taken||0)-assigned.length);
   openDrawer({
     title: L(s.what, s.whatAr), sub: `${s.taken} / ${s.slots} · ${L('closes', 'يقفل')} ${fmtDate(s.deadline)}`,
-    body: `<div class="stack">${Array.from({ length: s.slots }, (_, i) => {
-      const p = D.person(names[i]);
-      return `<div class="listrow" style="padding-inline:0"><span class="mono dim" style="width:26px">${i + 1}</span>
-        ${p ? who(p) : `<span class="dim">${L('Open place', 'مركز شاغر')}</span>`}<span class="grow"></span>
-        ${p ? pill(L('Signed up', 'مسجَّل'), 'success') : `<button class="btn btn-secondary btn-dense" data-slot="${i}">${L('Sign someone up', 'سجّل شخصاً')}</button>`}</div>`;
-    }).join('')}</div>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-      <button class="btn btn-primary" id="sh_share" style="margin-inline-start:auto">${icon('link', 16)}${L('Share sign-up link', 'مشاركة رابط التسجيل')}</button>`,
+    body: `${legacy?`<p class="alert alert-info">${legacy} ${L('previously filled places have no names saved; these remain reserved.','مراكز مُعبّأة سابقاً بلا أسماء محفوظة؛ تبقى محجوزة.')}</p>`:''}
+      <p class="help">${L('Select several volunteers, then save. Unchecking a named volunteer removes them from this sheet.','اختر عدة متطوعين ثم احفظ. إزالة علامة متطوع مسمّى تُخرجه من اللائحة.')}</p>
+      <div class="choice-grid" style="margin-top:14px">${D.VOLUNTEERS.map(v=>D.person(v.p)).filter(Boolean).map(p=>`<label class="check"><input type="checkbox" name="sheet-person" value="${esc(p.id)}" ${assigned.includes(p.id)?'checked':''}><span>${esc(L(p.lat,p.ar))}</span></label>`).join('')}</div>
+      <p class="help">${L('Capacity','السعة')}: ${s.slots} · ${L('previously filled without names','محجوز سابقاً بلا أسماء')}: ${legacy}</p>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
+      <button class="btn btn-primary" id="sh_save" style="margin-inline-start:auto">${L('Save participants', 'حفظ المشاركين')}</button>`,
     onMount(el) {
-      el.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => {
-        closeOverlays();
-        pickPerson({ title: L('Sign someone up', 'تسجيل شخص'), cta: L('Sign up', 'تسجيل'),
-          onPick: p => { s.taken = Math.min(s.slots, s.taken + 1); refresh(); ok(L('Signed up', 'سُجّل'), nameOf(p)); } });
-      }));
-      el.querySelector('#sh_share').addEventListener('click', () => { closeOverlays();
-        share({ title: L(s.what, s.whatAr), url: `${location.origin}${location.pathname}#/volunteers/sheets` }); });
+      el.querySelector('#sh_save').addEventListener('click',async()=>{
+        const people=[...el.querySelectorAll('[name="sheet-person"]:checked')].map(x=>x.value);
+        if(people.length+legacy>s.slots)return toast(L('Sheet is full','اللائحة ممتلئة'),L('Increase capacity or remove a participant.','زد السعة أو أزل مشاركاً.'),'warning');
+        s.people=people;s.taken=legacy+people.length;
+        if(!await persist())return;closeOverlays();refresh();ok(L('Participants saved','حُفظ المشاركون'),`${s.taken} / ${s.slots}`);
+      });
     }
   });
 }
@@ -1207,6 +1163,7 @@ export function formNew() {
   /* An event that is not in the calendar yet can be described right here; it is created together
      with the form, so cancelling the drawer leaves nothing half-made behind. */
   const canMakeEvent = is('priest', 'secretary');
+  const deadline=new Date();deadline.setDate(deadline.getDate()+30);
   let draft = null;
   const place = id => { const v = D.venue(id); return v ? L(v.name, v.ar || v.name) : ''; };
   const hm = x => { const [h, m] = String(x || '0:0').split(':').map(Number); return h * 60 + m; };
@@ -1233,17 +1190,18 @@ export function formNew() {
           <div class="formrow"><label class="label" for="ne_k">${L('Kind of event', 'نوع الحدث')}</label><select class="select" id="ne_k">
             ${KINDS.map(([k, lab]) => `<option value="${k}">${esc(lab)}</option>`).join('')}</select>
             <span class="help">${L('Masses are not registered for, so they are not offered here.', 'لا يُسجَّل للقداديس، لذلك لا تظهر هنا.')}</span></div>
+          <div class="formrow" id="ne_group_row" hidden><label class="label" for="ne_group">${L('Group','المجموعة')}</label><select class="select" id="ne_group"><option value="">${L('Choose a group','اختر مجموعة')}</option>${D.GROUPS.map(g=>`<option value="${esc(g.id)}">${esc(L(g.name,g.ar))}</option>`).join('')}</select></div>
           <div id="ne_clash"></div>
           <div class="inlinecard-acts">
             <button type="button" class="btn btn-secondary btn-dense" id="ne_cancel">${L('Cancel', 'إلغاء')}</button>
             <button type="button" class="btn btn-primary btn-dense" id="ne_ok">${icon('check', 15)}${L('Use this event', 'استعمل هذا الحدث')}</button></div>
         </div>` : ''}
       <div class="formgrid">${C.stepper({ label: L('Capacity', 'السعة'), value: 60, id: 'rf_cap' })}
-        ${C.field({ label: L('Closes', 'يقفل'), type: 'date', value: '2026-11-30', id: 'rf_dl' })}</div>
+        ${C.field({ label: L('Closes', 'يقفل'), type: 'date', value: deadline.toLocaleDateString('sv-SE'), id: 'rf_dl' })}</div>
       ${C.currencyField({ label: L('Fee', 'الرسم'), value: '0.00', id: 'rf_fee' })}
-      <div class="stack" style="gap:10px">${C.checkRow(L('Household registration', 'تسجيل عائلي'), { checked: true })}
-        ${C.checkRow(L('Waiting list once full', 'لائحة انتظار عند الامتلاء'), { checked: true })}
-        ${C.checkRow(L('Parental consent for under-18s', 'موافقة الأهل لمن دون ١٨'), { checked: true })}</div>`,
+      <div class="stack" style="gap:10px">${C.checkRow(L('Household registration', 'تسجيل عائلي'), { checked: true,id:'rf_household' })}
+        ${C.checkRow(L('Waiting list once full', 'لائحة انتظار عند الامتلاء'), { checked: true,id:'rf_waitlist' })}
+        ${C.checkRow(L('Parental consent for under-18s', 'موافقة الأهل لمن دون ١٨'), { checked: true,id:'rf_consent' })}</div>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="rf_go" style="margin-inline-start:auto">${L('Create form', 'إنشاء الاستمارة')}</button>`,
     onMount(el) {
@@ -1258,6 +1216,7 @@ export function formNew() {
       sel.addEventListener('change', context);
       if (box) {
         const v = q => el.querySelector(q).value;
+        el.querySelector('#ne_k').addEventListener('change',()=>{el.querySelector('#ne_group_row').hidden=v('#ne_k')!=='group';});
         /* the room is checked against the calendar, room bookings (with their set-up time) and maintenance blocks */
         const showClash = () => {
           const d = v('#ne_d'), from = v('#ne_from'), to = v('#ne_to'), room = v('#ne_v');
@@ -1277,29 +1236,33 @@ export function formNew() {
         opener.addEventListener('click', () => toggle(box.hidden));
         el.querySelector('#ne_cancel').addEventListener('click', () => toggle(false));
         el.querySelector('#ne_ok').addEventListener('click', () => {
+          if(v('#ne_k')==='group'&&!v('#ne_group'))return toast(L('Choose a group','اختر مجموعة'),'','warning');
           if (![need(el, '#ne_t', L('Give the event a title', 'أعطِ الحدث عنواناً')),
                 need(el, '#ne_d', L('Choose today or a later date', 'اختر اليوم أو تاريخاً لاحقاً'), d => !!d && d >= today),
                 need(el, '#ne_to', L('Ends before it starts', 'ينتهي قبل أن يبدأ'), to => hm(to) > hm(v('#ne_from')))].every(Boolean)) return;
           const title = v('#ne_t').trim();
-          draft = { title, titleAr: title, d: v('#ne_d'), t: v('#ne_from'), to: v('#ne_to'), venue: v('#ne_v'), kind: v('#ne_k') };
+          draft = { title, titleAr: title, d: v('#ne_d'), t: v('#ne_from'), to: v('#ne_to'), venue: v('#ne_v'), kind: v('#ne_k'),groupId:v('#ne_group') };
           sel.innerHTML = options(); sel.value = '__new__'; sel.dispatchEvent(new Event('change', { bubbles: true }));
           opener.querySelector('span').textContent = L('Change the new event', 'عدّل الحدث الجديد');
           toggle(false); context();
         });
       }
-      el.querySelector('#rf_go').addEventListener('click', () => {
+      el.querySelector('#rf_go').addEventListener('click', async () => {
         let e = sel.value === '__new__' ? draft : eventById(sel.value);
         if (!e) return toast(L('Select an eligible event', 'اختر حدثاً صالحاً'), canMakeEvent ? L('Or create the event here first.', 'أو أنشئ الحدث هنا أولاً.') : '', 'warning');
         if (e === draft) {
           e = { id: 'ev' + Date.now().toString(36), ...draft };
           D.EVENTS.push(e);
           const cat = { event: ['Parish life', 'حياة الرعية'], group: ['Formation', 'التنشئة'], sacr: ['Sacrament', 'سرّ'] }[e.kind];
-          D.EVENT_DETAIL[e.id] = { ...D.eventInfo(e), cat: cat[0], catAr: cat[1], cap: +val(el, '#rf_cap') || 60, visibility: 'public', visibleGroupIds: [], priestIds: [] };
+          D.EVENT_DETAIL[e.id] = { ...D.eventInfo(e), cat: cat[0], catAr: cat[1], cap: +val(el, '#rf_cap') || 60,
+            visibility:e.kind==='group'?'groups':e.kind==='sacr'?'confidential':'public',
+            visibleGroupIds:e.kind==='group'?[e.groupId]:[],priestIds:[] };
         }
         const form = { id: 'rg' + Date.now(), eventId: e.id, event: e.title, eventAr: e.titleAr, open: true, cap: +val(el, '#rf_cap') || 60,
-          taken: 0, fee: parseFloat(val(el, '#rf_fee')) || 0, deadline: val(el, '#rf_dl'), waiting: 0, fields: [], discounts: [], installments: [] };
+          taken: 0, fee: parseFloat(val(el, '#rf_fee')) || 0, deadline: val(el, '#rf_dl'), waiting: 0, fields: [], discounts: [], installments: [],
+          household:el.querySelector('#rf_household').checked,waitingList:el.querySelector('#rf_waitlist').checked,parentalConsent:el.querySelector('#rf_consent').checked };
         D.REGISTRATIONS.unshift(form); selectRegistration(form.id);
-        closeOverlays(); refresh();
+        if(!await persist())return;closeOverlays(); refresh();
         ok(sel.value === '__new__' ? L('Event and form created', 'أُنشئ الحدث والاستمارة') : L('Form created and open', 'أُنشئت الاستمارة وفُتحت'),
            `${L(e.title, e.titleAr)} · ${e.d}`);
       });
@@ -1329,7 +1292,7 @@ export function registerParticipant() {
       if(form.taken>=form.cap)return toast(L('This event is full','هذا الحدث مكتمل العدد'),'','warning');
       save.disabled=true;
       const id='rgr'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-      D.REGISTRANTS.push({id,registrationId:form.id,p:personId,paid:0,status:form.fee?'pending':'registered',
+      D.REGISTRANTS.push({id,registrationId:form.id,p:personId,paid:0,status:form.fee||!el.querySelector('#rp_consent').checked?'pending':'registered',
         consent:!!el.querySelector('#rp_consent').checked,transport:'own'});
       form.taken+=1;
       if(!await persist()){save.disabled=false;return;}
@@ -1353,11 +1316,11 @@ export function fieldAdd() {
       <button class="btn btn-primary" id="ff_go" style="margin-inline-start:auto">${L('Add field', 'إضافة الحقل')}</button>`,
     onMount(el) {
       C.wire(el);
-      el.querySelector('#ff_go').addEventListener('click', () => {
+      el.querySelector('#ff_go').addEventListener('click', async () => {
         if (!need(el, '#ff_en', L('Give it a label', 'أعطه تسمية'))) return; const en = val(el, '#ff_en');
         form.fields.push([en, val(el, '#ff_ar') || en, el.querySelector('#ff_t').value,
           el.querySelector('.check input').checked, '', '']);
-        closeOverlays(); refresh(); ok(L('Field added', 'أُضيف الحقل'), en);
+        if(!await persist())return;closeOverlays(); refresh(); ok(L('Field added', 'أُضيف الحقل'), en);
       });
     }
   });
@@ -1366,12 +1329,11 @@ export function fieldAdd() {
 export function fieldMenu(btn, i) {
   const f = selectedRegistration()?.fields;if(!f)return; i = +i;
   openMenu(btn, [
-    { label: L('Make required', 'اجعله إلزامياً'), icon: 'check', fn: () => { f[i][3] = true; refresh(); ok(L('Now required', 'صار إلزامياً')); } },
-    { label: L('Move up', 'نقل للأعلى'), icon: 'chevL', fn: () => { if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]]; refresh(); } } },
+    { label: L('Make required', 'اجعله إلزامياً'), icon: 'check', fn: async () => { f[i][3] = true;if(!await persist())return;refresh();ok(L('Now required', 'صار إلزامياً')); } },
+    { label: L('Move up', 'نقل للأعلى'), icon: 'chevL', fn: async () => { if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]];if(await persist())refresh(); } } },
     { sep: true },
-    { label: L('Remove field', 'إزالة الحقل'), icon: 'trash', danger: true, fn: () => {
-      const [x] = f.splice(i, 1); refresh();
-      ok(L('Field removed', 'أُزيل الحقل'), L(x[0], x[1]), { action: { label: L('Undo', 'تراجع'), fn: () => { f.splice(i, 0, x); refresh(); } } });
+    { label: L('Remove field', 'إزالة الحقل'), icon: 'trash', danger: true, fn: async () => {
+      const [x] = f.splice(i, 1);if(!await persist())return;refresh();ok(L('Field removed', 'أُزيل الحقل'),L(x[0],x[1]));
     } }
   ]);
 }
@@ -1493,23 +1455,30 @@ export function incidentOpen(id) {
 /* ═════════════ facilities ═════════════ */
 /* ═════════════ portal ═════════════ */
 export function contentEdit(key = 'history') {
-  const c = D.CONTENT[key] || D.CONTENT.history;
+  const sections={welcome:['Welcome message','رسالة الترحيب'],history:['Parish history and patron saint','تاريخ الرعية والشفيع'],massTimes:['Mass and confession information','معلومات القداديس والاعتراف'],contact:['Contact and visiting information','معلومات التواصل والزيارة']};
+  if(!sections[key])key='history';
+  const c = D.CONTENT[key] || {en:'',ar:'',published:false};
   openDrawer({
-    large: true, title: L('Edit parish content', 'تعديل محتوى الرعية'),
-    sub: L('What families see when they open the parish link.', 'ما تراه العائلات عند فتح رابط الرعية.'),
-    body: `<div class="formrow"><label class="label">${L('Parish history and the patron saint', 'تاريخ الرعية والشفيع')}</label>
-      ${C.richText(esc(L(c.en, c.ar)))}</div>`,
+    large: true, title: L(...sections[key]),
+    sub: L('Edit both languages, preview, then save a draft or publish.', 'حرّر اللغتين وعاين ثم احفظ مسودة أو انشر.'),
+    body: `<div class="formrow"><label class="label" for="ce-en">English</label><textarea class="input" id="ce-en" rows="6" maxlength="10000">${esc(c.en||'')}</textarea></div>
+      <div class="formrow"><label class="label" for="ce-ar">العربية</label><textarea class="input" id="ce-ar" rows="6" maxlength="10000" dir="rtl">${esc(c.ar||'')}</textarea></div>
+      <div class="panel" style="margin-top:14px"><div class="panel-b"><b>${L('Preview','معاينة')}</b><div id="ce-preview" class="stack" style="margin-top:10px;white-space:pre-wrap"></div></div></div>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-secondary" id="ce_prev">${L('Preview', 'معاينة')}</button>
+      <button class="btn btn-secondary" id="ce_draft">${L('Save draft', 'حفظ مسودة')}</button>
       <button class="btn btn-primary" id="ce_go" style="margin-inline-start:auto">${L('Publish', 'نشر')}</button>`,
     onMount(el) {
-      C.wire(el);
-      el.querySelector('#ce_go').addEventListener('click', () => {
-        const txt = el.querySelector('.rte-body').innerText.trim();
-        if (isAr()) c.ar = txt; else c.en = txt;
-        closeOverlays(); refresh(); ok(L('Published', 'نُشر'), L('Live on the parish page now.', 'منشور على صفحة الرعية الآن.'));
-      });
-      el.querySelector('#ce_prev').addEventListener('click', () => window.open('landing.html', '_blank', 'noopener'));
+      const preview=()=>{el.querySelector('#ce-preview').innerHTML=`<p><b>English</b><br>${esc(el.querySelector('#ce-en').value)||'—'}</p><p dir="rtl"><b>العربية</b><br>${esc(el.querySelector('#ce-ar').value)||'—'}</p>`;};
+      el.querySelectorAll('#ce-en,#ce-ar').forEach(field=>field.addEventListener('input',preview));preview();
+      const save=async published=>{
+        const en=val(el,'#ce-en'),ar=val(el,'#ce-ar');
+        if(published&&(!en||!ar))return toast(L('Enter both languages before publishing','أدخل اللغتين قبل النشر'),'','warning');
+        const previous=D.CONTENT[key];D.CONTENT[key]={en,ar,published};
+        if(!await persist()){if(previous)D.CONTENT[key]=previous;else delete D.CONTENT[key];return;}
+        closeOverlays();refresh();ok(published?L('Published','نُشر'):L('Draft saved','حُفظت المسودة'),L('Parish content saved','حُفظ محتوى الرعية'));
+      };
+      el.querySelector('#ce_go').addEventListener('click',()=>save(true));
+      el.querySelector('#ce_draft').addEventListener('click',()=>save(false));
     }
   });
 }
@@ -1543,21 +1512,59 @@ export function lineReverse(i) {
 /* ═════════════ services: requests ═════════════ */
 export function svcRequestOpen(id) {
   const r = D.SERVICE_REQUESTS.find(x => x.id === id); if (!r) return;
-  const reqs = D.PREP_REQUIREMENTS[r.kind.toLowerCase()] || D.PREP_REQUIREMENTS.baptism;
+  const reqs = D.PREP_REQUIREMENTS[r.kind.toLowerCase()] || [];
+  const documents = r.documents || {};
+  const missing = reqs.filter(([en]) => !documents[en]);
+  const stage = r.stage || (r.status === 'pending' ? 'request' : r.status === 'approved' ? 'preparation' : r.status);
+  const stageLabel={request:L('Request','طلب'),approval:L('Approved','موافَق عليه'),preparation:L('Preparation','تحضير'),
+    celebration:L('Celebrated','احتُفل به'),rejected:L('Declined','مرفوض')}[stage]||stage;
+  const canAdvance = is('priest') && !['celebrated','rejected'].includes(r.status);
   openDrawer({
     title: L(r.kind, r.kindAr), sub: `${esc(nameOf(D.person(r.by)))} · ${fmtDate(r.date)}`,
     body: `<dl class="dl"><dt>${L('Status', 'الحالة')}</dt><dd>${status(r.status)}</dd>
         <dt>${L('Requested by', 'مقدَّم من')}</dt><dd>${esc(nameOf(D.person(r.by)))}</dd>
-        <dt>${L('Date', 'التاريخ')}</dt><dd class="mono">${fmtDate(r.date)}</dd></dl>
-      <div class="divider"></div><h4 class="t-ui" style="margin-bottom:10px">${L('Preparation', 'التحضير')}</h4>
-      <div class="stack" style="gap:10px">${reqs.map(([en, ar, done]) => C.checkRow(L(en, ar), { checked: done })).join('')}</div>`,
+        <dt>${L('Preferred date and time','التاريخ والوقت المفضّلان')}</dt><dd class="mono">${fmtDate(r.date)} ${esc(r.time||'')}</dd>
+        <dt>${L('Place','المكان')}</dt><dd>${esc(D.venue(r.venue)?.name||r.place||'—')}</dd>
+        <dt>${L('Contact','التواصل')}</dt><dd>${esc(r.contact||'—')}</dd>
+        <dt>${L('Purpose / intention','الغاية / النيّة')}</dt><dd>${esc(r.purpose||'—')}</dd>
+        <dt>${L('Language','اللغة')}</dt><dd>${esc(r.language||'—')}</dd>
+        <dt>${L('Notes','ملاحظات')}</dt><dd>${esc(r.notes||'—')}</dd>
+        ${r.celebratedAt?`<dt>${L('Celebrated on','تاريخ الاحتفال')}</dt><dd>${fmtDate(r.celebratedAt)}</dd>`:''}</dl>
+      <div class="divider"></div><h4 class="t-ui" style="margin-bottom:10px">${L('Progress','التقدّم')}</h4>
+      <p class="t-caption dim">${L('Request → priest approval → preparation → celebration','طلب ← موافقة الكاهن ← تحضير ← احتفال')}</p>
+      <p class="t-caption">${L('Current stage','المرحلة الحالية')}: <b>${esc(stageLabel)}</b></p>
+      ${reqs.length ? `<div class="divider"></div><h4 class="t-ui">${L('Required documents and preparation','المستندات والتحضير المطلوب')}</h4>
+      <div class="stack" style="gap:8px">${reqs.map(([en, ar])=>`<label class="check"><input type="checkbox" data-sr-doc="${esc(en)}" ${documents[en]?'checked':''} ${['rejected','celebrated'].includes(r.status)?'disabled':''}><span>${esc(L(en,ar))}</span></label>`).join('')}</div>
+      <p class="help">${missing.length ? `${L('Missing','الناقص')}: ${missing.map(([en,ar])=>esc(L(en,ar))).join(', ')}` : L('All required items are recorded.','سُجّلت جميع المتطلبات.')}</p>` : ''}
+      ${r.status==='ready'?C.field({label:L('Actual celebration date','تاريخ الاحتفال الفعلي'),id:'sr_actual',type:'date',value:new Date().toLocaleDateString('sv-SE')}):''}
+      ${r.status==='celebrated'?C.inlineAlert('success',L('Celebration recorded','سُجّل الاحتفال'),L('This service request does not create an official sacramental register entry.','لا ينشئ طلب الخدمة هذا قيداً رسمياً في سجل الأسرار.')):''}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-      ${r.status === 'pending' ? `<button class="btn btn-primary" id="srok" style="margin-inline-start:auto">${L('Approve and schedule', 'الموافقة والجدولة')}</button>` : ''}`,
+      ${r.status==='pending'&&is('priest')?`<button class="btn btn-secondary" id="srreject">${L('Decline','رفض')}</button>`:''}
+      ${canAdvance?`<button class="btn btn-primary" id="srok" style="margin-inline-start:auto">${r.status==='pending'?L('Approve request','الموافقة على الطلب'):r.status==='approved'?L('Start preparation','بدء التحضير'):r.status==='preparing'?L('Mark ready','جاهز للاحتفال'):L('Record celebration','تسجيل الاحتفال')}</button>`:''}`,
     onMount(el) {
       C.wire(el);
-      el.querySelector('#srok')?.addEventListener('click', () => {
-        r.status = 'approved'; r.prep = 'complete'; closeOverlays(); refresh();
-        ok(L('Approved and scheduled', 'اعتُمد وجُدول'), `${L(r.kind, r.kindAr)} · ${fmtDate(r.date)}`);
+      el.querySelectorAll('[data-sr-doc]').forEach(box=>box.addEventListener('change',async()=>{
+        r.documents ||= {};r.documents[box.dataset.srDoc]=box.checked;
+        r.prep=reqs.every(([en])=>r.documents[en])?'complete':'documents missing';
+        if(!await persist()){box.checked=!box.checked;return;}
+        closeOverlays();svcRequestOpen(id);
+      }));
+      el.querySelector('#srok')?.addEventListener('click',async()=>{
+        if(r.status==='preparing'&&reqs.some(([en])=>!r.documents?.[en]))return toast(L('Complete the missing requirements first','أكمل المتطلبات الناقصة أولاً'),'','warning');
+        const next={pending:'approved',approved:'preparing',preparing:'ready',ready:'celebrated'}[r.status];
+        if(!next)return;
+        if(next==='celebrated'){
+          const actual=val(el,'#sr_actual'),todayKey=new Date().toLocaleDateString('sv-SE');
+          if(!actual||actual>todayKey)return toast(L('Enter the actual date, today or earlier','أدخل التاريخ الفعلي، اليوم أو قبله'),'','warning');
+          r.celebratedAt=actual;
+        }
+        r.status=next;r.stage=next==='approved'?'approval':next==='preparing'||next==='ready'?'preparation':'celebration';
+        r.history ||= [];r.history.push({at:new Date().toISOString(),status:next,by:me()?.id||null});
+        if(!await persist())return;closeOverlays();refresh();ok(L('Request updated','حُدّث الطلب'),L(r.kind,r.kindAr));
+      });
+      el.querySelector('#srreject')?.addEventListener('click',async()=>{
+        r.status='rejected';r.stage='rejected';r.history||=[];r.history.push({at:new Date().toISOString(),status:'rejected',by:me()?.id||null});
+        if(!await persist())return;closeOverlays();refresh();ok(L('Request declined','رُفض الطلب'));
       });
     }
   });
@@ -1567,20 +1574,28 @@ export function svcRequestNew(kind = 'Mass|قدّاس') {
   const [en, ar] = kind.split('|');
   openDrawer({
     title: L(`Request — ${en}`, `طلب — ${ar}`),
-    body: `${C.personPicker(L('Requested by', 'مقدَّم من'), 'sq_p')}
-      <div class="formgrid">${C.field({ label: L('Preferred date', 'التاريخ المفضّل'), type: 'date', value: '2026-11-07', id: 'sq_d' })}
-        ${C.field({ label: L('Time', 'الوقت'), type: 'time', value: '11:00', id: 'sq_t' })}</div>
-      <div class="formrow"><label class="label">${L('Language', 'اللغة')}</label><select class="select">
-        <option>${L('Arabic', 'عربي')}</option><option>${L('Arabic & Syriac', 'عربي وسرياني')}</option><option>${L('Bilingual', 'ثنائي')}</option></select></div>
-      ${C.textarea({ label: L('Notes for the office', 'ملاحظات للمكتب'), id: 'sq_n', max: 400 })}`,
+    body: `<div class="formrow"><label class="label" for="sq_p">${L('Requested by','مقدَّم من')}</label><select class="select" id="sq_p"><option value="">${L('Choose a person','اختر شخصاً')}</option>${D.PEOPLE.map(p=>`<option value="${esc(p.id)}">${esc(L(p.lat,p.ar))}</option>`).join('')}</select></div>
+      <div class="formgrid">${C.field({ label: L('Preferred date', 'التاريخ المفضّل'), type: 'date', id: 'sq_d' })}
+        ${C.field({ label: L('Preferred time', 'الوقت المفضّل'), type: 'time', id: 'sq_t' })}</div>
+      <div class="formrow"><label class="label" for="sq_v">${L('Preferred place','المكان المفضّل')}</label><select class="select" id="sq_v"><option value="">${L('To be arranged','يُحدّد لاحقاً')}</option>${D.VENUES.map(v=>`<option value="${esc(v.id)}">${esc(L(v.name,v.ar))}</option>`).join('')}</select></div>
+      ${C.field({label:L('Contact phone or email','رقم الهاتف أو البريد'),id:'sq_c',req:true,max:160})}
+      ${C.field({label:L('Purpose or intention','الغاية أو النيّة'),id:'sq_i',req:true,max:240})}
+      <div class="formrow"><label class="label" for="sq_l">${L('Language', 'اللغة')}</label><select class="select" id="sq_l">
+        <option value="Arabic">${L('Arabic', 'عربي')}</option><option value="Arabic & Syriac">${L('Arabic & Syriac', 'عربي وسرياني')}</option><option value="Bilingual">${L('Bilingual', 'ثنائي')}</option></select></div>
+      ${C.textarea({ label: L('Notes for the office', 'ملاحظات للمكتب'), id: 'sq_n', max: 1000 })}
+      ${['baptism','wedding'].includes(en.toLowerCase())?`<p class="help">${L('A service request plans the ceremony. Submit the sacramental request separately for the official register.','طلب الخدمة يخطّط للاحتفال. قدّم طلب السرّ منفصلاً للسجل الرسمي.')}</p>`:''}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="sq_go" style="margin-inline-start:auto">${L('Send request', 'إرسال الطلب')}</button>`,
     onMount(el) {
       C.wire(el);
-      el.querySelector('#sq_go').addEventListener('click', () => {
-        D.SERVICE_REQUESTS.unshift({ id: 'sr' + Date.now(), kind: en, kindAr: ar, by: 'p4', date: val(el, '#sq_d'),
-          prep: 'documents missing', prepAr: 'مستندات ناقصة', status: 'pending' });
-        closeOverlays(); refresh(); ok(L('Request sent', 'أُرسل الطلب'), L(`${en} · with the office for review`, `${ar} · لدى المكتب للمراجعة`));
+      el.querySelector('#sq_go').addEventListener('click', async () => {
+        if(!need(el,'#sq_p',L('Choose the requester','اختر مقدّم الطلب'))||!need(el,'#sq_d',L('Choose a date','اختر تاريخاً'))||
+          !need(el,'#sq_t',L('Choose a time','اختر وقتاً'))||!need(el,'#sq_c',L('Add contact details','أضف معلومات التواصل'))||
+          !need(el,'#sq_i',L('Describe the purpose','اشرح الغاية')))return;
+        D.SERVICE_REQUESTS.unshift({ id: 'sr' + Date.now(), kind: en, kindAr: ar, by: val(el,'#sq_p'), date: val(el, '#sq_d'),
+          time:val(el,'#sq_t'),venue:val(el,'#sq_v'),contact:val(el,'#sq_c'),purpose:val(el,'#sq_i'),language:val(el,'#sq_l'),notes:val(el,'#sq_n'),
+          documents:{},prep:'documents missing',status:'pending',stage:'request',history:[] });
+        if(!await persist())return;closeOverlays(); refresh(); ok(L('Request sent', 'أُرسل الطلب'), L(`${en} · awaiting priest review`, `${ar} · بانتظار مراجعة الكاهن`));
       });
     }
   });
@@ -1618,16 +1633,22 @@ export function hymnRestore(mid, i) {
 
 export function memberMenu(btn, pid) {
   const d = gd(), i = d.roster.findIndex(r => r.p === pid), r = d.roster[i];
+  const g=D.group(curGroup());if(!r)return;
   openMenu(btn, [
     ...(S.role !== 'leader' ? [{ label: L('Message', 'مراسلة'), icon: 'msg', fn: () => compose(pid) }] : []),
     { label: L('Open record', 'فتح السجل'), icon: 'people', fn: () => go('person/' + pid) },
-    { label: L('Make assistant', 'تعيين مساعداً'), icon: 'check', fn: () => {
-      r.role = 'Assistant'; r.roleAr = 'مساعد'; refresh(); ok(L('Role updated', 'حُدّث الدور'), nameOf(D.person(pid))); } },
+    ...(!is('leader')&&pid!==g?.leader?[{ label: L('Make assistant', 'تعيين مساعداً'), icon: 'check', fn: async () => {
+      if(g.assistant&&g.assistant!==pid){const previous=d.roster.find(row=>row.p===g.assistant);if(previous){previous.role='Member';previous.roleAr='عضو';}}
+      g.assistant=pid;d.assistant=pid;r.role='Assistant';r.roleAr='مساعد';
+      d.roles=d.roles.filter(([personId,role])=>personId!==pid&&role!=='Assistant');d.roles.push([pid,'Assistant','مساعد']);
+      if(!await persist())return;refresh();ok(L('Assistant updated','حُدّث المساعد'),nameOf(D.person(pid)));} }]:[]),
     { sep: true },
-    { label: L('Remove from group', 'إزالة من المجموعة'), icon: 'trash', danger: true, fn: () => {
-      d.roster.splice(i, 1); refresh();
-      ok(L('Removed from the group', 'أُزيل من المجموعة'), nameOf(D.person(pid)),
-         { action: { label: L('Undo', 'تراجع'), fn: () => { d.roster.splice(i, 0, r); refresh(); } } });
+    { label: L('Remove from group', 'إزالة من المجموعة'), icon: 'trash', danger: true, fn: async () => {
+      if(pid===g?.leader)return toast(L('Hand over leadership first','سلّم المسؤولية أولاً'),'','warning');
+      if(pid===g?.assistant&&is('leader'))return toast(L('Ask the parish office to change the assistant','اطلب من مكتب الرعية تغيير المساعد'),'','warning');
+      d.roster.splice(i, 1);if(g&&S.role!=='leader')g.members=Math.max(0,Number(g.members||0)-1);
+      if(pid===g?.assistant){g.assistant=null;d.assistant=null;d.roles=d.roles.filter(([personId])=>personId!==pid);}
+      if(!await persist())return;refresh();ok(L('Removed from the group', 'أُزيل من المجموعة'),nameOf(D.person(pid)));
     } }
   ]);
 }

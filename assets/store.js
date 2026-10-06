@@ -29,10 +29,10 @@ export const ROLES = {
       L('myprofile'), L('myconcerns'), L('membernotifications')]
   },
   bishop: {
-    en:'Bishop', ar:'المطران', who:'p17',
+    en:'Bishop', ar:'المطران', who:null,
     noteEn:'Read-only oversight of parishes and their activities.',
     noteAr:'إشراف للقراءة فقط على الرعايا وأنشطتها.',
-    nav:[L('oversight')]
+    nav:[L('oversight'), H('Eparchy','الأبرشية'), L('bishopeparchy'), L('bishopmap'), L('assignments')]
   },
   priest: {
     en:'Parish priest', ar:'كاهن الرعية', who:'p17',
@@ -44,7 +44,7 @@ export const ROLES = {
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
       H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'), L('memberhub'),
       H('Money','المال'), L('giving'), L('finance'),
-      H('Administration','الإدارة'), L('eparchy'), L('forms'), L('reports'), L('audit'), L('settings'), L('styleguide')]
+      H('Administration','الإدارة'), L('forms'), L('reports'), L('audit'), L('settings'), L('styleguide')]
   },
   secretary: {
     en:'Secretary', ar:'أمينة السرّ', who:'p4',
@@ -74,23 +74,16 @@ export const ROLES = {
       H('My ministry','خدمتي'), L('groups'), L('attendance'), L('volunteers'), L('checkin'), L('music'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'),
       H('Communicate','التواصل'), L('messaging'), L('memberhub')]
-  },
-  volunteer: {
-    en:'Volunteer', ar:'متطوّع', who:'p16',
-    noteEn:'One station and no navigation. In production the kiosk runs full screen — no rail, no top bar, a 48px keypad and a very large Done button.',
-    noteAr:'محطة واحدة بلا تنقّل. في التشغيل الفعلي يعمل الكشك ملء الشاشة — بلا شريط جانبي ولا علوي، ولوحة أرقام ٤٨ بكسل وزرّ «تمّ» كبير جداً.',
-    nav:[L('checkin'), L('children')]
   }
 };
 
 export const MOBILE_NAV = {
   member:    ['memberhome','mymeetings','mymessages','mycalendar','myprofile'],
-  bishop: ['oversight'],
+  bishop: ['oversight','bishopmap','bishopeparchy'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],
   treasurer: ['dashboard','giving','finance','reports'],
-  leader:    ['dashboard','groups','calendar','messaging'],
-  volunteer: ['checkin','children']
+  leader:    ['dashboard','groups','calendar','messaging']
 };
 
 export const role = () => S.role === 'member'

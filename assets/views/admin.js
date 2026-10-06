@@ -68,7 +68,7 @@ export function assignments() {
   if (!is('bishop')) return empty('shield', L('Bishop access required', 'تتطلّب صلاحية المطران'), L('Only the bishop can assign parish priests.', 'المطران وحده يعيّن كهنة الرعايا.'));
   return pageHead({ crumbs: [{ label: L('Archdiocese', 'الأبرشية') }, { label: L('Priest assignments', 'تعيينات الكهنة') }],
     title: L('Priest assignments', 'تعيينات الكهنة'),
-    sub: L('Assign, replace, or reassign priests to parishes within this archdiocese. A removed assignment ends access immediately.', 'عيّن الكهنة أو استبدلهم أو أعد تعيينهم في رعايا هذه الأبرشية. وينتهي الوصول فور إزالة التعيين.') }) +
+    sub: L('Read-only view of clergy assignments. Changes are made by an operator on the parish server.', 'عرض تعيينات الكهنة للقراءة فقط. يجري المشغّل التغييرات على خادم الرعية.') }) +
     `<div id="assignment-body" class="tabbody"><p class="dim">${L('Loading assignments…', 'جارٍ تحميل التعيينات…')}</p></div>`;
 }
 assignments.mount = async host => {
@@ -76,19 +76,9 @@ assignments.mount = async host => {
   try {
     const data = await api('assignments');
     body.innerHTML = data.priests.length ? data.priests.map(priest => `<section class="panel" style="margin-bottom:16px" data-priest="${esc(priest.id)}">
-      <div class="panel-h"><h3>${esc(priest.name)}</h3></div><div class="panel-b"><div class="stack" style="gap:10px">${data.parishes.map(p =>
-        `<label class="check"><input type="checkbox" value="${esc(p.id)}" ${priest.parishes.includes(p.id) ? 'checked' : ''}><span>${esc(L(p.name, p.ar))} · ${esc(L(p.town, p.townAr))}</span></label>`).join('')}</div>
-        <button class="btn btn-primary" style="margin-top:16px" data-save-priest="${esc(priest.id)}">${L('Save assignments', 'حفظ التعيينات')}</button></div></section>`).join('')
+      <div class="panel-h"><h3>${esc(priest.name)}</h3></div><div class="panel-b"><div class="stack" style="gap:10px">${data.parishes.filter(p=>priest.parishes.includes(p.id)).map(p =>
+        `<div class="listrow"><span>${esc(L(p.name, p.ar))} · ${esc(L(p.town, p.townAr))}</span></div>`).join('') || `<p class="help">${L('No assigned parishes.','لا رعايا معيّنة.')}</p>`}</div></div></section>`).join('')
       : empty('people', L('No priest accounts yet', 'لا حسابات كهنة بعد'), L('Create a priest account on the server, then assign its parishes here.', 'أنشئ حساب كاهن على الخادم ثم عيّن رعاياه هنا.'));
-    body.querySelectorAll('[data-save-priest]').forEach(button => button.addEventListener('click', async () => {
-      const priest = button.dataset.savePriest, section = button.closest('[data-priest]');
-      const parishes = [...section.querySelectorAll('input:checked')].map(input => input.value);
-      button.disabled = true;
-      try { await api('assignments', 'PUT', { priest, parishes });
-        toast(L('Priest assignments saved', 'حُفظت تعيينات الكاهن'), L('Access now follows this list.', 'يتبع الوصول هذه القائمة الآن.'), 'success');
-      } catch (e) { toast(L('Could not save assignments', 'تعذّر حفظ التعيينات'), e.message, 'danger'); }
-      finally { button.disabled = false; }
-    }));
   } catch (e) { body.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; }
 };
 
@@ -669,20 +659,20 @@ export function styleguide(tab = '') {
 
   const T = {
     '': () => `
-      ${spec(L('Colour', 'اللون'), L('Shades of blue, brown and yellow throughout the product', 'درجات الأزرق والبني والأصفر في جميع أجزاء التطبيق'), `
+      ${spec(L('Colour', 'اللون'), L('Forest green, sage and warm white throughout the product', 'الأخضر الداكن والمريمي والأبيض الدافئ في جميع أجزاء التطبيق'), `
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Navy', 'كحلي'), '#3D4161', L('Actions, rail and body text', 'الأفعال والشريط ونص المتن'))}
-          ${swatch(L('Light blue', 'أزرق فاتح'), '#DCEEFF', L('Soft fills and blue accents', 'التعبئة الناعمة واللمسات الزرقاء'))}
+          ${swatch(L('Forest green', 'أخضر داكن'), '#233B32', L('Actions, rail and body text', 'الأفعال والشريط ونص المتن'))}
+          ${swatch(L('Soft sage', 'مريمي فاتح'), '#EDF0E8', L('Soft fills and selected states', 'الخلفيات الناعمة وحالات التحديد'))}
           ${swatch(L('White', 'أبيض'), '#FFFFFF', L('Cards, forms and print', 'البطاقات والاستمارات والطباعة'))}
-          ${swatch(L('Yellow', 'أصفر'), '#F4CF56', L('Buttons, selected navigation and highlights', 'الأزرار والتنقّل المحدّد والإبراز'))}
-          ${swatch(L('Brown', 'بني'), '#765039', L('Secondary text, accents and charts', 'النص الثانوي واللمسات والرسوم'))}
+          ${swatch(L('Selection sage', 'مريمي التحديد'), '#D6E1D0', L('Selected navigation and quiet highlights', 'التنقّل المحدّد والإبراز الهادئ'))}
+          ${swatch(L('Muted sage gray', 'رمادي مريمي'), '#607068', L('Secondary text, accents and charts', 'النص الثانوي واللمسات والرسوم'))}
         </div>
         <div class="divider"></div>
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Page blue', 'أزرق الصفحة'), '#EAF4FF', L('Page background', 'خلفية الصفحة'))}
-          ${swatch(L('Soft yellow', 'أصفر ناعم'), '#FFF5CC', L('Table headers and summary cards', 'رؤوس الجداول وبطاقات الملخّص'))}
-          ${swatch(L('Blue accent', 'أزرق بارز'), '#8EC5F4', L('Charts and small marks', 'الرسوم والعلامات الصغيرة'))}
-          ${swatch(L('Blue border', 'حدّ أزرق'), '#9BC6EC', L('Control outlines', 'حدود الضوابط'))}
+          ${swatch(L('Warm white', 'أبيض دافئ'), '#F7F7F2', L('Page background', 'خلفية الصفحة'))}
+          ${swatch(L('Paper', 'لون الورق'), '#F7F7F2', L('Table headers and summary cards', 'رؤوس الجداول وبطاقات الملخّص'))}
+          ${swatch(L('Sage accent', 'لمسة مريمية'), '#9BAC9F', L('Charts and small marks', 'الرسوم والعلامات الصغيرة'))}
+          ${swatch(L('Sage border', 'حدّ مريمي'), '#9BAC9F', L('Control outlines', 'حدود الضوابط'))}
         </div>
         <div class="divider"></div>
         <div class="row" style="gap:10px;flex-wrap:wrap">

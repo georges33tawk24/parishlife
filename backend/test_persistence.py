@@ -1,8 +1,11 @@
 """End-to-end state write checks against an isolated SQLite database."""
 import copy
+import base64
+import io
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import server
@@ -66,6 +69,116 @@ class ParishPersistenceTests(unittest.TestCase):
         with self.assertRaises(server.Problem) as raised:
             self.patch('secretary', 'EVENT_TEMPLATES', templates, parish='p-charbel')
         self.assertEqual(raised.exception.status, 403)
+
+    def test_service_request_requires_details_and_priest_stages(self):
+        _, state = self.state()
+        requests = copy.deepcopy(state['SERVICE_REQUESTS'])
+        requests.append(dict(id='sr-test', kind='Mass', kindAr='قدّاس', by='p1', date='2026-11-01',
+                             time='10:00', contact='0123456', purpose='Memorial Mass', venue='v1',
+                             language='Arabic', notes='', documents={}, prep='documents missing',
+                             status='pending', stage='request', history=[]))
+        self.patch('secretary', 'SERVICE_REQUESTS', requests)
+        requests[-1]['status'] = 'approved'
+        requests[-1]['history'].append(dict(at='2026-10-05T10:00:00', status='approved', by='p4'))
+        with self.assertRaises(server.Problem):
+            self.patch('secretary', 'SERVICE_REQUESTS', requests)
+        requests[-1]['history'][-1]['by'] = 'p17'
+        self.patch('priest', 'SERVICE_REQUESTS', requests)
+        requests[-1]['status'] = 'celebrated'
+        requests[-1]['history'].append(dict(at='2026-10-05T10:01:00', status='celebrated', by='p17'))
+        with self.assertRaises(server.Problem):
+            self.patch('priest', 'SERVICE_REQUESTS', requests)
+
+    def test_excel_attendance_preview_reads_shared_strings_without_saving_file(self):
+        data=io.BytesIO()
+        with zipfile.ZipFile(data,'w') as workbook:
+            workbook.writestr('xl/sharedStrings.xml',
+                '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Name</t></si><si><t>Status</t></si><si><t>Maya Haddad</t></si><si><t>Present</t></si></sst>')
+            workbook.writestr('xl/worksheets/sheet1.xml',
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row></sheetData></worksheet>')
+        self.assertEqual(server.xlsx_preview(base64.b64encode(data.getvalue()).decode()),
+                         [['Name','Status'],['Maya Haddad','Present']])
+
+    def test_person_and_group_file_access_is_scoped(self):
+        member=dict(id='member-test',role='member',person_id='p1')
+        with server.connect() as c:
+            server.file_access(c,self.users['priest'],'p-elias','person','p1',True)
+            with self.assertRaises(server.Problem):
+                server.file_access(c,self.users['leader'],'p-elias','person','p1')
+            server.file_access(c,member,'p-elias','person','p1')
+            with self.assertRaises(server.Problem):
+                server.file_access(c,member,'p-elias','person','p2')
+            server.file_access(c,self.users['leader'],'p-elias','group','g1',True)
+
+    def test_handover_requires_group_history_and_updates_member_account(self):
+        with server.connect() as c:
+            c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)',
+                      ('future-leader','future-leader','Future leader','member','beirut','p12','test-hash'))
+            c.execute('INSERT INTO assignments VALUES(?,?)',('future-leader','p-elias'))
+        revision,state=self.state()
+        groups=copy.deepcopy(state['GROUPS'])
+        next(group for group in groups if group['id']=='g1')['leader']='p12'
+        with server.connect() as c:
+            with self.assertRaises(server.Problem):
+                server.save_patch(c,self.users['priest'],'p-elias',
+                                  dict(revision=revision,changes={'GROUPS':groups}))
+        detail=copy.deepcopy(state['GROUP_DETAIL'])
+        detail['g1']['history'].append(['Leadership transferred','انتقلت المسؤولية','2026-10-05'])
+        with server.connect() as c:
+            server.save_patch(c,self.users['priest'],'p-elias',
+                              dict(revision=revision,changes={'GROUPS':groups,'GROUP_DETAIL':detail}))
+            self.assertEqual(c.execute('SELECT role FROM users WHERE id=?',('future-leader',)).fetchone()['role'],'leader')
+
+    def test_parish_content_draft_and_published_sections_persist_with_staff_permissions(self):
+        _, state = self.state()
+        sections = copy.deepcopy(state['CONTENT'])
+        sections['welcome'] = dict(en='Welcome to Saint Elias', ar='أهلاً بكم في مار الياس', published=False)
+        self.patch('secretary', 'CONTENT', sections)
+        self.assertFalse(self.state()[1]['CONTENT']['welcome']['published'])
+        sections['welcome']['published'] = True
+        self.patch('priest', 'CONTENT', sections)
+        self.assertTrue(self.state()[1]['CONTENT']['welcome']['published'])
+        with self.assertRaises(server.Problem) as raised:
+            self.patch('leader', 'CONTENT', sections)
+        self.assertEqual(raised.exception.status, 403)
+        sections['welcome']['en'] = 'x' * 10001
+        with self.assertRaises(server.Problem):
+            self.patch('secretary', 'CONTENT', sections)
+
+    def test_baptism_request_creates_and_links_child_without_account(self):
+        revision, _ = self.state()
+        request = dict(action='create-sacrament-request', id='sc-test-child', revision=revision,
+                       kind='baptism', child=dict(lat='Test Infant', ar='طفل تجريبي', born='2025-10-01',
+                                                   father='Test Father', mother='Test Mother'), date='', notes='')
+        with server.connect() as c:
+            server.workflow(c, self.users['secretary'], 'p-elias', request)
+        _, saved = self.state()
+        entry = next(s for s in saved['SACRAMENTS'] if s['id'] == 'sc-test-child')
+        child = next(p for p in saved['PEOPLE'] if p['id'] == entry['person'])
+        self.assertEqual((child['lat'], child['born'], entry['father']), ('Test Infant', '2025-10-01', 'Test Father'))
+        self.assertIn(child['id'], saved['PERSON_EXTRA'])
+        with self.assertRaises(server.Problem):
+            with server.connect() as c:
+                server.workflow(c, self.users['secretary'], 'p-elias', {**request, 'id':'sc-test-child-2',
+                                                                       'revision':self.state()[0]})
+
+    def test_approved_request_amendment_waits_for_priest_and_keeps_history(self):
+        def act(role, action, **extra):
+            with server.connect() as c:
+                server.workflow(c, self.users[role], 'p-elias', dict(action=action, id='sc-amend-test',
+                                revision=self.state()[0], **extra))
+        act('secretary', 'create-sacrament-request', kind='baptism', person='p1', date='2026-11-01', notes='Original')
+        act('priest', 'approve-sacrament-request')
+        act('secretary', 'propose-request-amendment', date='2026-11-02', notes='Revised', reason='Family changed date')
+        record = next(s for s in self.state()[1]['SACRAMENTS'] if s['id'] == 'sc-amend-test')
+        self.assertEqual(record['requestNotes'], 'Original')
+        self.assertEqual(record['pendingAmendment']['notes'], 'Revised')
+        with self.assertRaises(server.Problem):
+            act('secretary', 'approve-request-amendment')
+        act('priest', 'approve-request-amendment')
+        record = next(s for s in self.state()[1]['SACRAMENTS'] if s['id'] == 'sc-amend-test')
+        self.assertEqual(record['requestedDate'], '2026-11-02')
+        self.assertEqual(record['history'][-1]['before']['notes'], 'Original')
 
     def test_group_attendance_persists_for_leader_group(self):
         _, state = self.state()
@@ -170,6 +283,14 @@ class ParishPersistenceTests(unittest.TestCase):
             detail = server.oversight(c, self.users['bishop'], 'p-elias')
             self.assertIn('events', detail)
             self.assertNotIn('NOTES', detail)
+            person = next(p for p in detail['people'] if p['id'] == 'p6')
+            self.assertIn('groups', person)
+            self.assertNotIn('phone', person)
+            self.assertNotIn('born', person)
+            group = next(g for g in detail['groups'] if g['id'] == 'g1')
+            self.assertIn('attendance', group)
+            self.assertTrue(group['meetings'])
+            self.assertTrue(group['roster'])
             with self.assertRaises(server.Problem) as raised:
                 server.visible(c, self.users['bishop'], 'p-elias', state)
             self.assertEqual(raised.exception.status, 403)

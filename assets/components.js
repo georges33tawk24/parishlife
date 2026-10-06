@@ -5,6 +5,7 @@ import { icon } from './icons.js';
 import { t, isAr, num, usd, lbp, fmtDate, month, dayShort, matches } from './i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from './data.js';
 import { persist } from './persist.js';
+import { parishAPI, session } from './api.js';
 import { renderAddressCascade, wireAddressCascades } from './geography.js';
 import { esc, avatar, who, toast, openPopover, closeMenu } from './ui.js';
 
@@ -178,21 +179,14 @@ export const dateRange = () => `<div class="formrow"><label class="label">${t('D
   </div></div>`;
 
 /* ---------------- uploads ---------------- */
-export const dropzone = (id = 'dz', { specimen = false } = {}) => `
-  <div class="drop" data-drop="${id}">${icon('export', 26)}
+export const dropzone = (id = 'dz', { scope = '', ownerId = '' } = {}) => `
+  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}"></div>
+  <div class="drop" data-drop="${esc(id)}">${icon('export', 26)}
     <b style="margin-top:8px">${t('Drop the file here, or', 'أفلت الملف هنا، أو')}
-      <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${id}"
+      <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${esc(id)}"
         accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf"></label></b>
-    <span class="hint">${t('JPG, PNG or PDF up to 10 MB. A photo from the phone is fine.',
-      'JPG أو PNG أو PDF حتى ١٠ ميغابايت. صورة من الهاتف تكفي.')}</span></div>
-  <div class="files" data-files="${id}">${specimen ? `
-  <div class="filerow">${icon('doc', 18, 'dimmer')}
-    <span class="grow"><b>receipt-electricity-sept.jpg</b><small>1.2 MB ${t('of', 'من')} 1.9 MB · 64%</small>
-      <span class="progress" style="margin-top:6px"><i style="width:64%"></i></span></span>
-    <button class="iconbtn" data-rmfile aria-label="${t('Cancel', 'إلغاء')}">${icon('close', 16)}</button></div>
-  <div class="filerow err">${icon('warn', 18)}
-    <span class="grow"><b>scan-002.tiff</b><small>${t('TIFF is not supported. Try JPG or PDF.', 'صيغة TIFF غير مدعومة. جرّب JPG أو PDF.')}</small></span>
-    <button class="btn btn-ghost btn-dense" data-rmfile>${t('Remove', 'إزالة')}</button></div>` : ''}</div>`;
+    <span class="hint">${scope ? t('JPG, PNG or PDF up to 10 MB. Files are saved to this parish.', 'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.')
+      : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}</span></div>`;
 
 export const avatarUpload = (key = 'specimen') => {
   const ph = PHOTOS[key], label = key === 'parish' ? 'P' : key === 'new' || key === 'specimen' ? 'GH' : initials(person(key));
@@ -211,15 +205,11 @@ export const richText = (body = '') => `<div class="rte">
   <div class="rte-bar">
     <button data-rte="bold"><b>B</b></button><button data-rte="underline"><u>U</u></button>
     <span class="sep"></span><button data-rte="link">${t('Link', 'رابط')}</button>
-    <button data-rte="list">${t('List', 'لائحة')}</button>
+    <button data-rte="list">${t('List', 'لائحة')}</button><button data-rte="emoji" aria-label="${t('Insert emoji','إدراج رمز تعبيري')}">☺</button>
     <span class="sep"></span>${bgroup(['EN', 'ع'], isAr() ? 1 : 0)}
   </div>
-  <div class="rte-body" contenteditable="true">${body || `<b>${t('Feast of Our Lady of the Rosary.', 'عيد سيدة الورديّة.')}</b>
-    ${t('Mass at 10:30 followed by the procession from the upper church. Families are asked to bring flowers for the shrine.',
-        'القدّاس الساعة ١٠:٣٠ يليه الزيّاح من الكنيسة العليا. يُرجى من العائلات إحضار الزهور للمزار.')}`}</div>
-  <div class="rte-foot">${t('Draft saved 14 seconds ago', 'حُفظت المسوّدة قبل ١٤ ثانية')} ·
-    ${t('Bold, underline, link and list only — nothing that can break a printed bulletin.',
-        'غامق وتسطير ورابط ولائحة فقط — لا شيء يكسر نشرة مطبوعة.')}</div></div>`;
+  <div class="rte-body" contenteditable="true" data-placeholder="${t('Write an announcement…','اكتب إعلاناً…')}">${body}</div>
+  <div class="rte-foot">${t('Use bold, underline, links, lists and emoji.','استخدم الغامق والتسطير والروابط واللوائح والرموز التعبيرية.')}</div></div>`;
 
 /* ---------------- menus ---------------- */
 export const filterMenu = (title, opts) => `<div class="menu" style="position:static;width:260px">
@@ -294,7 +284,7 @@ export const barChart = rows => `<div class="barchart">${rows.map(r => {
 }).join('')}</div>`;
 
 export function donut(segments, { size = 132 } = {}) {
-  const chartPalette = ['var(--primary)', 'var(--yellow)', 'var(--brown)', 'var(--blue-accent)'];
+  const chartPalette = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)'];
   segments = segments.map((segment, index) => ({ ...segment, color: chartPalette[index % chartPalette.length] }));
   const total = segments.reduce((a, s) => a + s.v, 0);
   const r = size / 2 - 11, c = 2 * Math.PI * r;
@@ -475,40 +465,46 @@ export function wire(host) {
     el.addEventListener('focus', show); el.addEventListener('blur', hide);
   });
 
-  /* dropzone: real files, validated, with progress to completion */
-  const takeFiles = (id, files) => {
-    const list = host.querySelector(`[data-files="${id}"]`); if (!list) return;
-    [...files].forEach(f => {
-      const okType = /\.(jpe?g|png|pdf)$/i.test(f.name) || /^image\/|pdf$/.test(f.type);
-      const tooBig = f.size > 10 * 1024 * 1024, mb = (f.size / 1048576).toFixed(1);
-      const row = document.createElement('div');
-      row.className = 'filerow' + (okType && !tooBig ? '' : ' err');
-      row.innerHTML = okType && !tooBig
-        ? `${icon('doc', 18, 'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${mb} MB · <span data-pct>0%</span></small>
-            <span class="progress" style="margin-top:6px"><i style="width:0%"></i></span></span>
-           <button class="iconbtn" data-rmfile aria-label="${t('Remove', 'إزالة')}">${icon('close', 16)}</button>`
-        : `${icon('warn', 18)}<span class="grow"><b>${esc(f.name)}</b><small>${tooBig
-            ? t('Larger than 10 MB. Try a smaller photo.', 'أكبر من ١٠ ميغابايت. جرّب صورة أصغر.')
-            : t('This type is not supported. Try JPG or PDF.', 'هذا النوع غير مدعوم. جرّب JPG أو PDF.')}</small></span>
-           <button class="btn btn-ghost btn-dense" data-rmfile>${t('Remove', 'إزالة')}</button>`;
-      list.append(row);
-      row.querySelector('[data-rmfile]').addEventListener('click', () => row.remove());
-      if (!okType || tooBig) return;
-      let pct = 0; const bar = row.querySelector('.progress i'), lab = row.querySelector('[data-pct]');
-      const timer = setInterval(() => {
-        pct = Math.min(100, pct + 12 + Math.random() * 18);
-        bar.style.width = pct + '%'; lab.textContent = Math.round(pct) + '%';
-        if (pct >= 100) { clearInterval(timer); lab.textContent = t('Uploaded', 'رُفع'); bar.parentElement.remove(); }
-      }, 160);
-    });
+  /* Files appear above the drop area immediately; success comes from the server. */
+  const listFor=id=>host.querySelector(`[data-files="${id}"]`);
+  const loadFiles=async id=>{
+    const list=listFor(id);if(!list?.dataset.uploadScope)return;
+    try{
+      const scope=list.dataset.uploadScope,owner=list.dataset.uploadOwner;
+      const data=await parishAPI(`files?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(owner)}`);
+      if(!list.isConnected)return;
+      list.innerHTML=data.files.map(f=>`<div class="filerow">${icon('doc',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${(f.size/1048576).toFixed(1)} MB · ${esc(f.created_at.slice(0,10))}</small></span>
+        <a class="btn btn-secondary btn-dense" href="/api/parishes/${encodeURIComponent(session.parishId)}/files/${encodeURIComponent(f.id)}" target="_blank" rel="noopener">${t('Open','فتح')}</a>
+        <button class="btn-icon" data-delete-file="${esc(f.id)}" aria-label="${t('Delete file','حذف الملف')}">${icon('trash',16)}</button></div>`).join('');
+      list.querySelectorAll('[data-delete-file]').forEach(button=>button.addEventListener('click',async()=>{
+        try{await parishAPI(`files/${encodeURIComponent(button.dataset.deleteFile)}`,'DELETE',{});await loadFiles(id);}
+        catch(error){toast(t('Could not delete file','تعذّر حذف الملف'),error.message,'danger');}
+      }));
+    }catch(error){list.innerHTML=`<p class="help help-error">${esc(error.message)}</p>`;}
   };
+  const takeFiles=async(id,files)=>{
+    const list=listFor(id);if(!list)return;
+    for(const f of files){
+      const supported=/\.(jpe?g|png|pdf)$/i.test(f.name),large=f.size>10_000_000;
+      const row=document.createElement('div');row.className='filerow'+(supported&&!large?'':' err');
+      row.innerHTML=`${icon(supported&&!large?'doc':'warn',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${large?t('File is larger than 10 MB','الملف أكبر من ١٠ ميغابايت'):!supported?t('Use JPG, PNG or PDF','استخدم JPG أو PNG أو PDF'):list.dataset.uploadScope?t('Uploading…','جارٍ الرفع…'):t('Selected for preview only','مختار للمعاينة فقط')}</small></span>`;
+      list.prepend(row);
+      if(!supported||large||!list.dataset.uploadScope)continue;
+      const bytes=new Uint8Array(await f.arrayBuffer());let binary='';
+      for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      try{
+        await parishAPI('files','POST',{scope:list.dataset.uploadScope,id:list.dataset.uploadOwner,name:f.name,data:btoa(binary)});
+        await loadFiles(id);toast(t('File uploaded','رُفع الملف'),f.name,'success');
+      }catch(error){row.classList.add('err');row.querySelector('small').textContent=error.message;}
+    }
+  };
+  host.querySelectorAll('[data-files]').forEach(list=>loadFiles(list.dataset.files));
   host.querySelectorAll('[data-drop]').forEach(d => {
     ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));
     ['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));
     d.addEventListener('drop', e => takeFiles(d.dataset.drop, e.dataTransfer.files));
   });
   host.querySelectorAll('[data-pick]').forEach(inp => inp.addEventListener('change', () => { takeFiles(inp.dataset.pick, inp.files); inp.value = ''; }));
-  host.querySelectorAll('[data-rmfile]').forEach(b => b.addEventListener('click', () => b.closest('.filerow')?.remove()));
 
   /* date picker: prev / next really change the month */
   host.querySelectorAll('.dp').forEach(wireDp);
@@ -518,6 +514,11 @@ export function wire(host) {
   host.querySelectorAll('[data-rte]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
   host.querySelectorAll('[data-rte]').forEach(b => b.addEventListener('click', () => {
     const body = b.closest('.rte')?.querySelector('[contenteditable]');
+    if(b.dataset.rte==='emoji'){
+      openPopover(b,`<div style="display:flex;gap:6px;padding:10px">${['🙏','❤️','✨','🎵','📅','😊'].map(value=>`<button class="btn btn-secondary btn-dense" data-emoji="${value}" aria-label="${value}">${value}</button>`).join('')}</div>`,
+        {width:310,onMount(pop){pop.querySelectorAll('[data-emoji]').forEach(option=>option.addEventListener('click',()=>{body?.focus();document.execCommand('insertText',false,option.dataset.emoji);closeMenu();}));}});
+      return;
+    }
     const cmd = { bold: 'bold', underline: 'underline', list: 'insertUnorderedList' }[b.dataset.rte];
     if (cmd) {
       if (body && !body.contains(getSelection().anchorNode)) {   // nothing selected in this editor yet: work at its end
@@ -531,7 +532,9 @@ export function wire(host) {
       <button class="btn btn-primary btn-dense" id="rtego" style="margin-inline-start:auto">${t('Add link', 'إضافة رابط')}</button></div></div>`,
       { width: 300, onMount(pop) {
         const inp = pop.querySelector('#rtel'); inp.focus();
-        const apply = () => { const url = inp.value.trim(); closeMenu(); if (!url || !range) return;
+        const apply = () => { const url = inp.value.trim();
+          if(!/^https?:\/\//i.test(url))return toast(t('Use an http or https link','استخدم رابط http أو https'),'','warning');
+          closeMenu(); if (!range) return;
           sel.removeAllRanges(); sel.addRange(range); document.execCommand('createLink', false, url); };
         pop.querySelector('#rtego').addEventListener('click', apply);
         inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } });

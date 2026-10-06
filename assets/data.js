@@ -628,10 +628,10 @@ export const RUN_LOG = [
 export const ATTENDANCE_SERIES = [268, 291, 254, 302, 288, 311, 276, 284];
 export const GIVING_SERIES = [5200, 6100, 4800, 7300, 6900, 8420, 7100, 8100, 6400, 7700, 9100, 8420];
 export const PAYMENT_MIX = [
-  { label:'Cash', labelAr:'نقداً', v:54, color:'#3D4161' },
-  { label:'OMT / Whish', labelAr:'OMT / ويش', v:30, color:'#8EC5F4' },
-  { label:'Card', labelAr:'بطاقة', v:13, color:'#DCEEFF' },
-  { label:'Bank transfer', labelAr:'تحويل مصرفي', v:3, color:'#9BC6EC' }
+  { label:'Cash', labelAr:'نقداً', v:54, color:'#233B32' },
+  { label:'OMT / Whish', labelAr:'OMT / ويش', v:30, color:'#9BAC9F' },
+  { label:'Card', labelAr:'بطاقة', v:13, color:'#EDF0E8' },
+  { label:'Bank transfer', labelAr:'تحويل مصرفي', v:3, color:'#9BAC9F' }
 ];
 
 /* ---------- 17 · security ---------- */
@@ -666,7 +666,7 @@ export const PERMISSIONS = [
   ['sacrament.sign','Sign a certificate','توقيع شهادة',['priest']],
   ['reservation.approve','Approve a reservation','الموافقة على حجز',['priest']],
   ['reservation.review','Review a reservation','مراجعة حجز',['priest','secretary']],
-  ['checkin.release','Release a child','تسليم طفل',['priest','secretary','volunteer']],
+  ['checkin.release','Release a child','تسليم طفل',['priest','secretary']],
   ['audit.view','View the audit trail','عرض سجل التدقيق',['priest']]
 ];
 

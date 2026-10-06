@@ -21,7 +21,7 @@ export function printSheet({ title, body, css = '', size = 'A4 portrait', margin
   doc.write(`<!doctype html><html lang="${esc(lang)}" dir="${esc(dir)}"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <link rel="stylesheet" href="${FONTS}"><style>@page{size:${size};margin:${margin}}
 *{box-sizing:border-box}
-html,body{margin:0;background:#FFFFFF;color:#3D4161;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+html,body{margin:0;background:#FFFFFF;color:#233B32;-webkit-print-color-adjust:exact;print-color-adjust:exact;
   font:400 11.5px/1.5 Inter,'IBM Plex Sans Arabic','Segoe UI',Arial,sans-serif}
 [lang=ar],:lang(ar){font-family:'IBM Plex Sans Arabic',Inter,'Segoe UI',Tahoma,Arial,sans-serif}
 .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}

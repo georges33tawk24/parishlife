@@ -17,6 +17,33 @@ import { PEOPLE, ARCHIVED, PHOTOS, HOUSEHOLDS, GROUPS, SACRAMENTS, PLEDGES, BATC
 
 const label = p => p?.lat || p?.ar || '';
 const relLabel = (m, h) => t(...F.RELS.find(r => r[0] === F.relOf(m, h)).slice(1));
+const occupationSuggestions = ['Accountant','Carpenter','Catechist','Electrician','Electrical engineer','Electrical technician',
+  'Healthcare worker','Nurse','Teacher','Social worker','Software engineer'];
+const occupationOptions = () => [...new Set([...occupationSuggestions,...Object.values(PERSON_EXTRA).map(x=>x.occupation).filter(Boolean)])].sort();
+const occupationField = (id,value='') => `<div class="formrow"><label class="label" for="${id}">${t('Line of work','المهنة')}</label>
+  <input class="input" id="${id}" list="${id}-options" value="${esc(value)}" maxlength="120" autocomplete="off" placeholder="${t('Start typing or enter your own','ابدأ بالكتابة أو أدخل مهنتك')}">
+  <datalist id="${id}-options">${occupationOptions().map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist></div>`;
+const skillOptions = () => [...new Set([...Object.values(PERSON_EXTRA).flatMap(x=>x.skills||[]),...VOLUNTEERS.flatMap(v=>v.skills||[])])].filter(Boolean).sort();
+function skillPicker(selected=[]) {
+  const options=[...new Set([...skillOptions(),...selected])].sort();
+  return `<div class="formrow"><label class="label" for="skill-search">${t('Skills','المهارات')}</label>
+    <input class="input" type="search" id="skill-search" placeholder="${t('Search existing skills','ابحث عن مهارة موجودة')}">
+    <div class="choice-grid skill-choices" style="max-height:180px;overflow:auto;margin-top:8px">${options.map(s=>`<label class="check" data-skill-choice><input type="checkbox" value="${esc(s)}" ${selected.includes(s)?'checked':''}><span>${esc(s)}</span></label>`).join('')}</div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="skill-other"><span>${t('Other skill','مهارة أخرى')}</span></label>
+    <input class="input" id="skill-custom" maxlength="80" placeholder="${t('Enter another skill','أدخل مهارة أخرى')}" style="margin-top:7px" disabled></div>`;
+}
+function wireSkillPicker(el) {
+  el.querySelector('#skill-search')?.addEventListener('input',e=>{
+    const q=e.target.value.trim().toLocaleLowerCase();
+    el.querySelectorAll('[data-skill-choice]').forEach(row=>{row.hidden=!row.textContent.toLocaleLowerCase().includes(q);});
+  });
+  el.querySelector('#skill-other')?.addEventListener('change',e=>{const custom=el.querySelector('#skill-custom');custom.disabled=!e.target.checked;if(e.target.checked)custom.focus();});
+}
+function selectedSkills(el) {
+  const selected=[...el.querySelectorAll('[data-skill-choice] input:checked')].map(x=>x.value);
+  const other=el.querySelector('#skill-other')?.checked?el.querySelector('#skill-custom').value.trim():'';
+  return [...new Set([...selected,...(other?[other]:[])])];
+}
 
 /* The household drawn as a family tree. Every member's relationship is read relative to the person
    it names ("Related to"), or to the head when it names no one, and turned into parent and partner
@@ -294,6 +321,7 @@ export function deleteGuard(p, { dry = false } = {}) {
 
 people.mount = host => {
   C.wire(host);
+  wireImport(host);
   host.querySelector('#people-export')?.addEventListener('click', peopleExport);
   host.querySelector('#people-directory')?.addEventListener('click', printPeopleDirectory);
   host.querySelectorAll('[data-delete-archived]').forEach(button=>button.addEventListener('click',()=>{
@@ -388,44 +416,77 @@ function duplicates() {
 }
 
 /* ---------------- import ---------------- */
+let importDraft = null;
+const importFields = [['lat','English name'],['ar','Arabic name'],['phone','Phone'],['born','Birth date'],['town','Town'],['rite','Rite'],['occupation','Line of work']];
+function parseCsv(source) {
+  const rows=[];let row=[],cell='',quoted=false;
+  for(let i=0;i<source.length;i++){
+    const ch=source[i];
+    if(ch==='"') {if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}
+    else if(ch===','&&!quoted){row.push(cell);cell='';}
+    else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell='';}
+    else cell+=ch;
+  }
+  if(quoted)throw new Error(t('Unclosed quotation mark in CSV','علامة اقتباس غير مغلقة في CSV'));
+  row.push(cell);if(row.some(x=>x.trim()))rows.push(row);
+  return rows;
+}
+function importMapping(header){
+  const normalized=header.toLowerCase().replace(/[^a-z]/g,'');
+  return ({englishname:'lat',name:'lat',arabicname:'ar',phone:'phone',phonenumber:'phone',birthdate:'born',dateofbirth:'born',town:'town',rite:'rite',lineofwork:'occupation',occupation:'occupation'})[normalized]||'';
+}
+function importReview(){
+  if(!importDraft)return [];
+  const used=new Set();
+  return importDraft.rows.map((row,index)=>{
+    const record={};importDraft.map.forEach((field,col)=>{if(field)record[field]=(row[col]||'').trim();});
+    const errors=[];
+    if(!record.lat||!record.ar)errors.push(t('Both names required','الاسمان مطلوبان'));
+    if(record.born&&!/^\d{4}-\d{2}-\d{2}$/.test(record.born))errors.push(t('Birth date must be YYYY-MM-DD','تاريخ الولادة يجب أن يكون YYYY-MM-DD'));
+    const key=`${(record.lat||'').toLowerCase()}|${record.born||''}`;
+    if(used.has(key)||PEOPLE.some(p=>p.lat.toLowerCase()===(record.lat||'').toLowerCase()&&(!record.born||p.born===record.born)))errors.push(t('Possible duplicate','سجل محتمل مكرّر'));
+    used.add(key);
+    return {line:index+2,record,errors};
+  });
+}
 function importView() {
-  const I = IMPORT_PREVIEW;
-  return `<div style="margin-top:20px" class="splitview">
-    <div class="stack" style="gap:16px">
-      ${panel(t('1 · Choose the file', '١ · اختر الملف'), C.dropzone('imp'))}
-      ${panel(t('2 · Map the columns', '٢ · طابِق الأعمدة'), `
-        ${table({
-          cols: [{ label: t('Column in your file', 'العمود في ملفك') }, { label: t('Maps to', 'يقابل') }, { label: '', cls: 'shrink' }],
-          rows: I.cols.map(([en, ar, st]) => ({ cells: [
-            `<span class="mono">${esc(en)}</span>`,
-            st === 'skip' ? `<span class="dim">${t('Not imported — ParishLife has no postal code field', 'لا يُستورَد — لا حقل رمز بريدي')}</span>`
-                          : `<select class="select" style="min-height:32px;font-size:13px"><option>${esc(t(en, ar))}</option></select>`,
-            st === 'ok' ? pill(t('Ready', 'جاهز'), 'success') : st === 'warn' ? pill(t('Check', 'تحقّق'), 'warning') : pill(t('Skip', 'تخطّي'))
-          ]}))
-        })}`)}
-      ${panel(t('3 · Review what will happen', '٣ · راجع ما سيحدث'), `
-        <div class="stats" style="grid-template-columns:repeat(3,1fr)">
-          ${stat(t('Will import', 'سيُستورَد'), I.ok, t('new records', 'سجلاً جديداً'))}
-          ${stat(t('Need a look', 'يحتاج مراجعة'), I.warn, t('imported with a flag', 'يُستورَد مع علامة'))}
-          ${stat(t('Blocked', 'موقوف'), I.err, t('fix the file and retry', 'أصلح الملف وأعد المحاولة'))}
-        </div>
-        <div class="divider"></div>
-        ${I.issues.map(([r, ra, w, wa]) => `<div class="listrow" style="padding-inline:0">
-          <span class="mono dim" style="width:64px;flex:none">${esc(t(r, ra))}</span>
-          <span class="grow">${esc(t(w, wa))}</span></div>`).join('')}`)}
-    </div>
-    <div class="sidecol">
-      ${panel(t('Progress', 'التقدّم'), `
-        <div class="row" style="gap:10px"><span class="spinner"></span>
-          <span class="t-ui">${t('Importing members — step 3 of 4', 'استيراد الأعضاء — الخطوة ٣ من ٤')}</span></div>
-        <span class="progress" style="margin-top:12px"><i style="width:60%"></i></span>
-        <span class="t-caption dim mono" style="display:block;margin-top:6px">248 / 412</span>`)}
-      ${panel(t('Rules', 'القواعد'), `<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px">
-        ${[[t('Every row is validated before anything is written.', 'يُتحقَّق من كل صف قبل الكتابة.'), 'shield'],
-           [t('Rows that look like an existing record are flagged, never merged.', 'الصفوف الشبيهة بسجل قائم تُعلَّم ولا تُدمج.'), 'people'],
-           [t('The whole import can be rolled back for 24 hours.', 'يمكن التراجع عن الاستيراد كاملاً خلال ٢٤ ساعة.'), 'clock']]
-          .map(([x, i]) => `<li class="row" style="gap:10px;align-items:flex-start">${icon(i, 17, 'dimmer')}<span class="t-caption">${esc(x)}</span></li>`).join('')}</ul>`)}
-    </div></div>`;
+  const review=importReview(),valid=review.filter(x=>!x.errors.length),invalid=review.filter(x=>x.errors.length);
+  const duplicates=importDraft?.map.filter(Boolean).filter((x,i,a)=>a.indexOf(x)!==i)||[];
+  return `<div class="stack" style="margin-top:20px;gap:16px">
+    ${panel(t('1 · Choose a CSV file','١ · اختر ملف CSV'),`<input class="input" type="file" id="people-import-file" accept=".csv,text/csv" aria-label="${t('Choose CSV file','اختر ملف CSV')}">
+      ${importDraft?`<p class="help">${esc(importDraft.name)} · ${importDraft.rows.length} ${t('data rows','صفوف بيانات')}</p>`:`<p class="help">${t('Use a CSV file with column headings. Nothing is saved until you review and confirm.','استخدم ملف CSV بعناوين أعمدة. لا يُحفظ شيء قبل المراجعة والتأكيد.')}</p>`}`)}
+    ${importDraft?panel(t('2 · Map columns','٢ · طابق الأعمدة'),table({cols:[{label:t('File column','عمود الملف')},{label:t('Save as','احفظ باسم')}],rows:importDraft.header.map((name,i)=>({cells:[esc(name),`<select class="select" data-import-map="${i}" aria-label="${t('Map column','طابق العمود')} ${esc(name)}"><option value="">${t('Skip','تخطّ')}</option>${importFields.map(([key,label])=>`<option value="${key}" ${importDraft.map[i]===key?'selected':''}>${t(label,label)}</option>`).join('')}</select>`]}))}),{tight:true}):''}
+    ${importDraft?panel(t('3 · Review and save','٣ · راجع واحفظ'),`${duplicates.length?`<p class="alert alert-warning">${t('A destination field is mapped more than once. Choose each field once.','حقل الهدف محدّد أكثر من مرة. اختر كل حقل مرة واحدة.')}</p>`:''}
+      <div class="stats">${stat(t('Ready','جاهز'),valid.length)}${stat(t('Needs correction','يحتاج تصحيحاً'),invalid.length)}</div>
+      ${table({cols:[{label:t('Row','الصف')},{label:t('English name','الاسم الإنكليزي')},{label:t('Arabic name','الاسم العربي')},{label:t('Result','النتيجة')}],rows:review.slice(0,100).map(item=>({cells:[String(item.line),esc(item.record.lat||'—'),esc(item.record.ar||'—'),item.errors.length?esc(item.errors.join(' · ')):pill(t('Ready','جاهز'),'success')]}))})}
+      ${review.length>100?`<p class="help">${t('Showing the first 100 rows; every row is validated before save.','تظهر أول ١٠٠ صف؛ يُفحص كل صف قبل الحفظ.')}</p>`:''}
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" id="people-import-save" ${!valid.length||invalid.length||duplicates.length?'disabled':''}>${t('Import reviewed records','استيراد السجلات المراجعة')}</button></div>`,{tight:true}):''}
+    ${importDraft?.result?`<p class="alert alert-success">${esc(importDraft.result)}</p>`:''}
+  </div>`;
+}
+function wireImport(host){
+  host.querySelector('#people-import-file')?.addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    if(file.size>2_000_000)return toast(t('File exceeds 2 MB','الملف أكبر من ٢ ميغابايت'),'','warning');
+    try {const [header,...rows]=parseCsv((await file.text()).replace(/^\uFEFF/,''));
+      if(!header?.length||!rows.length)throw new Error(t('CSV has no data rows','ملف CSV بلا صفوف بيانات'));
+      if(rows.length>2000)throw new Error(t('Import at most 2,000 people at a time','استورد حتى ٢٠٠٠ شخص في المرة'));
+      importDraft={name:file.name,header,rows,map:header.map(importMapping),result:''};bus.refresh();
+    }catch(error){toast(t('Cannot read CSV','تعذّرت قراءة CSV'),error.message,'danger');}
+  });
+  host.querySelectorAll('[data-import-map]').forEach(select=>select.addEventListener('change',()=>{importDraft.map[Number(select.dataset.importMap)]=select.value;bus.refresh();}));
+  host.querySelector('#people-import-save')?.addEventListener('click',async button=>{
+    const review=importReview();if(!review.length||review.some(x=>x.errors.length))return;
+    if(new Set(importDraft.map.filter(Boolean)).size!==importDraft.map.filter(Boolean).length)return;
+    const started=Date.now();
+    review.forEach((item,i)=>{const r=item.record,id=`p${(started+i).toString(36)}`;
+      PEOPLE.push({id,lat:r.lat,ar:r.ar,phone:r.phone||'—',born:r.born||'',town:r.town||'',townAr:'',rite:r.rite||'Maronite',status:'member',hh:null,tags:[]});
+      PERSON_EXTRA[id]={occupation:r.occupation||'',skills:[],dates:[]};
+    });
+    if(!await persist())return;
+    D.PARISH.people=PEOPLE.length;importDraft={...importDraft,rows:[],result:`${review.length} ${t('people imported','شخصاً استُوردوا')}`};
+    bus.refresh();toast(t('Import complete','اكتمل الاستيراد'),`${review.length} ${t('records','سجلات')}`,'success');
+  });
 }
 
 /* ---------------- archived ---------------- */
@@ -452,7 +513,7 @@ function archived() {
 /* ---------------- person detail ---------------- */
 const PTABS = pid => [['', 'Profile', 'الملف'], ['family', 'Family', 'العائلة'], ['groups', 'Groups', 'المجموعات'], ['sacraments', 'Sacraments', 'الأسرار', SACRAMENTS.filter(x => x.person === pid).length],
                ['attendance', 'Group attendance', 'حضور المجموعات'], ['giving', 'Giving', 'التقدمات'],
-               ['notes', 'Notes', 'ملاحظات'], ['files', 'Files', 'ملفات'], ['consent', 'Consent', 'الموافقات']];
+               ['activity', 'Activity', 'النشاط'], ['notes', 'Notes', 'ملاحظات'], ['files', 'Files', 'ملفات'], ['consent', 'Consent', 'الموافقات']];
 
 export function personView(id, tab = '') {
   const p = person(id);
@@ -489,6 +550,7 @@ export function personView(id, tab = '') {
           <dt>${t('Rite', 'الطقس')}</dt><dd>${esc(riteLabel(p.rite))}</dd>
           <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono" dir="ltr">${p.phone === '—' ? '—' : '+961 ' + p.phone}</dd>
           <dt>${t('Address', 'العنوان')}</dt><dd>${house ? esc(t(house.address, house.addressAr)) : '—'}</dd>
+          <dt>${t('Line of work','المهنة')}</dt><dd>${esc(x.occupation||'—')}</dd>
           <dt>${t('Language', 'اللغة')}</dt><dd>${x.lang === 'ar' ? t('Arabic', 'العربية') : t('English', 'الإنكليزية')}</dd>
           <dt>${t('Reach them on', 'التواصل عبر')}</dt><dd>${esc({ whatsapp: 'WhatsApp', sms: 'SMS', email: t('Email', 'بريد إلكتروني') }[x.channel] || 'WhatsApp')}</dd>
           <dt>${t('Blood type', 'زمرة الدم')}</dt><dd class="mono">${esc(x.blood || '—')}</dd>
@@ -555,15 +617,24 @@ export function personView(id, tab = '') {
 
     groups: () => {
       const memberships = new Set(Object.entries(GROUP_DETAIL).filter(([, d]) => d.roster?.some(r => r.p === p.id)).map(([gid]) => gid));
-      return panel(t('Parish groups', 'مجموعات الرعية'), `<div class="row" style="justify-content:flex-end"><button class="btn btn-secondary btn-dense" id="edit-person-groups">${icon('edit',15)}${t('Edit memberships','تعديل العضويات')}</button></div>
-        ${GROUPS.filter(g=>memberships.has(g.id)).map(g=>`<div class="listrow"><b class="grow">${esc(t(g.name,g.ar))}</b><span class="dim">${esc(t(g.cat,g.catAr))}</span></div>`).join('') || `<p class="dim">${t('No group memberships.','لا عضوية في مجموعات.')}</p>`}`, {tight:true});
+      return panel(t('Parish groups', 'مجموعات الرعية'),
+        GROUPS.filter(g=>memberships.has(g.id)).map(g=>`<a class="listrow" href="#/groups/${esc(g.id)}"><b class="grow">${esc(t(g.name,g.ar))}</b><span class="dim">${esc(t(g.cat,g.catAr))}</span></a>`).join('') || `<p class="dim">${t('No group memberships.','لا عضوية في مجموعات.')}</p>`,
+        {tight:true,more:`<button class="btn btn-secondary btn-dense" id="edit-person-groups">${icon('edit',15)}${t('Edit memberships','تعديل العضويات')}</button>`});
     },
 
     attendance: () => {
       const entries=GROUPS.flatMap(g=>(GROUP_DETAIL[g.id]?.meetings||[]).filter(m=>m.attendance?.[p.id]).map(m=>({group:g,meeting:m,mark:m.attendance[p.id]})));
       return panel(t('Group meeting attendance','حضور اجتماعات المجموعات'), entries.length ? table({cols:[{label:t('Group','المجموعة')},{label:t('Meeting','الاجتماع')},{label:t('Date','التاريخ')},{label:t('Attendance','الحضور')}],
-        rows:entries.map(({group,meeting,mark})=>({cells:[esc(t(group.name,group.ar)),esc(t(meeting.title||meeting.topic||'Meeting',meeting.titleAr||meeting.topicAr||'اجتماع')),fmtDate(meeting.date||meeting.d),status(mark)]}))})
+        rows:entries.map(({group,meeting,mark})=>({cells:[`<a href="#/groups/${esc(group.id)}">${esc(t(group.name,group.ar))}</a>`,`<a href="#/groups/${esc(group.id)}/meetings">${esc(t(meeting.title||meeting.topic||'Meeting',meeting.titleAr||meeting.topicAr||'اجتماع'))}</a>`,fmtDate(meeting.date||meeting.d),status(mark)]}))})
         : empty('groups',t('No group attendance recorded','لا حضور مجموعات مسجّلاً'),t('Attendance is recorded only at group meetings and activities.','يسجّل الحضور فقط في اجتماعات المجموعات وأنشطتها.')),{tight:true});
+    },
+
+    activity: () => {
+      const entries=[
+        ...SACRAMENTS.filter(s=>s.person===p.id).map(s=>({date:s.date,label:t('Sacrament recorded','سُجّل سرّ'),detail:`${s.kind} · ${s.reg}`})),
+        ...GROUPS.flatMap(g=>(GROUP_DETAIL[g.id]?.meetings||[]).filter(m=>m.attendance?.[p.id]).map(m=>({date:m.date||m.d,label:t('Meeting attendance','حضور اجتماع'),detail:`${t(g.name,g.ar)} · ${m.attendance[p.id]}`})))
+      ].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+      return panel(t('Recorded activity','النشاط المسجّل'),entries.length?table({cols:[{label:t('Date','التاريخ')},{label:t('Activity','النشاط')},{label:t('Detail','التفاصيل')}],rows:entries.map(e=>({cells:[fmtDate(e.date),esc(e.label),esc(e.detail)]}))}):empty('notes',t('No linked activity yet','لا نشاط مرتبط بعد'),t('Sacraments and recorded group attendance appear here.','تظهر هنا الأسرار وحضور المجموعات المسجّل.')),{tight:true});
     },
 
     giving: () => {
@@ -595,12 +666,8 @@ export function personView(id, tab = '') {
       NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`)}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Pastoral Notes.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
 
     files: () => `<div style="max-width:720px">${panel(t('Attachments', 'المرفقات'), `
-      ${['Baptism extract 2019.pdf', 'ID card scan.jpg', 'Consent form 2026.pdf'].map((f, i) => `
-        <div class="listrow" style="padding-inline:0">${icon('doc', 17, 'dimmer')}
-          <span class="grow"><b>${esc(f)}</b><small class="mono">${['240 KB', '1.1 MB', '86 KB'][i]} · ${['2019-06-12', '2024-02-08', '2026-03-30'][i]}</small></span>
-          ${i === 2 ? pill(t('Restricted', 'مقيّد'), 'warning', 'lock') : ''}
-          ${C.iconBtn('export', t('Open', 'فتح'), `data-act="doc:${f}"`)}</div>`).join('')}
-      <div class="divider"></div>${C.dropzone('pfiles')}`)}</div>`,
+      <p class="help" style="margin-bottom:12px">${t('Only real uploaded files appear here. Access and deletion are logged.','تظهر هنا الملفات المرفوعة فعلياً فقط. يُسجّل فتحها وحذفها.')}</p>
+      ${C.dropzone('pfiles',{scope:'person',ownerId:p.id})}`)}</div>`,
 
     consent: () => `<div style="max-width:720px">${panel(t('Consent', 'الموافقات'), `
       <div class="stack" style="gap:12px">
@@ -641,7 +708,7 @@ function printPeopleDirectory() {
   if(!listed.length)return toast(t('Nobody to print yet','لا أحد للطباعة بعد'),t('Only people who opted in to the directory are printed.','لا يُطبع إلا من وافق على الإدراج في الدليل.'),'warning');
   /* printed from a hidden frame, so the page stays where it is and no new tab opens */
   printSheet({ title:t('Parish people directory','دليل مؤمني الرعية'), margin:'14mm',
-    css:'h1{font:600 20px/28px Inter,sans-serif;margin:0 0 4px}p{margin:0 0 14px;color:#765039}table{width:100%;border-collapse:collapse}th,td{text-align:start;padding:7px 9px;border-bottom:1px solid #DCEEFF}th{background:#EAF4FF;font:600 10px/14px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em}',
+    css:'h1{font:600 20px/28px Inter,sans-serif;margin:0 0 4px}p{margin:0 0 14px;color:#607068}table{width:100%;border-collapse:collapse}th,td{text-align:start;padding:7px 9px;border-bottom:1px solid #EDF0E8}th{background:#F7F7F2;font:600 10px/14px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em}',
     body:`<h1>${t('Parish people directory','دليل مؤمني الرعية')}</h1><p>${t('Only people who opted in are included.','يشمل فقط من وافقوا على الإدراج.')} · ${listed.length}</p>
     <table><thead><tr>${[t('English name','الاسم بالإنكليزية'),t('Arabic name','الاسم بالعربية'),t('Household','العائلة'),t('Town','البلدة'),t('Phone','الهاتف')].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>
     ${listed.map(p=>{const h=hh(p.hh);return `<tr><td dir="auto">${esc(p.lat)}</td><td dir="auto">${esc(p.ar)}</td><td>${esc(h?t(h.name,h.ar||h.name):'')}</td><td>${esc(t(p.town||'',p.townAr||p.town||''))}</td><td dir="ltr">${esc(p.phone==='—'?'':p.phone)}</td></tr>`;}).join('')}</tbody></table>` });
@@ -678,17 +745,18 @@ function editProfileExtra(id) {
   const x=PERSON_EXTRA[id]||{};
   const dates=x.dates||[];
   openModal({title:t('Skills and important dates','المهارات والتواريخ المهمّة'),
-    body:`${C.field({label:t('Skills, separated by commas','المهارات، مفصولة بفواصل'),id:'extra-skills',value:(x.skills||[]).join(', ')})}
+    body:`${skillPicker(x.skills||[])}${occupationField('extra-occupation',x.occupation||'')}
       <div class="stack" id="extra-dates">${[...dates, ['', '', '']].map(([en,ar,d],i)=>`<div class="formgrid" data-date-row>
       ${C.field({label:t('Date label (English)','تسمية التاريخ (إنكليزي)'),value:en||'',id:`extra-en-${i}`})}
       ${C.field({label:t('Date label (Arabic)','تسمية التاريخ (عربي)'),value:ar||'',id:`extra-ar-${i}`})}
       ${C.field({label:t('Date','التاريخ'),type:'date',value:d||'',id:`extra-date-${i}`})}</div>`).join('')}</div>`,
     foot:`<button class="btn btn-secondary" data-close>${t('Cancel','إلغاء')}</button><button class="btn btn-primary" id="extra-save">${t('Save','حفظ')}</button>`,
-    onMount(el){el.querySelector('#extra-save').addEventListener('click',async()=>{
-      const skills=el.querySelector('#extra-skills').value.split(',').map(s=>s.trim()).filter(Boolean);
+    onMount(el){wireSkillPicker(el);el.querySelector('#extra-save').addEventListener('click',async()=>{
+      const skills=selectedSkills(el);
+      const occupation=el.querySelector('#extra-occupation').value.trim();
       const nextDates=[...el.querySelectorAll('[data-date-row]')].map(row=>[...row.querySelectorAll('input')].map(i=>i.value.trim())).filter(([en,ar,d])=>en||ar||d);
       if(nextDates.some(([en,ar,d])=>!en||!d))return toast(t('Complete each date label and date','أكمل تسمية كل تاريخ وتاريخه'),'','warning');
-      PERSON_EXTRA[id]={...x,skills,dates:nextDates};
+      PERSON_EXTRA[id]={...x,skills,occupation,dates:nextDates};
       if(!await persist())return;
       closeOverlays();bus.refresh();toast(t('Profile details saved','حُفظت تفاصيل الملف'),'','success');
     });}
@@ -751,13 +819,17 @@ export function householdView(id = '') {
     t('This household may have been removed.', 'ربما أزيلت هذه العائلة.'),
     `<a class="btn btn-primary" href="#/households">${t('Back to households', 'العودة إلى العائلات')}</a>`);
   const members = h.members.map(person).filter(Boolean);
+  const view = S.ui.householdDetailView || 'both';
   return pageHead({
     crumbs: [{ label: t('Households', 'العائلات'), href: '#/households' }, { label: t(h.name, h.ar) }],
     title: t(h.name, h.ar),
     sub: t(`${members.length} household members`, `${members.length} أفراد`),
     actions: CR.recBtn('household', h.id)
-  }) + `<div class="splitview"><div class="stack" style="gap:16px">
-    ${panel(t('Members and relationships', 'الأفراد وصلاتهم'), members.map(m =>
+  }) + `<div class="toolbar" style="margin:18px 0"><span class="seg" role="group" aria-label="${t('Household view','عرض العائلة')}">
+    ${[['list','List','قائمة'],['tree','Tree','شجرة'],['both','Both','كلاهما']].map(([key,en,ar])=>`<button data-hh-detail-view="${key}" aria-pressed="${view===key}">${t(en,ar)}</button>`).join('')}</span></div>
+    <div class="splitview"><div class="stack" style="gap:16px">
+    ${view==='list'?'':panel(t('Family tree','شجرة العائلة'),familyTree(h,h.head))}
+    ${view==='tree'?'':panel(t('Members and relationships', 'الأفراد وصلاتهم'), members.map(m =>
       `<a class="listrow" href="#/person/${m.id}">${who(m)}<span class="grow"></span><span class="dim">${esc(relLabel(m, h))}</span></a>`).join('') ||
       empty('family', t('No members', 'لا أفراد'), t('Add a member from a person record.', 'أضف فرداً من سجلّه.')), { tight: true })}
     </div>
@@ -767,7 +839,7 @@ export function householdView(id = '') {
       <dt>${t('Address', 'العنوان')}</dt><dd>${esc(t(h.address, h.addressAr))}</dd>
       <dt>${t('Town', 'البلدة')}</dt><dd>${esc(t(h.town, h.townAr))}</dd></dl>`)}</div></div>`;
 }
-householdView.mount = host => { C.wire(host); };
+householdView.mount = host => { C.wire(host);host.querySelectorAll('[data-hh-detail-view]').forEach(button=>button.addEventListener('click',()=>{S.ui.householdDetailView=button.dataset.hhDetailView;bus.refresh();})); };
 
 /* ---------------- new-person drawer ---------------- */
 export function newPersonDrawer() {
@@ -779,6 +851,7 @@ export function newPersonDrawer() {
            'الاسمان مطلوبان. الاسم العربي هو ما تطبعه الشهادة.'),
     body: `${C.namePair()}${C.riteSelect()}${C.phoneField({ id: 'newphone', value:'', required:false })}
       <div class="formgrid">${C.field({ label: t('Date of birth', 'تاريخ الولادة'), type: 'date', id:'newborn' })}</div>
+      ${occupationField('newoccupation')}
       <div class="divider"></div>
       <h4 class="t-ui" style="margin-bottom:12px">${t('Address', 'العنوان')}</h4>
       ${C.addressCascade()}
@@ -817,6 +890,7 @@ export function newPersonDrawer() {
         PEOPLE.unshift(rec);
         const announcement=!!el.querySelector('#announce-optin')?.checked,directory=!!el.querySelector('#directory-optin')?.checked;
         PERSON_EXTRA[id]={address,directory,blood:el.querySelector('#newblood')?.value||'',lang:el.querySelector('#newlang')?.value||'ar',
+          occupation:el.querySelector('#newoccupation')?.value.trim()||'',
           channel:announcement?'whatsapp':'',skills:[],dates:[],consent:[
             ['Parish announcements on WhatsApp','إعلانات الرعية على واتساب',announcement],
             ['Printed parish directory','الدليل المطبوع',directory],

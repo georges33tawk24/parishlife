@@ -71,6 +71,7 @@ const STATUS = {
   member:        ['Member', 'منتسب', 'success', 'st-ok'],
   ready:         ['Ready', 'جاهز', 'success', 'st-ok'],
   completed:     ['Completed', 'مكتمل', 'success', 'st-ok'],
+  celebrated:    ['Celebrated', 'تمّ الاحتفال', 'success', 'st-ok'],
   open:          ['Open', 'مفتوحة', 'info', 'st-open'],
   requested:     ['Request received', 'استُلم الطلب', 'warning', 'st-review'],
   'office-reviewed': ['Office reviewed', 'راجعه المكتب', 'warning', 'st-review'],

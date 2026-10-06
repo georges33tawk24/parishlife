@@ -14,18 +14,22 @@ import hashlib
 import hmac
 import http.cookies
 import http.server
+import io
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import sqlite3
 import time
-from urllib.parse import urlsplit
+import zipfile
+import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit, parse_qs, quote
 
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'var' / 'parishlife.sqlite3'
 GEOGRAPHY = json.loads((ROOT / 'backend' / 'geography.json').read_text(encoding='utf-8'))['governorates']
-ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'volunteer', 'member'}
+ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'}
 CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
@@ -271,7 +275,15 @@ def init_db():
           parish_id TEXT NOT NULL REFERENCES parishes(id), user_id TEXT NOT NULL REFERENCES users(id),
           kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, route TEXT NOT NULL,
           created_at TEXT NOT NULL, read_at TEXT);
+        CREATE TABLE IF NOT EXISTS uploaded_files(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
+          scope TEXT NOT NULL, owner_id TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL,
+          size INTEGER NOT NULL, data BLOB NOT NULL, uploaded_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS uploaded_files_owner ON uploaded_files(parish_id,scope,owner_id);
         ''')
+        # Keep legacy account IDs for audit/history, but remove the old
+        # volunteer-only login and revoke any sessions it already opened.
+        c.execute("UPDATE users SET role='disabled' WHERE role='volunteer'")
+        c.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role='disabled')")
         if 'assigned_to' not in {row['name'] for row in c.execute('PRAGMA table_info(member_concerns)')}:
             c.execute('ALTER TABLE member_concerns ADD COLUMN assigned_to TEXT REFERENCES users(id)')
         c.execute("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')")
@@ -339,12 +351,30 @@ def access(c, u, pid):
     require(p is not None and (u['role'] == 'bishop' or c.execute('SELECT 1 FROM assignments WHERE user_id=? AND parish_id=?', (u['id'], pid)).fetchone()), 'This parish is not assigned to your account.', 403)
 
 
+def file_access(c, u, pid, scope, owner_id, write=False):
+    require(scope in {'group', 'person'}, 'Invalid file owner.')
+    row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
+    require(row is not None, 'Parish not found.', 404)
+    state = json.loads(row['data'])
+    if scope == 'person':
+        require(any(person['id'] == owner_id for person in state['PEOPLE'] + state['ARCHIVED']), 'Person not found.', 404)
+        require(u['role'] in {'priest', 'secretary'} or not write and u['role'] == 'member' and u['person_id'] == owner_id,
+                'Person attachments are restricted.', 403)
+    else:
+        group = next((item for item in state['GROUPS'] if item['id'] == owner_id), None)
+        require(group is not None, 'Group not found.', 404)
+        permitted = u['role'] in {'priest', 'secretary'} or u['role'] == 'leader' and u['person_id'] in {group.get('leader'), group.get('assistant')}
+        if not write and u['role'] == 'member':
+            permitted = any(item.get('p') == u['person_id'] for item in state['GROUP_DETAIL'].get(owner_id, {}).get('roster', []))
+        require(permitted, 'Group files are outside your scope.', 403)
+
+
 def parishes(c, u):
     rows = c.execute('SELECT * FROM parishes WHERE diocese=?', (u['diocese'],)).fetchall()
     assigned = {r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (u['id'],))}
     role_names = {'bishop': ('Archdiocese oversight', 'إشراف الأبرشية'), 'priest': ('Assigned parish priest', 'كاهن معيّن'),
                   'secretary': ('Parish secretary', 'أمانة سرّ الرعية'), 'treasurer': ('Parish treasurer', 'أمين صندوق الرعية'),
-                  'leader': ('Ministry leader', 'مسؤول خدمة'), 'volunteer': ('Volunteer', 'متطوّع'),
+                  'leader': ('Ministry leader', 'مسؤول خدمة'),
                   'member': ('Ministry member', 'عضو خدمة')}
     result = []
     for r in rows:
@@ -373,11 +403,42 @@ def oversight(c, u, pid=None):
         if pid:
             people = {p['id']: p for p in d['PEOPLE'] + d['ARCHIVED']}
             name = lambda person_id: {key: people.get(person_id, {}).get(key, '') for key in ('lat', 'ar')}
-            item['people'] = [dict(id=p['id'], lat=p['lat'], ar=p['ar'], status=p.get('status', ''), household=p.get('hh')) for p in d['PEOPLE']]
-            item['records'] = [dict(id=s['id'], reference=s['reg'], kind=s['kind'], status=s['status'], date=s['date'], person=name(s['person'])) for s in d['SACRAMENTS']]
+            households = {h['id']: h for h in d['HOUSEHOLDS']}
+            item['people'] = [dict(id=p['id'], lat=p['lat'], ar=p['ar'], status=p.get('status', ''),
+                                   town=p.get('town', ''), townAr=p.get('townAr', ''), rite=p.get('rite', ''),
+                                   household={k: households.get(p.get('hh'), {}).get(k, '') for k in ('name', 'ar')},
+                                   groups=[dict(id=g['id'], name=g['name'], ar=g.get('ar', '')) for g in d['GROUPS']
+                                           if any(r.get('p') == p['id'] for r in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', []))])
+                              for p in d['PEOPLE']]
+            item['records'] = [dict(id=s['id'], reference=s.get('reg', ''), kind=s['kind'], status=s['status'],
+                                    date=s.get('date', ''), personId=s['person'], person=name(s['person']))
+                               for s in d['SACRAMENTS']]
             item['events'] = [dict(id=e['id'], title=e.get('title', ''), titleAr=e.get('titleAr', ''), date=e.get('d', e.get('date', '')), time=e.get('time', e.get('t', '')), kind=e.get('kind', ''), venue=e.get('venue', '')) for e in d['EVENTS']]
-            item['groups'] = [dict(id=g['id'], name=g['name'], ar=g.get('ar', ''), members=len(d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])), meetings=len(d['GROUP_DETAIL'].get(g['id'], {}).get('meetings', []))) for g in d['GROUPS']]
-            item['activity'] = [dict(at=r['at'], action=r['action']) for r in c.execute('SELECT at,action FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 50', (pid,))]
+            item['groups'] = []
+            for g in d['GROUPS']:
+                detail = d['GROUP_DETAIL'].get(g['id'], {})
+                meetings, present, recorded = [], 0, 0
+                for m in detail.get('meetings', []):
+                    marks = list(m.get('attendance', {}).values())
+                    if marks:
+                        came = sum(mark == 'present' for mark in marks)
+                        marked = sum(mark in {'present', 'absent', 'excused'} for mark in marks)
+                    elif m.get('done'):
+                        came = int(m.get('present') or 0)
+                        marked = came + len(m.get('absent', []))
+                    else:
+                        came = marked = 0
+                    present += came; recorded += marked
+                    meetings.append(dict(id=m.get('id', ''), title=m.get('title') or m.get('topic') or g['name'],
+                                         date=m.get('d', ''), time=m.get('t', ''), present=came, recorded=marked))
+                item['groups'].append(dict(id=g['id'], name=g['name'], ar=g.get('ar', ''),
+                                           members=len(detail.get('roster', [])), meetings=meetings,
+                                           attendance=dict(present=present, recorded=recorded,
+                                                           percentage=round(100 * present / recorded) if recorded else None),
+                                           roster=[dict(id=r['p'], **name(r['p'])) for r in detail.get('roster', [])]))
+            actors = {r['id']: r['name'] for r in c.execute('SELECT id,name FROM users WHERE diocese=?', (u['diocese'],))}
+            item['activity'] = [dict(at=r['at'], action=r['action'], actor=actors.get(r['actor'], 'System'))
+                                for r in c.execute('SELECT at,action,actor FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 50', (pid,))]
         result.append(item)
     require(not pid or result, 'Parish not found in your archdiocese.', 404)
     return result[0] if pid else result
@@ -407,7 +468,7 @@ def visible(c, u, pid, d):
     if u['role'] == 'treasurer':
         for k in ('SACRAMENTS', 'CORRECTIONS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'PRAYERS', 'INCIDENTS', 'PICKUP'):
             d[k] = []
-    if u['role'] in {'leader', 'volunteer'}:
+    if u['role'] == 'leader':
         gs = {g['id'] for g in d['GROUPS'] if g.get('leader') == u['person_id'] or g.get('assistant') == u['person_id']}
         ids = ({u['person_id']}
                | {r['p'] for g in gs for r in d['GROUP_DETAIL'].get(g, {}).get('roster', [])}
@@ -438,10 +499,10 @@ def visible(c, u, pid, d):
         d['REGISTRATIONS'] = [form for form in d['REGISTRATIONS'] if form.get('eventId') in allowed_events]
         allowed_forms = {form['id'] for form in d['REGISTRATIONS']}
         d['REGISTRANTS'] = [row for row in d['REGISTRANTS'] if row.get('registrationId') in allowed_forms]
-        if u['role'] in {'leader', 'volunteer'}:
+        if u['role'] == 'leader':
             participant_ids = {row.get('p') for row in d['REGISTRANTS']}
             d['PICKUP'] = {person_id: info for person_id, info in d['PICKUP'].items() if person_id in participant_ids}
-        if u['role'] in {'leader', 'volunteer'}:
+        if u['role'] == 'leader':
             existing = {person['id'] for person in d['PEOPLE']}
             allowed_people = {row['p'] for row in d['REGISTRANTS']}
             d['PEOPLE'].extend(dict(id=person['id'], lat=person['lat'], ar=person['ar'], tags=[], hh=None,
@@ -469,6 +530,12 @@ def validate(d):
         require(len(result) == len(rows), 'Duplicate IDs in ' + key)
         return result
     pp = {**index('PEOPLE'), **index('ARCHIVED')}
+    content = d.get('CONTENT', {})
+    require(isinstance(content, dict), 'Invalid parish content.')
+    for key, item in content.items():
+        require(isinstance(key, str) and len(key) <= 60 and isinstance(item, dict)
+                and all(isinstance(item.get(lang, ''), str) and len(item.get(lang, '')) <= 10000 for lang in ('en', 'ar'))
+                and isinstance(item.get('published', True), bool), 'Invalid parish content.')
     hh, ff, bb, gg = index('HOUSEHOLDS'), index('FAMILIES'), index('BRANCHES'), index('GROUPS')
     for b in bb.values():
         require(b.get('family') in ff, 'A branch must belong to an existing family.')
@@ -487,6 +554,11 @@ def validate(d):
         require(not rel or rel != p['id'] and p.get('hh') and rel in hh[p['hh']]['members'], 'The related person must be another member of this household.')
     for pid, extra in d['PERSON_EXTRA'].items():
         require(pid in pp, 'Person details must belong to an existing person.')
+        require(isinstance(extra.get('occupation', ''), str) and len(extra.get('occupation', '')) <= 120,
+                'Invalid line of work.')
+        require(isinstance(extra.get('skills', []), list) and len(extra.get('skills', [])) <= 60 and
+                all(isinstance(skill, str) and 0 < len(skill) <= 80 for skill in extra.get('skills', [])),
+                'Invalid skills.')
         address = extra.get('address')
         if not isinstance(address, dict) or not any(address.get(k) for k in ('governorate', 'district', 'town', 'sector')):
             continue
@@ -496,15 +568,38 @@ def validate(d):
         require(gov and district and town and (not address.get('sector') or
                 address['sector'] in {x['id'] for x in town['sectors']}),
                 'Choose a valid Governorate, District, Town, and Sector combination.')
+    service_ids = set()
+    service_stages = {'pending', 'approved', 'preparing', 'ready', 'celebrated', 'rejected'}
+    for request in d['SERVICE_REQUESTS']:
+        rid = request.get('id')
+        require(isinstance(rid, str) and rid and rid not in service_ids, 'Service requests need unique IDs.')
+        service_ids.add(rid)
+        require(request.get('by') in pp and iso_date(request.get('date'))
+                and request.get('status') in service_stages, 'Invalid service request.')
+        if request.get('time'):
+            require(isinstance(request['time'], str) and re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', request['time']), 'Invalid service time.')
+        require(not request.get('venue') or any(v['id'] == request['venue'] for v in d['VENUES']), 'Invalid service venue.')
+        require(all(isinstance(request.get(field, ''), str) and len(request.get(field, '')) <= limit
+                    for field, limit in (('contact', 160), ('purpose', 240), ('notes', 1000))), 'Invalid service details.')
+        documents = request.get('documents', {})
+        require(isinstance(documents, dict) and all(isinstance(k, str) and len(k) <= 120 and isinstance(v, bool)
+                    for k, v in documents.items()), 'Invalid service documents.')
     for gid, detail in d['GROUP_DETAIL'].items():
         require(gid in gg, 'Group assignments must use an existing parish group.')
         roster = detail.get('roster', [])
         require(all(r.get('p') in pp for r in roster) and len({r['p'] for r in roster}) == len(roster), 'Invalid or duplicate group membership.')
+        require(all(isinstance(post, dict) and post.get('by') in pp and
+                    isinstance(post.get('body', ''), str) and len(post.get('body', '')) <= 12000 and
+                    isinstance(post.get('html', ''), str) and len(post.get('html', '')) <= 12000
+                    for post in detail.get('posts', [])), 'Invalid group post.')
         meeting_ids = set()
         for meeting in detail.get('meetings', []):
             mid = meeting.get('id')
             require(isinstance(mid, str) and mid and mid not in meeting_ids, 'Group meetings need unique IDs.')
             meeting_ids.add(mid)
+            participants = meeting.get('participants', [])
+            require(isinstance(participants, list) and len(participants) == len(set(participants))
+                    and set(participants) <= set(pp), 'Meeting participants must be people in this parish.')
             attendance = meeting.get('attendance', {})
             require(isinstance(attendance, dict) and set(attendance) <= set(pp) and
                     all(value in {'present', 'excused', 'absent'} for value in attendance.values()),
@@ -512,7 +607,11 @@ def validate(d):
         resources = detail.get('belongings', [])
         require(isinstance(resources, list) and all(isinstance(r, dict) and isinstance(r.get('id'), str)
                 and r.get('id') and isinstance(r.get('name'), str) and r['name'].strip()
-                and isinstance(r.get('qty'), int) and r['qty'] >= 0 for r in resources)
+                and isinstance(r.get('qty'), int) and r['qty'] >= 0
+                and all(isinstance(r.get(field, ''), str) and len(r.get(field, '')) <= limit
+                        for field, limit in (('ar', 200), ('code', 80), ('description', 500),
+                                             ('location', 200), ('locationAr', 200)))
+                and r.get('condition', 'good') in {'good', 'fair', 'repair', 'damaged'} for r in resources)
                 and len({r['id'] for r in resources}) == len(resources), 'Invalid ministry resources.')
         resource_ids = {r['id'] for r in resources}
         loans = detail.get('resourceLoans', [])
@@ -553,6 +652,16 @@ def validate(d):
             require(url.scheme == 'https' and hostname and not url.username and not url.password
                     and (hosts is None or any(hostname == host or hostname.endswith('.' + host) for host in hosts)),
                     'Music links must use HTTPS and the selected provider.')
+    volunteer_ids = {v.get('p') for v in d['VOLUNTEERS']}
+    for notice in d['NOTICES']:
+        require(not notice.get('groupId') or notice['groupId'] in gg, 'Notice group must exist in this parish.')
+    for sheet in d['SIGNUP_SHEETS']:
+        participants = sheet.get('people', [])
+        require(isinstance(participants, list) and len(participants) == len(set(participants))
+                and set(participants) <= volunteer_ids
+                and isinstance(sheet.get('slots'), int) and sheet['slots'] > 0
+                and isinstance(sheet.get('taken'), int) and len(participants) <= sheet['taken'] <= sheet['slots'],
+                'Sign-up sheet participants and capacity are invalid.')
     plans = index('SERVICE_PLANS')
     require(d['SERVICE'].get('id') not in plans, 'Service plan IDs must be unique.')
     for plan in [d['SERVICE'], *plans.values()]:
@@ -592,7 +701,20 @@ def validate(d):
         require(not event_id or event_id in events and events[event_id].get('kind') != 'mass' and
                 not events[event_id].get('feastLiturgy') and not events[event_id].get('liturgy'),
                 'Registration requires an eligible event, not a Mass or feast liturgy.')
+    registrant_ids = set()
     for row in d['REGISTRANTS']:
+        require(isinstance(row.get('id'), str) and row['id'] not in registrant_ids and row.get('p') in pp
+                and isinstance(row.get('paid', 0), (int, float)) and not isinstance(row.get('paid', 0), bool)
+                and 0 <= row.get('paid', 0) <= 1_000_000 and isinstance(row.get('consent', False), bool)
+                and row.get('status') in {'awaiting-approval', 'pending', 'paid', 'registered', 'cancelled'},
+                'Invalid participant registration.')
+        registrant_ids.add(row['id'])
+        payments = row.get('payments', [])
+        require(isinstance(payments, list) and all(isinstance(payment, dict)
+                and isinstance(payment.get('amount'), (int, float)) and not isinstance(payment.get('amount'), bool)
+                and 0 < payment['amount'] <= 1_000_000 and payment.get('method') in {'cash', 'bank', 'omt'}
+                and isinstance(payment.get('at'), str) and isinstance(payment.get('by'), str)
+                for payment in payments), 'Invalid registration payment history.')
         require(not row.get('registrationId') or row['registrationId'] in registration_ids,
                 'Registrant must belong to an existing registration form.')
     for eid, session in d['CHECKIN'].get('sessions', {}).items():
@@ -687,19 +809,43 @@ def save_patch(c, u, pid, payload):
             event_id = form.get('eventId')
             require(event_id and event_id in {event['id'] for event in d['EVENTS']},
                     'Select an eligible event before saving a registration form.')
-    previous_registrants = {registrant['id'] for registrant in old['REGISTRANTS']}
+    previous_registrants = {registrant['id']: registrant for registrant in old['REGISTRANTS']}
     current_forms = {form['id']: form for form in d['REGISTRATIONS']}
     added_by_form = {}
     for registrant in d['REGISTRANTS']:
-        if registrant['id'] not in previous_registrants:
+        before_registrant = previous_registrants.get(registrant['id'])
+        if before_registrant is None:
             require(registrant.get('registrationId'), 'Select a registration form before adding participants.')
             form = current_forms.get(registrant['registrationId'])
             require(form is not None and form.get('eventId') and form.get('open'),
                     'New participants require an open registration form linked to an event.')
+            require(registrant.get('paid', 0) == 0 and registrant.get('status') in {'pending', 'registered'}
+                    and (registrant.get('status') != 'registered' or registrant.get('consent'))
+                    and not registrant.get('payments'), 'New participant status is inconsistent.')
             added_by_form[form['id']] = added_by_form.get(form['id'], 0) + 1
             require(not any(other is not registrant and other.get('p') == registrant.get('p') and
                             current_forms.get(other.get('registrationId'), {}).get('eventId') == form['eventId']
                             for other in d['REGISTRANTS']), 'This person is already registered for that event.')
+        else:
+            require(registrant.get('p') == before_registrant.get('p') and
+                    registrant.get('registrationId') == before_registrant.get('registrationId'),
+                    'An existing registration cannot change its person or event.')
+            previous_status, current_status = before_registrant.get('status'), registrant.get('status')
+            if current_status != previous_status:
+                allowed = {'awaiting-approval': {'pending'}, 'pending': {'registered'}, 'paid': {'registered'}}
+                require(current_status in allowed.get(previous_status, set()), 'Invalid registration progression.')
+                require(current_status != 'registered' or registrant.get('consent'),
+                        'Consent is required before confirming a place.')
+            require(not before_registrant.get('consent') or registrant.get('consent'),
+                    'Received consent cannot be silently removed.')
+            old_payments, payments = before_registrant.get('payments', []), registrant.get('payments', [])
+            require(isinstance(payments, list) and payments[:len(old_payments)] == old_payments,
+                    'Registration payment history is immutable.')
+            added_payments = payments[len(old_payments):]
+            require(len(added_payments) <= 1 and all(item.get('by') == u['id'] for item in added_payments)
+                    and abs(float(registrant.get('paid', 0)) - float(before_registrant.get('paid', 0))
+                            - sum(item['amount'] for item in added_payments)) < 0.001,
+                    'Payment changes require a matching audit entry.')
     for form_id, count in added_by_form.items():
         form = current_forms[form_id]
         require(form.get('cap', 0) >= form.get('taken', 0) and
@@ -717,6 +863,9 @@ def save_patch(c, u, pid, payload):
                 previous_ids = set(earlier.get(meeting.get('id'), {}).get('attendance', {}))
                 added_ids = set(meeting.get('attendance', {})) - previous_ids
                 require(added_ids <= current_members, 'New attendance may be recorded only for current group members.')
+                previous_participants = set(earlier.get(meeting.get('id'), {}).get('participants', []))
+                added_participants = set(meeting.get('participants', [])) - previous_participants
+                require(added_participants <= current_members, 'New meeting participants must be current group members.')
             earlier_milestones = {item.get('id'): item for item in old['GROUP_DETAIL'].get(gid, {}).get('milestones', [])}
             for item in detail.get('milestones', []):
                 previous_ids = set(earlier_milestones.get(item.get('id'), {}).get('completions', {}))
@@ -738,15 +887,76 @@ def save_patch(c, u, pid, payload):
                 require(source is not None and source['kind'] != 'certificate' and source['person'] == s.get('person')
                         and source['status'] in {'registered', 'issued'}, 'Choose an official register entry for the certificate request.')
             s.update(history=[], revision=1)
+    earlier_services = {item['id']: item for item in old['SERVICE_REQUESTS']}
+    next_service = {'pending': {'approved', 'rejected'}, 'approved': {'preparing'},
+                    'preparing': {'ready'}, 'ready': {'celebrated'}}
+    for request in d['SERVICE_REQUESTS']:
+        before = earlier_services.get(request['id'])
+        if before is None:
+            require(request['status'] == 'pending' and request.get('by') and request.get('time')
+                    and request.get('contact', '').strip() and request.get('purpose', '').strip(),
+                    'New service requests need a requester, date, time, contact, and purpose.')
+            require(not request.get('history'), 'New service requests cannot contain approval history.')
+        else:
+            require(request.get('history', []) == before.get('history', []) or
+                    before.get('status') != request.get('status'), 'Service approval history is immutable.')
+        if before and before.get('status') != request.get('status'):
+            require(request['status'] in next_service.get(before['status'], set()), 'Invalid service request progression.')
+            require(u['role'] in CLERGY, 'Priest approval is required.', 403)
+            history = request.get('history', [])
+            require(isinstance(history, list) and len(history) == len(before.get('history', [])) + 1
+                    and history[:-1] == before.get('history', []) and history[-1].get('status') == request['status']
+                    and history[-1].get('by') == u.get('person_id'), 'Service transition requires an audit entry.')
+            if request['status'] == 'ready' and request.get('kind', '').lower() in {'baptism', 'wedding'}:
+                required = ('Parents’ marriage certificate', 'Godparent baptism certificate', 'Preparation session attended') if request['kind'].lower() == 'baptism' else ('Baptism certificates, both', 'Freedom-to-marry declaration', 'Pre-marriage course', 'Civil file reference')
+                require(all(request.get('documents', {}).get(item) for item in required), 'Complete the missing preparation requirements first.')
+            if request['status'] == 'celebrated':
+                require(iso_date(request.get('celebratedAt')) and request['celebratedAt'] <= TODAY(),
+                        'Record the actual celebration date, today or earlier.')
+    if u['role'] == 'leader' and 'GROUP_DETAIL' in changes:
+        for group in d['GROUPS']:
+            gid = group['id']
+            if gid in changes['GROUP_DETAIL']:
+                before_count = len(old['GROUP_DETAIL'].get(gid, {}).get('roster', []))
+                after_count = len(d['GROUP_DETAIL'].get(gid, {}).get('roster', []))
+                group['members'] = max(0, int(group.get('members', 0)) + after_count - before_count)
+    former_groups = {item['id']: item for item in old['GROUPS']}
+    role_changes = []
+    for group in d['GROUPS']:
+        former = former_groups.get(group['id'])
+        if not former: continue
+        for field in ('leader', 'assistant'):
+            if former.get(field) == group.get(field): continue
+            require(u['role'] in CLERGY | {'secretary'}, 'Parish office approval is required for leadership changes.', 403)
+            detail = d['GROUP_DETAIL'].get(group['id'], {})
+            require(not group.get(field) or group[field] in {row.get('p') for row in detail.get('roster', [])},
+                    'Leader and assistant must be in the group roster.')
+            if field == 'leader':
+                require(group.get('leader'), 'A group needs a leader.')
+                require(detail.get('history', []) != old['GROUP_DETAIL'].get(group['id'], {}).get('history', []),
+                        'Record a leadership handover in the group history.')
+            role_changes.append((field, group['id'], former.get(field), group.get(field)))
     if u['role'] not in CLERGY:
         for key in ('RESERVATIONS', 'EXPENSES', 'SERVICE_REQUESTS'):
             before = {x['id']: x for x in old[key]}
             for x in d[key]:
-                if x.get('status') in {'approved', 'rejected'}:
+                if x.get('status') in {'approved', 'preparing', 'ready', 'celebrated', 'rejected'}:
                     require(x['id'] in before and before[x['id']].get('status') == x['status'], 'Priest approval is required.', 403)
     d = migrate_state(d)
     validate(d)
     sync_relationships(c, pid, d)
+    for field, group_id, outgoing, incoming in role_changes:
+        if incoming:
+            c.execute("UPDATE users SET role='leader' WHERE role='member' AND person_id=? AND id IN (SELECT user_id FROM assignments WHERE parish_id=?)", (incoming, pid))
+        for account in c.execute("SELECT * FROM users WHERE role='leader' AND person_id=? AND id IN (SELECT user_id FROM assignments WHERE parish_id=?)", (outgoing, pid)).fetchall():
+            other_leadership = False
+            for parish_row in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (account['id'],)):
+                state = d if parish_row['parish_id'] == pid else json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (parish_row['parish_id'],)).fetchone()['data'])
+                if any(account['person_id'] in {item.get('leader'), item.get('assistant')} for item in state['GROUPS']):
+                    other_leadership = True; break
+            if not other_leadership: c.execute("UPDATE users SET role='member' WHERE id=?", (account['id'],))
+        audit(c, u, pid, 'Leadership handover' if field == 'leader' else 'Group assistant changed',
+              {'group': group_id, 'from': outgoing, 'to': incoming})
     c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
     if 'GROUP_DETAIL' in changes:
         notify_meeting_changes(c, pid, old, d)
@@ -756,6 +966,50 @@ def save_patch(c, u, pid, payload):
 
 def audit(c, u, pid, action, detail):
     c.execute('INSERT INTO audit(parish_id,actor,at,action,detail) VALUES(?,?,?,?,?)', (pid, u['id'], NOW(), action, json.dumps(detail)))
+
+
+def xlsx_preview(encoded):
+    """Read cells from the first worksheet; never store uploaded workbook bytes."""
+    require(isinstance(encoded, str) and len(encoded) <= 3_000_000, 'Workbook is too large.', 413)
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+        require(len(raw) <= 2_000_000, 'Workbook is too large.', 413)
+        with zipfile.ZipFile(io.BytesIO(raw)) as workbook:
+            names = workbook.namelist()
+            require(len(names) <= 150 and all(info.file_size <= 4_000_000 for info in workbook.infolist()),
+                    'Workbook is too large.', 413)
+            sheets = sorted(name for name in names if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', name))
+            require(sheets, 'No worksheet found.')
+            ns = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+            shared = []
+            if 'xl/sharedStrings.xml' in names:
+                root = ET.fromstring(workbook.read('xl/sharedStrings.xml'))
+                shared = [''.join(node.itertext()) for node in root.findall(f'{ns}si')]
+            root = ET.fromstring(workbook.read(sheets[0]))
+            rows = []
+            for node in root.findall(f'.//{ns}sheetData/{ns}row')[:2001]:
+                cells = {}
+                for cell in node.findall(f'{ns}c'):
+                    match = re.match(r'([A-Z]+)', cell.get('r', ''))
+                    if not match: continue
+                    col = 0
+                    for char in match.group(1): col = col * 26 + ord(char) - 64
+                    if col > 32: continue
+                    value = cell.find(f'{ns}v')
+                    if cell.get('t') == 'inlineStr':
+                        inline = cell.find(f'{ns}is')
+                        text = ''.join(inline.itertext()) if inline is not None else ''
+                    elif value is None: text = ''
+                    elif cell.get('t') == 's':
+                        index = int(value.text or '-1')
+                        text = shared[index] if 0 <= index < len(shared) else ''
+                    else: text = value.text or ''
+                    cells[col - 1] = text.strip()[:500]
+                if cells: rows.append([cells.get(i, '') for i in range(max(cells) + 1)])
+            require(rows, 'The worksheet is empty.')
+            return rows
+    except (binascii.Error, zipfile.BadZipFile, ET.ParseError, IndexError, ValueError):
+        raise Problem(400, 'Invalid .xlsx workbook.')
 
 
 def workflow(c, u, pid, q):
@@ -771,7 +1025,25 @@ def workflow(c, u, pid, q):
                 'Choose a unique request reference.')
         require(q.get('kind') in {'baptism', 'confirmation', 'communion', 'marriage', 'funeral'},
                 'Choose a sacrament.')
-        require(any(p['id'] == q.get('person') for p in d['PEOPLE']), 'Choose a parishioner.')
+        child = q.get('child')
+        if child is not None:
+            require(q['kind'] == 'baptism' and isinstance(child, dict), 'Manual child details are for baptism requests only.')
+            require(all(isinstance(child.get(k), str) and 0 < len(child[k].strip()) <= 120 for k in ('lat', 'ar')),
+                    'Enter the child’s English and Arabic names.')
+            born = child.get('born')
+            try: require(isinstance(born, str) and dt.date.fromisoformat(born) <= dt.date.today(), 'Enter a valid birth date.')
+            except ValueError: raise Problem(400, 'Enter a valid birth date.')
+            for key in ('father', 'mother'):
+                require(isinstance(child.get(key, ''), str) and len(child.get(key, '')) <= 120, 'Parent name is too long.')
+            require(not any(p['lat'].strip().casefold() == child['lat'].strip().casefold() and p.get('born') == born
+                            for p in d['PEOPLE'] + d['ARCHIVED']), 'A person with this name and birth date already exists. Choose the existing record.')
+            person_id = 'p' + secrets.token_hex(8)
+            d['PEOPLE'].append(dict(id=person_id, lat=child['lat'].strip(), ar=child['ar'].strip(), born=born,
+                                    phone='—', town='', townAr='', rite='Maronite', status='member', hh=None, tags=[]))
+            d['PERSON_EXTRA'][person_id] = dict(skills=[], dates=[], occupation='')
+        else:
+            person_id = q.get('person')
+            require(any(p['id'] == person_id for p in d['PEOPLE']), 'Choose a parishioner.')
         require(not any(x['id'] == sid for x in d['SACRAMENTS']), 'Request already exists.')
         requested_date = str(q.get('date') or '').strip()
         if requested_date:
@@ -783,7 +1055,8 @@ def workflow(c, u, pid, q):
         number = max([int(x['reg'][len(prefix):]) for x in d['SACRAMENTS']
                       if str(x.get('reg', '')).startswith(prefix) and str(x['reg'][len(prefix):]).isdigit()] or [0]) + 1
         d['SACRAMENTS'].insert(0, dict(id=sid, kind=q['kind'], reg=f'{prefix}{number:03d}',
-            person=q['person'], date=requested_date, requestedDate=requested_date, requestedAt=at, requestNotes=notes,
+            person=person_id, father=child.get('father', '').strip() if child else '', mother=child.get('mother', '').strip() if child else '',
+            date=requested_date, requestedDate=requested_date, requestedAt=at, requestNotes=notes,
             status='requested', preparation=[], history=[dict(action='sacrament requested', by=u['name'], at=at)], revision=1))
     elif action == 'review-sacrament-request':
         require(s is not None and s.get('kind') != 'certificate' and s['status'] == 'requested',
@@ -805,6 +1078,35 @@ def workflow(c, u, pid, q):
         require(0 < len(reason) <= 500, 'Enter a reason for declining this request.')
         s['status'] = 'rejected'
         s.setdefault('history', []).append(dict(action='request declined', by=u['name'], at=at, reason=reason))
+    elif action == 'propose-request-amendment':
+        require(s is not None and s.get('kind') != 'certificate' and s.get('requestApprovedAt')
+                and s['status'] in {'preparing', 'scheduled', 'draft', 'awaiting-signature'},
+                'Only an accepted sacrament request can be amended.')
+        require(not s.get('pendingAmendment'), 'Review the pending amendment first.')
+        date = q.get('date', '')
+        require(isinstance(date, str), 'Invalid requested date.')
+        if date:
+            try: dt.date.fromisoformat(date)
+            except ValueError: raise Problem(400, 'Enter a valid requested date.')
+        notes, reason = q.get('notes', ''), q.get('reason', '')
+        require(isinstance(notes, str) and len(notes) <= 500 and isinstance(reason, str)
+                and 0 < len(reason.strip()) <= 500, 'Enter an amendment reason and keep notes within 500 characters.')
+        require(date != s.get('requestedDate', '') or notes.strip() != s.get('requestNotes', ''), 'No request details changed.')
+        s['pendingAmendment'] = dict(date=date, notes=notes.strip(), reason=reason.strip(), by=u['name'], at=at)
+        s.setdefault('history', []).append(dict(action='request amendment proposed', by=u['name'], at=at, reason=reason.strip()))
+    elif action in {'approve-request-amendment', 'reject-request-amendment'}:
+        require(u['role'] in CLERGY, 'Only a priest can decide a request amendment.', 403)
+        require(s is not None and s.get('pendingAmendment'), 'There is no pending amendment.')
+        amendment = s.pop('pendingAmendment')
+        if action == 'approve-request-amendment':
+            before = dict(date=s.get('requestedDate', ''), notes=s.get('requestNotes', ''))
+            s.update(requestedDate=amendment['date'], requestNotes=amendment['notes'])
+            s.setdefault('history', []).append(dict(action='request amendment approved', by=u['name'], at=at,
+                                                      reason=amendment['reason'], before=before,
+                                                      after=dict(date=amendment['date'], notes=amendment['notes'])))
+        else:
+            s.setdefault('history', []).append(dict(action='request amendment rejected', by=u['name'], at=at,
+                                                      reason=str(q.get('reason') or '')[:500]))
     elif action == 'update-preparation':
         require(s is not None and s.get('kind') != 'certificate' and s['status'] in {'preparing', 'scheduled'},
                 'Only accepted preparations can be edited.')
@@ -1017,7 +1319,7 @@ def member_context(c, u, pid):
 def member_private(c, u, pid):
     row = c.execute('SELECT data FROM member_private WHERE parish_id=? AND user_id=?', (pid, u['id'])).fetchone()
     data = json.loads(row['data']) if row else {}
-    for key, default in (('notes', []), ('rsvp', {}), ('commitments', {}), ('readIds', []), ('archivedIds', []),
+    for key, default in (('notes', []), ('todos', []), ('concernIds', []), ('rsvp', {}), ('commitments', {}), ('readIds', []), ('archivedIds', []),
                          ('preferences', {'email': True, 'inSystem': True, 'meetings': True,
                                           'announcements': True, 'messages': True})):
         data.setdefault(key, default)
@@ -1058,7 +1360,8 @@ def notify_meeting_changes(c, pid, old, current):
             if not subject: continue
             title = subject.get('title') or group['name'] + ' meeting'
             details = (subject.get('d', '') + ' ' + subject.get('t', '')).strip()
-            for person_id in members:
+            invitees = set(subject.get('participants') or members) & members
+            for person_id in invitees:
                 for user_id in accounts.get(person_id, []):
                     preferences = member_private(c, {'id': user_id}, pid)['preferences']
                     if subject.get('d', '') >= TODAY() and preferences.get('meetings', True):
@@ -1108,6 +1411,7 @@ def member_meetings(d, gids, person_id, private):
     for g in d['GROUPS']:
         if g['id'] not in gids: continue
         for m in d['GROUP_DETAIL'].get(g['id'], {}).get('meetings', []):
+            if m.get('participants') and person_id not in m['participants']: continue
             attendance = m.get('attendance', {}).get(person_id)
             if not attendance:
                 attendance = 'excused' if any(row and row[0] == person_id for row in m.get('absent', [])) else ('unrecorded' if m.get('done') else 'upcoming')
@@ -1183,20 +1487,27 @@ def member_view(c, u, pid):
         visible_events.append({**{k: e.get(k) for k in ('id', 'd', 't', 'title', 'titleAr', 'kind')},
                                'description': detail.get('desc', ''), 'location': next((v.get('name', '') for v in d.get('VENUES', []) if v.get('id') == e.get('venue')), '')})
     content = []
-    for gid in gids:
+    for notice in d.get('NOTICES', []):
+        group_id = notice.get('groupId')
+        if group_id and group_id not in gids | managed_groups: continue
+        if not group_id and notice.get('audience') != 'Parish': continue
+        content.append(dict(id='notice-' + notice['id'], kind='announcement', groupId=group_id,
+                            recipientId=None, authorId=None, title=notice.get('title', ''), body=notice.get('ar', ''),
+                            category='Notice', eventId=None, attachment=None, pinned=notice.get('pri') == 'urgent',
+                            at=notice.get('at', ''), read=True, archived=False, replies=[]))
+    for gid in gids | managed_groups:
         detail = d['GROUP_DETAIL'].get(gid, {})
         for index, post in enumerate(detail.get('posts', [])):
             if not isinstance(post, dict): continue
             content.append(dict(id=f'group-post-{gid}-{index}', kind='post', groupId=gid,
                                 recipientId=None, authorId=None, title=post.get('title') or next((g['name'] + ' update' for g in d['GROUPS'] if g['id'] == gid), 'Ministry update'),
-                                body=post.get('body', ''), category='', eventId=None, attachment=None,
+                                body=post.get('body', ''), html=post.get('html', ''), category='', eventId=None, attachment=None,
                                 pinned=False, at=post.get('at', ''), read=True, archived=False, replies=[]))
-        for index, resource in enumerate(detail.get('files', [])):
-            if not isinstance(resource, list) or not resource: continue
-            content.append(dict(id=f'group-resource-{gid}-{index}', kind='resource', groupId=gid,
-                                recipientId=None, authorId=None, title=resource[0], body='Resource listed by the ministry. Ask the leader for the file.',
-                                category='', eventId=None, attachment=None, pinned=False, at='',
-                                read=True, archived=False, replies=[]))
+        for resource in c.execute("SELECT id,name,created_at FROM uploaded_files WHERE parish_id=? AND scope='group' AND owner_id=? ORDER BY created_at DESC", (pid, gid)):
+            content.append(dict(id='group-resource-' + resource['id'], kind='resource', groupId=gid,
+                                recipientId=None, authorId=None, title=resource['name'], body='', category='', eventId=None,
+                                attachment={'name': resource['name'], 'data': f"/api/parishes/{pid}/files/{resource['id']}"},
+                                pinned=False, at=resource['created_at'], read=True, archived=False, replies=[]))
     for r in c.execute('SELECT * FROM member_content WHERE parish_id=? ORDER BY created_at DESC', (pid,)):
         if r['group_id'] and r['group_id'] not in gids | managed_groups: continue
         if r['kind'] == 'message' and r['recipient_id'] not in (None, u['id']) and r['author_id'] != u['id']: continue
@@ -1214,6 +1525,13 @@ def member_view(c, u, pid):
                                 if x['kind'] == 'resource' and x['eventId'] == meeting['id']]
     concerns = [concern_public(c, r, u['id']) for r in c.execute(
         'SELECT * FROM member_concerns WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', (pid, u['id']))]
+    # Anonymous cases stay anonymous to reviewers. Only the submitter's private
+    # account data remembers their case IDs so the portal can show follow-up.
+    for concern_id in private['concernIds']:
+        row = c.execute('SELECT * FROM member_concerns WHERE id=? AND parish_id=? AND user_id IS NULL',
+                        (concern_id, pid)).fetchone()
+        if row: concerns.append(concern_public(c, row))
+    concerns.sort(key=lambda item: item['created_at'], reverse=True)
     perms = complaint_permissions(c, u, pid)
     review = []
     if 'Review' in perms:
@@ -1262,9 +1580,12 @@ def member_view(c, u, pid):
         if 'Review' in json.loads(r['permissions'])] if 'Assign' in perms else []
     categories = [dict(name=r['name'], active=bool(r['active'])) for r in c.execute(
         'SELECT name,active FROM complaint_categories WHERE parish_id=? ORDER BY name', (pid,))]
+    site = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')} for key, item in d.get('CONTENT', {}).items()
+            if isinstance(item, dict) and item.get('published', True)}
     return dict(parish={k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
+                site=site,
                 person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
-                notes=private['notes'], commitments=private['commitments'], preferences=private['preferences'],
+                notes=private['notes'], todos=private['todos'], commitments=private['commitments'], preferences=private['preferences'],
                 concerns=concerns, review=review, leaderConcerns=leader_concerns, complaintPermissions=sorted(perms), profileRequests=requests,
                 volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups),
                 formation=formation, reviewers=reviewers, categories=categories, notifications=notifications)
@@ -1292,6 +1613,29 @@ def member_action(c, u, pid, q):
                         pinned=bool(q.get('pinned')), updatedAt=NOW())
             if existing: private['notes'][private['notes'].index(existing)] = item
             else: private['notes'].append(item)
+        save_member_private(c, u, pid, private)
+    elif op == 'todo':
+        todo_id = q.get('id')
+        existing = next((item for item in private['todos'] if item['id'] == todo_id), None)
+        if q.get('delete'):
+            require(existing is not None, 'Task not found.', 404)
+            private['todos'] = [item for item in private['todos'] if item['id'] != todo_id]
+        elif 'done' in q:
+            require(existing is not None and type(q['done']) is bool, 'Invalid task.', 400)
+            existing['done'] = q['done']
+        else:
+            title, due = q.get('title'), q.get('due', '')
+            require(isinstance(title, str) and 0 < len(title.strip()) <= 160 and isinstance(due, str) and
+                    (not due or len(due) == 10 and due[4] == '-' and due[7] == '-' and
+                     all(part.isdigit() for part in (due[:4], due[5:7], due[8:]))), 'Invalid task.')
+            if due:
+                try: dt.date.fromisoformat(due)
+                except ValueError: raise Problem('Invalid task date.')
+            item = dict(id=existing['id'] if existing else secrets.token_hex(12), title=title.strip(),
+                        due=due, done=existing['done'] if existing else False,
+                        createdAt=existing['createdAt'] if existing else NOW())
+            if existing: private['todos'][private['todos'].index(existing)] = item
+            else: private['todos'].append(item)
         save_member_private(c, u, pid, private)
     elif op == 'rsvp':
         meeting = next((m for m in member_meetings(d, gids, person['id'], private) if m['id'] == q.get('meetingId')), None)
@@ -1391,6 +1735,28 @@ def member_action(c, u, pid, q):
                 continue
             notify_member(c, pid, target['id'], q['kind'], title.strip(), body, 'myresources' if q['kind'] == 'resource' else 'mycommitments' if q['kind'] == 'opportunity' else 'mymessages' if q['kind'] == 'discussion' else 'myfeed')
         audit(c, u, pid, 'member.publish', q['kind'])
+    elif op == 'staffMessage':
+        require(u['role'] in {'priest', 'secretary', 'leader'}, 'Staff messaging permission required.', 403)
+        recipient_person_id = q.get('recipientPersonId')
+        require(recipient_person_id in {item['id'] for item in d['PEOPLE']}, 'Choose a person in this parish.')
+        if u['role'] == 'leader':
+            require(any(g['id'] in {group['id'] for group in d['GROUPS']
+                                      if u['person_id'] in {group.get('leader'), group.get('assistant')}}
+                        and recipient_person_id in {row.get('p') for row in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])}
+                        for g in d['GROUPS']), 'You may message members of your ministries only.', 403)
+        recipient = c.execute('SELECT u.id FROM users u JOIN assignments a ON a.user_id=u.id '
+                              'WHERE a.parish_id=? AND u.person_id=? LIMIT 1',
+                              (pid, recipient_person_id)).fetchone()
+        require(recipient is not None, 'This person does not have an active in-app account.', 404)
+        title, body = q.get('title'), q.get('body')
+        require(isinstance(title, str) and 0 < len(title.strip()) <= 160 and
+                isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a subject and message.')
+        content_id = secrets.token_hex(12)
+        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (content_id, pid, None, 'message', u['id'], recipient['id'],
+                   title.strip(), body.strip(), '', None, None, 0, NOW()))
+        notify_member(c, pid, recipient['id'], 'message', title.strip(), body.strip(), 'mymessages')
+        audit(c, u, pid, 'member.staff-message', {'recipient': recipient_person_id, 'content': content_id})
     elif op == 'message':
         require(group_id in gids, 'Ministry membership required.', 403)
         group = next(g for g in d['GROUPS'] if g['id'] == group_id)
@@ -1450,26 +1816,20 @@ def member_action(c, u, pid, q):
                    event_id, subject.strip(), description.strip(), str(q.get('happenedAt', ''))[:40],
                    str(q.get('peopleInvolved', ''))[:500], member_attachment(q.get('attachment')),
                    None if anonymous else follow_up, 'Submitted', NOW(), None))
+        if anonymous:
+            private['concernIds'].append(concern_id)
+            save_member_private(c, u, pid, private)
         complaint_log(c, concern_id, None if anonymous else u['id'], 'submitted')
-        return {'reference': ref}
-    elif op == 'concernLookup':
-        ref = q.get('reference', '')
-        require(isinstance(ref, str) and len(ref) <= 40, 'Invalid reference.')
-        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND reference=? AND user_id IS NULL', (pid, ref)).fetchone()
-        require(row is not None, 'Reference not found.', 404)
-        result = concern_public(c, row)
-        for field in ('description', 'people_involved', 'attachment', 'group_id', 'event_id', 'happened_at'):
-            result.pop(field, None)
-        return {'concern': result}
+        return {'id': concern_id}
     elif op == 'concernFollowUp':
-        ref, message = q.get('reference', ''), q.get('message', '')
-        require(isinstance(ref, str) and len(ref) <= 40 and isinstance(message, str) and 0 < len(message.strip()) <= 5000,
-                'Enter a valid reference and message.')
-        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND reference=? AND user_id IS NULL', (pid, ref)).fetchone()
-        require(row is not None, 'Reference not found.', 404)
+        message = q.get('message', '')
+        require(isinstance(message, str) and 0 < len(message.strip()) <= 5000, 'Enter a message.')
+        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND id=?', (pid, q.get('id'))).fetchone()
+        require(row is not None and (row['user_id'] == u['id'] or
+                row['user_id'] is None and row['id'] in private['concernIds']), 'Case not available.', 403)
         c.execute('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)',
                   (secrets.token_hex(12), row['id'], None, row['status'], 'Submitted additional information: ' + message.strip(), '', NOW()))
-        complaint_log(c, row['id'], None, 'anonymous-follow-up')
+        complaint_log(c, row['id'], None if row['user_id'] is None else u['id'], 'submitter-follow-up')
     elif op == 'concernUpdate':
         perms = complaint_permissions(c, u, pid)
         require('Review' in perms and ('Respond' in perms or 'Resolve' in perms), 'Complaint reviewer permission required.', 403)
@@ -1533,17 +1893,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if cookie: self.send_header('Set-Cookie', cookie)
         self.end_headers(); self.wfile.write(body)
 
+    def reply_file(self, row):
+        self.send_response(200)
+        self.send_header('Content-Type', row['mime'])
+        self.send_header('Content-Length', str(row['size']))
+        self.send_header('Content-Disposition', "inline; filename*=UTF-8''" + quote(row['name']))
+        self.end_headers(); self.wfile.write(row['data'])
+
+    def public_asset_allowed(self):
+        path = urlsplit(self.path).path
+        target = Path(self.translate_path(self.path)).resolve()
+        if not target.is_relative_to(ROOT) or '/..' in path:
+            return False
+        if path in {'/', '/index.html', '/landing.html', '/public.html'}:
+            return True
+        if not path.startswith('/assets/') or not target.is_relative_to(ROOT / 'assets'):
+            return False
+        return (target.suffix in {'.js', '.css'}
+                or target.is_relative_to(ROOT / 'assets' / 'images') and target.suffix in {'.jpg', '.jpeg', '.png', '.webp'}
+                or target.is_relative_to(ROOT / 'assets' / 'fonts') and target.suffix == '.woff2')
+
     def do_GET(self):
         if self.path.startswith('/api/'): return self.api()
-        path = urlsplit(self.path).path
-        allowed = path in {'/', '/index.html', '/landing.html'} or path.startswith('/assets/') and Path(path).suffix in {'.js', '.css'}
-        target = (ROOT / path.lstrip('/')).resolve()
-        if not allowed or not target.is_relative_to(ROOT) or '/..' in path:
+        if not self.public_asset_allowed():
             return self.send_error(404)
         return super().do_GET()
 
+    def do_HEAD(self):
+        if not self.public_asset_allowed():
+            return self.send_error(404)
+        return super().do_HEAD()
+
     def do_POST(self): self.api()
     def do_PUT(self): self.api()
+    def do_DELETE(self): self.api()
 
     def api(self):
         try:
@@ -1556,13 +1939,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     require(not origin or urlsplit(origin).netloc == self.headers.get('Host'), 'Cross-origin write rejected.', 403)
                     require(self.headers.get_content_type() == 'application/json', 'JSON required.', 415)
                     length = int(self.headers.get('Content-Length', 0))
-                    require(0 < length <= 8_000_000, 'Request too large or empty.', 413)
+                    limit = 14_000_000 if urlsplit(self.path).path.endswith('/files') else 8_000_000
+                    require(0 < length <= limit, 'Request too large or empty.', 413)
                     q = json.loads(self.rfile.read(length))
                     require(isinstance(q, dict), 'Expected an object.')
                 path = urlsplit(self.path).path
+                if path == '/api/public/parishes' and self.command == 'GET':
+                    return self.reply(200, {'parishes': [dict(id=row['id'], name=meta.get('name', ''), ar=meta.get('ar', ''),
+                                                            town=meta.get('town', ''), townAr=meta.get('townAr', ''))
+                                           for row in c.execute('SELECT id,metadata FROM parishes')
+                                           for meta in [json.loads(row['metadata'])]]})
+                if path.startswith('/api/public/parishes/') and self.command == 'GET':
+                    public_id = path.rsplit('/', 1)[-1]
+                    row = c.execute('SELECT data FROM states WHERE parish_id=?', (public_id,)).fetchone()
+                    require(row is not None, 'Parish not found.', 404)
+                    public_state = json.loads(row['data'])
+                    parish = public_state['PARISH']
+                    content = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')}
+                               for key, item in public_state.get('CONTENT', {}).items()
+                               if isinstance(item, dict) and item.get('published', True)}
+                    events = []
+                    for event in public_state.get('EVENTS', []):
+                        detail = public_state.get('EVENT_DETAIL', {}).get(event.get('id'), {})
+                        if event.get('kind') == 'pending' or (detail.get('visibility') != 'public'
+                            and not (not detail and event.get('kind') in {'mass', 'event'})): continue
+                        events.append({key: event.get(key, '') for key in ('id', 'd', 't', 'title', 'titleAr', 'kind')})
+                    posts = [dict(title=item['title'], body=item['body'], at=item['created_at'])
+                             for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", (public_id,))]
+                    posts.extend(dict(title=n.get('title', ''), body=n.get('ar', ''), at=n.get('at', ''))
+                                 for n in public_state.get('NOTICES', []) if n.get('audience') == 'Parish' and not n.get('groupId'))
+                    posts.sort(key=lambda item: item['at'], reverse=True)
+                    public_parish = {key: parish.get(key, '') for key in
+                                     ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
+                    if not content.get('contact'):
+                        public_parish.update(address='', addressAr='', phone='')
+                    return self.reply(200, {'parish': public_parish,
+                                             'content': content, 'events': events, 'posts': posts})
                 if path == '/api/login' and self.command == 'POST':
                     u = c.execute('SELECT * FROM users WHERE username=?', (q.get('username'),)).fetchone()
-                    require(u is not None and hmac.compare_digest(u['password'], password_hash(str(q.get('password', '')), u['password'].split(':')[0])), 'Incorrect username or password.', 401)
+                    require(u is not None and u['role'] in ROLES and hmac.compare_digest(u['password'], password_hash(str(q.get('password', '')), u['password'].split(':')[0])), 'Incorrect username or password.', 401)
                     token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
                     c.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
                     c.execute('INSERT INTO sessions VALUES(?,?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), u['id'], csrf, time.time()+28800))
@@ -1574,6 +1989,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()
                 require(session is not None, 'Sign in to continue.', 401)
                 u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
+                require(u is not None and u['role'] in ROLES, 'Sign in to continue.', 401)
                 if self.command != 'GET': require(hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), session['csrf']), 'Invalid request token.', 403)
                 if path == '/api/session' and self.command == 'GET':
                     return self.reply(200, dict(user={k: u[k] for k in ('id', 'username', 'name', 'role', 'person_id')}, csrf=session['csrf'], parishes=parishes(c, u)))
@@ -1589,8 +2005,60 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     priests = [dict(id=x['id'], name=x['name'], parishes=[r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (x['id'],))]) for x in c.execute("SELECT * FROM users WHERE role='priest' AND diocese=?", (u['diocese'],)).fetchall()]
                     return self.reply(200, {'priests': priests, 'parishes': parishes(c, u)})
                 parts = path.strip('/').split('/')
+                if len(parts) == 5 and parts[:2] == ['api', 'parishes'] and parts[3] == 'files':
+                    pid, file_id = parts[2], parts[4]
+                    access(c, u, pid)
+                    row = c.execute('SELECT * FROM uploaded_files WHERE parish_id=? AND id=?', (pid, file_id)).fetchone()
+                    require(row is not None, 'File not found.', 404)
+                    file_access(c, u, pid, row['scope'], row['owner_id'], self.command == 'DELETE')
+                    if self.command == 'GET':
+                        audit(c, u, pid, 'File opened', {'file': file_id}); c.commit()
+                        return self.reply_file(row)
+                    if self.command == 'DELETE':
+                        c.execute('DELETE FROM uploaded_files WHERE id=? AND parish_id=?', (file_id, pid))
+                        audit(c, u, pid, 'File deleted', {'file': file_id, 'scope': row['scope'], 'owner': row['owner_id']})
+                        c.commit(); return self.reply(200, {'ok': True})
+                    raise Problem(405, 'Method not allowed.')
                 require(len(parts) == 4 and parts[:2] == ['api', 'parishes'], 'Endpoint not found.', 404)
                 pid, endpoint = parts[2:]; access(c, u, pid)
+                if endpoint == 'files':
+                    if self.command == 'GET':
+                        query = parse_qs(urlsplit(self.path).query)
+                        scope, owner_id = query.get('scope', [''])[0], query.get('id', [''])[0]
+                        file_access(c, u, pid, scope, owner_id)
+                        rows = c.execute('SELECT id,name,mime,size,created_at FROM uploaded_files WHERE parish_id=? AND scope=? AND owner_id=? ORDER BY created_at DESC',
+                                         (pid, scope, owner_id)).fetchall()
+                        return self.reply(200, {'files': [dict(row) for row in rows]})
+                    if self.command == 'POST':
+                        scope, owner_id = q.get('scope'), q.get('id')
+                        file_access(c, u, pid, scope, owner_id, True)
+                        filename = str(q.get('name', '')).replace('\\', '/').split('/')[-1].strip()
+                        require(filename and len(filename) <= 180 and not any(ord(ch) < 32 for ch in filename), 'Invalid filename.')
+                        mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png'}.get(filename.rsplit('.', 1)[-1].lower())
+                        require(mime is not None, 'Only PDF, JPG, and PNG files are supported.')
+                        encoded = q.get('data')
+                        require(isinstance(encoded, str) and len(encoded) <= 13_500_000, 'File is too large.', 413)
+                        try: data = base64.b64decode(encoded, validate=True)
+                        except binascii.Error: raise Problem(400, 'Invalid file data.')
+                        require(0 < len(data) <= 10_000_000, 'File is too large.', 413)
+                        valid = data.startswith(b'%PDF-') if mime == 'application/pdf' else data.startswith(b'\xff\xd8\xff') if mime == 'image/jpeg' else data.startswith(b'\x89PNG\r\n\x1a\n')
+                        require(valid, 'File contents do not match the filename.')
+                        file_id = secrets.token_urlsafe(18)
+                        c.execute('INSERT INTO uploaded_files VALUES(?,?,?,?,?,?,?,?,?,?)',
+                                  (file_id, pid, scope, owner_id, filename, mime, len(data), data, u['id'], NOW()))
+                        audit(c, u, pid, 'File uploaded', {'file': file_id, 'scope': scope, 'owner': owner_id})
+                        c.commit(); return self.reply(200, {'id': file_id, 'name': filename})
+                    raise Problem(405, 'Method not allowed.')
+                if endpoint == 'attendance-preview' and self.command == 'POST':
+                    require(u['role'] in {'priest', 'secretary', 'leader'}, 'Group access required.', 403)
+                    row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
+                    state = json.loads(row['data'])
+                    gid = q.get('groupId')
+                    group = next((item for item in state['GROUPS'] if item['id'] == gid), None)
+                    require(group is not None, 'Group not found.', 404)
+                    if u['role'] == 'leader':
+                        require(u['person_id'] in {group.get('leader'), group.get('assistant')}, 'Group is outside your ministry.', 403)
+                    return self.reply(200, {'rows': xlsx_preview(q.get('data'))})
                 if endpoint == 'oversight' and self.command == 'GET':
                     return self.reply(200, oversight(c, u, pid))
                 if endpoint == 'member':
