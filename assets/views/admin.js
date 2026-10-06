@@ -7,9 +7,10 @@ import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { deleteGuard, newPersonDrawer } from './people.js';
 import { savedAt, savedSize } from '../persist.js';
+import { api } from '../api.js';
 import { WORKFLOWS, RUNS, RUN_LOG, AUDIT, FUNDS, RATE, PARISH, PARISHES, EPARCHY_NEWS, GROUPS, BATCH,
          SESSIONS, SECURITY_ALERTS, RETENTION, WEBHOOKS, PERMISSIONS, ATTENDANCE_SERIES,
-         GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, person } from '../data.js';
+         GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, GROUP_DETAIL, REGISTRATIONS, REGISTRANTS, CHECKIN, EVENTS, person } from '../data.js';
 import { FIELD_TYPES } from '../crud.js';
 
 const L = (en, ar) => t(en, ar);
@@ -21,8 +22,7 @@ export function eparchy(tab = '') {
     title: L(PARISH.eparchy, PARISH.eparchyAr),
     sub: L('Aggregated across the parishes you hold a role in. Restricted parish records are never exposed here by default.',
            'مجمَّع عبر الرعايا التي لك دور فيها. ولا تُكشف السجلات المقيّدة هنا افتراضياً.'),
-    actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${L('Export', 'تصدير')}</button>
-      <button class="btn btn-primary" data-act="eparchy-msg">${icon('bell', 17)}${L('Eparchy announcement', 'إعلان أبرشي')}</button>`
+    actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${L('Export', 'تصدير')}</button>`
   }) + tabBar('eparchy', [['', 'Parishes', 'الرعايا'], ['news', 'Announcements', 'الإعلانات'], ['aggregate', 'Aggregates', 'التجميعات']], tab);
 
   if (tab === 'news') return head + table({
@@ -35,10 +35,9 @@ export function eparchy(tab = '') {
   });
 
   if (tab === 'aggregate') return head + `<div class="grid g2">
-      ${C.kpi({ k: L('People across parishes', 'المؤمنون عبر الرعايا'), v: num(PARISHES.reduce((a, p) => a + p.people, 0)),
-                sub: `${PARISHES.length} ${L('parishes', 'رعايا')}`, delta: L('+2.1% this year', '+٢٫١٪ هذه السنة'), spark: ATTENDANCE_SERIES })}
-      ${C.kpi({ k: L('Sacraments registered, 2026', 'الأسرار المسجَّلة ٢٠٢٦'), v: '118', sub: L('across all registers', 'في كل السجلات'),
-                delta: L('+9 on 2025', '+٩ عن ٢٠٢٥') })}
+      ${C.kpi({ k: L('People across accessible parishes', 'المؤمنون في الرعايا المتاحة'), v: num(PARISHES.reduce((a, p) => a + p.people, 0)),
+                sub: `${PARISHES.length} ${L('parishes', 'رعايا')}` })}
+      ${C.kpi({ k: L(`Sacraments registered, ${new Date().getFullYear()}`, `الأسرار المسجَّلة ${new Date().getFullYear()}`), v: num(PARISHES.reduce((a, p) => a + (p.sacramentsYear || 0), 0)), sub: L('across accessible registers', 'في السجلات المتاحة') })}
     </div>
     ${panel(L('Parishioners by parish', 'المؤمنون حسب الرعية'), C.barChart(
       PARISHES.map(p => ({ label: L(p.name, p.ar), v: p.people, max: 2200, text: num(p.people) }))))}
@@ -65,36 +64,68 @@ export function eparchy(tab = '') {
 }
 eparchy.mount = host => { C.wire(host); wireTables(host); };
 
+export function assignments() {
+  if (!is('bishop')) return empty('shield', L('Bishop access required', 'تتطلّب صلاحية المطران'), L('Only the bishop can assign parish priests.', 'المطران وحده يعيّن كهنة الرعايا.'));
+  return pageHead({ crumbs: [{ label: L('Archdiocese', 'الأبرشية') }, { label: L('Priest assignments', 'تعيينات الكهنة') }],
+    title: L('Priest assignments', 'تعيينات الكهنة'),
+    sub: L('Read-only view of clergy assignments. Changes are made by an operator on the parish server.', 'عرض تعيينات الكهنة للقراءة فقط. يجري المشغّل التغييرات على خادم الرعية.') }) +
+    `<div id="assignment-body" class="tabbody"><p class="dim">${L('Loading assignments…', 'جارٍ تحميل التعيينات…')}</p></div>`;
+}
+assignments.mount = async host => {
+  const body = host.querySelector('#assignment-body'); if (!body) return;
+  try {
+    const data = await api('assignments');
+    body.innerHTML = data.priests.length ? data.priests.map(priest => `<section class="panel" style="margin-bottom:16px" data-priest="${esc(priest.id)}">
+      <div class="panel-h"><h3>${esc(priest.name)}</h3></div><div class="panel-b"><div class="stack" style="gap:10px">${data.parishes.filter(p=>priest.parishes.includes(p.id)).map(p =>
+        `<div class="listrow"><span>${esc(L(p.name, p.ar))} · ${esc(L(p.town, p.townAr))}</span></div>`).join('') || `<p class="help">${L('No assigned parishes.','لا رعايا معيّنة.')}</p>`}</div></div></section>`).join('')
+      : empty('people', L('No priest accounts yet', 'لا حسابات كهنة بعد'), L('Create a priest account on the server, then assign its parishes here.', 'أنشئ حساب كاهن على الخادم ثم عيّن رعاياه هنا.'));
+  } catch (e) { body.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; }
+};
+
 /* ═══════════ 15 · forms & workflows ═══════════ */
 const WTABS = () => [['', 'Workflows', 'المسارات'], ['runs', 'Open tasks', 'المهام المفتوحة', RUNS.length],
-               ['builder', 'Form builder', 'بناء الاستمارة'], ['log', 'Execution log', 'سجل التنفيذ']];
+               ['builder', 'Form builder', 'بناء الاستمارة'], ['log', 'Activity log', 'سجل النشاط']];
+const wfSteps = w => (w && (isAr() ? w.stepsAr : w.steps)) || w?.steps || [];
+const nameIn = p => p ? L(p.lat, p.ar || p.lat) : '';
+const RULE_OPS = { '=': ['is', 'هو'], '≠': ['is not', 'ليس'] };
 
 export function forms(tab = '') {
+  if (tab !== 'runs') S.ui.runWf = '';          // the queue filter belongs to the visit that set it
   const head = pageHead({
     crumbs: [{ label: L('Administration', 'الإدارة') }, { label: L('Forms & workflows', 'الاستمارات والمسارات') }],
-    title: L('Forms, workflows and automation', 'الاستمارات والمسارات والأتمتة'),
-    sub: L('A request becomes a tracked task with an owner, a due date and a visible outcome.',
-           'يتحوّل الطلب إلى مهمّة متابَعة لها مسؤول ومهلة ونتيجة ظاهرة.'),
+    title: L('Forms and workflows', 'الاستمارات ومسارات العمل'),
+    sub: L('Each request moves through set steps. Every step has a person responsible and a due date, so nothing is forgotten.',
+           'يمرّ كل طلب بخطوات محدّدة، ولكل خطوة شخص مسؤول وموعد، فلا يُنسى شيء.'),
     actions: `${tab === 'builder' ? '' : `<button class="btn btn-secondary" data-go="forms/builder">${icon('doc', 17)}${L('Form templates', 'قوالب الاستمارات')}</button>`}
       <button class="btn btn-primary" data-act="wf-new">${icon('plus', 17)}${L('New workflow', 'مسار جديد')}</button>`
   }) + tabBar('forms', WTABS(), tab);
 
-  if (tab === 'runs') return head + `${table({
-      cols: [{ label: L('Workflow', 'المسار'), sort: true }, { label: L('Subject', 'الموضوع') },
-             { label: L('Step', 'الخطوة') }, { label: L('Owner', 'المسؤول'), cls: 'hide-sm' },
-             { label: L('Due', 'المهلة'), sort: true }, { label: '', cls: 'shrink' }],
-      rows: RUNS.map(r => { const w = WORKFLOWS.find(x => x.id === r.wf);
-        return { cells: [
-          `<b>${esc(L(w.name, w.ar))}</b>`,
-          r.subject ? who(person(r.subject)) : `<span class="dim">${L('Parish expense', 'مصروف الرعية')}</span>`,
-          `<span style="display:block;min-width:120px"><span class="t-caption dim tnum">${r.step} / ${r.total}</span>
-            <span class="meter" style="margin-top:6px"><i style="width:${Math.round(r.step / r.total * 100)}%"></i></span></span>`,
-          who(person(r.owner)),
-          r.overdue ? pill(`${fmtDate(r.due)} · ${L('overdue', 'متأخرة')}`, 'danger') : `<span class="mono dim">${fmtDate(r.due)}</span>`,
-          `<button class="btn btn-secondary btn-dense" data-run="${r.id}">${L('Open', 'فتح')}</button>`]}; })
-    })}
-    ${C.inlineAlert('warning', L('One task is past its due date', 'مهمّة واحدة تجاوزت مهلتها'),
-      L('Escalation is a reminder to a named person, never an automatic decision.', 'التصعيد تذكير لشخص مسمّى، لا قرار تلقائي.'))}`;
+  if (tab === 'runs') {
+    const only = WORKFLOWS.find(w => w.id === S.ui.runWf), runs = RUNS.filter(r => WORKFLOWS.some(w => w.id === r.wf) && (!only || r.wf === only.id));
+    const late = runs.filter(r => r.overdue).length;
+    return head + `${only ? `<div class="toolbar" style="margin-bottom:14px">
+        <span class="chip chip-on" style="gap:6px">${icon('filter', 14)}${esc(L(only.name, only.ar))}</span>
+        <span class="t-caption dim">${runs.length} ${L('open', 'مفتوحة')}</span>
+        <button class="btn btn-ghost btn-dense" data-act="wf-queue:">${L('Show every workflow', 'عرض كل المسارات')}</button></div>` : ''}
+      ${table({
+        cols: [{ label: L('Workflow', 'المسار'), sort: true }, { label: L('For', 'لـ') },
+               { label: L('Current step', 'الخطوة الحالية') }, { label: L('Responsible', 'المسؤول'), cls: 'hide-sm' },
+               { label: L('Due', 'الموعد'), sort: true }, { label: '', cls: 'shrink' }],
+        rows: runs.map(r => { const w = WORKFLOWS.find(x => x.id === r.wf), steps = wfSteps(w);
+          return { cls: 'clickable', attrs: `data-run="${r.id}" tabindex="0"`, cells: [
+            `<b>${esc(L(w.name, w.ar))}</b>`,
+            r.subject ? who(person(r.subject)) : `<span class="dim">${L('Parish expense', 'مصروف الرعية')}</span>`,
+            `<span style="display:block;min-width:150px"><b style="font-weight:500">${esc(steps[r.step] || '')}</b>
+              <span class="t-caption dim tnum" style="display:block">${L(`Step ${Math.min(r.step + 1, r.total)} of ${r.total}`, `الخطوة ${Math.min(r.step + 1, r.total)} من ${r.total}`)}</span>
+              <span class="meter" style="margin-top:6px"><i style="width:${Math.round(r.step / r.total * 100)}%"></i></span></span>`,
+            who(person(r.owner)),
+            r.overdue ? pill(`${fmtDate(r.due)} · ${L('late', 'متأخرة')}`, 'danger') : `<span class="mono dim">${fmtDate(r.due)}</span>`,
+            `<span class="btn btn-secondary btn-dense" aria-hidden="true">${L('Open', 'فتح')}</span>`]}; }),   /* the whole row opens the task */
+        empty: empty('check', L('No open tasks', 'لا مهام مفتوحة'), only ? L('Nothing is waiting in this workflow.', 'لا شيء ينتظر في هذا المسار.') : L('Every request has been dealt with.', 'عولجت كل الطلبات.'))
+      })}
+      ${late ? C.inlineAlert('warning', late === 1 ? L('One task is late', 'مهمّة واحدة متأخرة') : L(`${late} tasks are late`, `${late} مهام متأخرة`),
+        L('The person responsible is reminded. Nothing is ever decided automatically.', 'يُذكَّر الشخص المسؤول. ولا يُتّخذ أي قرار تلقائياً.')) : ''}`;
+  }
 
   if (tab === 'builder') return head + `<div class="splitview">
       <div>${panel(L('Certificate request form', 'استمارة طلب شهادة'), `
@@ -104,100 +135,110 @@ export function forms(tab = '') {
               ${f.note ? `<small style="white-space:normal">${esc(L(f.note, f.noteAr))}</small>` : ''}</span>
             <span class="chip">${esc(L(...(FIELD_TYPES[f.type] || [f.type, f.type])))}</span>${CR.recBtn('field', f.id, L('Field options', 'خيارات الحقل'))}</div>`).join('')
           || `<p class="t-caption dim">${L('No fields yet — add the first one.', 'لا حقول بعد — أضف الأول.')}</p>`}
-        <button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="dom-add-field">${icon('plus', 15)}${L('Add field', 'إضافة حقل')}</button>`)}
-        ${C.inlineAlert('info', L('Fixed field types first', 'أنواع حقول ثابتة أولاً'),
-          L('A drag-and-drop designer is deliberately deferred until these forms have been tested on real requests.',
-            'مصمّم السحب والإفلات مؤجَّل عن قصد حتى تُختبَر هذه الاستمارات على طلبات حقيقية.'))}
+        <button class="btn btn-secondary btn-dense" style="margin-top:14px" data-act="dom-add-field">${icon('plus', 15)}${L('Add field', 'إضافة حقل')}</button>
+        <p class="t-caption dim" style="margin-top:12px">${L('Fields marked * must be filled in before the request can be sent.', 'يجب ملء الحقول المعلَّمة بـ* قبل إرسال الطلب.')}</p>`)}
       </div>
       <div class="sidecol">
-        ${panel(L('Conditional logic', 'المنطق الشرطي'), `${FORM_RULES.map(r => { const a = FORM_FIELDS.find(f => f.id === r.show), b = FORM_FIELDS.find(f => f.id === r.when);
-          return `<div class="card card-flat rule" style="font:400 13px/20px var(--sans);margin-bottom:10px">
-            <span><b>${L('Show', 'أظهر')}</b> ${esc(a ? L(a.label, a.labelAr) : '—')}<br>
-            <b>${L('when', 'حين')}</b> ${esc(b ? L(b.label, b.labelAr) : '—')} <b>${esc(r.op)}</b> ${esc(L(r.value, r.valueAr))}</span>
+        ${panel(L('Show a field only when…', 'أظهر الحقل فقط حين…'), `${FORM_RULES.map(r => { const a = FORM_FIELDS.find(f => f.id === r.show), b = FORM_FIELDS.find(f => f.id === r.when);
+          return `<div class="rulecard"><span class="grow">${L('Show', 'أظهر')} <b>${esc(a ? L(a.label, a.labelAr) : '—')}</b>
+            ${L('only when', 'فقط حين يكون')} <b>${esc(b ? L(b.label, b.labelAr) : '—')}</b> ${esc(L(...(RULE_OPS[r.op] || [r.op, r.op])))} <b>${esc(L(r.value, r.valueAr))}</b></span>
             ${C.iconBtn('close', L('Remove rule', 'إزالة القاعدة'), `data-act="rule-del:${r.id}"`)}</div>`; }).join('')
           || `<p class="t-caption dim">${L('No rules — every field always shows.', 'لا قواعد — كل الحقول تظهر دائماً.')}</p>`}
-          <button class="btn btn-secondary btn-dense" style="margin-top:12px" data-act="dom-add-rule">${icon('plus', 15)}${L('Add rule', 'إضافة قاعدة')}</button>`)}
-        ${panel(L('Validation', 'التحقّق'), `<div class="stack" style="gap:10px">
+          <button class="btn btn-secondary btn-dense" style="margin-top:4px" data-act="dom-add-rule">${icon('plus', 15)}${L('Add rule', 'إضافة قاعدة')}</button>`)}
+        ${panel(L('Checks before sending', 'تحقّق قبل الإرسال'), `<div class="stack" style="gap:10px">
           ${C.checkRow(L('Required fields must be filled', 'الحقول المطلوبة إلزامية'), { checked: true })}
           ${C.checkRow(L('Attachments limited to 10 MB', 'المرفقات حتى ١٠ ميغابايت'), { checked: true })}
-          ${C.checkRow(L('Reject a second identical request within 7 days', 'رفض طلب مطابق خلال ٧ أيام'), { checked: true })}</div>`)}
+          ${C.checkRow(L('Refuse the same request twice within 7 days', 'رفض الطلب نفسه مرّتين خلال ٧ أيام'), { checked: true })}</div>`)}
       </div></div>`;
 
-  if (tab === 'log') return head + `${panel(L('Execution history', 'سجل التنفيذ'), `
+  if (tab === 'log') return head + `${panel(L('What happened, newest first', 'ما جرى، الأحدث أولاً'), `
       <div class="timeline">${RUN_LOG.map(([when, en, ar, kind]) => `<div class="tl-item ${kind === 'err' ? 'accent' : ''}">
         <div class="when">${esc(when)}</div>
-        <div class="what">${esc(L(en, ar))}${kind === 'err' ? ` ${pill(L('Retried', 'أُعيدت'), 'warning')}` : ''}</div></div>`).join('')}</div>`)}
+        <div class="what">${esc(L(en, ar))}${kind === 'err' && /retry|محاولة/i.test(en + ar) ? ` ${pill(L('Retried', 'أُعيدت'), 'warning')}` : ''}</div></div>`).join('')}</div>`)}
     <div class="grid g2">
-      ${panel(L('Controls', 'التحكّم'), `<div class="row" style="gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-dense" data-act="wf-pause">${WORKFLOWS[0]?.paused ? L('Resume workflow', 'استئناف المسار') : L('Pause this workflow', 'إيقاف المسار مؤقتاً')}</button>
-        <button class="btn btn-secondary btn-dense" data-act="wf-retry">${L('Retry failed steps', 'إعادة الخطوات الفاشلة')}</button>
-        <button class="btn btn-danger-quiet btn-dense" data-act="wf-cancel">${L('Cancel run', 'إلغاء التنفيذ')}</button></div>
+      ${panel(L('Pause or resume a workflow', 'إيقاف مسار أو استئنافه'), `${WORKFLOWS.map(w => `<div class="listrow" style="padding-inline:0">
+          <span class="grow"><b>${esc(L(w.name, w.ar))}</b><small>${w.paused ? L('Paused — no new requests start', 'متوقّف — لا تبدأ طلبات جديدة') : L('Running', 'يعمل')}</small></span>
+          <button class="btn btn-secondary btn-dense" data-act="wf-pause:${w.id}">${w.paused ? L('Resume', 'استئناف') : L('Pause', 'إيقاف مؤقّت')}</button></div>`).join('')}
+        <div class="row" style="gap:8px;margin-top:14px"><button class="btn btn-secondary btn-dense" data-act="wf-retry">${L('Retry messages that failed', 'إعادة إرسال الرسائل الفاشلة')}</button></div>
         <p class="t-caption dim" style="margin-top:12px">${L(
-          'A retry never re-sends a message that already went out — the run history is what prevents the duplicate, not the operator’s memory.',
-          'الإعادة لا تُرسل رسالة سبق إرسالها — سجل التنفيذ هو ما يمنع التكرار، لا ذاكرة المستخدم.')}</p>`)}
-      ${panel(L('Error handling', 'معالجة الأخطاء'), `<dl class="dl">
-        <dt>${L('Retries', 'المحاولات')}</dt><dd>3 ${L('with backoff', 'مع تباعد')}</dd>
-        <dt>${L('On final failure', 'عند الفشل النهائي')}</dt><dd>${L('Stop and notify the owner', 'التوقّف وإبلاغ المسؤول')}</dd>
-        <dt>${L('Sensitive steps', 'الخطوات الحسّاسة')}</dt><dd>${L('Always wait for a person', 'تنتظر إنساناً دائماً')}</dd></dl>`)}
+          'Retrying never sends a message twice: anything already delivered is skipped.',
+          'إعادة المحاولة لا تُرسل رسالة مرّتين: ما وصل سابقاً يُتخطّى.')}</p>`)}
+      ${panel(L('When something goes wrong', 'حين يتعطّل شيء'), `<dl class="dl">
+        <dt>${L('A message fails', 'فشل رسالة')}</dt><dd>${L('Tried again up to 3 times, a little later each time', 'تُعاد حتى ٣ مرّات، بفاصل أطول كل مرّة')}</dd>
+        <dt>${L('It still fails', 'إن استمرّ الفشل')}</dt><dd>${L('The workflow stops and tells the person responsible', 'يتوقّف المسار ويُبلغ المسؤول')}</dd>
+        <dt>${L('Sensitive steps', 'الخطوات الحسّاسة')}</dt><dd>${L('Always wait for a person', 'تنتظر شخصاً دائماً')}</dd></dl>`)}
     </div>`;
 
   const cards = WORKFLOWS.map(w => {
-    const steps = (isAr() ? w.stepsAr : w.steps) || [];
+    const steps = wfSteps(w), open = RUNS.filter(r => r.wf === w.id).length;
     return `<section class="panel"><div class="panel-b">
       <div class="row" style="gap:10px;align-items:flex-start">
         <span class="avatar avatar-lg">${icon('forms', 20)}</span>
         <div style="flex:1;min-width:0"><b style="display:block;font:600 16px/22px var(--sans)">${esc(L(w.name, w.ar))}</b>
-          <small class="t-caption dim">${L('average', 'المتوسط')} ${esc(L(w.avg, w.avgAr))}</small></div>
-        ${w.paused ? pill(L('Paused', 'متوقّف'), 'warning', 'st-pause') : ''}<span class="badge ${w.open ? '' : 'badge-quiet'}">${w.open}</span>${CR.recBtn('workflow', w.id)}</div>
+          <small class="t-caption dim">${L('usually takes', 'يستغرق عادةً')} ${esc(L(w.avg, w.avgAr))}</small></div>
+        ${w.paused ? pill(L('Paused', 'متوقّف'), 'warning', 'st-pause') : ''}<span class="badge ${open ? '' : 'badge-quiet'}" title="${L('Open tasks', 'مهام مفتوحة')}">${open}</span>${CR.recBtn('workflow', w.id)}</div>
       <div class="divider"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center">
-        ${steps.map((st, i) => `<span class="t-caption" style="color:${i < 2 ? 'var(--text)' : 'var(--text-3)'}">${esc(st)}</span>
-          ${i < steps.length - 1 ? `<span class="dimmer">${icon('arrowR', 13)}</span>` : ''}`).join('')}</div>
-      <button class="btn btn-secondary" style="width:100%;margin-top:14px;min-height:34px;font-size:13px"
-        data-go="forms/runs">${L('Open queue', 'فتح الطابور')}</button>
+      <ol class="wfsteps">${steps.map((st, i) => `<li><span class="n">${i + 1}</span>${esc(st)}</li>`).join('')}</ol>
+      <button class="btn btn-secondary" style="width:100%;margin-top:14px;min-height:34px;font-size:13px" data-act="wf-queue:${w.id}">
+        ${open ? L(`See ${open} open task${open === 1 ? '' : 's'}`, `عرض المهام المفتوحة (${open})`) : L('No open tasks', 'لا مهام مفتوحة')}</button>
     </div></section>`;
   }).join('');
+  const late = RUNS.filter(r => r.overdue), lateW = late[0] && WORKFLOWS.find(w => w.id === late[0].wf);
 
   return head + `<div class="stats">
-      ${stat(L('Open tasks', 'مهام مفتوحة'), WORKFLOWS.reduce((a, w) => a + w.open, 0), L('across 5 workflows', 'في ٥ مسارات'))}
-      ${stat(L('Overdue', 'متأخرة'), 1, `<span class="down">${L('a certificate request, 4 days', 'طلب شهادة، ٤ أيام')}</span>`)}
-      ${stat(L('Closed this month', 'أُقفلت هذا الشهر'), 27, L('median 2 days', 'الوسيط يومان'))}
-      ${stat(L('Automations', 'أتمتة'), 4, L('all with a human review step', 'كلّها بخطوة مراجعة بشرية'))}
+      ${stat(L('Open tasks', 'مهام مفتوحة'), RUNS.length, L(`in ${new Set(RUNS.map(r => r.wf)).size} workflows`, `في ${new Set(RUNS.map(r => r.wf)).size} مسارات`))}
+      ${stat(L('Late', 'متأخرة'), late.length, late.length ? `<span class="down">${esc(L(lateW?.name || '', lateW?.ar || ''))} · ${fmtDate(late[0].due)}</span>` : L('nothing is late', 'لا شيء متأخر'))}
+      ${stat(L('Finished this month', 'أُنجزت هذا الشهر'), 27, L('usually within 2 days', 'عادةً خلال يومين'))}
+      ${stat(L('Automatic steps', 'خطوات تلقائية'), 4, L('a person always checks the result', 'يراجع شخصٌ النتيجة دائماً'))}
     </div>
     <div class="gridcards">${cards}</div>
     ${C.inlineAlert('info', L('Sensitive decisions always stop for a person', 'القرارات الحسّاسة تتوقّف دائماً عند شخص'),
-      L('Pastoral, safeguarding, financial and disciplinary steps are never auto-completed, however routine they look. Automation may prepare the work; it may not decide it.',
+      L('Pastoral, safeguarding, financial and disciplinary steps are never completed automatically, however routine they look. Automation may prepare the work; it never decides it.',
         'لا تُنجَز الخطوات الرعوية والحمائية والمالية والتأديبية تلقائياً مهما بدت روتينية. للأتمتة أن تُحضّر العمل لا أن تقرّره.'))}`;
+}
+
+/* One open task: its steps, who is responsible, and the next action. Also reopened after
+   "Keep the task" in the cancel confirmation. */
+export function openRun(id) {
+  const r = RUNS.find(x => x.id === id), w = r && WORKFLOWS.find(x => x.id === r.wf);
+  if (!w) return;
+  const steps = wfSteps(w), owner = person(r.owner);
+  openDrawer({
+    title: L(w.name, w.ar),
+    sub: r.subject ? esc(nameIn(person(r.subject))) : L('Parish expense', 'مصروف الرعية'),
+    body: `<ol class="runsteps">${steps.map((st, i) => `<li class="${i < r.step ? 'done' : i === r.step ? 'now' : ''}">
+        <span class="dot" aria-hidden="true">${i < r.step ? icon('check', 13) : i + 1}</span>
+        <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? L('Done', 'أُنجزت') : i === r.step ? L('Current step', 'الخطوة الحالية') : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
+      <div class="divider"></div>
+      <dl class="dl"><dt>${L('Responsible', 'المسؤول')}</dt><dd>${esc(nameIn(owner) || '—')}</dd>
+        <dt>${L('Due', 'الموعد')}</dt><dd>${fmtDate(r.due)}${r.overdue ? ` · <span style="color:var(--danger-ink);font-weight:600">${L('late', 'متأخرة')}</span>` : ''}</dd>
+        <dt>${L('If it runs late', 'إن تأخّرت')}</dt><dd>${L('Fr. Antoine Khoury is reminded after 2 days', 'يُذكَّر الأب أنطوان خوري بعد يومين')}</dd></dl>
+      <div style="margin-top:18px">${C.textarea({ label: L('Note for the next person (optional)', 'ملاحظة لمن يتابع (اختياري)'), id: 'runnote', max: 300 })}</div>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
+      <button class="btn btn-danger-quiet" data-act="wf-cancel:${r.id}">${L('Cancel task', 'إلغاء المهمّة')}</button>
+      <button class="btn btn-primary" id="run_go" style="margin-inline-start:auto" data-act="run-step:${r.id}">${icon('check', 16)}${r.step + 1 >= r.total ? L('Finish task', 'إنهاء المهمّة') : L('Mark step done', 'إنجاز الخطوة')}</button>`,
+    onMount(el) {
+      C.wire(el);
+      /* start on the steps, not in the note: on a phone, focusing the note would scroll past them and
+         open the keyboard. Focus rests on the dialog itself, so no key press completes a step by accident. */
+      el.querySelector('.drawer-body').scrollTop = 0;
+      el.tabIndex = -1; el.focus({ preventScroll: true });
+    }
+  });
 }
 
 forms.mount = host => {
   C.wire(host); wireTables(host);
-  host.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', () => {
-    const r = RUNS.find(x => x.id === b.dataset.run), w = WORKFLOWS.find(x => x.id === r.wf);
-    const steps = (isAr() ? w.stepsAr : w.steps) || [];
-    openDrawer({
-      title: L(w.name, w.ar),
-      sub: r.subject ? esc(isAr() ? person(r.subject).ar : person(r.subject).lat) : L('Parish expense', 'مصروف الرعية'),
-      body: `<div class="timeline">${steps.map((st, i) => `<div class="tl-item ${i < r.step ? 'accent' : ''}">
-          <div class="when">${i < r.step ? L('done', 'أُنجزت') : i === r.step ? L('now', 'الآن') : L('waiting', 'بانتظار')}</div>
-          <div class="what"><b>${esc(st)}</b></div></div>`).join('')}</div>
-        <div class="divider"></div>
-        <dl class="dl"><dt>${L('Owner', 'المسؤول')}</dt><dd>${esc(isAr() ? person(r.owner).ar : person(r.owner).lat)}</dd>
-          <dt>${L('Due', 'المهلة')}</dt><dd class="mono">${fmtDate(r.due)}</dd>
-          <dt>${L('Escalates to', 'يُصعَّد إلى')}</dt><dd>${L('Fr. Antoine Khoury after 2 days', 'الأب أنطوان خوري بعد يومين')}</dd></dl>
-        ${C.textarea({ label: L('Note on this step', 'ملاحظة على هذه الخطوة'), id: 'runnote', max: 300 })}`,
-      foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
-        <button class="btn btn-danger-quiet" data-act="wf-cancel">${L('Cancel run', 'إلغاء')}</button>
-        <button class="btn btn-primary" style="margin-inline-start:auto" data-act="run-step:${r.id}">${L('Complete step', 'إنجاز الخطوة')}</button>`,
-      onMount(el) { C.wire(el); }
-    });
-  }));
+  host.querySelectorAll('tr[data-run]').forEach(tr => {
+    tr.addEventListener('click', () => openRun(tr.dataset.run));
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRun(tr.dataset.run); } });
+  });
 };
 
 /* ═══════════ 16 · reporting ═══════════ */
 const REPORTS = [
-  ['attendance', 'attend', 'Attendance and visitors', 'الحضور والزوّار', 'Mass counts, catechism attendance, visitor follow-up', 'عدّ القداديس وحضور التعليم ومتابعة الزوّار'],
-  ['membership', 'people', 'Membership changes', 'تغيّرات الانتساب', 'Joins, transfers in and out, archived records', 'الانضمام والانتقال والسجلات المؤرشفة'],
+  ['attendance', 'attend', 'Group meeting attendance', 'حضور اجتماعات المجموعات', 'Recorded attendance at group meetings and activities only', 'حضور مسجّل في اجتماعات المجموعات وأنشطتها فقط'],
+  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and archived parish records', 'سجلات الرعية الحالية والمؤرشفة'],
   ['groups', 'groups', 'Group participation', 'مشاركة المجموعات', 'Roster size, attendance rate, course completion', 'حجم اللائحة ونسبة الحضور وإتمام الدورات'],
   ['volunteers', 'vol', 'Volunteer workload', 'عبء المتطوّعين', 'Availability, conflicts, who is serving too often', 'التوفّر والتعارضات ومن يخدم كثيراً'],
   ['facilities', 'rooms', 'Facility utilisation', 'استخدام المرافق', 'Hours booked, refusals, equipment loans', 'ساعات الحجز والرفض وإعارات التجهيزات'],
@@ -224,8 +265,8 @@ export function reports(id = '') {
             <small class="t-caption dim" style="display:block;margin-top:3px">${esc(L(se, sa))}</small></span>
           <span class="dimmer">${icon('chevR', 16)}</span></div></div></a>`).join('')}</div>
     ${C.inlineAlert('info', L('What these numbers are, and are not', 'ما هي هذه الأرقام وما ليست'),
-      L('An attendance count is a count of people in the building, taken by an usher. It is not a measure of faith, personal worth or pastoral need, and ParishLife does not rank anyone by it. Groups smaller than five are never broken out.',
-        'عدّ الحضور هو عدد الحاضرين في المبنى، يسجّله مُرشد. وليس مقياساً للإيمان أو القيمة أو الحاجة الرعوية، ولا يرتّب «حياة الرعية» أحداً به. ولا تُفصَّل المجموعات الأصغر من خمسة أبداً.'))}`;
+      L('Individual attendance reports cover group meetings and activities. Event check-in requires a selected eligible event. Individual attendance at Masses and feast-day liturgies is not recorded.',
+        'تشمل تقارير الحضور اجتماعات المجموعات وأنشطتها. يتطلّب تسجيل الوصول حدثاً مؤهّلاً محدداً. لا يُسجّل حضور الأفراد في القداديس وليتورجيات الأعياد.'))}`;
 }
 
 /* The period scales what is counted over time (visitors, gifts, hours, joins); averages move a little.
@@ -255,15 +296,10 @@ function reportDetail(slug) {
   const given = funds.reduce((n, f) => n + f.actual, 0);
 
   const body = {
-    attendance: () => `<div class="grid g2">
-        ${C.kpi({ k: L('Average Sunday attendance', 'متوسط حضور الأحد'), v: num(av(284)), sub: L('across 3 Masses', 'في ٣ قداديس'),
-                  delta: L('+4% on last year', '+٤٪ عن العام الماضي'), spark: ATTENDANCE_SERIES })}
-        ${C.kpi({ k: L('First-time visitors', 'زوّار لأول مرة'), v: num(Math.max(1, sc(31))), sub: inPeriod,
-                  delta: `${num(Math.round(sc(31) * 0.58))} ${L('followed up', 'جرت متابعتهم')}`, dir: 'up' })}
-      </div>
-      ${panel(L('By Mass', 'حسب القدّاس'), C.barChart([[L('Sunday 10:30', 'الأحد ١٠:٣٠'), 284, 420], [L('Sunday 08:00', 'الأحد ٠٨:٠٠'), 131, 420],
-        [L('Sunday 18:00', 'الأحد ١٨:٠٠'), 96, 120], [L('Weekday average', 'متوسط أيام الأسبوع'), 38, 120]]
-        .map(([label, v, max]) => ({ label, v: Math.min(av(v), max), max, text: `${num(Math.min(av(v), max))} / ${num(max)}` }))))}`,
+    attendance: () => panel(L('Group meetings and activities', 'اجتماعات المجموعات وأنشطتها'), table({
+      cols:[{label:L('Group','المجموعة')},{label:L('Meeting','الاجتماع')},{label:L('Present','حاضر')},{label:L('Excused','معذور')},{label:L('Absent','غائب')}],
+      rows:GROUPS.flatMap(g=>(GROUP_DETAIL[g.id]?.meetings||[]).filter(m=>m.d>=from&&m.d<=new Date().toISOString().slice(0,10)).map(m=>{const values=Object.values(m.attendance||{});return {cells:[esc(L(g.name,g.ar)),fmtDate(m.d),values.filter(v=>v==='present').length,values.filter(v=>v==='excused').length,values.filter(v=>v==='absent').length]};}))
+    })),
     giving: () => `<div class="grid g2">
         ${C.kpi({ k: `${L('Given', 'المعطى')} ${inPeriod}`, v: usd(sc(given)), sub: `L.L ${num(sc(given) * RATE.value)}`,
                   delta: fund ? L(fund.name, fund.ar) : L('All funds', 'كل الصناديق'), spark: GIVING_SERIES })}
@@ -276,12 +312,12 @@ function reportDetail(slug) {
       GROUPS.slice(0, 6).map(g => ({ label: L(g.name, g.ar), v: g.members, max: 45, text: String(g.members) })))),
     budget: () => panel(`${L('Budget against actual', 'الموازنة مقابل الفعلي')} · ${inPeriod}`,
       C.barChart(funds.map(f => ({ label: L(f.name, f.ar), v: sc(f.actual), max: sc(f.budget), text: `${usd(sc(f.actual))} / ${usd(sc(f.budget))}` })))),
-    capacity: () => panel(L('Registered against attended', 'المسجَّل مقابل الحاضر'), C.barChart([
-      { label: L('Youth retreat', 'خلوة الشبيبة'), v: 29, max: 33, text: '29 / 33' },
-      { label: L('Parish lunch', 'غداء الرعية'), v: 127, max: 141, text: '127 / 141' },
-      { label: L('Catechism year', 'سنة التعليم'), v: 186, max: 198, text: '186 / 198' }])),
-    membership: () => panel(`${L('Membership movement', 'حركة الانتساب')} · ${inPeriod}`, bars([
-      [L('Joined', 'انضمّوا'), 64], [L('Transferred in', 'انتقلوا إلينا'), 11], [L('Transferred out', 'انتقلوا عنّا'), 8], [L('Archived', 'أُرشفوا'), 7]], 80)),
+    capacity: () => panel(L('Event registration and check-in','التسجيل في الأحداث والوصول إليها'), table({
+      cols:[{label:L('Event','الحدث')},{label:L('Registered','مسجّل')},{label:L('Checked in','سجّل وصوله')}],
+      rows:REGISTRATIONS.filter(r=>EVENTS.some(e=>e.id===r.eventId&&e.kind!=='mass'&&!e.liturgy&&!e.feastLiturgy)).map(r=>({cells:[esc(L(r.event,r.eventAr)),REGISTRANTS.filter(p=>p.registrationId===r.id).length,(CHECKIN.sessions?.[r.eventId]?.rows||[]).length]}))
+    })),
+    membership: () => panel(`${L('Membership records', 'سجلات الانتساب')} · ${inPeriod}`, bars([
+      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Archived records', 'السجلات المؤرشفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
     facilities: () => panel(`${L('Room utilisation', 'استخدام القاعات')} · ${inPeriod}`, C.barChart([
       [L('Parish Hall', 'قاعة الرعية'), 68], [L('Meeting Room 1', 'قاعة اجتماعات ١'), 41], [L('Catechism Room A', 'صف التعليم أ'), 88], [L('Courtyard', 'ساحة الكنيسة'), 22]]
       .map(([label, v]) => ({ label, v: Math.min(av(v), 100), max: 100, text: `${Math.min(av(v), 100)}%` }))))
@@ -345,7 +381,7 @@ export function audit() {
       cols: [{ label: L('When', 'الوقت'), cls: 'hide-sm', sort: true }, { label: L('Who', 'من'), cls: 'hide-md' },
              { label: L('What', 'ماذا') }, { label: L('Kind', 'النوع'), cls: 'shrink' }],
       rows: AUDIT.filter(a => !kind || a.kind === ONLY[kind]).map(a => ({ attrs: 'data-find-item', cells: [
-        `<span class="mono dim" dir="ltr">${a.at}</span>`, who(person(a.who)), esc(L(a.what, a.whatAr)),
+        `<span class="mono dim" dir="ltr">${a.at}</span>`, a.who && person(a.who) ? who(person(a.who)) : esc(a.actorName || '—'), esc(L(a.what, a.whatAr)),
         pill(KINDS[a.kind][0], KINDS[a.kind][1])]})),
       empty: empty('shield', L('Nothing of this kind was recorded', 'لم يُسجَّل شيء من هذا النوع'), L('Choose All to see every event.', 'اختر «الكل» لرؤية كل الأحداث.'))
     })}
@@ -500,16 +536,16 @@ export function settings(tab = '') {
       }), { tight: true })}</div>
       <div class="sidecol">
         ${panel(L('Where this parish is saved', 'أين تُحفظ هذه الرعية'), `<p class="t-body dim" style="font-size:14px;line-height:22px">${L(
-          'Everything you add, change or delete is saved in this browser straight away and is still here after a reload. Another browser or computer keeps its own copy — move the parish with a backup file.',
-          'كل ما تضيفه أو تعدّله أو تحذفه يُحفظ في هذا المتصفّح فوراً ويبقى بعد إعادة التحميل. ولكل متصفّح أو حاسوب آخر نسخته — انقل الرعية بملف نسخة احتياطية.')}</p>
+          'Changes are saved to the parish database on the server and are available to authorized accounts after a reload or from another computer.',
+          'تُحفظ التغييرات في قاعدة بيانات الرعية على الخادم، وتبقى متاحة للحسابات المخوّلة بعد إعادة التحميل أو من حاسوب آخر.')}</p>
           <dl class="dl" style="margin-top:12px">
             <dt>${L('Last saved', 'آخر حفظ')}</dt><dd class="mono">${savedAt() ? new Date(savedAt()).toLocaleString(isAr() ? 'ar-LB' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : L('Not yet — nothing has changed', 'ليس بعد — لم يتغيّر شيء')}</dd>
             <dt>${L('Size', 'الحجم')}</dt><dd class="mono">${Math.max(1, Math.round(savedSize() / 1024))} KB</dd></dl>
           <div class="row" style="gap:8px;margin-top:14px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-dense" data-act="data-export">${icon('export', 15)}${L('Download a backup', 'تنزيل نسخة احتياطية')}</button>
-            <button class="btn btn-secondary btn-dense" data-act="data-import">${icon('doc', 15)}${L('Restore from a backup', 'استرجاع من نسخة')}</button></div>
+            <button class="btn btn-secondary btn-dense" data-act="data-export">${icon('export', 15)}${L('Download data snapshot', 'تنزيل صورة من البيانات')}</button>
+          </div>
           <div class="divider"></div>
-          <button class="btn btn-danger-quiet btn-dense" data-act="data-reset">${icon('trash', 15)}${L('Reset to the sample parish', 'العودة إلى الرعية النموذجية')}</button>`)}
+          <p class="help">${L('Restoring a database backup requires a reviewed administrator operation.', 'استعادة نسخة قاعدة البيانات تتطلب إجراءً إدارياً مُراجعاً.')}</p>`)}
         ${panel(L('Permanent deletion', 'الحذف النهائي'), `<p class="t-body dim" style="font-size:14px">${L(
           'Permanent deletion is a reviewed request, not a button. The reviewer is shown exactly what would be lost before they can confirm, and sacramental records are never deletable.',
           'الحذف النهائي طلب يُراجَع لا زرّ. ويُعرَض على المراجع ما سيُفقَد قبل التأكيد، وسجلات الأسرار غير قابلة للحذف أبداً.')}</p>
@@ -623,21 +659,20 @@ export function styleguide(tab = '') {
 
   const T = {
     '': () => `
-      ${spec(L('Colour', 'اللون'), L('Six brand colours; everything else is derived', 'ستة ألوان أساسية وما عداها مشتقّ'), `
+      ${spec(L('Colour', 'اللون'), L('Forest green, sage and warm white throughout the product', 'الأخضر الداكن والمريمي والأبيض الدافئ في جميع أجزاء التطبيق'), `
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Ink', 'حبر'), '#0D1B2A', L('Rail, dark panels', 'الشريط واللوحات الداكنة'))}
-          ${swatch(L('Navy', 'كحلي'), '#1B263B', L('Body text, primary hover', 'نص المتن، تمرير الزرّ'))}
-          ${swatch(L('Slate', 'أزرق رمادي'), '#415A77', L('Primary action, links, focus', 'الفعل الأساسي والروابط والتركيز'))}
-          ${swatch(L('Sage', 'مريمي'), '#778D7A', L('Sync dot, quiet marks', 'نقطة المزامنة والعلامات الهادئة'))}
-          ${swatch(L('Sand', 'رملي'), '#D4C4A8', L('Marker on dark, fills', 'العلامة على الداكن والتعبئة'))}
-          ${swatch(L('Cream', 'كريمي'), '#F4F1DE', L('Page ground', 'أرضية الصفحة'))}
+          ${swatch(L('Forest green', 'أخضر داكن'), '#233B32', L('Actions, rail and body text', 'الأفعال والشريط ونص المتن'))}
+          ${swatch(L('Soft sage', 'مريمي فاتح'), '#EDF0E8', L('Soft fills and selected states', 'الخلفيات الناعمة وحالات التحديد'))}
+          ${swatch(L('White', 'أبيض'), '#FFFFFF', L('Cards, forms and print', 'البطاقات والاستمارات والطباعة'))}
+          ${swatch(L('Selection sage', 'مريمي التحديد'), '#D6E1D0', L('Selected navigation and quiet highlights', 'التنقّل المحدّد والإبراز الهادئ'))}
+          ${swatch(L('Muted sage gray', 'رمادي مريمي'), '#607068', L('Secondary text, accents and charts', 'النص الثانوي واللمسات والرسوم'))}
         </div>
         <div class="divider"></div>
         <div class="gridcards" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
-          ${swatch(L('Surface', 'سطح'), '#FFFFFF', L('Cards, tables, drawers', 'البطاقات والجداول والأدراج'))}
-          ${swatch(L('Muted', 'مكتوم'), '#EAE6D2', L('Table headers, hover rows', 'رؤوس الجداول وصفوف التمرير'))}
-          ${swatch(L('Border', 'حدّ'), '#DDD8C2', L('1px hairlines', 'خطوط ١ بكسل'))}
-          ${swatch(L('Accent', 'لهجة'), '#7E6435', L('Eyebrows, feast markers on light', 'العناوين الفوقية وعلامات الأعياد'))}
+          ${swatch(L('Warm white', 'أبيض دافئ'), '#F7F7F2', L('Page background', 'خلفية الصفحة'))}
+          ${swatch(L('Paper', 'لون الورق'), '#F7F7F2', L('Table headers and summary cards', 'رؤوس الجداول وبطاقات الملخّص'))}
+          ${swatch(L('Sage accent', 'لمسة مريمية'), '#9BAC9F', L('Charts and small marks', 'الرسوم والعلامات الصغيرة'))}
+          ${swatch(L('Sage border', 'حدّ مريمي'), '#9BAC9F', L('Control outlines', 'حدود الضوابط'))}
         </div>
         <div class="divider"></div>
         <div class="row" style="gap:10px;flex-wrap:wrap">
@@ -648,7 +683,7 @@ export function styleguide(tab = '') {
 
       ${spec(L('Type', 'الخطّ'), L('Six sizes, two families', 'ستة أحجام وعائلتان'), `
         <div class="tablescroll"><table class="tbl">
-          <thead><tr><th>${L('Token', 'الرمز')}</th><th>${L('Inter / Latin', 'إنتر / لاتيني')}</th>
+          <thead><tr><th>${L('Token', 'الرمز')}</th><th>${L('Inter / English', 'إنتر / إنكليزي')}</th>
             <th>${L('Plex Arabic', 'بلكس عربي')}</th><th>${L('Spec', 'المواصفة')}</th></tr></thead>
           <tbody>${[['t-display', 'Saint Elias', 'مار الياس', '32 / 40 / 600'],
                     ['t-heading', 'Baptism register', 'سجل المعمودية', '24 / 32 / 600'],
@@ -728,13 +763,13 @@ export function styleguide(tab = '') {
 
       ${spec(L('Text fields', 'الحقول النصّية'), L('40px · 6px radius · label above, helper below', '٤٠ بكسل · استدارة ٦ · التسمية فوق والمساعدة تحت'), `
         <div class="formgrid">
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), req: true, value: 'Georges Haddad',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), req: true, value: 'Georges Haddad',
                       help: L('As it appears on the ID card.', 'كما يظهر على الهوية.') })}
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), req: true, value: 'G', state: 'error',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), req: true, value: 'G', state: 'error',
                       help: L('Enter at least 2 characters.', 'أدخل حرفين على الأقل.'), helpTone: 'help-error' })}
           ${C.field({ label: L('Envelope number', 'رقم المظروف'), value: '0142', state: 'ok',
                       help: L('Available.', 'متاح.'), helpTone: 'help-ok', tail: `<span style="color:var(--success)">${icon('check', 16)}</span>` })}
-          ${C.field({ label: L('Latin name', 'الاسم اللاتيني'), value: 'Georges Haddad', state: 'disabled',
+          ${C.field({ label: L('English name', 'الاسم الإنكليزي'), value: 'Georges Haddad', state: 'disabled',
                       help: L('Locked while the record is archived.', 'مقفل ما دام السجل مؤرشفاً.') })}
           ${C.field({ label: L('Envelope number', 'رقم المظروف'), value: '0142', state: 'loading',
                       help: L('Checking if this envelope is free…', 'يجري التحقّق من توفّر المظروف…') })}
@@ -746,7 +781,7 @@ export function styleguide(tab = '') {
           ${C.stepper({ label: L('Seats in the hall', 'المقاعد في القاعة'), value: 120, id: 'sgst',
             help: L('Steppers are 38px wide so a thumb can hit them.', 'أزرار الزيادة ٣٨ بكسل ليصلها الإبهام.') })}
           <div class="formrow"><label class="label">${L('Find a parishioner', 'ابحث عن مؤمن')}</label>
-            ${C.searchClear(L('Searches Arabic and Latin name at once', 'يبحث في الاسمين معاً'), 'sgsc')}</div>
+            ${C.searchClear(L('Searches Arabic and English name at once', 'يبحث في الاسمين معاً'), 'sgsc')}</div>
         </div>`)}
 
       ${spec(L('Choosing', 'الاختيار'), L('Every option row is 44px', 'كل صف خيار ٤٤ بكسل'), `
@@ -962,7 +997,7 @@ export function styleguide(tab = '') {
         <div class="grid g3" style="gap:16px">
           ${C.kpi({ k: L('Given this month', 'المعطى هذا الشهر'), v: usd(8420), sub: `L.L ${num(8420 * RATE.value)}`,
                     delta: L('+12% vs Sept', '+١٢٪ عن أيلول'), spark: GIVING_SERIES })}
-          ${C.kpi({ k: L('Sunday attendance', 'حضور الأحد'), v: '412', sub: L('across 3 Masses', 'في ٣ قداديس'), spark: ATTENDANCE_SERIES })}
+          ${C.kpi({ k: L('Group meeting attendance', 'حضور اجتماعات المجموعات'), v: '86%', sub: L('illustrative component data', 'بيانات توضيحية للمكوّن'), spark: ATTENDANCE_SERIES })}
           ${C.kpi({ k: L('Volunteers active', 'متطوّعون نشطون'), v: '96', sub: L('this quarter', 'هذا الفصل'),
                     delta: L('−4 on last quarter', '−٤ عن الفصل الماضي'), dir: 'down' })}
         </div>
@@ -1037,7 +1072,7 @@ styleguide.mount = host => {
     large: true, title: L('Large drawer — 720', 'درج كبير — ٧٢٠'),
     sub: L('Used where a form needs two columns or a preview sits beside the fields.', 'يُستعمل حين تحتاج الاستمارة عمودين أو معاينة إلى جانب الحقول.'),
     body: `<div class="formgrid">${C.field({ label: L('Arabic name', 'الاسم العربي'), ar: true, dir: 'rtl' })}
-      ${C.field({ label: L('Transliteration', 'الحرف اللاتيني') })}</div>${C.addressCascade()}`,
+      ${C.field({ label: L('English name', 'الاسم الإنكليزي') })}</div>${C.addressCascade()}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`,
     onMount(el) { C.wire(el); }
   }));

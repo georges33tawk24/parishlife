@@ -60,7 +60,7 @@
     },
     secretary: {
       en: 'Secretary', ar: 'أمينة السرّ', user: 'Rita Nassar', userAr: 'ريتا نصّار', initials: 'RN',
-      noteEn: 'People, records, events and messaging. Giving is not in the rail at all — hiding beats greying out.',
+      noteEn: 'People, records, events and messaging. Giving is not in the rail at all — hidden modules do not appear.',
       noteAr: 'المؤمنون والسجلّات والأحداث والمراسلة. التقدمات غائبة كلياً عن الشريط — الإخفاء أفضل من الإطفاء.',
       titleEn: 'Good morning, Rita', titleAr: 'صباح الخير يا ريتا',
       subEn: '4 certificate requests · 2 new registrations from the portal',
@@ -120,21 +120,9 @@
         ['l', 'Message my group', 'مراسلة مجموعتي', 'msg', '']
       ]
     },
-    volunteer: {
-      en: 'Volunteer', ar: 'متطوّع', user: 'Elias Aoun', userAr: 'الياس عون', initials: 'EA',
-      noteEn: 'One station, no navigation. In production the kiosk runs full-screen with no rail and no top bar — a 48px keypad and a very large Done button.',
-      noteAr: 'محطة واحدة بلا تنقّل. في التشغيل الفعلي يعمل الكشك ملء الشاشة بلا شريط جانبي ولا شريط علوي — لوحة أرقام ٤٨ بكسل وزرّ «تمّ» كبير جداً.',
-      titleEn: 'Sunday 10:30 check-in', titleAr: 'تسجيل الأحد ١٠:٣٠',
-      subEn: '184 checked in · 12 children awaiting a guardian code',
-      subAr: '١٨٤ مسجّلاً · ١٢ طفلاً بانتظار رمز وليّ الأمر',
-      items: [
-        ['l', 'Check-in', 'التسجيل', 'checkin', '', 1],
-        ['l', 'Children', 'الأطفال', 'family', '12']
-      ]
-    }
   };
 
-  var order = ['priest', 'secretary', 'treasurer', 'leader', 'volunteer'];
+  var order = ['priest', 'secretary', 'treasurer', 'leader'];
   var current = 'priest';
   var tabs = document.getElementById('roletabs');
   var rail = document.getElementById('rolerail');

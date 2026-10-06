@@ -41,10 +41,10 @@ export const avatar = (p, cls = '', key = p?.id) => PHOTOS[key]
   ? `<span class="avatar has-photo ${cls}" style="background-image:url(${PHOTOS[key]})" aria-hidden="true"></span>`
   : `<span class="avatar ${cls}" aria-hidden="true">${esc(initials(p))}</span>`;
 
-/** Bilingual name pair — the Arabic record leads in Arabic, the Latin in English. */
+/** Personal names always show English first, followed by Arabic. */
 export function who(p, { avatarCls = '' } = {}) {
   if (!p) return `<span class="dimmer">—</span>`;
-  const lead = isAr() ? p.ar : p.lat, sub = isAr() ? p.lat : p.ar;
+  const lead = p.lat, sub = p.ar;
   return `<span class="who">${avatar(p, avatarCls)}<span class="truncate">
     <b>${esc(lead)}</b><small>${esc(sub)}</small></span></span>`;
 }
@@ -63,13 +63,20 @@ export const pill = (label, tone = '', mark = true) => {
 const STATUS = {
   approved:      ['Approved', 'موافَق عليه', 'success', 'st-ok'],
   registered:    ['Registered', 'مسجَّل', 'success', 'st-ok'],
+  issued:        ['Issued', 'صدرت', 'success', 'st-ok'],
   accepted:      ['Accepted', 'مقبول', 'success', 'st-ok'],
   sent:          ['Sent', 'أُرسلت', 'success', 'st-sent'],
   paid:          ['Paid', 'مدفوع', 'success', 'st-ok'],
   closed:        ['Closed', 'مقفلة', 'success', 'st-ok'],
   member:        ['Member', 'منتسب', 'success', 'st-ok'],
   ready:         ['Ready', 'جاهز', 'success', 'st-ok'],
+  completed:     ['Completed', 'مكتمل', 'success', 'st-ok'],
+  celebrated:    ['Celebrated', 'تمّ الاحتفال', 'success', 'st-ok'],
   open:          ['Open', 'مفتوحة', 'info', 'st-open'],
+  requested:     ['Request received', 'استُلم الطلب', 'warning', 'st-review'],
+  'office-reviewed': ['Office reviewed', 'راجعه المكتب', 'warning', 'st-review'],
+  preparing:     ['In preparation', 'قيد التحضير', 'info', 'st-wait'],
+  legacy:        ['Needs linked record', 'يحتاج قيداً مرتبطاً', 'warning', 'st-alert'],
   scheduled:     ['Scheduled', 'مجدوَل', 'info', 'st-wait'],
   draft:         ['Draft', 'مسوّدة', 'info', 'st-open'],
   visitor:       ['Visitor', 'زائر', 'info', 'people'],
@@ -80,6 +87,7 @@ const STATUS = {
   unfilled:      ['Unfilled', 'شاغر', 'warning', 'st-alert'],
   conflict:      ['Conflict', 'تعارض', 'danger', 'st-alert'],
   rejected:      ['Rejected', 'مرفوض', 'danger', 'st-no'],
+  cancelled:     ['Cancelled', 'ملغى', 'danger', 'st-no'],
   declined:      ['Declined', 'اعتذر', 'danger', 'st-no'],
   failed:        ['Failed', 'فشل الإرسال', 'danger', 'st-no']
 };
@@ -87,6 +95,7 @@ export function status(key) {
   const s = STATUS[key];
   return s ? pill(t(s[0], s[1]), s[2], s[3]) : pill(key);
 }
+export const statusLabel = key => STATUS[key] ? t(STATUS[key][0], STATUS[key][1]) : key;
 
 /** USD leads at full size, LBP follows in mono, and the rate travels with it. */
 export function amount(dollars, { showRate = false, cls = '' } = {}) {
@@ -277,7 +286,7 @@ export function openModal(opts) {
   ensureOverlays();
   lastFocus = document.activeElement;
   gen++;
-  modalEl.innerHTML = `<div class="sheet">${shell('modal', opts)}</div>`;
+  modalEl.innerHTML = `<div class="sheet${opts.wide ? ' sheet-wide' : ''}">${shell('modal', opts)}</div>`;
   void modalEl.offsetWidth;
   scrimEl.classList.add('open'); modalEl.classList.add('open');
   modalEl.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeOverlays));
@@ -308,7 +317,7 @@ export function closeMenu() {
 function menuItems(items) {
   return items.map((it, i) => it.sep ? '<div class="sep"></div>'
     : it.head ? `<div class="head">${esc(it.head)}</div>`
-    : `<button type="button" class="${it.danger ? 'danger' : ''} ${it.sub ? 'hassub' : ''}" data-mi="${i}" role="menuitem">
+    : `<button type="button" class="${it.danger ? 'danger' : ''} ${it.sub ? 'hassub' : ''} ${['present','excused','absent','unrecorded'].includes(it.tone) ? `attendance-option-${it.tone}` : ''}" data-mi="${i}" role="menuitem">
         ${it.icon ? icon(it.icon, 16) : ''}<span style="flex:1">${esc(it.label)}</span>
         ${it.hint ? `<span class="t-caption dimmer">${esc(it.hint)}</span>` : ''}
         ${it.sub ? icon('chevR', 14) : ''}</button>`).join('');
