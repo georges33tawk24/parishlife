@@ -1,0 +1,32 @@
+/* ParishLife on Cloudflare Workers: the API from server.py (cloudflare/src) with the
+   SQLite data in D1, and the existing pages and assets served as static assets.
+   See cloudflare/README.md. */
+{
+  "name": "parishlife",
+  "main": "cloudflare/src/worker.js",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    /* .assetsignore limits the upload to what server.py serves publicly. */
+    "directory": ".",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parishlife",
+      "database_id": "4b820562-ef3a-4d21-ab0c-78ab6c60703a"
+    }
+  ],
+  "vars": {
+    /* server.py used the computer's local date; the parish is in Lebanon. */
+    "PARISH_TIMEZONE": "Asia/Beirut"
+  },
+  /* Run near the database, since each API request makes several D1 queries. */
+  "placement": { "mode": "smart" },
+  "observability": { "enabled": true }
+}
