@@ -22,6 +22,10 @@ Leaders can save group messaging automation and rule configurations. They are re
 
 The first start creates `var/parishlife.sqlite3` from `backend/seed.json`. Saint Elias contains sample data; the other sample parishes start with independent empty records. The `var/` directory is ignored by Git. Back up the database file with the server stopped or with SQLite's backup facility. The browser's Data snapshot export is a review artifact, not a database restore path.
 
+## Cloudflare
+
+The same application also runs on Cloudflare Workers with a Cloudflare D1 database, without `server.py`; see [cloudflare/README.md](cloudflare/README.md).
+
 ## Architecture
 
 - `server.py`: same-origin HTTP API, password-authenticated sessions, CSRF token, parish assignment checks, collection write permissions, SQLite schema, migrations, register workflow, and audit trail.

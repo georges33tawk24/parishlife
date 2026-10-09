@@ -1,0 +1,17 @@
+# Workers Static Assets uploads the repository root (wrangler.jsonc "assets").
+# Publish exactly what server.py serves: the three pages, and under assets/ the
+# scripts and styles, images in assets/images and fonts in assets/fonts.
+# Server code, data, docs and everything else are never uploaded.
+*
+!/index.html
+!/landing.html
+!/public.html
+!/assets/
+!/assets/**/
+!/assets/**/*.js
+!/assets/**/*.css
+!/assets/images/**/*.jpg
+!/assets/images/**/*.jpeg
+!/assets/images/**/*.png
+!/assets/images/**/*.webp
+!/assets/fonts/**/*.woff2

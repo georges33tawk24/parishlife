@@ -1,0 +1,6 @@
+# Same response headers server.py adds to every page and asset.
+/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  X-Frame-Options: DENY

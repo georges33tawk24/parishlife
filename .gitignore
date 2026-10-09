@@ -2,3 +2,5 @@ var/
 __pycache__/
 *.pyc
 test-results/
+.wrangler/
+node_modules/

@@ -518,11 +518,13 @@ def visible(c, u, pid, d):
     return d
 
 
+def iso_date(value):
+    if not isinstance(value, str): return False
+    try: return dt.date.fromisoformat(value).isoformat() == value
+    except ValueError: return False
+
+
 def validate(d):
-    def iso_date(value):
-        if not isinstance(value, str): return False
-        try: return dt.date.fromisoformat(value).isoformat() == value
-        except ValueError: return False
     def index(key):
         rows = d[key]
         require(isinstance(rows, list) and all(isinstance(x, dict) and isinstance(x.get('id'), str) for x in rows), 'Invalid ' + key)
@@ -906,7 +908,7 @@ def save_patch(c, u, pid, payload):
             history = request.get('history', [])
             require(isinstance(history, list) and len(history) == len(before.get('history', [])) + 1
                     and history[:-1] == before.get('history', []) and history[-1].get('status') == request['status']
-                    and history[-1].get('by') == u.get('person_id'), 'Service transition requires an audit entry.')
+                    and history[-1].get('by') == u['person_id'], 'Service transition requires an audit entry.')
             if request['status'] == 'ready' and request.get('kind', '').lower() in {'baptism', 'wedding'}:
                 required = ('Parents’ marriage certificate', 'Godparent baptism certificate', 'Preparation session attended') if request['kind'].lower() == 'baptism' else ('Baptism certificates, both', 'Freedom-to-marry declaration', 'Pre-marriage course', 'Civil file reference')
                 require(all(request.get('documents', {}).get(item) for item in required), 'Complete the missing preparation requirements first.')
@@ -1188,7 +1190,7 @@ def workflow(c, u, pid, q):
         if source: request_history.append(dict(action='submitted for clergy review', by=u['name'], at=at))
         d['SACRAMENTS'].insert(0, dict(id=request_id, kind='certificate', kindAr='طلب شهادة',
             reg=f'{prefix}{number:03d}', person=person_id, date=TODAY(),
-            celebrant=(source or planned or {}).get('celebrant') or u.get('person_id') or '',
+            celebrant=(source or planned or {}).get('celebrant') or u['person_id'] or '',
             status='awaiting-signature' if source else 'draft', sourceRecordId=source_id, requestedSacramentId=planned_id,
             purpose=purpose, godparents='', history=request_history, revision=1))
     elif action in {'submit', 'approve', 'issue', 'reject', 'cancel'}:
