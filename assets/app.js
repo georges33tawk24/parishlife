@@ -1,6 +1,5 @@
-/* ParishLife — application shell.
-   Frontend only: no fetch, no server, no build step. Views render HTML strings
-   into the content well; the rail and the top bar never re-render. */
+/* ParishLife application shell. Views render HTML strings into the content well;
+   the server owns authentication, parish access, and authoritative records. */
 import { icon } from './icons.js';
 import { t, isAr, lang, setLang, num, fmtLong, matches } from './i18n.js';
 import { PARISH, PARISHES, RATE, TODAY, PEOPLE, PHOTOS, person, initials } from './data.js';
@@ -8,32 +7,65 @@ import * as D from './data.js';
 import { closeOverlays, toast, openModal, openDrawer, esc, avatar, catchAll, openPopover, closeMenu } from './ui.js';
 import { S, ROLES, MOBILE_NAV, role, me, canSee, go, save, bus } from './store.js';
 import { wireActions } from './actions.js';
-import { hydrate, persist } from './persist.js';
+import { hydrate, persist, saveFailed } from './persist.js';
+import { api, loadSession, session } from './api.js';
 import { enhanceSelects, closeDropdown } from './components.js';
+import { confirmPlanNavigation, planDirty } from './planning.js';
 
 import * as Dashboard from './views/dashboard.js';
 import * as People    from './views/people.js';
 import * as Records   from './views/records.js';
+import * as Pastoral  from './views/notes.js';
 import * as Parish    from './views/parish.js';
 import * as Spaces    from './views/spaces.js';
 import * as Money     from './views/money.js';
 import * as Comms     from './views/comms.js';
 import * as Admin     from './views/admin.js';
+import * as Oversight from './views/oversight.js';
+import * as Member from './views/member.js';
+import { M, loadMember } from './member-data.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
+  memberhome: { ico:'dash', en:'Home', ar:'الرئيسية', view:Member.home },
+  myministries: { ico:'groups', en:'My Ministries', ar:'خدماتي', view:Member.ministries },
+  mymeetings: { ico:'events', en:'Meetings', ar:'الاجتماعات', view:Member.meetings },
+  mycalendar: { ico:'events', en:'Calendar', ar:'الرزنامة', view:Member.calendar },
+  myattendance: { ico:'attend', en:'Attendance', ar:'الحضور', view:Member.attendancePage },
+  mymessages: { ico:'msg', en:'Messages', ar:'الرسائل', view:Member.messages },
+  myfeed: { ico:'bell', en:'Announcements & Posts', ar:'الإعلانات والمنشورات', view:Member.feed },
+  myresources: { ico:'doc', en:'Resources', ar:'الموارد', view:Member.resources },
+  myformation: { ico:'doc', en:'Formation', ar:'التنشئة', view:Member.formation },
+  mycommitments: { ico:'vol', en:'My Commitments', ar:'التزاماتي', view:Member.commitments },
+  mynotes: { ico:'notes', en:'My Notes', ar:'ملاحظاتي', view:Member.notes },
+  myprofile: { ico:'people', en:'My Profile', ar:'ملفي', view:Member.profile },
+  myconcerns: { ico:'shield', en:'Submit a Concern', ar:'تقديم ملاحظة', view:Member.concerns },
+  membernotifications: { ico:'bell', en:'Notifications', ar:'الإشعارات', view:Member.notificationsPage },
+  memberhub: { ico:'msg', en:'Member communication', ar:'التواصل مع الأعضاء', view:Member.hub },
+  oversight:    { ico:'portal', en:'Parish oversight', ar:'الإشراف على الرعايا', view:Oversight.oversight },
+  bishopeparchy:{ ico:'portal', en:'Eparchy', ar:'الأبرشية', view:Oversight.eparchy },
+  bishopmap:    { ico:'events', en:'Parish map', ar:'خريطة الرعايا', view:Oversight.mapView },
   dashboard:    { ico:'dash',     en:'Dashboard',        ar:'لوحة القيادة',        view:Dashboard.dashboard },
   people:       { ico:'people',   en:'People',           ar:'المؤمنون',            view:People.people,      badge:() => num(D.PEOPLE.length) },
   person:       { ico:'people',   en:'Person',           ar:'سجلّ شخص',            view:People.personView,  hidden:true },
   households:   { ico:'family',   en:'Households',       ar:'العائلات',            view:People.households,  badge:() => D.HOUSEHOLDS.length },
-  sacraments:   { ico:'sacr',     en:'Sacraments',       ar:'الأسرار',             view:Records.sacraments, badge:() => D.SACRAMENTS.filter(x => x.status === 'awaiting-signature').length },
-  certificate:  { ico:'doc',      en:'Certificate',      ar:'شهادة',               view:Records.certificate, hidden:true },
-  notes:        { ico:'notes',    en:'Pastoral notes',   ar:'ملاحظات رعوية',       view:Records.notes },
+  sacraments:   { ico:'sacr',     en:'Sacraments',       ar:'الأسرار',             view:Records.sacraments, badge:() => D.SACRAMENTS.filter(x => x.kind !== 'certificate' && ['preparing','scheduled','draft'].includes(x.status)).length },
+  requests:     { ico:'doc',      en:'Requests',         ar:'الطلبات',             view:Records.requests, badge:() => D.SACRAMENTS.filter(x => x.kind === 'certificate'
+      ? ['draft','awaiting-signature','approved'].includes(x.status)
+      : ['requested','office-reviewed','awaiting-signature'].includes(x.status)).length
+      + D.RESERVATIONS.filter(x => x.status === 'pending').length
+      + D.SERVICE_REQUESTS.filter(x => ['pending','awaiting-approval'].includes(x.status)).length
+      + D.PORTAL_REQUESTS.length + D.REGISTRATIONS.filter(x => x.waiting > 0).length },
+  certificate:  { ico:'doc',      en:'Record',           ar:'قيد',                 view:Records.certificate, hidden:true },
+  notes:        { ico:'notes',    en:'Pastoral notes',   ar:'ملاحظات رعوية',       view:Pastoral.notes },
 
   calendar:     { ico:'events',   en:'Calendar',         ar:'الرزنامة',            view:Parish.calendar },
   services:     { ico:'service',  en:'Service planning', ar:'تخطيط الخدم',         view:Parish.services },
   groups:       { ico:'groups',   en:'Groups',           ar:'المجموعات',           view:Parish.groups,      badge:() => D.GROUPS.length },
-  volunteers:   { ico:'vol',      en:'Volunteers',       ar:'المتطوّعون',           view:Parish.volunteers,  badge:() => D.ROTA.teams.flatMap(t => t.filled).filter(f => !f.p || f.s === 'declined').length },
+  attendance:   { ico:'attend',   en:'Attendance',       ar:'الحضور',              view:Parish.ministryAttendance },
+  volunteers:   { ico:'vol',      en:'Volunteers',       ar:'المتطوّعون',           view:Parish.volunteers,
+    badge:() => S.role==='leader' ? new Set(D.GROUPS.flatMap(g=>D.groupInfo(g.id).roster.map(r=>r.p))).size :
+      D.ROTA.teams.flatMap(t => t.filled).filter(f => !f.p || f.s === 'declined').length },
   registrations:{ ico:'registr',  en:'Registrations',    ar:'التسجيلات',           view:Parish.registrations },
   checkin:      { ico:'checkin',  en:'Check-in',         ar:'التسجيل عند الباب',   view:Parish.checkin },
 
@@ -52,15 +84,22 @@ export const ROUTES = {
   reports:      { ico:'reports',  en:'Reports',          ar:'التقارير',            view:Admin.reports },
   audit:        { ico:'shield',   en:'Audit trail',      ar:'سجل التدقيق',         view:Admin.audit },
   settings:     { ico:'settings', en:'Settings',         ar:'الإعدادات',           view:Admin.settings },
-  children:     { ico:'family',   en:'Children present', ar:'الأطفال الحاضرون',    view:Parish.checkin,     badge:() => D.CHECKIN.rows.length },
   eparchy:      { ico:'portal',   en:'Eparchy',          ar:'الأبرشية',            view:Admin.eparchy },
+  assignments:  { ico:'shield',   en:'Priest assignments', ar:'تعيينات الكهنة', view:Admin.assignments },
+  household:    { ico:'family',   en:'Household',         ar:'العائلة',             view:People.householdView, hidden:true },
   styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide }
 };
 
 export { S as state, ROLES, me, go };
 /* Detail views (a person, a certificate, the design system) are reachable from
    whatever module linked to them, so they ride on their parent's permission. */
-export const allowed = id => canSee(id) || !!ROUTES[id]?.hidden;
+const DETAIL_PARENT = { person: 'people', household: 'households', certificate: 'sacraments' };
+const PERSONAL_ROUTES = new Set(['memberhome','myministries','mymeetings','mycalendar','myattendance',
+  'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
+  'myconcerns','membernotifications']);
+const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
+export const allowed = id => canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+  (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
 function railHTML() {
@@ -71,13 +110,13 @@ function railHTML() {
     if (!rt) return '';
     const on = S.route === n[1];
     return `<a class="navitem ${on ? 'on' : ''}" href="#/${n[1]}" ${on ? 'aria-current="page"' : ''}>
-      ${icon(rt.ico, 18)}<span class="nl">${esc(t(rt.en, rt.ar))}</span>
+      ${icon(rt.ico, 18)}<span class="nl">${esc(S.role==='leader'&&n[1]==='services'?t('Ministry planning','تخطيط الخدمة'):t(rt.en, rt.ar))}</span>
       <span class="nb" ${rt.badge?.() ? '' : 'hidden'}>${esc(String(rt.badge?.() || ''))}</span></a>`;
   }).join('');
 
-  const sync = S.offline
-    ? `<div class="syncline offline"><span class="dot"></span><span>${t('Offline — saving locally', 'غير متصل — يُحفظ محلياً')}</span></div>`
-    : `<div class="syncline"><span class="dot"></span><span>${t('All changes saved', 'حُفظت كل التغييرات')}</span></div>`;
+  const sync = saveFailed
+    ? `<div class="syncline offline"><span class="dot"></span><span>${t('Save failed', 'تعذّر الحفظ')}</span></div>`
+    : `<div class="syncline"><span class="dot"></span><span>${t('Connected to parish records', 'متصل بسجلات الرعية')}</span></div>`;
 
   return `<aside class="rail" id="rail">
     <button class="rail-parish" id="parishbtn" style="width:100%;border:0;background:none;cursor:pointer;text-align:start">
@@ -107,8 +146,8 @@ function topbarHTML() {
       </div>
     </div>
     <div class="topbar-right">
-      <button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
-        ${icon('bell', 19)}<span class="dotmark"></span></button>
+      ${S.role === 'bishop' ? '' : `<button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
+        ${icon('bell', 19)}${S.role !== 'member' || M.notifications.some(n=>!n.read) ? '<span class="dotmark"></span>' : ''}</button>`}
       <button class="userbtn" id="userbtn" aria-label="${t('Account', 'الحساب')}">
         ${avatar(p)}
         <span class="txt"><span class="un">${esc(isAr() ? p.ar : p.lat)}</span>
@@ -129,22 +168,13 @@ function mobileHTML() {
   }).join('')}</nav>`;
 }
 
-function offbarHTML() {
-  if (!S.offline) return '';
-  return `<div class="offbar" role="status">${icon('wifi', 18)}
-    <span>${t('You are offline. Work is being saved on this computer and will sync when the connection returns.',
-              'أنت غير متصل بالإنترنت. يتم حفظ العمل على هذا الحاسوب وسيُزامَن عند عودة الاتصال.')}</span>
-    <button class="btn btn-secondary" style="min-height:32px;padding:0 12px;font-size:13px" id="retry">
-      ${t('Retry now', 'إعادة المحاولة')}</button></div>`;
-}
-
 /* ---------------- render ---------------- */
 const app = document.getElementById('app');
 
 function renderShell() {
   app.className = `app${S.collapsed ? ' collapsed' : ''}`;
   app.innerHTML = `${railHTML()}<div class="railscrim" id="railscrim"></div>
-    <div class="main">${topbarHTML()}${offbarHTML()}
+    <div class="main">${topbarHTML()}
       <main class="well" id="well" tabindex="-1"><div class="wellpad" id="view"></div></main>
     </div>${mobileHTML()}`;
   wireShell();
@@ -164,13 +194,38 @@ function wireShell() {
   document.getElementById('userbtn')?.addEventListener('click', userMenu);
   document.getElementById('bellbtn')?.addEventListener('click', notifications);
   document.getElementById('parishbtn')?.addEventListener('click', parishSwitcher);
-  document.getElementById('retry')?.addEventListener('click', () => { S.offline = false; renderAll(); });
   document.getElementById('gsearch')?.addEventListener('click', openPalette);
 }
 
 export function renderAll() {
+  if (!session.user) return loginScreen();
   renderShell();
   renderView();
+}
+
+function loginScreen(error = '') {
+  app.className = 'signin';
+  app.innerHTML = `<div class="signin-art"><div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
+    <div><h1>${t('Parish administration for your community.', 'إدارة الرعية لخدمة جماعتكم.')}</h1><p style="font-family:var(--arabic)">حياة الرعية</p></div>
+    <div class="swatches"><i style="background:#233B32;border:1px solid #EDF0E8"></i><i style="background:#EDF0E8"></i><i style="background:#FFFFFF"></i><i style="background:var(--selection)"></i><i style="background:var(--text-2)"></i></div></div>
+    <div class="signin-form"><form id="signform" novalidate><h2>${t('Sign in', 'تسجيل الدخول')}</h2>
+      <p class="dim" style="margin:6px 0 24px">${t('Use the account created by your administrator.', 'استخدم الحساب الذي أنشأه المسؤول.')}</p>
+      ${error ? `<div class="alert alert-danger" role="alert">${esc(error)}</div>` : ''}
+      <div class="formrow"><label class="label" for="si_u">${t('Username', 'اسم المستخدم')}</label><input class="input" id="si_u" required autocomplete="username"></div>
+      <div class="formrow"><label class="label" for="si_p">${t('Password', 'كلمة المرور')}</label><input class="input" id="si_p" type="password" required autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-touch" style="width:100%" type="submit">${t('Sign in', 'تسجيل الدخول')}</button>
+      <div class="langswap" role="group" style="margin:20px auto 0;width:max-content"><button type="button" data-login-lang="en">EN</button><button type="button" data-login-lang="ar">ع</button></div>
+    </form></div>`;
+  app.querySelectorAll('[data-login-lang]').forEach(b => b.addEventListener('click', () => { setLang(b.dataset.loginLang); loginScreen(); }));
+  app.querySelector('#signform').addEventListener('submit', async e => {
+    e.preventDefault(); const button = e.target.querySelector('[type=submit]'); button.disabled = true;
+    try {
+      await api('login', 'POST', { username: e.target.querySelector('#si_u').value.trim(), password: e.target.querySelector('#si_p').value });
+      await loadSession();
+      S.role = session.user.role; await hydrate(); S.route = S.role === 'bishop' ? 'oversight' : (ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'dashboard');
+      location.hash = '#/' + S.route; renderAll();
+    } catch (error) { loginScreen(error.message); }
+  });
 }
 
 /* Navigation must not rebuild the rail — rebuilding it throws away the rail's
@@ -202,6 +257,17 @@ function renderView({ keepScroll = false } = {}) {
   const rt = ROUTES[S.route] || ROUTES.dashboard;
   const host = document.getElementById('view');
   const well = document.getElementById('well'), y = well?.scrollTop || 0;
+  if (MEMBER_ROUTES.has(S.route) && M.loadedFor !== `${session.user?.id}:${session.parishId}`) {
+    host.innerHTML = `<div class="member-page member-empty"><p>${t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')}</p></div>`;
+    document.title = `${t(rt.en, rt.ar)} · ParishLife`;
+    const key = `${session.user?.id}:${session.parishId}`;
+    if (M.loadingFor !== key) {
+      M.loadingFor = key;
+      loadMember().then(() => { M.loadingFor = null; if (MEMBER_ROUTES.has(S.route)) renderView(); })
+        .catch(error => { M.loadingFor = null; toast(t('Could not load member data', 'تعذّر تحميل بيانات الأعضاء'), error.message, 'danger'); });
+    }
+    return;
+  }
   host.innerHTML = rt.view(...S.params) || '';
   (rt.mount || rt.view.mount)?.(host, ...S.params);
   host.querySelectorAll('[data-go]').forEach(el =>
@@ -226,8 +292,8 @@ function rateDialog() {
         <input class="value" id="rateinput" value="${num(RATE.value)}" ${canEdit ? '' : 'disabled'} dir="ltr"
           style="border:0;background:none;width:100%" inputmode="numeric"></div>
       <p class="help" id="ratehelp">${canEdit
-        ? t('Set 4 Oct 2026 by Fr. Antoine Khoury.', 'ضُبط في ٤ تشرين الأول ٢٠٢٦ من الأب أنطوان خوري.')
-        : t('Only the parish priest and the treasurer may change the rate.', 'الكاهن وأمين الصندوق وحدهما يغيّران السعر.')}</p>`,
+        ? t(`Last set by ${RATE.setBy || 'parish office'}.`, `ضُبط أخيراً من ${RATE.setBy || 'مكتب الرعية'}.`)
+        : t('Only clergy and the treasurer may change the rate.', 'الإكليروس وأمين الصندوق وحدهم يغيّرون السعر.')}</p>`,
     foot: `<button class="btn btn-secondary" data-close>${t('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="saverate" ${canEdit ? '' : 'disabled'} style="margin-inline-start:auto">${t('Save rate', 'حفظ السعر')}</button>`,
     onMount(el) {
@@ -242,41 +308,10 @@ function rateDialog() {
       el.querySelector('#saverate')?.addEventListener('click', () => {
         const v = parseInt(inp.value.replace(/\D/g, ''), 10);
         if (!(v >= 10000 && v <= 500000)) return inp.focus();
-        const before = RATE.value; RATE.value = v; RATE.setOn = new Date(2026, 9, 4);
+        const before = RATE.value; RATE.value = v; RATE.setOn = new Date(); RATE.setBy = session.user?.name || '';
         closeOverlays(); renderView({ keepScroll: true });
         toast(t('Rate saved', 'حُفظ السعر'), `${num(v)} L.L / $`, 'success',
           { action: { label: t('Undo', 'تراجع'), fn: () => { RATE.value = before; renderView({ keepScroll: true }); } } });
-      });
-    }
-  });
-}
-
-function roleDialog() {
-  const rows = Object.entries(ROLES).map(([k, r]) => {
-    const p = person(r.who);
-    return `<button class="listrow" data-role="${k}" style="width:100%;border:0;background:none;text-align:start;cursor:pointer">
-      ${avatar(p)}
-      <span class="grow"><b>${esc(t(r.en, r.ar))}</b><small>${esc(isAr() ? p.ar : p.lat)}</small></span>
-      ${S.role === k ? `<span class="pill pill-success"><span class="dot"></span>${t('Signed in', 'مسجّل الدخول')}</span>` : ''}
-    </button>`;
-  }).join('');
-  openModal({
-    title: t('Switch role', 'تبديل الدور'),
-    sub: t('A demo control. The rail, the screens and the permissions all change with it — what a role may not use is absent, not greyed out.',
-           'أداة عرض. الشريط والشاشات والصلاحيات تتغيّر معه — وما لا يحقّ للدور رؤيته غائب لا مطفأ.'),
-    body: `<div class="panel" style="box-shadow:none">${rows}</div>
-      <label class="switch" style="margin-top:16px">
-        <input type="checkbox" id="offtoggle" ${S.offline ? 'checked' : ''}>
-        <span>${t('Simulate being offline', 'محاكاة انقطاع الاتصال')}</span></label>`,
-    onMount(el) {
-      el.querySelectorAll('[data-role]').forEach(b => b.addEventListener('click', () => {
-        S.role = b.dataset.role; save('pl-role', S.role); closeOverlays();
-        const first = ROLES[S.role].nav.find(n => n[0] === 'l')[1];
-        if (!allowed(S.route)) { S.route = first; S.params = []; location.hash = '#/' + first; }
-        renderAll();
-      }));
-      el.querySelector('#offtoggle').addEventListener('change', e => {
-        S.offline = e.target.checked; closeOverlays(); renderAll();
       });
     }
   });
@@ -289,7 +324,7 @@ const ACTIONS = [
   ['Request a room', 'طلب قاعة', 'rooms', '#/reservations'],
   ['Take attendance', 'تسجيل الحضور', 'attend', '#/checkin'],
   ['Build this week\u2019s bulletin', 'بناء نشرة الأسبوع', 'doc', '#/notices'],
-  ['Print my week', 'اطبع أسبوعي', 'print', '#/calendar'],
+  ['Print my schedule', 'اطبع جدولي', 'print', '#/calendar'],
   ['Open the audit trail', 'فتح سجل التدقيق', 'shield', '#/audit']
 ];
 
@@ -325,8 +360,10 @@ const closePalette = () => paletteEl?.classList.remove('open');
 
 function renderPalette(q) {
   const res = paletteEl.querySelector('#cmdres');
-  const acts = ACTIONS.filter(a => matches(a[0] + ' ' + a[1], q));
-  const ppl = (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
+  const acts = ['bishop','member'].includes(S.role) ? [] : ACTIONS.filter(a => matches(a[0] + ' ' + a[1], q));
+  const ppl = S.role === 'member' ? [] : (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
+  const households = q && canSee('households') ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town||''} ${h.envelope||''}`,q)).slice(0,5) : [];
+  const records = q && canSee('sacraments') ? D.SACRAMENTS.filter(r => matches(`${r.reg||''} ${r.kind||''} ${D.person(r.person)?.lat||''}`,q)).slice(0,5) : [];
   const pages = Object.entries(ROUTES).filter(([id, r]) => !r.hidden && allowed(id) && matches(r.en + ' ' + r.ar, q)).slice(0, 5);
 
   const mark = (s2) => q ? esc(s2).replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark>$1</mark>') : esc(s2);
@@ -340,7 +377,11 @@ function renderPalette(q) {
     (ppl.length ? `<div class="ac-group">${q ? t('People', 'المؤمنون') : t('Recent', 'الأخيرة')}</div>` + ppl.map(p =>
       `<button class="ac-opt" data-href="#/person/${p.id}">${avatar(p, 'avatar-sm')}
         <span><b>${mark(isAr() ? p.ar : p.lat)}</b><small>${esc(isAr() ? p.lat : p.ar)} · ${t('Parishioner', 'مؤمن')}</small></span></button>`).join('') : '') +
-    (!acts.length && !pages.length && !ppl.length ? `<div class="ac-none">${t('Nothing matches.', 'لا نتيجة.')}</div>` : '');
+    (households.length ? `<div class="ac-group">${t('Households','العائلات')}</div>` + households.map(h=>
+      `<button class="ac-opt" data-href="#/household/${esc(h.id)}">${icon('family',17)}<span><b>${mark(isAr()?h.ar:h.name)}</b><small>${t('Household','عائلة')} · ${esc(h.town||'')}</small></span></button>`).join('') : '') +
+    (records.length ? `<div class="ac-group">${t('Sacrament records','سجلات الأسرار')}</div>` + records.map(r=>
+      `<button class="ac-opt" data-href="#/certificate/${esc(r.id)}">${icon('sacr',17)}<span><b>${mark(r.reg||r.kind)}</b><small>${t('Record','قيد')} · ${esc(D.person(r.person)?.lat||'')}</small></span></button>`).join('') : '') +
+    (!acts.length && !pages.length && !ppl.length && !households.length && !records.length ? `<div class="ac-none">${t('Nothing matches.', 'لا نتيجة.')}</div>` : '');
 
   res.querySelector('.ac-opt')?.setAttribute('aria-selected', 'true');
   res.querySelectorAll('[data-href]').forEach(b => b.addEventListener('click', () => {
@@ -351,6 +392,7 @@ function renderPalette(q) {
 /* ---------------- notifications ---------------- */
 const NOTES = D.NOTIFICATIONS;
 function notifications(e) {
+  if (S.role === 'member') { go('membernotifications'); return; }
   openPopover(e.currentTarget, `
     <div class="pop-h"><b>${t('Notifications', 'الإشعارات')}</b>
       <button class="btn btn-ghost btn-dense" id="markread" style="margin-inline-start:auto">${t('Mark all read', 'تعليم الكل كمقروء')}</button></div>
@@ -378,21 +420,33 @@ function notifications(e) {
 /* ---------------- user menu ---------------- */
 function userMenu(e) {
   const r = role(), p = me();
+  if (S.role === 'member') {
+    openPopover(e.currentTarget, `<div class="pop-user">${avatar(p, 'avatar-lg')}<span><b>${esc(p.lat)}</b><small>${t('Ministry member', 'عضو خدمة')}</small></span></div><div class="pop-b">
+      <button class="mi" data-u="profile">${icon('people',17)}<span>${t('My profile', 'ملفي')}</span></button>
+      <button class="mi" data-u="lang">${icon('msg',17)}<span>${t('Language', 'اللغة')}</span></button>
+      <button class="mi danger" data-u="signout">${icon('arrowR',17)}<span>${t('Sign out', 'تسجيل الخروج')}</span></button></div>`,
+      { width:290, onMount(el) { el.querySelectorAll('[data-u]').forEach(b => b.addEventListener('click', () => {
+        closeMenu(); if (b.dataset.u === 'profile') go('myprofile');
+        else if (b.dataset.u === 'lang') { setLang(lang === 'ar' ? 'en' : 'ar'); renderAll(); }
+        else signOut();
+      })); } });
+    return;
+  }
   openPopover(e.currentTarget, `
     <div class="pop-user">${avatar(p, 'avatar-lg')}
       <span><b>${esc(isAr() ? p.ar : p.lat)}</b><small>${esc(t(r.en, r.ar))} · ${esc(t(PARISH.name, PARISH.nameAr))}, ${esc(t(PARISH.town, PARISH.townAr))}</small></span></div>
     <div class="pop-b">
       <button class="mi" data-u="account">${icon('people', 17)}<span>${t('My account', 'حسابي')}</span></button>
+      ${session.user?.person_id ? `<button class="mi" data-u="member">${icon('groups', 17)}<span>${t('My parish life', 'حياتي الرعوية')}</span></button>` : ''}
       <button class="mi" data-u="lang">${icon('msg', 17)}<span>${t('Language', 'اللغة')}</span>
         <span class="mhint">${lang === 'ar' ? 'العربية' : 'English'}</span></button>
-      <button class="mi" data-u="rate">${icon('give', 17)}<span>${t('Exchange rate', 'سعر الصرف')}</span>
+      ${S.role === 'bishop' ? '' : `<button class="mi" data-u="rate">${icon('give', 17)}<span>${t('Exchange rate', 'سعر الصرف')}</span>
         <span class="mhint mono">${num(RATE.value)}</span></button>
-      <button class="mi" data-u="role">${icon('shield', 17)}<span>${t('Switch role (demo)', 'تبديل الدور (عرض)')}</span></button>
-      <button class="mi" data-u="settings">${icon('settings', 17)}<span>${t('Parish settings', 'إعدادات الرعية')}</span></button>
+      <button class="mi" data-u="settings">${icon('settings', 17)}<span>${t('Parish settings', 'إعدادات الرعية')}</span></button>`}
       <div class="msep"></div>
-      <div class="syncline" style="padding:8px 12px">${S.offline
-        ? `<span class="dot" style="background:var(--danger)"></span>${t('Offline — saving locally', 'غير متصل — يُحفظ محلياً')}`
-        : `<span class="dot"></span>${t('All changes saved', 'حُفظت كل التغييرات')}`}</div>
+      <div class="syncline" style="padding:8px 12px">${saveFailed
+        ? `<span class="dot" style="background:var(--danger)"></span>${t('Save failed', 'تعذّر الحفظ')}`
+        : `<span class="dot"></span>${t('Connected to parish records', 'متصل بسجلات الرعية')}`}</div>
       <div class="msep"></div>
       <button class="mi danger" data-u="signout">${icon('arrowR', 17)}<span>${t('Sign out', 'تسجيل الخروج')}</span></button>
     </div>`,
@@ -401,9 +455,10 @@ function userMenu(e) {
         const u = b.dataset.u; closeMenu();
         if (u === 'lang') { setLang(lang === 'ar' ? 'en' : 'ar'); renderAll(); }
         else if (u === 'rate') rateDialog();
-        else if (u === 'role') roleDialog();
+        else if (u === 'assignments') location.hash = '#/assignments';
         else if (u === 'settings') location.hash = '#/settings';
         else if (u === 'account') accountDrawer();
+        else if (u === 'member') go('memberhome');
         else if (u === 'signout') signOut();
       }));
   } });
@@ -415,61 +470,55 @@ function accountDrawer() {
     title: t('My account', 'حسابي'), sub: `${esc(isAr() ? p.ar : p.lat)} · ${esc(t(r.en, r.ar))}`,
     body: `<div class="row" style="gap:14px;margin-bottom:18px">${avatar(p, 'avatar-xl')}
         <div><b style="font:600 17px/24px var(--sans)">${esc(p.lat)}</b><div style="font:400 15px/24px var(--arabic);color:var(--text-2)">${esc(p.ar)}</div></div></div>
+      <dl class="dl" style="margin-bottom:20px"><dt>${t('Username','اسم المستخدم')}</dt><dd>${esc(session.user?.username||'—')}</dd>
+        <dt>${t('Access','الصلاحية')}</dt><dd>${esc(t(r.en,r.ar))}${S.role==='bishop'?` · ${t('Read-only','للقراءة فقط')}`:''}</dd>
+        <dt>${t('Parishes visible','الرعايا المتاحة')}</dt><dd>${session.parishes.length}</dd>
+        ${S.role==='bishop'?`<dt>${t('Scope','النطاق')}</dt><dd>${t('Archdiocese oversight; private member notes and pastoral records are excluded.','إشراف الأبرشية؛ لا يشمل ملاحظات الأعضاء الخاصة أو السجلات الرعوية السرية.')}</dd>`:''}</dl>
       <div class="ac-group" style="padding-inline:0">${t('Language', 'اللغة')}</div>
       <div class="langswap" role="group">
         <button data-lang="en" aria-pressed="${lang === 'en'}">English</button>
-        <button data-lang="ar" aria-pressed="${lang === 'ar'}" lang="ar">العربية</button></div>
-      <div class="divider"></div>
-      <div class="ac-group" style="padding-inline:0">${t('Preferences', 'التفضيلات')}</div>
-      <div class="stack" style="gap:12px">
-        <label class="switch"><input type="checkbox" id="offtoggle" ${S.offline ? 'checked' : ''}><span>${t('Simulate being offline', 'محاكاة انقطاع الاتصال')}</span></label>
-        <label class="switch"><input type="checkbox" checked><span>${t('Weekly giving digest', 'ملخّص التقدمات الأسبوعي')}</span></label>
-        <label class="switch"><input type="checkbox" checked><span>${t('Quiet hours 21:00–07:00', 'ساعات هدوء ٢١:٠٠–٠٧:٠٠')}</span></label>
-        <label class="switch"><input type="checkbox" checked><span>${t('Two-factor sign-in', 'دخول بخطوتين')}</span></label>
-      </div>`,
+        <button data-lang="ar" aria-pressed="${lang === 'ar'}" lang="ar">العربية</button></div>`,
     foot: `<button class="btn btn-secondary" data-close>${t('Close', 'إغلاق')}</button>`,
     onMount(el) {
       el.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { setLang(b.dataset.lang); closeOverlays(); renderAll(); }));
-      el.querySelector('#offtoggle').addEventListener('change', ev => { S.offline = ev.target.checked; closeOverlays(); renderAll(); });
     }
   });
 }
 
 /* Signing out lands on the sign-in screen — a new surface, drawn to the same rules. */
-function signOut() {
-  closeOverlays();
-  app.className = 'signin';
-  app.innerHTML = `<div class="signin-art">
-      <div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
-      <div><h1>${t('Your parish register, kept the way your parish actually works.', 'سجلّ رعيّتك، محفوظ كما تعمل رعيّتك فعلاً.')}</h1>
-        <p style="font-family:var(--arabic)">حياة الرعية</p></div>
-      <div class="swatches"><i style="background:#0D1B2A;border:1px solid rgba(244,241,222,.3)"></i><i style="background:#1B263B"></i><i style="background:#415A77"></i>
-        <i style="background:#778D7A"></i><i style="background:#D4C4A8"></i><i style="background:#F4F1DE"></i></div>
-    </div>
-    <div class="signin-form"><form id="signform" novalidate>
-      <h2>${t('Sign in', 'تسجيل الدخول')}</h2>
-      <p class="dim" style="margin:6px 0 24px">${esc(t(PARISH.name, PARISH.nameAr))} · ${esc(t(PARISH.town, PARISH.townAr))}</p>
-      <div class="formrow"><label class="label" for="si_u">${t('Email or phone', 'البريد أو الهاتف')}</label>
-        <input class="input" id="si_u" value="antoine@saint-elias.parish" autocomplete="username"></div>
-      <div class="formrow"><label class="label" for="si_p">${t('Password', 'كلمة المرور')}</label>
-        <input class="input" id="si_p" type="password" value="parishlife" autocomplete="current-password"></div>
-      <label class="check" style="margin-bottom:20px"><input type="checkbox" checked><span>${t('Keep me signed in on this computer', 'أبقني مسجّلاً على هذا الحاسوب')}</span></label>
-      <button class="btn btn-primary btn-touch" style="width:100%" type="submit">${t('Sign in', 'تسجيل الدخول')}</button>
-      <div class="langswap" role="group" style="margin:20px auto 0;width:max-content">
-        <button type="button" data-lang="en" aria-pressed="${lang === 'en'}">EN</button>
-        <button type="button" data-lang="ar" aria-pressed="${lang === 'ar'}" lang="ar">ع</button></div>
-    </form></div>`;
-  app.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { setLang(b.dataset.lang); signOut(); }));
-  app.querySelector('#signform').addEventListener('submit', ev => {
-    ev.preventDefault();
-    const btn = ev.target.querySelector('[type=submit]');
-    btn.innerHTML = `<span class="spin"></span>${t('Signing in…', 'جارٍ الدخول…')}`; btn.disabled = true;
-    setTimeout(() => { renderAll(); toast(t('Welcome back', 'أهلاً بعودتك'), t(PARISH.name, PARISH.nameAr), 'success'); }, 700);
-  });
+async function signOut() {
+  if (!confirmPlanNavigation()) return;
+  if (!await persist()) return toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), t('Resolve the save error before signing out.', 'عالِج خطأ الحفظ قبل تسجيل الخروج.'), 'danger');
+  closeOverlays(); await api('logout', 'POST').catch(() => {});
+  session.user = null; session.parishes = []; session.parishId = null; session.csrf = '';
+  loginScreen();
 }
 
 /* ---------------- parish / archdiocese switcher ---------------- */
+async function switchParish(id) {
+  const x = session.parishes.find(q => q.id === id);
+  if (!x || x.id === session.parishId) return false;
+  if (!confirmPlanNavigation()) return false;
+  if (!await persist()) {
+    toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), t('Resolve the save error before switching parishes.', 'عالِج خطأ الحفظ قبل تبديل الرعية.'), 'danger');
+    return false;
+  }
+  const previous = session.parishId;
+  session.parishId = x.id;
+  try {
+    await hydrate(); closeOverlays(); renderAll();
+    toast(t(`Now working in ${x.name}`, `تعمل الآن في ${x.ar}`), t(`Your role here: ${x.role}`, `دورك هنا: ${x.roleAr}`), 'success');
+    return true;
+  } catch (e) {
+    session.parishId = previous; await hydrate().catch(() => {});
+    toast(t('Parish could not be opened', 'تعذّر فتح الرعية'), e.message, 'danger');
+    return false;
+  }
+}
+bus.switchParish = switchParish;
+
 function parishSwitcher() {
+  if (S.role === 'bishop') { location.hash = '#/oversight'; return; }
   openDrawer({
     title: t('Switch parish', 'تبديل الرعية'),
     sub: t('You hold a role in more than one parish. Records never cross between them.',
@@ -480,19 +529,12 @@ function parishSwitcher() {
         <span><b>${esc(t(x.name, x.ar))}</b><small>${esc(t(x.town, x.townAr))} · ${esc(t(x.role, x.roleAr))}</small></span>
         ${x.name === PARISH.name ? `<span style="margin-inline-start:auto;color:var(--primary)">${icon('check', 16)}</span>` : ''}</button>`).join('')}
       <div class="divider"></div>
-      <a class="listrow" href="#/eparchy" style="padding-inline:0">${icon('portal', 17, 'dimmer')}
+      ${S.role === 'bishop' ? `<a class="listrow" href="#/bishopeparchy" style="padding-inline:0">${icon('portal', 17, 'dimmer')}
         <span class="grow"><b>${t('Eparchy view', 'عرض الأبرشية')}</b>
-          <small>${t('Aggregated across all parishes', 'مجمَّع عبر كل الرعايا')}</small></span>${icon('chevR', 15)}</a>`,
+          <small>${t('All parishes in this archdiocese', 'كل رعايا هذه الأبرشية')}</small></span>${icon('chevR', 15)}</a>` : ''}`,
     foot: `<button class="btn btn-secondary" data-close>${t('Close', 'إغلاق')}</button>`,
     onMount(el) {
-      el.querySelectorAll('[data-parish]').forEach(b => b.addEventListener('click', () => {
-        closeOverlays();
-        const x = PARISHES.find(q => q.id === b.dataset.parish);
-        if (!x || x.name === PARISH.name) return toast(t('Already in this parish', 'أنت في هذه الرعية أصلاً'));
-        Object.assign(PARISH, { name: x.name, nameAr: x.ar, town: x.town, townAr: x.townAr, people: x.people, households: x.households });
-        renderAll();
-        toast(t(`Now working in ${x.name}`, `تعمل الآن في ${x.ar}`), t(`Your role here: ${x.role}`, `دورك هنا: ${x.roleAr}`), 'success');
-      }));
+      el.querySelectorAll('[data-parish]').forEach(b => b.addEventListener('click', () => switchParish(b.dataset.parish)));
     }
   });
 }
@@ -500,6 +542,10 @@ function parishSwitcher() {
 /* ---------------- router ---------------- */
 function route() {
   const raw = location.hash.replace(/^#\/?/, '');
+  const current = [S.route,...S.params].filter(Boolean).join('/');
+  if (current && raw !== current && planDirty() && !confirmPlanNavigation()) {
+    location.hash = '#/' + current; return;
+  }
   const [id, ...params] = raw.split('/').filter(Boolean);
   const target = ROUTES[id] ? id : ROLES[S.role].nav.find(n => n[0] === 'l')[1];
 
@@ -524,6 +570,9 @@ bus.renderAll = () => { renderAll(); persist(); };
 addEventListener('pagehide', persist);
 document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 window.addEventListener('hashchange', route);
-hydrate();
+document.addEventListener('parish-save-error', e => toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), e.detail, 'danger'));
 setLang(lang);
-route();
+(async () => {
+  try { await loadSession(); S.role = session.user.role; await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
+  catch (error) { session.user = null; loginScreen(error.status === 401 ? '' : error.message); }
+})();

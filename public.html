@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="Find your parish, explore its story, and discover published Mass times, events and visiting information. ParishLife connects church communities in Lebanon.">
+  <meta name="theme-color" content="#f7f7f2">
+  <title>ParishLife · Find your parish</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23233b32'/%3E%3Cpath d='M20 9v23M12 17h16' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="preload" href="assets/fonts/NotoSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/public.css">
+</head>
+<body>
+  <a class="skip-link" href="#app" data-i18n="skip">Skip to content</a>
+  <header class="site-header">
+    <div class="site-wrap header-inner">
+      <a class="brand" href="public.html" aria-label="ParishLife home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 36" fill="none"><path d="M5 32V17a11 11 0 0 1 22 0v15M16 7v18M10 14h12" stroke="currentColor" stroke-width="1.8"/></svg></span><span>Parish<span class="brand-light">Life</span><small data-i18n="brandSub">FAITH & COMMUNITY</small></span></a>
+      <nav class="desktop-nav" aria-label="Main navigation"><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a><a href="public.html#about" data-i18n="aboutNav">About</a></nav>
+      <div class="header-actions"><button id="lang" class="language-button" type="button" aria-label="Switch to Arabic">العربية</button><a class="sign-in" href="index.html"><span data-i18n="signIn">My ParishLife</span><span aria-hidden="true">↗</span></a><button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open navigation"><span></span><span></span></button></div>
+    </div>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a><a href="public.html#about" data-i18n="aboutNav">About</a></nav>
+  </header>
+  <main id="app" tabindex="-1" aria-busy="true"><div class="site-wrap loading" role="status"><span class="loading-line"></span><p>Loading parish information…</p></div></main>
+  <footer class="site-footer">
+    <div class="site-wrap footer-main"><div><a class="brand" href="public.html"><span class="brand-mark" aria-hidden="true">✝</span><span>Parish<span class="brand-light">Life</span></span></a><p data-i18n="footerIntro">A little closer to your parish. A little closer to one another.</p></div><div class="footer-links"><span class="eyebrow" data-i18n="explore">Explore</span><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a></div><div class="footer-links"><span class="eyebrow" data-i18n="stayConnected">Stay connected</span><a href="index.html" data-i18n="signIn">My ParishLife</a><a href="public.html#about" data-i18n="aboutNav">About</a><button class="text-button" id="footer-lang" type="button">العربية</button></div></div>
+    <div class="site-wrap footer-bottom"><span>© <span id="year">2026</span> ParishLife</span><span data-i18n="footer">Information published by participating parishes.</span><a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer" data-i18n="photoCredit">Illustrative photography · Unsplash ↗</a></div>
+  </footer>
+  <noscript><div class="site-wrap empty"><h2>Explore ParishLife</h2><p>Please enable JavaScript to load the parish directory and published parish information.</p><a href="index.html">Parish office sign in</a></div></noscript>
+  <script type="module" src="assets/public.js"></script>
+</body>
+</html>
+

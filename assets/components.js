@@ -5,6 +5,8 @@ import { icon } from './icons.js';
 import { t, isAr, num, usd, lbp, fmtDate, month, dayShort, matches } from './i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from './data.js';
 import { persist } from './persist.js';
+import { parishAPI, session } from './api.js';
+import { renderAddressCascade, wireAddressCascades } from './geography.js';
 import { esc, avatar, who, toast, openPopover, closeMenu } from './ui.js';
 
 /* ---------------- buttons ---------------- */
@@ -86,13 +88,13 @@ export const splitCurrency = () => `<div class="formrow">
   </div>
   <span class="help">${t('Total recorded:', 'المسجَّل إجمالاً:')} <b class="mono">$1,250.00</b> ${t('equivalent.', 'ما يعادل.')}</span></div>`;
 
-export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421 887', state = '', id = 'ph' } = {}) {
+export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421 887', state = '', id = 'ph', required = true } = {}) {
   const ok = state !== 'error';
   return `<div class="formrow">
-    <label class="label" for="${id}">${esc(label)}<span class="req">*</span></label>
+    <label class="label" for="${id}">${esc(label)}${required?'<span class="req">*</span>':''}</label>
     <div class="field" style="${ok ? '' : 'border-color:var(--danger)'}"><span class="prefix">+961</span>
       <input id="${id}" class="value" value="${esc(value)}" dir="ltr" style="border:0;background:none;width:100%" data-phone>
-      ${ok ? `<span style="display:flex;align-items:center;padding-inline-end:10px">
+      ${ok && value ? `<span style="display:flex;align-items:center;padding-inline-end:10px">
         <span class="pill pill-success"><span class="dot"></span>${t('on WhatsApp', 'على واتساب')}</span></span>` : ''}</div>
     <span class="help ${ok ? '' : 'help-error'}" data-phonehelp>${ok
       ? t('Leading zero is dropped automatically. 03, 70, 71, 76, 78, 79, 81 are recognised as mobile.',
@@ -100,44 +102,22 @@ export function phoneField({ label = t('Mobile', 'الخلوي'), value = '3 421
       : t('A Lebanese mobile has 7 digits after the prefix.', 'الخلوي اللبناني ٧ أرقام بعد المقدّمة.')}</span></div>`;
 }
 
-export const addressCascade = () => `
-  <div class="formgrid">
-    <div class="formrow"><label class="label">${t('Governorate', 'المحافظة')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Mount Lebanon', 'جبل لبنان')}</option><option>${t('Beirut', 'بيروت')}</option>
-        <option>${t('North', 'الشمال')}</option><option>${t('South', 'الجنوب')}</option><option>${t('Bekaa', 'البقاع')}</option>
-        <option>${t('Nabatieh', 'النبطية')}</option><option>${t('Baalbek-Hermel', 'بعلبك-الهرمل')}</option>
-        <option>${t('Akkar', 'عكار')}</option></select></div>
-    <div class="formrow"><label class="label">${t('District', 'القضاء')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Baabda', 'بعبدا')}</option><option>${t('Metn', 'المتن')}</option>
-        <option>${t('Aley', 'عاليه')}</option><option>${t('Kesrouan', 'كسروان')}</option></select></div>
-    <div class="formrow"><label class="label">${t('Town', 'البلدة')}<span class="req">*</span></label>
-      <select class="select"><option>${t('Hadath', 'الحدث')}</option><option>${t('Hazmieh', 'الحازمية')}</option>
-        <option>${t('Louaizeh', 'اللويزة')}</option></select></div>
-    <div class="formrow"><label class="label">${t('Sector', 'المنطقة')}<span class="opt">${t('(optional)', '(اختياري)')}</span></label>
-      <select class="select"><option>${t('Pick a town first', 'اختر البلدة أولاً')}</option></select></div>
-  </div>
-  ${field({ label: t('Building', 'البناية'), ph: t('Imm. Khoury, 3rd floor', 'بناية خوري، الطابق الثالث') })}
-  ${field({ label: t('Landmark', 'مَعلَم'), ph: t('Behind the municipality', 'خلف البلدية'),
-            help: t('How a visitor would actually find the house. There is no postal code field.',
-                    'كيف يجد الزائر البيت فعلاً. لا حقل رمز بريدي.') })}`;
+export const addressCascade = options => renderAddressCascade(options);
 
 export const namePair = () => `
   <div class="formgrid">
-    <div class="formrow"><label class="label">${t('Arabic name', 'الاسم العربي')}<span class="req">*</span></label>
-      <input class="input" id="arname" dir="rtl" style="font-family:var(--arabic)" placeholder="جورج حدّاد"></div>
-    <div class="formrow"><label class="label">${t('Transliteration', 'الحرف اللاتيني')}<span class="req">*</span>
-      <span class="pill" style="margin-inline-start:6px">auto</span></label>
+    <div class="formrow"><label class="label" for="latname">${t('English name', 'الاسم الإنكليزي')}<span class="req">*</span></label>
       <input class="input" id="latname" dir="ltr" placeholder="Georges Haddad"></div>
+    <div class="formrow"><label class="label" for="arname">${t('Arabic name', 'الاسم العربي')}<span class="req">*</span></label>
+      <input class="input" id="arname" dir="rtl" style="font-family:var(--arabic)" placeholder="جورج حدّاد"></div>
   </div>
-  <span class="help" style="margin:-8px 0 16px;display:block">${t(
-    'Typing Arabic proposes a transliteration; the secretary can always override it.',
-    'الكتابة بالعربية تقترح تحويلاً بالحروف اللاتينية، ويمكن لأمانة السرّ تعديله دائماً.')}</span>`;
+`;
 
-export const riteSelect = () => `<div class="formrow">
+export const riteSelect = ({id='newrite'} = {}) => `<div class="formrow">
   <label class="label">${t('Rite', 'الطقس')}<span class="req">*</span></label>
-  <select class="select">${[['Maronite','ماروني'],['Greek Orthodox','روم أرثوذكس'],['Melkite','روم كاثوليك'],
-    ['Armenian','أرمني'],['Syriac','سرياني'],['Latin','لاتيني'],['Evangelical','إنجيلي']]
-    .map(r => `<option>${esc(t(...r))}</option>`).join('')}</select>
+  <select class="select" id="${esc(id)}">${[['Maronite','ماروني'],['Greek Orthodox','روم أرثوذكس'],['Melkite','روم كاثوليك'],
+    ['Armenian','أرمني'],['Syriac','سرياني'],['Roman Catholic','روم كاثوليك غربي'],['Evangelical','إنجيلي']]
+    .map(r => `<option value="${esc(r[0])}">${esc(t(...r))}</option>`).join('')}</select>
   <span class="help">${t('Changing the rite changes the sacraments available and the feast calendar. Existing records keep the rite they were entered under.',
     'تغيير الطقس يغيّر الأسرار المتاحة ورزنامة الأعياد. والسجلات القائمة تحتفظ بالطقس الذي أُدخلت به.')}</span></div>`;
 
@@ -199,21 +179,14 @@ export const dateRange = () => `<div class="formrow"><label class="label">${t('D
   </div></div>`;
 
 /* ---------------- uploads ---------------- */
-export const dropzone = (id = 'dz', { specimen = false } = {}) => `
-  <div class="drop" data-drop="${id}">${icon('export', 26)}
+export const dropzone = (id = 'dz', { scope = '', ownerId = '' } = {}) => `
+  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}"></div>
+  <div class="drop" data-drop="${esc(id)}">${icon('export', 26)}
     <b style="margin-top:8px">${t('Drop the file here, or', 'أفلت الملف هنا، أو')}
-      <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${id}"
+      <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${esc(id)}"
         accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf"></label></b>
-    <span class="hint">${t('JPG, PNG or PDF up to 10 MB. A photo from the phone is fine.',
-      'JPG أو PNG أو PDF حتى ١٠ ميغابايت. صورة من الهاتف تكفي.')}</span></div>
-  <div class="files" data-files="${id}">${specimen ? `
-  <div class="filerow">${icon('doc', 18, 'dimmer')}
-    <span class="grow"><b>receipt-electricity-sept.jpg</b><small>1.2 MB ${t('of', 'من')} 1.9 MB · 64%</small>
-      <span class="progress" style="margin-top:6px"><i style="width:64%"></i></span></span>
-    <button class="iconbtn" data-rmfile aria-label="${t('Cancel', 'إلغاء')}">${icon('close', 16)}</button></div>
-  <div class="filerow err">${icon('warn', 18)}
-    <span class="grow"><b>scan-002.tiff</b><small>${t('TIFF is not supported. Try JPG or PDF.', 'صيغة TIFF غير مدعومة. جرّب JPG أو PDF.')}</small></span>
-    <button class="btn btn-ghost btn-dense" data-rmfile>${t('Remove', 'إزالة')}</button></div>` : ''}</div>`;
+    <span class="hint">${scope ? t('JPG, PNG or PDF up to 10 MB. Files are saved to this parish.', 'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.')
+      : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}</span></div>`;
 
 export const avatarUpload = (key = 'specimen') => {
   const ph = PHOTOS[key], label = key === 'parish' ? 'P' : key === 'new' || key === 'specimen' ? 'GH' : initials(person(key));
@@ -223,8 +196,8 @@ export const avatarUpload = (key = 'specimen') => {
       <button class="btn btn-secondary btn-dense" data-act="avatar-upload:${key}">${icon('export', 16)}${ph ? t('Change photo', 'تغيير الصورة') : t('Upload photo', 'رفع صورة')}</button>
       ${ph ? `<button class="btn btn-ghost btn-dense" data-act="avatar-remove:${key}">${t('Remove', 'إزالة')}</button>` : ''}</div>
     <p class="help" style="margin-top:8px;max-width:38ch">${t(
-      'Initials are the fallback and are generated from the Latin name. Square crop, 1:1, minimum 200px.',
-      'الأحرف الأولى هي البديل وتُولَّد من الاسم اللاتيني. قصّ مربّع ١:١، ٢٠٠ بكسل كحدّ أدنى.')}</p></div></div>`;
+      'Initials are the fallback and are generated from the English name. Square crop, 1:1, minimum 200px.',
+      'الأحرف الأولى هي البديل وتُولَّد من الاسم الإنكليزي. قصّ مربّع ١:١، ٢٠٠ بكسل كحدّ أدنى.')}</p></div></div>`;
 };
 
 /* ---------------- rich text ---------------- */
@@ -232,15 +205,11 @@ export const richText = (body = '') => `<div class="rte">
   <div class="rte-bar">
     <button data-rte="bold"><b>B</b></button><button data-rte="underline"><u>U</u></button>
     <span class="sep"></span><button data-rte="link">${t('Link', 'رابط')}</button>
-    <button data-rte="list">${t('List', 'لائحة')}</button>
+    <button data-rte="list">${t('List', 'لائحة')}</button><button data-rte="emoji" aria-label="${t('Insert emoji','إدراج رمز تعبيري')}">☺</button>
     <span class="sep"></span>${bgroup(['EN', 'ع'], isAr() ? 1 : 0)}
   </div>
-  <div class="rte-body" contenteditable="true">${body || `<b>${t('Feast of Our Lady of the Rosary.', 'عيد سيدة الورديّة.')}</b>
-    ${t('Mass at 10:30 followed by the procession from the upper church. Families are asked to bring flowers for the shrine.',
-        'القدّاس الساعة ١٠:٣٠ يليه الزيّاح من الكنيسة العليا. يُرجى من العائلات إحضار الزهور للمزار.')}`}</div>
-  <div class="rte-foot">${t('Draft saved 14 seconds ago', 'حُفظت المسوّدة قبل ١٤ ثانية')} ·
-    ${t('Bold, underline, link and list only — nothing that can break a printed bulletin.',
-        'غامق وتسطير ورابط ولائحة فقط — لا شيء يكسر نشرة مطبوعة.')}</div></div>`;
+  <div class="rte-body" contenteditable="true" data-placeholder="${t('Write an announcement…','اكتب إعلاناً…')}">${body}</div>
+  <div class="rte-foot">${t('Use bold, underline, links, lists and emoji.','استخدم الغامق والتسطير والروابط واللوائح والرموز التعبيرية.')}</div></div>`;
 
 /* ---------------- menus ---------------- */
 export const filterMenu = (title, opts) => `<div class="menu" style="position:static;width:260px">
@@ -289,6 +258,7 @@ export const skeletonRows = (n = 4) => Array.from({ length: n }, () => `<div cla
 
 /* ---------------- charts ---------------- */
 export function sparkline(values, { w = 240, h = 40, tone = 'var(--primary)' } = {}) {
+  if (!values || values.length < 2) return '';      /* no trend to draw (e.g. giving hidden from this role) */
   const max = Math.max(...values), min = Math.min(...values), span = max - min || 1;
   const pts = values.map((v, i) => [i / (values.length - 1) * w, h - ((v - min) / span) * (h - 6) - 3]);
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
@@ -314,6 +284,8 @@ export const barChart = rows => `<div class="barchart">${rows.map(r => {
 }).join('')}</div>`;
 
 export function donut(segments, { size = 132 } = {}) {
+  const chartPalette = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)'];
+  segments = segments.map((segment, index) => ({ ...segment, color: chartPalette[index % chartPalette.length] }));
   const total = segments.reduce((a, s) => a + s.v, 0);
   const r = size / 2 - 11, c = 2 * Math.PI * r;
   let off = 0;
@@ -346,6 +318,7 @@ function wireDp(dp) {
 }
 
 export function wire(host) {
+  wireAddressCascades(host);
   /* switches with a pref key are saved the moment they change */
   const saved = (key, v, what) => { PREFS[key] = v; persist(); toast(t('Setting saved', 'حُفظ الإعداد'), what.trim().replace(/\s+/g, ' '), 'success'); };
   host.querySelectorAll('select[data-pref]').forEach(sel => {
@@ -446,18 +419,6 @@ export function wire(host) {
                             : t('A Lebanese mobile has 7 digits after the prefix.', 'الخلوي اللبناني ٧ أرقام بعد المقدّمة.'); }
   }));
 
-  /* transliteration proposal — deliberately naive, the office always overrides */
-  const ar2lat = { 'ا':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh','د':'d','ذ':'dh','ر':'r','ز':'z',
-    'س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z','ع':'a','غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m',
-    'ن':'n','ه':'h','و':'ou','ي':'i','ى':'a','ة':'e','أ':'a','إ':'i','آ':'a','ؤ':'o','ئ':'i',' ':' ' };
-  const arn = host.querySelector('#arname'), latn = host.querySelector('#latname');
-  if (arn && latn) arn.addEventListener('input', () => {
-    if (latn.dataset.touched) return;
-    latn.value = [...arn.value].map(ch => ar2lat[ch] ?? '').join('')
-      .replace(/\b\w/g, m => m.toUpperCase());
-  });
-  latn?.addEventListener('input', () => { latn.dataset.touched = '1'; });
-
   /* person autocomplete */
   host.querySelectorAll('[data-ac]').forEach(ac => {
     const inp = ac.querySelector('input'), list = ac.querySelector('.ac-list');
@@ -504,40 +465,46 @@ export function wire(host) {
     el.addEventListener('focus', show); el.addEventListener('blur', hide);
   });
 
-  /* dropzone: real files, validated, with progress to completion */
-  const takeFiles = (id, files) => {
-    const list = host.querySelector(`[data-files="${id}"]`); if (!list) return;
-    [...files].forEach(f => {
-      const okType = /\.(jpe?g|png|pdf)$/i.test(f.name) || /^image\/|pdf$/.test(f.type);
-      const tooBig = f.size > 10 * 1024 * 1024, mb = (f.size / 1048576).toFixed(1);
-      const row = document.createElement('div');
-      row.className = 'filerow' + (okType && !tooBig ? '' : ' err');
-      row.innerHTML = okType && !tooBig
-        ? `${icon('doc', 18, 'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${mb} MB · <span data-pct>0%</span></small>
-            <span class="progress" style="margin-top:6px"><i style="width:0%"></i></span></span>
-           <button class="iconbtn" data-rmfile aria-label="${t('Remove', 'إزالة')}">${icon('close', 16)}</button>`
-        : `${icon('warn', 18)}<span class="grow"><b>${esc(f.name)}</b><small>${tooBig
-            ? t('Larger than 10 MB. Try a smaller photo.', 'أكبر من ١٠ ميغابايت. جرّب صورة أصغر.')
-            : t('This type is not supported. Try JPG or PDF.', 'هذا النوع غير مدعوم. جرّب JPG أو PDF.')}</small></span>
-           <button class="btn btn-ghost btn-dense" data-rmfile>${t('Remove', 'إزالة')}</button>`;
-      list.append(row);
-      row.querySelector('[data-rmfile]').addEventListener('click', () => row.remove());
-      if (!okType || tooBig) return;
-      let pct = 0; const bar = row.querySelector('.progress i'), lab = row.querySelector('[data-pct]');
-      const timer = setInterval(() => {
-        pct = Math.min(100, pct + 12 + Math.random() * 18);
-        bar.style.width = pct + '%'; lab.textContent = Math.round(pct) + '%';
-        if (pct >= 100) { clearInterval(timer); lab.textContent = t('Uploaded', 'رُفع'); bar.parentElement.remove(); }
-      }, 160);
-    });
+  /* Files appear above the drop area immediately; success comes from the server. */
+  const listFor=id=>host.querySelector(`[data-files="${id}"]`);
+  const loadFiles=async id=>{
+    const list=listFor(id);if(!list?.dataset.uploadScope)return;
+    try{
+      const scope=list.dataset.uploadScope,owner=list.dataset.uploadOwner;
+      const data=await parishAPI(`files?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(owner)}`);
+      if(!list.isConnected)return;
+      list.innerHTML=data.files.map(f=>`<div class="filerow">${icon('doc',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${(f.size/1048576).toFixed(1)} MB · ${esc(f.created_at.slice(0,10))}</small></span>
+        <a class="btn btn-secondary btn-dense" href="/api/parishes/${encodeURIComponent(session.parishId)}/files/${encodeURIComponent(f.id)}" target="_blank" rel="noopener">${t('Open','فتح')}</a>
+        <button class="btn-icon" data-delete-file="${esc(f.id)}" aria-label="${t('Delete file','حذف الملف')}">${icon('trash',16)}</button></div>`).join('');
+      list.querySelectorAll('[data-delete-file]').forEach(button=>button.addEventListener('click',async()=>{
+        try{await parishAPI(`files/${encodeURIComponent(button.dataset.deleteFile)}`,'DELETE',{});await loadFiles(id);}
+        catch(error){toast(t('Could not delete file','تعذّر حذف الملف'),error.message,'danger');}
+      }));
+    }catch(error){list.innerHTML=`<p class="help help-error">${esc(error.message)}</p>`;}
   };
+  const takeFiles=async(id,files)=>{
+    const list=listFor(id);if(!list)return;
+    for(const f of files){
+      const supported=/\.(jpe?g|png|pdf)$/i.test(f.name),large=f.size>10_000_000;
+      const row=document.createElement('div');row.className='filerow'+(supported&&!large?'':' err');
+      row.innerHTML=`${icon(supported&&!large?'doc':'warn',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${large?t('File is larger than 10 MB','الملف أكبر من ١٠ ميغابايت'):!supported?t('Use JPG, PNG or PDF','استخدم JPG أو PNG أو PDF'):list.dataset.uploadScope?t('Uploading…','جارٍ الرفع…'):t('Selected for preview only','مختار للمعاينة فقط')}</small></span>`;
+      list.prepend(row);
+      if(!supported||large||!list.dataset.uploadScope)continue;
+      const bytes=new Uint8Array(await f.arrayBuffer());let binary='';
+      for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      try{
+        await parishAPI('files','POST',{scope:list.dataset.uploadScope,id:list.dataset.uploadOwner,name:f.name,data:btoa(binary)});
+        await loadFiles(id);toast(t('File uploaded','رُفع الملف'),f.name,'success');
+      }catch(error){row.classList.add('err');row.querySelector('small').textContent=error.message;}
+    }
+  };
+  host.querySelectorAll('[data-files]').forEach(list=>loadFiles(list.dataset.files));
   host.querySelectorAll('[data-drop]').forEach(d => {
     ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));
     ['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));
     d.addEventListener('drop', e => takeFiles(d.dataset.drop, e.dataTransfer.files));
   });
   host.querySelectorAll('[data-pick]').forEach(inp => inp.addEventListener('change', () => { takeFiles(inp.dataset.pick, inp.files); inp.value = ''; }));
-  host.querySelectorAll('[data-rmfile]').forEach(b => b.addEventListener('click', () => b.closest('.filerow')?.remove()));
 
   /* date picker: prev / next really change the month */
   host.querySelectorAll('.dp').forEach(wireDp);
@@ -547,6 +514,11 @@ export function wire(host) {
   host.querySelectorAll('[data-rte]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
   host.querySelectorAll('[data-rte]').forEach(b => b.addEventListener('click', () => {
     const body = b.closest('.rte')?.querySelector('[contenteditable]');
+    if(b.dataset.rte==='emoji'){
+      openPopover(b,`<div style="display:flex;gap:6px;padding:10px">${['🙏','❤️','✨','🎵','📅','😊'].map(value=>`<button class="btn btn-secondary btn-dense" data-emoji="${value}" aria-label="${value}">${value}</button>`).join('')}</div>`,
+        {width:310,onMount(pop){pop.querySelectorAll('[data-emoji]').forEach(option=>option.addEventListener('click',()=>{body?.focus();document.execCommand('insertText',false,option.dataset.emoji);closeMenu();}));}});
+      return;
+    }
     const cmd = { bold: 'bold', underline: 'underline', list: 'insertUnorderedList' }[b.dataset.rte];
     if (cmd) {
       if (body && !body.contains(getSelection().anchorNode)) {   // nothing selected in this editor yet: work at its end
@@ -560,7 +532,9 @@ export function wire(host) {
       <button class="btn btn-primary btn-dense" id="rtego" style="margin-inline-start:auto">${t('Add link', 'إضافة رابط')}</button></div></div>`,
       { width: 300, onMount(pop) {
         const inp = pop.querySelector('#rtel'); inp.focus();
-        const apply = () => { const url = inp.value.trim(); closeMenu(); if (!url || !range) return;
+        const apply = () => { const url = inp.value.trim();
+          if(!/^https?:\/\//i.test(url))return toast(t('Use an http or https link','استخدم رابط http أو https'),'','warning');
+          closeMenu(); if (!range) return;
           sel.removeAllRanges(); sel.addRange(range); document.execCommand('createLink', false, url); };
         pop.querySelector('#rtego').addEventListener('click', apply);
         inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } });

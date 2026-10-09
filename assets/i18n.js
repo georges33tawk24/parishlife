@@ -45,12 +45,25 @@ export const dayShort = i => t(DAYS[i][0].slice(0, 3), DAYS[i][1].replace('ال'
 
 /** 4 Oct 2026 / ٤ تشرين الأول ٢٠٢٦ — digits stay Western either way. */
 export function fmtDate(d) {
+  if (!d) return '—';
   const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
   return `${x.getDate()} ${monthShort(x.getMonth())} ${x.getFullYear()}`;
 }
 export function fmtLong(d) {
+  if (!d) return '—';
   const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
   return `${day(x.getDay())} ${x.getDate()} ${month(x.getMonth())}`;
+}
+/** A date as a printed document gives it, in the document's language whatever the screen's is:
+    17 May 2015 · 17 أيار 2015 · 17/05/2015 for a bilingual sheet, which both readers can follow. */
+export function fmtDateIn(d, language) {
+  if (!d) return '—';
+  const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return '—';
+  if (language === 'ar' || language === 'en') return `${x.getDate()} ${MONTHS[x.getMonth()][language === 'ar' ? 1 : 0]} ${x.getFullYear()}`;
+  return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`;
 }
 export const fmtTime = s => s;   // stored already as "10:30"
 
