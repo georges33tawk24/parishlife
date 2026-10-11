@@ -254,6 +254,49 @@ async function main() {
     return view(await s.client('fr-antoine').req('POST', '/api/parishes/p-elias/workflow', { action: 'correction-approve', id: cor.id, revision: state.revision }));
   });
 
+  /* Member portal sacrament and certificate requests */
+  const portal = async (s, user) => {
+    const r = await s.client(user).req('GET', '/api/parishes/p-elias/member');
+    return { status: r.status, requests: r.json?.requests, options: r.json?.requestOptions,
+      notifications: r.json?.notifications?.filter(n => n.kind.startsWith('request-')) };
+  };
+  const ask = async (s, user, key, body) => {
+    const r = await member(s, user, { op: 'sacramentRequest', ...body });
+    if (r.json?.id) (s.requests ??= {})[key] = r.json.id;
+    return view(r);
+  };
+  await both('request options', async s => portal(s, 'tony'));
+  await both('request a child baptism', async s => ask(s, 'tony', 'child', { kind: 'baptism', child: { lat: 'Elie Gemayel', ar: 'إيلي الجميّل', born: '2026-08-15', father: 'Tony Gemayel', mother: 'Rita' }, date: '2099-05-03', notes: 'Godmother: Carla', phone: '03 112 233' }));
+  await both('request first communion', async s => ask(s, 'tony', 'communion', { kind: 'communion', personId: 'p5', date: '2099-06-01' }));
+  await both('request marriage', async s => ask(s, 'carla', 'marriage', { kind: 'marriage', personId: 'p6', partner: 'Marc Aoun', partnerParish: 'Saint Maron', date: '2099-09-12' }));
+  await both('request certificate', async s => ask(s, 'carla', 'certificate', { kind: 'certificate', personId: 'p6', certificateOf: 'baptism', purpose: 'Marriage file', language: 'arabic' }));
+  await both('duplicate request refused', async s => ask(s, 'tony', 'x', { kind: 'baptism', child: { lat: 'elie gemayel ', ar: 'إيلي', born: '2026-08-15' } }));
+  await both('request outside household refused', async s => ask(s, 'tony', 'x', { kind: 'communion', personId: 'p1' }));
+  await both('funeral for oneself refused', async s => ask(s, 'tony', 'x', { kind: 'funeral', personId: 'p5' }));
+  await both('past preferred date refused', async s => ask(s, 'carla', 'x', { kind: 'confirmation', personId: 'p6', date: '2001-01-01' }));
+  await both('unknown request kind refused', async s => ask(s, 'carla', 'x', { kind: 'blessing', personId: 'p6' }));
+  await both('certificate without purpose refused', async s => ask(s, 'carla', 'x', { kind: 'certificate', personId: 'p6', certificateOf: 'baptism' }));
+  await both('member cannot use the office workflow', async s => view(await flow(s, 'tony', 'decline-member-request', null, { requestId: s.requests.child, reason: 'No' })));
+  await both('office sees online requests', async s => ({ secretary: (await getState(s, 'rita')).d.MEMBER_REQUESTS, leader: (await getState(s, 'maya')).d.MEMBER_REQUESTS }));
+  await both('office cannot write online requests', async s => view(await put(s, 'rita', () => ({ MEMBER_REQUESTS: [] }))));
+  await both('secretary accepts child baptism into household', async s => view(await flow(s, 'rita', 'accept-member-request', 'sc-web1', { requestId: s.requests.child, household: true, note: 'Welcome' })));
+  await both('already handled', async s => view(await flow(s, 'rita', 'accept-member-request', 'sc-web9', { requestId: s.requests.child })));
+  await both('priest accepts the baptism', async s => view(await flow(s, 'fr-antoine', 'approve-sacrament-request', 'sc-web1')));
+  await both('preparation date set', async s => view(await flow(s, 'rita', 'update-preparation', 'sc-web1', { date: '2099-05-10', checklist: [true, false, true] })));
+  await both('preparation complete', async s => view(await flow(s, 'rita', 'complete-preparation', 'sc-web1')));
+  await both('priest accepts communion directly', async s => view(await flow(s, 'fr-antoine', 'accept-member-request', 'sc-web2', { requestId: s.requests.communion })));
+  await both('decline without message refused', async s => view(await flow(s, 'rita', 'decline-member-request', null, { requestId: s.requests.marriage, reason: ' ' })));
+  await both('office declines marriage', async s => view(await flow(s, 'rita', 'decline-member-request', null, { requestId: s.requests.marriage, reason: 'Please visit the office first.' })));
+  await both('certificate with wrong entry refused', async s => view(await flow(s, 'rita', 'accept-member-request', 'sc-web3', { requestId: s.requests.certificate, sourceRecordId: 'sc5' })));
+  await both('member withdraws certificate request', async s => view(await member(s, 'carla', { op: 'requestWithdraw', id: s.requests.certificate })));
+  await both('withdraw twice refused', async s => view(await member(s, 'carla', { op: 'requestWithdraw', id: s.requests.certificate })));
+  await both('state after online requests', async s => {
+    const d = (await getState(s, 'fr-antoine')).d;
+    return { requests: d.MEMBER_REQUESTS, sacraments: d.SACRAMENTS.filter(x => x.memberRequestId), households: d.HOUSEHOLDS, people: d.PEOPLE.slice(-2) };
+  });
+  await both('tony follows his requests', async s => portal(s, 'tony'));
+  await both('carla follows her requests', async s => portal(s, 'carla'));
+
   /* Files */
   await both('upload PDF to person', async s => { const r = await s.client('rita').req('POST', '/api/parishes/p-elias/files', { scope: 'person', id: 'p1', name: 'c:\\docs\\Letter.PDF', data: PDF.toString('base64') }); if (r.json?.id) s.fileIds.push(r.json.id); return view(r); });
   await both('upload PNG to group', async s => { const r = await s.client('maya').req('POST', '/api/parishes/p-elias/files', { scope: 'group', id: 'g1', name: 'photo.png', data: PNG.toString('base64') }); if (r.json?.id) s.fileIds.push(r.json.id); return view(r); });

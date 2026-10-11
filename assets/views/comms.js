@@ -10,6 +10,7 @@ import { printSheet } from '../print.js';
 import * as F from '../flows.js';
 import { MESSAGES, TEMPLATES, NOTICES, MUSIC, MUSIC_DETAIL, SETLISTS, AUTOMATIONS, PRAYERS,
          PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, GROUPS, CONTENT, groupInfo, musicInfo, person, venue } from '../data.js';
+import { waitingOnline } from './online-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const CHANNEL = { whatsapp: ['WhatsApp', 'واتساب'], sms: ['SMS', 'رسالة قصيرة'], email: ['Email', 'بريد إلكتروني'] };
@@ -375,7 +376,8 @@ const portalSections=[
   ['welcome','Welcome message','رسالة الترحيب','Introduce your parish in a few welcoming words.','عرّف برعيتك بكلمات ترحيبية موجزة.'],
   ['history','History & patron saint','التاريخ والشفيع','Share the story and identity of your parish.','شارك تاريخ رعيتك وهويتها.'],
   ['massTimes','Mass & confession','القداديس والاعتراف','Help visitors plan their next visit.','ساعد الزوّار على التخطيط لزيارتهم المقبلة.'],
-  ['contact','Contact & visiting','التواصل والزيارة','Make it easy to find and contact the parish.','سهّل الوصول إلى الرعية والتواصل معها.']
+  ['contact','Contact & visiting','التواصل والزيارة','Make it easy to find and contact the parish.','سهّل الوصول إلى الرعية والتواصل معها.'],
+  ['sacraments','Sacraments & certificates','الأسرار والشهادات','Tell families what to know before they ask for a baptism, a wedding or a certificate.','أخبر العائلات بما يجب معرفته قبل طلب معمودية أو إكليل أو شهادة.']
 ];
 function portalContent(){
   const hasText=c=>!!(c.en?.trim()||c.ar?.trim());
@@ -397,7 +399,7 @@ function portalContent(){
       return `<article class="cms-section-card" aria-labelledby="cms-${key}-title">
         <div class="cms-card-top"><span class="cms-section-number" aria-hidden="true">${String(index+1).padStart(2,'0')}</span><span class="cms-state cms-state-${state}"><span aria-hidden="true"></span>${state==='published'?L('Published','منشور'):state==='draft'?L('Draft · private','مسودة · خاصة'):L('Not started','لم يبدأ بعد')}</span></div>
         <h3 id="cms-${key}-title">${L(en,ar)}</h3><p class="cms-card-description">${L(desc,descAr)}</p>
-        <p class="cms-content-preview${filled?'':' cms-content-empty'}" dir="auto">${esc(preview||L('Add this section to welcome visitors to your parish.','أضف هذا القسم للترحيب بزوّار رعيتك.'))}</p>
+        <p class="cms-content-preview${filled?'':' cms-content-empty'}" dir="auto">${esc(preview||(key==='sacraments'?L('Until you add one, visitors see a short default introduction above the request buttons.','إلى أن تضيف نصاً، يرى الزوّار مقدّمة قصيرة افتراضية فوق أزرار الطلبات.'):L('Add this section to welcome visitors to your parish.','أضف هذا القسم للترحيب بزوّار رعيتك.')))}</p>
         <div class="cms-card-footer"><div class="cms-languages" aria-label="${L('Content languages','لغات المحتوى')}"><span class="${c.en?.trim()?'is-ready':''}" title="${c.en?.trim()?L('English content ready','المحتوى الإنكليزي جاهز'):L('English content missing','المحتوى الإنكليزي غير مضاف')}">${icon(c.en?.trim()?'check':'plus',12)}English</span><span class="${c.ar?.trim()?'is-ready':''}" lang="ar" title="${c.ar?.trim()?L('Arabic content ready','المحتوى العربي جاهز'):L('Arabic content missing','المحتوى العربي غير مضاف')}">${icon(c.ar?.trim()?'check':'plus',12)}العربية</span></div>
           <button class="cms-edit" data-act="content-edit:${key}" aria-label="${esc(L('Edit '+en,'تعديل '+ar))}">${filled?L('Edit section','تعديل القسم'):L('Add content','إضافة محتوى')}${icon('arrowR',16)}</button></div>
       </article>`;
@@ -422,8 +424,11 @@ export function portal(tab = '') {
       <button class="btn btn-primary" data-act="content-edit:welcome">${icon('edit', 17)}${L('Edit welcome', 'تعديل الترحيب')}</button>`
   }) + tabBar('portal', PTABS(), tab);
 
+  const online = waitingOnline().length;
+  const onlineNote = online ? `<a class="listrow or-pointer" href="#/requests">${icon('sacr', 17, 'dimmer')}<span class="grow"><b>${L(online === 1 ? '1 sacrament or certificate request is waiting' : `${online} sacrament or certificate requests are waiting`, online === 1 ? 'طلب سرّ أو شهادة واحد بالانتظار' : `${online} طلبات أسرار أو شهادات بالانتظار`)}</b>
+    <small>${L('They are reviewed in Requests.', 'تُراجَع في صفحة الطلبات.')}</small></span>${icon('chevR', 16, 'dimmer')}</a>` : '';
   if (tab === 'requests') return head + `<div style="margin-top:20px" class="splitview">
-    ${panel(L('Waiting for review', 'بانتظار المراجعة'), PORTAL_REQUESTS.length ? `
+    ${panel(L('Waiting for review', 'بانتظار المراجعة'), onlineNote + (PORTAL_REQUESTS.length ? `
       ${PORTAL_REQUESTS.map(r => `<div class="listrow" style="padding-inline:0"><span class="grow"><b>${esc(L(r.what, r.whatAr))}</b>
           <small>${L('submitted', 'قُدّم')} ${fmtDate(r.at)}</small></span>
           <button class="btn btn-secondary btn-dense" data-act="portal-compare:${r.id}">${L('Compare', 'مقارنة')}</button>
@@ -431,13 +436,13 @@ export function portal(tab = '') {
       <p class="t-caption dim" style="margin-top:12px">${L(
         'Nothing a member submits lands in the record directly. The office reviews every change first.',
         'لا شيء يقدّمه المؤمن يدخل السجل مباشرة. يراجع المكتب كل تعديل أولاً.')}</p>`
-      : empty('check', L('Nothing waiting', 'لا شيء بالانتظار'), L('Changes members submit from the portal appear here for review.', 'التعديلات التي يرسلها المؤمنون من البوّابة تظهر هنا للمراجعة.')),
+      : online ? '' : empty('check', L('Nothing waiting', 'لا شيء بالانتظار'), L('Changes members submit from the portal appear here for review.', 'التعديلات التي يرسلها المؤمنون من البوّابة تظهر هنا للمراجعة.'))),
       { tight: false })}
     <div class="sidecol">${panel(L('What a member can do', 'ما يستطيع المؤمن فعله'), `
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px">
         ${[[L('Update their own address, phone and family members', 'تحديث عنوانه وهاتفه وأفراد عائلته'), 'edit'],
            [L('Manage family registrations where authorised', 'إدارة تسجيلات العائلة حيث يُصرَّح له'), 'family'],
-           [L('Request a certificate', 'طلب شهادة'), 'doc'],
+           [L('Request a sacrament or a certificate, and follow each step', 'طلب سرّ أو شهادة ومتابعة كل خطوة'), 'sacr'],
            [L('See their own giving statement', 'الاطّلاع على كشف تقدماته'), 'give'],
            [L('Discover groups and request membership', 'اكتشاف المجموعات وطلب الانتساب'), 'groups'],
            [L('See their volunteer schedule and registrations', 'رؤية مناوباته وتسجيلاته'), 'vol'],

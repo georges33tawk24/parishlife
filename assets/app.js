@@ -23,11 +23,13 @@ import * as Comms     from './views/comms.js';
 import * as Admin     from './views/admin.js';
 import * as Oversight from './views/oversight.js';
 import * as Member from './views/member.js';
+import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
   memberhome: { ico:'dash', en:'Home', ar:'الرئيسية', view:Member.home },
+  myrequests: { ico:'sacr', en:'Sacraments & certificates', ar:'الأسرار والشهادات', mEn:'Requests', mAr:'طلباتي', view:requestsPage },
   myministries: { ico:'groups', en:'My Ministries', ar:'خدماتي', view:Member.ministries },
   mymeetings: { ico:'events', en:'Meetings', ar:'الاجتماعات', view:Member.meetings },
   mycalendar: { ico:'events', en:'Calendar', ar:'الرزنامة', view:Member.calendar },
@@ -55,7 +57,8 @@ export const ROUTES = {
       : ['requested','office-reviewed','awaiting-signature'].includes(x.status)).length
       + D.RESERVATIONS.filter(x => x.status === 'pending').length
       + D.SERVICE_REQUESTS.filter(x => ['pending','awaiting-approval'].includes(x.status)).length
-      + D.PORTAL_REQUESTS.length + D.REGISTRATIONS.filter(x => x.waiting > 0).length },
+      + D.PORTAL_REQUESTS.length + D.REGISTRATIONS.filter(x => x.waiting > 0).length
+      + D.MEMBER_REQUESTS.filter(x => x.status === 'submitted').length },
   certificate:  { ico:'doc',      en:'Record',           ar:'قيد',                 view:Records.certificate, hidden:true },
   notes:        { ico:'notes',    en:'Pastoral notes',   ar:'ملاحظات رعوية',       view:Pastoral.notes },
 
@@ -94,7 +97,7 @@ export { S as state, ROLES, me, go };
 /* Detail views (a person, a certificate, the design system) are reachable from
    whatever module linked to them, so they ride on their parent's permission. */
 const DETAIL_PARENT = { person: 'people', household: 'households', certificate: 'sacraments' };
-const PERSONAL_ROUTES = new Set(['memberhome','myministries','mymeetings','mycalendar','myattendance',
+const PERSONAL_ROUTES = new Set(['memberhome','myrequests','myministries','mymeetings','mycalendar','myattendance',
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
 const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
@@ -164,7 +167,7 @@ function mobileHTML() {
     const rt = ROUTES[id]; if (!rt) return '';
     const on = S.route === id;
     return `<button data-go="${id}" ${on ? 'aria-current="page"' : ''}>${icon(rt.ico, 20)}
-      <span>${esc(t(rt.en, rt.ar))}</span></button>`;
+      <span>${esc(rt.mEn ? t(rt.mEn, rt.mAr) : t(rt.en, rt.ar))}</span></button>`;
   }).join('')}</nav>`;
 }
 
@@ -203,6 +206,15 @@ export function renderAll() {
   renderView();
 }
 
+/* A link from a parish's public page names the parish; open the account there when it can. */
+function pickParish() {
+  const wanted = new URLSearchParams(location.search).get('parish');
+  if (!wanted) return;
+  if (session.parishes.some(p => p.id === wanted)) session.parishId = wanted;
+  history.replaceState(null, '', location.pathname + location.hash);
+}
+const requestLink = () => /^#\/?myrequests/.test(location.hash);
+
 function loginScreen(error = '') {
   app.className = 'signin';
   app.innerHTML = `<div class="signin-art"><div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
@@ -210,6 +222,7 @@ function loginScreen(error = '') {
     <div class="swatches"><i style="background:#233B32;border:1px solid #EDF0E8"></i><i style="background:#EDF0E8"></i><i style="background:#FFFFFF"></i><i style="background:var(--selection)"></i><i style="background:var(--text-2)"></i></div></div>
     <div class="signin-form"><form id="signform" novalidate><h2>${t('Sign in', 'تسجيل الدخول')}</h2>
       <p class="dim" style="margin:6px 0 24px">${t('Use the account created by your administrator.', 'استخدم الحساب الذي أنشأه المسؤول.')}</p>
+      ${requestLink() ? `<div class="alert alert-info signin-context">${icon('info', 18)}<span><b>${t('Sign in to send your request', 'سجّل الدخول لإرسال طلبك')}</b>${t('Use your My ParishLife account. If you do not have one yet, ask the parish office to create it for you.', 'استخدم حسابك في «حياة الرعية». إذا لم يكن لديك حساب بعد، اطلب من مكتب الرعية إنشاءه لك.')}</span></div>` : ''}
       ${error ? `<div class="alert alert-danger" role="alert">${esc(error)}</div>` : ''}
       <div class="formrow"><label class="label" for="si_u">${t('Username', 'اسم المستخدم')}</label><input class="input" id="si_u" required autocomplete="username"></div>
       <div class="formrow"><label class="label" for="si_p">${t('Password', 'كلمة المرور')}</label><input class="input" id="si_p" type="password" required autocomplete="current-password"></div>
@@ -221,9 +234,12 @@ function loginScreen(error = '') {
     e.preventDefault(); const button = e.target.querySelector('[type=submit]'); button.disabled = true;
     try {
       await api('login', 'POST', { username: e.target.querySelector('#si_u').value.trim(), password: e.target.querySelector('#si_p').value });
-      await loadSession();
+      await loadSession(); pickParish();
       S.role = session.user.role; await hydrate(); S.route = S.role === 'bishop' ? 'oversight' : (ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'dashboard');
-      location.hash = '#/' + S.route; renderAll();
+      /* Signing in from a link (a request form, a notification) continues to that page. */
+      const wanted = location.hash.replace(/^#\/?/, '').split('/')[0];
+      if (wanted && ROUTES[wanted] && allowed(wanted)) route();
+      else { location.hash = '#/' + S.route; renderAll(); }
     } catch (error) { loginScreen(error.message); }
   });
 }
@@ -573,6 +589,6 @@ window.addEventListener('hashchange', route);
 document.addEventListener('parish-save-error', e => toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), e.detail, 'danger'));
 setLang(lang);
 (async () => {
-  try { await loadSession(); S.role = session.user.role; await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
+  try { await loadSession(); pickParish(); S.role = session.user.role; await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
   catch (error) { session.user = null; loginScreen(error.status === 401 ? '' : error.message); }
 })();

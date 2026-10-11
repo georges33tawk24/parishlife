@@ -74,6 +74,7 @@ const STATUS = {
   celebrated:    ['Celebrated', 'تمّ الاحتفال', 'success', 'st-ok'],
   open:          ['Open', 'مفتوحة', 'info', 'st-open'],
   requested:     ['Request received', 'استُلم الطلب', 'warning', 'st-review'],
+  submitted:     ['Submitted', 'مُرسَل', 'warning', 'st-review'],
   'office-reviewed': ['Office reviewed', 'راجعه المكتب', 'warning', 'st-review'],
   preparing:     ['In preparation', 'قيد التحضير', 'info', 'st-wait'],
   legacy:        ['Needs linked record', 'يحتاج قيداً مرتبطاً', 'warning', 'st-alert'],
@@ -89,6 +90,7 @@ const STATUS = {
   rejected:      ['Rejected', 'مرفوض', 'danger', 'st-no'],
   cancelled:     ['Cancelled', 'ملغى', 'danger', 'st-no'],
   declined:      ['Declined', 'اعتذر', 'danger', 'st-no'],
+  withdrawn:     ['Withdrawn', 'مسحوب', '', 'st-pause'],
   failed:        ['Failed', 'فشل الإرسال', 'danger', 'st-no']
 };
 export function status(key) {

@@ -2,9 +2,11 @@
 import {
   Problem, PyError, need, truthy, eq, has, get, K, setItem, iter, len, slice, strip, str, set, union, intersection,
   subset, intersects, any, all, items, add, ge, lt, sorted, isDict, isList, isStr, isBool, isdigit, fromisoformat,
-  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, sha256hex, b64decode
+  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, sha256hex, b64decode, keyed, isoDate, le, pad3
 } from './py.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
+import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, request_subjects, sacrament_conflict, request_subject_key,
+  member_request_item, member_request_options } from './requests.js';
 
 const SENSITIVE_CONCERNS = new Set(['Leadership', 'Behaviour or conduct', 'Safety', 'Financial concerns',
   'Harassment or inappropriate behaviour']);
@@ -295,13 +297,14 @@ export async function member_view(c, u, pid) {
     });
   }
   const office = role === 'priest' || role === 'secretary';
-  const [requests, notificationRows, volunteerRows, profileRows, reviewerRows, categoryRows] = await c.reads([
+  const [requests, notificationRows, volunteerRows, profileRows, reviewerRows, categoryRows, requestRows] = await c.reads([
     ['SELECT id,field,requested_value,status,created_at FROM member_profile_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', [pid, K(u, 'id')]],
     ['SELECT * FROM member_notifications WHERE parish_id=? AND user_id=? ORDER BY created_at DESC LIMIT 100', [pid, K(u, 'id')]],
     ['SELECT mc.content_id,mc.user_id,mc.status,mc.created_at,c.title,c.group_id,u.name FROM member_commitments mc JOIN member_content c ON c.id=mc.content_id JOIN users u ON u.id=mc.user_id WHERE mc.parish_id=? ORDER BY mc.created_at DESC', [pid]],
     office ? ['SELECT pr.*,u.name FROM member_profile_requests pr JOIN users u ON u.id=pr.user_id WHERE pr.parish_id=? ORDER BY pr.created_at DESC', [pid]] : ['SELECT 1 WHERE 0', []],
     perms.has('Assign') ? ['SELECT cr.user_id,cr.permissions,u.name FROM complaint_reviewers cr JOIN users u ON u.id=cr.user_id WHERE cr.parish_id=?', [pid]] : ['SELECT 1 WHERE 0', []],
-    ['SELECT name,active FROM complaint_categories WHERE parish_id=? ORDER BY name', [pid]]
+    ['SELECT name,active FROM complaint_categories WHERE parish_id=? ORDER BY name', [pid]],
+    ['SELECT * FROM member_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC,reference DESC', [pid, K(u, 'id')]]
   ]);
   /* Reminders inserted above belong in this list, newest first, like the committed rows. */
   const allNotifications = [...[...reminders].reverse(), ...notificationRows];
@@ -321,7 +324,8 @@ export async function member_view(c, u, pid) {
     volunteerReview: volunteerRows.filter(r => has(managedGroups, r.group_id)), profileReview: office ? profileRows : [],
     managedGroups: sorted([...managedGroups]), formation,
     reviewers: perms.has('Assign') ? reviewerRows.filter(r => has(set(JSON.parse(r.permissions)), 'Review')).map(r => ({ id: r.user_id, name: r.name })) : [],
-    categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active) })), notifications
+    categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active) })), notifications,
+    requests: requestRows.map(r => member_request_item(d, r)), requestOptions: member_request_options(d, person)
   };
 }
 
@@ -441,6 +445,76 @@ export async function member_action(c, u, pid, q) {
       }
     }
     audit(c, u, pid, 'volunteer.confirm', row.content_id);
+  } else if (op === 'sacramentRequest') {
+    const kind = get(q, 'kind');
+    need(isStr(kind) && has(REQUEST_LABELS, kind), 'Choose what you would like to request.');
+    const subjects = keyed(request_subjects(d, person), p => K(p, 'id'));
+    need(subjects.size > 0, 'Your person record is not active in this parish.', 403);
+    const year = TODAY().slice(0, 4), prefix = `WEB/${year}/`;
+    const [[waitingRow], submitted, references] = await c.reads([
+      ["SELECT COUNT(*) AS n FROM member_requests WHERE parish_id=? AND user_id=? AND status='submitted'", [pid, K(u, 'id')]],
+      ["SELECT kind,details FROM member_requests WHERE parish_id=? AND status='submitted'", [pid]],
+      ['SELECT reference FROM member_requests WHERE parish_id=? AND reference LIKE ?', [pid, prefix + '%']]
+    ]);
+    need(waitingRow.n < 10, 'You already have 10 requests waiting for the parish office.');
+    const child = get(q, 'child'), details = {};
+    if (child !== null) {
+      need(kind === 'baptism' && isDict(child), 'Only a baptism can be requested for a child who is not registered yet.');
+      const names = [get(child, 'lat'), get(child, 'ar')];
+      need(names.every(x => isStr(x) && len(strip(x)) > 0 && len(strip(x)) <= 120), 'Enter the child’s full name in English and in Arabic.');
+      const born = get(child, 'born');
+      need(isoDate(born) && le(born, TODAY()), 'Enter the child’s date of birth.');
+      const parents = [get(child, 'father', ''), get(child, 'mother', '')];
+      need(parents.every(x => isStr(x) && len(strip(x)) <= 120), 'Parent names are too long.');
+      details.child = { lat: strip(names[0]), ar: strip(names[1]), born, father: strip(parents[0]), mother: strip(parents[1]) };
+    } else {
+      const personId = get(q, 'personId');
+      need(isStr(personId) && has(subjects, personId), 'Choose yourself or a member of your household.');
+      need(kind !== 'funeral' || personId !== K(person, 'id'), 'Choose the family member the funeral is for.');
+      details.personId = personId;
+    }
+    if (kind === 'certificate') {
+      const certificateOf = get(q, 'certificateOf'), purpose = get(q, 'purpose'), language = get(q, 'language', 'bilingual');
+      need(isStr(certificateOf) && CERTIFICATE_OF.includes(certificateOf), 'Choose the certificate you need.');
+      need(isStr(purpose) && len(strip(purpose)) > 0 && len(strip(purpose)) <= 200, 'Tell the parish office what the certificate is for.');
+      need(isStr(language) && CERTIFICATE_LANGUAGES.includes(language), 'Choose the certificate language.');
+      Object.assign(details, { certificateOf, purpose: strip(purpose), language });
+    } else {
+      if (truthy(get(details, 'personId'))) {
+        const conflict = sacrament_conflict(d, details.personId, kind);
+        need(!conflict, conflict);
+      }
+      const date = get(q, 'date', '');
+      need(isStr(date) && (!truthy(date) || isoDate(date) && ge(date, TODAY())), 'Choose a preferred date from today onwards.');
+      details.date = date;
+      if (kind === 'marriage') {
+        const partner = get(q, 'partner'), partnerParish = get(q, 'partnerParish', '');
+        need(isStr(partner) && len(strip(partner)) > 0 && len(strip(partner)) <= 120, 'Enter the full name of the future spouse.');
+        need(isStr(partnerParish) && len(strip(partnerParish)) <= 120, 'The parish name is too long.');
+        Object.assign(details, { partner: strip(partner), partnerParish: strip(partnerParish) });
+      }
+    }
+    const notes = get(q, 'notes', ''), phone = get(q, 'phone', '');
+    need(isStr(notes) && len(strip(notes)) <= 500, 'Keep your message within 500 characters.');
+    need(isStr(phone) && len(strip(phone)) <= 40, 'Enter a shorter phone number.');
+    Object.assign(details, { notes: strip(notes), phone: strip(phone) });
+    const key = request_subject_key(kind, details);
+    need(!submitted.some(r => request_subject_key(r.kind, JSON.parse(r.details)) === key),
+      'The parish office already has this request and will reply soon.');
+    const numbers = references.map(r => r.reference.slice(prefix.length)).filter(isdigit).map(Number);
+    const reference = prefix + pad3(Math.max(0, ...numbers) + 1);
+    const requestId = tokenHex(12), at = NOW();
+    c.run('INSERT INTO member_requests VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      requestId, pid, reference, K(u, 'id'), kind, JSON.stringify(details), 'submitted', null, '', at, at);
+    audit(c, u, pid, 'member.request', { id: requestId, kind, reference });
+    return { id: requestId, reference };
+  } else if (op === 'requestWithdraw') {
+    const requestId = get(q, 'id');
+    const row = isStr(requestId) ? await c.first('SELECT * FROM member_requests WHERE id=? AND parish_id=? AND user_id=?', requestId, pid, K(u, 'id')) : null;
+    need(row !== null, 'Request not found.', 404);
+    need(row.status === 'submitted', 'The parish office has already handled this request. Please contact the office to change it.');
+    c.run("UPDATE member_requests SET status='withdrawn',updated_at=? WHERE id=?", NOW(), row.id);
+    audit(c, u, pid, 'member.request-withdrawn', { id: row.id });
   } else if (op === 'profileRequest') {
     need(has(new Set(['name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture']), get(q, 'field')), 'Invalid field.');
     const value = get(q, 'value');
