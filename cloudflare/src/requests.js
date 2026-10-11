@@ -4,7 +4,7 @@
 import { truthy, eq, has, get, K, iter, len, set, add, sorted, next, keyed, casefold, isDict, or, str, ge, TODAY } from './py.js';
 
 export const REQUEST_LABELS = { baptism: 'Baptism', communion: 'First Communion', confirmation: 'Confirmation',
-  marriage: 'Marriage', funeral: 'Funeral', certificate: 'Certificate', booking: 'Booking', custom: 'Request' };
+  marriage: 'Marriage', funeral: 'Funeral', certificate: 'Certificate', booking: 'Booking', custom: 'General' };  // "General request not accepted"
 export const OWN_REQUESTS = new Set(['booking', 'custom']); // asked by the member for themselves, not for a household member
 const BOOKABLE = new Set(['Hall', 'Room', 'Outdoor']);
 export const CLOCK = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;

@@ -212,6 +212,7 @@ class MemberBookingTests(unittest.TestCase):
         keys = {r['id']: [e['key'] for e in r['progress']['events']] for r in self.view('nada')['requests']}
         self.assertEqual(keys[withdrawn['id']], ['submitted', 'withdrawn'])
         self.assertEqual(keys[declined['id']], ['submitted', 'declined'])
+        self.assertEqual(self.notifications('nada')[-1], ('request-declined', 'General request not accepted'))
         with server.connect() as c:
             office = {r['id']: r for r in server.visible(c, self.users['secretary'], 'p-elias', self.state()[1])['MEMBER_REQUESTS']}
         self.assertEqual([e['key'] for e in office[declined['id']]['log']], ['declined'])

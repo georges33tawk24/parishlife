@@ -1684,7 +1684,7 @@ def member_attachment(value):
 # the sacrament workflow, so a parishioner never changes the record the office edits.
 REQUEST_LABELS = {'baptism': 'Baptism', 'communion': 'First Communion', 'confirmation': 'Confirmation',
                   'marriage': 'Marriage', 'funeral': 'Funeral', 'certificate': 'Certificate',
-                  'booking': 'Booking', 'custom': 'Request'}
+                  'booking': 'Booking', 'custom': 'General'}  # "General request not accepted"
 OWN_REQUESTS = {'booking', 'custom'}  # asked by the member for themselves, not for a household member
 BOOKABLE = {'Hall', 'Room', 'Outdoor'}
 CLOCK = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]')
