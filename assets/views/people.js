@@ -11,6 +11,8 @@ import { download, wireActions } from '../actions.js';
 import { persist } from '../persist.js';
 import { printSheet } from '../print.js';
 import { readAddressCascade } from '../geography.js';
+import { memberAction } from '../member-data.js';
+import { phoneShow } from '../sacrament-requests.js';
 import * as D from '../data.js';
 import { PEOPLE, ARCHIVED, PHOTOS, HOUSEHOLDS, GROUPS, SACRAMENTS, PLEDGES, BATCH, PERSON_EXTRA, DUPLICATES,
          IMPORT_PREVIEW, VOLUNTEERS, TODAY, FAMILIES, BRANCHES, GROUP_DETAIL, NOTES, FUNDS, person, initials } from '../data.js';
@@ -136,11 +138,17 @@ function familyTree(h, focus) {
       <div class="ft-row">${side.map(node).join('')}</div></div>` : ''}</div>`;
 }
 const hh = id => HOUSEHOLDS.find(h => h.id === id);
+/* People records keep Lebanese numbers without +961; a number from abroad is kept whole. */
+const phoneText = v => !v || v === '—' ? '—' : String(v).startsWith('+') ? String(v) : '+961 ' + v;
+const unverified = p => !!p.registeredOnline && !p.registeredOnline.verified;
+const onlineNew = p => unverified(p) ? `<span class="or-mark" title="${esc(t('Registered online — not verified yet', 'مسجّل إلكترونياً — لم يُتحقّق منه بعد'))}">${icon('globe', 12)}${t('New online', 'جديد إلكترونياً')}</span>` : '';
+const signInName = v => /^\+\d+$/.test(v) ? phoneShow(v) : v;
+const ACCESS = { member: ['Member portal', 'بوّابة المؤمنين'], leader: ['Member portal · ministry leader', 'بوّابة المؤمنين · مسؤول خدمة'] };
 const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', 'Roman Catholic': 'لاتيني', Syriac: 'سرياني' };
 const riteLabel = r => t(r, RITE_AR[r] || r);
 const filteredPeople = () => PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status))
   && (!S.ui.peopleTown || x.town === S.ui.peopleTown) && (!S.ui.peopleRite || x.rite === S.ui.peopleRite)
-  && (!S.ui.peopleEnv || hh(x.hh)?.envelope)
+  && (!S.ui.peopleEnv || hh(x.hh)?.envelope) && (!S.ui.peopleNew || unverified(x))
   && matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, S.ui.peopleQ || ''));
 const csvCell = value => `"${String(value ?? '').replace(/"/g,'""')}"`;
 function peopleExport() {
@@ -198,17 +206,17 @@ export function people(tab = '') {
     cls: 'clickable', attrs: `data-ri-p="${p.id}"`,
     detail: `<div class="grid g3" style="gap:20px">
         <dl class="dl"><dt>${t('Household', 'العائلة')}</dt><dd>${hh(p.hh) ? esc(t(hh(p.hh).name, hh(p.hh).ar)) : '—'}</dd>
-          <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono">+961 ${p.phone}</dd></dl>
+          <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono" dir="ltr">${esc(phoneText(p.phone))}</dd></dl>
         <dl class="dl"><dt>${t('Groups', 'المجموعات')}</dt><dd>${GROUPS.filter(g => GROUP_DETAIL[g.id]?.roster?.some(r => r.p === p.id)).map(g => esc(t(g.name, g.ar))).join(', ') || '—'}</dd>
           <dt>${t('Born', 'الولادة')}</dt><dd class="mono">${p.born}</dd></dl>
         <div><a class="btn btn-secondary btn-dense" href="#/person/${p.id}">${t('Open record', 'فتح السجل')}</a></div>
       </div>`,
     cells: [
-      `<span class="row" style="gap:6px">${C.iconBtn('chevR', t('Expand', 'توسيع'), 'data-expand aria-expanded="false"')}${who(p)}</span>`,
+      `<span class="row" style="gap:6px">${C.iconBtn('chevR', t('Expand', 'توسيع'), 'data-expand aria-expanded="false"')}${who(p)}${onlineNew(p)}</span>`,
       `<span class="dim">${esc(hh(p.hh) ? t(hh(p.hh).name, hh(p.hh).ar) : '—')}</span>`,
       `<span class="dim">${esc(t(p.town, p.townAr))}</span>`,
       `<span class="dim">${esc(riteLabel(p.rite))}</span>`,
-      `<span class="mono dim" dir="ltr">${p.phone === '—' ? '<span class="dimmer">—</span>' : '+961 ' + p.phone}</span>`,
+      `<span class="mono dim" dir="ltr">${p.phone === '—' ? '<span class="dimmer">—</span>' : esc(phoneText(p.phone))}</span>`,
       status(p.status),
       `<span class="rowacts">${C.iconBtn('msg', t('Message', 'مراسلة'), `data-act="compose:${p.id}"`)}${C.iconBtn('dots', t('More', 'المزيد'), `data-kebab="${p.id}"`)}</span>`
     ]
@@ -219,10 +227,11 @@ export function people(tab = '') {
       <div class="grow" style="max-width:320px">${C.searchClear(t('Name, phone or envelope number', 'الاسم أو الهاتف أو رقم المظروف'), 'psearch')}</div>
       <button class="btn btn-secondary" data-filter aria-haspopup="true">${icon('filter', 17)}${t('Status', 'الحالة')}<span class="badge" style="margin-inline-start:6px">${(S.ui.peopleStatus || ['member', 'visitor']).length}</span></button>
       <select class="select" style="width:auto" id="ptown" aria-label="${t('Town', 'البلدة')}"><option value="">${t('All towns', 'كل البلدات')}</option>
-        ${[...new Map(PEOPLE.map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => `<option value="${esc(en)}" ${town === en ? 'selected' : ''}>${esc(t(en, ar))}</option>`).join('')}</select>
+        ${[...new Map(PEOPLE.filter(x => x.town).map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => `<option value="${esc(en)}" ${town === en ? 'selected' : ''}>${esc(t(en, ar))}</option>`).join('')}</select>
       <select class="select" style="width:auto" id="prite" aria-label="${t('Rite', 'الطقس')}"><option value="">${t('All rites', 'كل الطقوس')}</option>
-        ${[...new Set(PEOPLE.map(x => x.rite))].sort().map(r => `<option value="${esc(r)}" ${rite === r ? 'selected' : ''}>${esc(riteLabel(r))}</option>`).join('')}</select>
-      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" style="margin-inline-start:auto">${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
+        ${[...new Set(PEOPLE.map(x => x.rite).filter(Boolean))].sort().map(r => `<option value="${esc(r)}" ${rite === r ? 'selected' : ''}>${esc(riteLabel(r))}</option>`).join('')}</select>
+      ${PEOPLE.some(unverified) || S.ui.peopleNew ? `<button class="savedview" data-act="people-new" aria-pressed="${!!S.ui.peopleNew}" style="margin-inline-start:auto">${icon(S.ui.peopleNew ? 'check' : 'globe', 14)}${t('New online', 'جدد إلكترونياً')}<span class="badge" style="margin-inline-start:6px">${PEOPLE.filter(unverified).length}</span></button>` : ''}
+      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" ${PEOPLE.some(unverified) || S.ui.peopleNew ? '' : 'style="margin-inline-start:auto"'}>${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
     </div>
     ${S.ui.peopleEnv ? `<p class="help" style="margin-bottom:12px">${t('A numbered giving envelope belongs to a household. It connects counted gifts and statements to that household; its members are listed for lookup, not as individual donors.', 'المظروف المرقّم للعطاء يتبع العائلة المنزلية. يربط التقدمات وكشوفها بها؛ ويظهر أفرادها للبحث لا لأن كل فرد متبرّع.')}</p>` : ''}
     ${table({
@@ -529,9 +538,10 @@ export function personView(id, tab = '') {
       <div class="id">
         <nav class="crumbs"><a href="#/people">${t('People', 'المؤمنون')}</a><span class="sep">/</span><span>${esc(label(p))}</span></nav>
         <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(label(p))}
-          ${status(p.status)}<span class="pill">${esc(riteLabel(p.rite))}</span></h1>
-        <div class="meta"><span style="font-family:var(--arabic)" dir="auto">${esc(p.ar || '')}</span>
-          ${house?.envelope ? ` · ${t('Offering-envelope identifier', 'رمز مظروف العطاء')} <span class="mono">${esc(house.envelope)}</span>` : ''} · ${esc(t(p.town, p.townAr))}</div>
+          ${status(p.status)}${p.rite ? `<span class="pill">${esc(riteLabel(p.rite))}</span>` : ''}${onlineNew(p)}</h1>
+        <div class="meta">${[p.ar && p.ar !== p.lat ? `<span style="font-family:var(--arabic)" dir="auto">${esc(p.ar)}</span>` : '',
+          house?.envelope ? `${t('Offering-envelope identifier', 'رمز مظروف العطاء')} <span class="mono">${esc(house.envelope)}</span>` : '',
+          p.town ? esc(t(p.town, p.townAr)) : ''].filter(Boolean).join(' · ')}</div>
       </div>
       <div class="acts"><button class="btn btn-secondary" data-act="compose:${p.id}">${icon('msg', 17)}${t('Message', 'مراسلة')}</button>
         <button class="btn btn-secondary" data-act="print">${icon('print', 17)}${t('Print card', 'طباعة بطاقة')}</button>
@@ -546,9 +556,10 @@ export function personView(id, tab = '') {
         ${panel(t('Record', 'السجل'), `<dl class="dl">
           <dt>${t('English name', 'الاسم الإنكليزي')}</dt><dd>${esc(p.lat)}</dd>
           <dt>${t('Arabic name', 'الاسم العربي')}</dt><dd style="font-family:var(--arabic);font-size:16px">${esc(p.ar)}</dd>
-          <dt>${t('Born', 'الولادة')}</dt><dd class="mono" dir="ltr">${p.born}</dd>
-          <dt>${t('Rite', 'الطقس')}</dt><dd>${esc(riteLabel(p.rite))}</dd>
-          <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono" dir="ltr">${p.phone === '—' ? '—' : '+961 ' + p.phone}</dd>
+          <dt>${t('Born', 'الولادة')}</dt><dd class="mono" dir="ltr">${esc(p.born || '—')}</dd>
+          <dt>${t('Rite', 'الطقس')}</dt><dd>${p.rite ? esc(riteLabel(p.rite)) : '—'}</dd>
+          <dt>${t('Phone', 'الهاتف')}</dt><dd class="mono" dir="ltr">${esc(phoneText(p.phone))}</dd>
+          ${p.email ? `<dt>${t('Email', 'البريد الإلكتروني')}</dt><dd><bdi dir="ltr">${esc(p.email)}</bdi></dd>` : ''}
           <dt>${t('Address', 'العنوان')}</dt><dd>${house ? esc(t(house.address, house.addressAr)) : '—'}</dd>
           <dt>${t('Line of work','المهنة')}</dt><dd>${esc(x.occupation||'—')}</dd>
           <dt>${t('Language', 'اللغة')}</dt><dd>${x.lang === 'ar' ? t('Arabic', 'العربية') : t('English', 'الإنكليزية')}</dd>
@@ -569,6 +580,7 @@ export function personView(id, tab = '') {
             ${x.fields.map(([en, ar, v]) => `<div class="listrow" style="padding-inline:0"><span class="grow">${esc(t(en, ar))}</span><b>${esc(v)}</b></div>`).join('')}` : ''}`)}
       </div>
       <div class="sidecol">
+        ${accountPanel(p)}
         ${panel(t('Household', 'العائلة'), house ? house.members.map(person).filter(Boolean).map(m =>
           `<a class="listrow" href="#/person/${m.id}">${who(m)}<span class="grow"></span>
             ${m.id === house.head ? pill(t('Head', 'ربّ العائلة'), 'info') : ''}</a>`).join('')
@@ -690,8 +702,61 @@ export function personView(id, tab = '') {
   return head + (T[tab] || T[''])();
 }
 
+/* The portal account of a parishioner: how they sign in, whether the office has checked a record they
+   made themselves, and a new password when they forget theirs. Only the parish office sees it. */
+function accountPanel(p) {
+  const account = D.ACCOUNTS[p.id], online = p.registeredOnline;
+  if (!is('priest', 'secretary') || !(account || online)) return '';
+  const access = account && (ACCESS[account.role] || [account.role, account.role]);
+  return panel(t('Online account', 'الحساب الإلكتروني'), `
+    ${unverified(p) ? C.inlineAlert('warning', t('Registered online. ', 'سجّل نفسه إلكترونياً. '), t('Check the details they gave — the Arabic name, town and household — then mark the record as verified.', 'تحقّق من المعلومات التي أدخلها — الاسم بالعربية والبلدة والعائلة — ثم علّم السجل كمُتحقَّق منه.')) : ''}
+    <dl class="dl">
+      ${account ? `<dt>${t('Signs in with', 'يسجّل الدخول بـ')}</dt><dd><bdi class="mono" dir="ltr">${esc(signInName(account.username))}</bdi></dd>
+        <dt>${t('Access', 'الصلاحية')}</dt><dd>${esc(t(...access))}</dd>` : ''}
+      ${online ? `<dt>${t('Registered', 'التسجيل')}</dt><dd>${fmtDate(online.at)} · ${online.via === 'email' ? t('with an email address', 'ببريد إلكتروني') : t('with a phone number', 'برقم هاتف')}</dd>
+        <dt>${t('Verified', 'التحقّق')}</dt><dd>${online.verified ? `${t('Yes', 'نعم')}${online.verifiedBy ? ` · ${esc(online.verifiedBy)}` : ''}${online.verifiedAt ? ` · ${fmtDate(online.verifiedAt)}` : ''}` : t('Not yet', 'ليس بعد')}</dd>` : ''}
+    </dl>
+    ${unverified(p) || (account && ACCESS[account.role]) ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
+      ${unverified(p) ? `<button class="btn btn-primary btn-dense" data-act="person-verify:${esc(p.id)}">${icon('check', 15)}${t('Mark as verified', 'تعليم كمُتحقَّق منه')}</button>` : ''}
+      ${account && ACCESS[account.role] ? `<button class="btn btn-secondary btn-dense" id="account-reset">${icon('lock', 15)}${t('Reset password', 'إعادة تعيين كلمة المرور')}</button>` : ''}
+    </div>` : ''}`);
+}
+
+/* A forgotten password: the office makes a new one and reads it to the parishioner over the phone. */
+function resetPassword(p) {
+  const name = isAr() ? p.ar || p.lat : p.lat;
+  openModal({ title: t('Reset the password?', 'إعادة تعيين كلمة المرور؟'),
+    body: `<p>${esc(t(`A new password is made for ${name}. Their old password stops working, and they are signed out on every device.`, `تُنشأ كلمة مرور جديدة لـ ${name}. تتوقّف كلمة المرور القديمة، ويُسجَّل خروجه من كل الأجهزة.`))}</p>`,
+    foot: `<button class="btn btn-secondary" data-close>${t('Cancel', 'إلغاء')}</button><button class="btn btn-primary" id="reset-yes">${t('Make a new password', 'إنشاء كلمة مرور جديدة')}</button>`,
+    onMount(el) {
+      const yes = el.querySelector('#reset-yes');
+      yes.addEventListener('click', async () => {
+        yes.disabled = true; yes.setAttribute('aria-busy', 'true');
+        try {
+          const result = await memberAction('accountReset', { personId: p.id });
+          openModal({ title: t('New password', 'كلمة المرور الجديدة'),
+            body: `<p>${esc(t(`Read it to ${name}. They sign in with:`, `اقرأها لـ ${name}. يسجّل الدخول بـ:`))}</p>
+              <dl class="dl reset-dl"><dt>${t('Phone number or email', 'رقم الهاتف أو البريد')}</dt><dd><bdi class="mono" dir="ltr">${esc(signInName(result.username))}</bdi></dd>
+                <dt>${t('Password', 'كلمة المرور')}</dt><dd><bdi class="mono reset-pass" dir="ltr">${esc(result.password.replace(/(\d{4})(\d{4})/, '$1 $2'))}</bdi></dd></dl>
+              <p class="help">${t('It is shown only now. They can choose their own password in My profile once they sign in.', 'تظهر الآن فقط. يمكنه اختيار كلمة مروره من «ملفي» بعد تسجيل الدخول.')}</p>`,
+            foot: `<button class="btn btn-secondary" id="reset-copy">${icon('doc', 15)}${t('Copy password', 'نسخ كلمة المرور')}</button><button class="btn btn-primary" data-close>${t('Done', 'تمّ')}</button>`,
+            onMount(box) {
+              box.querySelector('#reset-copy').addEventListener('click', async () => {
+                try { await navigator.clipboard.writeText(result.password); toast(t('Password copied', 'نُسخت كلمة المرور'), '', 'success'); }
+                catch { toast(t('Could not copy', 'تعذّر النسخ'), t('Select the password and copy it instead.', 'حدّد كلمة المرور وانسخها.'), 'warning'); }
+              });
+            } });
+        } catch (error) {
+          yes.disabled = false; yes.removeAttribute('aria-busy');
+          toast(t('The password was not reset', 'لم تُعَد كلمة المرور'), error.message, 'danger');
+        }
+      });
+    } });
+}
+
 personView.mount = (host, id) => {
   C.wire(host); wireTables(host);
+  host.querySelector('#account-reset')?.addEventListener('click', () => { const p = person(id); if (p) resetPassword(p); });
   host.querySelector('[data-pkebab]')?.addEventListener('click', e => personMenu(e.currentTarget, id));
   host.querySelector('#edit-person-groups')?.addEventListener('click',()=>editPersonGroups(id));
   host.querySelector('#edit-profile-extra')?.addEventListener('click',()=>editProfileExtra(id));

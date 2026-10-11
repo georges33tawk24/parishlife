@@ -1,10 +1,13 @@
 /* Sacrament and certificate requests from the member portal, ported from server.py
    (request_subjects, sacrament_conflict, request_subject_key, member_request_progress,
    member_request_item, member_request_options). */
-import { truthy, eq, has, get, K, iter, len, set, add, sorted, next, keyed, casefold, isDict, or } from './py.js';
+import { truthy, eq, has, get, K, iter, len, set, add, sorted, next, keyed, casefold, isDict, or, str, ge, TODAY } from './py.js';
 
 export const REQUEST_LABELS = { baptism: 'Baptism', communion: 'First Communion', confirmation: 'Confirmation',
-  marriage: 'Marriage', funeral: 'Funeral', certificate: 'Certificate' };
+  marriage: 'Marriage', funeral: 'Funeral', certificate: 'Certificate', booking: 'Booking', custom: 'Request' };
+export const OWN_REQUESTS = new Set(['booking', 'custom']); // asked by the member for themselves, not for a household member
+const BOOKABLE = new Set(['Hall', 'Room', 'Outdoor']);
+export const CLOCK = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 export const CERTIFICATE_OF = ['baptism', 'communion', 'confirmation', 'marriage'];
 export const CERTIFICATE_LANGUAGES = ['bilingual', 'arabic', 'english'];
 const ONCE_ONLY = new Set(['baptism', 'communion', 'confirmation', 'funeral']);
@@ -41,6 +44,8 @@ export function sacrament_conflict(d, personId, kind) {
 }
 
 export function request_subject_key(kind, details) {
+  if (kind === 'booking') return ['booking', K(details, 'venue'), K(details, 'date'), K(details, 'from')].join(':');
+  if (kind === 'custom') return 'custom:' + casefold(K(details, 'subject'));
   const child = get(details, 'child');
   const who = !truthy(child) ? K(details, 'personId') : 'child:' + casefold(K(child, 'lat')) + ':' + K(child, 'born');
   return kind + ':' + get(details, 'certificateOf', '') + ':' + who;
@@ -50,16 +55,28 @@ export function request_subject_key(kind, details) {
 export function member_request_progress(d, row, details) {
   const s = truthy(row.sacrament_id) ? next(K(d, 'SACRAMENTS'), x => eq(K(x, 'id'), row.sacrament_id)) : null;
   const events = [{ key: 'submitted', at: row.created_at }];
+  let logged = JSON.parse(row.log || '[]');
+  if (!logged.length && row.status !== 'submitted') logged = [{ key: row.status, at: row.updated_at }]; // handled before steps were logged
+  events.push(...logged.map(entry => ({ key: entry.key, at: entry.at })));
   let stage = 'received', reason = '', register = '', planned = '', preparation = [];
   if (row.status === 'declined') {
     stage = 'declined'; reason = row.response;
-    events.push({ key: 'declined', at: row.updated_at });
   } else if (row.status === 'withdrawn') {
     stage = 'withdrawn';
-    events.push({ key: 'withdrawn', at: row.updated_at });
+  } else if (row.status === 'completed') {
+    stage = 'completed';
+  } else if (row.status === 'accepted' && row.kind === 'custom') {
+    stage = 'inprogress';
+  } else if (row.status === 'accepted' && row.kind === 'booking') {
+    const booking = next(K(d, 'RESERVATIONS'), x => eq(K(x, 'id'), row.sacrament_id));
+    stage = booking === null ? 'cancelled' : get({ approved: 'confirmed', rejected: 'declined' }, get(booking, 'status'), 'review');
+    for (const entry of iter(get(booking ?? {}, 'history', []))) {
+      const key = get({ approve: 'confirmed', reject: 'declined' }, get(entry, 'action'));
+      if (truthy(key)) events.push({ key, at: get(entry, 'at', '') });
+      if (key === 'declined' && truthy(get(entry, 'reason'))) reason = K(entry, 'reason');
+    }
   } else if (row.status === 'accepted') {
     stage = 'review';
-    events.push({ key: 'accepted', at: row.updated_at });
     if (s !== null) {
       const status = get(s, 'status'), certificate = eq(get(s, 'kind'), 'certificate');
       if (certificate) {
@@ -112,5 +129,24 @@ export function member_request_options(d, person) {
   }
   const contact = get(get(d, 'CONTENT', {}), 'contact');
   const phone = isDict(contact) && truthy(get(contact, 'published', true)) ? get(K(d, 'PARISH'), 'phone', '') : '';
-  return { subjects, preparation: get(d, 'PREP_REQUIREMENTS', {}), phone };
+  const venues = bookable_venues(d).map(v => ({ id: K(v, 'id'), name: get(v, 'name', ''), ar: get(v, 'ar', ''), cap: get(v, 'cap', 0),
+    kind: get(v, 'kind', ''), kindAr: get(v, 'kindAr', '') }));
+  const busy = sorted(iter(K(d, 'RESERVATIONS')).filter(r => has(set(['pending', 'approved']), get(r, 'status')) && ge(str(get(r, 'date', '')), TODAY()))
+    /* a booking holds its place from the start of its set-up time */
+    .map(r => ({ venue: K(r, 'venue'), date: K(r, 'date'), from: clock(Math.max(0, minutes(K(r, 'from')) - Math.trunc(setup_minutes(r)))), to: K(r, 'to'), status: K(r, 'status') })),
+  r => [r.date, r.from, r.venue]).slice(0, 400);
+  return { subjects, preparation: get(d, 'PREP_REQUIREMENTS', {}), phone, venues, busy };
+}
+
+/* Halls, rooms and outdoor spaces a parishioner can ask to book; churches and service rooms are arranged with the office. */
+export const bookable_venues = d => iter(K(d, 'VENUES')).filter(v => has(BOOKABLE, get(v, 'kind')));
+
+export const minutes = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+const clock = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+const setup_minutes = r => { const value = get(r, 'setup'); return typeof value === 'number' && value > 0 ? value : 0; };
+
+/* The first reservation of this place that overlaps the time, counting its set-up buffer. */
+export function booking_clash(d, venue, date, start, end, statuses = new Set(['approved'])) {
+  return next(K(d, 'RESERVATIONS'), r => has(statuses, get(r, 'status')) && eq(get(r, 'venue'), venue) && eq(get(r, 'date'), date)
+    && minutes(K(r, 'from')) - setup_minutes(r) < minutes(end) && minutes(start) < minutes(K(r, 'to')));
 }

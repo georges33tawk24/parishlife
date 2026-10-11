@@ -8,7 +8,7 @@ import {
 } from './py.js';
 import { SEED, ROLES, CLERGY, FINANCE, PROTECTED, migrate_state, validate, writable } from './state.js';
 import { Tx, Conflict } from './db.js';
-import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, sacrament_conflict } from './requests.js';
+import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, sacrament_conflict, booking_clash } from './requests.js';
 
 export { Problem, ROLES };
 
@@ -52,7 +52,7 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS member_notifications(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, route TEXT NOT NULL, created_at TEXT NOT NULL, read_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS uploaded_files(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), scope TEXT NOT NULL, owner_id TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL, uploaded_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS uploaded_files_owner ON uploaded_files(parish_id,scope,owner_id)`,
-  `CREATE TABLE IF NOT EXISTS member_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), reference TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, details TEXT NOT NULL, status TEXT NOT NULL, sacrament_id TEXT, response TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(parish_id,reference))`,
+  `CREATE TABLE IF NOT EXISTS member_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), reference TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, details TEXT NOT NULL, status TEXT NOT NULL, sacrament_id TEXT, response TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, log TEXT NOT NULL DEFAULT '[]', UNIQUE(parish_id,reference))`,
   `CREATE INDEX IF NOT EXISTS member_requests_parish ON member_requests(parish_id,created_at)`,
   /* Cloudflare additions. cf_meta holds the commit counter (see db.js); file bytes are
      kept as base64 text chunks because a D1 row is limited to 2 MB. The indexes keep
@@ -72,6 +72,12 @@ export const INIT_VERSION = 'server.py schema 5';
 /* Tables server.py gained after INIT_VERSION: an existing database gets them on each
    instance's first request (CREATE ... IF NOT EXISTS), without re-running init_db(). */
 const ADDED_SCHEMA = SCHEMA.filter(sql => sql.includes(' member_requests'));
+/* Requests made before they kept a log of their steps gain the column, once. */
+async function addRequestLog(db) {
+  const columns = await db.prepare("SELECT name FROM pragma_table_info('member_requests')").all();
+  if (!columns.results.some(column => column.name === 'log'))
+    await db.prepare("ALTER TABLE member_requests ADD COLUMN log TEXT NOT NULL DEFAULT '[]'").run();
+}
 
 let ready = null;
 /* init_db() runs once per Worker instance, the way server.py runs it once per start. */
@@ -90,6 +96,7 @@ export async function initialize(db, force = false) {
       const row = await db.prepare('SELECT init FROM cf_meta WHERE id=1').first();
       if (row && row.init === INIT_VERSION) {
         await db.batch(ADDED_SCHEMA.map(sql => db.prepare(sql)));
+        await addRequestLog(db);
         return;
       }
     } catch {
@@ -97,6 +104,7 @@ export async function initialize(db, force = false) {
     }
   }
   await db.batch(SCHEMA.map(sql => db.prepare(sql)));
+  await addRequestLog(db);
   await db.prepare("INSERT OR IGNORE INTO cf_meta(id,seq,init) VALUES(1,0,'')").run();
   for (let attempt = 1; ; attempt++) {
     const c = new Tx(db);
@@ -408,10 +416,37 @@ async function office_member_requests(c, pid, d) {
     const owner = r.requester_person || '';
     return { id: r.id, reference: r.reference, kind: r.kind, status: r.status,
       details: JSON.parse(r.details), sacramentId: r.sacrament_id, response: r.response,
-      createdAt: r.created_at, updatedAt: r.updated_at,
+      createdAt: r.created_at, updatedAt: r.updated_at, log: JSON.parse(r.log || '[]'),
       requester: { name: r.requester, personId: owner, phone: get(people.get(owner, {}), 'phone', ''),
         household: households.get(owner) } };
   });
+}
+
+/* A booking that began as an online request: record when it is approved, refused or removed,
+   and tell the parishioner. */
+async function booking_decisions(c, u, pid, old, d) {
+  const before = iter(K(old, 'RESERVATIONS')).filter(r => truthy(get(r, 'memberRequestId')));
+  const current = keyed(K(d, 'RESERVATIONS'), r => K(r, 'id'));
+  const at = NOW();
+  for (const prior of before) {
+    const rid = K(prior, 'id'), r = current.get(rid, null);
+    const status = r !== null ? get(r, 'status') : 'removed';
+    if (eq(status, get(prior, 'status'))) continue;
+    const row = await c.first('SELECT * FROM member_requests WHERE id=? AND parish_id=? AND sacrament_id=?', K(prior, 'memberRequestId'), pid, rid);
+    if (row === null) continue;
+    const reason = status === 'rejected' ? [...strip(str(or(get(r ?? {}, 'reason'), '')))].slice(0, 500).join('') : '';
+    if (r !== null && (status === 'approved' || status === 'rejected')) {
+      const entry = { action: status === 'approved' ? 'approve' : 'reject', by: K(u, 'name'), at };
+      if (reason) entry.reason = reason;  // the parishioner reads it on their request page
+      r.history = [...iter(or(get(r, 'history'), [])), entry];
+    }
+    const event = { approved: ['confirmed', 'Booking confirmed', ''], rejected: ['declined', 'Booking request not accepted', reason],
+      removed: ['cancelled', 'Booking cancelled', ''] }[status];
+    if (event) {
+      const rows = await memberPrivateRows(c, pid, [row.user_id]);
+      notify_member(c, pid, row.user_id, 'request-' + event[0], event[1], event[2], 'myrequests/' + row.id, rows.get(row.user_id));
+    }
+  }
 }
 
 /* Tell the parishioner when the office or the priest moves their request on. */
@@ -448,6 +483,11 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
   d.PARISHES = await parishes(c, u, known);
   const role = K(u, 'role');
   d.MEMBER_REQUESTS = CLERGY.has(role) || role === 'secretary' ? await office_member_requests(c, pid, d) : [];
+  d.ACCOUNTS = {};
+  if (CLERGY.has(role) || role === 'secretary') {
+    for (const r of await c.all('SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
+      + 'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', pid)) d.ACCOUNTS[r.person_id] = { username: r.username, role: r.role };
+  }
   if (!CLERGY.has(role)) {
     d.NOTES = [];
     d.AUDIT = [];
@@ -756,6 +796,7 @@ export async function save_patch(c, u, pid, payload) {
       }
     }
   }
+  if (has(changes, 'RESERVATIONS')) await booking_decisions(c, u, pid, old, d);
   d = migrate_state(d);
   validate(d);
   await sync_relationships(c, pid, d);
@@ -886,9 +927,9 @@ const fromiso = (value, message) => {
     throw error;
   }
 };
-const nextNumber = (sacraments, prefix) => {
-  const numbers = iter(sacraments).filter(x => str(get(x, 'reg', '')).startsWith(prefix) && isdigit(str(slice(K(x, 'reg'), prefix.length))))
-    .map(x => int(slice(K(x, 'reg'), prefix.length)));
+const nextNumber = (items, prefix, field = 'reg') => {
+  const numbers = iter(items).filter(x => str(get(x, field, '')).startsWith(prefix) && isdigit(str(slice(K(x, field), prefix.length))))
+    .map(x => int(slice(K(x, field), prefix.length)));
   return Math.max(...(numbers.length ? numbers : [0])) + 1;
 };
 
@@ -1161,19 +1202,59 @@ export async function workflow(c, u, pid, q) {
       history(s, { action: 'correction', by, at, correction: K(cor, 'id') });
     }
     Object.assign(cor, { status: action.endsWith('approve') ? 'approved' : 'rejected', approver: by, reviewedAt: at });
-  } else if (action === 'accept-member-request' || action === 'decline-member-request') {
+  } else if (action === 'accept-member-request' || action === 'decline-member-request' || action === 'complete-member-request') {
     const requestId = get(q, 'requestId');
     const request = isStr(requestId) ? await c.first('SELECT * FROM member_requests WHERE id=? AND parish_id=?', requestId, pid) : null;
     need(request !== null, 'Online request not found.', 404);
-    need(request.status === 'submitted', 'This online request was already handled.');
+    const openStates = action === 'complete-member-request' && request.kind === 'custom' ? ['submitted', 'accepted'] : ['submitted'];
+    need(openStates.includes(request.status), 'This online request was already handled.');
     const details = JSON.parse(request.details), route = 'myrequests/' + request.id;
     const label = K(REQUEST_LABELS, request.kind);
+    const log = JSON.parse(request.log || '[]');
+    const logged = key => JSON.stringify([...log, { key, at }]);
+    const tell = async (kind, title, body) => {
+      const rows = await memberPrivateRows(c, pid, [request.user_id]);
+      notify_member(c, pid, request.user_id, kind, title, body, route, rows.get(request.user_id));
+    };
     if (action === 'decline-member-request') {
       const message = strip(str(or(get(q, 'reason'), '')));
       need(len(message) > 0 && len(message) <= 500, 'Enter a message for the parishioner.');
-      c.run("UPDATE member_requests SET status='declined',response=?,updated_at=? WHERE id=?", message, at, request.id);
-      const rows = await memberPrivateRows(c, pid, [request.user_id]);
-      notify_member(c, pid, request.user_id, 'request-declined', label + ' request not accepted', message, route, rows.get(request.user_id));
+      c.run("UPDATE member_requests SET status='declined',response=?,updated_at=?,log=? WHERE id=?", message, at, logged('declined'), request.id);
+      await tell('request-declined', label + ' request not accepted', message);
+    } else if (action === 'complete-member-request') {
+      need(request.kind === 'custom', 'Only a general request is marked as done this way.');
+      const note = strip(str(or(get(q, 'note'), '')));
+      need(len(note) <= 500, 'Keep the message within 500 characters.');
+      c.run("UPDATE member_requests SET status='completed',response=?,updated_at=?,log=? WHERE id=?", note || request.response, at, logged('completed'), request.id);
+      await tell('request-completed', 'Request completed', note);
+    } else if (request.kind === 'custom') {
+      const note = strip(str(or(get(q, 'note'), '')));
+      need(len(note) <= 500, 'Keep the message within 500 characters.');
+      c.run("UPDATE member_requests SET status='accepted',response=?,updated_at=?,log=? WHERE id=?", note, at, logged('accepted'), request.id);
+      await tell('request-accepted', 'Request accepted', note);
+    } else if (request.kind === 'booking') {
+      need(isStr(sid) && /^r[0-9a-z]{4,40}$/.test(sid) && !iter(K(d, 'RESERVATIONS')).some(x => eq(K(x, 'id'), sid)), 'Choose a unique booking reference.');
+      const note = strip(str(or(get(q, 'note'), '')));
+      need(len(note) <= 500, 'Keep the message within 500 characters.');
+      const personId = K(details, 'personId');
+      need(any(K(d, 'PEOPLE'), p => eq(K(p, 'id'), personId)), 'The person on this request is no longer active in People.');
+      need(any(K(d, 'VENUES'), v => eq(K(v, 'id'), K(details, 'venue'))), 'This place is no longer in the parish list.');
+      need(booking_clash(d, K(details, 'venue'), K(details, 'date'), K(details, 'from'), K(details, 'to')) === null,
+        'This place is already booked at that time. Decline the request or agree another time with the parishioner.');
+      const owner = await c.first('SELECT name FROM users WHERE id=?', request.user_id);
+      const prefix = `RES-${TODAY().slice(0, 4)}-`;
+      const number = nextNumber(K(d, 'RESERVATIONS'), prefix, 'ref');
+      const bookingHistory = [{ action: 'request submitted', by: owner !== null ? owner.name : 'Parishioner', at: request.created_at, via: 'portal' },
+        { action: 'office review completed', by, at }];
+      if (clergy) bookingHistory.push({ action: 'approve', by, at });
+      K(d, 'RESERVATIONS').unshift({ id: sid, ref: `${prefix}${pad3(number)}`, venue: K(details, 'venue'), by: personId, group: null,
+        title: K(details, 'occasion'), titleAr: K(details, 'occasion'), date: K(details, 'date'), from: K(details, 'from'), to: K(details, 'to'),
+        status: clergy ? 'approved' : 'pending', stage: clergy ? 'done' : 'priest', setup: 0,
+        guests: K(details, 'guests'), notes: get(details, 'notes', ''), history: bookingHistory,
+        memberRequestId: request.id, memberReference: request.reference, contactPhone: get(details, 'phone', '') });
+      c.run("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=?,log=? WHERE id=?", sid, note, at, logged('accepted'), request.id);
+      if (clergy) await tell('request-confirmed', 'Booking confirmed', note);
+      else await tell('request-review', 'Booking request sent to the priest', note);
     } else {
       need(s === null && isStr(sid) && sid.startsWith('sc') && len(sid) <= 48, 'Choose a unique request reference.');
       const note = strip(str(or(get(q, 'note'), '')));
@@ -1260,9 +1341,8 @@ export async function workflow(c, u, pid, q) {
         }
         K(d, 'SACRAMENTS').unshift(entry);
       }
-      c.run("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=? WHERE id=?", sid, note, at, request.id);
-      const rows = await memberPrivateRows(c, pid, [request.user_id]);
-      notify_member(c, pid, request.user_id, 'request-' + event, title, note, route, rows.get(request.user_id));
+      c.run("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=?,log=? WHERE id=?", sid, note, at, logged('accepted'), request.id);
+      await tell('request-' + event, title, note);
     }
   } else {
     throw new Problem(400, 'Unknown workflow action.');

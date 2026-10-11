@@ -33,7 +33,7 @@ ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'}
 CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
-READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS'}
+READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS'}
 PROTECTED = {'status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference'}
 NOW = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
 TODAY = lambda: dt.date.today().isoformat()
@@ -282,9 +282,12 @@ def init_db():
         CREATE TABLE IF NOT EXISTS member_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
           reference TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, details TEXT NOT NULL,
           status TEXT NOT NULL, sacrament_id TEXT, response TEXT NOT NULL DEFAULT '',
-          created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(parish_id,reference));
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL, log TEXT NOT NULL DEFAULT '[]', UNIQUE(parish_id,reference));
         CREATE INDEX IF NOT EXISTS member_requests_parish ON member_requests(parish_id,created_at);
         ''')
+        # Databases made before requests kept a log of their steps gain the column.
+        if 'log' not in {r[1] for r in c.execute('PRAGMA table_info(member_requests)')}:
+            c.execute("ALTER TABLE member_requests ADD COLUMN log TEXT NOT NULL DEFAULT '[]'")
         # Keep legacy account IDs for audit/history, but remove the old
         # volunteer-only login and revoke any sessions it already opened.
         c.execute("UPDATE users SET role='disabled' WHERE role='volunteer'")
@@ -349,6 +352,89 @@ def sync_relationships(c, pid, d):
 def password_hash(password, salt=None):
     salt = salt or secrets.token_hex(16)
     return salt + ':' + hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 600000).hex()
+
+
+def password_matches(stored, password):
+    """server.py stores salt:hex (600,000 rounds); accounts made on Cloudflare store pbkdf2_sha256$rounds$salt$hex."""
+    stored = str(stored or '')
+    if stored.startswith('pbkdf2_sha256$'):
+        parts = stored.split('$')
+        if len(parts) != 4 or not re.fullmatch(r'[0-9]{1,8}', parts[1]) or not 1 <= int(parts[1]) <= 10_000_000 or not parts[2]: return False
+        digest = hashlib.pbkdf2_hmac('sha256', password.encode(), parts[2].encode(), int(parts[1])).hex()
+        return hmac.compare_digest(stored, f'pbkdf2_sha256${int(parts[1])}${parts[2]}${digest}')
+    return hmac.compare_digest(stored, password_hash(password, stored.split(':')[0]))
+
+
+EASTERN_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
+
+
+def login_name(value):
+    """How an account is found: an email address in lower case, a phone number in international
+    form (Lebanon unless another country code is given), any other username as typed."""
+    text = str(value or '').strip().translate(EASTERN_DIGITS)
+    if '@' in text: return text.lower()
+    digits = re.sub(r'[ \t\u00a0\-().]', '', text)
+    if not re.fullmatch(r'(\+|00)?[0-9]{6,15}', digits): return text
+    if digits.startswith('00'): return '+' + digits[2:]
+    if digits.startswith('+'): return digits
+    if digits.startswith('961') and len(digits) >= 10: return '+' + digits
+    return '+961' + digits.lstrip('0')
+
+
+EMAIL_ADDRESS = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+SIGNUPS_PER_HOUR = 30
+
+
+def record_phone(number):
+    """A phone number as People records it: a Lebanese number without +961 in groups ('3 123 456', '76 220 415'),
+    any other in full."""
+    if not number.startswith('+961'): return number
+    digits = number[4:]
+    return ' '.join(part for part in (digits[:-6], digits[-6:-3], digits[-3:]) if part)
+
+
+def signup(c, q):
+    """A parishioner opens their own account with a phone number or an email address. It adds a
+    person record to the chosen parish, marked as registered online until the office verifies it."""
+    require(not q.get('website'), 'The account could not be created.')  # a field only robots fill in
+    pid = q.get('parish')
+    row = c.execute('SELECT s.data,p.diocese FROM states s JOIN parishes p ON p.id=s.parish_id WHERE s.parish_id=?',
+                    (pid,)).fetchone() if isinstance(pid, str) else None
+    require(row is not None, 'Choose your parish.')
+    name = q.get('name')
+    name = ' '.join(name.split()) if isinstance(name, str) else ''
+    require(2 <= len(name) <= 120, 'Enter your full name.')
+    method, phone, email = q.get('method'), '', ''
+    require(method in {'phone', 'email'}, 'Choose a phone number or an email address.')
+    if method == 'phone':
+        phone = str(q.get('phone') or '').strip()
+        username = login_name(phone)
+        require(len(phone) <= 40 and re.fullmatch(r'\+[0-9]{8,15}', username) is not None, 'Enter a valid phone number.')
+    else:
+        email = str(q.get('email') or '').strip().lower()
+        require(len(email) <= 120 and EMAIL_ADDRESS.fullmatch(email) is not None, 'Enter a valid email address.')
+        username = email
+    password = q.get('password')
+    require(isinstance(password, str) and 8 <= len(password) <= 200, 'Choose a password of at least 8 characters.')
+    require(c.execute('SELECT 1 FROM users WHERE username=?', (username,)).fetchone() is None,
+            ('This phone number' if method == 'phone' else 'This email address') + ' already has an account. Sign in instead.', 409)
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)).isoformat()
+    recent = c.execute("SELECT COUNT(*) FROM audit WHERE parish_id=? AND action='member.signup' AND at>?", (pid, since)).fetchone()[0]
+    require(recent < SIGNUPS_PER_HOUR, 'Many accounts were opened in the last hour. Please try again later or call the parish office.', 429)
+    d, at = json.loads(row['data']), NOW()
+    person_id, user_id = 'p' + secrets.token_hex(8), 'u-' + secrets.token_hex(8)
+    d['PEOPLE'].append(dict(id=person_id, lat=name, ar=name, town='', townAr='', rite='', status='member',
+                            phone=record_phone(username) if method == 'phone' else '—', email=email, born='', hh=None, tags=[],
+                            registeredOnline=dict(at=at, via=method, verified=False)))
+    d['PERSON_EXTRA'][person_id] = dict(skills=[], dates=[], occupation='')
+    d = migrate_state(d)
+    validate(d)
+    sync_relationships(c, pid, d)
+    c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
+    c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id, username, name, 'member', row['diocese'], person_id, password_hash(password)))
+    c.execute('INSERT INTO assignments VALUES(?,?)', (user_id, pid))
+    audit(c, {'id': user_id}, pid, 'member.signup', {'via': method})
+    return user_id
 
 
 def access(c, u, pid):
@@ -456,6 +542,9 @@ def visible(c, u, pid, d):
     d['PARISH'].update(people=len(d['PEOPLE']), households=len(d['HOUSEHOLDS']), groups=len(d['GROUPS']))
     d['PARISHES'] = parishes(c, u)
     d['MEMBER_REQUESTS'] = office_member_requests(c, pid, d) if u['role'] in CLERGY | {'secretary'} else []
+    d['ACCOUNTS'] = {r['person_id']: dict(username=r['username'], role=r['role']) for r in c.execute(
+        'SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
+        'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', (pid,))} if u['role'] in CLERGY | {'secretary'} else {}
     if u['role'] not in CLERGY:
         d['NOTES'] = []
         d['AUDIT'] = []
@@ -950,6 +1039,8 @@ def save_patch(c, u, pid, payload):
             for x in d[key]:
                 if x.get('status') in {'approved', 'preparing', 'ready', 'celebrated', 'rejected'}:
                     require(x['id'] in before and before[x['id']].get('status') == x['status'], 'Priest approval is required.', 403)
+    if 'RESERVATIONS' in changes:
+        booking_decisions(c, u, pid, old, d)
     d = migrate_state(d)
     validate(d)
     sync_relationships(c, pid, d)
@@ -1285,19 +1376,61 @@ def workflow(c, u, pid, q):
             s[cor['field']] = cor['to']; s['revision'] = s.get('revision', 1) + 1
             s.setdefault('history', []).append(dict(action='correction', by=u['name'], at=at, correction=cor['id']))
         cor.update(status='approved' if action.endswith('approve') else 'rejected', approver=u['name'], reviewedAt=at)
-    elif action in {'accept-member-request', 'decline-member-request'}:
+    elif action in {'accept-member-request', 'decline-member-request', 'complete-member-request'}:
         request_id = q.get('requestId')
         request = c.execute('SELECT * FROM member_requests WHERE id=? AND parish_id=?',
                             (request_id, pid)).fetchone() if isinstance(request_id, str) else None
         require(request is not None, 'Online request not found.', 404)
-        require(request['status'] == 'submitted', 'This online request was already handled.')
+        open_states = {'submitted', 'accepted'} if action == 'complete-member-request' and request['kind'] == 'custom' else {'submitted'}
+        require(request['status'] in open_states, 'This online request was already handled.')
         details, route = json.loads(request['details']), 'myrequests/' + request['id']
         label = REQUEST_LABELS[request['kind']]
+        log = json.loads(request['log'] or '[]')
         if action == 'decline-member-request':
             message = str(q.get('reason') or '').strip()
             require(0 < len(message) <= 500, 'Enter a message for the parishioner.')
-            c.execute("UPDATE member_requests SET status='declined',response=?,updated_at=? WHERE id=?", (message, at, request['id']))
+            c.execute("UPDATE member_requests SET status='declined',response=?,updated_at=?,log=? WHERE id=?",
+                      (message, at, json.dumps(log + [dict(key='declined', at=at)]), request['id']))
             notify_member(c, pid, request['user_id'], 'request-declined', label + ' request not accepted', message, route)
+        elif action == 'complete-member-request':
+            require(request['kind'] == 'custom', 'Only a general request is marked as done this way.')
+            note = str(q.get('note') or '').strip()
+            require(len(note) <= 500, 'Keep the message within 500 characters.')
+            c.execute("UPDATE member_requests SET status='completed',response=?,updated_at=?,log=? WHERE id=?",
+                      (note or request['response'], at, json.dumps(log + [dict(key='completed', at=at)]), request['id']))
+            notify_member(c, pid, request['user_id'], 'request-completed', 'Request completed', note, route)
+        elif request['kind'] == 'custom':
+            note = str(q.get('note') or '').strip()
+            require(len(note) <= 500, 'Keep the message within 500 characters.')
+            c.execute("UPDATE member_requests SET status='accepted',response=?,updated_at=?,log=? WHERE id=?",
+                      (note, at, json.dumps(log + [dict(key='accepted', at=at)]), request['id']))
+            notify_member(c, pid, request['user_id'], 'request-accepted', 'Request accepted', note, route)
+        elif request['kind'] == 'booking':
+            require(isinstance(sid, str) and re.fullmatch(r'r[0-9a-z]{4,40}', sid) is not None
+                    and not any(x['id'] == sid for x in d['RESERVATIONS']), 'Choose a unique booking reference.')
+            note = str(q.get('note') or '').strip()
+            require(len(note) <= 500, 'Keep the message within 500 characters.')
+            person_id = details['personId']
+            require(any(p['id'] == person_id for p in d['PEOPLE']), 'The person on this request is no longer active in People.')
+            require(any(v['id'] == details['venue'] for v in d['VENUES']), 'This place is no longer in the parish list.')
+            require(booking_clash(d, details['venue'], details['date'], details['from'], details['to']) is None,
+                    'This place is already booked at that time. Decline the request or agree another time with the parishioner.')
+            owner = c.execute('SELECT name FROM users WHERE id=?', (request['user_id'],)).fetchone()
+            prefix = f'RES-{TODAY()[:4]}-'
+            number = max([int(x['ref'][len(prefix):]) for x in d['RESERVATIONS']
+                          if str(x.get('ref', '')).startswith(prefix) and str(x['ref'][len(prefix):]).isdigit()] or [0]) + 1
+            history = [dict(action='request submitted', by=owner['name'] if owner else 'Parishioner', at=request['created_at'], via='portal'),
+                       dict(action='office review completed', by=u['name'], at=at)]
+            if u['role'] in CLERGY: history.append(dict(action='approve', by=u['name'], at=at))
+            d['RESERVATIONS'].insert(0, dict(id=sid, ref=f'{prefix}{number:03d}', venue=details['venue'], by=person_id, group=None,
+                title=details['occasion'], titleAr=details['occasion'], date=details['date'], **{'from': details['from'], 'to': details['to']},
+                status='approved' if u['role'] in CLERGY else 'pending', stage='done' if u['role'] in CLERGY else 'priest', setup=0,
+                guests=details['guests'], notes=details.get('notes', ''), history=history,
+                memberRequestId=request['id'], memberReference=request['reference'], contactPhone=details.get('phone', '')))
+            c.execute("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=?,log=? WHERE id=?",
+                      (sid, note, at, json.dumps(log + [dict(key='accepted', at=at)]), request['id']))
+            event, title = ('confirmed', 'Booking confirmed') if u['role'] in CLERGY else ('review', 'Booking request sent to the priest')
+            notify_member(c, pid, request['user_id'], 'request-' + event, title, note, route)
         else:
             require(s is None and isinstance(sid, str) and sid.startswith('sc') and len(sid) <= 48, 'Choose a unique request reference.')
             note = str(q.get('note') or '').strip()
@@ -1378,8 +1511,8 @@ def workflow(c, u, pid, q):
                 else:
                     event, title = 'review', label + ' request sent to the priest'
                 d['SACRAMENTS'].insert(0, entry)
-            c.execute("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=? WHERE id=?",
-                      (sid, note, at, request['id']))
+            c.execute("UPDATE member_requests SET status='accepted',sacrament_id=?,response=?,updated_at=?,log=? WHERE id=?",
+                      (sid, note, at, json.dumps(log + [dict(key='accepted', at=at)]), request['id']))
             notify_member(c, pid, request['user_id'], 'request-' + event, title, note, route)
     else: raise Problem(400, 'Unknown workflow action.')
     if before is not None and s.get('memberRequestId'):
@@ -1550,7 +1683,11 @@ def member_attachment(value):
 # wait in member_requests (not in the parish record) until the office accepts them into
 # the sacrament workflow, so a parishioner never changes the record the office edits.
 REQUEST_LABELS = {'baptism': 'Baptism', 'communion': 'First Communion', 'confirmation': 'Confirmation',
-                  'marriage': 'Marriage', 'funeral': 'Funeral', 'certificate': 'Certificate'}
+                  'marriage': 'Marriage', 'funeral': 'Funeral', 'certificate': 'Certificate',
+                  'booking': 'Booking', 'custom': 'Request'}
+OWN_REQUESTS = {'booking', 'custom'}  # asked by the member for themselves, not for a household member
+BOOKABLE = {'Hall', 'Room', 'Outdoor'}
+CLOCK = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]')
 CERTIFICATE_OF = ('baptism', 'communion', 'confirmation', 'marriage')
 CERTIFICATE_LANGUAGES = ('bilingual', 'arabic', 'english')
 ONCE_ONLY = {'baptism', 'communion', 'confirmation', 'funeral'}
@@ -1583,6 +1720,8 @@ def sacrament_conflict(d, person_id, kind):
 
 
 def request_subject_key(kind, details):
+    if kind == 'booking': return ':'.join(('booking', details['venue'], details['date'], details['from']))
+    if kind == 'custom': return 'custom:' + details['subject'].casefold()
     child = details.get('child')
     who = details['personId'] if not child else 'child:' + child['lat'].casefold() + ':' + child['born']
     return kind + ':' + details.get('certificateOf', '') + ':' + who
@@ -1592,16 +1731,28 @@ def member_request_progress(d, row, details):
     """Where a parishioner's request stands, in terms the parishioner can follow."""
     s = next((x for x in d['SACRAMENTS'] if x['id'] == row['sacrament_id']), None) if row['sacrament_id'] else None
     events = [dict(key='submitted', at=row['created_at'])]
+    logged = json.loads(row['log'] or '[]')
+    if not logged and row['status'] != 'submitted':  # a request handled before steps were logged
+        logged = [dict(key=row['status'], at=row['updated_at'])]
+    events += [dict(key=entry['key'], at=entry['at']) for entry in logged]
     stage, reason, register, planned, preparation = 'received', '', '', '', []
     if row['status'] == 'declined':
         stage, reason = 'declined', row['response']
-        events.append(dict(key='declined', at=row['updated_at']))
     elif row['status'] == 'withdrawn':
         stage = 'withdrawn'
-        events.append(dict(key='withdrawn', at=row['updated_at']))
+    elif row['status'] == 'completed':
+        stage = 'completed'
+    elif row['status'] == 'accepted' and row['kind'] == 'custom':
+        stage = 'inprogress'
+    elif row['status'] == 'accepted' and row['kind'] == 'booking':
+        booking = next((x for x in d['RESERVATIONS'] if x['id'] == row['sacrament_id']), None)
+        stage = 'cancelled' if booking is None else {'approved': 'confirmed', 'rejected': 'declined'}.get(booking.get('status'), 'review')
+        for entry in (booking or {}).get('history', []):
+            key = {'approve': 'confirmed', 'reject': 'declined'}.get(entry.get('action'))
+            if key: events.append(dict(key=key, at=entry.get('at', '')))
+            if key == 'declined' and entry.get('reason'): reason = entry['reason']
     elif row['status'] == 'accepted':
         stage = 'review'
-        events.append(dict(key='accepted', at=row['updated_at']))
         if s is not None:
             status, certificate = s.get('status'), s.get('kind') == 'certificate'
             if certificate:
@@ -1649,7 +1800,37 @@ def member_request_options(d, person):
                              inProgress=sorted({s['kind'] for s in entries if s.get('status') in ACTIVE_ENTRY})))
     contact = d.get('CONTENT', {}).get('contact')
     phone = d['PARISH'].get('phone', '') if isinstance(contact, dict) and contact.get('published', True) else ''
-    return dict(subjects=subjects, preparation=d.get('PREP_REQUIREMENTS', {}), phone=phone)
+    venues = [dict(id=v['id'], name=v.get('name', ''), ar=v.get('ar', ''), cap=v.get('cap', 0), kind=v.get('kind', ''), kindAr=v.get('kindAr', ''))
+              for v in bookable_venues(d)]
+    # a booking holds its place from the start of its set-up time
+    busy = sorted((dict(venue=r['venue'], date=r['date'], **{'from': clock(max(0, minutes(r['from']) - int(setup_minutes(r)))), 'to': r['to']}, status=r['status'])
+                   for r in d['RESERVATIONS'] if r.get('status') in {'pending', 'approved'} and str(r.get('date', '')) >= TODAY()),
+                  key=lambda r: (r['date'], r['from'], r['venue']))[:400]
+    return dict(subjects=subjects, preparation=d.get('PREP_REQUIREMENTS', {}), phone=phone, venues=venues, busy=busy)
+
+
+def bookable_venues(d):
+    """Halls, rooms and outdoor spaces a parishioner can ask to book; churches and service rooms are arranged with the office."""
+    return [v for v in d['VENUES'] if v.get('kind') in BOOKABLE]
+
+
+def minutes(clock):
+    return int(clock[:2]) * 60 + int(clock[3:5])
+
+
+def clock(total):
+    return f'{total // 60:02d}:{total % 60:02d}'
+
+
+def setup_minutes(r):
+    value = r.get('setup')
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else 0
+
+
+def booking_clash(d, venue, date, start, end, statuses=frozenset({'approved'})):
+    """The first reservation of this place that overlaps the time, counting its set-up buffer."""
+    return next((r for r in d['RESERVATIONS'] if r.get('status') in statuses and r.get('venue') == venue and r.get('date') == date
+                 and minutes(r['from']) - setup_minutes(r) < minutes(end) and minutes(start) < minutes(r['to'])), None)
 
 
 def office_member_requests(c, pid, d):
@@ -1661,10 +1842,34 @@ def office_member_requests(c, pid, d):
         owner = r['requester_person'] or ''
         rows.append(dict(id=r['id'], reference=r['reference'], kind=r['kind'], status=r['status'],
                          details=json.loads(r['details']), sacramentId=r['sacrament_id'], response=r['response'],
-                         createdAt=r['created_at'], updatedAt=r['updated_at'],
+                         createdAt=r['created_at'], updatedAt=r['updated_at'], log=json.loads(r['log'] or '[]'),
                          requester=dict(name=r['requester'], personId=owner, phone=people.get(owner, {}).get('phone', ''),
                                         household=households.get(owner))))
     return rows
+
+
+def booking_decisions(c, u, pid, old, d):
+    """A booking that began as an online request: record when it is approved, refused or removed,
+    and tell the parishioner."""
+    before = {r['id']: r for r in old['RESERVATIONS'] if r.get('memberRequestId')}
+    current = {r['id']: r for r in d['RESERVATIONS']}
+    at = NOW()
+    for rid, prior in before.items():
+        r = current.get(rid)
+        status = r.get('status') if r is not None else 'removed'
+        if status == prior.get('status'): continue
+        row = c.execute('SELECT * FROM member_requests WHERE id=? AND parish_id=? AND sacrament_id=?',
+                        (prior['memberRequestId'], pid, rid)).fetchone()
+        if row is None: continue
+        reason = str((r or {}).get('reason') or '').strip()[:500] if status == 'rejected' else ''
+        if r is not None and status in {'approved', 'rejected'}:
+            entry = dict(action='approve' if status == 'approved' else 'reject', by=u['name'], at=at)
+            if reason: entry['reason'] = reason  # the parishioner reads it on their request page
+            r['history'] = list(r.get('history') or []) + [entry]
+        event = {'approved': ('confirmed', 'Booking confirmed', ''), 'rejected': ('declined', 'Booking request not accepted', reason),
+                 'removed': ('cancelled', 'Booking cancelled', '')}.get(status)
+        if event:
+            notify_member(c, pid, row['user_id'], 'request-' + event[0], event[1], event[2], 'myrequests/' + row['id'])
 
 
 def notify_request_progress(c, pid, s, before, action):
@@ -1956,7 +2161,9 @@ def member_action(c, u, pid, q):
                             (pid, u['id'])).fetchone()[0]
         require(waiting < 10, 'You already have 10 requests waiting for the parish office.')
         child, details = q.get('child'), {}
-        if child is not None:
+        if kind in OWN_REQUESTS:
+            details['personId'] = person['id']
+        elif child is not None:
             require(kind == 'baptism' and isinstance(child, dict),
                     'Only a baptism can be requested for a child who is not registered yet.')
             names = [child.get('lat'), child.get('ar')]
@@ -1973,7 +2180,28 @@ def member_action(c, u, pid, q):
             require(isinstance(person_id, str) and person_id in subjects, 'Choose yourself or a member of your household.')
             require(kind != 'funeral' or person_id != person['id'], 'Choose the family member the funeral is for.')
             details['personId'] = person_id
-        if kind == 'certificate':
+        if kind == 'booking':
+            venues = {v['id']: v for v in bookable_venues(d)}
+            venue, date, start, end = q.get('venue'), q.get('date'), q.get('from'), q.get('to')
+            require(isinstance(venue, str) and venue in venues, 'Choose the place you would like to book.')
+            require(isinstance(date, str) and iso_date(date) and TODAY() <= date and date[:4] <= str(int(TODAY()[:4]) + 2),
+                    'Choose a date from today onwards.')
+            require(all(isinstance(x, str) and CLOCK.fullmatch(x) for x in (start, end)) and start < end,
+                    'Choose a start time before the end time.')
+            occasion, guests = q.get('occasion'), q.get('guests')
+            require(isinstance(occasion, str) and 2 <= len(occasion.strip()) <= 120, 'Tell the parish what the booking is for.')
+            require(isinstance(guests, int) and not isinstance(guests, bool) and guests >= 1, 'Enter how many people are expected.')
+            capacity = venues[venue].get('cap') or 0
+            require(not capacity or guests <= capacity, f'This place holds up to {capacity} people.')
+            require(booking_clash(d, venue, date, start, end) is None, 'This place is already booked at that time. Choose another time or place.')
+            details.update(venue=venue, date=date, occasion=occasion.strip(), guests=guests, **{'from': start, 'to': end})
+        elif kind == 'custom':
+            subject, message, date = q.get('subject'), q.get('message'), q.get('date', '')
+            require(isinstance(subject, str) and 2 <= len(subject.strip()) <= 120, 'Say in a few words what you are asking for.')
+            require(isinstance(message, str) and 2 <= len(message.strip()) <= 1000, 'Describe your request.')
+            require(isinstance(date, str) and (not date or iso_date(date) and date >= TODAY()), 'Choose a date from today onwards.')
+            details.update(subject=subject.strip(), message=message.strip(), date=date)
+        elif kind == 'certificate':
             certificate_of, purpose, language = q.get('certificateOf'), q.get('purpose'), q.get('language', 'bilingual')
             require(isinstance(certificate_of, str) and certificate_of in CERTIFICATE_OF, 'Choose the certificate you need.')
             require(isinstance(purpose, str) and 0 < len(purpose.strip()) <= 200, 'Tell the parish office what the certificate is for.')
@@ -1997,8 +2225,8 @@ def member_action(c, u, pid, q):
         require(isinstance(phone, str) and len(phone.strip()) <= 40, 'Enter a shorter phone number.')
         details.update(notes=notes.strip(), phone=phone.strip())
         key = request_subject_key(kind, details)
-        require(not any(request_subject_key(r['kind'], json.loads(r['details'])) == key for r in c.execute(
-            "SELECT kind,details FROM member_requests WHERE parish_id=? AND status='submitted'", (pid,))),
+        require(not any(request_subject_key(r['kind'], json.loads(r['details'])) == key and (kind not in OWN_REQUESTS or r['user_id'] == u['id'])
+                        for r in c.execute("SELECT kind,details,user_id FROM member_requests WHERE parish_id=? AND status='submitted'", (pid,))),
             'The parish office already has this request and will reply soon.')
         prefix = f'WEB/{TODAY()[:4]}/'
         numbers = [int(r['reference'][len(prefix):]) for r in c.execute(
@@ -2006,8 +2234,8 @@ def member_action(c, u, pid, q):
             if r['reference'][len(prefix):].isdigit()]
         reference = f'{prefix}{max(numbers or [0]) + 1:03d}'
         request_id, at = secrets.token_hex(12), NOW()
-        c.execute('INSERT INTO member_requests VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                  (request_id, pid, reference, u['id'], kind, json.dumps(details, ensure_ascii=False), 'submitted', None, '', at, at))
+        c.execute('INSERT INTO member_requests VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (request_id, pid, reference, u['id'], kind, json.dumps(details, ensure_ascii=False), 'submitted', None, '', at, at, '[]'))
         audit(c, u, pid, 'member.request', {'id': request_id, 'kind': kind, 'reference': reference})
         return {'id': request_id, 'reference': reference}
     elif op == 'requestWithdraw':
@@ -2016,8 +2244,27 @@ def member_action(c, u, pid, q):
                         (request_id, pid, u['id'])).fetchone() if isinstance(request_id, str) else None
         require(row is not None, 'Request not found.', 404)
         require(row['status'] == 'submitted', 'The parish office has already handled this request. Please contact the office to change it.')
-        c.execute("UPDATE member_requests SET status='withdrawn',updated_at=? WHERE id=?", (NOW(), row['id']))
+        at = NOW()
+        c.execute("UPDATE member_requests SET status='withdrawn',updated_at=?,log=? WHERE id=?",
+                  (at, json.dumps(json.loads(row['log'] or '[]') + [dict(key='withdrawn', at=at)]), row['id']))
         audit(c, u, pid, 'member.request-withdrawn', {'id': row['id']})
+    elif op == 'changePassword':
+        require(password_matches(u['password'], str(q.get('current', ''))), 'Your current password is not correct.')
+        password = q.get('password')
+        require(isinstance(password, str) and 8 <= len(password) <= 200, 'Choose a password of at least 8 characters.')
+        c.execute('UPDATE users SET password=? WHERE id=?', (password_hash(password), u['id']))
+        audit(c, u, pid, 'member.password', {})
+    elif op == 'accountReset':
+        require(u['role'] in CLERGY | {'secretary'}, 'Parish office access required.', 403)
+        person_id = q.get('personId')
+        target = c.execute("SELECT u.* FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? "
+                           "AND u.role IN ('member','leader')", (pid, person_id)).fetchone() if isinstance(person_id, str) else None
+        require(target is not None, 'This person has no online account to reset.', 404)
+        temporary = ''.join(secrets.choice('23456789') for _ in range(8))
+        c.execute('UPDATE users SET password=? WHERE id=?', (password_hash(temporary), target['id']))
+        c.execute('DELETE FROM sessions WHERE user_id=?', (target['id'],))
+        audit(c, u, pid, 'member.password-reset', {'person': person_id})
+        return {'username': target['username'], 'password': temporary}
     elif op == 'profileRequest':
         require(q.get('field') in {'name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture'}, 'Invalid field.')
         value = q.get('value')
@@ -2242,6 +2489,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         parts = urlsplit(self.path)
         if parts.path == '/': self.path = '/public.html' + ('?' + parts.query if parts.query else '')
 
+    def start_session(self, c, user_id):
+        token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        c.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
+        c.execute('INSERT INTO sessions VALUES(?,?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user_id, csrf, time.time()+28800))
+        c.commit()
+        secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
+        return self.reply(200, {'ok': True}, f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}')
+
     def do_GET(self):
         if self.path.startswith('/api/'): return self.api()
         if not self.public_asset_allowed():
@@ -2307,14 +2562,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply(200, {'parish': public_parish,
                                              'content': content, 'events': events, 'posts': posts})
                 if path == '/api/login' and self.command == 'POST':
-                    u = c.execute('SELECT * FROM users WHERE username=?', (q.get('username'),)).fetchone()
-                    require(u is not None and u['role'] in ROLES and hmac.compare_digest(u['password'], password_hash(str(q.get('password', '')), u['password'].split(':')[0])), 'Incorrect username or password.', 401)
-                    token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-                    c.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
-                    c.execute('INSERT INTO sessions VALUES(?,?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), u['id'], csrf, time.time()+28800))
-                    c.commit()
-                    secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
-                    return self.reply(200, {'ok': True}, f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}')
+                    u = c.execute('SELECT * FROM users WHERE username=?', (login_name(q.get('username')),)).fetchone()
+                    require(u is not None and u['role'] in ROLES and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
+                    return self.start_session(c, u['id'])
+                if path == '/api/signup' and self.command == 'POST':
+                    return self.start_session(c, signup(c, q))
                 cookie = http.cookies.SimpleCookie(self.headers.get('Cookie', ''))
                 token = cookie.get('pl_session')
                 session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()

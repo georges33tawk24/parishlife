@@ -2,11 +2,16 @@
 import {
   Problem, PyError, need, truthy, eq, has, get, K, setItem, iter, len, slice, strip, str, set, union, intersection,
   subset, intersects, any, all, items, add, ge, lt, sorted, isDict, isList, isStr, isBool, isdigit, fromisoformat,
-  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, sha256hex, b64decode, keyed, isoDate, le, pad3
+  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, sha256hex, b64decode, keyed, isoDate, le, pad3,
+  passwordHash, passwordMatches
 } from './py.js';
+import { randomBytes } from 'node:crypto';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
-import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, request_subjects, sacrament_conflict, request_subject_key,
-  member_request_item, member_request_options } from './requests.js';
+import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
+  request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
+
+/* Accounts made on Cloudflare hash with 10,000 rounds so a sign-in fits the plan's CPU allowance (see README). */
+export const ROUNDS = 10000;
 
 const SENSITIVE_CONCERNS = new Set(['Leadership', 'Behaviour or conduct', 'Safety', 'Financial concerns',
   'Harassment or inappropriate behaviour']);
@@ -453,12 +458,14 @@ export async function member_action(c, u, pid, q) {
     const year = TODAY().slice(0, 4), prefix = `WEB/${year}/`;
     const [[waitingRow], submitted, references] = await c.reads([
       ["SELECT COUNT(*) AS n FROM member_requests WHERE parish_id=? AND user_id=? AND status='submitted'", [pid, K(u, 'id')]],
-      ["SELECT kind,details FROM member_requests WHERE parish_id=? AND status='submitted'", [pid]],
+      ["SELECT kind,details,user_id FROM member_requests WHERE parish_id=? AND status='submitted'", [pid]],
       ['SELECT reference FROM member_requests WHERE parish_id=? AND reference LIKE ?', [pid, prefix + '%']]
     ]);
     need(waitingRow.n < 10, 'You already have 10 requests waiting for the parish office.');
     const child = get(q, 'child'), details = {};
-    if (child !== null) {
+    if (has(OWN_REQUESTS, kind)) {
+      details.personId = K(person, 'id');
+    } else if (child !== null) {
       need(kind === 'baptism' && isDict(child), 'Only a baptism can be requested for a child who is not registered yet.');
       const names = [get(child, 'lat'), get(child, 'ar')];
       need(names.every(x => isStr(x) && len(strip(x)) > 0 && len(strip(x)) <= 120), 'Enter the child’s full name in English and in Arabic.');
@@ -473,7 +480,27 @@ export async function member_action(c, u, pid, q) {
       need(kind !== 'funeral' || personId !== K(person, 'id'), 'Choose the family member the funeral is for.');
       details.personId = personId;
     }
-    if (kind === 'certificate') {
+    if (kind === 'booking') {
+      const venues = keyed(bookable_venues(d), v => K(v, 'id'));
+      const venue = get(q, 'venue'), date = get(q, 'date'), start = get(q, 'from'), end = get(q, 'to');
+      need(isStr(venue) && has(venues, venue), 'Choose the place you would like to book.');
+      need(isStr(date) && isoDate(date) && le(TODAY(), date) && le(date.slice(0, 4), String(Number(TODAY().slice(0, 4)) + 2)),
+        'Choose a date from today onwards.');
+      need([start, end].every(x => isStr(x) && CLOCK.test(x)) && start < end, 'Choose a start time before the end time.');
+      const occasion = get(q, 'occasion'), guests = get(q, 'guests');
+      need(isStr(occasion) && len(strip(occasion)) >= 2 && len(strip(occasion)) <= 120, 'Tell the parish what the booking is for.');
+      need(typeof guests === 'number' && Number.isInteger(guests) && guests >= 1, 'Enter how many people are expected.');
+      const capacity = get(K(venues, venue), 'cap') || 0;
+      need(!capacity || guests <= capacity, `This place holds up to ${capacity} people.`);
+      need(booking_clash(d, venue, date, start, end) === null, 'This place is already booked at that time. Choose another time or place.');
+      Object.assign(details, { venue, date, occasion: strip(occasion), guests, from: start, to: end });
+    } else if (kind === 'custom') {
+      const subject = get(q, 'subject'), message = get(q, 'message'), date = get(q, 'date', '');
+      need(isStr(subject) && len(strip(subject)) >= 2 && len(strip(subject)) <= 120, 'Say in a few words what you are asking for.');
+      need(isStr(message) && len(strip(message)) >= 2 && len(strip(message)) <= 1000, 'Describe your request.');
+      need(isStr(date) && (!truthy(date) || isoDate(date) && ge(date, TODAY())), 'Choose a date from today onwards.');
+      Object.assign(details, { subject: strip(subject), message: strip(message), date });
+    } else if (kind === 'certificate') {
       const certificateOf = get(q, 'certificateOf'), purpose = get(q, 'purpose'), language = get(q, 'language', 'bilingual');
       need(isStr(certificateOf) && CERTIFICATE_OF.includes(certificateOf), 'Choose the certificate you need.');
       need(isStr(purpose) && len(strip(purpose)) > 0 && len(strip(purpose)) <= 200, 'Tell the parish office what the certificate is for.');
@@ -499,13 +526,13 @@ export async function member_action(c, u, pid, q) {
     need(isStr(phone) && len(strip(phone)) <= 40, 'Enter a shorter phone number.');
     Object.assign(details, { notes: strip(notes), phone: strip(phone) });
     const key = request_subject_key(kind, details);
-    need(!submitted.some(r => request_subject_key(r.kind, JSON.parse(r.details)) === key),
+    need(!submitted.some(r => request_subject_key(r.kind, JSON.parse(r.details)) === key && (!has(OWN_REQUESTS, kind) || r.user_id === K(u, 'id'))),
       'The parish office already has this request and will reply soon.');
     const numbers = references.map(r => r.reference.slice(prefix.length)).filter(isdigit).map(Number);
     const reference = prefix + pad3(Math.max(0, ...numbers) + 1);
     const requestId = tokenHex(12), at = NOW();
-    c.run('INSERT INTO member_requests VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-      requestId, pid, reference, K(u, 'id'), kind, JSON.stringify(details), 'submitted', null, '', at, at);
+    c.run('INSERT INTO member_requests VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+      requestId, pid, reference, K(u, 'id'), kind, JSON.stringify(details), 'submitted', null, '', at, at, '[]');
     audit(c, u, pid, 'member.request', { id: requestId, kind, reference });
     return { id: requestId, reference };
   } else if (op === 'requestWithdraw') {
@@ -513,8 +540,27 @@ export async function member_action(c, u, pid, q) {
     const row = isStr(requestId) ? await c.first('SELECT * FROM member_requests WHERE id=? AND parish_id=? AND user_id=?', requestId, pid, K(u, 'id')) : null;
     need(row !== null, 'Request not found.', 404);
     need(row.status === 'submitted', 'The parish office has already handled this request. Please contact the office to change it.');
-    c.run("UPDATE member_requests SET status='withdrawn',updated_at=? WHERE id=?", NOW(), row.id);
+    const at = NOW();
+    c.run("UPDATE member_requests SET status='withdrawn',updated_at=?,log=? WHERE id=?",
+      at, JSON.stringify([...JSON.parse(row.log || '[]'), { key: 'withdrawn', at }]), row.id);
     audit(c, u, pid, 'member.request-withdrawn', { id: row.id });
+  } else if (op === 'changePassword') {
+    need(passwordMatches(K(u, 'password'), str(get(q, 'current', ''))), 'Your current password is not correct.');
+    const password = get(q, 'password');
+    need(isStr(password) && len(password) >= 8 && len(password) <= 200, 'Choose a password of at least 8 characters.');
+    c.run('UPDATE users SET password=? WHERE id=?', passwordHash(password, tokenHex(16), ROUNDS), K(u, 'id'));
+    audit(c, u, pid, 'member.password', {});
+  } else if (op === 'accountReset') {
+    need(role === 'priest' || role === 'secretary', 'Parish office access required.', 403);
+    const personId = get(q, 'personId');
+    const target = isStr(personId) ? await c.first("SELECT u.* FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? "
+      + "AND u.role IN ('member','leader')", pid, personId) : null;
+    need(target !== null, 'This person has no online account to reset.', 404);
+    const temporary = Array.from(randomBytes(8), b => '23456789'[b % 8]).join('');
+    c.run('UPDATE users SET password=? WHERE id=?', passwordHash(temporary, tokenHex(16), ROUNDS), target.id);
+    c.run('DELETE FROM sessions WHERE user_id=?', target.id);
+    audit(c, u, pid, 'member.password-reset', { person: personId });
+    return { username: target.username, password: temporary };
   } else if (op === 'profileRequest') {
     need(has(new Set(['name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture']), get(q, 'field')), 'Invalid field.');
     const value = get(q, 'value');

@@ -12,6 +12,7 @@ import {
   ROLES, ensureDatabase, access, file_access, parishes, oversight, visible, save_patch, workflow, audit
 } from './app.js';
 import { member_view, member_action } from './member.js';
+import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
 
 const HEADERS = {
@@ -127,15 +128,19 @@ async function handle(c, env, request, url, q, secureCookie) {
     if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
     return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
   }
-  if (path === '/api/login' && method === 'POST') {
-    const u = await c.first('SELECT * FROM users WHERE username=?', get(q, 'username'));
-    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+  const startSession = async userId => {
     const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
     c.run('DELETE FROM sessions WHERE expires<?', time());
-    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), u.id, csrf, time() + 28800);
+    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
     await c.commit();
     return reply(200, { ok: true }, `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+  };
+  if (path === '/api/login' && method === 'POST') {
+    const u = await c.first('SELECT * FROM users WHERE username=?', loginName(get(q, 'username')));
+    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    return startSession(u.id);
   }
+  if (path === '/api/signup' && method === 'POST') return startSession(await signup(c, q));
   const token = sessionCookie(request.headers.get('Cookie'));
   const [sessions, users] = await c.reads([
     ['SELECT * FROM sessions WHERE token=? AND expires>?', [sha256hex(token ?? ''), time()]],

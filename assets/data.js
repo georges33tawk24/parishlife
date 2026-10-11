@@ -681,6 +681,8 @@ export const PORTAL_REQUESTS = [
 export const REQUEST_HISTORY = [];
 /* Sacrament and certificate requests parishioners send from the member portal (read-only here; the server keeps them). */
 export const MEMBER_REQUESTS = [];
+/* Who can sign in to the portal, by person: { username, role }. Sent to the parish office only. */
+export const ACCOUNTS = {};
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

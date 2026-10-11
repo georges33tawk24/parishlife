@@ -244,6 +244,8 @@ button.chip svg{flex:none}
 .input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus)}
 .input:disabled,.select:disabled{background:var(--muted);color:var(--text-3);cursor:not-allowed}
 .input[aria-invalid=true]{border-color:var(--danger);box-shadow:0 0 0 3px rgba(35,59,50,.16)}
+/* iPhone Safari zooms into any field set below 16px, and leaves the page zoomed afterwards */
+@media (hover:none) and (pointer:coarse){.input,.select,.textarea,.dd-q{font-size:16px}}
 .select{
   appearance:none;padding-inline-end:34px;cursor:pointer;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23233B32' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M6 8.5l4 4 4-4'/%3E%3C/svg%3E");
@@ -416,7 +418,7 @@ table.tbl .shrink{width:1%;white-space:nowrap}
 .drawer-head,.modal-head{
   display:flex;align-items:flex-start;gap:var(--s3);padding:20px 24px;border-bottom:1px solid var(--border);flex:none
 }
-.drawer-head h3,.modal-head h3{font:600 20px/28px var(--sans);letter-spacing:-.01em}
+.drawer-head h2,.modal-head h2{margin:0;font:600 20px/28px var(--sans);letter-spacing:-.01em}
 .drawer-body,.modal-body{padding:24px;overflow-y:auto;flex:1}
 .drawer-foot,.modal-foot{
   display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);padding:16px 24px;border-top:1px solid var(--border);
@@ -790,7 +792,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 table.tbl thead th{position:sticky;top:0;z-index:2}
 table.tbl th.sortable{cursor:pointer;user-select:none}
 table.tbl th.sortable:hover{color:var(--text)}
-table.tbl th .arrow{margin-inline-start:4px;opacity:.4}
+table.tbl th .arrow{display:inline-flex;vertical-align:-2px;margin-inline-start:4px;opacity:.4}
 table.tbl th[aria-sort] .arrow{opacity:1;color:var(--primary)}
 table.tbl td.pick,table.tbl th.pick{width:44px;padding-inline:14px 0}
 table.tbl tr.expanded{background:var(--primary-subtle)}

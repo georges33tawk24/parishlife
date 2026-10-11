@@ -8,6 +8,7 @@ import { icon, pageHead, sectionH, stat, panel, who, status, amount, pill, esc, 
 import { PARISH, TODAY, RATE, EVENTS, SACRAMENTS, RESERVATIONS, BATCH, EXPENSES, FUNDS, PEOPLE, HOUSEHOLDS, PORTAL_REQUESTS,
          GROUPS, GROUP_DETAIL, ROTA, AUDIT, NOTICES, anniversaryItems, CHECKIN, person, venue, group, resStatus, resClash } from '../data.js';
 import { waitingOnline, onlineTitle, subjectOf } from './online-requests.js';
+import * as C from '../components.js';
 
 const greet = () => {
   const p = me(), name = isAr() ? p.ar.split(' ')[0] : p.lat.split(' ')[0];
@@ -27,12 +28,21 @@ const clashNote = () => { const n = pendingRes().filter(resClash).length;
   return n ? `<span class="down">${t(n === 1 ? '1 has a clash' : `${n} have a clash`, n === 1 ? 'واحد فيه تعارض' : `${n} فيها تعارض`)}</span>` : t('no clashes', 'بلا تعارض'); };
 
 /* ---------- shared blocks ---------- */
-/* Sacrament and certificate requests parishioners sent online, newest first. */
+/* Requests parishioners sent online — sacraments, certificates, bookings and anything else — newest first. */
 const onlineRows = () => waitingOnline().map(r => `<a class="listrow" href="#/requests/online/${esc(r.id)}">${who(subjectOf(r))}
     <span class="grow"><b>${esc(onlineTitle(r))}</b><small><span class="mono" dir="ltr">${esc(r.reference)}</span> · ${esc(fmtDate(r.createdAt))}</small></span>
     ${status('submitted')}${icon('chevR', 16, 'dimmer')}</a>`).join('');
 const onlinePanel = () => waitingOnline().length ? panel(t('New online requests', 'طلبات إلكترونية جديدة'), onlineRows(),
   { more: `<a href="#/requests">${t('All requests', 'كل الطلبات')}</a>`, tight: true }) : '';
+
+/* Parishioners who opened an account themselves and whose record the office has not checked yet. */
+const newOnline = () => {
+  const list = PEOPLE.filter(p => p.registeredOnline && !p.registeredOnline.verified);
+  if (!list.length || !is('priest', 'secretary')) return '';
+  return `<div class="dash-new">${C.inlineAlert('info', t(list.length === 1 ? '1 parishioner registered online. ' : `${list.length} parishioners registered online. `, list.length === 1 ? 'سجّل مؤمن واحد إلكترونياً. ' : `سجّل ${list.length} مؤمنين إلكترونياً. `),
+    t('Check their details and mark each record as verified.', 'تحقّق من معلوماتهم وعلّم كل سجل كمُتحقَّق منه.'),
+    `<button class="btn btn-secondary btn-dense" data-act="people-new-open">${t('Review them', 'مراجعتهم')}</button>`)}</div>`;
+};
 
 function todayPanel() {
   const rows = todayEvents().map(e => `<a class="listrow" href="#/calendar">
@@ -148,8 +158,9 @@ function secretary() {
       ${stat(t('Parishioners', 'المؤمنون'), num(PEOPLE.length), t('updated today', 'حُدّثت اليوم'))}
       ${stat(t('Households', 'العائلات'), num(HOUSEHOLDS.length), (n => n ? t(`${n} need an address`, `${n} بحاجة إلى عنوان`) : t('every one has an address', 'لكلٍّ عنوان'))(HOUSEHOLDS.filter(h => !h.address).length))}
       ${stat(t('Certificate requests', 'طلبات الشهادات'), certs.length, t(`${awaitingSig().length} waiting on the priest`, `${awaitingSig().length} بانتظار الكاهن`))}
-      ${stat(t('Portal requests', 'طلبات البوّابة'), PORTAL_REQUESTS.length + waitingOnline().length, waitingOnline().length ? t(waitingOnline().length === 1 ? '1 sacrament or certificate request' : `${waitingOnline().length} sacrament or certificate requests`, waitingOnline().length === 1 ? 'طلب سرّ أو شهادة واحد' : `${waitingOnline().length} طلبات أسرار أو شهادات`) : PORTAL_REQUESTS.length ? t('to review', 'للمراجعة') : t('nothing waiting', 'لا شيء بالانتظار'))}
+      ${stat(t('Portal requests', 'طلبات البوّابة'), PORTAL_REQUESTS.length + waitingOnline().length, waitingOnline().length ? t(waitingOnline().length === 1 ? '1 sent online' : `${waitingOnline().length} sent online`, waitingOnline().length === 1 ? 'طلب واحد أُرسل إلكترونياً' : `${waitingOnline().length} أُرسلت إلكترونياً`) : PORTAL_REQUESTS.length ? t('to review', 'للمراجعة') : t('nothing waiting', 'لا شيء بالانتظار'))}
     </div>
+    ${newOnline()}
     <div class="grid g2">
       ${panel(t('Requests in your queue', 'طلبات في صندوقك'), onlineRows() + rows, { tight: true, more: `<a href="#/requests">${t('All requests', 'كل الطلبات')}</a>` })}
       ${todayPanel()}

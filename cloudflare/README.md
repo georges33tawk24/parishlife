@@ -31,7 +31,12 @@ Differences from `server.py`, all invisible to the browser:
 - **Passwords.** `server.py` stores PBKDF2-SHA256 with 600,000 iterations (`salt:hex`). On
   the Workers Free plan a request may use only about 10 ms of CPU, so accounts made with
   `tools/accounts.mjs` use `pbkdf2_sha256$10000$salt$hex` with long random passwords. The
-  Worker accepts both formats.
+  Worker accepts both formats, and so does `server.py`. Accounts parishioners open
+  themselves (`/api/signup`) and passwords changed or reset in the portal use the same
+  10,000-iteration format on the Worker.
+- **Schema additions.** The Worker adds the `member_requests.log` column on its first
+  request if the database predates it (`addRequestLog` in `src/app.js`), as `server.py`
+  does at start-up.
 - A few indexes (`cf_*`) keep D1's daily row-read allowance for the lists read most often.
 
 ## Deploying

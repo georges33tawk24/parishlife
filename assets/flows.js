@@ -374,7 +374,7 @@ export function receipt(no, pid, amount, at = today) {
     title: L('Receipt', 'إيصال') + ' ' + no,
     sub: `${esc(nameOf(p) || L('Anonymous', 'مجهول'))} · ${usd(amount)}`,
     body: `<div class="a4frame"><div style="display:flex;justify-content:center"><div class="a4" style="aspect-ratio:auto;max-width:380px;padding:28px;align-items:stretch;text-align:start">
-        <div class="row" style="gap:10px"><span class="seal-lg" style="width:36px;height:36px;font-size:14px;margin:0">✚</span>
+        <div class="row" style="gap:10px"><span class="seal-lg" style="width:36px;height:36px;margin:0" aria-hidden="true">${icon('cross', 18)}</span>
           <div><b style="font:600 14px/18px var(--sans)">${esc(L(D.PARISH.name, D.PARISH.nameAr))}</b>
           <div class="t-caption dim">${L('Receipt', 'إيصال')} <span class="mono">${esc(no)}</span></div></div></div>
         <div class="divider"></div>

@@ -75,7 +75,7 @@ svg{display:block}
 .quick-paths a{display:flex;align-items:center;gap:16px;padding-inline:25px;border-inline-end:1px solid var(--line)}
 .quick-paths a:first-child{padding-inline-start:0}
 .quick-paths a:last-child{border:0;padding-inline-end:0}
-.path-number{font-size:10px;color:#8b998e}
+.path-number{font-size:10px;color:var(--muted)}
 .path-icon{color:#6e826d}
 .quick-paths b{font-size:12px;display:block;font-weight:600}
 .quick-paths small{display:block;font-size:10px;margin-top:4px;color:var(--muted)}
@@ -104,11 +104,11 @@ svg{display:block}
 .parish-emblem .icon{width:27px;height:27px}
 .parish-card:nth-child(3n+2) .parish-emblem{background:#f3eee3;color:#9a885e}
 .parish-card:nth-child(3n+3) .parish-emblem{background:#eaf0ef;color:#607d79}
-.card-number{font-size:11px;color:#71806f}
+.card-number{font-size:11px;color:#5d6b5b}
 .card-location{display:flex;gap:5px;align-items:center;font-size:10px;color:var(--muted);margin-bottom:11px}
 .card-location .icon{width:12px;height:12px}
 .parish-card h3{font-size:25px;margin-bottom:8px;font-weight:600}
-.parish-other-name{font-size:13px;text-align:start;color:#748071;margin-bottom:24px;align-self:flex-start}
+.parish-other-name{font-size:13px;text-align:start;color:#5d6a5a;margin-bottom:24px;align-self:flex-start}
 .card-bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;padding-top:18px;margin-top:auto;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
 .card-open{display:flex;gap:8px;align-items:center;color:var(--forest);font-weight:600}
 .card-open .icon{width:16px;height:16px}
@@ -126,7 +126,7 @@ svg{display:block}
 .times-section{background:#eaf0e7;padding-block:86px}
 .times-layout{display:grid;grid-template-columns:1fr 1.2fr;gap:95px}
 .times-layout h2{margin-block:15px 21px}
-.times-layout>div>p{font-size:13px;max-width:295px;line-height:1.85}
+.times-layout>div>p{font-size:13px;max-width:295px;line-height:1.85;color:#55625a}
 .times-layout>div>.icon-cross{width:35px;height:40px;margin-top:25px;color:#899e80}
 .times-list{align-self:center}
 .mass-detail{border-block-end:1px solid #ccd5c5}
@@ -151,7 +151,7 @@ svg{display:block}
 .event-date b{font-size:29px;line-height:1.25;font-weight:400}
 .event-date span{font-size:10px;margin-top:3px}
 .event-info{flex:1;min-width:0}
-.event-info .eyebrow{font-size:8px;color:#6c8164}
+.event-info .eyebrow{font-size:10px;color:#556a4f}
 .event-info h3{font-size:20px;margin-block:7px}
 .event-info p{font-size:11px}
 .event-time{display:flex;gap:8px;align-items:center;font-size:12px}
@@ -188,7 +188,7 @@ svg{display:block}
 .parish-about h2{margin-top:18px}
 .reading-copy h3{margin-bottom:20px;font-size:23px}
 .reading-copy p{font-size:15px;line-height:1.9}
-.location-note{display:flex;align-items:center;gap:9px;color:#667860;font-size:12px;margin-top:26px}
+.location-note{display:flex;align-items:center;gap:9px;color:#56684f;font-size:12px;margin-top:26px}
 .updates-section{background:#f0f2eb}
 .updates-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
 .update-card{padding:28px;background:#fff;border:1px solid var(--line);border-radius:10px}
@@ -266,3 +266,22 @@ a.contact-row:hover{text-decoration:underline}
 .reveal.is-visible{animation:arrive .6s ease both}
 @media(prefers-reduced-motion:reduce){.reveal.is-visible{animation:none}}
 @media(max-width:700px){.event-info{flex:1 1 calc(100% - 82px)}.event-time:empty{display:none}}
+/* Arrows and marks are drawn, never typed: iPhone shows ↗ and ✝ as emoji. */
+.ext-icon{width:14px;height:14px;flex-shrink:0}
+[dir=rtl] .ext-icon{transform:scaleX(-1)}
+.ext-link{display:inline-flex;align-items:center;gap:6px}
+.sign-in .ext-icon{width:15px;height:15px}
+.text-link .icon{width:16px;height:16px}
+/* iPhone Safari zooms into any field set below 16px */
+@media (hover:none) and (pointer:coarse){.search-field input,.town-field select,.results-bar select{font-size:16px}}
+/* the requests grouped: sacraments and certificates, then a booking or anything else */
+.request-group{margin:34px 0 14px;font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+.section-head+.request-group{margin-top:0}
+[dir=rtl] .request-group{letter-spacing:0;font-size:14px}
+.request-grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.request-card-wide{min-height:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 22px;align-items:center}
+.request-card-wide .request-icon{grid-row:1/3}
+.request-card-wide .request-go{grid-column:2}
+.request-grid-2 .request-card:nth-child(1) .request-icon{background:#f3eee3;color:#9a885e}
+.request-grid-2 .request-card:nth-child(2) .request-icon{background:#eaf0ef;color:#607d79}
+@media(max-width:700px){.request-grid-2{grid-template-columns:1fr}}

@@ -3,6 +3,7 @@ import { api, session } from '../api.js';
 import { t, fmtDate } from '../i18n.js';
 import { S, bus } from '../store.js';
 import { pageHead, table, stat, esc, status } from '../ui.js';
+import { icon } from '../icons.js';
 
 const cache = new Map();
 const L = (en, ar) => t(en, ar);
@@ -12,7 +13,7 @@ const link = (url, label) => `<a href="${url}" class="text-link">${label}</a>`;
 const rows = (items, cols) => items.length ? table({cols:cols.map(label=>({label})),rows:items.map(cells=>({cells}))}) :
   `<p class="help" style="padding:18px">${L('No records to show.','لا سجلات لعرضها.')}</p>`;
 const block = (id, title, body) => `<details class="panel oversight-section" id="oversight-${id}" open>
-  <summary class="panel-h"><b>${title}</b><span class="oversight-chevron" aria-hidden="true">⌄</span></summary><div class="panel-b tight">${body}</div></details>`;
+  <summary class="panel-h"><b>${title}</b><span class="oversight-chevron" aria-hidden="true">${icon('chevD',16)}</span></summary><div class="panel-b tight">${body}</div></details>`;
 const dateKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const monthKey = () => S.ui.oversightMonth || dateKey(new Date()).slice(0,7);
 
@@ -35,7 +36,7 @@ function personDetail(entry, parishId, personId) {
   const p=entry.people.find(x=>x.id===personId);
   if(!p)return `<p class="alert alert-danger">${L('Person not found.','الشخص غير موجود.')}</p>`;
   const records=entry.records.filter(r=>r.personId===personId);
-  return `${link(`#/oversight/${esc(parishId)}`,L('← Back to parish','← العودة إلى الرعية'))}<h2 style="margin:18px 0 8px">${personName(p)}</h2>
+  return `${link(`#/oversight/${esc(parishId)}`,`${icon('chevL',15)}${L('Back to parish','العودة إلى الرعية')}`)}<h2 style="margin:18px 0 8px">${personName(p)}</h2>
     <p class="help">${L('Read-only profile. Private member and pastoral records are excluded.','ملف للقراءة فقط. لا يشمل بيانات الأعضاء الخاصة أو السجلات الرعوية السرية.')}</p>
     <div class="stats" style="margin:18px 0">${stat(L('Status','الحالة'),esc(p.status))}${stat(L('Town','البلدة'),esc(L(p.town,p.townAr||p.town)))}${stat(L('Rite','الطقس'),esc(p.rite||'—'))}</div>
     ${block('household',L('Household and groups','العائلة والمجموعات'),`<div style="padding:18px"><p>${L('Household','العائلة')}: <b>${esc(L(p.household?.name||'—',p.household?.ar||p.household?.name||'—'))}</b></p>
@@ -47,7 +48,7 @@ function personDetail(entry, parishId, personId) {
 function groupDetail(entry, parishId, groupId) {
   const g=entry.groups.find(x=>x.id===groupId);
   if(!g)return `<p class="alert alert-danger">${L('Group not found.','المجموعة غير موجودة.')}</p>`;
-  return `${link(`#/oversight/${esc(parishId)}`,L('← Back to parish','← العودة إلى الرعية'))}<h2 style="margin:18px 0 8px">${esc(L(g.name,g.ar||g.name))}</h2>
+  return `${link(`#/oversight/${esc(parishId)}`,`${icon('chevL',15)}${L('Back to parish','العودة إلى الرعية')}`)}<h2 style="margin:18px 0 8px">${esc(L(g.name,g.ar||g.name))}</h2>
     <p class="help">${L('Read-only group activity based on recorded meetings.','نشاط المجموعة للقراءة فقط، وفق الاجتماعات المسجلة.')}</p>
     <div class="stats" style="margin:18px 0">${stat(L('Members','الأعضاء'),g.members)}${stat(L('Meetings','الاجتماعات'),g.meetings.length)}
       ${stat(L('Attendance','الحضور'),g.attendance.percentage===null?'—':`${g.attendance.percentage}%`,`${g.attendance.present} / ${g.attendance.recorded} ${L('recorded','مسجّل')}`)}</div>
@@ -86,7 +87,7 @@ export function oversight(id='', detail='', detailId='') {
       <button data-oversight-view="list" aria-pressed="${eventsView==='list'}">${L('List','قائمة')}</button><button data-oversight-view="calendar" aria-pressed="${eventsView==='calendar'}">${L('Calendar','رزنامة')}</button></div></div>
       ${eventsView==='calendar'?calendar(entry.events):rows(entry.events.map(e=>[`<b>${esc(L(e.title,e.titleAr||e.title))}</b>`,fmtDate(e.date),esc(e.time||'—'),esc(e.kind)]),
         [L('Event','الحدث'),L('Date','التاريخ'),L('Time','الوقت'),L('Type','النوع')])}`)}
-    ${block('groups',L('Group activity','نشاط المجموعات'),rows(entry.groups.map(g=>[link(`#/oversight/${esc(id)}/group/${esc(g.id)}`,`${esc(L(g.name,g.ar||g.name))} ↗`),String(g.members),String(g.meetings.length),
+    ${block('groups',L('Group activity','نشاط المجموعات'),rows(entry.groups.map(g=>[link(`#/oversight/${esc(id)}/group/${esc(g.id)}`,`${esc(L(g.name,g.ar||g.name))}${icon('ext',13,'ext-mark')}`),String(g.members),String(g.meetings.length),
       g.attendance.percentage===null?'—':`${g.attendance.percentage}%`]),[L('Group','المجموعة'),L('Members','الأعضاء'),L('Meetings','الاجتماعات'),L('Recorded attendance','الحضور المسجل')]))}
     ${block('activity',L('Recent administrative activity','النشاط الإداري الأخير'),rows(entry.activity.map(a=>[esc(new Date(a.at).toLocaleString(document.documentElement.lang==='ar'?'ar-LB':'en-GB')),
       esc(a.actor),esc(a.action.replaceAll('.',' '))]),[L('When','الوقت'),L('By','بواسطة'),L('Activity','النشاط')]))}`;

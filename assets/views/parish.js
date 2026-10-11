@@ -777,7 +777,7 @@ function groupDetail(id, tab) {
       const monthLabel=new Intl.DateTimeFormat(isAr()?'ar-LB':'en-US',{month:'long',year:'numeric'}).format(first);
       return `<div class="meeting-overview"><div><h2>${L('Ministry meetings','اجتماعات الخدمة')}</h2>
         <p class="t-caption dim">${L('Plan meetings, follow replies, and record attendance in one place.','خطّط للاجتماعات وتابع الردود وسجّل الحضور في مكان واحد.')}</p></div>
-        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-dense" data-meeting-order title="${L('Reverse meeting date order','عكس ترتيب الاجتماعات')}"><span aria-hidden="true">⇅</span>${L(S.ui.meetingReverse?'Newest first':'Oldest first',S.ui.meetingReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn btn-secondary btn-dense" data-meeting-order title="${L('Reverse meeting date order','عكس ترتيب الاجتماعات')}">${icon('sort',15)}${L(S.ui.meetingReverse?'Newest first':'Oldest first',S.ui.meetingReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
         <div class="seg"><button data-meeting-view="list" aria-pressed="${!calendar}">${L('List','قائمة')}</button><button data-meeting-view="calendar" aria-pressed="${calendar}">${L('Calendar','رزنامة')}</button></div>
         <button class="btn btn-primary" data-act="meeting-new">${icon('plus',17)}${L('Add meeting','إضافة اجتماع')}</button></div></div>
         ${!d.meetings.length ? empty('calendar',L('No meetings yet','لا اجتماعات بعد'),L('Add the first meeting for this ministry.','أضف أول اجتماع لهذه الخدمة.')) : ''}
@@ -942,7 +942,7 @@ function attendanceMatrix(g,d) {
       <b style="min-width:130px;text-align:center">${esc(periodLabel)}</b>
       ${C.iconBtn('chevR',L('Next month','الشهر التالي'),'data-attendance-shift="1"')}</div>
     <input class="input" type="search" data-attendance-search placeholder="${esc(L('Find a member','ابحث عن عضو'))}" aria-label="${esc(L('Find a member','ابحث عن عضو'))}" style="max-width:230px">
-    <button class="btn btn-secondary btn-dense" data-attendance-order aria-label="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}" title="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}"><span aria-hidden="true">⇅</span>${L(S.ui.attendanceReverse?'Newest first':'Oldest first',S.ui.attendanceReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
+    <button class="btn btn-secondary btn-dense" data-attendance-order aria-label="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}" title="${L('Reverse meeting date order','عكس ترتيب تواريخ الاجتماعات')}">${icon('sort',15)}${L(S.ui.attendanceReverse?'Newest first':'Oldest first',S.ui.attendanceReverse?'الأحدث أولاً':'الأقدم أولاً')}</button>
     <span class="t-caption dim">${recorded}/${meetings.reduce((n,m)=>n+d.roster.filter(r=>!m.participants?.length||m.participants.includes(r.p)).length,0) + formerIds.reduce((n,pid)=>n+meetings.filter(m=>attendanceValue(m,pid)).length,0)} ${L('recorded','مسجّل')}</span>
     <span class="attendance-legend">${attendanceTag('present',counts.present)}${attendanceTag('excused',counts.excused)}${attendanceTag('absent',counts.absent)}</span>
     <button class="btn btn-secondary btn-dense" data-attendance-import>${L('Import Excel','استيراد Excel')}</button>

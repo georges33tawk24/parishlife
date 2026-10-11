@@ -13,7 +13,7 @@ const copy = {
   stayConnected: ['Stay connected', 'ابقَ على تواصل'],
   footerIntro: ['A little closer to your parish. A little closer to one another.', 'أقرب إلى رعيتك. أقرب إلى بعضنا البعض.'],
   footer: ['Information published by participating parishes.', 'معلومات تنشرها الرعايا المشاركة.'],
-  photoCredit: ['Illustrative photography · Unsplash ↗', 'صور توضيحية · Unsplash ↗']
+  photoCredit: ['Illustrative photography · Unsplash', 'صور توضيحية · Unsplash']
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
 const htmlText = value => safe(value).replace(/\n/g, '<br>');
@@ -33,7 +33,9 @@ const icons = {
   flame: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10 3.2c.4 2.4 3.9 4.2 3.9 8a3.9 3.9 0 0 1-7.8 0c0-1.9.9-3.2 2-4.1c.1 1.4.7 2.3 1.6 2.6c-.3-2.2 0-4.4.3-6.5z"/></g>',
   rings: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M2.6 10a4.2 4.2 0 1 0 8.4 0a4.2 4.2 0 1 0 -8.4 0M9 10a4.2 4.2 0 1 0 8.4 0a4.2 4.2 0 1 0 -8.4 0"/></g>',
   candle: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M8.2 9h3.6v7.4H8.2zM6.4 16.4h7.2M10 3.4c1 1.2 1.5 2.1 1.5 2.8a1.5 1.5 0 0 1-3 0c0-.7.5-1.6 1.5-2.8z"/></g>',
-  cert: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10.2 16.4H4.6V3.6h10.8v6.2M7.2 6.8h5.6M7.2 9.4h3.4M7.2 12h2M11.8 12.4a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M12.9 14.3l-.5 2.7 1.6-.9 1.6.9-.5-2.7"/></g>'
+  cert: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10.2 16.4H4.6V3.6h10.8v6.2M7.2 6.8h5.6M7.2 9.4h3.4M7.2 12h2M11.8 12.4a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M12.9 14.3l-.5 2.7 1.6-.9 1.6.9-.5-2.7"/></g>',
+  hall: '<path d="M3 21V10l9-6 9 6v11M3 21h18M9 21v-6h6v6M7.5 12.5h.01M16.5 12.5h.01"/>',
+  message: '<path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h8M8 12.5h5"/>'
 };
 const icon = name => '<svg class="icon icon-' + name + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (icons[name] || icons.church) + '</svg>';
 let lang = 'en';
@@ -55,6 +57,12 @@ const REQUESTS = [
   ['funeral', 'candle', ['Funeral', 'الجنّاز'], ['For a family member who has died', 'لأحد أفراد العائلة المتوفّين']],
   ['certificate', 'cert', ['Certificate', 'شهادة'], ['A copy of an entry in the parish register', 'إفادة عن قيد في سجلّ الرعية']]
 ];
+const OTHER_REQUESTS = [
+  ['booking', 'hall', ['Book a hall or room', 'حجز قاعة أو مكان'], ['For a reception, a family gathering or a meeting — see when it is free', 'لاستقبال أو لقاء عائلي أو اجتماع — واطّلع على الأوقات المتاحة']],
+  ['custom', 'message', ['Something else', 'طلب آخر'], ['A house blessing, a Mass intention, a visit to someone who is sick…', 'تبريك منزل، نيّة قدّاس، زيارة مريض…']]
+];
+const requestCard = (p, wide) => ([kind, art, title, sub]) => '<a class="request-card' + (wide ? ' request-card-wide' : '') + '" href="' + safe(requestURL(p.id, kind)) + '"><span class="request-icon">' + icon(art) + '</span><span class="request-text"><strong>' + L(...title) + '</strong><small>' + L(...sub) + '</small></span><span class="request-go">' + L('Start a request', 'ابدأ الطلب') + icon('arrow') + '</span></a>';
+const signupURL = id => 'index.html?parish=' + encodeURIComponent(id) + '&signup=1#/myrequests';
 const localToday = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-'); };
 const normalize = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 const params = new URLSearchParams(location.search);
@@ -98,7 +106,7 @@ function renderCards(updateURL = false) {
     const d = details.get(p.id), rite = pair(d?.parish, 'rite', 'riteAr');
     return '<a class="parish-card" href="' + profileURL(p.id) + '"><div class="parish-card-top"><span class="parish-emblem" aria-hidden="true">' + icon('church') + '</span><span class="card-number" aria-hidden="true">' + String(i + 1).padStart(2, '0') + '</span></div>' +
       '<div class="card-location">' + icon('pin') + safe(townName(p)) + '</div><h3>' + safe(parishName(p)) + '</h3><p class="parish-other-name" lang="' + L('ar', 'en') + '" dir="' + L('rtl', 'ltr') + '">' + safe(L(p.ar || '', p.name || '')) + '</p><div class="card-bottom"><span>' + safe(rite || L('Parish community', 'جماعة الرعية')) + '</span><span class="card-open">' + L('Explore', 'استكشف') + icon('arrow') + '</span></div></a>';
-  }).join('') : empty(L('No parishes found', 'لم نعثر على رعايا'), L('Try a different name or choose another town.', 'جرّب اسمًا مختلفًا أو اختر بلدة أخرى.'), '<button class="text-link" id="clear-filters" type="button">' + L('Clear filters', 'إلغاء التصفية') + ' ↗</button>');
+  }).join('') : empty(L('No parishes found', 'لم نعثر على رعايا'), L('Try a different name or choose another town.', 'جرّب اسمًا مختلفًا أو اختر بلدة أخرى.'), '<button class="text-link" id="clear-filters" type="button">' + L('Clear filters', 'إلغاء التصفية') + icon('arrow') + '</button>');
   document.querySelector('#clear-filters')?.addEventListener('click', () => {
     filters.q = ''; filters.town = ''; document.querySelector('#directory-filter').value = ''; document.querySelector('#town-filter').value = ''; renderCards(true); document.querySelector('#directory-filter').focus();
   });
@@ -140,7 +148,7 @@ function timesSection(parishes) {
   const hasTimes = parishes.filter(p => content(details.get(p.id), 'massTimes'));
   return '<section id="times" class="times-section"><div class="site-wrap times-layout"><div><span class="eyebrow">' + L('MAKE TIME FOR WHAT MATTERS', 'وقتٌ لما يهمّنا') + '</span><h2>' + L('A moment<br>of peace.', 'لحظة<br>سلام.') + '</h2><p>' + L('Find published Mass and confession information, and plan your next visit.', 'اطّلع على مواعيد القداديس والاعتراف المنشورة وخطّط لزيارتك القادمة.') + '</p>' + icon('cross') + '</div><div class="times-list">' +
     (hasTimes.length ? hasTimes.map(p => '<details class="mass-detail"' + (selected ? ' open' : '') + '><summary><span><small>' + safe(townName(p)) + '</small><strong>' + safe(parishName(p)) + '</strong></span><span class="details-plus" aria-hidden="true">+</span></summary><div class="mass-body"><p>' + htmlText(content(details.get(p.id), 'massTimes')) + '</p>' + (selected ? '<a class="text-link" href="#contact">' + L('Contact the parish', 'تواصل مع الرعية') : '<a class="text-link" href="' + profileURL(p.id, '#times') + '">' + L('Visit parish page', 'صفحة الرعية')) + ' ' + icon('arrow') + '</a></div></details>').join('') :
-      empty(L('Times will be shared here', 'ستُنشر المواعيد هنا'), L('Mass and confession information has not been published yet. Visit your parish page for available contact details.', 'لم تُنشر مواعيد القداديس والاعتراف بعد. يمكنك زيارة صفحة رعيتك للاطّلاع على معلومات التواصل المتاحة.'), selected ? '<a class="text-link" href="#contact">' + L('Contact information', 'معلومات التواصل') + ' ↗</a>' : '<a class="text-link" href="#directory">' + L('Find your parish', 'ابحث عن رعيتك') + ' ↗</a>')) +
+      empty(L('Times will be shared here', 'ستُنشر المواعيد هنا'), L('Mass and confession information has not been published yet. Visit your parish page for available contact details.', 'لم تُنشر مواعيد القداديس والاعتراف بعد. يمكنك زيارة صفحة رعيتك للاطّلاع على معلومات التواصل المتاحة.'), selected ? '<a class="text-link" href="#contact">' + L('Contact information', 'معلومات التواصل') + icon('arrow') + '</a>' : '<a class="text-link" href="#directory">' + L('Find your parish', 'ابحث عن رعيتك') + icon('arrow') + '</a>')) +
     '</div></div></section>';
 }
 
@@ -180,14 +188,18 @@ function profile(p, d) {
 
 function sacramentsSection(p, d, phone) {
   const intro = content(d, 'sacraments');
-  return '<section id="sacraments" class="sacraments-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('CELEBRATE WITH US', 'نحتفل معاً') + '</span><h2>' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h2></div>' +
-    '<p>' + (intro ? htmlText(intro) : L('Planning a baptism or a wedding, preparing for First Communion, or need a certificate from the parish register? Send your request online and follow every step.', 'تخطّط لمعمودية أو إكليل، أو تستعدّ للمناولة الأولى، أو تحتاج إلى شهادة من سجلّ الرعية؟ أرسل طلبك عبر الإنترنت وتابع كل خطوة.')) + '</p></div>' +
-    '<div class="request-grid">' + REQUESTS.map(([kind, art, title, sub]) => '<a class="request-card" href="' + safe(requestURL(p.id, kind)) + '"><span class="request-icon">' + icon(art) + '</span><span class="request-text"><strong>' + L(...title) + '</strong><small>' + L(...sub) + '</small></span><span class="request-go">' + L('Start a request', 'ابدأ الطلب') + icon('arrow') + '</span></a>').join('') + '</div>' +
+  return '<section id="sacraments" class="sacraments-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('CELEBRATE WITH US', 'نحتفل معاً') + '</span><h2>' + L('Ask your parish', 'اطلب من رعيتك') + '</h2></div>' +
+    '<p>' + (intro ? htmlText(intro) : L('Planning a baptism or a wedding, need a certificate, the parish hall, or something else? Send your request online and follow every step.', 'تخطّط لمعمودية أو إكليل، أو تحتاج إلى شهادة أو إلى قاعة الرعية أو إلى أمر آخر؟ أرسل طلبك عبر الإنترنت وتابع كل خطوة.')) + '</p></div>' +
+    '<h3 class="request-group">' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h3>' +
+    '<div class="request-grid">' + REQUESTS.map(requestCard(p, false)).join('') + '</div>' +
+    '<h3 class="request-group">' + L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر') + '</h3>' +
+    '<div class="request-grid request-grid-2">' + OTHER_REQUESTS.map(requestCard(p, true)).join('') + '</div>' +
     '<div class="request-steps"><ol>' +
-      '<li><span>01</span><b>' + L('Sign in', 'سجّل الدخول') + '</b><small>' + L('With your ParishLife account.', 'بحسابك على ParishLife.') + '</small></li>' +
-      '<li><span>02</span><b>' + L('Send your request', 'أرسل طلبك') + '</b><small>' + L('Say who it is for. It takes two minutes.', 'حدّد لمن الطلب. يستغرق ذلك دقيقتين.') + '</small></li>' +
-      '<li><span>03</span><b>' + L('Follow every step', 'تابع كل خطوة') + '</b><small>' + L('Preparation, dates and certificates, with a notification at each step.', 'التحضير والمواعيد والشهادات، مع إشعار عند كل خطوة.') + '</small></li></ol>' +
-    '<p class="request-note">' + L('No account yet? The parish office can create one for you, or take your request in person.', 'لا حساب لديك بعد؟ يمكن لمكتب الرعية أن ينشئ لك حساباً، أو أن يستقبل طلبك شخصياً.') +
+      '<li><span>01</span><b>' + L('Sign in or create an account', 'سجّل الدخول أو أنشئ حساباً') + '</b><small>' + L('With your phone number or your email. It is free.', 'برقم هاتفك أو ببريدك الإلكتروني. إنه مجاني.') + '</small></li>' +
+      '<li><span>02</span><b>' + L('Send your request', 'أرسل طلبك') + '</b><small>' + L('Choose what you need. It takes two minutes.', 'اختر ما تحتاج إليه. يستغرق ذلك دقيقتين.') + '</small></li>' +
+      '<li><span>03</span><b>' + L('Follow every step', 'تابع كل خطوة') + '</b><small>' + L('Answers, dates and preparation, with a notification at each step.', 'الأجوبة والمواعيد والتحضير، مع إشعار عند كل خطوة.') + '</small></li></ol>' +
+    '<p class="request-note">' + L('No account yet?', 'لا حساب لديك بعد؟') + ' <a href="' + safe(signupURL(p.id)) + '">' + L('Create one in a minute', 'أنشئ حساباً في دقيقة') + icon('arrow') + '</a> ' +
+      L('Prefer to talk to someone? Call the parish office.', 'تفضّل التحدّث مع أحد؟ اتصل بمكتب الرعية.') +
       (phone ? ' <a href="tel:' + safe(phone) + '">' + icon('phone') + '<bdi>' + safe(d.parish.phone) + '</bdi></a>' : '') + '</p></div></div></section>';
 }
 
