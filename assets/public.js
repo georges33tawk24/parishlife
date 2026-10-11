@@ -26,7 +26,14 @@ const icons = {
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-13 4h2m4 0h2"/>',
   phone: '<path d="m8 3 2 5-3 2a15 15 0 0 0 7 7l2-3 5 2v3a2 2 0 0 1-2 2C10 20 4 14 3 5a2 2 0 0 1 2-2Z"/>',
   cross: '<path d="M12 3v19M6 9h12"/>',
-  chevron: '<path d="m8 5 7 7-7 7"/>'
+  chevron: '<path d="m8 5 7 7-7 7"/>',
+  /* the sacraments, drawn on the app's 20-unit grid and scaled to this one */
+  water: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10 3.2C12.9 6.8 14.9 9.5 14.9 12.1a4.9 4.9 0 0 1-9.8 0C5.1 9.5 7.1 6.8 10 3.2zM7.7 12.6a2.4 2.4 0 0 0 2.3 2.2"/></g>',
+  chalice: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M5.8 3.6h8.4c0 3.4-1.9 5.6-4.2 5.6S5.8 7 5.8 3.6zM10 9.2v5.2M6.8 16.4c.5-1.3 1.7-2 3.2-2s2.7.7 3.2 2z"/></g>',
+  flame: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10 3.2c.4 2.4 3.9 4.2 3.9 8a3.9 3.9 0 0 1-7.8 0c0-1.9.9-3.2 2-4.1c.1 1.4.7 2.3 1.6 2.6c-.3-2.2 0-4.4.3-6.5z"/></g>',
+  rings: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M2.6 10a4.2 4.2 0 1 0 8.4 0a4.2 4.2 0 1 0 -8.4 0M9 10a4.2 4.2 0 1 0 8.4 0a4.2 4.2 0 1 0 -8.4 0"/></g>',
+  candle: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M8.2 9h3.6v7.4H8.2zM6.4 16.4h7.2M10 3.4c1 1.2 1.5 2.1 1.5 2.8a1.5 1.5 0 0 1-3 0c0-.7.5-1.6 1.5-2.8z"/></g>',
+  cert: '<g transform="scale(1.2)" stroke-width="1.25"><path d="M10.2 16.4H4.6V3.6h10.8v6.2M7.2 6.8h5.6M7.2 9.4h3.4M7.2 12h2M11.8 12.4a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M12.9 14.3l-.5 2.7 1.6-.9 1.6.9-.5-2.7"/></g>'
 };
 const icon = name => '<svg class="icon icon-' + name + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (icons[name] || icons.church) + '</svg>';
 let lang = 'en';
@@ -38,6 +45,16 @@ const parishName = p => pair(p, 'name', 'ar');
 const townName = p => pair(p, 'town', 'townAr');
 const number = value => new Intl.NumberFormat(lang === 'ar' ? 'ar-LB' : 'en').format(value);
 const profileURL = (id, hash = '') => 'public.html?parish=' + encodeURIComponent(id) + hash;
+/* A request starts in the member portal, in this parish; signing in comes first when needed. */
+const requestURL = (id, kind) => 'index.html?parish=' + encodeURIComponent(id) + '#/myrequests/new/' + kind;
+const REQUESTS = [
+  ['baptism', 'water', ['Baptism', 'المعمودية'], ['For a child or an adult', 'لطفل أو لشخص بالغ']],
+  ['communion', 'chalice', ['First Communion', 'المناولة الأولى'], ['For a child getting ready to receive', 'لطفل يستعدّ للمناولة']],
+  ['confirmation', 'flame', ['Confirmation', 'الميرون'], ['Chrismation, the seal of the Holy Spirit', 'مسحة الميرون، ختم الروح القدس']],
+  ['marriage', 'rings', ['Marriage', 'الإكليل'], ['Open your marriage file with the parish', 'افتح ملف الزواج مع الرعية']],
+  ['funeral', 'candle', ['Funeral', 'الجنّاز'], ['For a family member who has died', 'لأحد أفراد العائلة المتوفّين']],
+  ['certificate', 'cert', ['Certificate', 'شهادة'], ['A copy of an entry in the parish register', 'إفادة عن قيد في سجلّ الرعية']]
+];
 const localToday = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-'); };
 const normalize = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 const params = new URLSearchParams(location.search);
@@ -148,9 +165,9 @@ function profile(p, d) {
   const contact = content(d, 'contact');
   return '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<span>' + safe(name) + '</span></div>' +
     '<section class="profile-hero"><div class="site-wrap"><span class="eyebrow">' + safe(meta || L('YOUR PARISH COMMUNITY', 'جماعتك الرعوية')) + '</span><h1>' + safe(name) + '</h1><p>' + htmlText(content(d, 'welcome') || L('A place of faith, a life in community.', 'مكان للإيمان وحياة في الجماعة.')) + '</p><div class="actions"><a class="button button-light" href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + icon('clock') + '</a><a class="button button-outline" href="#contact">' + L('Plan your visit', 'خطّط لزيارتك') + icon('arrow') + '</a></div></div></section>' +
-    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a><a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
+    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a><a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a><a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
     '<section id="about" class="section site-wrap parish-about"><div><span class="eyebrow">' + L('ROOTED IN COMMUNITY', 'متجذّرون في الجماعة') + '</span><h2>' + L('Every parish<br>has a story.', 'لكل رعية<br>حكاية.') + '</h2></div><div class="reading-copy"><h3>' + safe(name) + '</h3><p>' + htmlText(content(d, 'history') || L('The parish’s story will appear here when it is published.', 'ستظهر حكاية الرعية هنا عندما تُنشر.')) + '</p>' + (meta ? '<span class="location-note">' + icon('pin') + safe(meta) + '</span>' : '') + '</div></section>' +
-    timesSection([p]) + eventsSection([p]) +
+    timesSection([p]) + eventsSection([p]) + sacramentsSection(p, d, phone) +
     '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
     (d.posts?.length ? d.posts.map(post => '<article class="update-card">' + (publishedDate(post.at) ? '<time datetime="' + safe(post.at) + '">' + safe(publishedDate(post.at)) + '</time>' : '') + '<h3>' + safe(post.title) + '</h3><div class="published-body">' + (/<[a-z][\s\S]*>/i.test(post.body || '') ? safeRichText(post.body) : htmlText(post.body)) + '</div></article>').join('') :
       empty(L('Updates will find a home here', 'هنا تجد مستجدّات الرعية'), L('Published parish announcements will appear in this space.', 'ستظهر إعلانات الرعية المنشورة في هذه المساحة.'))) + '</div></div></section>' +
@@ -159,6 +176,19 @@ function profile(p, d) {
     (d.parish.address ? '<div class="contact-row">' + icon('pin') + '<span>' + safe(pair(d.parish, 'address', 'addressAr')) + '</span></div>' : '') +
     (phone ? '<a class="contact-row" href="tel:' + safe(phone) + '">' + icon('phone') + '<bdi>' + safe(d.parish.phone) + '</bdi></a>' : '') +
     '</div></section><div class="back-directory site-wrap"><a class="text-link" href="public.html#directory">' + L('Explore other parishes', 'استكشف رعايا أخرى') + icon('arrow') + '</a></div>';
+}
+
+function sacramentsSection(p, d, phone) {
+  const intro = content(d, 'sacraments');
+  return '<section id="sacraments" class="sacraments-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('CELEBRATE WITH US', 'نحتفل معاً') + '</span><h2>' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h2></div>' +
+    '<p>' + (intro ? htmlText(intro) : L('Planning a baptism or a wedding, preparing for First Communion, or need a certificate from the parish register? Send your request online and follow every step.', 'تخطّط لمعمودية أو إكليل، أو تستعدّ للمناولة الأولى، أو تحتاج إلى شهادة من سجلّ الرعية؟ أرسل طلبك عبر الإنترنت وتابع كل خطوة.')) + '</p></div>' +
+    '<div class="request-grid">' + REQUESTS.map(([kind, art, title, sub]) => '<a class="request-card" href="' + safe(requestURL(p.id, kind)) + '"><span class="request-icon">' + icon(art) + '</span><span class="request-text"><strong>' + L(...title) + '</strong><small>' + L(...sub) + '</small></span><span class="request-go">' + L('Start a request', 'ابدأ الطلب') + icon('arrow') + '</span></a>').join('') + '</div>' +
+    '<div class="request-steps"><ol>' +
+      '<li><span>01</span><b>' + L('Sign in', 'سجّل الدخول') + '</b><small>' + L('With your ParishLife account.', 'بحسابك على ParishLife.') + '</small></li>' +
+      '<li><span>02</span><b>' + L('Send your request', 'أرسل طلبك') + '</b><small>' + L('Say who it is for. It takes two minutes.', 'حدّد لمن الطلب. يستغرق ذلك دقيقتين.') + '</small></li>' +
+      '<li><span>03</span><b>' + L('Follow every step', 'تابع كل خطوة') + '</b><small>' + L('Preparation, dates and certificates, with a notification at each step.', 'التحضير والمواعيد والشهادات، مع إشعار عند كل خطوة.') + '</small></li></ol>' +
+    '<p class="request-note">' + L('No account yet? The parish office can create one for you, or take your request in person.', 'لا حساب لديك بعد؟ يمكن لمكتب الرعية أن ينشئ لك حساباً، أو أن يستقبل طلبك شخصياً.') +
+      (phone ? ' <a href="tel:' + safe(phone) + '">' + icon('phone') + '<bdi>' + safe(d.parish.phone) + '</bdi></a>' : '') + '</p></div></div></section>';
 }
 
 function bindEventToggle(parishes) {

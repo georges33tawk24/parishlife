@@ -6,6 +6,8 @@ import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 import { safeRichText } from '../rich-text.js';
+import { homeCard } from './member-requests.js';
+import { noticeText } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const date = value => value ? fmtDate(value) : '—';
@@ -56,6 +58,7 @@ export function home() {
     : blank(L('No upcoming ministry meetings yet.', 'لا اجتماعات خدمة مقبلة حالياً.'), link('mycalendar', L('View calendar', 'عرض الرزنامة')));
   return `<div class="member-page">${title(L('Welcome,', 'أهلاً،') + ' ' + (M.person.lat || '').split(' ')[0],
     L('Here is what is happening in your parish life.', 'إليك ما يجري في حياتك الرعوية.'))}
+    ${homeCard()}
     ${M.site?.welcome ? card(`<p class="member-site-welcome">${txt(t(M.site.welcome.en,M.site.welcome.ar))}</p><a class="btn btn-secondary btn-dense" href="public.html?parish=${encodeURIComponent(M.parish.id||'')}" target="_blank" rel="noopener">${L('Visit parish page','زيارة صفحة الرعية')}</a>`):''}
     <div class="member-grid member-home-highlights">
       ${card(`<h2>${L('My attendance', 'حضوري')}</h2><strong>${stats.percent === null ? '—' : stats.percent + '%'}</strong><p>${stats.attended} ${L('attended', 'حضور')} · ${stats.past.filter(x => x.attendance === 'excused').length} ${L('excused', 'غياب معذور')}</p>${link('myattendance', L('View history', 'عرض السجل'))}`)}
@@ -65,7 +68,7 @@ export function home() {
       ${card(`<h2>${L('Next meeting', 'الاجتماع المقبل')}</h2>${nextBody}`)}
       ${card(`<h2>${L('Upcoming', 'القادم')}</h2>${sorted([...upcoming(), ...M.events.filter(e => e.d >= todayKey())]).slice(0, 4).map(e => `<div class="member-simple-row"><span>${txt(e.title)}</span><small>${date(e.date || e.d)}</small></div>`).join('') || blank(L('Nothing on your calendar yet.', 'لا مواعيد في رزنامتك حالياً.'))}${link('mycalendar', L('Open calendar', 'فتح الرزنامة'))}`)}
       ${card(`<h2>${L('Announcements', 'الإعلانات')}</h2>${M.content.filter(x=>['announcement','post'].includes(x.kind)).slice(0, 2).map(x => `<p><b>${txt(x.title)}</b><br><small>${txt(groupName(x.groupId))}</small></p>`).join('') || blank(L('No new announcements.', 'لا إعلانات جديدة.'))}${link('myfeed', L('Read updates', 'قراءة المستجدات'))}`)}
-    </div><div class="member-actions">${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
+    </div><div class="member-actions">${link('myrequests', L('Sacraments & certificates', 'الأسرار والشهادات'))}${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
 }
 
 export function ministries() {
@@ -163,7 +166,7 @@ export function concerns() {
 
 export function notificationsPage() {
   const rows = M.notifications;
-  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions">${rows.some(x=>!x.read) ? `<button class="btn btn-secondary" data-notification-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>` : ''}${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div><p>${txt(x.body)}</p><div class="member-actions">${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-notification-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}${link(x.route, L('Open', 'فتح'))}</div>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
+  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions">${rows.some(x=>!x.read) ? `<button class="btn btn-secondary" data-notification-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>` : ''}${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => ({ ...x, ...(x.kind?.startsWith('request-') ? noticeText(x, M.requests.find(r => x.route === 'myrequests/' + r.id)) : {}) })).map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div>${x.body ? `<p>${txt(x.body)}</p>` : ''}<div class="member-actions">${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-notification-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}${link(x.route, L('Open', 'فتح'))}</div>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
 }
 
 export function hub() {

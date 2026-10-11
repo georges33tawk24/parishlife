@@ -679,6 +679,8 @@ export const PORTAL_REQUESTS = [
     now:'', nowAr:'', to:'Daou household, Ain el Remmaneh — 2 adults, 1 child', toAr:'عائلة ضو، عين الرمانة — راشدان وطفل', name:'Daou', nameAr:'ضو', town:'Ain el Remmaneh', townAr:'عين الرمانة' }
 ];
 export const REQUEST_HISTORY = [];
+/* Sacrament and certificate requests parishioners send from the member portal (read-only here; the server keeps them). */
+export const MEMBER_REQUESTS = [];
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

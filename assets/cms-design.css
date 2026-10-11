@@ -30,6 +30,7 @@
 .cms-section-heading h2,.cms-related h2{font-size:21px;line-height:1.5;font-weight:500;letter-spacing:-.025em;margin-top:8px}
 .cms-section-heading>p{max-width:36ch;font-size:12px;line-height:1.8;color:var(--cms-muted)}
 .cms-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.cms-section-grid>:last-child:nth-child(odd){grid-column:1/-1}   /* an odd last section takes the full row */
 .cms-section-card{min-width:0;background:#fff;border:1px solid var(--cms-line);padding:27px;display:flex;flex-direction:column;transition:border-color .18s ease}
 .cms-section-card:focus-within,.cms-section-card:hover{border-color:#9bac9f}
 .cms-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}

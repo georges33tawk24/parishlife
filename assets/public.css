@@ -220,6 +220,36 @@ a.contact-row:hover{text-decoration:underline}
 [dir=rtl] .fixed-story,[dir=rtl] .profile-hero{background-image:linear-gradient(270deg,#172d23df,#182a2160),url("images/church-light.jpg")}
 [dir=rtl] .brand small{letter-spacing:0;font-size:9px}
 [dir=rtl] .site-header .brand{direction:ltr}
+/* sacraments and certificates: each card starts a request in the member portal */
+.sacraments-section{border-top:1px solid var(--line)}
+.request-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.request-card{display:flex;flex-direction:column;gap:20px;min-height:236px;padding:26px 25px 20px;border:1px solid var(--line);border-radius:10px;background:#fff;transition:transform .3s,box-shadow .3s,border-color .3s}
+.request-card:hover{transform:translateY(-4px);border-color:#99ae94;box-shadow:0 12px 35px #233b3209}
+.request-icon{width:50px;height:56px;display:grid;place-items:center;border-radius:24px 24px 5px 5px;background:var(--soft);color:#5d755c}
+.request-icon .icon{width:27px;height:27px}
+.request-card:nth-child(3n+2) .request-icon{background:#f3eee3;color:#9a885e}
+.request-card:nth-child(3n+3) .request-icon{background:#eaf0ef;color:#607d79}
+.request-text strong{display:block;font-size:22px;font-weight:600;letter-spacing:-.025em;line-height:1.3}
+.request-text small{display:block;margin-top:7px;font-size:13px;line-height:1.7;color:var(--muted)}
+.request-go{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:16px;border-top:1px solid var(--line);font-size:12px;font-weight:600;color:var(--forest)}
+.request-go .icon{width:16px;height:16px;transition:transform .2s}
+.request-card:hover .request-go .icon{transform:translateX(4px)}
+[dir=rtl] .request-card:hover .request-go .icon{transform:scaleX(-1) translateX(4px)}
+.request-steps{display:grid;grid-template-columns:1.7fr 1fr;gap:56px;align-items:center;margin-top:36px;padding-top:30px;border-top:1px solid var(--line)}
+.request-steps ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
+.request-steps li{display:flex;flex-direction:column;gap:5px}
+.request-steps li span{font-size:10px;letter-spacing:1px;color:var(--muted)}
+.request-steps li b{font-size:14px;font-weight:600}
+.request-steps li small{font-size:12px;line-height:1.7;color:var(--muted)}
+.request-note{font-size:13px;line-height:1.85}
+.request-note a{display:inline-flex;align-items:center;gap:7px;margin-inline-start:4px;color:var(--forest);font-weight:600;border-bottom:1px solid #a6b1a2}
+.request-note a:hover{border-color:currentColor}
+.request-note .icon{width:15px;height:15px}
+@media(max-width:1100px){.request-steps{grid-template-columns:1fr;gap:22px}}
+@media(max-width:900px){.request-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.request-card{min-height:220px;padding:22px 20px 18px}}
+@media(max-width:700px){.request-grid{grid-template-columns:1fr}.request-card{min-height:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 18px;align-items:center}.request-icon{grid-row:1/3;width:46px;height:52px}.request-text strong{font-size:19px}.request-go{grid-column:2;padding-top:10px;margin-top:6px}.request-steps ol{grid-template-columns:1fr;gap:16px}}
+@media(prefers-reduced-motion:reduce){.request-card:hover{transform:none}}
+@media print{.request-grid,.request-steps{display:none}}
 @media(min-width:1500px){.hero{gap:95px}.hero-photo{height:560px}.hero h1{font-size:76px}}
 @media(max-width:1100px){.site-wrap{width:calc(100% - 64px)}.desktop-nav{gap:18px;font-size:11px}.header-inner{gap:18px}.header-actions{gap:12px}.hero{gap:40px}.hero-photo{height:490px}.hero h1{font-size:57px}.hero .eyebrow{font-size:8px;letter-spacing:1px}.quick-paths a{gap:12px;padding-inline:18px}.path-number{display:none}.times-layout,.parish-about,.contact-section{gap:55px}.about-site{gap:75px}.hero-note{margin-top:25px}}
 @media(max-width:900px){:root{--header:77px}.desktop-nav{display:none}.menu-toggle{display:block}.header-actions{margin-inline-start:auto}.hero{gap:28px;padding-block:44px 56px}.hero-photo{height:445px}.hero h1{font-size:48px}.hero-copy>p{font-size:13px}.hero .actions{gap:17px}.photo-caption{inset-inline-start:-15px;padding:13px;font-size:10px}.photo-caption small{font-size:7px}.section{padding-block:70px}.quick-paths a{gap:11px}.quick-paths small{font-size:9px}.quick-paths b{font-size:11px}.path-icon .icon{width:19px}.town-field{width:190px;padding-inline:16px}.parish-grid{gap:14px}.parish-card{padding:21px 18px;min-height:276px}.parish-card h3{font-size:22px}.card-bottom{font-size:9px}.times-layout{gap:38px}.about-site{gap:45px}.about-site h2{font-size:34px}.footer-main{gap:40px}.footer-bottom{font-size:8px}.profile-nav .site-wrap{gap:25px}html{scroll-padding-top:150px}}
