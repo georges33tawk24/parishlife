@@ -214,15 +214,22 @@ function pickParish() {
   history.replaceState(null, '', location.pathname + location.hash);
 }
 const requestLink = () => /^#\/?myrequests/.test(location.hash);
+/* The way back from the sign-in screen: the parish page someone came from, or the homepage. */
+const siteLink = () => {
+  const parish = new URLSearchParams(location.search).get('parish');
+  return parish ? `./?parish=${encodeURIComponent(parish)}${requestLink() ? '#sacraments' : ''}` : './';
+};
 
 function loginScreen(error = '') {
   app.className = 'signin';
   app.innerHTML = `<div class="signin-art"><div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
     <div><h1>${t('Parish administration for your community.', 'إدارة الرعية لخدمة جماعتكم.')}</h1><p style="font-family:var(--arabic)">حياة الرعية</p></div>
     <div class="swatches"><i style="background:#233B32;border:1px solid #EDF0E8"></i><i style="background:#EDF0E8"></i><i style="background:#FFFFFF"></i><i style="background:var(--selection)"></i><i style="background:var(--text-2)"></i></div></div>
-    <div class="signin-form"><form id="signform" novalidate><h2>${t('Sign in', 'تسجيل الدخول')}</h2>
+    <div class="signin-form"><form id="signform" novalidate>
+      <a class="signin-back" href="${esc(siteLink())}">${icon('chevL', 16)}${siteLink() === './' ? t('Back to the website', 'العودة إلى الموقع') : t('Back to the parish page', 'العودة إلى صفحة الرعية')}</a>
+      <h2>${t('Sign in', 'تسجيل الدخول')}</h2>
       <p class="dim" style="margin:6px 0 24px">${t('Use the account created by your administrator.', 'استخدم الحساب الذي أنشأه المسؤول.')}</p>
-      ${requestLink() ? `<div class="alert alert-info signin-context">${icon('info', 18)}<span><b>${t('Sign in to send your request', 'سجّل الدخول لإرسال طلبك')}</b>${t('Use your My ParishLife account. If you do not have one yet, ask the parish office to create it for you.', 'استخدم حسابك في «حياة الرعية». إذا لم يكن لديك حساب بعد، اطلب من مكتب الرعية إنشاءه لك.')}</span></div>` : ''}
+      ${requestLink() ? `<div class="alert alert-info signin-context">${icon('info', 18)}<span><b>${t('Sign in to send your request', 'سجّل الدخول لإرسال طلبك')}</b>${t('Use your members portal account. If you do not have one yet, ask the parish office to create it for you.', 'استخدم حسابك في بوّابة المؤمنين. إذا لم يكن لديك حساب بعد، اطلب من مكتب الرعية إنشاءه لك.')}</span></div>` : ''}
       ${error ? `<div class="alert alert-danger" role="alert">${esc(error)}</div>` : ''}
       <div class="formrow"><label class="label" for="si_u">${t('Username', 'اسم المستخدم')}</label><input class="input" id="si_u" required autocomplete="username"></div>
       <div class="formrow"><label class="label" for="si_p">${t('Password', 'كلمة المرور')}</label><input class="input" id="si_p" type="password" required autocomplete="current-password"></div>

@@ -356,8 +356,9 @@ export default {
     if (method === 'GET' && url.pathname.startsWith('/api/')) return api(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return api(request, env, url);
     if (method === 'GET' || method === 'HEAD') {
+      /* The site's address opens the public homepage; the system itself is index.html. */
       if (url.pathname === '/') {
-        const asset = await env.ASSETS.fetch(new Request(new URL('/index.html', url), { method }));
+        const asset = await env.ASSETS.fetch(new Request(new URL('/public.html', url), { method }));
         if (asset.ok) {
           const headers = new Headers(asset.headers);
           for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);

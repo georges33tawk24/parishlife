@@ -770,6 +770,8 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .signin-art .swatches i{width:40px;height:40px;border-radius:10px;display:block}
 .signin-form{display:grid;place-items:center;padding:40px 24px;background:var(--surface-soft)}
 .signin-form form{width:100%;max-width:380px}
+.signin-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 28px;margin-inline-start:-4px;padding:2px 4px;border-radius:6px;color:var(--text-2);font-size:13px;font-weight:500;line-height:20px;text-decoration:none}
+.signin-back:hover{color:var(--text)}
 .signin-form h2{font:600 26px/34px var(--sans);letter-spacing:-.02em}
 [dir=rtl] .signin-form h2{font-family:var(--arabic);letter-spacing:0}
 @media (max-width:860px){

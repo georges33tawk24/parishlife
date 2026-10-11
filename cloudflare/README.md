@@ -12,7 +12,7 @@ changes: it calls the same `/api/...` endpoints and gets the same answers.
 | Piece | Where |
 | --- | --- |
 | Worker configuration | `wrangler.jsonc` (repository root) |
-| Published files | `.assetsignore` limits the upload to `index.html`, `landing.html`, `public.html` and, under `assets/`, scripts, styles, images and fonts — the files `server.py` serves. `_headers` adds the same security headers. |
+| Published files | `.assetsignore` limits the upload to `index.html`, `landing.html`, `public.html` and, under `assets/`, scripts, styles, images and fonts — the files `server.py` serves. `_headers` adds the same security headers. The site's address (`/`) serves `public.html`, the public homepage, in both servers; the system itself is `index.html`. |
 | API | `src/worker.js` (routing, sessions, files), `src/app.js` (parish records, oversight, sacrament workflow), `src/member.js` (member portal and concerns), `src/state.js` (`migrate_state`, `validate`), `src/xlsx.js` (attendance import), `src/py.js` (Python semantics the port relies on) |
 | Database | D1 database `parishlife`; the Worker creates the tables and the sample parishes on first use, as `init_db()` does |
 

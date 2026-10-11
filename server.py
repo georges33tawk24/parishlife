@@ -2237,15 +2237,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 or target.is_relative_to(ROOT / 'assets' / 'images') and target.suffix in {'.jpg', '.jpeg', '.png', '.webp'}
                 or target.is_relative_to(ROOT / 'assets' / 'fonts') and target.suffix == '.woff2')
 
+    def home_page(self):
+        """The site's address opens the public homepage; the system itself is index.html."""
+        parts = urlsplit(self.path)
+        if parts.path == '/': self.path = '/public.html' + ('?' + parts.query if parts.query else '')
+
     def do_GET(self):
         if self.path.startswith('/api/'): return self.api()
         if not self.public_asset_allowed():
             return self.send_error(404)
+        self.home_page()
         return super().do_GET()
 
     def do_HEAD(self):
         if not self.public_asset_allowed():
             return self.send_error(404)
+        self.home_page()
         return super().do_HEAD()
 
     def do_POST(self): self.api()

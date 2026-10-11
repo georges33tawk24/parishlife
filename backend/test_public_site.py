@@ -135,6 +135,12 @@ class PublicSiteTests(unittest.TestCase):
                 self.assertEqual(body, files[relative])
                 self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
                 self.assertEqual(self.request('/' + relative, 'HEAD')[0], 200)
+        for path in ('/', '/?parish=p-elias'):
+            with self.subTest(home=path):
+                status, headers, body = self.request(path)
+                self.assertEqual((status, body), (200, b'public page'))  # the site address opens the homepage
+                self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+                self.assertEqual(self.request(path, 'HEAD')[0], 200)
         forbidden = ['/' + relative for relative in list(files)[6:]]
         forbidden += ['/assets/../backend/secret.js', '/assets/%2e%2e/backend/secret.js',
                       '/assets/%2e%2e%2fbackend/secret.js', '/assets/%2e%2e%5cbackend/secret.js',

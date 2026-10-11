@@ -8,7 +8,7 @@ const copy = {
   times: ['Mass times', 'مواعيد القداديس'],
   events: ['Parish life', 'حياة الرعية'],
   aboutNav: ['About', 'عنّا'],
-  signIn: ['My ParishLife', 'حسابي'],
+  signIn: ['Members portal', 'بوّابة المؤمنين'],
   explore: ['Explore', 'استكشف'],
   stayConnected: ['Stay connected', 'ابقَ على تواصل'],
   footerIntro: ['A little closer to your parish. A little closer to one another.', 'أقرب إلى رعيتك. أقرب إلى بعضنا البعض.'],
@@ -155,7 +155,7 @@ function home() {
     directorySection() +
     '<section class="fixed-story"><div class="site-wrap"><span class="eyebrow">' + L('MORE THAN A PLACE', 'أكثر من مكان') + '</span><h2>' + L('Where faith finds<br>its community.', 'حيث يجد الإيمان<br>جماعته.') + '</h2><p>' + L('In a familiar face. In a shared prayer.<br>In the everyday moments of parish life.', 'في وجهٍ مألوف. في صلاةٍ مشتركة.<br>في لحظات الحياة الرعوية اليومية.') + '</p><a class="button button-light" href="#events">' + L('Discover parish life', 'اكتشف حياة الرعية') + icon('arrow') + '</a></div><span class="story-footnote">' + L('A MOMENT TO PAUSE', 'لحظة للتأمّل') + '</span></section>' +
     timesSection(directory) + eventsSection(directory) +
-    '<section id="about" class="about-site section site-wrap"><div class="about-symbol" aria-hidden="true">' + icon('church') + '</div><div><span class="eyebrow">' + L('A SHARED PLACE FOR OUR PARISHES', 'مساحة مشتركة لرعايانا') + '</span><h2>' + L('Closer to your parish.<br>Closer to one another.', 'أقرب إلى رعيتك.<br>أقرب إلى بعضنا البعض.') + '</h2><p>' + L('ParishLife brings the information your parish shares into one welcoming place. Explore its story, plan a visit, and keep up with community life — in English or Arabic.', 'يجمع ParishLife المعلومات التي تنشرها رعيتك في مساحة واحدة ترحّب بك. اكتشف حكايتها، وخطّط لزيارة، وتابع حياة الجماعة بالإنجليزية أو العربية.') + '</p><a class="text-link" href="index.html">' + L('Go to My ParishLife', 'انتقل إلى حسابي') + icon('arrow') + '</a></div></section>';
+    '<section id="about" class="about-site section site-wrap"><div class="about-symbol" aria-hidden="true">' + icon('church') + '</div><div><span class="eyebrow">' + L('A SHARED PLACE FOR OUR PARISHES', 'مساحة مشتركة لرعايانا') + '</span><h2>' + L('Closer to your parish.<br>Closer to one another.', 'أقرب إلى رعيتك.<br>أقرب إلى بعضنا البعض.') + '</h2><p>' + L('ParishLife brings the information your parish shares into one welcoming place. Explore its story, plan a visit, and keep up with community life — in English or Arabic.', 'يجمع ParishLife المعلومات التي تنشرها رعيتك في مساحة واحدة ترحّب بك. اكتشف حكايتها، وخطّط لزيارة، وتابع حياة الجماعة بالإنجليزية أو العربية.') + '</p><a class="text-link" href="index.html">' + L('Open the members portal', 'ادخل إلى بوّابة المؤمنين') + icon('arrow') + '</a></div></section>';
 }
 
 function profile(p, d) {
