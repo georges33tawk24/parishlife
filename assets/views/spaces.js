@@ -7,6 +7,8 @@ import * as C from '../components.js';
 import * as CR from '../crud.js';
 import * as F from '../flows.js';
 import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, EVENTS, PEOPLE, TODAY, person, venue, group, resClash, resStatus } from '../data.js';
+import { onlineMark } from './online-requests.js';
+import { occasionText, phoneShow } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const STAGES = [['Requested', 'الطلب'], ['Secretary review', 'مراجعة أمانة السرّ'], ['Priest approval', 'موافقة الكاهن'], ['Approved', 'موافَق عليه']];
@@ -299,7 +301,7 @@ export function reservations() {
     const v = venue(r.venue), by = person(r.by), g = r.group ? group(r.group) : null;
     return { cls: 'clickable', attrs: `data-res="${r.id}" tabindex="0" data-find-item`, cells: [
       `<span class="mono" dir="ltr">${r.ref}</span>`,
-      `<b style="font:500 14px/20px var(--sans)">${esc(L(r.title, r.titleAr))}</b>
+      `<b style="font:500 14px/20px var(--sans)">${esc(r.memberRequestId ? occasionText(r.title) : L(r.title, r.titleAr))}</b>${onlineMark(r)}
        ${g ? `<small class="t-caption dim" style="display:block">${esc(L(g.name, g.ar))}</small>` : ''}`,
       `<span class="dim">${esc(v ? L(v.name, v.ar) : '—')}</span>`,
       `<span class="dim">${fmtDate(r.date)} <span class="mono" dir="ltr">${r.from}–${r.to}</span></span>`,
@@ -340,14 +342,22 @@ export function reservations() {
     <div class="find-empty" hidden>${empty('search', L('No request matches', 'لا طلب مطابق'), L('Try the reference number or part of the title.', 'جرّب رقم الطلب أو جزءاً من العنوان.'))}</div>`;
 }
 
-reservations.mount = host => {
+/* #/reservations/<id> opens that booking over the list; the address then settles back on Reservations. */
+reservations.mount = (host, first) => {
   C.wire(host); wireTables(host);
   host.querySelectorAll('[data-res]').forEach(tr => {
     const open = () => resDrawer(tr.dataset.res);
     tr.addEventListener('click', e => { if (!e.target.closest('button, a, input, label')) open(); });
     tr.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === tr) open(); });
   });
+  if (first) { S.params = []; history.replaceState(null, '', '#/reservations'); resDrawer(first); }
 };
+
+/* What happened to a booking, as recorded on it */
+const RES_STEPS = { 'request submitted': ['Requested', 'طُلب'], 'office review completed': ['Checked by the parish office', 'راجعه مكتب الرعية'],
+  approve: ['Confirmed', 'تأكّد'], reject: ['Refused', 'رُفض'] };
+const resHistory = r => r.history.map((h, i) => `<div class="tl-item${i === r.history.length - 1 ? ' accent' : ''}"><div class="when">${esc(L(...(RES_STEPS[h.action] || [h.action, h.action])))}${h.at ? ` · ${fmtDate(h.at)}` : ''}</div>
+  <div class="what">${esc(h.by || '')}${h.via === 'portal' ? ` · ${L('online', 'إلكترونياً')}` : ''}${h.reason ? `<small class="dim" style="display:block">${esc(h.reason)}</small>` : ''}</div></div>`).join('');
 
 function stageBar(current) {
   const idx = { secretary: 1, priest: 2, done: 3 }[current] ?? 0;
@@ -361,24 +371,31 @@ function stageBar(current) {
 function resDrawer(id) {
   const r = RESERVATIONS.find(x => x.id === id); if (!r) return;
   const v = venue(r.venue) || { name: '—', ar: '—', cap: 0 }, by = person(r.by) || { lat: '—', ar: '—' }, g = r.group ? group(r.group) : null;
-  const clash = resClash(r);
-  const canDecide = is('priest') || (is('secretary') && r.stage === 'secretary');
+  const clash = resClash(r), online = !!r.memberRequestId;
+  const canDecide = r.status === 'pending' && (is('priest') || (is('secretary') && r.stage === 'secretary'));
+  const canCancel = r.status === 'approved' && is('priest');
+  const phone = r.contactPhone || (by.phone && by.phone !== '—' ? by.phone : '');
   openDrawer({
     large: true,
-    title: L(r.title, r.titleAr),
+    title: online ? occasionText(r.title) : L(r.title, r.titleAr),
     sub: `<span class="mono">${r.ref}</span> · ${esc(L(v.name, v.ar))} · ${fmtDate(r.date)}`,
     body: `${stageBar(r.stage)}
       ${clash && r.status === 'pending' ? C.inlineAlert('warning', L('Clashes with an existing booking', 'يتعارض مع حجز قائم'),
         L(`The ${v.name} is already held on ${fmtDate(clash.date)} from ${clash.from}, including a ${clash.setup || 0}-minute set-up buffer. Approving this request refuses the other one.`,
           `${v.ar} محجوزة في ${fmtDate(clash.date)} من ${clash.from}، مع ${clash.setup || 0} دقيقة تحضير. الموافقة على هذا الطلب ترفض الآخر.`)) : ''}
+      ${online ? C.inlineAlert('info', L('Booked online by the parishioner. ', 'حجزه المؤمن إلكترونياً. '),
+        L(`Request ${r.memberReference}. They are told when it is confirmed or refused, with your reason.`, `الطلب ${r.memberReference}. يُبلَّغ عند تأكيده أو رفضه، مع السبب.`)) : ''}
       <dl class="dl">
         <dt>${L('Room', 'القاعة')}</dt><dd>${esc(L(v.name, v.ar))} · ${L('seats', 'يتّسع لـ')} ${v.cap}</dd>
         <dt>${L('When', 'الموعد')}</dt><dd class="mono" dir="ltr">${fmtDate(r.date)} · ${r.from}–${r.to}</dd>
         <dt>${L('Setup buffer', 'وقت التحضير')}</dt><dd>${r.setup} ${L('minutes before and after', 'دقيقة قبل وبعد')}</dd>
-        <dt>${L('Requested by', 'مقدَّم من')}</dt><dd>${esc(isAr() ? by.ar : by.lat)}</dd>
+        <dt>${L('Requested by', 'مقدَّم من')}</dt><dd>${r.by && person(r.by) ? `<a href="#/person/${esc(r.by)}">${esc(isAr() ? by.ar || by.lat : by.lat)}</a>` : esc(isAr() ? by.ar : by.lat)}</dd>
+        ${phone ? `<dt>${L('Phone', 'الهاتف')}</dt><dd><a href="tel:${esc(String(phone).replace(/[^\d+]/g, ''))}"><bdi dir="ltr">${esc(phoneShow(phone))}</bdi></a></dd>` : ''}
+        ${r.guests ? `<dt>${L('People expected', 'عدد الأشخاص')}</dt><dd>${esc(String(r.guests))}</dd>` : ''}
         ${g ? `<dt>${L('Group', 'المجموعة')}</dt><dd>${esc(L(g.name, g.ar))}</dd>` : ''}
-        <dt>${L('Hold expires', 'ينتهي الحجز المؤقت')}</dt><dd class="mono">${fmtDate('2026-10-07')}</dd>
+        ${online ? '' : `<dt>${L('Hold expires', 'ينتهي الحجز المؤقت')}</dt><dd class="mono">${fmtDate('2026-10-07')}</dd>`}
         <dt>${L('Status', 'الحالة')}</dt><dd>${status(resStatus(r))}</dd></dl>
+      ${r.notes ? `<blockquote class="or-quote"><span>${L('Message from the parishioner', 'رسالة من المؤمن')}</span><p><bdi>${esc(r.notes)}</bdi></p></blockquote>` : ''}
       <div class="divider"></div>
       <h4 class="t-ui" style="margin-bottom:12px">${L('Opening and closing checklist', 'لائحة الفتح والإقفال')}</h4>
       <div class="stack" style="gap:8px">
@@ -388,17 +405,20 @@ function resDrawer(id) {
            L('Kitchen left clean', 'ترك المطبخ نظيفاً')].map(x => C.checkRow(x)).join('')}</div>
       <div class="divider"></div>
       <h4 class="t-ui" style="margin-bottom:10px">${L('Decision history', 'سجل القرارات')}</h4>
-      <div class="timeline"><div class="tl-item accent"><div class="when">${L('Submitted', 'قُدّم')}</div>
+      <div class="timeline">${r.history?.length ? resHistory(r) : `<div class="tl-item accent"><div class="when">${L('Submitted', 'قُدّم')}</div>
           <div class="what">${L(`By ${by.lat}`, `من ${by.ar}`)}</div></div>
         ${r.stage !== 'secretary' ? `<div class="tl-item"><div class="when">${L('Reviewed', 'رُوجع')}</div>
           <div class="what">${L('By Rita Nassar and forwarded to the priest', 'من ريتا نصّار وأُحيل إلى الكاهن')}</div></div>` : ''}
         ${r.status === 'approved' || r.status === 'rejected' ? `<div class="tl-item"><div class="when">${L('Decided', 'قُرّر')}</div>
-          <div class="what">${status(r.status)}</div></div>` : ''}</div>`,
+          <div class="what">${status(r.status)}</div></div>` : ''}`}</div>`,
     foot: canDecide
       ? `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
          <button class="btn btn-danger-quiet" data-act="res-reject:${r.id}">${L('Reject', 'رفض')}</button>
          <button class="btn btn-primary" data-act="res-approve:${r.id}" style="margin-inline-start:auto">
            ${is('secretary') ? L('Forward to the priest', 'إحالة إلى الكاهن') : L('Approve', 'موافقة')}</button>`
+      : canCancel ? `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
+         <button class="btn btn-danger-quiet" data-act="res-reject:${r.id}" style="margin-inline-start:auto">${L('Cancel booking…', 'إلغاء الحجز…')}</button>`
+      : r.status !== 'pending' ? `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`
       : `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
          <span class="t-caption dim" style="margin-inline-start:auto">${L('Your role can view this request but not decide it.', 'دورك يتيح الاطّلاع لا القرار.')}</span>`,
     onMount(el) {

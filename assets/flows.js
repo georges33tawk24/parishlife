@@ -374,7 +374,7 @@ export function receipt(no, pid, amount, at = today) {
     title: L('Receipt', 'إيصال') + ' ' + no,
     sub: `${esc(nameOf(p) || L('Anonymous', 'مجهول'))} · ${usd(amount)}`,
     body: `<div class="a4frame"><div style="display:flex;justify-content:center"><div class="a4" style="aspect-ratio:auto;max-width:380px;padding:28px;align-items:stretch;text-align:start">
-        <div class="row" style="gap:10px"><span class="seal-lg" style="width:36px;height:36px;font-size:14px;margin:0">✚</span>
+        <div class="row" style="gap:10px"><span class="seal-lg" style="width:36px;height:36px;margin:0" aria-hidden="true">${icon('cross', 18)}</span>
           <div><b style="font:600 14px/18px var(--sans)">${esc(L(D.PARISH.name, D.PARISH.nameAr))}</b>
           <div class="t-caption dim">${L('Receipt', 'إيصال')} <span class="mono">${esc(no)}</span></div></div></div>
         <div class="divider"></div>
@@ -1455,13 +1455,13 @@ export function incidentOpen(id) {
 /* ═════════════ facilities ═════════════ */
 /* ═════════════ portal ═════════════ */
 export function contentEdit(key = 'history') {
-  const sections={welcome:['Welcome message','رسالة الترحيب'],history:['Parish history and patron saint','تاريخ الرعية والشفيع'],massTimes:['Mass and confession information','معلومات القداديس والاعتراف'],contact:['Contact and visiting information','معلومات التواصل والزيارة']};
+  const sections={welcome:['Welcome message','رسالة الترحيب'],history:['Parish history and patron saint','تاريخ الرعية والشفيع'],massTimes:['Mass and confession information','معلومات القداديس والاعتراف'],contact:['Contact and visiting information','معلومات التواصل والزيارة'],sacraments:['Sacraments and certificates','الأسرار والشهادات']};
   if(!sections[key])key='history';
   const c = D.CONTENT[key] || {en:'',ar:'',published:false};
   openDrawer({
     large: true, title: L(...sections[key]),
     sub: L('Edit both languages, preview, then save a draft or publish.', 'حرّر اللغتين وعاين ثم احفظ مسودة أو انشر.'),
-    body: `<div class="formrow"><label class="label" for="ce-en">English</label><textarea class="input" id="ce-en" rows="6" maxlength="10000">${esc(c.en||'')}</textarea></div>
+    body: `${key==='sacraments'?`<p class="help" style="margin:0 0 16px">${L('This text introduces the request buttons on your public page: baptism, First Communion, confirmation, marriage, funeral and certificates. Mention anything families should know first, such as preparation sessions or documents. Without it, a short default introduction is shown.','يقدّم هذا النص أزرار الطلبات في صفحتك العامة: المعمودية والمناولة الأولى والميرون والإكليل والجنّاز والشهادات. اذكر ما يجب أن تعرفه العائلات أولاً، مثل لقاءات التحضير أو المستندات. ومن دونه تظهر مقدّمة قصيرة افتراضية.')}</p>`:''}<div class="formrow"><label class="label" for="ce-en">English</label><textarea class="input" id="ce-en" rows="6" maxlength="10000">${esc(c.en||'')}</textarea></div>
       <div class="formrow"><label class="label" for="ce-ar">العربية</label><textarea class="input" id="ce-ar" rows="6" maxlength="10000" dir="rtl">${esc(c.ar||'')}</textarea></div>
       <div class="panel" style="margin-top:14px"><div class="panel-b"><b>${L('Preview','معاينة')}</b><div id="ce-preview" class="stack" style="margin-top:10px;white-space:pre-wrap"></div></div></div>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>

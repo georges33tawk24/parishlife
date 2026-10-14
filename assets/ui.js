@@ -44,9 +44,9 @@ export const avatar = (p, cls = '', key = p?.id) => PHOTOS[key]
 /** Personal names always show English first, followed by Arabic. */
 export function who(p, { avatarCls = '' } = {}) {
   if (!p) return `<span class="dimmer">—</span>`;
-  const lead = p.lat, sub = p.ar;
+  const lead = p.lat || p.ar, sub = p.ar && p.ar !== lead ? p.ar : '';  // a name typed once (online sign-up) shows once
   return `<span class="who">${avatar(p, avatarCls)}<span class="truncate">
-    <b>${esc(lead)}</b><small>${esc(sub)}</small></span></span>`;
+    <b>${esc(lead)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></span>`;
 }
 
 /* Status badges: a toned pill carries the icon for what it means (the Status Badges UI Kit set:
@@ -74,6 +74,7 @@ const STATUS = {
   celebrated:    ['Celebrated', 'تمّ الاحتفال', 'success', 'st-ok'],
   open:          ['Open', 'مفتوحة', 'info', 'st-open'],
   requested:     ['Request received', 'استُلم الطلب', 'warning', 'st-review'],
+  submitted:     ['Submitted', 'مُرسَل', 'warning', 'st-review'],
   'office-reviewed': ['Office reviewed', 'راجعه المكتب', 'warning', 'st-review'],
   preparing:     ['In preparation', 'قيد التحضير', 'info', 'st-wait'],
   legacy:        ['Needs linked record', 'يحتاج قيداً مرتبطاً', 'warning', 'st-alert'],
@@ -89,6 +90,7 @@ const STATUS = {
   rejected:      ['Rejected', 'مرفوض', 'danger', 'st-no'],
   cancelled:     ['Cancelled', 'ملغى', 'danger', 'st-no'],
   declined:      ['Declined', 'اعتذر', 'danger', 'st-no'],
+  withdrawn:     ['Withdrawn', 'مسحوب', '', 'st-pause'],
   failed:        ['Failed', 'فشل الإرسال', 'danger', 'st-no']
 };
 export function status(key) {
@@ -132,14 +134,14 @@ export function table({ cols, rows, foot = '', pick = false, empty: emptyMsg = '
     t('Nothing matches those filters', 'لا شيء يطابق هذه المرشّحات'),
     t('Try clearing one of them, or add the first record.', 'جرّب إزالة أحدها، أو أضف السجل الأول.'))}</div>`;
 
-  const head = `<tr>${pick ? `<th class="pick"><label class="check"><input type="checkbox" data-all></label></th>` : ''}
+  const head = `<tr>${pick ? `<th class="pick"><label class="check"><input type="checkbox" data-all aria-label="${t('Select all rows', 'تحديد كل الصفوف')}"></label></th>` : ''}
     ${cols.map((c, i) => `<th class="${c.cls || ''} ${c.sort ? 'sortable' : ''}" ${c.sort ? `data-sort="${i}" tabindex="0"` : ''}>
-      ${esc(c.label)}${c.sort ? '<span class="arrow">⇅</span>' : ''}</th>`).join('')}</tr>`;
+      ${c.label ? esc(c.label) : `<span class="sr">${t('Actions', 'إجراءات')}</span>`}${c.sort ? `<span class="arrow" aria-hidden="true">${icon('sort', 13)}</span>` : ''}</th>`).join('')}</tr>`;
 
   const body = rows.map((r, ri) => {
     const cells = (r.cells || r);
     const main = `<tr class="${r.cls || ''}" data-ri="${ri}" ${r.attrs || ''}>
-      ${pick ? `<td class="pick"><label class="check"><input type="checkbox" data-row></label></td>` : ''}
+      ${pick ? `<td class="pick"><label class="check"><input type="checkbox" data-row aria-label="${t(`Select row ${ri + 1}`, `تحديد الصف ${ri + 1}`)}"></label></td>` : ''}
       ${cells.map((c, i) => `<td class="${cols[i]?.cls || ''}">${c}</td>`).join('')}</tr>`;
     const det = r.detail ? `<tr class="detail" data-detail="${ri}" hidden>
       <td colspan="${cells.length + (pick ? 1 : 0)}">${r.detail}</td></tr>` : '';
@@ -220,10 +222,11 @@ let drawerEl, modalEl, scrimEl, lastFocus, gen = 0;   // gen: a close only empti
 function ensureOverlays() {
   if (scrimEl) return;
   scrimEl = Object.assign(document.createElement('div'), { className: 'scrim' });
-  drawerEl = Object.assign(document.createElement('aside'), { className: 'drawer' });
-  drawerEl.setAttribute('role', 'dialog'); drawerEl.setAttribute('aria-modal', 'true');
+  /* each overlay is a dialog named by its own heading */
+  drawerEl = Object.assign(document.createElement('div'), { className: 'drawer' });
+  drawerEl.setAttribute('role', 'dialog'); drawerEl.setAttribute('aria-modal', 'true'); drawerEl.setAttribute('aria-labelledby', 'drawer-title');
   modalEl = Object.assign(document.createElement('div'), { className: 'modal' });
-  modalEl.setAttribute('role', 'dialog'); modalEl.setAttribute('aria-modal', 'true');
+  modalEl.setAttribute('role', 'dialog'); modalEl.setAttribute('aria-modal', 'true'); modalEl.setAttribute('aria-labelledby', 'modal-title');
   document.body.append(scrimEl, drawerEl, modalEl);
   scrimEl.addEventListener('click', closeOverlays);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlays(); });
@@ -260,7 +263,7 @@ function focusFirst(host) {
 
 function shell(kind, { title, sub = '', body, foot = '' }) {
   return `<div class="${kind}-head">
-      <div style="flex:1;min-width:0"><h3>${esc(title)}</h3>${sub ? `<p class="t-caption dim" style="margin-top:4px">${sub}</p>` : ''}</div>
+      <div style="flex:1;min-width:0"><h2 id="${kind}-title">${esc(title)}</h2>${sub ? `<p class="t-caption dim" style="margin-top:4px">${sub}</p>` : ''}</div>
       <button class="iconbtn" data-close aria-label="${t('Close', 'إغلاق')}">${icon('close', 18)}</button>
     </div>
     <div class="${kind}-body">${body}</div>

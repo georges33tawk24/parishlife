@@ -24,7 +24,7 @@ export const ROLES = {
     en:'Ministry member', ar:'عضو خدمة', who:null,
     noteEn:'Your ministries, meetings and personal parish life.',
     noteAr:'خدماتك واجتماعاتك وحياتك الرعوية.',
-    nav:[L('memberhome'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
+    nav:[L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
       L('mymessages'), L('myfeed'), L('myresources'), L('mycommitments'), L('mynotes'),
       L('myprofile'), L('myconcerns'), L('membernotifications')]
   },
@@ -78,7 +78,7 @@ export const ROLES = {
 };
 
 export const MOBILE_NAV = {
-  member:    ['memberhome','mymeetings','mymessages','mycalendar','myprofile'],
+  member:    ['memberhome','myrequests','mymessages','mycalendar','myprofile'],
   bishop: ['oversight','bishopmap','bishopeparchy'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],

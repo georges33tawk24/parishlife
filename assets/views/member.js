@@ -1,11 +1,13 @@
 /* A member sees a server-built projection, never the parish administration state. */
-import { t, fmtDate } from '../i18n.js';
+import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
 import { session } from '../api.js';
 import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 import { safeRichText } from '../rich-text.js';
+import { homeCard } from './member-requests.js';
+import { noticeText, phoneShow } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const date = value => value ? fmtDate(value) : '—';
@@ -56,6 +58,7 @@ export function home() {
     : blank(L('No upcoming ministry meetings yet.', 'لا اجتماعات خدمة مقبلة حالياً.'), link('mycalendar', L('View calendar', 'عرض الرزنامة')));
   return `<div class="member-page">${title(L('Welcome,', 'أهلاً،') + ' ' + (M.person.lat || '').split(' ')[0],
     L('Here is what is happening in your parish life.', 'إليك ما يجري في حياتك الرعوية.'))}
+    ${homeCard()}
     ${M.site?.welcome ? card(`<p class="member-site-welcome">${txt(t(M.site.welcome.en,M.site.welcome.ar))}</p><a class="btn btn-secondary btn-dense" href="public.html?parish=${encodeURIComponent(M.parish.id||'')}" target="_blank" rel="noopener">${L('Visit parish page','زيارة صفحة الرعية')}</a>`):''}
     <div class="member-grid member-home-highlights">
       ${card(`<h2>${L('My attendance', 'حضوري')}</h2><strong>${stats.percent === null ? '—' : stats.percent + '%'}</strong><p>${stats.attended} ${L('attended', 'حضور')} · ${stats.past.filter(x => x.attendance === 'excused').length} ${L('excused', 'غياب معذور')}</p>${link('myattendance', L('View history', 'عرض السجل'))}`)}
@@ -65,7 +68,7 @@ export function home() {
       ${card(`<h2>${L('Next meeting', 'الاجتماع المقبل')}</h2>${nextBody}`)}
       ${card(`<h2>${L('Upcoming', 'القادم')}</h2>${sorted([...upcoming(), ...M.events.filter(e => e.d >= todayKey())]).slice(0, 4).map(e => `<div class="member-simple-row"><span>${txt(e.title)}</span><small>${date(e.date || e.d)}</small></div>`).join('') || blank(L('Nothing on your calendar yet.', 'لا مواعيد في رزنامتك حالياً.'))}${link('mycalendar', L('Open calendar', 'فتح الرزنامة'))}`)}
       ${card(`<h2>${L('Announcements', 'الإعلانات')}</h2>${M.content.filter(x=>['announcement','post'].includes(x.kind)).slice(0, 2).map(x => `<p><b>${txt(x.title)}</b><br><small>${txt(groupName(x.groupId))}</small></p>`).join('') || blank(L('No new announcements.', 'لا إعلانات جديدة.'))}${link('myfeed', L('Read updates', 'قراءة المستجدات'))}`)}
-    </div><div class="member-actions">${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
+    </div><div class="member-actions">${link('myrequests', L('My requests', 'طلباتي'))}${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
 }
 
 export function ministries() {
@@ -149,9 +152,12 @@ export function notes() {
     <div class="member-list">${rows.map(n => `<div class="member-card member-filter-row member-search-row" data-category="${txt(n.category)}" data-search="${txt(n.title + ' ' + n.body + ' ' + n.tags.join(' '))}"><div class="member-row"><h2>${txt(n.title)} ${n.pinned ? status(L('Pinned', 'مثبّتة')) : ''}</h2><small>${date(n.updatedAt)}</small></div><p>${txt(n.body)}</p><p class="dim">${txt(n.category)} ${n.tags.map(tag=>`#${txt(tag)}`).join(' ')} ${n.reminder ? '· ' + date(n.reminder) : ''}</p><button class="btn btn-secondary btn-dense" data-note-edit="${txt(n.id)}">${L('Edit', 'تعديل')}</button><button class="btn btn-secondary btn-dense" data-note-delete="${txt(n.id)}">${L('Delete', 'حذف')}</button></div>`).join('') || blank(L('Your private notes will appear here.', 'تظهر ملاحظاتك الخاصة هنا.'))}</div>`}</div>`;
 }
 
+const MEMBERSHIP = { member: ['Parishioner', 'من أبناء الرعية'], visitor: ['Visitor', 'زائر'], inactive: ['Inactive', 'غير ناشط'] };
+
 export function profile() {
-  const p = M.person;
-  return `<div class="member-page">${title(L('My profile', 'ملفي'), L('Your official record is maintained by the parish office.', 'يحتفظ مكتب الرعية بسجلك الرسمي.'))}${card(`<h2>${txt(p.lat)}</h2><p>${txt(p.ar)}</p><dl class="member-profile"><dt>${L('Parish membership', 'العضوية الرعوية')}</dt><dd>${txt(p.status)}</dd><dt>${L('Phone', 'الهاتف')}</dt><dd>${txt(p.phone || '—')}</dd><dt>${L('Email', 'البريد الإلكتروني')}</dt><dd>${txt(p.email || '—')}</dd><dt>${L('Address', 'العنوان')}</dt><dd>${txt(p.address || '—')}</dd><dt>${L('Date of birth', 'تاريخ الميلاد')}</dt><dd>${date(p.born)}</dd><dt>${L('Ministries', 'الخدمات')}</dt><dd>${M.groups.map(g=>txt(g.name)).join(', ') || '—'}</dd></dl><button class="btn btn-primary" data-profile-request>${L('Request information update', 'طلب تحديث المعلومات')}</button>`)}
+  const p = M.person, other = isAr() ? p.lat : p.ar;
+  return `<div class="member-page">${title(L('My profile', 'ملفي'), L('Your official record is maintained by the parish office.', 'يحتفظ مكتب الرعية بسجلك الرسمي.'))}${card(`<h2>${txt(isAr() ? p.ar || p.lat : p.lat)}</h2>${other && other !== (isAr() ? p.ar || p.lat : p.lat) ? `<p>${txt(other)}</p>` : ''}<dl class="member-profile"><dt>${L('Parish membership', 'العضوية الرعوية')}</dt><dd>${txt(MEMBERSHIP[p.status] ? L(...MEMBERSHIP[p.status]) : p.status)}</dd><dt>${L('Phone', 'الهاتف')}</dt><dd><bdi dir="ltr">${txt(phoneShow(p.phone))}</bdi></dd><dt>${L('Email', 'البريد الإلكتروني')}</dt><dd>${txt(p.email || '—')}</dd><dt>${L('Address', 'العنوان')}</dt><dd>${txt(p.address || '—')}</dd><dt>${L('Date of birth', 'تاريخ الميلاد')}</dt><dd>${date(p.born)}</dd><dt>${L('Ministries', 'الخدمات')}</dt><dd>${M.groups.map(g=>txt(g.name)).join(', ') || '—'}</dd></dl><button class="btn btn-primary" data-profile-request>${L('Request information update', 'طلب تحديث المعلومات')}</button>`)}
+    ${card(`<h2>${L('Signing in', 'تسجيل الدخول')}</h2><dl class="member-profile"><dt>${L('You sign in with', 'تسجّل الدخول بـ')}</dt><dd><bdi dir="ltr">${txt(/^\+\d+$/.test(session.user?.username || '') ? phoneShow(session.user.username) : session.user?.username || '—')}</bdi></dd></dl><button class="btn btn-secondary" data-password-change>${L('Change my password', 'تغيير كلمة المرور')}</button>`)}
     ${card(`<h2>${L('Notification preferences', 'تفضيلات الإشعارات')}</h2>${[['email','Email notifications','إشعارات البريد'],['inSystem','In-system notifications','إشعارات النظام'],['meetings','Meeting updates and reminders','تحديثات وتذكيرات الاجتماعات'],['announcements','Announcements','الإعلانات'],['messages','Ministry messages','رسائل الخدمة']].map(([key,en,ar]) => `<label class="member-toggle"><span>${L(en,ar)}</span><input type="checkbox" data-preference="${key}" ${M.preferences[key] ? 'checked' : ''}></label>`).join('')}<p class="help">${L('Email delivery is not connected yet. Your email choice is saved for future use; in-system reminders appear when you open the portal.', 'لم يُربط إرسال البريد بعد. يُحفظ اختيارك للمستقبل؛ وتظهر التذكيرات داخل النظام عند فتح البوابة.')}</p>`)}
     ${M.profileRequests.length ? card(`<h2>${L('Update requests', 'طلبات التحديث')}</h2>${M.profileRequests.map(x=>`<div class="member-simple-row"><span>${txt(x.field)} · ${txt(x.requested_value)}</span>${status(x.status)}</div>`).join('')}`) : ''}</div>`;
 }
@@ -163,7 +169,7 @@ export function concerns() {
 
 export function notificationsPage() {
   const rows = M.notifications;
-  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions">${rows.some(x=>!x.read) ? `<button class="btn btn-secondary" data-notification-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>` : ''}${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div><p>${txt(x.body)}</p><div class="member-actions">${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-notification-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}${link(x.route, L('Open', 'فتح'))}</div>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
+  return `<div class="member-page">${title(L('Notifications', 'الإشعارات'), L('Recent updates that matter to you.', 'آخر المستجدات التي تهمك.'))}<div class="member-actions">${rows.some(x=>!x.read) ? `<button class="btn btn-secondary" data-notification-read-all>${L('Mark all as read', 'تعليم الكل كمقروء')}</button>` : ''}${link('myprofile', L('Notification preferences', 'تفضيلات الإشعارات'))}</div><div class="member-list">${rows.map(x => ({ ...x, ...(x.kind?.startsWith('request-') ? noticeText(x, M.requests.find(r => x.route === 'myrequests/' + r.id)) : {}) })).map(x => card(`<div class="member-row"><h2>${txt(x.title)} ${!x.read ? status(L('New', 'جديد')) : ''}</h2><small>${date(x.at)}</small></div>${x.body ? `<p>${txt(x.body)}</p>` : ''}<div class="member-actions">${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-notification-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}${link(x.route, L('Open', 'فتح'))}</div>`)).join('') || blank(L('You are all caught up.', 'لا إشعارات جديدة.'))}</div></div>`;
 }
 
 export function hub() {
@@ -262,6 +268,38 @@ function profileDrawer() {
   });
 }
 
+/* A new password, after the current one; the parish office resets a forgotten one. */
+function passwordModal() {
+  const field = (id, label, autocomplete, help = '') => `<div class="formrow"><label class="label" for="${id}">${label}</label>
+    <input class="input" id="${id}" type="password" autocomplete="${autocomplete}" maxlength="200" aria-describedby="${help ? `${id}-help ` : ''}${id}-error">
+    ${help ? `<span class="help" id="${id}-help">${help}</span>` : ''}<span class="help help-error" id="${id}-error" hidden></span></div>`;
+  openModal({ title:L('Change my password', 'تغيير كلمة المرور'),
+    body:`${field('pw-current', L('Current password', 'كلمة المرور الحالية'), 'current-password')}
+      ${field('pw-new', L('New password', 'كلمة المرور الجديدة'), 'new-password', L('At least 8 characters. Write it down and keep it somewhere safe.', '٨ أحرف على الأقل. دوّنها واحفظها في مكان آمن.'))}
+      <label class="member-toggle pw-show"><span>${L('Show the passwords', 'إظهار كلمات المرور')}</span><input type="checkbox" id="pw-show"></label>`,
+    foot:`<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button><button class="btn btn-primary" id="pw-save">${L('Change password', 'تغيير كلمة المرور')}</button>`,
+    onMount(el) {
+      const say = (id, message) => { const e = el.querySelector(`#${id}-error`), f = el.querySelector('#' + id); e.textContent = message; e.hidden = !message; message ? f.setAttribute('aria-invalid', 'true') : f.removeAttribute('aria-invalid'); };
+      el.querySelector('#pw-show').addEventListener('change', e => el.querySelectorAll('#pw-current,#pw-new').forEach(f => { f.type = e.target.checked ? 'text' : 'password'; }));
+      const save = el.querySelector('#pw-save');
+      save.addEventListener('click', async () => {
+        const current = el.querySelector('#pw-current').value, password = el.querySelector('#pw-new').value;
+        say('pw-current', current ? '' : L('Enter your current password.', 'أدخل كلمة المرور الحالية.'));
+        say('pw-new', password.length >= 8 ? '' : L('Choose a password of at least 8 characters.', 'اختر كلمة مرور من ٨ أحرف على الأقل.'));
+        if (!current || password.length < 8) return el.querySelector('[aria-invalid=true]').focus();
+        save.disabled = true; save.setAttribute('aria-busy', 'true');
+        try {
+          await memberAction('changePassword', { current, password });
+          closeOverlays(); toast(L('Password changed', 'تغيّرت كلمة المرور'), L('Use your new password next time you sign in.', 'استخدم كلمة المرور الجديدة عند تسجيل الدخول في المرّة المقبلة.'), 'success');
+        } catch (error) {
+          save.disabled = false; save.removeAttribute('aria-busy');
+          if (/current password/.test(error.message)) { say('pw-current', L('Your current password is not correct.', 'كلمة المرور الحالية غير صحيحة.')); el.querySelector('#pw-current').select(); }
+          else toast(L('The password was not changed', 'لم تتغيّر كلمة المرور'), error.message, 'danger');
+        }
+      });
+    } });
+}
+
 function messageDrawer() {
   openDrawer({ title:L('Message my ministry', 'مراسلة خدمتي'),
     sub:L('Your message goes to the ministry leader if they have a linked account.', 'تصل رسالتك إلى مسؤول الخدمة إذا كان له حساب مرتبط.'),
@@ -356,6 +394,7 @@ export function mount(host) {
   host.querySelectorAll('[data-todo-delete]').forEach(b=>b.addEventListener('click',()=>{ if(confirm(L('Delete this task?', 'حذف هذه المهمة؟'))) run('todo',{id:b.dataset.todoDelete,delete:true}); }));
   host.querySelectorAll('[data-todo-toggle]').forEach(b=>b.addEventListener('change',()=>run('todo',{id:b.dataset.todoToggle,done:b.checked},'')));
   host.querySelector('[data-profile-request]')?.addEventListener('click',profileDrawer);
+  host.querySelector('[data-password-change]')?.addEventListener('click',passwordModal);
   host.querySelector('[data-member-compose]')?.addEventListener('click',messageDrawer);
   host.querySelector('[data-concern-new]')?.addEventListener('click',concernDrawer);
   host.querySelector('[data-publish]')?.addEventListener('click',publishDrawer);

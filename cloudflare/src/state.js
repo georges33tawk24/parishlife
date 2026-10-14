@@ -13,8 +13,8 @@ export const ROLES = new Set(['bishop', 'priest', 'secretary', 'treasurer', 'lea
 export const CLERGY = new Set(['priest']); // Bishops use the separate, read-only oversight API.
 export const FINANCE = new Set(['BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX']);
 export const OFFICE = new Set(['PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS']);
-export const READONLY = new Set(['PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS']);
-export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision']);
+export const READONLY = new Set(['PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS']);
+export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference']);
 
 /* Idempotent migration for parish records and working templates. */
 export function migrate_state(d) {
@@ -249,7 +249,19 @@ function index(d, key) {
 
 const TIME = /^(?:[01]\p{Nd}|2[0-3]):[0-5]\p{Nd}$/u;
 
+export const THEME_SCHEMES = new Set(['forest', 'navy', 'marian', 'burgundy', 'purple', 'teal', 'cedar', 'slate', 'custom']);
+const HEX_COLOUR = /^#[0-9A-Fa-f]{6}$/;
+
+export function parish_theme(parish) {
+  const theme = get(parish, 'theme');
+  return isDict(theme) ? { scheme: K(theme, 'scheme'), primary: K(theme, 'primary') } : null;
+}
+
 export function validate(d) {
+  const theme = get(K(d, 'PARISH'), 'theme');
+  need(theme === null || (isDict(theme) && eq(Object.keys(theme).sort(), ['primary', 'scheme'])
+    && isStr(K(theme, 'scheme')) && THEME_SCHEMES.has(K(theme, 'scheme'))
+    && isStr(K(theme, 'primary')) && HEX_COLOUR.test(K(theme, 'primary'))), 'Invalid colour scheme.');
   const pp = index(d, 'PEOPLE');
   for (const [k, v] of index(d, 'ARCHIVED').entries()) pp.set(k, v);
   const content = get(d, 'CONTENT', {});

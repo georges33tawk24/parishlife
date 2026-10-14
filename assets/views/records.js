@@ -9,7 +9,9 @@ import { download } from '../actions.js';
 import { need } from '../flows.js';
 import { workflow as serverWorkflow } from '../persist.js';
 import { printSheet, saveBlob, svgToPng, fileName } from '../print.js';
-import { SACRAMENTS, anniversaryItems, PARISH, PREP_REQUIREMENTS, PEOPLE, person, RESERVATIONS, SERVICE_REQUESTS, PORTAL_REQUESTS, REQUEST_HISTORY, REGISTRATIONS } from '../data.js';
+import { SACRAMENTS, anniversaryItems, PARISH, PREP_REQUIREMENTS, PEOPLE, person, RESERVATIONS, SERVICE_REQUESTS, PORTAL_REQUESTS, REQUEST_HISTORY, REGISTRATIONS, venue } from '../data.js';
+import { onlineItems, openOnlineRequest, onlineMark, sharedNote } from './online-requests.js';
+import { certificateName, languageName, occasionText } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const KIND = { baptism:['Baptism','معمودية'], communion:['First Communion','المناولة الأولى'],
@@ -43,7 +45,7 @@ const nextStep = s => s.status === 'cancelled'
   'office-reviewed': [L('Accept or decline the request', 'قبول الطلب أو رفضه'), PRIEST()],
   preparing: [L('Finish the preparation checklist and set the date', 'إكمال لائحة التحضير وتحديد الموعد'), OFFICE()],
   draft: [s.kind === 'certificate' ? L('Send the request to the priest', 'إرسال الطلب إلى الكاهن') : L('Send the celebrated sacrament to the priest for approval', 'إرسال السرّ المحتفل به إلى الكاهن للاعتماد'), OFFICE()],
-  scheduled: [s.date > today() ? L(`Wait for the celebration on ${fmtDate(s.date)}`, `انتظار الاحتفال في ${fmtDate(s.date)}`) : L('Confirm it was celebrated and send it for approval', 'تأكيد الاحتفال وإرساله للاعتماد'), OFFICE()],
+  scheduled: [s.date > today() ? L(`Wait for the celebration on ${celebrationText(s)}`, `انتظار الاحتفال في ${celebrationText(s)}`) : L('Confirm it was celebrated and send it for approval', 'تأكيد الاحتفال وإرساله للاعتماد'), OFFICE()],
   'awaiting-signature': [s.kind === 'certificate' ? L('Check the request and approve it', 'مراجعة الطلب واعتماده') : L('Check against the register book and approve', 'المطابقة مع دفتر السجل والاعتماد'), PRIEST()],
   approved: [L('Sign and issue the certificate', 'توقيع الشهادة وإصدارها'), PRIEST()],
   registered: [L('Done — request a certificate whenever one is needed', 'منجز — اطلب شهادة متى احتجت إليها'), ''],
@@ -82,9 +84,10 @@ export function sacraments(tab = '') {
 
   if (tab === 'requests') {
     const items = [
-      ...SACRAMENTS.filter(s => s.kind === 'certificate').map(s => ({ category:'certificate', title:`${kindLabel(s.kind)} · ${s.reg}`, who:person(s.person), state:s.status, waitingSource:!sourceFor(s)&&!['cancelled','rejected'].includes(s.status), open:!['issued','rejected','cancelled'].includes(s.status), date:s.date, priority:s.priority || '', owner:nextStep(s)[1], next:nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.reg })),
-      ...SACRAMENTS.filter(s => s.kind !== 'certificate' && (['requested','office-reviewed','awaiting-signature','rejected','cancelled'].includes(s.status) || s.requestApprovedAt)).map(s => ({ category:'sacrament', title:`${kindLabel(s.kind)} · ${s.requestReference||s.reg}`, who:person(s.person), state:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? 'approved' : s.status, open:['requested','office-reviewed','awaiting-signature'].includes(s.status), date:s.requestedAt || s.date, priority:'', owner:nextStep(s)[1], next:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? s.status==='registered' ? L('Official record available','القيد الرسمي متاح') : L('Continue in Preparation','تابع التحضير') : nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.requestReference||s.reg })),
-      ...RESERVATIONS.map(r => ({ category:'facility', title:L(r.title, r.titleAr), who:person(r.by), state:r.status, open:r.status === 'pending', date:r.date || r.at, priority:r.priority || '', owner:r.stage==='priest'?L('Priest','الكاهن'):L('Parish office','مكتب الرعية'), next:r.status === 'pending' ? L('Review reservation','مراجعة الحجز') : L('Completed','مكتمل'), href:'#/reservations', ref:r.ref||r.id })),
+      ...onlineItems(),
+      ...SACRAMENTS.filter(s => s.kind === 'certificate').map(s => ({ category:'certificate', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.reg}`, who:person(s.person), state:s.status, waitingSource:!sourceFor(s)&&!['cancelled','rejected'].includes(s.status), open:!['issued','rejected','cancelled'].includes(s.status), date:s.date, priority:s.priority || '', owner:nextStep(s)[1], next:nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.reg })),
+      ...SACRAMENTS.filter(s => s.kind !== 'certificate' && (['requested','office-reviewed','awaiting-signature','rejected','cancelled'].includes(s.status) || s.requestApprovedAt)).map(s => ({ category:'sacrament', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.requestReference||s.reg}`, who:person(s.person), state:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? 'approved' : s.status, open:['requested','office-reviewed','awaiting-signature'].includes(s.status), date:s.requestedAt || s.date, priority:'', owner:nextStep(s)[1], next:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? s.status==='registered' ? L('Official record available','القيد الرسمي متاح') : L('Continue in Preparation','تابع التحضير') : nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.requestReference||s.reg })),
+      ...RESERVATIONS.map(r => ({ category:'facility', mark:onlineMark(r), title:r.memberRequestId ? `${occasionText(r.title)} · ${L(venue(r.venue)?.name || '', venue(r.venue)?.ar || '')}` : L(r.title, r.titleAr), who:person(r.by), state:r.status, open:r.status === 'pending', date:r.date || r.at, priority:r.priority || '', owner:r.stage==='priest'?L('Priest','الكاهن'):L('Parish office','مكتب الرعية'), next:r.status === 'pending' ? (r.stage === 'priest' ? L('Confirm or refuse the booking','تأكيد الحجز أو رفضه') : L('Review reservation','مراجعة الحجز')) : L('Completed','مكتمل'), href:`#/reservations/${r.id}`, ref:r.ref||r.id })),
       ...SERVICE_REQUESTS.map(r => ({ category:'service', title:`${L(r.kind, r.kindAr)} · ${fmtDate(r.date)}`, who:person(r.by), state:r.status, open:['pending','awaiting-approval'].includes(r.status), date:r.date, priority:r.priority || '', owner:L('Priest or service team','الكاهن أو فريق الخدمة'), next:r.prep === 'documents missing' ? L('Collect missing documents','استكمال المستندات الناقصة') : L('Review service request','مراجعة طلب الخدمة'), href:'#/services/requests', ref:r.ref||'' })),
       ...PORTAL_REQUESTS.map(r => ({ category:'portal', title:L(r.what, r.whatAr), who:person(r.by), state:'pending', open:true, date:r.at, priority:r.priority || '', owner:L('Parish office','مكتب الرعية'), next:L('Accept or decline','قبول أو رفض'), href:'#/portal', ref:r.ref||'' })),
       ...REQUEST_HISTORY.map(r => ({ category:'portal', title:L(r.title, r.titleAr), who:person(r.by), state:r.status, open:false, date:r.at, priority:'', owner:L('Parish office','مكتب الرعية'), next:L('Completed','مكتمل'), href:'#/portal', ref:r.ref||'' })),
@@ -93,7 +96,7 @@ export function sacraments(tab = '') {
     const f = S.ui.requestFilter === 'open' ? 'action' : S.ui.requestFilter || 'action', cat = S.ui.requestCategory || '', owner = S.ui.requestOwner || '', date = S.ui.requestDate || '', priority = S.ui.requestPriority || '', state = S.ui.requestStatus || '';
     const needsAction = x => x.open && !x.waitingSource && !(x.category === 'certificate' && x.state === 'draft');
     const shown = items.filter(x => (f === 'all' || f === 'action' && needsAction(x) || f === 'waiting' && x.open && !needsAction(x) || f === 'completed' && !x.open) && (!cat || x.category === cat) && (!state || x.state === state) && (!owner || x.owner === owner) && (!date || String(x.date || '').slice(0,10) >= date) && (!priority || x.priority === priority));
-    const categories = [['certificate','Certificates','الشهادات'],['sacrament','Sacrament requests','طلبات الأسرار'],['facility','Facilities','المرافق'],['service','Services','الخدمات'],['portal','Portal','البوابة'],['registration','Registrations','التسجيل']].filter(([k]) => items.some(x => x.category === k));
+    const categories = [['online','Online requests','الطلبات الإلكترونية'],['certificate','Certificates','الشهادات'],['sacrament','Sacrament requests','طلبات الأسرار'],['facility','Facilities','المرافق'],['service','Services','الخدمات'],['portal','Portal','البوابة'],['registration','Registrations','التسجيل']].filter(([k]) => items.some(x => x.category === k));
     return head + `<div class="tabbody">
       <div class="stats" style="margin:0 0 16px">${stat(L('Needs action','تحتاج إجراءً'),items.filter(needsAction).length,L('a decision or a step from the office or the priest','قرار أو خطوة من المكتب أو الكاهن'))}${stat(L('Waiting','بانتظار'),items.filter(x=>x.open&&!needsAction(x)).length,L('on a date, a document or another record','على موعد أو مستند أو قيد آخر'))}${stat(L('Completed','مكتملة'),items.filter(x=>!x.open).length,L('approved, issued, declined or cancelled','معتمدة أو صادرة أو مرفوضة أو ملغاة'))}</div>
       <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap">
@@ -104,7 +107,7 @@ export function sacraments(tab = '') {
         <select class="select" id="reqowner" aria-label="${L('Responsible role','الدور المسؤول')}" style="width:auto"><option value="">${L('All responsible roles','كل المسؤولين')}</option>${[...new Set(items.map(x=>x.owner).filter(Boolean))].map(v=>`<option value="${esc(v)}" ${owner===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
       </div>
       <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap"><label class="t-caption dim" for="reqdate">${L('Date since','التاريخ منذ')}</label><input class="input" id="reqdate" type="date" value="${esc(date)}" style="width:auto">${items.some(x=>x.priority)?`<select class="select" id="reqpriority" aria-label="${L('Priority','الأولوية')}" style="width:auto"><option value="">${L('Any priority','أي أولوية')}</option>${[...new Set(items.map(x=>x.priority).filter(Boolean))].map(v=>`<option value="${esc(v)}" ${priority===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:''}<span class="t-caption dim">${shown.length} ${L('shown','معروض')}</span>${cat||state||owner||date||priority?`<button class="btn btn-ghost btn-dense" id="reqclear">${L('Clear filters','مسح المرشّحات')}</button>`:''}</div>
-      ${table({cols:[{label:L('Type / reference','النوع / المرجع')},{label:L('Person / subject','الشخص / الموضوع')},{label:L('Submitted / date','التقديم / التاريخ'),cls:'hide-md'},{label:L('Status','الحالة')},{label:L('Next action','الخطوة التالية')},{label:L('Responsible','المسؤول'),cls:'hide-md'},{label:'',cls:'shrink'}],rows:shown.map(x=>({attrs:'data-find-item',cells:[`<b>${esc(x.title)}</b>${x.ref?`<small class="t-caption dim mono" style="display:block" dir="ltr">${esc(x.ref)}</small>`:''}`,x.who?who(x.who):'—',esc(fmtDate(x.date||'')),x.waitingSource?pill(L('Waiting for official entry','بانتظار قيد رسمي'),'warning'):x.state==='draft'&&x.category==='certificate'?pill(L('Request received','استُلم الطلب'),'info'):x.state==='legacy'?pill(L('Needs linked record','يحتاج قيداً مرتبطاً'),'warning'):status(x.state),`<b>${esc(x.next)}</b>`,esc(x.owner),`<span class="row" style="gap:6px">${x.state==='legacy'?`<span class="t-caption dim">${L('Legacy record','قيد قديم')}</span>`:`<a class="btn btn-secondary btn-dense" href="${x.href}">${L('View','عرض')}</a>`}</span>`]})),empty:empty('check',L('No requests match','لا طلبات مطابقة'),L('Clear a filter or create a request.','امسح مرشّحاً أو أنشئ طلباً.'))})}
+      ${table({cols:[{label:L('Type / reference','النوع / المرجع')},{label:L('Person / subject','الشخص / الموضوع')},{label:L('Submitted / date','التقديم / التاريخ'),cls:'hide-md'},{label:L('Status','الحالة')},{label:L('Next action','الخطوة التالية')},{label:L('Responsible','المسؤول'),cls:'hide-md'},{label:'',cls:'shrink'}],rows:shown.map(x=>({attrs:'data-find-item',cells:[`<b>${esc(x.title)}</b>${x.online?`<span class="or-mark">${icon('globe',12)}${L('Online','إلكتروني')}</span>`:x.mark||''}${x.ref?`<small class="t-caption dim mono" style="display:block" dir="ltr">${esc(x.ref)}</small>`:''}`,x.who?who(x.who):'—',esc(fmtDate(x.date||'')),x.waitingSource?pill(L('Waiting for official entry','بانتظار قيد رسمي'),'warning'):x.state==='draft'&&x.category==='certificate'?pill(L('Request received','استُلم الطلب'),'info'):x.state==='legacy'?pill(L('Needs linked record','يحتاج قيداً مرتبطاً'),'warning'):status(x.state),`<b>${esc(x.next)}</b>`,esc(x.owner),`<span class="row" style="gap:6px">${x.state==='legacy'?`<span class="t-caption dim">${L('Legacy record','قيد قديم')}</span>`:`<a class="btn ${x.online&&x.open?'btn-primary':'btn-secondary'} btn-dense" href="${x.href}">${x.online&&x.open?L('Review','مراجعة'):L('View','عرض')}</a>`}</span>`]})),empty:empty('check',L('No requests match','لا طلبات مطابقة'),L('Clear a filter or create a request.','امسح مرشّحاً أو أنشئ طلباً.'))})}
       <div class="find-empty" hidden>${empty('search',L('No matching request','لا طلب مطابق'),L('Try a parishioner name or reference number.','جرّب اسم الشخص أو رقم المرجع.'))}</div>
     </div>`;
   }
@@ -126,7 +129,7 @@ export function sacraments(tab = '') {
   return head + `<div class="tabbody">
       ${C.inlineAlert('info', L('Preparation follows priest approval', 'يبدأ التحضير بعد موافقة الكاهن'), L('Start with a sacrament request. The priest may accept it directly; then the parish office completes preparation before the celebration.', 'ابدأ بطلب سرّ. يمكن للكاهن قبوله مباشرة، ثم يُكمل مكتب الرعية التحضير قبل الاحتفال.'))}
       <div class="toolbar" style="margin:16px 0"><button class="btn btn-primary" id="newsacreq">${icon('plus',16)}${L('New sacrament request','طلب سرّ جديد')}</button></div>
-      ${table({cols:[{label:L('Person','الشخص')},{label:L('Sacrament','السرّ')},{label:L('Celebration date','تاريخ الاحتفال')},{label:L('Preparation','التحضير')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],rows:entries.map(s=>({attrs:'data-find-item',cells:[who(person(s.person)),esc(kindLabel(s.kind)),s.date?esc(fmtDate(s.date)):L('Set date','حدّد التاريخ'),esc(prepProgress(s)),status(s.status),`<span class="row" style="gap:6px"><a class="btn btn-secondary btn-dense" href="#/certificate/${esc(s.id)}">${L('View','عرض')}</a>${s.status==='draft'?'':`<button class="btn btn-secondary btn-dense" data-prep-edit="${esc(s.id)}">${L('Edit','تعديل')}</button><button class="btn btn-ghost btn-dense" data-prep-cancel="${esc(s.id)}">${L('Cancel','إلغاء')}</button>`}</span>`]})),empty:empty('sacr',L('No active preparations','لا تحضيرات جارية'),L('Approved sacrament requests will appear here.','ستظهر هنا طلبات الأسرار المعتمدة.'))})}
+      ${table({cols:[{label:L('Person','الشخص')},{label:L('Sacrament','السرّ')},{label:L('Celebration date','تاريخ الاحتفال')},{label:L('Preparation','التحضير')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],rows:entries.map(s=>({attrs:'data-find-item',cells:[who(person(s.person)),esc(kindLabel(s.kind)),s.date?esc(celebrationText(s)):L('Set date','حدّد التاريخ'),esc(prepProgress(s)),status(s.status),`<span class="row" style="gap:6px"><a class="btn btn-secondary btn-dense" href="#/certificate/${esc(s.id)}">${L('View','عرض')}</a>${s.status==='draft'?'':`<button class="btn btn-secondary btn-dense" data-prep-edit="${esc(s.id)}">${L('Edit','تعديل')}</button><button class="btn btn-ghost btn-dense" data-prep-cancel="${esc(s.id)}">${L('Cancel','إلغاء')}</button>`}</span>`]})),empty:empty('sacr',L('No active preparations','لا تحضيرات جارية'),L('Approved sacrament requests will appear here.','ستظهر هنا طلبات الأسرار المعتمدة.'))})}
       <details style="margin-top:20px"><summary>${L('Preparation requirements by sacrament','متطلبات التحضير بحسب السرّ')}</summary><div class="grid g2" style="margin-top:16px">${Object.entries(PREP_REQUIREMENTS).map(([k,reqs])=>panel(kindLabel(k),reqs.map(([en,ar])=>`<div class="listrow">${icon('check',15)}${esc(L(en,ar))}</div>`).join(''))).join('')}</div></details>
     </div>`;
 }
@@ -206,29 +209,59 @@ sacraments.mount = host => {
     const record=SACRAMENTS.find(s=>s.id===btn.dataset.prepEdit); if(!record)return;
     const requirements=PREP_REQUIREMENTS[record.kind]||[];
     openDrawer({title:L('Edit preparation','تعديل التحضير'),sub:L('Record the planned date and requirements. Complete preparation before celebration.','سجّل الموعد والمتطلبات. أكمل التحضير قبل الاحتفال.'),
-      body:`<p class="t-caption dim">${esc((isAr()?person(record.person)?.ar:person(record.person)?.lat)||'')} · ${esc(kindLabel(record.kind))}</p>${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'prep_date',type:'date',value:record.date||''})}<div class="stack" style="gap:10px;margin-top:16px">${requirements.map(([en,ar,required],i)=>`<label class="check"><input type="checkbox" data-prep-item="${i}" ${Array.isArray(record.preparation)&&record.preparation[i]?'checked':''}><span>${esc(L(en,ar))}${required?'':` <small class="dim">(${L('optional','اختياري')})</small>`}</span></label>`).join('')}</div>`,
+      body:`<p class="t-caption dim">${esc((isAr()?person(record.person)?.ar:person(record.person)?.lat)||'')} · ${esc(kindLabel(record.kind))}</p><div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'prep_date',type:'date',value:record.date||''})}${timeSelect('prep_time',record.time||'')}</div><div class="stack" style="gap:10px;margin-top:16px">${requirements.map(([en,ar,required],i)=>`<label class="check"><input type="checkbox" data-prep-item="${i}" ${Array.isArray(record.preparation)&&record.preparation[i]?'checked':''}><span>${esc(L(en,ar))}${required?'':` <small class="dim">(${L('optional','اختياري')})</small>`}</span></label>`).join('')}</div>`,
       foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button><button class="btn btn-primary" id="prep_save">${L('Save preparation','حفظ التحضير')}</button>${record.status==='preparing'?`<button class="btn btn-secondary" id="prep_complete">${L('Complete preparation','إكمال التحضير')}</button>`:''}`,
-      onMount(el){C.wire(el);const save=async()=>{await serverWorkflow('update-preparation',record.id,{date:el.querySelector('#prep_date').value,checklist:[...el.querySelectorAll('[data-prep-item]')].map(x=>x.checked)});};
+      onMount(el){C.wire(el);const save=async()=>{await serverWorkflow('update-preparation',record.id,{date:el.querySelector('#prep_date').value,time:el.querySelector('#prep_date').value?el.querySelector('#prep_time').value:'',checklist:[...el.querySelectorAll('[data-prep-item]')].map(x=>x.checked)});};
         el.querySelector('#prep_save').addEventListener('click',async()=>{try{await save();closeOverlays();bus.refresh();toast(L('Preparation saved','حُفظ التحضير'),'','success')}catch(e){toast(L('Could not save preparation','تعذّر حفظ التحضير'),e.message,'danger')}});
         el.querySelector('#prep_complete')?.addEventListener('click',async()=>{try{await save();await serverWorkflow('complete-preparation',record.id);closeOverlays();bus.refresh();toast(L('Preparation completed','اكتمل التحضير'),L('Record the celebration on or after its date.','سجّل الاحتفال في موعده أو بعده.'),'success')}catch(e){toast(L('Could not complete preparation','تعذّر إكمال التحضير'),e.message,'danger')}});
       }});
   }));
-  host.querySelectorAll('[data-prep-cancel]').forEach(btn=>btn.addEventListener('click',()=>openModal({title:L('Cancel this preparation?','إلغاء هذا التحضير؟'),sub:L('The request and its history remain available.','يبقى الطلب وسجله متاحين.'),body:C.textarea({label:L('Reason','السبب'),id:'prep_reason',max:500}),foot:`<button class="btn btn-secondary" data-close>${L('Keep','إبقاء')}</button><button class="btn btn-primary" id="prep_cancel_confirm">${L('Cancel preparation','إلغاء التحضير')}</button>`,onMount(el){C.wire(el);el.querySelector('#prep_cancel_confirm').addEventListener('click',async()=>{if(!need(el,'#prep_reason',L('Enter a reason','أدخل السبب')))return;try{await serverWorkflow('cancel-preparation',btn.dataset.prepCancel,{reason:el.querySelector('#prep_reason').value.trim()});closeOverlays();bus.refresh()}catch(e){toast(L('Could not cancel preparation','تعذّر إلغاء التحضير'),e.message,'danger')}})}})));
+  host.querySelectorAll('[data-prep-cancel]').forEach(btn=>btn.addEventListener('click',()=>openModal({title:L('Cancel this preparation?','إلغاء هذا التحضير؟'),sub:L('The request and its history remain available.','يبقى الطلب وسجله متاحين.'),body:C.textarea({label:L('Reason','السبب'),id:'prep_reason',max:500})+sharedNote(SACRAMENTS.find(s=>s.id===btn.dataset.prepCancel)),foot:`<button class="btn btn-secondary" data-close>${L('Keep','إبقاء')}</button><button class="btn btn-primary" id="prep_cancel_confirm">${L('Cancel preparation','إلغاء التحضير')}</button>`,onMount(el){C.wire(el);el.querySelector('#prep_cancel_confirm').addEventListener('click',async()=>{if(!need(el,'#prep_reason',L('Enter a reason','أدخل السبب')))return;try{await serverWorkflow('cancel-preparation',btn.dataset.prepCancel,{reason:el.querySelector('#prep_reason').value.trim()});closeOverlays();bus.refresh()}catch(e){toast(L('Could not cancel preparation','تعذّر إلغاء التحضير'),e.message,'danger')}})}})));
 
 };
 
 export const requests = () => sacraments('requests');
-requests.mount = sacraments.mount;
+/* #/requests/online/<id> opens that online request over the list; the address then settles back on Requests. */
+requests.mount = (host, first, second) => {
+  sacraments.mount(host);
+  if (first === 'online' && second) { S.params = []; history.replaceState(null, '', '#/requests'); openOnlineRequest(second); }
+};
 
 /* ---------------- record page: progress, the document, details ---------------- */
+/* When a step happened, from the record's own history (the newest matching entry). */
+const stepAt = (s, ...actions) => [...(s.history || [])].reverse().find(h => actions.includes(h.action))?.at || '';
 const workflowStages = s => s.kind === 'certificate'
-  ? [[L('Requested','طُلبت'), true], [L('Register entry linked','رُبط القيد'), !!sourceFor(s)],
-     [L('Approved by the priest','اعتمدها الكاهن'), ['approved','issued'].includes(s.status)], [L('Issued','صدرت'), s.status === 'issued']]
-  : [[L('Requested','طُلب'), true],
-     [L('Accepted by the priest','قبله الكاهن'), !!s.requestApprovedAt || ['preparing','scheduled','draft','awaiting-signature','registered','issued'].includes(s.status) && !String(s.reg).startsWith('SRQ/')],
-     [L('Prepared','اكتمل التحضير'), ['scheduled','draft','awaiting-signature','registered','issued'].includes(s.status)],
-     [L('Celebrated','احتُفل به'), ['draft','awaiting-signature','registered','issued'].includes(s.status)],
-     [L('Entered in the register','دُوّن في السجل'), ['registered','issued'].includes(s.status)]];
+  ? [[L('Requested','طُلبت'), true, s.requestedAt || s.history?.[0]?.at || ''],
+     [L('Register entry linked','رُبط القيد'), !!sourceFor(s), stepAt(s, 'source linked')],
+     [L('Approved by the priest','اعتمدها الكاهن'), ['approved','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')],
+     [L('Issued','صدرت'), s.status === 'issued', s.issuedAt || stepAt(s, 'issue')]]
+  : [[L('Requested','طُلب'), true, s.requestedAt || stepAt(s, 'sacrament requested', 'request submitted')],
+     [L('Accepted by the priest','قبله الكاهن'), !!s.requestApprovedAt || ['preparing','scheduled','draft','awaiting-signature','registered','issued'].includes(s.status) && !String(s.reg).startsWith('SRQ/'),
+       s.requestApprovedAt || stepAt(s, 'request accepted for preparation')],
+     [L('Prepared','اكتمل التحضير'), ['scheduled','draft','awaiting-signature','registered','issued'].includes(s.status), stepAt(s, 'preparation completed')],
+     [L('Celebrated','احتُفل به'), ['draft','awaiting-signature','registered','issued'].includes(s.status), '', 'celebration'],
+     [L('Entered in the register','دُوّن في السجل'), ['registered','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')]];
+
+/* The celebration as people say it: 25 Oct 2026 · 10:30 */
+export const celebrationText = s => s?.date ? `${fmtDate(s.date)}${s.time ? ` · ${s.time}` : ''}` : '';
+/* Half-hour steps for the celebration time: a list is easier than a clock to set on any phone. */
+const CELEBRATION_TIMES = Array.from({ length: 32 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+const timeSelect = (id, value = '') => `<div class="formrow"><label class="label" for="${id}">${L('Celebration time','وقت الاحتفال')}</label>
+  <select class="select" id="${id}" dir="ltr"><option value="">${L('Not set yet','لم يُحدَّد بعد')}</option>${[...new Set([...CELEBRATION_TIMES, ...(value ? [value] : [])])].sort()
+    .map(x => `<option value="${x}" ${x === value ? 'selected' : ''}>${x}</option>`).join('')}</select></div>`;
+
+/* What each step says under its name: when it happened, how long the current one has waited, or when the celebration is planned. */
+function stepWhen(s, stages, i, now) {
+  const [, done, at, kind] = stages[i];
+  if (kind === 'celebration') {
+    if (!s.date) return '';
+    return done ? celebrationText(s) : `${L('Planned for','مقرّر في')} ${celebrationText(s)}`;
+  }
+  if (done) return at ? when(at) : '';
+  if (i !== now) return '';
+  const since = [...stages.slice(0, i)].reverse().find(([, ok, stamp]) => ok && stamp)?.[2];
+  return since ? `${L('Waiting since','بانتظار منذ')} ${when(since)}` : '';
+}
 
 /* Where the request stands, one numbered step at a time, and the single next thing to do. */
 const progressPanel = s => {
@@ -239,9 +272,9 @@ const progressPanel = s => {
     <div class="progress-top"><h3>${s.kind === 'certificate' ? L('Request progress', 'مراحل الطلب') : L('Progress', 'المراحل')}</h3>${sacramentStatus(s)}</div>
     <p class="nextstep"><span class="lbl">${now < 0 ? L('Status', 'الحالة') : L('Next step', 'الخطوة التالية')}</span>
       <b>${esc(next)}</b>${owner ? `<span class="owner">${icon('people', 14)}${esc(owner)}</span>` : ''}</p>
-    <ol class="steps${closed ? ' closed' : ''}">${stages.map(([label, done], i) => `<li class="${done ? 'done' : i === now ? 'now' : ''}">
-      <span class="dot" aria-hidden="true">${done ? icon('check', 13) : i + 1}</span><span class="lbl">${esc(label)}</span>
-      <span class="sr-only">${done ? L('done', 'منجز') : i === now ? L('current step', 'الخطوة الحالية') : L('not yet', 'لم يحن بعد')}</span></li>`).join('')}</ol>
+    <ol class="steps${closed ? ' closed' : ''}">${stages.map(([label, done], i) => { const at = stepWhen(s, stages, i, now); return `<li class="${done ? 'done' : i === now ? 'now' : ''}">
+      <span class="dot" aria-hidden="true">${done ? icon('check', 13) : i + 1}</span><span class="step-text"><span class="lbl">${esc(label)}</span>${at ? `<span class="when">${esc(at)}</span>` : ''}</span>
+      <span class="sr-only">${done ? L('done', 'منجز') : i === now ? L('current step', 'الخطوة الحالية') : L('not yet', 'لم يحن بعد')}</span></li>`; }).join('')}</ol>
     ${s.kind === 'certificate' && (s.purpose || s.godparents) ? `<p class="t-caption dim" style="margin-top:12px">${L('Purpose of the request', 'غاية الطلب')}: ${esc(s.purpose || s.godparents)}</p>` : ''}
   </div></section>`;
 };
@@ -413,10 +446,14 @@ const zoned = at => { const v = String(at || ''); if (!/T.*(Z|[+-]\d\d:?\d\d)$/.
 const when = at => { if (!at) return ''; const d = zoned(at), v = String(at);
   return d ? `${fmtDate(d)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : `${fmtDate(v.slice(0, 10))}${v.length > 10 ? ` · ${v.slice(11, 16)}` : ''}`; };
 
-export function certificate(id, lang = 'bilingual') {
+/* The document opens in the language the parishioner asked for, when they asked online. */
+const docLang = (s, lang) => DOC_LANGS().some(([k]) => k === lang) ? lang : DOC_LANGS().some(([k]) => k === s?.language) ? s.language : 'bilingual';
+const telLink = v => `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ''))}"><bdi dir="ltr">${esc(v)}</bdi></a>`;
+
+export function certificate(id, lang = '') {
   const s = SACRAMENTS.find(x => x.id === id);
   if (!s) return empty('doc', L('Record not found', 'لم يُعثر على القيد'), L('Open a record from Requests or from a person’s Sacraments tab.', 'افتح قيداً من الطلبات أو من تبويب الأسرار في سجل الشخص.'));
-  if (!DOC_LANGS().some(([k]) => k === lang)) lang = 'bilingual';
+  lang = docLang(s, lang);
   const source = s.kind === 'certificate' ? SACRAMENTS.find(x => x.id === s.sourceRecordId) : s;
   const record = source || s;
   const p = person(record.person) || { lat: '', ar: '' }, cel = person(record.celebrant);
@@ -428,24 +465,29 @@ export function certificate(id, lang = 'bilingual') {
   const planned = s.kind === 'certificate' && s.requestedSacramentId ? SACRAMENTS.find(x => x.id === s.requestedSacramentId) : null;
   const dlRows = s.kind === 'certificate' ? [
       [L('Person', 'الشخص'), `<a href="#/person/${esc(p.id || '')}">${esc(p.lat)}</a><small class="dim" style="display:block;font-family:var(--arabic)">${esc(p.ar)}</small>`],
-      [L('Certificate of', 'شهادة'), source ? esc(kindLabel(source.kind)) : planned ? `${esc(kindLabel(planned.kind))} <small class="dim">· ${L('not celebrated yet', 'لم يُحتفل به بعد')}</small>` : `<span class="dim">${L('Not linked to an entry yet', 'لم تُربط بقيد بعد')}</span>`],
+      [L('Certificate of', 'شهادة'), source ? esc(kindLabel(source.kind)) : planned ? `${esc(kindLabel(planned.kind))} <small class="dim">· ${L('not celebrated yet', 'لم يُحتفل به بعد')}</small>`
+        : s.certificateOf ? `${esc(certificateName(s.certificateOf))} <small class="dim">· ${L('not linked to an entry yet', 'لم تُربط بقيد بعد')}</small>` : `<span class="dim">${L('Not linked to an entry yet', 'لم تُربط بقيد بعد')}</span>`],
       [L('Requested on', 'تاريخ الطلب'), fmtDate(s.date)],
       purpose ? [L('Purpose', 'الغاية'), esc(purpose)] : null,
+      s.language ? [L('Language asked for', 'اللغة المطلوبة'), esc(languageName(s.language))] : null,
       [L('Request reference', 'مرجع الطلب'), `<span class="mono" dir="ltr">${esc(s.reg)}</span>`],
       source ? [L('Register entry', 'القيد'), `<a class="mono" dir="ltr" href="#/certificate/${esc(source.id)}">${esc(source.reg)}</a>`]
         : planned ? [L('Planned sacrament', 'السرّ المخطّط'), `<a class="mono" dir="ltr" href="#/certificate/${esc(planned.id)}">${esc(planned.reg)}</a>`] : null
     ] : [
       [L('Person', 'الشخص'), `<a href="#/person/${esc(p.id || '')}">${esc(p.lat)}</a><small class="dim" style="display:block;font-family:var(--arabic)">${esc(p.ar)}</small>`],
       [L('Sacrament', 'السرّ'), esc(kindLabel(record.kind))],
-      [record.date > today() ? L('Planned for', 'الموعد المقرّر') : L('Date', 'التاريخ'), record.date ? fmtDate(record.date) : L('Not set yet', 'لم يُحدَّد بعد')],
+      [record.date > today() ? L('Planned for', 'الموعد المقرّر') : L('Date', 'التاريخ'), record.date ? celebrationText(record) : L('Not set yet', 'لم يُحدَّد بعد')],
       [L('Celebrant', 'المحتفل'), esc(nameIn(cel) || L('To be assigned', 'يُحدَّد لاحقاً'))],
       record.godparents ? [L('Godparents / witnesses', 'الإشبين / الشهود'), esc(record.godparents)] : null,
       [L('Book / page', 'الدفتر / الصفحة'), `${esc(record.book || '—')} / ${esc(record.page || '—')}`],
       [official(s) ? L('Register entry', 'رقم القيد') : L('Reference', 'المرجع'), `<span class="mono" dir="ltr">${esc(s.reg)}</span>`],
       s.requestReference && s.requestReference !== s.reg ? [L('Request reference', 'مرجع الطلب'), `<span class="mono" dir="ltr">${esc(s.requestReference)}</span>`] : null,
       record.externalParish ? [L('Other parish', 'رعية أخرى'), esc(record.externalParish)] : null,
-      record.externalReference ? [L('Their reference', 'مرجعها'), esc(record.externalReference)] : null
+      record.externalReference ? [L('Their reference', 'مرجعها'), esc(record.externalReference)] : null,
+      s.partner ? [L('Future spouse', 'الشريك'), `${esc(s.partner)}${s.partnerParish ? ` <small class="dim">· ${esc(s.partnerParish)}</small>` : ''}`] : null
     ];
+  if (s.memberReference) dlRows.push([L('Sent online', 'أُرسل إلكترونياً'), `<span class="mono" dir="ltr">${esc(s.memberReference)}</span> <small class="dim">· ${L('member portal', 'بوّابة المؤمنين')}</small>`],
+    s.contactPhone ? [L('Phone for this request', 'هاتف هذا الطلب'), telLink(s.contactPhone)] : null);
   const details = panel(L('Details', 'التفاصيل'), `<dl class="dl">${dlRows.filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     ${s.requestNotes ? `<p class="t-caption" style="margin-top:14px"><b>${L('From the family', 'من العائلة')}:</b> ${esc(s.requestNotes)}</p>` : ''}
     ${s.pendingAmendment?`<div class="alert alert-warning" style="margin-top:14px"><b>${L('Amendment awaiting priest decision','تعديل بانتظار قرار الكاهن')}</b><br>${esc(s.pendingAmendment.reason)}<br>${L('Requested date','التاريخ المطلوب')}: ${esc(s.pendingAmendment.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(s.pendingAmendment.notes||'—')}</div>`:''}`);
@@ -453,13 +495,13 @@ export function certificate(id, lang = 'bilingual') {
   const people = [[L('Request accepted by', 'قبل الطلب'), s.requestApprovedBy, s.requestApprovedAt], [L('Approved by', 'اعتمده'), s.approvedBy, s.approvedAt], [L('Issued by', 'أصدره'), s.issuedBy, s.issuedAt]].filter(([, by]) => by);
   const activity = panel(L('Activity', 'النشاط'), `${people.length ? `<dl class="dl" style="margin-bottom:14px">${people.map(([k, by, at]) => `<dt>${k}</dt><dd>${esc(by)}<small class="dim" style="display:block">${esc(when(at))}</small></dd>`).join('')}</dl>` : ''}
     ${(s.history || []).length ? `<div class="timeline">${s.history.slice().reverse().map(h => `<div class="tl-item"><div class="when">${esc(when(h.at))}</div>
-        <div class="what">${esc(histLabel(h.action))}${h.by ? ` · ${esc(h.by)}` : ''}${h.source ? ` · <span class="mono" dir="ltr">${esc(h.source)}</span>` : ''}${h.reason ? `<small class="dim" style="display:block">${esc(h.reason)}</small>` : ''}${h.before&&h.after?`<small class="dim" style="display:block">${L('Date','التاريخ')}: ${esc(h.before.date||'—')} → ${esc(h.after.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(h.before.notes||'—')} → ${esc(h.after.notes||'—')}</small>`:''}</div></div>`).join('')}</div>`
+        <div class="what">${esc(histLabel(h.action))}${h.by ? ` · ${esc(h.by)}` : ''}${h.via === 'portal' ? ` · ${L('online', 'إلكترونياً')}` : ''}${h.source ? ` · <span class="mono" dir="ltr">${esc(h.source)}</span>` : ''}${h.reason ? `<small class="dim" style="display:block">${esc(h.reason)}</small>` : ''}${h.before&&h.after?`<small class="dim" style="display:block">${L('Date','التاريخ')}: ${esc(h.before.date||'—')} → ${esc(h.after.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(h.before.notes||'—')} → ${esc(h.after.notes||'—')}</small>`:''}</div></div>`).join('')}</div>`
       : `<p class="t-caption dim">${L('Nothing recorded yet.', 'لا شيء مسجَّل بعد.')}</p>`}`);
 
   return `${pageHead({
       crumbs: [{ label: L('Records', 'السجلات') }, { label: asRequest ? L('Requests', 'الطلبات') : L('Sacraments', 'الأسرار'), href: asRequest ? '#/requests' : '#/sacraments' }, { label: s.reg }],
       title: kindLabel(s.kind),
-      sub: `<bdi>${esc(nameIn(p))}</bdi> · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi>${s.date ? ` · <bdi>${fmtDate(s.date)}</bdi>` : ''}`,
+      sub: `<bdi>${esc(nameIn(p))}</bdi> · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi>${s.date ? ` · <bdi>${s.kind === 'certificate' ? fmtDate(s.date) : celebrationText(s)}</bdi>` : ''}${onlineMark(s)}`,
       actions: `${s.kind !== 'certificate' && ['requested','office-reviewed'].includes(s.status) && is('priest')
         ? `<button class="btn btn-primary" id="acceptrequest">${icon('check',17)}${L('Accept request','قبول الطلب')}</button><button class="btn btn-secondary" id="declinerequest">${L('Decline','رفض')}</button>`
         : s.kind !== 'certificate' && s.status === 'requested' && is('secretary')
@@ -505,10 +547,10 @@ export function certificate(id, lang = 'bilingual') {
     </div>`;
 }
 
-certificate.mount = (host, id, lang = 'bilingual') => {
+certificate.mount = (host, id, lang = '') => {
   C.wire(host);
   const doc = SACRAMENTS.find(x => x.id === id);
-  if (!DOC_LANGS().some(([k]) => k === lang)) lang = 'bilingual';
+  lang = docLang(doc, lang);
   host.querySelectorAll('[data-docview]').forEach(b => b.addEventListener('click', () => viewDoc(doc, lang)));
   host.querySelector('[data-docdl]')?.addEventListener('click', e => downloadMenu(e.currentTarget, doc, () => lang));
   host.querySelector('[data-docprint]')?.addEventListener('click', () => printDoc(doc, lang));
@@ -538,14 +580,14 @@ certificate.mount = (host, id, lang = 'bilingual') => {
   host.querySelector('#acceptrequest')?.addEventListener('click',()=>openModal({
     title:L('Accept this sacrament request?','قبول طلب السرّ؟'),
     sub:L('The request will move to Preparation. The priest may accept it without a secretary review.','سينتقل الطلب إلى التحضير. يمكن للكاهن قبوله من دون مراجعة الأمينة.'),
-    body:`<p>${L('Confirm the person and sacrament before accepting.','تأكّد من الشخص والسرّ قبل القبول.')}</p>`,
+    body:`<p>${L('Confirm the person and sacrament before accepting.','تأكّد من الشخص والسرّ قبل القبول.')}</p>${doc?.memberRequestId?`<p class="or-shared">${icon('info',15)}<span>${L('The parishioner sent this request online and will be notified.','أرسل المؤمن هذا الطلب إلكترونياً وسيُبلَّغ بالقرار.')}</span></p>`:''}`,
     foot:`<button class="btn btn-secondary" data-close>${L('Back','رجوع')}</button><button class="btn btn-primary" id="accept_confirm">${L('Accept request','قبول الطلب')}</button>`,
     onMount(el){el.querySelector('#accept_confirm').addEventListener('click',async()=>{try{await serverWorkflow('approve-sacrament-request',id);closeOverlays();bus.refresh();toast(L('Request accepted','قُبل الطلب'),L('Preparation can begin.','يمكن بدء التحضير.'),'success')}catch(e){toast(L('Could not accept request','تعذّر قبول الطلب'),e.message,'danger')}})}
   }));
   host.querySelector('#declinerequest')?.addEventListener('click',()=>openModal({
     title:L('Decline this sacrament request?','رفض طلب السرّ؟'),
     sub:L('The declined request stays in the completed history.','يبقى الطلب المرفوض في سجل الطلبات المكتملة.'),
-    body:C.textarea({label:L('Reason','السبب'),id:'decline_reason',max:500}),
+    body:C.textarea({label:L('Reason','السبب'),id:'decline_reason',max:500})+sharedNote(doc),
     foot:`<button class="btn btn-secondary" data-close>${L('Back','رجوع')}</button><button class="btn btn-primary" id="decline_confirm">${L('Decline request','رفض الطلب')}</button>`,
     onMount(el){C.wire(el);el.querySelector('#decline_confirm').addEventListener('click',async()=>{if(!need(el,'#decline_reason',L('Enter a reason','أدخل السبب')))return;try{await serverWorkflow('decline-sacrament-request',id,{reason:el.querySelector('#decline_reason').value.trim()});closeOverlays();bus.refresh()}catch(e){toast(L('Could not decline request','تعذّر رفض الطلب'),e.message,'danger')}})}
   }));
@@ -556,7 +598,7 @@ certificate.mount = (host, id, lang = 'bilingual') => {
     openDrawer({
       title:L('Edit sacrament details','تعديل تفاصيل السرّ'),
       sub:L('Changes are kept in the record’s history. Once the priest approves the entry it can no longer be edited here.','تُحفظ التعديلات في سجل القيد. بعد أن يعتمد الكاهن القيد لا يمكن تعديله من هنا.'),
-      body:`<div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'edit_date',type:'date',value:record.date,req:true})}<div class="formrow"><label class="label" for="edit_celebrant">${L('Celebrant','المحتفل')}</label><select class="select" id="edit_celebrant"><option value="">${L('To be assigned','يُحدّد لاحقاً')}</option>${PEOPLE.filter(p=>p.status==='clergy'||p.id===record.celebrant).map(p=>`<option value="${esc(p.id)}" ${p.id===record.celebrant?'selected':''}>${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div></div>
+      body:`<div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'edit_date',type:'date',value:record.date,req:true})}${timeSelect('edit_time',record.time||'')}</div><div class="formgrid"><div class="formrow"><label class="label" for="edit_celebrant">${L('Celebrant','المحتفل')}</label><select class="select" id="edit_celebrant"><option value="">${L('To be assigned','يُحدّد لاحقاً')}</option>${PEOPLE.filter(p=>p.status==='clergy'||p.id===record.celebrant).map(p=>`<option value="${esc(p.id)}" ${p.id===record.celebrant?'selected':''}>${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div></div>
         <div class="formgrid">${C.field({label:L('Book','الدفتر'),id:'edit_book',value:record.book||''})}${C.field({label:L('Page','الصفحة'),id:'edit_page',value:record.page||''})}</div>
         ${C.field({label:L('Godparents / witnesses','الإشبين / الشهود'),id:'edit_godparents',value:record.godparents||''})}
         <div class="formgrid">${C.field({label:L('Father','الأب'),id:'edit_father',value:record.father||''})}${C.field({label:L('Mother','الأم'),id:'edit_mother',value:record.mother||''})}</div>
@@ -565,7 +607,7 @@ certificate.mount = (host, id, lang = 'bilingual') => {
       foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="edit_save">${L('Save changes','حفظ التعديلات')}</button>`,
       onMount(el) { C.wire(el); el.querySelector('#edit_save').addEventListener('click',async()=>{
         if (!need(el,'#edit_date',L('Enter a date','أدخل التاريخ'))) return;
-        const fields = Object.fromEntries(['date','celebrant','book','page','godparents','father','mother','place','externalParish','externalReference'].map(k=>[k,el.querySelector('#edit_'+k).value.trim()]));
+        const fields = Object.fromEntries(['date','time','celebrant','book','page','godparents','father','mother','place','externalParish','externalReference'].map(k=>[k,el.querySelector('#edit_'+k).value.trim()]));
         try { await serverWorkflow('update-entry',id,{fields}); closeOverlays(); bus.refresh(); toast(L('Details updated','حُدّثت التفاصيل'),L('The workflow and activity history were updated.','حُدّث المسار وسجل النشاط.'),'success'); }
         catch(e) { toast(L('Could not update entry','تعذّر تعديل القيد'),e.message,'danger'); }
       }); }
@@ -613,7 +655,7 @@ certificate.mount = (host, id, lang = 'bilingual') => {
   const decision = (selector, action) => host.querySelector(selector)?.addEventListener('click', () => openModal({
     title: action==='reject' ? L('Reject this request or entry?','رفض هذا الطلب أو القيد؟') : L('Cancel this certificate request?','إلغاء طلب الشهادة؟'),
     sub: L('The decision and reason will remain in the activity history.','سيبقى القرار وسببه في سجل النشاط.'),
-    body: C.textarea({label:L('Reason','السبب'),id:'decision_reason',max:500}),
+    body: C.textarea({label:L('Reason','السبب'),id:'decision_reason',max:500})+sharedNote(doc),
     foot:`<button class="btn btn-secondary" data-close>${L('Keep open','إبقاؤه مفتوحاً')}</button><button class="btn btn-primary" id="decision_confirm">${action==='reject'?L('Reject','رفض'):L('Cancel request','إلغاء الطلب')}</button>`,
     onMount(el) { C.wire(el); el.querySelector('#decision_confirm').addEventListener('click',async()=>{
       if (!need(el,'#decision_reason',L('Enter a reason','أدخل السبب'))) return;

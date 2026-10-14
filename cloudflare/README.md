@@ -12,7 +12,7 @@ changes: it calls the same `/api/...` endpoints and gets the same answers.
 | Piece | Where |
 | --- | --- |
 | Worker configuration | `wrangler.jsonc` (repository root) |
-| Published files | `.assetsignore` limits the upload to `index.html`, `landing.html`, `public.html` and, under `assets/`, scripts, styles, images and fonts — the files `server.py` serves. `_headers` adds the same security headers. |
+| Published files | `.assetsignore` limits the upload to `index.html`, `landing.html`, `public.html` and, under `assets/`, scripts, styles, images and fonts — the files `server.py` serves. `_headers` adds the same security headers. The site's address (`/`) serves `public.html`, the public homepage, in both servers; the system itself is `index.html`. |
 | API | `src/worker.js` (routing, sessions, files), `src/app.js` (parish records, oversight, sacrament workflow), `src/member.js` (member portal and concerns), `src/state.js` (`migrate_state`, `validate`), `src/xlsx.js` (attendance import), `src/py.js` (Python semantics the port relies on) |
 | Database | D1 database `parishlife`; the Worker creates the tables and the sample parishes on first use, as `init_db()` does |
 
@@ -31,7 +31,12 @@ Differences from `server.py`, all invisible to the browser:
 - **Passwords.** `server.py` stores PBKDF2-SHA256 with 600,000 iterations (`salt:hex`). On
   the Workers Free plan a request may use only about 10 ms of CPU, so accounts made with
   `tools/accounts.mjs` use `pbkdf2_sha256$10000$salt$hex` with long random passwords. The
-  Worker accepts both formats.
+  Worker accepts both formats, and so does `server.py`. Accounts parishioners open
+  themselves (`/api/signup`) and passwords changed or reset in the portal use the same
+  10,000-iteration format on the Worker.
+- **Schema additions.** The Worker adds the `member_requests.log` column on its first
+  request if the database predates it (`addRequestLog` in `src/app.js`), as `server.py`
+  does at start-up.
 - A few indexes (`cf_*`) keep D1's daily row-read allowance for the lists read most often.
 
 ## Deploying

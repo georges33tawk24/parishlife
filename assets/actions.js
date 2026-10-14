@@ -3,7 +3,7 @@
    current view to re-render, so a workflow can actually be walked end to end. */
 import { t, isAr, num, usd } from './i18n.js';
 import { bus, S } from './store.js';
-import { toast, closeOverlays, esc } from './ui.js';
+import { toast, closeOverlays, esc, openModal } from './ui.js';
 import * as D from './data.js';
 import * as F from './flows.js';
 import * as CR from './crud.js';
@@ -95,9 +95,36 @@ export const VERBS = {
   },
   'res-reject': (btn, id) => {
     const r = find(D.RESERVATIONS, id); if (!r) return;
-    r.status = 'rejected'; r.stage = 'done';
-    closeOverlays(); refresh();
-    toast(L('Reservation rejected', 'رُفض الحجز'), L('The slot is free again and the requester has been told.', 'تحرّر الوقت وأُبلغ مقدّم الطلب.'), 'warning');
+    const refuse = reason => {
+      r.status = 'rejected'; r.stage = 'done';
+      if (reason) r.reason = reason;
+      closeOverlays(); refresh();
+      toast(L('Reservation rejected', 'رُفض الحجز'), L('The slot is free again and the requester has been told.', 'تحرّر الوقت وأُبلغ مقدّم الطلب.'), 'warning');
+    };
+    if (!r.memberRequestId && r.status !== 'approved') return refuse('');
+    /* A parishioner who booked online reads the reason on their request page; a confirmed booking is never cancelled by one click. */
+    openModal({
+      title: r.status === 'approved' ? L('Cancel this booking?', 'إلغاء هذا الحجز؟') : L('Refuse this booking?', 'رفض هذا الحجز؟'),
+      body: `<div class="formrow"><label class="label" for="res-reason">${r.memberRequestId ? L('Why — the parishioner reads this', 'السبب — يقرؤه المؤمن') : L('Why', 'السبب')}<span class="req">*</span></label>
+        <textarea class="textarea" id="res-reason" rows="3" maxlength="500" aria-describedby="res-reason-help"></textarea>
+        <span class="help" id="res-reason-help">${L('For example: the hall is being painted that week. You can suggest another day.', 'مثلاً: تُطلى القاعة في ذلك الأسبوع. يمكنك اقتراح يوم آخر.')}</span></div>`,
+      foot: `<button class="btn btn-secondary" data-close>${L('Keep it', 'إبقاء الحجز')}</button><button class="btn btn-danger" id="res-reason-yes">${r.status === 'approved' ? L('Cancel booking', 'إلغاء الحجز') : L('Refuse booking', 'رفض الحجز')}</button>`,
+      onMount(el) {
+        el.querySelector('#res-reason-yes').addEventListener('click', () => {
+          if (!F.need(el, '#res-reason', r.memberRequestId ? L('Tell the parishioner why.', 'أخبر المؤمن بالسبب.') : L('Say why.', 'اذكر السبب.'))) return;
+          refuse(el.querySelector('#res-reason').value.trim());
+        });
+      }
+    });
+  },
+
+  /* people ------------------------------------------------------ */
+  /* A record a parishioner made by registering online, once the office has checked it */
+  'person-verify': (btn, id) => {
+    const p = find(D.PEOPLE, id); if (!p?.registeredOnline) return;
+    p.registeredOnline = { ...p.registeredOnline, verified: true, verifiedBy: session.user?.name || '', verifiedAt: stamp() };
+    refresh();
+    ok(L('Record verified', 'تمّ التحقّق من السجل'), L(`${p.lat} is now a verified parishioner.`, `${p.ar || p.lat} مؤمن مُتحقَّق منه الآن.`));
   },
 
   /* sacraments -------------------------------------------------- */
@@ -236,6 +263,7 @@ export const VERBS = {
     const note = document.querySelector('.drawer.open #runnote')?.value.trim() || '';
     const before = { step: r.step, at: D.RUNS.indexOf(r) };
     const doneEn = steps[r.step] || '', doneAr = stepsAr[r.step] || doneEn;
+    r.doneAt = { ...(r.doneAt || {}), [r.step]: stamp() };   // each step keeps the date and time it was done
     r.step = Math.min(r.total, r.step + 1);
     const finished = r.step >= r.total;
     if (finished) D.RUNS.splice(before.at, 1);
@@ -320,6 +348,8 @@ export const VERBS = {
   'cal-day':      (b, a) => F.calDay(+a),
   view:           (b, a) => { const [k, v] = a.split('|'); S.ui[k] = +v; refresh(); },
   'people-env':   () => { S.ui.peopleEnv = !S.ui.peopleEnv; S.ui.peoplePage = 0; refresh(); },
+  'people-new':   () => { S.ui.peopleNew = !S.ui.peopleNew; S.ui.peoplePage = 0; refresh(); },
+  'people-new-open': () => { S.ui.peopleNew = true; S.ui.peoplePage = 0; location.hash = '#/people'; },
   'music-clear':  () => { S.ui.music = {}; refresh(); },
   transpose:      (b, a) => { const [id, n] = a.split('|'); S.ui.transpose = { ...S.ui.transpose, [id]: +n }; refresh(); },
   'cal-kind':     (b, k) => { const off = S.ui.calOff || []; S.ui.calOff = off.includes(k) ? off.filter(x => x !== k) : [...off, k]; refresh(); },

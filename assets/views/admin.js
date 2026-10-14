@@ -6,12 +6,13 @@ import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTab
 import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { deleteGuard, newPersonDrawer } from './people.js';
-import { savedAt, savedSize } from '../persist.js';
+import { savedAt, savedSize, persist } from '../persist.js';
 import { api } from '../api.js';
 import { WORKFLOWS, RUNS, RUN_LOG, AUDIT, FUNDS, RATE, PARISH, PARISHES, EPARCHY_NEWS, GROUPS, BATCH,
          SESSIONS, SECURITY_ALERTS, RETENTION, WEBHOOKS, PERMISSIONS, ATTENDANCE_SERIES,
          GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, GROUP_DETAIL, REGISTRATIONS, REGISTRANTS, CHECKIN, EVENTS, person } from '../data.js';
 import { FIELD_TYPES } from '../crud.js';
+import { SCHEMES, schemeOf, palette, readable, applyTheme, isHex } from '../theme.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -153,7 +154,7 @@ export function forms(tab = '') {
 
   if (tab === 'log') return head + `${panel(L('What happened, newest first', 'ما جرى، الأحدث أولاً'), `
       <div class="timeline">${RUN_LOG.map(([when, en, ar, kind]) => `<div class="tl-item ${kind === 'err' ? 'accent' : ''}">
-        <div class="when">${esc(when)}</div>
+        <div class="when">${esc(stampText(when))}</div>
         <div class="what">${esc(L(en, ar))}${kind === 'err' && /retry|محاولة/i.test(en + ar) ? ` ${pill(L('Retried', 'أُعيدت'), 'warning')}` : ''}</div></div>`).join('')}</div>`)}
     <div class="grid g2">
       ${panel(L('Pause or resume a workflow', 'إيقاف مسار أو استئنافه'), `${WORKFLOWS.map(w => `<div class="listrow" style="padding-inline:0">
@@ -199,6 +200,9 @@ export function forms(tab = '') {
 
 /* One open task: its steps, who is responsible, and the next action. Also reopened after
    "Keep the task" in the cancel confirmation. */
+/* "2026-10-04 11:02" as people read it: 4 Oct 2026 · 11:02 */
+const stampText = v => `${fmtDate(String(v).slice(0, 10))}${String(v).length > 10 ? ` · ${String(v).slice(11, 16)}` : ''}`;
+
 export function openRun(id) {
   const r = RUNS.find(x => x.id === id), w = r && WORKFLOWS.find(x => x.id === r.wf);
   if (!w) return;
@@ -208,7 +212,9 @@ export function openRun(id) {
     sub: r.subject ? esc(nameIn(person(r.subject))) : L('Parish expense', 'مصروف الرعية'),
     body: `<ol class="runsteps">${steps.map((st, i) => `<li class="${i < r.step ? 'done' : i === r.step ? 'now' : ''}">
         <span class="dot" aria-hidden="true">${i < r.step ? icon('check', 13) : i + 1}</span>
-        <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? L('Done', 'أُنجزت') : i === r.step ? L('Current step', 'الخطوة الحالية') : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
+        <span class="grow"><b>${esc(st)}</b><small>${i < r.step ? `${L('Done', 'أُنجزت')}${r.doneAt?.[i] ? ` · ${esc(stampText(r.doneAt[i]))}` : ''}`
+          : i === r.step ? `${L('Current step', 'الخطوة الحالية')}${r.doneAt?.[i - 1] ? ` · ${L('waiting since', 'بانتظار منذ')} ${esc(stampText(r.doneAt[i - 1]))}` : ''}`
+          : L('Still to come', 'لاحقاً')}</small></span></li>`).join('')}</ol>
       <div class="divider"></div>
       <dl class="dl"><dt>${L('Responsible', 'المسؤول')}</dt><dd>${esc(nameIn(owner) || '—')}</dd>
         <dt>${L('Due', 'الموعد')}</dt><dd>${fmtDate(r.due)}${r.overdue ? ` · <span style="color:var(--danger-ink);font-weight:600">${L('late', 'متأخرة')}</span>` : ''}</dd>
@@ -393,7 +399,7 @@ export function audit() {
 audit.mount = host => { C.wire(host); wireTables(host); };
 
 /* ═══════════ 17 · settings & security ═══════════ */
-const SETTABS = () => [['', 'Parish', 'الرعية'], ['currency', 'Currency', 'العملة'], ['languages', 'Languages', 'اللغات'],
+const SETTABS = () => [['', 'Parish', 'الرعية'], ['appearance', 'Colours', 'الألوان'], ['currency', 'Currency', 'العملة'], ['languages', 'Languages', 'اللغات'],
                  ['modules', 'Modules', 'الوحدات'], ['roles', 'Roles & permissions', 'الأدوار والصلاحيات'],
                  ['security', 'Security', 'الأمان'], ['data', 'Data & retention', 'البيانات والحفظ'],
                  ['api', 'API & webhooks', 'الواجهة البرمجية']];
@@ -404,7 +410,7 @@ export function settings(tab = '') {
     title: L('Parish settings', 'إعدادات الرعية'),
     sub: L('Branding, enabled modules, languages, currency, permissions and local workflow rules.',
            'الهوية والوحدات المفعّلة واللغات والعملة والصلاحيات وقواعد العمل المحلية.'),
-    actions: `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
+    actions: tab === 'appearance' ? '' : `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
   }) + tabBar('settings', SETTABS(), tab);
 
   const T = {
@@ -418,11 +424,16 @@ export function settings(tab = '') {
           ${C.riteSelect()}
           ${C.field({ label: L('Phone', 'الهاتف'), value: PARISH.phone, dir: 'ltr' })}
           ${C.field({ label: L('Address', 'العنوان'), value: L(PARISH.address, PARISH.addressAr) })}`)}
-        ${panel(L('Branding', 'الهوية'), C.avatarUpload('parish'))}
+        ${panel(L('Branding', 'الهوية'), `${C.avatarUpload('parish')}
+          <div class="scheme-current"><span class="scheme-dot" aria-hidden="true"></span>
+            <span class="grow"><b>${L('Colour scheme', 'نظام الألوان')}</b><small>${esc(L(schemeOf(PARISH.theme).en, schemeOf(PARISH.theme).ar))}</small></span>
+            <a class="btn btn-secondary btn-dense" href="#/settings/appearance">${L('Change colours', 'تغيير الألوان')}</a></div>`)}
       </div>
       <div class="sidecol">${panel(L('Clergy and staff', 'الإكليروس والموظّفون'),
         ['p17', 'p18', 'p4', 'p15'].map(id => `<div class="listrow" style="padding-inline:0">${who(person(id))}
           <span class="grow"></span>${C.iconBtn('edit', L('Edit', 'تعديل'), `data-act="person-edit:${id}"`)}</div>`).join(''), { tight: true })}</div></div>`,
+
+    appearance: appearance,
 
     currency: () => `<div class="splitview">
       <div>${panel(L('Currency and rate', 'العملة والسعر'), `<div class="formgrid">
@@ -576,10 +587,138 @@ export function settings(tab = '') {
   return head + (T[tab] || T[''])();
 }
 
-settings.mount = host => {
+settings.mount = (host, tab = '') => {
   C.wire(host); wireTables(host);
   host.querySelector('#perm')?.addEventListener('click', reviewDeletions);
+  if (tab === 'appearance') wireAppearance(host);
 };
+
+/* ── Colours: a scheme for the whole parish, previewed live and saved by the priest ── */
+const sameTheme = (a, b) => schemeOf(a).id === schemeOf(b).id && schemeOf(a).primary === schemeOf(b).primary;
+const themeDraft = () => S.themeDraft || schemeOf(PARISH.theme);
+const canTheme = () => is('priest');
+
+const SAMPLE = `<i class="ss-rail"><i></i><i></i><i></i></i>
+      <i class="ss-page"><i class="ss-line"></i><i class="ss-line short"></i><i class="ss-chip"></i><i class="ss-btn"></i></i>`;
+
+/* The own-colour card shows a colour wheel until a colour of the parish's own has been picked. */
+function schemeCard(scheme, chosen, locked, wheel = false) {
+  const p = palette(scheme.primary), on = chosen.id === scheme.id;
+  return `<label class="scheme-card${on ? ' on' : ''}" style="--sw-1:${p.primary};--sw-2:${p.muted};--sw-3:${p.selection};--sw-4:${p.bg}">
+    <input type="radio" name="scheme" value="${scheme.id}" class="sr" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+    <span class="scheme-sample${wheel ? ' wheel' : ''}" aria-hidden="true">${wheel ? `<i class="ss-wheel">${icon('plus', 18)}</i>` : SAMPLE}</span>
+    <span class="scheme-name">${esc(L(scheme.en, scheme.ar))}${on ? `<span class="scheme-tick">${icon('check', 15)}</span>` : ''}</span>
+  </label>`;
+}
+
+function appearance() {
+  const saved = schemeOf(PARISH.theme), chosen = themeDraft(), locked = !canTheme();
+  const custom = chosen.id === 'custom' ? chosen : { id: 'custom', en: 'Your own colour', ar: 'لونك الخاص', primary: saved.id === 'custom' ? saved.primary : '#7A2E3A' };
+  const changed = !sameTheme(chosen, saved);
+  const shown = readable(custom.primary);
+  return `<div class="splitview">
+    <div class="stack" style="gap:16px">
+      ${panel(L('Colour scheme', 'نظام الألوان'), `
+        <p class="t-body dim scheme-intro">${L('Choose the colour of your parish. It is used everywhere: on the office screens, in the members’ portal and on your parish website.',
+          'اختر لون رعيتك. يُستعمل في كل مكان: في شاشات المكتب وفي بوّابة المؤمنين وعلى موقع رعيتك.')}</p>
+        ${locked ? C.inlineAlert('info', L('Only the parish priest can change the colours', 'وحده كاهن الرعية يغيّر الألوان'),
+          L('You can see the scheme in use. Ask the parish priest if it should change.', 'يمكنك رؤية النظام المستعمل. اطلب من كاهن الرعية إن كان يجب تغييره.')) : ''}
+        <fieldset class="scheme-grid" ${locked ? 'disabled' : ''}><legend class="sr">${L('Colour scheme', 'نظام الألوان')}</legend>
+          ${SCHEMES.map(scheme => schemeCard(scheme, chosen, locked)).join('')}
+          ${schemeCard({ ...custom, en: 'Your own colour', ar: 'لونك الخاص' }, chosen, locked, chosen.id !== 'custom' && saved.id !== 'custom')}
+        </fieldset>
+        <div class="scheme-custom" id="th-custom" ${chosen.id === 'custom' ? '' : 'hidden'}>
+          <label class="label" for="th-color">${L('Your colour', 'لونك')}</label>
+          <div class="scheme-custom-row">
+            <input type="color" id="th-color" value="${esc(custom.primary.toLowerCase())}" ${locked ? 'disabled' : ''} aria-describedby="th-note">
+            <input class="input mono" id="th-hex" value="${esc(custom.primary)}" maxlength="7" dir="ltr" spellcheck="false" autocomplete="off"
+              aria-label="${L('Colour code', 'رمز اللون')}" ${locked ? 'disabled' : ''} aria-describedby="th-note">
+          </div>
+          <p class="help" id="th-note" aria-live="polite">${customNote(custom.primary, shown)}</p>
+        </div>
+        ${locked ? '' : `<div class="scheme-actions">
+          <button class="btn btn-primary" id="th-save" ${changed ? '' : 'disabled'}>${icon('check', 17)}${L('Save colours', 'حفظ الألوان')}</button>
+          <button class="btn btn-secondary" id="th-undo" ${changed ? '' : 'disabled'}>${L('Discard', 'تجاهل')}</button>
+          <span class="t-caption dim" id="th-state" aria-live="polite">${changed
+            ? L('You are previewing this scheme. Save it so everyone sees it.', 'أنت تعاين هذا النظام. احفظه ليراه الجميع.')
+            : L('This is the scheme everyone sees.', 'هذا هو النظام الذي يراه الجميع.')}</span></div>`}`)}
+    </div>
+    <div class="sidecol">
+      ${panel(L('How it looks', 'كيف يبدو'), `<div class="scheme-preview" aria-hidden="true">
+          <div class="sp-site"><span class="sp-seal"></span><b>${esc(L(PARISH.name, PARISH.nameAr))}</b><span class="sp-pill">${L('Members', 'المؤمنون')}</span></div>
+          <div class="sp-body"><span class="sp-eyebrow">${L('This Sunday', 'هذا الأحد')}</span>
+            <b>${L('Divine Liturgy', 'القداس الإلهي')}</b><span class="sp-text">${L('9:00 and 11:00 in the main church', '٩:٠٠ و١١:٠٠ في الكنيسة الكبرى')}</span>
+            <span class="sp-row"><span class="sp-btn">${L('Ask for a certificate', 'اطلب شهادة')}</span><span class="sp-tag">${L('Confirmed', 'مؤكَّد')}</span></span></div></div>
+        <p class="t-caption dim" style="margin-top:12px">${L('Text colours are checked and darkened when needed, so every word stays easy to read.',
+          'تُفحص ألوان النص وتُغمَّق عند الحاجة، لتبقى كل كلمة سهلة القراءة.')}</p>`)}
+      ${panel(L('Where it shows', 'أين يظهر'), `<ul class="scheme-where">
+          ${[['dash', L('Office screens, for every role', 'شاشات المكتب، لكل الأدوار')],
+             ['people', L('The members’ portal', 'بوّابة المؤمنين')],
+             ['globe', L('Your parish website', 'موقع رعيتك')]].map(([i, x]) => `<li>${icon(i, 17, 'dimmer')}<span>${esc(x)}</span></li>`).join('')}</ul>
+        <p class="t-caption dim">${L('Certificates and printed pages keep their classic dark ink.', 'تحتفظ الشهادات والصفحات المطبوعة بحبرها الداكن الكلاسيكي.')}</p>`)}
+    </div></div>`;
+}
+
+const customNote = (picked, shown) => picked.toUpperCase() === shown
+  ? L('Good choice — white text reads clearly on this colour.', 'اختيار جيد — النص الأبيض واضح على هذا اللون.')
+  : L(`This colour is quite light, so it is shown a little darker (${shown}) to keep text readable.`,
+      `هذا اللون فاتح بعض الشيء، لذا يظهر أغمق قليلاً (${shown}) ليبقى النص مقروءاً.`);
+
+function wireAppearance(host) {
+  applyTheme(themeDraft());
+  if (!canTheme()) return;
+  const preview = next => {
+    S.themeDraft = sameTheme(next, PARISH.theme) ? null : { id: next.id, en: next.en, ar: next.ar, primary: next.primary };
+    applyTheme(themeDraft());
+    const changed = !!S.themeDraft;
+    host.querySelectorAll('.scheme-card').forEach(card => {
+      const on = card.querySelector('input').value === next.id;
+      card.classList.toggle('on', on);
+      card.querySelector('.scheme-tick')?.remove();
+      if (on) card.querySelector('.scheme-name').insertAdjacentHTML('beforeend', `<span class="scheme-tick">${icon('check', 15)}</span>`);
+    });
+    host.querySelector('#th-custom').hidden = next.id !== 'custom';
+    host.querySelector('#th-save').disabled = host.querySelector('#th-undo').disabled = !changed;
+    host.querySelector('#th-state').textContent = changed
+      ? L('You are previewing this scheme. Save it so everyone sees it.', 'أنت تعاين هذا النظام. احفظه ليراه الجميع.')
+      : L('This is the scheme everyone sees.', 'هذا هو النظام الذي يراه الجميع.');
+  };
+  const customCard = host.querySelector('.scheme-card input[value=custom]').closest('.scheme-card');
+  const setCustom = (color, from) => {
+    const value = color.toUpperCase();
+    if (from !== 'hex') host.querySelector('#th-hex').value = value;
+    if (from !== 'color') host.querySelector('#th-color').value = value.toLowerCase();
+    const p = palette(value), sample = customCard.querySelector('.scheme-sample');
+    if (sample.classList.contains('wheel')) { sample.classList.remove('wheel'); sample.innerHTML = SAMPLE; }
+    Object.entries({ '--sw-1': p.primary, '--sw-2': p.muted, '--sw-3': p.selection, '--sw-4': p.bg }).forEach(([k, v]) => customCard.style.setProperty(k, v));
+    host.querySelector('#th-note').textContent = customNote(value, readable(value));
+    customCard.querySelector('input').checked = true;
+    preview({ id: 'custom', en: 'Custom colour', ar: 'لون مخصّص', primary: value });
+  };
+  host.querySelectorAll('.scheme-card input').forEach(input => input.addEventListener('change', () => {
+    if (input.value === 'custom') return setCustom(host.querySelector('#th-hex').value);
+    preview(SCHEMES.find(scheme => scheme.id === input.value));
+  }));
+  let frame = 0;
+  host.querySelector('#th-color').addEventListener('input', e => {
+    cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setCustom(e.target.value, 'color'));
+  });
+  host.querySelector('#th-hex').addEventListener('input', e => {
+    let value = e.target.value.trim(); if (value && value[0] !== '#') value = '#' + value;
+    const ok = isHex(value);
+    e.target.setAttribute('aria-invalid', ok || value.length < 7 ? 'false' : 'true');
+    if (ok) setCustom(value, 'hex');
+  });
+  host.querySelector('#th-undo').addEventListener('click', () => { S.themeDraft = null; bus.refresh(); });
+  host.querySelector('#th-save').addEventListener('click', async () => {
+    const next = themeDraft();
+    PARISH.theme = { scheme: next.id, primary: next.primary.toUpperCase() };
+    S.themeDraft = null; bus.refresh();
+    if (!await persist()) return bus.refresh();   // refused: the saved colours come back, and the error is already on screen
+    toast(L('Colours saved', 'حُفظت الألوان'), L(`${L(next.en, next.ar)} is now used in the office, the members’ portal and on your parish website.`,
+      `يُستعمل «${L(next.en, next.ar)}» الآن في المكتب وبوّابة المؤمنين وعلى موقع رعيتك.`), 'success');
+  });
+}
 
 /* Deletion requests made from People → Archived. Approving is permanent and typed; declining keeps the archived record. */
 function reviewDeletions() {

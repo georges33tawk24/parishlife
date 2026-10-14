@@ -11,7 +11,9 @@ import {
 import {
   ROLES, ensureDatabase, access, file_access, parishes, oversight, visible, save_patch, workflow, audit
 } from './app.js';
+import { parish_theme } from './state.js';
 import { member_view, member_action } from './member.js';
+import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
 
 const HEADERS = {
@@ -124,18 +126,23 @@ async function handle(c, env, request, url, q, secureCookie) {
     const orderedPosts = sorted(posts, item => item.at, true);
     const publicParish = {};
     for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) publicParish[key] = get(parish, key, '');
+    publicParish.theme = parish_theme(parish);
     if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
     return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
   }
-  if (path === '/api/login' && method === 'POST') {
-    const u = await c.first('SELECT * FROM users WHERE username=?', get(q, 'username'));
-    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+  const startSession = async userId => {
     const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
     c.run('DELETE FROM sessions WHERE expires<?', time());
-    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), u.id, csrf, time() + 28800);
+    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
     await c.commit();
     return reply(200, { ok: true }, `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+  };
+  if (path === '/api/login' && method === 'POST') {
+    const u = await c.first('SELECT * FROM users WHERE username=?', loginName(get(q, 'username')));
+    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    return startSession(u.id);
   }
+  if (path === '/api/signup' && method === 'POST') return startSession(await signup(c, q));
   const token = sessionCookie(request.headers.get('Cookie'));
   const [sessions, users] = await c.reads([
     ['SELECT * FROM sessions WHERE token=? AND expires>?', [sha256hex(token ?? ''), time()]],
@@ -356,8 +363,9 @@ export default {
     if (method === 'GET' && url.pathname.startsWith('/api/')) return api(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return api(request, env, url);
     if (method === 'GET' || method === 'HEAD') {
+      /* The site's address opens the public homepage; the system itself is index.html. */
       if (url.pathname === '/') {
-        const asset = await env.ASSETS.fetch(new Request(new URL('/index.html', url), { method }));
+        const asset = await env.ASSETS.fetch(new Request(new URL('/public.html', url), { method }));
         if (asset.ok) {
           const headers = new Headers(asset.headers);
           for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);

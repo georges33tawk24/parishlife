@@ -106,6 +106,10 @@ class MemberPortalTests(unittest.TestCase):
         self.assertEqual(self.view('choir')['todos'], [])
 
     def test_ministry_content_and_rsvp_are_scoped(self):
+        # The sample choir meetings end on 9 October 2026; keep one of them in the future.
+        original_today = server.TODAY
+        server.TODAY = lambda: '2026-10-01'
+        self.addCleanup(setattr, server, 'TODAY', original_today)
         self.action('leader', 'publish', kind='post', groupId='g1', title='Choir update', body='Practice on Friday')
         self.assertIn('Choir update', [x['title'] for x in self.view('choir')['content']])
         self.assertNotIn('Choir update', [x['title'] for x in self.view('other')['content']])
