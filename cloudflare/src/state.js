@@ -249,7 +249,19 @@ function index(d, key) {
 
 const TIME = /^(?:[01]\p{Nd}|2[0-3]):[0-5]\p{Nd}$/u;
 
+export const THEME_SCHEMES = new Set(['forest', 'navy', 'marian', 'burgundy', 'purple', 'teal', 'cedar', 'slate', 'custom']);
+const HEX_COLOUR = /^#[0-9A-Fa-f]{6}$/;
+
+export function parish_theme(parish) {
+  const theme = get(parish, 'theme');
+  return isDict(theme) ? { scheme: K(theme, 'scheme'), primary: K(theme, 'primary') } : null;
+}
+
 export function validate(d) {
+  const theme = get(K(d, 'PARISH'), 'theme');
+  need(theme === null || (isDict(theme) && eq(Object.keys(theme).sort(), ['primary', 'scheme'])
+    && isStr(K(theme, 'scheme')) && THEME_SCHEMES.has(K(theme, 'scheme'))
+    && isStr(K(theme, 'primary')) && HEX_COLOUR.test(K(theme, 'primary'))), 'Invalid colour scheme.');
   const pp = index(d, 'PEOPLE');
   for (const [k, v] of index(d, 'ARCHIVED').entries()) pp.set(k, v);
   const content = get(d, 'CONTENT', {});

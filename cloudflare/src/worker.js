@@ -11,6 +11,7 @@ import {
 import {
   ROLES, ensureDatabase, access, file_access, parishes, oversight, visible, save_patch, workflow, audit
 } from './app.js';
+import { parish_theme } from './state.js';
 import { member_view, member_action } from './member.js';
 import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
@@ -125,6 +126,7 @@ async function handle(c, env, request, url, q, secureCookie) {
     const orderedPosts = sorted(posts, item => item.at, true);
     const publicParish = {};
     for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) publicParish[key] = get(parish, key, '');
+    publicParish.theme = parish_theme(parish);
     if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
     return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
   }

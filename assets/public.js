@@ -1,4 +1,5 @@
 import { safeRichText } from './rich-text.js';
+import { applySiteTheme } from './theme.js';
 
 // The public site reads only the server's published parish projection.
 const copy = {
@@ -216,6 +217,7 @@ function render() {
   observer?.disconnect();
   updateChrome();
   const p = directory.find(p => p.id === selected), d = details.get(selected);
+  applySiteTheme(p && d ? d.parish.theme : null);   // a parish page wears its parish's colours; the directory stays in Forest
   if (loadFailure) {
     app.innerHTML = '<div class="site-wrap error-page">' + empty(L('We couldn’t load the directory', 'تعذّر تحميل الدليل'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.'), '<button class="button retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>') + '</div>';
   } else if (selected && (!p || !d)) {

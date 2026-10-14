@@ -60,6 +60,14 @@ export const dayDate = value => {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : value;
 };
 export const fmtDay = value => fmtDate(dayDate(value));
+/* A moment the parish recorded, in the reader's own time: 11 Oct 2026 · 14:32 */
+export const fmtStamp = at => {
+  const d = new Date(at || '');
+  if (Number.isNaN(d.getTime())) return fmtDate(at);
+  return `${fmtDate(d)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+/* The planned celebration: 25 Oct 2026 · 10:30, or the day alone until a time is set. */
+export const plannedText = p => p.plannedDate ? `${fmtDay(p.plannedDate)}${p.plannedTime ? ` · ${p.plannedTime}` : ''}` : '';
 export const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /* ---- where a request stands ---------------------------------------------- */
@@ -110,6 +118,18 @@ const REACHED = {
   sacrament: { submitted: 1, accepted: 2, 'priest-accepted': 3, prepared: 4, celebrated: 5 }
 };
 const family = r => ['certificate', 'booking', 'custom'].includes(r.kind) ? r.kind : 'sacrament';
+/* Which steps each recorded event completes, so every step can say when it happened. */
+const STEP_EVENTS = {
+  certificate: { submitted: [0], approved: [1], issued: [2, 3] },
+  booking: { submitted: [0], accepted: [1], confirmed: [2, 3] },
+  custom: { submitted: [0], accepted: [1], completed: [2] },
+  sacrament: { submitted: [0], accepted: [1], 'priest-accepted': [2], prepared: [3], celebrated: [4], registered: [5] }
+};
+export const stepTimes = r => {
+  const times = stepsFor(r).map(() => '');
+  for (const e of r.progress.events) for (const i of STEP_EVENTS[family(r)][e.key] || []) if (e.at) times[i] = e.at;
+  return times;
+};
 /* How many steps are complete; for a closed request, how far it got before it closed. */
 export const stepsDone = r => {
   if (!CLOSED.has(r.progress.stage)) return DONE_STEPS[family(r)][r.progress.stage] ?? 1;
@@ -130,7 +150,9 @@ export function nextText(r) {
       `حجزك مؤكَّد في ${fmtDay(r.details.date)}، من ${r.details.from} إلى ${r.details.to}. يُرجى استلام المفاتيح من مكتب الرعية.`);
     case 'inprogress': return t('The parish has accepted your request and will contact you to arrange it.', 'قبلت الرعية طلبك وستتواصل معك لترتيبه.');
     case 'preparing': return t('The priest accepted your request. Work through the preparation below; the parish office will confirm the date.', 'قبل الكاهن طلبك. أكمِل التحضير أدناه، وسيؤكّد مكتب الرعية الموعد.');
-    case 'scheduled': return t(`Everything is ready. The celebration is planned for ${fmtDay(date)}.`, `كل شيء جاهز. الاحتفال مقرّر في ${fmtDay(date)}.`);
+    case 'scheduled': return p.plannedTime
+      ? t(`Everything is ready. The celebration is planned for ${fmtDay(date)} at ${p.plannedTime}.`, `كل شيء جاهز. الاحتفال مقرّر في ${fmtDay(date)} الساعة ${p.plannedTime}.`)
+      : t(`Everything is ready. The celebration is planned for ${fmtDay(date)}.`, `كل شيء جاهز. الاحتفال مقرّر في ${fmtDay(date)}.`);
     case 'celebrated': return t('The celebration took place. The parish office is entering it in the register.', 'تمّ الاحتفال، ويدوّنه مكتب الرعية الآن في السجل.');
     case 'completed': return r.kind === 'custom' ? t('Your request has been taken care of.', 'تمّت تلبية طلبك.')
       : t(`Recorded in the parish register as ${p.register}. You can ask for a certificate at any time.`, `دُوّن في سجلّ الرعية برقم ${p.register}. يمكنك طلب شهادة في أي وقت.`);
@@ -178,7 +200,8 @@ export function noticeText(n, request) {
       completed: [`${what}: done`, `${what}: أُنجز`] });
   }
   const title = request && titles[event] ? t(...titles[event]) : n.title;
-  let body = ['date', 'scheduled'].includes(event) && /^\d{4}-\d\d-\d\d$/.test(n.body || '') ? fmtDay(n.body) : n.body;
+  const dated = ['date', 'scheduled'].includes(event) && /^(\d{4}-\d\d-\d\d)(?: (\d\d:\d\d))?$/.exec(n.body || '');
+  let body = dated ? fmtDay(dated[1]) + (dated[2] ? ` · ${dated[2]}` : '') : n.body;
   /* a booking notice always says which place and when */
   if (request?.kind === 'booking' && !body) {
     const v = (M.requestOptions?.venues || []).find(x => x.id === request.details.venue);

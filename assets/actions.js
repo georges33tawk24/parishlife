@@ -263,6 +263,7 @@ export const VERBS = {
     const note = document.querySelector('.drawer.open #runnote')?.value.trim() || '';
     const before = { step: r.step, at: D.RUNS.indexOf(r) };
     const doneEn = steps[r.step] || '', doneAr = stepsAr[r.step] || doneEn;
+    r.doneAt = { ...(r.doneAt || {}), [r.step]: stamp() };   // each step keeps the date and time it was done
     r.step = Math.min(r.total, r.step + 1);
     const finished = r.step >= r.total;
     if (finished) D.RUNS.splice(before.at, 1);

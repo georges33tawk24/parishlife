@@ -58,7 +58,7 @@ export function member_request_progress(d, row, details) {
   let logged = JSON.parse(row.log || '[]');
   if (!logged.length && row.status !== 'submitted') logged = [{ key: row.status, at: row.updated_at }]; // handled before steps were logged
   events.push(...logged.map(entry => ({ key: entry.key, at: entry.at })));
-  let stage = 'received', reason = '', register = '', planned = '', preparation = [];
+  let stage = 'received', reason = '', register = '', planned = '', plannedTime = '', preparation = [];
   if (row.status === 'declined') {
     stage = 'declined'; reason = row.response;
   } else if (row.status === 'withdrawn') {
@@ -84,7 +84,7 @@ export function member_request_progress(d, row, details) {
       } else {
         stage = get(SACRAMENT_STAGES, status, 'review');
         if (truthy(get(s, 'date')) && (has(set(['scheduled', 'celebrated', 'completed']), stage) || !eq(K(s, 'date'), get(details, 'date', ''))))
-          planned = K(s, 'date');
+          { planned = K(s, 'date'); plannedTime = get(s, 'time', ''); }
         if (has(OFFICIAL_ENTRY, status)) register = get(s, 'reg', '');
         const requirements = get(get(d, 'PREP_REQUIREMENTS', {}), get(s, 'kind'), []);
         if (has(set(['preparing', 'scheduled']), status)) {
@@ -102,7 +102,7 @@ export function member_request_progress(d, row, details) {
       }
     }
   }
-  return { stage, preferredDate: get(details, 'date', ''), plannedDate: planned, register, preparation, reason, events };
+  return { stage, preferredDate: get(details, 'date', ''), plannedDate: planned, plannedTime, register, preparation, reason, events };
 }
 
 export function member_request_item(d, row) {

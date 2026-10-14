@@ -45,7 +45,7 @@ const nextStep = s => s.status === 'cancelled'
   'office-reviewed': [L('Accept or decline the request', 'قبول الطلب أو رفضه'), PRIEST()],
   preparing: [L('Finish the preparation checklist and set the date', 'إكمال لائحة التحضير وتحديد الموعد'), OFFICE()],
   draft: [s.kind === 'certificate' ? L('Send the request to the priest', 'إرسال الطلب إلى الكاهن') : L('Send the celebrated sacrament to the priest for approval', 'إرسال السرّ المحتفل به إلى الكاهن للاعتماد'), OFFICE()],
-  scheduled: [s.date > today() ? L(`Wait for the celebration on ${fmtDate(s.date)}`, `انتظار الاحتفال في ${fmtDate(s.date)}`) : L('Confirm it was celebrated and send it for approval', 'تأكيد الاحتفال وإرساله للاعتماد'), OFFICE()],
+  scheduled: [s.date > today() ? L(`Wait for the celebration on ${celebrationText(s)}`, `انتظار الاحتفال في ${celebrationText(s)}`) : L('Confirm it was celebrated and send it for approval', 'تأكيد الاحتفال وإرساله للاعتماد'), OFFICE()],
   'awaiting-signature': [s.kind === 'certificate' ? L('Check the request and approve it', 'مراجعة الطلب واعتماده') : L('Check against the register book and approve', 'المطابقة مع دفتر السجل والاعتماد'), PRIEST()],
   approved: [L('Sign and issue the certificate', 'توقيع الشهادة وإصدارها'), PRIEST()],
   registered: [L('Done — request a certificate whenever one is needed', 'منجز — اطلب شهادة متى احتجت إليها'), ''],
@@ -129,7 +129,7 @@ export function sacraments(tab = '') {
   return head + `<div class="tabbody">
       ${C.inlineAlert('info', L('Preparation follows priest approval', 'يبدأ التحضير بعد موافقة الكاهن'), L('Start with a sacrament request. The priest may accept it directly; then the parish office completes preparation before the celebration.', 'ابدأ بطلب سرّ. يمكن للكاهن قبوله مباشرة، ثم يُكمل مكتب الرعية التحضير قبل الاحتفال.'))}
       <div class="toolbar" style="margin:16px 0"><button class="btn btn-primary" id="newsacreq">${icon('plus',16)}${L('New sacrament request','طلب سرّ جديد')}</button></div>
-      ${table({cols:[{label:L('Person','الشخص')},{label:L('Sacrament','السرّ')},{label:L('Celebration date','تاريخ الاحتفال')},{label:L('Preparation','التحضير')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],rows:entries.map(s=>({attrs:'data-find-item',cells:[who(person(s.person)),esc(kindLabel(s.kind)),s.date?esc(fmtDate(s.date)):L('Set date','حدّد التاريخ'),esc(prepProgress(s)),status(s.status),`<span class="row" style="gap:6px"><a class="btn btn-secondary btn-dense" href="#/certificate/${esc(s.id)}">${L('View','عرض')}</a>${s.status==='draft'?'':`<button class="btn btn-secondary btn-dense" data-prep-edit="${esc(s.id)}">${L('Edit','تعديل')}</button><button class="btn btn-ghost btn-dense" data-prep-cancel="${esc(s.id)}">${L('Cancel','إلغاء')}</button>`}</span>`]})),empty:empty('sacr',L('No active preparations','لا تحضيرات جارية'),L('Approved sacrament requests will appear here.','ستظهر هنا طلبات الأسرار المعتمدة.'))})}
+      ${table({cols:[{label:L('Person','الشخص')},{label:L('Sacrament','السرّ')},{label:L('Celebration date','تاريخ الاحتفال')},{label:L('Preparation','التحضير')},{label:L('Status','الحالة')},{label:'',cls:'shrink'}],rows:entries.map(s=>({attrs:'data-find-item',cells:[who(person(s.person)),esc(kindLabel(s.kind)),s.date?esc(celebrationText(s)):L('Set date','حدّد التاريخ'),esc(prepProgress(s)),status(s.status),`<span class="row" style="gap:6px"><a class="btn btn-secondary btn-dense" href="#/certificate/${esc(s.id)}">${L('View','عرض')}</a>${s.status==='draft'?'':`<button class="btn btn-secondary btn-dense" data-prep-edit="${esc(s.id)}">${L('Edit','تعديل')}</button><button class="btn btn-ghost btn-dense" data-prep-cancel="${esc(s.id)}">${L('Cancel','إلغاء')}</button>`}</span>`]})),empty:empty('sacr',L('No active preparations','لا تحضيرات جارية'),L('Approved sacrament requests will appear here.','ستظهر هنا طلبات الأسرار المعتمدة.'))})}
       <details style="margin-top:20px"><summary>${L('Preparation requirements by sacrament','متطلبات التحضير بحسب السرّ')}</summary><div class="grid g2" style="margin-top:16px">${Object.entries(PREP_REQUIREMENTS).map(([k,reqs])=>panel(kindLabel(k),reqs.map(([en,ar])=>`<div class="listrow">${icon('check',15)}${esc(L(en,ar))}</div>`).join(''))).join('')}</div></details>
     </div>`;
 }
@@ -209,9 +209,9 @@ sacraments.mount = host => {
     const record=SACRAMENTS.find(s=>s.id===btn.dataset.prepEdit); if(!record)return;
     const requirements=PREP_REQUIREMENTS[record.kind]||[];
     openDrawer({title:L('Edit preparation','تعديل التحضير'),sub:L('Record the planned date and requirements. Complete preparation before celebration.','سجّل الموعد والمتطلبات. أكمل التحضير قبل الاحتفال.'),
-      body:`<p class="t-caption dim">${esc((isAr()?person(record.person)?.ar:person(record.person)?.lat)||'')} · ${esc(kindLabel(record.kind))}</p>${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'prep_date',type:'date',value:record.date||''})}<div class="stack" style="gap:10px;margin-top:16px">${requirements.map(([en,ar,required],i)=>`<label class="check"><input type="checkbox" data-prep-item="${i}" ${Array.isArray(record.preparation)&&record.preparation[i]?'checked':''}><span>${esc(L(en,ar))}${required?'':` <small class="dim">(${L('optional','اختياري')})</small>`}</span></label>`).join('')}</div>`,
+      body:`<p class="t-caption dim">${esc((isAr()?person(record.person)?.ar:person(record.person)?.lat)||'')} · ${esc(kindLabel(record.kind))}</p><div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'prep_date',type:'date',value:record.date||''})}${timeSelect('prep_time',record.time||'')}</div><div class="stack" style="gap:10px;margin-top:16px">${requirements.map(([en,ar,required],i)=>`<label class="check"><input type="checkbox" data-prep-item="${i}" ${Array.isArray(record.preparation)&&record.preparation[i]?'checked':''}><span>${esc(L(en,ar))}${required?'':` <small class="dim">(${L('optional','اختياري')})</small>`}</span></label>`).join('')}</div>`,
       foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button><button class="btn btn-primary" id="prep_save">${L('Save preparation','حفظ التحضير')}</button>${record.status==='preparing'?`<button class="btn btn-secondary" id="prep_complete">${L('Complete preparation','إكمال التحضير')}</button>`:''}`,
-      onMount(el){C.wire(el);const save=async()=>{await serverWorkflow('update-preparation',record.id,{date:el.querySelector('#prep_date').value,checklist:[...el.querySelectorAll('[data-prep-item]')].map(x=>x.checked)});};
+      onMount(el){C.wire(el);const save=async()=>{await serverWorkflow('update-preparation',record.id,{date:el.querySelector('#prep_date').value,time:el.querySelector('#prep_date').value?el.querySelector('#prep_time').value:'',checklist:[...el.querySelectorAll('[data-prep-item]')].map(x=>x.checked)});};
         el.querySelector('#prep_save').addEventListener('click',async()=>{try{await save();closeOverlays();bus.refresh();toast(L('Preparation saved','حُفظ التحضير'),'','success')}catch(e){toast(L('Could not save preparation','تعذّر حفظ التحضير'),e.message,'danger')}});
         el.querySelector('#prep_complete')?.addEventListener('click',async()=>{try{await save();await serverWorkflow('complete-preparation',record.id);closeOverlays();bus.refresh();toast(L('Preparation completed','اكتمل التحضير'),L('Record the celebration on or after its date.','سجّل الاحتفال في موعده أو بعده.'),'success')}catch(e){toast(L('Could not complete preparation','تعذّر إكمال التحضير'),e.message,'danger')}});
       }});
@@ -228,14 +228,40 @@ requests.mount = (host, first, second) => {
 };
 
 /* ---------------- record page: progress, the document, details ---------------- */
+/* When a step happened, from the record's own history (the newest matching entry). */
+const stepAt = (s, ...actions) => [...(s.history || [])].reverse().find(h => actions.includes(h.action))?.at || '';
 const workflowStages = s => s.kind === 'certificate'
-  ? [[L('Requested','طُلبت'), true], [L('Register entry linked','رُبط القيد'), !!sourceFor(s)],
-     [L('Approved by the priest','اعتمدها الكاهن'), ['approved','issued'].includes(s.status)], [L('Issued','صدرت'), s.status === 'issued']]
-  : [[L('Requested','طُلب'), true],
-     [L('Accepted by the priest','قبله الكاهن'), !!s.requestApprovedAt || ['preparing','scheduled','draft','awaiting-signature','registered','issued'].includes(s.status) && !String(s.reg).startsWith('SRQ/')],
-     [L('Prepared','اكتمل التحضير'), ['scheduled','draft','awaiting-signature','registered','issued'].includes(s.status)],
-     [L('Celebrated','احتُفل به'), ['draft','awaiting-signature','registered','issued'].includes(s.status)],
-     [L('Entered in the register','دُوّن في السجل'), ['registered','issued'].includes(s.status)]];
+  ? [[L('Requested','طُلبت'), true, s.requestedAt || s.history?.[0]?.at || ''],
+     [L('Register entry linked','رُبط القيد'), !!sourceFor(s), stepAt(s, 'source linked')],
+     [L('Approved by the priest','اعتمدها الكاهن'), ['approved','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')],
+     [L('Issued','صدرت'), s.status === 'issued', s.issuedAt || stepAt(s, 'issue')]]
+  : [[L('Requested','طُلب'), true, s.requestedAt || stepAt(s, 'sacrament requested', 'request submitted')],
+     [L('Accepted by the priest','قبله الكاهن'), !!s.requestApprovedAt || ['preparing','scheduled','draft','awaiting-signature','registered','issued'].includes(s.status) && !String(s.reg).startsWith('SRQ/'),
+       s.requestApprovedAt || stepAt(s, 'request accepted for preparation')],
+     [L('Prepared','اكتمل التحضير'), ['scheduled','draft','awaiting-signature','registered','issued'].includes(s.status), stepAt(s, 'preparation completed')],
+     [L('Celebrated','احتُفل به'), ['draft','awaiting-signature','registered','issued'].includes(s.status), '', 'celebration'],
+     [L('Entered in the register','دُوّن في السجل'), ['registered','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')]];
+
+/* The celebration as people say it: 25 Oct 2026 · 10:30 */
+export const celebrationText = s => s?.date ? `${fmtDate(s.date)}${s.time ? ` · ${s.time}` : ''}` : '';
+/* Half-hour steps for the celebration time: a list is easier than a clock to set on any phone. */
+const CELEBRATION_TIMES = Array.from({ length: 32 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+const timeSelect = (id, value = '') => `<div class="formrow"><label class="label" for="${id}">${L('Celebration time','وقت الاحتفال')}</label>
+  <select class="select" id="${id}" dir="ltr"><option value="">${L('Not set yet','لم يُحدَّد بعد')}</option>${[...new Set([...CELEBRATION_TIMES, ...(value ? [value] : [])])].sort()
+    .map(x => `<option value="${x}" ${x === value ? 'selected' : ''}>${x}</option>`).join('')}</select></div>`;
+
+/* What each step says under its name: when it happened, how long the current one has waited, or when the celebration is planned. */
+function stepWhen(s, stages, i, now) {
+  const [, done, at, kind] = stages[i];
+  if (kind === 'celebration') {
+    if (!s.date) return '';
+    return done ? celebrationText(s) : `${L('Planned for','مقرّر في')} ${celebrationText(s)}`;
+  }
+  if (done) return at ? when(at) : '';
+  if (i !== now) return '';
+  const since = [...stages.slice(0, i)].reverse().find(([, ok, stamp]) => ok && stamp)?.[2];
+  return since ? `${L('Waiting since','بانتظار منذ')} ${when(since)}` : '';
+}
 
 /* Where the request stands, one numbered step at a time, and the single next thing to do. */
 const progressPanel = s => {
@@ -246,9 +272,9 @@ const progressPanel = s => {
     <div class="progress-top"><h3>${s.kind === 'certificate' ? L('Request progress', 'مراحل الطلب') : L('Progress', 'المراحل')}</h3>${sacramentStatus(s)}</div>
     <p class="nextstep"><span class="lbl">${now < 0 ? L('Status', 'الحالة') : L('Next step', 'الخطوة التالية')}</span>
       <b>${esc(next)}</b>${owner ? `<span class="owner">${icon('people', 14)}${esc(owner)}</span>` : ''}</p>
-    <ol class="steps${closed ? ' closed' : ''}">${stages.map(([label, done], i) => `<li class="${done ? 'done' : i === now ? 'now' : ''}">
-      <span class="dot" aria-hidden="true">${done ? icon('check', 13) : i + 1}</span><span class="lbl">${esc(label)}</span>
-      <span class="sr-only">${done ? L('done', 'منجز') : i === now ? L('current step', 'الخطوة الحالية') : L('not yet', 'لم يحن بعد')}</span></li>`).join('')}</ol>
+    <ol class="steps${closed ? ' closed' : ''}">${stages.map(([label, done], i) => { const at = stepWhen(s, stages, i, now); return `<li class="${done ? 'done' : i === now ? 'now' : ''}">
+      <span class="dot" aria-hidden="true">${done ? icon('check', 13) : i + 1}</span><span class="step-text"><span class="lbl">${esc(label)}</span>${at ? `<span class="when">${esc(at)}</span>` : ''}</span>
+      <span class="sr-only">${done ? L('done', 'منجز') : i === now ? L('current step', 'الخطوة الحالية') : L('not yet', 'لم يحن بعد')}</span></li>`; }).join('')}</ol>
     ${s.kind === 'certificate' && (s.purpose || s.godparents) ? `<p class="t-caption dim" style="margin-top:12px">${L('Purpose of the request', 'غاية الطلب')}: ${esc(s.purpose || s.godparents)}</p>` : ''}
   </div></section>`;
 };
@@ -450,7 +476,7 @@ export function certificate(id, lang = '') {
     ] : [
       [L('Person', 'الشخص'), `<a href="#/person/${esc(p.id || '')}">${esc(p.lat)}</a><small class="dim" style="display:block;font-family:var(--arabic)">${esc(p.ar)}</small>`],
       [L('Sacrament', 'السرّ'), esc(kindLabel(record.kind))],
-      [record.date > today() ? L('Planned for', 'الموعد المقرّر') : L('Date', 'التاريخ'), record.date ? fmtDate(record.date) : L('Not set yet', 'لم يُحدَّد بعد')],
+      [record.date > today() ? L('Planned for', 'الموعد المقرّر') : L('Date', 'التاريخ'), record.date ? celebrationText(record) : L('Not set yet', 'لم يُحدَّد بعد')],
       [L('Celebrant', 'المحتفل'), esc(nameIn(cel) || L('To be assigned', 'يُحدَّد لاحقاً'))],
       record.godparents ? [L('Godparents / witnesses', 'الإشبين / الشهود'), esc(record.godparents)] : null,
       [L('Book / page', 'الدفتر / الصفحة'), `${esc(record.book || '—')} / ${esc(record.page || '—')}`],
@@ -475,7 +501,7 @@ export function certificate(id, lang = '') {
   return `${pageHead({
       crumbs: [{ label: L('Records', 'السجلات') }, { label: asRequest ? L('Requests', 'الطلبات') : L('Sacraments', 'الأسرار'), href: asRequest ? '#/requests' : '#/sacraments' }, { label: s.reg }],
       title: kindLabel(s.kind),
-      sub: `<bdi>${esc(nameIn(p))}</bdi> · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi>${s.date ? ` · <bdi>${fmtDate(s.date)}</bdi>` : ''}${onlineMark(s)}`,
+      sub: `<bdi>${esc(nameIn(p))}</bdi> · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi>${s.date ? ` · <bdi>${s.kind === 'certificate' ? fmtDate(s.date) : celebrationText(s)}</bdi>` : ''}${onlineMark(s)}`,
       actions: `${s.kind !== 'certificate' && ['requested','office-reviewed'].includes(s.status) && is('priest')
         ? `<button class="btn btn-primary" id="acceptrequest">${icon('check',17)}${L('Accept request','قبول الطلب')}</button><button class="btn btn-secondary" id="declinerequest">${L('Decline','رفض')}</button>`
         : s.kind !== 'certificate' && s.status === 'requested' && is('secretary')
@@ -572,7 +598,7 @@ certificate.mount = (host, id, lang = '') => {
     openDrawer({
       title:L('Edit sacrament details','تعديل تفاصيل السرّ'),
       sub:L('Changes are kept in the record’s history. Once the priest approves the entry it can no longer be edited here.','تُحفظ التعديلات في سجل القيد. بعد أن يعتمد الكاهن القيد لا يمكن تعديله من هنا.'),
-      body:`<div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'edit_date',type:'date',value:record.date,req:true})}<div class="formrow"><label class="label" for="edit_celebrant">${L('Celebrant','المحتفل')}</label><select class="select" id="edit_celebrant"><option value="">${L('To be assigned','يُحدّد لاحقاً')}</option>${PEOPLE.filter(p=>p.status==='clergy'||p.id===record.celebrant).map(p=>`<option value="${esc(p.id)}" ${p.id===record.celebrant?'selected':''}>${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div></div>
+      body:`<div class="formgrid">${C.field({label:L('Celebration date','تاريخ الاحتفال'),id:'edit_date',type:'date',value:record.date,req:true})}${timeSelect('edit_time',record.time||'')}</div><div class="formgrid"><div class="formrow"><label class="label" for="edit_celebrant">${L('Celebrant','المحتفل')}</label><select class="select" id="edit_celebrant"><option value="">${L('To be assigned','يُحدّد لاحقاً')}</option>${PEOPLE.filter(p=>p.status==='clergy'||p.id===record.celebrant).map(p=>`<option value="${esc(p.id)}" ${p.id===record.celebrant?'selected':''}>${esc(isAr()?p.ar:p.lat)}</option>`).join('')}</select></div></div>
         <div class="formgrid">${C.field({label:L('Book','الدفتر'),id:'edit_book',value:record.book||''})}${C.field({label:L('Page','الصفحة'),id:'edit_page',value:record.page||''})}</div>
         ${C.field({label:L('Godparents / witnesses','الإشبين / الشهود'),id:'edit_godparents',value:record.godparents||''})}
         <div class="formgrid">${C.field({label:L('Father','الأب'),id:'edit_father',value:record.father||''})}${C.field({label:L('Mother','الأم'),id:'edit_mother',value:record.mother||''})}</div>
@@ -581,7 +607,7 @@ certificate.mount = (host, id, lang = '') => {
       foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="edit_save">${L('Save changes','حفظ التعديلات')}</button>`,
       onMount(el) { C.wire(el); el.querySelector('#edit_save').addEventListener('click',async()=>{
         if (!need(el,'#edit_date',L('Enter a date','أدخل التاريخ'))) return;
-        const fields = Object.fromEntries(['date','celebrant','book','page','godparents','father','mother','place','externalParish','externalReference'].map(k=>[k,el.querySelector('#edit_'+k).value.trim()]));
+        const fields = Object.fromEntries(['date','time','celebrant','book','page','godparents','father','mother','place','externalParish','externalReference'].map(k=>[k,el.querySelector('#edit_'+k).value.trim()]));
         try { await serverWorkflow('update-entry',id,{fields}); closeOverlays(); bus.refresh(); toast(L('Details updated','حُدّثت التفاصيل'),L('The workflow and activity history were updated.','حُدّث المسار وسجل النشاط.'),'success'); }
         catch(e) { toast(L('Could not update entry','تعذّر تعديل القيد'),e.message,'danger'); }
       }); }

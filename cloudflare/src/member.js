@@ -6,6 +6,7 @@ import {
   passwordHash, passwordMatches
 } from './py.js';
 import { randomBytes } from 'node:crypto';
+import { parish_theme } from './state.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
   request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
@@ -322,6 +323,7 @@ export async function member_view(c, u, pid) {
   }
   const parish = {};
   for (const k of ['id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr']) parish[k] = get(K(d, 'PARISH'), k, '');
+  parish.theme = parish_theme(K(d, 'PARISH'));
   return {
     parish, site, person: own, groups, meetings, events: visibleEvents, content,
     notes: K(priv, 'notes'), todos: K(priv, 'todos'), commitments: K(priv, 'commitments'), preferences: K(priv, 'preferences'),

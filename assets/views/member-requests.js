@@ -8,7 +8,7 @@ import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, icon, pill, openModal, closeOverlays, toast } from '../ui.js';
 import { REQUEST_KINDS, kindOf, kindName, CERTIFICATE_OF, certificateName, PURPOSES, purposeText, LANGUAGES, languageName,
-         OCCASIONS, occasionText, TOPICS, topicText, fmtDay, todayKey, stageInfo, isActive, CLOSED, stepsFor, stepsDone, nextText,
+         OCCASIONS, occasionText, TOPICS, topicText, fmtDay, fmtStamp, plannedText, todayKey, stageInfo, isActive, CLOSED, stepsFor, stepsDone, stepTimes, nextText,
          eventLabel, phoneShow } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
@@ -48,7 +48,7 @@ const meter = r => {
 const dateNote = r => {
   const p = r.progress;
   if (OWN.has(r.kind)) return r.kind === 'custom' && p.preferredDate && isActive(r) ? ` · ${L('For', 'ليوم')} ${fmtDay(p.preferredDate)}` : '';
-  if (p.plannedDate && !CLOSED.has(p.stage)) return ` · ${L('Planned for', 'مقرّر في')} ${fmtDay(p.plannedDate)}`;
+  if (p.plannedDate && !CLOSED.has(p.stage)) return ` · ${L('Planned for', 'مقرّر في')} ${plannedText(p)}`;
   if (p.preferredDate && isActive(r)) return ` · ${L('Preferred date', 'التاريخ المفضّل')} ${fmtDay(p.preferredDate)}`;
   return '';
 };
@@ -365,11 +365,20 @@ function detailPage(id) {
   if (!r) return `<div class="member-page mr-page">${back()}<div class="member-empty"><p>${L('This request could not be found.', 'تعذّر العثور على هذا الطلب.')}</p>
     <a class="btn btn-secondary btn-dense" href="#/myrequests">${L('See all your requests', 'عرض كل طلباتك')}</a></div></div>`;
   const p = r.progress, closed = CLOSED.has(p.stage), [label, tone, mark] = stageInfo(r);
-  const steps = stepsFor(r), done = stepsDone(r), phone = M.requestOptions?.phone;
+  const steps = stepsFor(r), done = stepsDone(r), phone = M.requestOptions?.phone, times = stepTimes(r);
+  /* under each step: when it happened, since when the current one has waited, or when the celebration is planned */
+  const celebration = !['certificate', 'booking', 'custom'].includes(r.kind) && p.plannedDate ? 4 : -1;
+  const stepNote = i => {
+    if (i === celebration && !closed) return i < done ? plannedText(p) : `${L('Planned for', 'مقرّر في')} ${plannedText(p)}`;
+    if (i < done) return times[i] ? fmtStamp(times[i]) : '';
+    if (closed) return '';
+    const since = i === done ? times.slice(0, i).reverse().find(Boolean) : '';
+    return since ? `${L('Waiting since', 'بانتظار منذ')} ${fmtStamp(since)}` : '';
+  };
   const quote = (title, text) => text ? `<blockquote class="mr-quote"><span class="lbl">${title}</span><p>${txt(text)}</p></blockquote>` : '';
   const dates = r.kind === 'booking'
     ? [[L('Date', 'التاريخ'), fmtDay(r.details.date)], [L('Time', 'الوقت'), `<bdi dir="ltr">${txt(r.details.from)}–${txt(r.details.to)}</bdi>`], [L('Place', 'المكان'), venueName(r.details.venue)]]
-    : [p.preferredDate && [r.kind === 'custom' ? L('Day', 'اليوم') : L('Preferred date', 'التاريخ المفضّل'), fmtDay(p.preferredDate)], p.plannedDate && [L('Planned date', 'الموعد المقرّر'), fmtDay(p.plannedDate)],
+    : [p.preferredDate && [r.kind === 'custom' ? L('Day', 'اليوم') : L('Preferred date', 'التاريخ المفضّل'), fmtDay(p.preferredDate)], p.plannedDate && [L('Planned for', 'الموعد المقرّر'), plannedText(p)],
       p.register && [L('Register entry', 'رقم القيد'), `<bdi class="mono" dir="ltr">${txt(p.register)}</bdi>`]].filter(Boolean);
   const required = p.preparation.filter(x => x.required);
   const certificateFor = p.stage === 'completed' && ['baptism', 'communion', 'confirmation', 'marriage'].includes(r.kind);
@@ -382,14 +391,14 @@ function detailPage(id) {
     <header class="mr-detail-head"><span class="mr-head-icon" aria-hidden="true">${icon(kindOf(r.kind).icon, 26)}</span>
       <div class="mr-detail-title"><h1>${txt(titleOf(r))}</h1>
         ${about ? `<p><span>${txt(about)}</span>${aboutOther ? ` <span class="dim">· ${txt(aboutOther)}</span>` : ''}</p>` : ''}
-        <p class="mr-detail-meta"><bdi class="mono" dir="ltr">${txt(r.reference)}</bdi> · ${L('Sent', 'أُرسل')} ${fmtDate(r.createdAt)}</p></div>
+        <p class="mr-detail-meta"><bdi class="mono" dir="ltr">${txt(r.reference)}</bdi> · ${L('Sent', 'أُرسل')} ${fmtStamp(r.createdAt)}</p></div>
       ${pill(label, tone, mark)}</header>
     <div class="mr-layout">
       <div class="mr-main">
         <section class="member-card mr-status" aria-labelledby="mr-status-title">
           <h2 id="mr-status-title">${L('Where your request stands', 'أين أصبح طلبك')}</h2>
           <ol class="steps${closed ? ' closed' : ''}">${steps.map((s, i) => `<li class="${i < done ? 'done' : i === done && !closed ? 'now' : ''}">
-            <span class="dot" aria-hidden="true">${i < done ? icon('check', 13) : i + 1}</span><span class="lbl">${txt(s)}</span>
+            <span class="dot" aria-hidden="true">${i < done ? icon('check', 13) : i + 1}</span><span class="step-text"><span class="lbl">${txt(s)}</span>${stepNote(i) ? `<span class="when">${txt(stepNote(i))}</span>` : ''}</span>
             <span class="sr-only">${i < done ? L('done', 'منجز') : i === done && !closed ? L('current step', 'الخطوة الحالية') : L('not yet', 'لم يحن بعد')}</span></li>`).join('')}</ol>
           <div class="mr-next${closed ? ' is-closed' : ''}"><span class="lbl">${closed ? L('Status', 'الحالة') : p.stage === 'completed' || p.stage === 'confirmed' || p.stage === 'ready' ? L('Done', 'تمّ') : L('What happens next', 'ما الخطوة التالية')}</span><p>${txt(nextText(r))}</p></div>
           ${closed ? quote(L('Message from the parish office', 'رسالة من مكتب الرعية'), p.reason) : quote(L('Message from the parish office', 'رسالة من مكتب الرعية'), r.response)}
@@ -402,7 +411,7 @@ function detailPage(id) {
             <small>${x.done ? L('Done', 'منجز') : x.required ? L('Required', 'مطلوب') : L('Optional', 'اختياري')}</small></li>`).join('')}</ul>
           <p class="help">${L('The parish office ticks each item once it has what it needs. Bring documents to the office.', 'يؤشّر مكتب الرعية على كل بند عند استلام ما يلزم. أحضر المستندات إلى المكتب.')}</p></section>` : ''}
         <section class="member-card mr-history" aria-labelledby="mr-history-title"><h2 id="mr-history-title">${L('History', 'السجلّ')}</h2>
-          <ol class="mr-timeline">${p.events.slice().reverse().map(e => `<li><span class="mr-timeline-dot" aria-hidden="true"></span><span class="mr-timeline-what">${txt(eventLabel(e.key))}</span><time datetime="${txt(e.at)}">${fmtDate(e.at)}</time></li>`).join('')}</ol></section>
+          <ol class="mr-timeline">${p.events.slice().reverse().map(e => `<li><span class="mr-timeline-dot" aria-hidden="true"></span><span class="mr-timeline-what">${txt(eventLabel(e.key))}</span><time datetime="${txt(e.at)}">${fmtStamp(e.at)}</time></li>`).join('')}</ol></section>
       </div>
       <aside class="mr-aside">
         <section class="member-card"><h2>${L('Your request', 'طلبك')}</h2>${summaryList(details, ' mr-summary-compact')}</section>

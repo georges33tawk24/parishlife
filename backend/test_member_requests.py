@@ -169,6 +169,36 @@ class MemberRequestTests(unittest.TestCase):
         self.assertEqual((notice['title'], notice['body'], notice['route']),
                          ('Baptism preparation complete', '2099-05-10', 'myrequests/' + result['id']))
 
+    def test_the_celebration_has_a_time_as_well_as_a_date(self):
+        result = self.child_baptism()
+        self.flow('secretary', 'accept-member-request', 'sc-web-1', requestId=result['id'], household=True)
+        self.flow('priest', 'approve-sacrament-request', 'sc-web-1')
+        for values, message in [(dict(date='2099-05-10', time='25:00'), 'valid celebration time'),
+                                (dict(date='2099-05-10', time='10.30'), 'valid celebration time'),
+                                (dict(date='', time='10:30'), 'date before its time')]:
+            with self.subTest(values=values), self.assertRaisesRegex(server.Problem, message):
+                self.flow('secretary', 'update-preparation', 'sc-web-1', checklist=[True, False, True], **values)
+        self.flow('secretary', 'update-preparation', 'sc-web-1', date='2099-05-10', time='10:30', checklist=[True, False, True])
+        entry = self.entry('sc-web-1')
+        self.assertEqual((entry['date'], entry['time']), ('2099-05-10', '10:30'))
+        notice = self.view('nada')['notifications'][0]
+        self.assertEqual((notice['kind'], notice['body']), ('request-date', '2099-05-10 10:30'))
+        # a new time on the same day is news to the family too
+        self.flow('secretary', 'update-preparation', 'sc-web-1', date='2099-05-10', time='11:00', checklist=[True, False, True])
+        self.assertEqual(self.view('nada')['notifications'][0]['body'], '2099-05-10 11:00')
+        self.flow('secretary', 'complete-preparation', 'sc-web-1')
+        progress = self.request('nada', result['id'])['progress']
+        self.assertEqual((progress['plannedDate'], progress['plannedTime']), ('2099-05-10', '11:00'))
+        notice = self.view('nada')['notifications'][0]
+        self.assertEqual((notice['kind'], notice['body']), ('request-scheduled', '2099-05-10 11:00'))
+        # the time can be changed on the record, and cleared
+        self.flow('secretary', 'update-entry', 'sc-web-1', fields={'time': '17:30'})
+        self.assertEqual(self.entry('sc-web-1')['time'], '17:30')
+        with self.assertRaisesRegex(server.Problem, 'valid celebration time'):
+            self.flow('secretary', 'update-entry', 'sc-web-1', fields={'time': '7pm'})
+        self.flow('secretary', 'update-entry', 'sc-web-1', fields={'time': ''})
+        self.assertEqual(self.request('nada', result['id'])['progress']['plannedTime'], '')
+
     def test_priest_accepts_directly_and_can_link_an_existing_person(self):
         result = self.child_baptism(lat='Yara Matar', born='2016-05-04')
         with self.assertRaisesRegex(server.Problem, 'already exists'):

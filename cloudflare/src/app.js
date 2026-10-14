@@ -8,7 +8,7 @@ import {
 } from './py.js';
 import { SEED, ROLES, CLERGY, FINANCE, PROTECTED, migrate_state, validate, writable } from './state.js';
 import { Tx, Conflict } from './db.js';
-import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, sacrament_conflict, booking_clash } from './requests.js';
+import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, CLOCK, sacrament_conflict, booking_clash } from './requests.js';
 
 export { Problem, ROLES };
 
@@ -456,18 +456,19 @@ async function notify_request_progress(c, pid, s, before, action) {
   if (row === null) return;
   const label = get(REQUEST_LABELS, get(s, 'kind'), 'Request');
   const status = get(s, 'status'), date = get(s, 'date', '');
+  const when = date + (truthy(date) && truthy(get(s, 'time')) ? ' ' + K(s, 'time') : '');
   const reason = get(K(or(get(s, 'history'), [{}]), -1), 'reason', '');
   let event = null;
   if (!eq(status, before[0])) {
     if (status === 'preparing' && action === 'approve-sacrament-request') event = ['accepted', label + ' request accepted', ''];
     else if (status === 'rejected') event = ['declined', label + ' request not accepted', reason];
-    else if (status === 'scheduled' && action === 'complete-preparation') event = ['scheduled', label + ' preparation complete', date];
+    else if (status === 'scheduled' && action === 'complete-preparation') event = ['scheduled', label + ' preparation complete', when];
     else if (status === 'cancelled') event = ['cancelled', label + ' request cancelled', reason];
     else if (status === 'registered') event = ['registered', label + ' recorded in the parish register', get(s, 'reg', '')];
     else if (status === 'issued') event = ['ready', 'Certificate ready to collect', ''];
   }
-  if (event === null && action === 'update-preparation' && truthy(date) && !eq(date, before[1]))
-    event = ['date', label + ' date set', date];
+  if (event === null && action === 'update-preparation' && truthy(date) && !eq([date, get(s, 'time', '')], before.slice(1)))
+    event = ['date', label + ' date set', when];
   if (event !== null) {
     const rows = await memberPrivateRows(c, pid, [row.user_id]);
     notify_member(c, pid, row.user_id, 'request-' + event[0], event[1], event[2], 'myrequests/' + row.id, rows.get(row.user_id));
@@ -942,7 +943,7 @@ export async function workflow(c, u, pid, q) {
   let d = JSON.parse(row.data);
   const action = get(q, 'action'), sid = get(q, 'id');
   let s = next(K(d, 'SACRAMENTS'), x => eq(K(x, 'id'), sid));
-  const before = s !== null ? [get(s, 'status'), get(s, 'date', '')] : null;
+  const before = s !== null ? [get(s, 'status'), get(s, 'date', ''), get(s, 'time', '')] : null;
   const at = NOW();
   const by = K(u, 'name');
   const history = (target, entry) => setdefault(target, 'history', []).push(entry);
@@ -1032,7 +1033,10 @@ export async function workflow(c, u, pid, q) {
     need(isList(checklist) && checklist.length === len(requirements) && checklist.every(value => isBool(value)), 'Complete the preparation checklist.');
     const date = strip(str(or(get(q, 'date'), '')));
     if (truthy(date)) fromiso(date, 'Enter a valid celebration date.');
-    s.date = date;
+    const time = strip(str(or(get(q, 'time'), '')));
+    need(!truthy(time) || truthy(date), 'Set the celebration date before its time.');
+    need(!truthy(time) || CLOCK.test(time), 'Enter a valid celebration time.');
+    s.date = date; s.time = time;
     s.preparation = checklist;
     if (eq(K(s, 'status'), 'scheduled') && (!truthy(date) || iter(requirements).some((item, index) => truthy(K(item, 2)) && !truthy(K(checklist, index)))))
       s.status = 'preparing';
@@ -1056,11 +1060,12 @@ export async function workflow(c, u, pid, q) {
     need(s !== null && !eq(get(s, 'kind'), 'certificate') && has(new Set(['draft', 'scheduled']), get(s, 'status')),
       'Only a planned or unsubmitted sacrament can be edited. Approved entries need a correction request.');
     const fields = get(q, 'fields');
-    const allowed = new Set(['date', 'celebrant', 'godparents', 'book', 'page', 'father', 'mother', 'place', 'externalParish', 'externalReference']);
+    const allowed = new Set(['date', 'time', 'celebrant', 'godparents', 'book', 'page', 'father', 'mother', 'place', 'externalParish', 'externalReference']);
     need(isDict(fields) && truthy(fields) && subset(set(fields), allowed), 'Choose editable sacrament details.');
     for (const [key, value] of Object.entries(fields)) {
       need(isStr(value) && len(value) <= 500, 'Invalid sacrament detail.');
       if (key === 'date') fromiso(value, 'Enter a valid celebration date.');
+      if (key === 'time') need(!truthy(strip(value)) || CLOCK.test(strip(value)), 'Enter a valid celebration time.');
       if (key === 'celebrant' && truthy(value))
         need(any(K(d, 'PEOPLE'), p => eq(K(p, 'id'), value) && eq(get(p, 'status'), 'clergy')), 'Choose a parish celebrant.');
       s[key] = strip(value);

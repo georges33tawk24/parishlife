@@ -619,7 +619,20 @@ def iso_date(value):
     except ValueError: return False
 
 
+THEME_SCHEMES = {'forest', 'navy', 'marian', 'burgundy', 'purple', 'teal', 'cedar', 'slate', 'custom'}
+HEX_COLOUR = re.compile(r'#[0-9A-Fa-f]{6}')
+
+
+def parish_theme(parish):
+    theme = parish.get('theme')
+    return dict(scheme=theme['scheme'], primary=theme['primary']) if isinstance(theme, dict) else None
+
+
 def validate(d):
+    theme = d['PARISH'].get('theme')
+    require(theme is None or (isinstance(theme, dict) and set(theme) == {'scheme', 'primary'}
+            and isinstance(theme['scheme'], str) and theme['scheme'] in THEME_SCHEMES and isinstance(theme['primary'], str)
+            and HEX_COLOUR.fullmatch(theme['primary']) is not None), 'Invalid colour scheme.')
     def index(key):
         rows = d[key]
         require(isinstance(rows, list) and all(isinstance(x, dict) and isinstance(x.get('id'), str) for x in rows), 'Invalid ' + key)
@@ -1118,7 +1131,7 @@ def workflow(c, u, pid, q):
     require(q.get('revision') == row['revision'], 'Record changed. Reload before continuing.', 409)
     d = json.loads(row['data']); action = q.get('action'); sid = q.get('id')
     s = next((s for s in d['SACRAMENTS'] if s['id'] == sid), None)
-    before = (s.get('status'), s.get('date', '')) if s is not None else None
+    before = (s.get('status'), s.get('date', ''), s.get('time', '')) if s is not None else None
     at = NOW()
     if action == 'create-sacrament-request':
         require(s is None and isinstance(sid, str) and sid.startswith('sc') and len(sid) <= 48,
@@ -1218,7 +1231,10 @@ def workflow(c, u, pid, q):
         if date:
             try: dt.date.fromisoformat(date)
             except ValueError: raise Problem(400, 'Enter a valid celebration date.')
-        s['date'] = date
+        time = str(q.get('time') or '').strip()
+        require(not time or date, 'Set the celebration date before its time.')
+        require(not time or CLOCK.fullmatch(time) is not None, 'Enter a valid celebration time.')
+        s['date'], s['time'] = date, time
         s['preparation'] = checklist
         if s['status'] == 'scheduled' and (not date or any(not checklist[index] for index, item in enumerate(requirements) if item[2])):
             s['status'] = 'preparing'
@@ -1244,7 +1260,7 @@ def workflow(c, u, pid, q):
         require(s is not None and s.get('kind') != 'certificate' and s.get('status') in {'draft', 'scheduled'},
                 'Only a planned or unsubmitted sacrament can be edited. Approved entries need a correction request.')
         fields = q.get('fields')
-        allowed = {'date', 'celebrant', 'godparents', 'book', 'page', 'father', 'mother', 'place',
+        allowed = {'date', 'time', 'celebrant', 'godparents', 'book', 'page', 'father', 'mother', 'place',
                    'externalParish', 'externalReference'}
         require(isinstance(fields, dict) and fields and set(fields) <= allowed, 'Choose editable sacrament details.')
         for key, value in fields.items():
@@ -1252,6 +1268,8 @@ def workflow(c, u, pid, q):
             if key == 'date':
                 try: dt.date.fromisoformat(value)
                 except ValueError: raise Problem(400, 'Enter a valid celebration date.')
+            if key == 'time':
+                require(not value.strip() or CLOCK.fullmatch(value.strip()) is not None, 'Enter a valid celebration time.')
             if key == 'celebrant' and value:
                 require(any(p['id'] == value and p.get('status') == 'clergy' for p in d['PEOPLE']), 'Choose a parish celebrant.')
             s[key] = value.strip()
@@ -1735,7 +1753,7 @@ def member_request_progress(d, row, details):
     if not logged and row['status'] != 'submitted':  # a request handled before steps were logged
         logged = [dict(key=row['status'], at=row['updated_at'])]
     events += [dict(key=entry['key'], at=entry['at']) for entry in logged]
-    stage, reason, register, planned, preparation = 'received', '', '', '', []
+    stage, reason, register, planned, planned_time, preparation = 'received', '', '', '', '', []
     if row['status'] == 'declined':
         stage, reason = 'declined', row['response']
     elif row['status'] == 'withdrawn':
@@ -1761,7 +1779,7 @@ def member_request_progress(d, row, details):
                 stage = {'preparing': 'preparing', 'scheduled': 'scheduled', 'draft': 'celebrated', 'awaiting-signature': 'celebrated',
                          'registered': 'completed', 'issued': 'completed', 'rejected': 'declined', 'cancelled': 'cancelled'}.get(status, 'review')
                 if s.get('date') and (stage in {'scheduled', 'celebrated', 'completed'} or s['date'] != details.get('date', '')):
-                    planned = s['date']
+                    planned, planned_time = s['date'], s.get('time', '')
                 if status in OFFICIAL_ENTRY: register = s.get('reg', '')
                 requirements = d.get('PREP_REQUIREMENTS', {}).get(s.get('kind'), [])
                 if status in {'preparing', 'scheduled'}:
@@ -1774,7 +1792,7 @@ def member_request_progress(d, row, details):
                 if key == 'approved' and not certificate: key = 'registered'
                 events.append(dict(key=key, at=entry.get('at', '')))
                 if key in {'declined', 'cancelled'} and entry.get('reason'): reason = entry['reason']
-    return dict(stage=stage, preferredDate=details.get('date', ''), plannedDate=planned, register=register,
+    return dict(stage=stage, preferredDate=details.get('date', ''), plannedDate=planned, plannedTime=planned_time, register=register,
                 preparation=preparation, reason=reason, events=events)
 
 
@@ -1879,17 +1897,18 @@ def notify_request_progress(c, pid, s, before, action):
     if row is None: return
     label = REQUEST_LABELS.get(s.get('kind'), 'Request')
     status, date = s.get('status'), s.get('date', '')
+    when = date + (' ' + s['time'] if date and s.get('time') else '')
     reason = (s.get('history') or [{}])[-1].get('reason', '')
     event = None
     if status != before[0]:
         if status == 'preparing' and action == 'approve-sacrament-request': event = ('accepted', label + ' request accepted', '')
         elif status == 'rejected': event = ('declined', label + ' request not accepted', reason)
-        elif status == 'scheduled' and action == 'complete-preparation': event = ('scheduled', label + ' preparation complete', date)
+        elif status == 'scheduled' and action == 'complete-preparation': event = ('scheduled', label + ' preparation complete', when)
         elif status == 'cancelled': event = ('cancelled', label + ' request cancelled', reason)
         elif status == 'registered': event = ('registered', label + ' recorded in the parish register', s.get('reg', ''))
         elif status == 'issued': event = ('ready', 'Certificate ready to collect', '')
-    if event is None and action == 'update-preparation' and date and date != before[1]:
-        event = ('date', label + ' date set', date)
+    if event is None and action == 'update-preparation' and date and (date, s.get('time', '')) != before[1:]:
+        event = ('date', label + ' date set', when)
     if event:
         notify_member(c, pid, row['user_id'], 'request-' + event[0], event[1], event[2], 'myrequests/' + row['id'])
 
@@ -2039,7 +2058,8 @@ def member_view(c, u, pid):
             if isinstance(item, dict) and item.get('published', True)}
     parish_requests = [member_request_item(d, r) for r in c.execute(
         'SELECT * FROM member_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC,reference DESC', (pid, u['id']))]
-    return dict(parish={k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
+    return dict(parish={**{k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
+                        'theme': parish_theme(d['PARISH'])},
                 site=site,
                 person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
                 notes=private['notes'], todos=private['todos'], commitments=private['commitments'], preferences=private['preferences'],
@@ -2557,6 +2577,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     posts.sort(key=lambda item: item['at'], reverse=True)
                     public_parish = {key: parish.get(key, '') for key in
                                      ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
+                    public_parish['theme'] = parish_theme(parish)
                     if not content.get('contact'):
                         public_parish.update(address='', addressAr='', phone='')
                     return self.reply(200, {'parish': public_parish,

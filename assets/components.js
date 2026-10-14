@@ -24,9 +24,11 @@ export const iconBtn = (ico, label, attrs = '') =>
   `<button class="btn-icon dense" data-tip="${esc(label)}" aria-label="${esc(label)}" ${attrs}>${icon(ico, 17)}</button>`;
 
 /* ---------------- fields ---------------- */
+let fieldCount = 0;
 export function field({ label, req, opt, help, helpTone = '', value = '', ph = '', type = 'text',
                         dir = '', ar = false, state = '', tail = '', id = '' }) {
   const cls = state === 'error' ? 'input' : state === 'ok' ? 'input ok' : 'input';
+  if (label && !id) id = 'f' + (++fieldCount).toString(36);   // every labelled field is named by its label
   if (state === 'loading') tail = tail || '<span class="spinner" style="width:15px;height:15px;border-width:2px"></span>';
   return `<div class="formrow">
     ${label ? `<label class="label" ${id ? `for="${id}"` : ''}>${esc(label)}

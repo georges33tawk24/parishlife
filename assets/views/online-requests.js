@@ -9,7 +9,7 @@ import * as C from '../components.js';
 import { need } from '../flows.js';
 import { workflow as serverWorkflow } from '../persist.js';
 import { MEMBER_REQUESTS, SACRAMENTS, PEOPLE, ARCHIVED, HOUSEHOLDS, RESERVATIONS, VENUES, person } from '../data.js';
-import { kindOf, certificateName, purposeText, languageName, occasionText, topicText, fmtDay, phoneShow } from '../sacrament-requests.js';
+import { kindOf, certificateName, purposeText, languageName, occasionText, topicText, fmtDay, phoneShow, fmtStamp } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
 const ONCE = new Set(['baptism', 'communion', 'confirmation', 'funeral']);
@@ -148,25 +148,25 @@ function fromBlock(r) {
     <dl class="dl or-dl">${row(L('Parishioner', 'المؤمن'), (p ? `<a href="#/person/${esc(p.id)}">${esc(nameOf(p))}</a>` : esc(q.name)) + unverified)}
       ${row(L('Phone for this request', 'هاتف هذا الطلب'), phoneLink(contact))}${row(L('Phone on record', 'الهاتف في السجل'), phoneLink(profile))}
       ${row(L('Household', 'العائلة'), home ? `<a href="#/household/${esc(home.id)}">${esc(L(home.name, home.ar))}</a>` : '')}
-      ${row(L('Sent', 'أُرسل'), `${esc(fmtDate(r.createdAt))} · ${L('member portal', 'بوّابة المؤمنين')}`)}</dl></section>`;
+      ${row(L('Sent', 'أُرسل'), `${esc(fmtStamp(r.createdAt))} · ${L('member portal', 'بوّابة المؤمنين')}`)}</dl></section>`;
 }
 
 function outcomeBlock(r) {
-  if (r.status === 'withdrawn') return C.inlineAlert('info', L('Withdrawn. ', 'مسحوب. '), L(`The parishioner withdrew this request on ${fmtDate(r.updatedAt)}.`, `سحب المؤمن هذا الطلب في ${fmtDate(r.updatedAt)}.`));
-  if (r.status === 'declined') return `${C.inlineAlert('warning', L('Not accepted. ', 'لم يُقبل. '), L(`Declined on ${fmtDate(r.updatedAt)}. The parishioner saw this message:`, `رُفض في ${fmtDate(r.updatedAt)}. رأى المؤمن هذه الرسالة:`))}
+  if (r.status === 'withdrawn') return C.inlineAlert('info', L('Withdrawn. ', 'مسحوب. '), L(`The parishioner withdrew this request on ${fmtStamp(r.updatedAt)}.`, `سحب المؤمن هذا الطلب في ${fmtStamp(r.updatedAt)}.`));
+  if (r.status === 'declined') return `${C.inlineAlert('warning', L('Not accepted. ', 'لم يُقبل. '), L(`Declined on ${fmtStamp(r.updatedAt)}. The parishioner saw this message:`, `رُفض في ${fmtStamp(r.updatedAt)}. رأى المؤمن هذه الرسالة:`))}
     <blockquote class="or-quote"><p><bdi>${esc(r.response)}</bdi></p></blockquote>`;
-  if (r.status === 'completed') return `${C.inlineAlert('success', L('Done. ', 'منجز. '), L(`Marked as done on ${fmtDate(r.updatedAt)}.`, `عُلّم كمنجز في ${fmtDate(r.updatedAt)}.`))}
+  if (r.status === 'completed') return `${C.inlineAlert('success', L('Done. ', 'منجز. '), L(`Marked as done on ${fmtStamp(r.updatedAt)}.`, `عُلّم كمنجز في ${fmtStamp(r.updatedAt)}.`))}
     ${r.response ? `<blockquote class="or-quote"><span>${L('Message to the parishioner', 'رسالة إلى المؤمن')}</span><p><bdi>${esc(r.response)}</bdi></p></blockquote>` : ''}`;
-  if (r.status === 'accepted' && r.kind === 'custom') return `${C.inlineAlert('info', L('Accepted. ', 'مقبول. '), L(`Accepted on ${fmtDate(r.updatedAt)}. Mark it as done once it is done, so the parishioner knows.`, `قُبل في ${fmtDate(r.updatedAt)}. علّمه كمنجز عند إنجازه ليعرف المؤمن.`))}
+  if (r.status === 'accepted' && r.kind === 'custom') return `${C.inlineAlert('info', L('Accepted. ', 'مقبول. '), L(`Accepted on ${fmtStamp(r.updatedAt)}. Mark it as done once it is done, so the parishioner knows.`, `قُبل في ${fmtStamp(r.updatedAt)}. علّمه كمنجز عند إنجازه ليعرف المؤمن.`))}
     ${r.response ? `<blockquote class="or-quote"><span>${L('Message to the parishioner', 'رسالة إلى المؤمن')}</span><p><bdi>${esc(r.response)}</bdi></p></blockquote>` : ''}`;
   if (r.status === 'accepted' && r.kind === 'booking') {
     const b = RESERVATIONS.find(x => x.id === r.sacramentId);
-    return C.inlineAlert('success', L('Accepted. ', 'مقبول. '), b ? L(`Accepted on ${fmtDate(r.updatedAt)} as booking ${b.ref}.`, `قُبل في ${fmtDate(r.updatedAt)} كالحجز ${b.ref}.`) : L(`Accepted on ${fmtDate(r.updatedAt)}. The booking was later removed.`, `قُبل في ${fmtDate(r.updatedAt)}. ثم أُزيل الحجز.`),
+    return C.inlineAlert('success', L('Accepted. ', 'مقبول. '), b ? L(`Accepted on ${fmtStamp(r.updatedAt)} as booking ${b.ref}.`, `قُبل في ${fmtStamp(r.updatedAt)} كالحجز ${b.ref}.`) : L(`Accepted on ${fmtStamp(r.updatedAt)}. The booking was later removed.`, `قُبل في ${fmtStamp(r.updatedAt)}. ثم أُزيل الحجز.`),
       b ? `<a class="btn btn-secondary btn-dense" href="#/reservations/${esc(b.id)}">${L('Open the booking', 'فتح الحجز')}</a>` : '');
   }
   if (r.status === 'accepted') {
     const s = SACRAMENTS.find(x => x.id === r.sacramentId);
-    return C.inlineAlert('success', L('Accepted. ', 'مقبول. '), L(`Accepted on ${fmtDate(r.updatedAt)}.`, `قُبل في ${fmtDate(r.updatedAt)}.`),
+    return C.inlineAlert('success', L('Accepted. ', 'مقبول. '), L(`Accepted on ${fmtStamp(r.updatedAt)}.`, `قُبل في ${fmtStamp(r.updatedAt)}.`),
       s ? `<a class="btn btn-secondary btn-dense" href="#/certificate/${esc(s.id)}">${L('Open the entry', 'فتح القيد')} · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi></a>` : '');
   }
   return '';
@@ -198,7 +198,7 @@ export function openOnlineRequest(id) {
   openDrawer({
     large: true,
     title: `${onlineTitle(r)} · ${L('online request', 'طلب إلكتروني')}`,
-    sub: `<bdi class="mono" dir="ltr">${esc(r.reference)}</bdi> · ${L('Sent', 'أُرسل')} ${esc(fmtDate(r.createdAt))}`,
+    sub: `<bdi class="mono" dir="ltr">${esc(r.reference)}</bdi> · ${L('Sent', 'أُرسل')} ${esc(fmtStamp(r.createdAt))}`,
     body: `<div class="or-body">
       ${outcomeBlock(r)}
       ${missing ? C.inlineAlert('warning', L('Person not found. ', 'الشخص غير موجود. '), L('The person on this request is no longer active in People. Decline it, or restore the record first.', 'لم يعد صاحب الطلب ناشطاً في المؤمنين. ارفضه، أو استعِد السجل أولاً.')) : ''}

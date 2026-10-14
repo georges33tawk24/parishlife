@@ -25,6 +25,7 @@ import * as Oversight from './views/oversight.js';
 import * as Member from './views/member.js';
 import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
+import { applyTheme } from './theme.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
@@ -245,6 +246,7 @@ const siField = (id, label, attrs, help = '') => `<div class="formrow"><label cl
 const parishLabel = p => t(p.name, p.ar || p.name) + (p.town ? ` — ${t(p.town, p.townAr || p.town)}` : '');
 
 function loginScreen(error = '') {
+  S.themeDraft = null; applyTheme(null);   // the sign-in page is ParishLife's own, before any parish is chosen
   const params = new URLSearchParams(location.search);
   SI.tab ||= params.get('signup') ? 'up' : 'in';
   const up = SI.tab === 'up', v = SI.values;
@@ -462,6 +464,9 @@ function updateRail() {
    the reader exactly where they were. The rail never moves either way. */
 function renderView({ keepScroll = false } = {}) {
   const rt = ROUTES[S.route] || ROUTES.dashboard;
+  /* the parish colours; a scheme being previewed in Settings → Colours lasts only while that tab is open */
+  if (!(S.route === 'settings' && S.params[0] === 'appearance')) S.themeDraft = null;
+  applyTheme(S.themeDraft || PARISH.theme);
   const host = document.getElementById('view');
   const well = document.getElementById('well'), y = well?.scrollTop || 0;
   if (MEMBER_ROUTES.has(S.route) && M.loadedFor !== `${session.user?.id}:${session.parishId}`) {
@@ -696,7 +701,7 @@ function accountDrawer() {
 async function signOut() {
   if (!confirmPlanNavigation()) return;
   if (!await persist()) return toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), t('Resolve the save error before signing out.', 'عالِج خطأ الحفظ قبل تسجيل الخروج.'), 'danger');
-  closeOverlays(); await api('logout', 'POST').catch(() => {});
+  closeOverlays(); await api('logout', 'POST', {}).catch(() => {});   // an empty JSON object: both servers refuse a bodiless write
   session.user = null; session.parishes = []; session.parishId = null; session.csrf = '';
   loginScreen();
 }
