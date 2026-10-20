@@ -690,6 +690,9 @@ export const INVITATIONS = [];
 export const MINISTRY_APPLICATIONS = [];
 export const MINISTRY_INQUIRIES = [];
 export const MINISTRY_DEPARTURES = [];
+/* Certificates asked for without an account, and the diocese's rules that apply here (read-only). */
+export const GUEST_REQUESTS = [];
+export const POLICIES = { documentRelease: 'unset' };
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

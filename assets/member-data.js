@@ -4,7 +4,7 @@ export const M = { parish: {}, person: {}, site: {}, groups: [], meetings: [], e
   commitments: {}, preferences: {}, concerns: [], review: [], leaderConcerns: [], complaintPermissions: [],
   profileRequests: [], volunteerReview: [], profileReview: [], managedGroups: [], formation: [], reviewers: [], categories: [], notifications: [],
   requests: [], requestOptions: { subjects: [], preparation: {}, phone: '', venues: [], busy: [] },
-  ministryApplications: [], ministryDepartures: [], openMinistries: [] };
+  ministryApplications: [], ministryDepartures: [], openMinistries: [], guestRequests: [] };
 
 export async function loadMember() {
   Object.assign(M, await parishAPI('member'));

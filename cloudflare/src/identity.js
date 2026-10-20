@@ -111,13 +111,14 @@ async function issueCode(c, ctx, userId, purpose, kind, target, outbox) {
 }
 
 /* Written after the request's own commit, in a transaction of its own. */
-const DELIVERY_TABLES = { verification_codes: 'verification_codes', invitations: 'invitations' };
+const DELIVERY_COLUMNS = { verification_codes: ['verification_codes', 'delivery'], invitations: ['invitations', 'delivery'], guest_requests: ['guest_requests', 'link_delivery'] };
 async function recordDelivery(db, table, id, status) {
+  const [name, column] = DELIVERY_COLUMNS[table];
   for (let attempt = 1; attempt <= 8; attempt++) {
     const c = new Tx(db);
     try {
       await c.reads([]);
-      c.run(`UPDATE ${DELIVERY_TABLES[table]} SET delivery=? WHERE id=?`, status, id);
+      c.run(`UPDATE ${name} SET ${column}=? WHERE id=?`, status, id);
       await c.commit();
       return;
     } catch (error) {

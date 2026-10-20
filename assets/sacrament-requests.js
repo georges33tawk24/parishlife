@@ -79,6 +79,8 @@ const STAGES = {
   celebrated: ['Being recorded', 'قيد التدوين', 'info', 'st-wait'],
   completed:  ['Completed', 'مكتمل', 'success', 'st-ok'],
   signing:    ['Being signed', 'قيد التوقيع', 'info', 'st-wait'],
+  acceptance: ['Signed · with the bishop', 'موقّعة · لدى المطران', 'info', 'st-wait'],
+  accepted:   ['Accepted by the bishop', 'قبلها المطران', 'info', 'st-wait'],
   ready:      ['Ready to collect', 'جاهزة للاستلام', 'success', 'st-ok'],
   confirmed:  ['Booking confirmed', 'الحجز مؤكَّد', 'success', 'st-ok'],
   inprogress: ['Being taken care of', 'قيد المتابعة', 'info', 'st-wait'],
@@ -101,18 +103,18 @@ export const isActive = r => !CLOSED.has(r.progress.stage) && !['completed', 're
 
 /* The steps a parishioner sees, and how many are behind them. */
 export const stepsFor = r => r.kind === 'certificate'
-  ? [t('Request sent', 'أُرسل الطلب'), t('Register checked', 'التحقّق من السجل'), t('Signed by the priest', 'توقيع الكاهن'), t('Ready to collect', 'جاهزة للاستلام')]
+  ? [t('Request sent', 'أُرسل الطلب'), t('Register checked', 'التحقّق من السجل'), t('Signed by the priest', 'توقيع الكاهن'), t('Accepted by the bishop', 'قبول المطران'), t('Ready to collect', 'جاهزة للاستلام')]
   : r.kind === 'booking' ? [t('Request sent', 'أُرسل الطلب'), t('Parish office', 'مكتب الرعية'), t('Priest’s approval', 'موافقة الكاهن'), t('Confirmed', 'مؤكَّد')]
   : r.kind === 'custom' ? [t('Request sent', 'أُرسل الطلب'), t('Accepted', 'مقبول'), t('Done', 'منجز')]
   : [t('Request sent', 'أُرسل الطلب'), t('Parish office', 'مكتب الرعية'), t('Priest’s decision', 'قرار الكاهن'), t('Preparation', 'التحضير'), t('Celebration', 'الاحتفال'), t('Parish register', 'سجلّ الرعية')];
 const DONE_STEPS = {
-  certificate: { received: 1, review: 1, signing: 2, ready: 4 },
+  certificate: { received: 1, review: 1, signing: 2, acceptance: 3, accepted: 4, ready: 5 },
   booking: { received: 1, review: 2, confirmed: 4 },
   custom: { received: 1, inprogress: 2, completed: 3 },
   sacrament: { received: 1, review: 2, preparing: 3, scheduled: 4, celebrated: 5, completed: 6 }
 };
 const REACHED = {
-  certificate: { submitted: 1, approved: 2 },
+  certificate: { submitted: 1, approved: 3, 'bishop-accepted': 4 },
   booking: { submitted: 1, accepted: 2 },
   custom: { submitted: 1, accepted: 2 },
   sacrament: { submitted: 1, accepted: 2, 'priest-accepted': 3, prepared: 4, celebrated: 5 }
@@ -120,7 +122,7 @@ const REACHED = {
 const family = r => ['certificate', 'booking', 'custom'].includes(r.kind) ? r.kind : 'sacrament';
 /* Which steps each recorded event completes, so every step can say when it happened. */
 const STEP_EVENTS = {
-  certificate: { submitted: [0], approved: [1], issued: [2, 3] },
+  certificate: { submitted: [0], accepted: [1], approved: [2], 'bishop-accepted': [3], issued: [4] },
   booking: { submitted: [0], accepted: [1], confirmed: [2, 3] },
   custom: { submitted: [0], accepted: [1], completed: [2] },
   sacrament: { submitted: [0], accepted: [1], 'priest-accepted': [2], prepared: [3], celebrated: [4], registered: [5] }
@@ -157,6 +159,8 @@ export function nextText(r) {
     case 'completed': return r.kind === 'custom' ? t('Your request has been taken care of.', 'تمّت تلبية طلبك.')
       : t(`Recorded in the parish register as ${p.register}. You can ask for a certificate at any time.`, `دُوّن في سجلّ الرعية برقم ${p.register}. يمكنك طلب شهادة في أي وقت.`);
     case 'signing': return t('Approved by the priest. Your certificate is being signed.', 'وافق الكاهن، والشهادة قيد التوقيع.');
+    case 'acceptance': return t('The priest signed your certificate. It is now with the bishop for acceptance.', 'وقّع الكاهن شهادتك، وهي الآن لدى المطران للقبول.');
+    case 'accepted': return t('The bishop accepted your certificate. The parish office will tell you when it is ready.', 'قبل المطران شهادتك. سيخبرك مكتب الرعية عندما تصبح جاهزة.');
     case 'ready': return t('Your certificate is signed and ready. Collect it from the parish office.', 'شهادتك موقّعة وجاهزة. استلمها من مكتب الرعية.');
     case 'declined': return t('The parish could not accept this request.', 'تعذّر على الرعية قبول هذا الطلب.');
     case 'cancelled': return r.kind === 'booking' ? t('This booking was cancelled. Please contact the parish office if you still need the place.', 'أُلغي هذا الحجز. يُرجى التواصل مع مكتب الرعية إذا كنت لا تزال بحاجة إلى المكان.') : t('This request was cancelled.', 'أُلغي هذا الطلب.');
@@ -170,7 +174,8 @@ const EVENTS = {
   submitted: ['Request sent', 'أُرسل الطلب'], accepted: ['Reviewed by the parish office', 'راجعه مكتب الرعية'],
   'priest-accepted': ['Accepted by the priest', 'قبله الكاهن'], prepared: ['Preparation completed', 'اكتمل التحضير'],
   celebrated: ['Celebrated', 'تمّ الاحتفال'], registered: ['Recorded in the parish register', 'دُوّن في سجلّ الرعية'],
-  approved: ['Approved by the priest', 'وافق عليه الكاهن'], issued: ['Signed and ready to collect', 'وُقّعت وهي جاهزة للاستلام'],
+  approved: ['Approved by the priest', 'وافق عليه الكاهن'], issued: ['Ready to collect', 'جاهزة للاستلام'],
+  'bishop-accepted': ['Accepted by the bishop', 'قبلها المطران'],
   declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي'], withdrawn: ['You withdrew the request', 'سحبتَ الطلب'],
   confirmed: ['Booking confirmed', 'أُكّد الحجز'], completed: ['Done', 'أُنجز']
 };

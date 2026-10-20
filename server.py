@@ -35,8 +35,9 @@ CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
 READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS',
-            'MEMBERSHIP_REQUESTS', 'INVITATIONS', 'MINISTRY_APPLICATIONS', 'MINISTRY_INQUIRIES', 'MINISTRY_DEPARTURES'}
-PROTECTED = {'status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference'}
+            'MEMBERSHIP_REQUESTS', 'INVITATIONS', 'MINISTRY_APPLICATIONS', 'MINISTRY_INQUIRIES', 'MINISTRY_DEPARTURES', 'GUEST_REQUESTS', 'POLICIES'}
+PROTECTED = {'status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference',
+             'acceptance', 'guestRequest'}
 NOW = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
 TODAY = lambda: dt.date.today().isoformat()
 
@@ -533,8 +534,9 @@ def send_outbox(c, outbox):
                 item['status'] = 'sent' if 200 <= r.status < 300 else 'failed'
         except (OSError, ValueError):
             item['status'] = 'failed'
-        table = {'verification_codes': 'verification_codes', 'invitations': 'invitations'}[item['table']]
-        c.execute(f'UPDATE {table} SET delivery=? WHERE id=?', (item['status'], item['id'])); c.commit()
+        table, column = {'verification_codes': ('verification_codes', 'delivery'), 'invitations': ('invitations', 'delivery'),
+                         'guest_requests': ('guest_requests', 'link_delivery')}[item['table']]
+        c.execute(f'UPDATE {table} SET {column}=? WHERE id=?', (item['status'], item['id'])); c.commit()
     return [dict(channel=item['channel'], to=item['target'], delivery=item['status']) for item in outbox]
 
 
@@ -1724,6 +1726,301 @@ def account_notifications_action(c, u, q):
     return {}
 
 
+# ───────────── Documents: guest requests, the priest's signature, the bishop's acceptance, release ─────────────
+# Anyone can ask a parish for a certificate without an account, for themselves or a family member (a
+# child's is asked for by a parent or guardian). They get a private tracking link. The priest signs the
+# document; it then goes to the bishop, whose acceptance is a separate step with its own history. Whether
+# a document is released before the bishop accepts it is a diocesan policy: until the bishop sets one,
+# nothing is released automatically and a priest releasing early says so explicitly.
+DOCUMENT_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS guest_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), reference TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, subject TEXT NOT NULL, requester TEXT NOT NULL, purpose TEXT NOT NULL DEFAULT '',
+  delivery TEXT NOT NULL, status TEXT NOT NULL, certificate_id TEXT, response TEXT NOT NULL DEFAULT '', link_delivery TEXT NOT NULL,
+  claim_user_id TEXT, claim_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, log TEXT NOT NULL DEFAULT '[]',
+  UNIQUE(parish_id,reference));
+CREATE INDEX IF NOT EXISTS guest_requests_parish ON guest_requests(parish_id,status);
+'''
+GUEST_KINDS = {'baptism': 'Baptism certificate', 'communion': 'First Communion certificate', 'confirmation': 'Confirmation certificate',
+               'marriage': 'Marriage certificate'}
+RELATIONSHIPS = {'self', 'parent', 'guardian', 'spouse', 'child', 'sibling', 'other'}
+RELEASE_POLICIES = ('unset', 'after-signature', 'after-acceptance')
+GUEST_REQUESTS_PER_HOUR = 20
+
+
+def release_policy(c, pid):
+    """The diocese's rule for releasing signed documents; 'unset' until its bishop decides."""
+    parish = c.execute('SELECT diocese FROM parishes WHERE id=?', (pid,)).fetchone()
+    value = setting(c, 'diocese', parish['diocese'], 'documentRelease', 'unset') if parish else 'unset'
+    return value if value in RELEASE_POLICIES else 'unset'
+
+
+def adult(born):
+    if not born: return True
+    b = dt.date.fromisoformat(born); t = dt.date.today()
+    return t.year - b.year - ((t.month, t.day) < (b.month, b.day)) >= 18
+
+
+def guest_request_create(c, pid, q, outbox, base_url):
+    """A certificate asked for without an account. The private tracking link is shown once and, when a
+    delivery service is configured, also sent to the contact given."""
+    require(not q.get('website'), 'The request could not be sent.')  # a field only robots fill in
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone()
+    require(parish is not None, 'Parish not found.', 404)
+    kind = q.get('kind')
+    require(kind in GUEST_KINDS, 'Choose the document you need.')
+    s, r = q.get('subject') or {}, q.get('requester') or {}
+    require(isinstance(s, dict) and isinstance(r, dict), 'Invalid request data.')
+    born = str(s.get('birthDate') or '')
+    if born:
+        require(re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', born) is not None, 'Check the date of birth.')
+        try: require(dt.date.fromisoformat(born) <= dt.date.today(), 'Check the date of birth.')
+        except ValueError: raise Problem(400, 'Check the date of birth.')
+    subject = dict(name=clean(s.get('name'), 120, 'Enter the full name of the person the document is about.'), birthDate=born,
+                   father=clean(s.get('father'), 120, 'Check the father’s name.', required=False),
+                   mother=clean(s.get('mother'), 120, 'Check the mother’s name.', required=False),
+                   when=clean(s.get('when'), 120, 'Check the date or year of the sacrament.', required=False))
+    relationship = r.get('relationship')
+    require(relationship in RELATIONSHIPS, 'Say how you are related to this person.')
+    if not adult(born):
+        require(relationship in {'parent', 'guardian'}, 'A document about a child is asked for by a parent or legal guardian.')
+    requester = dict(name=clean(r.get('name'), 120, 'Enter your name.'), relationship=relationship,
+                     email=contact_value('email', r.get('email')) if str(r.get('email') or '').strip() else '',
+                     phone=contact_value('phone', r.get('phone')) if str(r.get('phone') or '').strip() else '')
+    require(requester['email'] or requester['phone'], 'Give a phone number or an email address.')
+    delivery = q.get('delivery')
+    require(delivery in {'download', 'collect'}, 'Choose how you will receive the document.')
+    purpose = clean(q.get('purpose'), 500, 'Keep the purpose within 500 characters.', required=False)
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)).isoformat()
+    require(c.execute('SELECT COUNT(*) FROM guest_requests WHERE parish_id=? AND created_at>?', (pid, since)).fetchone()[0] < GUEST_REQUESTS_PER_HOUR,
+            'Many requests reached this parish in the last hour. Please try again later or call the parish office.', 429)
+    at, year = NOW(), TODAY()[:4]
+    number = c.execute('SELECT COUNT(*) FROM guest_requests WHERE parish_id=? AND reference LIKE ?', (pid, f'GR-{year}-%')).fetchone()[0] + 1
+    rid, token, reference = 'gr-' + secrets.token_hex(8), secrets.token_urlsafe(24), f'GR-{year}-{number:04d}'
+    link = f'{base_url}/public.html?track={token}'
+    channel = 'email' if requester['email'] else 'sms'
+    mode = delivery_mode(channel)
+    link_delivery = {'none': 'not-configured', 'service': 'sending', 'console': 'console'}[mode]
+    c.execute('INSERT INTO guest_requests(id,parish_id,reference,token,kind,subject,requester,purpose,delivery,status,link_delivery,created_at,updated_at,log) '
+              'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (rid, pid, reference, sha(token), kind, json.dumps(subject), json.dumps(requester), purpose,
+                                                      delivery, 'submitted', link_delivery, at, at, json.dumps([dict(key='submitted', at=at)])))
+    if mode != 'none':
+        name = json.loads(parish['metadata']).get('name', 'Your parish')
+        outbox.append(dict(id=rid, table='guest_requests', channel=channel, target=requester['email'] or requester['phone'], mode=mode,
+                           status=link_delivery, subject=f'Your request to {name} ({reference})',
+                           text=f'{name} received your request {reference}. Follow it with this private link: {link}'))
+    audit(c, {'id': None}, pid, 'guest-request.created', {'request': rid, 'kind': kind})
+    return dict(reference=reference, link=link, linkDelivery=link_delivery, channel=channel)
+
+
+def certificate_stage(s, row):
+    """Where a certificate stands, in words a requester can follow."""
+    if row['status'] == 'declined': return 'declined'
+    if row['status'] == 'collected': return 'collected'
+    if row['status'] == 'submitted' or s is None: return 'received'
+    status, acceptance = s.get('status'), (s.get('acceptance') or {}).get('status')
+    if status in {'rejected', 'cancelled'}: return 'cancelled'
+    if status == 'issued': return 'ready'
+    if status == 'approved': return 'accepted' if acceptance == 'accepted' else 'signed'
+    return 'review'
+
+
+def guest_files(c, pid, rid):
+    return c.execute("SELECT id,name,mime,size,created_at FROM uploaded_files WHERE parish_id=? AND scope='guest-request' AND owner_id=? ORDER BY created_at DESC",
+                     (pid, rid)).fetchall()
+
+
+def guest_request_view(c, row):
+    d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (row['parish_id'],)).fetchone()['data'])
+    s = next((x for x in d['SACRAMENTS'] if x['id'] == row['certificate_id']), None) if row['certificate_id'] else None
+    stage = certificate_stage(s, row)
+    events = json.loads(row['log'] or '[]')
+    for h in (s or {}).get('history', []):
+        key = {'approve': 'signed', 'bishop accepted': 'bishop-accepted', 'bishop returned': 'review', 'issue': 'ready',
+               'reject': 'cancelled', 'cancelled': 'cancelled'}.get(h.get('action'))
+        if key: events.append(dict(key=key, at=h.get('at', '')))
+    events.sort(key=lambda e: e['at'])
+    subject, parish = json.loads(row['subject']), c.execute('SELECT metadata FROM parishes WHERE id=?', (row['parish_id'],)).fetchone()
+    meta = json.loads(parish['metadata'])
+    return dict(reference=row['reference'], parish=dict(id=row['parish_id'], name=meta.get('name', ''), ar=meta.get('ar', '')),
+                kind=row['kind'], subject=subject['name'], minor=not adult(subject.get('birthDate')), delivery=row['delivery'], stage=stage,
+                events=events, message=row['response'], createdAt=row['created_at'],
+                download=stage == 'ready' and row['delivery'] == 'download' and bool(guest_files(c, row['parish_id'], row['id'])))
+
+
+def guest_request_row(c, token):
+    row = c.execute('SELECT * FROM guest_requests WHERE token=?', (sha(str(token or '')),)).fetchone()
+    require(row is not None, 'This tracking link is not valid. Check that you copied all of it.', 404)
+    return row
+
+
+def guest_document(c, token):
+    """The signed document, once released, for a request that asked to download it."""
+    row = guest_request_row(c, token)
+    view = guest_request_view(c, row)
+    require(view['download'], 'This document is not available to download.', 403)
+    file_id = guest_files(c, row['parish_id'], row['id'])[0]['id']
+    audit(c, {'id': None}, row['parish_id'], 'guest-request.downloaded', {'request': row['id']})
+    return c.execute('SELECT * FROM uploaded_files WHERE id=?', (file_id,)).fetchone()
+
+
+def office_guest_requests(c, pid, d):
+    certs = {s['id']: s for s in d['SACRAMENTS'] if s.get('kind') == 'certificate'}
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=120)).isoformat()
+    out = []
+    for r in c.execute("SELECT * FROM guest_requests WHERE parish_id=? AND (status IN ('submitted','accepted') OR updated_at>? OR claim_status='pending') "
+                       "ORDER BY created_at DESC", (pid, since)).fetchall():
+        claimant = c.execute('SELECT name,username FROM users WHERE id=?', (r['claim_user_id'],)).fetchone() if r['claim_user_id'] else None
+        out.append(dict(id=r['id'], reference=r['reference'], kind=r['kind'], subject=json.loads(r['subject']), requester=json.loads(r['requester']),
+                        purpose=r['purpose'], delivery=r['delivery'], status=r['status'], certificateId=r['certificate_id'], response=r['response'],
+                        linkDelivery=r['link_delivery'], createdAt=r['created_at'], stage=certificate_stage(certs.get(r['certificate_id']), r),
+                        files=[dict(f) for f in guest_files(c, pid, r['id'])],
+                        claim=dict(status=r['claim_status'], name=claimant['name'], username=claimant['username']) if claimant else None))
+    return out
+
+
+def guest_request_action(c, u, pid, q):
+    u = parish_user(c, u, pid)
+    require('requests.manage' in perms_of(u), 'Permission to handle requests is required.', 403)
+    r = c.execute('SELECT * FROM guest_requests WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+    require(r is not None, 'Request not found.', 404)
+    op, at = q.get('op'), NOW()
+    log = json.loads(r['log'] or '[]')
+    row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
+    d, revision = json.loads(row['data']), row['revision']
+    if op == 'accept':
+        require(r['status'] == 'submitted', 'This request was already handled.')
+        person_id, source_id = q.get('personId'), q.get('sourceRecordId') or None
+        require(any(p['id'] == person_id for p in d['PEOPLE'] + d['ARCHIVED']), 'Choose the person’s record in your registers.')
+        source = next((x for x in d['SACRAMENTS'] if x['id'] == source_id), None) if source_id else None
+        if source_id:
+            require(source is not None and source['kind'] == r['kind'] and source['person'] == person_id and source['status'] in {'registered', 'issued'},
+                    'Choose the official register entry for this person.')
+        year, prefix = TODAY()[:4], f'REQ/{TODAY()[:4]}/'
+        number = max([int(x['reg'][len(prefix):]) for x in d['SACRAMENTS']
+                      if str(x.get('reg', '')).startswith(prefix) and str(x['reg'][len(prefix):]).isdigit()] or [0]) + 1
+        cid = 'sc' + secrets.token_hex(10)
+        history = [dict(action='request submitted', by=u['name'], at=at, guestRequest=r['reference'])]
+        if source: history.append(dict(action='submitted for clergy review', by=u['name'], at=at))
+        d['SACRAMENTS'].insert(0, dict(id=cid, kind='certificate', kindAr='طلب شهادة', reg=f'{prefix}{number:03d}', person=person_id, date=TODAY(),
+                                       celebrant=(source or {}).get('celebrant') or '', status='awaiting-signature' if source else 'draft',
+                                       sourceRecordId=source_id, requestedSacramentId=None, purpose=r['purpose'] or GUEST_KINDS[r['kind']],
+                                       godparents='', history=history, revision=1, guestRequest=r['reference']))
+        revision = save_state(c, pid, d)
+        c.execute("UPDATE guest_requests SET status='accepted',certificate_id=?,updated_at=?,log=? WHERE id=?",
+                  (cid, at, json.dumps(log + [dict(key='accepted', at=at)]), r['id']))
+        audit(c, u, pid, 'guest-request.accepted', {'request': r['id'], 'certificate': cid})
+        return dict(revision=revision, certificateId=cid)
+    if op == 'decline':
+        require(r['status'] in {'submitted', 'accepted'}, 'This request was already closed.')
+        note = clean(q.get('note'), 500, 'Tell them why, in 500 characters or fewer.')
+        c.execute("UPDATE guest_requests SET status='declined',response=?,updated_at=?,log=? WHERE id=?",
+                  (note, at, json.dumps(log + [dict(key='declined', at=at)]), r['id']))
+        audit(c, u, pid, 'guest-request.declined', {'request': r['id']})
+        return dict(revision=revision)
+    if op == 'collected':
+        s = next((x for x in d['SACRAMENTS'] if x['id'] == r['certificate_id']), None)
+        require(r['status'] == 'accepted' and s is not None and s.get('status') == 'issued', 'Release the document before marking it collected.')
+        c.execute("UPDATE guest_requests SET status='collected',updated_at=?,log=? WHERE id=?", (at, json.dumps(log + [dict(key='collected', at=at)]), r['id']))
+        audit(c, u, pid, 'guest-request.collected', {'request': r['id']})
+        return dict(revision=revision)
+    if op in {'approveClaim', 'declineClaim'}:
+        require(r['claim_status'] == 'pending', 'Nobody is waiting to link this request.')
+        c.execute('UPDATE guest_requests SET claim_status=?,updated_at=? WHERE id=?', ('approved' if op == 'approveClaim' else 'declined', at, r['id']))
+        notify_member(c, pid, r['claim_user_id'], 'request', f"Request {r['reference']} " + ('is now linked to your account' if op == 'approveClaim' else 'was not linked to your account'), '', 'myrequests')
+        audit(c, u, pid, 'guest-request.claim-' + ('approved' if op == 'approveClaim' else 'declined'), {'request': r['id']})
+        return dict(revision=revision)
+    raise Problem(400, 'Unknown action.')
+
+
+def guest_request_claim(c, u, pid, q):
+    """An account asks to see a request it made as a guest. Holding the private link is the proof, and the
+    office still confirms; a matching name, phone or email never links anything by itself."""
+    r = guest_request_row(c, q.get('token'))
+    require(r['parish_id'] == pid, 'This request belongs to another parish.', 404)
+    require(r['claim_status'] not in {'pending', 'approved'} or r['claim_user_id'] == u['id'], 'This request is already linked to another account.', 409)
+    require(r['claim_status'] != 'approved', 'This request is already linked to your account.')
+    c.execute("UPDATE guest_requests SET claim_user_id=?,claim_status='pending',updated_at=? WHERE id=?", (u['id'], NOW(), r['id']))
+    audit(c, u, pid, 'guest-request.claimed', {'request': r['id']})
+    return dict(reference=r['reference'])
+
+
+def claimed_guest_requests(c, u, pid):
+    return [dict(guest_request_view(c, r), id=r['id'], claim=r['claim_status'])
+            for r in c.execute("SELECT * FROM guest_requests WHERE parish_id=? AND claim_user_id=? AND claim_status IN ('pending','approved') "
+                               "ORDER BY created_at DESC", (pid, u['id'])).fetchall()]
+
+
+def diocese_documents(c, u):
+    """Certificates signed by priests in the bishop's dioceses, waiting for (or recently given) the bishop's acceptance."""
+    auth = authority(c, u)
+    dioceses = [r['id'] for r in c.execute("SELECT id FROM dioceses WHERE id<>''") if 'documents.accept' in diocese_perms(auth, r['id'])]
+    require(dioceses, 'Accepting signed documents belongs to the bishop.', 403)
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=60)).isoformat()
+    out = []
+    for p in c.execute(f'SELECT * FROM parishes WHERE diocese IN ({",".join("?" * len(dioceses))}) ORDER BY rowid', dioceses).fetchall():
+        d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (p['id'],)).fetchone()['data'])
+        people = {x['id']: x for x in d['PEOPLE'] + d['ARCHIVED']}
+        regs = {x['id']: x for x in d['SACRAMENTS']}
+        meta = json.loads(p['metadata'])
+        for s in d['SACRAMENTS']:
+            a = s.get('acceptance') or {}
+            if s.get('kind') != 'certificate' or not a or (a.get('status') != 'awaiting' and str(a.get('at', '')) < since): continue
+            source = regs.get(s.get('sourceRecordId')) or {}
+            out.append(dict(parish=p['id'], parishName=meta.get('name', ''), parishAr=meta.get('ar', ''), id=s['id'], reg=s.get('reg', ''),
+                            person=people.get(s.get('person'), {}).get('lat', ''), source=dict(kind=source.get('kind', ''), reg=source.get('reg', '')),
+                            purpose=s.get('purpose', ''), signedBy=s.get('approvedBy', ''), signedAt=s.get('approvedAt', ''), status=s.get('status'),
+                            acceptance=a))
+    return dict(documents=out, policies={did: setting(c, 'diocese', did, 'documentRelease', 'unset') for did in dioceses})
+
+
+def diocese_document_action(c, u, q):
+    pid = q.get('parish')
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone() if isinstance(pid, str) else None
+    require(parish is not None, 'Parish not found.', 404)
+    require('documents.accept' in diocese_perms(authority(c, u), parish['diocese']), 'Accepting signed documents belongs to the bishop.', 403)
+    row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
+    d, at = json.loads(row['data']), NOW()
+    s = next((x for x in d['SACRAMENTS'] if x['id'] == q.get('id') and x.get('kind') == 'certificate'), None)
+    # A document the diocesan policy already released on signature is still accepted (or returned) by the bishop.
+    require(s is not None and (s.get('acceptance') or {}).get('status') == 'awaiting' and s.get('status') in {'approved', 'issued'},
+            'This document is not waiting for your acceptance.', 409)
+    decision = q.get('decision')
+    require(decision in {'accept', 'return'}, 'Accept the document or return it to the priest.')
+    note = clean(q.get('note'), 500, 'Say why you are returning it, in 500 characters or fewer.', required=decision == 'return')
+    s['acceptance'] = dict(status='accepted' if decision == 'accept' else 'returned', by=u['name'], at=at, note=note)
+    s.setdefault('history', []).append(dict(action='bishop accepted' if decision == 'accept' else 'bishop returned', by=u['name'], at=at, note=note))
+    if decision == 'return':
+        if s['status'] == 'approved': s['status'] = 'awaiting-signature'   # back to the priest, who reviews and signs again
+    elif s['status'] == 'approved' and release_policy(c, pid) == 'after-acceptance':
+        s.update(status='issued', issuedBy='Released by the diocesan policy', issuedAt=at)
+        s['history'].append(dict(action='issue', by='Diocesan policy: release after the bishop’s acceptance', at=at, automatic=True))
+    save_state(c, pid, d)
+    for user_id in parish_priest_accounts(c, pid):
+        notify_account(c, user_id, pid, 'document', f"{s.get('reg', '')} " + ('accepted by the bishop' if decision == 'accept' else 'returned by the bishop'),
+                       note, 'requests')
+    audit(c, u, pid, 'document.bishop-' + ('accepted' if decision == 'accept' else 'returned'), {'certificate': s['id']})
+    return {}
+
+
+def finance_overview(c, auth, parish_rows):
+    """Read-only totals for the parishes whose finances this account may see from the diocese or the system."""
+    out = []
+    for p in parish_rows:
+        if 'finance.view' not in diocese_perms(auth, p['diocese']): continue
+        d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (p['id'],)).fetchone()['data'])
+        meta = json.loads(p['metadata'])
+        expenses = d.get('EXPENSES', [])
+        out.append(dict(parish=p['id'], name=meta.get('name', ''), ar=meta.get('ar', ''), diocese=p['diocese'],
+                        funds=[dict(name=f.get('name', ''), ar=f.get('ar', ''), budget=f.get('budget', 0), actual=f.get('actual', 0),
+                                    restricted=bool(f.get('restricted'))) for f in d.get('FUNDS', [])],
+                        expensesApproved=sum(float(x.get('usd') or 0) for x in expenses if x.get('status') == 'approved'),
+                        expensesWaiting=sum(1 for x in expenses if x.get('status') == 'awaiting-approval'),
+                        giving=list(d.get('GIVING_SERIES', []))[-12:],
+                        pledged=sum(float(x.get('pledged') or 0) for x in d.get('PLEDGES', [])),
+                        paid=sum(float(x.get('paid') or 0) for x in d.get('PLEDGES', []))))
+    return out
+
+
 # ───────────── Organisation, roles and permissions ─────────────
 # Diocese → parishes → ministries. Access comes from role assignments scoped to the whole
 # system, one diocese or one parish; one account can hold several, in different places.
@@ -1853,6 +2150,7 @@ def migrate_v2(c):
     migrate_accounts(c)
     c.executescript(CONNECTIONS_SCHEMA)
     c.executescript(MINISTRY_SCHEMA)
+    c.executescript(DOCUMENT_SCHEMA)
 
 
 def legacy_access(c, u):
@@ -2000,7 +2298,11 @@ def perms_of(u):
 
 
 def file_access(c, u, pid, scope, owner_id, write=False):
-    require(scope in {'group', 'person'}, 'Invalid file owner.')
+    require(scope in {'group', 'person', 'guest-request'}, 'Invalid file owner.')
+    if scope == 'guest-request':   # the signed document for a guest's request: the office only
+        require('requests.manage' in perms_of(u), 'Guest request documents are restricted to the parish office.', 403)
+        require(c.execute('SELECT 1 FROM guest_requests WHERE id=? AND parish_id=?', (owner_id, pid)).fetchone(), 'Request not found.', 404)
+        return
     row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
     require(row is not None, 'Parish not found.', 404)
     state = json.loads(row['data'])
@@ -2095,7 +2397,7 @@ def admin_view(c, u):
         bishops = [dict(r) for r in c.execute("SELECT * FROM role_assignments WHERE role='bishop' AND scope='diocese' AND scope_id=? AND status='active'", (did,))]
         out_dioceses.append(dict(id=did, name=d['name'], nameAr=meta.get('ar', ''), bishops=[b['user_id'] for b in bishops],
                                  perms=sorted(scope['dioceses'][did]),
-                                 releasePolicy=json.loads(setting(c, 'diocese', did, 'documents.release', '"unset"'))))
+                                 releasePolicy=setting(c, 'diocese', did, 'documentRelease', 'unset')))
     out_parishes = []
     for pid in parish_ids:
         p = parish_rows[pid]; meta = json.loads(p['metadata'])
@@ -2139,7 +2441,7 @@ def admin_view(c, u):
                         [x['userId'] for x in clergy] + [i for d in out_dioceses for i in d['bishops']] +
                         [t['setBy'] for x in clergy for t in x['titles']])
     return dict(system=sorted(scope['system']), dioceses=out_dioceses, parishes=out_parishes, assignments=assignments,
-                clergy=clergy, blocks=blocks, users=people,
+                clergy=clergy, blocks=blocks, users=people, finance=finance_overview(c, auth, list(parish_rows.values())),
                 catalog=dict(permissions=[dict(code=p[0], level=p[1], en=p[2], ar=p[3], fixed=FIXED_PERMISSIONS.get(p[0], ''))
                                           for p in PERMISSIONS],
                              templates={k: sorted(v) for k, v in ROLE_TEMPLATES.items()},
@@ -2248,6 +2550,15 @@ def admin_action(c, u, q):
                or c.execute('SELECT u.id,u.username,u.name FROM user_contacts k JOIN users u ON u.id=k.user_id WHERE k.value=? AND u.role<>?',
                             (key, 'disabled')).fetchone())
         return dict(user=dict(id=row['id'], username=row['username'], name=row['name']) if row else None)
+    if op == 'setPolicy':
+        did = q.get('diocese')
+        require(c.execute("SELECT 1 FROM dioceses WHERE id=? AND id<>''", (did,)).fetchone(), 'Diocese not found.', 404)
+        require('diocese.policies' in diocese_perms(auth, did), 'Diocesan policies are set by the bishop.', 403)
+        require(q.get('key') == 'documentRelease' and q.get('value') in RELEASE_POLICIES, 'Choose a policy.')
+        c.execute('INSERT INTO settings VALUES(?,?,?,?,?,?) ON CONFLICT(scope,scope_id,key) DO UPDATE SET value=excluded.value,'
+                  'updated_at=excluded.updated_at,updated_by=excluded.updated_by', ('diocese', did, 'documentRelease', q['value'], at, u['id']))
+        audit(c, u, None, 'diocese.policy', {'diocese': did, 'documentRelease': q['value']})
+        return {}
     if op == 'createDiocese':
         require('dioceses.manage' in system_perms(auth), 'Only the super admin creates dioceses.', 403)
         name = clean(q.get('name'), 120, 'Enter the diocese’s name.')
@@ -2536,6 +2847,8 @@ def visible(c, u, pid, d):
             "WHERE a.parish_id=? AND a.person_id IS NOT NULL ORDER BY u.username,CASE a.role WHEN 'member' THEN 0 ELSE 1 END", (pid,))}
     d['MEMBERSHIP_REQUESTS'], d['INVITATIONS'] = office_connections(c, pid) if 'people.manage' in perms else ([], [])
     d['MINISTRY_APPLICATIONS'], d['MINISTRY_INQUIRIES'], d['MINISTRY_DEPARTURES'] = ministry_lists(c, u, pid, d)
+    d['GUEST_REQUESTS'] = office_guest_requests(c, pid, d) if 'requests.manage' in perms else []
+    d['POLICIES'] = dict(documentRelease=release_policy(c, pid))
     if 'notes.pastoral' not in perms:
         d['NOTES'] = []
     if 'settings.manage' not in perms:
@@ -3351,10 +3664,23 @@ def workflow(c, u, pid, q):
                                 request.setdefault('history', []).append(dict(action='source linked', by=u['name'], at=at, source=s['reg']))
                 else:
                     require(s.get('kind') == 'certificate' and s['status'] == 'approved', 'Approve a certificate request before issuing it.')
+                    # Releasing follows the diocese's policy; with none set, releasing before the bishop's acceptance is said out loud.
+                    policy, accepted = release_policy(c, pid), (s.get('acceptance') or {}).get('status') == 'accepted'
+                    require(policy != 'after-acceptance' or accepted, 'This diocese releases documents only after the bishop has accepted them.', 409)
+                    require(accepted or policy == 'after-signature' or q.get('beforeAcceptance') is True,
+                            'The bishop has not accepted this document yet, and the diocese has not decided whether documents wait for that. '
+                            'Confirm that you are releasing it before the bishop’s acceptance.', 409)
                     s.update(status='issued', issuedBy=u['name'], issuedAt=at)
             h = dict(action=action, by=u['name'], at=at)
             if action == 'reject': h['reason'] = reason
+            if action == 'issue' and not accepted: h['beforeAcceptance'] = True
             s.setdefault('history', []).append(h)
+            if action == 'approve' and s.get('kind') == 'certificate':   # the priest's signature: on to the bishop
+                s['acceptance'] = dict(status='awaiting', sentAt=at)
+                s['history'].append(dict(action='sent to the bishop', by=u['name'], at=at))
+                if release_policy(c, pid) == 'after-signature':
+                    s.update(status='issued', issuedBy='Released by the diocesan policy', issuedAt=at)
+                    s['history'].append(dict(action='issue', by='Diocesan policy: release after the priest’s signature', at=at, automatic=True))
     elif action == 'link-source':
         require(s is not None and s.get('kind') == 'certificate' and s['status'] in {'draft', 'scheduled', 'awaiting-signature'}, 'Only an open certificate request can be linked.')
         source = next((x for x in d['SACRAMENTS'] if x['id'] == q.get('sourceRecordId')), None)
@@ -3701,7 +4027,7 @@ ONCE_ONLY = {'baptism', 'communion', 'confirmation', 'funeral'}
 ACTIVE_ENTRY = {'requested', 'office-reviewed', 'preparing', 'scheduled', 'draft', 'awaiting-signature'}
 OFFICIAL_ENTRY = {'registered', 'issued'}
 PROGRESS_EVENTS = {'request accepted for preparation': 'priest-accepted', 'preparation completed': 'prepared',
-                   'sacrament celebrated': 'celebrated', 'approve': 'approved', 'issue': 'issued',
+                   'sacrament celebrated': 'celebrated', 'approve': 'approved', 'issue': 'issued', 'bishop accepted': 'bishop-accepted',
                    'request declined': 'declined', 'reject': 'declined',
                    'preparation cancelled': 'cancelled', 'cancelled': 'cancelled'}
 
@@ -3764,6 +4090,8 @@ def member_request_progress(d, row, details):
             status, certificate = s.get('status'), s.get('kind') == 'certificate'
             if certificate:
                 stage = {'approved': 'signing', 'issued': 'ready', 'rejected': 'declined', 'cancelled': 'cancelled'}.get(status, 'review')
+                acceptance = (s.get('acceptance') or {}).get('status')
+                if status == 'approved' and acceptance in {'awaiting', 'accepted'}: stage = 'acceptance' if acceptance == 'awaiting' else 'accepted'
             else:
                 stage = {'preparing': 'preparing', 'scheduled': 'scheduled', 'draft': 'celebrated', 'awaiting-signature': 'celebrated',
                          'registered': 'completed', 'issued': 'completed', 'rejected': 'declined', 'cancelled': 'cancelled'}.get(status, 'review')
@@ -4057,7 +4385,8 @@ def member_view(c, u, pid):
                 volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups),
                 formation=formation, reviewers=reviewers, categories=categories, notifications=notifications,
                 requests=parish_requests, requestOptions=member_request_options(d, person),
-                **(ministry_member_view(c, u, pid, d, person) if person.get('id') else dict(ministryApplications=[], ministryDepartures=[], openMinistries=[])))
+                **(ministry_member_view(c, u, pid, d, person) if person.get('id') else dict(ministryApplications=[], ministryDepartures=[], openMinistries=[])),
+                guestRequests=claimed_guest_requests(c, u, pid))
 
 
 def member_action(c, u, pid, q):
@@ -4068,6 +4397,8 @@ def member_action(c, u, pid, q):
     group_id = q.get('groupId')
     if op in {'ministryApply', 'ministryWithdraw', 'ministryLeave'}:
         return ministry_member_action(c, u, pid, d, person, q)
+    if op == 'claimGuestRequest':
+        return guest_request_claim(c, u, pid, q)
     if op == 'note':
         note_id = q.get('id')
         if q.get('delete'):
@@ -4526,6 +4857,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone() if session else None
         return (session, u) if login_allowed(c, u) else (None, None)
 
+    def public_base(self):
+        """The address links in messages point to: PARISHLIFE_PUBLIC_URL, else the address this request came to."""
+        return os.environ.get('PARISHLIFE_PUBLIC_URL', '').rstrip('/') or \
+            ('https://' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else 'http://') + self.headers.get('Host', '127.0.0.1')
+
     def redirect(self, location, cookies=()):
         self.send_response(302)
         self.send_header('Location', location)
@@ -4618,6 +4954,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply(200, public_parish(c, path.rsplit('/', 1)[-1]))
                 if path.startswith('/api/public/parishes/') and path.endswith('/inquiries') and self.command == 'POST':
                     result = ministry_inquiry(c, path.split('/')[4], q); c.commit(); return self.reply(200, result)
+                if path.startswith('/api/public/parishes/') and path.endswith('/document-requests') and self.command == 'POST':
+                    outbox = []; result = guest_request_create(c, path.split('/')[4], q, outbox, self.public_base()); c.commit()
+                    if outbox: send_outbox(c, outbox); result['linkDelivery'] = outbox[0]['status']
+                    return self.reply(200, result)
+                if path == '/api/public/requests/track' and self.command == 'POST':
+                    return self.reply(200, guest_request_view(c, guest_request_row(c, q.get('token'))))
+                if path == '/api/public/requests/document' and self.command == 'POST':
+                    row = guest_document(c, q.get('token')); c.commit()
+                    return self.reply_file(row)
                 if path == '/api/invitations/info' and self.command == 'POST':
                     return self.reply(200, invitation_info(c, q.get('token')))
                 if path == '/api/auth/config' and self.command == 'GET':
@@ -4659,6 +5004,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         outbox = []; result = account_action(c, u, session, q, outbox); c.commit()
                         if outbox: send_outbox(c, outbox); result['delivery'] = outbox[-1]['status']
                         return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
+                if path == '/api/diocese/documents':
+                    if self.command == 'GET': return self.reply(200, diocese_documents(c, u))
+                    if self.command == 'POST':
+                        result = diocese_document_action(c, u, q); c.commit(); return self.reply(200, result)
                     raise Problem(405, 'Method not allowed.')
                 if path == '/api/notifications':
                     if self.command == 'GET': return self.reply(200, account_notifications_view(c, u))
@@ -4748,13 +5098,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply(200, {'rows': xlsx_preview(q.get('data'))})
                 if endpoint == 'oversight' and self.command == 'GET':
                     return self.reply(200, oversight(c, u, pid))
+                if endpoint == 'guest-requests' and self.command == 'POST':
+                    result = guest_request_action(c, u, pid, q); c.commit(); return self.reply(200, result)
                 if endpoint == 'ministries' and self.command == 'POST':
                     result = ministry_action(c, u, pid, q); c.commit(); return self.reply(200, result)
                 if endpoint == 'connections' and self.command == 'POST':
                     outbox = []
-                    base = os.environ.get('PARISHLIFE_PUBLIC_URL', '').rstrip('/') or \
-                        ('https://' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else 'http://') + self.headers.get('Host', '127.0.0.1')
-                    result = office_connection_action(c, u, pid, q, outbox, base); c.commit()
+                    result = office_connection_action(c, u, pid, q, outbox, self.public_base()); c.commit()
                     if outbox: send_outbox(c, outbox); result['delivery'] = outbox[0]['status']
                     return self.reply(200, result)
                 if endpoint == 'member':

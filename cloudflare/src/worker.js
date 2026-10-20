@@ -21,6 +21,13 @@ import {
 import { xlsx_preview } from './xlsx.js';
 import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction } from './connections.js';
 import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
+import { guestRequestCreate, guestRequestRow, guestRequestView, guestDocument, guestRequestAction, dioceseDocuments, dioceseDocumentAction } from './documents.js';
+
+function fileReply(row, data) {
+  const headers = new Headers({ 'Content-Type': row.mime, 'Content-Length': String(row.size), 'Content-Disposition': "inline; filename*=UTF-8''" + quote(row.name) });
+  for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
+  return new Response(data, { status: 200, headers });
+}
 
 const HEADERS = {
   'Cache-Control': 'no-store',
@@ -128,6 +135,23 @@ async function handle(c, env, request, url, q, secureCookie) {
     await c.commit();
     return reply(200, result);
   }
+  if (path.startsWith('/api/public/parishes/') && path.endsWith('/document-requests') && method === 'POST') {
+    const outbox = [], ctx = deliveryContext(env, url);
+    const result = await guestRequestCreate(c, ctx, path.split('/')[4], q, outbox, String(env.PARISHLIFE_PUBLIC_URL || '').replace(/\/+$/, '') || url.origin);
+    await c.commit();
+    if (outbox.length) {
+      await sendOutbox(ctx, outbox);
+      result.linkDelivery = outbox[0].status;
+    }
+    return reply(200, result);
+  }
+  if (path === '/api/public/requests/track' && method === 'POST') return reply(200, await guestRequestView(c, await guestRequestRow(c, get(q, 'token'))));
+  if (path === '/api/public/requests/document' && method === 'POST') {
+    const row = await guestDocument(c, get(q, 'token'));
+    const data = await storedFile(c, row);
+    await c.commit();
+    return fileReply(row, data);
+  }
   if (path === '/api/invitations/info' && method === 'POST') return reply(200, await invitationInfo(c, get(q, 'token')));
   const ctx = deliveryContext(env, url);
   /* Codes are handed to the delivery service only after the commit, so a retried request never sends twice. */
@@ -198,6 +222,15 @@ async function handle(c, env, request, url, q, secureCookie) {
         await sendOutbox(ctx, outbox);
         result.delivery = outbox[outbox.length - 1].status;
       }
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/diocese/documents') {
+    if (method === 'GET') return reply(200, await dioceseDocuments(c, u));
+    if (method === 'POST') {
+      const result = await dioceseDocumentAction(c, u, q);
+      await c.commit();
       return reply(200, result);
     }
     throw new Problem(405, 'Method not allowed.');
@@ -325,6 +358,11 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { rows: xlsx_preview(get(q, 'data')) });
   }
   if (endpoint === 'oversight' && method === 'GET') return reply(200, await oversight(c, u, pid));
+  if (endpoint === 'guest-requests' && method === 'POST') {
+    const result = await guestRequestAction(c, u, pid, q);
+    await c.commit();
+    return reply(200, result);
+  }
   if (endpoint === 'ministries' && method === 'POST') {
     const result = await ministryAction(c, u, pid, q);
     await c.commit();

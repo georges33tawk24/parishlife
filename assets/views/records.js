@@ -9,8 +9,10 @@ import { download } from '../actions.js';
 import { need } from '../flows.js';
 import { workflow as serverWorkflow } from '../persist.js';
 import { printSheet, saveBlob, svgToPng, fileName } from '../print.js';
+import * as D from '../data.js';
 import { SACRAMENTS, anniversaryItems, PARISH, PREP_REQUIREMENTS, PEOPLE, person, RESERVATIONS, SERVICE_REQUESTS, PORTAL_REQUESTS, REQUEST_HISTORY, REGISTRATIONS, venue } from '../data.js';
 import { onlineItems, openOnlineRequest, onlineMark, sharedNote } from './online-requests.js';
+import { guestItems, openGuestRequest } from './guest-office.js';
 import { certificateName, languageName, occasionText } from '../sacrament-requests.js';
 
 const L = (en, ar) => t(en, ar);
@@ -85,6 +87,7 @@ export function sacraments(tab = '') {
   if (tab === 'requests') {
     const items = [
       ...onlineItems(),
+      ...guestItems(),
       ...SACRAMENTS.filter(s => s.kind === 'certificate').map(s => ({ category:'certificate', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.reg}`, who:person(s.person), state:s.status, waitingSource:!sourceFor(s)&&!['cancelled','rejected'].includes(s.status), open:!['issued','rejected','cancelled'].includes(s.status), date:s.date, priority:s.priority || '', owner:nextStep(s)[1], next:nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.reg })),
       ...SACRAMENTS.filter(s => s.kind !== 'certificate' && (['requested','office-reviewed','awaiting-signature','rejected','cancelled'].includes(s.status) || s.requestApprovedAt)).map(s => ({ category:'sacrament', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.requestReference||s.reg}`, who:person(s.person), state:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? 'approved' : s.status, open:['requested','office-reviewed','awaiting-signature'].includes(s.status), date:s.requestedAt || s.date, priority:'', owner:nextStep(s)[1], next:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? s.status==='registered' ? L('Official record available','القيد الرسمي متاح') : L('Continue in Preparation','تابع التحضير') : nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.requestReference||s.reg })),
       ...RESERVATIONS.map(r => ({ category:'facility', mark:onlineMark(r), title:r.memberRequestId ? `${occasionText(r.title)} · ${L(venue(r.venue)?.name || '', venue(r.venue)?.ar || '')}` : L(r.title, r.titleAr), who:person(r.by), state:r.status, open:r.status === 'pending', date:r.date || r.at, priority:r.priority || '', owner:r.stage==='priest'?L('Priest','الكاهن'):L('Parish office','مكتب الرعية'), next:r.status === 'pending' ? (r.stage === 'priest' ? L('Confirm or refuse the booking','تأكيد الحجز أو رفضه') : L('Review reservation','مراجعة الحجز')) : L('Completed','مكتمل'), href:`#/reservations/${r.id}`, ref:r.ref||r.id })),
@@ -96,7 +99,7 @@ export function sacraments(tab = '') {
     const f = S.ui.requestFilter === 'open' ? 'action' : S.ui.requestFilter || 'action', cat = S.ui.requestCategory || '', owner = S.ui.requestOwner || '', date = S.ui.requestDate || '', priority = S.ui.requestPriority || '', state = S.ui.requestStatus || '';
     const needsAction = x => x.open && !x.waitingSource && !(x.category === 'certificate' && x.state === 'draft');
     const shown = items.filter(x => (f === 'all' || f === 'action' && needsAction(x) || f === 'waiting' && x.open && !needsAction(x) || f === 'completed' && !x.open) && (!cat || x.category === cat) && (!state || x.state === state) && (!owner || x.owner === owner) && (!date || String(x.date || '').slice(0,10) >= date) && (!priority || x.priority === priority));
-    const categories = [['online','Online requests','الطلبات الإلكترونية'],['certificate','Certificates','الشهادات'],['sacrament','Sacrament requests','طلبات الأسرار'],['facility','Facilities','المرافق'],['service','Services','الخدمات'],['portal','Portal','البوابة'],['registration','Registrations','التسجيل']].filter(([k]) => items.some(x => x.category === k));
+    const categories = [['online','Online requests','الطلبات الإلكترونية'],['guest','Without an account','بدون حساب'],['certificate','Certificates','الشهادات'],['sacrament','Sacrament requests','طلبات الأسرار'],['facility','Facilities','المرافق'],['service','Services','الخدمات'],['portal','Portal','البوابة'],['registration','Registrations','التسجيل']].filter(([k]) => items.some(x => x.category === k));
     return head + `<div class="tabbody">
       <div class="stats" style="margin:0 0 16px">${stat(L('Needs action','تحتاج إجراءً'),items.filter(needsAction).length,L('a decision or a step from the office or the priest','قرار أو خطوة من المكتب أو الكاهن'))}${stat(L('Waiting','بانتظار'),items.filter(x=>x.open&&!needsAction(x)).length,L('on a date, a document or another record','على موعد أو مستند أو قيد آخر'))}${stat(L('Completed','مكتملة'),items.filter(x=>!x.open).length,L('approved, issued, declined or cancelled','معتمدة أو صادرة أو مرفوضة أو ملغاة'))}</div>
       <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap">
@@ -225,6 +228,7 @@ export const requests = () => sacraments('requests');
 requests.mount = (host, first, second) => {
   sacraments.mount(host);
   if (first === 'online' && second) { S.params = []; history.replaceState(null, '', '#/requests'); openOnlineRequest(second); }
+  if (first === 'guest' && second) { S.params = []; history.replaceState(null, '', '#/requests'); openGuestRequest(second); }
 };
 
 /* ---------------- record page: progress, the document, details ---------------- */
@@ -233,8 +237,10 @@ const stepAt = (s, ...actions) => [...(s.history || [])].reverse().find(h => act
 const workflowStages = s => s.kind === 'certificate'
   ? [[L('Requested','طُلبت'), true, s.requestedAt || s.history?.[0]?.at || ''],
      [L('Register entry linked','رُبط القيد'), !!sourceFor(s), stepAt(s, 'source linked')],
-     [L('Approved by the priest','اعتمدها الكاهن'), ['approved','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')],
-     [L('Issued','صدرت'), s.status === 'issued', s.issuedAt || stepAt(s, 'issue')]]
+     [L('Signed by the priest','وقّعها الكاهن'), ['approved','issued'].includes(s.status), s.approvedAt || stepAt(s, 'approve')],
+     [s.acceptance?.status === 'returned' ? L('Returned by the bishop','أعادها المطران') : L('Accepted by the bishop','قبلها المطران'),
+       s.acceptance?.status === 'accepted', s.acceptance?.at || stepAt(s, 'bishop accepted')],
+     [L('Released','سُلّمت'), s.status === 'issued', s.issuedAt || stepAt(s, 'issue')]]
   : [[L('Requested','طُلب'), true, s.requestedAt || stepAt(s, 'sacrament requested', 'request submitted')],
      [L('Accepted by the priest','قبله الكاهن'), !!s.requestApprovedAt || ['preparing','scheduled','draft','awaiting-signature','registered','issued'].includes(s.status) && !String(s.reg).startsWith('SRQ/'),
        s.requestApprovedAt || stepAt(s, 'request accepted for preparation')],
@@ -439,7 +445,9 @@ const HIST = { 'sacrament requested': ['Request received', 'استُلم الط�
   'request amendment approved': ['Request amendment approved', 'اعتُمد تعديل الطلب'],
   'request amendment rejected': ['Request amendment rejected', 'رُفض تعديل الطلب'],
   'submitted for clergy review': ['Sent to the priest', 'أُرسل إلى الكاهن'], submit: ['Sent to the priest for approval', 'أُرسل إلى الكاهن للاعتماد'],
-  'sacrament celebrated': ['Celebrated', 'احتُفل به'], approve: ['Approved', 'اعتُمد'], issue: ['Signed and issued', 'وُقّع وصدر'], reject: ['Rejected', 'رُفض'],
+  'sacrament celebrated': ['Celebrated', 'احتُفل به'], approve: ['Approved', 'اعتُمد'], issue: ['Released', 'سُلّمت'], reject: ['Rejected', 'رُفض'],
+  'sent to the bishop': ['Sent to the bishop for acceptance', 'أُرسلت إلى المطران للقبول'], 'bishop accepted': ['Accepted by the bishop', 'قبلها المطران'],
+  'bishop returned': ['Returned by the bishop', 'أعادها المطران'],
   cancelled: ['Cancelled', 'أُلغي'], 'source linked': ['Register entry linked', 'رُبط القيد'], correction: ['Corrected', 'صُحّح'] };
 const histLabel = a => HIST[a] ? L(...HIST[a]) : String(a || '').charAt(0).toUpperCase() + String(a || '').slice(1);
 const zoned = at => { const v = String(at || ''); if (!/T.*(Z|[+-]\d\d:?\d\d)$/.test(v)) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
@@ -515,9 +523,9 @@ export function certificate(id, lang = '') {
         : s.kind === 'certificate' && !source && ['draft','awaiting-signature'].includes(s.status) && is('priest','secretary')
         ? `<a class="btn btn-secondary" href="#/person/${esc(s.person)}/sacraments">${icon('sacr',17)}${L('See this person’s sacraments','عرض أسرار هذا الشخص')}</a>`
         : is('priest') && s.status === 'awaiting-signature' && (s.kind === 'certificate' ? !!source : s.date <= today())
-        ? `<button class="btn btn-primary" id="approve">${icon('check', 17)}${s.kind === 'certificate' ? L('Approve request', 'اعتماد الطلب') : L('Approve entry', 'اعتماد القيد')}</button>`
+        ? `<button class="btn btn-primary" id="approve">${icon('check', 17)}${s.kind === 'certificate' ? L('Sign', 'توقيع') : L('Approve entry', 'اعتماد القيد')}</button>`
         : is('priest') && s.kind === 'certificate' && s.status === 'approved'
-          ? `<button class="btn btn-primary" id="sign">${icon('check', 17)}${L('Sign and issue', 'التوقيع والإصدار')}</button>`
+          ? `<button class="btn btn-primary" id="sign">${icon('check', 17)}${L('Release', 'تسليم')}</button>`
           : s.kind !== 'certificate' && s.status === 'registered'
             ? `<button class="btn btn-secondary" id="startcertreq">${icon('doc', 17)}${L('Request a certificate', 'طلب شهادة')}</button>`
           : is('secretary','priest') && ['draft','scheduled'].includes(s.status) && (s.kind === 'certificate' ? !!source : s.date <= today())
@@ -631,26 +639,40 @@ certificate.mount = (host, id, lang = '') => {
       }
     });
   });
-  const confirm = (button, action) => button?.addEventListener('click', () => openModal({
-    title: action === 'approve' ? (SACRAMENTS.find(s=>s.id===id)?.kind==='certificate' ? L('Approve this certificate request?','اعتماد طلب الشهادة؟') : L('Approve this register entry?', 'اعتماد هذا القيد؟')) : L('Sign and issue this certificate?', 'توقيع هذه الشهادة وإصدارها؟'),
-    sub: L('This action is recorded with your account and the time. Check the original register before confirming.', 'يُسجّل هذا الإجراء باسم حسابك ووقته. راجع السجل الأصلي قبل التأكيد.'),
-    body: `<label class="check"><input type="checkbox" id="ack">
-      <span>${L('I have checked the register entry against the bound book.', 'راجعتُ القيد مقابل الدفتر الأصلي.')}</span></label>`,
-    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
-      <button class="btn btn-primary" id="confirm" disabled>${action === 'approve' ? (SACRAMENTS.find(s=>s.id===id)?.kind==='certificate' ? L('Approve request', 'اعتماد الطلب') : L('Approve entry', 'اعتماد القيد')) : L('Sign and issue', 'التوقيع والإصدار')}</button>`,
-    onMount(el) {
-      const ack = el.querySelector('#ack'), ok = el.querySelector('#confirm');
-      ack.addEventListener('change', () => { ok.disabled = !ack.checked; });
-      ok.addEventListener('click', async () => {
-        try { await serverWorkflow(action, id, { verified: true }); closeOverlays(); bus.refresh();
-          const cert = SACRAMENTS.find(s=>s.id===id)?.kind === 'certificate';
-          toast(action === 'issue' ? L('Certificate issued', 'صدرت الشهادة') : cert ? L('Request approved', 'اعتُمد الطلب') : L('Entry approved', 'اعتُمد القيد'),
-            action === 'issue' ? L('It is signed and ready to print, download or send.', 'موقّعة وجاهزة للطباعة أو التنزيل أو الإرسال.')
-              : cert ? L('Next: sign and issue the certificate.', 'التالي: توقيع الشهادة وإصدارها.') : L('It now has its official register number.', 'صار له رقم القيد الرسمي.'), 'success'); }
-        catch (e) { toast(L('Action could not be completed', 'تعذّر إتمام الإجراء'), e.message, 'danger'); }
-      });
-    }
-  }));
+  /* Signing is the priest's; the bishop's acceptance follows as its own step. Releasing follows the diocese's policy:
+     with none set, a document released before the bishop accepts it is released knowingly, and the history says so. */
+  const confirm = (button, action) => button?.addEventListener('click', () => {
+    const s = SACRAMENTS.find(x => x.id === id), cert = s?.kind === 'certificate';
+    const policy = D.POLICIES.documentRelease || 'unset', accepted = s?.acceptance?.status === 'accepted';
+    const early = action === 'issue' && !accepted && policy === 'unset', blocked = action === 'issue' && !accepted && policy === 'after-acceptance';
+    const POLICY_TEXT = { unset: L('The diocese has not decided whether documents wait for the bishop’s acceptance before release. Nothing is released automatically.', 'لم تقرّر الأبرشية بعد هل تنتظر الوثائق قبول المطران قبل تسليمها. لا يُسلَّم شيء تلقائياً.'),
+      'after-signature': L('Diocesan policy: documents may be released once the priest has signed them.', 'سياسة الأبرشية: يمكن تسليم الوثائق بعد توقيع الكاهن.'),
+      'after-acceptance': L('Diocesan policy: documents are released only after the bishop accepts them.', 'سياسة الأبرشية: لا تُسلَّم الوثائق إلا بعد قبول المطران.') };
+    openModal({
+      title: action === 'approve' ? (cert ? L('Sign this certificate?', 'توقيع هذه الشهادة؟') : L('Approve this register entry?', 'اعتماد هذا القيد؟')) : L('Release this certificate?', 'تسليم هذه الشهادة؟'),
+      sub: L('This action is recorded with your account and the time. Check the original register before confirming.', 'يُسجّل هذا الإجراء باسم حسابك ووقته. راجع السجل الأصلي قبل التأكيد.'),
+      body: `<label class="check"><input type="checkbox" id="ack">
+        <span>${L('I have checked the register entry against the bound book.', 'راجعتُ القيد مقابل الدفتر الأصلي.')}</span></label>
+        ${cert && action === 'approve' ? `<p class="dim" style="margin-top:12px">${L('After you sign, the certificate goes to the bishop for acceptance.', 'بعد توقيعك، تُرسل الشهادة إلى المطران للقبول.')} ${esc(POLICY_TEXT[policy])}</p>` : ''}
+        ${action === 'issue' ? `<p class="dim" style="margin-top:12px">${esc(POLICY_TEXT[policy])} ${accepted ? esc(L('The bishop has accepted this certificate.', 'قبل المطران هذه الشهادة.')) : esc(L('The bishop has not accepted it yet.', 'لم يقبلها المطران بعد.'))}</p>` : ''}
+        ${early ? `<label class="check" style="margin-top:10px"><input type="checkbox" id="early"><span>${L('Release it before the bishop’s acceptance. This is recorded in its history.', 'سلّمها قبل قبول المطران. يُسجَّل ذلك في سجلّها.')}</span></label>` : ''}`,
+      foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
+        <button class="btn btn-primary" id="confirm" disabled>${action === 'approve' ? (cert ? L('Sign', 'توقيع') : L('Approve entry', 'اعتماد القيد')) : L('Release', 'تسليم')}</button>`,
+      onMount(el) {
+        const ack = el.querySelector('#ack'), ok = el.querySelector('#confirm'), early_ = el.querySelector('#early');
+        const sync = () => { ok.disabled = blocked || !ack.checked || (early && !early_?.checked); };
+        ack.addEventListener('change', sync); early_?.addEventListener('change', sync);
+        ok.addEventListener('click', async () => {
+          try { await serverWorkflow(action, id, { verified: true, ...(early ? { beforeAcceptance: true } : {}) }); closeOverlays(); bus.refresh();
+            const now = SACRAMENTS.find(x => x.id === id);
+            toast(action === 'issue' ? L('Certificate released', 'سُلّمت الشهادة') : cert ? (now?.status === 'issued' ? L('Signed and released', 'وُقّعت وسُلّمت') : L('Signed', 'وُقّعت')) : L('Entry approved', 'اعتُمد القيد'),
+              action === 'issue' ? L('It can be printed, collected or downloaded.', 'يمكن طباعتها أو استلامها أو تنزيلها.')
+                : cert ? L('It has gone to the bishop for acceptance.', 'أُرسلت إلى المطران للقبول.') : L('It now has its official register number.', 'صار له رقم القيد الرسمي.'), 'success'); }
+          catch (e) { toast(L('Action could not be completed', 'تعذّر إتمام الإجراء'), e.message, 'danger'); }
+        });
+      }
+    });
+  });
   confirm(host.querySelector('#approve'), 'approve'); confirm(host.querySelector('#sign'), 'issue');
   const decision = (selector, action) => host.querySelector(selector)?.addEventListener('click', () => openModal({
     title: action==='reject' ? L('Reject this request or entry?','رفض هذا الطلب أو القيد؟') : L('Cancel this certificate request?','إلغاء طلب الشهادة؟'),

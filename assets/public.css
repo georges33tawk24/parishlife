@@ -304,3 +304,26 @@ a.contact-row:hover{text-decoration:underline}
 .ministry-form .button{justify-self:start}
 @media(max-width:900px){.ministry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.ministry-grid{grid-template-columns:1fr}.ministry-form{padding:22px}.ministry-form .form-pair{grid-template-columns:1fr}}
+/* A certificate without an account, and its tracking page */
+.guest-doc{margin-top:28px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.guest-doc>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;cursor:pointer;list-style:none}
+.guest-doc>summary::-webkit-details-marker{display:none}
+.guest-doc>summary b{display:block;font-size:16px}
+.guest-doc>summary small{display:block;margin-top:4px;color:var(--muted);font-size:13px}
+.guest-doc[open]>summary .icon{transform:rotate(90deg)}
+.guest-doc .guest-form{margin:0 24px 24px;padding:0;border:0;max-width:none}
+.guest-form fieldset{display:grid;gap:12px;margin:0;padding:16px 0 0;border:0;border-top:1px solid var(--line)}
+.guest-form legend{font-weight:600;font-size:14px;padding-bottom:8px}
+.guest-form .radio{display:flex;align-items:center;gap:10px;font-weight:400}
+.guest-form .radio input{min-height:0;width:18px;height:18px}
+.guest-done{margin:0 24px 24px;padding:20px;border-radius:8px;background:var(--soft)}
+.guest-done h3{font-size:20px;margin-bottom:8px}
+.track-link{margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:8px;background:#fff;font-size:13px;overflow-wrap:anywhere}
+.track-page{max-width:760px}
+.track-page h1{font-size:clamp(32px,5vw,48px);line-height:1.15;margin:14px 0 6px}
+.track-subject{font-size:18px;color:var(--muted)}
+.track-stage{margin:22px 0 12px;font-size:18px}
+.track-message{padding:14px 16px;border-radius:8px;background:var(--soft)}
+.track-events{display:grid;gap:12px;margin:24px 0;padding-inline-start:20px}
+.track-events small{display:block;color:var(--muted);font-size:12px}
+.track-note{font-size:13px;color:var(--muted)}

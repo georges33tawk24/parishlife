@@ -86,7 +86,22 @@ function listPage() {
     ${section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(REQUEST_KINDS.filter(k => k.other), ' mr-kinds-2'))}
     ${M.requests.length ? '' : howItWorks()}
     ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
+    ${section('guest', L('Requests you made without an account', 'طلبات قدّمتها دون حساب'), guestRequests())}
   </div>`;
+}
+
+/* A certificate asked for on the public page, without an account. Holding its private link proves it is
+   yours; the parish office still confirms before it appears here. Nothing is matched by name or phone. */
+const GUEST_STAGE = { received: ['Received', 'استُلم'], review: ['Being prepared', 'قيد التحضير'], signed: ['Signed · with the bishop', 'موقّعة · لدى المطران'],
+  accepted: ['Accepted by the bishop', 'قبلها المطران'], ready: ['Ready', 'جاهزة'], collected: ['Collected', 'استُلمت'], declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي'] };
+function guestRequests() {
+  const list = M.guestRequests || [];
+  return (list.length ? `<div class="mr-cards">${list.map(g => `<article class="member-card"><h3>${txt(g.reference)} · ${txt(g.subject)}</h3>
+      <p>${txt(L(...(GUEST_STAGE[g.stage] || GUEST_STAGE.received)))}${g.claim === 'pending' ? ' · ' + txt(L('waiting for the parish office to confirm it is yours', 'بانتظار تأكيد مكتب الرعية أنه لك')) : ''}</p></article>`).join('')}</div>` : '') +
+    `<form class="mr-claim" id="mr-claim" novalidate><label class="label" for="mr-claim-link">${L('Paste the private link you were given', 'الصق الرابط الخاص الذي حصلت عليه')}</label>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><input class="input" id="mr-claim-link" dir="ltr" autocomplete="off" style="flex:1;min-width:14em">
+      <button class="btn btn-secondary" type="submit">${L('Ask to add it', 'اطلب إضافته')}</button></div>
+      <p class="help">${L('The parish office confirms it before it is linked to your account.', 'يؤكّد مكتب الرعية ذلك قبل ربطه بحسابك.')}</p></form>`;
 }
 
 /* ---- a new request ------------------------------------------------------------ */
@@ -628,6 +643,16 @@ function mountForm(host) {
 
 requestsPage.mount = host => {
   mountForm(host);
+  host.querySelector('#mr-claim')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const raw = host.querySelector('#mr-claim-link').value.trim();
+    let token = raw;
+    try { token = new URL(raw, location.href).searchParams.get('track') || raw; } catch { /* a bare token */ }
+    if (!token) return;
+    try { await memberAction('claimGuestRequest', { token }); await loadMember(); bus.refresh();
+      toast(L('Sent to the parish office', 'أُرسل إلى مكتب الرعية'), L('It appears here once they confirm it.', 'يظهر هنا بعد تأكيدهم.'), 'success'); }
+    catch (error) { toast(L('Not added', 'لم يُضف'), error.message, 'danger'); }
+  });
   host.querySelectorAll('[data-mr-withdraw]').forEach(b => b.addEventListener('click', () => {
     const r = M.requests.find(x => x.id === b.dataset.mrWithdraw);
     if (!r) return;

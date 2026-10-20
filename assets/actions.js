@@ -128,11 +128,12 @@ export const VERBS = {
   },
 
   /* sacraments -------------------------------------------------- */
+  /* Quick release from a list; the server refuses it when the diocese's policy or the bishop's acceptance requires the full dialog. */
   'sacr-sign': async (btn, id) => {
     const s = find(D.SACRAMENTS, id); if (!s) return;
     try { await serverWorkflow('issue', id, { verified: true }); closeOverlays(); refresh();
-      ok(L('Signed and issued', 'وُقّعت وصدرت'), L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`));
-    } catch (e) { toast(L('Could not issue certificate', 'تعذّر إصدار الشهادة'), e.message, 'danger'); }
+      ok(L('Released', 'سُلّمت'), L(`${s.reg} is now in the release history.`, `${s.reg} في سجل التسليم الآن.`));
+    } catch (e) { toast(L('Could not release the certificate', 'تعذّر تسليم الشهادة'), e.message, 'danger'); }
   },
 
   /* giving & finance -------------------------------------------- */

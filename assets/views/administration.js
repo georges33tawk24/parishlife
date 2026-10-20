@@ -46,7 +46,9 @@ const may = {
   accessParishes: () => D().parishes.filter(p => has(p.perms, 'access.manage')),
   accessDioceses: () => D().dioceses.filter(d => has(d.perms, 'access.manage') && (has(D().system, 'dioceses.manage') || session.authority?.dioceses?.some(x => x.id === d.id))),
   global: () => has(D().system, 'accounts.global'),
-  titles: did => has(D().dioceses.find(d => d.id === did)?.perms, 'clergy.title')
+  titles: did => has(D().dioceses.find(d => d.id === did)?.perms, 'clergy.title'),
+  policies: did => has(D().dioceses.find(d => d.id === did)?.perms, 'diocese.policies'),
+  accept: () => D().dioceses.some(d => has(d.perms, 'documents.accept'))
 };
 const scopePerms = (scope, id) => scope === 'parish' ? D().parishes.find(p => p.id === id)?.perms || []
   : scope === 'diocese' ? D().dioceses.find(d => d.id === id)?.perms || [] : D().system;
@@ -58,7 +60,9 @@ function tabs() {
     ...(d.parishes.length || may.parishDioceses().length ? [['parishes', 'Parishes', 'الرعايا', d.parishes.length]] : []),
     ['staff', 'Staff & permissions', 'العاملون والصلاحيات', d.assignments.filter(a => a.status === 'active').length],
     ...(d.clergy.length || may.clergyDioceses().length ? [['clergy', 'Clergy', 'الإكليروس', d.clergy.length]] : []),
-    ['access', 'Access', 'الوصول', d.blocks.filter(b => !b.liftedAt).length]];
+    ['access', 'Access', 'الوصول', d.blocks.filter(b => !b.liftedAt).length],
+    ...(may.accept() ? [['documents', 'Documents to accept', 'وثائق للقبول', docs.data ? docs.data.documents.filter(x => x.acceptance.status === 'awaiting').length : undefined]] : []),
+    ...(d.finance?.length ? [['finance', 'Finance', 'المالية', d.finance.length]] : [])];
 }
 
 export function administration(tab = '') {
@@ -71,7 +75,7 @@ export function administration(tab = '') {
   if (!D()) return head + (state.error ? `<p class="alert alert-danger" role="alert">${esc(state.error)}</p>` : `<p role="status" class="dim" style="margin-top:18px">${L('Loading administration…', 'جارٍ تحميل الإدارة…')}</p>`);
   const items = tabs();
   if (!items.some(x => x[0] === tab)) tab = '';
-  const body = { '': overview, dioceses, parishes, staff, clergy, access }[tab]();
+  const body = { '': overview, dioceses, parishes, staff, clergy, access, documents, finance }[tab]();
   return head + tabBar('administration', items, tab) + `<div class="tabbody admin-console">${body}</div>`;
 }
 
@@ -108,10 +112,70 @@ function dioceses() {
     `<b>${esc(x.name)}</b>${x.nameAr ? `<small class="dim" style="display:block" dir="rtl">${esc(x.nameAr)}</small>` : ''}`,
     x.bishops.length ? x.bishops.map(userLine).join('') : `<span class="dim">${L('No bishop yet', 'لا مطران بعد')}</span>`,
     String(d.parishes.filter(p => p.diocese === x.id).length),
+    may.policies(x.id) ? `<select class="select" data-release-policy="${esc(x.id)}" aria-label="${esc(L('Release of signed documents', 'تسليم الوثائق الموقّعة'))}">${RELEASE.map(([v, en, ar]) =>
+      `<option value="${v}" ${x.releasePolicy === v ? 'selected' : ''}>${esc(L(en, ar))}</option>`).join('')}</select>`
+      : `<span class="dim">${esc(L(...(RELEASE.find(r => r[0] === x.releasePolicy) || RELEASE[0]).slice(1)))}</span>`,
     may.createDiocese() && !x.bishops.length ? `<button class="btn btn-secondary btn-dense" data-provision="${esc(x.id)}">${icon('plus', 15)}${L('Provision first bishop', 'تجهيز حساب المطران الأول')}</button>` : ''] }));
   return `${may.createDiocese() ? `<div class="toolbar" style="margin-bottom:16px"><button class="btn btn-primary" id="adm-new-diocese">${icon('plus', 16)}${L('New diocese', 'أبرشية جديدة')}</button></div>` : ''}
-    ${table({ id: 'adm-dioceses', cols: [{ label: L('Diocese', 'الأبرشية') }, { label: L('Bishop', 'المطران') }, { label: L('Parishes', 'الرعايا'), cls: 'shrink' }, { label: '', cls: 'shrink' }], rows,
+    ${table({ id: 'adm-dioceses', cols: [{ label: L('Diocese', 'الأبرشية') }, { label: L('Bishop', 'المطران') }, { label: L('Parishes', 'الرعايا'), cls: 'shrink' },
+      { label: L('Release of signed documents', 'تسليم الوثائق الموقّعة'), cls: 'hide-sm' }, { label: '', cls: 'shrink' }], rows,
       empty: empty('portal', L('No dioceses yet', 'لا أبرشيات بعد'), L('The super admin creates each diocese, then provisions its first bishop account.', 'ينشئ المدير العام كل أبرشية، ثم يجهّز حساب مطرانها الأول.')) })}`;
+}
+
+/* ---------- documents the bishop accepts; the diocese's release rule ---------- */
+const RELEASE = [['unset', 'Not decided — release is manual, and early release is recorded', 'لم يُحسم — التسليم يدوي ويُسجَّل التسليم المبكر'],
+  ['after-signature', 'Released once the priest has signed', 'تُسلَّم بعد توقيع الكاهن'],
+  ['after-acceptance', 'Released only after the bishop accepts', 'لا تُسلَّم إلا بعد قبول المطران']];
+const docs = { data: null, loading: false, error: '' };
+async function loadDocs(force = false) {
+  if (docs.loading || (docs.data && !force)) return;
+  docs.loading = true;
+  try { docs.data = await api('diocese/documents'); docs.error = ''; } catch (e) { docs.error = e.message; }
+  finally { docs.loading = false; bus.refresh(); }
+}
+function documents() {
+  if (!docs.data) { loadDocs(); return docs.error ? `<p class="alert alert-danger" role="alert">${esc(docs.error)}</p>` : `<p class="dim" role="status">${L('Loading documents…', 'جارٍ تحميل الوثائق…')}</p>`; }
+  const waiting = docs.data.documents.filter(x => x.acceptance.status === 'awaiting'), done = docs.data.documents.filter(x => x.acceptance.status !== 'awaiting');
+  const row = x => `<li>${icon('cert', 18, 'dimmer')}<span class="grow"><b>${esc(x.reg)} · ${esc(x.person)}</b>
+      <small>${esc(L(x.parishName, x.parishAr || x.parishName))}${x.source.reg ? ' · ' + esc(L('from ', 'من ') + x.source.reg) : ''}${x.purpose ? ' · ' + esc(x.purpose) : ''}</small>
+      <small>${esc(L(`Signed by ${x.signedBy}`, `وقّعها ${x.signedBy}`))} · ${esc(fmtDate(x.signedAt))}</small>
+      ${x.acceptance.status !== 'awaiting' ? `<small>${x.acceptance.status === 'accepted' ? pill(L('Accepted', 'مقبولة'), 'success') : pill(L('Returned', 'مُعادة'), 'warning')} ${esc(fmtDate(x.acceptance.at))}${x.acceptance.note ? ' · ' + esc(x.acceptance.note) : ''}</small>` : ''}</span>
+    ${x.acceptance.status === 'awaiting' ? `<span class="acct-acts"><button class="btn btn-ghost btn-dense" data-doc-return="${esc(x.parish)}:${esc(x.id)}">${L('Return to the priest', 'إعادة إلى الكاهن')}</button>
+      <button class="btn btn-primary btn-dense" data-doc-accept="${esc(x.parish)}:${esc(x.id)}">${L('Accept', 'قبول')}</button></span>` : ''}</li>`;
+  return `<p class="dim" style="margin-bottom:12px">${L('Certificates the priests of your diocese have signed. Accepting is recorded separately from the priest’s signature.', 'الإفادات التي وقّعها كهنة أبرشيتك. يُسجَّل القبول منفصلاً عن توقيع الكاهن.')}</p>
+    ${panel(L('Waiting for your acceptance', 'بانتظار قبولك'), waiting.length ? `<ul class="admin-list">${waiting.map(row).join('')}</ul>` : `<p class="dim">${L('Nothing is waiting.', 'لا شيء بانتظارك.')}</p>`)}
+    ${done.length ? panel(L('Decided in the last 60 days', 'ما بُتّ فيه خلال آخر ٦٠ يوماً'), `<ul class="admin-list">${done.map(row).join('')}</ul>`) : ''}`;
+}
+function documentDecision(value, accept) {
+  const [parish, id] = value.split(':');
+  openModal({
+    title: accept ? L('Accept this signed document?', 'قبول هذه الوثيقة الموقّعة؟') : L('Return it to the priest?', 'إعادتها إلى الكاهن؟'),
+    body: `<form id="docform" class="stack" novalidate><p>${accept ? L('Your acceptance is recorded with your name and the time.', 'يُسجَّل قبولك باسمك ووقته.') : L('It goes back to the priest, who reviews and signs it again.', 'تعود إلى الكاهن ليراجعها ويوقّعها مجدداً.')}</p>
+      <div class="formrow"><label class="label" for="doc-note">${accept ? L('Note (optional)', 'ملاحظة (اختيارية)') : L('Why are you returning it?', 'لماذا تعيدها؟')}</label><textarea class="input" id="doc-note" rows="3" maxlength="500"></textarea></div>
+      <p class="si-error" id="doc-error" role="alert" hidden></p></form>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button><button class="btn btn-primary" form="docform" type="submit" style="margin-inline-start:auto">${accept ? L('Accept', 'قبول') : L('Return', 'إعادة')}</button>`,
+    onMount(el) {
+      el.querySelector('#docform').addEventListener('submit', async e => {
+        e.preventDefault();
+        try { await api('diocese/documents', 'POST', { parish, id, decision: accept ? 'accept' : 'return', note: el.querySelector('#doc-note').value });
+          closeOverlays(); await loadDocs(true); toast(accept ? L('Accepted', 'قُبلت') : L('Returned to the priest', 'أُعيدت إلى الكاهن'), '', 'success'); }
+        catch (err) { const box = el.querySelector('#doc-error'); box.textContent = err.message; box.hidden = false; }
+      });
+    }
+  });
+}
+
+/* ---------- finance: read-only, for the dioceses (or the whole system) this account oversees ---------- */
+function finance() {
+  const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
+  return `<p class="dim" style="margin-bottom:12px">${L('Totals from each parish’s own records. Editing and approving stay with the parish’s treasurer and priest.', 'مجاميع من سجلّات كل رعية. يبقى التعديل والموافقة لأمين صندوق الرعية وكاهنها.')}</p>
+    <div class="grid g2">${D().finance.map(f => panel(L(f.name, f.ar || f.name), `<dl class="dl">
+      <dt>${L('Approved expenses', 'المصاريف الموافق عليها')}</dt><dd>${money(f.expensesApproved)}</dd>
+      <dt>${L('Expenses awaiting the priest', 'مصاريف بانتظار الكاهن')}</dt><dd>${f.expensesWaiting}</dd>
+      <dt>${L('Pledges paid', 'التعهدات المدفوعة')}</dt><dd>${money(f.paid)} / ${money(f.pledged)}</dd>
+      <dt>${L('Giving, recent months', 'التقدمات في الأشهر الأخيرة')}</dt><dd>${f.giving.length ? f.giving.map(money).join(' · ') : '—'}</dd></dl>
+      ${f.funds.length ? `<div class="ac-group" style="padding-inline:0;margin-top:10px">${L('Funds', 'الصناديق')}</div><ul class="admin-list">${f.funds.map(x => `<li><span class="grow"><b>${esc(L(x.name, x.ar || x.name))}</b>
+        <small>${money(x.actual)} / ${money(x.budget)}${x.restricted ? ' · ' + esc(L('restricted', 'مقيّد')) : ''}</small></span></li>`).join('')}</ul>` : ''}`)).join('')}</div>`;
 }
 
 /* ---------- parishes ---------- */
@@ -417,6 +481,12 @@ administration.mount = host => {
   C.wire(host);
   load();
   if (!D()) return;
+  host.querySelectorAll('[data-doc-accept]').forEach(b => b.addEventListener('click', () => documentDecision(b.dataset.docAccept, true)));
+  host.querySelectorAll('[data-doc-return]').forEach(b => b.addEventListener('click', () => documentDecision(b.dataset.docReturn, false)));
+  host.querySelectorAll('[data-release-policy]').forEach(sel => sel.addEventListener('change', async () => {
+    try { await act({ op: 'setPolicy', diocese: sel.dataset.releasePolicy, key: 'documentRelease', value: sel.value }, L('Release policy saved', 'حُفظت سياسة التسليم')); }
+    catch (e) { toast(L('Not saved', 'لم يُحفظ'), e.message, 'danger'); }
+  }));
   host.querySelector('#adm-new-diocese')?.addEventListener('click', newDiocese);
   host.querySelectorAll('[data-provision]').forEach(b => b.addEventListener('click', () => provisionBishop(b.dataset.provision)));
   host.querySelector('#adm-new-parish')?.addEventListener('click', newParish);

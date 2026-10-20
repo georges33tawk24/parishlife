@@ -282,7 +282,12 @@ export async function sync_relationships(c, pid, d) {
 
 /* ---- access: see authority.js ------------------------------------------- */
 export async function file_access(c, u, pid, scope, owner_id, write = false) {
-  need(has(new Set(['group', 'person']), scope), 'Invalid file owner.');
+  need(has(new Set(['group', 'person', 'guest-request']), scope), 'Invalid file owner.');
+  if (scope === 'guest-request') {   // the signed document for a guest's request: the office only
+    need(permsOf(u).has('requests.manage'), 'Guest request documents are restricted to the parish office.', 403);
+    need(await c.first('SELECT 1 AS x FROM guest_requests WHERE id=? AND parish_id=?', owner_id, pid), 'Request not found.', 404);
+    return;
+  }
   const row = await c.first('SELECT data FROM states WHERE parish_id=?', pid);
   need(row !== null, 'Parish not found.', 404);
   const state = JSON.parse(row.data);
@@ -475,6 +480,9 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
   [d.MEMBERSHIP_REQUESTS, d.INVITATIONS] = perms.has('people.manage') ? await officeConnections(c, pid) : [[], []];
   const { ministryLists } = await import('./ministries.js');
   [d.MINISTRY_APPLICATIONS, d.MINISTRY_INQUIRIES, d.MINISTRY_DEPARTURES] = await ministryLists(c, u, pid, d);
+  const { officeGuestRequests, releasePolicy } = await import('./documents.js');
+  d.GUEST_REQUESTS = perms.has('requests.manage') ? await officeGuestRequests(c, pid, d) : [];
+  d.POLICIES = { documentRelease: await releasePolicy(c, pid) };
   if (!perms.has('notes.pastoral')) d.NOTES = [];
   if (!perms.has('settings.manage')) {
     for (const k of ['SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS']) d[k] = [];
@@ -1077,6 +1085,7 @@ export async function workflow(c, u, pid, q) {
       purpose, godparents: '', history: requestHistory, revision: 1 });
   } else if (['submit', 'approve', 'issue', 'reject', 'cancel'].includes(action)) {
     need(s !== null, 'Register entry not found.', 404);
+    let accepted = false;
     if (action === 'cancel') {
       need(eq(get(s, 'kind'), 'certificate') && has(new Set(['draft', 'awaiting-signature']), K(s, 'status')),
         'Only an open certificate request can be cancelled.');
@@ -1135,12 +1144,30 @@ export async function workflow(c, u, pid, q) {
           }
         } else {
           need(eq(get(s, 'kind'), 'certificate') && eq(K(s, 'status'), 'approved'), 'Approve a certificate request before issuing it.');
+          /* Releasing follows the diocese's policy; with none set, releasing before the bishop's acceptance is said out loud. */
+          const { releasePolicy } = await import('./documents.js');
+          const policy = await releasePolicy(c, pid);
+          accepted = get(get(s, 'acceptance') ?? {}, 'status') === 'accepted';
+          need(policy !== 'after-acceptance' || accepted, 'This diocese releases documents only after the bishop has accepted them.', 409);
+          need(accepted || policy === 'after-signature' || get(q, 'beforeAcceptance') === true,
+            'The bishop has not accepted this document yet, and the diocese has not decided whether documents wait for that. ' +
+            'Confirm that you are releasing it before the bishop’s acceptance.', 409);
           Object.assign(s, { status: 'issued', issuedBy: by, issuedAt: at });
         }
       }
       const entry = { action, by, at };
       if (action === 'reject') entry.reason = reason;
+      if (action === 'issue' && !accepted) entry.beforeAcceptance = true;
       history(s, entry);
+      if (action === 'approve' && eq(get(s, 'kind'), 'certificate')) {   // the priest's signature: on to the bishop
+        s.acceptance = { status: 'awaiting', sentAt: at };
+        history(s, { action: 'sent to the bishop', by, at });
+        const { releasePolicy } = await import('./documents.js');
+        if (await releasePolicy(c, pid) === 'after-signature') {
+          Object.assign(s, { status: 'issued', issuedBy: 'Released by the diocesan policy', issuedAt: at });
+          history(s, { action: 'issue', by: 'Diocesan policy: release after the priest’s signature', at, automatic: true });
+        }
+      }
     }
   } else if (action === 'link-source') {
     need(s !== null && eq(get(s, 'kind'), 'certificate') && has(new Set(['draft', 'scheduled', 'awaiting-signature']), K(s, 'status')),

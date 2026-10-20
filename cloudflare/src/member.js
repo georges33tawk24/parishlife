@@ -10,6 +10,7 @@ import { parish_theme } from './state.js';
 import { parishUser, authority } from './authority.js';
 import { PROFILE_REQUEST_FIELDS } from './connections.js';
 import { ministryMemberAction, ministryMemberView } from './ministries.js';
+import { guestRequestClaim, claimedGuestRequests } from './documents.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
   request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
@@ -338,7 +339,8 @@ export async function member_view(c, u, pid) {
     reviewers: perms.has('Assign') ? reviewerRows.filter(r => has(set(JSON.parse(r.permissions)), 'Review')).map(r => ({ id: r.user_id, name: r.name })) : [],
     categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active) })), notifications,
     requests: requestRows.map(r => member_request_item(d, r)), requestOptions: member_request_options(d, person),
-    ...(person.id ? await ministryMemberView(c, u, pid, d, person) : { ministryApplications: [], ministryDepartures: [], openMinistries: [] })
+    ...(person.id ? await ministryMemberView(c, u, pid, d, person) : { ministryApplications: [], ministryDepartures: [], openMinistries: [] }),
+    guestRequests: await claimedGuestRequests(c, u, pid)
   };
 }
 
@@ -349,6 +351,7 @@ export async function member_action(c, u, pid, q) {
   const priv = await member_private(c, u, pid);
   const op = get(q, 'op');
   if (['ministryApply', 'ministryWithdraw', 'ministryLeave'].includes(op)) return ministryMemberAction(c, u, pid, d, person, q);
+  if (op === 'claimGuestRequest') return guestRequestClaim(c, u, pid, q);
   const groupId = get(q, 'groupId');
   const role = K(u, 'role');
   const notify = async (userId, kind, title, body, route) => {

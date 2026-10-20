@@ -177,8 +177,14 @@ export const MINISTRY_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS account_notifications_user ON account_notifications(user_id,created_at)`
 ];
 
+/* Certificates asked for without an account (documents.js uses it). */
+export const DOCUMENT_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS guest_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), reference TEXT NOT NULL, token TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, subject TEXT NOT NULL, requester TEXT NOT NULL, purpose TEXT NOT NULL DEFAULT '', delivery TEXT NOT NULL, status TEXT NOT NULL, certificate_id TEXT, response TEXT NOT NULL DEFAULT '', link_delivery TEXT NOT NULL, claim_user_id TEXT, claim_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, log TEXT NOT NULL DEFAULT '[]', UNIQUE(parish_id,reference))`,
+  `CREATE INDEX IF NOT EXISTS guest_requests_parish ON guest_requests(parish_id,status)`
+];
+
 export async function migrateV2(db) {
-  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA].map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA, ...DOCUMENT_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();
@@ -441,7 +447,7 @@ export async function adminView(c, u) {
     const meta = JSON.parse(d.metadata || '{}');
     const bishops = await c.all("SELECT * FROM role_assignments WHERE role='bishop' AND scope='diocese' AND scope_id=? AND status='active'", d.id);
     outDioceses.push({ id: d.id, name: d.name, nameAr: meta.ar ?? '', bishops: bishops.map(b => b.user_id), perms: sorted([...scope.dioceses.get(d.id)]),
-      releasePolicy: JSON.parse(await setting(c, 'diocese', d.id, 'documents.release', '"unset"')) });
+      releasePolicy: await setting(c, 'diocese', d.id, 'documentRelease', 'unset') });
   }
   const byId = new Map(parishRows.map(p => [p.id, p]));
   const outParishes = [...parishIds].map(pid => {
@@ -482,7 +488,9 @@ export async function adminView(c, u) {
   for (const [k, v] of Object.entries(ROLE_TITLES)) roles[k] = [...v];
   for (const [k, v] of Object.entries(CLERGY_OFFICES)) offices[k] = [...v];
   for (const [k, v] of Object.entries(ROLE_TEMPLATES)) templates[k] = sorted([...v]);
-  return { system: sorted([...scope.system]), dioceses: outDioceses, parishes: outParishes, assignments, clergy, blocks, users,
+  const { financeOverview } = await import('./documents.js');
+  const finance = await financeOverview(c, auth, parishRows);
+  return { system: sorted([...scope.system]), dioceses: outDioceses, parishes: outParishes, assignments, clergy, blocks, users, finance,
     catalog: { permissions: PERMISSIONS.map(p => ({ code: p[0], level: p[1], en: p[2], ar: p[3], fixed: FIXED_PERMISSIONS[p[0]] ?? '' })),
       templates, titles: [...CLERGY_TITLES], offices, roles } };
 }
@@ -578,6 +586,16 @@ export async function adminAction(c, u, q) {
     const row = await c.first('SELECT id,username,name FROM users WHERE username=? AND role<>?', key, 'disabled')
       ?? await c.first('SELECT u.id,u.username,u.name FROM user_contacts k JOIN users u ON u.id=k.user_id WHERE k.value=? AND u.role<>?', key, 'disabled');
     return { user: row ? { id: row.id, username: row.username, name: row.name } : null };
+  }
+  if (op === 'setPolicy') {
+    const did = get(q, 'diocese');
+    need(await c.first("SELECT 1 AS x FROM dioceses WHERE id=? AND id<>''", did), 'Diocese not found.', 404);
+    need(diocesePerms(auth, did).has('diocese.policies'), 'Diocesan policies are set by the bishop.', 403);
+    need(get(q, 'key') === 'documentRelease' && ['unset', 'after-signature', 'after-acceptance'].includes(get(q, 'value')), 'Choose a policy.');
+    c.run('INSERT INTO settings VALUES(?,?,?,?,?,?) ON CONFLICT(scope,scope_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at,updated_by=excluded.updated_by',
+      'diocese', did, 'documentRelease', get(q, 'value'), at, u.id);
+    audit(c, u, null, 'diocese.policy', { diocese: did, documentRelease: get(q, 'value') });
+    return {};
   }
   if (op === 'createDiocese') {
     need(systemPerms(auth).has('dioceses.manage'), 'Only the super admin creates dioceses.', 403);

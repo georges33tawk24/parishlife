@@ -238,6 +238,113 @@ function bindMinistryForm(p) {
   });
 }
 
+/* A certificate asked for without an account, for oneself or a family member. A child's is asked for by a parent
+   or guardian. The private tracking link is shown once; it is only described as sent when it really was. */
+const GUEST_DOCS = [['baptism', ['Baptism certificate', 'إفادة معمودية']], ['communion', ['First Communion certificate', 'إفادة مناولة أولى']],
+  ['confirmation', ['Confirmation certificate', 'إفادة تثبيت']], ['marriage', ['Marriage certificate', 'إفادة زواج']]];
+const RELATIONS = [['self', ['It is about me', 'تخصّني']], ['parent', ['I am a parent', 'أنا أحد الوالدين']], ['guardian', ['I am the legal guardian', 'أنا الوصي القانوني']],
+  ['spouse', ['I am the spouse', 'أنا الزوج أو الزوجة']], ['child', ['I am a son or daughter', 'أنا الابن أو الابنة']], ['sibling', ['I am a brother or sister', 'أنا الأخ أو الأخت']], ['other', ['Another relative', 'قريب آخر']]];
+function guestDocumentForm(p) {
+  const field = (name, label, attrs = '') => '<label>' + label + '<input name="' + name + '" ' + attrs + '></label>';
+  return '<details class="guest-doc" id="no-account"><summary><span><b>' + L('Only need a certificate? No account needed.', 'تحتاج إلى إفادة فقط؟ لا حاجة إلى حساب.') + '</b><small>' +
+    L('Ask for yourself or for a family member. You get a private link to follow it.', 'اطلب لنفسك أو لأحد أفراد عائلتك. تحصل على رابط خاص لمتابعة الطلب.') + '</small></span>' + icon('chevron') + '</summary>' +
+    '<form class="ministry-form guest-form" id="guest-form" novalidate>' +
+    '<label>' + L('Document', 'الوثيقة') + '<select name="kind">' + GUEST_DOCS.map(([v, l]) => '<option value="' + v + '">' + L(...l) + '</option>').join('') + '</select></label>' +
+    '<fieldset><legend>' + L('Who is the document about?', 'عمّن الوثيقة؟') + '</legend>' + field('subject.name', L('Full name', 'الاسم الكامل'), 'maxlength="120" required') +
+    '<div class="form-pair">' + field('subject.birthDate', L('Date of birth', 'تاريخ الولادة'), 'type="date"') + field('subject.when', L('Date or year of the sacrament, if known', 'تاريخ السرّ أو سنته إن عُرف'), 'maxlength="120"') + '</div>' +
+    '<div class="form-pair">' + field('subject.father', L('Father’s name', 'اسم الأب'), 'maxlength="120"') + field('subject.mother', L('Mother’s name', 'اسم الأم'), 'maxlength="120"') + '</div>' +
+    '<small>' + L('For a child, a parent or legal guardian makes the request. The child does not need an account and does not come alone.', 'لطفل، يقدّم الطلبَ أحدُ الوالدين أو الوصي القانوني. لا يحتاج الطفل إلى حساب ولا يأتي وحده.') + '</small></fieldset>' +
+    '<fieldset><legend>' + L('About you', 'عنك') + '</legend>' + field('requester.name', L('Your name', 'اسمك'), 'maxlength="120" autocomplete="name" required') +
+    '<label>' + L('How you are related', 'صلة القرابة') + '<select name="requester.relationship">' + RELATIONS.map(([v, l]) => '<option value="' + v + '">' + L(...l) + '</option>').join('') + '</select></label>' +
+    '<div class="form-pair">' + field('requester.phone', L('Phone', 'الهاتف'), 'type="tel" dir="ltr" maxlength="40" autocomplete="tel"') + field('requester.email', L('Email', 'البريد الإلكتروني'), 'type="email" dir="ltr" maxlength="120" autocomplete="email"') + '</div>' +
+    '<small>' + L('Give a phone number, an email address, or both.', 'أدخل رقم هاتف أو بريداً إلكترونياً أو كليهما.') + '</small></fieldset>' +
+    '<label>' + L('What it is for (optional)', 'الغاية منها (اختياري)') + '<input name="purpose" maxlength="500"></label>' +
+    '<fieldset><legend>' + L('How will you receive it?', 'كيف ستستلمها؟') + '</legend><label class="radio"><input type="radio" name="delivery" value="collect" checked>' + L('I will collect it at the parish office', 'سأستلمها من مكتب الرعية') + '</label>' +
+    '<label class="radio"><input type="radio" name="delivery" value="download">' + L('I will download it from my tracking link once it is released', 'سأنزّلها من رابط المتابعة بعد تسليمها') + '</label></fieldset>' +
+    '<span class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></span>' +
+    '<p class="form-status" role="status" aria-live="polite"></p><button class="button" type="submit">' + L('Send the request', 'إرسال الطلب') + icon('arrow') + '</button></form>' +
+    '<div class="guest-done" id="guest-done" hidden></div></details>';
+}
+const LINK_SENT = {
+  sent: ['We also sent this link to you.', 'وأرسلنا إليك هذا الرابط أيضاً.'],
+  sending: ['We handed this link to our message service, which has not confirmed it yet. Keep a copy.', 'سلّمنا هذا الرابط إلى خدمة الرسائل التي لم تؤكّده بعد. احتفظ بنسخة.'],
+  failed: ['We could not send this link to you. Keep a copy now.', 'تعذّر إرسال هذا الرابط إليك. احتفظ بنسخة الآن.'],
+  console: ['Development server: this link was printed in the server console, not sent to you. Keep a copy.', 'خادم تطوير: طُبع هذا الرابط في نافذة الخادم ولم يُرسل إليك. احتفظ بنسخة.'],
+  'not-configured': ['This link has not been sent anywhere: this site cannot send emails or text messages yet. Keep a copy now — it is the only way to follow your request.', 'لم يُرسل هذا الرابط إلى أي مكان: لا يستطيع هذا الموقع إرسال رسائل بريد أو رسائل نصية بعد. احتفظ بنسخة الآن — فهو الطريقة الوحيدة لمتابعة طلبك.']
+};
+function bindGuestForm(p) {
+  const form = document.querySelector('#guest-form');
+  if (!form) return;
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const status = form.querySelector('.form-status'), values = Object.fromEntries(new FormData(form));
+    const body = { kind: values.kind, purpose: values.purpose, delivery: values.delivery, website: values.website, subject: {}, requester: {} };
+    for (const [k, v] of Object.entries(values)) { const [group, key] = k.split('.'); if (key) body[group][key] = v; }
+    if (!body.subject.name.trim()) { status.textContent = L('Enter the full name of the person the document is about.', 'أدخل الاسم الكامل لصاحب الوثيقة.'); return form.elements['subject.name'].focus(); }
+    if (!body.requester.name.trim()) { status.textContent = L('Enter your name.', 'أدخل اسمك.'); return form.elements['requester.name'].focus(); }
+    if (!body.requester.phone.trim() && !body.requester.email.trim()) { status.textContent = L('Give a phone number or an email address.', 'أدخل رقم هاتف أو بريداً إلكترونياً.'); return form.elements['requester.phone'].focus(); }
+    const button = form.querySelector('[type=submit]'); button.disabled = true; status.textContent = L('Sending…', 'جارٍ الإرسال…');
+    try {
+      const response = await fetch('/api/public/parishes/' + encodeURIComponent(p.id) + '/document-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || L('The request could not be sent.', 'تعذّر إرسال الطلب.'));
+      form.hidden = true;
+      const done = document.querySelector('#guest-done');
+      done.hidden = false;
+      done.innerHTML = '<h3>' + L('Your request is saved', 'حُفظ طلبك') + ' · <bdi>' + safe(result.reference) + '</bdi></h3><p>' + L('This is your private link to follow it. Anyone with this link can see the request, so keep it to yourself.', 'هذا رابطك الخاص لمتابعة الطلب. من يملك هذا الرابط يرى الطلب، فاحتفظ به لنفسك.') + '</p>' +
+        '<p class="track-link" dir="ltr">' + safe(result.link) + '</p><p><button class="text-button" type="button" id="copy-track">' + L('Copy the link', 'انسخ الرابط') + '</button> · <a class="text-link" href="' + safe(result.link) + '">' + L('Open it', 'افتحه') + '</a></p>' +
+        '<p class="form-status">' + L(...(LINK_SENT[result.linkDelivery] || LINK_SENT['not-configured'])) + '</p>';
+      done.querySelector('#copy-track').addEventListener('click', () => navigator.clipboard?.writeText(result.link).then(() => { done.querySelector('#copy-track').textContent = L('Copied', 'نُسخ'); }));
+      done.scrollIntoView({ block: 'center' });
+    } catch (error) { status.textContent = error.message; button.disabled = false; }
+  });
+}
+
+/* The private tracking page for a request made without an account. */
+const TRACK_STAGES = {
+  received: ['Received by the parish office', 'استلمه مكتب الرعية'], review: ['Being prepared', 'قيد التحضير'], signed: ['Signed by the priest · with the bishop', 'وقّعها الكاهن · لدى المطران'],
+  accepted: ['Accepted by the bishop', 'قبلها المطران'], ready: ['Ready', 'جاهزة'], collected: ['Collected', 'استُلمت'], declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي']
+};
+const TRACK_EVENTS = { submitted: ['Request sent', 'أُرسل الطلب'], accepted: ['The parish office found the record', 'وجد مكتب الرعية القيد'], signed: ['Signed by the priest', 'وقّعها الكاهن'],
+  'bishop-accepted': ['Accepted by the bishop', 'قبلها المطران'], review: ['Returned for review', 'أُعيدت للمراجعة'], ready: ['Released', 'سُلّمت'], collected: ['Collected', 'استُلمت'],
+  declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي'] };
+async function trackPage(token) {
+  app.setAttribute('aria-busy', 'true');
+  let view;
+  try {
+    const response = await fetch('/api/public/requests/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    view = await response.json();
+    if (!response.ok) throw new Error(view.error || '');
+  } catch (error) {
+    app.innerHTML = '<div class="site-wrap error-page">' + empty(L('We could not find this request', 'لم نعثر على هذا الطلب'), error.message || L('Check that you copied the whole link.', 'تحقّق من أنك نسخت الرابط كاملاً.')) + '</div>';
+    app.setAttribute('aria-busy', 'false'); return;
+  }
+  const kind = GUEST_DOCS.find(([v]) => v === view.kind)?.[1] || ['Certificate', 'إفادة'];
+  const when = at => publishedDate(at) || '';
+  app.innerHTML = '<section class="section site-wrap track-page"><span class="eyebrow">' + safe(pair(view.parish, 'name', 'ar')) + ' · <bdi>' + safe(view.reference) + '</bdi></span>' +
+    '<h1>' + L(...kind) + '</h1><p class="track-subject">' + safe(view.subject) + '</p>' +
+    '<p class="track-stage"><b>' + L(...(TRACK_STAGES[view.stage] || TRACK_STAGES.received)) + '</b></p>' +
+    (view.message ? '<p class="track-message">' + L('Message from the parish: ', 'رسالة من الرعية: ') + safe(view.message) + '</p>' : '') +
+    (view.stage === 'ready' ? (view.download ? '<p><button class="button" type="button" id="track-download">' + L('Download the document', 'نزّل الوثيقة') + icon('arrow') + '</button></p>'
+      : view.delivery === 'download' ? '<p>' + L('The document is released. The parish office is attaching the signed copy; check this page again soon, or collect it at the office.', 'سُلّمت الوثيقة. يرفق مكتب الرعية النسخة الموقّعة؛ عُد إلى هذه الصفحة قريباً أو استلمها من المكتب.') + '</p>'
+      : '<p>' + L('Collect it at the parish office. Bring an identity document.', 'استلمها من مكتب الرعية، واصطحب وثيقة هوية.') + (view.minor ? ' ' + L('As it concerns a child, the parent or guardian who asked for it collects it.', 'ولأنها تخصّ طفلاً، يستلمها الوالد أو الوصي الذي طلبها.') : '') + '</p>') : '') +
+    '<ol class="track-events">' + view.events.map(e => '<li><b>' + L(...(TRACK_EVENTS[e.key] || [e.key, e.key])) + '</b><small>' + safe(when(e.at)) + '</small></li>').join('') + '</ol>' +
+    '<p class="track-note">' + L('This page is private to whoever holds its link. Have an account? Members can ask the parish office to add this request to their account from My requests.', 'هذه الصفحة خاصة بمن يملك رابطها. هل لديك حساب؟ يمكن للأعضاء أن يطلبوا من مكتب الرعية إضافة هذا الطلب إلى حسابهم من «طلباتي».') + '</p></section>';
+  app.setAttribute('aria-busy', 'false');
+  document.title = view.reference + ' · ParishLife';
+  document.querySelector('#track-download')?.addEventListener('click', async event => {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const response = await fetch('/api/public/requests/document', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || L('The document could not be downloaded.', 'تعذّر تنزيل الوثيقة.'));
+      const blob = await response.blob(), name = decodeURIComponent((response.headers.get('Content-Disposition') || '').split("''")[1] || view.reference);
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (error) { alert(error.message); }
+    finally { button.disabled = false; }
+  });
+}
+
 function sacramentsSection(p, d, phone) {
   const intro = content(d, 'sacraments');
   return '<section id="sacraments" class="sacraments-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('CELEBRATE WITH US', 'نحتفل معاً') + '</span><h2>' + L('Ask your parish', 'اطلب من رعيتك') + '</h2></div>' +
@@ -245,7 +352,7 @@ function sacramentsSection(p, d, phone) {
     '<h3 class="request-group">' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h3>' +
     '<div class="request-grid">' + REQUESTS.map(requestCard(p, false)).join('') + '</div>' +
     '<h3 class="request-group">' + L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر') + '</h3>' +
-    '<div class="request-grid request-grid-2">' + OTHER_REQUESTS.map(requestCard(p, true)).join('') + '</div>' +
+    '<div class="request-grid request-grid-2">' + OTHER_REQUESTS.map(requestCard(p, true)).join('') + '</div>' + guestDocumentForm(p) +
     '<div class="request-steps"><ol>' +
       '<li><span>01</span><b>' + L('Sign in or create an account', 'سجّل الدخول أو أنشئ حساباً') + '</b><small>' + L('With your phone number or your email. It is free.', 'برقم هاتفك أو ببريدك الإلكتروني. إنه مجاني.') + '</small></li>' +
       '<li><span>02</span><b>' + L('Send your request', 'أرسل طلبك') + '</b><small>' + L('Choose what you need. It takes two minutes.', 'اختر ما تحتاج إليه. يستغرق ذلك دقيقتين.') + '</small></li>' +
@@ -264,9 +371,13 @@ function bindEventToggle(parishes) {
   });
 }
 
+/* A private tracking link opens its request instead of the directory (the link is the requester's own; pages
+   are served with a same-origin referrer policy, so it is not passed on to other sites). */
+const trackToken = params.get('track');
 function render() {
   observer?.disconnect();
   updateChrome();
+  if (trackToken) return trackPage(trackToken);
   const p = directory.find(p => p.id === selected), d = details.get(selected);
   applySiteTheme(p && d ? d.parish.theme : null);   // a parish page wears its parish's colours; the directory stays in Forest
   if (loadFailure) {
@@ -285,7 +396,7 @@ function render() {
   document.querySelector('#town-filter')?.addEventListener('change', event => { filters.town = event.target.value; renderCards(true); });
   document.querySelector('#sort-filter')?.addEventListener('change', event => { filters.sort = event.target.value; renderCards(true); });
   bindEventToggle(selected && p ? [p] : directory);
-  if (selected && p && d) bindMinistryForm(p);
+  if (selected && p && d) { bindMinistryForm(p); bindGuestForm(p); }
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     observer = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
@@ -300,6 +411,7 @@ async function getJSON(url) {
   return response.json();
 }
 async function load() {
+  if (trackToken) return render();
   app.setAttribute('aria-busy', 'true');
   loadFailure = false;
   try {
