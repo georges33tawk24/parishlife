@@ -11,7 +11,7 @@ import { download, wireActions } from '../actions.js';
 import { persist } from '../persist.js';
 import { printSheet } from '../print.js';
 import { membershipRequests, pendingMembership, invitationsFor, wireConnections } from './connections-office.js';
-import { can } from '../api.js';
+import { can, session } from '../api.js';
 import { readAddressCascade } from '../geography.js';
 import { memberAction } from '../member-data.js';
 import { phoneShow } from '../sacrament-requests.js';
@@ -681,7 +681,7 @@ export function personView(id, tab = '') {
     },
 
     notes: () => `<div class="tabbody">${panel(t('Pastoral notes', 'الملاحظات الرعوية'),
-      NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`)}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Pastoral Notes.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
+      NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${n.visibility === 'shared' ? pill(t('Shared with parish priests', 'مشتركة مع كهنة الرعية'), 'info', false) : pill(t('Personal', 'شخصية'), '', false)}${!n.authorId || n.authorId === session.user?.id ? C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`) : ''}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Pastoral Notes.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
 
     files: () => `<div style="max-width:720px">${panel(t('Attachments', 'المرفقات'), `
       <p class="help" style="margin-bottom:12px">${t('Only real uploaded files appear here. Access and deletion are logged.','تظهر هنا الملفات المرفوعة فعلياً فقط. يُسجّل فتحها وحذفها.')}</p>

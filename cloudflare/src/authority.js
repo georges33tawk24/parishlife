@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   ['ministries.manage', 'parish', 'Ministries, volunteers and rotas', 'الخدمات والمتطوّعون وجداول الخدمة'],
   ['facilities.manage', 'parish', 'Rooms, bookings and equipment', 'القاعات والحجوزات والمعدّات'],
   ['communications.manage', 'parish', 'Notices, broadcasts and prayer requests', 'الإعلانات والرسائل الجماعية ونوايا الصلاة'],
+  ['messages.office', 'parish', 'Read and answer the parish office inbox', 'قراءة بريد مكتب الرعية والردّ عليه'],
   ['website.publish', 'parish', 'Public website content', 'محتوى الموقع العام'],
   ['finance.view', 'parish', 'See giving and finance', 'الاطّلاع على التقدمات والمالية'],
   ['finance.edit', 'parish', 'Record gifts, expenses and the exchange rate', 'تسجيل التقدمات والمصاريف وسعر الصرف'],
@@ -60,7 +61,7 @@ export const FIXED_PERMISSIONS = {
 };
 const isFixed = p => Object.prototype.hasOwnProperty.call(FIXED_PERMISSIONS, p);
 const PARISH_OFFICE = ['people.manage', 'sacraments.manage', 'requests.manage', 'events.manage', 'ministries.manage',
-  'facilities.manage', 'communications.manage', 'website.publish'];
+  'facilities.manage', 'communications.manage', 'messages.office', 'website.publish'];
 /* Diocesan and system roles also carry parish permissions: they never open a parish's records with
    them, but they are what such an administrator may hand on when appointing a parish admin. */
 const PARISH_ADMIN = [...PARISH_OFFICE, 'settings.manage', 'staff.manage', 'access.manage', 'audit.view'];
@@ -183,8 +184,22 @@ export const DOCUMENT_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS guest_requests_parish ON guest_requests(parish_id,status)`
 ];
 
+/* Private conversations, their reports and emergency reviews, and the people each complaint was sent to (privacy.js uses them). */
+export const PRIVACY_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, reference TEXT UNIQUE NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL, parish_id TEXT REFERENCES parishes(id), group_id TEXT, context TEXT NOT NULL DEFAULT '{}', created_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, last_at TEXT NOT NULL, legacy_id TEXT UNIQUE)`,
+  `CREATE INDEX IF NOT EXISTS conversations_place ON conversations(kind,parish_id,group_id)`,
+  `CREATE TABLE IF NOT EXISTS conversation_members(conversation_id TEXT NOT NULL REFERENCES conversations(id), user_id TEXT NOT NULL REFERENCES users(id), side TEXT NOT NULL DEFAULT 'person', read_at TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(conversation_id,user_id))`,
+  `CREATE INDEX IF NOT EXISTS conversation_members_user ON conversation_members(user_id,side)`,
+  `CREATE TABLE IF NOT EXISTS conversation_messages(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), author_id TEXT NOT NULL REFERENCES users(id), side TEXT NOT NULL DEFAULT 'person', body TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS conversation_messages_thread ON conversation_messages(conversation_id,created_at)`,
+  `CREATE TABLE IF NOT EXISTS conversation_reports(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), reporter_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL, closed_at TEXT, closed_by TEXT, close_note TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS emergency_reviews(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), reviewer_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, report_id TEXT, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS concern_recipients(concern_id TEXT NOT NULL REFERENCES member_concerns(id), user_id TEXT NOT NULL REFERENCES users(id), source TEXT NOT NULL, added_at TEXT NOT NULL, PRIMARY KEY(concern_id,user_id))`,
+  `CREATE INDEX IF NOT EXISTS concern_recipients_user ON concern_recipients(user_id)`
+];
+
 export async function migrateV2(db) {
-  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA, ...DOCUMENT_SCHEMA].map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA, ...DOCUMENT_SCHEMA, ...PRIVACY_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();
@@ -200,6 +215,8 @@ export async function migrateV2Roles(c) {
     c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-roles',?)", NOW());
   }
   await migrateAccounts(c);
+  const { migratePrivacy } = await import('./privacy.js');
+  await migratePrivacy(c);
 }
 
 /* The access an account had before scoped roles: one role, the parishes in `assignments`. */

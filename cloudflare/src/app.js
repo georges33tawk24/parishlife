@@ -8,6 +8,7 @@ import {
 } from './py.js';
 import { SEED, ROLES, CLERGY, FINANCE, PROTECTED, migrate_state, validate } from './state.js';
 import { access, parishes, parishUser, permsOf, writable, authority, migrateV2, migrateV2Roles } from './authority.js';
+import { noteVisible, mergeNotes } from './notes.js';
 import { Tx, Conflict } from './db.js';
 import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, CLOCK, sacrament_conflict, booking_clash } from './requests.js';
 
@@ -483,7 +484,7 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
   const { officeGuestRequests, releasePolicy } = await import('./documents.js');
   d.GUEST_REQUESTS = perms.has('requests.manage') ? await officeGuestRequests(c, pid, d) : [];
   d.POLICIES = { documentRelease: await releasePolicy(c, pid) };
-  if (!perms.has('notes.pastoral')) d.NOTES = [];
+  d.NOTES = iter(K(d, 'NOTES')).filter(n => noteVisible(u, n));   // personal notes: their author; shared: the parish's priests
   if (!perms.has('settings.manage')) {
     for (const k of ['SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS']) d[k] = [];
     delete d.PARISH.apiKey;
@@ -616,6 +617,8 @@ export async function save_patch(c, u, pid, payload) {
         need(!truthy(get(info, 'restricted')) || get(info, 'required') !== false, 'Restricted pickup remains required.', 403);
         setItem(K(d, 'PICKUP'), personId, info);
       }
+    } else if (key === 'NOTES') {
+      d[key] = mergeNotes(u, K(old, 'NOTES'), value);
     } else {
       d[key] = value;
     }

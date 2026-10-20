@@ -2021,6 +2021,568 @@ def finance_overview(c, auth, parish_rows):
     return out
 
 
+# ───────────── Privacy: private messages, pastoral-note visibility, complaint recipients ─────────────
+# A conversation is private to the people in it. Writing to a parish office reaches the accounts that
+# answer the office inbox there now; writing to a ministry reaches its current leader and assistant.
+# Nobody else reads it, whatever their rank. Messages are never edited or deleted; archiving only tidies
+# the archiving account's own inbox. A super admin can open one conversation for a recorded reason, as a
+# separate, audited emergency review; that never reaches notes or the identity of an anonymous complaint.
+PRIVACY_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, reference TEXT UNIQUE NOT NULL, kind TEXT NOT NULL,
+  subject TEXT NOT NULL, parish_id TEXT REFERENCES parishes(id), group_id TEXT, context TEXT NOT NULL DEFAULT '{}',
+  created_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, last_at TEXT NOT NULL, legacy_id TEXT UNIQUE);
+CREATE INDEX IF NOT EXISTS conversations_place ON conversations(kind,parish_id,group_id);
+CREATE TABLE IF NOT EXISTS conversation_members(conversation_id TEXT NOT NULL REFERENCES conversations(id),
+  user_id TEXT NOT NULL REFERENCES users(id), side TEXT NOT NULL DEFAULT 'person', read_at TEXT NOT NULL DEFAULT '',
+  archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(conversation_id,user_id));
+CREATE INDEX IF NOT EXISTS conversation_members_user ON conversation_members(user_id,side);
+CREATE TABLE IF NOT EXISTS conversation_messages(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id),
+  author_id TEXT NOT NULL REFERENCES users(id), side TEXT NOT NULL DEFAULT 'person', body TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS conversation_messages_thread ON conversation_messages(conversation_id,created_at);
+CREATE TABLE IF NOT EXISTS conversation_reports(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id),
+  reporter_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL, closed_at TEXT, closed_by TEXT, close_note TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS emergency_reviews(id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id),
+  reviewer_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, report_id TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS concern_recipients(concern_id TEXT NOT NULL REFERENCES member_concerns(id),
+  user_id TEXT NOT NULL REFERENCES users(id), source TEXT NOT NULL, added_at TEXT NOT NULL, PRIMARY KEY(concern_id,user_id));
+CREATE INDEX IF NOT EXISTS concern_recipients_user ON concern_recipients(user_id);
+'''
+MESSAGES_PER_PAGE = 10
+NOTE_VISIBILITY = ('personal', 'shared')
+
+
+def migrate_privacy(c):
+    """Additive and run once each: earlier one-to-one portal messages are copied into conversations
+    (the originals stay where they were), each earlier pastoral note gets the author it had in practice
+    and stays personal, and each earlier complaint keeps exactly the people who could already see it."""
+    c.executescript(PRIVACY_SCHEMA)
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-messages'").fetchone() is None:
+        threads = {}
+        for r in c.execute("SELECT * FROM member_content WHERE kind='message' AND recipient_id IS NOT NULL ORDER BY created_at,id").fetchall():
+            title = r['title']
+            while title.startswith('Re: '): title = title[4:]
+            key = (r['parish_id'], r['group_id'] or '', tuple(sorted((r['author_id'], r['recipient_id']))), title)
+            conv_id = threads.get(key)
+            if conv_id is None:
+                conv_id = threads[key] = 'cv-' + hashlib.sha256(('legacy|' + r['id']).encode()).hexdigest()[:20]
+                c.execute('INSERT OR IGNORE INTO conversations(id,reference,kind,subject,parish_id,group_id,context,created_by,created_at,last_at,legacy_id) '
+                          'VALUES(?,?,?,?,?,?,?,?,?,?,?)', (conv_id, conversation_reference(conv_id), 'direct', title or 'Message', r['parish_id'], r['group_id'],
+                                                        json.dumps(conversation_context(c, r['parish_id'], r['group_id'])), r['author_id'], r['created_at'], r['created_at'], r['id']))
+            c.execute('INSERT OR IGNORE INTO conversation_messages VALUES(?,?,?,?,?,?)',
+                      ('cm-' + hashlib.sha256(('legacy|' + r['id']).encode()).hexdigest()[:20], conv_id, r['author_id'], 'person', r['body'], r['created_at']))
+            c.execute('UPDATE conversations SET last_at=max(last_at,?) WHERE id=?', (r['created_at'], conv_id))
+            for user_id in (r['author_id'], r['recipient_id']):
+                own = c.execute('SELECT data FROM member_private WHERE parish_id=? AND user_id=?', (r['parish_id'], user_id)).fetchone()
+                private = json.loads(own['data']) if own else {}
+                read = user_id == r['author_id'] or r['id'] in private.get('readIds', [])
+                c.execute('INSERT OR IGNORE INTO conversation_members VALUES(?,?,?,?,?)', (conv_id, user_id, 'person', '', 0))
+                if read: c.execute('UPDATE conversation_members SET read_at=max(read_at,?) WHERE conversation_id=? AND user_id=?', (r['created_at'], conv_id, user_id))
+                c.execute('UPDATE conversation_members SET archived=? WHERE conversation_id=? AND user_id=?',
+                          (int(r['id'] in private.get('archivedIds', [])), conv_id, user_id))
+        c.execute("INSERT INTO schema_migrations VALUES('v2-messages',?)", (NOW(),))
+    # Each parish's earlier notes go to its priest once it has a priest account (until then nobody could read them).
+    for row in c.execute("SELECT parish_id,data FROM states WHERE 'v2-notes:'||parish_id NOT IN (SELECT name FROM schema_migrations)").fetchall():
+        d = json.loads(row['data'])
+        if any(not n.get('authorId') for n in d.get('NOTES', [])):
+            owner = legacy_note_owner(c, row['parish_id'])
+            if owner is None: continue
+            for n in d['NOTES']:
+                if not n.get('authorId'):
+                    n.update(authorId=owner['user_id'], visibility='personal')
+                    n.setdefault('by', owner['person_id'])
+            c.execute('UPDATE states SET data=? WHERE parish_id=?', (json.dumps(d), row['parish_id']))
+        c.execute('INSERT INTO schema_migrations VALUES(?,?)', ('v2-notes:' + row['parish_id'], NOW()))
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-concerns'").fetchone() is None:
+        at = NOW()
+        for r in c.execute('SELECT * FROM member_concerns').fetchall():
+            for user_id in existing_concern_access(c, r):
+                c.execute('INSERT OR IGNORE INTO concern_recipients VALUES(?,?,?,?)', (r['id'], user_id, 'existing-access', at))
+        c.execute("INSERT INTO schema_migrations VALUES('v2-concerns',?)", (NOW(),))
+
+
+def legacy_note_owner(c, pid):
+    """Who wrote a parish's earlier pastoral notes: until now only its priests could, so its parish priest
+    (or, without one on record, its first priest account)."""
+    priests = c.execute("SELECT user_id,person_id FROM parish_accounts WHERE parish_id=? AND role='priest' ORDER BY user_id", (pid,)).fetchall()
+    if not priests: return None
+    lead = c.execute("SELECT cl.user_id FROM clergy_assignments a JOIN clergy cl ON cl.id=a.clergy_id WHERE a.parish_id=? "
+                     "AND a.office='parish-priest' AND a.end_date IS NULL AND cl.user_id IS NOT NULL ORDER BY a.start_date DESC", (pid,)).fetchone()
+    return next((p for p in priests if lead and p['user_id'] == lead['user_id']), priests[0])
+
+
+def existing_concern_access(c, r):
+    """The accounts that could see an earlier complaint under the earlier rules: appointed reviewers
+    (as the case's sensitivity and assignment allowed), the reviewer it was assigned to, and, for an
+    ordinary complaint about a ministry, that ministry's leaders."""
+    users = set()
+    if r['assigned_to']: users.add(r['assigned_to'])
+    for row in c.execute('SELECT user_id,permissions FROM complaint_reviewers WHERE parish_id=?', (r['parish_id'],)):
+        perms = set(json.loads(row['permissions']))
+        if 'Review' in perms and (not sensitive_concern(r['category']) or 'ViewSensitive' in perms) and \
+                (not r['assigned_to'] or r['assigned_to'] == row['user_id'] or 'Assign' in perms):
+            users.add(row['user_id'])
+    if r['group_id'] and not sensitive_concern(r['category']):
+        state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['parish_id'],)).fetchone()
+        group = next((g for g in json.loads(state['data']).get('GROUPS', []) if g.get('id') == r['group_id']), None) if state else None
+        if group:
+            users.update(x['user_id'] for x in c.execute("SELECT user_id FROM parish_accounts WHERE parish_id=? AND role='leader' AND person_id IN (?,?)",
+                                                         (r['parish_id'], group.get('leader') or '', group.get('assistant') or '')))
+    return sorted(users)
+
+
+# Pastoral notes. A note is its author's alone unless they share it with the parish's priests; a shared
+# note is read by whoever is a priest of that parish now. Nothing is ever shared on anyone's behalf.
+def note_visible(u, n):
+    if 'notes.pastoral' not in perms_of(u) or not n.get('authorId'): return False
+    return n['authorId'] == u['id'] or n.get('visibility') == 'shared'
+
+
+def merge_notes(u, old, incoming):
+    """The notes a priest saves replace only what they may see: their own notes, and (to mark a task
+    done that was shared and assigned to them) the shared ones. Everything else stays as it was."""
+    require(isinstance(incoming, list) and all(isinstance(n, dict) and isinstance(n.get('id'), str) for n in incoming), 'Invalid notes.')
+    before = {n['id']: n for n in old}
+    seen, out = set(), []
+    for n in incoming:
+        require(n['id'] not in seen, 'Invalid notes.')
+        seen.add(n['id'])
+        prior = before.get(n['id'])
+        visibility = n.get('visibility', 'personal')
+        require(visibility in NOTE_VISIBILITY, 'Choose who can see this note.')
+        if prior is None:
+            out.append(dict(n, authorId=u['id'], by=u.get('person_id'), visibility=visibility))
+        elif prior.get('authorId') == u['id']:
+            out.append(dict(n, authorId=u['id'], by=prior.get('by') or u.get('person_id'), visibility=visibility))
+        else:
+            require(note_visible(u, prior), 'Note not available.', 403)
+            changed = {k for k in set(n) | set(prior) if n.get(k) != prior.get(k)}
+            require(not changed or changed == {'done'} and prior.get('kind') == 'task' and prior.get('assignee') == u.get('person_id'),
+                    'Only the author can change this note.', 403)
+            out.append(dict(prior, done=n.get('done', prior.get('done'))))
+    for n in old:
+        if n['id'] in seen: continue
+        require(not note_visible(u, n) or n.get('authorId') == u['id'], 'Only the author can delete this note.', 403)
+        if not note_visible(u, n): out.append(n)
+    return out
+
+
+# Messages.
+def conversation_reference(conv_id):
+    return 'MSG-' + hashlib.sha256(conv_id.encode()).hexdigest()[:8].upper()
+
+
+def conversation_context(c, pid, group_id=None):
+    """Names shown on a conversation card, kept as they were when it started."""
+    if not pid: return {}
+    row = c.execute('SELECT metadata FROM parishes WHERE id=?', (pid,)).fetchone()
+    meta = json.loads(row['metadata']) if row else {}
+    out = dict(parish=meta.get('name', ''), parishAr=meta.get('ar', ''))
+    if group_id:
+        state = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
+        group = next((g for g in json.loads(state['data']).get('GROUPS', []) if g.get('id') == group_id), {}) if state else {}
+        out.update(group=group.get('name', ''), groupAr=group.get('ar', group.get('name', '')))
+    return out
+
+
+def blocked_accounts(c):
+    return {(r['user_id'], r['scope'], r['scope_id']) for r in c.execute('SELECT user_id,scope,scope_id FROM access_blocks WHERE lifted_at IS NULL')}
+
+
+def reachable(blocked, user_id, pid, diocese):
+    return not ({(user_id, 'global', ''), (user_id, 'diocese', diocese), (user_id, 'parish', pid)} & blocked or
+                any(b[0] == user_id and b[1] == 'global' for b in blocked))
+
+
+def message_places(c, u, auth=None):
+    """Each parish this account is connected to, with its role there and whether it answers the office inbox."""
+    auth = auth or authority(c, u)
+    out = []
+    for r in c.execute('SELECT * FROM parishes ORDER BY rowid').fetchall():
+        ctx = parish_context(c, u, r['id'], auth, r)
+        if ctx is None: continue
+        meta = json.loads(r['metadata'])
+        out.append(dict(id=r['id'], diocese=r['diocese'], name=meta.get('name', ''), ar=meta.get('ar', ''), ctx=ctx))
+    return out
+
+
+def handled_groups(c, place):
+    """The ministries this account leads or assists in a parish, now."""
+    person_id = place['ctx'].get('person_id')
+    if not person_id or place['ctx']['role'] in {'follower', 'bishop'}: return []
+    state = c.execute('SELECT data FROM states WHERE parish_id=?', (place['id'],)).fetchone()
+    return [g for g in json.loads(state['data']).get('GROUPS', []) if person_id in {g.get('leader'), g.get('assistant')}] if state else []
+
+
+def message_directory(c, u):
+    """Who this account may start a conversation with: the office of each parish it belongs to, follows,
+    serves or oversees; the ministries of each parish it belongs to or serves; and, there, the staff and
+    the members who agreed to be listed in the parish directory."""
+    places = message_places(c, u)
+    blocked = blocked_accounts(c)
+    offices, ministries, people = [], [], {}
+    for place in places:
+        offices.append(dict(parish=place['id'], name=place['name'], ar=place['ar']))
+        if place['ctx']['role'] in {'follower', 'bishop'}: continue
+        state = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (place['id'],)).fetchone()['data'])
+        for g in state.get('GROUPS', []):
+            if group_leader_accounts(c, place['id'], g):
+                ministries.append(dict(parish=place['id'], parishName=place['name'], group=g['id'], name=g.get('name', ''), ar=g.get('ar', g.get('name', ''))))
+        extra = state.get('PERSON_EXTRA', {})
+        for r in c.execute('SELECT a.user_id,a.person_id,a.role,u.name,p.data FROM parish_accounts a JOIN users u ON u.id=a.user_id '
+                           'LEFT JOIN user_profiles p ON p.user_id=a.user_id WHERE a.parish_id=? ORDER BY u.name', (place['id'],)):
+            if r['user_id'] == u['id'] or not reachable(blocked, r['user_id'], place['id'], place['diocese']): continue
+            listed = r['role'] != 'member' or extra.get(r['person_id'] or '', {}).get('directory') is True or \
+                json.loads(r['data'] or '{}').get('directory') is True
+            if not listed: continue
+            entry = people.setdefault(r['user_id'], dict(id=r['user_id'], name=r['name'], places=[]))
+            role = ROLE_TITLES.get(r['role'], ('', ''))
+            if not any(p['parish'] == place['id'] and p['role'] == role[0] for p in entry['places']):
+                entry['places'].append(dict(parish=place['id'], name=place['name'], role=role[0], roleAr=role[1]))
+    return dict(offices=offices, ministries=ministries, people=sorted(people.values(), key=lambda p: p['name'].casefold()))
+
+
+def conversation_side(c, u, conv, places=None):
+    """How this account takes part: 'person' (it is in the conversation), 'office' or 'ministry' (it answers
+    for the parish office or the ministry today), or None. Rank never opens a conversation."""
+    row = c.execute("SELECT 1 FROM conversation_members WHERE conversation_id=? AND user_id=? AND side='person'", (conv['id'], u['id'])).fetchone()
+    if row: return 'person'
+    if conv['kind'] not in {'office', 'ministry'} or not conv['parish_id']: return None
+    place = next((p for p in (places if places is not None else message_places(c, u)) if p['id'] == conv['parish_id']), None)
+    if place is None: return None
+    if conv['kind'] == 'office':
+        return 'office' if 'messages.office' in place['ctx']['perms'] else None
+    return 'ministry' if any(g['id'] == conv['group_id'] for g in handled_groups(c, place)) else None
+
+
+def handlers(c, conv):
+    """The accounts that answer for a conversation's office or ministry today."""
+    if conv['kind'] == 'office':
+        out = []
+        for r in c.execute("SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND role<>'member'", (conv['parish_id'],)).fetchall():
+            account = c.execute('SELECT * FROM users WHERE id=?', (r['user_id'],)).fetchone()
+            ctx = parish_context(c, account, conv['parish_id']) if account else None
+            if ctx and 'messages.office' in ctx['perms']: out.append(r['user_id'])
+        return out
+    if conv['kind'] == 'ministry':
+        state = c.execute('SELECT data FROM states WHERE parish_id=?', (conv['parish_id'],)).fetchone()
+        group = next((g for g in json.loads(state['data']).get('GROUPS', []) if g.get('id') == conv['group_id']), None) if state else None
+        return group_leader_accounts(c, conv['parish_id'], group) if group else []
+    return []
+
+
+CARD_SQL = ("SELECT c.*,m.read_at AS my_read,m.archived AS my_archived,m.side AS my_side,"
+            "(SELECT COUNT(*) FROM conversation_messages x WHERE x.conversation_id=c.id) AS total,"
+            "l.body AS last_body,l.author_id AS last_author,l.side AS last_side,l.created_at AS last_created "
+            "FROM conversations c LEFT JOIN conversation_members m ON m.conversation_id=c.id AND m.user_id=? "
+            "LEFT JOIN conversation_messages l ON l.id=(SELECT x.id FROM conversation_messages x WHERE x.conversation_id=c.id "
+            "ORDER BY x.created_at DESC,x.id DESC LIMIT 1) ")
+
+
+def names_of(c, ids):
+    ids = sorted({i for i in ids if i})
+    if not ids: return {}
+    return {r['id']: r['name'] for r in c.execute(f"SELECT id,name FROM users WHERE id IN ({','.join('?' * len(ids))})", ids)}
+
+
+def conversation_cards(c, u, rows):
+    """Cards for a page of conversations: who it is with, the latest message in brief, read and archived state."""
+    ids = [r['id'] for r in rows]
+    people = {}
+    if ids:
+        for r in c.execute(f"SELECT conversation_id,user_id FROM conversation_members WHERE side='person' AND user_id<>? "
+                           f"AND conversation_id IN ({','.join('?' * len(ids))}) ORDER BY user_id", (u['id'], *ids)):
+            people.setdefault(r['conversation_id'], []).append(r['user_id'])
+    names = names_of(c, [x for v in people.values() for x in v] + [r['last_author'] for r in rows])
+    return [dict(id=r['id'], reference=r['reference'], kind=r['kind'], subject=r['subject'],
+                 side='person' if r['my_side'] == 'person' else r['kind'], parish=r['parish_id'], group=r['group_id'],
+                 context=json.loads(r['context'] or '{}'), people=[names.get(x, '') for x in people.get(r['id'], [])],
+                 lastAt=r['last_at'], snippet=(r['last_body'] or '')[:160], lastAuthor=names.get(r['last_author'], ''),
+                 lastSide=r['last_side'] or '', lastMine=r['last_author'] == u['id'], count=r['total'],
+                 unread=card_unread(u, r), archived=bool(r['my_archived'])) for r in rows]
+
+
+def card_unread(u, r):
+    return bool(r['last_author'] and r['last_author'] != u['id'] and r['last_created'] > (r['my_read'] or ''))
+
+
+def messages_list(c, u, q):
+    """One page of the account's conversations, newest first, after its search and box filters."""
+    box = q.get('box') or 'inbox'
+    require(box in {'inbox', 'unread', 'archived', 'all'}, 'Unknown mailbox.')
+    places = message_places(c, u)
+    office_pids = [p['id'] for p in places if 'messages.office' in p['ctx']['perms']]
+    led = [(p['id'], g['id']) for p in places for g in handled_groups(c, p)]
+    clauses, args = ["c.id IN (SELECT conversation_id FROM conversation_members WHERE user_id=? AND side='person')"], [u['id'], u['id']]
+    if office_pids:
+        clauses.append(f"(c.kind='office' AND c.parish_id IN ({','.join('?' * len(office_pids))}))"); args += office_pids
+    for pid, gid in led:
+        clauses.append("(c.kind='ministry' AND c.parish_id=? AND c.group_id=?)"); args += [pid, gid]
+    where = '(' + ' OR '.join(clauses) + ')'
+    term = ' '.join(str(q.get('q') or '').split())[:100]
+    if term:
+        pattern = '%' + term.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+        where += (" AND (c.subject LIKE ? ESCAPE '\\' OR c.reference LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM conversation_messages x "
+                  "WHERE x.conversation_id=c.id AND x.body LIKE ? ESCAPE '\\'))")
+        args += [pattern] * 3
+    rows = c.execute(CARD_SQL + f'WHERE {where} ORDER BY c.last_at DESC,c.id', args).fetchall()
+    unread = sum(1 for r in rows if card_unread(u, r) and not r['my_archived'])
+    rows = [r for r in rows if box == 'all' or (box == 'archived') == bool(r['my_archived']) and (box != 'unread' or card_unread(u, r))]
+    pages = max(1, -(-len(rows) // MESSAGES_PER_PAGE))
+    page = min(q.get('page') if type(q.get('page')) is int and q.get('page') > 0 else 1, pages)
+    return dict(conversations=conversation_cards(c, u, rows[(page - 1) * MESSAGES_PER_PAGE: page * MESSAGES_PER_PAGE]),
+                page=page, pages=pages, total=len(rows), unread=unread, perPage=MESSAGES_PER_PAGE)
+
+
+def conversation_open(c, u, conv_id):
+    conv = c.execute('SELECT * FROM conversations WHERE id=?', (conv_id,)).fetchone()
+    side = conversation_side(c, u, conv) if conv else None
+    require(side is not None, 'Conversation not found.', 404)
+    rows = c.execute('SELECT * FROM conversation_messages WHERE conversation_id=? ORDER BY created_at,id', (conv['id'],)).fetchall()
+    names = names_of(c, [r['author_id'] for r in rows])
+    c.execute('INSERT INTO conversation_members(conversation_id,user_id,side,read_at,archived) VALUES(?,?,?,?,0) '
+              'ON CONFLICT(conversation_id,user_id) DO UPDATE SET read_at=excluded.read_at', (conv['id'], u['id'], side, NOW()))
+    card = dict(conversation_cards(c, u, c.execute(CARD_SQL + 'WHERE c.id=?', (u['id'], conv['id'])).fetchall())[0], unread=False)
+    report = c.execute("SELECT 1 FROM conversation_reports WHERE conversation_id=? AND reporter_id=? AND status='open'", (conv['id'], u['id'])).fetchone()
+    return dict(conversation=card, messages=[message_view(r, names, u['id']) for r in rows], reported=bool(report))
+
+
+def message_view(row, names, me=None):
+    return dict(id=row['id'], author=names.get(row['author_id'], ''), mine=row['author_id'] == me, side=row['side'], body=row['body'], at=row['created_at'])
+
+
+def conversation_post(c, u, conv, side, body, at, people=None):
+    """Adds a message. `people` lists the other participants when the conversation is new in this request."""
+    c.execute('INSERT INTO conversation_messages VALUES(?,?,?,?,?,?)', ('cm-' + secrets.token_hex(10), conv['id'], u['id'], side, body, at))
+    c.execute('UPDATE conversations SET last_at=? WHERE id=?', (at, conv['id']))
+    c.execute('INSERT INTO conversation_members(conversation_id,user_id,side,read_at,archived) VALUES(?,?,?,?,0) '
+              'ON CONFLICT(conversation_id,user_id) DO UPDATE SET read_at=excluded.read_at,archived=0', (conv['id'], u['id'], side, at))
+    # A new message brings the conversation back to the others' inboxes; they are told without its text.
+    c.execute('UPDATE conversation_members SET archived=0 WHERE conversation_id=? AND user_id<>?', (conv['id'], u['id']))
+    if people is None:
+        people = [r['user_id'] for r in c.execute("SELECT user_id FROM conversation_members WHERE conversation_id=? AND side='person' AND user_id<>?",
+                                                  (conv['id'], u['id']))]
+    targets = set(people) | ({x for x in handlers(c, conv) if x != u['id']} if side == 'person' else set())
+    for user_id in sorted(targets):
+        notify_account(c, user_id, conv['parish_id'], 'message', 'New message: ' + conv['subject'], '', 'inbox/' + conv['id'])
+
+
+def conversation_start(c, u, q, at=None):
+    """A new conversation with a parish office, a ministry or a person in this account's directory."""
+    at = at or NOW()
+    subject = clean(q.get('subject'), 160, 'Enter a subject of up to 160 characters.')
+    body = str(q.get('body') or '').strip()
+    require(0 < len(body) <= 5000, 'Write a message of up to 5000 characters.')
+    to = q.get('to') if isinstance(q.get('to'), dict) else {}
+    directory = message_directory(c, u)
+    pid, group_id, kind, people = None, None, to.get('kind'), []
+    if kind == 'office':
+        require(any(o['parish'] == to.get('parish') for o in directory['offices']), 'Choose a parish you are connected to.', 403)
+        pid = to['parish']
+    elif kind == 'ministry':
+        require(any(m['parish'] == to.get('parish') and m['group'] == to.get('group') for m in directory['ministries']),
+                'Choose a ministry of a parish you belong to.', 403)
+        pid, group_id = to['parish'], to['group']
+    elif kind == 'direct':
+        ids = to.get('people')
+        reachable_ids = {p['id']: p for p in directory['people']}
+        require(isinstance(ids, list) and 0 < len(ids) <= 10 and len(set(ids)) == len(ids) and all(i in reachable_ids for i in ids),
+                'Choose up to ten people from the directory.', 403)
+        people = ids
+        shared = [p['parish'] for p in reachable_ids[ids[0]]['places']]
+        pid = to.get('parish') if to.get('parish') in shared else (shared[0] if shared else None)
+    else:
+        raise Problem(400, 'Choose who the message is for.')
+    conv = new_conversation(c, u, kind, subject, pid, group_id, at)
+    c.execute('INSERT INTO conversation_members VALUES(?,?,?,?,0)', (conv['id'], u['id'], 'person', at))
+    for user_id in people:
+        c.execute('INSERT INTO conversation_members VALUES(?,?,?,?,0)', (conv['id'], user_id, 'person', ''))
+    conversation_post(c, u, conv, 'person', body, at, people)
+    return conv
+
+
+def new_conversation(c, u, kind, subject, pid, group_id, at):
+    conv = dict(id='cv-' + secrets.token_hex(10), kind=kind, subject=subject, parish_id=pid, group_id=group_id)
+    conv['reference'] = conversation_reference(conv['id'])
+    c.execute('INSERT INTO conversations(id,reference,kind,subject,parish_id,group_id,context,created_by,created_at,last_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+              (conv['id'], conv['reference'], kind, subject, pid, group_id, json.dumps(conversation_context(c, pid, group_id)), u['id'], at, at))
+    return conv
+
+
+def office_conversation(c, u, pid, person_id, subject, body, group_id=None):
+    """The parish office (or a ministry's leader) writing to a person in its records: the reply comes back to
+    the office inbox (or the ministry's leaders), not to whoever happened to send it."""
+    account = c.execute('SELECT user_id FROM parish_accounts WHERE parish_id=? AND person_id=? LIMIT 1', (pid, person_id)).fetchone()
+    require(account is not None, 'This person does not have an active in-app account.', 404)
+    at = NOW()
+    kind = 'ministry' if group_id else 'office'
+    conv = new_conversation(c, u, kind, subject, pid, group_id, at)
+    c.execute('INSERT INTO conversation_members VALUES(?,?,?,?,0)', (conv['id'], account['user_id'], 'person', ''))
+    conversation_post(c, u, conv, kind, body, at, [account['user_id']])
+    return conv
+
+
+def system_reviewers(c):
+    out = []
+    for r in c.execute("SELECT DISTINCT user_id FROM role_assignments WHERE scope='system' AND status='active'").fetchall():
+        account = c.execute('SELECT * FROM users WHERE id=?', (r['user_id'],)).fetchone()
+        if account and 'messages.emergency' in system_perms(authority(c, account)): out.append(r['user_id'])
+    return out
+
+
+def messages_action(c, u, q):
+    op = q.get('op')
+    if op == 'list': return messages_list(c, u, q)
+    if op == 'directory': return message_directory(c, u)
+    if op == 'open': return conversation_open(c, u, q.get('id'))
+    if op == 'start':
+        conv = conversation_start(c, u, q)
+        return dict(id=conv['id'], reference=conv['reference'])
+    if op in {'emergencyOpen', 'reports', 'reportClose'}: return emergency_action(c, u, q)
+    conv = c.execute('SELECT * FROM conversations WHERE id=?', (q.get('id'),)).fetchone()
+    side = conversation_side(c, u, conv) if conv else None
+    require(side is not None, 'Conversation not found.', 404)
+    at = NOW()
+    if op == 'reply':
+        body = str(q.get('body') or '').strip()
+        require(0 < len(body) <= 5000, 'Write a reply of up to 5000 characters.')
+        conversation_post(c, u, conv, side, body, at)
+    elif op in {'archive', 'unarchive', 'markUnread', 'markRead'}:
+        c.execute('INSERT INTO conversation_members(conversation_id,user_id,side,read_at,archived) VALUES(?,?,?,?,0) '
+                  'ON CONFLICT(conversation_id,user_id) DO NOTHING', (conv['id'], u['id'], side, ''))
+        if op in {'archive', 'unarchive'}:
+            c.execute('UPDATE conversation_members SET archived=? WHERE conversation_id=? AND user_id=?', (int(op == 'archive'), conv['id'], u['id']))
+        else:
+            c.execute('UPDATE conversation_members SET read_at=? WHERE conversation_id=? AND user_id=?', ('' if op == 'markUnread' else at, conv['id'], u['id']))
+    elif op == 'report':
+        reason = clean(q.get('reason'), 1000, 'Say in up to 1000 characters what the problem is.')
+        require(len(reason) >= 10, 'Say in a sentence what the problem is.')
+        require(c.execute("SELECT 1 FROM conversation_reports WHERE conversation_id=? AND reporter_id=? AND status='open'",
+                          (conv['id'], u['id'])).fetchone() is None, 'You have already reported this conversation.')
+        c.execute('INSERT INTO conversation_reports(id,conversation_id,reporter_id,reason,created_at) VALUES(?,?,?,?,?)',
+                  ('rp-' + secrets.token_hex(10), conv['id'], u['id'], reason, at))
+        for user_id in system_reviewers(c):
+            notify_account(c, user_id, None, 'report', 'A conversation was reported for review', conv['reference'], 'inbox')
+    else:
+        raise Problem(400, 'Unknown action.')
+    return {}
+
+
+def emergency_action(c, u, q):
+    """A super admin's problem review. Each opening names one conversation and records why; there is no
+    browsing, and nothing else (notes, complaint identities) is reachable from here."""
+    require('messages.emergency' in system_perms(authority(c, u)), 'Emergency review is reserved for super admins.', 403)
+    op = q.get('op')
+    if op == 'reports':
+        reports = c.execute('SELECT r.*,c.reference FROM conversation_reports r JOIN conversations c ON c.id=r.conversation_id '
+                            "ORDER BY CASE r.status WHEN 'open' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 200").fetchall()
+        reviews = c.execute('SELECT e.*,c.reference FROM emergency_reviews e JOIN conversations c ON c.id=e.conversation_id '
+                            'ORDER BY e.created_at DESC LIMIT 200').fetchall()
+        names = names_of(c, [r['reporter_id'] for r in reports] + [r['reviewer_id'] for r in reviews])
+        return dict(reports=[dict(id=r['id'], conversation=r['conversation_id'], reference=r['reference'], reason=r['reason'],
+                                  reporter=names.get(r['reporter_id'], ''), at=r['created_at'], status=r['status'],
+                                  closedAt=r['closed_at'] or '', closeNote=r['close_note'])
+                             for r in reports],
+                    reviews=[dict(reference=r['reference'], reviewer=names.get(r['reviewer_id'], ''), reason=r['reason'], at=r['created_at'])
+                             for r in reviews])
+    if op == 'reportClose':
+        report = c.execute("SELECT * FROM conversation_reports WHERE id=? AND status='open'", (q.get('id'),)).fetchone()
+        require(report is not None, 'Report not found.', 404)
+        note = clean(q.get('note'), 1000, 'Keep the note within 1000 characters.', required=False)
+        c.execute("UPDATE conversation_reports SET status='closed',closed_at=?,closed_by=?,close_note=? WHERE id=?", (NOW(), u['id'], note, report['id']))
+        return {}
+    reason = clean(q.get('reason'), 1000, 'Record the reason for this review in up to 1000 characters.')
+    require(len(reason) >= 20, 'Record the reason for this review in a full sentence (at least 20 characters).')
+    report = c.execute('SELECT * FROM conversation_reports WHERE id=?', (q.get('reportId'),)).fetchone() if q.get('reportId') else None
+    reference = str(q.get('reference') or '').strip().upper()
+    conv = (c.execute('SELECT * FROM conversations WHERE id=?', (report['conversation_id'],)).fetchone() if report else
+            c.execute('SELECT * FROM conversations WHERE reference=?', (reference,)).fetchone() if reference else None)
+    require(conv is not None, 'Name the reported conversation or its reference.', 404)
+    at = NOW()
+    c.execute('INSERT INTO emergency_reviews VALUES(?,?,?,?,?,?)', ('er-' + secrets.token_hex(10), conv['id'], u['id'], reason, report['id'] if report else None, at))
+    audit(c, u, conv['parish_id'], 'messages.emergency-review', {'conversation': conv['reference'], 'reason': reason})
+    rows = c.execute('SELECT * FROM conversation_messages WHERE conversation_id=? ORDER BY created_at,id', (conv['id'],)).fetchall()
+    members = [r['user_id'] for r in c.execute("SELECT user_id FROM conversation_members WHERE conversation_id=? AND side='person'", (conv['id'],))]
+    names = names_of(c, members + [r['author_id'] for r in rows])
+    messages, people = [message_view(r, names) for r in rows], [names.get(x, '') for x in members]
+    return dict(conversation=dict(reference=conv['reference'], subject=conv['subject'], kind=conv['kind'], context=json.loads(conv['context'] or '{}'),
+                                  people=people, createdAt=conv['created_at']), messages=messages, recordedAt=at)
+
+
+# Complaints. The person raising one chooses who receives it from the people suggested for its context;
+# only they (and nobody by rank) see it, its status or that it exists. Identity stays the submitter's choice.
+def concern_recipient_options(c, u, pid, d, person, gids):
+    """Who a complaint can go to: the parish's priests, the leaders of the submitter's ministries and the
+    reviewers the parish appointed, each with the contexts it is suggested for."""
+    blocked = blocked_accounts(c)
+    diocese = c.execute('SELECT diocese FROM parishes WHERE id=?', (pid,)).fetchone()['diocese']
+    options = {}
+
+    def add(user_id, role, roleAr, suggest):
+        if user_id == u['id'] or not reachable(blocked, user_id, pid, diocese): return
+        item = options.setdefault(user_id, dict(id=user_id, name='', roles=[], suggested=[]))
+        if role not in [r['en'] for r in item['roles']]: item['roles'].append(dict(en=role, ar=roleAr))
+        for s in suggest:
+            if s not in item['suggested']: item['suggested'].append(s)
+    for user_id in parish_priest_accounts(c, pid):
+        add(user_id, 'Priest of the parish', 'كاهن الرعية', ['parish'] + ['group:' + g for g in sorted(gids)])
+    for g in d['GROUPS']:
+        if g['id'] not in gids: continue
+        for user_id in group_leader_accounts(c, pid, g):
+            add(user_id, 'Leader of ' + g.get('name', ''), 'مسؤول ' + g.get('ar', g.get('name', '')), ['group:' + g['id']])
+    for r in c.execute('SELECT user_id,permissions FROM complaint_reviewers WHERE parish_id=?', (pid,)):
+        if 'Review' in json.loads(r['permissions']):
+            add(r['user_id'], 'Appointed reviewer', 'مراجِع معيَّن', ['sensitive'])
+    names = names_of(c, options)
+    for item in options.values(): item['name'] = names.get(item['id'], '')
+    return sorted(options.values(), key=lambda x: x['name'].casefold())
+
+
+def concern_identity(c, pid, d, r):
+    """An identified submitter as their recipients see them: their name, and the contact they asked to be followed up on."""
+    account = c.execute('SELECT name FROM users WHERE id=?', (r['user_id'],)).fetchone()
+    link = c.execute('SELECT person_id FROM parish_accounts WHERE parish_id=? AND user_id=? AND person_id IS NOT NULL LIMIT 1',
+                     (pid, r['user_id'])).fetchone()
+    person = next((p for p in d['PEOPLE'] if link and p['id'] == link['person_id']), {})
+    out = dict(name=account['name'] if account else '')
+    if r['follow_up'] == 'phone': out['phone'] = person.get('phone', '')
+    if r['follow_up'] == 'email': out['email'] = d.get('PERSON_EXTRA', {}).get(person.get('id', ''), {}).get('email', '')
+    return out
+
+
+def concerns_received(c, u, pid, d, person):
+    """The complaints whose submitters chose this account, except any that name it."""
+    out = []
+    for r in c.execute('SELECT m.* FROM member_concerns m JOIN concern_recipients x ON x.concern_id=m.id '
+                       'WHERE m.parish_id=? AND x.user_id=? ORDER BY m.created_at DESC', (pid, u['id'])).fetchall():
+        if reviewer_conflict(u, person, r): continue
+        item = concern_public(c, r, reviewer_permissions={'Review', 'ViewSensitive'})
+        ids = concern_recipient_ids(c, r['id'])
+        names = names_of(c, ids)
+        item.update(sensitive=sensitive_concern(r['category']), recipients=[dict(id=i, name=names.get(i, '')) for i in ids])
+        if r['user_id']: item['identity'] = concern_identity(c, pid, d, r)
+        out.append(item)
+        complaint_log(c, r['id'], u['id'], 'view')
+    return out
+
+
+def concern_recipient_ids(c, concern_id):
+    return [r['user_id'] for r in c.execute('SELECT user_id FROM concern_recipients WHERE concern_id=? ORDER BY added_at,user_id', (concern_id,))]
+
+
+def concern_recipients_check(c, u, pid, d, person, gids, ids, people_involved):
+    options = {o['id']: o for o in concern_recipient_options(c, u, pid, d, person, gids)}
+    require(isinstance(ids, list) and 0 < len(ids) <= 10 and len(set(ids)) == len(ids) and all(i in options for i in ids),
+            'Choose who should receive this concern.')
+    involved = (people_involved or '').casefold()
+    for i in ids:
+        account = c.execute('SELECT name,username,person_id FROM users WHERE id=?', (i,)).fetchone()
+        named = next((p for p in d['PEOPLE'] if p['id'] == account['person_id']), {}) if account else {}
+        require(not reviewer_conflict(account, named, {'people_involved': involved}),
+                options[i]['name'] + ' is named in this concern, so they cannot receive it. Choose someone else.')
+    return ids
+
+
 # ───────────── Organisation, roles and permissions ─────────────
 # Diocese → parishes → ministries. Access comes from role assignments scoped to the whole
 # system, one diocese or one parish; one account can hold several, in different places.
@@ -2048,6 +2610,7 @@ PERMISSIONS = [
     ('ministries.manage', 'parish', 'Ministries, volunteers and rotas', 'الخدمات والمتطوّعون وجداول الخدمة'),
     ('facilities.manage', 'parish', 'Rooms, bookings and equipment', 'القاعات والحجوزات والمعدّات'),
     ('communications.manage', 'parish', 'Notices, broadcasts and prayer requests', 'الإعلانات والرسائل الجماعية ونوايا الصلاة'),
+    ('messages.office', 'parish', 'Read and answer the parish office inbox', 'قراءة بريد مكتب الرعية والردّ عليه'),
     ('website.publish', 'parish', 'Public website content', 'محتوى الموقع العام'),
     ('finance.view', 'parish', 'See giving and finance', 'الاطّلاع على التقدمات والمالية'),
     ('finance.edit', 'parish', 'Record gifts, expenses and the exchange rate', 'تسجيل التقدمات والمصاريف وسعر الصرف'),
@@ -2072,7 +2635,7 @@ PERMISSION_LEVEL = {p[0]: p[1] for p in PERMISSIONS}
 FIXED_PERMISSIONS = {'sacraments.sign': 'priest', 'notes.pastoral': 'priest', 'clergy.title': 'bishop',
                      'documents.accept': 'bishop', 'diocese.policies': 'bishop', 'messages.emergency': 'superadmin'}
 PARISH_OFFICE = ['people.manage', 'sacraments.manage', 'requests.manage', 'events.manage', 'ministries.manage',
-                 'facilities.manage', 'communications.manage', 'website.publish']
+                 'facilities.manage', 'communications.manage', 'messages.office', 'website.publish']
 # Diocesan and system roles also carry parish permissions: they never open a parish's records with
 # them, but they are what such an administrator may hand on when appointing a parish admin.
 PARISH_ADMIN = PARISH_OFFICE + ['settings.manage', 'staff.manage', 'access.manage', 'audit.view']
@@ -2151,6 +2714,7 @@ def migrate_v2(c):
     c.executescript(CONNECTIONS_SCHEMA)
     c.executescript(MINISTRY_SCHEMA)
     c.executescript(DOCUMENT_SCHEMA)
+    migrate_privacy(c)
 
 
 def legacy_access(c, u):
@@ -2849,8 +3413,7 @@ def visible(c, u, pid, d):
     d['MINISTRY_APPLICATIONS'], d['MINISTRY_INQUIRIES'], d['MINISTRY_DEPARTURES'] = ministry_lists(c, u, pid, d)
     d['GUEST_REQUESTS'] = office_guest_requests(c, pid, d) if 'requests.manage' in perms else []
     d['POLICIES'] = dict(documentRelease=release_policy(c, pid))
-    if 'notes.pastoral' not in perms:
-        d['NOTES'] = []
+    d['NOTES'] = [n for n in d['NOTES'] if note_visible(u, n)]   # personal notes: their author; shared: the parish's priests
     if 'settings.manage' not in perms:
         for k in ('SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS'):
             d[k] = []
@@ -3099,6 +3662,7 @@ def validate(d):
                 and isinstance(n.get('body'), str) and bool(n['body'].strip())
                 and (n.get('p') in pp or n['kind'] == 'task' and not n.get('p'))
                 and isinstance(n.get('due'), str), 'A pastoral item needs valid content, priority, and person if it is a note.')
+        require(n.get('visibility', 'personal') in NOTE_VISIBILITY, 'Choose who can see this pastoral item.')
         require(not n.get('assignee') or n['kind'] == 'task' and n['assignee'] in pp and pp[n['assignee']].get('status') == 'clergy',
                 'Task assignee must be clergy in this parish.')
     events = index('EVENTS')
@@ -3206,6 +3770,8 @@ def save_patch(c, u, pid, payload):
                 require(info.get('restricted', []) == previous.get('restricted', []), 'A leader cannot change pickup restrictions.', 403)
                 require(not info.get('restricted') or info.get('required') is not False, 'Restricted pickup remains required.', 403)
                 d['PICKUP'][person_id] = info
+        elif key == 'NOTES':
+            d[key] = merge_notes(u, old['NOTES'], value)
         else: d[key] = value
     removed_people = ({person['id'] for person in old['PEOPLE'] + old['ARCHIVED']} -
                       {person['id'] for person in d['PEOPLE'] + d['ARCHIVED']})
@@ -4300,10 +4866,9 @@ def member_view(c, u, pid):
                                 recipientId=None, authorId=None, title=resource['name'], body='', category='', eventId=None,
                                 attachment={'name': resource['name'], 'data': f"/api/parishes/{pid}/files/{resource['id']}"},
                                 pinned=False, at=resource['created_at'], read=True, archived=False, replies=[]))
-    for r in c.execute('SELECT * FROM member_content WHERE parish_id=? ORDER BY created_at DESC', (pid,)):
+    # One-to-one messages live in the account's private inbox (conversations), copied there from here.
+    for r in c.execute("SELECT * FROM member_content WHERE parish_id=? AND kind<>'message' ORDER BY created_at DESC", (pid,)):
         if r['group_id'] and r['group_id'] not in gids | managed_groups: continue
-        if r['kind'] == 'message' and r['recipient_id'] not in (None, u['id']) and r['author_id'] != u['id']: continue
-        if r['kind'] == 'message' and not r['recipient_id'] and r['author_id'] == u['id']: continue
         content.append(dict(id=r['id'], kind=r['kind'], groupId=r['group_id'], recipientId=r['recipient_id'],
                             authorId=r['author_id'], title=r['title'], body=r['body'], category=r['category'],
                             eventId=r['event_id'], attachment=json.loads(r['attachment']) if r['attachment'] else None,
@@ -4324,28 +4889,12 @@ def member_view(c, u, pid):
                         (concern_id, pid)).fetchone()
         if row: concerns.append(concern_public(c, row))
     concerns.sort(key=lambda item: item['created_at'], reverse=True)
+    for item in concerns:   # the submitter sees who received their concern
+        ids = concern_recipient_ids(c, item['id'])
+        names = names_of(c, ids)
+        item.update(recipients=[names[i] for i in ids if i in names], recipientIds=ids)
     perms = complaint_permissions(c, u, pid)
-    review = []
-    if 'Review' in perms:
-        review = [concern_public(c, r, reviewer_permissions=perms) for r in c.execute(
-            'SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', (pid,))
-                  if not reviewer_conflict(u, person, r) and
-                  (not r['assigned_to'] or r['assigned_to'] == u['id'] or 'Assign' in perms) and
-                  (not sensitive_concern(r['category']) or 'ViewSensitive' in perms)]
-        if 'ViewIdentity' in perms:
-            for item in review:
-                if item.get('identity'):
-                    account = c.execute('SELECT name,person_id FROM users WHERE id=?', (item['identity'],)).fetchone()
-                    owner = next((p for p in d['PEOPLE'] if p['id'] == account['person_id']), {}) if account else {}
-                    item['identity'] = {'name': account['name'] if account else '', 'phone': owner.get('phone', '')}
-        for item in review: complaint_log(c, item['id'], u['id'], 'view')
-    leader_concerns = []
-    if u['role'] == 'leader':
-        leader_concerns = [concern_public(c, r) for r in c.execute(
-            'SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', (pid,))
-            if r['group_id'] in managed_groups and not sensitive_concern(r['category'])
-            and not reviewer_conflict(u, person, r)]
-        for item in leader_concerns: complaint_log(c, item['id'], u['id'], 'ministry-view')
+    review = concerns_received(c, u, pid, d, person)
     own = {k: person.get(k, '') for k in ('id', 'lat', 'ar', 'phone', 'born', 'town', 'townAr', 'status')}
     own['email'] = d.get('PERSON_EXTRA', {}).get(person['id'], {}).get('email', '')
     own['address'] = next((h.get('address', '') for h in d['HOUSEHOLDS'] if person['id'] in h.get('members', [])), '')
@@ -4367,10 +4916,7 @@ def member_view(c, u, pid):
     volunteer_review = [dict(r) for r in c.execute('SELECT mc.content_id,mc.user_id,mc.status,mc.created_at,c.title,c.group_id,u.name FROM member_commitments mc JOIN member_content c ON c.id=mc.content_id JOIN users u ON u.id=mc.user_id WHERE mc.parish_id=? ORDER BY mc.created_at DESC', (pid,))
                         if r['group_id'] in managed_groups]
     profile_review = [dict(r) for r in c.execute('SELECT pr.*,u.name FROM member_profile_requests pr JOIN users u ON u.id=pr.user_id WHERE pr.parish_id=? ORDER BY pr.created_at DESC', (pid,))] if u['role'] in {'priest', 'secretary'} else []
-    reviewers = [dict(id=r['user_id'], name=r['name']) for r in c.execute(
-        'SELECT cr.user_id,cr.permissions,u.name FROM complaint_reviewers cr JOIN users u ON u.id=cr.user_id WHERE cr.parish_id=?', (pid,))
-        if 'Review' in json.loads(r['permissions'])] if 'Assign' in perms else []
-    categories = [dict(name=r['name'], active=bool(r['active'])) for r in c.execute(
+    categories = [dict(name=r['name'], active=bool(r['active']), sensitive=sensitive_concern(r['name'])) for r in c.execute(
         'SELECT name,active FROM complaint_categories WHERE parish_id=? ORDER BY name', (pid,))]
     site = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')} for key, item in d.get('CONTENT', {}).items()
             if isinstance(item, dict) and item.get('published', True)}
@@ -4381,9 +4927,10 @@ def member_view(c, u, pid):
                 site=site,
                 person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
                 notes=private['notes'], todos=private['todos'], commitments=private['commitments'], preferences=private['preferences'],
-                concerns=concerns, review=review, leaderConcerns=leader_concerns, complaintPermissions=sorted(perms), profileRequests=requests,
+                concerns=concerns, review=review, complaintPermissions=sorted(perms), profileRequests=requests,
                 volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups),
-                formation=formation, reviewers=reviewers, categories=categories, notifications=notifications,
+                formation=formation, categories=categories, notifications=notifications,
+                concernRecipients=concern_recipient_options(c, u, pid, d, person, gids),
                 requests=parish_requests, requestOptions=member_request_options(d, person),
                 **(ministry_member_view(c, u, pid, d, person) if person.get('id') else dict(ministryApplications=[], ministryDepartures=[], openMinistries=[])),
                 guestRequests=claimed_guest_requests(c, u, pid))
@@ -4657,50 +5204,36 @@ def member_action(c, u, pid, q):
         require(u['role'] in {'priest', 'secretary', 'leader'}, 'Staff messaging permission required.', 403)
         recipient_person_id = q.get('recipientPersonId')
         require(recipient_person_id in {item['id'] for item in d['PEOPLE']}, 'Choose a person in this parish.')
+        led = [g for g in d['GROUPS'] if u['person_id'] in {g.get('leader'), g.get('assistant')} and
+               recipient_person_id in {row.get('p') for row in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])}]
         if u['role'] == 'leader':
-            require(any(g['id'] in {group['id'] for group in d['GROUPS']
-                                      if u['person_id'] in {group.get('leader'), group.get('assistant')}}
-                        and recipient_person_id in {row.get('p') for row in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])}
-                        for g in d['GROUPS']), 'You may message members of your ministries only.', 403)
-        recipient = c.execute('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id=? LIMIT 1',
-                              (pid, recipient_person_id)).fetchone()
-        require(recipient is not None, 'This person does not have an active in-app account.', 404)
+            require(bool(led), 'You may message members of your ministries only.', 403)
+        else:
+            require('messages.office' in perms_of(u), 'The parish office inbox permission is needed to write for the office.', 403)
         title, body = q.get('title'), q.get('body')
         require(isinstance(title, str) and 0 < len(title.strip()) <= 160 and
                 isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a subject and message.')
-        content_id = secrets.token_hex(12)
-        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                  (content_id, pid, None, 'message', u['id'], recipient['id'],
-                   title.strip(), body.strip(), '', None, None, 0, NOW()))
-        notify_member(c, pid, recipient['id'], 'message', title.strip(), body.strip(), 'mymessages')
-        audit(c, u, pid, 'member.staff-message', {'recipient': recipient_person_id, 'content': content_id})
+        conv = office_conversation(c, u, pid, recipient_person_id, title.strip(), body.strip(), led[0]['id'] if u['role'] == 'leader' else None)
+        audit(c, u, pid, 'member.staff-message', {'recipient': recipient_person_id, 'conversation': conv['reference']})
+        return {'id': conv['id']}
     elif op == 'message':
         require(group_id in gids, 'Ministry membership required.', 403)
         group = next(g for g in d['GROUPS'] if g['id'] == group_id)
-        recipient = c.execute('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? '
-                              'AND person_id IN (?,?) AND role IN (\'leader\',\'priest\',\'parishadmin\',\'secretary\') '
-                              'ORDER BY CASE WHEN person_id=? THEN 0 ELSE 1 END LIMIT 1',
-                              (pid, group.get('leader'), group.get('assistant'), group.get('leader'))).fetchone()
-        require(recipient is not None, 'This ministry has no available messaging contact.', 403)
+        require(bool(group_leader_accounts(c, pid, group)), 'This ministry has no available messaging contact.', 403)
         body = q.get('body', '')
         require(isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a message under 5000 characters.')
-        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                  (secrets.token_hex(12), pid, group_id, 'message', u['id'], recipient['id'],
-                   'Message to ' + group['name'], body.strip(), '', None, None, 0, NOW()))
-        notify_member(c, pid, recipient['id'], 'message', 'New ministry message', body.strip(), 'memberhub')
-    elif op == 'messageReply':
-        original = c.execute("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='message'", (q.get('id'), pid)).fetchone()
-        require(original and original['recipient_id'] == u['id'] and
-                (u['role'] in {'priest', 'secretary'} or any(g['id'] == original['group_id'] and
-                 u['person_id'] in {g.get('leader'), g.get('assistant')} for g in d['GROUPS'])),
-                'Message not available for reply.', 403)
-        require(u['role'] in {'leader', 'priest', 'secretary'}, 'Ministry communication permission required.', 403)
+        account = c.execute('SELECT * FROM users WHERE id=?', (u['id'],)).fetchone()   # the account, not its role in this parish
+        conv = conversation_start(c, account, {'subject': 'Message to ' + group['name'], 'body': body,
+                                               'to': {'kind': 'ministry', 'parish': pid, 'group': group_id}})
+        return {'id': conv['id']}
+    elif op == 'messageReply':   # an earlier portal message, now a conversation in the inbox
+        account = c.execute('SELECT * FROM users WHERE id=?', (u['id'],)).fetchone()
+        conv = c.execute('SELECT * FROM conversations WHERE legacy_id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        side = conversation_side(c, account, conv) if conv else None
+        require(side is not None, 'Message not available for reply.', 403)
         body = q.get('body', '')
         require(isinstance(body, str) and 0 < len(body.strip()) <= 5000, 'Enter a message under 5000 characters.')
-        c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                  (secrets.token_hex(12), pid, original['group_id'], 'message', u['id'], original['author_id'],
-                   'Re: ' + original['title'], body.strip(), '', None, None, 0, NOW()))
-        notify_member(c, pid, original['author_id'], 'message', 'Reply from your ministry', body.strip(), 'mymessages')
+        conversation_post(c, account, conv, side, body.strip(), NOW())
     elif op == 'discussionReply':
         row = c.execute("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='discussion'", (q.get('id'), pid)).fetchone()
         require(row and row['group_id'] in gids, 'Conversation not available.', 403)
@@ -4726,6 +5259,7 @@ def member_action(c, u, pid, q):
         anonymous = q.get('anonymous') is True
         follow_up = q.get('followUp', 'none')
         require(anonymous or follow_up in {'system', 'email', 'phone', 'none'}, 'Invalid follow-up choice.')
+        recipients = concern_recipients_check(c, u, pid, d, person, gids, q.get('recipients'), str(q.get('peopleInvolved', ''))[:500])
         ref = 'CMP-' + secrets.token_hex(8).upper()
         concern_id = secrets.token_hex(12)
         c.execute('INSERT INTO member_concerns VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -4737,6 +5271,11 @@ def member_action(c, u, pid, q):
             private['concernIds'].append(concern_id)
             save_member_private(c, u, pid, private)
         complaint_log(c, concern_id, None if anonymous else u['id'], 'submitted')
+        at = NOW()
+        for user_id in recipients:   # only the people the submitter chose are told, and without who sent it
+            c.execute('INSERT INTO concern_recipients VALUES(?,?,?,?)', (concern_id, user_id, 'chosen', at))
+            notify_account(c, user_id, pid, 'concern', 'A concern was sent to you', ref, 'memberhub')
+        complaint_log(c, concern_id, None, 'recipients', str(len(recipients)))
         return {'id': concern_id}
     elif op == 'concernFollowUp':
         message = q.get('message', '')
@@ -4747,18 +5286,27 @@ def member_action(c, u, pid, q):
         c.execute('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)',
                   (secrets.token_hex(12), row['id'], None, row['status'], 'Submitted additional information: ' + message.strip(), '', NOW()))
         complaint_log(c, row['id'], None if row['user_id'] is None else u['id'], 'submitter-follow-up')
+        for user_id in concern_recipient_ids(c, row['id']):
+            notify_account(c, user_id, pid, 'concern', 'New information on a concern sent to you', row['reference'], 'memberhub')
+    elif op == 'concernAddRecipients':
+        row = c.execute('SELECT * FROM member_concerns WHERE parish_id=? AND id=?', (pid, q.get('id'))).fetchone()
+        require(row is not None and (row['user_id'] == u['id'] or
+                row['user_id'] is None and row['id'] in private['concernIds']), 'Case not available.', 403)
+        current = concern_recipient_ids(c, row['id'])
+        added = concern_recipients_check(c, u, pid, d, person, gids, [i for i in (q.get('recipients') or []) if i not in current], row['people_involved'])
+        require(len(current) + len(added) <= 10, 'A concern can go to ten people at most.')
+        at = NOW()
+        for user_id in added:
+            c.execute('INSERT INTO concern_recipients VALUES(?,?,?,?)', (row['id'], user_id, 'chosen', at))
+            notify_account(c, user_id, pid, 'concern', 'A concern was sent to you', row['reference'], 'memberhub')
+        complaint_log(c, row['id'], None if row['user_id'] is None else u['id'], 'recipients-added', str(len(added)))
     elif op == 'concernUpdate':
-        perms = complaint_permissions(c, u, pid)
-        require('Review' in perms and ('Respond' in perms or 'Resolve' in perms), 'Complaint reviewer permission required.', 403)
         row = c.execute('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
-        require(row is not None, 'Case not found.', 404)
+        # Only the people the submitter chose; for anyone else the case does not exist.
+        require(row is not None and u['id'] in concern_recipient_ids(c, row['id']), 'Case not found.', 404)
         require(not reviewer_conflict(u, person, row), 'A different reviewer must handle a case involving you.', 403)
-        require(not row['assigned_to'] or row['assigned_to'] == u['id'] or 'Assign' in perms,
-                'Case is assigned to another reviewer.', 403)
-        require(not sensitive_concern(row['category']) or 'ViewSensitive' in perms,
-                'Sensitive complaint permission required.', 403)
         status = q.get('status')
-        require(status in CONCERN_STATUSES and (status not in {'Resolved', 'Closed'} or 'Resolve' in perms), 'Status permission required.', 403)
+        require(status in CONCERN_STATUSES, 'Choose a status.')
         public_text, internal_text = q.get('publicText', ''), q.get('internalText', '')
         require(isinstance(public_text, str) and len(public_text) <= 5000 and isinstance(internal_text, str) and len(internal_text) <= 5000, 'Update is too long.')
         c.execute('UPDATE member_concerns SET status=? WHERE id=?', (status, row['id']))
@@ -4767,16 +5315,14 @@ def member_action(c, u, pid, q):
         if row['user_id']:
             notify_member(c, pid, row['user_id'], 'concern', 'Concern status: ' + status, public_text, 'myconcerns')
         complaint_log(c, row['id'], u['id'], 'updated', status)
-    elif op == 'concernAssign':
-        perms = complaint_permissions(c, u, pid)
-        require({'Review', 'Assign'} <= perms, 'Complaint assignment permission required.', 403)
+    elif op == 'concernAssign':   # which of the chosen recipients takes the lead
         row = c.execute('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
-        require(row is not None and not reviewer_conflict(u, person, row), 'Case not available for assignment.', 403)
+        recipients = concern_recipient_ids(c, row['id']) if row else []
+        require(row is not None and u['id'] in recipients and not reviewer_conflict(u, person, row), 'Case not found.', 404)
         target = c.execute('SELECT * FROM users WHERE id=?', (q.get('reviewerId'),)).fetchone()
-        require(target is not None and not reviewer_conflict(target, next((p for p in d['PEOPLE'] if p['id'] == target['person_id']), {}), row) and
-                'Review' in complaint_permissions(c, target, pid), 'Choose an independent authorized reviewer.', 403)
-        if sensitive_concern(row['category']):
-            require('ViewSensitive' in complaint_permissions(c, target, pid), 'Reviewer needs sensitive-case permission.', 403)
+        require(target is not None and target['id'] in recipients and
+                not reviewer_conflict(target, next((p for p in d['PEOPLE'] if p['id'] == target['person_id']), {}), row),
+                'Choose one of the people the submitter sent this concern to.', 403)
         c.execute('UPDATE member_concerns SET assigned_to=? WHERE id=?', (target['id'], row['id']))
         complaint_log(c, row['id'], u['id'], 'assigned', target['id'])
     elif op == 'categoryManage':
@@ -5009,6 +5555,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if self.command == 'GET': return self.reply(200, diocese_documents(c, u))
                     if self.command == 'POST':
                         result = diocese_document_action(c, u, q); c.commit(); return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
+                if path == '/api/messages':
+                    if self.command == 'GET': return self.reply(200, messages_list(c, u, {}))
+                    if self.command == 'POST':
+                        result = messages_action(c, u, q); c.commit(); return self.reply(200, result)
                     raise Problem(405, 'Method not allowed.')
                 if path == '/api/notifications':
                     if self.command == 'GET': return self.reply(200, account_notifications_view(c, u))

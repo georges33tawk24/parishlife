@@ -9,7 +9,8 @@ import { randomBytes } from 'node:crypto';
 import { parish_theme } from './state.js';
 import { parishUser, authority } from './authority.js';
 import { PROFILE_REQUEST_FIELDS } from './connections.js';
-import { ministryMemberAction, ministryMemberView } from './ministries.js';
+import { ministryMemberAction, ministryMemberView, notifyAccount, groupLeaderAccounts } from './ministries.js';
+import { conversationStart, officeConversation, conversationPost, conversationSide, concernRecipientOptions, concernRecipientIds, namesOf } from './privacy.js';
 import { guestRequestClaim, claimedGuestRequests } from './documents.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
@@ -167,6 +168,50 @@ async function concernUpdates(c, concerns) {
   return c.reads(concerns.map(concern => [UPDATES_SQL, [concern.id]]));
 }
 
+/* An identified submitter as their recipients see them: their name, and the contact they asked to be followed up on. */
+async function concern_identity(c, pid, d, r) {
+  const [accounts, links] = await c.reads([
+    ['SELECT name FROM users WHERE id=?', [r.user_id]],
+    ['SELECT person_id FROM parish_accounts WHERE parish_id=? AND user_id=? AND person_id IS NOT NULL LIMIT 1', [pid, r.user_id]]
+  ]);
+  const person = links.length ? iter(K(d, 'PEOPLE')).find(p => p.id === links[0].person_id) ?? {} : {};
+  const out = { name: accounts.length ? accounts[0].name : '' };
+  if (r.follow_up === 'phone') out.phone = get(person, 'phone', '');
+  if (r.follow_up === 'email') out.email = get(get(get(d, 'PERSON_EXTRA', {}), get(person, 'id', ''), {}), 'email', '');
+  return out;
+}
+
+/* The complaints whose submitters chose this account, except any that name it. */
+async function concerns_received(c, u, pid, d, person) {
+  const rows = (await c.all('SELECT m.* FROM member_concerns m JOIN concern_recipients x ON x.concern_id=m.id ' +
+    'WHERE m.parish_id=? AND x.user_id=? ORDER BY m.created_at DESC', pid, K(u, 'id'))).filter(r => !reviewer_conflict(u, person, r));
+  const updates = await concernUpdates(c, rows);
+  const out = [];
+  for (const [i, r] of rows.entries()) {
+    const item = concern_public(r, updates[i], null, new Set(['Review', 'ViewSensitive']));
+    const ids = await concernRecipientIds(c, r.id);
+    const names = await namesOf(c, ids);
+    Object.assign(item, { sensitive: sensitive_concern(r.category), recipients: ids.map(x => ({ id: x, name: names.get(x) ?? '' })) });
+    if (truthy(r.user_id)) item.identity = await concern_identity(c, pid, d, r);
+    out.push(item);
+    complaint_log(c, r.id, K(u, 'id'), 'view');
+  }
+  return out;
+}
+
+async function concern_recipients_check(c, u, pid, d, gids, ids, peopleInvolved) {
+  const options = new Map((await concernRecipientOptions(c, u, pid, d, gids)).map(o => [o.id, o]));
+  need(isList(ids) && ids.length > 0 && ids.length <= 10 && new Set(ids).size === ids.length && ids.every(i => options.has(i)),
+    'Choose who should receive this concern.');
+  for (const i of ids) {
+    const account = await c.first('SELECT name,username,person_id FROM users WHERE id=?', i);
+    const named = account ? iter(K(d, 'PEOPLE')).find(p => p.id === account.person_id) ?? {} : {};
+    need(!account || !reviewer_conflict(account, named, { people_involved: peopleInvolved ?? '' }),
+      options.get(i).name + ' is named in this concern, so they cannot receive it. Choose someone else.');
+  }
+  return ids;
+}
+
 function reviewer_conflict(u, person, concern) {
   const involved = casefold(truthy(concern.people_involved) ? concern.people_involved : '');
   const names = new Set([K(u, 'name'), K(u, 'username'), get(person, 'lat', ''), get(person, 'ar', '')]);
@@ -230,13 +275,9 @@ export async function member_view(c, u, pid) {
         pinned: false, at: resource.created_at, read: true, archived: false, replies: [] });
     }
   });
-  const contentRows = await c.all('SELECT * FROM member_content WHERE parish_id=? ORDER BY created_at DESC', pid);
-  const shown = contentRows.filter(r => {
-    if (truthy(r.group_id) && !has(visibleGroups, r.group_id)) return false;
-    if (r.kind === 'message' && !(r.recipient_id === null || r.recipient_id === K(u, 'id')) && r.author_id !== K(u, 'id')) return false;
-    if (r.kind === 'message' && !truthy(r.recipient_id) && r.author_id === K(u, 'id')) return false;
-    return true;
-  });
+  /* One-to-one messages live in the account's private inbox (conversations), copied there from here. */
+  const contentRows = await c.all("SELECT * FROM member_content WHERE parish_id=? AND kind<>'message' ORDER BY created_at DESC", pid);
+  const shown = contentRows.filter(r => !truthy(r.group_id) || has(visibleGroups, r.group_id));
   const discussions = shown.filter(r => r.kind === 'discussion');
   const replyRows = discussions.length ? await c.reads(discussions.map(r => [
     'SELECT mr.id,mr.body,mr.created_at,u.name FROM member_replies mr JOIN users u ON u.id=mr.author_id WHERE mr.content_id=? ORDER BY mr.created_at', [r.id]])) : [];
@@ -264,33 +305,13 @@ export async function member_view(c, u, pid) {
     ...anonymous.map((r, i) => concern_public(r, ownUpdates[ownConcerns.length + i]))
   ];
   const sortedConcerns = sorted(concerns, item => item.created_at, true);
+  for (const item of sortedConcerns) {   // the submitter sees who received their concern
+    const ids = await concernRecipientIds(c, item.id);
+    const names = await namesOf(c, ids);
+    Object.assign(item, { recipients: ids.filter(x => names.has(x)).map(x => names.get(x)), recipientIds: ids });
+  }
   const perms = await complaint_permissions(c, u, pid);
-  let review = [];
-  if (perms.has('Review')) {
-    const rows = (await c.all('SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', pid)).filter(r =>
-      !reviewer_conflict(u, person, r) && (!truthy(r.assigned_to) || r.assigned_to === K(u, 'id') || perms.has('Assign')) &&
-      (!sensitive_concern(r.category) || perms.has('ViewSensitive')));
-    const updates = await concernUpdates(c, rows);
-    review = rows.map((r, i) => concern_public(r, updates[i], null, perms));
-    if (perms.has('ViewIdentity')) {
-      for (const item of review) {
-        if (truthy(get(item, 'identity'))) {
-          const account = await c.first('SELECT name,person_id FROM users WHERE id=?', item.identity);
-          const owner = account ? iter(K(d, 'PEOPLE')).find(p => eq(K(p, 'id'), account.person_id)) ?? {} : {};
-          item.identity = { name: account ? account.name : '', phone: get(owner, 'phone', '') };
-        }
-      }
-    }
-    for (const item of review) complaint_log(c, item.id, K(u, 'id'), 'view');
-  }
-  let leaderConcerns = [];
-  if (role === 'leader') {
-    const rows = (await c.all('SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', pid)).filter(r =>
-      has(managedGroups, r.group_id) && !sensitive_concern(r.category) && !reviewer_conflict(u, person, r));
-    const updates = await concernUpdates(c, rows);
-    leaderConcerns = rows.map((r, i) => concern_public(r, updates[i]));
-    for (const item of leaderConcerns) complaint_log(c, item.id, K(u, 'id'), 'ministry-view');
-  }
+  const review = await concerns_received(c, u, pid, d, person);
   const own = {};
   for (const k of ['id', 'lat', 'ar', 'phone', 'born', 'town', 'townAr', 'status']) own[k] = get(person, k, '');
   own.email = get(get(get(d, 'PERSON_EXTRA', {}), K(person, 'id'), {}), 'email', '');
@@ -309,12 +330,11 @@ export async function member_view(c, u, pid) {
     });
   }
   const office = role === 'priest' || role === 'secretary';
-  const [requests, notificationRows, volunteerRows, profileRows, reviewerRows, categoryRows, requestRows] = await c.reads([
+  const [requests, notificationRows, volunteerRows, profileRows, categoryRows, requestRows] = await c.reads([
     ['SELECT id,field,requested_value,status,created_at FROM member_profile_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', [pid, K(u, 'id')]],
     ['SELECT * FROM member_notifications WHERE parish_id=? AND user_id=? ORDER BY created_at DESC LIMIT 100', [pid, K(u, 'id')]],
     ['SELECT mc.content_id,mc.user_id,mc.status,mc.created_at,c.title,c.group_id,u.name FROM member_commitments mc JOIN member_content c ON c.id=mc.content_id JOIN users u ON u.id=mc.user_id WHERE mc.parish_id=? ORDER BY mc.created_at DESC', [pid]],
     office ? ['SELECT pr.*,u.name FROM member_profile_requests pr JOIN users u ON u.id=pr.user_id WHERE pr.parish_id=? ORDER BY pr.created_at DESC', [pid]] : ['SELECT 1 WHERE 0', []],
-    perms.has('Assign') ? ['SELECT cr.user_id,cr.permissions,u.name FROM complaint_reviewers cr JOIN users u ON u.id=cr.user_id WHERE cr.parish_id=?', [pid]] : ['SELECT 1 WHERE 0', []],
     ['SELECT name,active FROM complaint_categories WHERE parish_id=? ORDER BY name', [pid]],
     ['SELECT * FROM member_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC,reference DESC', [pid, K(u, 'id')]]
   ]);
@@ -333,11 +353,11 @@ export async function member_view(c, u, pid) {
   return {
     parish, site, person: own, groups, meetings, events: visibleEvents, content,
     notes: K(priv, 'notes'), todos: K(priv, 'todos'), commitments: K(priv, 'commitments'), preferences: K(priv, 'preferences'),
-    concerns: sortedConcerns, review, leaderConcerns, complaintPermissions: sorted([...perms]), profileRequests: requests,
+    concerns: sortedConcerns, review, complaintPermissions: sorted([...perms]), profileRequests: requests,
     volunteerReview: volunteerRows.filter(r => has(managedGroups, r.group_id)), profileReview: office ? profileRows : [],
     managedGroups: sorted([...managedGroups]), formation,
-    reviewers: perms.has('Assign') ? reviewerRows.filter(r => has(set(JSON.parse(r.permissions)), 'Review')).map(r => ({ id: r.user_id, name: r.name })) : [],
-    categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active) })), notifications,
+    categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active), sensitive: sensitive_concern(r.name) })), notifications,
+    concernRecipients: await concernRecipientOptions(c, u, pid, d, gids),
     requests: requestRows.map(r => member_request_item(d, r)), requestOptions: member_request_options(d, person),
     ...(person.id ? await ministryMemberView(c, u, pid, d, person) : { ministryApplications: [], ministryDepartures: [], openMinistries: [] }),
     guestRequests: await claimedGuestRequests(c, u, pid)
@@ -620,45 +640,34 @@ export async function member_action(c, u, pid, q) {
     need(['priest', 'secretary', 'leader'].includes(role), 'Staff messaging permission required.', 403);
     const recipientPersonId = get(q, 'recipientPersonId');
     need(has(set(iter(K(d, 'PEOPLE')).map(item => K(item, 'id'))), recipientPersonId), 'Choose a person in this parish.');
-    if (role === 'leader') {
-      const mine = set(iter(K(d, 'GROUPS')).filter(group => has(set([get(group, 'leader'), get(group, 'assistant')]), K(u, 'person_id'))).map(group => K(group, 'id')));
-      need(any(K(d, 'GROUPS'), g => has(mine, K(g, 'id')) &&
-        has(set(iter(get(get(K(d, 'GROUP_DETAIL'), K(g, 'id'), {}), 'roster', [])).map(row => get(row, 'p'))), recipientPersonId)),
-        'You may message members of your ministries only.', 403);
-    }
-    const recipient = await c.first('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id=? LIMIT 1', pid, recipientPersonId);
-    need(recipient !== null, 'This person does not have an active in-app account.', 404);
+    const led = iter(K(d, 'GROUPS')).filter(g => has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id')) &&
+      has(set(iter(get(get(K(d, 'GROUP_DETAIL'), K(g, 'id'), {}), 'roster', [])).map(row => get(row, 'p'))), recipientPersonId));
+    if (role === 'leader') need(led.length > 0, 'You may message members of your ministries only.', 403);
+    else need(u.perms instanceof Set && u.perms.has('messages.office'), 'The parish office inbox permission is needed to write for the office.', 403);
     const title = get(q, 'title'), body = get(q, 'body');
     need(isStr(title) && len(strip(title)) > 0 && len(strip(title)) <= 160 && isStr(body) && len(strip(body)) > 0 && len(strip(body)) <= 5000,
       'Enter a subject and message.');
-    const contentId = tokenHex(12);
-    c.run('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', contentId, pid, null, 'message', K(u, 'id'), recipient.id,
-      strip(title), strip(body), '', null, null, 0, NOW());
-    await notify(recipient.id, 'message', strip(title), strip(body), 'mymessages');
-    audit(c, u, pid, 'member.staff-message', { recipient: recipientPersonId, content: contentId });
+    const conv = await officeConversation(c, u, pid, recipientPersonId, strip(title), strip(body), role === 'leader' ? led[0].id : null);
+    audit(c, u, pid, 'member.staff-message', { recipient: recipientPersonId, conversation: conv.reference });
+    return { id: conv.id };
   } else if (op === 'message') {
     need(has(gids, groupId), 'Ministry membership required.', 403);
     const group = iter(K(d, 'GROUPS')).find(g => eq(K(g, 'id'), groupId));
     if (group === undefined) throw new Error('StopIteration');
-    const recipient = await c.first("SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id IN (?,?) AND role IN ('leader','priest','parishadmin','secretary') ORDER BY CASE WHEN person_id=? THEN 0 ELSE 1 END LIMIT 1",
-      pid, get(group, 'leader'), get(group, 'assistant'), get(group, 'leader'));
-    need(recipient !== null, 'This ministry has no available messaging contact.', 403);
+    need((await groupLeaderAccounts(c, pid, group)).length > 0, 'This ministry has no available messaging contact.', 403);
     const body = get(q, 'body', '');
     need(isStr(body) && len(strip(body)) > 0 && len(strip(body)) <= 5000, 'Enter a message under 5000 characters.');
-    c.run('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', tokenHex(12), pid, groupId, 'message', K(u, 'id'), recipient.id,
-      add('Message to ', K(group, 'name')), strip(body), '', null, null, 0, NOW());
-    await notify(recipient.id, 'message', 'New ministry message', strip(body), 'memberhub');
-  } else if (op === 'messageReply') {
-    const original = await c.first("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='message'", get(q, 'id'), pid);
-    need(original && original.recipient_id === K(u, 'id') &&
-      (role === 'priest' || role === 'secretary' || any(K(d, 'GROUPS'), g => eq(K(g, 'id'), original.group_id) &&
-        has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id')))), 'Message not available for reply.', 403);
-    need(['leader', 'priest', 'secretary'].includes(role), 'Ministry communication permission required.', 403);
+    const account = await c.first('SELECT * FROM users WHERE id=?', K(u, 'id'));   // the account, not its role in this parish
+    const conv = await conversationStart(c, account, { subject: 'Message to ' + K(group, 'name'), body, to: { kind: 'ministry', parish: pid, group: groupId } });
+    return { id: conv.id };
+  } else if (op === 'messageReply') {   // an earlier portal message, now a conversation in the inbox
+    const account = await c.first('SELECT * FROM users WHERE id=?', K(u, 'id'));
+    const conv = await c.first('SELECT * FROM conversations WHERE legacy_id=? AND parish_id=?', get(q, 'id'), pid);
+    const side = conv ? await conversationSide(c, account, conv) : null;
+    need(side !== null, 'Message not available for reply.', 403);
     const body = get(q, 'body', '');
     need(isStr(body) && len(strip(body)) > 0 && len(strip(body)) <= 5000, 'Enter a message under 5000 characters.');
-    c.run('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', tokenHex(12), pid, original.group_id, 'message', K(u, 'id'), original.author_id,
-      'Re: ' + original.title, strip(body), '', null, null, 0, NOW());
-    await notify(original.author_id, 'message', 'Reply from your ministry', strip(body), 'mymessages');
+    await conversationPost(c, account, conv, side, strip(body), NOW());
   } else if (op === 'discussionReply') {
     const row = await c.first("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='discussion'", get(q, 'id'), pid);
     need(row && has(gids, row.group_id), 'Conversation not available.', 403);
@@ -684,6 +693,7 @@ export async function member_action(c, u, pid, q) {
     const anonymous = get(q, 'anonymous') === true;
     const followUp = get(q, 'followUp', 'none');
     need(anonymous || has(new Set(['system', 'email', 'phone', 'none']), followUp), 'Invalid follow-up choice.');
+    const recipients = await concern_recipients_check(c, u, pid, d, gids, get(q, 'recipients'), slice(str(get(q, 'peopleInvolved', '')), 0, 500));
     const ref = 'CMP-' + tokenHex(8).toUpperCase();
     const concernId = tokenHex(12);
     const happenedAt = slice(str(get(q, 'happenedAt', '')), 0, 40);
@@ -698,6 +708,12 @@ export async function member_action(c, u, pid, q) {
       save_member_private(c, u, pid, priv);
     }
     complaint_log(c, concernId, anonymous ? null : K(u, 'id'), 'submitted');
+    const at = NOW();
+    for (const userId of recipients) {   // only the people the submitter chose are told, and without who sent it
+      c.run('INSERT INTO concern_recipients VALUES(?,?,?,?)', concernId, userId, 'chosen', at);
+      notifyAccount(c, userId, pid, 'concern', 'A concern was sent to you', ref, 'memberhub');
+    }
+    complaint_log(c, concernId, null, 'recipients', String(recipients.length));
     return { id: concernId };
   } else if (op === 'concernFollowUp') {
     const message = get(q, 'message', '');
@@ -707,32 +723,41 @@ export async function member_action(c, u, pid, q) {
     c.run('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)', tokenHex(12), row.id, null, row.status,
       'Submitted additional information: ' + strip(message), '', NOW());
     complaint_log(c, row.id, row.user_id === null ? null : K(u, 'id'), 'submitter-follow-up');
+    for (const userId of await concernRecipientIds(c, row.id)) notifyAccount(c, userId, pid, 'concern', 'New information on a concern sent to you', row.reference, 'memberhub');
+  } else if (op === 'concernAddRecipients') {
+    const row = await c.first('SELECT * FROM member_concerns WHERE parish_id=? AND id=?', pid, get(q, 'id'));
+    need(row !== null && (row.user_id === K(u, 'id') || (row.user_id === null && has(K(priv, 'concernIds'), row.id))), 'Case not available.', 403);
+    const current = await concernRecipientIds(c, row.id);
+    const asked = isList(get(q, 'recipients')) ? get(q, 'recipients') : [];
+    const added = await concern_recipients_check(c, u, pid, d, gids, asked.filter(i => !current.includes(i)), row.people_involved);
+    need(current.length + added.length <= 10, 'A concern can go to ten people at most.');
+    const at = NOW();
+    for (const userId of added) {
+      c.run('INSERT INTO concern_recipients VALUES(?,?,?,?)', row.id, userId, 'chosen', at);
+      notifyAccount(c, userId, pid, 'concern', 'A concern was sent to you', row.reference, 'memberhub');
+    }
+    complaint_log(c, row.id, row.user_id === null ? null : K(u, 'id'), 'recipients-added', String(added.length));
   } else if (op === 'concernUpdate') {
-    const perms = await complaint_permissions(c, u, pid);
-    need(perms.has('Review') && (perms.has('Respond') || perms.has('Resolve')), 'Complaint reviewer permission required.', 403);
     const row = await c.first('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', get(q, 'id'), pid);
-    need(row !== null, 'Case not found.', 404);
+    /* Only the people the submitter chose; for anyone else the case does not exist. */
+    need(row !== null && (await concernRecipientIds(c, row.id)).includes(K(u, 'id')), 'Case not found.', 404);
     need(!reviewer_conflict(u, person, row), 'A different reviewer must handle a case involving you.', 403);
-    need(!truthy(row.assigned_to) || row.assigned_to === K(u, 'id') || perms.has('Assign'), 'Case is assigned to another reviewer.', 403);
-    need(!sensitive_concern(row.category) || perms.has('ViewSensitive'), 'Sensitive complaint permission required.', 403);
     const status = get(q, 'status');
-    need(has(CONCERN_STATUSES, status) && (!has(new Set(['Resolved', 'Closed']), status) || perms.has('Resolve')), 'Status permission required.', 403);
+    need(has(CONCERN_STATUSES, status), 'Choose a status.');
     const publicText = get(q, 'publicText', ''), internalText = get(q, 'internalText', '');
     need(isStr(publicText) && len(publicText) <= 5000 && isStr(internalText) && len(internalText) <= 5000, 'Update is too long.');
     c.run('UPDATE member_concerns SET status=? WHERE id=?', status, row.id);
     c.run('INSERT INTO member_concern_updates VALUES(?,?,?,?,?,?,?)', tokenHex(12), row.id, K(u, 'id'), status, publicText, internalText, NOW());
     if (truthy(row.user_id)) await notify(row.user_id, 'concern', add('Concern status: ', status), publicText, 'myconcerns');
     complaint_log(c, row.id, K(u, 'id'), 'updated', status);
-  } else if (op === 'concernAssign') {
-    const perms = await complaint_permissions(c, u, pid);
-    need(perms.has('Review') && perms.has('Assign'), 'Complaint assignment permission required.', 403);
+  } else if (op === 'concernAssign') {   // which of the chosen recipients takes the lead
     const row = await c.first('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', get(q, 'id'), pid);
-    need(row !== null && !reviewer_conflict(u, person, row), 'Case not available for assignment.', 403);
+    const recipients = row ? await concernRecipientIds(c, row.id) : [];
+    need(row !== null && recipients.includes(K(u, 'id')) && !reviewer_conflict(u, person, row), 'Case not found.', 404);
     const target = await c.first('SELECT * FROM users WHERE id=?', get(q, 'reviewerId'));
     const targetPerson = target ? iter(K(d, 'PEOPLE')).find(p => eq(K(p, 'id'), target.person_id)) ?? {} : {};
-    need(target !== null && !reviewer_conflict(target, targetPerson, row) &&
-      (await complaint_permissions(c, target, pid)).has('Review'), 'Choose an independent authorized reviewer.', 403);
-    if (sensitive_concern(row.category)) need((await complaint_permissions(c, target, pid)).has('ViewSensitive'), 'Reviewer needs sensitive-case permission.', 403);
+    need(target !== null && recipients.includes(target.id) && !reviewer_conflict(target, targetPerson, row),
+      'Choose one of the people the submitter sent this concern to.', 403);
     c.run('UPDATE member_concerns SET assigned_to=? WHERE id=?', target.id, row.id);
     complaint_log(c, row.id, K(u, 'id'), 'assigned', target.id);
   } else if (op === 'categoryManage') {

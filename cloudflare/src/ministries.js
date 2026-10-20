@@ -33,7 +33,7 @@ export function notifyAccount(c, userId, pid, kind, title, body = '', route = ''
   c.run('INSERT INTO account_notifications VALUES(?,?,?,?,?,?,?,?,?)', tokenHex(12), userId, pid, kind, title, str(body).slice(0, 300), route, NOW(), null);
 }
 
-const parishPriestAccounts = async (c, pid) =>
+export const parishPriestAccounts = async (c, pid) =>
   (await c.all("SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND role='priest'", pid)).map(r => r.user_id);
 
 async function bishopAccounts(c, diocese) {
@@ -41,7 +41,7 @@ async function bishopAccounts(c, diocese) {
     "UNION SELECT u.id FROM users u WHERE u.role='bishop' AND u.diocese=? AND NOT EXISTS (SELECT 1 FROM role_assignments r WHERE r.user_id=u.id)", diocese, diocese)).map(r => r.id);
 }
 
-async function groupLeaderAccounts(c, pid, group) {
+export async function groupLeaderAccounts(c, pid, group) {
   const people = [get(group, 'leader'), get(group, 'assistant')].filter(Boolean);
   if (!people.length) return [];
   return (await c.all(`SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND person_id IN (${people.map(() => '?').join(',')})`, pid, ...people)).map(r => r.user_id);

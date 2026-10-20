@@ -422,6 +422,7 @@ export function validate(d) {
       && isStr(get(n, 'due')), 'A pastoral item needs valid content, priority, and person if it is a note.');
     need(!truthy(get(n, 'assignee')) || (eq(K(n, 'kind'), 'task') && pp.has(K(n, 'assignee')) && eq(get(pp.get(K(n, 'assignee')), 'status'), 'clergy')),
       'Task assignee must be clergy in this parish.');
+    need(has(new Set(['personal', 'shared']), get(n, 'visibility', 'personal')), 'Choose who can see this pastoral item.');
   }
   const events = index(d, 'EVENTS');
   const clergy = set(pp.values().filter(p => eq(get(p, 'status'), 'clergy')).map(p => K(p, 'id')));

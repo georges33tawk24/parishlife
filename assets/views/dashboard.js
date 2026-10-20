@@ -247,7 +247,7 @@ function leader() {
       ${mine.slice(0, 2).map(g => stat(t(g.name, g.ar), g.members, g.meets ? t(g.meets, g.meetsAr) : t('no fixed meeting', 'بلا اجتماع ثابت'))).join('')}
       ${stat(t('Upcoming meetings', 'الاجتماعات القادمة'), upcoming.length, t('in my groups', 'في مجموعاتي'))}
       ${stat(t('Recorded group attendance', 'حضور المجموعات المسجّل'), recorded, `${meetings.length} ${t('meetings','اجتماعات')}`)}
-      ${stat(t('Complaints received','الشكاوى الواردة'),M.loadedFor===`${session.user?.id}:${session.parishId}`?M.leaderConcerns.length:'…',`<a href="#/memberhub">${t('View group complaints','عرض شكاوى المجموعة')}</a>`)}
+      ${stat(t('Concerns sent to you','الملاحظات المرسلة إليك'),M.loadedFor===`${session.user?.id}:${session.parishId}`?M.review.length:'…',`<a href="#/memberhub">${t('Open','فتح')}</a>`)}
     </div>
     ${sectionH(t('My groups', 'مجموعاتي'))}
     <div class="gridcards">${cards}</div>

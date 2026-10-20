@@ -22,6 +22,7 @@ import { xlsx_preview } from './xlsx.js';
 import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction } from './connections.js';
 import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
 import { guestRequestCreate, guestRequestRow, guestRequestView, guestDocument, guestRequestAction, dioceseDocuments, dioceseDocumentAction } from './documents.js';
+import { messagesList, messagesAction } from './privacy.js';
 
 function fileReply(row, data) {
   const headers = new Headers({ 'Content-Type': row.mime, 'Content-Length': String(row.size), 'Content-Disposition': "inline; filename*=UTF-8''" + quote(row.name) });
@@ -230,6 +231,15 @@ async function handle(c, env, request, url, q, secureCookie) {
     if (method === 'GET') return reply(200, await dioceseDocuments(c, u));
     if (method === 'POST') {
       const result = await dioceseDocumentAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/messages') {
+    if (method === 'GET') return reply(200, await messagesList(c, u, {}));
+    if (method === 'POST') {
+      const result = await messagesAction(c, u, q);
       await c.commit();
       return reply(200, result);
     }

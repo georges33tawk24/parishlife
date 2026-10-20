@@ -26,6 +26,7 @@ import * as Administration from './views/administration.js';
 import * as Member from './views/member.js';
 import * as Account from './views/account.js';
 import * as Home from './views/home.js';
+import * as Inbox from './views/inbox.js';
 import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
 import { applyTheme } from './theme.js';
@@ -38,7 +39,7 @@ export const ROUTES = {
   mymeetings: { ico:'events', en:'Meetings', ar:'الاجتماعات', view:Member.meetings },
   mycalendar: { ico:'events', en:'Calendar', ar:'الرزنامة', view:Member.calendar },
   myattendance: { ico:'attend', en:'Attendance', ar:'الحضور', view:Member.attendancePage },
-  mymessages: { ico:'msg', en:'Messages', ar:'الرسائل', view:Member.messages },
+  mymessages: { ico:'msg', en:'Parish messages', ar:'رسائل الرعية', view:Member.messages },
   myfeed: { ico:'bell', en:'Announcements & Posts', ar:'الإعلانات والمنشورات', view:Member.feed },
   myresources: { ico:'doc', en:'Resources', ar:'الموارد', view:Member.resources },
   myformation: { ico:'doc', en:'Formation', ar:'التنشئة', view:Member.formation },
@@ -97,7 +98,8 @@ export const ROUTES = {
   styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide },
   administration: { ico:'shield', en:'Administration',   ar:'الإدارة',             view:Administration.administration },
   account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Account.account },
-  home:         { ico:'portal',   en:'My parishes',      ar:'رعاياي',              view:Home.home }
+  home:         { ico:'portal',   en:'My parishes',      ar:'رعاياي',              view:Home.home },
+  inbox:        { ico:'mail',     en:'Private messages', ar:'الرسائل الخاصة',      view:Inbox.inbox, badge:() => Inbox.inboxUnread() }
 };
 
 export { S as state, ROLES, me, go };
@@ -108,7 +110,7 @@ const PERSONAL_ROUTES = new Set(['memberhome','myrequests','myministries','mymee
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
 const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
-export const allowed = id => id === 'account' || id === 'home' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+export const allowed = id => id === 'account' || id === 'home' || id === 'inbox' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
   (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
@@ -875,7 +877,8 @@ async function loadAccountNotes() {
 async function openAccountNote(n) {
   closeMenu();
   if (!n.read) { n.read = true; api('notifications', 'POST', { op: 'read', id: n.id }).catch(() => {}); }
-  if (n.parish && n.parish !== session.parishId && session.parishes.some(p => p.id === n.parish)) { if (!await switchParish(n.parish)) return; }
+  /* a private message belongs to the account, not to a parish workspace */
+  if (n.parish && !String(n.route || '').startsWith('inbox') && n.parish !== session.parishId && session.parishes.some(p => p.id === n.parish)) { if (!await switchParish(n.parish)) return; }
   if (n.route) location.hash = '#/' + n.route;
 }
 async function notifications(e) {
@@ -887,7 +890,7 @@ async function notifications(e) {
     <div class="pop-h"><b>${t('Notifications', 'الإشعارات')}</b>
       <button class="btn btn-ghost btn-dense" id="markread" style="margin-inline-start:auto">${t('Mark all read', 'تعليم الكل كمقروء')}</button></div>
     <div class="pop-b">${mine.length ? `<div class="ac-group">${t('For you', 'لك')}</div>` + mine.map((n, i) => `<button class="notif ${n.read ? '' : 'unread'}" data-an="${i}">
-      <span class="nico">${icon(n.kind.startsWith('ministry') ? 'groups' : 'bell', 17)}</span>
+      <span class="nico">${icon(n.kind === 'message' ? 'mail' : n.kind.startsWith('ministry') ? 'groups' : 'bell', 17)}</span>
       <span class="ntxt"><span>${esc(n.title)}</span>${n.body ? `<small>${esc(n.body)}</small>` : ''}<small class="mono">${esc(fmtLong(n.at))}</small></span>
       ${n.read ? '' : '<span class="ndot"></span>'}</button>`).join('') : ''}
     ${office ? `${mine.length ? `<div class="ac-group">${t('This parish', 'هذه الرعية')}</div>` : ''}${NOTES.map(([ic, txt, when, href, unread], i) => `<button class="notif ${unread ? 'unread' : ''}" data-n="${i}">

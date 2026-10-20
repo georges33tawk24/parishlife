@@ -8,6 +8,7 @@ import { esc, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 import { safeRichText } from '../rich-text.js';
 import { homeCard } from './member-requests.js';
 import { noticeText, phoneShow } from '../sacrament-requests.js';
+import { composeMessage } from './inbox.js';
 
 const L = (en, ar) => t(en, ar);
 const date = value => value ? fmtDate(value) : '—';
@@ -159,8 +160,8 @@ export function messages() {
   const selected = rows.filter(x => filter === 'archived' ? x.archived : !x.archived &&
     (filter === 'all' || filter === 'sent' && x.authorId === session.user?.id ||
      filter === 'announcements' && x.kind === 'announcement' || filter === 'inbox' && x.authorId !== session.user?.id));
-  return `<div class="member-page">${title(L('Messages', 'الرسائل'), L('Announcements are one-way; conversations can receive replies.', 'الإعلانات باتجاه واحد، ويمكن الرد على المحادثات.'))}
-    ${M.groups.length ? `<div class="member-actions"><button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button></div>` : ''}
+  return `<div class="member-page">${title(L('Parish messages', 'رسائل الرعية'), L('Announcements are one-way; group conversations can receive replies. Private messages are in your inbox.', 'الإعلانات باتجاه واحد، ويمكن الرد على المحادثات الجماعية. أما الرسائل الخاصة ففي بريدك.'))}
+    <div class="member-actions">${M.groups.length ? `<button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button>` : ''}${link('inbox', L('Private messages', 'الرسائل الخاصة'))}</div>
     <div class="member-toolbar"><div class="seg" role="group">${[['inbox','Inbox','الوارد'],['sent','Sent','المرسل'],['announcements','Announcements','الإعلانات'],['archived','Archived','الأرشيف'],['all','All','الكل']].map(([id,en,ar]) => `<button data-message-filter="${id}" aria-pressed="${filter === id}">${L(en,ar)}</button>`).join('')}</div><input class="input" type="search" data-member-search placeholder="${L('Search communications', 'البحث في الرسائل')}"></div>
     <div class="member-list">${selected.map(x => `<div class="member-card member-search-row" data-search="${txt(x.title + ' ' + x.body)}"><div class="member-row"><div><h2>${txt(x.title)} ${!x.read ? status(L('Unread', 'غير مقروء')) : ''}</h2><p>${txt(groupName(x.groupId))} · ${date(x.at)}</p></div>${status(x.kind === 'announcement' ? L('Announcement', 'إعلان') : x.kind === 'discussion' ? L('Group conversation', 'محادثة جماعية') : L('Message', 'رسالة'))}</div><p>${txt(x.body)}</p>${x.attachment ? `<a class="btn btn-secondary btn-dense" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download attachment', 'تنزيل المرفق')}</a>` : ''}<div class="member-actions">${x.kind === 'discussion' ? `<button class="btn btn-primary btn-dense" data-discussion="${txt(x.id)}">${L('Open conversation', 'فتح المحادثة')}</button>` : ''}${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-member-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}<button class="btn btn-secondary btn-dense" data-member-archive="${txt(x.id)}" data-archive-op="${x.archived ? 'unarchive' : 'archive'}">${x.archived ? L('Restore', 'استعادة') : L('Archive', 'أرشفة')}</button></div></div>`).join('') || blank(L('No communications in this view.', 'لا رسائل في هذا العرض.'))}</div></div>`;
 }
@@ -212,7 +213,7 @@ export function profile() {
 
 export function concerns() {
   return `<div class="member-page">${title(L('Submit a Concern', 'تقديم ملاحظة أو قلق'), L('Your submissions and their updates appear here automatically.', 'تظهر طلباتك وتحديثاتها هنا تلقائياً.'))}<div class="member-actions"><button class="btn btn-primary" data-concern-new>${L('Submit a concern', 'تقديم ملاحظة')}</button></div>
-    <div class="member-section-head"><h2>${L('My concerns', 'ملاحظاتي المقدّمة')}</h2></div><div class="member-list">${M.concerns.map(x => card(`<div class="member-row"><h2>${txt(x.subject)}</h2>${status(x.status)}</div><p>${date(x.created_at)} · ${x.anonymous ? L('Anonymous to reviewers', 'مجهول الهوية للمراجعين') : L('Identified', 'معرّف')}</p><div class="member-updates">${x.updates.map(y=>`<p><b>${date(y.at)} · ${txt(y.status)}</b><br>${txt(y.text)}</p>`).join('')}</div><button class="btn btn-secondary btn-dense" data-concern-follow="${txt(x.id)}">${L('Add information', 'إضافة معلومات')}</button>`)).join('') || blank(L('You have no submissions yet.', 'ليس لديك طلبات بعد.'))}</div></div>`;
+    <div class="member-section-head"><h2>${L('My concerns', 'ملاحظاتي المقدّمة')}</h2></div><div class="member-list">${M.concerns.map(x => card(`<div class="member-row"><h2>${txt(x.subject)}</h2>${status(x.status)}</div><p>${date(x.created_at)} · ${x.anonymous ? L('Anonymous to its recipients', 'مجهول الهوية لمستلميها') : L('Identified', 'معرّف')}</p><p class="dim">${L('Sent to', 'أُرسلت إلى')}: ${txt((x.recipients || []).join(', ') || '—')}</p><div class="member-updates">${x.updates.map(y=>`<p><b>${date(y.at)} · ${txt(y.status)}</b><br>${txt(y.text)}</p>`).join('')}</div><div class="member-actions"><button class="btn btn-secondary btn-dense" data-concern-follow="${txt(x.id)}">${L('Add information', 'إضافة معلومات')}</button><button class="btn btn-secondary btn-dense" data-concern-more="${txt(x.id)}">${L('Send to someone else too', 'إرسالها إلى شخص آخر أيضاً')}</button></div>`)).join('') || blank(L('You have no submissions yet.', 'ليس لديك طلبات بعد.'))}</div></div>`;
 }
 
 export function notificationsPage() {
@@ -222,11 +223,10 @@ export function notificationsPage() {
 
 export function hub() {
   return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${currentRole() !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
-    ${currentRole()==='leader'?card(`<h2>${L('Complaints received','الشكاوى الواردة')}</h2><p class="help">${L('Related to your ministries; sensitive cases and cases involving you are handled by an independent reviewer.','المرتبطة بخدماتك؛ الحالات الحساسة والحالات التي تتعلق بك يتولاها مراجع مستقل.')}</p>${M.leaderConcerns.map(x=>`<div class="member-simple-row"><span><b>${txt(x.subject)}</b><small style="display:block">${txt(groupName(x.group_id))} · ${txt(x.reference)} · ${txt(x.category)} · ${txt(x.status)}</small><span>${txt(x.description)}</span></span></div>`).join('')||blank(L('No complaints received for your groups.','لا شكاوى واردة لمجموعاتك.'))}`):''}
-    ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2>${M.content.filter(x=>x.kind==='message' && x.recipientId===session.user?.id).map(x=>`<div class="member-simple-row"><span>${txt(groupName(x.groupId))} · ${txt(x.body)}</span><button class="btn btn-secondary btn-dense" data-reply-message="${txt(x.id)}">${L('Reply', 'رد')}</button></div>`).join('') || blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))}`)}
+    ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2><p>${L('Messages from members to the parish office or to your ministries arrive in Private messages, where you can reply.', 'تصل رسائل الأعضاء إلى مكتب الرعية أو إلى خدماتك في الرسائل الخاصة، حيث يمكنك الرد.')}</p>${link('inbox', L('Open private messages', 'فتح الرسائل الخاصة'))}`)}
     ${card(`<h2>${L('Volunteer responses', 'ردود المتطوعين')}</h2>${M.volunteerReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.title)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-confirm-volunteer="${txt(x.content_id)}" data-user="${txt(x.user_id)}">${L('Confirm', 'تأكيد')}</button></div>`).join('') || blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))}`)}
     ${M.profileReview.length ? card(`<h2>${L('Profile update requests', 'طلبات تحديث الملفات')}</h2>${M.profileReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.field)}: ${txt(x.requested_value)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-profile-review="${txt(x.id)}">${L('Mark reviewed', 'تعليم كمراجَع')}</button></div>`).join('')}`) : ''}
-    ${M.complaintPermissions.includes('Review') ? card(`<h2>${L('Concern review', 'مراجعة الطلبات السرية')}</h2><p>${L('Only explicitly appointed reviewers can see these cases.', 'هذه الحالات متاحة فقط للمراجعين المعيّنين صراحةً.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Review', 'مراجعة')}</button></div>`).join('') || blank(L('No cases assigned to this parish.', 'لا حالات مسجّلة في هذه الرعية.'))}`) : ''}
+    ${card(`<h2>${L('Concerns sent to you', 'الملاحظات المرسلة إليك')}</h2><p class="help">${L('Only the people a submitter chose can see a concern. A case that names you is handled by someone else.', 'لا يرى الملاحظة إلا من اختارهم مقدّمها. والحالة التي تذكرك يتولاها شخص آخر.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Open', 'فتح')}</button></div>`).join('') || blank(L('No concern has been sent to you.', 'لم تُرسل إليك أي ملاحظة.'))}`)}
     ${M.complaintPermissions.includes('ManageCategories') ? card(`<h2>${L('Concern categories', 'فئات الملاحظات')}</h2><button class="btn btn-secondary btn-dense" data-category-add>${L('Add category', 'إضافة فئة')}</button>${M.categories.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} ${status(x.active ? L('Active', 'نشطة') : L('Hidden', 'مخفية'))}</span><button class="btn btn-secondary btn-dense" data-category-toggle="${txt(x.name)}" data-active="${!x.active}">${x.active ? L('Hide', 'إخفاء') : L('Activate', 'تفعيل')}</button></div>`).join('')}`) : ''}</div>`;
 }
 
@@ -349,35 +349,50 @@ function passwordModal() {
 }
 
 function messageDrawer() {
-  openDrawer({ title:L('Message my ministry', 'مراسلة خدمتي'),
-    sub:L('Your message goes to the ministry leader if they have a linked account.', 'تصل رسالتك إلى مسؤول الخدمة إذا كان له حساب مرتبط.'),
-    body:`<div class="formrow"><label class="label" for="message-group">${L('Ministry', 'الخدمة')}</label><select class="select" id="message-group">${M.groups.map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>${area(L('Message', 'الرسالة'),'message-body')}`,
-    foot:footer(L('Send message', 'إرسال الرسالة')), onMount(el) { el.querySelector('#member-save').addEventListener('click', () => {
-      if (!val(el,'message-body')) { el.querySelector('#message-body').focus(); return; }
-      run('message',{groupId:val(el,'message-group'),body:val(el,'message-body')});
-    }); }
+  composeMessage({ kind:'ministry', parish:session.parishId, group:M.groups[0]?.id });
+}
+
+/* Who receives a concern is the submitter's choice; the suggestions follow the ministry and category chosen. */
+const recipientRows = (options, name) => options.map(o => `<label class="check concern-recipient" data-recipient="${txt(o.id)}"><input type="checkbox" name="${name}" value="${txt(o.id)}"><span>${txt(o.name)} <small class="dim">${o.roles.map(r => txt(L(r.en, r.ar))).join(' · ')}</small> <span class="member-badge" data-suggested hidden>${L('Suggested', 'مقترح')}</span></span></label>`).join('');
+function suggestRecipients(el, touched) {
+  const group = el.querySelector('#concern-group')?.value, category = M.categories.find(c => c.name === el.querySelector('#concern-category')?.value);
+  const wanted = new Set([group ? 'group:' + group : 'parish', ...(category?.sensitive ? ['sensitive'] : [])]);
+  el.querySelectorAll('[data-recipient]').forEach(row => {
+    const option = M.concernRecipients.find(o => o.id === row.dataset.recipient), on = option.suggested.some(s => wanted.has(s));
+    row.querySelector('[data-suggested]').hidden = !on;
+    if (!touched) row.querySelector('input').checked = on;
   });
 }
 
 function concernDrawer() {
   openDrawer({ title:L('Submit a Concern', 'تقديم ملاحظة أو قلق'),
-    sub:L('Your concern is visible only to explicitly authorized reviewers.', 'تُعرض ملاحظتك فقط على المراجعين المخوّلين صراحةً.'),
+    sub:L('Only the people you choose below will see your concern, its status or that it exists.', 'لا يرى ملاحظتك أو حالتها أو وجودها إلا من تختارهم أدناه.'),
     body:`<div class="formrow"><label class="label" for="concern-category">${L('Category', 'الفئة')}</label><select class="select" id="concern-category">${M.categories.filter(x=>x.active).map(x=>`<option>${txt(x.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-group">${L('Related ministry (optional)', 'الخدمة المرتبطة (اختياري)')}</label><select class="select" id="concern-group"><option value="">—</option>${M.groups.map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-event">${L('Related event or meeting (optional)', 'المناسبة أو الاجتماع المرتبط (اختياري)')}</label><select class="select" id="concern-event"><option value="">—</option>${[...M.events,...M.meetings].map(x=>`<option value="${txt(x.id)}">${txt(x.title)}</option>`).join('')}</select></div>
       ${field(L('Subject', 'الموضوع'),'concern-subject')}${area(L('Description', 'الوصف'),'concern-description')}
       ${field(L('When did this happen? (optional)', 'متى حصل هذا؟ (اختياري)'),'concern-when','','datetime-local')}${field(L('People involved (optional)', 'الأشخاص المعنيون (اختياري)'),'concern-people')}
       <div class="formrow"><label class="label" for="concern-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق (اختياري، بحد أقصى ١ ميغابايت)')}</label><input class="input" id="concern-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div>
+      <fieldset class="formrow"><legend class="label">${L('Send it to', 'أرسلها إلى')} <span class="req">*</span></legend>
+        <p class="help">${L('Suggestions follow the ministry and category you chose. Change them as you wish; nobody else is told.', 'تتبع الاقتراحات الخدمة والفئة اللتين اخترتهما. غيّرها كما تشاء؛ ولا يُبلَّغ أحد سواهم.')}</p>
+        ${M.concernRecipients.length ? recipientRows(M.concernRecipients, 'concern-recipient') : `<p class="dim">${L('Nobody in this parish can receive concerns yet. Speak to the parish office.', 'لا أحد في هذه الرعية يمكنه استلام الملاحظات بعد. تحدّث إلى مكتب الرعية.')}</p>`}</fieldset>
       <label class="member-toggle"><span>${L('Submit anonymously', 'إرسال دون إظهار الهوية')}</span><input type="checkbox" id="concern-anonymous"></label>
-      <p class="help">${L('Reviewers will not see your account identity. You can follow the status here after submitting.', 'لن يرى المراجعون هوية حسابك. يمكنك متابعة الحالة هنا بعد الإرسال.')}</p>
+      <p class="help">${L('If you submit anonymously, the people you chose will not see who you are, and neither will anyone else. You can follow the status here after submitting.', 'إذا أرسلتها دون إظهار الهوية، فلن يعرف من اخترتهم ولا أي أحد آخر من أنت. يمكنك متابعة الحالة هنا بعد الإرسال.')}</p>
       <div class="formrow"><label class="label" for="concern-follow">${L('Preferred follow-up (identified submissions)', 'طريقة المتابعة للطلبات المعرّفة')}</label><select class="select" id="concern-follow"><option value="system">${L('In-system message', 'رسالة في النظام')}</option><option value="email">${L('Email', 'البريد الإلكتروني')}</option><option value="phone">${L('Phone', 'الهاتف')}</option><option value="none">${L('No response required', 'لا حاجة للرد')}</option></select></div>`,
-    foot:footer(L('Submit concern', 'إرسال الملاحظة')), onMount(el) { el.querySelector('#member-save').addEventListener('click', async () => {
+    foot:footer(L('Submit concern', 'إرسال الملاحظة')), onMount(el) {
+      let touched = false;
+      el.querySelectorAll('[name=concern-recipient]').forEach(x => x.addEventListener('change', () => { touched = true; }));
+      ['#concern-group', '#concern-category'].forEach(id => el.querySelector(id)?.addEventListener('change', () => suggestRecipients(el, touched)));
+      suggestRecipients(el, false);
+      el.querySelector('#member-save').addEventListener('click', async () => {
       if (!val(el,'concern-subject') || !val(el,'concern-description')) { el.querySelector(!val(el,'concern-subject')?'#concern-subject':'#concern-description').focus(); return; }
+      const recipients = [...el.querySelectorAll('[name=concern-recipient]:checked')].map(x => x.value);
+      if (!recipients.length) { toast(L('Choose who should receive it', 'اختر من يجب أن يستلمها'), '', 'warning'); el.querySelector('[name=concern-recipient]')?.focus(); return; }
       try {
         const values = { category:val(el,'concern-category'), groupId:val(el,'concern-group') || null,
           eventId:val(el,'concern-event') || null, subject:val(el,'concern-subject'), description:val(el,'concern-description'),
           happenedAt:val(el,'concern-when'), peopleInvolved:val(el,'concern-people'),
-          anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el) };
+          anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el), recipients };
         const result = await run('concern', values, '');
         if (result?.id) openDrawer({title:L('Concern received', 'تم استلام الملاحظة'),
           body:`<p>${L('You can follow its status any time on this page.', 'يمكنك متابعة حالتها في هذه الصفحة في أي وقت.')}</p>`,
@@ -408,17 +423,16 @@ function publishDrawer() {
 }
 
 function reviewDrawer(x) {
-  const canResolve = M.complaintPermissions.includes('Resolve');
-  const canRespond = (M.complaintPermissions.includes('Respond') || canResolve) &&
-    (canResolve || !['Resolved','Closed'].includes(x.status));
-  const statuses = ['Submitted','Under Review','Additional Information Requested','Referred',
-    ...(canResolve ? ['Resolved','Closed'] : [])];
+  const statuses = ['Submitted','Under Review','Additional Information Requested','Referred','Resolved','Closed'];
+  const identity = x.identity ? [x.identity.name, x.identity.phone, x.identity.email].filter(Boolean).join(' · ') : '';
   openDrawer({title:x.reference, sub:`${x.status} · ${x.category}`,
-    body:`<h3>${txt(x.subject)}</h3><p>${txt(x.description)}</p><p>${L('People involved', 'الأشخاص المعنيون')}: ${txt(x.people_involved || '—')}</p>${x.identity ? `<p>${L('Identity', 'الهوية')}: ${txt(x.identity.name)} · ${txt(x.identity.phone)}</p>` : ''}${x.attachment ? `<a class="btn btn-secondary" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download evidence', 'تنزيل المرفق')}</a>` : ''}
-      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}${y.internal ? `<br><small>${L('Internal note', 'ملاحظة داخلية')}: ${txt(y.internal)}</small>` : ''}</p>`).join('')}
-      ${M.complaintPermissions.includes('Assign') ? `<div class="formrow"><label class="label" for="review-assignee">${L('Assign to independent reviewer', 'تعيين مراجع مستقل')}</label><select class="select" id="review-assignee"><option value="">${L('Choose reviewer', 'اختر مراجعاً')}</option>${M.reviewers.map(r=>`<option value="${txt(r.id)}" ${x.assignedTo===r.id?'selected':''}>${txt(r.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-dense" id="assign-reviewer">${L('Assign', 'تعيين')}</button></div>` : ''}
-      ${canRespond ? `<div class="formrow"><label class="label" for="review-status">${L('Public status', 'الحالة العامة')}</label><select class="select" id="review-status">${statuses.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Public response', 'الرد العام'),'review-public')}${area(L('Internal note', 'ملاحظة داخلية'),'review-internal')}` : ''}`,
-    foot:canRespond ? footer(L('Save update', 'حفظ التحديث')) : `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`, onMount(el) {
+    body:`<h3>${txt(x.subject)}</h3><p>${txt(x.description)}</p><p>${L('People involved', 'الأشخاص المعنيون')}: ${txt(x.people_involved || '—')}</p>
+      <p>${L('Submitted by', 'مقدّم الملاحظة')}: ${x.anonymous ? L('Anonymous — the submitter chose not to say who they are.', 'مجهول — اختار مقدّمها ألّا يُعرّف بنفسه.') : txt(identity)}</p>
+      <p class="help">${L('Sent to', 'أُرسلت إلى')}: ${x.recipients.map(r=>txt(r.name)).join(', ')}</p>${x.attachment ? `<a class="btn btn-secondary" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download evidence', 'تنزيل المرفق')}</a>` : ''}
+      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}${y.internal ? `<br><small>${L('Note for the recipients', 'ملاحظة للمستلمين')}: ${txt(y.internal)}</small>` : ''}</p>`).join('')}
+      ${x.recipients.length > 1 ? `<div class="formrow"><label class="label" for="review-assignee">${L('Who takes the lead', 'من يتولّى المتابعة')}</label><select class="select" id="review-assignee"><option value="">${L('Choose one of the recipients', 'اختر أحد المستلمين')}</option>${x.recipients.map(r=>`<option value="${txt(r.id)}" ${x.assignedTo===r.id?'selected':''}>${txt(r.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-dense" id="assign-reviewer">${L('Save', 'حفظ')}</button></div>` : ''}
+      <div class="formrow"><label class="label" for="review-status">${L('Status the submitter sees', 'الحالة التي يراها مقدّم الملاحظة')}</label><select class="select" id="review-status">${statuses.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Response to the submitter', 'الرد على مقدّم الملاحظة'),'review-public')}${area(L('Note for the other recipients only', 'ملاحظة للمستلمين الآخرين فقط'),'review-internal')}`,
+    foot:footer(L('Save update', 'حفظ التحديث')), onMount(el) {
       el.querySelector('#member-save')?.addEventListener('click',()=>run('concernUpdate',{id:x.id,status:val(el,'review-status'),publicText:val(el,'review-public'),internalText:val(el,'review-internal')}));
       el.querySelector('#assign-reviewer')?.addEventListener('click',()=>run('concernAssign',{id:x.id,reviewerId:val(el,'review-assignee')}));
     }
@@ -469,12 +483,17 @@ export function mount(host) {
   host.querySelector('[data-category-add]')?.addEventListener('click',()=>openDrawer({title:L('Add concern category', 'إضافة فئة للملاحظات'),body:field(L('Category name', 'اسم الفئة'),'category-name'),foot:footer(L('Add category', 'إضافة فئة')),
     onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('categoryManage',{name:val(el,'category-name'),active:true}));}}));
   host.querySelectorAll('[data-category-toggle]').forEach(b=>b.addEventListener('click',()=>run('categoryManage',{name:b.dataset.categoryToggle,active:b.dataset.active==='true'})));
-  host.querySelectorAll('[data-reply-message]').forEach(b=>b.addEventListener('click',()=>{
-    const x=M.content.find(x=>x.id===b.dataset.replyMessage); if(!x) return;
-    openDrawer({title:L('Reply to member', 'الرد على العضو'),body:`<p>${txt(x.body)}</p>${area(L('Reply', 'الرد'),'reply-body')}`,
-      foot:footer(L('Send reply', 'إرسال الرد')),onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('messageReply',{id:x.id,body:val(el,'reply-body')}));}});
-  }));
   host.querySelectorAll('[data-discussion]').forEach(b=>b.addEventListener('click',()=>{ const x=M.content.find(x=>x.id===b.dataset.discussion); if(x) discussionDrawer(x); }));
+  host.querySelectorAll('[data-concern-more]').forEach(b=>b.addEventListener('click',()=>{
+    const x=M.concerns.find(item=>item.id===b.dataset.concernMore); if(!x) return;
+    const options=M.concernRecipients.filter(o=>!(x.recipientIds||[]).includes(o.id));
+    openDrawer({title:x.subject,sub:L('Choose who else should receive this concern. They see it as it is now, with its history.','اختر من يجب أن يستلم هذه الملاحظة أيضاً. يرونها كما هي الآن مع سجلّها.'),
+      body:options.length?`<fieldset class="formrow"><legend class="label">${L('Also send it to','أرسلها أيضاً إلى')}</legend>${recipientRows(options,'concern-more')}</fieldset>`:blank(L('Everyone who can receive it already has it.','كل من يمكنه استلامها قد استلمها.')),
+      foot:footer(L('Send','إرسال')),onMount(el){ el.querySelectorAll('[data-suggested]').forEach(s=>{s.hidden=true;});
+        el.querySelector('#member-save').addEventListener('click',()=>{
+        const recipients=[...el.querySelectorAll('[name=concern-more]:checked')].map(i=>i.value); if(recipients.length) run('concernAddRecipients',{id:x.id,recipients});
+      });}});
+  }));
   host.querySelectorAll('[data-concern-follow]').forEach(b=>b.addEventListener('click',()=>{
     const x=M.concerns.find(item=>item.id===b.dataset.concernFollow); if(!x) return;
     openDrawer({title:x.subject,sub:x.status,body:area(L('Provide additional information','إضافة معلومات'),'concern-follow-message'),
