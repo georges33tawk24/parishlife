@@ -92,7 +92,7 @@ export function ministries() {
   const apps = M.ministryApplications.filter(a => a.status !== 'approved').slice(0, 10).map(a => `<div class="member-simple-row"><span><b>${txt(ministryName(a.groupId))}</b> · ${txt(L(...(APPLICATION_STATE[a.status] || [a.status, a.status])))}
       ${a.withdrawRequested ? ' · ' + txt(L('you asked to withdraw', 'طلبت السحب')) : ''}${a.note ? `<br><small>${txt(a.note)}</small>` : ''}</span>
       ${['pending', 'leader-approved'].includes(a.status) && !a.withdrawRequested ? `<button class="btn btn-secondary btn-dense" type="button" data-ministry-withdraw="${txt(a.id)}" data-approved="${a.status === 'leader-approved'}">${a.status === 'pending' ? L('Withdraw', 'سحب') : L('Ask to withdraw', 'طلب السحب')}</button>` : ''}</div>`).join('');
-  const joinable = M.openMinistries.filter(g => !open.has(g.id)).map(g => card(`<h2>${txt(t(g.name, g.ar || g.name))}</h2><p>${txt(t(g.cat, g.catAr || g.cat))}${g.meets ? ' · ' + txt(t(g.meets, g.meetsAr || g.meets)) : ''}</p>
+  const joinable = (M.parish.modules && !M.parish.modules.includes('ministries') ? [] : M.openMinistries).filter(g => !open.has(g.id)).map(g => card(`<h2>${txt(t(g.name, g.ar || g.name))}</h2><p>${txt(t(g.cat, g.catAr || g.cat))}${g.meets ? ' · ' + txt(t(g.meets, g.meetsAr || g.meets)) : ''}</p>
       ${g.about || g.aboutAr ? `<p>${txt(t(g.about, g.aboutAr || g.about))}</p>` : ''}
       <div class="member-actions"><button class="btn btn-primary btn-dense" type="button" data-ministry-apply="${txt(g.id)}">${L('Ask to join', 'طلب الانضمام')}</button></div>`)).join('');
   return `<div class="member-page">${title(L('My ministries', 'خدماتي'), L('Your membership is separate from a leadership position.', 'عضويتك منفصلة عن أي منصب قيادي.'))}

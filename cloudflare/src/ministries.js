@@ -8,6 +8,7 @@ import { migrate_state, validate } from './state.js';
 import { audit, sync_relationships, notify_member } from './app.js';
 import { parishUser, permsOf, clean } from './authority.js';
 import { contactValue } from './identity.js';
+import { requireModule } from './plans.js';
 
 const GROUP_PROFILE = ['about', 'aboutAr', 'duties', 'dutiesAr', 'howToJoin', 'howToJoinAr'];
 const OPEN_APPLICATION = ['pending', 'leader-approved'];
@@ -56,6 +57,7 @@ export async function ministryInquiry(c, pid, q) {
   const row = await c.first('SELECT data FROM states WHERE parish_id=?', pid);
   need(row !== null, 'Parish not found.', 404);
   const d = JSON.parse(row.data);
+  await requireModule(c, pid, 'ministries', 'ministry inquiries');
   const group = iter(K(d, 'GROUPS')).find(g => g.id === get(q, 'groupId') && (get(g, 'vis', 'public') ?? 'public') === 'public') ?? null;
   need(group !== null, 'Choose a ministry.', 404);
   const name = clean(get(q, 'name'), 120, 'Enter your name.');
@@ -146,6 +148,7 @@ export async function ministryMemberAction(c, u, pid, d, person, q) {
   const group = iter(K(d, 'GROUPS')).find(g => g.id === get(q, 'groupId')) ?? null;
   const rosterOf = gid => iter(get(get(K(d, 'GROUP_DETAIL'), gid, {}) ?? {}, 'roster', []));
   if (op === 'ministryApply') {
+    await requireModule(c, pid, 'ministries', 'ministry applications');
     need(group !== null && get(group, 'vis', 'public') !== 'confidential', 'Choose a ministry.', 404);
     need(!rosterOf(group.id).some(r => get(r, 'p') === person.id), 'You already belong to this ministry.');
     need(!(await c.first("SELECT 1 AS x FROM ministry_applications WHERE parish_id=? AND group_id=? AND person_id=? AND status IN ('pending','leader-approved')",

@@ -5,7 +5,7 @@ import { t, isAr, lang, setLang, num, fmtLong, matches } from './i18n.js';
 import { PARISH, PARISHES, RATE, TODAY, PEOPLE, PHOTOS, person, initials } from './data.js';
 import * as D from './data.js';
 import { closeOverlays, toast, openModal, openDrawer, esc, avatar, catchAll, openPopover, closeMenu } from './ui.js';
-import { S, ROLES, MOBILE_NAV, role, me, canSee, go, save, bus } from './store.js';
+import { S, ROLES, MOBILE_NAV, role, me, canSee, inRole, moduleOn, go, save, bus } from './store.js';
 import { wireActions } from './actions.js';
 import { hydrate, persist, saveFailed } from './persist.js';
 import { api, loadSession, session, currentRole } from './api.js';
@@ -110,7 +110,7 @@ const PERSONAL_ROUTES = new Set(['memberhome','myrequests','myministries','mymee
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
 const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
-export const allowed = id => id === 'account' || id === 'home' || id === 'inbox' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+export const allowed = id => id === 'account' || id === 'home' || id === 'inbox' || inRole(id) || !!(DETAIL_PARENT[id] && inRole(DETAIL_PARENT[id])) ||
   (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
@@ -171,7 +171,7 @@ function topbarHTML() {
 }
 
 function mobileHTML() {
-  const ids = MOBILE_NAV[S.role] || [];
+  const ids = (MOBILE_NAV[S.role] || []).filter(moduleOn);
   return `<nav class="mobilebar" aria-label="${t('Sections', 'الأقسام')}">${ids.map(id => {
     const rt = ROUTES[id]; if (!rt) return '';
     const on = S.route === id;
@@ -741,6 +741,16 @@ function renderView({ keepScroll = false } = {}) {
       loadMember().then(() => { M.loadingFor = null; if (MEMBER_ROUTES.has(S.route)) renderView(); })
         .catch(error => { M.loadingFor = null; toast(t('Could not load member data', 'تعذّر تحميل بيانات الأعضاء'), error.message, 'danger'); });
     }
+    return;
+  }
+  /* A module the parish's plan switched off: its records are kept, and can still be opened to finish what is waiting. */
+  if (!moduleOn(S.route) && !(S.ui.planOpen ||= {})[S.route]) {
+    host.innerHTML = `<div class="empty-state plan-off" role="status"><h1>${esc(t(rt.en, rt.ar))}</h1>
+      <p>${t('This module is not in the parish’s current plan. Nothing in it was deleted: its records, bookings and waiting requests are kept as they were.', 'هذه الوحدة ليست ضمن خطة الرعية الحالية. لم يُحذف منها شيء: سجلّاتها وحجوزاتها وطلباتها المنتظرة محفوظة كما هي.')}</p>
+      <p class="dim">${t('The parish priest can change the plan in Administration → Plans.', 'يمكن لكاهن الرعية تغيير الخطة من الإدارة ← الخطط.')}</p>
+      <button class="btn btn-secondary" data-plan-open>${t('Open the records to finish what is waiting', 'فتح السجلّات لإنهاء ما ينتظر')}</button></div>`;
+    host.querySelector('[data-plan-open]').addEventListener('click', () => { S.ui.planOpen[S.route] = true; renderView(); });
+    document.title = `${t(rt.en, rt.ar)} · ParishLife`;
     return;
   }
   host.innerHTML = rt.view(...S.params) || '';

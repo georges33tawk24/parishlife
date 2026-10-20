@@ -127,15 +127,34 @@ export const MOBILE_NAV = {
   leader:    ['dashboard','groups','calendar','messaging']
 };
 
-export const role = () => S.role === 'member'
+/* The plan module each page belongs to. A page whose module the parish has switched off leaves the rail;
+   its records are kept and can still be opened to finish what is waiting. Unlisted pages are always there. */
+export const ROUTE_MODULE = {
+  people:'office', households:'office', person:'office', household:'office', notes:'office', reports:'office',
+  sacraments:'sacraments', certificate:'sacraments', forms:'requests',
+  calendar:'events', services:'events', music:'events', registrations:'events', checkin:'events',
+  groups:'ministries', volunteers:'ministries', attendance:'ministries',
+  facilities:'resources', reservations:'reservations',
+  messaging:'communications', notices:'communications', memberhub:'communications',
+  giving:'finance', finance:'finance',
+  memberhome:'members', myrequests:'members', myministries:'ministries', mymeetings:'ministries', mycalendar:'members',
+  myattendance:'ministries', mymessages:'members', myfeed:'members', myresources:'ministries', myformation:'ministries',
+  mycommitments:'ministries', mynotes:'members', myprofile:'members', myconcerns:'members', membernotifications:'members'
+};
+export const parishModules = () => session.parishes.find(p => p.id === session.parishId)?.modules || null;
+export const moduleOn = route => { const m = ROUTE_MODULE[route], list = parishModules(); return !m || !list || list.includes(m); };
+const fullRole = () => S.role === 'member'
   ? { ...ROLES.member, nav:[...ROLES.member.nav,
       ...(M.formation.length ? [L('myformation')] : []),
       ...(M.review.length || M.complaintPermissions.includes('ManageCategories') ? [L('memberhub')] : [])] }
   : ROLES[S.role] || ROLES.user;
+export const role = () => { const r = fullRole(); return { ...r, nav: r.nav.filter(n => n[0] !== 'l' || moduleOn(n[1])) }; };
 export const me = () => person(session.user?.person_id || role().who) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
 /* A parish admin works in the office workspace, so it counts as the secretary wherever a screen asks. */
 export const is = (...roles) => roles.includes(S.role) || (S.role === 'parishadmin' && roles.includes('secretary'));
 export const canSee = id => role().nav.some(n => n[0] === 'l' && n[1] === id);
+/* Reachable by its address even when the plan has taken it out of the rail. */
+export const inRole = id => fullRole().nav.some(n => n[0] === 'l' && n[1] === id);
 export const go = h => { location.hash = h.startsWith('#') ? h : '#/' + h; };
 
 /* Set by app.js once the router exists. Actions call bus.refresh() after they

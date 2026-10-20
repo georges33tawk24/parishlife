@@ -7,6 +7,7 @@ import { S, bus, ROLES } from '../store.js';
 import { pageHead, tabBar, panel, table, esc, empty, pill, openDrawer, openModal, closeOverlays, toast, stat } from '../ui.js';
 import { icon } from '../icons.js';
 import * as C from '../components.js';
+import { plansTab, mountPlans, plansAvailable } from './plans-admin.js';
 
 const L = (en, ar) => t(en, ar);
 const state = { data: null, loading: false, error: '', loadedAt: 0 };
@@ -62,7 +63,8 @@ function tabs() {
     ...(d.clergy.length || may.clergyDioceses().length ? [['clergy', 'Clergy', 'الإكليروس', d.clergy.length]] : []),
     ['access', 'Access', 'الوصول', d.blocks.filter(b => !b.liftedAt).length],
     ...(may.accept() ? [['documents', 'Documents to accept', 'وثائق للقبول', docs.data ? docs.data.documents.filter(x => x.acceptance.status === 'awaiting').length : undefined]] : []),
-    ...(d.finance?.length ? [['finance', 'Finance', 'المالية', d.finance.length]] : [])];
+    ...(d.finance?.length ? [['finance', 'Finance', 'المالية', d.finance.length]] : []),
+    ...(plansAvailable(d) ? [['plans', 'Plans', 'الخطط']] : [])];
 }
 
 export function administration(tab = '') {
@@ -75,7 +77,7 @@ export function administration(tab = '') {
   if (!D()) return head + (state.error ? `<p class="alert alert-danger" role="alert">${esc(state.error)}</p>` : `<p role="status" class="dim" style="margin-top:18px">${L('Loading administration…', 'جارٍ تحميل الإدارة…')}</p>`);
   const items = tabs();
   if (!items.some(x => x[0] === tab)) tab = '';
-  const body = { '': overview, dioceses, parishes, staff, clergy, access, documents, finance }[tab]();
+  const body = { '': overview, dioceses, parishes, staff, clergy, access, documents, finance, plans: plansTab }[tab]();
   return head + tabBar('administration', items, tab) + `<div class="tabbody admin-console">${body}</div>`;
 }
 
@@ -496,5 +498,6 @@ administration.mount = host => {
   host.querySelector('#adm-new-clergy')?.addEventListener('click', newClergy);
   host.querySelectorAll('[data-clergy]').forEach(b => b.addEventListener('click', () => openClergy(b.dataset.clergy)));
   host.querySelector('#adm-block')?.addEventListener('click', block);
+  mountPlans(host);
   host.querySelectorAll('[data-unblock]').forEach(b => b.addEventListener('click', () => unblock(b.dataset.unblock)));
 };

@@ -1164,7 +1164,10 @@ def public_parish(c, pid):
     public['theme'] = parish_theme(parish)
     if not content.get('contact'):
         public.update(address='', addressAr='', phone='')
-    return {'parish': public, 'content': content, 'events': events, 'posts': posts, 'ministries': public_ministries(public_state)}
+    modules = parish_plan(c, pid)['modules']
+    return {'parish': public, 'content': content, 'events': events, 'posts': posts,
+            'ministries': public_ministries(public_state) if 'ministries' in modules else [],
+            'modules': modules, 'documentsOpen': documents_open(c, pid)}
 
 
 def parish_brief(row):
@@ -1264,6 +1267,7 @@ def connections_action(c, u, q):
         c.execute('UPDATE parish_links SET is_primary=1 WHERE user_id=? AND parish_id=?', (u['id'], pid))
         return {}
     if op in {'requestMembership', 'acceptInvite'}:
+        require_module(c, pid, 'members', 'membership through ParishLife')
         require(not (active and active['kind'] == 'member'), 'You are already a member of this parish.')
         require(not pending, 'Your request is already with the parish office.', 409)
         message = clean(q.get('message'), 500, 'Keep your message within 500 characters.', required=False)
@@ -1480,6 +1484,7 @@ def ministry_inquiry(c, pid, q):
     row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
     require(row is not None, 'Parish not found.', 404)
     d = json.loads(row['data'])
+    require_module(c, pid, 'ministries', 'ministry inquiries')
     group = next((g for g in d['GROUPS'] if g['id'] == q.get('groupId') and g.get('vis', 'public') == 'public'), None)
     require(group is not None, 'Choose a ministry.', 404)
     name = clean(q.get('name'), 120, 'Enter your name.')
@@ -1570,6 +1575,7 @@ def ministry_member_action(c, u, pid, d, person, q):
     require(person.get('id'), 'Your account is not linked to a person record in this parish.', 403)
     group = next((g for g in d['GROUPS'] if g['id'] == q.get('groupId')), None)
     if op == 'ministryApply':
+        require_module(c, pid, 'ministries', 'ministry applications')
         require(group is not None and group.get('vis', 'public') != 'confidential', 'Choose a ministry.', 404)
         require(not any(r.get('p') == person['id'] for r in d['GROUP_DETAIL'].get(group['id'], {}).get('roster', [])), 'You already belong to this ministry.')
         require(not c.execute(f"SELECT 1 FROM ministry_applications WHERE parish_id=? AND group_id=? AND person_id=? AND status IN {OPEN_APPLICATION}",
@@ -1766,6 +1772,7 @@ def guest_request_create(c, pid, q, outbox, base_url):
     require(not q.get('website'), 'The request could not be sent.')  # a field only robots fill in
     parish = c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone()
     require(parish is not None, 'Parish not found.', 404)
+    require(documents_open(c, pid), 'This parish does not take certificate requests on ParishLife at the moment. Please contact the parish office.', 403)
     kind = q.get('kind')
     require(kind in GUEST_KINDS, 'Choose the document you need.')
     s, r = q.get('subject') or {}, q.get('requester') or {}
@@ -2583,6 +2590,340 @@ def concern_recipients_check(c, u, pid, d, person, gids, ids, people_involved):
     return ids
 
 
+# ───────────── Plans: modules a parish uses, bundles, diocesan arrangements, change requests ─────────────
+# A plan says which modules a parish has switched on; it never grants anyone access — people still need
+# the role permissions for each part. No prices, limits or billing periods are set and nothing is charged:
+# this is configuration only. Every parish that had no plan keeps every module it had (all of them), and
+# changing a plan never deletes records, cancels bookings or drops requests that are already waiting.
+PLAN_MODULES = [
+    ('presence', 'Public presence', 'الحضور العام', 'The public parish page, published information, news and following. Always included.',
+     'صفحة الرعية العامة والمعلومات المنشورة والأخبار والمتابعة. مشمولة دائماً.'),
+    ('members', 'Members and member portal', 'الأعضاء وبوّابتهم', 'Membership requests, invitations and the member portal.', 'طلبات الانتساب والدعوات وبوّابة الأعضاء.'),
+    ('office', 'Parish office and records', 'مكتب الرعية والسجلات', 'People, households, pastoral notes and reports.', 'المؤمنون والعائلات والملاحظات الرعوية والتقارير.'),
+    ('sacraments', 'Sacraments and certificates', 'الأسرار والشهادات', 'Sacrament requests and preparation, the register and certificates.', 'طلبات الأسرار والتحضير والسجل والشهادات.'),
+    ('requests', 'Requests, forms and workflows', 'الطلبات والاستمارات والمسارات', 'General requests from members, forms and workflows.', 'الطلبات العامة من الأعضاء والاستمارات والمسارات.'),
+    ('documents', 'Document requests without an account', 'طلب الوثائق دون حساب', 'Certificates asked for from the public page, with a private tracking link.', 'شهادات تُطلب من الصفحة العامة مع رابط متابعة خاص.'),
+    ('ministries', 'Ministries and volunteers', 'الخدمات والمتطوّعون', 'Ministries, applications, attendance, volunteers and rotas.', 'الخدمات والطلبات والحضور والمتطوّعون وجداول الخدمة.'),
+    ('events', 'Calendar, services and registrations', 'الرزنامة والخدم والتسجيلات', 'The calendar, service planning, the music library, registrations and check-in.', 'الرزنامة وتخطيط الخدم ومكتبة الألحان والتسجيلات والحضور.'),
+    ('reservations', 'Reservations', 'الحجوزات', 'Hall and room booking requests and their approval.', 'طلبات حجز القاعات والغرف والموافقة عليها.'),
+    ('resources', 'Facilities and resources', 'المرافق والموارد', 'Rooms, equipment and maintenance.', 'القاعات والمعدّات والصيانة.'),
+    ('communications', 'Communications', 'التواصل', 'Notices, broadcasts, prayer requests and member communication.', 'الإعلانات والرسائل الجماعية ونوايا الصلاة والتواصل مع الأعضاء.'),
+    ('finance', 'Giving and finance', 'التقدمات والمالية', 'Gifts, counting sessions, funds and expenses.', 'التقدمات وجلسات العدّ والصناديق والمصاريف.'),
+]
+ALL_MODULES = [m[0] for m in PLAN_MODULES]
+PRESENCE_DOCUMENTS = ('undecided', 'included', 'separate')
+PLAN_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS plan_bundles(id TEXT PRIMARY KEY, name TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '', description_ar TEXT NOT NULL DEFAULT '', modules TEXT NOT NULL,
+  demo INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, created_by TEXT, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS plan_arrangements(id TEXT PRIMARY KEY, diocese TEXT NOT NULL REFERENCES dioceses(id), name TEXT NOT NULL,
+  bundle_id TEXT, modules TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, created_by TEXT, ended_at TEXT, ended_by TEXT);
+CREATE TABLE IF NOT EXISTS parish_plans(parish_id TEXT PRIMARY KEY REFERENCES parishes(id), mode TEXT NOT NULL, bundle_id TEXT,
+  modules TEXT NOT NULL, arrangement_id TEXT, updated_at TEXT NOT NULL, updated_by TEXT);
+CREATE TABLE IF NOT EXISTS plan_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id),
+  requested_by TEXT NOT NULL REFERENCES users(id), bundle_id TEXT, modules TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL, created_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, decision_note TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS plan_requests_parish ON plan_requests(parish_id,status);
+CREATE TABLE IF NOT EXISTS plan_history(id TEXT PRIMARY KEY, parish_id TEXT, arrangement_id TEXT, action TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '{}', actor TEXT, at TEXT NOT NULL);
+'''
+# Starting options. Public Presence is the option the requirements name; the other two only show how
+# bundles look and are marked as demonstration configuration, not approved packages.
+SEED_BUNDLES = [
+    ('public-presence', 'Public Presence', 'الحضور العام', 'Appearing on ParishLife with the parish’s public profile and published information, without operational modules.',
+     'الظهور على ParishLife بملف الرعية العام ومعلوماتها المنشورة، دون الوحدات التشغيلية.', ['presence'], 0),
+    ('demo-office', 'Example: parish office (demonstration)', 'مثال: مكتب الرعية (للعرض)', 'Demonstration configuration only — not an approved package.',
+     'إعداد للعرض فقط — ليس باقة معتمدة.', ['presence', 'members', 'office', 'sacraments', 'requests', 'documents', 'communications'], 1),
+    ('demo-complete', 'Example: every module (demonstration)', 'مثال: كل الوحدات (للعرض)', 'Demonstration configuration only — not an approved package.',
+     'إعداد للعرض فقط — ليس باقة معتمدة.', ALL_MODULES, 1),
+]
+
+
+def migrate_plans(c):
+    c.executescript(PLAN_SCHEMA)
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-plans'").fetchone() is None:
+        at = NOW()
+        for bid, name, name_ar, desc, desc_ar, modules, demo in SEED_BUNDLES:
+            c.execute('INSERT OR IGNORE INTO plan_bundles VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                      (bid, name, name_ar, desc, desc_ar, json.dumps(modules), demo, 'active', at, None, at))
+        c.execute("INSERT INTO schema_migrations VALUES('v2-plans',?)", (at,))
+
+
+def clean_modules(modules):
+    require(isinstance(modules, list) and all(m in ALL_MODULES for m in modules), 'Choose modules from the list.')
+    return [m for m in ALL_MODULES if m in set(modules) | {'presence'}]
+
+
+def parish_plan(c, pid):
+    """A parish's plan. Without one (every parish before plans existed), every module stays on."""
+    row = c.execute('SELECT * FROM parish_plans WHERE parish_id=?', (pid,)).fetchone()
+    if row is None: return dict(parish=pid, mode='unchosen', bundle=None, modules=list(ALL_MODULES), arrangement=None, updatedAt='')
+    return dict(parish=pid, mode=row['mode'], bundle=row['bundle_id'], modules=json.loads(row['modules']), arrangement=row['arrangement_id'],
+                updatedAt=row['updated_at'])
+
+
+def module_on(c, pid, module):
+    return module in parish_plan(c, pid)['modules']
+
+
+def presence_documents(c):
+    row = c.execute("SELECT value FROM settings WHERE scope='system' AND scope_id='' AND key='presenceDocuments'").fetchone()
+    return json.loads(row['value']) if row else 'undecided'
+
+
+def documents_open(c, pid):
+    """Whether a parish takes certificate requests from its public page. Until the operator decides whether
+    Public Presence includes them, they stay available to every parish, as they were."""
+    return module_on(c, pid, 'documents') or presence_documents(c) != 'separate'
+
+
+def require_module(c, pid, module, what):
+    require(module_on(c, pid, module), f'This parish does not offer {what} on ParishLife at the moment.', 403)
+
+
+def plan_catalog(c, all_bundles=False):
+    bundles = [dict(id=r['id'], name=r['name'], nameAr=r['name_ar'], description=r['description'], descriptionAr=r['description_ar'],
+                    modules=json.loads(r['modules']), demo=bool(r['demo']), status=r['status'])
+               for r in c.execute('SELECT * FROM plan_bundles ORDER BY demo,created_at,id') if all_bundles or r['status'] == 'active']
+    return dict(modules=[dict(id=m[0], en=m[1], ar=m[2], about=m[3], aboutAr=m[4], always=m[0] == 'presence') for m in PLAN_MODULES],
+                bundles=bundles, presenceDocuments=presence_documents(c), billing='not-live')
+
+
+def plans_public(c):
+    """The public "Plans for parishes" page: what can be switched on, the bundles on offer, and nothing about prices."""
+    return plan_catalog(c)
+
+
+def plan_pending_work(c, pid, removed):
+    """What is still waiting in modules a change would switch off. It all stays, and can still be finished."""
+    if not removed: return {}
+    d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()['data'])
+    count = lambda sql, *a: c.execute(sql, (pid, *a)).fetchone()[0]
+    out = {}
+    if 'reservations' in removed:
+        out['reservations'] = sum(1 for r in d.get('RESERVATIONS', []) if r.get('status') == 'pending') + \
+            count("SELECT COUNT(*) FROM member_requests WHERE parish_id=? AND kind='booking' AND status='submitted'")
+    if 'sacraments' in removed:
+        out['sacraments'] = sum(1 for s in d.get('SACRAMENTS', []) if s.get('status') in {'requested', 'office-reviewed', 'awaiting-signature', 'preparing', 'scheduled', 'draft', 'approved'}) + \
+            count("SELECT COUNT(*) FROM member_requests WHERE parish_id=? AND kind NOT IN ('booking','custom') AND status IN ('submitted','accepted')")
+    if 'requests' in removed:
+        out['requests'] = count("SELECT COUNT(*) FROM member_requests WHERE parish_id=? AND kind='custom' AND status IN ('submitted','accepted')") + len(d.get('PORTAL_REQUESTS', []))
+    if 'documents' in removed:
+        out['documents'] = count("SELECT COUNT(*) FROM guest_requests WHERE parish_id=? AND status IN ('submitted','accepted')")
+    if 'ministries' in removed:
+        out['ministries'] = count("SELECT COUNT(*) FROM ministry_applications WHERE parish_id=? AND status IN ('pending','leader-approved')") + \
+            count("SELECT COUNT(*) FROM ministry_inquiries WHERE parish_id=? AND status='new'")
+    if 'members' in removed:
+        out['members'] = count("SELECT COUNT(*) FROM membership_requests WHERE parish_id=? AND status='pending'")
+    return {k: v for k, v in out.items() if v}
+
+
+def plan_record(c, u, pid, arrangement, action, detail):
+    c.execute('INSERT INTO plan_history VALUES(?,?,?,?,?,?,?)', ('ph-' + secrets.token_hex(8), pid, arrangement, action, json.dumps(detail),
+                                                                u['id'] if u else None, NOW()))
+
+
+def set_parish_plan(c, u, pid, mode, bundle_id, modules, arrangement_id, action):
+    before = parish_plan(c, pid)
+    at = NOW()
+    c.execute('INSERT INTO parish_plans VALUES(?,?,?,?,?,?,?) ON CONFLICT(parish_id) DO UPDATE SET mode=excluded.mode,bundle_id=excluded.bundle_id,'
+              'modules=excluded.modules,arrangement_id=excluded.arrangement_id,updated_at=excluded.updated_at,updated_by=excluded.updated_by',
+              (pid, mode, bundle_id, json.dumps(modules), arrangement_id, at, u['id']))
+    removed = [m for m in before['modules'] if m not in modules]
+    plan_record(c, u, pid, arrangement_id, action, dict(mode=mode, bundle=bundle_id, modules=modules, removed=removed,
+                                                         added=[m for m in modules if m not in before['modules']]))
+    audit(c, u, pid, 'plan.' + action, dict(mode=mode, bundle=bundle_id, removed=removed))
+    for user_id in parish_priest_accounts(c, pid):
+        if user_id != u['id']:
+            notify_account(c, user_id, pid, 'plan', 'The parish plan changed', ', '.join(m for m in modules), 'administration/plans')
+
+
+def bundle_modules(c, bundle_id):
+    row = c.execute("SELECT modules FROM plan_bundles WHERE id=? AND status='active'", (bundle_id,)).fetchone()
+    require(row is not None, 'Choose a bundle that is on offer.')
+    return json.loads(row['modules'])
+
+
+def chosen_modules(c, q):
+    """A bundle and any modules added to it, or a list of modules alone."""
+    bundle_id = q.get('bundle') or None
+    base = bundle_modules(c, bundle_id) if bundle_id else []
+    return bundle_id, clean_modules(base + list(q.get('modules') or []))
+
+
+def diocese_sponsors(c, did):
+    out = []
+    for r in c.execute("SELECT DISTINCT user_id FROM role_assignments WHERE scope='diocese' AND scope_id=? AND status='active'", (did,)).fetchall():
+        account = c.execute('SELECT * FROM users WHERE id=?', (r['user_id'],)).fetchone()
+        if account and 'plans.sponsor' in diocese_perms(authority(c, account), did): out.append(r['user_id'])
+    return out
+
+
+def plans_view(c, u):
+    """Plan management within this account's authority: its parishes (as their priest), its dioceses'
+    arrangements and change requests (as bishop or diocesan admin), and the options on offer (super admin)."""
+    auth = authority(c, u)
+    system = system_perms(auth)
+    out = dict(plan_catalog(c, all_bundles='plans.configure' in system), configure='plans.configure' in system, parishes=[], dioceses=[])
+    for r in c.execute('SELECT * FROM parishes ORDER BY rowid').fetchall():
+        meta = json.loads(r['metadata'])
+        ctx = parish_context(c, u, r['id'], auth, r)
+        manage = bool(ctx and 'plans.manage' in ctx['perms'])
+        sponsor = 'plans.sponsor' in diocese_perms(auth, r['diocese'])
+        if not (manage or sponsor): continue
+        plan = parish_plan(c, r['id'])
+        requests = [dict(id=x['id'], bundle=x['bundle_id'], modules=json.loads(x['modules']), note=x['note'], status=x['status'],
+                         createdAt=x['created_at'], requestedBy=x['requested_by'], decidedAt=x['decided_at'] or '', decisionNote=x['decision_note'])
+                    for x in c.execute('SELECT * FROM plan_requests WHERE parish_id=? ORDER BY created_at DESC LIMIT 20', (r['id'],))]
+        history = [dict(action=x['action'], detail=json.loads(x['detail']), at=x['at']) for x in c.execute(
+            'SELECT * FROM plan_history WHERE parish_id=? ORDER BY at DESC LIMIT 10', (r['id'],))]
+        out['parishes'].append(dict(id=r['id'], name=meta.get('name', ''), ar=meta.get('ar', ''), diocese=r['diocese'], plan=plan,
+                                    manage=manage, sponsor=sponsor, requests=requests, history=history))
+    names = names_of(c, [r['requestedBy'] for p in out['parishes'] for r in p['requests']])
+    for p in out['parishes']:
+        for r in p['requests']: r['requestedByName'] = names.get(r['requestedBy'], '')
+    for d in c.execute("SELECT * FROM dioceses WHERE id<>'' ORDER BY name").fetchall():
+        if 'plans.sponsor' not in diocese_perms(auth, d['id']): continue
+        arrangements = [dict(id=a['id'], name=a['name'], bundle=a['bundle_id'], modules=json.loads(a['modules']), status=a['status'], note=a['note'],
+                             createdAt=a['created_at'], endedAt=a['ended_at'] or '',
+                             parishes=[x['parish_id'] for x in c.execute('SELECT parish_id FROM parish_plans WHERE arrangement_id=?', (a['id'],))])
+                        for a in c.execute('SELECT * FROM plan_arrangements WHERE diocese=? ORDER BY created_at DESC', (d['id'],))]
+        out['dioceses'].append(dict(id=d['id'], name=d['name'], arrangements=arrangements))
+    return out
+
+
+def plans_action(c, u, q):
+    auth = authority(c, u)
+    op, at = q.get('op'), NOW()
+    if op in {'bundleSave', 'bundleRetire', 'setPresenceDocuments'}:
+        require('plans.configure' in system_perms(auth), 'Only a super admin configures the plan options.', 403)
+        if op == 'setPresenceDocuments':
+            value = q.get('value')
+            require(value in PRESENCE_DOCUMENTS, 'Choose whether Public Presence includes document requests.')
+            c.execute("INSERT INTO settings VALUES('system','','presenceDocuments',?,?,?) ON CONFLICT(scope,scope_id,key) DO UPDATE SET "
+                      "value=excluded.value,updated_at=excluded.updated_at,updated_by=excluded.updated_by", (json.dumps(value), at, u['id']))
+            plan_record(c, u, None, None, 'presence-documents', dict(value=value))
+            return {}
+        if op == 'bundleRetire':
+            row = c.execute('SELECT * FROM plan_bundles WHERE id=?', (q.get('id'),)).fetchone()
+            require(row is not None, 'Bundle not found.', 404)
+            # Parishes on it keep their modules; it is simply no longer offered.
+            c.execute("UPDATE plan_bundles SET status=?,updated_at=? WHERE id=?", ('retired' if q.get('retire', True) else 'active', at, row['id']))
+            plan_record(c, u, None, None, 'bundle-retired' if q.get('retire', True) else 'bundle-offered', dict(bundle=row['id']))
+            return {}
+        name = clean(q.get('name'), 80, 'Give the bundle a name of up to 80 characters.')
+        name_ar = clean(q.get('nameAr'), 80, 'Keep the Arabic name within 80 characters.', required=False)
+        desc = clean(q.get('description'), 400, 'Keep the description within 400 characters.', required=False)
+        desc_ar = clean(q.get('descriptionAr'), 400, 'Keep the Arabic description within 400 characters.', required=False)
+        modules = clean_modules(q.get('modules'))
+        demo = 1 if q.get('demo') is not False else 0   # a new bundle is a demonstration until someone says it is not
+        bid = q.get('id')
+        if bid:
+            require(c.execute('SELECT 1 FROM plan_bundles WHERE id=?', (bid,)).fetchone() is not None, 'Bundle not found.', 404)
+            c.execute('UPDATE plan_bundles SET name=?,name_ar=?,description=?,description_ar=?,modules=?,demo=?,updated_at=? WHERE id=?',
+                      (name, name_ar, desc, desc_ar, json.dumps(modules), demo, at, bid))
+        else:
+            bid = 'pb-' + secrets.token_hex(6)
+            c.execute('INSERT INTO plan_bundles VALUES(?,?,?,?,?,?,?,?,?,?,?)', (bid, name, name_ar, desc, desc_ar, json.dumps(modules), demo, 'active', at, u['id'], at))
+        plan_record(c, u, None, None, 'bundle-saved', dict(bundle=bid, modules=modules, demo=bool(demo)))
+        return dict(id=bid)
+    if op in {'arrangementSave', 'arrangementEnd'}:
+        if op == 'arrangementEnd':
+            a = c.execute("SELECT * FROM plan_arrangements WHERE id=? AND status='active'", (q.get('id'),)).fetchone()
+            require(a is not None, 'Arrangement not found.', 404)
+            require('plans.sponsor' in diocese_perms(auth, a['diocese']), 'Diocesan plan permission required.', 403)
+            for p in c.execute('SELECT parish_id FROM parish_plans WHERE arrangement_id=?', (a['id'],)).fetchall():
+                plan = parish_plan(c, p['parish_id'])   # each parish keeps its modules and manages them itself from now on
+                set_parish_plan(c, u, p['parish_id'], 'independent', plan['bundle'], plan['modules'], None, 'arrangement-ended')
+            c.execute("UPDATE plan_arrangements SET status='ended',ended_at=?,ended_by=? WHERE id=?", (at, u['id'], a['id']))
+            return {}
+        did = q.get('diocese')
+        require('plans.sponsor' in diocese_perms(auth, did or ''), 'Diocesan plan permission required.', 403)
+        name = clean(q.get('name'), 120, 'Name the arrangement in up to 120 characters.')
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        bundle_id, modules = chosen_modules(c, q)
+        parishes_in = q.get('parishes')
+        diocese_parishes = {r['id'] for r in c.execute('SELECT id FROM parishes WHERE diocese=?', (did,))}
+        require(isinstance(parishes_in, list) and parishes_in and set(parishes_in) <= diocese_parishes, 'Choose parishes of this diocese.')
+        aid = q.get('id')
+        if aid:
+            a = c.execute("SELECT * FROM plan_arrangements WHERE id=? AND diocese=? AND status='active'", (aid, did)).fetchone()
+            require(a is not None, 'Arrangement not found.', 404)
+            c.execute('UPDATE plan_arrangements SET name=?,bundle_id=?,modules=?,note=? WHERE id=?', (name, bundle_id, json.dumps(modules), note, aid))
+        else:
+            aid = 'pa-' + secrets.token_hex(6)
+            c.execute('INSERT INTO plan_arrangements VALUES(?,?,?,?,?,?,?,?,?,?,?)', (aid, did, name, bundle_id, json.dumps(modules), 'active', note, at, u['id'], None, None))
+        current = {r['parish_id'] for r in c.execute('SELECT parish_id FROM parish_plans WHERE arrangement_id=?', (aid,))}
+        losing = sorted(pid for pid in set(parishes_in) if set(parish_plan(c, pid)['modules']) - set(modules))
+        require(not losing or q.get('confirmRemoval') is True, 'Confirm switching modules off for some of these parishes. Their records are kept.')
+        for pid in sorted(set(parishes_in)):
+            other = parish_plan(c, pid)['arrangement']
+            require(other in (None, aid), 'A parish can be covered by one arrangement at a time; end or edit the other one first.', 409)
+            set_parish_plan(c, u, pid, 'sponsored', bundle_id, modules, aid, 'arrangement-joined' if pid not in current else 'arrangement-updated')
+        for pid in sorted(current - set(parishes_in)):
+            plan = parish_plan(c, pid)
+            set_parish_plan(c, u, pid, 'independent', plan['bundle'], plan['modules'], None, 'arrangement-left')
+        return dict(id=aid)
+    pid = q.get('parish')
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone()
+    require(parish is not None, 'Parish not found.', 404)
+    ctx = parish_context(c, u, pid, auth, parish)
+    manage = bool(ctx and 'plans.manage' in ctx['perms'])
+    sponsor = 'plans.sponsor' in diocese_perms(auth, parish['diocese'])
+    plan = parish_plan(c, pid)
+    if op == 'preview':
+        require(manage or sponsor, 'Plan permission required.', 403)
+        _, modules = chosen_modules(c, q)
+        removed = [m for m in plan['modules'] if m not in modules]
+        return dict(modules=modules, removed=removed, added=[m for m in modules if m not in plan['modules']], pending=plan_pending_work(c, pid, removed))
+    if op == 'activate':
+        require(manage, 'The parish priest manages the parish plan.', 403)
+        require(plan['mode'] != 'sponsored', 'The diocese manages this parish’s plan. Send a change request instead.', 409)
+        bundle_id, modules = chosen_modules(c, q)
+        removed = [m for m in plan['modules'] if m not in modules]
+        require(not removed or q.get('confirmRemoval') is True, 'Confirm switching off ' + ', '.join(removed) + '. Their records are kept.')
+        set_parish_plan(c, u, pid, 'independent', bundle_id, modules, None, 'activated')
+        return dict(plan=parish_plan(c, pid))
+    if op == 'request':
+        require(manage, 'The parish priest asks for plan changes.', 403)
+        require(plan['mode'] == 'sponsored', 'This parish manages its own plan; activate the change directly.', 409)
+        require(c.execute("SELECT 1 FROM plan_requests WHERE parish_id=? AND status='pending'", (pid,)).fetchone() is None,
+                'A change request is already waiting for the diocese.', 409)
+        bundle_id, modules = chosen_modules(c, q)
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        rid = 'pr-' + secrets.token_hex(8)
+        c.execute('INSERT INTO plan_requests(id,parish_id,requested_by,bundle_id,modules,note,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                  (rid, pid, u['id'], bundle_id, json.dumps(modules), note, 'pending', at))
+        plan_record(c, u, pid, plan['arrangement'], 'change-requested', dict(request=rid, modules=modules))
+        for user_id in diocese_sponsors(c, parish['diocese']):
+            notify_account(c, user_id, pid, 'plan', 'A parish asked to change its plan', json.loads(parish['metadata']).get('name', ''), 'administration/plans')
+        return dict(id=rid)
+    if op in {'withdrawRequest', 'decideRequest'}:
+        r = c.execute("SELECT * FROM plan_requests WHERE id=? AND parish_id=? AND status='pending'", (q.get('id'), pid)).fetchone()
+        require(r is not None, 'There is no waiting request.', 404)
+        if op == 'withdrawRequest':
+            require(manage, 'The parish priest manages the parish plan.', 403)
+            c.execute("UPDATE plan_requests SET status='withdrawn',decided_by=?,decided_at=? WHERE id=?", (u['id'], at, r['id']))
+            plan_record(c, u, pid, plan['arrangement'], 'change-withdrawn', dict(request=r['id']))
+            return {}
+        require(sponsor, 'Diocesan plan permission required.', 403)
+        decision = q.get('decision')
+        require(decision in {'approve', 'decline'}, 'Approve or decline the request.')
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        c.execute('UPDATE plan_requests SET status=?,decided_by=?,decided_at=?,decision_note=? WHERE id=?',
+                  ('approved' if decision == 'approve' else 'declined', u['id'], at, note, r['id']))
+        if decision == 'approve':
+            set_parish_plan(c, u, pid, plan['mode'] if plan['mode'] == 'sponsored' else 'independent', r['bundle_id'], json.loads(r['modules']),
+                            plan['arrangement'], 'change-approved')
+        else:
+            plan_record(c, u, pid, plan['arrangement'], 'change-declined', dict(request=r['id'], note=note))
+        notify_account(c, r['requested_by'], pid, 'plan', 'Your plan change request was ' + ('approved' if decision == 'approve' else 'declined'),
+                       note, 'administration/plans')
+        return {}
+    raise Problem(400, 'Unknown action.')
+
+
 # ───────────── Organisation, roles and permissions ─────────────
 # Diocese → parishes → ministries. Access comes from role assignments scoped to the whole
 # system, one diocese or one parish; one account can hold several, in different places.
@@ -2619,15 +2960,18 @@ PERMISSIONS = [
     ('access.manage', 'parish', 'Deactivate and reactivate access', 'إيقاف الوصول وإعادته'),
     ('audit.view', 'parish', 'Audit trail', 'سجل التدقيق'),
     ('notes.pastoral', 'parish', 'Pastoral notes (author-private unless shared)', 'الملاحظات الرعوية (خاصة بكاتبها ما لم تُشارك)'),
+    ('plans.manage', 'parish', 'The parish plan and its modules', 'خطة الرعية ووحداتها'),
     ('parishes.create', 'diocese', 'Create parishes in the diocese', 'إنشاء رعايا في الأبرشية'),
     ('clergy.assign', 'diocese', 'Clergy service assignments', 'تعيينات خدمة الإكليروس'),
     ('clergy.title', 'diocese', 'Change clergy titles', 'تغيير ألقاب الإكليروس'),
     ('diocese.staff', 'diocese', 'Appoint diocesan and parish admins', 'تعيين إداريي الأبرشية والرعايا'),
     ('documents.accept', 'diocese', 'Accept documents signed by priests', 'قبول الوثائق التي وقّعها الكهنة'),
     ('diocese.policies', 'diocese', 'Diocesan policies', 'سياسات الأبرشية'),
+    ('plans.sponsor', 'diocese', 'Diocesan plan arrangements and plan change requests', 'ترتيبات الخطط الأبرشية وطلبات تغيير الخطط'),
     ('dioceses.manage', 'system', 'Create dioceses and provision bishops', 'إنشاء الأبرشيات وتجهيز حسابات المطارنة'),
     ('accounts.global', 'system', 'Deactivate accounts everywhere', 'إيقاف الحسابات في كل مكان'),
     ('messages.emergency', 'system', 'Emergency review of a reported conversation', 'المراجعة الطارئة لمحادثة مُبلَّغ عنها'),
+    ('plans.configure', 'system', 'Plan options offered to parishes', 'خيارات الخطط المعروضة على الرعايا'),
 ]
 PERMISSION_CODES = {p[0] for p in PERMISSIONS}
 PERMISSION_LEVEL = {p[0]: p[1] for p in PERMISSIONS}
@@ -2640,11 +2984,11 @@ PARISH_OFFICE = ['people.manage', 'sacraments.manage', 'requests.manage', 'event
 # them, but they are what such an administrator may hand on when appointing a parish admin.
 PARISH_ADMIN = PARISH_OFFICE + ['settings.manage', 'staff.manage', 'access.manage', 'audit.view']
 ROLE_TEMPLATES = {
-    'superadmin': ['dioceses.manage', 'accounts.global', 'messages.emergency', 'parishes.create', 'clergy.assign',
-                   'diocese.staff', 'finance.view'] + PARISH_ADMIN,
+    'superadmin': ['dioceses.manage', 'accounts.global', 'messages.emergency', 'plans.configure', 'parishes.create', 'clergy.assign',
+                   'diocese.staff', 'plans.sponsor', 'finance.view'] + PARISH_ADMIN,
     'bishop': ['parishes.create', 'clergy.assign', 'clergy.title', 'diocese.staff', 'documents.accept', 'diocese.policies',
-               'finance.view'] + PARISH_ADMIN,
-    'diocesanadmin': ['parishes.create', 'clergy.assign', 'diocese.staff'] + PARISH_ADMIN,
+               'plans.sponsor', 'finance.view'] + PARISH_ADMIN,
+    'diocesanadmin': ['parishes.create', 'clergy.assign', 'diocese.staff', 'plans.sponsor'] + PARISH_ADMIN,
     'priest': [p[0] for p in PERMISSIONS if p[1] == 'parish'],
     'parishadmin': list(PARISH_ADMIN),
     'secretary': list(PARISH_OFFICE),
@@ -2715,6 +3059,7 @@ def migrate_v2(c):
     c.executescript(MINISTRY_SCHEMA)
     c.executescript(DOCUMENT_SCHEMA)
     migrate_privacy(c)
+    migrate_plans(c)
 
 
 def legacy_access(c, u):
@@ -2894,7 +3239,7 @@ def parishes(c, u, auth=None):
         p['role'], p['roleAr'] = ROLE_TITLES[ctx['role']]
         link = next((l for l in auth['links'] if l['parish_id'] == r['id'] and l['status'] == 'active'), None)
         p.update(roleCode=ctx['role'], perms=sorted(ctx['perms']), diocese=r['diocese'], primary=bool(link and link['is_primary']),
-                 kind=link['kind'] if link else None)
+                 kind=link['kind'] if link else None, modules=parish_plan(c, r['id'])['modules'])
         state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['id'],)).fetchone() if ctx['workspace'] not in {'member', 'follower'} else None
         if state:
             data = json.loads(state['data']); p['people'] = len(data['PEOPLE']); p['households'] = len(data['HOUSEHOLDS'])
@@ -4584,7 +4929,8 @@ def member_attachment(value):
 REQUEST_LABELS = {'baptism': 'Baptism', 'communion': 'First Communion', 'confirmation': 'Confirmation',
                   'marriage': 'Marriage', 'funeral': 'Funeral', 'certificate': 'Certificate',
                   'booking': 'Booking', 'custom': 'General'}  # "General request not accepted"
-OWN_REQUESTS = {'booking', 'custom'}  # asked by the member for themselves, not for a household member
+OWN_REQUESTS = {'booking', 'custom'}
+REQUEST_MODULE = {'booking': 'reservations', 'custom': 'requests'}   # every other kind belongs to sacraments and certificates  # asked by the member for themselves, not for a household member
 BOOKABLE = {'Hall', 'Room', 'Outdoor'}
 CLOCK = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]')
 CERTIFICATE_OF = ('baptism', 'communion', 'confirmation', 'marriage')
@@ -4923,7 +5269,7 @@ def member_view(c, u, pid):
     parish_requests = [member_request_item(d, r) for r in c.execute(
         'SELECT * FROM member_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC,reference DESC', (pid, u['id']))]
     return dict(parish={**{k: d['PARISH'].get(k, '') for k in ('id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr')},
-                        'theme': parish_theme(d['PARISH'])},
+                        'theme': parish_theme(d['PARISH']), 'modules': parish_plan(c, pid)['modules']},
                 site=site,
                 person=own, groups=groups, meetings=meetings, events=visible_events, content=content,
                 notes=private['notes'], todos=private['todos'], commitments=private['commitments'], preferences=private['preferences'],
@@ -5047,6 +5393,7 @@ def member_action(c, u, pid, q):
     elif op == 'sacramentRequest':
         kind = q.get('kind')
         require(isinstance(kind, str) and kind in REQUEST_LABELS, 'Choose what you would like to request.')
+        require_module(c, pid, REQUEST_MODULE.get(kind, 'sacraments'), 'this kind of request')
         subjects = {p['id']: p for p in request_subjects(d, person)}
         require(subjects, 'Your person record is not active in this parish.', 403)
         waiting = c.execute("SELECT COUNT(*) FROM member_requests WHERE parish_id=? AND user_id=? AND status='submitted'",
@@ -5496,6 +5843,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                                             town=meta.get('town', ''), townAr=meta.get('townAr', ''))
                                            for row in c.execute('SELECT id,metadata FROM parishes')
                                            for meta in [json.loads(row['metadata'])]]})
+                if path == '/api/public/plans' and self.command == 'GET':
+                    return self.reply(200, plans_public(c))
                 if path.startswith('/api/public/parishes/') and self.command == 'GET':
                     return self.reply(200, public_parish(c, path.rsplit('/', 1)[-1]))
                 if path.startswith('/api/public/parishes/') and path.endswith('/inquiries') and self.command == 'POST':
@@ -5555,6 +5904,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if self.command == 'GET': return self.reply(200, diocese_documents(c, u))
                     if self.command == 'POST':
                         result = diocese_document_action(c, u, q); c.commit(); return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
+                if path == '/api/plans':
+                    if self.command == 'GET': return self.reply(200, plans_view(c, u))
+                    if self.command == 'POST':
+                        result = plans_action(c, u, q); c.commit(); return self.reply(200, result)
                     raise Problem(405, 'Method not allowed.')
                 if path == '/api/messages':
                     if self.command == 'GET': return self.reply(200, messages_list(c, u, {}))

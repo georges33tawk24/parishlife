@@ -10,6 +10,7 @@ import { audit, sync_relationships, notify_member } from './app.js';
 import { authority, diocesePerms, parishUser, permsOf, clean, setting } from './authority.js';
 import { contactValue, deliveryMode, sha } from './identity.js';
 import { notifyAccount } from './ministries.js';
+import { documentsOpen } from './plans.js';
 
 export const GUEST_KINDS = { baptism: 'Baptism certificate', communion: 'First Communion certificate', confirmation: 'Confirmation certificate', marriage: 'Marriage certificate' };
 const RELATIONSHIPS = ['self', 'parent', 'guardian', 'spouse', 'child', 'sibling', 'other'];
@@ -39,6 +40,7 @@ export async function guestRequestCreate(c, ctx, pid, q, outbox, baseUrl) {
   need(!truthy(get(q, 'website')), 'The request could not be sent.');  // a field only robots fill in
   const parish = await c.first('SELECT * FROM parishes WHERE id=?', pid);
   need(parish !== null, 'Parish not found.', 404);
+  need(await documentsOpen(c, pid), 'This parish does not take certificate requests on ParishLife at the moment. Please contact the parish office.', 403);
   const kind = get(q, 'kind');
   need(Object.prototype.hasOwnProperty.call(GUEST_KINDS, kind), 'Choose the document you need.');
   const s = or(get(q, 'subject'), {}), r = or(get(q, 'requester'), {});

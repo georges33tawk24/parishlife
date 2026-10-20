@@ -12,6 +12,7 @@ import { authority, parishContext, parishUser, permsOf, materializeLegacy, isBlo
 import { contactValue, deliveryMode, sha, birthDate } from './identity.js';
 import { recordPhone } from './accounts.js';
 import { publicMinistries } from './ministries.js';
+import { parishPlan, documentsOpen, requireModule } from './plans.js';
 
 const INVITATION_DAYS = 14;
 /* The person-profile fields a parishioner may fill in themselves; status, tags, households, notes and
@@ -89,7 +90,9 @@ export async function publicParish(c, pid) {
   for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) pub[key] = get(parish, key, '');
   pub.theme = parish_theme(parish);
   if (!truthy(get(content, 'contact'))) Object.assign(pub, { address: '', addressAr: '', phone: '' });
-  return { parish: pub, content, events, posts: ordered, ministries: publicMinistries(state) };
+  const { modules } = await parishPlan(c, pid);
+  return { parish: pub, content, events, posts: ordered, ministries: modules.includes('ministries') ? publicMinistries(state) : [],
+    modules, documentsOpen: await documentsOpen(c, pid) };
 }
 
 export function parishBrief(row) {
@@ -193,6 +196,7 @@ export async function connectionsAction(c, u, q) {
     return {};
   }
   if (op === 'requestMembership' || op === 'acceptInvite') {
+    await requireModule(c, pid, 'members', 'membership through ParishLife');
     need(!(active && active.kind === 'member'), 'You are already a member of this parish.');
     need(!pending, 'Your request is already with the parish office.', 409);
     const message = clean(get(q, 'message'), 500, 'Keep your message within 500 characters.', false);

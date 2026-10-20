@@ -17,6 +17,9 @@ const nameOf = x => (isAr() ? x.ar || x.lat : x.lat || x.ar) || '';
 const otherName = x => { const other = isAr() ? x.lat : x.ar; return other && other !== nameOf(x) ? other : ''; };
 const ONCE = new Set(['baptism', 'communion', 'confirmation', 'funeral']);
 const OWN = new Set(['booking', 'custom']); // asked by the member for themselves
+/* Only the kinds this parish's plan takes; requests already made stay listed whatever the plan. */
+const KIND_MODULE = { booking: 'reservations', custom: 'requests' };
+const offered = kinds => kinds.filter(k => !M.parish.modules || M.parish.modules.includes(KIND_MODULE[k.id] || 'sacraments'));
 const venueOf = id => (M.requestOptions?.venues || []).find(v => v.id === id);
 const venueName = id => { const v = venueOf(id); return v ? t(v.name, v.ar || v.name) : String(id || ''); };
 const titleOf = r => r.kind === 'certificate' ? certificateName(r.details.certificateOf)
@@ -82,8 +85,8 @@ function listPage() {
       <p>${L('Ask the parish for a sacrament, a certificate, a hall or anything else, then follow every step here.', 'اطلب من الرعية سرّاً أو شهادة أو قاعة أو أي أمر آخر، ثم تابع كل خطوة هنا.')}</p></header>
     ${linked ? '' : unlinked()}
     ${active.length ? section('active', L('Current requests', 'طلباتك الحالية'), `<div class="mr-cards">${active.map(requestCard).join('')}</div>`) : ''}
-    ${section('sacraments', L('Sacraments and certificates', 'الأسرار والشهادات'), kindGrid(REQUEST_KINDS.filter(k => !k.other)))}
-    ${section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(REQUEST_KINDS.filter(k => k.other), ' mr-kinds-2'))}
+    ${offered(REQUEST_KINDS.filter(k => !k.other)).length ? section('sacraments', L('Sacraments and certificates', 'الأسرار والشهادات'), kindGrid(offered(REQUEST_KINDS.filter(k => !k.other)))) : ''}
+    ${offered(REQUEST_KINDS.filter(k => k.other)).length ? section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(offered(REQUEST_KINDS.filter(k => k.other)), ' mr-kinds-2')) : ''}
     ${M.requests.length ? '' : howItWorks()}
     ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
     ${section('guest', L('Requests you made without an account', 'طلبات قدّمتها دون حساب'), guestRequests())}

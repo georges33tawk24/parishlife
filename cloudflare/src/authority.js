@@ -43,15 +43,18 @@ export const PERMISSIONS = [
   ['access.manage', 'parish', 'Deactivate and reactivate access', 'إيقاف الوصول وإعادته'],
   ['audit.view', 'parish', 'Audit trail', 'سجل التدقيق'],
   ['notes.pastoral', 'parish', 'Pastoral notes (author-private unless shared)', 'الملاحظات الرعوية (خاصة بكاتبها ما لم تُشارك)'],
+  ['plans.manage', 'parish', 'The parish plan and its modules', 'خطة الرعية ووحداتها'],
   ['parishes.create', 'diocese', 'Create parishes in the diocese', 'إنشاء رعايا في الأبرشية'],
   ['clergy.assign', 'diocese', 'Clergy service assignments', 'تعيينات خدمة الإكليروس'],
   ['clergy.title', 'diocese', 'Change clergy titles', 'تغيير ألقاب الإكليروس'],
   ['diocese.staff', 'diocese', 'Appoint diocesan and parish admins', 'تعيين إداريي الأبرشية والرعايا'],
   ['documents.accept', 'diocese', 'Accept documents signed by priests', 'قبول الوثائق التي وقّعها الكهنة'],
   ['diocese.policies', 'diocese', 'Diocesan policies', 'سياسات الأبرشية'],
+  ['plans.sponsor', 'diocese', 'Diocesan plan arrangements and plan change requests', 'ترتيبات الخطط الأبرشية وطلبات تغيير الخطط'],
   ['dioceses.manage', 'system', 'Create dioceses and provision bishops', 'إنشاء الأبرشيات وتجهيز حسابات المطارنة'],
   ['accounts.global', 'system', 'Deactivate accounts everywhere', 'إيقاف الحسابات في كل مكان'],
-  ['messages.emergency', 'system', 'Emergency review of a reported conversation', 'المراجعة الطارئة لمحادثة مُبلَّغ عنها']
+  ['messages.emergency', 'system', 'Emergency review of a reported conversation', 'المراجعة الطارئة لمحادثة مُبلَّغ عنها'],
+  ['plans.configure', 'system', 'Plan options offered to parishes', 'خيارات الخطط المعروضة على الرعايا']
 ];
 const PERMISSION_CODES = new Set(PERMISSIONS.map(p => p[0]));
 /* Never granted through an adjustment, and never part of a "full access" shortcut. */
@@ -66,9 +69,9 @@ const PARISH_OFFICE = ['people.manage', 'sacraments.manage', 'requests.manage', 
    them, but they are what such an administrator may hand on when appointing a parish admin. */
 const PARISH_ADMIN = [...PARISH_OFFICE, 'settings.manage', 'staff.manage', 'access.manage', 'audit.view'];
 export const ROLE_TEMPLATES = {
-  superadmin: ['dioceses.manage', 'accounts.global', 'messages.emergency', 'parishes.create', 'clergy.assign', 'diocese.staff', 'finance.view', ...PARISH_ADMIN],
-  bishop: ['parishes.create', 'clergy.assign', 'clergy.title', 'diocese.staff', 'documents.accept', 'diocese.policies', 'finance.view', ...PARISH_ADMIN],
-  diocesanadmin: ['parishes.create', 'clergy.assign', 'diocese.staff', ...PARISH_ADMIN],
+  superadmin: ['dioceses.manage', 'accounts.global', 'messages.emergency', 'plans.configure', 'parishes.create', 'clergy.assign', 'diocese.staff', 'plans.sponsor', 'finance.view', ...PARISH_ADMIN],
+  bishop: ['parishes.create', 'clergy.assign', 'clergy.title', 'diocese.staff', 'documents.accept', 'diocese.policies', 'plans.sponsor', 'finance.view', ...PARISH_ADMIN],
+  diocesanadmin: ['parishes.create', 'clergy.assign', 'diocese.staff', 'plans.sponsor', ...PARISH_ADMIN],
   priest: PERMISSIONS.filter(p => p[1] === 'parish').map(p => p[0]),
   parishadmin: [...PARISH_ADMIN],
   secretary: [...PARISH_OFFICE],
@@ -198,8 +201,34 @@ export const PRIVACY_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS concern_recipients_user ON concern_recipients(user_id)`
 ];
 
+/* The modules a parish can switch on (plans.js manages plans; parishes() reports each parish's modules).
+   key, English, Arabic, what it covers in English and Arabic. Public presence is always included. */
+export const PLAN_MODULES = [
+  ['presence', 'Public presence', 'الحضور العام', 'The public parish page, published information, news and following. Always included.', 'صفحة الرعية العامة والمعلومات المنشورة والأخبار والمتابعة. مشمولة دائماً.'],
+  ['members', 'Members and member portal', 'الأعضاء وبوّابتهم', 'Membership requests, invitations and the member portal.', 'طلبات الانتساب والدعوات وبوّابة الأعضاء.'],
+  ['office', 'Parish office and records', 'مكتب الرعية والسجلات', 'People, households, pastoral notes and reports.', 'المؤمنون والعائلات والملاحظات الرعوية والتقارير.'],
+  ['sacraments', 'Sacraments and certificates', 'الأسرار والشهادات', 'Sacrament requests and preparation, the register and certificates.', 'طلبات الأسرار والتحضير والسجل والشهادات.'],
+  ['requests', 'Requests, forms and workflows', 'الطلبات والاستمارات والمسارات', 'General requests from members, forms and workflows.', 'الطلبات العامة من الأعضاء والاستمارات والمسارات.'],
+  ['documents', 'Document requests without an account', 'طلب الوثائق دون حساب', 'Certificates asked for from the public page, with a private tracking link.', 'شهادات تُطلب من الصفحة العامة مع رابط متابعة خاص.'],
+  ['ministries', 'Ministries and volunteers', 'الخدمات والمتطوّعون', 'Ministries, applications, attendance, volunteers and rotas.', 'الخدمات والطلبات والحضور والمتطوّعون وجداول الخدمة.'],
+  ['events', 'Calendar, services and registrations', 'الرزنامة والخدم والتسجيلات', 'The calendar, service planning, the music library, registrations and check-in.', 'الرزنامة وتخطيط الخدم ومكتبة الألحان والتسجيلات والحضور.'],
+  ['reservations', 'Reservations', 'الحجوزات', 'Hall and room booking requests and their approval.', 'طلبات حجز القاعات والغرف والموافقة عليها.'],
+  ['resources', 'Facilities and resources', 'المرافق والموارد', 'Rooms, equipment and maintenance.', 'القاعات والمعدّات والصيانة.'],
+  ['communications', 'Communications', 'التواصل', 'Notices, broadcasts, prayer requests and member communication.', 'الإعلانات والرسائل الجماعية ونوايا الصلاة والتواصل مع الأعضاء.'],
+  ['finance', 'Giving and finance', 'التقدمات والمالية', 'Gifts, counting sessions, funds and expenses.', 'التقدمات وجلسات العدّ والصناديق والمصاريف.']
+];
+export const ALL_MODULES = PLAN_MODULES.map(m => m[0]);
+export const PLAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS plan_bundles(id TEXT PRIMARY KEY, name TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', description_ar TEXT NOT NULL DEFAULT '', modules TEXT NOT NULL, demo INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, created_by TEXT, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS plan_arrangements(id TEXT PRIMARY KEY, diocese TEXT NOT NULL REFERENCES dioceses(id), name TEXT NOT NULL, bundle_id TEXT, modules TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, created_by TEXT, ended_at TEXT, ended_by TEXT)`,
+  `CREATE TABLE IF NOT EXISTS parish_plans(parish_id TEXT PRIMARY KEY REFERENCES parishes(id), mode TEXT NOT NULL, bundle_id TEXT, modules TEXT NOT NULL, arrangement_id TEXT, updated_at TEXT NOT NULL, updated_by TEXT)`,
+  `CREATE TABLE IF NOT EXISTS plan_requests(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), requested_by TEXT NOT NULL REFERENCES users(id), bundle_id TEXT, modules TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, created_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, decision_note TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS plan_requests_parish ON plan_requests(parish_id,status)`,
+  `CREATE TABLE IF NOT EXISTS plan_history(id TEXT PRIMARY KEY, parish_id TEXT, arrangement_id TEXT, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '{}', actor TEXT, at TEXT NOT NULL)`
+];
+
 export async function migrateV2(db) {
-  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA, ...DOCUMENT_SCHEMA, ...PRIVACY_SCHEMA].map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA, ...DOCUMENT_SCHEMA, ...PRIVACY_SCHEMA, ...PLAN_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();
@@ -217,6 +246,8 @@ export async function migrateV2Roles(c) {
   await migrateAccounts(c);
   const { migratePrivacy } = await import('./privacy.js');
   await migratePrivacy(c);
+  const { migratePlans } = await import('./plans.js');
+  await migratePlans(c);
 }
 
 /* The access an account had before scoped roles: one role, the parishes in `assignments`. */
@@ -373,11 +404,14 @@ export async function parishes(c, u, known = {}, auth = null) {
   const stateRows = missing.length ? await c.reads(missing.map(([r]) => ['SELECT data FROM states WHERE parish_id=?', [r.id]])) : [];
   const parsed = new Map(missing.map(([r], i) => [r.id, stateRows[i][0] ? JSON.parse(stateRows[i][0].data) : null]));
   const year = localToday().slice(0, 4).replace(/^0+/, '');
+  /* a parish without a plan keeps every module (see plans.js) */
+  const plans = new Map((await c.all('SELECT parish_id,modules FROM parish_plans')).map(r => [r.parish_id, JSON.parse(r.modules)]));
   return contexts.map(([r, ctx]) => {
     const p = JSON.parse(r.metadata);
     [p.role, p.roleAr] = ROLE_TITLES[ctx.role];
     const link = auth.links.find(l => l.parish_id === r.id && l.status === 'active');
-    Object.assign(p, { roleCode: ctx.role, perms: sorted([...ctx.perms]), diocese: r.diocese, primary: Boolean(link?.is_primary), kind: link ? link.kind : null });
+    Object.assign(p, { roleCode: ctx.role, perms: sorted([...ctx.perms]), diocese: r.diocese, primary: Boolean(link?.is_primary), kind: link ? link.kind : null,
+      modules: plans.get(r.id) ?? [...ALL_MODULES] });
     const data = ctx.workspace === 'member' || ctx.workspace === 'follower' ? null
       : Object.prototype.hasOwnProperty.call(known, r.id) ? known[r.id] : parsed.get(r.id);
     if (data) {

@@ -23,6 +23,7 @@ import { publicParish, invitationInfo, connectionsView, connectionsAction, offic
 import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
 import { guestRequestCreate, guestRequestRow, guestRequestView, guestDocument, guestRequestAction, dioceseDocuments, dioceseDocumentAction } from './documents.js';
 import { messagesList, messagesAction } from './privacy.js';
+import { plansPublic, plansView, plansAction } from './plans.js';
 
 function fileReply(row, data) {
   const headers = new Headers({ 'Content-Type': row.mime, 'Content-Length': String(row.size), 'Content-Disposition': "inline; filename*=UTF-8''" + quote(row.name) });
@@ -123,6 +124,7 @@ async function storedFile(c, row) {
 async function handle(c, env, request, url, q, secureCookie) {
   const method = request.method;
   const path = url.pathname;
+  if (path === '/api/public/plans' && method === 'GET') return reply(200, await plansPublic(c));
   if (path === '/api/public/parishes' && method === 'GET') {
     const rows = await c.all('SELECT id,metadata FROM parishes');
     return reply(200, { parishes: rows.map(row => {
@@ -231,6 +233,15 @@ async function handle(c, env, request, url, q, secureCookie) {
     if (method === 'GET') return reply(200, await dioceseDocuments(c, u));
     if (method === 'POST') {
       const result = await dioceseDocumentAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/plans') {
+    if (method === 'GET') return reply(200, await plansView(c, u));
+    if (method === 'POST') {
+      const result = await plansAction(c, u, q);
       await c.commit();
       return reply(200, result);
     }

@@ -14,7 +14,8 @@ const copy = {
   stayConnected: ['Stay connected', 'ابقَ على تواصل'],
   footerIntro: ['A little closer to your parish. A little closer to one another.', 'أقرب إلى رعيتك. أقرب إلى بعضنا البعض.'],
   footer: ['Information published by participating parishes.', 'معلومات تنشرها الرعايا المشاركة.'],
-  photoCredit: ['Illustrative photography · Unsplash', 'صور توضيحية · Unsplash']
+  photoCredit: ['Illustrative photography · Unsplash', 'صور توضيحية · Unsplash'],
+  plans: ['Plans for parishes', 'الخطط للرعايا']
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
 const htmlText = value => safe(value).replace(/\n/g, '<br>');
@@ -174,7 +175,7 @@ function profile(p, d) {
   const contact = content(d, 'contact');
   return '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<span>' + safe(name) + '</span></div>' +
     '<section class="profile-hero"><div class="site-wrap"><span class="eyebrow">' + safe(meta || L('YOUR PARISH COMMUNITY', 'جماعتك الرعوية')) + '</span><h1>' + safe(name) + '</h1><p>' + htmlText(content(d, 'welcome') || L('A place of faith, a life in community.', 'مكان للإيمان وحياة في الجماعة.')) + '</p><div class="actions"><a class="button button-light" href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + icon('clock') + '</a><a class="button button-outline" href="#contact">' + L('Plan your visit', 'خطّط لزيارتك') + icon('arrow') + '</a></div></div></section>' +
-    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a><a href="#ministries">' + L('Ministries', 'الخدمات') + '</a><a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a><a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
+    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a>' + (offers(d, 'ministries') ? '<a href="#ministries">' + L('Ministries', 'الخدمات') + '</a>' : '') + (hasRequests(d) ? '<a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a>' : '') + '<a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
     '<section id="about" class="section site-wrap parish-about"><div><span class="eyebrow">' + L('ROOTED IN COMMUNITY', 'متجذّرون في الجماعة') + '</span><h2>' + L('Every parish<br>has a story.', 'لكل رعية<br>حكاية.') + '</h2></div><div class="reading-copy"><h3>' + safe(name) + '</h3><p>' + htmlText(content(d, 'history') || L('The parish’s story will appear here when it is published.', 'ستظهر حكاية الرعية هنا عندما تُنشر.')) + '</p>' + (meta ? '<span class="location-note">' + icon('pin') + safe(meta) + '</span>' : '') + '</div></section>' +
     timesSection([p]) + eventsSection([p]) + ministriesSection(p, d) + sacramentsSection(p, d, phone) +
     '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
@@ -190,6 +191,7 @@ function profile(p, d) {
 /* Public ministries: what each does, who leads it (by name only — never a leader's personal number or
    address), how to join, and a form to say you are interested. The form makes nobody a member. */
 function ministriesSection(p, d) {
+  if (!offers(d, 'ministries')) return '';
   const list = d.ministries || [];
   const text = (m, en) => pair(m, en, en + 'Ar');
   return '<section id="ministries" class="section site-wrap ministries-section"><div class="section-head"><div><span class="eyebrow">' + L('SERVE AND BELONG', 'خدمة وانتماء') + '</span><h2>' + L('Ministries', 'الخدمات') + '</h2></div><p>' +
@@ -345,14 +347,21 @@ async function trackPage(token) {
   });
 }
 
+/* What a parish's plan has switched on. Older answers without the list mean everything, as before. */
+const offers = (d, module) => !d.modules || d.modules.includes(module);
+const REQUEST_MODULE = { booking: 'reservations', custom: 'requests' };
+const offeredRequests = (d, list) => offers(d, 'members') ? list.filter(([kind]) => offers(d, REQUEST_MODULE[kind] || 'sacraments')) : [];
+const hasRequests = d => offeredRequests(d, REQUESTS).length || offeredRequests(d, OTHER_REQUESTS).length || d.documentsOpen !== false;
+
 function sacramentsSection(p, d, phone) {
-  const intro = content(d, 'sacraments');
+  if (!hasRequests(d)) return '';
+  const intro = content(d, 'sacraments'), main = offeredRequests(d, REQUESTS), other = offeredRequests(d, OTHER_REQUESTS);
   return '<section id="sacraments" class="sacraments-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('CELEBRATE WITH US', 'نحتفل معاً') + '</span><h2>' + L('Ask your parish', 'اطلب من رعيتك') + '</h2></div>' +
     '<p>' + (intro ? htmlText(intro) : L('Planning a baptism or a wedding, need a certificate, the parish hall, or something else? Send your request online and follow every step.', 'تخطّط لمعمودية أو إكليل، أو تحتاج إلى شهادة أو إلى قاعة الرعية أو إلى أمر آخر؟ أرسل طلبك عبر الإنترنت وتابع كل خطوة.')) + '</p></div>' +
-    '<h3 class="request-group">' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h3>' +
-    '<div class="request-grid">' + REQUESTS.map(requestCard(p, false)).join('') + '</div>' +
-    '<h3 class="request-group">' + L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر') + '</h3>' +
-    '<div class="request-grid request-grid-2">' + OTHER_REQUESTS.map(requestCard(p, true)).join('') + '</div>' + guestDocumentForm(p) +
+    (main.length ? '<h3 class="request-group">' + L('Sacraments &amp; certificates', 'الأسرار والشهادات') + '</h3>' +
+    '<div class="request-grid">' + main.map(requestCard(p, false)).join('') + '</div>' : '') +
+    (other.length ? '<h3 class="request-group">' + L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر') + '</h3>' +
+    '<div class="request-grid request-grid-2">' + other.map(requestCard(p, true)).join('') + '</div>' : '') + (d.documentsOpen !== false ? guestDocumentForm(p) : '') +
     '<div class="request-steps"><ol>' +
       '<li><span>01</span><b>' + L('Sign in or create an account', 'سجّل الدخول أو أنشئ حساباً') + '</b><small>' + L('With your phone number or your email. It is free.', 'برقم هاتفك أو ببريدك الإلكتروني. إنه مجاني.') + '</small></li>' +
       '<li><span>02</span><b>' + L('Send your request', 'أرسل طلبك') + '</b><small>' + L('Choose what you need. It takes two minutes.', 'اختر ما تحتاج إليه. يستغرق ذلك دقيقتين.') + '</small></li>' +
@@ -374,10 +383,12 @@ function bindEventToggle(parishes) {
 /* A private tracking link opens its request instead of the directory (the link is the requester's own; pages
    are served with a same-origin referrer policy, so it is not passed on to other sites). */
 const trackToken = params.get('track');
+const plansView = params.get('view') === 'plans';
 function render() {
   observer?.disconnect();
   updateChrome();
   if (trackToken) return trackPage(trackToken);
+  if (plansView) return plansPage();
   const p = directory.find(p => p.id === selected), d = details.get(selected);
   applySiteTheme(p && d ? d.parish.theme : null);   // a parish page wears its parish's colours; the directory stays in Forest
   if (loadFailure) {
@@ -405,13 +416,52 @@ function render() {
   }
 }
 
+/* Plans for parishes: the modules a parish can switch on and the bundles on offer. No prices are set and
+   nothing is charged yet; demonstration bundles say so. */
+let plansData = null, plansFailed = false;
+async function plansPage() {
+  applySiteTheme(null);
+  document.title = L('Plans for parishes', 'الخطط للرعايا') + ' · ParishLife';
+  if (!plansData && !plansFailed) {
+    app.innerHTML = '<div class="site-wrap error-page"><p role="status">' + L('Loading…', 'جارٍ التحميل…') + '</p></div>';
+    try { plansData = await getJSON('/api/public/plans'); } catch { plansFailed = true; }
+  }
+  if (plansFailed) {
+    app.innerHTML = '<div class="site-wrap error-page">' + empty(L('We couldn’t load the plans', 'تعذّر تحميل الخطط'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.')) + '</div>';
+    app.setAttribute('aria-busy', 'false');
+    return;
+  }
+  const d = plansData, bundles = d.bundles;
+  const docs = d.presenceDocuments === 'included' ? L('Included', 'مشمولة') : d.presenceDocuments === 'separate' ? L('Separate module', 'وحدة منفصلة') : L('Not decided yet', 'لم يُحسم بعد');
+  const cell = (b, m) => {
+    if (m.id === 'documents' && !b.modules.includes('documents') && b.modules.length === 1) return '<td>' + safe(docs) + '</td>';
+    return '<td>' + (b.modules.includes(m.id) ? '<span aria-hidden="true">✓</span><span class="sr-only">' + L('Included', 'مشمول') + '</span>' : '<span aria-hidden="true">—</span><span class="sr-only">' + L('Not included', 'غير مشمول') + '</span>') + '</td>';
+  };
+  app.innerHTML = '<section class="plans-hero"><div class="site-wrap"><span class="eyebrow">' + L('FOR PARISHES', 'للرعايا') + '</span><h1>' + L('Plans for parishes', 'الخطط للرعايا') + '</h1><p>' +
+      L('A parish switches on only the modules it needs. With Public Presence alone, it appears on ParishLife with its public profile and published information, without operational modules.', 'تفعّل الرعية الوحدات التي تحتاج إليها فقط. ومع الحضور العام وحده تظهر على ParishLife بملفها العام ومعلوماتها المنشورة، دون الوحدات التشغيلية.') + '</p>' +
+      '<p class="plans-note" role="note">' + L('No prices, limits or billing periods have been set, and nothing is charged: billing is not live yet. Bundles marked “demonstration” only show how options can be put together — they are not approved packages.', 'لم تُحدَّد أسعار ولا حدود ولا فترات فوترة، ولا يُحتسب أي مبلغ: الفوترة غير مفعّلة بعد. والباقات المعلَّمة «للعرض» تبيّن فقط كيف يمكن جمع الخيارات — وليست باقات معتمدة.') + '</p></div></section>' +
+    '<section class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('MODULES', 'الوحدات') + '</span><h2>' + L('What a parish can switch on', 'ما يمكن للرعية تفعيله') + '</h2></div><p>' + L('A module makes a part of ParishLife available to the parish. It never gives anyone access by itself: each person still needs the permissions of their role.', 'تجعل الوحدة جزءاً من ParishLife متاحاً للرعية. ولا تمنح أحداً وصولاً بذاتها: يبقى كل شخص بحاجة إلى صلاحيات دوره.') + '</p></div>' +
+      '<ul class="plan-modules">' + d.modules.map(m => '<li><b>' + safe(L(m.en, m.ar)) + '</b><span>' + safe(L(m.about, m.aboutAr)) + '</span></li>').join('') + '</ul></section>' +
+    '<section class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('BUNDLES', 'الباقات') + '</span><h2>' + L('Ways to start', 'طرق البدء') + '</h2></div><p>' + L('Any bundle can be extended with single modules.', 'يمكن توسيع أي باقة بوحدات منفردة.') + '</p></div>' +
+      '<div class="plan-bundles">' + bundles.map(b => '<article class="plan-bundle"><h3>' + safe(L(b.name, b.nameAr || b.name)) + '</h3>' + (b.demo ? '<span class="plan-demo">' + L('Demonstration configuration', 'إعداد للعرض') + '</span>' : '') + '<p>' + safe(L(b.description, b.descriptionAr || b.description)) + '</p><p class="plan-count">' + b.modules.length + ' ' + L('of', 'من') + ' ' + d.modules.length + ' ' + L('modules', 'وحدات') + '</p></article>').join('') + '</div>' +
+      '<div class="plan-table-wrap"><table class="plan-table"><caption>' + L('Modules in each bundle', 'الوحدات في كل باقة') + '</caption><thead><tr><th scope="col">' + L('Module', 'الوحدة') + '</th>' + bundles.map(b => '<th scope="col">' + safe(L(b.name, b.nameAr || b.name)) + '</th>').join('') + '</tr></thead><tbody>' +
+      d.modules.map(m => '<tr><th scope="row">' + safe(L(m.en, m.ar)) + '</th>' + bundles.map(b => cell(b, m)).join('') + '</tr>').join('') + '</tbody></table></div>' +
+      '<p class="plans-note">' + L('Whether Public Presence includes certificate requests from the public page: ', 'هل يشمل الحضور العام طلبات الشهادات من الصفحة العامة: ') + '<b>' + safe(docs) + '</b>.</p></section>' +
+    '<section class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('HOW IT WORKS', 'كيف يعمل') + '</span><h2>' + L('Who chooses', 'من يختار') + '</h2></div></div><ol class="plan-steps">' +
+      '<li><b>' + L('A parish that manages itself', 'رعية تدير نفسها') + '</b><span>' + L('Its parish priest switches a bundle or modules on directly.', 'يفعّل كاهن رعيتها باقة أو وحدات مباشرة.') + '</span></li>' +
+      '<li><b>' + L('A parish the diocese covers', 'رعية تغطّيها الأبرشية') + '</b><span>' + L('One diocesan arrangement can cover several parishes; their priests ask the diocese for changes.', 'يمكن لترتيب أبرشي واحد أن يغطّي عدة رعايا؛ ويطلب كهنتها التغييرات من الأبرشية.') + '</span></li>' +
+      '<li><b>' + L('Changing a plan', 'تغيير الخطة') + '</b><span>' + L('Switching a module off keeps every record, booking and waiting request.', 'إيقاف وحدة يُبقي كل سجلّ وحجز وطلب منتظر.') + '</span></li></ol>' +
+      '<p><a class="button" href="index.html">' + L('Sign in to ParishLife', 'تسجيل الدخول إلى ParishLife') + icon('arrow') + '</a> <a class="text-link" href="public.html#directory">' + L('Find a parish', 'ابحث عن رعية') + icon('arrow') + '</a></p></section>';
+  app.setAttribute('aria-busy', 'false');
+}
+
 async function getJSON(url) {
   const response = await fetch(url, {signal:AbortSignal.timeout(12000)});
   if (!response.ok) throw new Error('Could not load parish information');
   return response.json();
 }
 async function load() {
-  if (trackToken) return render();
+  if (trackToken || plansView) return render();
   app.setAttribute('aria-busy', 'true');
   loadFailure = false;
   try {

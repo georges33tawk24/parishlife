@@ -10,6 +10,7 @@ import { parish_theme } from './state.js';
 import { parishUser, authority } from './authority.js';
 import { PROFILE_REQUEST_FIELDS } from './connections.js';
 import { ministryMemberAction, ministryMemberView, notifyAccount, groupLeaderAccounts } from './ministries.js';
+import { parishPlan, requireModule, REQUEST_MODULE } from './plans.js';
 import { conversationStart, officeConversation, conversationPost, conversationSide, concernRecipientOptions, concernRecipientIds, namesOf } from './privacy.js';
 import { guestRequestClaim, claimedGuestRequests } from './documents.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
@@ -350,6 +351,7 @@ export async function member_view(c, u, pid) {
   const parish = {};
   for (const k of ['id', 'name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr']) parish[k] = get(K(d, 'PARISH'), k, '');
   parish.theme = parish_theme(K(d, 'PARISH'));
+  parish.modules = (await parishPlan(c, pid)).modules;
   return {
     parish, site, person: own, groups, meetings, events: visibleEvents, content,
     notes: K(priv, 'notes'), todos: K(priv, 'todos'), commitments: K(priv, 'commitments'), preferences: K(priv, 'preferences'),
@@ -486,6 +488,7 @@ export async function member_action(c, u, pid, q) {
   } else if (op === 'sacramentRequest') {
     const kind = get(q, 'kind');
     need(isStr(kind) && has(REQUEST_LABELS, kind), 'Choose what you would like to request.');
+    await requireModule(c, pid, REQUEST_MODULE[kind] ?? 'sacraments', 'this kind of request');
     const subjects = keyed(request_subjects(d, person), p => K(p, 'id'));
     need(subjects.size > 0, 'Your person record is not active in this parish.', 403);
     const year = TODAY().slice(0, 4), prefix = `WEB/${year}/`;

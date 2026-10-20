@@ -1628,3 +1628,18 @@ a.inbox-card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0}
 .pager span{font-size:13.5px;color:var(--text-2)}
 @media (max-width:640px){.inbox-card-foot small{margin-inline-start:0;flex-basis:100%}.inbox-message{max-width:none}}
+/* Plans */
+.plan-list{display:grid;gap:12px}
+.plan-card{border:1px solid var(--border);border-radius:var(--r-card);padding:16px;background:var(--surface);display:grid;gap:10px;min-width:0}
+.plan-card header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline}
+.plan-card h3{margin:0;font:600 16px/24px var(--sans)}
+.plan-chips{display:flex;flex-wrap:wrap;gap:6px}
+.plan-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:12.5px;border:1px solid var(--border)}
+.plan-chip.on{background:var(--primary-subtle);border-color:transparent}
+.plan-chip.off{color:var(--text-2);text-decoration:line-through;text-decoration-color:var(--border-strong)}
+.plan-request{border:1px dashed var(--border-strong);border-radius:10px;padding:12px;display:grid;gap:8px}
+.plan-history ul{margin:8px 0 0;padding-inline-start:18px;font-size:13px}
+.plan-matrix td{text-align:center}
+.plan-matrix th small{font-weight:400}
+.plan-off{max-width:620px;margin:48px auto;text-align:center;display:grid;gap:12px;justify-items:center}
+.plan-off h1{font:600 24px/32px var(--sans);margin:0}
