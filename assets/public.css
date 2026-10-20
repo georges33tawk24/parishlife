@@ -285,3 +285,22 @@ a.contact-row:hover{text-decoration:underline}
 .request-grid-2 .request-card:nth-child(1) .request-icon{background:#f3eee3;color:#9a885e}
 .request-grid-2 .request-card:nth-child(2) .request-icon{background:#eaf0ef;color:#607d79}
 @media(max-width:700px){.request-grid-2{grid-template-columns:1fr}}
+/* Ministries on a parish page, and the interest form */
+.ministry-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.ministry-card{display:flex;flex-direction:column;gap:12px;padding:26px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.ministry-card h3{font-size:22px;line-height:1.25}
+.ministry-card p{font-size:14px;line-height:1.6;color:var(--muted)}
+.ministry-card dl{display:grid;gap:4px;margin:0;font-size:13px}
+.ministry-card dt{font-weight:600;color:var(--ink);margin-top:6px}
+.ministry-card dd{margin:0;color:var(--muted);line-height:1.55}
+.ministry-card .text-button{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:8px}
+.ministry-form{display:grid;gap:14px;max-width:640px;margin-top:28px;padding:28px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.ministry-form label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.ministry-form input,.ministry-form select,.ministry-form textarea{min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;font-weight:400;background:#fff;color:var(--ink)}
+.ministry-form small{color:var(--muted)}
+.ministry-form .form-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ministry-form .form-status{min-height:1.4em;font-size:14px;color:var(--ink)}
+.ministry-form .hp{position:absolute;inset-inline-start:-10000px;width:1px;height:1px;overflow:hidden}
+.ministry-form .button{justify-self:start}
+@media(max-width:900px){.ministry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.ministry-grid{grid-template-columns:1fr}.ministry-form{padding:22px}.ministry-form .form-pair{grid-template-columns:1fr}}

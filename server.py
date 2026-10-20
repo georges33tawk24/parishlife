@@ -35,7 +35,7 @@ CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
 READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS',
-            'MEMBERSHIP_REQUESTS', 'INVITATIONS'}
+            'MEMBERSHIP_REQUESTS', 'INVITATIONS', 'MINISTRY_APPLICATIONS', 'MINISTRY_INQUIRIES', 'MINISTRY_DEPARTURES'}
 PROTECTED = {'status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference'}
 NOW = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
 TODAY = lambda: dt.date.today().isoformat()
@@ -1162,7 +1162,7 @@ def public_parish(c, pid):
     public['theme'] = parish_theme(parish)
     if not content.get('contact'):
         public.update(address='', addressAr='', phone='')
-    return {'parish': public, 'content': content, 'events': events, 'posts': posts}
+    return {'parish': public, 'content': content, 'events': events, 'posts': posts, 'ministries': public_ministries(public_state)}
 
 
 def parish_brief(row):
@@ -1408,6 +1408,322 @@ def sync_ministry_leaders(c, actor, pid, d, people):
                           "AND scope_id=? AND status='active' AND source IN ('ministry','migrated')", (NOW(), actor['id'], user['id'], pid))
 
 
+# ───────────── Ministries: public profiles, inquiries, applications, departures ─────────────
+# A public ministry is described on the parish page with its leader's name only; the parish's own
+# published contact details are the way in. Guests can say they are interested without an account,
+# which grants nothing. Members apply: the ministry leader approves, then the parish priest (who may
+# also approve straight away). Leaving is a private request only the parish's priests see.
+MINISTRY_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS ministry_applications(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), person_id TEXT NOT NULL, status TEXT NOT NULL, message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, leader_by TEXT, leader_at TEXT, priest_by TEXT, priest_at TEXT, decision_note TEXT NOT NULL DEFAULT '',
+  withdraw_requested_at TEXT, withdraw_note TEXT NOT NULL DEFAULT '', closed_at TEXT, closed_by TEXT);
+CREATE INDEX IF NOT EXISTS ministry_applications_group ON ministry_applications(parish_id,group_id,status);
+CREATE TABLE IF NOT EXISTS ministry_departures(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id), person_id TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
+  created_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, note TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS ministry_inquiries(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL,
+  name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', message TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
+  created_at TEXT NOT NULL, handled_by TEXT, handled_at TEXT, note TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS ministry_inquiries_parish ON ministry_inquiries(parish_id,status);
+CREATE TABLE IF NOT EXISTS account_notifications(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), parish_id TEXT,
+  kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', route TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, read_at TEXT);
+CREATE INDEX IF NOT EXISTS account_notifications_user ON account_notifications(user_id,created_at);
+'''
+GROUP_PROFILE = ('about', 'aboutAr', 'duties', 'dutiesAr', 'howToJoin', 'howToJoinAr')
+OPEN_APPLICATION = ('pending', 'leader-approved')
+INQUIRIES_PER_HOUR = 20
+
+
+def public_ministries(d):
+    """What the public page says about each public ministry. Leaders are named; their phone numbers and
+    email addresses are never published — the parish's own contact details are the way in."""
+    people = {p['id']: p for p in d['PEOPLE']}
+    out = []
+    for g in d['GROUPS']:
+        if g.get('vis', 'public') != 'public': continue
+        leader = people.get(g.get('leader'))
+        out.append(dict({k: g.get(k, '') for k in ('id', 'name', 'ar', 'cat', 'catAr', 'meets', 'meetsAr') + GROUP_PROFILE},
+                        leader=dict(name=leader.get('lat', ''), ar=leader.get('ar', '')) if leader else None))
+    return out
+
+
+def notify_account(c, user_id, pid, kind, title, body='', route=''):
+    c.execute('INSERT INTO account_notifications VALUES(?,?,?,?,?,?,?,?,?)',
+              (secrets.token_hex(12), user_id, pid, kind, title, body[:300], route, NOW(), None))
+
+
+def parish_priest_accounts(c, pid):
+    return [r['user_id'] for r in c.execute("SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND role='priest'", (pid,))]
+
+
+def bishop_accounts(c, diocese):
+    rows = c.execute("SELECT DISTINCT user_id FROM role_assignments WHERE role='bishop' AND scope='diocese' AND scope_id=? AND status='active' "
+                     "UNION SELECT u.id FROM users u WHERE u.role='bishop' AND u.diocese=? AND NOT EXISTS "
+                     "(SELECT 1 FROM role_assignments r WHERE r.user_id=u.id)", (diocese, diocese))
+    return [r[0] for r in rows]
+
+
+def group_leader_accounts(c, pid, group):
+    people = [p for p in (group.get('leader'), group.get('assistant')) if p]
+    if not people: return []
+    return [r['user_id'] for r in c.execute(f"SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND person_id IN ({','.join('?' * len(people))})",
+                                            (pid, *people))]
+
+
+def ministry_inquiry(c, pid, q):
+    """A guest says they are interested in a ministry. It reaches the office and the ministry's leaders; it
+    makes nobody a member and opens nothing private."""
+    require(not q.get('website'), 'The message could not be sent.')  # a field only robots fill in
+    row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
+    require(row is not None, 'Parish not found.', 404)
+    d = json.loads(row['data'])
+    group = next((g for g in d['GROUPS'] if g['id'] == q.get('groupId') and g.get('vis', 'public') == 'public'), None)
+    require(group is not None, 'Choose a ministry.', 404)
+    name = clean(q.get('name'), 120, 'Enter your name.')
+    email = contact_value('email', q.get('email')) if str(q.get('email') or '').strip() else ''
+    phone = contact_value('phone', q.get('phone')) if str(q.get('phone') or '').strip() else ''
+    require(email or phone, 'Give a phone number or an email address, so the parish can reply.')
+    message = clean(q.get('message'), 1000, 'Keep your message within 1000 characters.', required=False)
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)).isoformat()
+    require(c.execute('SELECT COUNT(*) FROM ministry_inquiries WHERE parish_id=? AND created_at>?', (pid, since)).fetchone()[0] < INQUIRIES_PER_HOUR,
+            'Many messages reached this parish in the last hour. Please try again later or call the parish office.', 429)
+    iid = 'mi-' + secrets.token_hex(8)
+    c.execute('INSERT INTO ministry_inquiries(id,parish_id,group_id,name,email,phone,message,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+              (iid, pid, group['id'], name, email, phone, message, 'new', NOW()))
+    for user_id in group_leader_accounts(c, pid, group):
+        notify_account(c, user_id, pid, 'ministry-inquiry', f"Someone is interested in {group['name']}", '', f"groups/{group['id']}")
+    audit(c, {'id': None}, pid, 'ministry.inquiry', {'group': group['id'], 'inquiry': iid})
+    return {}
+
+
+def ministry_scope(u, d):
+    """Which ministries' applications and inquiries this account handles: a priest and the office see every
+    ministry; a leader sees the ministries they lead or assist."""
+    if u['roleCode'] == 'priest' or 'ministries.manage' in perms_of(u): return {g['id'] for g in d['GROUPS']}
+    return {g['id'] for g in d['GROUPS'] if u['person_id'] and u['person_id'] in {g.get('leader'), g.get('assistant')}}
+
+
+def ministry_lists(c, u, pid, d):
+    """For the parish workspace. Departure requests and their reasons go to the parish's priests only."""
+    scope = ministry_scope(u, d)
+    names = {}
+    def name_of(user_id):
+        if user_id and user_id not in names:
+            row = c.execute('SELECT name FROM users WHERE id=?', (user_id,)).fetchone()
+            names[user_id] = row['name'] if row else ''
+        return names.get(user_id, '')
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)).isoformat()
+    apps = [dict(id=a['id'], groupId=a['group_id'], personId=a['person_id'], account=name_of(a['user_id']), status=a['status'],
+                 message=a['message'], createdAt=a['created_at'], leaderBy=name_of(a['leader_by']), leaderAt=a['leader_at'] or '',
+                 priestBy=name_of(a['priest_by']), priestAt=a['priest_at'] or '', note=a['decision_note'],
+                 withdrawRequested=a['withdraw_requested_at'] or '', withdrawNote=a['withdraw_note'])
+            for a in c.execute("SELECT * FROM ministry_applications WHERE parish_id=? AND (status IN ('pending','leader-approved') OR created_at>?) "
+                               "ORDER BY created_at DESC", (pid, since)) if a['group_id'] in scope]
+    inquiries = [dict(id=i['id'], groupId=i['group_id'], name=i['name'], email=i['email'], phone=i['phone'], message=i['message'],
+                      status=i['status'], createdAt=i['created_at'], note=i['note'], handledBy=name_of(i['handled_by']))
+                 for i in c.execute("SELECT * FROM ministry_inquiries WHERE parish_id=? AND (status='new' OR created_at>?) ORDER BY created_at DESC",
+                                    (pid, since)) if i['group_id'] in scope]
+    departures = [dict(id=x['id'], groupId=x['group_id'], personId=x['person_id'], reason=x['reason'], status=x['status'],
+                       createdAt=x['created_at'], decidedAt=x['decided_at'] or '', note=x['note'])
+                  for x in c.execute("SELECT * FROM ministry_departures WHERE parish_id=? AND (status='pending' OR created_at>?) ORDER BY created_at DESC",
+                                     (pid, since))] if u['roleCode'] == 'priest' else []
+    return apps, inquiries, departures
+
+
+def roster_add(d, gid, person_id, at):
+    group = next(g for g in d['GROUPS'] if g['id'] == gid)
+    detail = d['GROUP_DETAIL'].setdefault(gid, {})
+    roster = detail.setdefault('roster', [])
+    person = next((p for p in d['PEOPLE'] if p['id'] == person_id), {})
+    if not any(r.get('p') == person_id for r in roster):
+        roster.append(dict(p=person_id, role='Member', roleAr='عضو', joined=at[:4], att=0))
+        group['members'] = int(group.get('members') or 0) + 1
+        detail.setdefault('history', []).append([f"{person.get('lat', '')} joined", f"انضمّ {person.get('ar') or person.get('lat', '')}", at[:10]])
+    detail['requests'] = [r for r in detail.get('requests', []) if r.get('p') != person_id]
+
+
+def roster_remove(d, gid, person_id, at):
+    """The person leaves the roster; their membership stays in the ministry's history (without any reason)."""
+    group = next(g for g in d['GROUPS'] if g['id'] == gid)
+    detail = d['GROUP_DETAIL'].setdefault(gid, {})
+    entry = next((r for r in detail.get('roster', []) if r.get('p') == person_id), None)
+    if entry is None: return
+    detail['roster'] = [r for r in detail['roster'] if r.get('p') != person_id]
+    detail.setdefault('former', []).append(dict(entry, left=at[:10]))
+    group['members'] = max(0, int(group.get('members') or 0) - 1)
+    person = next((p for p in d['PEOPLE'] if p['id'] == person_id), {})
+    detail.setdefault('history', []).append([f"{person.get('lat', '')} is no longer a member", f"لم يعد {person.get('ar') or person.get('lat', '')} عضواً", at[:10]])
+
+
+def save_state(c, pid, d):
+    d = migrate_state(d); validate(d); sync_relationships(c, pid, d)
+    c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
+    return c.execute('SELECT revision FROM states WHERE parish_id=?', (pid,)).fetchone()['revision']
+
+
+def ministry_member_action(c, u, pid, d, person, q):
+    """The member's side: apply, withdraw an application, ask to leave."""
+    op, at = q.get('op'), NOW()
+    require(person.get('id'), 'Your account is not linked to a person record in this parish.', 403)
+    group = next((g for g in d['GROUPS'] if g['id'] == q.get('groupId')), None)
+    if op == 'ministryApply':
+        require(group is not None and group.get('vis', 'public') != 'confidential', 'Choose a ministry.', 404)
+        require(not any(r.get('p') == person['id'] for r in d['GROUP_DETAIL'].get(group['id'], {}).get('roster', [])), 'You already belong to this ministry.')
+        require(not c.execute(f"SELECT 1 FROM ministry_applications WHERE parish_id=? AND group_id=? AND person_id=? AND status IN {OPEN_APPLICATION}",
+                              (pid, group['id'], person['id'])).fetchone(), 'Your application is already being considered.', 409)
+        message = clean(q.get('message'), 500, 'Keep your message within 500 characters.', required=False)
+        aid = 'ma-' + secrets.token_hex(8)
+        c.execute('INSERT INTO ministry_applications(id,parish_id,group_id,user_id,person_id,status,message,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                  (aid, pid, group['id'], u['id'], person['id'], 'pending', message, at))
+        for user_id in group_leader_accounts(c, pid, group):
+            notify_account(c, user_id, pid, 'ministry-application', f"New application to {group['name']}", '', f"groups/{group['id']}")
+        audit(c, u, pid, 'ministry.applied', {'group': group['id'], 'application': aid})
+        return dict(id=aid)
+    if op == 'ministryWithdraw':
+        a = c.execute('SELECT * FROM ministry_applications WHERE id=? AND parish_id=? AND user_id=?', (q.get('id'), pid, u['id'])).fetchone()
+        require(a is not None and a['status'] in OPEN_APPLICATION, 'This application is no longer open.', 404)
+        if a['status'] == 'pending':   # nobody has approved it yet: it ends now
+            c.execute("UPDATE ministry_applications SET status='withdrawn',closed_at=?,closed_by=? WHERE id=?", (at, u['id'], a['id']))
+            audit(c, u, pid, 'ministry.application-withdrawn', {'application': a['id']})
+            return dict(status='withdrawn')
+        require(not a['withdraw_requested_at'], 'You have already asked to withdraw it.')
+        note = clean(q.get('note'), 500, 'Keep your note within 500 characters.', required=False)
+        c.execute('UPDATE ministry_applications SET withdraw_requested_at=?,withdraw_note=? WHERE id=?', (at, note, a['id']))
+        g = next((x for x in d['GROUPS'] if x['id'] == a['group_id']), {})
+        for user_id in set(group_leader_accounts(c, pid, g)) | set(parish_priest_accounts(c, pid)):
+            notify_account(c, user_id, pid, 'ministry-application', f"Request to withdraw an application to {g.get('name', '')}", '', f"groups/{a['group_id']}")
+        audit(c, u, pid, 'ministry.withdrawal-requested', {'application': a['id']})
+        return dict(status='withdrawal-requested')
+    if op == 'ministryLeave':
+        require(group is not None and any(r.get('p') == person['id'] for r in d['GROUP_DETAIL'].get(group['id'], {}).get('roster', [])),
+                'You do not belong to this ministry.', 404)
+        require(person['id'] not in {group.get('leader'), group.get('assistant')},
+                'You lead this ministry. Speak with the parish priest about handing it over first.')
+        require(not c.execute("SELECT 1 FROM ministry_departures WHERE parish_id=? AND group_id=? AND person_id=? AND status='pending'",
+                              (pid, group['id'], person['id'])).fetchone(), 'Your request is already with the parish priest.', 409)
+        reason = clean(q.get('reason'), 1000, 'Keep the reason within 1000 characters.', required=False)
+        did = 'md-' + secrets.token_hex(8)
+        c.execute('INSERT INTO ministry_departures(id,parish_id,group_id,user_id,person_id,reason,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                  (did, pid, group['id'], u['id'], person['id'], reason, 'pending', at))
+        for user_id in parish_priest_accounts(c, pid):   # the reason stays in the request, for the priest to read there
+            notify_account(c, user_id, pid, 'ministry-departure', 'A request to leave a ministry is waiting for you', '', f"groups/{group['id']}")
+        audit(c, u, pid, 'ministry.departure-requested', {'request': did})
+        return dict(id=did)
+    raise Problem(400, 'Unknown action.')
+
+
+def ministry_member_view(c, u, pid, d, person):
+    roster_of = lambda gid: d['GROUP_DETAIL'].get(gid, {}).get('roster', [])
+    apps = [dict(id=a['id'], groupId=a['group_id'], status=a['status'], message=a['message'], createdAt=a['created_at'],
+                 leaderAt=a['leader_at'] or '', priestAt=a['priest_at'] or '', note=a['decision_note'],
+                 withdrawRequested=a['withdraw_requested_at'] or '')
+            for a in c.execute('SELECT * FROM ministry_applications WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', (pid, u['id']))]
+    departures = [dict(id=x['id'], groupId=x['group_id'], status=x['status'], createdAt=x['created_at'], decidedAt=x['decided_at'] or '', note=x['note'])
+                  for x in c.execute('SELECT * FROM ministry_departures WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', (pid, u['id']))]
+    open_groups = [dict({k: g.get(k, '') for k in ('id', 'name', 'ar', 'cat', 'catAr', 'meets', 'meetsAr', 'vis') + GROUP_PROFILE})
+                   for g in d['GROUPS'] if g.get('vis', 'public') != 'confidential' and not any(r.get('p') == person['id'] for r in roster_of(g['id']))]
+    return dict(ministryApplications=apps, ministryDepartures=departures, openMinistries=open_groups)
+
+
+def ministry_action(c, u, pid, q):
+    """The leader's and the priest's side. A leader approves an application first; the priest approves it
+    (and may do so without waiting). Departures are the priest's alone."""
+    u = parish_user(c, u, pid)
+    row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
+    d = json.loads(row['data'])
+    op, at = q.get('op'), NOW()
+    priest = u['roleCode'] == 'priest'
+    leads = lambda gid: bool(u['person_id']) and any(g['id'] == gid and u['person_id'] in {g.get('leader'), g.get('assistant')} for g in d['GROUPS'])
+    revision = row['revision']
+    if op in {'applicationDecide', 'withdrawalDecide'}:
+        a = c.execute('SELECT * FROM ministry_applications WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(a is not None and a['status'] in OPEN_APPLICATION, 'This application is no longer open.', 404)
+        group = next((g for g in d['GROUPS'] if g['id'] == a['group_id']), None)
+        require(group is not None, 'This ministry no longer exists.', 404)
+        require(priest or (leads(group['id']) and (a['status'] == 'pending' or op == 'withdrawalDecide')),
+                'The ministry’s leader and then the parish priest decide applications.', 403)
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        if op == 'withdrawalDecide':
+            require(a['withdraw_requested_at'], 'Nobody asked to withdraw this application.')
+            if q.get('accept'):
+                c.execute("UPDATE ministry_applications SET status='withdrawn',closed_at=?,closed_by=?,decision_note=? WHERE id=?", (at, u['id'], note, a['id']))
+                notify_member(c, pid, a['user_id'], 'ministry', f"Your application to {group['name']} is withdrawn", note, 'myministries')
+            else:
+                c.execute("UPDATE ministry_applications SET withdraw_requested_at=NULL,decision_note=? WHERE id=?", (note, a['id']))
+                notify_member(c, pid, a['user_id'], 'ministry', f"Your application to {group['name']} stays open", note, 'myministries')
+            audit(c, u, pid, 'ministry.withdrawal-decided', {'application': a['id'], 'accepted': bool(q.get('accept'))})
+            return dict(revision=revision)
+        if not q.get('approve'):
+            c.execute("UPDATE ministry_applications SET status='declined',closed_at=?,closed_by=?,decision_note=? WHERE id=?", (at, u['id'], note, a['id']))
+            notify_member(c, pid, a['user_id'], 'ministry', f"Your application to {group['name']} was not accepted", note, 'myministries')
+            audit(c, u, pid, 'ministry.application-declined', {'application': a['id']})
+            return dict(revision=revision)
+        if not priest:   # the leader's approval: on to the priest
+            c.execute("UPDATE ministry_applications SET status='leader-approved',leader_by=?,leader_at=?,decision_note=? WHERE id=?", (u['id'], at, note, a['id']))
+            for user_id in parish_priest_accounts(c, pid):
+                notify_account(c, user_id, pid, 'ministry-application', f"An application to {group['name']} awaits your approval", '', f"groups/{group['id']}")
+            audit(c, u, pid, 'ministry.application-leader-approved', {'application': a['id']})
+            return dict(revision=revision)
+        require(any(p['id'] == a['person_id'] for p in d['PEOPLE']), 'The applicant’s parish record is no longer active.')
+        roster_add(d, group['id'], a['person_id'], at)
+        revision = save_state(c, pid, d)
+        c.execute("UPDATE ministry_applications SET status='approved',priest_by=?,priest_at=?,decision_note=?,closed_at=?,closed_by=? WHERE id=?",
+                  (u['id'], at, note, at, u['id'], a['id']))
+        notify_member(c, pid, a['user_id'], 'ministry', f"Welcome to {group['name']}", note, 'myministries')
+        audit(c, u, pid, 'ministry.application-approved', {'application': a['id'], 'leaderApproved': bool(a['leader_at'])})
+        return dict(revision=revision)
+    if op == 'departureDecide':
+        require(priest, 'Only the parish priest handles requests to leave a ministry.', 403)
+        x = c.execute("SELECT * FROM ministry_departures WHERE id=? AND parish_id=? AND status='pending'", (q.get('id'), pid)).fetchone()
+        require(x is not None, 'This request has already been handled.', 404)
+        group = next((g for g in d['GROUPS'] if g['id'] == x['group_id']), None)
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        if not q.get('approve'):
+            c.execute("UPDATE ministry_departures SET status='declined',decided_by=?,decided_at=?,note=? WHERE id=?", (u['id'], at, note, x['id']))
+            notify_member(c, pid, x['user_id'], 'ministry', 'Your request to leave a ministry', note or 'The parish priest would like to talk with you first.', 'myministries')
+            audit(c, u, pid, 'ministry.departure-declined', {'request': x['id']})
+            return dict(revision=revision)
+        if group is not None:
+            roster_remove(d, group['id'], x['person_id'], at)
+            revision = save_state(c, pid, d)
+        c.execute("UPDATE ministry_departures SET status='approved',decided_by=?,decided_at=?,note=? WHERE id=?", (u['id'], at, note, x['id']))
+        name = (group or {}).get('name', 'the ministry')
+        notify_member(c, pid, x['user_id'], 'ministry', f'Your membership of {name} has ended', note, 'myministries')
+        parish = c.execute('SELECT diocese FROM parishes WHERE id=?', (pid,)).fetchone()
+        person = next((p for p in d['PEOPLE'] + d['ARCHIVED'] if p['id'] == x['person_id']), {})
+        ended = f"{person.get('lat', 'A member')} is no longer a member of {name}"
+        for user_id in set(parish_priest_accounts(c, pid)) | set(bishop_accounts(c, parish['diocese'])):
+            notify_account(c, user_id, pid, 'ministry-ended', ended, '', f"groups/{x['group_id']}")
+        audit(c, u, pid, 'ministry.departure-approved', {'request': x['id']})
+        return dict(revision=revision)
+    if op == 'inquiryUpdate':
+        i = c.execute('SELECT * FROM ministry_inquiries WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(i is not None, 'Message not found.', 404)
+        require(i['group_id'] in ministry_scope(u, d), 'This ministry is outside your responsibility.', 403)
+        require(q.get('status') in {'new', 'answered', 'closed'}, 'Choose a status.')
+        note = clean(q.get('note'), 500, 'Keep the note within 500 characters.', required=False)
+        c.execute('UPDATE ministry_inquiries SET status=?,note=?,handled_by=?,handled_at=? WHERE id=?', (q['status'], note, u['id'], at, i['id']))
+        audit(c, u, pid, 'ministry.inquiry-updated', {'inquiry': i['id'], 'status': q['status']})
+        return dict(revision=revision)
+    raise Problem(400, 'Unknown action.')
+
+
+def account_notifications_view(c, u):
+    rows = c.execute('SELECT * FROM account_notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50', (u['id'],)).fetchall()
+    return dict(notifications=[dict(id=r['id'], parish=r['parish_id'], kind=r['kind'], title=r['title'], body=r['body'], route=r['route'],
+                                    at=r['created_at'], read=bool(r['read_at'])) for r in rows])
+
+
+def account_notifications_action(c, u, q):
+    if q.get('op') == 'readAll':
+        c.execute('UPDATE account_notifications SET read_at=? WHERE user_id=? AND read_at IS NULL', (NOW(), u['id']))
+    elif q.get('op') == 'read':
+        c.execute('UPDATE account_notifications SET read_at=? WHERE user_id=? AND id=? AND read_at IS NULL', (NOW(), u['id'], q.get('id')))
+    else: raise Problem(400, 'Unknown action.')
+    return {}
+
+
 # ───────────── Organisation, roles and permissions ─────────────
 # Diocese → parishes → ministries. Access comes from role assignments scoped to the whole
 # system, one diocese or one parish; one account can hold several, in different places.
@@ -1536,6 +1852,7 @@ def migrate_v2(c):
         c.execute("INSERT INTO schema_migrations VALUES('v2-roles',?)", (NOW(),))
     migrate_accounts(c)
     c.executescript(CONNECTIONS_SCHEMA)
+    c.executescript(MINISTRY_SCHEMA)
 
 
 def legacy_access(c, u):
@@ -2218,6 +2535,7 @@ def visible(c, u, pid, d):
             "SELECT u.username,a.role,a.person_id FROM parish_accounts a JOIN users u ON u.id=a.user_id "
             "WHERE a.parish_id=? AND a.person_id IS NOT NULL ORDER BY u.username,CASE a.role WHEN 'member' THEN 0 ELSE 1 END", (pid,))}
     d['MEMBERSHIP_REQUESTS'], d['INVITATIONS'] = office_connections(c, pid) if 'people.manage' in perms else ([], [])
+    d['MINISTRY_APPLICATIONS'], d['MINISTRY_INQUIRIES'], d['MINISTRY_DEPARTURES'] = ministry_lists(c, u, pid, d)
     if 'notes.pastoral' not in perms:
         d['NOTES'] = []
     if 'settings.manage' not in perms:
@@ -2555,6 +2873,10 @@ def save_patch(c, u, pid, payload):
         if key == 'GROUP_DETAIL' and u['role'] == 'leader':
             permitted = {g['id'] for g in old['GROUPS'] if g.get('leader') == u['person_id'] or g.get('assistant') == u['person_id']}
             require(set(value) <= permitted, 'Group is outside your ministry.', 403)
+            for gid, detail in value.items():   # new members join with the parish priest's approval
+                before = {r.get('p') for r in old['GROUP_DETAIL'].get(gid, {}).get('roster', [])}
+                require({r.get('p') for r in detail.get('roster', [])} <= before,
+                        'New members join with the parish priest’s approval. Send the request on to the priest instead.', 403)
             d[key].update(value)
         elif key == 'CHECKIN' and u['role'] == 'leader':
             scoped = visible(c, u, pid, old)
@@ -3734,7 +4056,8 @@ def member_view(c, u, pid):
                 concerns=concerns, review=review, leaderConcerns=leader_concerns, complaintPermissions=sorted(perms), profileRequests=requests,
                 volunteerReview=volunteer_review, profileReview=profile_review, managedGroups=sorted(managed_groups),
                 formation=formation, reviewers=reviewers, categories=categories, notifications=notifications,
-                requests=parish_requests, requestOptions=member_request_options(d, person))
+                requests=parish_requests, requestOptions=member_request_options(d, person),
+                **(ministry_member_view(c, u, pid, d, person) if person.get('id') else dict(ministryApplications=[], ministryDepartures=[], openMinistries=[])))
 
 
 def member_action(c, u, pid, q):
@@ -3743,6 +4066,8 @@ def member_action(c, u, pid, q):
     private = member_private(c, u, pid)
     op = q.get('op')
     group_id = q.get('groupId')
+    if op in {'ministryApply', 'ministryWithdraw', 'ministryLeave'}:
+        return ministry_member_action(c, u, pid, d, person, q)
     if op == 'note':
         note_id = q.get('id')
         if q.get('delete'):
@@ -4291,6 +4616,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                            for meta in [json.loads(row['metadata'])]]})
                 if path.startswith('/api/public/parishes/') and self.command == 'GET':
                     return self.reply(200, public_parish(c, path.rsplit('/', 1)[-1]))
+                if path.startswith('/api/public/parishes/') and path.endswith('/inquiries') and self.command == 'POST':
+                    result = ministry_inquiry(c, path.split('/')[4], q); c.commit(); return self.reply(200, result)
                 if path == '/api/invitations/info' and self.command == 'POST':
                     return self.reply(200, invitation_info(c, q.get('token')))
                 if path == '/api/auth/config' and self.command == 'GET':
@@ -4332,6 +4659,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         outbox = []; result = account_action(c, u, session, q, outbox); c.commit()
                         if outbox: send_outbox(c, outbox); result['delivery'] = outbox[-1]['status']
                         return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
+                if path == '/api/notifications':
+                    if self.command == 'GET': return self.reply(200, account_notifications_view(c, u))
+                    if self.command == 'POST':
+                        result = account_notifications_action(c, u, q); c.commit(); return self.reply(200, result)
                     raise Problem(405, 'Method not allowed.')
                 if path == '/api/connections':
                     if self.command == 'GET': return self.reply(200, connections_view(c, u))
@@ -4416,6 +4748,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply(200, {'rows': xlsx_preview(q.get('data'))})
                 if endpoint == 'oversight' and self.command == 'GET':
                     return self.reply(200, oversight(c, u, pid))
+                if endpoint == 'ministries' and self.command == 'POST':
+                    result = ministry_action(c, u, pid, q); c.commit(); return self.reply(200, result)
                 if endpoint == 'connections' and self.command == 'POST':
                     outbox = []
                     base = os.environ.get('PARISHLIFE_PUBLIC_URL', '').rstrip('/') or \

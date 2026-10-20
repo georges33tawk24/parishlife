@@ -5,6 +5,7 @@ import { is, S, go, bus } from '../store.js';
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, amount,
          searchField, openDrawer, openModal, closeOverlays, toast, stat, avatar, tabBar, openMenu } from '../ui.js';
 import * as C from '../components.js';
+import * as MO from './ministry-office.js';
 import * as CR from '../crud.js';
 import { VERBS, download } from '../actions.js';
 import { parishAPI, session } from '../api.js';
@@ -728,10 +729,11 @@ function groupDetail(id, tab) {
         ${panel(L('Leadership', 'المسؤوليات'), d.roles.map(([p, en, ar]) => `<div class="listrow">
           ${who(person(p))}<span class="grow"></span><span class="chip">${esc(L(en, ar))}</span></div>`).join(''), { tight: true })}
         ${panel(L('Join requests', 'طلبات الانتساب'), d.requests.length ? d.requests.map(r => `<div class="listrow">
-            ${who(person(r.p))}<span class="grow"><small class="mono">${fmtDate(r.at)}</small></span>
-            <button class="btn btn-secondary btn-dense" data-act="join-decline:${r.p}">${L('Decline', 'رفض')}</button>
-            <button class="btn btn-primary btn-dense" data-act="join-approve:${r.p}">${L('Approve', 'قبول')}</button></div>`).join('')
+            ${who(person(r.p))}<span class="grow"><small class="mono">${fmtDate(r.at)}</small> ${MO.joinRequestStage(r)}</span>
+            ${MO.canApproveJoin(g, r) ? `<button class="btn btn-secondary btn-dense" data-act="join-decline:${r.p}">${L('Decline', 'رفض')}</button>
+            <button class="btn btn-primary btn-dense" data-act="join-approve:${r.p}">${MO.isLeaderStage(g) ? L('Approve and send to the priest', 'موافقة وإرسال إلى الكاهن') : L('Approve', 'قبول')}</button>` : ''}</div>`).join('')
           : empty('groups', L('No requests', 'لا طلبات'), L('Nobody is waiting.', 'لا أحد ينتظر.')), { tight: true })}
+        ${MO.ministryPanels(g)}
       </div>
       <div class="sidecol">
         ${!is('leader')?panel(L('Leadership handover','تسليم المسؤولية'),`<p class="t-caption dim">${L('Transfer the group role and open tasks to an existing member. The person’s history stays intact.','انقل مسؤولية المجموعة ومهامها المفتوحة إلى عضو موجود. يبقى تاريخ الشخص محفوظاً.')}</p>
@@ -1047,7 +1049,7 @@ function attendanceImport(gid) {
 }
 
 groups.mount = host => {
-  C.wire(host); wireTables(host);
+  C.wire(host); wireTables(host); MO.wireMinistryPanels(host);
   const bindFilter=(selector,key)=>{const el=host.querySelector(selector);if(!el)return;el.value=S.ui[key]||el.value;el.addEventListener(el.tagName==='INPUT'?'input':'change',()=>{const caret=el.tagName==='INPUT'?el.selectionStart:0;S.ui[key]=el.value;bus.refresh();if(el.tagName==='INPUT'){const next=host.querySelector(selector);next?.focus();next?.setSelectionRange(caret,caret);}});};
   bindFilter('[data-roster-search]','rosterQuery');bindFilter('[data-roster-filter]','rosterFilter');
   bindFilter('[data-resource-search]','resourceQuery');bindFilter('[data-resource-filter]','resourceFilter');

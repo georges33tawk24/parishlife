@@ -686,6 +686,10 @@ export const ACCOUNTS = {};
 /* Membership requests from accounts, and invitations the office sent (read-only here; the server keeps them). */
 export const MEMBERSHIP_REQUESTS = [];
 export const INVITATIONS = [];
+/* Ministry applications and guest inquiries this account handles, and (for the parish priest only) requests to leave. */
+export const MINISTRY_APPLICATIONS = [];
+export const MINISTRY_INQUIRIES = [];
+export const MINISTRY_DEPARTURES = [];
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

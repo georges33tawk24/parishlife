@@ -722,8 +722,15 @@ export function memberAdd(gid = curGroup()) {
       el.querySelector('#group-members-add').addEventListener('click',async()=>{
         const selected=[...el.querySelectorAll('[data-member-choice]:checked')].map(c=>c.value);
         if(!selected.length)return toast(L('Select at least one person','اختر شخصاً واحداً على الأقل'),'','warning');
+        /* A leader proposes new members; the parish priest approves them. The office records memberships directly. */
+        if(S.role==='leader'){
+          const at=new Date().toISOString().slice(0,10);
+          for(const pid of selected)if(!d.requests.some(r=>r.p===pid))d.requests.push({p:pid,at,leaderApproved:{by:me()?.lat||'',at}});
+          if(!await persist())return;closeOverlays();refresh();
+          return ok(L('Sent to the parish priest','أُرسل إلى كاهن الرعية'),L('They join once the priest approves.','ينضمّون بعد موافقة الكاهن.'));
+        }
         for(const pid of selected)if(!d.roster.some(r=>r.p===pid))d.roster.push({p:pid,role:'Member',roleAr:'عضو',joined:new Date().getFullYear().toString(),att:0});
-        const g=D.group(gid);if(g&&S.role!=='leader')g.members=(Number(g.members)||0)+selected.length;
+        const g=D.group(gid);if(g)g.members=(Number(g.members)||0)+selected.length;
         if(!await persist())return;closeOverlays();refresh();ok(L('Members added','أُضيف الأعضاء'),`${selected.length}`);
       });
     }
@@ -1663,6 +1670,7 @@ export function memberMenu(btn, pid) {
       if(pid===g?.leader)return toast(L('Hand over leadership first','سلّم المسؤولية أولاً'),'','warning');
       if(pid===g?.assistant&&is('leader'))return toast(L('Ask the parish office to change the assistant','اطلب من مكتب الرعية تغيير المساعد'),'','warning');
       d.roster.splice(i, 1);if(g&&S.role!=='leader')g.members=Math.max(0,Number(g.members||0)-1);
+      (d.former ||= []).push({ ...r, left: new Date().toISOString().slice(0, 10) });   // membership history stays with the ministry
       if(pid===g?.assistant){g.assistant=null;d.assistant=null;d.roles=d.roles.filter(([personId])=>personId!==pid);}
       if(!await persist())return;refresh();ok(L('Removed from the group', 'أُزيل من المجموعة'),nameOf(D.person(pid)));
     } }

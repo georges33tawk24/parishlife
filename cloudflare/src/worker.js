@@ -20,6 +20,7 @@ import {
 } from './identity.js';
 import { xlsx_preview } from './xlsx.js';
 import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction } from './connections.js';
+import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
 
 const HEADERS = {
   'Cache-Control': 'no-store',
@@ -122,6 +123,11 @@ async function handle(c, env, request, url, q, secureCookie) {
     }) });
   }
   if (path.startsWith('/api/public/parishes/') && method === 'GET') return reply(200, await publicParish(c, path.slice(path.lastIndexOf('/') + 1)));
+  if (path.startsWith('/api/public/parishes/') && path.endsWith('/inquiries') && method === 'POST') {
+    const result = await ministryInquiry(c, path.split('/')[4], q);
+    await c.commit();
+    return reply(200, result);
+  }
   if (path === '/api/invitations/info' && method === 'POST') return reply(200, await invitationInfo(c, get(q, 'token')));
   const ctx = deliveryContext(env, url);
   /* Codes are handed to the delivery service only after the commit, so a retried request never sends twice. */
@@ -192,6 +198,15 @@ async function handle(c, env, request, url, q, secureCookie) {
         await sendOutbox(ctx, outbox);
         result.delivery = outbox[outbox.length - 1].status;
       }
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/notifications') {
+    if (method === 'GET') return reply(200, await accountNotificationsView(c, u));
+    if (method === 'POST') {
+      const result = accountNotificationsAction(c, u, q);
+      await c.commit();
       return reply(200, result);
     }
     throw new Problem(405, 'Method not allowed.');
@@ -310,6 +325,11 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { rows: xlsx_preview(get(q, 'data')) });
   }
   if (endpoint === 'oversight' && method === 'GET') return reply(200, await oversight(c, u, pid));
+  if (endpoint === 'ministries' && method === 'POST') {
+    const result = await ministryAction(c, u, pid, q);
+    await c.commit();
+    return reply(200, result);
+  }
   if (endpoint === 'connections' && method === 'POST') {
     const outbox = [], base = String(env.PARISHLIFE_PUBLIC_URL || '').replace(/\/+$/, '') || url.origin;
     const result = await officeConnectionAction(c, ctx, u, pid, q, outbox, base);

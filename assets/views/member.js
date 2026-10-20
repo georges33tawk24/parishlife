@@ -71,9 +71,57 @@ export function home() {
     </div><div class="member-actions">${link('myrequests', L('My requests', 'طلباتي'))}${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
 }
 
+/* Ministries the member belongs to, applications to others, and a private request to leave one.
+   Joining needs the ministry leader's and then the parish priest's approval; a request to leave is read
+   by the parish's priests only. */
+const APPLICATION_STATE = {
+  pending: ['Waiting for the leader', 'بانتظار المسؤول'], 'leader-approved': ['Leader approved · waiting for the priest', 'وافق المسؤول · بانتظار الكاهن'],
+  approved: ['Approved', 'مقبول'], declined: ['Not accepted', 'غير مقبول'], withdrawn: ['Withdrawn', 'مسحوب']
+};
+const ministryName = id => { const g = M.groups.find(x => x.id === id) || M.openMinistries.find(x => x.id === id); return g ? t(g.name, g.ar || g.name) : ''; };
 export function ministries() {
+  const leaving = new Set(M.ministryDepartures.filter(x => x.status === 'pending').map(x => x.groupId));
+  const open = new Set(M.ministryApplications.filter(a => ['pending', 'leader-approved'].includes(a.status)).map(a => a.groupId));
+  const mine = M.groups.map(g => {
+    const leads = ['Leader', 'Assistant'].includes(g.position);
+    return card(`<h2>${txt(g.name)}</h2><p>${txt(g.category)}</p><p>${status(g.position || L('Member', 'عضو'))}${leaving.has(g.id) ? ' ' + status(L('Request to leave sent', 'أُرسل طلب المغادرة')) : ''}</p>
+      <div class="member-actions">${link('mymeetings', L('Meetings', 'الاجتماعات'))}${link('myresources', L('Resources', 'الموارد'))}
+      ${!leads && !leaving.has(g.id) && currentRole() === 'member' ? `<button class="btn btn-ghost btn-dense" type="button" data-ministry-leave="${txt(g.id)}">${L('Leave this ministry', 'مغادرة هذه الخدمة')}</button>` : ''}</div>`);
+  }).join('');
+  const apps = M.ministryApplications.filter(a => a.status !== 'approved').slice(0, 10).map(a => `<div class="member-simple-row"><span><b>${txt(ministryName(a.groupId))}</b> · ${txt(L(...(APPLICATION_STATE[a.status] || [a.status, a.status])))}
+      ${a.withdrawRequested ? ' · ' + txt(L('you asked to withdraw', 'طلبت السحب')) : ''}${a.note ? `<br><small>${txt(a.note)}</small>` : ''}</span>
+      ${['pending', 'leader-approved'].includes(a.status) && !a.withdrawRequested ? `<button class="btn btn-secondary btn-dense" type="button" data-ministry-withdraw="${txt(a.id)}" data-approved="${a.status === 'leader-approved'}">${a.status === 'pending' ? L('Withdraw', 'سحب') : L('Ask to withdraw', 'طلب السحب')}</button>` : ''}</div>`).join('');
+  const joinable = M.openMinistries.filter(g => !open.has(g.id)).map(g => card(`<h2>${txt(t(g.name, g.ar || g.name))}</h2><p>${txt(t(g.cat, g.catAr || g.cat))}${g.meets ? ' · ' + txt(t(g.meets, g.meetsAr || g.meets)) : ''}</p>
+      ${g.about || g.aboutAr ? `<p>${txt(t(g.about, g.aboutAr || g.about))}</p>` : ''}
+      <div class="member-actions"><button class="btn btn-primary btn-dense" type="button" data-ministry-apply="${txt(g.id)}">${L('Ask to join', 'طلب الانضمام')}</button></div>`)).join('');
   return `<div class="member-page">${title(L('My ministries', 'خدماتي'), L('Your membership is separate from a leadership position.', 'عضويتك منفصلة عن أي منصب قيادي.'))}
-    <div class="member-grid">${M.groups.map(g => card(`<h2>${txt(g.name)}</h2><p>${txt(g.category)}</p><p>${status(g.position || L('Member', 'عضو'))}</p><div class="member-actions">${link('mymeetings', L('Meetings', 'الاجتماعات'))}${link('myresources', L('Resources', 'الموارد'))}</div>`)).join('') || blank(L('No ministry membership is recorded for your account.', 'لا توجد عضوية خدمة مسجّلة لحسابك.'))}</div></div>`;
+    <div class="member-grid">${mine || blank(L('No ministry membership is recorded for your account.', 'لا توجد عضوية خدمة مسجّلة لحسابك.'))}</div>
+    ${apps ? card(`<h2>${L('Your applications', 'طلباتك')}</h2>${apps}<p><small>${L('The ministry’s leader approves first, then the parish priest. Before anyone approves, you can withdraw at once; afterwards, withdrawing is a request.',
+      'يوافق مسؤول الخدمة أولاً ثم كاهن الرعية. قبل أي موافقة يمكنك السحب فوراً؛ وبعدها يصبح السحب طلباً.')}</small></p>`) : ''}
+    ${currentRole() === 'member' && joinable ? `<h2 class="member-subhead">${L('Join a ministry', 'انضمّ إلى خدمة')}</h2><div class="member-grid">${joinable}</div>` : ''}</div>`;
+}
+function ministryDialog(kind, id, approved = false) {
+  const leave = kind === 'leave', withdraw = kind === 'withdraw';
+  openModal({
+    title: leave ? L(`Leave ${ministryName(id)}?`, `مغادرة ${ministryName(id)}؟`) : withdraw ? (approved ? L('Ask to withdraw your application?', 'طلب سحب طلبك؟') : L('Withdraw your application?', 'سحب طلبك؟'))
+      : L(`Ask to join ${ministryName(id)}`, `طلب الانضمام إلى ${ministryName(id)}`),
+    body: `<form id="mform" class="stack" novalidate><p>${leave ? L('Your request goes to the parish priest only. The ministry leader does not see it or your reason; they will only see that the roster changed once the priest approves.',
+        'يصل طلبك إلى كاهن الرعية وحده. لا يرى مسؤول الخدمة الطلب ولا السبب؛ ولا يرى إلا تغيّر اللائحة بعد موافقة الكاهن.')
+      : withdraw ? (approved ? L('Your application was already approved by the leader, so withdrawing it is a request the leader or the priest confirms.', 'وافق المسؤول على طلبك، لذلك يصبح السحب طلباً يؤكّده المسؤول أو الكاهن.')
+        : L('Nobody has approved it yet, so it ends now.', 'لم يوافق عليه أحد بعد، لذلك ينتهي الآن.'))
+      : L('The ministry’s leader looks at it first, then the parish priest.', 'ينظر فيه مسؤول الخدمة أولاً ثم كاهن الرعية.')}</p>
+      ${withdraw && !approved ? '' : `<div class="formrow"><label class="label" for="m-text">${leave ? L('Reason (optional, seen by the priest only)', 'السبب (اختياري، يراه الكاهن وحده)') : L('Message (optional)', 'رسالة (اختيارية)')}</label>
+        <textarea class="textarea" id="m-text" rows="4" maxlength="${leave ? 1000 : 500}"></textarea></div>`}</form>`,
+    foot: footer(leave ? L('Send to the priest', 'إرسال إلى الكاهن') : withdraw ? (approved ? L('Send request', 'إرسال الطلب') : L('Withdraw', 'سحب')) : L('Send application', 'إرسال الطلب')),
+    onMount(el) {
+      el.querySelector('#member-save').addEventListener('click', () => {
+        const text = val(el, 'm-text');
+        if (leave) run('ministryLeave', { groupId: id, reason: text }, L('Sent to the parish priest', 'أُرسل إلى كاهن الرعية'));
+        else if (withdraw) run('ministryWithdraw', { id, note: text }, approved ? L('Request sent', 'أُرسل الطلب') : L('Application withdrawn', 'سُحب الطلب'));
+        else run('ministryApply', { groupId: id, message: text }, L('Application sent', 'أُرسل الطلب'));
+      });
+    }
+  });
 }
 
 export function meetings() {
@@ -384,6 +432,9 @@ function discussionDrawer(x) {
 }
 
 export function mount(host) {
+  host.querySelectorAll('[data-ministry-apply]').forEach(b=>b.addEventListener('click',()=>ministryDialog('apply',b.dataset.ministryApply)));
+  host.querySelectorAll('[data-ministry-leave]').forEach(b=>b.addEventListener('click',()=>ministryDialog('leave',b.dataset.ministryLeave)));
+  host.querySelectorAll('[data-ministry-withdraw]').forEach(b=>b.addEventListener('click',()=>ministryDialog('withdraw',b.dataset.ministryWithdraw,b.dataset.approved==='true')));
   host.querySelectorAll('[data-member-item]').forEach(b=>b.addEventListener('click',()=>memberItem(b.dataset.memberItem,b.dataset.itemId)));
   host.querySelectorAll('[data-meeting]').forEach(b=>b.addEventListener('click',()=>memberItem('meeting',b.dataset.meeting)));
   host.querySelectorAll('[data-note-edit]').forEach(b=>b.addEventListener('click',()=>noteDrawer(M.notes.find(x=>x.id===b.dataset.noteEdit))));

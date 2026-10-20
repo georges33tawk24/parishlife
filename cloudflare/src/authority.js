@@ -166,8 +166,19 @@ export const CONNECTIONS_SCHEMA = [
       AND NOT EXISTS (SELECT 1 FROM parish_links l WHERE l.user_id=u.id)`
 ];
 
+/* Ministry applications, departures and guest inquiries, and notifications addressed to one account (ministries.js uses them). */
+export const MINISTRY_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS ministry_applications(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), person_id TEXT NOT NULL, status TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, leader_by TEXT, leader_at TEXT, priest_by TEXT, priest_at TEXT, decision_note TEXT NOT NULL DEFAULT '', withdraw_requested_at TEXT, withdraw_note TEXT NOT NULL DEFAULT '', closed_at TEXT, closed_by TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ministry_applications_group ON ministry_applications(parish_id,group_id,status)`,
+  `CREATE TABLE IF NOT EXISTS ministry_departures(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), person_id TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, created_at TEXT NOT NULL, decided_by TEXT, decided_at TEXT, note TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS ministry_inquiries(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), group_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', message TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, created_at TEXT NOT NULL, handled_by TEXT, handled_at TEXT, note TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS ministry_inquiries_parish ON ministry_inquiries(parish_id,status)`,
+  `CREATE TABLE IF NOT EXISTS account_notifications(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), parish_id TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', route TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, read_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS account_notifications_user ON account_notifications(user_id,created_at)`
+];
+
 export async function migrateV2(db) {
-  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA].map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA, ...MINISTRY_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();

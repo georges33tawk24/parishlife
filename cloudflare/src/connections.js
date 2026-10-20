@@ -11,6 +11,7 @@ import { audit, sync_relationships, notify_member } from './app.js';
 import { authority, parishContext, parishUser, permsOf, materializeLegacy, isBlocked, clean, ROLE_TITLES } from './authority.js';
 import { contactValue, deliveryMode, sha, birthDate } from './identity.js';
 import { recordPhone } from './accounts.js';
+import { publicMinistries } from './ministries.js';
 
 const INVITATION_DAYS = 14;
 /* The person-profile fields a parishioner may fill in themselves; status, tags, households, notes and
@@ -88,7 +89,7 @@ export async function publicParish(c, pid) {
   for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) pub[key] = get(parish, key, '');
   pub.theme = parish_theme(parish);
   if (!truthy(get(content, 'contact'))) Object.assign(pub, { address: '', addressAr: '', phone: '' });
-  return { parish: pub, content, events, posts: ordered };
+  return { parish: pub, content, events, posts: ordered, ministries: publicMinistries(state) };
 }
 
 export function parishBrief(row) {

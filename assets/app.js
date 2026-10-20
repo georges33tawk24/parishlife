@@ -156,8 +156,8 @@ function topbarHTML() {
       </div>
     </div>
     <div class="topbar-right">
-      ${!['priest','parishadmin','secretary','treasurer','leader','member'].includes(S.role) ? '' : `<button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
-        ${icon('bell', 19)}${S.role !== 'member' || M.notifications.some(n=>!n.read) ? '<span class="dotmark"></span>' : ''}</button>`}
+      <button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
+        ${icon('bell', 19)}${(S.role === 'member' ? M.notifications.some(n => !n.read) : OFFICE_BELL.includes(S.role) && NOTES.some(n => n[4])) || ACCOUNT_NOTES.list.some(n => !n.read) ? '<span class="dotmark"></span>' : ''}</button>
       <button class="userbtn" id="userbtn" aria-label="${t('Account', 'الحساب')}">
         ${avatar(p)}
         <span class="txt"><span class="un">${esc(isAr() ? p.ar : p.lat)}</span>
@@ -864,19 +864,43 @@ function renderPalette(q) {
 
 /* ---------------- notifications ---------------- */
 const NOTES = D.NOTIFICATIONS;
-function notifications(e) {
-  if (S.role === 'member') { go('membernotifications'); return; }
-  openPopover(e.currentTarget, `
+const OFFICE_BELL = ['priest', 'parishadmin', 'secretary', 'treasurer', 'leader'];
+/* Notifications addressed to this account (ministry applications, departures, membership changes), across parishes. */
+const ACCOUNT_NOTES = { list: [] };
+async function loadAccountNotes() {
+  try { ACCOUNT_NOTES.list = (await api('notifications')).notifications; } catch { ACCOUNT_NOTES.list = []; }
+  const bell = document.getElementById('bellbtn');
+  if (bell && ACCOUNT_NOTES.list.some(n => !n.read) && !bell.querySelector('.dotmark')) bell.insertAdjacentHTML('beforeend', '<span class="dotmark"></span>');
+}
+async function openAccountNote(n) {
+  closeMenu();
+  if (!n.read) { n.read = true; api('notifications', 'POST', { op: 'read', id: n.id }).catch(() => {}); }
+  if (n.parish && n.parish !== session.parishId && session.parishes.some(p => p.id === n.parish)) { if (!await switchParish(n.parish)) return; }
+  if (n.route) location.hash = '#/' + n.route;
+}
+async function notifications(e) {
+  if (S.role === 'member' && !ACCOUNT_NOTES.list.some(n => !n.read)) { go('membernotifications'); return; }
+  const anchor = e.currentTarget;
+  await loadAccountNotes();
+  const office = OFFICE_BELL.includes(S.role), mine = ACCOUNT_NOTES.list.slice(0, 12);
+  openPopover(anchor, `
     <div class="pop-h"><b>${t('Notifications', 'الإشعارات')}</b>
       <button class="btn btn-ghost btn-dense" id="markread" style="margin-inline-start:auto">${t('Mark all read', 'تعليم الكل كمقروء')}</button></div>
-    <div class="pop-b">${NOTES.map(([ic, txt, when, href, unread], i) => `<button class="notif ${unread ? 'unread' : ''}" data-n="${i}">
+    <div class="pop-b">${mine.length ? `<div class="ac-group">${t('For you', 'لك')}</div>` + mine.map((n, i) => `<button class="notif ${n.read ? '' : 'unread'}" data-an="${i}">
+      <span class="nico">${icon(n.kind.startsWith('ministry') ? 'groups' : 'bell', 17)}</span>
+      <span class="ntxt"><span>${esc(n.title)}</span>${n.body ? `<small>${esc(n.body)}</small>` : ''}<small class="mono">${esc(fmtLong(n.at))}</small></span>
+      ${n.read ? '' : '<span class="ndot"></span>'}</button>`).join('') : ''}
+    ${office ? `${mine.length ? `<div class="ac-group">${t('This parish', 'هذه الرعية')}</div>` : ''}${NOTES.map(([ic, txt, when, href, unread], i) => `<button class="notif ${unread ? 'unread' : ''}" data-n="${i}">
       <span class="nico">${icon(ic, 17)}</span>
       <span class="ntxt"><span>${esc(t(...txt))}</span><small class="mono">${esc(t(...when))}</small></span>
-      ${unread ? '<span class="ndot"></span>' : ''}</button>`).join('')}</div>
-    <a class="pop-f" href="#/audit">${t('See all activity', 'كل النشاط')}</a>`,
+      ${unread ? '<span class="ndot"></span>' : ''}</button>`).join('')}` : ''}
+    ${!mine.length && !office ? `<p class="dim" style="padding:12px 16px">${t('Nothing new.', 'لا جديد.')}</p>` : ''}</div>
+    ${S.role === 'member' ? `<a class="pop-f" href="#/membernotifications">${t('Parish notifications', 'إشعارات الرعية')}</a>` : office && canSee('audit') ? `<a class="pop-f" href="#/audit">${t('See all activity', 'كل النشاط')}</a>` : ''}`,
   { width: 360, onMount(el) {
+      el.querySelectorAll('[data-an]').forEach(b => b.addEventListener('click', () => openAccountNote(mine[+b.dataset.an])));
       el.querySelector('#markread').addEventListener('click', () => {
-        NOTES.forEach(n => { n[4] = false; }); persist();
+        if (ACCOUNT_NOTES.list.some(n => !n.read)) { ACCOUNT_NOTES.list.forEach(n => { n.read = true; }); api('notifications', 'POST', { op: 'readAll' }).catch(() => {}); }
+        if (office) { NOTES.forEach(n => { n[4] = false; }); persist(); }
         el.querySelectorAll('.notif').forEach(n => n.classList.remove('unread'));
         el.querySelectorAll('.ndot').forEach(d => d.remove());
         document.querySelector('.topbar-right .dotmark')?.remove();
@@ -886,7 +910,7 @@ function notifications(e) {
         const n = NOTES[+b.dataset.n]; n[4] = false; persist(); closeMenu();
         if (n[3] === 'rate') rateDialog(); else location.hash = n[3];
       }));
-      el.querySelector('.pop-f').addEventListener('click', () => closeMenu());
+      el.querySelector('.pop-f')?.addEventListener('click', () => closeMenu());
   } });
 }
 

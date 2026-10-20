@@ -473,6 +473,8 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
   }
   const { officeConnections } = await import('./connections.js');
   [d.MEMBERSHIP_REQUESTS, d.INVITATIONS] = perms.has('people.manage') ? await officeConnections(c, pid) : [[], []];
+  const { ministryLists } = await import('./ministries.js');
+  [d.MINISTRY_APPLICATIONS, d.MINISTRY_INQUIRIES, d.MINISTRY_DEPARTURES] = await ministryLists(c, u, pid, d);
   if (!perms.has('notes.pastoral')) d.NOTES = [];
   if (!perms.has('settings.manage')) {
     for (const k of ['SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS']) d[k] = [];
@@ -585,6 +587,11 @@ export async function save_patch(c, u, pid, payload) {
     if (key === 'GROUP_DETAIL' && role === 'leader') {
       const permitted = leaderGroups(old, u);
       need(subset(set(value), permitted), 'Group is outside your ministry.', 403);
+      for (const [gid, detail] of items(value)) {   // new members join with the parish priest's approval
+        const before = new Set(iter(get(get(K(old, 'GROUP_DETAIL'), gid, {}) ?? {}, 'roster', [])).map(r => get(r, 'p')));
+        need(iter(get(detail, 'roster', [])).every(r => before.has(get(r, 'p'))),
+          'New members join with the parish priest’s approval. Send the request on to the priest instead.', 403);
+      }
       for (const [gid, detail] of items(value)) setItem(d[key], gid, detail);
     } else if (key === 'CHECKIN' && role === 'leader') {
       const scoped = await visible(c, u, pid, old, { stored: true });

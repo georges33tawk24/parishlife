@@ -204,9 +204,16 @@ export const VERBS = {
 
 
   /* groups ------------------------------------------------------ */
+  /* The leader approves first and the parish priest last (the priest may also approve straight away). */
   'join-approve': (btn, pid) => {
-    const gid = (S.route === 'groups' && S.params[0]) || 'g1', g = D.groupInfo(gid); g.requests = g.requests.filter(r => r.p !== pid);
-    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 }); const grp = D.group(gid); if (grp && S.role !== 'leader') grp.members += 1; }
+    const gid = (S.route === 'groups' && S.params[0]) || 'g1', g = D.groupInfo(gid), grp = D.group(gid);
+    const request = g.requests.find(r => r.p === pid);
+    if (request && S.role !== 'priest') {
+      request.leaderApproved = { by: session.user?.name || '', at: new Date().toISOString().slice(0, 10) };
+      refresh(); return ok(L('Sent to the parish priest', 'أُرسل إلى كاهن الرعية'), L('The priest makes the final decision.', 'القرار الأخير للكاهن.'));
+    }
+    g.requests = g.requests.filter(r => r.p !== pid);
+    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: String(new Date().getFullYear()), att: 0 }); if (grp) grp.members = (Number(grp.members) || 0) + 1; }
     refresh(); ok(L('Added to the group', 'أُضيف إلى المجموعة'), L('They are on the roster and will be messaged.', 'أصبح على اللائحة وستصله الرسائل.'));
   },
   'join-decline': (btn, pid) => {

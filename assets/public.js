@@ -174,9 +174,9 @@ function profile(p, d) {
   const contact = content(d, 'contact');
   return '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<span>' + safe(name) + '</span></div>' +
     '<section class="profile-hero"><div class="site-wrap"><span class="eyebrow">' + safe(meta || L('YOUR PARISH COMMUNITY', 'جماعتك الرعوية')) + '</span><h1>' + safe(name) + '</h1><p>' + htmlText(content(d, 'welcome') || L('A place of faith, a life in community.', 'مكان للإيمان وحياة في الجماعة.')) + '</p><div class="actions"><a class="button button-light" href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + icon('clock') + '</a><a class="button button-outline" href="#contact">' + L('Plan your visit', 'خطّط لزيارتك') + icon('arrow') + '</a></div></div></section>' +
-    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a><a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a><a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
+    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a><a href="#ministries">' + L('Ministries', 'الخدمات') + '</a><a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a><a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
     '<section id="about" class="section site-wrap parish-about"><div><span class="eyebrow">' + L('ROOTED IN COMMUNITY', 'متجذّرون في الجماعة') + '</span><h2>' + L('Every parish<br>has a story.', 'لكل رعية<br>حكاية.') + '</h2></div><div class="reading-copy"><h3>' + safe(name) + '</h3><p>' + htmlText(content(d, 'history') || L('The parish’s story will appear here when it is published.', 'ستظهر حكاية الرعية هنا عندما تُنشر.')) + '</p>' + (meta ? '<span class="location-note">' + icon('pin') + safe(meta) + '</span>' : '') + '</div></section>' +
-    timesSection([p]) + eventsSection([p]) + sacramentsSection(p, d, phone) +
+    timesSection([p]) + eventsSection([p]) + ministriesSection(p, d) + sacramentsSection(p, d, phone) +
     '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
     (d.posts?.length ? d.posts.map(post => '<article class="update-card">' + (publishedDate(post.at) ? '<time datetime="' + safe(post.at) + '">' + safe(publishedDate(post.at)) + '</time>' : '') + '<h3>' + safe(post.title) + '</h3><div class="published-body">' + (/<[a-z][\s\S]*>/i.test(post.body || '') ? safeRichText(post.body) : htmlText(post.body)) + '</div></article>').join('') :
       empty(L('Updates will find a home here', 'هنا تجد مستجدّات الرعية'), L('Published parish announcements will appear in this space.', 'ستظهر إعلانات الرعية المنشورة في هذه المساحة.'))) + '</div></div></section>' +
@@ -185,6 +185,57 @@ function profile(p, d) {
     (d.parish.address ? '<div class="contact-row">' + icon('pin') + '<span>' + safe(pair(d.parish, 'address', 'addressAr')) + '</span></div>' : '') +
     (phone ? '<a class="contact-row" href="tel:' + safe(phone) + '">' + icon('phone') + '<bdi>' + safe(d.parish.phone) + '</bdi></a>' : '') +
     '</div></section><div class="back-directory site-wrap"><a class="text-link" href="public.html#directory">' + L('Explore other parishes', 'استكشف رعايا أخرى') + icon('arrow') + '</a></div>';
+}
+
+/* Public ministries: what each does, who leads it (by name only — never a leader's personal number or
+   address), how to join, and a form to say you are interested. The form makes nobody a member. */
+function ministriesSection(p, d) {
+  const list = d.ministries || [];
+  const text = (m, en) => pair(m, en, en + 'Ar');
+  return '<section id="ministries" class="section site-wrap ministries-section"><div class="section-head"><div><span class="eyebrow">' + L('SERVE AND BELONG', 'خدمة وانتماء') + '</span><h2>' + L('Ministries', 'الخدمات') + '</h2></div><p>' +
+    L('Choirs, catechism, youth and service groups. Ask about one below or through the parish office — leaders’ personal phone numbers and addresses are not published.', 'جوقات وتعليم مسيحي وشبيبة وفرق خدمة. اسأل عن إحداها أدناه أو عبر مكتب الرعية — لا تُنشر أرقام المسؤولين وعناوينهم الشخصية.') + '</p></div>' +
+    (list.length ? '<div class="ministry-grid">' + list.map(m => '<article class="ministry-card"><span class="eyebrow">' + safe(pair(m, 'cat', 'catAr')) + '</span><h3>' + safe(pair(m, 'name', 'ar')) + '</h3>' +
+      (text(m, 'about') ? '<p>' + htmlText(text(m, 'about')) + '</p>' : '') +
+      '<dl>' + (m.leader ? '<dt>' + L('Led by', 'المسؤول') + '</dt><dd>' + safe(pair(m.leader, 'name', 'ar')) + '</dd>' : '') +
+      (pair(m, 'meets', 'meetsAr') ? '<dt>' + L('Meets', 'يجتمع') + '</dt><dd>' + safe(pair(m, 'meets', 'meetsAr')) + '</dd>' : '') +
+      (text(m, 'duties') ? '<dt>' + L('What members take on', 'ما يلتزم به الأعضاء') + '</dt><dd>' + htmlText(text(m, 'duties')) + '</dd>' : '') +
+      (text(m, 'howToJoin') ? '<dt>' + L('How to join', 'كيف تنضمّ') + '</dt><dd>' + htmlText(text(m, 'howToJoin')) + '</dd>' : '') + '</dl>' +
+      '<button class="text-button ministry-interest" type="button" data-ministry="' + safe(m.id) + '">' + L('I’m interested', 'أنا مهتمّ') + icon('arrow') + '</button></article>').join('') + '</div>' +
+      '<form class="ministry-form" id="ministry-form" novalidate hidden><h3>' + L('Tell the parish you are interested', 'أخبر الرعية باهتمامك') + '</h3>' +
+      '<p>' + L('The parish office or the ministry’s leader will get back to you. Sending this does not make you a member and opens nothing private.', 'سيعود إليك مكتب الرعية أو مسؤول الخدمة. إرسال هذا لا يجعلك عضواً ولا يفتح شيئاً خاصاً.') + '</p>' +
+      '<label>' + L('Ministry', 'الخدمة') + '<select name="groupId">' + list.map(m => '<option value="' + safe(m.id) + '">' + safe(pair(m, 'name', 'ar')) + '</option>').join('') + '</select></label>' +
+      '<label>' + L('Your name', 'اسمك') + '<input name="name" maxlength="120" autocomplete="name" required></label>' +
+      '<div class="form-pair"><label>' + L('Phone', 'الهاتف') + '<input name="phone" type="tel" dir="ltr" maxlength="40" autocomplete="tel"></label>' +
+      '<label>' + L('Email', 'البريد الإلكتروني') + '<input name="email" type="email" dir="ltr" maxlength="120" autocomplete="email"></label></div>' +
+      '<small>' + L('Give a phone number, an email address, or both.', 'أدخل رقم هاتف أو بريداً إلكترونياً أو كليهما.') + '</small>' +
+      '<label>' + L('Message (optional)', 'رسالة (اختيارية)') + '<textarea name="message" rows="3" maxlength="1000"></textarea></label>' +
+      '<span class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></span>' +
+      '<p class="form-status" role="status" aria-live="polite"></p><button class="button" type="submit">' + L('Send', 'إرسال') + icon('arrow') + '</button></form>'
+      : empty(L('Ministries will be listed here', 'ستُدرج الخدمات هنا'), L('This parish has not published its ministries yet. The parish office can tell you more.', 'لم تنشر هذه الرعية خدماتها بعد. يمكن لمكتب الرعية إخبارك بالمزيد.'))) + '</section>';
+}
+
+function bindMinistryForm(p) {
+  const form = document.querySelector('#ministry-form');
+  if (!form) return;
+  document.querySelectorAll('.ministry-interest').forEach(b => b.addEventListener('click', () => {
+    form.hidden = false; form.groupId.value = b.dataset.ministry;
+    form.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    form.name.focus({ preventScroll: true });
+  }));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const status = form.querySelector('.form-status'), values = Object.fromEntries(new FormData(form));
+    if (!values.name.trim()) { status.textContent = L('Enter your name.', 'أدخل اسمك.'); form.name.focus(); return; }
+    if (!values.phone.trim() && !values.email.trim()) { status.textContent = L('Give a phone number or an email address, so the parish can reply.', 'أدخل رقم هاتف أو بريداً إلكترونياً ليتمكّن الرعية من الرد.'); form.phone.focus(); return; }
+    const button = form.querySelector('[type=submit]'); button.disabled = true; status.textContent = L('Sending…', 'جارٍ الإرسال…');
+    try {
+      const response = await fetch('/api/public/parishes/' + encodeURIComponent(p.id) + '/inquiries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || L('The message could not be sent.', 'تعذّر إرسال الرسالة.'));
+      form.reset(); status.textContent = L('Thank you. The parish has your message and will get back to you.', 'شكراً. وصلت رسالتك إلى الرعية وستعود إليك.');
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
 }
 
 function sacramentsSection(p, d, phone) {
@@ -234,6 +285,7 @@ function render() {
   document.querySelector('#town-filter')?.addEventListener('change', event => { filters.town = event.target.value; renderCards(true); });
   document.querySelector('#sort-filter')?.addEventListener('change', event => { filters.sort = event.target.value; renderCards(true); });
   bindEventToggle(selected && p ? [p] : directory);
+  if (selected && p && d) bindMinistryForm(p);
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     observer = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
