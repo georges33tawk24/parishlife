@@ -111,8 +111,43 @@ export const V2_SCHEMA = [
 
 /* Additive: new tables, a diocese row for accounts that belong to none, then (once) the existing
    roles and parish links copied into the scoped model. Nothing is deleted. Runs in its own batch. */
+/* The account tables (identity.js uses them). */
+export const ACCOUNTS_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS user_contacts(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, value TEXT NOT NULL, verified_at TEXT, created_at TEXT NOT NULL, PRIMARY KEY(kind,value))`,
+  `CREATE INDEX IF NOT EXISTS user_contacts_user ON user_contacts(user_id)`,
+  `CREATE TABLE IF NOT EXISTS user_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id), first_name TEXT NOT NULL DEFAULT '', last_name TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS verification_codes(id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id), purpose TEXT NOT NULL, channel TEXT NOT NULL, target TEXT NOT NULL, code_hash TEXT NOT NULL, created REAL NOT NULL, expires REAL NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, delivery TEXT NOT NULL, used_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS verification_codes_target ON verification_codes(target,purpose,created)`,
+  `CREATE TABLE IF NOT EXISTS user_mfa(user_id TEXT NOT NULL REFERENCES users(id), method TEXT NOT NULL, secret TEXT NOT NULL DEFAULT '', enabled_at TEXT, last_step INTEGER NOT NULL DEFAULT 0, recovery TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(user_id,method))`,
+  `CREATE TABLE IF NOT EXISTS login_challenges(token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), methods TEXT NOT NULL, expires REAL NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS user_identities(provider TEXT NOT NULL, subject TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), email TEXT NOT NULL DEFAULT '', linked_at TEXT NOT NULL, PRIMARY KEY(provider,subject))`,
+  `CREATE INDEX IF NOT EXISTS user_identities_user ON user_identities(user_id)`,
+  `CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY, provider TEXT NOT NULL, intent TEXT NOT NULL, user_id TEXT, verifier TEXT NOT NULL DEFAULT '', nonce TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}', created REAL NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS login_failures(key TEXT PRIMARY KEY, count INTEGER NOT NULL, since REAL NOT NULL)`
+];
+const EMAIL_ADDRESS = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/* 'email' or 'phone' for a contact in loginName form, else null. */
+export function contactKind(value) {
+  value = str(or(value, ''));
+  if (len(value) <= 120 && EMAIL_ADDRESS.test(value) && value === value.toLowerCase()) return 'email';
+  if (/^\+[0-9]{8,15}$/.test(value)) return 'phone';
+  return null;
+}
+
+/* Once: the email address or phone number an account was opened with becomes its first sign-in
+   contact — unverified, because nothing ever checked it. */
+export async function migrateAccounts(c) {
+  const [done, users] = await c.reads([["SELECT 1 AS x FROM schema_migrations WHERE name='v2-contacts'", []], ['SELECT id,username FROM users', []]]);
+  if (done.length) return;
+  for (const user of users) {
+    const kind = contactKind(user.username);
+    if (kind) c.run('INSERT OR IGNORE INTO user_contacts VALUES(?,?,?,?,?)', user.id, kind, user.username, null, NOW());
+  }
+  c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-contacts',?)", NOW());
+}
+
 export async function migrateV2(db) {
-  await db.batch(V2_SCHEMA.map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();
@@ -122,10 +157,12 @@ export async function migrateV2(db) {
 /* The once-only copy, run inside a transaction (see initialize in app.js). */
 export async function migrateV2Roles(c) {
   const [done] = await c.reads([["SELECT 1 AS x FROM schema_migrations WHERE name='v2-roles'", []]]);
-  if (done.length) return;
-  const users = await c.all("SELECT * FROM users WHERE role IN ('bishop','priest','secretary','treasurer','leader','member')");
-  for (const user of users) await materializeLegacy(c, user, 'Copied from the account’s earlier role');
-  c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-roles',?)", NOW());
+  if (!done.length) {
+    const users = await c.all("SELECT * FROM users WHERE role IN ('bishop','priest','secretary','treasurer','leader','member')");
+    for (const user of users) await materializeLegacy(c, user, 'Copied from the account’s earlier role');
+    c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-roles',?)", NOW());
+  }
+  await migrateAccounts(c);
 }
 
 /* The access an account had before scoped roles: one role, the parishes in `assignments`. */
@@ -505,7 +542,9 @@ export async function adminAction(c, u, q) {
     const needle = strip(str(or(get(q, 'query'), '')));
     need(len(needle) >= 3 && len(needle) <= 120, 'Enter the person’s exact username, email address or phone number.');
     const { loginName } = await import('./accounts.js');
-    const row = await c.first('SELECT id,username,name FROM users WHERE username=? AND role<>?', loginName(needle), 'disabled');
+    const key = loginName(needle);
+    const row = await c.first('SELECT id,username,name FROM users WHERE username=? AND role<>?', key, 'disabled')
+      ?? await c.first('SELECT u.id,u.username,u.name FROM user_contacts k JOIN users u ON u.id=k.user_id WHERE k.value=? AND u.role<>?', key, 'disabled');
     return { user: row ? { id: row.id, username: row.username, name: row.name } : null };
   }
   if (op === 'createDiocese') {

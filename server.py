@@ -24,7 +24,8 @@ import sqlite3
 import time
 import zipfile
 import xml.etree.ElementTree as ET
-from urllib.parse import urlsplit, parse_qs, quote
+from urllib.parse import urlsplit, parse_qs, quote, urlencode
+import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'var' / 'parishlife.sqlite3'
@@ -383,7 +384,9 @@ def login_name(value):
 
 
 EMAIL_ADDRESS = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+PHONE_KEY = re.compile(r'\+[0-9]{8,15}')
 SIGNUPS_PER_HOUR = 30
+MINIMUM_AGE = 13
 
 
 def record_phone(number):
@@ -394,48 +397,640 @@ def record_phone(number):
     return ' '.join(part for part in (digits[:-6], digits[-6:-3], digits[-3:]) if part)
 
 
-def signup(c, q):
-    """A parishioner opens their own account with a phone number or an email address. It adds a
-    person record to the chosen parish, marked as registered online until the office verifies it."""
-    require(not q.get('website'), 'The account could not be created.')  # a field only robots fill in
-    pid = q.get('parish')
-    row = c.execute('SELECT s.data,p.diocese FROM states s JOIN parishes p ON p.id=s.parish_id WHERE s.parish_id=?',
-                    (pid,)).fetchone() if isinstance(pid, str) else None
-    require(row is not None, 'Choose your parish.')
-    name = q.get('name')
-    name = ' '.join(name.split()) if isinstance(name, str) else ''
-    require(2 <= len(name) <= 120, 'Enter your full name.')
-    method, phone, email = q.get('method'), '', ''
-    require(method in {'phone', 'email'}, 'Choose a phone number or an email address.')
-    if method == 'phone':
-        phone = str(q.get('phone') or '').strip()
-        username = login_name(phone)
-        require(len(phone) <= 40 and re.fullmatch(r'\+[0-9]{8,15}', username) is not None, 'Enter a valid phone number.')
-    else:
-        email = str(q.get('email') or '').strip().lower()
-        require(len(email) <= 120 and EMAIL_ADDRESS.fullmatch(email) is not None, 'Enter a valid email address.')
-        username = email
+# ───────────── Accounts: registration, sign-in methods, verification, two-step, providers ─────────────
+# An account belongs to a person, not to a parish; parishes are joined or followed afterwards.
+# It signs in with an email address or phone number it registered, or its username, and a password,
+# or with a linked Google, Apple or Microsoft identity once that provider is configured. A code is
+# only reported as sent when a delivery service accepted it; nothing is ever marked verified that
+# was not checked.
+ACCOUNTS_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS user_contacts(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, value TEXT NOT NULL,
+  verified_at TEXT, created_at TEXT NOT NULL, PRIMARY KEY(kind,value));
+CREATE INDEX IF NOT EXISTS user_contacts_user ON user_contacts(user_id);
+CREATE TABLE IF NOT EXISTS user_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id), first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS verification_codes(id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id), purpose TEXT NOT NULL,
+  channel TEXT NOT NULL, target TEXT NOT NULL, code_hash TEXT NOT NULL, created REAL NOT NULL, expires REAL NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0, delivery TEXT NOT NULL, used_at TEXT);
+CREATE INDEX IF NOT EXISTS verification_codes_target ON verification_codes(target,purpose,created);
+CREATE TABLE IF NOT EXISTS user_mfa(user_id TEXT NOT NULL REFERENCES users(id), method TEXT NOT NULL, secret TEXT NOT NULL DEFAULT '',
+  enabled_at TEXT, last_step INTEGER NOT NULL DEFAULT 0, recovery TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(user_id,method));
+CREATE TABLE IF NOT EXISTS login_challenges(token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), methods TEXT NOT NULL,
+  expires REAL NOT NULL, attempts INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS user_identities(provider TEXT NOT NULL, subject TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT NOT NULL DEFAULT '', linked_at TEXT NOT NULL, PRIMARY KEY(provider,subject));
+CREATE INDEX IF NOT EXISTS user_identities_user ON user_identities(user_id);
+CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY, provider TEXT NOT NULL, intent TEXT NOT NULL, user_id TEXT,
+  verifier TEXT NOT NULL DEFAULT '', nonce TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}', created REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS login_failures(key TEXT PRIMARY KEY, count INTEGER NOT NULL, since REAL NOT NULL);
+'''
+CONTACT_KINDS = ('email', 'phone')
+CHANNEL = {'email': 'email', 'phone': 'sms'}
+KIND_OF = {'email': 'email', 'sms': 'phone'}
+DELIVERY_ENV = {'email': 'PARISHLIFE_EMAIL_WEBHOOK', 'sms': 'PARISHLIFE_SMS_WEBHOOK'}
+DEV_OUTBOX = False   # --dev-outbox: codes are printed in this server's console instead of sent (local development only)
+CODE_TTL = 900
+sha = lambda text: hashlib.sha256(str(text).encode()).hexdigest()
+
+
+def migrate_accounts(c):
+    """Additive: the account tables, and (once) the email address or phone number an account was opened
+    with recorded as its first sign-in contact — unverified, because nothing ever checked it."""
+    c.executescript(ACCOUNTS_SCHEMA)
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-contacts'").fetchone() is None:
+        for user in c.execute('SELECT id,username FROM users').fetchall():
+            kind = contact_kind(user['username'])
+            if kind: c.execute('INSERT OR IGNORE INTO user_contacts VALUES(?,?,?,?,?)', (user['id'], kind, user['username'], None, NOW()))
+        c.execute("INSERT INTO schema_migrations VALUES('v2-contacts',?)", (NOW(),))
+
+
+def contact_kind(value):
+    value = str(value or '')
+    if len(value) <= 120 and EMAIL_ADDRESS.fullmatch(value) and value == value.lower(): return 'email'
+    if PHONE_KEY.fullmatch(value): return 'phone'
+    return None
+
+
+def contact_value(kind, raw):
+    """An email address in lower case, or a phone number in international form."""
+    text = str(raw or '').strip()
+    if kind == 'email':
+        value = text.lower()
+        require(len(value) <= 120 and EMAIL_ADDRESS.fullmatch(value) is not None, 'Enter a valid email address.')
+        return value
+    value = login_name(text)
+    require(len(text) <= 40 and PHONE_KEY.fullmatch(value) is not None, 'Enter a valid phone number.')
+    return value
+
+
+def contact_owner(c, kind, value):
+    """The account already using this email address or phone number, as a contact or as its username."""
+    row = c.execute('SELECT user_id FROM user_contacts WHERE kind=? AND value=?', (kind, value)).fetchone()
+    if row: return row['user_id']
+    row = c.execute('SELECT id FROM users WHERE username=?', (value,)).fetchone()
+    return row['id'] if row else None
+
+
+def verified_contact(c, user_id, kind):
+    row = c.execute('SELECT value FROM user_contacts WHERE user_id=? AND kind=? AND verified_at IS NOT NULL ORDER BY verified_at',
+                    (user_id, kind)).fetchone()
+    return row['value'] if row else None
+
+
+def masked(kind, value):
+    if kind == 'email':
+        name, _, domain = value.partition('@')
+        return name[:1] + '•••@' + domain
+    return value[:4] + ' ••• ' + value[-3:]
+
+
+def delivery_mode(channel):
+    """How codes reach people from this server: 'service' (a configured delivery webhook), 'console'
+    (--dev-outbox, local development only: printed, never sent) or 'none'."""
+    if os.environ.get(DELIVERY_ENV[channel], '').startswith(('https://', 'http://')): return 'service'
+    return 'console' if DEV_OUTBOX else 'none'
+
+
+def code_hash(cid, code): return sha(f'{cid}:{code}')
+
+
+def issue_code(c, user_id, purpose, kind, target, outbox):
+    """A six-digit code for `target`, valid 15 minutes, queued in `outbox` to be sent after the commit.
+    Without a delivery service nothing is stored or sent, and the caller is told so."""
+    channel = CHANNEL[kind]
+    mode = delivery_mode(channel)
+    if mode == 'none': return 'not-configured'
+    now = time.time()
+    last = c.execute('SELECT MAX(created) FROM verification_codes WHERE target=? AND purpose=?', (target, purpose)).fetchone()[0]
+    require(last is None or now - last >= 60, 'A code was sent a moment ago. Wait a minute before asking for another.', 429)
+    require(c.execute('SELECT COUNT(*) FROM verification_codes WHERE target=? AND created>?', (target, now - 86400)).fetchone()[0] < 10,
+            'Too many codes were asked for today. Try again tomorrow.', 429)
+    c.execute("UPDATE verification_codes SET used_at='replaced' WHERE target=? AND purpose=? AND used_at IS NULL", (target, purpose))
+    cid, code = secrets.token_hex(12), f'{secrets.randbelow(1_000_000):06d}'
+    status = 'sending' if mode == 'service' else 'console'
+    c.execute('INSERT INTO verification_codes VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+              (cid, user_id, purpose, channel, target, code_hash(cid, code), now, now + CODE_TTL, 0, status, None))
+    outbox.append(dict(id=cid, channel=channel, target=target, code=code, mode=mode, status=status))
+    return status
+
+
+def send_outbox(c, outbox):
+    """After the commit: hand each code to the delivery service and record whether it accepted it."""
+    for item in outbox:
+        text = (f"Your ParishLife code is {item['code']}. It expires in 15 minutes. If you did not ask for it, ignore this message.\n"
+                f"رمز ParishLife الخاص بك هو {item['code']}. تنتهي صلاحيته بعد ١٥ دقيقة.")
+        if item['mode'] == 'console':
+            print(f"[dev outbox, NOT SENT] {item['channel']} to {item['target']}: ParishLife code {item['code']}", flush=True)
+            continue
+        headers = {'Content-Type': 'application/json'}
+        if os.environ.get('PARISHLIFE_DELIVERY_TOKEN'): headers['Authorization'] = 'Bearer ' + os.environ['PARISHLIFE_DELIVERY_TOKEN']
+        body = json.dumps(dict(channel=item['channel'], to=item['target'], subject='Your ParishLife code', text=text)).encode()
+        try:
+            with urllib.request.urlopen(urllib.request.Request(os.environ[DELIVERY_ENV[item['channel']]], data=body, headers=headers,
+                                                               method='POST'), timeout=10) as r:
+                item['status'] = 'sent' if 200 <= r.status < 300 else 'failed'
+        except (OSError, ValueError):
+            item['status'] = 'failed'
+        c.execute('UPDATE verification_codes SET delivery=? WHERE id=?', (item['status'], item['id'])); c.commit()
+    return [dict(channel=item['channel'], to=item['target'], delivery=item['status']) for item in outbox]
+
+
+def consume_code(c, user_id, purpose, target, code):
+    """Uses up the latest code sent to `target`; a wrong one counts against it (five tries)."""
+    row = c.execute('SELECT * FROM verification_codes WHERE target=? AND purpose=? AND user_id=? AND used_at IS NULL ORDER BY created DESC LIMIT 1',
+                    (target, purpose, user_id)).fetchone()
+    require(row is not None and row['expires'] > time.time(), 'This code has expired or was replaced. Ask for a new one.')
+    require(row['attempts'] < 5, 'Too many wrong codes. Ask for a new one.', 429)
+    if not hmac.compare_digest(row['code_hash'], code_hash(row['id'], re.sub(r'\s', '', str(code or '')))):
+        c.execute('UPDATE verification_codes SET attempts=attempts+1 WHERE id=?', (row['id'],)); c.commit()
+        raise Problem(400, 'That code is not right. Check it and try again.')
+    c.execute('UPDATE verification_codes SET used_at=? WHERE id=?', (NOW(), row['id']))
+
+
+def totp_code(secret, step):
+    """RFC 6238: HMAC-SHA1, 30-second steps, six digits — what authenticator apps use."""
+    digest = hmac.new(base64.b32decode(secret), step.to_bytes(8, 'big'), hashlib.sha1).digest()
+    offset = digest[-1] & 15
+    return f'{(int.from_bytes(digest[offset:offset + 4], "big") & 0x7FFFFFFF) % 1_000_000:06d}'
+
+
+def totp_step(secret, code, last_step):
+    """The time step (now, or 30 seconds either side) a code belongs to, if that step has not been used yet."""
+    code = re.sub(r'\s', '', str(code or ''))
+    if not re.fullmatch(r'[0-9]{6}', code): return None
+    now = int(time.time() // 30)
+    return next((step for step in (now - 1, now, now + 1) if step > last_step and hmac.compare_digest(totp_code(secret, step), code)), None)
+
+
+def new_recovery_codes(c, user_id):
+    codes = [f'{secrets.token_hex(3)}-{secrets.token_hex(3)}' for _ in range(10)]
+    c.execute('INSERT INTO user_mfa VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,method) DO UPDATE SET recovery=excluded.recovery,enabled_at=excluded.enabled_at',
+              (user_id, 'recovery', '', NOW(), 0, json.dumps([sha(code.replace('-', '')) for code in codes])))
+    return codes
+
+
+def mfa_rows(c, user_id):
+    return {r['method']: r for r in c.execute('SELECT * FROM user_mfa WHERE user_id=?', (user_id,))}
+
+
+def login_methods(c, user_id):
+    """The second steps this account turned on that this server can still carry out, and whether any is on."""
+    rows = {m: r for m, r in mfa_rows(c, user_id).items() if r['enabled_at']}
+    turned_on = [m for m in ('totp', 'email', 'sms') if m in rows]
+    usable = [m for m in turned_on if m == 'totp' or (delivery_mode(m) != 'none' and verified_contact(c, user_id, KIND_OF[m]))]
+    if turned_on and 'recovery' in rows and json.loads(rows['recovery']['recovery']): usable.append('recovery')
+    return usable, bool(turned_on)
+
+
+def mfa_check(c, user_id, method, code):
+    """Whether `code` completes the second step by `method`; a used code or time step cannot be used again."""
+    rows = mfa_rows(c, user_id)
+    if method == 'totp' and rows.get('totp') and rows['totp']['enabled_at']:
+        step = totp_step(rows['totp']['secret'], code, rows['totp']['last_step'])
+        if step is None: return False
+        c.execute("UPDATE user_mfa SET last_step=? WHERE user_id=? AND method='totp'", (step, user_id))
+        return True
+    if method == 'recovery' and rows.get('recovery'):
+        hashes, given = json.loads(rows['recovery']['recovery']), sha(re.sub(r'[^0-9a-f]', '', str(code or '').lower()))
+        if given not in hashes: return False
+        hashes.remove(given)
+        c.execute("UPDATE user_mfa SET recovery=? WHERE user_id=? AND method='recovery'", (json.dumps(hashes), user_id))
+        return True
+    if method in {'email', 'sms'}:
+        consume_code(c, user_id, 'login', verified_contact(c, user_id, KIND_OF[method]) or '', code)
+        return True
+    return False
+
+
+def mfa_challenge(c, user_id):
+    """After the password: a short-lived ticket for the second step, instead of a session."""
+    methods, _ = login_methods(c, user_id)
+    require(methods, 'Two-step verification is on for this account, but none of its methods can be used on this server '
+                     'right now. Contact your parish office or the ParishLife administrator.', 403)
+    token = secrets.token_urlsafe(32)
+    c.execute('DELETE FROM login_challenges WHERE expires<?', (time.time(),))
+    c.execute('INSERT INTO login_challenges VALUES(?,?,?,?,?)', (sha(token), user_id, json.dumps(methods), time.time() + 600, 0))
+    return token
+
+
+def challenge_info(c, token):
+    row = c.execute('SELECT * FROM login_challenges WHERE token=? AND expires>?', (sha(str(token or '')), time.time())).fetchone()
+    require(row is not None, 'This sign-in has expired. Sign in again.', 401)
+    methods = json.loads(row['methods'])
+    hints = {m: masked(KIND_OF[m], verified_contact(c, row['user_id'], KIND_OF[m]) or '') for m in methods if m in KIND_OF}
+    return row, dict(mfa='required', challenge=token, methods=methods, hints=hints)
+
+
+def mfa_send(c, q, outbox):
+    row, _ = challenge_info(c, q.get('challenge'))
+    method = q.get('method')
+    require(method in {'email', 'sms'} and method in json.loads(row['methods']), 'Choose how to receive the code.')
+    return dict(delivery=issue_code(c, row['user_id'], 'login', KIND_OF[method], verified_contact(c, row['user_id'], KIND_OF[method]), outbox))
+
+
+def mfa_verify(c, q):
+    """The second step; returns the account to sign in."""
+    row, _ = challenge_info(c, q.get('challenge'))
+    require(row['attempts'] < 5, 'Too many wrong codes. Sign in again.', 429)
+    method = q.get('method')
+    require(method in json.loads(row['methods']), 'Choose a way to confirm it is you.')
+    if not mfa_check(c, row['user_id'], method, q.get('code')):
+        c.execute('UPDATE login_challenges SET attempts=attempts+1 WHERE token=?', (row['token'],)); c.commit()
+        raise Problem(401, 'That code is not right. Check it and try again.')
+    c.execute('DELETE FROM login_challenges WHERE token=?', (row['token'],))
+    u = c.execute('SELECT * FROM users WHERE id=?', (row['user_id'],)).fetchone()
+    require(login_allowed(c, u), 'Sign in to continue.', 401)
+    return u
+
+
+SIGN_IN_ERRORS = {'email': 'Incorrect email address or password.', 'phone': 'Incorrect phone number or password.'}
+LOGIN_ATTEMPTS, LOGIN_WINDOW = 10, 900
+
+
+def find_account(c, method, identifier):
+    """Email and Phone look in the account's registered contacts (and, for accounts made by the operator tools,
+    a username that is that address or number); Username looks in usernames. Requests without a method
+    (older pages) accept any of them."""
+    key = login_name(identifier)
+    kind = contact_kind(key)
+    if method in {'email', 'phone'} and method != kind: return None
+    if kind and method in {'email', 'phone', None}:
+        row = c.execute('SELECT u.* FROM user_contacts k JOIN users u ON u.id=k.user_id WHERE k.kind=? AND k.value=?', (kind, key)).fetchone()
+        if row: return row
+    return c.execute('SELECT * FROM users WHERE username=?', (key,)).fetchone()
+
+
+def sign_in(c, q):
+    method = q.get('method')
+    require(method in {'email', 'phone', 'username', None}, 'Choose how you sign in.')
+    identifier = q.get('identifier', q.get('username'))
+    key, now = sha(login_name(identifier)), time.time()
+    failures = c.execute('SELECT * FROM login_failures WHERE key=? AND since>?', (key, now - LOGIN_WINDOW)).fetchone()
+    require(failures is None or failures['count'] < LOGIN_ATTEMPTS, 'Too many attempts to sign in to this account. Wait 15 minutes, then try again.', 429)
+    u = find_account(c, method, identifier)
+    ok = login_allowed(c, u) and bool(u['password']) and password_matches(u['password'], str(q.get('password', '')))
+    if not ok:   # counted per name typed, so guessing one account's password is slowed down
+        c.execute('INSERT INTO login_failures VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET '
+                  'count=CASE WHEN since>? THEN count+1 ELSE 1 END, since=CASE WHEN since>? THEN since ELSE excluded.since END',
+                  (key, now, now - LOGIN_WINDOW, now - LOGIN_WINDOW))
+        c.commit()
+        raise Problem(401, SIGN_IN_ERRORS.get(method, 'Incorrect username or password.'))
+    c.execute('DELETE FROM login_failures WHERE key=?', (key,))
+    return u
+
+
+def birth_date(value):
+    text = str(value or '')
+    require(re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', text) is not None, 'Enter your date of birth.')
+    try: born = dt.date.fromisoformat(text)
+    except ValueError: raise Problem(400, 'Enter your date of birth.')
+    today = dt.date.today()
+    require(dt.date(1900, 1, 1) <= born <= today, 'Enter your date of birth.')
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    require(age >= MINIMUM_AGE, f'You need to be {MINIMUM_AGE} or older to open an account. A parent or guardian can make requests for you.')
+    return born.isoformat()
+
+
+def new_password(q):
     password = q.get('password')
     require(isinstance(password, str) and 8 <= len(password) <= 200, 'Choose a password of at least 8 characters.')
-    require(c.execute('SELECT 1 FROM users WHERE username=?', (username,)).fetchone() is None,
-            ('This phone number' if method == 'phone' else 'This email address') + ' already has an account. Sign in instead.', 409)
+    require(password == q.get('confirm'), 'The two passwords do not match.')
+    return password
+
+
+def registration_contacts(q):
+    contacts = [(kind, contact_value(kind, q.get(kind))) for kind in CONTACT_KINDS if str(q.get(kind) or '').strip()]
+    require(contacts, 'Enter an email address, a phone number, or both.')
+    return contacts
+
+
+def create_account(c, first, last, born, contacts, password, outbox, verified=()):
+    """The account, its profile and its contacts; a code goes to each contact not already verified."""
+    for kind, value in contacts:
+        require(contact_owner(c, kind, value) is None,
+                ('This email address' if kind == 'email' else 'This phone number') + ' already has an account. Sign in instead.', 409)
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)).isoformat()
-    recent = c.execute("SELECT COUNT(*) FROM audit WHERE parish_id=? AND action='member.signup' AND at>?", (pid, since)).fetchone()[0]
-    require(recent < SIGNUPS_PER_HOUR, 'Many accounts were opened in the last hour. Please try again later or call the parish office.', 429)
-    d, at = json.loads(row['data']), NOW()
-    person_id, user_id = 'p' + secrets.token_hex(8), 'u-' + secrets.token_hex(8)
-    d['PEOPLE'].append(dict(id=person_id, lat=name, ar=name, town='', townAr='', rite='', status='member',
-                            phone=record_phone(username) if method == 'phone' else '—', email=email, born='', hh=None, tags=[],
-                            registeredOnline=dict(at=at, via=method, verified=False)))
-    d['PERSON_EXTRA'][person_id] = dict(skills=[], dates=[], occupation='')
-    d = migrate_state(d)
-    validate(d)
-    sync_relationships(c, pid, d)
-    c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
-    c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id, username, name, 'member', row['diocese'], person_id, password_hash(password)))
-    c.execute('INSERT INTO assignments VALUES(?,?)', (user_id, pid))
-    audit(c, {'id': user_id}, pid, 'member.signup', {'via': method})
-    return user_id
+    recent = c.execute("SELECT COUNT(*) FROM audit WHERE action='account.signup' AND at>?", (since,)).fetchone()[0]
+    require(recent < SIGNUPS_PER_HOUR, 'Many accounts were opened in the last hour. Please try again later.', 429)
+    user_id, at = 'u-' + secrets.token_hex(8), NOW()
+    c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id, contacts[0][1], f'{first} {last}', 'user', '', None,
+                                                          password_hash(password) if password else ''))
+    c.execute('INSERT INTO user_profiles VALUES(?,?,?,?,?,?)', (user_id, first, last, born, '{}', at))
+    delivery = []
+    for kind, value in contacts:
+        done = (kind, value) in verified
+        c.execute('INSERT INTO user_contacts VALUES(?,?,?,?,?)', (user_id, kind, value, at if done else None, at))
+        delivery.append(dict(kind=kind, value=value, delivery='verified' if done else issue_code(c, user_id, 'verify', kind, value, outbox)))
+    audit(c, {'id': user_id}, None, 'account.signup', {'via': [kind for kind, _ in contacts]})
+    return user_id, delivery
+
+
+def register(c, q, outbox):
+    """Anyone 13 or older opens an account: a first and last name, an email address and/or a phone number,
+    a password. No parish is chosen here."""
+    require(not q.get('website'), 'The account could not be created.')  # a field only robots fill in
+    first = clean(q.get('firstName'), 60, 'Enter your first name.')
+    last = clean(q.get('lastName'), 60, 'Enter your last name.')
+    contacts = registration_contacts(q)
+    born = birth_date(q.get('birthDate'))
+    return create_account(c, first, last, born, contacts, new_password(q), outbox)
+
+
+# Sign-in providers. Each is unavailable until its client ID and secret and the site's public address are configured.
+PROVIDERS = {
+    'google': dict(name='Google', authorize='https://accounts.google.com/o/oauth2/v2/auth', token='https://oauth2.googleapis.com/token',
+                   scope='openid email profile', pkce=True, issuers=('https://accounts.google.com', 'accounts.google.com')),
+    'microsoft': dict(name='Microsoft', authorize='https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize',
+                      token='https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token', scope='openid email profile', pkce=True, issuers=()),
+    'apple': dict(name='Apple', authorize='https://appleid.apple.com/auth/authorize', token='https://appleid.apple.com/auth/token',
+                  scope='openid email name', pkce=False, issuers=('https://appleid.apple.com',)),
+}
+
+
+def provider_settings(name, env=os.environ):
+    if name not in PROVIDERS: return None
+    key, base = name.upper(), env.get('PARISHLIFE_PUBLIC_URL', '').rstrip('/')
+    cid, secret = env.get(f'PARISHLIFE_{key}_CLIENT_ID', ''), env.get(f'PARISHLIFE_{key}_CLIENT_SECRET', '')
+    if not (cid and secret and re.match(r'https://|http://(localhost|127\.0\.0\.1)(:|$)', base)): return None
+    tenant = env.get('PARISHLIFE_MICROSOFT_TENANT', 'common') or 'common'
+    p = PROVIDERS[name]
+    return dict(p, client_id=cid, secret=secret, tenant=tenant, redirect=f'{base}/api/auth/{name}/callback',
+                authorize=p['authorize'].format(tenant=tenant), token=p['token'].format(tenant=tenant))
+
+
+def auth_config():
+    """What the sign-in page may offer on this server."""
+    return dict(providers={n: dict(name=p['name'], configured=provider_settings(n) is not None) for n, p in PROVIDERS.items()},
+                delivery={ch: delivery_mode(ch) for ch in DELIVERY_ENV}, minimumAge=MINIMUM_AGE)
+
+
+def b64url(data): return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
+
+
+def oauth_start(c, provider, intent, user_id):
+    p = provider_settings(provider)
+    state, verifier, nonce = secrets.token_urlsafe(24), secrets.token_urlsafe(48), secrets.token_urlsafe(24)
+    c.execute('DELETE FROM oauth_states WHERE created<?', (time.time() - 1800,))
+    c.execute('INSERT INTO oauth_states VALUES(?,?,?,?,?,?,?,?)', (sha(state), provider, intent, user_id, verifier, nonce, '{}', time.time()))
+    params = dict(client_id=p['client_id'], redirect_uri=p['redirect'], response_type='code', scope=p['scope'], state=state, nonce=nonce)
+    if p['pkce']: params.update(code_challenge=b64url(hashlib.sha256(verifier.encode()).digest()), code_challenge_method='S256')
+    if provider == 'apple': params['response_mode'] = 'form_post'
+    if provider == 'google': params['prompt'] = 'select_account'
+    return p['authorize'] + '?' + urlencode(params), state
+
+
+def checked_claims(p, provider, claims, nonce):
+    """The ID token came straight from the provider's token endpoint over TLS, so (as OpenID Connect allows)
+    its signature is not re-checked here; issuer, audience, expiry and nonce are."""
+    aud = claims.get('aud')
+    if p['client_id'] not in (aud if isinstance(aud, list) else [aud]): return None
+    if not isinstance(claims.get('exp'), (int, float)) or claims['exp'] < time.time() - 60: return None
+    if not hmac.compare_digest(str(claims.get('nonce') or ''), nonce): return None
+    iss = str(claims.get('iss') or '')
+    if provider == 'microsoft':
+        tid = str(claims.get('tid') or '')
+        if not tid or iss != f'https://login.microsoftonline.com/{tid}/v2.0' or p['tenant'] not in {'common', 'organizations', 'consumers', tid}: return None
+    elif iss not in p['issuers']: return None
+    sub = str(claims.get('sub') or '')
+    if not sub or len(sub) > 255: return None
+    email = str(claims.get('email') or '').strip().lower()
+    email = email if len(email) <= 120 and EMAIL_ADDRESS.fullmatch(email) else ''
+    # Microsoft does not say whether an address was checked, so it is never treated as verified.
+    verified = bool(email) and provider in {'google', 'apple'} and claims.get('email_verified') in (True, 'true')
+    return dict(sub=sub, email=email, verified=verified,
+                firstName=' '.join(str(claims.get('given_name') or '').split())[:60], lastName=' '.join(str(claims.get('family_name') or '').split())[:60])
+
+
+def oauth_exchange(p, provider, code, verifier, nonce):
+    form = dict(grant_type='authorization_code', code=code, redirect_uri=p['redirect'], client_id=p['client_id'], client_secret=p['secret'])
+    if p['pkce']: form['code_verifier'] = verifier
+    try:
+        request = urllib.request.Request(p['token'], data=urlencode(form).encode(), method='POST',
+                                         headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'})
+        with urllib.request.urlopen(request, timeout=10) as r: token = json.loads(r.read())
+        payload = token['id_token'].split('.')[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+        require(isinstance(claims, dict), 'Invalid token.')
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, Problem):
+        return None
+    return checked_claims(p, provider, claims, nonce)
+
+
+def oauth_finish(c, provider, params, cookie_state):
+    """The provider sent the browser back. Returns (where to send it next, the account to sign in or None).
+    An identity signs in only the account it was linked to; a matching email address is never merged."""
+    state = str(params.get('state') or '')
+    row = c.execute('SELECT * FROM oauth_states WHERE state=? AND provider=? AND created>? AND intent<>?',
+                    (sha(state), provider, time.time() - 600, 'complete')).fetchone() if state else None
+    if row: c.execute('DELETE FROM oauth_states WHERE state=?', (row['state'],))
+    c.commit()   # the provider's token endpoint is asked next; nothing is held while waiting for it
+    back = '/index.html#/account' if row and row['intent'] == 'link' else '/index.html'
+    if row is None or not hmac.compare_digest(str(cookie_state or ''), state): return '/index.html?auth_error=expired', None
+    if params.get('error'): return f'/index.html?auth_error=cancelled{back[11:]}', None
+    p = provider_settings(provider)
+    if p is None: return '/index.html?auth_error=unavailable', None
+    claims = oauth_exchange(p, provider, str(params.get('code') or ''), row['verifier'], row['nonce'])
+    if claims is None: return f'/index.html?auth_error=failed{back[11:]}', None
+    if provider == 'apple' and params.get('user'):   # Apple sends the name once, beside the token
+        try:
+            name = json.loads(params['user']).get('name') or {}
+            claims['firstName'] = claims['firstName'] or ' '.join(str(name.get('firstName') or '').split())[:60]
+            claims['lastName'] = claims['lastName'] or ' '.join(str(name.get('lastName') or '').split())[:60]
+        except (ValueError, AttributeError): pass
+    identity = c.execute('SELECT * FROM user_identities WHERE provider=? AND subject=?', (provider, claims['sub'])).fetchone()
+    if row['intent'] == 'link':
+        owner = c.execute('SELECT * FROM users WHERE id=?', (row['user_id'],)).fetchone()
+        if not login_allowed(c, owner): return '/index.html?auth_error=expired', None
+        if identity and identity['user_id'] != owner['id']: return '/index.html?auth_error=linked-elsewhere#/account', None
+        if identity is None:
+            c.execute('INSERT INTO user_identities VALUES(?,?,?,?,?)', (provider, claims['sub'], owner['id'], claims['email'], NOW()))
+            if claims['verified']:   # the provider checked this address, so the same address on this account is verified too
+                c.execute('UPDATE user_contacts SET verified_at=? WHERE user_id=? AND kind=? AND value=? AND verified_at IS NULL',
+                          (NOW(), owner['id'], 'email', claims['email']))
+            audit(c, owner, None, 'account.provider-linked', {'provider': provider})
+        return f'/index.html?linked={provider}#/account', None
+    if identity: return '/index.html', identity['user_id']
+    if claims['email'] and contact_owner(c, 'email', claims['email']):
+        return f'/index.html?auth_error=email-in-use&provider={provider}', None
+    ticket = secrets.token_urlsafe(24)
+    c.execute('INSERT INTO oauth_states VALUES(?,?,?,?,?,?,?,?)', (sha(ticket), provider, 'complete', None, '', '', json.dumps(claims), time.time()))
+    return f'/index.html?provider_signup={ticket}&provider={provider}', None
+
+
+def provider_ticket(c, ticket):
+    row = c.execute("SELECT * FROM oauth_states WHERE state=? AND intent='complete' AND created>?",
+                    (sha(str(ticket or '')), time.time() - 1800)).fetchone()
+    require(row is not None, 'This sign-up has expired. Start again with the same button.', 400)
+    claims = json.loads(row['data'])
+    return row, claims, dict(provider=row['provider'], providerName=PROVIDERS[row['provider']]['name'], email=claims['email'],
+                             emailVerified=claims['verified'], firstName=claims['firstName'], lastName=claims['lastName'])
+
+
+def provider_complete(c, q, outbox):
+    """Finishes an account opened with a provider: the same name, age and contact rules; no password needed."""
+    row, claims, _ = provider_ticket(c, q.get('ticket'))
+    require(not q.get('website'), 'The account could not be created.')
+    first = clean(q.get('firstName'), 60, 'Enter your first name.')
+    last = clean(q.get('lastName'), 60, 'Enter your last name.')
+    born = birth_date(q.get('birthDate'))
+    contacts = ([('email', claims['email'])] if claims['email'] else []) + \
+               ([('phone', contact_value('phone', q.get('phone')))] if str(q.get('phone') or '').strip() else [])
+    require(contacts, 'Enter a phone number. Your provider did not share an email address.')
+    require(c.execute('SELECT 1 FROM user_identities WHERE provider=? AND subject=?', (row['provider'], claims['sub'])).fetchone() is None,
+            'This account is already linked. Sign in instead.', 409)
+    user_id, delivery = create_account(c, first, last, born, contacts, None, outbox,
+                                       verified={('email', claims['email'])} if claims['verified'] else set())
+    c.execute('INSERT INTO user_identities VALUES(?,?,?,?,?)', (row['provider'], claims['sub'], user_id, claims['email'], NOW()))
+    c.execute('DELETE FROM oauth_states WHERE state=?', (row['state'],))
+    return user_id, delivery
+
+
+def settle(delivery, outbox):
+    """What happened to each code once the delivery service answered."""
+    status = {item['target']: item['status'] for item in outbox}
+    return [dict(item, delivery=status.get(item['value'], item['delivery'])) for item in delivery]
+
+
+def account_view(c, u):
+    """The person's own account: name, sign-in methods and their verification, two-step verification, providers."""
+    profile = c.execute('SELECT * FROM user_profiles WHERE user_id=?', (u['id'],)).fetchone()
+    names = u['name'].split(' ', 1)
+    now, contacts = time.time(), []
+    for k in c.execute('SELECT * FROM user_contacts WHERE user_id=? ORDER BY kind,created_at', (u['id'],)).fetchall():
+        code = None if k['verified_at'] else c.execute(
+            "SELECT delivery,created,expires,used_at FROM verification_codes WHERE user_id=? AND target=? AND purpose='verify' ORDER BY created DESC LIMIT 1",
+            (u['id'], k['value'])).fetchone()
+        contacts.append(dict(kind=k['kind'], value=k['value'], verified=bool(k['verified_at']), verifiedAt=k['verified_at'] or '',
+                             username=k['value'] == u['username'],
+                             code=dict(delivery=code['delivery'], sentAt=dt.datetime.fromtimestamp(code['created'], dt.timezone.utc).isoformat(),
+                                       open=code['used_at'] is None and code['expires'] > now) if code else None))
+    rows = mfa_rows(c, u['id'])
+    on = lambda m: bool(rows.get(m) and rows[m]['enabled_at'])
+    mfa = dict(totp=dict(enabled=on('totp'), pending=bool(rows.get('totp')) and not on('totp')),
+               recoveryLeft=len(json.loads(rows['recovery']['recovery'])) if on('recovery') else 0)
+    for m in ('email', 'sms'):
+        mfa[m] = dict(enabled=on(m), delivery=delivery_mode(m), contact=bool(verified_contact(c, u['id'], KIND_OF[m])))
+    identities = [dict(provider=r['provider'], name=PROVIDERS.get(r['provider'], {}).get('name', r['provider']), email=r['email'], linkedAt=r['linked_at'])
+                  for r in c.execute('SELECT * FROM user_identities WHERE user_id=? ORDER BY linked_at', (u['id'],))]
+    return dict(username=u['username'], name=u['name'], firstName=profile['first_name'] if profile else names[0],
+                lastName=profile['last_name'] if profile else (names[1] if len(names) > 1 else ''), birthDate=profile['birth_date'] if profile else '',
+                hasPassword=bool(u['password']), contacts=contacts, mfa=mfa, identities=identities, config=auth_config())
+
+
+def confirm_identity(c, u, q):
+    """Before turning off a safeguard: the password, or for an account without one, a current authenticator code."""
+    if u['password']:
+        require(password_matches(u['password'], str(q.get('password') or '')), 'Your password is not right.', 403)
+        return
+    totp = mfa_rows(c, u['id']).get('totp')
+    if totp and totp['enabled_at']:
+        require(mfa_check(c, u['id'], 'totp', q.get('code')), 'Enter a current code from your authenticator app.', 403)
+
+
+def account_action(c, u, session, q, outbox):
+    op, at = q.get('op'), NOW()
+    if op == 'updateProfile':
+        first, last = clean(q.get('firstName'), 60, 'Enter your first name.'), clean(q.get('lastName'), 60, 'Enter your last name.')
+        c.execute('INSERT INTO user_profiles(user_id,first_name,last_name,updated_at) VALUES(?,?,?,?) '
+                  'ON CONFLICT(user_id) DO UPDATE SET first_name=excluded.first_name,last_name=excluded.last_name,updated_at=excluded.updated_at',
+                  (u['id'], first, last, at))
+        c.execute('UPDATE users SET name=? WHERE id=?', (f'{first} {last}', u['id']))
+        audit(c, u, None, 'account.name-changed', {})
+        return {}
+    if op in {'addContact', 'sendCode', 'verifyContact', 'removeContact'}:
+        kind = q.get('kind')
+        require(kind in CONTACT_KINDS, 'Choose an email address or a phone number.')
+        value = contact_value(kind, q.get('value'))
+        row = c.execute('SELECT * FROM user_contacts WHERE user_id=? AND kind=? AND value=?', (u['id'], kind, value)).fetchone()
+        noun = 'email address' if kind == 'email' else 'phone number'
+        if op == 'addContact':
+            require(row is None, f'This {noun} is already on your account.', 409)
+            require(contact_owner(c, kind, value) is None, f'This {noun} belongs to another account.', 409)
+            require(c.execute('SELECT COUNT(*) FROM user_contacts WHERE user_id=? AND kind=?', (u['id'], kind)).fetchone()[0] < 3,
+                    f'An account can have up to three of each. Remove one first.')
+            c.execute('INSERT INTO user_contacts VALUES(?,?,?,?,?)', (u['id'], kind, value, None, at))
+            audit(c, u, None, 'account.contact-added', {'kind': kind})
+            return dict(delivery=issue_code(c, u['id'], 'verify', kind, value, outbox))
+        require(row is not None, f'This {noun} is not on your account.', 404)
+        if op == 'sendCode':
+            require(not row['verified_at'], f'This {noun} is already verified.')
+            return dict(delivery=issue_code(c, u['id'], 'verify', kind, value, outbox))
+        if op == 'verifyContact':
+            require(not row['verified_at'], f'This {noun} is already verified.')
+            consume_code(c, u['id'], 'verify', value, q.get('code'))
+            c.execute('UPDATE user_contacts SET verified_at=? WHERE user_id=? AND kind=? AND value=?', (at, u['id'], kind, value))
+            audit(c, u, None, 'account.contact-verified', {'kind': kind})
+            return {}
+        require(value != u['username'], f'This {noun} is also your username, so it stays on your account.')
+        method = CHANNEL[kind]
+        rows = mfa_rows(c, u['id'])
+        if rows.get(method) and rows[method]['enabled_at'] and row['verified_at']:
+            others = c.execute('SELECT COUNT(*) FROM user_contacts WHERE user_id=? AND kind=? AND verified_at IS NOT NULL AND value<>?',
+                               (u['id'], kind, value)).fetchone()[0]
+            require(others, f'Two-step verification sends codes to this {noun}. Turn that off first, or verify another one.')
+        c.execute('DELETE FROM user_contacts WHERE user_id=? AND kind=? AND value=?', (u['id'], kind, value))
+        audit(c, u, None, 'account.contact-removed', {'kind': kind})
+        return {}
+    if op == 'changePassword':
+        if u['password']:
+            require(password_matches(u['password'], str(q.get('current') or '')), 'Your current password is not right.', 403)
+        c.execute('UPDATE users SET password=? WHERE id=?', (password_hash(new_password(q)), u['id']))
+        c.execute('DELETE FROM sessions WHERE user_id=? AND token<>?', (u['id'], session['token']))   # signed out everywhere else
+        audit(c, u, None, 'account.password-changed', {})
+        return {}
+    if op == 'totpBegin':
+        rows = mfa_rows(c, u['id'])
+        require(not (rows.get('totp') and rows['totp']['enabled_at']), 'The authenticator app is already set up.')
+        secret = base64.b32encode(secrets.token_bytes(20)).decode()
+        c.execute('INSERT INTO user_mfa VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,method) DO UPDATE SET secret=excluded.secret,enabled_at=NULL,last_step=0',
+                  (u['id'], 'totp', secret, None, 0, '[]'))
+        label = quote(f'ParishLife:{u["username"]}')
+        return dict(secret=secret, uri=f'otpauth://totp/{label}?secret={secret}&issuer=ParishLife&algorithm=SHA1&digits=6&period=30')
+    if op == 'totpConfirm':
+        row = mfa_rows(c, u['id']).get('totp')
+        require(row is not None and not row['enabled_at'], 'Start the authenticator set-up again.')
+        step = totp_step(row['secret'], q.get('code'), 0)
+        require(step is not None, 'That code is not right. Check that the time on your phone is correct, then try the newest code.')
+        c.execute("UPDATE user_mfa SET enabled_at=?,last_step=? WHERE user_id=? AND method='totp'", (at, step, u['id']))
+        first_method = not any(r['enabled_at'] for m, r in mfa_rows(c, u['id']).items() if m in {'email', 'sms', 'recovery'})
+        audit(c, u, None, 'account.mfa-on', {'method': 'totp'})
+        return dict(recovery=new_recovery_codes(c, u['id']) if first_method else None)
+    if op == 'mfaEnable':
+        method = q.get('method')
+        require(method in {'email', 'sms'}, 'Choose how to receive codes.')
+        require(delivery_mode(method) != 'none', ('Email' if method == 'email' else 'Text message') +
+                ' codes are not available: this server has no delivery service set up for them yet.')
+        require(verified_contact(c, u['id'], KIND_OF[method]), 'Verify ' + ('an email address' if method == 'email' else 'a phone number') + ' first.')
+        rows = mfa_rows(c, u['id'])
+        first_method = not any(r['enabled_at'] for m, r in rows.items() if m in {'totp', 'email', 'sms', 'recovery'})
+        c.execute('INSERT INTO user_mfa VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,method) DO UPDATE SET enabled_at=excluded.enabled_at',
+                  (u['id'], method, '', at, 0, '[]'))
+        audit(c, u, None, 'account.mfa-on', {'method': method})
+        return dict(recovery=new_recovery_codes(c, u['id']) if first_method else None)
+    if op == 'mfaDisable':
+        method = q.get('method')
+        require(method in {'totp', 'email', 'sms'}, 'Choose a method.')
+        confirm_identity(c, u, q)
+        c.execute('DELETE FROM user_mfa WHERE user_id=? AND method=?', (u['id'], method))
+        if not any(r['enabled_at'] for m, r in mfa_rows(c, u['id']).items() if m in {'totp', 'email', 'sms'}):
+            c.execute("DELETE FROM user_mfa WHERE user_id=? AND method='recovery'", (u['id'],))
+        audit(c, u, None, 'account.mfa-off', {'method': method})
+        return {}
+    if op == 'recoveryCodes':
+        require(login_methods(c, u['id'])[1], 'Turn on two-step verification first.')
+        confirm_identity(c, u, q)
+        audit(c, u, None, 'account.recovery-codes', {})
+        return dict(recovery=new_recovery_codes(c, u['id']))
+    if op == 'unlinkProvider':
+        provider = q.get('provider')
+        row = c.execute('SELECT * FROM user_identities WHERE user_id=? AND provider=?', (u['id'], provider)).fetchone()
+        require(row is not None, 'This sign-in provider is not linked.', 404)
+        others = c.execute('SELECT COUNT(*) FROM user_identities WHERE user_id=? AND provider<>?', (u['id'], provider)).fetchone()[0]
+        require(u['password'] or others, 'Set a password first, so you can still sign in afterwards.')
+        c.execute('DELETE FROM user_identities WHERE user_id=? AND provider=?', (u['id'], provider))
+        audit(c, u, None, 'account.provider-unlinked', {'provider': provider})
+        return {}
+    raise Problem(400, 'Unknown account action.')
 
 
 # ───────────── Organisation, roles and permissions ─────────────
@@ -564,6 +1159,7 @@ def migrate_v2(c):
         for user in c.execute("SELECT * FROM users WHERE role IN ('bishop','priest','secretary','treasurer','leader','member')").fetchall():
             materialize_legacy(c, user, note='Copied from the account’s earlier role')
         c.execute("INSERT INTO schema_migrations VALUES('v2-roles',?)", (NOW(),))
+    migrate_accounts(c)
 
 
 def legacy_access(c, u):
@@ -952,7 +1548,10 @@ def admin_action(c, u, q):
         require(scope['system'] or scope['dioceses'] or scope['parishes'], 'Administration is not part of your account.', 403)
         needle = str(q.get('query') or '').strip()
         require(3 <= len(needle) <= 120, 'Enter the person’s exact username, email address or phone number.')
-        row = c.execute('SELECT id,username,name FROM users WHERE username=? AND role<>?', (login_name(needle), 'disabled')).fetchone()
+        key = login_name(needle)
+        row = (c.execute('SELECT id,username,name FROM users WHERE username=? AND role<>?', (key, 'disabled')).fetchone()
+               or c.execute('SELECT u.id,u.username,u.name FROM user_contacts k JOIN users u ON u.id=k.user_id WHERE k.value=? AND u.role<>?',
+                            (key, 'disabled')).fetchone())
         return dict(user=dict(id=row['id'], username=row['username'], name=row['name']) if row else None)
     if op == 'createDiocese':
         require('dioceses.manage' in system_perms(auth), 'Only the super admin creates dioceses.', 403)
@@ -3212,13 +3811,76 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         parts = urlsplit(self.path)
         if parts.path == '/': self.path = '/public.html' + ('?' + parts.query if parts.query else '')
 
-    def start_session(self, c, user_id):
+    def new_session(self, c, user_id):
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         c.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
         c.execute('INSERT INTO sessions VALUES(?,?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user_id, csrf, time.time()+28800))
-        c.commit()
         secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
-        return self.reply(200, {'ok': True}, f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}')
+        return f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}'
+
+    def start_session(self, c, user_id, outbox=(), delivery=None):
+        cookie = self.new_session(c, user_id)
+        c.commit()
+        body = {'ok': True}
+        if delivery is not None:
+            send_outbox(c, outbox); body['delivery'] = settle(delivery, outbox)
+        return self.reply(200, body, cookie)
+
+    def session_user(self, c):
+        cookie = http.cookies.SimpleCookie(self.headers.get('Cookie', ''))
+        token = cookie.get('pl_session')
+        session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()
+        u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone() if session else None
+        return (session, u) if login_allowed(c, u) else (None, None)
+
+    def redirect(self, location, cookies=()):
+        self.send_response(302)
+        self.send_header('Location', location)
+        for cookie in cookies: self.send_header('Set-Cookie', cookie)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def oauth(self, path):
+        """Google, Apple and Microsoft send the browser here; every outcome is a redirect back to the sign-in page."""
+        provider, step = path.split('/')[3:5]
+        clear = 'pl_oauth=; Max-Age=0; HttpOnly; Secure; SameSite=None; Path=/api/auth/'
+        try:
+            with connect() as c:
+                c.execute('BEGIN IMMEDIATE')
+                if step == 'start':
+                    require(self.command == 'GET', 'Method not allowed.', 405)
+                    intent = parse_qs(urlsplit(self.path).query).get('intent', ['signin'])[0]
+                    if provider_settings(provider) is None or intent not in {'signin', 'signup', 'link'}:
+                        return self.redirect('/index.html?auth_error=unavailable')
+                    user_id = None
+                    if intent == 'link':
+                        _, u = self.session_user(c)
+                        if u is None: return self.redirect('/index.html?auth_error=expired')
+                        user_id = u['id']
+                    url, state = oauth_start(c, provider, intent, user_id); c.commit()
+                    return self.redirect(url, [f'pl_oauth={state}; Max-Age=600; HttpOnly; Secure; SameSite=None; Path=/api/auth/'])
+                if self.command == 'POST':   # Apple posts its answer as a form
+                    require(provider == 'apple' and self.headers.get_content_type() == 'application/x-www-form-urlencoded', 'Method not allowed.', 405)
+                    length = int(self.headers.get('Content-Length', 0))
+                    require(0 < length <= 20000, 'Request too large or empty.', 413)
+                    params = {k: v[0] for k, v in parse_qs(self.rfile.read(length).decode()).items()}
+                else:
+                    require(self.command == 'GET', 'Method not allowed.', 405)
+                    params = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
+                state = http.cookies.SimpleCookie(self.headers.get('Cookie', '')).get('pl_oauth')
+                location, user_id = oauth_finish(c, provider, params, state.value if state else '')
+                if user_id is None:
+                    c.commit(); return self.redirect(location, [clear])
+                u = c.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+                if not login_allowed(c, u):
+                    c.commit(); return self.redirect('/index.html?auth_error=blocked', [clear])
+                if login_methods(c, user_id)[1]:
+                    token = mfa_challenge(c, user_id); c.commit()
+                    return self.redirect('/index.html?mfa=' + token, [clear])
+                cookie = self.new_session(c, user_id); c.commit()
+                return self.redirect(location, [clear, cookie])
+        except (Problem, ValueError, TypeError, KeyError, AttributeError):
+            return self.redirect('/index.html?auth_error=failed', [clear])
 
     def do_GET(self):
         if self.path.startswith('/api/'): return self.api()
@@ -3238,6 +3900,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_DELETE(self): self.api()
 
     def api(self):
+        if re.fullmatch(r'/api/auth/[a-z]+/(start|callback)', urlsplit(self.path).path): return self.oauth(urlsplit(self.path).path)
         try:
             with connect() as c:
                 # Serialize validation + revision check + write in the same transaction.
@@ -3285,18 +3948,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         public_parish.update(address='', addressAr='', phone='')
                     return self.reply(200, {'parish': public_parish,
                                              'content': content, 'events': events, 'posts': posts})
+                if path == '/api/auth/config' and self.command == 'GET':
+                    return self.reply(200, auth_config())
                 if path == '/api/login' and self.command == 'POST':
-                    u = c.execute('SELECT * FROM users WHERE username=?', (login_name(q.get('username')),)).fetchone()
-                    require(login_allowed(c, u) and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
+                    u = sign_in(c, q)
+                    if login_methods(c, u['id'])[1]:   # two-step verification: a challenge instead of a session
+                        token = mfa_challenge(c, u['id']); c.commit()
+                        return self.reply(200, challenge_info(c, token)[1])
                     return self.start_session(c, u['id'])
+                if path == '/api/login/challenge' and self.command == 'POST':
+                    return self.reply(200, challenge_info(c, q.get('challenge'))[1])
+                if path == '/api/login/send' and self.command == 'POST':
+                    outbox = []; result = mfa_send(c, q, outbox); c.commit(); send_outbox(c, outbox)
+                    return self.reply(200, dict(result, delivery=outbox[0]['status'] if outbox else result['delivery']))
+                if path == '/api/login/verify' and self.command == 'POST':
+                    return self.start_session(c, mfa_verify(c, q)['id'])
                 if path == '/api/signup' and self.command == 'POST':
-                    return self.start_session(c, signup(c, q))
-                cookie = http.cookies.SimpleCookie(self.headers.get('Cookie', ''))
-                token = cookie.get('pl_session')
-                session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()
+                    outbox = []; user_id, delivery = register(c, q, outbox)
+                    return self.start_session(c, user_id, outbox, delivery)
+                if path == '/api/auth/ticket' and self.command == 'POST':
+                    return self.reply(200, provider_ticket(c, q.get('ticket'))[2])
+                if path == '/api/auth/complete' and self.command == 'POST':
+                    outbox = []; user_id, delivery = provider_complete(c, q, outbox)
+                    return self.start_session(c, user_id, outbox, delivery)
+                session, u = self.session_user(c)
                 require(session is not None, 'Sign in to continue.', 401)
-                u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
-                require(login_allowed(c, u), 'Sign in to continue.', 401)
                 if self.command != 'GET': require(hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), session['csrf']), 'Invalid request token.', 403)
                 if path == '/api/session' and self.command == 'GET':
                     auth = authority(c, u)
@@ -3305,6 +3981,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if path == '/api/logout' and self.command == 'POST':
                     c.execute('DELETE FROM sessions WHERE token=?', (session['token'],)); c.commit()
                     return self.reply(200, {'ok': True}, 'pl_session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/')
+                if path == '/api/account':
+                    if self.command == 'GET': return self.reply(200, account_view(c, u))
+                    if self.command == 'POST':
+                        outbox = []; result = account_action(c, u, session, q, outbox); c.commit()
+                        if outbox: send_outbox(c, outbox); result['delivery'] = outbox[-1]['status']
+                        return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
                 if path == '/api/oversight' and self.command == 'GET':
                     return self.reply(200, {'parishes': oversight(c, u)})
                 if path == '/api/admin':
@@ -3414,9 +4097,15 @@ def main():
     parser.add_argument('--grant-complaints', help='Username to grant explicit complaint reviewer permissions')
     parser.add_argument('--complaint-permission', action='append', default=[],
                         help='Review, Assign, Respond, Resolve, ViewIdentity, ViewSensitive or ManageCategories')
+    parser.add_argument('--dev-outbox', action='store_true',
+                        help='LOCAL DEVELOPMENT ONLY: print verification codes in this console instead of sending them')
     parser.add_argument('--demo-super-admin', action='store_true',
                         help='LOCAL DEMONSTRATION ONLY: create the super-admin account with the publicly known password 123456789')
     args = parser.parse_args(); init_db()
+    if args.dev_outbox:
+        global DEV_OUTBOX
+        DEV_OUTBOX = True
+        print('Development outbox: verification codes are printed here and are NOT sent to anyone.')
     if args.demo_super_admin:
         with connect() as c: provision_demo_super_admin(c)
         print('Demonstration super admin ready: username super-admin, password 123456789.')

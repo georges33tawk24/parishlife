@@ -14,7 +14,10 @@ import {
 import { parish_theme } from './state.js';
 import { authority, parishUser, sessionAuthority, loginAllowed, adminView, adminAction } from './authority.js';
 import { member_view, member_action } from './member.js';
-import { loginName, signup } from './accounts.js';
+import {
+  authConfig, signIn, mfaTurnedOn, mfaChallenge, challengeInfo, mfaSend, mfaVerify, register, providerTicket, providerComplete,
+  accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish
+} from './identity.js';
 import { xlsx_preview } from './xlsx.js';
 
 const HEADERS = {
@@ -59,13 +62,13 @@ function errorPage(status, message, explanation, head = false) {
   return new Response(head ? null : body, { status, headers });
 }
 
-/* http.cookies.SimpleCookie(header).get('pl_session') */
-function sessionCookie(header) {
+/* http.cookies.SimpleCookie(header).get(name) */
+function sessionCookie(header, name = 'pl_session') {
   let value = null;
   for (const part of (header || '').split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
-    if (part.slice(0, eq).trim() !== 'pl_session') continue;
+    if (part.slice(0, eq).trim() !== name) continue;
     let v = part.slice(eq + 1).trim();
     if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
     value = v;
@@ -82,6 +85,23 @@ function contentType(header) {
 function pathParts(path) {
   return path.replace(/^\/+|\/+$/g, '').split('/');
 }
+
+function redirect(location, cookies = []) {
+  const headers = new Headers({ Location: location, 'Content-Length': '0' });
+  for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
+  return new Response(null, { status: 302, headers });
+}
+
+function newSession(c, userId, secureCookie) {
+  const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
+  c.run('DELETE FROM sessions WHERE expires<?', time());
+  c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
+  return `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`;
+}
+
+/* Codes may be written to the log instead of sent only on a local `wrangler dev`. */
+const deliveryContext = (env, url) => ({ env, dev: env.PARISHLIFE_DEV_OUTBOX === '1' && ['localhost', '127.0.0.1'].includes(url.hostname) });
 
 async function storedFile(c, row) {
   const chunks = await c.all('SELECT data FROM cf_file_chunks WHERE file_id=? ORDER BY seq', row.id);
@@ -131,19 +151,45 @@ async function handle(c, env, request, url, q, secureCookie) {
     if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
     return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
   }
-  const startSession = async userId => {
-    const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
-    c.run('DELETE FROM sessions WHERE expires<?', time());
-    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
+  const ctx = deliveryContext(env, url);
+  /* Codes are handed to the delivery service only after the commit, so a retried request never sends twice. */
+  const startSession = async (userId, outbox = [], delivery = null) => {
+    const cookie = newSession(c, userId, secureCookie);
     await c.commit();
-    return reply(200, { ok: true }, `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+    const body = { ok: true };
+    if (delivery !== null) {
+      await sendOutbox(ctx, outbox);
+      body.delivery = settle(delivery, outbox);
+    }
+    return reply(200, body, cookie);
   };
+  if (path === '/api/auth/config' && method === 'GET') return reply(200, authConfig(ctx));
   if (path === '/api/login' && method === 'POST') {
-    const u = await c.first('SELECT * FROM users WHERE username=?', loginName(get(q, 'username')));
-    need(await loginAllowed(c, u) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    const u = await signIn(c, q);
+    if (await mfaTurnedOn(c, ctx, u.id)) {   // two-step verification: a challenge instead of a session
+      const token = await mfaChallenge(c, ctx, u.id);
+      await c.commit();
+      return reply(200, (await challengeInfo(c, token))[1]);
+    }
     return startSession(u.id);
   }
-  if (path === '/api/signup' && method === 'POST') return startSession(await signup(c, q));
+  if (path === '/api/login/challenge' && method === 'POST') return reply(200, (await challengeInfo(c, get(q, 'challenge')))[1]);
+  if (path === '/api/login/send' && method === 'POST') {
+    const outbox = [], result = await mfaSend(c, ctx, q, outbox);
+    await c.commit();
+    await sendOutbox(ctx, outbox);
+    return reply(200, { ...result, delivery: outbox.length ? outbox[0].status : result.delivery });
+  }
+  if (path === '/api/login/verify' && method === 'POST') return startSession((await mfaVerify(c, q)).id);
+  if (path === '/api/signup' && method === 'POST') {
+    const outbox = [], [userId, delivery] = await register(c, ctx, q, outbox);
+    return startSession(userId, outbox, delivery);
+  }
+  if (path === '/api/auth/ticket' && method === 'POST') return reply(200, (await providerTicket(c, get(q, 'ticket')))[2]);
+  if (path === '/api/auth/complete' && method === 'POST') {
+    const outbox = [], [userId, delivery] = await providerComplete(c, ctx, q, outbox);
+    return startSession(userId, outbox, delivery);
+  }
   const token = sessionCookie(request.headers.get('Cookie'));
   const [sessions, users] = await c.reads([
     ['SELECT * FROM sessions WHERE token=? AND expires>?', [sha256hex(token ?? ''), time()]],
@@ -164,6 +210,19 @@ async function handle(c, env, request, url, q, secureCookie) {
     c.run('DELETE FROM sessions WHERE token=?', session.token);
     await c.commit();
     return reply(200, { ok: true }, `pl_session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+  }
+  if (path === '/api/account') {
+    if (method === 'GET') return reply(200, await accountView(c, ctx, u));
+    if (method === 'POST') {
+      const outbox = [], result = await accountAction(c, ctx, u, session, q, outbox);
+      await c.commit();
+      if (outbox.length) {
+        await sendOutbox(ctx, outbox);
+        result.delivery = outbox[outbox.length - 1].status;
+      }
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
   }
   if (path === '/api/oversight' && method === 'GET') return reply(200, { parishes: await oversight(c, u) });
   if (path === '/api/admin') {
@@ -363,6 +422,73 @@ async function api(request, env, url) {
 }
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/* A piece of work in a transaction of its own, run again from the start if another request committed first. */
+async function inTransaction(db, work) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await work(new Tx(db));
+    } catch (error) {
+      if (!(error instanceof Conflict) || attempt >= ATTEMPTS) throw error;
+      await delay(Math.random() * Math.min(250, 4 * 2 ** Math.min(attempt, 6)));
+    }
+  }
+}
+
+/* Google, Apple and Microsoft send the browser here; every outcome is a redirect back to the sign-in page. */
+async function oauth(request, env, url) {
+  const [, , , provider, step] = url.pathname.split('/');
+  const clear = 'pl_oauth=; Max-Age=0; HttpOnly; Secure; SameSite=None; Path=/api/auth/';
+  const ctx = deliveryContext(env, url);
+  const secureCookie = url.protocol === 'https:' || env.PARISHLIFE_SECURE_COOKIE === '1' ? '; Secure' : '';
+  try {
+    await ensureDatabase(env.DB);
+    if (step === 'start') {
+      need(request.method === 'GET', 'Method not allowed.', 405);
+      const intent = url.searchParams.get('intent') ?? 'signin';
+      if (providerSettings(env, provider) === null || !['signin', 'signup', 'link'].includes(intent)) return redirect('/index.html?auth_error=unavailable');
+      return await inTransaction(env.DB, async c => {
+        let userId = null;
+        if (intent === 'link') {
+          const token = sessionCookie(request.headers.get('Cookie'));
+          const u = await c.first('SELECT * FROM users WHERE id=(SELECT user_id FROM sessions WHERE token=? AND expires>?)', sha256hex(token ?? ''), time());
+          if (!(await loginAllowed(c, u))) return redirect('/index.html?auth_error=expired');
+          userId = u.id;
+        }
+        const [target, state] = oauthStart(c, env, provider, intent, userId);
+        await c.commit();
+        return redirect(target, [`pl_oauth=${state}; Max-Age=600; HttpOnly; Secure; SameSite=None; Path=/api/auth/`]);
+      });
+    }
+    let params;
+    if (request.method === 'POST') {   // Apple posts its answer as a form
+      need(provider === 'apple' && contentType(request.headers.get('Content-Type')) === 'application/x-www-form-urlencoded', 'Method not allowed.', 405);
+      const text = await request.text();
+      need(text.length > 0 && text.length <= 20000, 'Request too large or empty.', 413);
+      params = Object.fromEntries(new URLSearchParams(text));
+    } else {
+      need(request.method === 'GET', 'Method not allowed.', 405);
+      params = Object.fromEntries(url.searchParams);
+    }
+    const [location, userId] = await oauthFinish(env, provider, params, sessionCookie(request.headers.get('Cookie'), 'pl_oauth'), work => inTransaction(env.DB, work));
+    if (userId === null) return redirect(location, [clear]);
+    return await inTransaction(env.DB, async c => {
+      const u = await c.first('SELECT * FROM users WHERE id=?', userId);
+      if (!(await loginAllowed(c, u))) return redirect('/index.html?auth_error=blocked', [clear]);
+      if (await mfaTurnedOn(c, ctx, userId)) {
+        const token = await mfaChallenge(c, ctx, userId);
+        await c.commit();
+        return redirect('/index.html?mfa=' + token, [clear]);
+      }
+      const cookie = newSession(c, userId, secureCookie);
+      await c.commit();
+      return redirect(location, [clear, cookie]);
+    });
+  } catch (error) {
+    if (!(error instanceof Problem || error instanceof PyError || error instanceof TypeError || error instanceof SyntaxError)) console.error(error);
+    return redirect('/index.html?auth_error=failed', [clear]);
+  }
+}
+
 function failure(error) {
   if (error instanceof Problem) return reply(error.status, { error: error.message });
   if (error instanceof PyError || error instanceof TypeError || error instanceof SyntaxError) {
@@ -378,6 +504,7 @@ export default {
     setTimeZone(env.PARISH_TIMEZONE || 'Asia/Beirut');
     const url = new URL(request.url);
     const method = request.method;
+    if (/^\/api\/auth\/[a-z]+\/(start|callback)$/.test(url.pathname)) return oauth(request, env, url);
     if (method === 'GET' && url.pathname.startsWith('/api/')) return api(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return api(request, env, url);
     if (method === 'GET' || method === 'HEAD') {

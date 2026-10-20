@@ -428,18 +428,3 @@ administration.mount = host => {
   host.querySelector('#adm-block')?.addEventListener('click', block);
   host.querySelectorAll('[data-unblock]').forEach(b => b.addEventListener('click', () => unblock(b.dataset.unblock)));
 };
-
-/* ---------- the account's own home when no parish is open ---------- */
-export function account() {
-  const a = session.authority || {};
-  const places = [
-    ...(a.superadmin ? [[L('Super admin', 'المدير العام'), L('All of ParishLife', 'كامل ParishLife')]] : []),
-    ...(a.dioceses || []).map(x => [ROLES[x.role] ? L(ROLES[x.role].en, ROLES[x.role].ar) : x.role, L(x.name, x.nameAr || x.name)]),
-    ...session.parishes.map(p => [L(p.role, p.roleAr), L(p.name, p.ar)])];
-  return pageHead({ title: L('My account', 'حسابي'), sub: L('Your ParishLife account belongs to you, not to a parish.', 'حسابك في ParishLife ملكك، لا ملك رعية.') }) +
-    `<div class="grid g2" style="margin-top:8px">${panel(L('Account', 'الحساب'), `<dl class="dl"><dt>${L('Name', 'الاسم')}</dt><dd>${esc(session.user?.name || '')}</dd>
-        <dt>${L('Signs in as', 'يسجّل الدخول باسم')}</dt><dd dir="ltr">${esc(session.user?.username || '')}</dd></dl>`)}
-      ${panel(L('Your places', 'أماكنك'), places.length ? `<ul class="admin-list">${places.map(([r, p]) => `<li>${icon('portal', 16, 'dimmer')}<span><b>${esc(p)}</b><small>${esc(r)}</small></span></li>`).join('')}</ul>`
-        : `<p class="dim">${L('You are not connected to a parish yet.', 'لست مرتبطاً برعية بعد.')}</p><p style="margin-top:12px"><a class="btn btn-secondary" href="public.html#directory">${L('Find a parish', 'ابحث عن رعية')}</a></p>`)}</div>`;
-}
-account.mount = () => {};

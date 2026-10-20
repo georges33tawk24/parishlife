@@ -823,6 +823,22 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .linkbtn:hover{text-decoration-thickness:2px}
 .signin-hp{position:absolute;inset-inline-start:-10000px;width:1px;height:1px;overflow:hidden}
 .signin-box .langswap{display:flex;justify-content:center;gap:4px;width:max-content;margin:24px auto 0}
+/* Email | Phone number | Username: a quieter tab list inside the sign-in form */
+.signin-via{display:flex;gap:6px;margin:0 0 16px;flex-wrap:wrap}
+.signin-via button{min-height:36px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font:500 14px/1.2 var(--sans);cursor:pointer}
+.signin-via button:hover{border-color:var(--border-strong);color:var(--text)}
+.signin-via button[aria-selected=true]{border-color:var(--primary);background:var(--primary-subtle);color:var(--primary);font-weight:600}
+.signin-via button:focus-visible{outline:none;box-shadow:var(--focus)}
+[dir=rtl] .signin-via button{font-family:var(--arabic)}
+.signin-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.signin-method>.help{margin:-2px 0 12px}
+.signin-method>.si-error{margin:-6px 0 12px}
+.signin-or{display:flex;align-items:center;gap:12px;margin:22px 0 14px;color:var(--text-2);font-size:13px}
+.signin-or::before,.signin-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.signin-providers{display:grid;gap:8px}
+.signin-provider{width:100%;min-height:46px;justify-content:center;font-weight:500}
+.signin-provider[disabled]{opacity:.6;cursor:not-allowed}
+@media (max-width:380px){.signin-pair{grid-template-columns:1fr;gap:0}}
 .signin-box .langswap button{min-width:84px;min-height:36px}
 @media (max-width:860px){
   #app.signin{grid-template-columns:1fr;grid-template-rows:auto 1fr}
@@ -1527,3 +1543,28 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .perm-row small{display:block;color:var(--text-2);font-size:12px;line-height:16px}
 .admin-inline-form{margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface-soft)}
 .admin-inline-form .btn{margin-top:4px}
+
+/* ---------- My account ---------- */
+.account-grid{margin:16px 0}
+.account-grid+.panel,.panel+.account-grid,.panel+.panel{margin-top:16px}
+.acct-contacts li,.panel .admin-list li{align-items:flex-start}
+.acct-contact .grow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;min-width:0}
+.acct-contact .grow>b{overflow-wrap:anywhere}
+.acct-status{flex-basis:100%}
+.acct-delivery{display:block;color:var(--text-2)}
+.acct-delivery.tone-warning{color:var(--warning-ink)}
+.acct-delivery.tone-danger{color:var(--danger-ink)}
+.acct-delivery.tone-success{color:var(--success-ink)}
+.acct-contact .admin-inline-form{flex-basis:100%;margin-top:6px}
+.admin-list li>.acct-acts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;flex:none}
+.acct-add{margin-top:14px}
+.btn.is-disabled{opacity:.55;pointer-events:none}
+.recovery-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+.recovery-codes li{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--muted);font-size:15px;text-align:center}
+.totp-key{margin:8px 0;padding:10px 12px;border:1px dashed var(--border-strong);border-radius:8px;background:var(--muted);font-size:16px;letter-spacing:.06em;overflow-wrap:anywhere}
+.steps-list{margin:0;padding-inline-start:20px;display:grid;gap:14px}
+@media (max-width:640px){.admin-list li{flex-wrap:wrap}.admin-list li>.acct-acts{flex-basis:100%;justify-content:flex-start}}
+.acct-add,.acct-contact .admin-inline-form{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.acct-add .label,.acct-contact .admin-inline-form .label{margin:0;flex-basis:100%}
+.acct-add .input{flex:1;min-width:12em}
+.acct-add .btn,.acct-contact .admin-inline-form .btn{margin-top:0}

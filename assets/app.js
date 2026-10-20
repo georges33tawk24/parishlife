@@ -24,6 +24,7 @@ import * as Admin     from './views/admin.js';
 import * as Oversight from './views/oversight.js';
 import * as Administration from './views/administration.js';
 import * as Member from './views/member.js';
+import * as Account from './views/account.js';
 import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
 import { applyTheme } from './theme.js';
@@ -94,7 +95,7 @@ export const ROUTES = {
   household:    { ico:'family',   en:'Household',         ar:'العائلة',             view:People.householdView, hidden:true },
   styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide },
   administration: { ico:'shield', en:'Administration',   ar:'الإدارة',             view:Administration.administration },
-  account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Administration.account }
+  account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Account.account }
 };
 
 export { S as state, ROLES, me, go };
@@ -105,7 +106,7 @@ const PERSONAL_ROUTES = new Set(['memberhome','myrequests','myministries','mymee
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
 const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
-export const allowed = id => canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+export const allowed = id => id === 'account' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
   (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
@@ -226,7 +227,7 @@ const siteLink = () => {
 
 /* ---------------- sign in, or open an account ---------------- */
 /* What the sign-in screen remembers while it is redrawn (a language switch, a failed attempt). */
-const SI = { tab: '', values: {}, parishes: null };
+const SI = { tab: '', via: '', values: {}, config: null, challenge: null, ticket: null, provider: null };
 const EASTERN_DIGITS = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
 /* A phone number read the way the server reads it (login_name): any spacing, 00 or +, Arabic
    digits; Lebanon unless another country code is given. '' when it is not a phone number. */
@@ -246,105 +247,142 @@ const passwordField = (id, label, autocomplete, help = '') => `<div class="formr
 const siField = (id, label, attrs, help = '') => `<div class="formrow"><label class="label" for="${id}">${label}</label>
   <input class="input" id="${id}" ${attrs} aria-describedby="${help ? `${id}-help ` : ''}${id}-error">
   ${help ? `<span class="help" id="${id}-help">${help}</span>` : ''}<span class="si-error" id="${id}-error" hidden></span></div>`;
-const parishLabel = p => t(p.name, p.ar || p.name) + (p.town ? ` — ${t(p.town, p.townAr || p.town)}` : '');
+/* Words for the outcomes a sign-in provider can send back. */
+const AUTH_ERRORS = {
+  unavailable: () => t('That sign-in provider is not set up on this server yet. Use your email address, phone number or username instead.', 'مزوّد تسجيل الدخول هذا غير مُعدّ على هذا الخادم بعد. استخدم بريدك الإلكتروني أو رقم هاتفك أو اسم المستخدم.'),
+  expired: () => t('The sign-in took too long, or was started in another browser. Please try again.', 'استغرق تسجيل الدخول وقتاً طويلاً أو بدأ في متصفّح آخر. يُرجى المحاولة مجدداً.'),
+  cancelled: () => t('Sign-in was cancelled.', 'أُلغي تسجيل الدخول.'),
+  failed: () => t('The provider’s sign-in could not be completed. Try again, or use your password.', 'تعذّر إكمال تسجيل الدخول عبر المزوّد. حاول مجدداً أو استخدم كلمة المرور.'),
+  blocked: () => t('This account cannot sign in. Contact your parish office.', 'لا يمكن لهذا الحساب تسجيل الدخول. اتصل بمكتب رعيتك.'),
+  'email-in-use': p => t(`An account already uses the email address from ${p}. Sign in with your password, then link ${p} from My account. Accounts are never joined automatically.`,
+    `يوجد حساب يستخدم البريد الإلكتروني الوارد من ${p}. سجّل الدخول بكلمة المرور، ثم اربط ${p} من «حسابي». لا تُدمج الحسابات تلقائياً.`),
+  'linked-elsewhere': p => t(`That ${p} account is already linked to a different ParishLife account.`, `حساب ${p} هذا مرتبط بحساب ParishLife آخر.`)
+};
+const PROVIDER_NAMES = { google: 'Google', apple: 'Apple', microsoft: 'Microsoft' };
+/* What a provider sent back in the address; read once, then removed from it. */
+function takeAuthParams() {
+  const params = new URLSearchParams(location.search), out = {};
+  for (const key of ['auth_error', 'provider', 'provider_signup', 'mfa', 'linked']) if (params.has(key)) { out[key] = params.get(key); params.delete(key); }
+  if (Object.keys(out).length) history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
+  return out;
+}
+const AUTH = takeAuthParams();
+
+const SIGNIN_VIA = [
+  ['email', 'Email', 'البريد الإلكتروني'], ['phone', 'Phone number', 'رقم الهاتف'], ['username', 'Username', 'اسم المستخدم']];
+const viaField = via => via === 'email'
+  ? siField('si_u', t('Email address', 'البريد الإلكتروني'), `type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr" maxlength="120" value="${esc(SI.values.si_email || '')}"`)
+  : via === 'phone'
+  ? siField('si_u', t('Phone number', 'رقم الهاتف'), `type="tel" inputmode="tel" autocomplete="username" dir="ltr" maxlength="40" placeholder="03 123 456" value="${esc(SI.values.si_phone || '')}"`,
+      t('Lebanese numbers need no country code. Others start with + and the country code.', 'الأرقام اللبنانية لا تحتاج رمز البلد. غيرها يبدأ بـ + ورمز البلد.'))
+  : siField('si_u', t('Username', 'اسم المستخدم'), `autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr" maxlength="120" value="${esc(SI.values.si_username || '')}"`,
+      t('Accounts made by a parish or diocese office have a username.', 'الحسابات التي أنشأها مكتب رعية أو أبرشية لها اسم مستخدم.'));
+
+/* Google, Apple and Microsoft: offered everywhere, usable only once this server is configured for them. */
+function providerButtons(intent) {
+  const cfg = SI.config?.providers || {};
+  const ready = Object.values(cfg).some(p => p.configured);
+  return `<div data-providers="${intent}"><div class="signin-or"><span>${t('or', 'أو')}</span></div>
+    <div class="signin-providers">${['google', 'apple', 'microsoft'].map(id => {
+      const p = cfg[id], on = !!p?.configured, name = PROVIDER_NAMES[id];
+      const label = intent === 'signup' ? t(`Sign up with ${name}`, `أنشئ حساباً عبر ${name}`) : t(`Continue with ${name}`, `المتابعة عبر ${name}`);
+      return on ? `<a class="btn btn-secondary signin-provider" href="/api/auth/${id}/start?intent=${intent}">${esc(label)}</a>`
+        : `<button type="button" class="btn btn-secondary signin-provider" disabled aria-describedby="si-providers-note-${intent}">${esc(label)}</button>`;
+    }).join('')}</div>
+    ${ready ? '' : `<p class="signin-fine" id="si-providers-note-${intent}">${SI.config ? t('Not set up yet: this server has no Google, Apple or Microsoft sign-in configured.', 'غير مُعدّ بعد: لا تسجيل دخول عبر Google أو Apple أو Microsoft على هذا الخادم.')
+      : t('Checking which sign-in providers this server offers…', 'جارٍ التحقّق من مزوّدي تسجيل الدخول المتاحين…')}</p>`}</div>`;
+}
 
 function loginScreen(error = '') {
   S.themeDraft = null; applyTheme(null);   // the sign-in page is ParishLife's own, before any parish is chosen
   const params = new URLSearchParams(location.search);
+  if (AUTH.provider_signup && !SI.ticket) { SI.ticket = AUTH.provider_signup; SI.tab = 'provider'; }
+  if (AUTH.mfa && !SI.challenge) { SI.challenge = { challenge: AUTH.mfa }; SI.tab = 'mfa'; }
+  if (AUTH.auth_error && !error) { error = (AUTH_ERRORS[AUTH.auth_error] || AUTH_ERRORS.failed)(PROVIDER_NAMES[AUTH.provider] || t('the provider', 'المزوّد')); delete AUTH.auth_error; SI.tab ||= 'in'; }
   SI.tab ||= params.get('signup') ? 'up' : 'in';
-  const up = SI.tab === 'up', v = SI.values;
-  const method = v.method || 'phone';
-  const wantsRequest = requestLink();
+  SI.via ||= 'email';
+  /* only the provider buttons change once the server says which providers it offers; what is being typed stays */
+  if (!SI.config) api('auth/config').then(c => {
+    SI.config = c;
+    app.querySelectorAll('.signin [data-providers]').forEach(el => { el.outerHTML = providerButtons(el.dataset.providers); });
+  }).catch(() => {});
   app.className = 'signin';
   app.innerHTML = `<div class="signin-art"><div class="brandrow"><span class="seal">P</span><span>ParishLife</span></div>
     <div><h1>${t('A little closer to your parish.', 'أقرب قليلاً إلى رعيتك.')}</h1><p>${t('Ask for a sacrament, a certificate or the parish hall, and follow every step.', 'اطلب سرّاً أو شهادة أو قاعة الرعية، وتابع كل خطوة.')}</p></div>
     <div class="swatches"><i style="background:#233B32;border:1px solid #EDF0E8"></i><i style="background:#EDF0E8"></i><i style="background:#FFFFFF"></i><i style="background:var(--selection)"></i><i style="background:var(--text-2)"></i></div></div>
     <div class="signin-form"><div class="signin-box">
       <a class="signin-back" href="${esc(siteLink())}">${icon('chevL', 16)}${siteLink() === './' ? t('Back to the website', 'العودة إلى الموقع') : t('Back to the parish page', 'العودة إلى صفحة الرعية')}</a>
-      <h2 id="si-title">${up ? t('Create your account', 'أنشئ حسابك') : t('Welcome', 'أهلاً بك')}</h2>
-      <p class="signin-lead" id="si-lead">${up ? t('It takes a minute. You can use your phone number or your email address.', 'يستغرق ذلك دقيقة. يمكنك استخدام رقم هاتفك أو بريدك الإلكتروني.')
-        : t('Sign in with your phone number or your email address.', 'سجّل الدخول برقم هاتفك أو ببريدك الإلكتروني.')}</p>
+      ${SI.tab === 'mfa' ? mfaPanel(error) : SI.tab === 'provider' ? providerPanel(error) : signInPanels(error)}
+      <div class="langswap" role="group" aria-label="${t('Language', 'اللغة')}"><button type="button" data-login-lang="en" aria-pressed="${!isAr()}">English</button><button type="button" data-login-lang="ar" aria-pressed="${isAr()}">العربية</button></div>
+    </div></div>`;
+  app.querySelectorAll('[data-login-lang]').forEach(b => b.addEventListener('click', () => { rememberLogin(); setLang(b.dataset.loginLang); loginScreen(); }));
+  if (SI.tab === 'mfa') wireMfa(); else if (SI.tab === 'provider') wireProvider(); else wireLogin();
+}
+
+function signInPanels(error) {
+  const up = SI.tab === 'up', v = SI.values, wantsRequest = requestLink();
+  const alert = show => `<div class="alert alert-danger signin-alert" role="alert" ${error && show ? '' : 'hidden'}>${icon('warn', 18)}<span>${esc(error && show ? error : '')}</span></div>`;
+  return `<h2 id="si-title">${up ? t('Create your account', 'أنشئ حسابك') : t('Welcome', 'أهلاً بك')}</h2>
+      <p class="signin-lead" id="si-lead">${up ? t('Your account is yours, not a parish’s. After creating it you can follow parishes or ask to become a member.', 'حسابك ملكك لا ملك رعية. بعد إنشائه يمكنك متابعة الرعايا أو طلب الانتساب إليها.')
+        : t('Sign in with your email address, phone number or username.', 'سجّل الدخول ببريدك الإلكتروني أو رقم هاتفك أو اسم المستخدم.')}</p>
       ${wantsRequest ? `<div class="alert alert-info signin-context">${icon('info', 18)}<span><b>${t('Sign in to send your request', 'سجّل الدخول لإرسال طلبك')}</b>${t('If you do not have an account yet, create one first. It is free and takes a minute.', 'إذا لم يكن لديك حساب بعد، أنشئ حساباً أولاً. إنه مجاني ويستغرق دقيقة.')}</span></div>` : ''}
       <div class="signin-tabs" role="tablist" aria-label="${t('Sign in or create an account', 'تسجيل الدخول أو إنشاء حساب')}">
         <button type="button" role="tab" id="si-tab-in" aria-controls="si-in" aria-selected="${!up}" tabindex="${up ? -1 : 0}" data-si-tab="in">${t('Sign in', 'تسجيل الدخول')}</button>
         <button type="button" role="tab" id="si-tab-up" aria-controls="si-up" aria-selected="${up}" tabindex="${up ? 0 : -1}" data-si-tab="up">${t('Create an account', 'إنشاء حساب')}</button>
       </div>
       <div id="si-in" role="tabpanel" aria-labelledby="si-tab-in" ${up ? 'hidden' : ''}><form novalidate>
-        <div class="alert alert-danger signin-alert" role="alert" ${error && !up ? '' : 'hidden'}>${icon('warn', 18)}<span>${esc(error && !up ? error : '')}</span></div>
-        ${siField('si_u', t('Phone number or email', 'رقم الهاتف أو البريد الإلكتروني'), `autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="120" value="${esc(v.si_u || '')}"`,
-          t('Parish staff sign in with their username.', 'يسجّل فريق الرعية الدخول باسم المستخدم الخاص به.'))}
+        ${alert(!up)}
+        <div class="signin-via" role="tablist" aria-label="${t('Sign in with', 'تسجيل الدخول بواسطة')}">${SIGNIN_VIA.map(([id, en, ar]) =>
+          `<button type="button" role="tab" id="si-via-${id}" aria-selected="${SI.via === id}" tabindex="${SI.via === id ? 0 : -1}" data-si-via="${id}" aria-controls="si-via-panel">${t(en, ar)}</button>`).join('')}</div>
+        <div id="si-via-panel" role="tabpanel" aria-labelledby="si-via-${SI.via}">${viaField(SI.via)}</div>
         ${passwordField('si_p', t('Password', 'كلمة المرور'), 'current-password')}
         <button class="btn btn-primary btn-touch signin-submit" type="submit">${t('Sign in', 'تسجيل الدخول')}</button>
         <details class="signin-forgot"><summary>${t('Forgot your password?', 'نسيت كلمة المرور؟')}</summary>
           <p>${t('Call your parish office. They will give you a new password over the phone.', 'اتصل بمكتب رعيتك، وسيعطونك كلمة مرور جديدة عبر الهاتف.')}</p></details>
+        ${providerButtons('signin')}
         <p class="signin-switch">${t('New here?', 'جديد هنا؟')} <button type="button" class="linkbtn" data-si-tab="up">${t('Create an account', 'أنشئ حساباً')}</button></p>
       </form></div>
       <div id="si-up" role="tabpanel" aria-labelledby="si-tab-up" ${up ? '' : 'hidden'}><form novalidate>
-        <div class="alert alert-danger signin-alert" role="alert" ${error && up ? '' : 'hidden'}>${icon('warn', 18)}<span>${esc(error && up ? error : '')}</span></div>
-        ${siField('su_name', t('Your full name', 'اسمك الكامل'), `autocomplete="name" maxlength="120" value="${esc(v.su_name || '')}"`)}
-        <fieldset class="signin-method"><legend class="label">${t('How would you like to sign in?', 'كيف تريد تسجيل الدخول؟')}</legend>
-          <div class="signin-methods">
-            <label class="signin-way"><input type="radio" name="su-method" value="phone" ${method === 'phone' ? 'checked' : ''}><span>${icon('phone', 20)}${t('Phone number', 'رقم الهاتف')}</span></label>
-            <label class="signin-way"><input type="radio" name="su-method" value="email" ${method === 'email' ? 'checked' : ''}><span>${icon('mail', 20)}${t('Email', 'البريد الإلكتروني')}</span></label>
-          </div></fieldset>
-        <div id="su-phone-row" ${method === 'phone' ? '' : 'hidden'}>${siField('su_phone', t('Mobile phone number', 'رقم الهاتف الخلوي'), `type="tel" inputmode="tel" autocomplete="tel" dir="ltr" maxlength="40" placeholder="03 123 456" value="${esc(v.su_phone || '')}"`,
-          t('You will sign in with this number.', 'ستسجّل الدخول بهذا الرقم.'))}</div>
-        <div id="su-email-row" ${method === 'email' ? '' : 'hidden'}>${siField('su_email', t('Email address', 'البريد الإلكتروني'), `type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr" maxlength="120" value="${esc(v.su_email || '')}"`,
-          t('You will sign in with this address.', 'ستسجّل الدخول بهذا العنوان.'))}</div>
-        <div class="formrow"><label class="label" for="su_parish">${t('Your parish', 'رعيتك')}</label>
-          <select class="select" id="su_parish" aria-describedby="su_parish-error"><option value="">${t('Loading parishes…', 'جارٍ تحميل الرعايا…')}</option></select>
-          <span class="si-error" id="su_parish-error" hidden></span></div>
+        ${alert(up)}
+        <div class="signin-pair">
+          ${siField('su_first', t('First name', 'الاسم'), `autocomplete="given-name" maxlength="60" value="${esc(v.su_first || '')}"`)}
+          ${siField('su_last', t('Last name', 'الشهرة'), `autocomplete="family-name" maxlength="60" value="${esc(v.su_last || '')}"`)}
+        </div>
+        <fieldset class="signin-method" aria-describedby="su-contact-help"><legend class="label">${t('How can we reach you?', 'كيف نتواصل معك؟')}</legend>
+          <p class="help" id="su-contact-help">${t('Give an email address, a phone number, or both. You can sign in with either.', 'أدخل بريداً إلكترونياً أو رقم هاتف أو كليهما. يمكنك تسجيل الدخول بأيّ منهما.')}</p>
+          <span class="si-error" id="su_contact-error" hidden></span>
+          ${siField('su_email', t('Email address', 'البريد الإلكتروني'), `type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr" maxlength="120" value="${esc(v.su_email || '')}"`)}
+          ${siField('su_phone', t('Mobile phone number', 'رقم الهاتف الخلوي'), `type="tel" inputmode="tel" autocomplete="tel" dir="ltr" maxlength="40" placeholder="03 123 456" value="${esc(v.su_phone || '')}"`)}
+        </fieldset>
+        ${siField('su_born', t('Date of birth', 'تاريخ الولادة'), `type="date" autocomplete="bday" max="${esc(new Date().toISOString().slice(0, 10))}" value="${esc(v.su_born || '')}"`,
+          t('You need to be 13 or older to have an account.', 'يجب أن يكون عمرك ١٣ سنة أو أكثر لفتح حساب.'))}
         ${passwordField('su_p', t('Choose a password', 'اختر كلمة مرور'), 'new-password', t('At least 8 characters. Write it down and keep it somewhere safe.', '٨ أحرف على الأقل. دوّنها واحفظها في مكان آمن.'))}
+        ${passwordField('su_p2', t('Confirm the password', 'أكّد كلمة المرور'), 'new-password')}
         <div class="signin-hp" aria-hidden="true"><label for="su_website">Website</label><input id="su_website" name="website" tabindex="-1" autocomplete="off"></div>
         <button class="btn btn-primary btn-touch signin-submit" type="submit">${t('Create my account', 'إنشاء حسابي')}</button>
-        <p class="signin-fine">${t('The parish office sees new accounts and may call you to confirm your details.', 'يرى مكتب الرعية الحسابات الجديدة، وقد يتّصل بك لتأكيد معلوماتك.')}</p>
+        <p class="signin-fine">${t('We then try to send a code to check each address and number. If this server cannot send codes yet, you will see that, and your details stay unverified until it can.',
+          'نحاول بعدها إرسال رمز للتحقّق من كل عنوان ورقم. إن لم يكن الخادم قادراً على إرسال الرموز بعد، سترى ذلك، وتبقى بياناتك غير مُتحقَّق منها حتى يصبح قادراً.')}</p>
+        ${providerButtons('signup')}
         <p class="signin-switch">${t('Already have an account?', 'لديك حساب مسبقاً؟')} <button type="button" class="linkbtn" data-si-tab="in">${t('Sign in', 'سجّل الدخول')}</button></p>
-      </form></div>
-      <div class="langswap" role="group" aria-label="${t('Language', 'اللغة')}"><button type="button" data-login-lang="en" aria-pressed="${!isAr()}">English</button><button type="button" data-login-lang="ar" aria-pressed="${isAr()}">العربية</button></div>
-    </div></div>`;
-  wireLogin(params);
+      </form></div>`;
 }
 
-function wireLogin(params) {
-  const box = app.querySelector('.signin-box'), signIn = box.querySelector('#si-in form'), signUp = box.querySelector('#si-up form');
-  const remember = () => {
-    for (const id of ['si_u', 'su_name', 'su_phone', 'su_email', 'su_parish']) SI.values[id] = box.querySelector('#' + id)?.value ?? SI.values[id];
-    SI.values.method = box.querySelector('input[name="su-method"]:checked')?.value || 'phone';
-  };
-  const showTab = (tab, focus = true) => {
-    remember(); SI.tab = tab;
-    const up = tab === 'up';
-    box.querySelectorAll('[role=tab]').forEach(b => { const on = b.dataset.siTab === tab; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
-    box.querySelector('#si-in').hidden = up; box.querySelector('#si-up').hidden = !up;
-    box.querySelector('#si-title').textContent = up ? t('Create your account', 'أنشئ حسابك') : t('Welcome', 'أهلاً بك');
-    box.querySelector('#si-lead').textContent = up ? t('It takes a minute. You can use your phone number or your email address.', 'يستغرق ذلك دقيقة. يمكنك استخدام رقم هاتفك أو بريدك الإلكتروني.')
-      : t('Sign in with your phone number or your email address.', 'سجّل الدخول برقم هاتفك أو ببريدك الإلكتروني.');
-    if (focus) box.querySelector(up ? '#su_name' : '#si_u').focus();
-  };
-  box.querySelectorAll('[data-si-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.siTab, b.getAttribute('role') !== 'tab')));
-  /* Arrow keys move between the two tabs, as in any tab list */
-  box.querySelector('[role=tablist]').addEventListener('keydown', e => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    e.preventDefault();
-    const next = SI.tab === 'up' ? 'in' : 'up';
-    showTab(next, false); box.querySelector(`#si-tab-${next}`).focus();
-  });
-  app.querySelectorAll('[data-login-lang]').forEach(b => b.addEventListener('click', () => { remember(); setLang(b.dataset.loginLang); loginScreen(); }));
-  box.querySelectorAll('[data-pw]').forEach(b => b.addEventListener('click', () => {
-    const field = box.querySelector('#' + b.dataset.pw), show = field.type === 'password';
-    field.type = show ? 'text' : 'password';
-    b.setAttribute('aria-pressed', show);
-    b.innerHTML = `${icon(show ? 'eyeOff' : 'eye', 18)}<span>${show ? t('Hide', 'إخفاء') : t('Show', 'إظهار')}</span>`;
-  }));
-  box.querySelectorAll('input[name="su-method"]').forEach(r => r.addEventListener('change', () => {
-    const phone = r.value === 'phone';
-    box.querySelector('#su-phone-row').hidden = !phone; box.querySelector('#su-email-row').hidden = phone;
-    box.querySelector(phone ? '#su_phone' : '#su_email').focus();
-  }));
-  fillParishes(box, params);
+function rememberLogin() {
+  const box = app.querySelector('.signin-box');
+  if (!box) return;
+  for (const id of ['su_first', 'su_last', 'su_phone', 'su_email', 'su_born', 'pv_first', 'pv_last', 'pv_born', 'pv_phone']) {
+    const field = box.querySelector('#' + id);
+    if (field) SI.values[id] = field.value;
+  }
+  const typed = box.querySelector('#si_u');
+  if (typed) SI.values['si_' + SI.via] = typed.value;
+}
 
+/* Shared by every sign-in form: per-field messages that go as soon as the field is corrected. */
+function formHelpers(forms) {
   const fieldError = (form, id, message) => {
     const error = form.querySelector(`#${id}-error`), field = form.querySelector('#' + id);
+    if (!error) return;
     if (message) { error.innerHTML = `${icon('warn', 14)}<span>${esc(message)}</span>`; error.hidden = false; field?.setAttribute('aria-invalid', 'true'); }
     else { error.hidden = true; error.textContent = ''; field?.removeAttribute('aria-invalid'); }
   };
@@ -358,86 +396,273 @@ function wireLogin(params) {
     errors.forEach(([id, message]) => fieldError(form, id, message));
     form.querySelector('#' + errors[0][0])?.focus();
   };
-  /* A field's message goes as soon as it is corrected */
-  [signIn, signUp].forEach(form => form.addEventListener('input', e => { if (e.target.id && form.querySelector(`#${e.target.id}-error:not([hidden])`)) fieldError(form, e.target.id, ''); }));
+  forms.forEach(form => form.addEventListener('input', e => {
+    if (e.target.id && form.querySelector(`#${e.target.id}-error:not([hidden])`)) fieldError(form, e.target.id, '');
+    if (['su_email', 'su_phone'].includes(e.target.id)) fieldError(form, 'su_contact', '');
+  }));
   const busy = (button, on) => { button.disabled = on; on ? button.setAttribute('aria-busy', 'true') : button.removeAttribute('aria-busy'); };
+  app.querySelectorAll('[data-pw]').forEach(b => b.addEventListener('click', () => {
+    const field = app.querySelector('#' + b.dataset.pw), show = field.type === 'password';
+    field.type = show ? 'text' : 'password';
+    b.setAttribute('aria-pressed', show);
+    b.innerHTML = `${icon(show ? 'eyeOff' : 'eye', 18)}<span>${show ? t('Hide', 'إخفاء') : t('Show', 'إظهار')}</span>`;
+  }));
+  return { fieldError, alertOf, clearAll, showErrors, busy };
+}
+
+const ageOn = born => {
+  const [y, m, d] = String(born || '').split('-').map(Number), now = new Date();
+  if (!y || !m || !d) return -1;
+  return now.getFullYear() - y - ((now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) ? 1 : 0);
+};
+const bornError = born => !/^\d{4}-\d{2}-\d{2}$/.test(born || '') ? t('Enter your date of birth.', 'أدخل تاريخ ولادتك.')
+  : ageOn(born) < 0 || born > new Date().toISOString().slice(0, 10) ? t('Enter your date of birth.', 'أدخل تاريخ ولادتك.')
+  : ageOn(born) < 13 ? t('You need to be 13 or older to have an account. A parent or guardian can make requests for you.', 'يجب أن يكون عمرك ١٣ سنة أو أكثر. يمكن لأحد الوالدين أو الوصي تقديم الطلبات عنك.') : '';
+const phoneError = raw => raw.trim() && !phoneKey(raw) ? t('This does not look like a phone number. Check the digits, for example 03 123 456.', 'لا يبدو هذا رقم هاتف. تحقّق من الأرقام، مثلاً ٠٣ ١٢٣ ٤٥٦.') : '';
+
+/* After an account is opened: what happened to each verification code, said plainly. */
+function deliveryToast(delivery = []) {
+  const lines = delivery.map(d => {
+    const what = d.kind === 'email' ? t('email', 'البريد') : t('phone', 'الهاتف');
+    return ({ sent: t(`A code was sent to your ${what}.`, `أُرسل رمز إلى ${what}.`),
+      verified: t(`Your ${what} is verified.`, `${what} مُتحقَّق منه.`),
+      failed: t(`The code to your ${what} could not be sent.`, `تعذّر إرسال الرمز إلى ${what}.`),
+      console: t(`Development server: the ${what} code is in the server console, not sent.`, `خادم تطوير: رمز ${what} في نافذة الخادم ولم يُرسل.`),
+      'not-configured': t(`No code was sent to your ${what}: this server cannot send them yet.`, `لم يُرسل رمز إلى ${what}: الخادم لا يستطيع إرسالها بعد.`) })[d.delivery]
+      || t(`The code to your ${what} is on its way.`, `الرمز إلى ${what} قيد الإرسال.`);
+  });
+  return lines.join(' ');
+}
+
+function wireLogin() {
+  const box = app.querySelector('.signin-box'), signIn = box.querySelector('#si-in form'), signUp = box.querySelector('#si-up form');
+  const { fieldError, alertOf, clearAll, showErrors, busy } = formHelpers([signIn, signUp]);
+  const showTab = (tab, focus = true) => {
+    rememberLogin(); SI.tab = tab;
+    const up = tab === 'up';
+    box.querySelectorAll('[data-si-tab][role=tab]').forEach(b => { const on = b.dataset.siTab === tab; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+    box.querySelector('#si-in').hidden = up; box.querySelector('#si-up').hidden = !up;
+    box.querySelector('#si-title').textContent = up ? t('Create your account', 'أنشئ حسابك') : t('Welcome', 'أهلاً بك');
+    box.querySelector('#si-lead').textContent = up ? t('Your account is yours, not a parish’s. After creating it you can follow parishes or ask to become a member.', 'حسابك ملكك لا ملك رعية. بعد إنشائه يمكنك متابعة الرعايا أو طلب الانتساب إليها.')
+      : t('Sign in with your email address, phone number or username.', 'سجّل الدخول ببريدك الإلكتروني أو رقم هاتفك أو اسم المستخدم.');
+    if (focus) box.querySelector(up ? '#su_first' : '#si_u').focus();
+  };
+  box.querySelectorAll('[data-si-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.siTab, b.getAttribute('role') !== 'tab')));
+  /* Arrow keys move along a tab list, as in any tab list */
+  const arrows = (list, ids, current, choose) => list.addEventListener('keydown', e => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const i = ids.indexOf(current()), step = (e.key === 'ArrowRight') !== isAr() ? 1 : -1;
+    choose(e.key === 'Home' ? ids[0] : e.key === 'End' ? ids[ids.length - 1] : ids[(i + step + ids.length) % ids.length]);
+  });
+  arrows(box.querySelector('.signin-tabs'), ['in', 'up'], () => SI.tab, next => { showTab(next, false); box.querySelector(`#si-tab-${next}`).focus(); });
+  const chooseVia = (via, focusTab) => {
+    rememberLogin(); SI.via = via;
+    box.querySelectorAll('[data-si-via]').forEach(b => { const on = b.dataset.siVia === via; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+    const panel = box.querySelector('#si-via-panel');
+    panel.setAttribute('aria-labelledby', `si-via-${via}`);
+    panel.innerHTML = viaField(via); clearAll(signIn);
+    (focusTab ? box.querySelector(`#si-via-${via}`) : panel.querySelector('#si_u')).focus();
+  };
+  box.querySelectorAll('[data-si-via]').forEach(b => b.addEventListener('click', () => chooseVia(b.dataset.siVia, false)));
+  arrows(box.querySelector('.signin-via'), SIGNIN_VIA.map(v => v[0]), () => SI.via, via => chooseVia(via, true));
 
   signIn.addEventListener('submit', async e => {
-    e.preventDefault(); clearAll(signIn);
-    const username = signIn.querySelector('#si_u').value.trim(), password = signIn.querySelector('#si_p').value;
+    e.preventDefault(); clearAll(signIn); rememberLogin();
+    const identifier = signIn.querySelector('#si_u').value.trim(), password = signIn.querySelector('#si_p').value, via = SI.via;
     const errors = [];
-    if (!username) errors.push(['si_u', t('Enter your phone number or email address.', 'أدخل رقم هاتفك أو بريدك الإلكتروني.')]);
+    if (!identifier) errors.push(['si_u', via === 'email' ? t('Enter your email address.', 'أدخل بريدك الإلكتروني.') : via === 'phone' ? t('Enter your phone number.', 'أدخل رقم هاتفك.') : t('Enter your username.', 'أدخل اسم المستخدم.')]);
+    else if (via === 'email' && !EMAIL.test(identifier)) errors.push(['si_u', t('This does not look like an email address. Check it, for example name@example.com.', 'لا يبدو هذا عنوان بريد إلكتروني. تحقّق منه، مثلاً name@example.com.')]);
+    else if (via === 'phone' && !phoneKey(identifier)) errors.push(['si_u', phoneError(identifier) || t('Enter your phone number.', 'أدخل رقم هاتفك.')]);
     if (!password) errors.push(['si_p', t('Enter your password.', 'أدخل كلمة المرور.')]);
     if (errors.length) return showErrors(signIn, errors);
     const button = signIn.querySelector('[type=submit]'); busy(button, true);
     try {
-      await api('login', 'POST', { username, password });
+      const result = await api('login', 'POST', { method: via, identifier, password });
+      if (result.mfa) { SI.challenge = result; SI.tab = 'mfa'; return loginScreen(); }
       SI.values = {}; SI.tab = '';
       await enter();
     } catch (error) {
       busy(button, false);
-      alertOf(signIn, error.status === 401 ? t('The phone number, email or password is not right. Please check them and try again.', 'رقم الهاتف أو البريد الإلكتروني أو كلمة المرور غير صحيح. يُرجى التحقّق والمحاولة مجدداً.') : error.message);
+      alertOf(signIn, error.status === 401 ? (via === 'email' ? t('The email address or password is not right. Please check them and try again.', 'البريد الإلكتروني أو كلمة المرور غير صحيح. يُرجى التحقّق والمحاولة مجدداً.')
+        : via === 'phone' ? t('The phone number or password is not right. Please check them and try again.', 'رقم الهاتف أو كلمة المرور غير صحيح. يُرجى التحقّق والمحاولة مجدداً.')
+        : t('The username or password is not right. Please check them and try again.', 'اسم المستخدم أو كلمة المرور غير صحيح. يُرجى التحقّق والمحاولة مجدداً.')) : error.message);
       signIn.querySelector('#si_p').select();
     }
   });
 
   signUp.addEventListener('submit', async e => {
-    e.preventDefault(); clearAll(signUp); remember();
-    const v = SI.values, password = signUp.querySelector('#su_p').value, phone = v.method === 'phone';
-    const name = (v.su_name || '').trim().split(/\s+/).filter(Boolean).join(' ');
+    e.preventDefault(); clearAll(signUp); rememberLogin();
+    const v = SI.values, password = signUp.querySelector('#su_p').value, confirm = signUp.querySelector('#su_p2').value;
+    const first = (v.su_first || '').trim(), last = (v.su_last || '').trim(), email = (v.su_email || '').trim(), phone = (v.su_phone || '').trim();
     const errors = [];
-    if (name.length < 2) errors.push(['su_name', t('Enter your full name.', 'أدخل اسمك الكامل.')]);
-    if (phone && !phoneKey(v.su_phone)) errors.push(['su_phone', (v.su_phone || '').trim() ? t('This does not look like a phone number. Check the digits, for example 03 123 456.', 'لا يبدو هذا رقم هاتف. تحقّق من الأرقام، مثلاً ٠٣ ١٢٣ ٤٥٦.') : t('Enter your mobile phone number.', 'أدخل رقم هاتفك الخلوي.')]);
-    if (!phone && !EMAIL.test((v.su_email || '').trim())) errors.push(['su_email', (v.su_email || '').trim() ? t('This does not look like an email address. Check it, for example name@example.com.', 'لا يبدو هذا عنوان بريد إلكتروني. تحقّق منه، مثلاً name@example.com.') : t('Enter your email address.', 'أدخل بريدك الإلكتروني.')]);
-    if (!v.su_parish) errors.push(['su_parish', t('Choose your parish.', 'اختر رعيتك.')]);
+    if (!first) errors.push(['su_first', t('Enter your first name.', 'أدخل اسمك.')]);
+    if (!last) errors.push(['su_last', t('Enter your last name.', 'أدخل شهرتك.')]);
+    if (!email && !phone) errors.push(['su_contact', t('Enter an email address, a phone number, or both.', 'أدخل بريداً إلكترونياً أو رقم هاتف أو كليهما.')]);
+    if (email && !EMAIL.test(email)) errors.push(['su_email', t('This does not look like an email address. Check it, for example name@example.com.', 'لا يبدو هذا عنوان بريد إلكتروني. تحقّق منه، مثلاً name@example.com.')]);
+    if (phoneError(phone)) errors.push(['su_phone', phoneError(phone)]);
+    if (bornError(v.su_born)) errors.push(['su_born', bornError(v.su_born)]);
     if (password.length < 8) errors.push(['su_p', t('Choose a password of at least 8 characters.', 'اختر كلمة مرور من ٨ أحرف على الأقل.')]);
-    if (errors.length) return showErrors(signUp, errors);
+    else if (password !== confirm) errors.push(['su_p2', t('The two passwords do not match.', 'كلمتا المرور غير متطابقتين.')]);
+    if (errors.length) {
+      const contact = errors.find(x => x[0] === 'su_contact'), fields = errors.filter(x => x[0] !== 'su_contact');
+      if (contact) fieldError(signUp, 'su_contact', contact[1]);
+      if (fields.length) showErrors(signUp, fields); else signUp.querySelector('#su_email').focus();
+      return;
+    }
     const button = signUp.querySelector('[type=submit]'); busy(button, true);
     try {
-      await api('signup', 'POST', { name, method: v.method, phone: phone ? v.su_phone.trim() : '', email: phone ? '' : v.su_email.trim(),
-        parish: v.su_parish, password, website: signUp.querySelector('#su_website').value });
-      const first = name.split(' ')[0];
+      const result = await api('signup', 'POST', { firstName: first, lastName: last, email, phone, birthDate: v.su_born,
+        password, confirm, website: signUp.querySelector('#su_website').value });
       SI.values = {}; SI.tab = '';
-      await enter(v.su_parish);
-      toast(t(`Welcome, ${first}`, `أهلاً بك، ${first}`), t('Your account is ready. You can send requests to your parish now.', 'حسابك جاهز. يمكنك الآن إرسال طلباتك إلى رعيتك.'), 'success');
+      await enter('', { welcome: first, delivery: result.delivery });
     } catch (error) {
       busy(button, false);
       if (error.status === 409) {
-        const field = phone ? 'su_phone' : 'su_email';
-        fieldError(signUp, field, phone ? t('This phone number already has an account.', 'لهذا الرقم حساب مسبقاً.') : t('This email address already has an account.', 'لهذا البريد الإلكتروني حساب مسبقاً.'));
-        alertOf(signUp, phone ? t('This phone number already has an account. ', 'لهذا الرقم حساب مسبقاً. ') : t('This email address already has an account. ', 'لهذا البريد الإلكتروني حساب مسبقاً. '),
+        const field = /phone/i.test(error.message) ? 'su_phone' : 'su_email';
+        fieldError(signUp, field, field === 'su_phone' ? t('This phone number already has an account.', 'لهذا الرقم حساب مسبقاً.') : t('This email address already has an account.', 'لهذا البريد الإلكتروني حساب مسبقاً.'));
+        alertOf(signUp, field === 'su_phone' ? t('This phone number already has an account. ', 'لهذا الرقم حساب مسبقاً. ') : t('This email address already has an account. ', 'لهذا البريد الإلكتروني حساب مسبقاً. '),
           `<button type="button" class="linkbtn" data-si-existing>${t('Sign in instead', 'سجّل الدخول بدلاً من ذلك')}</button>`);
         signUp.querySelector('[data-si-existing]').addEventListener('click', () => {
-          SI.values.si_u = phone ? v.su_phone : v.su_email; box.querySelector('#si_u').value = SI.values.si_u;
-          showTab('in', false); box.querySelector('#si_p').focus();
+          SI.via = field === 'su_phone' ? 'phone' : 'email';
+          SI.values['si_' + SI.via] = field === 'su_phone' ? phone : email;
+          SI.tab = 'in'; loginScreen(); app.querySelector('#si_p')?.focus();
         });
-      } else if (error.status === 429) alertOf(signUp, t('Many accounts were opened in the last hour. Please try again later, or call the parish office.', 'فُتحت حسابات كثيرة خلال الساعة الأخيرة. يُرجى المحاولة لاحقاً أو الاتصال بمكتب الرعية.'));
+      } else if (error.status === 429) alertOf(signUp, t('Many accounts were opened in the last hour. Please try again later.', 'فُتحت حسابات كثيرة خلال الساعة الأخيرة. يُرجى المحاولة لاحقاً.'));
       else alertOf(signUp, error.message);
     }
   });
 }
 
-/* The parishes a parishioner can join, with the one they came from already chosen. */
-async function fillParishes(box, params) {
-  const select = box.querySelector('#su_parish');
-  try { SI.parishes ||= (await api('public/parishes')).parishes; }
-  catch { select.innerHTML = `<option value="">${esc(t('The parishes could not be loaded. Reload the page.', 'تعذّر تحميل الرعايا. أعد تحميل الصفحة.'))}</option>`; return; }
-  if (!select.isConnected) return;
-  const list = [...SI.parishes].sort((a, b) => parishLabel(a).localeCompare(parishLabel(b), isAr() ? 'ar' : 'en'));
-  const chosen = SI.values.su_parish || (list.some(p => p.id === params.get('parish')) ? params.get('parish') : list.length === 1 ? list[0].id : '');
-  select.innerHTML = `<option value="">${esc(t('Choose your parish', 'اختر رعيتك'))}</option>` + list.map(p => `<option value="${esc(p.id)}" ${p.id === chosen ? 'selected' : ''}>${esc(parishLabel(p))}</option>`).join('');
-  SI.values.su_parish = chosen;
+/* The second step of signing in: an authenticator code, an emailed or texted code, or a recovery code. */
+const MFA_LABELS = {
+  totp: ['Authenticator app', 'تطبيق المصادقة'], email: ['Email code', 'رمز بالبريد'], sms: ['Text message code', 'رمز برسالة نصية'], recovery: ['Recovery code', 'رمز استرداد']
+};
+function mfaPanel(error) {
+  const c = SI.challenge || {}, methods = c.methods || [];
+  SI.mfaMethod = methods.includes(SI.mfaMethod) ? SI.mfaMethod : methods[0];
+  const m = SI.mfaMethod, hint = c.hints?.[m];
+  const lead = !methods.length ? t('Loading…', 'جارٍ التحميل…')
+    : m === 'totp' ? t('Open your authenticator app and enter the six-digit code it shows for ParishLife.', 'افتح تطبيق المصادقة وأدخل الرمز المكوّن من ستة أرقام لـ ParishLife.')
+    : m === 'recovery' ? t('Enter one of the recovery codes you saved. Each works once.', 'أدخل أحد رموز الاسترداد التي حفظتها. كل رمز يعمل مرة واحدة.')
+    : t(`We can send a code to ${hint || 'your verified contact'}.`, `يمكننا إرسال رمز إلى ${hint || 'جهة الاتصال المُتحقَّق منها'}.`);
+  return `<h2>${t('Confirm it’s you', 'تأكيد هويتك')}</h2>
+    <p class="signin-lead">${t('Two-step verification is on for this account.', 'التحقّق بخطوتين مفعّل لهذا الحساب.')}</p>
+    <form id="mfa-form" novalidate>
+      <div class="alert alert-danger signin-alert" role="alert" ${error ? '' : 'hidden'}>${icon('warn', 18)}<span>${esc(error)}</span></div>
+      ${methods.length > 1 ? `<fieldset class="signin-method"><legend class="label">${t('Use', 'استخدم')}</legend><div class="signin-methods">${methods.map(x =>
+        `<label class="signin-way"><input type="radio" name="mfa-method" value="${x}" ${x === m ? 'checked' : ''}><span>${esc(t(...MFA_LABELS[x]))}</span></label>`).join('')}</div></fieldset>` : ''}
+      <p class="signin-lead" id="mfa-lead">${esc(lead)}</p>
+      ${['email', 'sms'].includes(m) ? `<p><button type="button" class="btn btn-secondary" id="mfa-send">${t('Send the code', 'أرسل الرمز')}</button></p>
+        <p class="signin-fine" id="mfa-sent" role="status">${esc(SI.mfaSent?.[m] || '')}</p>` : ''}
+      ${siField('mfa_code', m === 'recovery' ? t('Recovery code', 'رمز الاسترداد') : t('Code', 'الرمز'),
+        `${m === 'recovery' ? 'autocapitalize="none" spellcheck="false"' : 'inputmode="numeric"'} autocomplete="one-time-code" dir="ltr" maxlength="${m === 'recovery' ? 20 : 8}"`)}
+      <button class="btn btn-primary btn-touch signin-submit" type="submit">${t('Continue', 'متابعة')}</button>
+      <p class="signin-switch"><button type="button" class="linkbtn" data-mfa-back>${t('Back to sign in', 'العودة إلى تسجيل الدخول')}</button></p>
+    </form>`;
+}
+function wireMfa() {
+  const form = app.querySelector('#mfa-form'), c = SI.challenge;
+  const { alertOf, showErrors, busy } = formHelpers([form]);
+  const back = () => { SI.challenge = null; SI.mfaSent = null; SI.tab = 'in'; loginScreen(); };
+  form.querySelector('[data-mfa-back]').addEventListener('click', back);
+  if (!c.methods) {   // arrived from a provider: ask what this challenge allows
+    api('login/challenge', 'POST', { challenge: c.challenge }).then(info => { SI.challenge = info; loginScreen(); })
+      .catch(error => { SI.challenge = null; SI.tab = 'in'; loginScreen(error.message); });
+    return;
+  }
+  form.querySelectorAll('input[name="mfa-method"]').forEach(r => r.addEventListener('change', () => { SI.mfaMethod = r.value; loginScreen(); }));
+  form.querySelector('#mfa-send')?.addEventListener('click', async e => {
+    busy(e.currentTarget, true);
+    try {
+      const result = await api('login/send', 'POST', { challenge: c.challenge, method: SI.mfaMethod });
+      const kind = SI.mfaMethod === 'email' ? 'email' : 'phone';
+      const { deliveryWords } = await import('./views/account.js');
+      SI.mfaSent = { ...SI.mfaSent, [SI.mfaMethod]: deliveryWords(result.delivery, kind) };
+      form.querySelector('#mfa-sent').textContent = SI.mfaSent[SI.mfaMethod];
+    } catch (error) { alertOf(form, error.message); }
+    finally { busy(e.currentTarget, false); }
+  });
+  form.querySelector('#mfa_code').focus();
+  form.addEventListener('submit', async e => {
+    e.preventDefault(); alertOf(form, '');
+    const code = form.querySelector('#mfa_code').value.trim();
+    if (!code) return showErrors(form, [['mfa_code', t('Enter the code.', 'أدخل الرمز.')]]);
+    const button = form.querySelector('[type=submit]'); busy(button, true);
+    try {
+      await api('login/verify', 'POST', { challenge: c.challenge, method: SI.mfaMethod, code });
+      SI.challenge = null; SI.mfaSent = null; SI.values = {}; SI.tab = '';
+      await enter();
+    } catch (error) {
+      busy(button, false);
+      if (error.status === 401 && /expired/i.test(error.message)) return back();
+      alertOf(form, error.message); form.querySelector('#mfa_code').select();
+    }
+  });
+}
+
+/* Finishing an account opened with Google, Apple or Microsoft: the same name, age and contact rules. */
+function providerPanel(error) {
+  const p = SI.provider, v = SI.values;
+  if (!p) return `<h2>${t('Finish creating your account', 'أكمل إنشاء حسابك')}</h2><p class="signin-lead">${t('Loading…', 'جارٍ التحميل…')}</p>`;
+  return `<h2>${t('Finish creating your account', 'أكمل إنشاء حسابك')}</h2>
+    <p class="signin-lead">${p.email ? esc(t(`You signed in with ${p.providerName} as ${p.email}.`, `سجّلت الدخول عبر ${p.providerName} بالعنوان ${p.email}.`)) + ' ' +
+      (p.emailVerified ? t(`${p.providerName} has verified this address.`, `تحقّق ${p.providerName} من هذا العنوان.`) : t('This address is not verified yet.', 'هذا العنوان غير مُتحقَّق منه بعد.'))
+      : esc(t(`You signed in with ${p.providerName}. It did not share an email address, so add a phone number.`, `سجّلت الدخول عبر ${p.providerName}. لم يشارك بريداً إلكترونياً، فأضف رقم هاتف.`))}</p>
+    <form id="pv-form" novalidate>
+      <div class="alert alert-danger signin-alert" role="alert" ${error ? '' : 'hidden'}>${icon('warn', 18)}<span>${esc(error)}</span></div>
+      <div class="signin-pair">
+        ${siField('pv_first', t('First name', 'الاسم'), `autocomplete="given-name" maxlength="60" value="${esc(v.pv_first ?? p.firstName ?? '')}"`)}
+        ${siField('pv_last', t('Last name', 'الشهرة'), `autocomplete="family-name" maxlength="60" value="${esc(v.pv_last ?? p.lastName ?? '')}"`)}
+      </div>
+      ${siField('pv_born', t('Date of birth', 'تاريخ الولادة'), `type="date" autocomplete="bday" max="${esc(new Date().toISOString().slice(0, 10))}" value="${esc(v.pv_born || '')}"`,
+        t('You need to be 13 or older to have an account.', 'يجب أن يكون عمرك ١٣ سنة أو أكثر لفتح حساب.'))}
+      ${siField('pv_phone', p.email ? t('Mobile phone number (optional)', 'رقم الهاتف الخلوي (اختياري)') : t('Mobile phone number', 'رقم الهاتف الخلوي'),
+        `type="tel" inputmode="tel" autocomplete="tel" dir="ltr" maxlength="40" placeholder="03 123 456" value="${esc(v.pv_phone || '')}"`)}
+      <div class="signin-hp" aria-hidden="true"><label for="pv_website">Website</label><input id="pv_website" name="website" tabindex="-1" autocomplete="off"></div>
+      <button class="btn btn-primary btn-touch signin-submit" type="submit">${t('Create my account', 'إنشاء حسابي')}</button>
+      <p class="signin-switch"><button type="button" class="linkbtn" data-pv-cancel>${t('Cancel', 'إلغاء')}</button></p>
+    </form>`;
+}
+function wireProvider() {
+  const form = app.querySelector('#pv-form');
+  if (!SI.provider) {
+    api('auth/ticket', 'POST', { ticket: SI.ticket }).then(info => { SI.provider = info; loginScreen(); })
+      .catch(error => { SI.ticket = null; SI.tab = 'in'; loginScreen(error.message); });
+    return;
+  }
+  const { alertOf, showErrors, busy } = formHelpers([form]);
+  form.querySelector('[data-pv-cancel]').addEventListener('click', () => { SI.ticket = null; SI.provider = null; SI.tab = 'in'; loginScreen(); });
+  form.addEventListener('submit', async e => {
+    e.preventDefault(); alertOf(form, ''); rememberLogin();
+    const v = SI.values, errors = [];
+    if (!(v.pv_first || '').trim()) errors.push(['pv_first', t('Enter your first name.', 'أدخل اسمك.')]);
+    if (!(v.pv_last || '').trim()) errors.push(['pv_last', t('Enter your last name.', 'أدخل شهرتك.')]);
+    if (bornError(v.pv_born)) errors.push(['pv_born', bornError(v.pv_born)]);
+    if (phoneError(v.pv_phone || '')) errors.push(['pv_phone', phoneError(v.pv_phone)]);
+    else if (!SI.provider.email && !(v.pv_phone || '').trim()) errors.push(['pv_phone', t('Enter your mobile phone number.', 'أدخل رقم هاتفك الخلوي.')]);
+    if (errors.length) return showErrors(form, errors);
+    const button = form.querySelector('[type=submit]'); busy(button, true);
+    try {
+      const result = await api('auth/complete', 'POST', { ticket: SI.ticket, firstName: v.pv_first, lastName: v.pv_last, birthDate: v.pv_born,
+        phone: v.pv_phone || '', website: form.querySelector('#pv_website').value });
+      const first = v.pv_first.trim();
+      SI.values = {}; SI.tab = ''; SI.ticket = null; SI.provider = null;
+      await enter('', { welcome: first, delivery: result.delivery });
+    } catch (error) { busy(button, false); alertOf(form, error.message); }
+  });
 }
 
 /* Into the portal after signing in or opening an account: the page that was asked for, or the role's first page. */
-async function enter(parishId = '') {
+async function enter(parishId = '', { welcome = '', delivery = null } = {}) {
   await loadSession(); pickParish();
   if (parishId && session.parishes.some(p => p.id === parishId)) session.parishId = parishId;
   S.role = currentRole(); await hydrate(); S.route = ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'account';
-  /* Signing in from a link (a request form, a notification) continues to that page. */
-  const wanted = location.hash.replace(/^#\/?/, '').split('/')[0];
-  if (wanted && ROUTES[wanted] && allowed(wanted)) route();
+  /* Signing in from a link (a request form, a notification) continues to that page; a new account starts at My account. */
+  const wanted = welcome ? 'account' : location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (wanted && ROUTES[wanted] && allowed(wanted)) { if (welcome) location.hash = '#/account'; route(); }
   else { location.hash = '#/' + S.route; renderAll(); }
+  if (welcome) toast(t(`Welcome, ${welcome}`, `أهلاً بك، ${welcome}`), t('Your account is ready. ', 'حسابك جاهز. ') + deliveryToast(delivery || []), 'success');
 }
 
 /* Navigation must not rebuild the rail — rebuilding it throws away the rail's
@@ -638,10 +863,12 @@ function userMenu(e) {
   if (S.role === 'member') {
     openPopover(e.currentTarget, `<div class="pop-user">${avatar(p, 'avatar-lg')}<span><b>${esc(isAr() ? p.ar || p.lat : p.lat)}</b><small>${session.user?.username ? `<bdi dir="ltr">${esc(session.user.username)}</bdi>` : t('Parishioner', 'من أبناء الرعية')}</small></span></div><div class="pop-b">
       <button class="mi" data-u="profile">${icon('people',17)}<span>${t('My profile', 'ملفي')}</span></button>
+      <button class="mi" data-u="account">${icon('lock',17)}<span>${t('Account and sign-in', 'الحساب وتسجيل الدخول')}</span></button>
       <button class="mi" data-u="lang">${icon('globe',17)}<span>${t('Language', 'اللغة')}</span><span class="mhint">${lang === 'ar' ? 'English' : 'العربية'}</span></button>
       <button class="mi danger" data-u="signout">${icon('arrowR',17)}<span>${t('Sign out', 'تسجيل الخروج')}</span></button></div>`,
       { width:290, onMount(el) { el.querySelectorAll('[data-u]').forEach(b => b.addEventListener('click', () => {
         closeMenu(); if (b.dataset.u === 'profile') go('myprofile');
+        else if (b.dataset.u === 'account') go('account');
         else if (b.dataset.u === 'lang') { setLang(lang === 'ar' ? 'en' : 'ar'); renderAll(); }
         else signOut();
       })); } });
@@ -672,32 +899,11 @@ function userMenu(e) {
         else if (u === 'rate') rateDialog();
         else if (u === 'assignments') location.hash = '#/assignments';
         else if (u === 'settings') location.hash = '#/settings';
-        else if (u === 'account') accountDrawer();
+        else if (u === 'account') go('account');
         else if (u === 'member') go('memberhome');
         else if (u === 'signout') signOut();
       }));
   } });
-}
-
-function accountDrawer() {
-  const p = me(), r = role();
-  openDrawer({
-    title: t('My account', 'حسابي'), sub: `${esc(isAr() ? p.ar : p.lat)} · ${esc(t(r.en, r.ar))}`,
-    body: `<div class="row" style="gap:14px;margin-bottom:18px">${avatar(p, 'avatar-xl')}
-        <div><b style="font:600 17px/24px var(--sans)">${esc(p.lat)}</b><div style="font:400 15px/24px var(--arabic);color:var(--text-2)">${esc(p.ar)}</div></div></div>
-      <dl class="dl" style="margin-bottom:20px"><dt>${t('Username','اسم المستخدم')}</dt><dd>${esc(session.user?.username||'—')}</dd>
-        <dt>${t('Access here','الصلاحية هنا')}</dt><dd>${esc(t(r.en,r.ar))}</dd>
-        <dt>${t('Places','الأماكن')}</dt><dd>${session.parishes.length + (session.authority?.dioceses || []).length + (session.authority?.superadmin ? 1 : 0)}</dd>
-        ${S.role==='bishop'?`<dt>${t('Scope','النطاق')}</dt><dd>${t('Oversight and administration of the diocese; pastoral notes, private messages and complaints are excluded.','الإشراف على الأبرشية وإدارتها؛ لا يشمل الملاحظات الرعوية والرسائل الخاصة والشكاوى.')}</dd>`:''}</dl>
-      <div class="ac-group" style="padding-inline:0">${t('Language', 'اللغة')}</div>
-      <div class="langswap" role="group">
-        <button data-lang="en" aria-pressed="${lang === 'en'}">English</button>
-        <button data-lang="ar" aria-pressed="${lang === 'ar'}" lang="ar">العربية</button></div>`,
-    foot: `<button class="btn btn-secondary" data-close>${t('Close', 'إغلاق')}</button>`,
-    onMount(el) {
-      el.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { setLang(b.dataset.lang); closeOverlays(); renderAll(); }));
-    }
-  });
 }
 
 /* Signing out lands on the sign-in screen — a new surface, drawn to the same rules. */
@@ -805,6 +1011,10 @@ window.addEventListener('hashchange', route);
 document.addEventListener('parish-save-error', e => toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), e.detail, 'danger'));
 setLang(lang);
 (async () => {
-  try { await loadSession(); pickParish(); S.role = currentRole(); await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
+  try {
+    await loadSession(); pickParish(); S.role = currentRole(); await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route();
+    if (AUTH.linked) toast(t(`${PROVIDER_NAMES[AUTH.linked] || AUTH.linked} is now linked`, `أصبح ${PROVIDER_NAMES[AUTH.linked] || AUTH.linked} مرتبطاً`), t('You can sign in with it from now on.', 'يمكنك تسجيل الدخول به من الآن.'), 'success');
+    if (AUTH.auth_error) toast(t('Not linked', 'لم يتمّ الربط'), (AUTH_ERRORS[AUTH.auth_error] || AUTH_ERRORS.failed)(PROVIDER_NAMES[AUTH.provider] || t('the provider', 'المزوّد')), 'danger');
+  }
   catch (error) { session.user = null; loginScreen(error.status === 401 ? '' : error.message); }
 })();
