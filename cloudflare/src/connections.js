@@ -8,7 +8,7 @@ import {
 } from './py.js';
 import { migrate_state, validate, parish_theme } from './state.js';
 import { audit, sync_relationships, notify_member } from './app.js';
-import { authority, parishContext, parishUser, permsOf, materializeLegacy, isBlocked, clean, ROLE_TITLES } from './authority.js';
+import { authority, parishContext, parishUser, permsOf, materializeLegacy, isBlocked, clean, ROLE_TITLES, CLERGY_OFFICES } from './authority.js';
 import { contactValue, deliveryMode, sha, birthDate } from './identity.js';
 import { recordPhone } from './accounts.js';
 import { publicMinistries } from './ministries.js';
@@ -63,7 +63,7 @@ export function cleanProfile(q) {
 export async function publicParish(c, pid) {
   const [stateRows, postRows] = await c.reads([
     ['SELECT data FROM states WHERE parish_id=?', [pid]],
-    ["SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", [pid]]
+    ["SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 50", [pid]]
   ]);
   need(stateRows.length, 'Parish not found.', 404);
   const state = JSON.parse(stateRows[0].data), parish = K(state, 'PARISH');
@@ -88,11 +88,67 @@ export async function publicParish(c, pid) {
   const ordered = sorted(posts, item => item.at, true);
   const pub = {};
   for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) pub[key] = get(parish, key, '');
-  pub.theme = parish_theme(parish);
+  /* Every parish page wears the one shared website theme; a parish's own colours are not published. */
   if (!truthy(get(content, 'contact'))) Object.assign(pub, { address: '', addressAr: '', phone: '' });
+  Object.assign(pub, await publicPlace(c, pid, state));
   const { modules } = await parishPlan(c, pid);
   return { parish: pub, content, events, posts: ordered, ministries: modules.includes('ministries') ? publicMinistries(state) : [],
-    modules, documentsOpen: await documentsOpen(c, pid) };
+    clergy: await publicClergy(c, pid), gallery: await publicGallery(c, pid), modules, documentsOpen: await documentsOpen(c, pid) };
+}
+
+/* Where a parish is, for the directory's filters and map: its diocese, rite, published coordinates (only
+   when the parish entered them) and whether it is demonstration data. */
+async function publicPlace(c, pid, state) {
+  const row = await c.first('SELECT p.diocese,p.metadata,d.name,d.metadata AS dmeta FROM parishes p LEFT JOIN dioceses d ON d.id=p.diocese WHERE p.id=?', pid);
+  const meta = JSON.parse(row.metadata), dmeta = JSON.parse(row.dmeta || '{}'), parish = K(state, 'PARISH');
+  const loc = get(parish, 'location');
+  return { diocese: row.diocese, dioceseName: row.name ?? '', dioceseAr: dmeta.ar ?? '', rite: get(parish, 'rite', ''), riteAr: get(parish, 'riteAr', ''),
+    location: loc !== null && typeof loc === 'object' ? { lat: loc.lat, lng: loc.lng } : null, demo: Boolean(meta.demo) };
+}
+
+/* The clergy serving a parish now: name, current title, responsibility and the photo the parish published. */
+async function publicClergy(c, pid) {
+  const order = { 'parish-priest': 0, 'assistant-priest': 1, deacon: 2 };
+  const out = [];
+  for (const r of await c.all('SELECT cl.id,cl.name,cl.name_ar,a.office FROM clergy_assignments a JOIN clergy cl ON cl.id=a.clergy_id WHERE a.parish_id=? AND a.end_date IS NULL', pid)) {
+    const [titles, photos] = await c.reads([
+      ['SELECT title FROM clergy_titles WHERE clergy_id=? AND effective_from<=? ORDER BY effective_from DESC,set_at DESC LIMIT 1', [r.id, TODAY()]],
+      ["SELECT id FROM uploaded_files WHERE parish_id=? AND scope='clergy' AND owner_id=? ORDER BY created_at DESC LIMIT 1", [pid, r.id]]
+    ]);
+    const office = CLERGY_OFFICES[r.office] ?? CLERGY_OFFICES.other;
+    out.push({ id: r.id, name: r.name, nameAr: r.name_ar, title: titles.length ? titles[0].title : '', office: r.office, officeEn: office[0], officeAr: office[1],
+      photo: photos.length ? `/api/public/parishes/${pid}/images/${photos[0].id}` : null });
+  }
+  return out.sort((a, b) => ((order[a.office] ?? 3) - (order[b.office] ?? 3)) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+async function publicGallery(c, pid) {
+  return (await c.all("SELECT id,name,created_at FROM uploaded_files WHERE parish_id=? AND scope='gallery' AND owner_id=? AND mime LIKE 'image/%' ORDER BY created_at DESC LIMIT 60", pid, pid))
+    .map(r => ({ id: r.id, name: r.name, url: `/api/public/parishes/${pid}/images/${r.id}`, at: r.created_at }));
+}
+
+export async function publicImage(c, pid, fileId) {
+  const row = await c.first("SELECT * FROM uploaded_files WHERE parish_id=? AND id=? AND scope IN ('gallery','clergy') AND mime LIKE 'image/%'", pid, fileId);
+  need(row !== null, 'Image not found.', 404);
+  return row;
+}
+
+/* Every parish registered in ParishLife, with what the directory filters and the map need. */
+export async function publicDirectory(c) {
+  const out = [];
+  for (const row of await c.all('SELECT id,metadata FROM parishes ORDER BY rowid')) {
+    const meta = JSON.parse(row.metadata);
+    const state = await c.first('SELECT data FROM states WHERE parish_id=?', row.id);
+    out.push({ id: row.id, name: meta.name ?? '', ar: meta.ar ?? '', town: meta.town ?? '', townAr: meta.townAr ?? '',
+      ...(state ? await publicPlace(c, row.id, JSON.parse(state.data)) : {}) });
+  }
+  return out;
+}
+
+/* What the public pages may use. The map provider is offered only once a browser key is configured. */
+export function publicConfig(env) {
+  const key = String(env.PARISHLIFE_GOOGLE_MAPS_KEY ?? '').trim();
+  return { maps: key ? { provider: 'google', key } : null };
 }
 
 export function parishBrief(row) {

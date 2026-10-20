@@ -7,6 +7,7 @@
 import { Problem, need, get, iter, tokenHex, NOW } from './py.js';
 import { authority, parishContext, systemPerms, diocesePerms, clean, PLAN_MODULES, ALL_MODULES } from './authority.js';
 import { audit } from './app.js';
+import { SEED } from './state.js';
 import { notifyAccount, parishPriestAccounts } from './ministries.js';
 import { namesOf } from './privacy.js';
 
@@ -25,6 +26,18 @@ const SEED_BUNDLES = [
 export const REQUEST_MODULE = { booking: 'reservations', custom: 'requests' };
 
 export async function migratePlans(c) {
+  if (!(await c.all("SELECT 1 AS x FROM schema_migrations WHERE name='v2-demo-parishes'")).length) {
+    /* The parishes the seed created are demonstration data; say so, unless someone already said otherwise. */
+    const seedIds = new Set(SEED.PARISHES.map(p => p.id));
+    for (const row of await c.all('SELECT id,metadata FROM parishes')) {
+      const meta = JSON.parse(row.metadata);
+      if (seedIds.has(row.id) && !Object.prototype.hasOwnProperty.call(meta, 'demo')) {
+        meta.demo = true;
+        c.run('UPDATE parishes SET metadata=? WHERE id=?', JSON.stringify(meta), row.id);
+      }
+    }
+    c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-demo-parishes',?)", NOW());
+  }
   if (!(await c.all("SELECT 1 AS x FROM schema_migrations WHERE name='v2-plans'")).length) {
     const at = NOW();
     for (const [bid, name, nameAr, desc, descAr, modules, demo] of SEED_BUNDLES)

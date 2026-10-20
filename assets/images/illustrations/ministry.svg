@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-label="Hands offering help">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5d755c"/><stop offset="1" stop-color="#a99467"/></linearGradient>
+<radialGradient id="l" cx=".6" cy=".3" r="0.7"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+<rect width="1200" height="800" fill="url(#g)"/><rect width="1200" height="800" fill="url(#l)"/>
+<g fill="none" stroke="#f7f7f2" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".88"><path d="M330 560c90-10 170-50 230-110 30-30 70-30 90 0M870 560c-90-10-170-50-230-110"/><path d="M600 300c-40-60-140-40-120 40 15 60 120 120 120 120s105-60 120-120c20-80-80-100-120-40Z"/><path d="M300 600h600"/></g>
+</svg>

@@ -68,7 +68,8 @@ const signupURL = id => 'index.html?parish=' + encodeURIComponent(id) + '&signup
 const localToday = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-'); };
 const normalize = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f\u064B-\u065F\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 const params = new URLSearchParams(location.search);
-const filters = { q: params.get('q') || '', town: params.get('town') || '', sort: params.get('sort') === 'town' ? 'town' : 'name' };
+const filters = { q: params.get('q') || '', town: params.get('town') || '', diocese: params.get('diocese') || '', rite: params.get('rite') || '', radius: '',
+  sort: params.get('sort') === 'town' ? 'town' : 'name', layout: params.get('layout') === 'map' ? 'map' : 'list' };
 let directory = [], details = new Map(), selected = params.get('parish'), failed = [], showAllEvents = false, loadFailure = false, observer;
 const app = document.querySelector('#app');
 const content = (d, key) => pair(d?.content?.[key]);
@@ -86,37 +87,260 @@ function updateChrome() {
   document.querySelector('#year').textContent = new Date().getFullYear();
 }
 
+/* ---- directory: list and map share one set of filters ------------------------------------------------
+   A visitor may use their own location to sort by distance; it stays in this page (never sent anywhere,
+   never put in the address) and nothing is ever placed on the map or measured without published coordinates. */
+let origin = null, geoState = '', mapsConfig, mapsFailed = false;
+const RADII = ['', '5', '10', '25', '50'];
+const toRad = x => x * Math.PI / 180;
+function kmBetween(a, b) {
+  const h = Math.sin(toRad(b.lat - a.lat) / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(toRad(b.lng - a.lng) / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+}
+const kmText = km => km < 1 ? L('under 1 km', 'أقل من ١ كم') : L(number(Math.round(km * 10) / 10) + ' km', number(Math.round(km * 10) / 10) + ' كم');
+const choices = (key, label) => [...new Map(directory.filter(p => p[key]).map(p => [p[key], p])).values()]
+  .map(p => [p[key], label(p)]).sort((a, b) => a[1].localeCompare(b[1], lang));
+const pageURL = (id, page) => 'public.html?parish=' + encodeURIComponent(id) + '&page=' + page;
+
 function directorySection() {
-  const towns = [...new Map(directory.map(p => [p.town, p])).values()].sort((a, b) => townName(a).localeCompare(townName(b), lang));
+  const select = (id, key, all, list) => '<label class="filter-field"><span>' + all[0] + '</span><select id="' + id + '" data-filter="' + key + '"><option value="">' + all[1] + '</option>' +
+    list.map(([value, text]) => '<option value="' + safe(value) + '"' + (filters[key] === value ? ' selected' : '') + '>' + safe(text) + '</option>').join('') + '</select></label>';
   return '<section id="directory" class="section directory-section site-wrap">' +
-    '<div class="section-head"><div><span class="eyebrow">' + L('OUR PARISHES', 'رعايانا') + '</span><h2>' + L('Find your place.<br><span>Feel at home.</span>', 'اعثر على رعيتك.<br><span>واشعر بالانتماء.</span>') + '</h2></div><p>' + L('Every parish has a story.<br>Discover the community waiting to welcome you.', 'لكل رعية حكاية.<br>اكتشف الجماعة التي ترحّب بك.') + '</p></div>' +
-    '<form class="directory-filters" role="search"><label class="search-field">' + icon('search') + '<span class="sr-only">' + L('Search by parish or town', 'ابحث باسم الرعية أو البلدة') + '</span><input id="directory-filter" type="search" value="' + safe(filters.q) + '" placeholder="' + L('Search by parish or town…', 'ابحث باسم الرعية أو البلدة…') + '" autocomplete="off"></label>' +
-    '<label class="town-field">' + icon('pin') + '<span class="sr-only">' + L('Filter by town', 'تصفية حسب البلدة') + '</span><select id="town-filter"><option value="">' + L('All towns', 'كل البلدات') + '</option>' + towns.map(p => '<option value="' + safe(p.town) + '"' + (filters.town === p.town ? ' selected' : '') + '>' + safe(townName(p)) + '</option>').join('') + '</select></label>' +
-    '<button class="button" type="submit">' + L('Find a parish', 'ابحث عن رعية') + icon('arrow') + '</button></form>' +
-    '<div class="results-bar"><p id="results-count" role="status" aria-live="polite"></p><label>' + L('Sort by', 'ترتيب حسب') + ' <select id="sort-filter" aria-label="' + L('Sort parishes', 'ترتيب الرعايا') + '"><option value="name"' + (filters.sort === 'name' ? ' selected' : '') + '>' + L('Parish name', 'اسم الرعية') + '</option><option value="town"' + (filters.sort === 'town' ? ' selected' : '') + '>' + L('Town', 'البلدة') + '</option></select></label></div>' +
-    '<div id="directory-cards" class="parish-grid"></div></section>';
+    '<div class="section-head"><div><span class="eyebrow">' + L('OUR PARISHES', 'رعايانا') + '</span><h2>' + L('Find your place.<br><span>Feel at home.</span>', 'اعثر على رعيتك.<br><span>واشعر بالانتماء.</span>') + '</h2></div><p>' + L('Every parish registered in ParishLife. Search, filter, and see them as a list or on the map.', 'كل الرعايا المسجّلة في ParishLife. ابحث وصفِّ، واعرضها لائحةً أو على الخريطة.') + '</p></div>' +
+    '<form class="directory-filters" role="search" aria-label="' + L('Find a parish', 'ابحث عن رعية') + '">' +
+      '<label class="search-field">' + icon('search') + '<span class="sr-only">' + L('Search by parish or town', 'ابحث باسم الرعية أو البلدة') + '</span><input id="directory-filter" type="search" value="' + safe(filters.q) + '" placeholder="' + L('Search by parish or town…', 'ابحث باسم الرعية أو البلدة…') + '" autocomplete="off"></label>' +
+      '<div class="filter-grid">' +
+        select('town-filter', 'town', [L('Location', 'المكان'), L('All locations', 'كل الأماكن')], choices('town', townName)) +
+        select('diocese-filter', 'diocese', [L('Diocese', 'الأبرشية'), L('All dioceses', 'كل الأبرشيات')], choices('diocese', p => pair(p, 'dioceseName', 'dioceseAr') || p.diocese)) +
+        select('rite-filter', 'rite', [L('Rite', 'الطقس'), L('All rites', 'كل الطقوس')], choices('rite', p => pair(p, 'rite', 'riteAr'))) +
+        '<label class="filter-field"><span>' + L('Distance', 'المسافة') + '</span><select id="radius-filter" data-filter="radius"' + (origin ? '' : ' disabled aria-describedby="geo-help"') + '>' +
+          RADII.map(r => '<option value="' + r + '"' + (filters.radius === r ? ' selected' : '') + '>' + (r ? L('Within ' + r + ' km', 'ضمن ' + number(+r) + ' كم') : L('Any distance', 'أي مسافة')) + '</option>').join('') + '</select></label>' +
+      '</div>' +
+      '<div class="filter-actions"><button class="button" type="submit">' + L('Find a parish', 'ابحث عن رعية') + icon('arrow') + '</button>' +
+        '<button class="text-button" type="button" id="use-location">' + icon('pin') + (origin ? L('Update my location', 'حدّث موقعي') : L('Use my location', 'استخدم موقعي')) + '</button>' +
+        '<button class="text-button" type="button" id="reset-filters">' + L('Reset filters', 'إعادة ضبط التصفية') + '</button>' +
+        '<p class="geo-status" id="geo-help" role="status" aria-live="polite">' + geoText() + '</p></div></form>' +
+    '<div class="results-bar"><p id="results-count" role="status" aria-live="polite"></p>' +
+      '<div class="layout-switch" role="group" aria-label="' + L('Show parishes as', 'اعرض الرعايا') + '">' +
+        [['list', L('List', 'لائحة')], ['map', L('Map', 'خريطة')]].map(([v, t]) => '<button type="button" data-layout="' + v + '" aria-pressed="' + (filters.layout === v) + '">' + t + '</button>').join('') + '</div>' +
+      '<label>' + L('Sort by', 'ترتيب حسب') + ' <select id="sort-filter" aria-label="' + L('Sort parishes', 'ترتيب الرعايا') + '"><option value="name"' + (filters.sort === 'name' ? ' selected' : '') + '>' + L('Parish name', 'اسم الرعية') + '</option><option value="town"' + (filters.sort === 'town' ? ' selected' : '') + '>' + L('Town', 'البلدة') + '</option>' +
+        (origin ? '<option value="distance"' + (filters.sort === 'distance' ? ' selected' : '') + '>' + L('Distance', 'المسافة') + '</option>' : '') + '</select></label></div>' +
+    '<div id="directory-results"></div></section>';
+}
+function geoText() {
+  if (geoState === 'locating') return L('Finding your location…', 'جارٍ تحديد موقعك…');
+  if (geoState === 'denied') return L('Location was not shared, so parishes are not sorted by distance. Every parish is still listed.', 'لم يُشارَك الموقع، فلا تُرتَّب الرعايا حسب المسافة. وتبقى كل الرعايا معروضة.');
+  if (geoState === 'unavailable') return L('Your location could not be read on this device. Every parish is still listed.', 'تعذّرت قراءة موقعك على هذا الجهاز. وتبقى كل الرعايا معروضة.');
+  if (origin) return L('Using your location (accurate to about ' + number(Math.round(origin.accuracy)) + ' m). It stays on this page.', 'نستخدم موقعك (بدقّة نحو ' + number(Math.round(origin.accuracy)) + ' م). ويبقى في هذه الصفحة.');
+  return L('Optional: share your location to sort parishes by distance.', 'اختياري: شارك موقعك لترتيب الرعايا حسب المسافة.');
+}
+
+/* The parishes that pass the filters, with their distance when both ends are known. */
+function filteredParishes() {
+  const q = normalize(filters.q.trim());
+  const rows = directory.filter(p => (!filters.town || p.town === filters.town) && (!filters.diocese || p.diocese === filters.diocese) &&
+    (!filters.rite || p.rite === filters.rite) && (!q || normalize([p.name, p.ar, p.town, p.townAr, p.dioceseName, p.rite].join(' ')).includes(q)))
+    .map(p => ({ ...p, km: origin && p.location ? kmBetween(origin, p.location) : null }));
+  const byName = (a, b) => (filters.sort === 'town' ? townName(a) : parishName(a)).localeCompare(filters.sort === 'town' ? townName(b) : parishName(b), lang);
+  rows.sort(filters.sort === 'distance' && origin ? (a, b) => (a.km ?? Infinity) - (b.km ?? Infinity) || byName(a, b) : byName);
+  if (!origin || !filters.radius) return { shown: rows, beyond: [] };
+  const limit = +filters.radius;
+  return { shown: rows.filter(p => p.km !== null && p.km <= limit), beyond: rows.filter(p => p.km === null || p.km > limit) };
+}
+
+function parishCard(p, i) {
+  return '<a class="parish-card" href="' + profileURL(p.id) + '"><div class="parish-card-top"><span class="parish-emblem" aria-hidden="true">' + icon('church') + '</span>' +
+    (p.demo ? '<span class="demo-badge">' + L('Demo', 'للعرض') + '</span>' : '<span class="card-number" aria-hidden="true">' + String(i + 1).padStart(2, '0') + '</span>') + '</div>' +
+    '<div class="card-location">' + icon('pin') + safe(townName(p)) + (p.km !== null && p.km !== undefined ? ' · ' + safe(kmText(p.km)) : '') + '</div><h3>' + safe(parishName(p)) + '</h3>' +
+    '<p class="parish-other-name" lang="' + L('ar', 'en') + '" dir="' + L('rtl', 'ltr') + '">' + safe(L(p.ar || '', p.name || '')) + '</p>' +
+    '<div class="card-bottom"><span>' + safe([pair(p, 'rite', 'riteAr'), pair(p, 'dioceseName', 'dioceseAr')].filter(Boolean).join(' · ') || L('Parish community', 'جماعة الرعية')) + '</span><span class="card-open">' + L('Explore', 'استكشف') + icon('arrow') + '</span></div></a>';
 }
 
 function renderCards(updateURL = false) {
-  const host = document.querySelector('#directory-cards');
+  const host = document.querySelector('#directory-results');
   if (!host) return;
-  const q = normalize(filters.q.trim());
-  const rows = directory.filter(p => (!filters.town || p.town === filters.town) && (!q || normalize([p.name, p.ar, p.town, p.townAr].join(' ')).includes(q)))
-    .sort((a, b) => (filters.sort === 'town' ? townName(a) : parishName(a)).localeCompare(filters.sort === 'town' ? townName(b) : parishName(b), lang));
-  document.querySelector('#results-count').textContent = L('Showing ' + rows.length + ' of ' + directory.length + ' parishes', 'عرض ' + number(rows.length) + ' من ' + number(directory.length) + ' رعايا');
-  host.innerHTML = rows.length ? rows.map((p, i) => {
-    const d = details.get(p.id), rite = pair(d?.parish, 'rite', 'riteAr');
-    return '<a class="parish-card" href="' + profileURL(p.id) + '"><div class="parish-card-top"><span class="parish-emblem" aria-hidden="true">' + icon('church') + '</span><span class="card-number" aria-hidden="true">' + String(i + 1).padStart(2, '0') + '</span></div>' +
-      '<div class="card-location">' + icon('pin') + safe(townName(p)) + '</div><h3>' + safe(parishName(p)) + '</h3><p class="parish-other-name" lang="' + L('ar', 'en') + '" dir="' + L('rtl', 'ltr') + '">' + safe(L(p.ar || '', p.name || '')) + '</p><div class="card-bottom"><span>' + safe(rite || L('Parish community', 'جماعة الرعية')) + '</span><span class="card-open">' + L('Explore', 'استكشف') + icon('arrow') + '</span></div></a>';
-  }).join('') : empty(L('No parishes found', 'لم نعثر على رعايا'), L('Try a different name or choose another town.', 'جرّب اسمًا مختلفًا أو اختر بلدة أخرى.'), '<button class="text-link" id="clear-filters" type="button">' + L('Clear filters', 'إلغاء التصفية') + icon('arrow') + '</button>');
-  document.querySelector('#clear-filters')?.addEventListener('click', () => {
-    filters.q = ''; filters.town = ''; document.querySelector('#directory-filter').value = ''; document.querySelector('#town-filter').value = ''; renderCards(true); document.querySelector('#directory-filter').focus();
-  });
+  const { shown, beyond } = filteredParishes();
+  document.querySelector('#results-count').textContent = L('Showing ' + shown.length + ' of ' + directory.length + ' parishes', 'عرض ' + number(shown.length) + ' من ' + number(directory.length) + ' رعايا');
+  const more = beyond.length ? '<div class="beyond"><p>' + L(beyond.length + ' more parishes are further away or have not published their location.', number(beyond.length) + ' رعايا أخرى أبعد أو لم تنشر موقعها.') +
+    '</p><button class="button button-outline" type="button" id="show-all">' + L('Show all parishes', 'اعرض كل الرعايا') + icon('arrow') + '</button>' +
+    (filters.radius !== '50' ? '<button class="text-button" type="button" id="widen">' + L('Widen the search', 'وسّع البحث') + '</button>' : '') + '</div>' : '';
+  if (filters.layout === 'map') host.innerHTML = mapView(shown) + more;
+  else host.innerHTML = (shown.length ? '<div class="parish-grid">' + shown.map(parishCard).join('') + '</div>'
+    : empty(L('No parishes found', 'لم نعثر على رعايا'), L('Try a different name, or reset the filters.', 'جرّب اسمًا مختلفًا أو أعد ضبط التصفية.'), '<button class="text-link" id="clear-filters" type="button">' + L('Reset filters', 'إعادة ضبط التصفية') + icon('arrow') + '</button>')) + more;
+  host.querySelector('#clear-filters')?.addEventListener('click', resetFilters);
+  host.querySelector('#show-all')?.addEventListener('click', () => { filters.radius = ''; syncFilterControls(); renderCards(true); });
+  host.querySelector('#widen')?.addEventListener('click', () => { filters.radius = RADII[Math.min(RADII.length - 1, RADII.indexOf(filters.radius) + 1)]; syncFilterControls(); renderCards(true); });
+  if (filters.layout === 'map' && mapsConfig?.maps && !mapsFailed) liveMap(shown);
   if (updateURL) {
     const url = new URL(location.href);
-    for (const key of ['q', 'town', 'sort']) filters[key] && !(key === 'sort' && filters[key] === 'name') ? url.searchParams.set(key, filters[key]) : url.searchParams.delete(key);
+    for (const key of ['q', 'town', 'diocese', 'rite', 'sort', 'layout']) filters[key] && !(key === 'sort' && filters[key] === 'name') && !(key === 'layout' && filters[key] === 'list') ? url.searchParams.set(key, filters[key]) : url.searchParams.delete(key);
     history.replaceState(null, '', url);
   }
+}
+function syncFilterControls() {
+  document.querySelectorAll('.directory-filters [data-filter]').forEach(el => { el.value = filters[el.dataset.filter] || ''; });
+  const q = document.querySelector('#directory-filter'); if (q) q.value = filters.q;
+}
+function resetFilters() {
+  Object.assign(filters, { q: '', town: '', diocese: '', rite: '', radius: '', sort: origin ? 'distance' : 'name' });
+  syncFilterControls();
+  const sort = document.querySelector('#sort-filter'); if (sort) sort.value = filters.sort;
+  renderCards(true);
+  document.querySelector('#directory-filter')?.focus();
+}
+function useLocation() {
+  if (!navigator.geolocation) { geoState = 'unavailable'; return rerenderDirectory(); }
+  geoState = 'locating'; document.querySelector('#geo-help').textContent = geoText();
+  navigator.geolocation.getCurrentPosition(pos => {
+    origin = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+    geoState = 'ok'; filters.sort = 'distance'; rerenderDirectory();
+  }, error => { geoState = error.code === 1 ? 'denied' : 'unavailable'; rerenderDirectory(); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+}
+function rerenderDirectory() {
+  const section = document.querySelector('#directory');
+  if (!section) return;
+  section.outerHTML = directorySection();
+  bindDirectory();
+  renderCards(true);
+}
+function bindDirectory() {
+  const form = document.querySelector('.directory-filters');
+  if (!form) return;
+  form.addEventListener('submit', event => { event.preventDefault(); renderCards(true); document.querySelector('#directory-results')?.scrollIntoView({ block: 'nearest' }); });
+  document.querySelector('#directory-filter').addEventListener('input', event => { filters.q = event.target.value; renderCards(true); });
+  form.querySelectorAll('[data-filter]').forEach(el => el.addEventListener('change', () => { filters[el.dataset.filter] = el.value; renderCards(true); }));
+  document.querySelector('#sort-filter').addEventListener('change', event => { filters.sort = event.target.value; renderCards(true); });
+  document.querySelector('#reset-filters').addEventListener('click', resetFilters);
+  document.querySelector('#use-location').addEventListener('click', useLocation);
+  document.querySelectorAll('[data-layout]').forEach(b => b.addEventListener('click', () => {
+    filters.layout = b.dataset.layout;
+    document.querySelectorAll('[data-layout]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderCards(true);
+  }));
+}
+
+/* The map. Until a Google Maps key is configured this is a clearly marked preview: published coordinates
+   drawn to scale on a plain background, not a live map. Parishes without coordinates are listed, never placed. */
+function mapView(rows) {
+  const placed = rows.filter(p => p.location), unplaced = rows.filter(p => !p.location);
+  const live = mapsConfig?.maps && !mapsFailed;
+  const list = unplaced.length ? '<div class="map-unplaced"><h3>' + L('Not on the map', 'ليست على الخريطة') + '</h3><p>' + L('These parishes have not published their location yet.', 'لم تنشر هذه الرعايا موقعها بعد.') + '</p><ul>' +
+    unplaced.map(p => '<li><a href="' + profileURL(p.id) + '">' + safe(parishName(p)) + '</a> · ' + safe(townName(p)) + '</li>').join('') + '</ul></div>' : '';
+  if (live) return '<div class="map-frame"><div id="live-map" class="live-map" role="region" aria-label="' + L('Map of parishes', 'خريطة الرعايا') + '"></div></div>' + list;
+  return '<div class="map-frame map-preview"><p class="map-label"><b>' + L('Map preview', 'معاينة الخريطة') + '</b> · ' +
+    L('Not a live map: Google Maps has not been configured yet. Points show the coordinates parishes have published, drawn to scale without streets or places.', 'ليست خريطة حيّة: لم تُضبط خرائط Google بعد. تُظهر النقاط الإحداثيات التي نشرتها الرعايا، مرسومة بمقياس دون شوارع أو أماكن.') + '</p>' +
+    (placed.length ? previewSVG(placed) : '<p class="map-empty">' + L('None of the parishes shown has published its location yet.', 'لم تنشر أيّ من الرعايا المعروضة موقعها بعد.') + '</p>') + '</div>' + list;
+}
+function previewSVG(placed) {
+  const pts = placed.map(p => p.location).concat(origin ? [origin] : []);
+  let minLat = Math.min(...pts.map(x => x.lat)), maxLat = Math.max(...pts.map(x => x.lat)), minLng = Math.min(...pts.map(x => x.lng)), maxLng = Math.max(...pts.map(x => x.lng));
+  const padLat = Math.max((maxLat - minLat) * 0.15, 0.01), padLng = Math.max((maxLng - minLng) * 0.15, 0.01);
+  minLat -= padLat; maxLat += padLat; minLng -= padLng; maxLng += padLng;
+  const W = 1000, H = 560, sx = W / (maxLng - minLng), sy = H / (maxLat - minLat), s = Math.min(sx, sy);
+  const ox = (W - (maxLng - minLng) * s) / 2, oy = (H - (maxLat - minLat) * s) / 2;
+  const xy = loc => [ox + (loc.lng - minLng) * s, oy + (maxLat - loc.lat) * s];
+  return '<svg class="map-svg" viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="' + L('Parish locations', 'مواقع الرعايا') + '">' +
+    '<rect width="' + W + '" height="' + H + '" class="map-bg"/>' +
+    (origin ? (([x, y]) => '<g class="map-origin" aria-label="' + L('Your location', 'موقعك') + '"><circle cx="' + x + '" cy="' + y + '" r="9"/><text x="' + (x + 14) + '" y="' + (y + 5) + '">' + L('You', 'أنت') + '</text></g>')(xy(origin)) : '') +
+    placed.map(p => { const [x, y] = xy(p.location); return '<a href="' + profileURL(p.id) + '" class="map-pin"><title>' + safe(parishName(p) + ' · ' + townName(p)) + '</title>' +
+      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="11"/><text x="' + (x + 16).toFixed(1) + '" y="' + (y + 5).toFixed(1) + '">' + safe(parishName(p)) + '</text></a>'; }).join('') + '</svg>';
+}
+/* Prepared for when a browser key is configured (PARISHLIFE_GOOGLE_MAPS_KEY). Not exercised without a key;
+   any failure falls back to the preview and says so. */
+function liveMap(rows) {
+  const host = document.querySelector('#live-map');
+  if (!host) return;
+  const draw = () => {
+    try {
+      const placed = rows.filter(p => p.location);
+      const map = new google.maps.Map(host, { center: placed[0]?.location || origin || { lat: 33.89, lng: 35.5 }, zoom: placed.length ? 11 : 8 });
+      const bounds = new google.maps.LatLngBounds();
+      for (const p of placed) {
+        const marker = new google.maps.Marker({ position: p.location, map, title: parishName(p) });
+        marker.addListener('click', () => { location.href = profileURL(p.id); });
+        bounds.extend(p.location);
+      }
+      if (placed.length > 1) map.fitBounds(bounds);
+    } catch { mapsFailed = true; renderCards(); }
+  };
+  if (window.google?.maps) return draw();
+  window.__plMapReady = draw;
+  if (!document.querySelector('#gmaps-script')) {
+    const s = Object.assign(document.createElement('script'), { id: 'gmaps-script', async: true,
+      src: 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsConfig.maps.key) + '&callback=__plMapReady' });
+    s.onerror = () => { mapsFailed = true; renderCards(); };
+    document.head.append(s);
+  }
+}
+
+/* ---- the "More than a place" slider: parish stories, ministries and events, mixed ---------------- */
+const ART = { story: 'community', ministry: 'ministry', event: 'event', parish: 'church' };
+const plain = html => String(html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+const clip = (text, n) => text.length > n ? text.slice(0, n - 1).trimEnd() + '…' : text;
+function slidesFor(parishes) {
+  const kinds = { story: [], ministry: [], event: [] };
+  for (const p of parishes) {
+    const d = details.get(p.id);
+    if (!d) continue;
+    const photos = (d.gallery || []).map(g => g.url);
+    const photo = i => photos.length ? photos[i % photos.length] : null;
+    (d.posts || []).slice(0, 2).forEach((post, i) => kinds.story.push({ kind: 'story', title: post.title, text: clip(plain(post.body), 150), p, photo: photo(i), href: profileURL(p.id, '#updates') }));
+    (d.ministries || []).slice(0, 2).forEach((m, i) => kinds.ministry.push({ kind: 'ministry', title: pair(m, 'name', 'ar'), text: clip(plain(pair(m, 'about', 'aboutAr')) || pair(m, 'meets', 'meetsAr'), 150), p, photo: photo(i + 2), href: profileURL(p.id, '#ministries') }));
+    (d.events || []).filter(e => e.d >= localToday()).slice(0, 2).forEach((e, i) => kinds.event.push({ kind: 'event', title: pair(e, 'title', 'titleAr'), text: [publishedDate(e.d), e.t].filter(Boolean).join(' · '), p, photo: photo(i + 4), href: pageURL(p.id, 'calendar') }));
+  }
+  const out = [];
+  for (let i = 0; out.length < 8 && (kinds.story.length || kinds.ministry.length || kinds.event.length); i++) {
+    for (const k of ['story', 'ministry', 'event']) if (kinds[k].length && out.length < 8) out.push(kinds[k].shift());
+  }
+  return out;
+}
+const KIND_NAME = { story: ['Parish story', 'من حياة الرعية'], ministry: ['Ministry', 'خدمة'], event: ['Event', 'حدث'] };
+function slider(slides) {
+  if (!slides.length) return '';
+  return '<div class="slider" role="region" aria-roledescription="' + L('carousel', 'عرض شرائح') + '" aria-label="' + L('Parish stories, ministries and events', 'من حياة الرعايا وخدماتها وأحداثها') + '">' +
+    '<div class="slides">' + slides.map((s, i) => '<article class="slide' + (i === 0 ? ' is-active' : '') + '" role="group" aria-roledescription="' + L('slide', 'شريحة') + '" aria-label="' + (i + 1) + ' / ' + slides.length + '"' + (i === 0 ? '' : ' hidden') + '>' +
+      '<div class="slide-media">' + (s.photo ? '<img src="' + safe(s.photo) + '" alt="" loading="lazy">' : '<img src="assets/images/illustrations/' + ART[s.kind] + '.svg" alt="" loading="lazy"><span class="slide-tag">' + L('Illustrative image', 'صورة توضيحية') + '</span>') + '</div>' +
+      '<div class="slide-copy"><span class="eyebrow">' + safe(L(...KIND_NAME[s.kind])) + ' · ' + safe(parishName(s.p)) + (s.p.demo ? ' · ' + L('demo', 'للعرض') : '') + '</span><h3>' + safe(s.title) + '</h3>' + (s.text ? '<p>' + safe(s.text) + '</p>' : '') +
+      '<a class="text-link" href="' + s.href + '">' + L('Read more', 'اقرأ المزيد') + icon('arrow') + '</a></div></article>').join('') + '</div>' +
+    (slides.length > 1 ? '<button class="slide-arrow slide-prev" type="button" aria-label="' + L('Previous slide', 'الشريحة السابقة') + '">' + icon('chevron') + '</button>' +
+      '<button class="slide-arrow slide-next" type="button" aria-label="' + L('Next slide', 'الشريحة التالية') + '">' + icon('chevron') + '</button>' +
+      '<div class="slide-bar"><button class="slide-pause" type="button" aria-pressed="false">' + L('Pause', 'إيقاف مؤقت') + '</button><div class="slide-dots" role="group" aria-label="' + L('Choose a slide', 'اختر شريحة') + '">' +
+      slides.map((s, i) => '<button type="button" class="slide-dot" data-slide="' + i + '" aria-label="' + safe(L('Slide ' + (i + 1) + ': ', 'الشريحة ' + number(i + 1) + ': ') + s.title) + '"' + (i === 0 ? ' aria-current="true"' : '') + '><span></span></button>').join('') + '</div></div>' : '') + '</div>';
+}
+let slideTimer = null;
+function bindSlider() {
+  const root = document.querySelector('.slider');
+  clearInterval(slideTimer);
+  if (!root || root.querySelectorAll('.slide').length < 2) return;
+  const slides = [...root.querySelectorAll('.slide')], dots = [...root.querySelectorAll('.slide-dot')], pause = root.querySelector('.slide-pause');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let current = 0, stopped = reduced, held = false;   // stopped: the visitor paused; held: pointer or focus is inside
+  const show = i => {
+    current = (i + slides.length) % slides.length;
+    slides.forEach((s, n) => { s.hidden = n !== current; s.classList.toggle('is-active', n === current); });
+    dots.forEach((d, n) => n === current ? d.setAttribute('aria-current', 'true') : d.removeAttribute('aria-current'));
+    root.classList.remove('is-running'); void root.offsetWidth; sync();
+  };
+  const sync = () => {
+    const running = !stopped && !held;
+    root.classList.toggle('is-running', running);
+    pause.setAttribute('aria-pressed', String(stopped));
+    pause.textContent = stopped ? L('Play', 'تشغيل') : L('Pause', 'إيقاف مؤقت');
+    clearInterval(slideTimer);
+    if (running) slideTimer = setInterval(() => show(current + 1), 5000);
+  };
+  root.querySelector('.slide-prev').addEventListener('click', () => show(current - 1));
+  root.querySelector('.slide-next').addEventListener('click', () => show(current + 1));
+  dots.forEach(d => d.addEventListener('click', () => show(+d.dataset.slide)));
+  pause.addEventListener('click', () => { stopped = !stopped; sync(); });
+  root.addEventListener('mouseenter', () => { held = true; sync(); });
+  root.addEventListener('mouseleave', () => { held = false; sync(); });
+  root.addEventListener('focusin', () => { held = true; sync(); });
+  root.addEventListener('focusout', event => { if (!root.contains(event.relatedTarget)) { held = false; sync(); } });
+  root.addEventListener('keydown', event => {
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); show(current + ((event.key === 'ArrowRight') !== (document.dir === 'rtl') ? 1 : -1)); }
+  });
+  sync();
 }
 
 function eventsFor(parishes) {
@@ -136,16 +360,6 @@ function publishedDate(value) {
 function eventKind(kind) {
   return ({ mass: L('Mass', 'قدّاس'), event: L('Gathering', 'لقاء'), wedding: L('Wedding', 'زفاف'), baptism: L('Baptism', 'معمودية'), funeral: L('Funeral', 'جنازة') })[kind] || L('Parish event', 'حدث رعوي');
 }
-function eventsSection(parishes) {
-  const events = eventsFor(parishes), visible = showAllEvents ? events : events.slice(0, 6);
-  return '<section id="events" class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('LIFE TOGETHER', 'حياتنا معًا') + '</span><h2>' + L('Come. Gather. Belong.', 'تعال. شارك. انتمِ.') + '</h2></div><p>' + L('Masses, gatherings, and moments<br>that bring us closer.', 'قداديس ولقاءات ولحظات<br>تجمعنا معًا.') + '</p></div>' +
-    '<div class="event-list">' + (visible.length ? visible.map(e => {
-      const [day, month] = dateParts(e.d);
-      return '<article class="event-row"><time class="event-date" datetime="' + safe(e.d) + '"><b>' + safe(day) + '</b><span>' + safe(month) + '</span></time><div class="event-info"><span class="eyebrow">' + safe(eventKind(e.kind)) + '</span><h3>' + safe(pair(e, 'title', 'titleAr')) + '</h3><p>' + safe(parishName(e.parish)) + ' · ' + safe(townName(e.parish)) + '</p></div><span class="event-time">' + (e.t ? icon('clock') + safe(e.t) : '') + '</span>' + (selected ? '' : '<a class="round-link" href="' + profileURL(e.parish.id, '#events') + '" aria-label="' + safe(L('View events at ', 'أحداث رعية ') + parishName(e.parish)) + '">' + icon('arrow') + '</a>') + '</article>';
-    }).join('') : empty(L('A little quiet for now', 'لحظات هادئة حاليًا'), L('Upcoming public events will appear here when a parish publishes them.', 'ستظهر الأحداث العامة القادمة هنا عندما تنشرها الرعية.'))) + '</div>' +
-    (events.length > 6 ? '<button id="more-events" class="text-link more-events" type="button">' + (showAllEvents ? L('Show fewer events', 'عرض أحداث أقل') : L('View all ' + events.length + ' events', 'عرض كل الأحداث (' + number(events.length) + ')')) + ' ' + icon('arrow') + '</button>' : '') + '</section>';
-}
-
 function timesSection(parishes) {
   const hasTimes = parishes.filter(p => content(details.get(p.id), 'massTimes'));
   return '<section id="times" class="times-section"><div class="site-wrap times-layout"><div><span class="eyebrow">' + L('MAKE TIME FOR WHAT MATTERS', 'وقتٌ لما يهمّنا') + '</span><h2>' + L('A moment<br>of peace.', 'لحظة<br>سلام.') + '</h2><p>' + L('Find published Mass and confession information, and plan your next visit.', 'اطّلع على مواعيد القداديس والاعتراف المنشورة وخطّط لزيارتك القادمة.') + '</p>' + icon('cross') + '</div><div class="times-list">' +
@@ -157,35 +371,119 @@ function timesSection(parishes) {
 function home() {
   return '<section class="hero site-wrap"><div class="hero-copy"><span class="eyebrow"><span class="eyebrow-dot"></span>' + L('ROOTED IN FAITH. CONNECTED IN LIFE.', 'متجذّرون في الإيمان. متّصلون بالحياة.') + '</span><h1>' + L('A place to pray.<br>A community<br>to <em>belong.</em>', 'مكانٌ للصلاة.<br>جماعةٌ<br><em>للانتماء.</em>') + '</h1><p>' + L('Discover parishes, find a moment of peace, and stay close to the life of your community.', 'اكتشف الرعايا، واعثر على لحظة سلام، وابقَ قريبًا من حياة جماعتك.') + '</p><div class="actions"><a class="button" href="#directory">' + L('Find your parish', 'ابحث عن رعيتك') + icon('arrow') + '</a><a class="text-link" href="#times">' + L('Explore Mass times', 'مواعيد القداديس') + '</a></div><div class="hero-note"><span class="note-line"></span>' + L('Your parish. Your people. Your place.', 'رعيّتك. جماعتك. مكانك.') + '</div></div>' +
     '<div class="hero-art"><div class="hero-photo" role="img" aria-label="' + L('Sunlight filling a quiet church interior; illustrative photograph', 'ضوء الشمس في كنيسة هادئة؛ صورة توضيحية') + '"></div><div class="photo-caption"><span class="caption-mark">' + icon('cross') + '</span><span>' + L('Faith brings us together.', 'الإيمان يجمعنا.') + '<small>' + L('A COMMUNITY BEGINS WITH YOU', 'الجماعة تبدأ بك') + '</small></span></div><span class="vertical-label" aria-hidden="true">PARISHLIFE — LEBANON</span></div></section>' +
-    '<div class="quick-paths site-wrap">' + [
-      ['01','church','#directory',L('Find your parish','اعثر على رعيتك'),L('A community close to you','جماعة قريبة منك')],
-      ['02','clock','#times',L('Plan a visit','خطّط لزيارة'),L('Make space for a quiet moment','فسحة للحظات هادئة')],
-      ['03','calendar','#events',L('Share in parish life','شارك في حياة الرعية'),L('Be part of what’s happening','كن جزءًا ممّا يجري')]
-    ].map(([n, ico, href, title, sub]) => '<a href="' + href + '"><span class="path-number">' + n + '</span><span class="path-icon">' + icon(ico) + '</span><span><b>' + title + '</b><small>' + sub + '</small></span>' + icon('arrow') + '</a>').join('') + '</div>' +
-    directorySection() +
-    '<section class="fixed-story"><div class="site-wrap"><span class="eyebrow">' + L('MORE THAN A PLACE', 'أكثر من مكان') + '</span><h2>' + L('Where faith finds<br>its community.', 'حيث يجد الإيمان<br>جماعته.') + '</h2><p>' + L('In a familiar face. In a shared prayer.<br>In the everyday moments of parish life.', 'في وجهٍ مألوف. في صلاةٍ مشتركة.<br>في لحظات الحياة الرعوية اليومية.') + '</p><a class="button button-light" href="#events">' + L('Discover parish life', 'اكتشف حياة الرعية') + icon('arrow') + '</a></div><span class="story-footnote">' + L('A MOMENT TO PAUSE', 'لحظة للتأمّل') + '</span></section>' +
-    timesSection(directory) + eventsSection(directory) +
+    directorySection() + communitySection() + timesSection(directory) +
     '<section id="about" class="about-site section site-wrap"><div class="about-symbol" aria-hidden="true">' + icon('church') + '</div><div><span class="eyebrow">' + L('A SHARED PLACE FOR OUR PARISHES', 'مساحة مشتركة لرعايانا') + '</span><h2>' + L('Closer to your parish.<br>Closer to one another.', 'أقرب إلى رعيتك.<br>أقرب إلى بعضنا البعض.') + '</h2><p>' + L('ParishLife brings the information your parish shares into one welcoming place. Explore its story, plan a visit, and keep up with community life — in English or Arabic.', 'يجمع ParishLife المعلومات التي تنشرها رعيتك في مساحة واحدة ترحّب بك. اكتشف حكايتها، وخطّط لزيارة، وتابع حياة الجماعة بالإنجليزية أو العربية.') + '</p><a class="text-link" href="index.html">' + L('Open the members portal', 'ادخل إلى بوّابة المؤمنين') + icon('arrow') + '</a></div></section>';
 }
 
+/* "More than a place": parish stories, ministries and events in one place — the slider, then what is coming up. */
+function communitySection() {
+  return '<section id="community" class="community-section"><div class="site-wrap"><div class="community-head"><span class="eyebrow">' + L('MORE THAN A PLACE', 'أكثر من مكان') + '</span><h2>' + L('Where faith finds<br>its community.', 'حيث يجد الإيمان<br>جماعته.') + '</h2><p>' +
+    L('In a familiar face. In a shared prayer. In the everyday moments of parish life — Masses, gatherings, ministries and the stories parishes share.', 'في وجهٍ مألوف. في صلاةٍ مشتركة. في لحظات الحياة الرعوية اليومية — القداديس واللقاءات والخدمات والحكايات التي تشاركها الرعايا.') + '</p></div>' +
+    slider(slidesFor(directory)) + '</div>' + eventsSection(directory, true) + '</section>';
+}
+
+function eventsSection(parishes, embedded = false) {
+  const events = eventsFor(parishes), single = parishes.length === 1, visible = single ? events.slice(0, 5) : showAllEvents ? events : events.slice(0, 6);
+  const list = '<div class="event-list">' + (visible.length ? visible.map(e => {
+      const [day, month] = dateParts(e.d);
+      return '<article class="event-row"><time class="event-date" datetime="' + safe(e.d) + '"><b>' + safe(day) + '</b><span>' + safe(month) + '</span></time><div class="event-info"><span class="eyebrow">' + safe(eventKind(e.kind)) + '</span><h3>' + safe(pair(e, 'title', 'titleAr')) + '</h3><p>' + safe(parishName(e.parish)) + ' · ' + safe(townName(e.parish)) + '</p></div><span class="event-time">' + (e.t ? icon('clock') + safe(e.t) : '') + '</span>' + (single ? '' : '<a class="round-link" href="' + pageURL(e.parish.id, 'calendar') + '" aria-label="' + safe(L('Calendar of ', 'رزنامة ') + parishName(e.parish)) + '">' + icon('arrow') + '</a>') + '</article>';
+    }).join('') : empty(L('A little quiet for now', 'لحظات هادئة حاليًا'), L('Upcoming public events will appear here when a parish publishes them.', 'ستظهر الأحداث العامة القادمة هنا عندما تنشرها الرعية.'))) + '</div>';
+  const more = single ? (events.length ? '<a class="text-link more-events" href="' + pageURL(parishes[0].id, 'calendar') + '">' + L('View the full calendar', 'اعرض الرزنامة كاملة') + icon('arrow') + '</a>' : '')
+    : events.length > 6 ? '<button id="more-events" class="text-link more-events" type="button">' + (showAllEvents ? L('Show fewer events', 'عرض أحداث أقل') : L('View all ' + events.length + ' events', 'عرض كل الأحداث (' + number(events.length) + ')')) + ' ' + icon('arrow') + '</button>' : '';
+  if (embedded) return '<div id="events" class="section site-wrap community-events"><h3 class="request-group">' + L('Coming up', 'قريباً') + '</h3>' + list + more + '</div>';
+  return '<section id="events" class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('PUBLIC CALENDAR', 'الرزنامة العامة') + '</span><h2>' + L('What’s on', 'الأحداث') + '</h2></div></div>' + list + more + '</section>';
+}
+
+const DEMO_NOTE = () => '<div class="demo-note site-wrap" role="note">' + icon('cross') + '<span><b>' + L('Demonstration parish.', 'رعية للعرض.') + '</b> ' +
+  L('This page shows sample information to demonstrate ParishLife. It is not a real parish’s published details.', 'تعرض هذه الصفحة معلومات نموذجية لعرض ParishLife، وليست معلومات منشورة لرعية حقيقية.') + '</span></div>';
+const mapLink = loc => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(loc.lat + ',' + loc.lng);
+
 function profile(p, d) {
   const name = pair(d.parish, 'name', 'nameAr') || parishName(p);
-  const meta = [pair(d.parish, 'town', 'townAr') || townName(p), pair(d.parish, 'rite', 'riteAr')].filter(Boolean).join(' · ');
+  const meta = [pair(d.parish, 'town', 'townAr') || townName(p), pair(d.parish, 'rite', 'riteAr'), pair(d.parish, 'dioceseName', 'dioceseAr')].filter(Boolean).join(' · ');
   const phone = String(d.parish.phone || '').replace(/[^\d+]/g, '');
-  const contact = content(d, 'contact');
-  return '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<span>' + safe(name) + '</span></div>' +
-    '<section class="profile-hero"><div class="site-wrap"><span class="eyebrow">' + safe(meta || L('YOUR PARISH COMMUNITY', 'جماعتك الرعوية')) + '</span><h1>' + safe(name) + '</h1><p>' + htmlText(content(d, 'welcome') || L('A place of faith, a life in community.', 'مكان للإيمان وحياة في الجماعة.')) + '</p><div class="actions"><a class="button button-light" href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + icon('clock') + '</a><a class="button button-outline" href="#contact">' + L('Plan your visit', 'خطّط لزيارتك') + icon('arrow') + '</a></div></div></section>' +
-    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a><a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a>' + (offers(d, 'ministries') ? '<a href="#ministries">' + L('Ministries', 'الخدمات') + '</a>' : '') + (hasRequests(d) ? '<a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a>' : '') + '<a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
+  const hours = content(d, 'officeHours');
+  const facts = [d.parish.address ? '<li>' + icon('pin') + '<span>' + safe(pair(d.parish, 'address', 'addressAr')) + '</span></li>' : '',
+    phone ? '<li>' + icon('phone') + '<a href="tel:' + safe(phone) + '"><bdi>' + safe(d.parish.phone) + '</bdi></a></li>' : '',
+    hours ? '<li>' + icon('clock') + '<span>' + safe(clip(hours.split('\n')[0], 90)) + '</span></li>' : ''].join('');
+  return (d.parish.demo ? DEMO_NOTE() : '') + '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<span>' + safe(name) + '</span></div>' +
+    '<section class="profile-hero"><div class="site-wrap"><span class="eyebrow">' + safe(meta || L('YOUR PARISH COMMUNITY', 'جماعتك الرعوية')) + '</span><h1>' + safe(name) + '</h1><p>' + htmlText(content(d, 'welcome') || L('A place of faith, a life in community.', 'مكان للإيمان وحياة في الجماعة.')) + '</p>' +
+      (facts ? '<ul class="profile-facts">' + facts + '</ul>' : '') + '</div></section>' +
+    '<nav class="profile-nav" aria-label="' + L('Parish sections', 'أقسام الرعية') + '"><div class="site-wrap"><a href="#about">' + L('Our story', 'حكايتنا') + '</a>' + (d.clergy?.length ? '<a href="#clergy">' + L('Clergy', 'الإكليروس') + '</a>' : '') + '<a href="#times">' + L('Mass & confession', 'القداديس والاعتراف') + '</a><a href="#events">' + L('What’s on', 'الأحداث') + '</a>' + (offers(d, 'ministries') ? '<a href="#ministries">' + L('Ministries', 'الخدمات') + '</a>' : '') + (hasRequests(d) ? '<a href="#sacraments">' + L('Sacraments', 'الأسرار') + '</a>' : '') + '<a href="#updates">' + L('Announcements', 'الإعلانات') + '</a><a href="#gallery">' + L('Gallery', 'الصور') + '</a><a href="#contact">' + L('Visit & contact', 'الزيارة والتواصل') + '</a></div></nav>' +
     '<section id="about" class="section site-wrap parish-about"><div><span class="eyebrow">' + L('ROOTED IN COMMUNITY', 'متجذّرون في الجماعة') + '</span><h2>' + L('Every parish<br>has a story.', 'لكل رعية<br>حكاية.') + '</h2></div><div class="reading-copy"><h3>' + safe(name) + '</h3><p>' + htmlText(content(d, 'history') || L('The parish’s story will appear here when it is published.', 'ستظهر حكاية الرعية هنا عندما تُنشر.')) + '</p>' + (meta ? '<span class="location-note">' + icon('pin') + safe(meta) + '</span>' : '') + '</div></section>' +
-    timesSection([p]) + eventsSection([p]) + ministriesSection(p, d) + sacramentsSection(p, d, phone) +
-    '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
-    (d.posts?.length ? d.posts.map(post => '<article class="update-card">' + (publishedDate(post.at) ? '<time datetime="' + safe(post.at) + '">' + safe(publishedDate(post.at)) + '</time>' : '') + '<h3>' + safe(post.title) + '</h3><div class="published-body">' + (/<[a-z][\s\S]*>/i.test(post.body || '') ? safeRichText(post.body) : htmlText(post.body)) + '</div></article>').join('') :
-      empty(L('Updates will find a home here', 'هنا تجد مستجدّات الرعية'), L('Published parish announcements will appear in this space.', 'ستظهر إعلانات الرعية المنشورة في هذه المساحة.'))) + '</div></div></section>' +
-    '<section id="contact" class="section site-wrap contact-section"><div><span class="eyebrow">' + L('YOU ARE WELCOME HERE', 'أهلًا بك') + '</span><h2>' + L('Come say hello.', 'تفضّل بزيارتنا.') + '</h2><p>' + L('Find your way to the parish.<br>We look forward to seeing you.', 'تعرّف على طريقك إلى الرعية.<br>نتطلّع إلى لقائك.') + '</p></div><div class="contact-panel"><h3>' + safe(name) + '</h3>' +
+    clergySection(d) + timesSection([p]) + eventsSection([p]) + ministriesSection(p, d) + sacramentsSection(p, d, phone) + updatesSection(p, d, 4) + gallerySection(p, d, 6) + contactSection(p, d, name, phone) +
+    '<div class="back-directory site-wrap"><a class="text-link" href="public.html#directory">' + L('Explore other parishes', 'استكشف رعايا أخرى') + icon('arrow') + '</a></div>';
+}
+
+/* The clergy serving the parish now, with the photos the parish published (initials until it has). */
+function clergySection(d) {
+  if (!d.clergy?.length) return '';
+  const initials = c => (pair(c, 'name', 'nameAr') || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('');
+  return '<section id="clergy" class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('SERVING THE PARISH', 'في خدمة الرعية') + '</span><h2>' + L('Clergy', 'الإكليروس') + '</h2></div></div><div class="clergy-grid">' +
+    d.clergy.map(c => '<article class="clergy-card">' + (c.photo ? '<img src="' + safe(c.photo) + '" alt="' + safe(pair(c, 'name', 'nameAr')) + '" loading="lazy">' : '<span class="clergy-initials" aria-hidden="true">' + safe(initials(c)) + '</span>') +
+      '<div><h3>' + safe([c.title, pair(c, 'name', 'nameAr')].filter(Boolean).join(' ')) + '</h3><p>' + safe(L(c.officeEn, c.officeAr)) + '</p></div></article>').join('') + '</div></section>';
+}
+
+function updatesSection(p, d, limit) {
+  const posts = d.posts || [], shown = limit ? posts.slice(0, limit) : posts;
+  return '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
+    (shown.length ? shown.map(post => '<article class="update-card">' + (publishedDate(post.at) ? '<time datetime="' + safe(post.at) + '">' + safe(publishedDate(post.at)) + '</time>' : '') + '<h3>' + safe(post.title) + '</h3><div class="published-body">' + (/<[a-z][\s\S]*>/i.test(post.body || '') ? safeRichText(post.body) : htmlText(post.body)) + '</div></article>').join('') :
+      empty(L('Updates will find a home here', 'هنا تجد مستجدّات الرعية'), L('Published parish announcements will appear in this space.', 'ستظهر إعلانات الرعية المنشورة في هذه المساحة.'))) + '</div>' +
+    (limit && posts.length > limit ? '<a class="text-link more-events" href="' + pageURL(p.id, 'announcements') + '">' + L('View all ' + posts.length + ' announcements', 'اعرض كل الإعلانات (' + number(posts.length) + ')') + icon('arrow') + '</a>' : '') + '</div></section>';
+}
+
+/* Photos the parish published; until it has, illustrative pictures that say so. */
+function gallerySection(p, d, limit) {
+  const photos = d.gallery || [], shown = limit ? photos.slice(0, limit) : photos;
+  const body = shown.length ? '<div class="gallery-grid">' + shown.map(g => '<figure><img src="' + safe(g.url) + '" alt="' + safe(g.name.replace(/\.[a-z]+$/i, '')) + '" loading="lazy"></figure>').join('') + '</div>'
+    : '<div class="gallery-grid">' + ['church', 'community', 'candle'].map(a => '<figure class="illustrative"><img src="assets/images/illustrations/' + a + '.svg" alt="" loading="lazy"><figcaption>' + L('Illustrative image', 'صورة توضيحية') + '</figcaption></figure>').join('') + '</div>' +
+      '<p class="gallery-note">' + L('This parish has not published photos yet; these are illustrations, not pictures of the parish.', 'لم تنشر هذه الرعية صوراً بعد؛ هذه رسوم توضيحية وليست صوراً للرعية.') + '</p>';
+  return '<section id="gallery" class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('PARISH LIFE IN PICTURES', 'حياة الرعية بالصور') + '</span><h2>' + L('Gallery', 'الصور') + '</h2></div></div>' + body +
+    (limit && photos.length > limit ? '<a class="text-link more-events" href="' + pageURL(p.id, 'gallery') + '">' + L('View all ' + photos.length + ' photos', 'اعرض كل الصور (' + number(photos.length) + ')') + icon('arrow') + '</a>' : '') + '</section>';
+}
+
+function contactSection(p, d, name, phone) {
+  const contact = content(d, 'contact'), hours = content(d, 'officeHours'), directions = content(d, 'directions'), access = content(d, 'accessibility');
+  const block = (title, text) => text ? '<div class="contact-block"><h4>' + title + '</h4><p>' + htmlText(text) + '</p></div>' : '';
+  return '<section id="contact" class="section site-wrap contact-section"><div><span class="eyebrow">' + L('YOU ARE WELCOME HERE', 'أهلًا بك') + '</span><h2>' + L('Come say hello.', 'تفضّل بزيارتنا.') + '</h2><p>' + L('Find your way to the parish.<br>We look forward to seeing you.', 'تعرّف على طريقك إلى الرعية.<br>نتطلّع إلى لقائك.') + '</p></div><div class="contact-panel"><h3>' + safe(name) + '</h3>' +
     (contact ? '<p>' + htmlText(contact) + '</p>' : '<p>' + L('Contact and visiting information has not been published yet.', 'لم تُنشر معلومات التواصل والزيارة بعد.') + '</p>') +
     (d.parish.address ? '<div class="contact-row">' + icon('pin') + '<span>' + safe(pair(d.parish, 'address', 'addressAr')) + '</span></div>' : '') +
     (phone ? '<a class="contact-row" href="tel:' + safe(phone) + '">' + icon('phone') + '<bdi>' + safe(d.parish.phone) + '</bdi></a>' : '') +
-    '</div></section><div class="back-directory site-wrap"><a class="text-link" href="public.html#directory">' + L('Explore other parishes', 'استكشف رعايا أخرى') + icon('arrow') + '</a></div>';
+    block(L('Office hours', 'ساعات عمل المكتب'), hours) + block(L('Getting here', 'الوصول إلينا'), directions) + block(L('Accessibility', 'تسهيلات الوصول'), access) +
+    (d.parish.location ? '<a class="text-link" href="' + safe(mapLink(d.parish.location)) + '" target="_blank" rel="noopener noreferrer">' + L('Open the location in a map app', 'افتح الموقع في تطبيق خرائط') + icon('arrow') + '</a>' : '') +
+    '</div></section>';
+}
+
+/* "View more": the parish's full calendar, all its announcements, or its whole gallery, each on its own page. */
+let calendarOffset = 0;
+function morePage(p, d, page) {
+  const name = pair(d.parish, 'name', 'nameAr') || parishName(p);
+  const titles = { calendar: L('Calendar', 'الرزنامة'), announcements: L('Announcements', 'الإعلانات'), gallery: L('Gallery', 'الصور') };
+  const body = page === 'calendar' ? calendarPage(p, d) : page === 'announcements' ? updatesSection(p, d, 0) : gallerySection(p, d, 0);
+  return (d.parish.demo ? DEMO_NOTE() : '') + '<div class="site-wrap breadcrumbs"><a href="public.html#directory">' + L('All parishes', 'كل الرعايا') + '</a>' + icon('chevron') + '<a href="' + profileURL(p.id) + '">' + safe(name) + '</a>' + icon('chevron') + '<span>' + titles[page] + '</span></div>' +
+    '<section class="profile-hero profile-hero-small"><div class="site-wrap"><span class="eyebrow">' + safe(name) + '</span><h1>' + titles[page] + '</h1></div></section>' + body +
+    '<div class="back-directory site-wrap"><a class="text-link" href="' + profileURL(p.id) + '">' + L('Back to the parish page', 'العودة إلى صفحة الرعية') + icon('arrow') + '</a></div>';
+}
+function calendarPage(p, d) {
+  const now = new Date(), start = new Date(now.getFullYear(), now.getMonth() + calendarOffset, 1);
+  const key = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  const events = (d.events || []).filter(e => e.d >= key(start) && e.d < key(end)).sort((a, b) => (a.d + (a.t || '')).localeCompare(b.d + (b.t || '')));
+  const lead = start.getDay(), days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate(), cells = Math.ceil((lead + days) / 7) * 7;
+  const fmt = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en', { month: 'long', year: 'numeric' });
+  const weekday = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en', { weekday: 'short' });
+  return '<section class="section site-wrap public-calendar"><div class="calendar-toolbar"><button class="button button-outline" type="button" data-cal="-1" aria-label="' + L('Previous month', 'الشهر السابق') + '">‹</button>' +
+    '<button class="text-button" type="button" data-cal="0">' + L('Today', 'اليوم') + '</button><h2 aria-live="polite">' + safe(fmt.format(start)) + '</h2>' +
+    '<button class="button button-outline" type="button" data-cal="1" aria-label="' + L('Next month', 'الشهر التالي') + '">›</button></div>' +
+    '<div class="month-grid" role="grid" aria-label="' + safe(fmt.format(start)) + '"><div class="month-head" role="row">' + Array.from({ length: 7 }, (_, i) => '<span role="columnheader">' + safe(weekday.format(new Date(2026, 7, 2 + i))) + '</span>').join('') + '</div><div class="month-cells">' +
+    Array.from({ length: cells }, (_, i) => {
+      const day = new Date(start.getFullYear(), start.getMonth(), i - lead + 1), inMonth = day.getMonth() === start.getMonth(), dayEvents = events.filter(e => e.d === key(day));
+      return '<div class="month-cell' + (inMonth ? '' : ' out') + (key(day) === localToday() ? ' today' : '') + '" role="gridcell"><time datetime="' + key(day) + '">' + day.getDate() + '</time>' +
+        dayEvents.map(e => '<span class="month-event">' + safe((e.t ? e.t + ' ' : '') + pair(e, 'title', 'titleAr')) + '</span>').join('') + '</div>';
+    }).join('') + '</div></div>' +
+    '<h3 class="request-group">' + L('This month', 'هذا الشهر') + '</h3><div class="event-list">' + (events.length ? events.map(e => { const [dd, mm] = dateParts(e.d);
+      return '<article class="event-row"><time class="event-date" datetime="' + safe(e.d) + '"><b>' + safe(dd) + '</b><span>' + safe(mm) + '</span></time><div class="event-info"><span class="eyebrow">' + safe(eventKind(e.kind)) + '</span><h3>' + safe(pair(e, 'title', 'titleAr')) + '</h3></div><span class="event-time">' + (e.t ? icon('clock') + safe(e.t) : '') + '</span></article>'; }).join('')
+      : empty(L('Nothing published this month', 'لا شيء منشور هذا الشهر'), L('Try another month, or contact the parish office.', 'جرّب شهراً آخر أو تواصل مع مكتب الرعية.'))) + '</div></section>';
 }
 
 /* Public ministries: what each does, who leads it (by name only — never a leader's personal number or
@@ -372,9 +670,9 @@ function sacramentsSection(p, d, phone) {
 }
 
 function bindEventToggle(parishes) {
-  document.querySelector('#more-events')?.addEventListener('click', () => {
+  document.querySelector('button#more-events')?.addEventListener('click', () => {
     showAllEvents = !showAllEvents;
-    document.querySelector('#events').outerHTML = eventsSection(parishes);
+    document.querySelector('#events').outerHTML = eventsSection(parishes, !selected);
     bindEventToggle(parishes);
     document.querySelector('#more-events')?.focus({preventScroll:true});
   });
@@ -384,30 +682,31 @@ function bindEventToggle(parishes) {
    are served with a same-origin referrer policy, so it is not passed on to other sites). */
 const trackToken = params.get('track');
 const plansView = params.get('view') === 'plans';
+const MORE_PAGES = ['calendar', 'announcements', 'gallery'], morePageName = params.get('page');
 function render() {
   observer?.disconnect();
   updateChrome();
   if (trackToken) return trackPage(trackToken);
   if (plansView) return plansPage();
   const p = directory.find(p => p.id === selected), d = details.get(selected);
-  applySiteTheme(p && d ? d.parish.theme : null);   // a parish page wears its parish's colours; the directory stays in Forest
+  applySiteTheme(null);   // one shared website theme for every page; a parish's colours never change it
   if (loadFailure) {
     app.innerHTML = '<div class="site-wrap error-page">' + empty(L('We couldn’t load the directory', 'تعذّر تحميل الدليل'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.'), '<button class="button retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>') + '</div>';
   } else if (selected && (!p || !d)) {
     app.innerHTML = '<div class="site-wrap error-page">' + empty(p ? L('This parish page is temporarily unavailable', 'صفحة الرعية غير متاحة حاليًا') : L('Parish not found', 'لم نعثر على الرعية'), L('You can return to the directory and explore another parish.', 'يمكنك العودة إلى الدليل واستكشاف رعية أخرى.'), (p ? '<button class="button retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>' : '') + '<a class="text-link" href="public.html#directory">' + L('Back to the directory', 'العودة إلى الدليل') + icon('arrow') + '</a>') + '</div>';
   } else {
-    app.innerHTML = (failed.length ? '<div class="site-wrap load-notice" role="status">' + L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ') + '<button class="text-button retry-load">' + L('Try again', 'حاول مجدّدًا') + '</button></div>' : '') + (selected ? profile(p, d) : home());
+    app.innerHTML = (failed.length ? '<div class="site-wrap load-notice" role="status">' + L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ') + '<button class="text-button retry-load">' + L('Try again', 'حاول مجدّدًا') + '</button></div>' : '') +
+      (selected ? (MORE_PAGES.includes(morePageName) ? morePage(p, d, morePageName) : profile(p, d)) : home());
   }
   app.setAttribute('aria-busy', 'false');
   document.title = (selected && p ? parishName(p) : L('Find your parish', 'ابحث عن رعيتك')) + ' · ParishLife';
   renderCards();
   document.querySelectorAll('.retry-load').forEach(button => button.addEventListener('click', load));
-  document.querySelector('.directory-filters')?.addEventListener('submit', event => { event.preventDefault(); renderCards(true); document.querySelector('#directory-cards')?.scrollIntoView({block:'nearest'}); });
-  document.querySelector('#directory-filter')?.addEventListener('input', event => { filters.q = event.target.value; renderCards(true); });
-  document.querySelector('#town-filter')?.addEventListener('change', event => { filters.town = event.target.value; renderCards(true); });
-  document.querySelector('#sort-filter')?.addEventListener('change', event => { filters.sort = event.target.value; renderCards(true); });
+  bindDirectory();
+  bindSlider();
   bindEventToggle(selected && p ? [p] : directory);
   if (selected && p && d) { bindMinistryForm(p); bindGuestForm(p); }
+  document.querySelectorAll('[data-cal]').forEach(b => b.addEventListener('click', () => { calendarOffset = +b.dataset.cal ? calendarOffset + +b.dataset.cal : 0; render(); document.querySelector('[data-cal="' + b.dataset.cal + '"]')?.focus(); }));
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     observer = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
@@ -465,12 +764,15 @@ async function load() {
   app.setAttribute('aria-busy', 'true');
   loadFailure = false;
   try {
-    const payload = await getJSON('/api/public/parishes');
+    const [payload, config] = await Promise.all([getJSON('/api/public/parishes'), mapsConfig ? mapsConfig : getJSON('/api/public/config').catch(() => ({ maps: null }))]);
+    mapsConfig = config;
     directory = payload.parishes || [];
     const responses = await Promise.allSettled(directory.map(p => getJSON('/api/public/parishes/' + encodeURIComponent(p.id))));
     details = new Map(); failed = [];
     responses.forEach((result, i) => result.status === 'fulfilled' ? details.set(directory[i].id, result.value) : failed.push(directory[i].id));
     if (filters.town && !directory.some(p => p.town === filters.town)) filters.town = '';
+    if (filters.diocese && !directory.some(p => p.diocese === filters.diocese)) filters.diocese = '';
+    if (filters.rite && !directory.some(p => p.rite === filters.rite)) filters.rite = '';
   } catch { loadFailure = true; }
   render();
   if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({behavior:'instant'});

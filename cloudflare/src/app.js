@@ -283,7 +283,13 @@ export async function sync_relationships(c, pid, d) {
 
 /* ---- access: see authority.js ------------------------------------------- */
 export async function file_access(c, u, pid, scope, owner_id, write = false) {
-  need(has(new Set(['group', 'person', 'guest-request']), scope), 'Invalid file owner.');
+  need(has(new Set(['group', 'person', 'guest-request', 'gallery', 'clergy']), scope), 'Invalid file owner.');
+  if (scope === 'gallery' || scope === 'clergy') {   // pictures for the public page: whoever publishes the website
+    need(permsOf(u).has('website.publish'), 'Publishing permission is needed for the public page’s pictures.', 403);
+    need(scope === 'gallery' ? owner_id === pid
+      : await c.first('SELECT 1 AS x FROM clergy_assignments WHERE parish_id=? AND clergy_id=? AND end_date IS NULL', pid, owner_id), 'Not found.', 404);
+    return;
+  }
   if (scope === 'guest-request') {   // the signed document for a guest's request: the office only
     need(permsOf(u).has('requests.manage'), 'Guest request documents are restricted to the parish office.', 403);
     need(await c.first('SELECT 1 AS x FROM guest_requests WHERE id=? AND parish_id=?', owner_id, pid), 'Request not found.', 404);

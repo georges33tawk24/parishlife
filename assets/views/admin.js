@@ -1,6 +1,11 @@
 /* Modules 1, 15, 16, 17 — eparchy, workflows, reporting, audit, security. */
 import { t, isAr, num, usd, fmtDate } from '../i18n.js';
-import { S, ROLES, is, go, bus } from '../store.js';
+import { S, ROLES, is, go, bus, parishModules } from '../store.js';
+const MODULE_NAMES = [['presence', 'Public presence', 'الحضور العام'], ['members', 'Members and member portal', 'الأعضاء وبوّابتهم'], ['office', 'Parish office and records', 'مكتب الرعية والسجلات'],
+  ['sacraments', 'Sacraments and certificates', 'الأسرار والشهادات'], ['requests', 'Requests, forms and workflows', 'الطلبات والاستمارات والمسارات'],
+  ['documents', 'Document requests without an account', 'طلب الوثائق دون حساب'], ['ministries', 'Ministries and volunteers', 'الخدمات والمتطوّعون'],
+  ['events', 'Calendar, services and registrations', 'الرزنامة والخدم والتسجيلات'], ['reservations', 'Reservations', 'الحجوزات'], ['resources', 'Facilities and resources', 'المرافق والموارد'],
+  ['communications', 'Communications', 'التواصل'], ['finance', 'Giving and finance', 'التقدمات والمالية']];
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, stat,
          searchField, openDrawer, openModal, closeOverlays, toast, tabBar, avatar, amount, openMenu } from '../ui.js';
 import * as C from '../components.js';
@@ -410,20 +415,28 @@ export function settings(tab = '') {
     title: L('Parish settings', 'إعدادات الرعية'),
     sub: L('Branding, enabled modules, languages, currency, permissions and local workflow rules.',
            'الهوية والوحدات المفعّلة واللغات والعملة والصلاحيات وقواعد العمل المحلية.'),
-    actions: tab === 'appearance' ? '' : `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
+    actions: ['', 'appearance', 'modules'].includes(tab) ? '' : `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
   }) + tabBar('settings', SETTABS(), tab);
 
   const T = {
     '': () => `<div class="splitview">
       <div class="stack" style="gap:16px">
-        ${panel(L('Parish', 'الرعية'), `<div class="formgrid">
-          ${C.field({ label: L('Name (English)', 'الاسم (إنكليزي)'), value: PARISH.name })}
-          ${C.field({ label: L('Name (Arabic)', 'الاسم (عربي)'), value: PARISH.nameAr, dir: 'rtl', ar: true })}
-          ${C.field({ label: L('Eparchy', 'الأبرشية'), value: L(PARISH.eparchy, PARISH.eparchyAr) })}
-          ${C.field({ label: L('Patron saint', 'الشفيع'), value: L('Saint Elias the Prophet', 'مار الياس النبي') })}</div>
-          ${C.riteSelect()}
-          ${C.field({ label: L('Phone', 'الهاتف'), value: PARISH.phone, dir: 'ltr' })}
-          ${C.field({ label: L('Address', 'العنوان'), value: L(PARISH.address, PARISH.addressAr) })}`)}
+        ${panel(L('Parish', 'الرعية'), `<dl class="dl">
+            <dt>${L('Name', 'الاسم')}</dt><dd>${esc(PARISH.name)} · <span dir="rtl">${esc(PARISH.nameAr || '')}</span></dd>
+            <dt>${L('Eparchy', 'الأبرشية')}</dt><dd>${esc(L(PARISH.eparchy || '—', PARISH.eparchyAr || PARISH.eparchy || '—'))}</dd>
+            <dt>${L('Rite', 'الطقس')}</dt><dd>${esc(L(PARISH.rite || '—', PARISH.riteAr || PARISH.rite || '—'))}</dd></dl>
+          <p class="help">${L('The name, diocese and rite are recorded with the diocese, in Administration.', 'يُسجَّل الاسم والأبرشية والطقس لدى الأبرشية، في الإدارة.')}</p>
+          <div class="divider"></div>
+          <div class="formgrid">
+            <div class="formrow"><label class="label" for="set-phone">${L('Phone', 'الهاتف')}</label><input class="input" id="set-phone" dir="ltr" maxlength="40" value="${esc(PARISH.phone || '')}"></div>
+            <div class="formrow"><label class="label" for="set-address">${L('Address', 'العنوان')}</label><input class="input" id="set-address" maxlength="200" value="${esc(PARISH.address || '')}"></div>
+            <div class="formrow"><label class="label" for="set-address-ar">${L('Address in Arabic', 'العنوان بالعربية')}</label><input class="input" id="set-address-ar" dir="rtl" maxlength="200" value="${esc(PARISH.addressAr || '')}"></div></div>
+          <fieldset class="formrow"><legend class="label">${L('Location on the public map', 'الموقع على الخريطة العامة')}</legend>
+            <div class="formgrid"><div class="formrow"><label class="label" for="set-lat">${L('Latitude', 'خط العرض')}</label><input class="input" id="set-lat" dir="ltr" inputmode="decimal" placeholder="33.8938" value="${PARISH.location ? esc(String(PARISH.location.lat)) : ''}"></div>
+              <div class="formrow"><label class="label" for="set-lng">${L('Longitude', 'خط الطول')}</label><input class="input" id="set-lng" dir="ltr" inputmode="decimal" placeholder="35.5018" value="${PARISH.location ? esc(String(PARISH.location.lng)) : ''}"></div></div>
+            <button class="btn btn-secondary btn-dense" type="button" id="set-here">${icon('globe', 15)}${L('Use this device’s location', 'استخدم موقع هذا الجهاز')}</button>
+            <p class="help" id="set-loc-help">${L('Shown on the public map and used for distance search. Leave both empty to keep the parish off the map. Address and phone appear publicly only when “Contact & visiting” is published.', 'تُعرض على الخريطة العامة وتُستعمل للبحث بالمسافة. اترك الحقلين فارغين لإبقاء الرعية خارج الخريطة. ولا يظهر العنوان والهاتف للعموم إلا عند نشر قسم «التواصل والزيارة».')}</p></fieldset>
+          <button class="btn btn-primary" type="button" id="set-parish-save">${icon('check', 16)}${L('Save parish details', 'حفظ معلومات الرعية')}</button>`)}
         ${panel(L('Branding', 'الهوية'), `${C.avatarUpload('parish')}
           <div class="scheme-current"><span class="scheme-dot" aria-hidden="true"></span>
             <span class="grow"><b>${L('Colour scheme', 'نظام الألوان')}</b><small>${esc(L(schemeOf(PARISH.theme).en, schemeOf(PARISH.theme).ar))}</small></span>
@@ -470,16 +483,11 @@ export function settings(tab = '') {
         <p class="help" style="margin-top:10px">${L('The calendar in use must be approved by the parish. Feast days drive the gold markers everywhere in the product.',
           'يجب أن توافق الرعية على الرزنامة المستعملة. والأعياد تقود العلامات الذهبية في كل المنتج.')}</p>`)}</div></div>`,
 
-    modules: () => `<div style="max-width:760px">${panel(L('Enabled modules', 'الوحدات المفعّلة'), `
-      <div class="stack" style="gap:12px">
-        ${[[L('Sacramental registers', 'سجلات الأسرار'), true], [L('Giving and finance', 'التقدمات والمالية'), true],
-           [L('Child check-in and safeguarding', 'تسجيل الأطفال والحماية'), true], [L('Music library', 'مكتبة الألحان'), true],
-           [L('Member portal', 'بوّابة المؤمنين'), true], [L('Facilities and reservations', 'المرافق والحجوزات'), true],
-           [L('Volunteer scheduling', 'جدولة المتطوّعين'), true], [L('Online payments', 'الدفع الإلكتروني'), false],
-           [L('AI assistance', 'مساعدة الذكاء الاصطناعي'), false]]
-          .map(([l, on], i) => C.switchRow(l, { checked: on, pref: `mod.${i}` })).join('')}</div>
-      <p class="help" style="margin-top:14px">${L('A module that is switched off disappears from every rail, for every role.',
-        'الوحدة المعطَّلة تختفي من كل شريط ولكل دور.')}</p>`)}</div>`,
+    modules: () => { const on = parishModules() || []; return `<div style="max-width:760px">${panel(L('Modules in the parish plan', 'الوحدات في خطة الرعية'), `
+      <div class="plan-chips">${MODULE_NAMES.map(([id, en, ar]) => `<span class="plan-chip ${on.includes(id) ? 'on' : 'off'}">${icon(on.includes(id) ? 'check' : 'close', 13)}${esc(L(en, ar))}</span>`).join('')}</div>
+      <p class="help" style="margin-top:14px">${L('The parish plan decides which modules are switched on. It never gives anyone access by itself: each person still needs their role’s permissions. Online payments and AI assistance are not available in ParishLife.',
+        'تحدّد خطة الرعية الوحدات المفعّلة. ولا تمنح أحداً وصولاً بذاتها: يبقى كل شخص بحاجة إلى صلاحيات دوره. والدفع الإلكتروني ومساعدة الذكاء الاصطناعي غير متاحين في ParishLife.')}</p>
+      <a class="btn btn-secondary" href="#/administration/plans">${L('Open Administration → Plans', 'افتح الإدارة ← الخطط')}</a>`)}</div>`; },
 
     roles: () => `<div class="splitview">
       <div>${panel(L('Permission matrix', 'مصفوفة الصلاحيات'), `<div class="tablescroll"><table class="tbl">
@@ -591,6 +599,28 @@ settings.mount = (host, tab = '') => {
   C.wire(host); wireTables(host);
   host.querySelector('#perm')?.addEventListener('click', reviewDeletions);
   if (tab === 'appearance') wireAppearance(host);
+  host.querySelector('#set-here')?.addEventListener('click', () => {
+    const help = host.querySelector('#set-loc-help');
+    if (!navigator.geolocation) { help.textContent = L('This device cannot share its location. Enter the coordinates instead.', 'لا يستطيع هذا الجهاز مشاركة موقعه. أدخل الإحداثيات بدلاً من ذلك.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      host.querySelector('#set-lat').value = pos.coords.latitude.toFixed(5); host.querySelector('#set-lng').value = pos.coords.longitude.toFixed(5);
+      help.textContent = L(`Filled from this device (accurate to about ${Math.round(pos.coords.accuracy)} m). Check it before saving.`, `مُلئت من هذا الجهاز (بدقّة نحو ${Math.round(pos.coords.accuracy)} م). تحقّق منها قبل الحفظ.`);
+    }, () => { help.textContent = L('The location was not shared. Enter the coordinates instead.', 'لم يُشارَك الموقع. أدخل الإحداثيات بدلاً من ذلك.'); });
+  });
+  host.querySelector('#set-parish-save')?.addEventListener('click', async e => {
+    const lat = host.querySelector('#set-lat').value.trim(), lng = host.querySelector('#set-lng').value.trim();
+    const la = Number(lat), ln = Number(lng);
+    if ((lat || lng) && !(lat && lng && Number.isFinite(la) && Number.isFinite(ln) && Math.abs(la) <= 90 && Math.abs(ln) <= 180)) {
+      toast(L('Check the coordinates', 'تحقّق من الإحداثيات'), L('Enter both latitude and longitude as numbers, or leave both empty.', 'أدخل خطّي العرض والطول أرقاماً، أو اترك الحقلين فارغين.'), 'warning');
+      host.querySelector('#set-lat').focus(); return;
+    }
+    const before = { phone: PARISH.phone, address: PARISH.address, addressAr: PARISH.addressAr, location: PARISH.location };
+    Object.assign(PARISH, { phone: host.querySelector('#set-phone').value.trim(), address: host.querySelector('#set-address').value.trim(),
+      addressAr: host.querySelector('#set-address-ar').value.trim(), location: lat && lng ? { lat: la, lng: ln } : null });
+    e.currentTarget.disabled = true;
+    if (!await persist()) { Object.assign(PARISH, before); e.currentTarget.disabled = false; return; }
+    bus.refresh(); toast(L('Parish details saved', 'حُفظت معلومات الرعية'), '', 'success');
+  });
 };
 
 /* ── Colours: a scheme for the whole parish, previewed live and saved by the priest ── */

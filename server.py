@@ -1156,18 +1156,76 @@ def public_parish(c, pid):
             and not (not detail and event.get('kind') in {'mass', 'event'})): continue
         events.append({key: event.get(key, '') for key in ('id', 'd', 't', 'title', 'titleAr', 'kind')})
     posts = [dict(title=item['title'], body=item['body'], at=item['created_at'])
-             for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", (pid,))]
+             for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 50", (pid,))]
     posts.extend(dict(title=n.get('title', ''), body=n.get('ar', ''), at=n.get('at', ''))
                  for n in public_state.get('NOTICES', []) if n.get('audience') == 'Parish' and not n.get('groupId'))
     posts.sort(key=lambda item: item['at'], reverse=True)
     public = {key: parish.get(key, '') for key in ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
-    public['theme'] = parish_theme(parish)
+    # Every parish page wears the one shared website theme; a parish's own colours are not published.
     if not content.get('contact'):
         public.update(address='', addressAr='', phone='')
+    public.update(public_place(c, pid, public_state))
     modules = parish_plan(c, pid)['modules']
     return {'parish': public, 'content': content, 'events': events, 'posts': posts,
             'ministries': public_ministries(public_state) if 'ministries' in modules else [],
+            'clergy': public_clergy(c, pid), 'gallery': public_gallery(c, pid),
             'modules': modules, 'documentsOpen': documents_open(c, pid)}
+
+
+def public_place(c, pid, state):
+    """Where a parish is, for the directory's filters and map: its diocese, rite, published coordinates
+    (only when the parish entered them) and whether it is demonstration data."""
+    row = c.execute('SELECT p.diocese,p.metadata,d.name,d.metadata AS dmeta FROM parishes p LEFT JOIN dioceses d ON d.id=p.diocese WHERE p.id=?', (pid,)).fetchone()
+    meta, dmeta = json.loads(row['metadata']), json.loads(row['dmeta'] or '{}')
+    loc = state['PARISH'].get('location')
+    return dict(diocese=row['diocese'], dioceseName=row['name'] or '', dioceseAr=dmeta.get('ar', ''),
+                rite=state['PARISH'].get('rite', ''), riteAr=state['PARISH'].get('riteAr', ''),
+                location=dict(lat=loc['lat'], lng=loc['lng']) if isinstance(loc, dict) else None, demo=bool(meta.get('demo')))
+
+
+def public_clergy(c, pid):
+    """The clergy serving a parish now: name, current title, responsibility and the photo the parish published."""
+    order = {'parish-priest': 0, 'assistant-priest': 1, 'deacon': 2}
+    out = []
+    for r in c.execute('SELECT cl.id,cl.name,cl.name_ar,a.office FROM clergy_assignments a JOIN clergy cl ON cl.id=a.clergy_id '
+                       'WHERE a.parish_id=? AND a.end_date IS NULL', (pid,)).fetchall():
+        title = c.execute('SELECT title FROM clergy_titles WHERE clergy_id=? AND effective_from<=? ORDER BY effective_from DESC,set_at DESC LIMIT 1',
+                          (r['id'], TODAY())).fetchone()
+        photo = c.execute("SELECT id FROM uploaded_files WHERE parish_id=? AND scope='clergy' AND owner_id=? ORDER BY created_at DESC LIMIT 1", (pid, r['id'])).fetchone()
+        office = CLERGY_OFFICES.get(r['office'], CLERGY_OFFICES['other'])
+        out.append(dict(id=r['id'], name=r['name'], nameAr=r['name_ar'], title=title['title'] if title else '', office=r['office'],
+                        officeEn=office[0], officeAr=office[1], photo=f'/api/public/parishes/{pid}/images/{photo["id"]}' if photo else None))
+    out.sort(key=lambda x: (order.get(x['office'], 3), x['name']))
+    return out
+
+
+def public_gallery(c, pid):
+    return [dict(id=r['id'], name=r['name'], url=f'/api/public/parishes/{pid}/images/{r["id"]}', at=r['created_at'])
+            for r in c.execute("SELECT id,name,created_at FROM uploaded_files WHERE parish_id=? AND scope='gallery' AND owner_id=? "
+                               "AND mime LIKE 'image/%' ORDER BY created_at DESC LIMIT 60", (pid, pid))]
+
+
+def public_image(c, pid, file_id):
+    row = c.execute("SELECT * FROM uploaded_files WHERE parish_id=? AND id=? AND scope IN ('gallery','clergy') AND mime LIKE 'image/%'", (pid, file_id)).fetchone()
+    require(row is not None, 'Image not found.', 404)
+    return row
+
+
+def public_directory(c):
+    """Every parish registered in ParishLife, with what the directory filters and the map need."""
+    out = []
+    for row in c.execute('SELECT id,metadata FROM parishes ORDER BY rowid').fetchall():
+        meta = json.loads(row['metadata'])
+        state = c.execute('SELECT data FROM states WHERE parish_id=?', (row['id'],)).fetchone()
+        place = public_place(c, row['id'], json.loads(state['data'])) if state else {}
+        out.append(dict(id=row['id'], name=meta.get('name', ''), ar=meta.get('ar', ''), town=meta.get('town', ''), townAr=meta.get('townAr', ''), **place))
+    return out
+
+
+def public_config():
+    """What the public pages may use. The map provider is offered only once a browser key is configured."""
+    key = os.environ.get('PARISHLIFE_GOOGLE_MAPS_KEY', '').strip()
+    return dict(maps=dict(provider='google', key=key) if key else None)
 
 
 def parish_brief(row):
@@ -2642,6 +2700,15 @@ SEED_BUNDLES = [
 
 def migrate_plans(c):
     c.executescript(PLAN_SCHEMA)
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-demo-parishes'").fetchone() is None:
+        # The parishes the seed created are demonstration data; say so, unless someone already said otherwise.
+        seed_ids = {p['id'] for p in json.loads((ROOT / 'backend' / 'seed.json').read_text(encoding='utf-8'))['PARISHES']}
+        for row in c.execute('SELECT id,metadata FROM parishes').fetchall():
+            meta = json.loads(row['metadata'])
+            if row['id'] in seed_ids and 'demo' not in meta:
+                meta['demo'] = True
+                c.execute('UPDATE parishes SET metadata=? WHERE id=?', (json.dumps(meta), row['id']))
+        c.execute("INSERT INTO schema_migrations VALUES('v2-demo-parishes',?)", (NOW(),))
     if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-plans'").fetchone() is None:
         at = NOW()
         for bid, name, name_ar, desc, desc_ar, modules, demo in SEED_BUNDLES:
@@ -3207,7 +3274,13 @@ def perms_of(u):
 
 
 def file_access(c, u, pid, scope, owner_id, write=False):
-    require(scope in {'group', 'person', 'guest-request'}, 'Invalid file owner.')
+    require(scope in {'group', 'person', 'guest-request', 'gallery', 'clergy'}, 'Invalid file owner.')
+    if scope in {'gallery', 'clergy'}:   # pictures for the public page: whoever publishes the website
+        require('website.publish' in perms_of(u), 'Publishing permission is needed for the public page’s pictures.', 403)
+        require(owner_id == pid if scope == 'gallery' else c.execute(
+            'SELECT 1 FROM clergy_assignments WHERE parish_id=? AND clergy_id=? AND end_date IS NULL', (pid, owner_id)).fetchone() is not None,
+            'Not found.', 404)
+        return
     if scope == 'guest-request':   # the signed document for a guest's request: the office only
         require('requests.manage' in perms_of(u), 'Guest request documents are restricted to the parish office.', 403)
         require(c.execute('SELECT 1 FROM guest_requests WHERE id=? AND parish_id=?', (owner_id, pid)).fetchone(), 'Request not found.', 404)
@@ -3311,7 +3384,8 @@ def admin_view(c, u):
     for pid in parish_ids:
         p = parish_rows[pid]; meta = json.loads(p['metadata'])
         out_parishes.append(dict(id=pid, diocese=p['diocese'], name=meta.get('name', ''), nameAr=meta.get('ar', ''),
-                                 town=meta.get('town', ''), townAr=meta.get('townAr', ''), perms=sorted(scope['parishes'][pid])))
+                                 town=meta.get('town', ''), townAr=meta.get('townAr', ''), perms=sorted(scope['parishes'][pid]),
+                                 demo=bool(meta.get('demo'))))
     out_parishes.sort(key=lambda p: (p['diocese'], p['name']))
     # Appointments the account may see: in its parishes, its dioceses and (super admin) the system.
     rows = c.execute("SELECT * FROM role_assignments ORDER BY created_at DESC,id").fetchall()
@@ -3523,6 +3597,14 @@ def admin_action(c, u, q):
         sync_relationships(c, pid, d)
         audit(c, u, pid, 'parish.created', {'diocese': did})
         return dict(id=pid)
+    if op == 'setDemo':   # whether a parish's information is demonstration data, shown as such on its public page
+        require('dioceses.manage' in system_perms(auth), 'Only a super admin marks demonstration data.', 403)
+        row = c.execute('SELECT * FROM parishes WHERE id=?', (q.get('parish'),)).fetchone()
+        require(row is not None and type(q.get('demo')) is bool, 'Choose a parish.', 404)
+        meta = json.loads(row['metadata']); meta['demo'] = q['demo']
+        c.execute('UPDATE parishes SET metadata=? WHERE id=?', (json.dumps(meta, ensure_ascii=False), row['id']))
+        audit(c, u, row['id'], 'parish.demo-' + ('on' if q['demo'] else 'off'), {})
+        return {}
     if op == 'assign':
         aid = assign_role(c, u, auth, q.get('userId'), q.get('role'), q.get('scope'), q.get('scopeId'),
                           q.get('grants') or [], q.get('revokes') or [], clean(q.get('note'), 300, '', required=False))
@@ -3853,6 +3935,9 @@ def validate(d):
         result = {x['id']: x for x in rows}
         require(len(result) == len(rows), 'Duplicate IDs in ' + key)
         return result
+    loc = d['PARISH'].get('location')
+    require(loc is None or (isinstance(loc, dict) and set(loc) == {'lat', 'lng'} and all(type(loc[k]) in (int, float) for k in loc)
+            and -90 <= loc['lat'] <= 90 and -180 <= loc['lng'] <= 180), 'Check the parish coordinates.')
     pp = {**index('PEOPLE'), **index('ARCHIVED')}
     content = d.get('CONTENT', {})
     require(isinstance(content, dict), 'Invalid parish content.')
@@ -5720,7 +5805,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not path.startswith('/assets/') or not target.is_relative_to(ROOT / 'assets'):
             return False
         return (target.suffix in {'.js', '.css'}
-                or target.is_relative_to(ROOT / 'assets' / 'images') and target.suffix in {'.jpg', '.jpeg', '.png', '.webp'}
+                or target.is_relative_to(ROOT / 'assets' / 'images') and target.suffix in {'.jpg', '.jpeg', '.png', '.webp', '.svg'}
                 or target.is_relative_to(ROOT / 'assets' / 'fonts') and target.suffix == '.woff2')
 
     def home_page(self):
@@ -5839,10 +5924,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     require(isinstance(q, dict), 'Expected an object.')
                 path = urlsplit(self.path).path
                 if path == '/api/public/parishes' and self.command == 'GET':
-                    return self.reply(200, {'parishes': [dict(id=row['id'], name=meta.get('name', ''), ar=meta.get('ar', ''),
-                                                            town=meta.get('town', ''), townAr=meta.get('townAr', ''))
-                                           for row in c.execute('SELECT id,metadata FROM parishes')
-                                           for meta in [json.loads(row['metadata'])]]})
+                    return self.reply(200, {'parishes': public_directory(c)})
+                if path == '/api/public/config' and self.command == 'GET':
+                    return self.reply(200, public_config())
+                if re.fullmatch(r'/api/public/parishes/[^/]+/images/[^/]+', path) and self.command == 'GET':
+                    return self.reply_file(public_image(c, path.split('/')[4], path.split('/')[6]))
                 if path == '/api/public/plans' and self.command == 'GET':
                     return self.reply(200, plans_public(c))
                 if path.startswith('/api/public/parishes/') and self.command == 'GET':
@@ -5978,6 +6064,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         require(filename and len(filename) <= 180 and not any(ord(ch) < 32 for ch in filename), 'Invalid filename.')
                         mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png'}.get(filename.rsplit('.', 1)[-1].lower())
                         require(mime is not None, 'Only PDF, JPG, and PNG files are supported.')
+                        require(scope not in {'gallery', 'clergy'} or mime.startswith('image/'), 'Use a JPG or PNG picture.')
                         encoded = q.get('data')
                         require(isinstance(encoded, str) and len(encoded) <= 13_500_000, 'File is too large.', 413)
                         try: data = base64.b64decode(encoded, validate=True)

@@ -19,7 +19,7 @@ import {
   accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish
 } from './identity.js';
 import { xlsx_preview } from './xlsx.js';
-import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction } from './connections.js';
+import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction, publicDirectory, publicConfig, publicImage } from './connections.js';
 import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
 import { guestRequestCreate, guestRequestRow, guestRequestView, guestDocument, guestRequestAction, dioceseDocuments, dioceseDocumentAction } from './documents.js';
 import { messagesList, messagesAction } from './privacy.js';
@@ -125,12 +125,12 @@ async function handle(c, env, request, url, q, secureCookie) {
   const method = request.method;
   const path = url.pathname;
   if (path === '/api/public/plans' && method === 'GET') return reply(200, await plansPublic(c));
-  if (path === '/api/public/parishes' && method === 'GET') {
-    const rows = await c.all('SELECT id,metadata FROM parishes');
-    return reply(200, { parishes: rows.map(row => {
-      const meta = JSON.parse(row.metadata);
-      return { id: row.id, name: get(meta, 'name', ''), ar: get(meta, 'ar', ''), town: get(meta, 'town', ''), townAr: get(meta, 'townAr', '') };
-    }) });
+  if (path === '/api/public/parishes' && method === 'GET') return reply(200, { parishes: await publicDirectory(c) });
+  if (path === '/api/public/config' && method === 'GET') return reply(200, publicConfig(env));
+  if (/^\/api\/public\/parishes\/[^/]+\/images\/[^/]+$/.test(path) && method === 'GET') {
+    const parts = path.split('/');
+    const row = await publicImage(c, parts[4], parts[6]);
+    return fileReply(row, await storedFile(c, row));
   }
   if (path.startsWith('/api/public/parishes/') && method === 'GET') return reply(200, await publicParish(c, path.slice(path.lastIndexOf('/') + 1)));
   if (path.startsWith('/api/public/parishes/') && path.endsWith('/inquiries') && method === 'POST') {
@@ -342,6 +342,7 @@ async function handle(c, env, request, url, q, secureCookie) {
       const extension = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1).toLowerCase() : filename.toLowerCase();
       const mime = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' }[extension] ?? null;
       need(mime !== null, 'Only PDF, JPG, and PNG files are supported.');
+      need(!['gallery', 'clergy'].includes(scope) || mime.startsWith('image/'), 'Use a JPG or PNG picture.');
       const encoded = get(q, 'data');
       need(typeof encoded === 'string' && len(encoded) <= 13500000, 'File is too large.', 413);
       if (/[^\x00-\x7f]/.test(encoded)) throw new PyError('string argument should contain only ASCII characters');

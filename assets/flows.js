@@ -1478,7 +1478,8 @@ export function incidentOpen(id) {
 /* ═════════════ facilities ═════════════ */
 /* ═════════════ portal ═════════════ */
 export function contentEdit(key = 'history') {
-  const sections={welcome:['Welcome message','رسالة الترحيب'],history:['Parish history and patron saint','تاريخ الرعية والشفيع'],massTimes:['Mass and confession information','معلومات القداديس والاعتراف'],contact:['Contact and visiting information','معلومات التواصل والزيارة'],sacraments:['Sacraments and certificates','الأسرار والشهادات']};
+  const sections={welcome:['Welcome message','رسالة الترحيب'],history:['Parish history and patron saint','تاريخ الرعية والشفيع'],massTimes:['Mass and confession information','معلومات القداديس والاعتراف'],contact:['Contact and visiting information','معلومات التواصل والزيارة'],sacraments:['Sacraments and certificates','الأسرار والشهادات'],
+    officeHours:['Office hours','ساعات عمل المكتب'],directions:['Directions','الوصول إلى الرعية'],accessibility:['Accessibility','تسهيلات الوصول']};
   if(!sections[key])key='history';
   const c = D.CONTENT[key] || {en:'',ar:'',published:false};
   openDrawer({

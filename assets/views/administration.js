@@ -186,9 +186,12 @@ function parishes() {
   const rows = d.parishes.map(p => ({ cells: [
     `<b>${esc(p.name)}</b>${p.nameAr ? `<small class="dim" style="display:block" dir="rtl">${esc(p.nameAr)}</small>` : ''}`,
     esc(L(p.town, p.townAr || p.town)), esc(dioceseName(p.diocese)),
-    `<span class="row" style="gap:4px;flex-wrap:wrap">${['staff.manage', 'access.manage', 'finance.view', 'settings.manage'].filter(x => has(p.perms, x)).map(x => `<span class="chip">${esc(permName(x))}</span>`).join('')}</span>`] }));
+    `<span class="row" style="gap:4px;flex-wrap:wrap">${['staff.manage', 'access.manage', 'finance.view', 'settings.manage'].filter(x => has(p.perms, x)).map(x => `<span class="chip">${esc(permName(x))}</span>`).join('')}</span>`,
+    has(d.system, 'dioceses.manage') ? `<label class="check"><input type="checkbox" data-demo-parish="${esc(p.id)}" ${p.demo ? 'checked' : ''}><span>${L('Demonstration data', 'بيانات للعرض')}</span></label>`
+      : p.demo ? pill(L('Demonstration data', 'بيانات للعرض'), 'warning', false) : ''] }));
   return `${may.parishDioceses().length ? `<div class="toolbar" style="margin-bottom:16px"><button class="btn btn-primary" id="adm-new-parish">${icon('plus', 16)}${L('New parish', 'رعية جديدة')}</button></div>` : ''}
-    ${table({ id: 'adm-parishes', cols: [{ label: L('Parish', 'الرعية') }, { label: L('Town', 'البلدة') }, { label: L('Diocese', 'الأبرشية') }, { label: L('Your authority here', 'صلاحيتك هنا'), cls: 'hide-sm' }], rows })}`;
+    ${table({ id: 'adm-parishes', cols: [{ label: L('Parish', 'الرعية') }, { label: L('Town', 'البلدة') }, { label: L('Diocese', 'الأبرشية') }, { label: L('Your authority here', 'صلاحيتك هنا'), cls: 'hide-sm' }, { label: L('Data', 'البيانات') }], rows })}
+    <p class="help">${L('A parish marked as demonstration data says so on its public page, so sample information is never taken for a real parish’s.', 'الرعية المعلَّمة كبيانات للعرض يُذكر ذلك في صفحتها العامة، فلا تُحسب المعلومات النموذجية معلوماتِ رعية حقيقية.')}</p>`;
 }
 
 /* ---------- staff & permissions ---------- */
@@ -498,6 +501,10 @@ administration.mount = host => {
   host.querySelector('#adm-new-clergy')?.addEventListener('click', newClergy);
   host.querySelectorAll('[data-clergy]').forEach(b => b.addEventListener('click', () => openClergy(b.dataset.clergy)));
   host.querySelector('#adm-block')?.addEventListener('click', block);
+  host.querySelectorAll('[data-demo-parish]').forEach(box => box.addEventListener('change', async () => {
+    try { await act({ op: 'setDemo', parish: box.dataset.demoParish, demo: box.checked }, box.checked ? L('Marked as demonstration data', 'عُلّمت كبيانات للعرض') : L('No longer marked as demonstration data', 'لم تعد معلَّمة كبيانات للعرض')); }
+    catch (e) { box.checked = !box.checked; toast(L('Not saved', 'لم يُحفظ'), e.message, 'danger'); }
+  }));
   mountPlans(host);
   host.querySelectorAll('[data-unblock]').forEach(b => b.addEventListener('click', () => unblock(b.dataset.unblock)));
 };

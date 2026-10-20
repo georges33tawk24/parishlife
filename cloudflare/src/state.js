@@ -264,6 +264,9 @@ export function validate(d) {
   need(theme === null || (isDict(theme) && eq(Object.keys(theme).sort(), ['primary', 'scheme'])
     && isStr(K(theme, 'scheme')) && THEME_SCHEMES.has(K(theme, 'scheme'))
     && isStr(K(theme, 'primary')) && HEX_COLOUR.test(K(theme, 'primary'))), 'Invalid colour scheme.');
+  const loc = get(K(d, 'PARISH'), 'location');
+  need(loc === null || (isDict(loc) && eq(Object.keys(loc).sort(), ['lat', 'lng']) && ['lat', 'lng'].every(k => typeof loc[k] === 'number' && Number.isFinite(loc[k]))
+    && loc.lat >= -90 && loc.lat <= 90 && loc.lng >= -180 && loc.lng <= 180), 'Check the parish coordinates.');
   const pp = index(d, 'PEOPLE');
   for (const [k, v] of index(d, 'ARCHIVED').entries()) pp.set(k, v);
   const content = get(d, 'CONTENT', {});

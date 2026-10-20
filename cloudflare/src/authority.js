@@ -503,7 +503,8 @@ export async function adminView(c, u) {
   const byId = new Map(parishRows.map(p => [p.id, p]));
   const outParishes = [...parishIds].map(pid => {
     const p = byId.get(pid), meta = JSON.parse(p.metadata);
-    return { id: pid, diocese: p.diocese, name: meta.name ?? '', nameAr: meta.ar ?? '', town: meta.town ?? '', townAr: meta.townAr ?? '', perms: sorted([...scope.parishes.get(pid)]) };
+    return { id: pid, diocese: p.diocese, name: meta.name ?? '', nameAr: meta.ar ?? '', town: meta.town ?? '', townAr: meta.townAr ?? '', perms: sorted([...scope.parishes.get(pid)]),
+      demo: Boolean(meta.demo) };
   });
   outParishes.sort((a, b) => (a.diocese < b.diocese ? -1 : a.diocese > b.diocese ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const assignmentVisible = a => a.scope === 'parish' ? parishIds.has(a.scope_id) && scope.parishes.get(a.scope_id).has('staff.manage')
@@ -701,6 +702,16 @@ export async function adminAction(c, u, q) {
     await sync_relationships(c, pid, d);
     audit(c, u, pid, 'parish.created', { diocese: did });
     return { id: pid };
+  }
+  if (op === 'setDemo') {   // whether a parish's information is demonstration data, shown as such on its public page
+    need(systemPerms(auth).has('dioceses.manage'), 'Only a super admin marks demonstration data.', 403);
+    const row = await c.first('SELECT * FROM parishes WHERE id=?', get(q, 'parish'));
+    need(row !== null && typeof get(q, 'demo') === 'boolean', 'Choose a parish.', 404);
+    const meta = JSON.parse(row.metadata);
+    meta.demo = get(q, 'demo');
+    c.run('UPDATE parishes SET metadata=? WHERE id=?', JSON.stringify(meta), row.id);
+    audit(c, u, row.id, 'parish.demo-' + (meta.demo ? 'on' : 'off'), {});
+    return {};
   }
   if (op === 'assign') {
     const aid = await assignRole(c, u, auth, get(q, 'userId'), get(q, 'role'), get(q, 'scope'), get(q, 'scopeId'),
