@@ -12,6 +12,7 @@ import {
   ROLES, ensureDatabase, access, file_access, parishes, oversight, visible, save_patch, workflow, audit
 } from './app.js';
 import { parish_theme } from './state.js';
+import { authority, parishUser, sessionAuthority, loginAllowed, adminView, adminAction } from './authority.js';
 import { member_view, member_action } from './member.js';
 import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
@@ -139,7 +140,7 @@ async function handle(c, env, request, url, q, secureCookie) {
   };
   if (path === '/api/login' && method === 'POST') {
     const u = await c.first('SELECT * FROM users WHERE username=?', loginName(get(q, 'username')));
-    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    need(await loginAllowed(c, u) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
     return startSession(u.id);
   }
   if (path === '/api/signup' && method === 'POST') return startSession(await signup(c, q));
@@ -150,32 +151,48 @@ async function handle(c, env, request, url, q, secureCookie) {
   ]);
   const session = sessions[0] ?? null;
   need(session !== null, 'Sign in to continue.', 401);
-  const u = users[0] ?? null;
-  need(u !== null && ROLES.has(u.role), 'Sign in to continue.', 401);
+  let u = users[0] ?? null;
+  need(await loginAllowed(c, u), 'Sign in to continue.', 401);
   if (method !== 'GET') need(compareDigest(request.headers.get('X-CSRF-Token') ?? '', session.csrf), 'Invalid request token.', 403);
   if (path === '/api/session' && method === 'GET') {
     const user = {};
     for (const k of ['id', 'username', 'name', 'role', 'person_id']) user[k] = u[k];
-    return reply(200, { user, csrf: session.csrf, parishes: await parishes(c, u) });
+    const auth = await authority(c, u);
+    return reply(200, { user, csrf: session.csrf, parishes: await parishes(c, u, {}, auth), authority: await sessionAuthority(c, u, auth) });
   }
   if (path === '/api/logout' && method === 'POST') {
     c.run('DELETE FROM sessions WHERE token=?', session.token);
     await c.commit();
     return reply(200, { ok: true }, `pl_session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
   }
-  need(u.role !== 'bishop' || method === 'GET', 'Bishop oversight is read-only.', 403);
   if (path === '/api/oversight' && method === 'GET') return reply(200, { parishes: await oversight(c, u) });
+  if (path === '/api/admin') {
+    if (method === 'GET') return reply(200, await adminView(c, u));
+    if (method === 'POST') {
+      const result = await adminAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
   if (path === '/api/assignments') {
-    need(u.role === 'bishop', 'Archdiocese administration is restricted to the bishop.', 403);
-    need(method === 'GET', 'Bishop oversight is read-only.', 403);
-    const priests = await c.all("SELECT * FROM users WHERE role='priest' AND diocese=?", u.diocese);
-    const assigned = priests.length ? await c.reads(priests.map(x => ['SELECT parish_id FROM assignments WHERE user_id=?', [x.id]])) : [];
-    return reply(200, { priests: priests.map((x, i) => ({ id: x.id, name: x.name, parishes: assigned[i].map(r => r.parish_id) })), parishes: await parishes(c, u) });
+    need(method === 'GET', 'Method not allowed.', 405);
+    const auth = await authority(c, u);
+    const dioceses = auth.assignments.filter(a => a.role === 'bishop' && a.scope === 'diocese').map(a => a.scope_id);
+    need(dioceses.length, 'Archdiocese administration is restricted to the bishop.', 403);
+    const inDiocese = new Set((await c.all(`SELECT id FROM parishes WHERE diocese IN (${dioceses.map(() => '?').join(',')})`, ...dioceses)).map(r => r.id));
+    const priests = new Map();
+    for (const a of await c.all("SELECT r.user_id,r.scope_id,u.name FROM role_assignments r JOIN users u ON u.id=r.user_id WHERE r.role='priest' AND r.scope='parish' AND r.status='active' ORDER BY u.name,r.scope_id")) {
+      if (!inDiocese.has(a.scope_id)) continue;
+      if (!priests.has(a.user_id)) priests.set(a.user_id, { id: a.user_id, name: a.name, parishes: [] });
+      priests.get(a.user_id).parishes.push(a.scope_id);
+    }
+    return reply(200, { priests: [...priests.values()], parishes: await parishes(c, u, {}, auth) });
   }
   const parts = pathParts(path);
   if (parts.length === 5 && parts[0] === 'api' && parts[1] === 'parishes' && parts[3] === 'files') {
     const [, , pid, , fileId] = parts;
-    await access(c, u, pid);
+    u = await parishUser(c, u, pid);
     const row = await c.first('SELECT id,parish_id,scope,owner_id,name,mime,size,uploaded_by,created_at FROM uploaded_files WHERE parish_id=? AND id=?', pid, fileId);
     need(row !== null, 'File not found.', 404);
     await file_access(c, u, pid, row.scope, row.owner_id, method === 'DELETE');
@@ -199,7 +216,8 @@ async function handle(c, env, request, url, q, secureCookie) {
   }
   need(parts.length === 4 && parts[0] === 'api' && parts[1] === 'parishes', 'Endpoint not found.', 404);
   const [, , pid, endpoint] = parts;
-  await access(c, u, pid);
+  u = await parishUser(c, u, pid);
+  need(u.role !== 'bishop' || (endpoint === 'oversight' && method === 'GET'), 'Bishop oversight of a parish is read-only.', 403);
   if (endpoint === 'files') {
     if (method === 'GET') {
       const scope = url.searchParams.get('scope') ?? '', ownerId = url.searchParams.get('id') ?? '';

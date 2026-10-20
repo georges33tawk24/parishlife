@@ -490,15 +490,5 @@ export function validate(d) {
   }
 }
 
-export function writable(role, key) {
-  if (role === 'bishop' || role === 'member') return false;
-  if (READONLY.has(key)) return false;
-  if (CLERGY.has(role)) return true;
-  if (key === 'NOTIFICATIONS' || key === 'PREFS') return true;
-  if (role === 'secretary') return OFFICE.has(key);
-  if (role === 'treasurer') return FINANCE.has(key) || key === 'RATE';
-  if (role === 'leader') return ['GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS', 'CHECKIN', 'PICKUP'].includes(key);
-  return false;
-}
-
+/* writable() is in authority.js: it needs the account's permissions. */
 export { Problem };

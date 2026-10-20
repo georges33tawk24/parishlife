@@ -1,6 +1,6 @@
 /* Shared objects remain the view model; SQLite is the authoritative store. */
 import * as D from './data.js';
-import { session, parishAPI } from './api.js';
+import { session, parishAPI, currentRole } from './api.js';
 import { loadMember } from './member-data.js';
 const KEYS = Object.keys(D).filter(k => k !== 'TODAY' && D[k] && typeof D[k] === 'object' && !(D[k] instanceof Date));
 const snapshot = () => JSON.parse(JSON.stringify(Object.fromEntries(KEYS.map(k => [k, D[k]]))));
@@ -23,14 +23,22 @@ export function applyData(data) {
   }
   if (typeof D.RATE.setOn === 'string') D.RATE.setOn = new Date(D.RATE.setOn);
 }
+/* Workspaces without a parish's office records: the member portal, and the administrative ones. */
+const OFFICE_ROLES = ['priest', 'parishadmin', 'secretary', 'treasurer', 'leader'];
 export async function hydrate() {
-  if (session.user?.role === 'member') {
+  const role = currentRole();
+  if (role === 'member') {
     const data = await loadMember();
     applyData({ PARISH: data.parish, PEOPLE: [data.person] });
     baseline = snapshot(); saveFailed = false; return true;
   }
-  if (session.user?.role === 'bishop') {
-    applyData({ PARISHES: session.parishes, PARISH: { name: 'Archdiocese oversight', nameAr: 'إشراف الأبرشية', town: 'Read-only', townAr: 'للقراءة فقط', rite: '', riteAr: '' } });
+  if (!OFFICE_ROLES.includes(role)) {
+    const open = session.parishes.find(p => p.id === session.parishId);
+    const title = role === 'bishop' ? { name: 'Diocese', nameAr: 'الأبرشية', town: 'Oversight and administration', townAr: 'الإشراف والإدارة' }
+      : role === 'follower' && open ? { name: open.name, nameAr: open.ar, town: open.town, townAr: open.townAr }
+      : role === 'superadmin' || role === 'diocesanadmin' ? { name: 'ParishLife', nameAr: 'ParishLife', town: 'Administration', townAr: 'الإدارة' }
+      : { name: 'ParishLife', nameAr: 'ParishLife', town: 'Your account', townAr: 'حسابك' };
+    applyData({ PARISHES: session.parishes, PARISH: { ...title, rite: '', riteAr: '' } });
     baseline = snapshot(); saveFailed = false; return true;
   }
   const data = await parishAPI('state');
@@ -39,7 +47,7 @@ export async function hydrate() {
   return true;
 }
 export function persist() {
-  if (session.user?.role === 'bishop' || session.user?.role === 'member') return Promise.resolve(true);
+  if (!OFFICE_ROLES.includes(currentRole())) return Promise.resolve(true);
   if (!session.user || !session.parishId) return Promise.resolve(false);
   again = true;
   if (running) return running;

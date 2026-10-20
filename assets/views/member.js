@@ -1,7 +1,7 @@
 /* A member sees a server-built projection, never the parish administration state. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
-import { session } from '../api.js';
+import { session, currentRole } from '../api.js';
 import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
@@ -173,8 +173,8 @@ export function notificationsPage() {
 }
 
 export function hub() {
-  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${session.user?.role !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
-    ${session.user?.role==='leader'?card(`<h2>${L('Complaints received','الشكاوى الواردة')}</h2><p class="help">${L('Related to your ministries; sensitive cases and cases involving you are handled by an independent reviewer.','المرتبطة بخدماتك؛ الحالات الحساسة والحالات التي تتعلق بك يتولاها مراجع مستقل.')}</p>${M.leaderConcerns.map(x=>`<div class="member-simple-row"><span><b>${txt(x.subject)}</b><small style="display:block">${txt(groupName(x.group_id))} · ${txt(x.reference)} · ${txt(x.category)} · ${txt(x.status)}</small><span>${txt(x.description)}</span></span></div>`).join('')||blank(L('No complaints received for your groups.','لا شكاوى واردة لمجموعاتك.'))}`):''}
+  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${currentRole() !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
+    ${currentRole()==='leader'?card(`<h2>${L('Complaints received','الشكاوى الواردة')}</h2><p class="help">${L('Related to your ministries; sensitive cases and cases involving you are handled by an independent reviewer.','المرتبطة بخدماتك؛ الحالات الحساسة والحالات التي تتعلق بك يتولاها مراجع مستقل.')}</p>${M.leaderConcerns.map(x=>`<div class="member-simple-row"><span><b>${txt(x.subject)}</b><small style="display:block">${txt(groupName(x.group_id))} · ${txt(x.reference)} · ${txt(x.category)} · ${txt(x.status)}</small><span>${txt(x.description)}</span></span></div>`).join('')||blank(L('No complaints received for your groups.','لا شكاوى واردة لمجموعاتك.'))}`):''}
     ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2>${M.content.filter(x=>x.kind==='message' && x.recipientId===session.user?.id).map(x=>`<div class="member-simple-row"><span>${txt(groupName(x.groupId))} · ${txt(x.body)}</span><button class="btn btn-secondary btn-dense" data-reply-message="${txt(x.id)}">${L('Reply', 'رد')}</button></div>`).join('') || blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))}`)}
     ${card(`<h2>${L('Volunteer responses', 'ردود المتطوعين')}</h2>${M.volunteerReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.title)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-confirm-volunteer="${txt(x.content_id)}" data-user="${txt(x.user_id)}">${L('Confirm', 'تأكيد')}</button></div>`).join('') || blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))}`)}
     ${M.profileReview.length ? card(`<h2>${L('Profile update requests', 'طلبات تحديث الملفات')}</h2>${M.profileReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.field)}: ${txt(x.requested_value)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-profile-review="${txt(x.id)}">${L('Mark reviewed', 'تعليم كمراجَع')}</button></div>`).join('')}`) : ''}
@@ -185,9 +185,9 @@ export function hub() {
 async function run(op, values, success = L('Saved', 'حُفظ')) {
   try {
     const result = await memberAction(op, values);
-    if (session.user?.role === 'member') await hydrate(); else await loadMember();
+    if (currentRole() === 'member') await hydrate(); else await loadMember();
     closeOverlays();
-    if (session.user?.role === 'member') bus.renderAll(); else bus.refresh();
+    if (currentRole() === 'member') bus.renderAll(); else bus.refresh();
     if (success) toast(success, '', 'success');
     return result;
   } catch (error) { toast(L('Could not save', 'تعذّر الحفظ'), error.message, 'danger'); return null; }
@@ -342,7 +342,7 @@ function concernDrawer() {
 function publishDrawer() {
   openDrawer({ title:L('Publish to members', 'النشر للأعضاء'),
     body:`<div class="formrow"><label class="label" for="publish-kind">${L('Type', 'النوع')}</label><select class="select" id="publish-kind">${[['post','Post'],['announcement','Announcement'],['resource','Resource'],['opportunity','Volunteer opportunity'],['discussion','Group conversation']].map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select></div>
-      <div class="formrow"><label class="label" for="publish-group">${L('Audience', 'الجمهور')}</label><select class="select" id="publish-group">${session.user?.role === 'priest' || session.user?.role === 'secretary' ? `<option value="">${L('Parish', 'الرعية')}</option>` : ''}${M.groups.filter(g=>M.managedGroups.includes(g.id)).map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
+      <div class="formrow"><label class="label" for="publish-group">${L('Audience', 'الجمهور')}</label><select class="select" id="publish-group">${['priest','parishadmin','secretary'].includes(currentRole()) ? `<option value="">${L('Parish', 'الرعية')}</option>` : ''}${M.groups.filter(g=>M.managedGroups.includes(g.id)).map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="publish-meeting">${L('Linked meeting (optional)', 'اجتماع مرتبط (اختياري)')}</label><select class="select" id="publish-meeting"><option value="">—</option>${M.meetings.map(m=>`<option value="${txt(m.id)}" data-group="${txt(m.groupId)}">${txt(m.title)} · ${date(m.date)}</option>`).join('')}</select></div>
       ${field(L('Title', 'العنوان'),'publish-title')}${area(L('Content', 'المحتوى'),'publish-body')}${field(L('Category or tags', 'الفئة أو الوسوم'),'publish-category')}
       <div class="formrow"><label class="label" for="publish-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق اختياري بحد ١ ميغابايت')}</label><input class="input" id="publish-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div><label class="member-toggle"><span>${L('Pin post', 'تثبيت المنشور')}</span><input type="checkbox" id="publish-pinned"></label>`,

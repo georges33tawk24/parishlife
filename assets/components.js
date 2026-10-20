@@ -237,7 +237,7 @@ export const bulkBar = n => `<div class="bulkbar">
   <button class="btn btn-secondary" data-act="bulk-message">${icon('msg', 16)}${t('Message', 'مراسلة')}</button>
   <button class="btn btn-secondary" data-act="bulk-group">${icon('groups', 16)}${t('Add to group', 'إضافة إلى مجموعة')}</button>
   <button class="btn btn-secondary" data-act="bulk-export">${icon('export', 16)}${t('Export', 'تصدير')}</button>
-  <button class="btn btn-secondary last" data-act="bulk-archive">${icon('trash', 16)}${t('Archive', 'أرشفة')}</button></div>`;
+  <button class="btn btn-secondary last" data-act="bulk-archive">${icon('lock', 16)}${t('Deactivate', 'إيقاف')}</button></div>`;
 
 export const ratePopover = (amount = 50) => `<div class="popover" style="position:static;width:auto;padding:14px 16px">
   <b style="display:block;font:600 13px/18px var(--sans);margin-bottom:10px">${t('How the LBP figure is worked out', 'كيف يُحتسب المبلغ بالليرة')}</b>

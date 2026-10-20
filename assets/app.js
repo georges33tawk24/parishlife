@@ -8,7 +8,7 @@ import { closeOverlays, toast, openModal, openDrawer, esc, avatar, catchAll, ope
 import { S, ROLES, MOBILE_NAV, role, me, canSee, go, save, bus } from './store.js';
 import { wireActions } from './actions.js';
 import { hydrate, persist, saveFailed } from './persist.js';
-import { api, loadSession, session } from './api.js';
+import { api, loadSession, session, currentRole } from './api.js';
 import { enhanceSelects, closeDropdown } from './components.js';
 import { confirmPlanNavigation, planDirty } from './planning.js';
 
@@ -22,6 +22,7 @@ import * as Money     from './views/money.js';
 import * as Comms     from './views/comms.js';
 import * as Admin     from './views/admin.js';
 import * as Oversight from './views/oversight.js';
+import * as Administration from './views/administration.js';
 import * as Member from './views/member.js';
 import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
@@ -91,7 +92,9 @@ export const ROUTES = {
   eparchy:      { ico:'portal',   en:'Eparchy',          ar:'الأبرشية',            view:Admin.eparchy },
   assignments:  { ico:'shield',   en:'Priest assignments', ar:'تعيينات الكهنة', view:Admin.assignments },
   household:    { ico:'family',   en:'Household',         ar:'العائلة',             view:People.householdView, hidden:true },
-  styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide }
+  styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide },
+  administration: { ico:'shield', en:'Administration',   ar:'الإدارة',             view:Administration.administration },
+  account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Administration.account }
 };
 
 export { S as state, ROLES, me, go };
@@ -150,7 +153,7 @@ function topbarHTML() {
       </div>
     </div>
     <div class="topbar-right">
-      ${S.role === 'bishop' ? '' : `<button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
+      ${!['priest','parishadmin','secretary','treasurer','leader','member'].includes(S.role) ? '' : `<button class="iconbtn" id="bellbtn" aria-label="${t('Notifications', 'الإشعارات')}">
         ${icon('bell', 19)}${S.role !== 'member' || M.notifications.some(n=>!n.read) ? '<span class="dotmark"></span>' : ''}</button>`}
       <button class="userbtn" id="userbtn" aria-label="${t('Account', 'الحساب')}">
         ${avatar(p)}
@@ -430,7 +433,7 @@ async function fillParishes(box, params) {
 async function enter(parishId = '') {
   await loadSession(); pickParish();
   if (parishId && session.parishes.some(p => p.id === parishId)) session.parishId = parishId;
-  S.role = session.user.role; await hydrate(); S.route = S.role === 'bishop' ? 'oversight' : (ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'dashboard');
+  S.role = currentRole(); await hydrate(); S.route = ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'account';
   /* Signing in from a link (a request form, a notification) continues to that page. */
   const wanted = location.hash.replace(/^#\/?/, '').split('/')[0];
   if (wanted && ROUTES[wanted] && allowed(wanted)) route();
@@ -652,7 +655,7 @@ function userMenu(e) {
       ${session.user?.person_id ? `<button class="mi" data-u="member">${icon('groups', 17)}<span>${t('My parish life', 'حياتي الرعوية')}</span></button>` : ''}
       <button class="mi" data-u="lang">${icon('msg', 17)}<span>${t('Language', 'اللغة')}</span>
         <span class="mhint">${lang === 'ar' ? 'العربية' : 'English'}</span></button>
-      ${S.role === 'bishop' ? '' : `<button class="mi" data-u="rate">${icon('give', 17)}<span>${t('Exchange rate', 'سعر الصرف')}</span>
+      ${!['priest','parishadmin','secretary','treasurer','leader'].includes(S.role) ? '' : `<button class="mi" data-u="rate">${icon('give', 17)}<span>${t('Exchange rate', 'سعر الصرف')}</span>
         <span class="mhint mono">${num(RATE.value)}</span></button>
       <button class="mi" data-u="settings">${icon('settings', 17)}<span>${t('Parish settings', 'إعدادات الرعية')}</span></button>`}
       <div class="msep"></div>
@@ -683,9 +686,9 @@ function accountDrawer() {
     body: `<div class="row" style="gap:14px;margin-bottom:18px">${avatar(p, 'avatar-xl')}
         <div><b style="font:600 17px/24px var(--sans)">${esc(p.lat)}</b><div style="font:400 15px/24px var(--arabic);color:var(--text-2)">${esc(p.ar)}</div></div></div>
       <dl class="dl" style="margin-bottom:20px"><dt>${t('Username','اسم المستخدم')}</dt><dd>${esc(session.user?.username||'—')}</dd>
-        <dt>${t('Access','الصلاحية')}</dt><dd>${esc(t(r.en,r.ar))}${S.role==='bishop'?` · ${t('Read-only','للقراءة فقط')}`:''}</dd>
-        <dt>${t('Parishes visible','الرعايا المتاحة')}</dt><dd>${session.parishes.length}</dd>
-        ${S.role==='bishop'?`<dt>${t('Scope','النطاق')}</dt><dd>${t('Archdiocese oversight; private member notes and pastoral records are excluded.','إشراف الأبرشية؛ لا يشمل ملاحظات الأعضاء الخاصة أو السجلات الرعوية السرية.')}</dd>`:''}</dl>
+        <dt>${t('Access here','الصلاحية هنا')}</dt><dd>${esc(t(r.en,r.ar))}</dd>
+        <dt>${t('Places','الأماكن')}</dt><dd>${session.parishes.length + (session.authority?.dioceses || []).length + (session.authority?.superadmin ? 1 : 0)}</dd>
+        ${S.role==='bishop'?`<dt>${t('Scope','النطاق')}</dt><dd>${t('Oversight and administration of the diocese; pastoral notes, private messages and complaints are excluded.','الإشراف على الأبرشية وإدارتها؛ لا يشمل الملاحظات الرعوية والرسائل الخاصة والشكاوى.')}</dd>`:''}</dl>
       <div class="ac-group" style="padding-inline:0">${t('Language', 'اللغة')}</div>
       <div class="langswap" role="group">
         <button data-lang="en" aria-pressed="${lang === 'en'}">English</button>
@@ -715,31 +718,47 @@ async function switchParish(id) {
     toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), t('Resolve the save error before switching parishes.', 'عالِج خطأ الحفظ قبل تبديل الرعية.'), 'danger');
     return false;
   }
-  const previous = session.parishId;
+  const previous = session.parishId, previousRole = S.role;
   session.parishId = x.id;
   try {
-    await hydrate(); closeOverlays(); renderAll();
+    S.role = currentRole();
+    await hydrate(); closeOverlays();
+    if (!allowed(S.route)) { S.route = ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'account'; S.params = []; history.replaceState(null, '', '#/' + S.route); }
+    renderAll();
     toast(t(`Now working in ${x.name}`, `تعمل الآن في ${x.ar}`), t(`Your role here: ${x.role}`, `دورك هنا: ${x.roleAr}`), 'success');
     return true;
   } catch (e) {
-    session.parishId = previous; await hydrate().catch(() => {});
+    session.parishId = previous; S.role = previousRole; await hydrate().catch(() => {});
     toast(t('Parish could not be opened', 'تعذّر فتح الرعية'), e.message, 'danger');
     return false;
   }
 }
 bus.switchParish = switchParish;
 
+/* An account may work in several places: each parish it serves or belongs to, and administration
+   that is not tied to one parish (the super admin, a diocesan admin). */
+async function openAdministrationOnly() {
+  if (!confirmPlanNavigation() || !await persist()) return;
+  session.parishId = null; S.role = currentRole();
+  await hydrate(); closeOverlays(); S.route = 'administration'; S.params = [];
+  history.replaceState(null, '', '#/administration'); renderAll();
+}
 function parishSwitcher() {
-  if (S.role === 'bishop') { location.hash = '#/oversight'; return; }
+  const adminOnly = session.authority?.superadmin || (session.authority?.dioceses || []).some(d => d.role === 'diocesanadmin');
+  if (S.role === 'bishop' && !adminOnly && session.parishes.every(x => x.roleCode === 'bishop')) { location.hash = '#/oversight'; return; }
   openDrawer({
-    title: t('Switch parish', 'تبديل الرعية'),
-    sub: t('You hold a role in more than one parish. Records never cross between them.',
-           'لديك دور في أكثر من رعية. ولا تعبر السجلات بينها أبداً.'),
-    body: `<div class="ac-group" style="padding-inline:0">${t(PARISH.eparchy, PARISH.eparchyAr)}</div>
-      ${PARISHES.map(x => `<button class="ac-opt" data-parish="${x.id}">
+    title: t('Switch workspace', 'تبديل مساحة العمل'),
+    sub: t('Your role depends on the place. Records never cross between parishes.',
+           'دورك يتبع المكان. ولا تعبر السجلات بين الرعايا أبداً.'),
+    body: `${adminOnly ? `<button class="ac-opt" data-admin-only>
+        <span class="avatar">${icon('shield', 16)}</span>
+        <span><b>${t('Administration', 'الإدارة')}</b><small>${esc(session.authority?.superadmin ? t('Super admin', 'المدير العام') : t('Diocesan admin', 'إداري الأبرشية'))}</small></span>
+        ${!session.parishId ? `<span style="margin-inline-start:auto;color:var(--primary)">${icon('check', 16)}</span>` : ''}</button>` : ''}
+      ${session.parishes.length ? `<div class="ac-group" style="padding-inline:0">${t('Parishes', 'الرعايا')}</div>` : ''}
+      ${session.parishes.map(x => `<button class="ac-opt" data-parish="${x.id}">
         <span class="avatar">${esc(t(x.name, x.ar).slice(0, 1))}</span>
         <span><b>${esc(t(x.name, x.ar))}</b><small>${esc(t(x.town, x.townAr))} · ${esc(t(x.role, x.roleAr))}</small></span>
-        ${x.name === PARISH.name ? `<span style="margin-inline-start:auto;color:var(--primary)">${icon('check', 16)}</span>` : ''}</button>`).join('')}
+        ${x.id === session.parishId ? `<span style="margin-inline-start:auto;color:var(--primary)">${icon('check', 16)}</span>` : ''}</button>`).join('')}
       <div class="divider"></div>
       ${S.role === 'bishop' ? `<a class="listrow" href="#/bishopeparchy" style="padding-inline:0">${icon('portal', 17, 'dimmer')}
         <span class="grow"><b>${t('Eparchy view', 'عرض الأبرشية')}</b>
@@ -747,6 +766,7 @@ function parishSwitcher() {
     foot: `<button class="btn btn-secondary" data-close>${t('Close', 'إغلاق')}</button>`,
     onMount(el) {
       el.querySelectorAll('[data-parish]').forEach(b => b.addEventListener('click', () => switchParish(b.dataset.parish)));
+      el.querySelector('[data-admin-only]')?.addEventListener('click', openAdministrationOnly);
     }
   });
 }
@@ -785,6 +805,6 @@ window.addEventListener('hashchange', route);
 document.addEventListener('parish-save-error', e => toast(t('Changes were not saved', 'لم تُحفظ التغييرات'), e.detail, 'danger'));
 setLang(lang);
 (async () => {
-  try { await loadSession(); pickParish(); S.role = session.user.role; await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
+  try { await loadSession(); pickParish(); S.role = currentRole(); await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route(); }
   catch (error) { session.user = null; loginScreen(error.status === 401 ? '' : error.message); }
 })();

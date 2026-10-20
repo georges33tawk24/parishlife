@@ -212,24 +212,40 @@ export function portalCompare(id) {
 
 /* ═════════════ archive ═════════════
    Archiving removes active-directory visibility while preserving related history. */
-export function archivePeople(ids) {
-  const moved = ids.map(id => D.PEOPLE.find(x => x.id === id)).filter(Boolean).map(p => [D.PEOPLE.indexOf(p), p]);
-  if (!moved.length) return;
-  moved.forEach(([, p]) => { D.PEOPLE.splice(D.PEOPLE.indexOf(p), 1); Object.assign(p, { archived: today, archivedBy: me()?.id || 'p17' }); D.ARCHIVED.unshift(p); });
-  refresh();
-  toast(moved.length === 1 ? L(`${moved[0][1].lat} archived`, `أُرشف ${moved[0][1].ar}`) : L(`${moved.length} records archived`, `أُرشف ${moved.length} سجلات`),
-    L('Removed from active People lists. Linked records remain and this person can be restored.', 'أُزيل من لوائح المؤمنين النشطة. تبقى السجلات المرتبطة ويمكن استرجاع الشخص.'), '',
-    { action: { label: L('Undo', 'تراجع'), fn: () => {
-      moved.sort((a, b) => a[0] - b[0]).forEach(([i, p]) => { D.ARCHIVED.splice(D.ARCHIVED.indexOf(p), 1); delete p.archived; delete p.archivedBy; delete p.deletionRequested; D.PEOPLE.splice(i, 0, p); });
-      refresh(); } } });
+/* Deactivate people in this parish: out of the active lists, history kept, member access to this parish
+   stopped (their person record is no longer active here). Other parishes are not affected. */
+export function archivePeople(ids, after) {
+  const people = ids.map(id => D.PEOPLE.find(x => x.id === id)).filter(Boolean);
+  if (!people.length) return;
+  const names = people.length === 1 ? nameOf(people[0]) : L(`${people.length} people`, `${people.length} أشخاص`);
+  openModal({ title: L('Deactivate in this parish?', 'الإيقاف في هذه الرعية؟'),
+    sub: L(`${names} leaves the active lists. Sacraments, households, gifts, attendance and requests stay linked. An account they have can no longer open this parish.`,
+           `يخرج ${names} من اللوائح النشطة. وتبقى الأسرار والعائلات والتقدمات والحضور والطلبات مرتبطة. ولا يعود حسابه يفتح هذه الرعية.`),
+    body: `<div class="formrow"><label class="label" for="deact-reason">${L('Reason', 'السبب')}</label><textarea class="input" id="deact-reason" rows="3" maxlength="300"></textarea></div>`,
+    foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button><button class="btn btn-danger" id="deact-yes">${L('Deactivate', 'إيقاف')}</button>`,
+    onMount(el) {
+      el.querySelector('#deact-yes').addEventListener('click', () => {
+        const reason = el.querySelector('#deact-reason').value.trim();
+        if (!reason) { el.querySelector('#deact-reason').setAttribute('aria-invalid', 'true'); return toast(L('Give the reason', 'اذكر السبب'), '', 'warning'); }
+        const moved = people.map(p => [D.PEOPLE.indexOf(p), p]);
+        moved.forEach(([, p]) => { D.PEOPLE.splice(D.PEOPLE.indexOf(p), 1);
+          Object.assign(p, { archived: today, archivedBy: me()?.id || null, deactivation: { at: today, by: me()?.id || null, reason } }); D.ARCHIVED.unshift(p); });
+        closeOverlays(); refresh(); after?.();
+        toast(moved.length === 1 ? L(`${moved[0][1].lat} deactivated`, `أوقف ${moved[0][1].ar}`) : L(`${moved.length} records deactivated`, `أوقف ${moved.length} سجلات`),
+          L('Deactivated in this parish only. Reactivate from People → Deactivated.', 'موقوف في هذه الرعية فقط. أعد التفعيل من المؤمنون ← الموقوفون.'), 'success',
+          { action: { label: L('Undo', 'تراجع'), fn: () => {
+            moved.sort((a, b) => a[0] - b[0]).forEach(([i, p]) => { D.ARCHIVED.splice(D.ARCHIVED.indexOf(p), 1); delete p.archived; delete p.archivedBy; delete p.deactivation; D.PEOPLE.splice(i, 0, p); });
+            refresh(); } } });
+      });
+    } });
 }
 
 export function restorePerson(id) {
   const p = D.ARCHIVED.find(x => x.id === id); if (!p) return;
-  const i = D.ARCHIVED.indexOf(p), was = { archived: p.archived, archivedBy: p.archivedBy, deletionRequested: p.deletionRequested };
-  D.ARCHIVED.splice(i, 1); delete p.archived; delete p.archivedBy; delete p.deletionRequested; D.PEOPLE.unshift(p);
+  const i = D.ARCHIVED.indexOf(p), was = { archived: p.archived, archivedBy: p.archivedBy, deletionRequested: p.deletionRequested, deactivation: p.deactivation };
+  D.ARCHIVED.splice(i, 1); delete p.archived; delete p.archivedBy; delete p.deletionRequested; delete p.deactivation; D.PEOPLE.unshift(p);
   refresh();
-  ok(L('Record restored', 'استُرجع السجل'), L(`${p.lat} is back in the parish lists.`, `عاد ${p.ar} إلى لوائح الرعية.`),
+  ok(L('Reactivated', 'أعيد التفعيل'), L(`${p.lat} is back in this parish’s lists.`, `عاد ${p.ar} إلى لوائح هذه الرعية.`),
      { action: { label: L('Undo', 'تراجع'), fn: () => { D.PEOPLE.splice(D.PEOPLE.indexOf(p), 1); Object.assign(p, was); D.ARCHIVED.splice(i, 0, p); refresh(); } } });
 }
 

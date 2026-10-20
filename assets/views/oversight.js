@@ -112,10 +112,10 @@ oversight.mount=(host,id='')=>{
     .catch(error=>cache.set(k,{error:error.message,loadedAt:Date.now()})).finally(()=>bus.refresh());
 };
 
-export function eparchy(){const parishes=session.parishes||[];return pageHead({title:L('Eparchy','الأبرشية'),sub:L('Read-only overview of parishes in your archdiocese.','نظرة عامة للقراءة فقط على رعايا الأبرشية.')})+
+export function eparchy(){const parishes=session.parishes||[];return pageHead({title:L('Eparchy','الأبرشية'),sub:L('Overview of the parishes in your diocese. Parishes, clergy and appointments are managed in Administration.','نظرة عامة على رعايا أبرشيتك. تُدار الرعايا والإكليروس والتعيينات من الإدارة.')})+
   `<div class="stats" style="margin:18px 0">${stat(L('Parishes','الرعايا'),parishes.length)}${stat(L('People','المؤمنون'),parishes.reduce((n,p)=>n+(p.people||0),0))}</div>`+
   rows(parishes.map(p=>[`${esc(p.name)}<small style="display:block">${esc(p.ar)}</small>`,esc(L(p.town,p.townAr||p.town)),link(`#/oversight/${esc(p.id)}`,L('View oversight','عرض الإشراف'))]),
-    [L('Parish','الرعية'),L('Town','البلدة'),''])+`<p style="margin-top:18px">${link('#/assignments',L('View priest assignments','عرض تعيينات الكهنة'))}</p>`;}
+    [L('Parish','الرعية'),L('Town','البلدة'),''])+`<p style="margin-top:18px">${link('#/administration/clergy',L('Clergy titles and assignments','ألقاب الإكليروس وتعييناتهم'))}</p>`;}
 
 export function mapView(){const parishes=session.parishes||[];return pageHead({title:L('Parish map','خريطة الرعايا'),sub:L('Find parishes in the eparchy.','تعرّف إلى رعايا الأبرشية.')})+
   `<p class="alert alert-info">${L('Exact parish coordinates have not been recorded. This list gives the known town without placing inaccurate map markers.',

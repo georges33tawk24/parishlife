@@ -3,7 +3,7 @@
    Requests page. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
-import { session } from '../api.js';
+import { session, currentRole } from '../api.js';
 import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, icon, pill, openModal, closeOverlays, toast } from '../ui.js';
@@ -26,8 +26,8 @@ const titleOf = r => r.kind === 'certificate' ? certificateName(r.details.certif
 const aboutOf = r => r.kind === 'booking' ? `${fmtDay(r.details.date)}, ${r.details.from}–${r.details.to}` : r.kind === 'custom' ? '' : nameOf(r.subject);
 const phoneLink = phone => phone ? `<a class="mr-phone" href="tel:${txt(String(phone).replace(/[^\d+]/g, ''))}">${icon('phone', 16)}<bdi dir="ltr">${txt(phone)}</bdi></a>` : '';
 const back = () => `<a class="mr-back" href="#/myrequests">${icon('chevL', 16)}${L('My requests', 'طلباتي')}</a>`;
-async function reload() { if (session.user?.role === 'member') await hydrate(); else await loadMember(); }
-const redraw = () => { if (session.user?.role === 'member') bus.renderAll(); else bus.refresh(); };
+async function reload() { if (currentRole() === 'member') await hydrate(); else await loadMember(); }
+const redraw = () => { if (currentRole() === 'member') bus.renderAll(); else bus.refresh(); };
 const yearsAhead = n => `${Number(todayKey().slice(0, 4)) + n}-12-31`;
 const minutes = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 /* Half-hour steps for start and end times: a list is easier than a clock to set on any phone. */

@@ -244,7 +244,7 @@ forms.mount = host => {
 /* ═══════════ 16 · reporting ═══════════ */
 const REPORTS = [
   ['attendance', 'attend', 'Group meeting attendance', 'حضور اجتماعات المجموعات', 'Recorded attendance at group meetings and activities only', 'حضور مسجّل في اجتماعات المجموعات وأنشطتها فقط'],
-  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and archived parish records', 'سجلات الرعية الحالية والمؤرشفة'],
+  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and deactivated parish records', 'سجلات الرعية الحالية والموقوفة'],
   ['groups', 'groups', 'Group participation', 'مشاركة المجموعات', 'Roster size, attendance rate, course completion', 'حجم اللائحة ونسبة الحضور وإتمام الدورات'],
   ['volunteers', 'vol', 'Volunteer workload', 'عبء المتطوّعين', 'Availability, conflicts, who is serving too often', 'التوفّر والتعارضات ومن يخدم كثيراً'],
   ['facilities', 'rooms', 'Facility utilisation', 'استخدام المرافق', 'Hours booked, refusals, equipment loans', 'ساعات الحجز والرفض وإعارات التجهيزات'],
@@ -323,7 +323,7 @@ function reportDetail(slug) {
       rows:REGISTRATIONS.filter(r=>EVENTS.some(e=>e.id===r.eventId&&e.kind!=='mass'&&!e.liturgy&&!e.feastLiturgy)).map(r=>({cells:[esc(L(r.event,r.eventAr)),REGISTRANTS.filter(p=>p.registrationId===r.id).length,(CHECKIN.sessions?.[r.eventId]?.rows||[]).length]}))
     })),
     membership: () => panel(`${L('Membership records', 'سجلات الانتساب')} · ${inPeriod}`, bars([
-      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Archived records', 'السجلات المؤرشفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
+      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Deactivated records', 'السجلات الموقوفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
     facilities: () => panel(`${L('Room utilisation', 'استخدام القاعات')} · ${inPeriod}`, C.barChart([
       [L('Parish Hall', 'قاعة الرعية'), 68], [L('Meeting Room 1', 'قاعة اجتماعات ١'), 41], [L('Catechism Room A', 'صف التعليم أ'), 88], [L('Courtyard', 'ساحة الكنيسة'), 22]]
       .map(([label, v]) => ({ label, v: Math.min(av(v), 100), max: 100, text: `${Math.min(av(v), 100)}%` }))))
@@ -720,24 +720,24 @@ function wireAppearance(host) {
   });
 }
 
-/* Deletion requests made from People → Archived. Approving is permanent and typed; declining keeps the archived record. */
+/* Deletion requests made earlier from the archive (deactivated records now). Approving is permanent; declining keeps the record. */
 function reviewDeletions() {
   const reqs = ARCHIVED.filter(p => p.deletionRequested);
   openModal({
     title: L('Deletion requests', 'طلبات الحذف'),
-    sub: reqs.length ? L('Each record was archived first. Deleting removes it for good; sacramental entries stay in the registers.',
+    sub: reqs.length ? L('Each record was deactivated first. Deleting removes it for good; sacramental entries stay in the registers.',
                          'أُرشف كل سجل أولاً. والحذف يزيله نهائياً؛ وتبقى قيود الأسرار في السجلات.') : '',
     body: reqs.length ? reqs.map(p => `<div class="listrow" style="padding-inline:0">${who(p)}<span class="grow"></span>
         <button class="btn btn-secondary btn-dense" data-del-no="${p.id}">${L('Decline', 'رفض')}</button>
         <button class="btn btn-danger btn-dense" data-del-yes="${p.id}">${L('Delete', 'حذف')}</button></div>`).join('')
-      : empty('check', L('No deletion requests', 'لا طلبات حذف'), L('They are made from People → Archived, after a record has been archived.', 'تُقدَّم من المؤمنون ← المؤرشفون، بعد أرشفة السجل.'),
-          `<a class="btn btn-secondary btn-dense" href="#/people/archived">${L('Open archived records', 'فتح السجلات المؤرشفة')}</a>`),
+      : empty('check', L('No deletion requests', 'لا طلبات حذف'), L('Records are deactivated, not deleted: their history stays. Earlier requests would appear here.', 'تُوقَف السجلات ولا تُحذف، ويبقى تاريخها. وتظهر هنا الطلبات السابقة إن وُجدت.'),
+          `<a class="btn btn-secondary btn-dense" href="#/people/archived">${L('Open deactivated records', 'فتح السجلات الموقوفة')}</a>`),
     foot: `<button class="btn btn-secondary" data-close style="margin-inline-start:auto">${L('Close', 'إغلاق')}</button>`,
     onMount(el) {
       el.querySelectorAll('[data-del-no]').forEach(b => b.addEventListener('click', () => {
         const p = ARCHIVED.find(x => x.id === b.dataset.delNo); if (!p) return;
         delete p.deletionRequested; bus.refresh(); reviewDeletions();
-        toast(L('Request declined', 'رُفض الطلب'), L(`${p.lat} stays archived.`, `يبقى ${p.ar} مؤرشفاً.`));
+        toast(L('Request declined', 'رُفض الطلب'), L(`${p.lat} stays deactivated.`, `يبقى ${p.ar} موقوفاً.`));
       }));
       el.querySelectorAll('[data-del-yes]').forEach(b => b.addEventListener('click', () => confirmDeletion(ARCHIVED.find(x => x.id === b.dataset.delYes))));
     }

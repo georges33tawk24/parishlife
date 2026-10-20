@@ -6,11 +6,12 @@ import {
   cmp, gt, ge, le, lt, sorted, int, isdigit, round, pad3, or, typeName, isDict, isList, isStr, isBool,
   fromisoformat, isoformat, isoDate, casefold, NOW, TODAY, localToday, tokenHex, deepcopy, dumps
 } from './py.js';
-import { SEED, ROLES, CLERGY, FINANCE, PROTECTED, migrate_state, validate, writable } from './state.js';
+import { SEED, ROLES, CLERGY, FINANCE, PROTECTED, migrate_state, validate } from './state.js';
+import { access, parishes, parishUser, permsOf, writable, authority, migrateV2, migrateV2Roles } from './authority.js';
 import { Tx, Conflict } from './db.js';
 import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, CLOCK, sacrament_conflict, booking_clash } from './requests.js';
 
-export { Problem, ROLES };
+export { Problem, ROLES, access, parishes };
 
 export const CONCERN_CATEGORIES = ['Ministry activities', 'Leadership', 'Meetings', 'Events', 'Facilities',
   'Behaviour or conduct', 'Safety', 'Communication', 'Financial concerns',
@@ -79,6 +80,20 @@ async function addRequestLog(db) {
     await db.prepare("ALTER TABLE member_requests ADD COLUMN log TEXT NOT NULL DEFAULT '[]'").run();
 }
 
+/* One transaction outside a request (start-up migrations), retried like a request on a concurrent commit. */
+async function runInTransaction(db, work) {
+  for (let attempt = 1; ; attempt++) {
+    const c = new Tx(db);
+    try {
+      await work(c);
+      await c.commit();
+      return;
+    } catch (error) {
+      if (!(error instanceof Conflict) || attempt >= 8) throw error;
+    }
+  }
+}
+
 let ready = null;
 /* init_db() runs once per Worker instance, the way server.py runs it once per start. */
 export function ensureDatabase(db) {
@@ -97,6 +112,8 @@ export async function initialize(db, force = false) {
       if (row && row.init === INIT_VERSION) {
         await db.batch(ADDED_SCHEMA.map(sql => db.prepare(sql)));
         await addRequestLog(db);
+        await migrateV2(db);
+        await runInTransaction(db, c => migrateV2Roles(c));
         return;
       }
     } catch {
@@ -105,6 +122,7 @@ export async function initialize(db, force = false) {
   }
   await db.batch(SCHEMA.map(sql => db.prepare(sql)));
   await addRequestLog(db);
+  await migrateV2(db);
   await db.prepare("INSERT OR IGNORE INTO cf_meta(id,seq,init) VALUES(1,0,'')").run();
   for (let attempt = 1; ; attempt++) {
     const c = new Tx(db);
@@ -126,7 +144,7 @@ export async function init_db(c, force = false) {
      part of CREATE TABLE here, so server.py's ALTER TABLE step never applies.) */
   c.run("UPDATE users SET role='disabled' WHERE role='volunteer'");
   c.run("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role='disabled')");
-  c.run("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')");
+  c.run("INSERT OR IGNORE INTO dioceses(id,name) VALUES('beirut','Archeparchy of Beirut')");
   const [stored] = await c.reads([['SELECT * FROM states', []]]);
   const states = stored.map(row => ({ parish_id: row.parish_id, data: row.data }));
   const present = new Set(states.map(row => row.parish_id));
@@ -164,8 +182,9 @@ export async function init_db(c, force = false) {
     if (text !== row.data) c.run('UPDATE states SET data=? WHERE parish_id=?', text, row.parish_id);
     await sync_relationships(c, row.parish_id, d);
   }
+  await migrateV2Roles(c);
   c.run('DELETE FROM schema_version');
-  c.run('INSERT INTO schema_version VALUES(5)');
+  c.run('INSERT INTO schema_version VALUES(6)');
   c.run('UPDATE cf_meta SET init=? WHERE id=1', INIT_VERSION);
 }
 
@@ -261,15 +280,7 @@ export async function sync_relationships(c, pid, d) {
   for (const table of [...order].reverse()) for (const [name, sql, params] of inserts) if (name === table) c.run(sql, ...params);
 }
 
-/* ---- access --------------------------------------------------------------- */
-export async function access(c, u, pid) {
-  const [parish, assignment] = await c.reads([
-    ['SELECT * FROM parishes WHERE id=? AND diocese=?', [pid, K(u, 'diocese')]],
-    ['SELECT 1 FROM assignments WHERE user_id=? AND parish_id=?', [K(u, 'id'), pid]]
-  ]);
-  need(parish.length > 0 && (K(u, 'role') === 'bishop' || assignment.length > 0), 'This parish is not assigned to your account.', 403);
-}
-
+/* ---- access: see authority.js ------------------------------------------- */
 export async function file_access(c, u, pid, scope, owner_id, write = false) {
   need(has(new Set(['group', 'person']), scope), 'Invalid file owner.');
   const row = await c.first('SELECT data FROM states WHERE parish_id=?', pid);
@@ -291,47 +302,14 @@ export async function file_access(c, u, pid, scope, owner_id, write = false) {
   }
 }
 
-const ROLE_NAMES = {
-  bishop: ['Archdiocese oversight', 'إشراف الأبرشية'], priest: ['Assigned parish priest', 'كاهن معيّن'],
-  secretary: ['Parish secretary', 'أمانة سرّ الرعية'], treasurer: ['Parish treasurer', 'أمين صندوق الرعية'],
-  leader: ['Ministry leader', 'مسؤول خدمة'], member: ['Ministry member', 'عضو خدمة']
-};
-
-/* `known` maps a parish ID to its state already read in this transaction, so the
-   counts below need not parse it again. */
-export async function parishes(c, u, known = {}) {
-  const [rows, assignedRows] = await c.reads([
-    ['SELECT * FROM parishes WHERE diocese=?', [K(u, 'diocese')]],
-    ['SELECT parish_id FROM assignments WHERE user_id=?', [K(u, 'id')]]
-  ]);
-  const assigned = new Set(assignedRows.map(r => r.parish_id));
-  const role = K(u, 'role');
-  if (!Object.prototype.hasOwnProperty.call(ROLE_NAMES, role)) throw new PyError('KeyError');
-  const chosen = rows.filter(r => role === 'bishop' || assigned.has(r.id));
-  const missing = role !== 'member' ? chosen.filter(r => !Object.prototype.hasOwnProperty.call(known, r.id)) : [];
-  const stateRows = missing.length ? await c.reads(missing.map(r => ['SELECT data FROM states WHERE parish_id=?', [r.id]])) : [];
-  const parsed = new Map(missing.map((r, i) => [r.id, stateRows[i][0] ? JSON.parse(stateRows[i][0].data) : null]));
-  const year = localToday().slice(0, 4).replace(/^0+/, '');
-  return chosen.map(r => {
-    const p = JSON.parse(r.metadata);
-    [p.role, p.roleAr] = ROLE_NAMES[role];
-    const data = role === 'member' ? null : Object.prototype.hasOwnProperty.call(known, r.id) ? known[r.id] : parsed.get(r.id);
-    if (data) {
-      p.people = len(K(data, 'PEOPLE'));
-      p.households = len(K(data, 'HOUSEHOLDS'));
-      p.sacramentsYear = iter(K(data, 'SACRAMENTS')).filter(s => str(get(s, 'date', '')).startsWith(year)
-        && !eq(get(s, 'kind'), 'certificate') && has(new Set(['registered', 'issued']), get(s, 'status'))).length;
-    }
-    return p;
-  });
-}
-
 /* A separate projection: no private notes, contact data, or parish editing model. */
 export async function oversight(c, u, pid = null) {
-  need(K(u, 'role') === 'bishop', 'Bishop oversight access required.', 403);
+  const auth = await authority(c, u);
+  need(auth.assignments.some(a => a.role === 'bishop' && a.scope === 'diocese'), 'Bishop oversight access required.', 403);
   const result = [];
   const today = TODAY();
-  for (const parish of await parishes(c, u)) {
+  for (const parish of await parishes(c, u, {}, auth)) {
+    if (parish.roleCode !== 'bishop' && !auth.assignments.some(a => a.role === 'bishop' && a.scope === 'diocese' && a.scope_id === parish.diocese)) continue;
     if (truthy(pid) && parish.id !== pid) continue;
     const stateRow = await c.first('SELECT data FROM states WHERE parish_id=?', parish.id);
     if (stateRow === null) throw new PyError("'NoneType' object is not subscriptable");
@@ -388,7 +366,7 @@ export async function oversight(c, u, pid = null) {
           roster: iter(get(detail, 'roster', [])).map(r => ({ id: K(r, 'p'), ...name(K(r, 'p')) })) });
       }
       const [actorRows, auditRows] = await c.reads([
-        ['SELECT id,name FROM users WHERE diocese=?', [K(u, 'diocese')]],
+        ['SELECT id,name FROM users WHERE id IN (SELECT actor FROM audit WHERE parish_id=?)', [pid]],
         ['SELECT at,action,actor FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 50', [pid]]
       ]);
       const actors = new Map(actorRows.map(r => [r.id, r.name]));
@@ -476,27 +454,35 @@ async function notify_request_progress(c, pid, s, before, action) {
 }
 
 export async function visible(c, u, pid, d, { fresh = false, stored = false } = {}) {
-  need(!has(new Set(['bishop', 'member']), K(u, 'role')), 'Use your dedicated portal.', 403);
+  u = await parishUser(c, u, pid);
+  need(!has(new Set(['bishop', 'member', 'follower']), K(u, 'role')), 'Use your dedicated portal.', 403);
+  const perms = permsOf(u);
   const known = stored ? { [pid]: d } : {};
   if (!fresh) d = deepcopy(d);
   const allPeople = K(d, 'PEOPLE');
   Object.assign(K(d, 'PARISH'), { people: len(K(d, 'PEOPLE')), households: len(K(d, 'HOUSEHOLDS')), groups: len(K(d, 'GROUPS')) });
   d.PARISHES = await parishes(c, u, known);
   const role = K(u, 'role');
-  d.MEMBER_REQUESTS = CLERGY.has(role) || role === 'secretary' ? await office_member_requests(c, pid, d) : [];
+  d.MEMBER_REQUESTS = perms.has('requests.manage') ? await office_member_requests(c, pid, d) : [];
   d.ACCOUNTS = {};
-  if (CLERGY.has(role) || role === 'secretary') {
-    for (const r of await c.all('SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
-      + 'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', pid)) d.ACCOUNTS[r.person_id] = { username: r.username, role: r.role };
+  if (perms.has('people.manage')) {
+    const [legacyRows, linkRows] = await c.reads([
+      ['SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', [pid]],
+      ["SELECT u.username,l.person_id FROM parish_links l JOIN users u ON u.id=l.user_id WHERE l.parish_id=? AND l.status='active' AND l.person_id IS NOT NULL ORDER BY u.username", [pid]]
+    ]);
+    for (const r of legacyRows) d.ACCOUNTS[r.person_id] = { username: r.username, role: r.role };
+    for (const r of linkRows) if (!Object.prototype.hasOwnProperty.call(d.ACCOUNTS, r.person_id)) d.ACCOUNTS[r.person_id] = { username: r.username, role: 'member' };
   }
-  if (!CLERGY.has(role)) {
-    d.NOTES = [];
-    d.AUDIT = [];
+  if (!perms.has('notes.pastoral')) d.NOTES = [];
+  if (!perms.has('settings.manage')) {
     for (const k of ['SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS']) d[k] = [];
     delete d.PARISH.apiKey;
+  }
+  if (!perms.has('audit.view')) {
+    d.AUDIT = [];
   } else {
     const [actorRows, auditRows] = await c.reads([
-      ['SELECT id,name,person_id FROM users WHERE diocese=?', [K(u, 'diocese')]],
+      ['SELECT id,name,person_id FROM users WHERE id IN (SELECT actor FROM audit WHERE parish_id=?)', [pid]],
       ['SELECT * FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 500', [pid]]
     ]);
     const actors = new Map(actorRows.map(r => [r.id, r]));
@@ -506,7 +492,7 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
       what: r.action, whatAr: r.action, kind: r.action.includes('approve') ? 'approve' : 'create'
     }));
   }
-  if (!(CLERGY.has(role) || role === 'treasurer')) {
+  if (!perms.has('finance.view')) {
     for (const k of FINANCE) d[k] = isList(get(d, k)) ? [] : { lines: [], status: 'unavailable', counters: [] };
   }
   if (role === 'treasurer') {
@@ -583,8 +569,8 @@ function references(value, personId) {
 }
 
 export async function save_patch(c, u, pid, payload) {
-  await access(c, u, pid);
-  need(!has(new Set(['bishop', 'member']), K(u, 'role')), 'Parish staff access required.', 403);
+  u = await parishUser(c, u, pid);
+  need(!has(new Set(['bishop', 'member', 'follower']), K(u, 'role')), 'Parish staff access required.', 403);
   const row = await c.first('SELECT * FROM states WHERE parish_id=?', pid);
   if (row === null) throw new PyError("'NoneType' object is not subscriptable");
   need(eq(get(payload, 'revision'), row.revision), 'Another user changed this parish. Reload before saving.', 409);
@@ -594,7 +580,7 @@ export async function save_patch(c, u, pid, payload) {
   need(isDict(changes), 'Expected changes.');
   const role = K(u, 'role');
   for (const [key, value] of Object.entries(changes)) {
-    need(has(d, key) && writable(role, key), 'Your role cannot change ' + key, 403);
+    need(has(d, key) && writable(u, key), 'Your role cannot change ' + key, 403);
     need(typeName(value) === typeName(d[key]), 'Invalid collection type: ' + key);
     if (key === 'GROUP_DETAIL' && role === 'leader') {
       const permitted = leaderGroups(old, u);
@@ -935,8 +921,10 @@ const nextNumber = (items, prefix, field = 'reg') => {
 };
 
 export async function workflow(c, u, pid, q) {
-  await access(c, u, pid);
-  need(CLERGY.has(K(u, 'role')) || K(u, 'role') === 'secretary', 'Office access required.', 403);
+  u = await parishUser(c, u, pid);
+  const officePerms = permsOf(u);
+  need((CLERGY.has(K(u, 'role')) || K(u, 'role') === 'secretary') && ['sacraments.manage', 'requests.manage', 'facilities.manage'].some(p => officePerms.has(p)),
+    'Office access required.', 403);
   const row = await c.first('SELECT * FROM states WHERE parish_id=?', pid);
   if (row === null) throw new PyError("'NoneType' object is not subscriptable");
   need(eq(get(q, 'revision'), row.revision), 'Record changed. Reload before continuing.', 409);

@@ -7,6 +7,7 @@ import {
 } from './py.js';
 import { randomBytes } from 'node:crypto';
 import { parish_theme } from './state.js';
+import { parishUser } from './authority.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
   request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
@@ -26,8 +27,9 @@ export function complaint_log(c, concernId, actorId, action, detail = '') {
 }
 
 export async function member_context(c, u, pid) {
-  await access(c, u, pid);
-  need(K(u, 'role') !== 'bishop', 'This portal is not available to a bishop account.', 403);
+  u = await parishUser(c, u, pid);
+  need(K(u, 'role') !== 'bishop' && K(u, 'role') !== 'follower', K(u, 'role') === 'bishop' ? 'This portal is not available to a bishop account.'
+    : 'Ask to become a member of this parish to use its member portal.', 403);
   const row = await c.first('SELECT data FROM states WHERE parish_id=?', pid);
   if (row === null) throw new PyError("'NoneType' object is not subscriptable");
   const d = JSON.parse(row.data);
@@ -169,6 +171,7 @@ function reviewer_conflict(u, person, concern) {
 }
 
 export async function member_view(c, u, pid) {
+  u = await parishUser(c, u, pid);
   const [d, person, gids] = await member_context(c, u, pid);
   const priv = await member_private(c, u, pid);
   d._viewer = K(person, 'id');
@@ -338,6 +341,7 @@ export async function member_view(c, u, pid) {
 
 /* member_action(): `members` holds each target's member_private row for notify_member. */
 export async function member_action(c, u, pid, q) {
+  u = await parishUser(c, u, pid);
   const [d, person, gids] = await member_context(c, u, pid);
   const priv = await member_private(c, u, pid);
   const op = get(q, 'op');

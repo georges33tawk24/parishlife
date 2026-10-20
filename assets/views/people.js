@@ -141,14 +141,14 @@ const hh = id => HOUSEHOLDS.find(h => h.id === id);
 /* People records keep Lebanese numbers without +961; a number from abroad is kept whole. */
 const phoneText = v => !v || v === '—' ? '—' : String(v).startsWith('+') ? String(v) : '+961 ' + v;
 const unverified = p => !!p.registeredOnline && !p.registeredOnline.verified;
-const onlineNew = p => unverified(p) ? `<span class="or-mark" title="${esc(t('Registered online — not verified yet', 'مسجّل إلكترونياً — لم يُتحقّق منه بعد'))}">${icon('globe', 12)}${t('New online', 'جديد إلكترونياً')}</span>` : '';
+/* People lists and profiles carry no online/new labels: how a record began is in its account panel. */
 const signInName = v => /^\+\d+$/.test(v) ? phoneShow(v) : v;
 const ACCESS = { member: ['Member portal', 'بوّابة المؤمنين'], leader: ['Member portal · ministry leader', 'بوّابة المؤمنين · مسؤول خدمة'] };
 const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', 'Roman Catholic': 'لاتيني', Syriac: 'سرياني' };
 const riteLabel = r => t(r, RITE_AR[r] || r);
 const filteredPeople = () => PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status))
   && (!S.ui.peopleTown || x.town === S.ui.peopleTown) && (!S.ui.peopleRite || x.rite === S.ui.peopleRite)
-  && (!S.ui.peopleEnv || hh(x.hh)?.envelope) && (!S.ui.peopleNew || unverified(x))
+  && (!S.ui.peopleEnv || hh(x.hh)?.envelope)
   && matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, S.ui.peopleQ || ''));
 const csvCell = value => `"${String(value ?? '').replace(/"/g,'""')}"`;
 function peopleExport() {
@@ -179,7 +179,7 @@ function peopleExport() {
 }
 const TABS = () => [['', 'All people', 'كل المؤمنين'], ['duplicates', 'Duplicates', 'التكرارات', DUPLICATES.length],
               ['import', 'Import', 'استيراد'],
-              ['archived', 'Archived', 'المؤرشفون', ARCHIVED.length]];
+              ['archived', 'Deactivated', 'الموقوفون', ARCHIVED.length]];
 
 /* ---------------- list ---------------- */
 export function people(tab = '') {
@@ -212,7 +212,7 @@ export function people(tab = '') {
         <div><a class="btn btn-secondary btn-dense" href="#/person/${p.id}">${t('Open record', 'فتح السجل')}</a></div>
       </div>`,
     cells: [
-      `<span class="row" style="gap:6px">${C.iconBtn('chevR', t('Expand', 'توسيع'), 'data-expand aria-expanded="false"')}${who(p)}${onlineNew(p)}</span>`,
+      `<span class="row" style="gap:6px">${C.iconBtn('chevR', t('Expand', 'توسيع'), 'data-expand aria-expanded="false"')}${who(p)}</span>`,
       `<span class="dim">${esc(hh(p.hh) ? t(hh(p.hh).name, hh(p.hh).ar) : '—')}</span>`,
       `<span class="dim">${esc(t(p.town, p.townAr))}</span>`,
       `<span class="dim">${esc(riteLabel(p.rite))}</span>`,
@@ -230,8 +230,7 @@ export function people(tab = '') {
         ${[...new Map(PEOPLE.filter(x => x.town).map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => `<option value="${esc(en)}" ${town === en ? 'selected' : ''}>${esc(t(en, ar))}</option>`).join('')}</select>
       <select class="select" style="width:auto" id="prite" aria-label="${t('Rite', 'الطقس')}"><option value="">${t('All rites', 'كل الطقوس')}</option>
         ${[...new Set(PEOPLE.map(x => x.rite).filter(Boolean))].sort().map(r => `<option value="${esc(r)}" ${rite === r ? 'selected' : ''}>${esc(riteLabel(r))}</option>`).join('')}</select>
-      ${PEOPLE.some(unverified) || S.ui.peopleNew ? `<button class="savedview" data-act="people-new" aria-pressed="${!!S.ui.peopleNew}" style="margin-inline-start:auto">${icon(S.ui.peopleNew ? 'check' : 'globe', 14)}${t('New online', 'جدد إلكترونياً')}<span class="badge" style="margin-inline-start:6px">${PEOPLE.filter(unverified).length}</span></button>` : ''}
-      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" ${PEOPLE.some(unverified) || S.ui.peopleNew ? '' : 'style="margin-inline-start:auto"'}>${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
+      <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" style="margin-inline-start:auto">${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
     </div>
     ${S.ui.peopleEnv ? `<p class="help" style="margin-bottom:12px">${t('A numbered giving envelope belongs to a household. It connects counted gifts and statements to that household; its members are listed for lookup, not as individual donors.', 'المظروف المرقّم للعطاء يتبع العائلة المنزلية. يربط التقدمات وكشوفها بها؛ ويظهر أفرادها للبحث لا لأن كل فرد متبرّع.')}</p>` : ''}
     ${table({
@@ -267,8 +266,8 @@ export function personMenu(anchor, pid) {
       { label: t('Arabic — A4', 'عربي — A4'), fn: () => cert('arabic') },
       { label: t('English — A4', 'إنكليزي — A4'), fn: () => cert('english') },
       { label: t('Bilingual — A4', 'ثنائي — A4'), fn: () => cert('bilingual') }] }] : []),
-    ...(ARCHIVED.includes(p)?[{ label:t('Restore to active list','استرجاع إلى اللائحة النشطة'),icon:'box',fn:()=>F.restorePerson(pid) }]:
-      [{ label: t('Archive — hide from active list', 'أرشفة — إخفاء من اللائحة النشطة'), icon: 'box', fn: () => { F.archivePeople([pid]); if (S.route === 'person') go('people'); } }]),
+    ...(ARCHIVED.includes(p)?[{ label:t('Reactivate in this parish','إعادة التفعيل في هذه الرعية'),icon:'check',fn:()=>F.restorePerson(pid) }]:
+      [{ label: t('Deactivate in this parish', 'إيقاف في هذه الرعية'), icon: 'lock', fn: () => F.archivePeople([pid], () => { if (S.route === 'person') go('people'); }) }]),
     { sep: true },
     { label: t('Delete permanently — cannot be undone', 'حذف نهائي — لا تراجع'), icon: 'trash', danger: true, fn: () => deleteGuard(p) }
   ], { width: 230 });
@@ -294,7 +293,7 @@ export function deleteGuard(p, { dry = false } = {}) {
   const blocked=!dry&&links.some(([,count])=>count);
   openModal({
     title: blocked?t('Cannot permanently delete this linked record','لا يمكن حذف هذا السجل المرتبط نهائياً'):t('Permanently delete this record?', 'حذف هذا السجل نهائياً؟'),
-    sub: blocked?t('Archive it to remove it from active lists while preserving its history.','أرشفه لإزالته من اللوائح النشطة مع الحفاظ على تاريخه.'):
+    sub: blocked?t('Deactivate it instead: it leaves the active lists and keeps its history.','أوقفه بدلاً من ذلك: يخرج من اللوائح النشطة ويحتفظ بتاريخه.'):
       t('This cannot be undone. Review the record before deleting.','لا يمكن التراجع. راجع السجل قبل حذفه.'),
     body: `<div class="stack">${links.map(([a, b]) => `<div class="listrow" style="padding-inline:0">
         <span class="grow">${esc(a)}</span><b class="mono">${esc(b)}</b></div>`).join('')}</div>
@@ -333,10 +332,7 @@ people.mount = host => {
   wireImport(host);
   host.querySelector('#people-export')?.addEventListener('click', peopleExport);
   host.querySelector('#people-directory')?.addEventListener('click', printPeopleDirectory);
-  host.querySelectorAll('[data-delete-archived]').forEach(button=>button.addEventListener('click',()=>{
-    const archived=ARCHIVED.find(person=>person.id===button.dataset.deleteArchived);
-    if(archived)deleteGuard(archived);
-  }));
+
   wireTables(host, {
     onBulk(n) {
       const h = host.querySelector('#bulkhost');
@@ -498,23 +494,26 @@ function wireImport(host){
   });
 }
 
-/* ---------------- archived ---------------- */
+/* ---------------- deactivated ----------------
+   Deactivating keeps the record and everything linked to it (sacraments, households, gifts, attendance,
+   requests), takes it out of the active lists, and stops that person's member access to this parish only. */
 function archived() {
+  const by = p => p.deactivation?.by || p.archivedBy;
   return `<div class="tabbody">
-    ${C.inlineAlert('info', t('Archived records remain restorable', 'تبقى السجلات المؤرشفة قابلة للاسترجاع'),
-      t('Archive removes a person from active lists and preserves linked history. Permanent deletion requires an unlinked record and typed confirmation.',
-        'تزيل الأرشفة الشخص من اللوائح النشطة وتحفظ السجلات المرتبطة به. يتطلّب الحذف النهائي سجلاً بلا روابط وتأكيداً بكتابة الاسم.'))}
+    ${C.inlineAlert('info', t('Deactivated in this parish only', 'موقوف في هذه الرعية فقط'),
+      t('A deactivated record keeps all its history and links. If the person has an account, it can no longer open this parish; other parishes are not affected. Reactivate to bring the record back.',
+        'يحتفظ السجل الموقوف بكل تاريخه وروابطه. وإن كان للشخص حساب، فلا يعود يفتح هذه الرعية، ولا تتأثّر الرعايا الأخرى. أعد التفعيل لاسترجاع السجل.'))}
     ${table({
-      cols: [{ label: t('Name', 'الاسم') }, { label: t('Archived', 'أُرشف') }, { label: t('By', 'بواسطة'), cls: 'hide-sm' },
+      cols: [{ label: t('Name', 'الاسم') }, { label: t('Deactivated', 'أوقف') }, { label: t('Reason', 'السبب'), cls: 'hide-sm' }, { label: t('By', 'بواسطة'), cls: 'hide-sm' },
              { label: '', cls: 'shrink' }],
       rows: ARCHIVED.map(p => ({ cells: [
         `<a href="#/person/${esc(p.id)}"><b>${esc(isAr() ? p.ar : p.lat)}</b></a>`,
-        `<span class="mono dim">${fmtDate(p.archived)}</span>`,
-        `<span class="dim">${esc(isAr() ? person(p.archivedBy)?.ar || '—' : person(p.archivedBy)?.lat || '—')}</span>`,
-        `<span class="row" style="gap:6px"><button class="btn btn-secondary btn-dense" data-act="restore:${p.id}">${t('Restore', 'استرجاع')}</button>
-          <button class="btn btn-danger-quiet btn-dense" data-delete-archived="${esc(p.id)}">${t('Review deletion', 'مراجعة الحذف')}</button></span>`
+        `<span class="mono dim">${fmtDate(p.deactivation?.at || p.archived)}</span>`,
+        `<span class="dim">${esc(p.deactivation?.reason || t('Archived before deactivation replaced archiving', 'أُرشف قبل أن يحلّ الإيقاف محلّ الأرشفة'))}</span>`,
+        `<span class="dim">${esc(isAr() ? person(by(p))?.ar || '—' : person(by(p))?.lat || '—')}</span>`,
+        `<button class="btn btn-secondary btn-dense" data-act="restore:${p.id}">${t('Reactivate', 'إعادة التفعيل')}</button>`
       ]})),
-      empty: empty('people', t('Nobody is archived', 'لا أحد مؤرشف'), t('Archive someone from their row menu; they can be restored here.', 'أرشف شخصاً من قائمة صفّه؛ ويمكن استرجاعه هنا.'))
+      empty: empty('people', t('Nobody is deactivated', 'لا أحد موقوف'), t('Deactivate someone from their row menu; they can be reactivated here.', 'أوقف شخصاً من قائمة صفّه؛ ويمكن إعادة تفعيله هنا.'))
     })}
     </div>`;
 }
@@ -538,7 +537,7 @@ export function personView(id, tab = '') {
       <div class="id">
         <nav class="crumbs"><a href="#/people">${t('People', 'المؤمنون')}</a><span class="sep">/</span><span>${esc(label(p))}</span></nav>
         <h1 style="font:600 26px/34px var(--sans);letter-spacing:-.02em">${esc(label(p))}
-          ${status(p.status)}${p.rite ? `<span class="pill">${esc(riteLabel(p.rite))}</span>` : ''}${onlineNew(p)}</h1>
+          ${status(p.status)}${p.rite ? `<span class="pill">${esc(riteLabel(p.rite))}</span>` : ''}</h1>
         <div class="meta">${[p.ar && p.ar !== p.lat ? `<span style="font-family:var(--arabic)" dir="auto">${esc(p.ar)}</span>` : '',
           house?.envelope ? `${t('Offering-envelope identifier', 'رمز مظروف العطاء')} <span class="mono">${esc(house.envelope)}</span>` : '',
           p.town ? esc(t(p.town, p.townAr)) : ''].filter(Boolean).join(' · ')}</div>

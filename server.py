@@ -294,7 +294,7 @@ def init_db():
         c.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role='disabled')")
         if 'assigned_to' not in {row['name'] for row in c.execute('PRAGMA table_info(member_concerns)')}:
             c.execute('ALTER TABLE member_concerns ADD COLUMN assigned_to TEXT REFERENCES users(id)')
-        c.execute("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')")
+        c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('beirut','Archeparchy of Beirut')")
         seed = json.loads((ROOT / 'backend' / 'seed.json').read_text(encoding='utf-8'))
         for p in seed['PARISHES']:
             c.execute('INSERT OR IGNORE INTO parishes VALUES(?,?,?)', (p['id'], 'beirut', json.dumps(p)))
@@ -322,8 +322,9 @@ def init_db():
             d = migrate_state(json.loads(row['data']))
             c.execute('UPDATE states SET data=? WHERE parish_id=?', (json.dumps(d), row['parish_id']))
             sync_relationships(c, row['parish_id'], d)
+        migrate_v2(c)
         c.execute('DELETE FROM schema_version')
-        c.execute('INSERT INTO schema_version VALUES(5)')
+        c.execute('INSERT INTO schema_version VALUES(6)')
 
 
 def sync_relationships(c, pid, d):
@@ -437,9 +438,276 @@ def signup(c, q):
     return user_id
 
 
+# ───────────── Organisation, roles and permissions ─────────────
+# Diocese → parishes → ministries. Access comes from role assignments scoped to the whole
+# system, one diocese or one parish; one account can hold several, in different places.
+# Accounts made before this (or by the operator tools) keep their old access until something
+# new is recorded for them, when it is first copied into the new tables (materialize_legacy).
+STAFF_ROLES = ('priest', 'parishadmin', 'secretary', 'treasurer', 'leader')   # strongest first
+DIOCESE_ROLES = ('bishop', 'diocesanadmin')
+RANK = {'superadmin': 0, 'bishop': 1, 'diocesanadmin': 2, 'priest': 3, 'parishadmin': 4,
+        'secretary': 5, 'treasurer': 5, 'leader': 6}
+# The parish workspace a role opens; a parish admin works in the office workspace.
+WORKSPACE_ROLE = {'priest': 'priest', 'parishadmin': 'secretary', 'secretary': 'secretary',
+                  'treasurer': 'treasurer', 'leader': 'leader'}
+ROLE_TITLES = {'superadmin': ('Super admin', 'المدير العام'), 'bishop': ('Bishop', 'المطران'),
+               'diocesanadmin': ('Diocesan admin', 'إداري الأبرشية'), 'priest': ('Parish priest', 'كاهن الرعية'),
+               'parishadmin': ('Parish admin', 'إداري الرعية'), 'secretary': ('Parish secretary', 'أمانة سرّ الرعية'),
+               'treasurer': ('Parish treasurer', 'أمين صندوق الرعية'), 'leader': ('Ministry leader', 'مسؤول خدمة'),
+               'member': ('Parish member', 'عضو في الرعية'), 'follower': ('Following', 'متابِع للرعية')}
+# code, level, English, Arabic. Fixed permissions belong to one role and are never delegated.
+PERMISSIONS = [
+    ('people.manage', 'parish', 'People, households and person records', 'المؤمنون والعائلات وسجلات الأشخاص'),
+    ('sacraments.manage', 'parish', 'Sacrament requests and preparation', 'طلبات الأسرار والتحضير'),
+    ('sacraments.sign', 'parish', 'Sign official sacramental documents', 'توقيع وثائق الأسرار الرسمية'),
+    ('requests.manage', 'parish', 'Online requests, forms and workflows', 'الطلبات الإلكترونية والاستمارات والمسارات'),
+    ('events.manage', 'parish', 'Calendar, services, registrations and check-in', 'الرزنامة والخدم والتسجيلات والحضور'),
+    ('ministries.manage', 'parish', 'Ministries, volunteers and rotas', 'الخدمات والمتطوّعون وجداول الخدمة'),
+    ('facilities.manage', 'parish', 'Rooms, bookings and equipment', 'القاعات والحجوزات والمعدّات'),
+    ('communications.manage', 'parish', 'Notices, broadcasts and prayer requests', 'الإعلانات والرسائل الجماعية ونوايا الصلاة'),
+    ('website.publish', 'parish', 'Public website content', 'محتوى الموقع العام'),
+    ('finance.view', 'parish', 'See giving and finance', 'الاطّلاع على التقدمات والمالية'),
+    ('finance.edit', 'parish', 'Record gifts, expenses and the exchange rate', 'تسجيل التقدمات والمصاريف وسعر الصرف'),
+    ('settings.manage', 'parish', 'Parish settings and profile', 'إعدادات الرعية وملفّها'),
+    ('staff.manage', 'parish', 'Appoint staff and adjust their permissions', 'تعيين العاملين وتعديل صلاحياتهم'),
+    ('access.manage', 'parish', 'Deactivate and reactivate access', 'إيقاف الوصول وإعادته'),
+    ('audit.view', 'parish', 'Audit trail', 'سجل التدقيق'),
+    ('notes.pastoral', 'parish', 'Pastoral notes (author-private unless shared)', 'الملاحظات الرعوية (خاصة بكاتبها ما لم تُشارك)'),
+    ('parishes.create', 'diocese', 'Create parishes in the diocese', 'إنشاء رعايا في الأبرشية'),
+    ('clergy.assign', 'diocese', 'Clergy service assignments', 'تعيينات خدمة الإكليروس'),
+    ('clergy.title', 'diocese', 'Change clergy titles', 'تغيير ألقاب الإكليروس'),
+    ('diocese.staff', 'diocese', 'Appoint diocesan and parish admins', 'تعيين إداريي الأبرشية والرعايا'),
+    ('documents.accept', 'diocese', 'Accept documents signed by priests', 'قبول الوثائق التي وقّعها الكهنة'),
+    ('diocese.policies', 'diocese', 'Diocesan policies', 'سياسات الأبرشية'),
+    ('dioceses.manage', 'system', 'Create dioceses and provision bishops', 'إنشاء الأبرشيات وتجهيز حسابات المطارنة'),
+    ('accounts.global', 'system', 'Deactivate accounts everywhere', 'إيقاف الحسابات في كل مكان'),
+    ('messages.emergency', 'system', 'Emergency review of a reported conversation', 'المراجعة الطارئة لمحادثة مُبلَّغ عنها'),
+]
+PERMISSION_CODES = {p[0] for p in PERMISSIONS}
+PERMISSION_LEVEL = {p[0]: p[1] for p in PERMISSIONS}
+# Never granted through an adjustment, and never part of a "full access" shortcut.
+FIXED_PERMISSIONS = {'sacraments.sign': 'priest', 'notes.pastoral': 'priest', 'clergy.title': 'bishop',
+                     'documents.accept': 'bishop', 'diocese.policies': 'bishop', 'messages.emergency': 'superadmin'}
+PARISH_OFFICE = ['people.manage', 'sacraments.manage', 'requests.manage', 'events.manage', 'ministries.manage',
+                 'facilities.manage', 'communications.manage', 'website.publish']
+# Diocesan and system roles also carry parish permissions: they never open a parish's records with
+# them, but they are what such an administrator may hand on when appointing a parish admin.
+PARISH_ADMIN = PARISH_OFFICE + ['settings.manage', 'staff.manage', 'access.manage', 'audit.view']
+ROLE_TEMPLATES = {
+    'superadmin': ['dioceses.manage', 'accounts.global', 'messages.emergency', 'parishes.create', 'clergy.assign',
+                   'diocese.staff', 'finance.view'] + PARISH_ADMIN,
+    'bishop': ['parishes.create', 'clergy.assign', 'clergy.title', 'diocese.staff', 'documents.accept', 'diocese.policies',
+               'finance.view'] + PARISH_ADMIN,
+    'diocesanadmin': ['parishes.create', 'clergy.assign', 'diocese.staff'] + PARISH_ADMIN,
+    'priest': [p[0] for p in PERMISSIONS if p[1] == 'parish'],
+    'parishadmin': list(PARISH_ADMIN),
+    'secretary': list(PARISH_OFFICE),
+    'treasurer': ['finance.view', 'finance.edit'],
+    'leader': [],
+}
+# What changing each part of the parish workspace needs. Parts not listed need settings.manage.
+KEY_PERMS = dict(
+    **{k: 'people.manage' for k in ('PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS',
+                                    'DUPLICATES', 'INCIDENTS', 'EVACUATION')},
+    SACRAMENTS='sacraments.manage',
+    **{k: 'requests.manage' for k in ('PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS',
+                                      'FORM_RULES', 'AUTOMATIONS')},
+    **{k: 'events.manage' for k in ('EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES',
+                                    'SERVICE_REQUESTS', 'CHECKIN', 'PICKUP', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS')},
+    **{k: 'ministries.manage' for k in ('GROUPS', 'GROUP_DETAIL', 'VOLUNTEERS', 'ROTA', 'SIGNUP_SHEETS')},
+    **{k: 'facilities.manage' for k in ('RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS')},
+    **{k: 'communications.manage' for k in ('MESSAGES', 'NOTICES', 'PRAYERS')},
+    CONTENT='website.publish',
+    **{k: 'finance.edit' for k in sorted(FINANCE | {'RATE'})},
+    NOTES='notes.pastoral')
+CLERGY_TITLES = ('Deacon', 'Priest', 'Monsignor', 'Archimandrite', 'Chorbishop', 'Bishop', 'Archbishop', 'Patriarch')
+CLERGY_OFFICES = {'parish-priest': ('Parish priest', 'كاهن الرعية'), 'assistant-priest': ('Assistant priest', 'كاهن مساعد'),
+                  'deacon': ('Deacon', 'شمّاس'), 'other': ('Other service', 'خدمة أخرى')}
+PRIESTLY_OFFICES = {'parish-priest', 'assistant-priest'}
+
+V2_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS role_assignments(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+  role TEXT NOT NULL, scope TEXT NOT NULL, scope_id TEXT NOT NULL, grants TEXT NOT NULL DEFAULT '[]',
+  revokes TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, created_by TEXT, ended_at TEXT, ended_by TEXT);
+CREATE INDEX IF NOT EXISTS role_assignments_user ON role_assignments(user_id,status);
+CREATE INDEX IF NOT EXISTS role_assignments_scope ON role_assignments(scope,scope_id,status);
+CREATE TABLE IF NOT EXISTS parish_links(user_id TEXT NOT NULL REFERENCES users(id), parish_id TEXT NOT NULL REFERENCES parishes(id),
+  kind TEXT NOT NULL, status TEXT NOT NULL, person_id TEXT, is_primary INTEGER NOT NULL DEFAULT 0,
+  note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, PRIMARY KEY(user_id,parish_id));
+CREATE INDEX IF NOT EXISTS parish_links_parish ON parish_links(parish_id,status);
+CREATE TABLE IF NOT EXISTS access_blocks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), scope TEXT NOT NULL,
+  scope_id TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT NOT NULL,
+  lifted_at TEXT, lifted_by TEXT, lift_note TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS access_blocks_user ON access_blocks(user_id,lifted_at);
+CREATE TABLE IF NOT EXISTS clergy(id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id), name TEXT NOT NULL,
+  name_ar TEXT NOT NULL DEFAULT '', diocese TEXT NOT NULL REFERENCES dioceses(id), created_at TEXT NOT NULL, created_by TEXT);
+CREATE TABLE IF NOT EXISTS clergy_titles(id TEXT PRIMARY KEY, clergy_id TEXT NOT NULL REFERENCES clergy(id), title TEXT NOT NULL,
+  effective_from TEXT NOT NULL, kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', set_by TEXT, set_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS clergy_assignments(id TEXT PRIMARY KEY, clergy_id TEXT NOT NULL REFERENCES clergy(id),
+  parish_id TEXT NOT NULL REFERENCES parishes(id), office TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT,
+  exception TEXT, note TEXT NOT NULL DEFAULT '', created_by TEXT, created_at TEXT NOT NULL, ended_by TEXT, ended_at TEXT);
+CREATE TABLE IF NOT EXISTS settings(scope TEXT NOT NULL, scope_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+  updated_at TEXT NOT NULL, updated_by TEXT, PRIMARY KEY(scope,scope_id,key));
+'''
+
+
+def migrate_v2(c):
+    """Additive: new tables, a diocese row for accounts that belong to none, then (once) the
+    existing roles and parish links copied into the scoped model. Nothing is deleted."""
+    c.executescript(V2_SCHEMA)
+    if 'metadata' not in {r['name'] for r in c.execute('PRAGMA table_info(dioceses)')}:
+        c.execute("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
+    c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('','No diocese')")
+    if c.execute("SELECT 1 FROM schema_migrations WHERE name='v2-roles'").fetchone() is None:
+        for user in c.execute("SELECT * FROM users WHERE role IN ('bishop','priest','secretary','treasurer','leader','member')").fetchall():
+            materialize_legacy(c, user, note='Copied from the account’s earlier role')
+        c.execute("INSERT INTO schema_migrations VALUES('v2-roles',?)", (NOW(),))
+
+
+def legacy_access(c, u):
+    """The access an account had before scoped roles: one role, the parishes in `assignments`."""
+    role = u['role']
+    pids = [r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=? ORDER BY parish_id', (u['id'],))]
+    assignments, links = [], []
+    if role == 'bishop':
+        assignments.append(dict(id='legacy:' + u['id'], user_id=u['id'], role='bishop', scope='diocese', scope_id=u['diocese'],
+                                grants='[]', revokes='[]', status='active', created_at='', note=''))
+    elif role in WORKSPACE_ROLE:
+        assignments += [dict(id=f'legacy:{u["id"]}:{pid}', user_id=u['id'], role=role, scope='parish', scope_id=pid,
+                             grants='[]', revokes='[]', status='active', created_at='', note='') for pid in pids]
+    elif role == 'member':
+        links += [dict(user_id=u['id'], parish_id=pid, kind='member', status='active', person_id=u['person_id'],
+                       is_primary=int(i == 0), created_at='') for i, pid in enumerate(pids)]
+    return assignments, links
+
+
+def materialize_legacy(c, u, note='Copied from the account’s earlier role'):
+    """Before anything new is recorded for an account still on its earlier access, copy that access."""
+    if c.execute('SELECT 1 FROM role_assignments WHERE user_id=? UNION SELECT 1 FROM parish_links WHERE user_id=?',
+                 (u['id'], u['id'])).fetchone():
+        return
+    assignments, links = legacy_access(c, u)
+    at = NOW()
+    for a in assignments:
+        c.execute('INSERT OR IGNORE INTO role_assignments(id,user_id,role,scope,scope_id,note,source,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                  ('ra-' + hashlib.sha256(f'{u["id"]}|{a["role"]}|{a["scope_id"]}'.encode()).hexdigest()[:20], u['id'], a['role'],
+                   a['scope'], a['scope_id'], note, 'migrated', at))
+    for link in links:
+        c.execute('INSERT OR IGNORE INTO parish_links(user_id,parish_id,kind,status,person_id,is_primary,note,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                  (u['id'], link['parish_id'], 'member', 'active', link['person_id'], link['is_primary'], note, at))
+    if u['role'] in {'bishop', 'priest'} and not c.execute('SELECT 1 FROM clergy WHERE user_id=?', (u['id'],)).fetchone():
+        cid = 'cl-' + hashlib.sha256(u['id'].encode()).hexdigest()[:16]
+        c.execute('INSERT OR IGNORE INTO clergy VALUES(?,?,?,?,?,?,?)', (cid, u['id'], u['name'], '', u['diocese'], at, None))
+        c.execute('INSERT OR IGNORE INTO clergy_titles VALUES(?,?,?,?,?,?,?,?)',
+                  (cid + '-t0', cid, 'Bishop' if u['role'] == 'bishop' else 'Priest', '', 'recorded',
+                   'Recorded when titles were introduced; the earlier history was not kept.', None, at))
+        for a in assignments:
+            if a['scope'] == 'parish':
+                c.execute('INSERT OR IGNORE INTO clergy_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                          (cid + '-a-' + a['scope_id'], cid, a['scope_id'], 'parish-priest', '', None, None,
+                           'Recorded when assignments were introduced; the start date was not kept.', None, at, None, None))
+
+
+def authority(c, u):
+    """Everything that decides what this account may reach: role assignments, parish links and access blocks."""
+    assignments = [dict(r) for r in c.execute('SELECT * FROM role_assignments WHERE user_id=? ORDER BY created_at,id', (u['id'],))]
+    links = [dict(r) for r in c.execute('SELECT * FROM parish_links WHERE user_id=? ORDER BY created_at,parish_id', (u['id'],))]
+    if not assignments and not links:
+        assignments, links = legacy_access(c, u)
+    blocks = [dict(r) for r in c.execute('SELECT * FROM access_blocks WHERE user_id=? AND lifted_at IS NULL ORDER BY created_at,id', (u['id'],))]
+    return dict(assignments=[a for a in assignments if a['status'] == 'active'], links=links, blocks=blocks)
+
+
+def assignment_perms(a):
+    """A role's template, with this assignment's own additions and removals. Fixed permissions stay with their role."""
+    template = set(ROLE_TEMPLATES.get(a['role'], ()))
+    grants = {p for p in json.loads(a.get('grants') or '[]') if p in PERMISSION_CODES and p not in FIXED_PERMISSIONS}
+    revokes = set(json.loads(a.get('revokes') or '[]'))
+    return (template | grants) - revokes
+
+
+def is_blocked(auth, diocese, pid=None):
+    return any(b['scope'] == 'global' or (b['scope'] == 'diocese' and b['scope_id'] == diocese) or
+               (pid is not None and b['scope'] == 'parish' and b['scope_id'] == pid) for b in auth['blocks'])
+
+
+def system_perms(auth):
+    perms = set()
+    for a in auth['assignments']:
+        if a['scope'] == 'system': perms |= assignment_perms(a)
+    return perms
+
+
+def diocese_perms(auth, did):
+    """Diocesan authority: the super admin's, apart from what belongs to the bishop alone, and this diocese's roles."""
+    perms = {p for p in system_perms(auth) if p not in FIXED_PERMISSIONS or FIXED_PERMISSIONS[p] == 'superadmin'}
+    for a in auth['assignments']:
+        if a['scope'] == 'diocese' and a['scope_id'] == did: perms |= assignment_perms(a)
+    return perms
+
+
+def admin_perms(auth, pid, did):
+    """Administrative authority over one parish: from the system, its diocese, or the parish itself."""
+    perms = diocese_perms(auth, did)
+    for a in auth['assignments']:
+        if a['scope'] == 'parish' and a['scope_id'] == pid: perms |= assignment_perms(a)
+    return perms
+
+
+def top_rank(auth, pid=None, did=None):
+    """The strongest role this account holds over a place (lower is stronger)."""
+    ranks = [RANK[a['role']] for a in auth['assignments'] if a['role'] in RANK and (
+        a['scope'] == 'system' or (a['scope'] == 'diocese' and a['scope_id'] == did) or
+        (pid is not None and a['scope'] == 'parish' and a['scope_id'] == pid))]
+    return min(ranks) if ranks else 99
+
+
+def parish_context(c, u, pid, auth=None, parish=None):
+    """This account's role in one parish, or None. Staff roles first, then the bishop's oversight,
+    then a parish connection (member or follower)."""
+    parish = parish or c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone()
+    if parish is None: return None
+    auth = auth or authority(c, u)
+    if is_blocked(auth, parish['diocese'], pid): return None
+    staff = [a for a in auth['assignments'] if a['scope'] == 'parish' and a['scope_id'] == pid]
+    link = next((l for l in auth['links'] if l['parish_id'] == pid and l['status'] == 'active'), None)
+    person_id = (link or {}).get('person_id') or u['person_id']
+    if staff:
+        roles = {a['role'] for a in staff}
+        role = next(r for r in STAFF_ROLES if r in roles)
+        perms = set()
+        for a in staff: perms |= assignment_perms(a)
+        return dict(role=role, workspace=WORKSPACE_ROLE[role], perms=perms, person_id=person_id, diocese=parish['diocese'])
+    if any(a['scope'] == 'diocese' and a['scope_id'] == parish['diocese'] and a['role'] == 'bishop' for a in auth['assignments']):
+        return dict(role='bishop', workspace='bishop', perms=set(), person_id=u['person_id'], diocese=parish['diocese'])
+    if link and link['kind'] == 'member':
+        return dict(role='member', workspace='member', perms=set(), person_id=link.get('person_id'), diocese=parish['diocese'])
+    if link and link['kind'] == 'follow':
+        return dict(role='follower', workspace='follower', perms=set(), person_id=None, diocese=parish['diocese'])
+    return None
+
+
+def parish_user(c, u, pid):
+    """The account as it acts in one parish: its role there, its permissions and its person record."""
+    if isinstance(u, dict) and u.get('scope_pid') == pid: return u
+    ctx = parish_context(c, u, pid)
+    require(ctx is not None, 'This parish is not assigned to your account.', 403)
+    e = dict(u)
+    e.update(role=ctx['workspace'], roleCode=ctx['role'], perms=ctx['perms'], person_id=ctx['person_id'], scope_pid=pid)
+    return e
+
+
 def access(c, u, pid):
-    p = c.execute('SELECT * FROM parishes WHERE id=? AND diocese=?', (pid, u['diocese'])).fetchone()
-    require(p is not None and (u['role'] == 'bishop' or c.execute('SELECT 1 FROM assignments WHERE user_id=? AND parish_id=?', (u['id'], pid)).fetchone()), 'This parish is not assigned to your account.', 403)
+    parish_user(c, u, pid)
+
+
+def perms_of(u):
+    """Workspace permissions of an account acting in a parish (or its role template when acting outside one)."""
+    if isinstance(u, dict) and 'perms' in u: return u['perms']
+    return set(ROLE_TEMPLATES.get(u['role'], ()))
+
 
 
 def file_access(c, u, pid, scope, owner_id, write=False):
@@ -460,30 +728,452 @@ def file_access(c, u, pid, scope, owner_id, write=False):
         require(permitted, 'Group files are outside your scope.', 403)
 
 
-def parishes(c, u):
-    rows = c.execute('SELECT * FROM parishes WHERE diocese=?', (u['diocese'],)).fetchall()
-    assigned = {r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (u['id'],))}
-    role_names = {'bishop': ('Archdiocese oversight', 'إشراف الأبرشية'), 'priest': ('Assigned parish priest', 'كاهن معيّن'),
-                  'secretary': ('Parish secretary', 'أمانة سرّ الرعية'), 'treasurer': ('Parish treasurer', 'أمين صندوق الرعية'),
-                  'leader': ('Ministry leader', 'مسؤول خدمة'),
-                  'member': ('Ministry member', 'عضو خدمة')}
+def parishes(c, u, auth=None):
+    """The parishes this account works in, oversees, belongs to or follows, with its role in each."""
+    auth = auth or authority(c, u)
     result = []
-    for r in rows:
-        if u['role'] != 'bishop' and r['id'] not in assigned: continue
-        p = json.loads(r['metadata']); p['role'], p['roleAr'] = role_names[u['role']]
-        state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['id'],)).fetchone()
-        if state and u['role'] != 'member':
+    for r in c.execute('SELECT * FROM parishes ORDER BY rowid').fetchall():
+        ctx = parish_context(c, u, r['id'], auth, r)
+        if ctx is None: continue
+        p = json.loads(r['metadata'])
+        p['role'], p['roleAr'] = ROLE_TITLES[ctx['role']]
+        p.update(roleCode=ctx['role'], perms=sorted(ctx['perms']), diocese=r['diocese'])
+        state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['id'],)).fetchone() if ctx['workspace'] not in {'member', 'follower'} else None
+        if state:
             data = json.loads(state['data']); p['people'] = len(data['PEOPLE']); p['households'] = len(data['HOUSEHOLDS'])
             p['sacramentsYear'] = sum(1 for s in data['SACRAMENTS'] if str(s.get('date', '')).startswith(str(dt.date.today().year)) and s.get('kind') != 'certificate' and s.get('status') in {'registered', 'issued'})
         result.append(p)
     return result
 
 
+def session_authority(c, u, auth=None):
+    """What the browser needs to build the account's workspaces: system and diocesan roles, and whether it administers anything."""
+    auth = auth or authority(c, u)
+    names = {r['id']: (r['name'], json.loads(r['metadata'] or '{}').get('ar', '')) for r in c.execute("SELECT * FROM dioceses WHERE id<>''")}
+    dioceses = [dict(id=a['scope_id'], name=names.get(a['scope_id'], ('', ''))[0], nameAr=names.get(a['scope_id'], ('', ''))[1],
+                     role=a['role'], perms=sorted(assignment_perms(a)))
+                for a in auth['assignments'] if a['scope'] == 'diocese' and a['scope_id'] in names]
+    system = sorted(system_perms(auth))
+    admin = bool(system or dioceses or any(a['scope'] == 'parish' and assignment_perms(a) & {'staff.manage', 'access.manage'}
+                                           for a in auth['assignments']))
+    return dict(superadmin='dioceses.manage' in system, system=system, dioceses=dioceses, admin=admin,
+                blocked=any(b['scope'] == 'global' for b in auth['blocks']))
+
+
+def login_allowed(c, u):
+    return u is not None and u['role'] != 'disabled' and not c.execute(
+        "SELECT 1 FROM access_blocks WHERE user_id=? AND scope='global' AND lifted_at IS NULL", (u['id'],)).fetchone()
+
+
+# ───────────── Administration: dioceses, parishes, staff, clergy, access ─────────────
+def slug(text, prefix):
+    base = re.sub(r'[^a-z0-9]+', '-', str(text).lower()).strip('-')[:40] or prefix
+    return f'{prefix}-{base}' if not base.startswith(prefix + '-') else base
+
+
+def user_brief(c, ids):
+    ids = sorted({i for i in ids if i})
+    rows = c.execute(f'SELECT id,username,name FROM users WHERE id IN ({",".join("?" * len(ids))})', ids).fetchall() if ids else []
+    return {r['id']: dict(name=r['name'], username=r['username']) for r in rows}
+
+
+def admin_scope(c, auth):
+    """Every place this account administers, with its authority there."""
+    dioceses = {r['id']: dict(r) for r in c.execute("SELECT * FROM dioceses WHERE id<>'' ORDER BY name")}
+    parishes_rows = {r['id']: dict(r) for r in c.execute('SELECT * FROM parishes ORDER BY rowid')}
+    system = system_perms(auth)
+    scope = dict(system=system, dioceses={}, parishes={})
+    for did in dioceses:
+        perms = diocese_perms(auth, did)
+        if perms: scope['dioceses'][did] = perms
+    for pid, p in parishes_rows.items():
+        perms = admin_perms(auth, pid, p['diocese'])
+        if perms & {'staff.manage', 'access.manage', 'finance.view', 'settings.manage'}: scope['parishes'][pid] = perms
+    return scope, dioceses, parishes_rows
+
+
+def admin_view(c, u):
+    auth = authority(c, u)
+    scope, dioceses, parish_rows = admin_scope(c, auth)
+    require(scope['system'] or scope['dioceses'] or scope['parishes'], 'Administration is not part of your account.', 403)
+    parish_ids = set(scope['parishes'])
+    out_dioceses = []
+    for did, d in dioceses.items():
+        if did not in scope['dioceses']: continue
+        meta = json.loads(d.get('metadata') or '{}')
+        bishops = [dict(r) for r in c.execute("SELECT * FROM role_assignments WHERE role='bishop' AND scope='diocese' AND scope_id=? AND status='active'", (did,))]
+        out_dioceses.append(dict(id=did, name=d['name'], nameAr=meta.get('ar', ''), bishops=[b['user_id'] for b in bishops],
+                                 perms=sorted(scope['dioceses'][did]),
+                                 releasePolicy=json.loads(setting(c, 'diocese', did, 'documents.release', '"unset"'))))
+    out_parishes = []
+    for pid in parish_ids:
+        p = parish_rows[pid]; meta = json.loads(p['metadata'])
+        out_parishes.append(dict(id=pid, diocese=p['diocese'], name=meta.get('name', ''), nameAr=meta.get('ar', ''),
+                                 town=meta.get('town', ''), townAr=meta.get('townAr', ''), perms=sorted(scope['parishes'][pid])))
+    out_parishes.sort(key=lambda p: (p['diocese'], p['name']))
+    # Appointments the account may see: in its parishes, its dioceses and (super admin) the system.
+    rows = c.execute("SELECT * FROM role_assignments ORDER BY created_at DESC,id").fetchall()
+    def assignment_visible(a):
+        if a['scope'] == 'parish': return a['scope_id'] in parish_ids and 'staff.manage' in scope['parishes'][a['scope_id']]
+        if a['scope'] == 'diocese': return a['scope_id'] in scope['dioceses']
+        return 'dioceses.manage' in scope['system']
+    assignments = [dict(id=a['id'], userId=a['user_id'], role=a['role'], scope=a['scope'], scopeId=a['scope_id'],
+                        grants=json.loads(a['grants']), revokes=json.loads(a['revokes']), status=a['status'], note=a['note'],
+                        source=a['source'], createdAt=a['created_at'], createdBy=a['created_by'], endedAt=a['ended_at'],
+                        perms=sorted(assignment_perms(dict(a))))
+                   for a in rows if assignment_visible(a)]
+    clergy = []
+    for row in c.execute('SELECT * FROM clergy ORDER BY name').fetchall():
+        if row['diocese'] not in scope['dioceses'] and not any(
+                ca['parish_id'] in parish_ids for ca in c.execute('SELECT parish_id FROM clergy_assignments WHERE clergy_id=?', (row['id'],))):
+            continue
+        titles = [dict(id=t['id'], title=t['title'], effectiveFrom=t['effective_from'], kind=t['kind'], note=t['note'],
+                       setBy=t['set_by'], setAt=t['set_at'])
+                  for t in c.execute('SELECT * FROM clergy_titles WHERE clergy_id=? ORDER BY set_at,id', (row['id'],))]
+        services = [dict(id=s['id'], parishId=s['parish_id'], office=s['office'], startDate=s['start_date'], endDate=s['end_date'],
+                         exception=json.loads(s['exception']) if s['exception'] else None, note=s['note'], createdAt=s['created_at'],
+                         createdBy=s['created_by'], endedBy=s['ended_by'])
+                    for s in c.execute('SELECT * FROM clergy_assignments WHERE clergy_id=? ORDER BY created_at,id', (row['id'],))]
+        clergy.append(dict(id=row['id'], userId=row['user_id'], name=row['name'], nameAr=row['name_ar'], diocese=row['diocese'],
+                           title=titles[-1]['title'] if titles else '', titles=titles, services=services))
+    def block_visible(b):
+        if b['scope'] == 'global': return 'accounts.global' in scope['system']
+        if b['scope'] == 'diocese': return b['scope_id'] in scope['dioceses']
+        return b['scope_id'] in parish_ids and 'access.manage' in scope['parishes'][b['scope_id']]
+    blocks = [dict(id=b['id'], userId=b['user_id'], scope=b['scope'], scopeId=b['scope_id'], reason=b['reason'], createdAt=b['created_at'],
+                   createdBy=b['created_by'], liftedAt=b['lifted_at'], liftedBy=b['lifted_by'], liftNote=b['lift_note'])
+              for b in c.execute('SELECT * FROM access_blocks ORDER BY created_at DESC,id').fetchall() if block_visible(b)]
+    people = user_brief(c, [a['userId'] for a in assignments] + [a['createdBy'] for a in assignments] +
+                        [b['userId'] for b in blocks] + [b['createdBy'] for b in blocks] + [b['liftedBy'] for b in blocks] +
+                        [x['userId'] for x in clergy] + [i for d in out_dioceses for i in d['bishops']] +
+                        [t['setBy'] for x in clergy for t in x['titles']])
+    return dict(system=sorted(scope['system']), dioceses=out_dioceses, parishes=out_parishes, assignments=assignments,
+                clergy=clergy, blocks=blocks, users=people,
+                catalog=dict(permissions=[dict(code=p[0], level=p[1], en=p[2], ar=p[3], fixed=FIXED_PERMISSIONS.get(p[0], ''))
+                                          for p in PERMISSIONS],
+                             templates={k: sorted(v) for k, v in ROLE_TEMPLATES.items()},
+                             titles=list(CLERGY_TITLES), offices={k: list(v) for k, v in CLERGY_OFFICES.items()},
+                             roles={k: list(v) for k, v in ROLE_TITLES.items()}))
+
+
+def setting(c, scope, scope_id, key, default):
+    row = c.execute('SELECT value FROM settings WHERE scope=? AND scope_id=? AND key=?', (scope, scope_id, key)).fetchone()
+    return row['value'] if row else default
+
+
+def empty_parish_state(seed, pid, meta, diocese_name='', diocese_ar=''):
+    """A new parish's records: empty lists and safe structural defaults for the existing views."""
+    d = copy.deepcopy(seed)
+    for k, v in list(d.items()):
+        if isinstance(v, list): d[k] = []
+        elif isinstance(v, dict): d[k] = {}
+    for k in ('RATE', 'SERVICE', 'ROTA', 'CHECKIN', 'BATCH', 'REG_FORM', 'EVACUATION', 'PREP_REQUIREMENTS'):
+        d[k] = copy.deepcopy(seed[k])
+    d['SERVICE'].update(order=[], celebrant=None, coordinator=None, venue=None)
+    d['ROTA']['teams'] = []
+    d['CHECKIN'].update(rows=[], present=0, expected=0, awaitingGuardian=0, room=None)
+    d['BATCH'].update(lines=[], counters=[])
+    d['REG_FORM'].update(fields=[], discounts=[], installments=[])
+    d['EVACUATION']['rooms'] = []
+    d['PARISH'] = copy.deepcopy(seed['PARISH'])
+    d['PARISH'].update(id=pid, name=meta['name'], nameAr=meta['ar'], town=meta['town'], townAr=meta['townAr'],
+                       rite=meta.get('rite', ''), riteAr=meta.get('riteAr', ''), eparchy=diocese_name, eparchyAr=diocese_ar,
+                       address='', addressAr='', phone='', people=0, households=0, groups=0, volunteers=0)
+    d['PARISHES'] = []
+    return d
+
+
+def clean(value, limit, message, required=True):
+    text = ' '.join(str(value or '').split())
+    require((not required or text) and len(text) <= limit, message)
+    return text
+
+
+def assign_role(c, actor, auth, user_id, role, scope, scope_id, grants=(), revokes=(), note='', source=''):
+    """Appoint someone, checking the appointer's authority: no one appoints at or above their own rank in a
+    parish, and no one hands on a permission they do not hold themselves or one fixed to another role."""
+    target = c.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    require(target is not None and target['role'] != 'disabled', 'Choose an existing account.')
+    grants = sorted({str(p) for p in grants}); revokes = sorted({str(p) for p in revokes})
+    require(all(p in PERMISSION_CODES for p in grants + revokes), 'Unknown permission.')
+    require(not any(p in FIXED_PERMISSIONS for p in grants), 'That permission belongs to one role and cannot be granted.')
+    if scope == 'parish':
+        parish = c.execute('SELECT * FROM parishes WHERE id=?', (scope_id,)).fetchone()
+        require(parish is not None, 'Parish not found.', 404)
+        require(role in {'parishadmin', 'secretary', 'treasurer', 'leader'},
+                'Choose a parish role. A priest’s access follows their clergy assignment.')
+        held = admin_perms(auth, scope_id, parish['diocese'])
+        require('staff.manage' in held, 'You cannot appoint staff in this parish.', 403)
+        require(RANK[role] > top_rank(auth, scope_id, parish['diocese']), 'You cannot appoint someone at or above your own role.', 403)
+    elif scope == 'diocese':
+        require(c.execute("SELECT 1 FROM dioceses WHERE id=? AND id<>''", (scope_id,)).fetchone(), 'Diocese not found.', 404)
+        require(role == 'diocesanadmin', 'Choose a diocesan role. The first bishop is provisioned by the super admin.')
+        held = diocese_perms(auth, scope_id)
+        require('diocese.staff' in held and top_rank(auth, did=scope_id) <= RANK['bishop'],
+                'Only the bishop or the super admin appoints diocesan admins.', 403)
+    else:
+        raise Problem(403, 'System roles are created by the setup process.')
+    final = assignment_perms(dict(role=role, grants=json.dumps(grants), revokes=json.dumps(revokes)))
+    beyond = final - {p for p in held if p not in FIXED_PERMISSIONS}
+    require(not beyond, 'You cannot give permissions you do not hold yourself: ' + ', '.join(sorted(beyond)), 403)
+    materialize_legacy(c, target)
+    require(not c.execute("SELECT 1 FROM role_assignments WHERE user_id=? AND role=? AND scope=? AND scope_id=? AND status='active'",
+                          (user_id, role, scope, scope_id)).fetchone(), 'This person already holds that role there.', 409)
+    aid = 'ra-' + secrets.token_hex(10)
+    c.execute('INSERT INTO role_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+              (aid, user_id, role, scope, scope_id, json.dumps(grants), json.dumps(revokes), 'active', note, source, NOW(), actor['id'], None, None))
+    return aid
+
+
+def can_manage_assignment(c, auth, a):
+    if a['scope'] == 'parish':
+        parish = c.execute('SELECT * FROM parishes WHERE id=?', (a['scope_id'],)).fetchone()
+        held = admin_perms(auth, a['scope_id'], parish['diocese'])
+        return 'staff.manage' in held and RANK.get(a['role'], 99) > top_rank(auth, a['scope_id'], parish['diocese']), held
+    if a['scope'] == 'diocese':
+        held = diocese_perms(auth, a['scope_id'])
+        return 'diocese.staff' in held and RANK.get(a['role'], 99) > top_rank(auth, did=a['scope_id']) and a['role'] != 'bishop', held
+    return False, set()
+
+
+def block_authority(c, auth, scope, scope_id):
+    """May this account deactivate or reactivate access at this scope?"""
+    if scope == 'global': return 'accounts.global' in system_perms(auth)
+    if scope == 'diocese': return 'access.manage' in diocese_perms(auth, scope_id) and top_rank(auth, did=scope_id) <= RANK['diocesanadmin']
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (scope_id,)).fetchone()
+    return parish is not None and 'access.manage' in admin_perms(auth, scope_id, parish['diocese'])
+
+
+def admin_action(c, u, q):
+    auth = authority(c, u)
+    op, at = q.get('op'), NOW()
+    if op == 'findUser':
+        scope, _, _ = admin_scope(c, auth)
+        require(scope['system'] or scope['dioceses'] or scope['parishes'], 'Administration is not part of your account.', 403)
+        needle = str(q.get('query') or '').strip()
+        require(3 <= len(needle) <= 120, 'Enter the person’s exact username, email address or phone number.')
+        row = c.execute('SELECT id,username,name FROM users WHERE username=? AND role<>?', (login_name(needle), 'disabled')).fetchone()
+        return dict(user=dict(id=row['id'], username=row['username'], name=row['name']) if row else None)
+    if op == 'createDiocese':
+        require('dioceses.manage' in system_perms(auth), 'Only the super admin creates dioceses.', 403)
+        name = clean(q.get('name'), 120, 'Enter the diocese’s name.')
+        name_ar = clean(q.get('nameAr'), 120, 'Enter the Arabic name.', required=False)
+        did = slug(name, 'dio')
+        require(not c.execute('SELECT 1 FROM dioceses WHERE id=?', (did,)).fetchone(), 'A diocese with this name already exists.', 409)
+        c.execute('INSERT INTO dioceses(id,name,metadata) VALUES(?,?,?)', (did, name, json.dumps(dict(ar=name_ar, createdAt=at, createdBy=u['id']))))
+        audit(c, u, None, 'diocese.created', {'diocese': did})
+        return dict(id=did)
+    if op == 'provisionBishop':
+        require('dioceses.manage' in system_perms(auth), 'Only the super admin provisions a bishop account.', 403)
+        did = q.get('diocese')
+        require(c.execute("SELECT 1 FROM dioceses WHERE id=? AND id<>''", (did,)).fetchone(), 'Diocese not found.', 404)
+        require(not c.execute("SELECT 1 FROM role_assignments WHERE role='bishop' AND scope='diocese' AND scope_id=? AND status='active'", (did,)).fetchone(),
+                'This diocese already has a bishop. Provisioning is for the first bishop account only.', 409)
+        name = clean(q.get('name'), 120, 'Enter the bishop’s name.')
+        name_ar = clean(q.get('nameAr'), 120, 'Enter the Arabic name.', required=False)
+        username = str(q.get('username') or '').strip()
+        require(re.fullmatch(r'[a-z0-9][a-z0-9._-]{2,40}', username) is not None, 'Choose a username of 3–40 lowercase letters, digits, dots or dashes.')
+        require(not c.execute('SELECT 1 FROM users WHERE username=?', (username,)).fetchone(), 'This username is taken.', 409)
+        password = secrets.token_urlsafe(12)
+        user_id = 'u-' + secrets.token_hex(8)
+        c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id, username, name, 'user', did, None, password_hash(password)))
+        cid = 'cl-' + secrets.token_hex(8)
+        c.execute('INSERT INTO clergy VALUES(?,?,?,?,?,?,?)', (cid, user_id, name, name_ar, did, at, u['id']))
+        c.execute('INSERT INTO clergy_titles VALUES(?,?,?,?,?,?,?,?)',
+                  (cid + '-t0', cid, 'Bishop', at[:10], 'initial', 'Set when the account was provisioned.', u['id'], at))
+        c.execute('INSERT INTO role_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  ('ra-' + secrets.token_hex(10), user_id, 'bishop', 'diocese', did, '[]', '[]', 'active', '', 'provision', at, u['id'], None, None))
+        audit(c, u, None, 'bishop.provisioned', {'diocese': did, 'user': user_id})
+        return dict(userId=user_id, username=username, temporaryPassword=password)
+    if op == 'createParish':
+        did = q.get('diocese')
+        require(isinstance(did, str) and c.execute("SELECT 1 FROM dioceses WHERE id=? AND id<>''", (did,)).fetchone(), 'Choose a diocese.', 404)
+        require('parishes.create' in diocese_perms(auth, did), 'You cannot create parishes in this diocese.', 403)
+        meta = dict(name=clean(q.get('name'), 120, 'Enter the parish’s name.'),
+                    ar=clean(q.get('nameAr'), 120, 'Enter the Arabic name.', required=False),
+                    town=clean(q.get('town'), 80, 'Enter the town.'),
+                    townAr=clean(q.get('townAr'), 80, 'Enter the town in Arabic.', required=False),
+                    rite=clean(q.get('rite'), 60, 'Enter the rite.', required=False),
+                    riteAr=clean(q.get('riteAr'), 60, 'Enter the rite in Arabic.', required=False))
+        pid = slug(meta['name'] + ' ' + meta['town'], 'p')
+        require(not c.execute('SELECT 1 FROM parishes WHERE id=?', (pid,)).fetchone(), 'A parish with this name already exists in this town.', 409)
+        meta['id'] = pid
+        c.execute('INSERT INTO parishes VALUES(?,?,?)', (pid, did, json.dumps(meta, ensure_ascii=False)))
+        for category in CONCERN_CATEGORIES:
+            c.execute('INSERT OR IGNORE INTO complaint_categories VALUES(?,?,1)', (pid, category))
+        seed = json.loads((ROOT / 'backend' / 'seed.json').read_text(encoding='utf-8'))
+        drow = c.execute('SELECT * FROM dioceses WHERE id=?', (did,)).fetchone()
+        d = migrate_state(empty_parish_state(seed, pid, meta, drow['name'], json.loads(drow['metadata'] or '{}').get('ar', '')))
+        validate(d)
+        c.execute('INSERT INTO states VALUES(?,1,?)', (pid, json.dumps(d)))
+        sync_relationships(c, pid, d)
+        audit(c, u, pid, 'parish.created', {'diocese': did})
+        return dict(id=pid)
+    if op == 'assign':
+        aid = assign_role(c, u, auth, q.get('userId'), q.get('role'), q.get('scope'), q.get('scopeId'),
+                          q.get('grants') or [], q.get('revokes') or [], clean(q.get('note'), 300, '', required=False))
+        audit(c, u, q.get('scopeId') if q.get('scope') == 'parish' else None, 'role.assigned',
+              {'assignment': aid, 'user': q.get('userId'), 'role': q.get('role'), 'scope': q.get('scope'), 'scopeId': q.get('scopeId')})
+        return dict(id=aid)
+    if op in {'adjust', 'endAssignment'}:
+        a = c.execute("SELECT * FROM role_assignments WHERE id=? AND status='active'", (q.get('id'),)).fetchone()
+        require(a is not None, 'Appointment not found.', 404)
+        allowed, held = can_manage_assignment(c, auth, a)
+        require(allowed, 'This appointment is outside your authority.', 403)
+        require(a['user_id'] != u['id'], 'You cannot change your own appointment.', 403)
+        if op == 'endAssignment':
+            require(a['role'] != 'priest', 'End the clergy assignment instead; the priest’s access follows it.')
+            c.execute("UPDATE role_assignments SET status='ended',ended_at=?,ended_by=? WHERE id=?", (at, u['id'], a['id']))
+            audit(c, u, a['scope_id'] if a['scope'] == 'parish' else None, 'role.ended', {'assignment': a['id']})
+            return dict(ok=True)
+        grants = sorted({str(p) for p in q.get('grants') or []}); revokes = sorted({str(p) for p in q.get('revokes') or []})
+        require(all(p in PERMISSION_CODES for p in grants + revokes), 'Unknown permission.')
+        require(not any(p in FIXED_PERMISSIONS for p in grants + revokes), 'Fixed permissions stay with their role and cannot be changed.')
+        final = assignment_perms(dict(role=a['role'], grants=json.dumps(grants), revokes=json.dumps(revokes)))
+        changed = final ^ assignment_perms(dict(a))
+        beyond = changed - {p for p in held if p not in FIXED_PERMISSIONS}
+        require(not beyond, 'You cannot change permissions you do not hold yourself: ' + ', '.join(sorted(beyond)), 403)
+        c.execute('UPDATE role_assignments SET grants=?,revokes=? WHERE id=?', (json.dumps(grants), json.dumps(revokes), a['id']))
+        audit(c, u, a['scope_id'] if a['scope'] == 'parish' else None, 'role.permissions', {'assignment': a['id'], 'grants': grants, 'revokes': revokes})
+        return dict(ok=True)
+    if op == 'addClergy':
+        did = q.get('diocese')
+        require(isinstance(did, str) and 'clergy.assign' in diocese_perms(auth, did), 'You cannot register clergy in this diocese.', 403)
+        title = q.get('title')
+        require(title in CLERGY_TITLES, 'Choose a title.')
+        user_id = q.get('userId') or None
+        if user_id:
+            require(c.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone(), 'Account not found.', 404)
+            require(not c.execute('SELECT 1 FROM clergy WHERE user_id=?', (user_id,)).fetchone(), 'This account is already linked to a clergy record.', 409)
+        cid = 'cl-' + secrets.token_hex(8)
+        c.execute('INSERT INTO clergy VALUES(?,?,?,?,?,?,?)', (cid, user_id, clean(q.get('name'), 120, 'Enter the name.'),
+                                                             clean(q.get('nameAr'), 120, '', required=False), did, at, u['id']))
+        c.execute('INSERT INTO clergy_titles VALUES(?,?,?,?,?,?,?,?)',
+                  (cid + '-t0', cid, title, str(q.get('effectiveFrom') or at[:10])[:10], 'initial', 'Recorded when the clergy record was created.', u['id'], at))
+        audit(c, u, None, 'clergy.added', {'clergy': cid, 'diocese': did})
+        return dict(id=cid)
+    if op == 'setClergyTitle':
+        row = c.execute('SELECT * FROM clergy WHERE id=?', (q.get('clergyId'),)).fetchone()
+        require(row is not None, 'Clergy record not found.', 404)
+        require(any(a['role'] == 'bishop' and a['scope'] == 'diocese' and a['scope_id'] == row['diocese'] for a in auth['assignments']),
+                'Only the bishop of this diocese changes a clergy title.', 403)
+        title = q.get('title')
+        require(title in CLERGY_TITLES, 'Choose a title.')
+        effective = str(q.get('effectiveFrom') or '')[:10]
+        require(iso_date(effective), 'Enter the date the title takes effect.')
+        c.execute('INSERT INTO clergy_titles VALUES(?,?,?,?,?,?,?,?)', ('ct-' + secrets.token_hex(8), row['id'], title, effective, 'change',
+                                                                      clean(q.get('note'), 300, '', required=False), u['id'], at))
+        audit(c, u, None, 'clergy.title', {'clergy': row['id'], 'title': title})
+        return dict(ok=True)
+    if op == 'linkClergyAccount':
+        row = c.execute('SELECT * FROM clergy WHERE id=?', (q.get('clergyId'),)).fetchone()
+        require(row is not None and 'clergy.assign' in diocese_perms(auth, row['diocese']), 'Clergy record outside your authority.', 403)
+        require(not row['user_id'], 'This clergy record already has an account.', 409)
+        user = c.execute('SELECT * FROM users WHERE id=?', (q.get('userId'),)).fetchone()
+        require(user is not None and not c.execute('SELECT 1 FROM clergy WHERE user_id=?', (user['id'],)).fetchone(), 'Choose an account not linked to clergy.')
+        c.execute('UPDATE clergy SET user_id=? WHERE id=?', (user['id'], row['id']))
+        audit(c, u, None, 'clergy.account', {'clergy': row['id'], 'user': user['id']})
+        return dict(ok=True)
+    if op == 'assignClergy':
+        row = c.execute('SELECT * FROM clergy WHERE id=?', (q.get('clergyId'),)).fetchone()
+        parish = c.execute('SELECT * FROM parishes WHERE id=?', (q.get('parishId'),)).fetchone()
+        require(row is not None and parish is not None, 'Choose a clergy member and a parish.', 404)
+        require('clergy.assign' in diocese_perms(auth, parish['diocese']), 'You cannot assign clergy to this parish.', 403)
+        office = q.get('office')
+        require(office in CLERGY_OFFICES, 'Choose the office.')
+        start = str(q.get('startDate') or '')[:10]
+        require(iso_date(start), 'Enter the start date.')
+        exception = None
+        if row['diocese'] != parish['diocese']:
+            reason = clean(q.get('exceptionReason'), 500, 'A clergy member from another diocese needs a recorded exception: give the reason.')
+            require(any(a['role'] == 'bishop' and a['scope'] == 'diocese' and a['scope_id'] == parish['diocese'] for a in auth['assignments'])
+                    or 'dioceses.manage' in system_perms(auth),
+                    'Only the receiving diocese’s bishop or the super admin authorises service across dioceses.', 403)
+            exception = json.dumps(dict(reason=reason, homeDiocese=row['diocese'], authorizedBy=u['id'], authorizedAt=at))
+        titles = c.execute('SELECT title FROM clergy_titles WHERE clergy_id=? ORDER BY set_at DESC,id DESC LIMIT 1', (row['id'],)).fetchone()
+        if office in PRIESTLY_OFFICES:
+            require(titles and titles['title'] not in {'Deacon'}, 'A priestly office needs a clergy member ordained a priest.')
+        sid = 'ca-' + secrets.token_hex(8)
+        c.execute('INSERT INTO clergy_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (sid, row['id'], parish['id'], office, start, None, exception, clean(q.get('note'), 300, '', required=False), u['id'], at, None, None))
+        if row['user_id'] and office in PRIESTLY_OFFICES:
+            target = c.execute('SELECT * FROM users WHERE id=?', (row['user_id'],)).fetchone()
+            materialize_legacy(c, target)
+            if not c.execute("SELECT 1 FROM role_assignments WHERE user_id=? AND role='priest' AND scope='parish' AND scope_id=? AND status='active'",
+                             (row['user_id'], parish['id'])).fetchone():
+                c.execute('INSERT INTO role_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                          ('ra-' + secrets.token_hex(10), row['user_id'], 'priest', 'parish', parish['id'], '[]', '[]', 'active',
+                           'Follows clergy assignment ' + sid, 'clergy', at, u['id'], None, None))
+        audit(c, u, parish['id'], 'clergy.assigned', {'clergy': row['id'], 'assignment': sid, 'office': office})
+        return dict(id=sid)
+    if op == 'endClergyAssignment':
+        s = c.execute('SELECT * FROM clergy_assignments WHERE id=? AND end_date IS NULL', (q.get('id'),)).fetchone()
+        require(s is not None, 'Assignment not found.', 404)
+        parish = c.execute('SELECT * FROM parishes WHERE id=?', (s['parish_id'],)).fetchone()
+        require('clergy.assign' in diocese_perms(auth, parish['diocese']), 'This assignment is outside your authority.', 403)
+        end = str(q.get('endDate') or '')[:10]
+        require(iso_date(end) and end >= (s['start_date'] or '0000'), 'Enter an end date after the start.')
+        c.execute('UPDATE clergy_assignments SET end_date=?,ended_by=?,ended_at=? WHERE id=?', (end, u['id'], at, s['id']))
+        row = c.execute('SELECT * FROM clergy WHERE id=?', (s['clergy_id'],)).fetchone()
+        if row['user_id'] and s['office'] in PRIESTLY_OFFICES and not c.execute(
+                "SELECT 1 FROM clergy_assignments WHERE clergy_id=? AND parish_id=? AND end_date IS NULL AND id<>? AND office IN ('parish-priest','assistant-priest')",
+                (row['id'], s['parish_id'], s['id'])).fetchone():
+            c.execute("UPDATE role_assignments SET status='ended',ended_at=?,ended_by=? WHERE user_id=? AND role='priest' AND scope='parish' AND scope_id=? AND status='active'",
+                      (at, u['id'], row['user_id'], s['parish_id']))
+        audit(c, u, s['parish_id'], 'clergy.assignment-ended', {'assignment': s['id']})
+        return dict(ok=True)
+    if op == 'block':
+        scope, scope_id = q.get('scope'), q.get('scopeId') or ''
+        require(scope in {'parish', 'diocese', 'global'}, 'Choose where to deactivate access.')
+        require(block_authority(c, auth, scope, scope_id), 'Deactivating access there is outside your authority.', 403)
+        target = c.execute('SELECT * FROM users WHERE id=?', (q.get('userId'),)).fetchone()
+        require(target is not None, 'Account not found.', 404)
+        require(target['id'] != u['id'], 'You cannot deactivate your own access.', 403)
+        target_auth = authority(c, target)
+        if scope == 'global':
+            require('dioceses.manage' not in system_perms(target_auth), 'Another super admin’s account cannot be deactivated here.', 403)
+        else:
+            did = scope_id if scope == 'diocese' else c.execute('SELECT diocese FROM parishes WHERE id=?', (scope_id,)).fetchone()['diocese']
+            mine = top_rank(auth, scope_id if scope == 'parish' else None, did)
+            require(top_rank(target_auth, scope_id if scope == 'parish' else None, did) > mine,
+                    'You cannot deactivate someone at or above your own role.', 403)
+        reason = clean(q.get('reason'), 500, 'Give the reason for deactivating access.')
+        bid = 'blk-' + secrets.token_hex(8)
+        c.execute('INSERT INTO access_blocks VALUES(?,?,?,?,?,?,?,?,?,?)', (bid, target['id'], scope, scope_id, reason, at, u['id'], None, None, ''))
+        if scope == 'global': c.execute('DELETE FROM sessions WHERE user_id=?', (target['id'],))
+        audit(c, u, scope_id if scope == 'parish' else None, 'access.deactivated', {'user': target['id'], 'scope': scope, 'scopeId': scope_id})
+        return dict(id=bid)
+    if op == 'unblock':
+        b = c.execute('SELECT * FROM access_blocks WHERE id=? AND lifted_at IS NULL', (q.get('id'),)).fetchone()
+        require(b is not None, 'Deactivation not found.', 404)
+        require(block_authority(c, auth, b['scope'], b['scope_id']), 'This deactivation was made above your authority; only that level can lift it.', 403)
+        c.execute('UPDATE access_blocks SET lifted_at=?,lifted_by=?,lift_note=? WHERE id=?',
+                  (at, u['id'], clean(q.get('note'), 300, '', required=False), b['id']))
+        audit(c, u, b['scope_id'] if b['scope'] == 'parish' else None, 'access.reactivated', {'block': b['id']})
+        return dict(ok=True)
+    raise Problem(400, 'Unknown administration action.')
+
+
+def provision_demo_super_admin(c):
+    """Local demonstration only (python3 server.py --demo-super-admin): a publicly known password."""
+    row = c.execute("SELECT * FROM users WHERE username='super-admin'").fetchone()
+    user_id = row['id'] if row else 'u-superadmin-demo'
+    if row is None:
+        c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)', (user_id, 'super-admin', 'Super admin (demo)', 'user', '', None, password_hash('123456789')))
+    if not c.execute("SELECT 1 FROM role_assignments WHERE user_id=? AND role='superadmin' AND status='active'", (user_id,)).fetchone():
+        c.execute('INSERT INTO role_assignments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  ('ra-superadmin-demo', user_id, 'superadmin', 'system', '', '[]', '[]', 'active', 'Local demonstration setup', 'setup', NOW(), None, None, None))
+
+
 def oversight(c, u, pid=None):
     """A separate projection: no private notes, contact data, or parish editing model."""
-    require(u['role'] == 'bishop', 'Bishop oversight access required.', 403)
+    auth = authority(c, u)
+    require(any(a['role'] == 'bishop' and a['scope'] == 'diocese' for a in auth['assignments']), 'Bishop oversight access required.', 403)
     result = []
-    for parish in parishes(c, u):
+    for parish in parishes(c, u, auth):
+        if parish['roleCode'] != 'bishop' and not any(a['role'] == 'bishop' and a['scope'] == 'diocese' and a['scope_id'] == parish['diocese']
+                                                      for a in auth['assignments']):
+            continue
         if pid and parish['id'] != pid: continue
         d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (parish['id'],)).fetchone()['data'])
         counts = dict(people=len(d['PEOPLE']), households=len(d['HOUSEHOLDS']), groups=len(d['GROUPS']),
@@ -527,7 +1217,7 @@ def oversight(c, u, pid=None):
                                            attendance=dict(present=present, recorded=recorded,
                                                            percentage=round(100 * present / recorded) if recorded else None),
                                            roster=[dict(id=r['p'], **name(r['p'])) for r in detail.get('roster', [])]))
-            actors = {r['id']: r['name'] for r in c.execute('SELECT id,name FROM users WHERE diocese=?', (u['diocese'],))}
+            actors = {r['id']: r['name'] for r in c.execute('SELECT id,name FROM users WHERE id IN (SELECT actor FROM audit WHERE parish_id=?)', (pid,))}
             item['activity'] = [dict(at=r['at'], action=r['action'], actor=actors.get(r['actor'], 'System'))
                                 for r in c.execute('SELECT at,action,actor FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 50', (pid,))]
         result.append(item)
@@ -536,28 +1226,37 @@ def oversight(c, u, pid=None):
 
 
 def visible(c, u, pid, d):
-    require(u['role'] not in {'bishop', 'member'}, 'Use your dedicated portal.', 403)
+    u = parish_user(c, u, pid)
+    require(u['role'] not in {'bishop', 'member', 'follower'}, 'Use your dedicated portal.', 403)
+    perms = perms_of(u)
     d = copy.deepcopy(d)
     all_people = d['PEOPLE']
     d['PARISH'].update(people=len(d['PEOPLE']), households=len(d['HOUSEHOLDS']), groups=len(d['GROUPS']))
     d['PARISHES'] = parishes(c, u)
-    d['MEMBER_REQUESTS'] = office_member_requests(c, pid, d) if u['role'] in CLERGY | {'secretary'} else []
-    d['ACCOUNTS'] = {r['person_id']: dict(username=r['username'], role=r['role']) for r in c.execute(
-        'SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
-        'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', (pid,))} if u['role'] in CLERGY | {'secretary'} else {}
-    if u['role'] not in CLERGY:
+    d['MEMBER_REQUESTS'] = office_member_requests(c, pid, d) if 'requests.manage' in perms else []
+    d['ACCOUNTS'] = {}
+    if 'people.manage' in perms:
+        d['ACCOUNTS'] = {r['person_id']: dict(username=r['username'], role=r['role']) for r in c.execute(
+            'SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
+            'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', (pid,))}
+        for r in c.execute("SELECT u.username,l.person_id FROM parish_links l JOIN users u ON u.id=l.user_id "
+                           "WHERE l.parish_id=? AND l.status='active' AND l.person_id IS NOT NULL ORDER BY u.username", (pid,)):
+            d['ACCOUNTS'].setdefault(r['person_id'], dict(username=r['username'], role='member'))
+    if 'notes.pastoral' not in perms:
         d['NOTES'] = []
-        d['AUDIT'] = []
+    if 'settings.manage' not in perms:
         for k in ('SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS'):
             d[k] = []
         d['PARISH'].pop('apiKey', None)
+    if 'audit.view' not in perms:
+        d['AUDIT'] = []
     else:
-        actors = {row['id']: row for row in c.execute('SELECT id,name,person_id FROM users WHERE diocese=?', (u['diocese'],))}
+        actors = {row['id']: row for row in c.execute('SELECT id,name,person_id FROM users WHERE id IN (SELECT actor FROM audit WHERE parish_id=?)', (pid,))}
         d['AUDIT'] = [dict(at=r['at'], who=actors[r['actor']]['person_id'] if r['actor'] in actors else None,
                            actorName=actors[r['actor']]['name'] if r['actor'] in actors else 'System',
                            what=r['action'], whatAr=r['action'], kind='approve' if 'approve' in r['action'] else 'create')
                       for r in c.execute('SELECT * FROM audit WHERE parish_id=? ORDER BY id DESC LIMIT 500', (pid,))]
-    if u['role'] not in CLERGY | {'treasurer'}:
+    if 'finance.view' not in perms:
         for k in FINANCE:
             d[k] = [] if isinstance(d.get(k), list) else {'lines': [], 'status': 'unavailable', 'counters': []}
     if u['role'] == 'treasurer':
@@ -855,27 +1554,27 @@ def validate(d):
                     and source['status'] in {'registered', 'issued'}, 'Certificate source must be an official register entry for the same person.')
 
 
-def writable(role, key):
-    if role in {'bishop', 'member'}: return False
+def writable(u, key):
+    """May this account change one part of the parish workspace? Each part needs one permission;
+    a ministry leader changes only their own ministry's parts, checked again in save_patch."""
+    role = u['role']
+    if role in {'bishop', 'member', 'follower'}: return False
     if key in READONLY: return False
-    if role in CLERGY: return True
     if key in {'NOTIFICATIONS', 'PREFS'}: return True
-    if role == 'secretary': return key in OFFICE
-    if role == 'treasurer': return key in FINANCE | {'RATE'}
-    if role == 'leader': return key in {'GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS', 'CHECKIN', 'PICKUP'}
-    return False
+    if role == 'leader' and key in {'GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS', 'CHECKIN', 'PICKUP'}: return True
+    return KEY_PERMS.get(key, 'settings.manage') in perms_of(u)
 
 
 def save_patch(c, u, pid, payload):
-    access(c, u, pid)
-    require(u['role'] not in {'bishop', 'member'}, 'Parish staff access required.', 403)
+    u = parish_user(c, u, pid)
+    require(u['role'] not in {'bishop', 'member', 'follower'}, 'Parish staff access required.', 403)
     row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
     require(payload.get('revision') == row['revision'], 'Another user changed this parish. Reload before saving.', 409)
     old = json.loads(row['data']); d = copy.deepcopy(old)
     changes = payload.get('changes')
     require(isinstance(changes, dict), 'Expected changes.')
     for key, value in changes.items():
-        require(key in d and writable(u['role'], key), 'Your role cannot change ' + key, 403)
+        require(key in d and writable(u, key), 'Your role cannot change ' + key, 403)
         require(type(value) is type(d[key]), 'Invalid collection type: ' + key)
         if key == 'GROUP_DETAIL' and u['role'] == 'leader':
             permitted = {g['id'] for g in old['GROUPS'] if g.get('leader') == u['person_id'] or g.get('assistant') == u['person_id']}
@@ -1125,8 +1824,9 @@ def xlsx_preview(encoded):
 
 
 def workflow(c, u, pid, q):
-    access(c, u, pid)
-    require(u['role'] in CLERGY | {'secretary'}, 'Office access required.', 403)
+    u = parish_user(c, u, pid)
+    require(u['role'] in CLERGY | {'secretary'} and perms_of(u) & {'sacraments.manage', 'requests.manage', 'facilities.manage'},
+            'Office access required.', 403)
     row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
     require(q.get('revision') == row['revision'], 'Record changed. Reload before continuing.', 409)
     d = json.loads(row['data']); action = q.get('action'); sid = q.get('id')
@@ -1561,8 +2261,9 @@ def complaint_log(c, concern_id, actor_id, action, detail=''):
 
 
 def member_context(c, u, pid):
-    access(c, u, pid)
-    require(u['role'] != 'bishop', 'This portal is not available to a bishop account.', 403)
+    u = parish_user(c, u, pid)
+    require(u['role'] not in {'bishop', 'follower'}, 'This portal is not available to a bishop account.' if u['role'] == 'bishop'
+            else 'Ask to become a member of this parish to use its member portal.', 403)
     d = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()['data'])
     person = next((p for p in d['PEOPLE'] if p['id'] == u['person_id']), None) if u['person_id'] else None
     if u['role'] == 'member':
@@ -1945,6 +2646,7 @@ def reviewer_conflict(u, person, concern):
 
 
 def member_view(c, u, pid):
+    u = parish_user(c, u, pid)
     d, person, gids = member_context(c, u, pid)
     private = member_private(c, u, pid)
     d['_viewer'] = person['id']
@@ -2070,6 +2772,7 @@ def member_view(c, u, pid):
 
 
 def member_action(c, u, pid, q):
+    u = parish_user(c, u, pid)
     d, person, gids = member_context(c, u, pid)
     private = member_private(c, u, pid)
     op = q.get('op')
@@ -2584,7 +3287,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                              'content': content, 'events': events, 'posts': posts})
                 if path == '/api/login' and self.command == 'POST':
                     u = c.execute('SELECT * FROM users WHERE username=?', (login_name(q.get('username')),)).fetchone()
-                    require(u is not None and u['role'] in ROLES and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
+                    require(login_allowed(c, u) and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
                     return self.start_session(c, u['id'])
                 if path == '/api/signup' and self.command == 'POST':
                     return self.start_session(c, signup(c, q))
@@ -2593,25 +3296,38 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()
                 require(session is not None, 'Sign in to continue.', 401)
                 u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
-                require(u is not None and u['role'] in ROLES, 'Sign in to continue.', 401)
+                require(login_allowed(c, u), 'Sign in to continue.', 401)
                 if self.command != 'GET': require(hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), session['csrf']), 'Invalid request token.', 403)
                 if path == '/api/session' and self.command == 'GET':
-                    return self.reply(200, dict(user={k: u[k] for k in ('id', 'username', 'name', 'role', 'person_id')}, csrf=session['csrf'], parishes=parishes(c, u)))
+                    auth = authority(c, u)
+                    return self.reply(200, dict(user={k: u[k] for k in ('id', 'username', 'name', 'role', 'person_id')}, csrf=session['csrf'],
+                                                parishes=parishes(c, u, auth), authority=session_authority(c, u, auth)))
                 if path == '/api/logout' and self.command == 'POST':
                     c.execute('DELETE FROM sessions WHERE token=?', (session['token'],)); c.commit()
                     return self.reply(200, {'ok': True}, 'pl_session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/')
-                require(u['role'] != 'bishop' or self.command == 'GET', 'Bishop oversight is read-only.', 403)
                 if path == '/api/oversight' and self.command == 'GET':
                     return self.reply(200, {'parishes': oversight(c, u)})
+                if path == '/api/admin':
+                    if self.command == 'GET': return self.reply(200, admin_view(c, u))
+                    if self.command == 'POST':
+                        result = admin_action(c, u, q); c.commit(); return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
                 if path == '/api/assignments':
-                    require(u['role'] == 'bishop', 'Archdiocese administration is restricted to the bishop.', 403)
-                    require(self.command == 'GET', 'Bishop oversight is read-only.', 403)
-                    priests = [dict(id=x['id'], name=x['name'], parishes=[r[0] for r in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (x['id'],))]) for x in c.execute("SELECT * FROM users WHERE role='priest' AND diocese=?", (u['diocese'],)).fetchall()]
-                    return self.reply(200, {'priests': priests, 'parishes': parishes(c, u)})
+                    require(self.command == 'GET', 'Method not allowed.', 405)
+                    auth = authority(c, u)
+                    dioceses = [a['scope_id'] for a in auth['assignments'] if a['role'] == 'bishop' and a['scope'] == 'diocese']
+                    require(dioceses, 'Archdiocese administration is restricted to the bishop.', 403)
+                    in_diocese = {r['id'] for r in c.execute(f'SELECT id FROM parishes WHERE diocese IN ({",".join("?" * len(dioceses))})', dioceses)}
+                    priests = {}
+                    for a in c.execute("SELECT r.user_id,r.scope_id,u.name FROM role_assignments r JOIN users u ON u.id=r.user_id "
+                                       "WHERE r.role='priest' AND r.scope='parish' AND r.status='active' ORDER BY u.name,r.scope_id").fetchall():
+                        if a['scope_id'] in in_diocese:
+                            priests.setdefault(a['user_id'], dict(id=a['user_id'], name=a['name'], parishes=[]))['parishes'].append(a['scope_id'])
+                    return self.reply(200, {'priests': list(priests.values()), 'parishes': parishes(c, u, auth)})
                 parts = path.strip('/').split('/')
                 if len(parts) == 5 and parts[:2] == ['api', 'parishes'] and parts[3] == 'files':
                     pid, file_id = parts[2], parts[4]
-                    access(c, u, pid)
+                    u = parish_user(c, u, pid)
                     row = c.execute('SELECT * FROM uploaded_files WHERE parish_id=? AND id=?', (pid, file_id)).fetchone()
                     require(row is not None, 'File not found.', 404)
                     file_access(c, u, pid, row['scope'], row['owner_id'], self.command == 'DELETE')
@@ -2624,7 +3340,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         c.commit(); return self.reply(200, {'ok': True})
                     raise Problem(405, 'Method not allowed.')
                 require(len(parts) == 4 and parts[:2] == ['api', 'parishes'], 'Endpoint not found.', 404)
-                pid, endpoint = parts[2:]; access(c, u, pid)
+                pid, endpoint = parts[2:]; u = parish_user(c, u, pid)
+                require(u['role'] != 'bishop' or (endpoint == 'oversight' and self.command == 'GET'),
+                        'Bishop oversight of a parish is read-only.', 403)
                 if endpoint == 'files':
                     if self.command == 'GET':
                         query = parse_qs(urlsplit(self.path).query)
@@ -2696,7 +3414,13 @@ def main():
     parser.add_argument('--grant-complaints', help='Username to grant explicit complaint reviewer permissions')
     parser.add_argument('--complaint-permission', action='append', default=[],
                         help='Review, Assign, Respond, Resolve, ViewIdentity, ViewSensitive or ManageCategories')
+    parser.add_argument('--demo-super-admin', action='store_true',
+                        help='LOCAL DEMONSTRATION ONLY: create the super-admin account with the publicly known password 123456789')
     args = parser.parse_args(); init_db()
+    if args.demo_super_admin:
+        with connect() as c: provision_demo_super_admin(c)
+        print('Demonstration super admin ready: username super-admin, password 123456789.')
+        print('This password is public. Never use --demo-super-admin on a server other people can reach.')
     require(sum(bool(x) for x in (args.create_user, args.assign_user, args.grant_complaints)) <= 1, 'Choose one account operation.')
     if args.grant_complaints:
         require(args.parish and args.complaint_permission, 'Specify a parish and at least one complaint permission.')

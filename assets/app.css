@@ -1502,3 +1502,28 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .scheme-where li{display:flex;align-items:center;gap:10px;font:400 14px/20px var(--sans)}
 [dir=rtl] .sp-eyebrow{letter-spacing:0}
 @media (max-width:560px){.scheme-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.scheme-sample{height:64px}}
+
+/* ---------- Administration ---------- */
+.admin-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.admin-list li{display:flex;align-items:flex-start;gap:10px;font:400 14px/20px var(--sans)}
+.admin-list li > span{flex:1;min-width:0}
+.admin-list li b{display:block;font-weight:500}
+.admin-list li small{display:block;color:var(--text-2);font-size:13px;line-height:18px}
+.admin-found:empty{display:none}
+.admin-found{margin-top:8px}
+.admin-person{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-input);background:var(--surface-soft)}
+.admin-person b{display:block;font:500 14px/20px var(--sans)}
+.admin-person small{display:block;color:var(--text-2);font-size:12px}
+.admin-template{margin:4px 0 14px}
+.perm-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.perm-list li{display:flex;align-items:center;gap:8px;font:400 13px/18px var(--sans);color:var(--text)}
+.perm-grid{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.perm-row{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border-radius:var(--r-input);cursor:pointer}
+.perm-row:hover{background:var(--surface-soft)}
+.perm-row.locked{cursor:default;opacity:.78}
+.perm-row input{margin-top:3px;width:17px;height:17px;accent-color:var(--primary);flex:none}
+.perm-row > span{flex:1;min-width:0}
+.perm-row b{display:block;font:500 14px/20px var(--sans)}
+.perm-row small{display:block;color:var(--text-2);font-size:12px;line-height:16px}
+.admin-inline-form{margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface-soft)}
+.admin-inline-form .btn{margin-top:4px}

@@ -416,7 +416,7 @@ export const VERBS = {
                         .map(x => [x.lat, x.ar, x.town, x.phone, x.status])];
                     download(`parishlife-selected-${rows.length - 1}.csv`, csv(rows));
                     ok(L('Exported', 'تمّ التصدير'), rows.length === 2 ? L('1 row', 'صفّ واحد') : `${rows.length - 1} ${L('rows', 'صفوف')}`); },
-  'bulk-archive': () => { const ids = picked(); if (!ids.length) return toast(L('Tick the people to archive first', 'حدّد الأشخاص أولاً'), '', 'warning'); F.archivePeople(ids); },
+  'bulk-archive': () => { const ids = picked(); if (!ids.length) return toast(L('Tick the people to deactivate first', 'حدّد الأشخاص أولاً'), '', 'warning'); F.archivePeople(ids); },
 
   /* eparchy, workflows, reports, settings ------------------------- */
   'eparchy-msg':  () => F.compose('eparchy', { title: L('Eparchy announcement', 'إعلان أبرشي') }),
