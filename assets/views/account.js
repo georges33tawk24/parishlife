@@ -44,7 +44,7 @@ export function deliveryWords(delivery, kind) {
 const deliveryTone = d => ({ sent: 'success', verified: 'success', failed: 'danger', 'not-configured': 'warning', console: 'info', sending: 'warning' }[d] || '');
 
 /* ---------- page ---------- */
-export function account() {
+export function account(section = '') {
   if (!state.data && !state.loading && !state.error) load();
   const head = pageHead({ title: L('My account', 'حسابي'),
     sub: L('Your ParishLife account belongs to you, not to a parish. Parishes you join or follow appear under Your places.',
@@ -56,6 +56,7 @@ export function account() {
       ${panel(L('Your name', 'اسمك'), nameForm(a))}
       ${panel(L('Your places', 'أماكنك'), places())}
     </div>
+    <div id="acct-profile">${panel(L('Your profile', 'ملفك'), profileForm(a))}</div>
     ${panel(L('Email addresses and phone numbers', 'البريد الإلكتروني وأرقام الهاتف'), contacts(a))}
     <div class="grid g2 account-grid">
       ${panel(L('Password', 'كلمة المرور'), password(a))}
@@ -95,9 +96,47 @@ function places() {
     ...(au.superadmin ? [[L('Super admin', 'المدير العام'), L('All of ParishLife', 'كامل ParishLife')]] : []),
     ...(au.dioceses || []).map(x => [ROLES[x.role] ? L(ROLES[x.role].en, ROLES[x.role].ar) : x.role, L(x.name, x.nameAr || x.name)]),
     ...session.parishes.map(p => [L(p.role, p.roleAr), L(p.name, p.ar)])];
-  return list.length ? `<ul class="admin-list">${list.map(([r, p]) => `<li>${icon('portal', 16, 'dimmer')}<span><b>${esc(p)}</b><small>${esc(r)}</small></span></li>`).join('')}</ul>`
-    : `<p class="dim">${L('You are not connected to a parish yet.', 'لست مرتبطاً برعية بعد.')}</p>
-       <p style="margin-top:12px"><a class="btn btn-secondary" href="./#directory">${icon('search', 16)}${L('Find a parish', 'ابحث عن رعية')}</a></p>`;
+  return (list.length ? `<ul class="admin-list">${list.map(([r, p]) => `<li>${icon('portal', 16, 'dimmer')}<span><b>${esc(p)}</b><small>${esc(r)}</small></span></li>`).join('')}</ul>`
+    : `<p class="dim">${L('You are not connected to a parish yet.', 'لست مرتبطاً برعية بعد.')}</p>`) +
+    `<p style="margin-top:12px"><a class="btn btn-secondary" href="#/home">${icon('portal', 16)}${L('Manage your parishes', 'إدارة رعاياك')}</a></p>`;
+}
+
+/* The profile a parishioner keeps themselves: the same details a parish office records, without the office's own.
+   Every field is optional. Sending it to a parish asks the office to update its record; it does not change it. */
+const RITES = [['Maronite', 'ماروني'], ['Melkite', 'روم كاثوليك'], ['Greek Orthodox', 'روم أرثوذكس'], ['Armenian', 'أرمني'],
+  ['Roman Catholic', 'لاتيني'], ['Syriac', 'سرياني']];
+function profileForm(a) {
+  const x = a.details || {};
+  const text = (id, label, value, attrs = '', help = '') => `<div class="formrow"><label class="label" for="pf-${id}">${label}</label>
+    <input class="input" id="pf-${id}" name="${id}" value="${esc(value || '')}" ${attrs}>${help ? `<span class="help">${help}</span>` : ''}</div>`;
+  const choice = (id, label, value, options) => `<div class="formrow"><label class="label" for="pf-${id}">${label}</label>
+    <select class="select" id="pf-${id}" name="${id}"><option value="">${L('Not given', 'غير محدّد')}</option>${options.map(([v, en, ar]) =>
+      `<option value="${esc(v)}" ${value === v ? 'selected' : ''}>${esc(L(en, ar || en))}</option>`).join('')}</select></div>`;
+  return `<form class="stack" data-acct-form="profile" novalidate>
+    <p class="dim">${L('Fill in what you like, now or later. Nothing here is required, and a parish office never sees it unless you send it or ask to become a member.',
+      'أدخل ما تشاء الآن أو لاحقاً. لا شيء هنا إلزامي، ولا يراه مكتب الرعية إلا إذا أرسلته أو طلبت الانتساب.')}</p>
+    <div class="formgrid">
+      ${text('arabicName', L('Name in Arabic', 'الاسم بالعربية'), x.arabicName, 'dir="rtl" maxlength="120" autocomplete="off"')}
+      <div class="formrow"><label class="label" for="pf-birthDate">${L('Date of birth', 'تاريخ الولادة')}</label>
+        <input class="input" id="pf-birthDate" name="birthDate" type="date" value="${esc(a.birthDate || '')}" max="${esc(new Date().toISOString().slice(0, 10))}"></div>
+      ${choice('rite', L('Rite', 'الطقس'), x.rite, RITES.map(([en, ar]) => [en, en, ar]))}
+      ${text('town', L('Town', 'البلدة'), x.town, 'maxlength="120" autocomplete="address-level2"')}
+      ${text('address', L('Address', 'العنوان'), x.address, 'maxlength="300" autocomplete="street-address"')}
+      ${text('occupation', L('Line of work', 'المهنة'), x.occupation, 'maxlength="120" autocomplete="organization-title"')}
+      ${text('skills', L('Skills', 'المهارات'), (x.skills || []).join(', '), 'maxlength="800"', L('Separate them with commas, for example: singing, accounting, first aid.', 'افصل بينها بفواصل، مثلاً: ترتيل، محاسبة، إسعافات أولية.'))}
+      ${choice('language', L('Preferred language', 'اللغة المفضّلة'), x.language, [['ar', 'Arabic', 'العربية'], ['en', 'English', 'الإنكليزية']])}
+      ${choice('channel', L('Reach me on', 'تواصلوا معي عبر'), x.channel, [['whatsapp', 'WhatsApp'], ['sms', 'Text message', 'رسالة نصية'], ['email', 'Email', 'البريد الإلكتروني']])}
+      ${choice('bloodType', L('Blood type', 'زمرة الدم'), x.bloodType, ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => [v, v]))}
+      ${text('emergencyName', L('Emergency contact', 'جهة الاتصال في حالات الطوارئ'), x.emergencyName, 'maxlength="120" autocomplete="off"')}
+      ${text('emergencyPhone', L('Emergency contact’s phone', 'هاتف جهة الاتصال في الطوارئ'), x.emergencyPhone, 'type="tel" dir="ltr" maxlength="40" autocomplete="off"')}
+    </div>
+    <label class="check"><input type="checkbox" name="directory" ${x.directory ? 'checked' : ''}><span>${L('List me in the parish directory that other members can see', 'أدرجني في دليل الرعية الذي يراه الأعضاء الآخرون')}</span></label>
+    ${a.memberParishes.length ? `<fieldset class="stack" style="border:0;padding:0;margin:0"><legend class="label">${L('Also ask these parish offices to update their records', 'واطلب من مكاتب هذه الرعايا تحديث سجلّاتها')}</legend>
+      ${a.memberParishes.map(p => `<label class="check"><input type="checkbox" name="sendTo" value="${esc(p.id)}"><span>${esc(L(p.name, p.ar || p.name))}</span></label>`).join('')}
+      <span class="help">${L('Only what you changed is sent. The office reviews it before changing its record.', 'يُرسل ما غيّرته فقط. يراجعه المكتب قبل تعديل سجلّه.')}</span></fieldset>` : ''}
+    <p class="si-error" id="pf-error" role="alert" hidden></p>
+    <div><button class="btn btn-primary" type="submit">${L('Save profile', 'حفظ الملف')}</button></div>
+  </form>`;
 }
 
 function contacts(a) {
@@ -294,9 +333,27 @@ async function totpDialog() {
 }
 
 /* ---------- wiring ---------- */
-account.mount = host => {
+account.mount = (host, section) => {
   const a = state.data;
   if (!a) return;
+  if (section === 'profile') requestAnimationFrame(() => host.querySelector('#acct-profile')?.scrollIntoView({ block: 'start' }));
+  host.querySelector('[data-acct-form="profile"]')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.currentTarget, error = f.querySelector('#pf-error'), v = name => f.elements[name]?.value ?? '';
+    const born = v('birthDate');
+    if (born && (born > new Date().toISOString().slice(0, 10) || new Date(born) > new Date(new Date().setFullYear(new Date().getFullYear() - 13)))) {
+      error.textContent = L('The date of birth must be at least 13 years ago.', 'يجب أن يكون تاريخ الولادة قبل ١٣ سنة على الأقل.'); error.hidden = false; return;
+    }
+    try {
+      const result = await act({ op: 'saveProfile', firstName: a.firstName, lastName: a.lastName, birthDate: born,
+        ...Object.fromEntries(['arabicName', 'town', 'address', 'rite', 'occupation', 'language', 'channel', 'bloodType', 'emergencyName', 'emergencyPhone'].map(k => [k, v(k)])),
+        skills: v('skills').split(/[,،]/).map(s => s.trim()).filter(Boolean), directory: f.elements.directory.checked,
+        sendTo: [...f.querySelectorAll('input[name="sendTo"]:checked')].map(i => i.value) });
+      try { localStorage.setItem('pl-profile-done:' + session.user?.id, '1'); } catch { /* private mode */ }
+      toast(L('Profile saved', 'حُفظ الملف'), result.sent ? L(`${result.sent} update request(s) sent to the parish office for review.`, `أُرسل ${result.sent} طلب تحديث إلى مكتب الرعية للمراجعة.`)
+        : result.changed.length ? '' : L('Nothing had changed.', 'لم يتغيّر شيء.'), 'success');
+    } catch (err) { error.textContent = err.message; error.hidden = false; }
+  });
   const find = id => a.contacts.find(k => `${k.kind}:${k.value}` === id);
   const guard = fn => async (...args) => { try { await fn(...args); } catch (e) { toast(L('Not done', 'لم يتمّ'), e.message, 'danger'); } };
   host.querySelectorAll('[data-acct-lang]').forEach(b => b.addEventListener('click', () => { setLang(b.dataset.acctLang); bus.renderAll?.(); }));

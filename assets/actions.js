@@ -348,8 +348,6 @@ export const VERBS = {
   'cal-day':      (b, a) => F.calDay(+a),
   view:           (b, a) => { const [k, v] = a.split('|'); S.ui[k] = +v; refresh(); },
   'people-env':   () => { S.ui.peopleEnv = !S.ui.peopleEnv; S.ui.peoplePage = 0; refresh(); },
-  'people-new':   () => { S.ui.peopleNew = !S.ui.peopleNew; S.ui.peoplePage = 0; refresh(); },
-  'people-new-open': () => { S.ui.peopleNew = true; S.ui.peoplePage = 0; location.hash = '#/people'; },
   'music-clear':  () => { S.ui.music = {}; refresh(); },
   transpose:      (b, a) => { const [id, n] = a.split('|'); S.ui.transpose = { ...S.ui.transpose, [id]: +n }; refresh(); },
   'cal-kind':     (b, k) => { const off = S.ui.calOff || []; S.ui.calOff = off.includes(k) ? off.filter(x => x !== k) : [...off, k]; refresh(); },

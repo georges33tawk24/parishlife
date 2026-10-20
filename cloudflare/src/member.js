@@ -7,7 +7,8 @@ import {
 } from './py.js';
 import { randomBytes } from 'node:crypto';
 import { parish_theme } from './state.js';
-import { parishUser } from './authority.js';
+import { parishUser, authority } from './authority.js';
+import { PROFILE_REQUEST_FIELDS } from './connections.js';
 import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
   request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
@@ -559,16 +560,18 @@ export async function member_action(c, u, pid, q) {
   } else if (op === 'accountReset') {
     need(role === 'priest' || role === 'secretary', 'Parish office access required.', 403);
     const personId = get(q, 'personId');
-    const target = isStr(personId) ? await c.first("SELECT u.* FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? "
-      + "AND u.role IN ('member','leader')", pid, personId) : null;
+    const target = isStr(personId) ? await c.first("SELECT u.* FROM parish_accounts a JOIN users u ON u.id=a.user_id WHERE a.parish_id=? AND a.person_id=? "
+      + "AND a.role IN ('member','leader') ORDER BY a.role DESC", pid, personId) : null;
     need(target !== null, 'This person has no online account to reset.', 404);
+    need((await authority(c, target)).assignments.every(a => a.role === 'leader' && a.scope === 'parish'),
+      'This account holds a staff role. Only an administrator with authority over that role can reset it.', 403);
     const temporary = Array.from(randomBytes(8), b => '23456789'[b % 8]).join('');
     c.run('UPDATE users SET password=? WHERE id=?', passwordHash(temporary, tokenHex(16), ROUNDS), target.id);
     c.run('DELETE FROM sessions WHERE user_id=?', target.id);
     audit(c, u, pid, 'member.password-reset', { person: personId });
     return { username: target.username, password: temporary };
   } else if (op === 'profileRequest') {
-    need(has(new Set(['name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture']), get(q, 'field')), 'Invalid field.');
+    need(has(PROFILE_REQUEST_FIELDS, get(q, 'field')), 'Invalid field.');
     const value = get(q, 'value');
     need(isStr(value) && len(strip(value)) > 0 && len(strip(value)) <= 500, 'Enter the requested update.');
     c.run('INSERT INTO member_profile_requests VALUES(?,?,?,?,?,?,?)', tokenHex(12), pid, K(u, 'id'), K(q, 'field'), strip(value), 'Submitted', NOW());
@@ -599,7 +602,7 @@ export async function member_action(c, u, pid, q) {
     c.run('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
       contentId, pid, groupId, K(q, 'kind'), K(u, 'id'), null, strip(title), body,
       slice(str(get(q, 'category', '')), 0, 60), eventId, attachment, truthy(get(q, 'pinned')) ? 1 : 0, NOW());
-    const members = await c.all("SELECT u.id,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.role='member'", pid);
+    const members = await c.all("SELECT DISTINCT user_id AS id,person_id FROM parish_accounts WHERE parish_id=? AND role='member'", pid);
     const rows = await memberPrivateRows(c, pid, members.map(m => m.id));
     const route = K(q, 'kind') === 'resource' ? 'myresources' : K(q, 'kind') === 'opportunity' ? 'mycommitments' : K(q, 'kind') === 'discussion' ? 'mymessages' : 'myfeed';
     for (const target of members) {
@@ -617,7 +620,7 @@ export async function member_action(c, u, pid, q) {
         has(set(iter(get(get(K(d, 'GROUP_DETAIL'), K(g, 'id'), {}), 'roster', [])).map(row => get(row, 'p'))), recipientPersonId)),
         'You may message members of your ministries only.', 403);
     }
-    const recipient = await c.first('SELECT u.id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? LIMIT 1', pid, recipientPersonId);
+    const recipient = await c.first('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id=? LIMIT 1', pid, recipientPersonId);
     need(recipient !== null, 'This person does not have an active in-app account.', 404);
     const title = get(q, 'title'), body = get(q, 'body');
     need(isStr(title) && len(strip(title)) > 0 && len(strip(title)) <= 160 && isStr(body) && len(strip(body)) > 0 && len(strip(body)) <= 5000,
@@ -631,7 +634,7 @@ export async function member_action(c, u, pid, q) {
     need(has(gids, groupId), 'Ministry membership required.', 403);
     const group = iter(K(d, 'GROUPS')).find(g => eq(K(g, 'id'), groupId));
     if (group === undefined) throw new Error('StopIteration');
-    const recipient = await c.first("SELECT u.id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id IN (?,?) AND u.role IN ('leader','priest','secretary') ORDER BY CASE WHEN u.person_id=? THEN 0 ELSE 1 END LIMIT 1",
+    const recipient = await c.first("SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id IN (?,?) AND role IN ('leader','priest','parishadmin','secretary') ORDER BY CASE WHEN person_id=? THEN 0 ELSE 1 END LIMIT 1",
       pid, get(group, 'leader'), get(group, 'assistant'), get(group, 'leader'));
     need(recipient !== null, 'This ministry has no available messaging contact.', 403);
     const body = get(q, 'body', '');

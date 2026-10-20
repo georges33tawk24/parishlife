@@ -25,6 +25,7 @@ import * as Oversight from './views/oversight.js';
 import * as Administration from './views/administration.js';
 import * as Member from './views/member.js';
 import * as Account from './views/account.js';
+import * as Home from './views/home.js';
 import { requestsPage } from './views/member-requests.js';
 import { M, loadMember } from './member-data.js';
 import { applyTheme } from './theme.js';
@@ -95,7 +96,8 @@ export const ROUTES = {
   household:    { ico:'family',   en:'Household',         ar:'العائلة',             view:People.householdView, hidden:true },
   styleguide:   { ico:'doc',      en:'Design system',    ar:'نظام التصميم',        view:Admin.styleguide },
   administration: { ico:'shield', en:'Administration',   ar:'الإدارة',             view:Administration.administration },
-  account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Account.account }
+  account:      { ico:'people',   en:'My account',       ar:'حسابي',               view:Account.account },
+  home:         { ico:'portal',   en:'My parishes',      ar:'رعاياي',              view:Home.home }
 };
 
 export { S as state, ROLES, me, go };
@@ -106,7 +108,7 @@ const PERSONAL_ROUTES = new Set(['memberhome','myrequests','myministries','mymee
   'mymessages','myfeed','myresources','myformation','mycommitments','mynotes','myprofile',
   'myconcerns','membernotifications']);
 const MEMBER_ROUTES = new Set([...PERSONAL_ROUTES, 'memberhub']);
-export const allowed = id => id === 'account' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
+export const allowed = id => id === 'account' || id === 'home' || canSee(id) || !!(DETAIL_PARENT[id] && canSee(DETAIL_PARENT[id])) ||
   (PERSONAL_ROUTES.has(id) && S.role !== 'bishop' && !!session.user?.person_id);
 
 /* ---------------- shell ---------------- */
@@ -262,11 +264,40 @@ const PROVIDER_NAMES = { google: 'Google', apple: 'Apple', microsoft: 'Microsoft
 /* What a provider sent back in the address; read once, then removed from it. */
 function takeAuthParams() {
   const params = new URLSearchParams(location.search), out = {};
-  for (const key of ['auth_error', 'provider', 'provider_signup', 'mfa', 'linked']) if (params.has(key)) { out[key] = params.get(key); params.delete(key); }
+  for (const key of ['auth_error', 'provider', 'provider_signup', 'mfa', 'linked', 'invite']) if (params.has(key)) { out[key] = params.get(key); params.delete(key); }
+  /* a parish's public page links here with its ID: remember it, so the new account can connect to that parish */
+  if (params.get('parish')) try { localStorage.setItem('pl-parish-hint', params.get('parish')); } catch { /* private mode */ }
   if (Object.keys(out).length) history.replaceState(null, '', location.pathname + (params.size ? '?' + params : '') + location.hash);
   return out;
 }
 const AUTH = takeAuthParams();
+
+/* An invitation link from a parish office: once signed in (or registered), it becomes a membership
+   request for the office to confirm against the record it was sent for. */
+async function acceptInvite() {
+  const token = AUTH.invite;
+  if (!token) return;
+  delete AUTH.invite; SI.invite = null;
+  try {
+    await api('connections', 'POST', { op: 'acceptInvite', token });
+    await loadSession(); Home.reloadHome();
+    toast(t('Invitation accepted', 'قُبلت الدعوة'), t('Your request is with the parish office. They will confirm it and link your account to your parish record.', 'طلبك لدى مكتب الرعية. سيؤكّده ويربط حسابك بسجلّك في الرعية.'), 'success');
+  } catch (error) { toast(t('Invitation not used', 'لم تُستعمل الدعوة'), error.message, 'danger'); }
+}
+function inviteBanner() {
+  if (!AUTH.invite) return '';
+  if (SI.invite === undefined || SI.invite === null) {
+    SI.invite = false;
+    api('invitations/info', 'POST', { token: AUTH.invite }).then(info => { SI.invite = info; if (!session.user) { rememberLogin(); loginScreen(); } })
+      .catch(error => { SI.invite = { error: error.message }; if (!session.user) { rememberLogin(); loginScreen(); } });
+  }
+  if (!SI.invite) return '';
+  if (SI.invite.error) return `<div class="alert alert-warning signin-context">${icon('warn', 18)}<span>${esc(SI.invite.error)}</span></div>`;
+  const p = SI.invite.parish;
+  return `<div class="alert alert-info signin-context">${icon('mail', 18)}<span><b>${esc(t(`${p.name} invited you${SI.invite.firstName ? ', ' + SI.invite.firstName : ''}`, `دعتك ${p.ar || p.name}${SI.invite.firstName ? '، ' + SI.invite.firstName : ''}`))}</b>
+    ${t('Sign in, or create an account if you have none. The parish office then confirms it is you and links your account to your parish record.',
+      'سجّل الدخول، أو أنشئ حساباً إن لم يكن لديك. ثم يؤكّد مكتب الرعية هويتك ويربط حسابك بسجلّك في الرعية.')}</span></div>`;
+}
 
 const SIGNIN_VIA = [
   ['email', 'Email', 'البريد الإلكتروني'], ['phone', 'Phone number', 'رقم الهاتف'], ['username', 'Username', 'اسم المستخدم']];
@@ -325,6 +356,7 @@ function signInPanels(error) {
   return `<h2 id="si-title">${up ? t('Create your account', 'أنشئ حسابك') : t('Welcome', 'أهلاً بك')}</h2>
       <p class="signin-lead" id="si-lead">${up ? t('Your account is yours, not a parish’s. After creating it you can follow parishes or ask to become a member.', 'حسابك ملكك لا ملك رعية. بعد إنشائه يمكنك متابعة الرعايا أو طلب الانتساب إليها.')
         : t('Sign in with your email address, phone number or username.', 'سجّل الدخول ببريدك الإلكتروني أو رقم هاتفك أو اسم المستخدم.')}</p>
+      ${inviteBanner()}
       ${wantsRequest ? `<div class="alert alert-info signin-context">${icon('info', 18)}<span><b>${t('Sign in to send your request', 'سجّل الدخول لإرسال طلبك')}</b>${t('If you do not have an account yet, create one first. It is free and takes a minute.', 'إذا لم يكن لديك حساب بعد، أنشئ حساباً أولاً. إنه مجاني ويستغرق دقيقة.')}</span></div>` : ''}
       <div class="signin-tabs" role="tablist" aria-label="${t('Sign in or create an account', 'تسجيل الدخول أو إنشاء حساب')}">
         <button type="button" role="tab" id="si-tab-in" aria-controls="si-in" aria-selected="${!up}" tabindex="${up ? -1 : 0}" data-si-tab="in">${t('Sign in', 'تسجيل الدخول')}</button>
@@ -656,11 +688,12 @@ function wireProvider() {
 /* Into the portal after signing in or opening an account: the page that was asked for, or the role's first page. */
 async function enter(parishId = '', { welcome = '', delivery = null } = {}) {
   await loadSession(); pickParish();
+  if (AUTH.invite) await acceptInvite();
   if (parishId && session.parishes.some(p => p.id === parishId)) session.parishId = parishId;
   S.role = currentRole(); await hydrate(); S.route = ROLES[S.role]?.nav.find(n => n[0] === 'l')?.[1] || 'account';
   /* Signing in from a link (a request form, a notification) continues to that page; a new account starts at My account. */
-  const wanted = welcome ? 'account' : location.hash.replace(/^#\/?/, '').split('/')[0];
-  if (wanted && ROUTES[wanted] && allowed(wanted)) { if (welcome) location.hash = '#/account'; route(); }
+  const wanted = welcome ? 'home' : location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (wanted && ROUTES[wanted] && allowed(wanted)) { if (welcome) location.hash = '#/home'; route(); }
   else { location.hash = '#/' + S.route; renderAll(); }
   if (welcome) toast(t(`Welcome, ${welcome}`, `أهلاً بك، ${welcome}`), t('Your account is ready. ', 'حسابك جاهز. ') + deliveryToast(delivery || []), 'success');
 }
@@ -940,6 +973,14 @@ async function switchParish(id) {
   }
 }
 bus.switchParish = switchParish;
+/* After the account's parish connections change: read the session again; the open workspace stays unless it is gone. */
+bus.reloadSession = async () => {
+  const before = session.parishId, role = S.role;
+  await loadSession();
+  if (!before) session.parishId = session.parishes.find(p => p.id === before)?.id || null;
+  S.role = currentRole();
+  if (S.role !== role || session.parishId !== before) { await hydrate(); renderAll(); }
+};
 
 /* An account may work in several places: each parish it serves or belongs to, and administration
    that is not tied to one parish (the super admin, a diocesan admin). */
@@ -1013,6 +1054,7 @@ setLang(lang);
 (async () => {
   try {
     await loadSession(); pickParish(); S.role = currentRole(); await hydrate(); if (S.role === 'bishop') S.route = 'oversight'; renderAll(); route();
+    if (AUTH.invite) acceptInvite().then(() => { if (S.route === 'home') renderAll(); else location.hash = '#/home'; });
     if (AUTH.linked) toast(t(`${PROVIDER_NAMES[AUTH.linked] || AUTH.linked} is now linked`, `أصبح ${PROVIDER_NAMES[AUTH.linked] || AUTH.linked} مرتبطاً`), t('You can sign in with it from now on.', 'يمكنك تسجيل الدخول به من الآن.'), 'success');
     if (AUTH.auth_error) toast(t('Not linked', 'لم يتمّ الربط'), (AUTH_ERRORS[AUTH.auth_error] || AUTH_ERRORS.failed)(PROVIDER_NAMES[AUTH.provider] || t('the provider', 'المزوّد')), 'danger');
   }

@@ -34,7 +34,8 @@ ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'}
 CLERGY = {'priest'}  # Bishops use the separate, read-only oversight API.
 FINANCE = {'BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'}
 OFFICE = {'PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS'}
-READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS'}
+READONLY = {'PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS',
+            'MEMBERSHIP_REQUESTS', 'INVITATIONS'}
 PROTECTED = {'status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference'}
 NOW = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
 TODAY = lambda: dt.date.today().isoformat()
@@ -510,28 +511,30 @@ def issue_code(c, user_id, purpose, kind, target, outbox):
     status = 'sending' if mode == 'service' else 'console'
     c.execute('INSERT INTO verification_codes VALUES(?,?,?,?,?,?,?,?,?,?,?)',
               (cid, user_id, purpose, channel, target, code_hash(cid, code), now, now + CODE_TTL, 0, status, None))
-    outbox.append(dict(id=cid, channel=channel, target=target, code=code, mode=mode, status=status))
+    outbox.append(dict(id=cid, table='verification_codes', channel=channel, target=target, mode=mode, status=status,
+                       subject='Your ParishLife code',
+                       text=f'Your ParishLife code is {code}. It expires in 15 minutes. If you did not ask for it, ignore this message.\n'
+                            f'رمز ParishLife الخاص بك هو {code}. تنتهي صلاحيته بعد ١٥ دقيقة.'))
     return status
 
 
 def send_outbox(c, outbox):
-    """After the commit: hand each code to the delivery service and record whether it accepted it."""
+    """After the commit: hand each message (a code, an invitation) to the delivery service and record whether it accepted it."""
     for item in outbox:
-        text = (f"Your ParishLife code is {item['code']}. It expires in 15 minutes. If you did not ask for it, ignore this message.\n"
-                f"رمز ParishLife الخاص بك هو {item['code']}. تنتهي صلاحيته بعد ١٥ دقيقة.")
         if item['mode'] == 'console':
-            print(f"[dev outbox, NOT SENT] {item['channel']} to {item['target']}: ParishLife code {item['code']}", flush=True)
+            print(f"[dev outbox, NOT SENT] {item['channel']} to {item['target']}: {item['text'].splitlines()[0]}", flush=True)
             continue
         headers = {'Content-Type': 'application/json'}
         if os.environ.get('PARISHLIFE_DELIVERY_TOKEN'): headers['Authorization'] = 'Bearer ' + os.environ['PARISHLIFE_DELIVERY_TOKEN']
-        body = json.dumps(dict(channel=item['channel'], to=item['target'], subject='Your ParishLife code', text=text)).encode()
+        body = json.dumps(dict(channel=item['channel'], to=item['target'], subject=item['subject'], text=item['text'])).encode()
         try:
             with urllib.request.urlopen(urllib.request.Request(os.environ[DELIVERY_ENV[item['channel']]], data=body, headers=headers,
                                                                method='POST'), timeout=10) as r:
                 item['status'] = 'sent' if 200 <= r.status < 300 else 'failed'
         except (OSError, ValueError):
             item['status'] = 'failed'
-        c.execute('UPDATE verification_codes SET delivery=? WHERE id=?', (item['status'], item['id'])); c.commit()
+        table = {'verification_codes': 'verification_codes', 'invitations': 'invitations'}[item['table']]
+        c.execute(f'UPDATE {table} SET delivery=? WHERE id=?', (item['status'], item['id'])); c.commit()
     return [dict(channel=item['channel'], to=item['target'], delivery=item['status']) for item in outbox]
 
 
@@ -912,8 +915,11 @@ def account_view(c, u):
         mfa[m] = dict(enabled=on(m), delivery=delivery_mode(m), contact=bool(verified_contact(c, u['id'], KIND_OF[m])))
     identities = [dict(provider=r['provider'], name=PROVIDERS.get(r['provider'], {}).get('name', r['provider']), email=r['email'], linkedAt=r['linked_at'])
                   for r in c.execute('SELECT * FROM user_identities WHERE user_id=? ORDER BY linked_at', (u['id'],))]
+    members = [parish_brief(r) for r in c.execute("SELECT p.* FROM parishes p JOIN parish_links l ON l.parish_id=p.id WHERE l.user_id=? "
+                                                   "AND l.kind='member' AND l.status='active' ORDER BY p.rowid", (u['id'],))]
     return dict(username=u['username'], name=u['name'], firstName=profile['first_name'] if profile else names[0],
                 lastName=profile['last_name'] if profile else (names[1] if len(names) > 1 else ''), birthDate=profile['birth_date'] if profile else '',
+                details=json.loads(profile['data']) if profile else {}, memberParishes=members,
                 hasPassword=bool(u['password']), contacts=contacts, mfa=mfa, identities=identities, config=auth_config())
 
 
@@ -937,6 +943,36 @@ def account_action(c, u, session, q, outbox):
         c.execute('UPDATE users SET name=? WHERE id=?', (f'{first} {last}', u['id']))
         audit(c, u, None, 'account.name-changed', {})
         return {}
+    if op == 'saveProfile':
+        before = account_profile(c, u)
+        first, last = clean(q.get('firstName'), 60, 'Enter your first name.'), clean(q.get('lastName'), 60, 'Enter your last name.')
+        born = birth_date(q.get('birthDate')) if q.get('birthDate') else before['birthDate']
+        details = clean_profile(q)
+        c.execute('INSERT INTO user_profiles VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET first_name=excluded.first_name,'
+                  'last_name=excluded.last_name,birth_date=excluded.birth_date,data=excluded.data,updated_at=excluded.updated_at',
+                  (u['id'], first, last, born, json.dumps(details), at))
+        c.execute('UPDATE users SET name=? WHERE id=?', (f'{first} {last}', u['id']))
+        # What changed, by the field names the parish office already uses for update requests
+        shown = lambda v: ', '.join(v) if isinstance(v, list) else ('Listed' if v else 'Not listed') if isinstance(v, bool) else (v or '(removed)')
+        changes = {}
+        if (first, last) != (before['firstName'], before['lastName']): changes.setdefault('name', []).append(f'{first} {last}')
+        if born != before['birthDate']: changes.setdefault('date of birth', []).append(born)
+        for key, value in details.items():
+            if value != before['details'].get(key, [] if key == 'skills' else False if key == 'directory' else ''):
+                changes.setdefault(PROFILE_LABELS[key], []).append(f'{key}: {shown(value)}' if PROFILE_LABELS[key] in {'address', 'emergency contact'} else shown(value))
+        send_to = q.get('sendTo') or []
+        require(isinstance(send_to, list), 'Choose parishes.')
+        members = {l['parish_id'] for l in authority(c, u)['links'] if l['kind'] == 'member' and l['status'] == 'active'}
+        sent = 0
+        for pid in sorted(set(send_to)):
+            require(pid in members, 'You can only send updates to parishes you are a member of.', 403)
+            for field, values in changes.items():
+                c.execute('INSERT INTO member_profile_requests VALUES(?,?,?,?,?,?,?)',
+                          (secrets.token_hex(12), pid, u['id'], field, '; '.join(values)[:500], 'Submitted', at))
+                audit(c, u, pid, 'profile.update-request', field)
+                sent += 1
+        audit(c, u, None, 'account.profile-saved', {'fields': sorted(changes)})
+        return dict(sent=sent, changed=sorted(changes))
     if op in {'addContact', 'sendCode', 'verifyContact', 'removeContact'}:
         kind = q.get('kind')
         require(kind in CONTACT_KINDS, 'Choose an email address or a phone number.')
@@ -1031,6 +1067,345 @@ def account_action(c, u, session, q, outbox):
         audit(c, u, None, 'account.provider-unlinked', {'provider': provider})
         return {}
     raise Problem(400, 'Unknown account action.')
+
+
+# ───────────── Parish connections: following, membership, invitations, the profile ─────────────
+# An account is an ordinary user. Following a parish, being a formal member of it, belonging to a
+# ministry and holding a staff role are separate relationships; one account can have several, in
+# several parishes. Membership is asked for and the parish office decides, linking the account to
+# an existing person record or creating one; nothing is linked or changed in parish records without it.
+CONNECTIONS_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS membership_requests(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+  parish_id TEXT NOT NULL REFERENCES parishes(id), status TEXT NOT NULL, message TEXT NOT NULL DEFAULT '',
+  profile TEXT NOT NULL DEFAULT '{}', person_id TEXT, invitation_id TEXT, created_at TEXT NOT NULL,
+  decided_at TEXT, decided_by TEXT, decision_note TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS membership_requests_parish ON membership_requests(parish_id,status);
+CREATE INDEX IF NOT EXISTS membership_requests_user ON membership_requests(user_id,status);
+CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), person_id TEXT NOT NULL,
+  channel TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', token TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, created_by TEXT,
+  expires REAL NOT NULL, delivery TEXT NOT NULL, accepted_at TEXT, accepted_by TEXT, revoked_at TEXT, revoked_by TEXT);
+CREATE INDEX IF NOT EXISTS invitations_person ON invitations(parish_id,person_id);
+CREATE VIEW IF NOT EXISTS parish_accounts AS
+  SELECT l.user_id AS user_id, l.parish_id AS parish_id, l.person_id AS person_id, 'member' AS role
+    FROM parish_links l JOIN users u ON u.id=l.user_id WHERE l.kind='member' AND l.status='active' AND u.role<>'disabled'
+  UNION
+  SELECT r.user_id, r.scope_id, COALESCE((SELECT l.person_id FROM parish_links l WHERE l.user_id=r.user_id AND l.parish_id=r.scope_id
+      AND l.status='active'), u.person_id), r.role
+    FROM role_assignments r JOIN users u ON u.id=r.user_id WHERE r.scope='parish' AND r.status='active' AND u.role<>'disabled'
+  UNION
+  SELECT u.id, a.parish_id, u.person_id, u.role FROM users u JOIN assignments a ON a.user_id=u.id
+    WHERE u.role<>'disabled' AND NOT EXISTS (SELECT 1 FROM role_assignments r WHERE r.user_id=u.id)
+      AND NOT EXISTS (SELECT 1 FROM parish_links l WHERE l.user_id=u.id);
+'''
+INVITATION_DAYS = 14
+# The person-profile fields a parishioner may fill in themselves; status, tags, households, notes and
+# sacramental records stay with the office.
+PROFILE_TEXT = {'arabicName': 120, 'town': 120, 'address': 300, 'rite': 40, 'occupation': 120, 'emergencyName': 120, 'emergencyPhone': 40}
+PROFILE_CHOICES = {'language': {'', 'en', 'ar'}, 'channel': {'', 'whatsapp', 'sms', 'email'},
+                   'bloodType': {'', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'}}
+PROFILE_LABELS = {'arabicName': 'arabic name', 'town': 'address', 'address': 'address', 'rite': 'rite', 'occupation': 'line of work',
+                  'emergencyName': 'emergency contact', 'emergencyPhone': 'emergency contact', 'language': 'language',
+                  'channel': 'contact preference', 'bloodType': 'blood type', 'directory': 'directory listing', 'skills': 'skills',
+                  'birthDate': 'date of birth', 'name': 'name'}
+PROFILE_REQUEST_FIELDS = {'name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture',
+                          'arabic name', 'rite', 'line of work', 'language', 'contact preference', 'blood type', 'directory listing', 'skills'}
+
+
+def account_profile(c, u):
+    """The account's own details, as a membership request carries them to a parish office."""
+    p = c.execute('SELECT * FROM user_profiles WHERE user_id=?', (u['id'],)).fetchone()
+    names = u['name'].split(' ', 1)
+    contacts = [dict(kind=k['kind'], value=k['value'], verified=bool(k['verified_at']))
+                for k in c.execute('SELECT * FROM user_contacts WHERE user_id=? ORDER BY kind,created_at', (u['id'],))]
+    return dict(firstName=p['first_name'] if p else names[0], lastName=p['last_name'] if p else (names[1] if len(names) > 1 else ''),
+                birthDate=p['birth_date'] if p else '', details=json.loads(p['data']) if p else {}, contacts=contacts)
+
+
+def clean_profile(q):
+    """The self-service profile fields; anything left out stays empty rather than invented."""
+    out = {}
+    for key, limit in PROFILE_TEXT.items():
+        out[key] = clean(q.get(key), limit, 'Check the ' + PROFILE_LABELS[key] + '.', required=False)
+    for key, allowed in PROFILE_CHOICES.items():
+        value = str(q.get(key) or '')
+        require(value in allowed, 'Check the ' + PROFILE_LABELS[key] + '.')
+        out[key] = value
+    out['directory'] = bool(q.get('directory'))
+    skills = q.get('skills') or []
+    require(isinstance(skills, list) and len(skills) <= 30 and all(isinstance(s, str) and 0 < len(s.strip()) <= 80 for s in skills), 'Check your skills.')
+    out['skills'] = sorted({' '.join(s.split()) for s in skills})
+    if out['emergencyPhone']: out['emergencyPhone'] = contact_value('phone', out['emergencyPhone'])
+    return out
+
+
+def public_parish(c, pid):
+    """What a parish's public page shows, and what its followers see."""
+    row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
+    require(row is not None, 'Parish not found.', 404)
+    public_state = json.loads(row['data'])
+    parish = public_state['PARISH']
+    content = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')}
+               for key, item in public_state.get('CONTENT', {}).items()
+               if isinstance(item, dict) and item.get('published', True)}
+    events = []
+    for event in public_state.get('EVENTS', []):
+        detail = public_state.get('EVENT_DETAIL', {}).get(event.get('id'), {})
+        if event.get('kind') == 'pending' or (detail.get('visibility') != 'public'
+            and not (not detail and event.get('kind') in {'mass', 'event'})): continue
+        events.append({key: event.get(key, '') for key in ('id', 'd', 't', 'title', 'titleAr', 'kind')})
+    posts = [dict(title=item['title'], body=item['body'], at=item['created_at'])
+             for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", (pid,))]
+    posts.extend(dict(title=n.get('title', ''), body=n.get('ar', ''), at=n.get('at', ''))
+                 for n in public_state.get('NOTICES', []) if n.get('audience') == 'Parish' and not n.get('groupId'))
+    posts.sort(key=lambda item: item['at'], reverse=True)
+    public = {key: parish.get(key, '') for key in ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
+    public['theme'] = parish_theme(parish)
+    if not content.get('contact'):
+        public.update(address='', addressAr='', phone='')
+    return {'parish': public, 'content': content, 'events': events, 'posts': posts}
+
+
+def parish_brief(row):
+    meta = json.loads(row['metadata'])
+    return dict(id=row['id'], name=meta.get('name', ''), ar=meta.get('ar', ''), town=meta.get('town', ''), townAr=meta.get('townAr', ''),
+                diocese=row['diocese'])
+
+
+def connections_view(c, u):
+    """The account's parishes — staff roles, membership, following and requests — and what is new in them."""
+    auth = authority(c, u)
+    links = {l['parish_id']: l for l in auth['links']}
+    requests = [dict(r) for r in c.execute('SELECT * FROM membership_requests WHERE user_id=? ORDER BY created_at DESC', (u['id'],))]
+    pending = {r['parish_id']: r for r in requests if r['status'] == 'pending'}
+    today, out, feed = TODAY(), [], dict(events=[], posts=[])
+    rows = c.execute('SELECT * FROM parishes ORDER BY rowid').fetchall()
+    for r in rows:
+        link = links.get(r['id']) if links.get(r['id'], {}).get('status') == 'active' else None
+        ctx = parish_context(c, u, r['id'], auth, r)
+        if not (ctx or link or r['id'] in pending): continue
+        item = parish_brief(r)
+        role = ctx['role'] if ctx else None
+        item.update(kind=link['kind'] if link else None, role=role, roleTitle=ROLE_TITLES[role] if role else None,
+                    primary=bool(link and link['is_primary']), request=dict(id=pending[r['id']]['id'], at=pending[r['id']]['created_at'])
+                    if r['id'] in pending else None)
+        out.append(item)
+        if link:   # the news of parishes followed or belonged to; staff see their own parish in its workspace
+            public = public_parish(c, r['id'])
+            for e in sorted((e for e in public['events'] if str(e.get('d', '')) >= today), key=lambda e: (str(e.get('d', '')), str(e.get('t', ''))))[:6]:
+                feed['events'].append(dict(e, parish=r['id']))
+            for p in public['posts'][:4]:
+                feed['posts'].append(dict(p, parish=r['id']))
+    feed['events'].sort(key=lambda e: (str(e.get('d', '')), str(e.get('t', ''))))
+    feed['posts'].sort(key=lambda p: p['at'], reverse=True)
+    names = {r['id']: parish_brief(r) for r in rows}
+    return dict(parishes=out, directory=[parish_brief(r) for r in rows], feed=feed,
+                requests=[dict(id=r['id'], parish=r['parish_id'], parishName=names.get(r['parish_id'], {}).get('name', ''),
+                               parishAr=names.get(r['parish_id'], {}).get('ar', ''), status=r['status'], message=r['message'],
+                               createdAt=r['created_at'], decidedAt=r['decided_at'] or '', note=r['decision_note'],
+                               invited=bool(r['invitation_id'])) for r in requests])
+
+
+def invitation_row(c, token):
+    row = c.execute('SELECT * FROM invitations WHERE token=?', (sha(str(token or '')),)).fetchone()
+    require(row is not None and not row['revoked_at'] and not row['accepted_at'] and row['expires'] > time.time(),
+            'This invitation is no longer valid. Ask the parish office for a new one.', 404)
+    return row
+
+
+def invitation_info(c, token):
+    """What the sign-in page says about an invitation link: which parish sent it, and to whom."""
+    row = invitation_row(c, token)
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (row['parish_id'],)).fetchone()
+    state = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (row['parish_id'],)).fetchone()['data'])
+    person = next((p for p in state['PEOPLE'] if p['id'] == row['person_id']), None)
+    return dict(parish=parish_brief(parish), firstName=(person or {}).get('lat', '').split(' ')[0])
+
+
+def follow(c, u, pid, at):
+    link = c.execute('SELECT * FROM parish_links WHERE user_id=? AND parish_id=?', (u['id'], pid)).fetchone()
+    if link and link['status'] == 'active': return
+    primary = 0 if c.execute("SELECT 1 FROM parish_links WHERE user_id=? AND status='active' AND is_primary=1", (u['id'],)).fetchone() else 1
+    c.execute("INSERT INTO parish_links(user_id,parish_id,kind,status,person_id,is_primary,note,created_at) VALUES(?,?,'follow','active',NULL,?,'',?) "
+              "ON CONFLICT(user_id,parish_id) DO UPDATE SET kind='follow',status='active',person_id=NULL,is_primary=excluded.is_primary,created_at=excluded.created_at",
+              (u['id'], pid, primary, at))
+
+
+def connections_action(c, u, q):
+    op, at = q.get('op'), NOW()
+    auth = authority(c, u)
+    if op == 'acceptInvite':
+        row = invitation_row(c, q.get('token'))
+        pid = row['parish_id']
+    else:
+        pid = q.get('parish')
+    parish = c.execute('SELECT * FROM parishes WHERE id=?', (pid,)).fetchone() if isinstance(pid, str) else None
+    require(parish is not None, 'Choose a parish.', 404)
+    require(not is_blocked(auth, parish['diocese'], pid), 'Your access to this parish has been deactivated.', 403)
+    materialize_legacy(c, u)
+    link = c.execute('SELECT * FROM parish_links WHERE user_id=? AND parish_id=?', (u['id'], pid)).fetchone()
+    active = link if link and link['status'] == 'active' else None
+    pending = c.execute("SELECT * FROM membership_requests WHERE user_id=? AND parish_id=? AND status='pending'", (u['id'], pid)).fetchone()
+    if op == 'follow':
+        require(not active, 'You are already connected to this parish.')
+        follow(c, u, pid, at)
+        audit(c, u, pid, 'parish.followed', {})
+        return {}
+    if op == 'unfollow':
+        require(active and active['kind'] == 'follow', 'You are not following this parish.')
+        require(not pending, 'Withdraw your membership request first.')
+        c.execute("UPDATE parish_links SET status='ended',is_primary=0,decided_at=? WHERE user_id=? AND parish_id=?", (at, u['id'], pid))
+        audit(c, u, pid, 'parish.unfollowed', {})
+        return {}
+    if op == 'setPrimary':
+        require(active, 'Follow or join this parish first.')
+        c.execute('UPDATE parish_links SET is_primary=0 WHERE user_id=?', (u['id'],))
+        c.execute('UPDATE parish_links SET is_primary=1 WHERE user_id=? AND parish_id=?', (u['id'], pid))
+        return {}
+    if op in {'requestMembership', 'acceptInvite'}:
+        require(not (active and active['kind'] == 'member'), 'You are already a member of this parish.')
+        require(not pending, 'Your request is already with the parish office.', 409)
+        message = clean(q.get('message'), 500, 'Keep your message within 500 characters.', required=False)
+        invitation = row if op == 'acceptInvite' else None
+        if invitation:
+            require(not c.execute("SELECT 1 FROM parish_links WHERE parish_id=? AND person_id=? AND kind='member' AND status='active'",
+                                  (pid, invitation['person_id'])).fetchone(), 'This parish record is already linked to an account.', 409)
+            c.execute('UPDATE invitations SET accepted_at=?,accepted_by=? WHERE id=?', (at, u['id'], invitation['id']))
+        rid = 'mr-' + secrets.token_hex(8)
+        c.execute('INSERT INTO membership_requests(id,user_id,parish_id,status,message,profile,person_id,invitation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+                  (rid, u['id'], pid, 'pending', message, json.dumps(account_profile(c, u)), invitation['person_id'] if invitation else None,
+                   invitation['id'] if invitation else None, at))
+        follow(c, u, pid, at)   # while the office decides, the parish's public news reaches the account
+        audit(c, u, pid, 'membership.requested', {'request': rid, 'invited': bool(invitation)})
+        return dict(id=rid, parish=pid)
+    if op == 'withdrawRequest':
+        require(pending is not None and pending['id'] == q.get('id'), 'There is no open request to withdraw.', 404)
+        c.execute("UPDATE membership_requests SET status='withdrawn',decided_at=?,decided_by=? WHERE id=?", (at, u['id'], pending['id']))
+        audit(c, u, pid, 'membership.withdrawn', {'request': pending['id']})
+        return {}
+    raise Problem(400, 'Unknown action.')
+
+
+def office_connections(c, pid):
+    """Membership requests and invitations, for staff who manage people."""
+    users = {}
+    requests = []
+    for r in c.execute("SELECT * FROM membership_requests WHERE parish_id=? AND (status='pending' OR decided_at>?) ORDER BY created_at DESC",
+                       (pid, (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=60)).isoformat())).fetchall():
+        account = users.get(r['user_id']) or c.execute('SELECT id,username,name FROM users WHERE id=?', (r['user_id'],)).fetchone()
+        users[r['user_id']] = account
+        requests.append(dict(id=r['id'], status=r['status'], message=r['message'], profile=json.loads(r['profile']), personId=r['person_id'],
+                             invited=bool(r['invitation_id']), createdAt=r['created_at'], decidedAt=r['decided_at'] or '', note=r['decision_note'],
+                             account=dict(name=account['name'], username=account['username'])))
+    invitations = [dict(id=r['id'], personId=r['person_id'], channel=r['channel'], target=r['target'], delivery=r['delivery'],
+                        createdAt=r['created_at'], expiresAt=dt.datetime.fromtimestamp(r['expires'], dt.timezone.utc).isoformat(),
+                        accepted=bool(r['accepted_at']), revoked=bool(r['revoked_at']))
+                   for r in c.execute('SELECT * FROM invitations WHERE parish_id=? ORDER BY created_at DESC LIMIT 200', (pid,))]
+    return requests, invitations
+
+
+def person_from_profile(profile, at):
+    """A new person record made from what the account holder entered; empty where they left it empty."""
+    details = profile.get('details', {})
+    phone = next((k['value'] for k in profile.get('contacts', []) if k['kind'] == 'phone'), '')
+    email = next((k['value'] for k in profile.get('contacts', []) if k['kind'] == 'email'), '')
+    name = f"{profile.get('firstName', '')} {profile.get('lastName', '')}".strip()
+    person = dict(id='p' + secrets.token_hex(8), lat=name, ar=details.get('arabicName') or name, town=details.get('town', ''),
+                  townAr='', rite=details.get('rite', ''), status='member', phone=record_phone(phone) if phone else '—', email=email,
+                  born=profile.get('birthDate', ''), hh=None, tags=[],
+                  registeredOnline=dict(at=at, via='account', verified=any(k['verified'] for k in profile.get('contacts', []))))
+    extra = dict(skills=details.get('skills', []), dates=[], occupation=details.get('occupation', ''), directory=bool(details.get('directory')))
+    for key, target in (('language', 'lang'), ('channel', 'channel'), ('bloodType', 'blood')):
+        if details.get(key): extra[target] = details[key]
+    if email: extra['email'] = email
+    return person, extra
+
+
+def office_connection_action(c, u, pid, q, outbox, base_url):
+    u = parish_user(c, u, pid)
+    require('people.manage' in perms_of(u), 'Permission to manage people is required.', 403)
+    op, at = q.get('op'), NOW()
+    if op in {'approveMembership', 'declineMembership'}:
+        r = c.execute("SELECT * FROM membership_requests WHERE id=? AND parish_id=? AND status='pending'", (q.get('id'), pid)).fetchone()
+        require(r is not None, 'This request has already been decided or withdrawn.', 404)
+        if op == 'declineMembership':
+            note = clean(q.get('note'), 500, 'Say briefly why, so the person knows what to do next.')
+            c.execute("UPDATE membership_requests SET status='declined',decided_at=?,decided_by=?,decision_note=? WHERE id=?", (at, u['id'], note, r['id']))
+            audit(c, u, pid, 'membership.declined', {'request': r['id']})
+            return {}
+        row = c.execute('SELECT * FROM states WHERE parish_id=?', (pid,)).fetchone()
+        d = json.loads(row['data'])
+        revision = row['revision']
+        if q.get('create'):
+            person, extra = person_from_profile(json.loads(r['profile']), at)
+            d['PEOPLE'].append(person); d['PERSON_EXTRA'][person['id']] = extra
+            d = migrate_state(d); validate(d); sync_relationships(c, pid, d)
+            c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
+            person_id, revision = person['id'], revision + 1
+        else:
+            person_id = q.get('personId')
+            require(any(p['id'] == person_id for p in d['PEOPLE']), 'Choose the person record to link.')
+        require(not c.execute("SELECT 1 FROM parish_links WHERE parish_id=? AND person_id=? AND kind='member' AND status='active' AND user_id<>?",
+                              (pid, person_id, r['user_id'])).fetchone(), 'This person record is already linked to another account.', 409)
+        primary = 0 if c.execute("SELECT 1 FROM parish_links WHERE user_id=? AND status='active' AND is_primary=1 AND parish_id<>?",
+                                 (r['user_id'], pid)).fetchone() else 1
+        c.execute("INSERT INTO parish_links(user_id,parish_id,kind,status,person_id,is_primary,note,created_at,decided_at,decided_by) "
+                  "VALUES(?,?,'member','active',?,?,'',?,?,?) ON CONFLICT(user_id,parish_id) DO UPDATE SET kind='member',status='active',"
+                  "person_id=excluded.person_id,is_primary=MAX(parish_links.is_primary,excluded.is_primary),decided_at=excluded.decided_at,decided_by=excluded.decided_by",
+                  (r['user_id'], pid, person_id, primary, at, at, u['id']))
+        c.execute("UPDATE membership_requests SET status='approved',person_id=?,decided_at=?,decided_by=? WHERE id=?", (person_id, at, u['id'], r['id']))
+        notify_member(c, pid, r['user_id'], 'membership', 'You are now a member of the parish', 'Your parish office approved your membership.', 'memberhome')
+        audit(c, u, pid, 'membership.approved', {'request': r['id'], 'person': person_id, 'created': bool(q.get('create'))})
+        return dict(personId=person_id, revision=revision)
+    if op == 'invite':
+        state = json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()['data'])
+        person = next((p for p in state['PEOPLE'] if p['id'] == q.get('personId')), None)
+        require(person is not None, 'Choose a person.', 404)
+        require(not c.execute("SELECT 1 FROM parish_links WHERE parish_id=? AND person_id=? AND kind='member' AND status='active'",
+                              (pid, person['id'])).fetchone(), 'This person already has an account linked.', 409)
+        channel = q.get('channel')
+        require(channel in {'email', 'sms', 'link'}, 'Choose how to send the invitation.')
+        target = '' if channel == 'link' else contact_value('email' if channel == 'email' else 'phone', q.get('target'))
+        c.execute('UPDATE invitations SET revoked_at=?,revoked_by=? WHERE parish_id=? AND person_id=? AND revoked_at IS NULL AND accepted_at IS NULL',
+                  (at, u['id'], pid, person['id']))
+        token, iid = secrets.token_urlsafe(24), 'inv-' + secrets.token_hex(8)
+        link = f'{base_url}/index.html?invite={token}'
+        mode = 'none' if channel == 'link' else delivery_mode(channel)
+        delivery = 'link-only' if channel == 'link' else {'none': 'not-configured', 'service': 'sending', 'console': 'console'}[mode]
+        c.execute('INSERT INTO invitations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (iid, pid, person['id'], channel, target, sha(token), at, u['id'], time.time() + INVITATION_DAYS * 86400, delivery, None, None, None, None))
+        if mode in {'service', 'console'}:
+            parish_name = state['PARISH'].get('name', 'Your parish')
+            outbox.append(dict(id=iid, table='invitations', channel=channel, target=target, mode=mode, status=delivery,
+                               subject=f'{parish_name} invites you to ParishLife',
+                               text=f'{parish_name} invites you to ParishLife, to see parish news and send requests to the office. '
+                                    f'Open this link within {INVITATION_DAYS} days: {link}'))
+        audit(c, u, pid, 'person.invited', {'person': person['id'], 'channel': channel})
+        return dict(id=iid, link=link, delivery=delivery)
+    if op == 'revokeInvite':
+        inv = c.execute('SELECT * FROM invitations WHERE id=? AND parish_id=?', (q.get('id'), pid)).fetchone()
+        require(inv is not None and not inv['revoked_at'] and not inv['accepted_at'], 'This invitation is no longer open.', 404)
+        c.execute('UPDATE invitations SET revoked_at=?,revoked_by=? WHERE id=?', (at, u['id'], inv['id']))
+        audit(c, u, pid, 'person.invitation-revoked', {'invitation': inv['id']})
+        return {}
+    raise Problem(400, 'Unknown action.')
+
+
+def sync_ministry_leaders(c, actor, pid, d, people):
+    """Someone who leads or assists a ministry works in the leader workspace of that parish; when they no
+    longer do, that ends. Staff appointments made by an administrator are left alone."""
+    leading = {g.get(f) for g in d['GROUPS'] for f in ('leader', 'assistant')} - {None, ''}
+    for person_id in people:
+        for row in c.execute('SELECT DISTINCT user_id FROM parish_accounts WHERE parish_id=? AND person_id=?', (pid, person_id)).fetchall():
+            user = c.execute('SELECT * FROM users WHERE id=?', (row['user_id'],)).fetchone()
+            materialize_legacy(c, user)
+            current = c.execute("SELECT 1 FROM role_assignments WHERE user_id=? AND role='leader' AND scope='parish' AND scope_id=? AND status='active'",
+                                (user['id'], pid)).fetchone()
+            if person_id in leading and not current:
+                c.execute('INSERT INTO role_assignments(id,user_id,role,scope,scope_id,note,source,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?)',
+                          ('ra-' + secrets.token_hex(10), user['id'], 'leader', 'parish', pid, 'Leads or assists a ministry', 'ministry', NOW(), actor['id']))
+            elif person_id not in leading and current:
+                c.execute("UPDATE role_assignments SET status='ended',ended_at=?,ended_by=? WHERE user_id=? AND role='leader' AND scope='parish' "
+                          "AND scope_id=? AND status='active' AND source IN ('ministry','migrated')", (NOW(), actor['id'], user['id'], pid))
 
 
 # ───────────── Organisation, roles and permissions ─────────────
@@ -1160,6 +1535,7 @@ def migrate_v2(c):
             materialize_legacy(c, user, note='Copied from the account’s earlier role')
         c.execute("INSERT INTO schema_migrations VALUES('v2-roles',?)", (NOW(),))
     migrate_accounts(c)
+    c.executescript(CONNECTIONS_SCHEMA)
 
 
 def legacy_access(c, u):
@@ -1333,7 +1709,9 @@ def parishes(c, u, auth=None):
         if ctx is None: continue
         p = json.loads(r['metadata'])
         p['role'], p['roleAr'] = ROLE_TITLES[ctx['role']]
-        p.update(roleCode=ctx['role'], perms=sorted(ctx['perms']), diocese=r['diocese'])
+        link = next((l for l in auth['links'] if l['parish_id'] == r['id'] and l['status'] == 'active'), None)
+        p.update(roleCode=ctx['role'], perms=sorted(ctx['perms']), diocese=r['diocese'], primary=bool(link and link['is_primary']),
+                 kind=link['kind'] if link else None)
         state = c.execute('SELECT data FROM states WHERE parish_id=?', (r['id'],)).fetchone() if ctx['workspace'] not in {'member', 'follower'} else None
         if state:
             data = json.loads(state['data']); p['people'] = len(data['PEOPLE']); p['households'] = len(data['HOUSEHOLDS'])
@@ -1835,12 +2213,11 @@ def visible(c, u, pid, d):
     d['MEMBER_REQUESTS'] = office_member_requests(c, pid, d) if 'requests.manage' in perms else []
     d['ACCOUNTS'] = {}
     if 'people.manage' in perms:
+        # a person's account and its strongest role here (a staff role is listed after membership, so it wins)
         d['ACCOUNTS'] = {r['person_id']: dict(username=r['username'], role=r['role']) for r in c.execute(
-            'SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id '
-            'WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', (pid,))}
-        for r in c.execute("SELECT u.username,l.person_id FROM parish_links l JOIN users u ON u.id=l.user_id "
-                           "WHERE l.parish_id=? AND l.status='active' AND l.person_id IS NOT NULL ORDER BY u.username", (pid,)):
-            d['ACCOUNTS'].setdefault(r['person_id'], dict(username=r['username'], role='member'))
+            "SELECT u.username,a.role,a.person_id FROM parish_accounts a JOIN users u ON u.id=a.user_id "
+            "WHERE a.parish_id=? AND a.person_id IS NOT NULL ORDER BY u.username,CASE a.role WHEN 'member' THEN 0 ELSE 1 END", (pid,))}
+    d['MEMBERSHIP_REQUESTS'], d['INVITATIONS'] = office_connections(c, pid) if 'people.manage' in perms else ([], [])
     if 'notes.pastoral' not in perms:
         d['NOTES'] = []
     if 'settings.manage' not in perms:
@@ -2355,16 +2732,8 @@ def save_patch(c, u, pid, payload):
     d = migrate_state(d)
     validate(d)
     sync_relationships(c, pid, d)
+    sync_ministry_leaders(c, u, pid, d, {p for _, _, outgoing, incoming in role_changes for p in (outgoing, incoming) if p})
     for field, group_id, outgoing, incoming in role_changes:
-        if incoming:
-            c.execute("UPDATE users SET role='leader' WHERE role='member' AND person_id=? AND id IN (SELECT user_id FROM assignments WHERE parish_id=?)", (incoming, pid))
-        for account in c.execute("SELECT * FROM users WHERE role='leader' AND person_id=? AND id IN (SELECT user_id FROM assignments WHERE parish_id=?)", (outgoing, pid)).fetchall():
-            other_leadership = False
-            for parish_row in c.execute('SELECT parish_id FROM assignments WHERE user_id=?', (account['id'],)):
-                state = d if parish_row['parish_id'] == pid else json.loads(c.execute('SELECT data FROM states WHERE parish_id=?', (parish_row['parish_id'],)).fetchone()['data'])
-                if any(account['person_id'] in {item.get('leader'), item.get('assistant')} for item in state['GROUPS']):
-                    other_leadership = True; break
-            if not other_leadership: c.execute("UPDATE users SET role='member' WHERE id=?", (account['id'],))
         audit(c, u, pid, 'Leadership handover' if field == 'leader' else 'Group assistant changed',
               {'group': group_id, 'from': outgoing, 'to': incoming})
     c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
@@ -2901,9 +3270,7 @@ def notify_member(c, pid, user_id, kind, title, body, route):
 
 def notify_meeting_changes(c, pid, old, current):
     accounts = {}
-    for row in c.execute(
-        "SELECT u.id,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.role='member'",
-        (pid,)):
+    for row in c.execute("SELECT DISTINCT user_id AS id,person_id FROM parish_accounts WHERE parish_id=? AND role='member'", (pid,)):
         if row['person_id']: accounts.setdefault(row['person_id'], []).append(row['id'])
     if not accounts: return
     for group in current['GROUPS']:
@@ -3579,16 +3946,18 @@ def member_action(c, u, pid, q):
     elif op == 'accountReset':
         require(u['role'] in CLERGY | {'secretary'}, 'Parish office access required.', 403)
         person_id = q.get('personId')
-        target = c.execute("SELECT u.* FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? "
-                           "AND u.role IN ('member','leader')", (pid, person_id)).fetchone() if isinstance(person_id, str) else None
+        target = c.execute("SELECT u.* FROM parish_accounts a JOIN users u ON u.id=a.user_id WHERE a.parish_id=? AND a.person_id=? "
+                           "AND a.role IN ('member','leader') ORDER BY a.role DESC", (pid, person_id)).fetchone() if isinstance(person_id, str) else None
         require(target is not None, 'This person has no online account to reset.', 404)
+        require(all(a['role'] == 'leader' and a['scope'] == 'parish' for a in authority(c, target)['assignments']),
+                'This account holds a staff role. Only an administrator with authority over that role can reset it.', 403)
         temporary = ''.join(secrets.choice('23456789') for _ in range(8))
         c.execute('UPDATE users SET password=? WHERE id=?', (password_hash(temporary), target['id']))
         c.execute('DELETE FROM sessions WHERE user_id=?', (target['id'],))
         audit(c, u, pid, 'member.password-reset', {'person': person_id})
         return {'username': target['username'], 'password': temporary}
     elif op == 'profileRequest':
-        require(q.get('field') in {'name', 'phone', 'email', 'address', 'emergency contact', 'date of birth', 'ministry memberships', 'profile picture'}, 'Invalid field.')
+        require(q.get('field') in PROFILE_REQUEST_FIELDS, 'Invalid field.')
         value = q.get('value')
         require(isinstance(value, str) and 0 < len(value.strip()) <= 500, 'Enter the requested update.')
         c.execute('INSERT INTO member_profile_requests VALUES(?,?,?,?,?,?,?)',
@@ -3622,7 +3991,7 @@ def member_action(c, u, pid, q):
         c.execute('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                   (content_id, pid, group_id, q['kind'], u['id'], None, title.strip(), body,
                    str(q.get('category', ''))[:60], event_id, attachment, int(bool(q.get('pinned'))), NOW()))
-        members = c.execute("SELECT u.id,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.role='member'", (pid,))
+        members = c.execute("SELECT DISTINCT user_id AS id,person_id FROM parish_accounts WHERE parish_id=? AND role='member'", (pid,))
         for target in members:
             if group_id and not any(r.get('p') == target['person_id'] for r in d['GROUP_DETAIL'].get(group_id, {}).get('roster', [])):
                 continue
@@ -3637,8 +4006,7 @@ def member_action(c, u, pid, q):
                                       if u['person_id'] in {group.get('leader'), group.get('assistant')}}
                         and recipient_person_id in {row.get('p') for row in d['GROUP_DETAIL'].get(g['id'], {}).get('roster', [])}
                         for g in d['GROUPS']), 'You may message members of your ministries only.', 403)
-        recipient = c.execute('SELECT u.id FROM users u JOIN assignments a ON a.user_id=u.id '
-                              'WHERE a.parish_id=? AND u.person_id=? LIMIT 1',
+        recipient = c.execute('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? AND person_id=? LIMIT 1',
                               (pid, recipient_person_id)).fetchone()
         require(recipient is not None, 'This person does not have an active in-app account.', 404)
         title, body = q.get('title'), q.get('body')
@@ -3653,9 +4021,9 @@ def member_action(c, u, pid, q):
     elif op == 'message':
         require(group_id in gids, 'Ministry membership required.', 403)
         group = next(g for g in d['GROUPS'] if g['id'] == group_id)
-        recipient = c.execute('SELECT u.id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? '
-                              'AND u.person_id IN (?,?) AND u.role IN (\'leader\',\'priest\',\'secretary\') '
-                              'ORDER BY CASE WHEN u.person_id=? THEN 0 ELSE 1 END LIMIT 1',
+        recipient = c.execute('SELECT user_id AS id FROM parish_accounts WHERE parish_id=? '
+                              'AND person_id IN (?,?) AND role IN (\'leader\',\'priest\',\'parishadmin\',\'secretary\') '
+                              'ORDER BY CASE WHEN person_id=? THEN 0 ELSE 1 END LIMIT 1',
                               (pid, group.get('leader'), group.get('assistant'), group.get('leader'))).fetchone()
         require(recipient is not None, 'This ministry has no available messaging contact.', 403)
         body = q.get('body', '')
@@ -3922,32 +4290,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                            for row in c.execute('SELECT id,metadata FROM parishes')
                                            for meta in [json.loads(row['metadata'])]]})
                 if path.startswith('/api/public/parishes/') and self.command == 'GET':
-                    public_id = path.rsplit('/', 1)[-1]
-                    row = c.execute('SELECT data FROM states WHERE parish_id=?', (public_id,)).fetchone()
-                    require(row is not None, 'Parish not found.', 404)
-                    public_state = json.loads(row['data'])
-                    parish = public_state['PARISH']
-                    content = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')}
-                               for key, item in public_state.get('CONTENT', {}).items()
-                               if isinstance(item, dict) and item.get('published', True)}
-                    events = []
-                    for event in public_state.get('EVENTS', []):
-                        detail = public_state.get('EVENT_DETAIL', {}).get(event.get('id'), {})
-                        if event.get('kind') == 'pending' or (detail.get('visibility') != 'public'
-                            and not (not detail and event.get('kind') in {'mass', 'event'})): continue
-                        events.append({key: event.get(key, '') for key in ('id', 'd', 't', 'title', 'titleAr', 'kind')})
-                    posts = [dict(title=item['title'], body=item['body'], at=item['created_at'])
-                             for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", (public_id,))]
-                    posts.extend(dict(title=n.get('title', ''), body=n.get('ar', ''), at=n.get('at', ''))
-                                 for n in public_state.get('NOTICES', []) if n.get('audience') == 'Parish' and not n.get('groupId'))
-                    posts.sort(key=lambda item: item['at'], reverse=True)
-                    public_parish = {key: parish.get(key, '') for key in
-                                     ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
-                    public_parish['theme'] = parish_theme(parish)
-                    if not content.get('contact'):
-                        public_parish.update(address='', addressAr='', phone='')
-                    return self.reply(200, {'parish': public_parish,
-                                             'content': content, 'events': events, 'posts': posts})
+                    return self.reply(200, public_parish(c, path.rsplit('/', 1)[-1]))
+                if path == '/api/invitations/info' and self.command == 'POST':
+                    return self.reply(200, invitation_info(c, q.get('token')))
                 if path == '/api/auth/config' and self.command == 'GET':
                     return self.reply(200, auth_config())
                 if path == '/api/login' and self.command == 'POST':
@@ -3987,6 +4332,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         outbox = []; result = account_action(c, u, session, q, outbox); c.commit()
                         if outbox: send_outbox(c, outbox); result['delivery'] = outbox[-1]['status']
                         return self.reply(200, result)
+                    raise Problem(405, 'Method not allowed.')
+                if path == '/api/connections':
+                    if self.command == 'GET': return self.reply(200, connections_view(c, u))
+                    if self.command == 'POST':
+                        result = connections_action(c, u, q); c.commit(); return self.reply(200, result)
                     raise Problem(405, 'Method not allowed.')
                 if path == '/api/oversight' and self.command == 'GET':
                     return self.reply(200, {'parishes': oversight(c, u)})
@@ -4066,6 +4416,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply(200, {'rows': xlsx_preview(q.get('data'))})
                 if endpoint == 'oversight' and self.command == 'GET':
                     return self.reply(200, oversight(c, u, pid))
+                if endpoint == 'connections' and self.command == 'POST':
+                    outbox = []
+                    base = os.environ.get('PARISHLIFE_PUBLIC_URL', '').rstrip('/') or \
+                        ('https://' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else 'http://') + self.headers.get('Host', '127.0.0.1')
+                    result = office_connection_action(c, u, pid, q, outbox, base); c.commit()
+                    if outbox: send_outbox(c, outbox); result['delivery'] = outbox[0]['status']
+                    return self.reply(200, result)
                 if endpoint == 'member':
                     if self.command == 'GET': return self.reply(200, member_view(c, u, pid))
                     if self.command == 'POST':

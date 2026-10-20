@@ -24,7 +24,7 @@ export const ROLES = {
     en:'Parish member', ar:'عضو في الرعية', who:null,
     noteEn:'Your requests, ministries, meetings and personal parish life.',
     noteAr:'طلباتك وخدماتك واجتماعاتك وحياتك الرعوية.',
-    nav:[L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
+    nav:[L('home'), H('This parish','هذه الرعية'), L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
       L('mymessages'), L('myfeed'), L('myresources'), L('mycommitments'), L('mynotes'),
       L('myprofile'), L('myconcerns'), L('membernotifications')]
   },
@@ -50,7 +50,13 @@ export const ROLES = {
     en:'ParishLife account', ar:'حساب ParishLife', who:null,
     noteEn:'Your own account. Follow a parish or ask to become a member to see more.',
     noteAr:'حسابك الخاص. تابع رعية أو اطلب الانتساب إليها لترى المزيد.',
-    nav:[L('account')]
+    nav:[L('home'), L('account')]
+  },
+  follower: {
+    en:'Following', ar:'متابِع', who:null,
+    noteEn:'You follow this parish: its public news reaches you. Ask to become a member to use its member portal.',
+    noteAr:'تتابع هذه الرعية فتصلك أخبارها العامة. اطلب الانتساب لتستعمل بوابة أعضائها.',
+    nav:[L('home'), L('account')]
   },
   priest: {
     en:'Parish priest', ar:'كاهن الرعية', who:'p17',
@@ -107,11 +113,12 @@ export const ROLES = {
 };
 
 export const MOBILE_NAV = {
-  member:    ['memberhome','myrequests','mymessages','mycalendar','myprofile'],
+  member:    ['home','memberhome','myrequests','mymessages','myprofile'],
   bishop: ['oversight','bishopmap','bishopeparchy','administration'],
   superadmin: ['administration'],
   diocesanadmin: ['administration'],
-  user: ['account'],
+  user: ['home', 'account'],
+  follower: ['home', 'account'],
   parishadmin: ['dashboard','people','calendar','requests'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],

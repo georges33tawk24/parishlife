@@ -29,7 +29,7 @@ const KIND_OF = { email: 'email', sms: 'phone' };
 const DELIVERY_ENV = { email: 'PARISHLIFE_EMAIL_WEBHOOK', sms: 'PARISHLIFE_SMS_WEBHOOK' };
 const CODE_TTL = 900;
 const LOGIN_ATTEMPTS = 10, LOGIN_WINDOW = 900;
-const sha = text => sha256hex(String(text));
+export const sha = text => sha256hex(String(text));
 const squash = value => str(or(value, '')).replace(/\s/g, '');
 
 /* datetime.fromtimestamp(seconds, timezone.utc).isoformat() */
@@ -44,7 +44,7 @@ function hourAgo() {
 }
 
 /* An email address in lower case, or a phone number in international form. */
-function contactValue(kind, raw) {
+export function contactValue(kind, raw) {
   const text = strip(str(or(raw, '')));
   if (kind === 'email') {
     const value = text.toLowerCase();
@@ -104,17 +104,20 @@ async function issueCode(c, ctx, userId, purpose, kind, target, outbox) {
   const cid = tokenHex(12), code = String(randomInt(0, 1000000)).padStart(6, '0');
   const status = mode === 'service' ? 'sending' : 'console';
   c.run('INSERT INTO verification_codes VALUES(?,?,?,?,?,?,?,?,?,?,?)', cid, userId, purpose, channel, target, codeHash(cid, code), now, now + CODE_TTL, 0, status, null);
-  outbox.push({ id: cid, channel, target, code, mode, status });
+  outbox.push({ id: cid, table: 'verification_codes', channel, target, mode, status, subject: 'Your ParishLife code',
+    text: `Your ParishLife code is ${code}. It expires in 15 minutes. If you did not ask for it, ignore this message.\n` +
+      `رمز ParishLife الخاص بك هو ${code}. تنتهي صلاحيته بعد ١٥ دقيقة.` });
   return status;
 }
 
 /* Written after the request's own commit, in a transaction of its own. */
-async function recordDelivery(db, id, status) {
+const DELIVERY_TABLES = { verification_codes: 'verification_codes', invitations: 'invitations' };
+async function recordDelivery(db, table, id, status) {
   for (let attempt = 1; attempt <= 8; attempt++) {
     const c = new Tx(db);
     try {
       await c.reads([]);
-      c.run('UPDATE verification_codes SET delivery=? WHERE id=?', status, id);
+      c.run(`UPDATE ${DELIVERY_TABLES[table]} SET delivery=? WHERE id=?`, status, id);
       await c.commit();
       return;
     } catch (error) {
@@ -123,13 +126,11 @@ async function recordDelivery(db, id, status) {
   }
 }
 
-/* After the commit: hand each code to the delivery service and record whether it accepted it. */
+/* After the commit: hand each message (a code, an invitation) to the delivery service and record whether it accepted it. */
 export async function sendOutbox(ctx, outbox) {
   for (const item of outbox) {
-    const text = `Your ParishLife code is ${item.code}. It expires in 15 minutes. If you did not ask for it, ignore this message.\n` +
-      `رمز ParishLife الخاص بك هو ${item.code}. تنتهي صلاحيته بعد ١٥ دقيقة.`;
     if (item.mode === 'console') {
-      console.log(`[dev outbox, NOT SENT] ${item.channel} to ${item.target}: ParishLife code ${item.code}`);
+      console.log(`[dev outbox, NOT SENT] ${item.channel} to ${item.target}: ${item.text.split('\n')[0]}`);
       continue;
     }
     const headers = { 'Content-Type': 'application/json' };
@@ -137,13 +138,13 @@ export async function sendOutbox(ctx, outbox) {
     try {
       const response = await fetch(ctx.env[DELIVERY_ENV[item.channel]], {
         method: 'POST', headers, signal: AbortSignal.timeout(10000),
-        body: JSON.stringify({ channel: item.channel, to: item.target, subject: 'Your ParishLife code', text })
+        body: JSON.stringify({ channel: item.channel, to: item.target, subject: item.subject, text: item.text })
       });
       item.status = response.ok ? 'sent' : 'failed';
     } catch {
       item.status = 'failed';
     }
-    await recordDelivery(ctx.env.DB, item.id, item.status);
+    await recordDelivery(ctx.env.DB, item.table, item.id, item.status);
   }
   return outbox.map(item => ({ channel: item.channel, to: item.target, delivery: item.status }));
 }
@@ -334,7 +335,7 @@ export async function signIn(c, q) {
   return u;
 }
 
-function birthDate(value) {
+export function birthDate(value) {
   const text = str(or(value, ''));
   need(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(text), 'Enter your date of birth.');
   const [y, m, d] = text.split('-').map(Number);
@@ -552,12 +553,14 @@ export async function providerComplete(c, ctx, q, outbox) {
 
 /* The person's own account: name, sign-in methods and their verification, two-step verification, providers. */
 export async function accountView(c, ctx, u) {
-  const [profiles, contactRows, codes, identityRows] = await c.reads([
+  const [profiles, contactRows, codes, identityRows, memberRows] = await c.reads([
     ['SELECT * FROM user_profiles WHERE user_id=?', [u.id]],
     ['SELECT * FROM user_contacts WHERE user_id=? ORDER BY kind,created_at', [u.id]],
     ["SELECT target,delivery,created,expires,used_at FROM verification_codes WHERE user_id=? AND purpose='verify' ORDER BY created DESC", [u.id]],
-    ['SELECT * FROM user_identities WHERE user_id=? ORDER BY linked_at', [u.id]]
+    ['SELECT * FROM user_identities WHERE user_id=? ORDER BY linked_at', [u.id]],
+    ["SELECT p.* FROM parishes p JOIN parish_links l ON l.parish_id=p.id WHERE l.user_id=? AND l.kind='member' AND l.status='active' ORDER BY p.rowid", [u.id]]
   ]);
+  const { parishBrief } = await import('./connections.js');
   const profile = profiles[0] ?? null, names = u.name.split(' '), now = time();
   const contacts = contactRows.map(k => {
     const code = k.verified_at ? null : codes.find(r => r.target === k.value) ?? null;
@@ -572,6 +575,7 @@ export async function accountView(c, ctx, u) {
   const identities = identityRows.map(r => ({ provider: r.provider, name: PROVIDERS[r.provider]?.name ?? r.provider, email: r.email, linkedAt: r.linked_at }));
   return { username: u.username, name: u.name, firstName: profile ? profile.first_name : names[0],
     lastName: profile ? profile.last_name : names.slice(1).join(' '), birthDate: profile ? profile.birth_date : '',
+    details: profile ? JSON.parse(profile.data) : {}, memberParishes: memberRows.map(parishBrief),
     hasPassword: truthy(u.password), contacts, mfa, identities, config: authConfig(ctx) };
 }
 
@@ -595,6 +599,10 @@ export async function accountAction(c, ctx, u, session, q, outbox) {
     c.run('UPDATE users SET name=? WHERE id=?', `${first} ${last}`, u.id);
     audit(c, u, null, 'account.name-changed', {});
     return {};
+  }
+  if (op === 'saveProfile') {
+    const { saveProfile } = await import('./connections.js');
+    return saveProfile(c, u, q, at);
   }
   if (['addContact', 'sendCode', 'verifyContact', 'removeContact'].includes(op)) {
     const kind = get(q, 'kind');

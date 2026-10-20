@@ -683,6 +683,9 @@ export const REQUEST_HISTORY = [];
 export const MEMBER_REQUESTS = [];
 /* Who can sign in to the portal, by person: { username, role }. Sent to the parish office only. */
 export const ACCOUNTS = {};
+/* Membership requests from accounts, and invitations the office sent (read-only here; the server keeps them). */
+export const MEMBERSHIP_REQUESTS = [];
+export const INVITATIONS = [];
 
 /* Photos people upload: a small square JPEG per person (and 'parish' for the seal), kept with the rest. */
 export const PHOTOS = {};

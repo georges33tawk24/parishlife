@@ -2,12 +2,13 @@
    treasurer on what is open in the safe, the volunteer on the door. */
 import { t, isAr, num, usd, fmtLong, fmtDate } from '../i18n.js';
 import { S, role, me, is, bus } from '../store.js';
-import { session } from '../api.js';
+import { session, can } from '../api.js';
 import { M, loadMember } from '../member-data.js';
 import { icon, pageHead, sectionH, stat, panel, who, status, amount, pill, esc, table, empty } from '../ui.js';
 import { PARISH, TODAY, RATE, EVENTS, SACRAMENTS, RESERVATIONS, BATCH, EXPENSES, FUNDS, PEOPLE, HOUSEHOLDS, PORTAL_REQUESTS,
          GROUPS, GROUP_DETAIL, ROTA, AUDIT, NOTICES, anniversaryItems, CHECKIN, person, venue, group, resStatus, resClash } from '../data.js';
 import { waitingOnline, onlineTitle, subjectOf } from './online-requests.js';
+import { pendingMembership } from './connections-office.js';
 import * as C from '../components.js';
 
 const greet = () => {
@@ -35,13 +36,14 @@ const onlineRows = () => waitingOnline().map(r => `<a class="listrow" href="#/re
 const onlinePanel = () => waitingOnline().length ? panel(t('New online requests', 'طلبات إلكترونية جديدة'), onlineRows(),
   { more: `<a href="#/requests">${t('All requests', 'كل الطلبات')}</a>`, tight: true }) : '';
 
-/* Parishioners who opened an account themselves and whose record the office has not checked yet. */
+/* Accounts asking to become members, waiting for the office to link them to a record. (Records made by the
+   earlier self-registration, not yet checked, are flagged on their own page.) */
 const newOnline = () => {
-  const list = PEOPLE.filter(p => p.registeredOnline && !p.registeredOnline.verified);
-  if (!list.length || !is('priest', 'secretary')) return '';
-  return `<div class="dash-new">${C.inlineAlert('info', t(list.length === 1 ? '1 parishioner registered online. ' : `${list.length} parishioners registered online. `, list.length === 1 ? 'سجّل مؤمن واحد إلكترونياً. ' : `سجّل ${list.length} مؤمنين إلكترونياً. `),
-    t('Check their details and mark each record as verified.', 'تحقّق من معلوماتهم وعلّم كل سجل كمُتحقَّق منه.'),
-    `<button class="btn btn-secondary btn-dense" data-act="people-new-open">${t('Review them', 'مراجعتهم')}</button>`)}</div>`;
+  const waiting = pendingMembership().length;
+  if (!waiting || !is('priest', 'secretary') || !can('people.manage')) return '';
+  return `<div class="dash-new">${C.inlineAlert('info', t(waiting === 1 ? '1 account asks to become a member. ' : `${waiting} accounts ask to become members. `, waiting === 1 ? 'حساب واحد يطلب الانتساب. ' : `${waiting} حسابات تطلب الانتساب. `),
+    t('Link each to the person’s record, create one, or decline.', 'اربط كلاً منها بسجلّ الشخص، أو أنشئ سجلاً، أو ارفض.'),
+    `<a class="btn btn-secondary btn-dense" href="#/people/accounts">${t('Review them', 'مراجعتهم')}</a>`)}</div>`;
 };
 
 function todayPanel() {

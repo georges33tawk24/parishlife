@@ -146,8 +146,28 @@ export async function migrateAccounts(c) {
   c.run("INSERT OR IGNORE INTO schema_migrations VALUES('v2-contacts',?)", NOW());
 }
 
+/* Membership requests, invitations, and every account's roles per parish in one view (connections.js uses them). */
+export const CONNECTIONS_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS membership_requests(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), parish_id TEXT NOT NULL REFERENCES parishes(id), status TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', profile TEXT NOT NULL DEFAULT '{}', person_id TEXT, invitation_id TEXT, created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, decision_note TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS membership_requests_parish ON membership_requests(parish_id,status)`,
+  `CREATE INDEX IF NOT EXISTS membership_requests_user ON membership_requests(user_id,status)`,
+  `CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, parish_id TEXT NOT NULL REFERENCES parishes(id), person_id TEXT NOT NULL, channel TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', token TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, created_by TEXT, expires REAL NOT NULL, delivery TEXT NOT NULL, accepted_at TEXT, accepted_by TEXT, revoked_at TEXT, revoked_by TEXT)`,
+  `CREATE INDEX IF NOT EXISTS invitations_person ON invitations(parish_id,person_id)`,
+  `CREATE VIEW IF NOT EXISTS parish_accounts AS
+  SELECT l.user_id AS user_id, l.parish_id AS parish_id, l.person_id AS person_id, 'member' AS role
+    FROM parish_links l JOIN users u ON u.id=l.user_id WHERE l.kind='member' AND l.status='active' AND u.role<>'disabled'
+  UNION
+  SELECT r.user_id, r.scope_id, COALESCE((SELECT l.person_id FROM parish_links l WHERE l.user_id=r.user_id AND l.parish_id=r.scope_id
+      AND l.status='active'), u.person_id), r.role
+    FROM role_assignments r JOIN users u ON u.id=r.user_id WHERE r.scope='parish' AND r.status='active' AND u.role<>'disabled'
+  UNION
+  SELECT u.id, a.parish_id, u.person_id, u.role FROM users u JOIN assignments a ON a.user_id=u.id
+    WHERE u.role<>'disabled' AND NOT EXISTS (SELECT 1 FROM role_assignments r WHERE r.user_id=u.id)
+      AND NOT EXISTS (SELECT 1 FROM parish_links l WHERE l.user_id=u.id)`
+];
+
 export async function migrateV2(db) {
-  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA].map(sql => db.prepare(sql)));
+  await db.batch([...V2_SCHEMA, ...ACCOUNTS_SCHEMA, ...CONNECTIONS_SCHEMA].map(sql => db.prepare(sql)));
   const columns = await db.prepare("SELECT name FROM pragma_table_info('dioceses')").all();
   if (!columns.results.some(column => column.name === 'metadata'))
     await db.prepare("ALTER TABLE dioceses ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").run();
@@ -236,7 +256,7 @@ export function assignmentPerms(a) {
   return out;
 }
 
-const isBlocked = (auth, diocese, pid = null) => auth.blocks.some(b => b.scope === 'global' || (b.scope === 'diocese' && b.scope_id === diocese)
+export const isBlocked = (auth, diocese, pid = null) => auth.blocks.some(b => b.scope === 'global' || (b.scope === 'diocese' && b.scope_id === diocese)
   || (pid !== null && b.scope === 'parish' && b.scope_id === pid));
 
 export function systemPerms(auth) {
@@ -322,7 +342,8 @@ export async function parishes(c, u, known = {}, auth = null) {
   return contexts.map(([r, ctx]) => {
     const p = JSON.parse(r.metadata);
     [p.role, p.roleAr] = ROLE_TITLES[ctx.role];
-    Object.assign(p, { roleCode: ctx.role, perms: sorted([...ctx.perms]), diocese: r.diocese });
+    const link = auth.links.find(l => l.parish_id === r.id && l.status === 'active');
+    Object.assign(p, { roleCode: ctx.role, perms: sorted([...ctx.perms]), diocese: r.diocese, primary: Boolean(link?.is_primary), kind: link ? link.kind : null });
     const data = ctx.workspace === 'member' || ctx.workspace === 'follower' ? null
       : Object.prototype.hasOwnProperty.call(known, r.id) ? known[r.id] : parsed.get(r.id);
     if (data) {

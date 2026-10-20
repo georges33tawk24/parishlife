@@ -19,6 +19,7 @@ import {
   accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish
 } from './identity.js';
 import { xlsx_preview } from './xlsx.js';
+import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction } from './connections.js';
 
 const HEADERS = {
   'Cache-Control': 'no-store',
@@ -120,37 +121,8 @@ async function handle(c, env, request, url, q, secureCookie) {
       return { id: row.id, name: get(meta, 'name', ''), ar: get(meta, 'ar', ''), town: get(meta, 'town', ''), townAr: get(meta, 'townAr', '') };
     }) });
   }
-  if (path.startsWith('/api/public/parishes/') && method === 'GET') {
-    const publicId = path.slice(path.lastIndexOf('/') + 1);
-    const row = await c.first('SELECT data FROM states WHERE parish_id=?', publicId);
-    need(row !== null, 'Parish not found.', 404);
-    const publicState = JSON.parse(row.data);
-    const parish = K(publicState, 'PARISH');
-    const content = {};
-    for (const [key, item] of items(get(publicState, 'CONTENT', {}))) {
-      if (isObject(item) && truthy(get(item, 'published', true))) content[key] = { en: get(item, 'en', ''), ar: get(item, 'ar', '') };
-    }
-    const events = [];
-    for (const event of iter(get(publicState, 'EVENTS', []))) {
-      const detail = get(get(publicState, 'EVENT_DETAIL', {}), get(event, 'id'), {});
-      if (eq(get(event, 'kind'), 'pending') || (!eq(get(detail, 'visibility'), 'public') &&
-        !(!truthy(detail) && has(new Set(['mass', 'event']), get(event, 'kind'))))) continue;
-      const item = {};
-      for (const key of ['id', 'd', 't', 'title', 'titleAr', 'kind']) item[key] = get(event, key, '');
-      events.push(item);
-    }
-    const postRows = await c.all("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", publicId);
-    const posts = postRows.map(item => ({ title: item.title, body: item.body, at: item.created_at }));
-    for (const n of iter(get(publicState, 'NOTICES', []))) {
-      if (eq(get(n, 'audience'), 'Parish') && !truthy(get(n, 'groupId'))) posts.push({ title: get(n, 'title', ''), body: get(n, 'ar', ''), at: get(n, 'at', '') });
-    }
-    const orderedPosts = sorted(posts, item => item.at, true);
-    const publicParish = {};
-    for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) publicParish[key] = get(parish, key, '');
-    publicParish.theme = parish_theme(parish);
-    if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
-    return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
-  }
+  if (path.startsWith('/api/public/parishes/') && method === 'GET') return reply(200, await publicParish(c, path.slice(path.lastIndexOf('/') + 1)));
+  if (path === '/api/invitations/info' && method === 'POST') return reply(200, await invitationInfo(c, get(q, 'token')));
   const ctx = deliveryContext(env, url);
   /* Codes are handed to the delivery service only after the commit, so a retried request never sends twice. */
   const startSession = async (userId, outbox = [], delivery = null) => {
@@ -220,6 +192,15 @@ async function handle(c, env, request, url, q, secureCookie) {
         await sendOutbox(ctx, outbox);
         result.delivery = outbox[outbox.length - 1].status;
       }
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/connections') {
+    if (method === 'GET') return reply(200, await connectionsView(c, u));
+    if (method === 'POST') {
+      const result = await connectionsAction(c, u, q);
+      await c.commit();
       return reply(200, result);
     }
     throw new Problem(405, 'Method not allowed.');
@@ -329,6 +310,16 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { rows: xlsx_preview(get(q, 'data')) });
   }
   if (endpoint === 'oversight' && method === 'GET') return reply(200, await oversight(c, u, pid));
+  if (endpoint === 'connections' && method === 'POST') {
+    const outbox = [], base = String(env.PARISHLIFE_PUBLIC_URL || '').replace(/\/+$/, '') || url.origin;
+    const result = await officeConnectionAction(c, ctx, u, pid, q, outbox, base);
+    await c.commit();
+    if (outbox.length) {
+      await sendOutbox(ctx, outbox);
+      result.delivery = outbox[0].status;
+    }
+    return reply(200, result);
+  }
   if (endpoint === 'member') {
     if (method === 'GET') {
       const view = await member_view(c, u, pid);

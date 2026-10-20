@@ -1568,3 +1568,22 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .acct-add .label,.acct-contact .admin-inline-form .label{margin:0;flex-basis:100%}
 .acct-add .input{flex:1;min-width:12em}
 .acct-add .btn,.acct-contact .admin-inline-form .btn{margin-top:0}
+
+/* ---------- My parishes ---------- */
+.home-prompt{margin-bottom:12px}
+.home-prompt>span{display:block}
+.home-selector{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.chip-toggle{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font:500 14px/1.2 var(--sans);cursor:pointer}
+.chip-toggle:hover{border-color:var(--border-strong);color:var(--text)}
+.chip-toggle[aria-pressed=true]{border-color:var(--primary);background:var(--primary-subtle);color:var(--primary);font-weight:600}
+.chip-toggle:focus-visible{outline:none;box-shadow:var(--focus)}
+[dir=rtl] .chip-toggle{font-family:var(--arabic)}
+.home-feed{margin-bottom:16px}
+.home-post{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px}
+.home-parishes .grow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.home-parishes .grow>small{flex-basis:100%}
+.home-parishes .grow>b{display:inline}
+.panel+.panel,.home-feed+.panel{margin-top:16px}
+.invite-ways{display:grid;gap:8px}
+.invite-ways .signin-way span{flex-direction:column;align-items:flex-start;min-height:0;padding:12px 14px;text-align:start}
+.invite-ways .signin-way small{font-weight:400}

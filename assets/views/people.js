@@ -10,6 +10,8 @@ import * as F from '../flows.js';
 import { download, wireActions } from '../actions.js';
 import { persist } from '../persist.js';
 import { printSheet } from '../print.js';
+import { membershipRequests, pendingMembership, invitationsFor, wireConnections } from './connections-office.js';
+import { can } from '../api.js';
 import { readAddressCascade } from '../geography.js';
 import { memberAction } from '../member-data.js';
 import { phoneShow } from '../sacrament-requests.js';
@@ -144,6 +146,8 @@ const unverified = p => !!p.registeredOnline && !p.registeredOnline.verified;
 /* People lists and profiles carry no online/new labels: how a record began is in its account panel. */
 const signInName = v => /^\+\d+$/.test(v) ? phoneShow(v) : v;
 const ACCESS = { member: ['Member portal', 'بوّابة المؤمنين'], leader: ['Member portal · ministry leader', 'بوّابة المؤمنين · مسؤول خدمة'] };
+const STAFF_ACCESS = { priest: ['Parish priest', 'كاهن الرعية'], parishadmin: ['Parish admin', 'إداري الرعية'], secretary: ['Parish office', 'مكتب الرعية'],
+  treasurer: ['Treasurer', 'أمين الصندوق'] };
 const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', 'Roman Catholic': 'لاتيني', Syriac: 'سرياني' };
 const riteLabel = r => t(r, RITE_AR[r] || r);
 const filteredPeople = () => PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status))
@@ -178,6 +182,7 @@ function peopleExport() {
   });
 }
 const TABS = () => [['', 'All people', 'كل المؤمنين'], ['duplicates', 'Duplicates', 'التكرارات', DUPLICATES.length],
+              ...(can('people.manage') ? [['accounts', 'Account requests', 'طلبات الحسابات', pendingMembership().length]] : []),
               ['import', 'Import', 'استيراد'],
               ['archived', 'Deactivated', 'الموقوفون', ARCHIVED.length]];
 
@@ -193,6 +198,7 @@ export function people(tab = '') {
   }) + tabBar('people', TABS(), tab);
 
   if (tab === 'duplicates') return head + duplicates();
+  if (tab === 'accounts') return head + membershipRequests();
   if (tab === 'import') return head + importView();
   if (tab === 'archived') return head + archived();
 
@@ -329,6 +335,7 @@ export function deleteGuard(p, { dry = false } = {}) {
 
 people.mount = host => {
   C.wire(host);
+  wireConnections(host);
   wireImport(host);
   host.querySelector('#people-export')?.addEventListener('click', peopleExport);
   host.querySelector('#people-directory')?.addEventListener('click', printPeopleDirectory);
@@ -705,14 +712,19 @@ export function personView(id, tab = '') {
    made themselves, and a new password when they forget theirs. Only the parish office sees it. */
 function accountPanel(p) {
   const account = D.ACCOUNTS[p.id], online = p.registeredOnline;
-  if (!is('priest', 'secretary') || !(account || online)) return '';
-  const access = account && (ACCESS[account.role] || [account.role, account.role]);
+  if (!is('priest', 'secretary') || !can('people.manage')) return '';
+  const access = account && (ACCESS[account.role] || STAFF_ACCESS[account.role] || [account.role, account.role]);
+  /* No account yet: the office can invite the person to create one (or link theirs), and sees what became of each invitation. */
+  if (!account && !online) return panel(t('Online account', 'الحساب الإلكتروني'), `
+    <p class="dim">${t('No ParishLife account is linked to this record.', 'لا حساب ParishLife مرتبط بهذا السجل.')}</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-secondary btn-dense" type="button" data-invite="${esc(p.id)}">${icon('mail', 15)}${t('Invite to ParishLife', 'دعوة إلى ParishLife')}</button></div>
+    ${invitationsFor(p.id)}`);
   return panel(t('Online account', 'الحساب الإلكتروني'), `
     ${unverified(p) ? C.inlineAlert('warning', t('Registered online. ', 'سجّل نفسه إلكترونياً. '), t('Check the details they gave — the Arabic name, town and household — then mark the record as verified.', 'تحقّق من المعلومات التي أدخلها — الاسم بالعربية والبلدة والعائلة — ثم علّم السجل كمُتحقَّق منه.')) : ''}
     <dl class="dl">
       ${account ? `<dt>${t('Signs in with', 'يسجّل الدخول بـ')}</dt><dd><bdi class="mono" dir="ltr">${esc(signInName(account.username))}</bdi></dd>
         <dt>${t('Access', 'الصلاحية')}</dt><dd>${esc(t(...access))}</dd>` : ''}
-      ${online ? `<dt>${t('Registered', 'التسجيل')}</dt><dd>${fmtDate(online.at)} · ${online.via === 'email' ? t('with an email address', 'ببريد إلكتروني') : t('with a phone number', 'برقم هاتف')}</dd>
+      ${online ? `<dt>${t('Registered', 'التسجيل')}</dt><dd>${fmtDate(online.at)} · ${online.via === 'account' ? t('from a ParishLife account, approved by the office', 'من حساب ParishLife، بموافقة المكتب') : online.via === 'email' ? t('with an email address', 'ببريد إلكتروني') : t('with a phone number', 'برقم هاتف')}</dd>
         <dt>${t('Verified', 'التحقّق')}</dt><dd>${online.verified ? `${t('Yes', 'نعم')}${online.verifiedBy ? ` · ${esc(online.verifiedBy)}` : ''}${online.verifiedAt ? ` · ${fmtDate(online.verifiedAt)}` : ''}` : t('Not yet', 'ليس بعد')}</dd>` : ''}
     </dl>
     ${unverified(p) || (account && ACCESS[account.role]) ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
@@ -754,7 +766,7 @@ function resetPassword(p) {
 }
 
 personView.mount = (host, id) => {
-  C.wire(host); wireTables(host);
+  C.wire(host); wireTables(host); wireConnections(host);
   host.querySelector('#account-reset')?.addEventListener('click', () => { const p = person(id); if (p) resetPassword(p); });
   host.querySelector('[data-pkebab]')?.addEventListener('click', e => personMenu(e.currentTarget, id));
   host.querySelector('#edit-person-groups')?.addEventListener('click',()=>editPersonGroups(id));

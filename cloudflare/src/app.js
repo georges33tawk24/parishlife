@@ -466,13 +466,13 @@ export async function visible(c, u, pid, d, { fresh = false, stored = false } = 
   d.MEMBER_REQUESTS = perms.has('requests.manage') ? await office_member_requests(c, pid, d) : [];
   d.ACCOUNTS = {};
   if (perms.has('people.manage')) {
-    const [legacyRows, linkRows] = await c.reads([
-      ['SELECT u.username,u.role,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id IS NOT NULL ORDER BY u.username', [pid]],
-      ["SELECT u.username,l.person_id FROM parish_links l JOIN users u ON u.id=l.user_id WHERE l.parish_id=? AND l.status='active' AND l.person_id IS NOT NULL ORDER BY u.username", [pid]]
-    ]);
-    for (const r of legacyRows) d.ACCOUNTS[r.person_id] = { username: r.username, role: r.role };
-    for (const r of linkRows) if (!Object.prototype.hasOwnProperty.call(d.ACCOUNTS, r.person_id)) d.ACCOUNTS[r.person_id] = { username: r.username, role: 'member' };
+    /* a person's account and its strongest role here (a staff role is listed after membership, so it wins) */
+    const rows = await c.all("SELECT u.username,a.role,a.person_id FROM parish_accounts a JOIN users u ON u.id=a.user_id " +
+      "WHERE a.parish_id=? AND a.person_id IS NOT NULL ORDER BY u.username,CASE a.role WHEN 'member' THEN 0 ELSE 1 END", pid);
+    for (const r of rows) d.ACCOUNTS[r.person_id] = { username: r.username, role: r.role };
   }
+  const { officeConnections } = await import('./connections.js');
+  [d.MEMBERSHIP_REQUESTS, d.INVITATIONS] = perms.has('people.manage') ? await officeConnections(c, pid) : [[], []];
   if (!perms.has('notes.pastoral')) d.NOTES = [];
   if (!perms.has('settings.manage')) {
     for (const k of ['SESSIONS', 'SECURITY_ALERTS', 'WEBHOOKS', 'EXCEPTIONS']) d[k] = [];
@@ -787,42 +787,17 @@ export async function save_patch(c, u, pid, payload) {
   d = migrate_state(d);
   validate(d);
   await sync_relationships(c, pid, d);
-  /* Account roles changed here are kept in `roles` so the reads below see them,
-     as they would inside server.py's transaction. */
-  let roles = null;
   if (roleChanges.length) {
-    const accounts = await c.all('SELECT * FROM users WHERE id IN (SELECT user_id FROM assignments WHERE parish_id=?)', pid);
-    roles = new Map(accounts.map(account => [account.id, account.role]));
+    const { syncMinistryLeaders } = await import('./connections.js');
+    const people = new Set();
+    for (const [, , outgoing, incoming] of roleChanges) for (const p of [outgoing, incoming]) if (truthy(p)) people.add(p);
+    await syncMinistryLeaders(c, u, pid, d, people);
     for (const [field, groupId, outgoing, incoming] of roleChanges) {
-      if (truthy(incoming)) {
-        c.run("UPDATE users SET role='leader' WHERE role='member' AND person_id=? AND id IN (SELECT user_id FROM assignments WHERE parish_id=?)", incoming, pid);
-        for (const account of accounts) if (roles.get(account.id) === 'member' && eq(account.person_id, incoming)) roles.set(account.id, 'leader');
-      }
-      for (const account of accounts.filter(a => roles.get(a.id) === 'leader' && eq(a.person_id, outgoing))) {
-        let otherLeadership = false;
-        const assigned = await c.all('SELECT parish_id FROM assignments WHERE user_id=?', account.id);
-        for (const parishRow of assigned) {
-          let state = d;
-          if (parishRow.parish_id !== pid) {
-            const other = await c.first('SELECT data FROM states WHERE parish_id=?', parishRow.parish_id);
-            if (other === null) throw new PyError("'NoneType' object is not subscriptable");
-            state = JSON.parse(other.data);
-          }
-          if (any(K(state, 'GROUPS'), item => has(set([get(item, 'leader'), get(item, 'assistant')]), account.person_id))) {
-            otherLeadership = true;
-            break;
-          }
-        }
-        if (!otherLeadership) {
-          c.run("UPDATE users SET role='member' WHERE id=?", account.id);
-          roles.set(account.id, 'member');
-        }
-      }
       audit(c, u, pid, field === 'leader' ? 'Leadership handover' : 'Group assistant changed', { group: groupId, from: outgoing, to: incoming });
     }
   }
   c.run('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', dumps(d), pid);
-  if (has(changes, 'GROUP_DETAIL')) await notify_meeting_changes(c, pid, old, d, roles);
+  if (has(changes, 'GROUP_DETAIL')) await notify_meeting_changes(c, pid, old, d);
   audit(c, u, pid, 'Records updated', { collections: Object.keys(changes) });
   return row.revision + 1;
 }
@@ -861,11 +836,9 @@ export function notify_member(c, pid, userId, kind, title, body, route, privateT
   c.run('INSERT INTO member_notifications VALUES(?,?,?,?,?,?,?,?,?)', tokenHex(12), pid, userId, kind, title, slice(body, 0, 300), route, NOW(), null);
 }
 
-export async function notify_meeting_changes(c, pid, old, current, roles = null) {
+export async function notify_meeting_changes(c, pid, old, current) {
   const accounts = new Map();
-  const rows = roles
-    ? (await c.all('SELECT u.id,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=?', pid)).filter(row => roles.get(row.id) === 'member')
-    : await c.all("SELECT u.id,u.person_id FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.role='member'", pid);
+  const rows = await c.all("SELECT DISTINCT user_id AS id,person_id FROM parish_accounts WHERE parish_id=? AND role='member'", pid);
   for (const row of rows) {
     if (truthy(row.person_id)) {
       if (!accounts.has(row.person_id)) accounts.set(row.person_id, []);
