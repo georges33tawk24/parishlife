@@ -36,7 +36,10 @@ Differences from `server.py`, all invisible to the browser:
   10,000-iteration format on the Worker.
 - **Schema additions.** The Worker adds the `member_requests.log` column on its first
   request if the database predates it (`addRequestLog` in `src/app.js`), as `server.py`
-  does at start-up.
+  does at start-up. The version 2 tables (`src/authority.js`) and the one-time data
+  migrations (`migrateV2Roles`, which loads `src/privacy.js` and `src/plans.js`) also run on
+  the first request after a deploy; they only add tables, rows and fields, and each is
+  recorded in `schema_migrations`.
 - A few indexes (`cf_*`) keep D1's daily row-read allowance for the lists read most often.
 
 ## Deploying
@@ -52,9 +55,29 @@ upload a preview version. To make this branch the live site:
 Older branches keep their static-only deploy, so switching the production branch back
 restores the previous site. The D1 data is independent of deploys.
 
+Check **Branch control** before pushing work in progress: the builds for the
+`parishlife-v2` pushes reported "Deployment successful", which suggests they ran the
+production deploy. If so, each push changed the live Worker, and its first request ran the
+additive version 2 migrations against the live D1 database. Set the production branch to
+the branch that should be live and turn on non-production branch builds as previews if
+other branches should not deploy.
+
+### Settings for integrations
+
+Integrations stay unavailable until configured. Set them as Worker variables, or as
+secrets for anything private (`npx wrangler secret put PARISHLIFE_SMS_WEBHOOK`): the
+delivery webhooks `PARISHLIFE_EMAIL_WEBHOOK` / `PARISHLIFE_SMS_WEBHOOK` (and optional
+`PARISHLIFE_DELIVERY_TOKEN`), `PARISHLIFE_PUBLIC_URL`, the provider sign-in pairs
+`PARISHLIFE_<GOOGLE|APPLE|MICROSOFT>_CLIENT_ID` / `_CLIENT_SECRET` (and
+`PARISHLIFE_MICROSOFT_TENANT`), `PARISHLIFE_GOOGLE_MAPS_KEY` for the directory map, and
+`PARISHLIFE_SECURE_COOKIE=1`. See **Configuration** in the main README for what each does.
+`PARISHLIFE_DEV_OUTBOX=1` shows verification codes on screen instead of sending them, and
+only on a local `wrangler dev` (localhost); never set it on the deployed Worker.
+
 ## Accounts
 
-There is no sign-up page; accounts are created by an operator, as with `server.py`:
+Anyone can register from the sign-in screen (see the main README). Staff and operator
+accounts are created with the tool, as with `server.py`:
 
 ```sh
 node cloudflare/tools/accounts.mjs create-user rita --role secretary --name "Rita Nassar" --person-id p4 --parish p-elias
@@ -62,7 +85,15 @@ npx wrangler d1 execute parishlife --remote --command "<the SQL it printed>"
 ```
 
 The tool prints the generated password. `set-password`, `assign-user` and
-`grant-complaints` work the same way. The SQL can also be pasted into the D1 console in
+`grant-complaints` work the same way.
+
+The first super admin of a production database is created with
+`node cloudflare/tools/accounts.mjs create-super-admin <username> --name "…"`, after the
+version 2 Worker has been deployed and has answered one request (that creates the role
+tables). It generates a strong password (or takes `--password` of 12+ characters) and
+refuses the public demonstration password. The Worker never creates a demonstration super
+admin; `server.py --demo-super-admin` is for a local demonstration only. The super admin
+then creates dioceses and provisions their bishops in Administration. The SQL can also be pasted into the D1 console in
 the dashboard (**Storage & Databases** → **D1** → **parishlife** → **Console**).
 
 ## Backups
@@ -88,3 +119,6 @@ WRANGLER=/path/to/wrangler cloudflare/test/run_differential.sh
 ```
 
 `wrangler dev` runs the Worker locally with a local D1 database.
+
+The version 2 changes were checked statically only (syntax, import resolution and a
+review of the source); these suites were not run for them.
