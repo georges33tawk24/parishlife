@@ -5,6 +5,7 @@ import { is, S, go, bus } from '../store.js';
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, amount,
          searchField, openDrawer, openModal, closeOverlays, toast, stat, avatar, tabBar, openMenu } from '../ui.js';
 import * as C from '../components.js';
+import * as MO from './ministry-office.js';
 import * as CR from '../crud.js';
 import { VERBS, download } from '../actions.js';
 import { parishAPI, session } from '../api.js';
@@ -21,8 +22,9 @@ import { EVENTS, EVENT_DETAIL, PEOPLE, FEASTS, GROUPS, GROUP_DETAIL, groupInfo, 
          SERVICE_REQUESTS, SERVICE_TEMPLATES, EVENT_TEMPLATES, MUSIC,
          person, venue, group, initials } from '../data.js';
 
-/* Month shown on the calendar: October 2026 moved by the prev / next buttons. */
-const calMonth = () => { const d = new Date(2026, 9 + S.ui.calOffset, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
+/* Month shown on the calendar: this month, moved by the previous / next buttons. */
+const calMonth = () => { const d = new Date(TODAY.getFullYear(), TODAY.getMonth() + S.ui.calOffset, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
+const calWeekStart = () => new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - TODAY.getDay() + 7 * (S.ui.calWeek || 0));
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const L = (en, ar) => t(en, ar);
 const byTime = (a, b) => (a.d + a.t).localeCompare(b.d + b.t);
@@ -31,30 +33,46 @@ const MINISTRY_ROLES=[['President','رئيس'],['Vice President','نائب رئ�
 /* the kinds of entry the calendar can show; the chips switch each on and off */
 const CAL_KINDS = [['mass', 'Masses', 'القداديس'], ['event', 'Parish events', 'أحداث الرعية'], ['group', 'Groups', 'المجموعات'],
                    ['sacr', 'Sacraments', 'الأسرار'], ['pending', 'Reservations', 'الحجوزات']];
-const calEvents = () => EVENTS.filter(e => !(S.ui.calOff || []).includes(e.kind));
+/* What the calendar shows: the kinds switched on, and the search (an event's name, in either language). */
+const calEvents = () => { const q = (S.ui.calQ || '').trim().toLocaleLowerCase();
+  return EVENTS.filter(e => !(S.ui.calOff || []).includes(e.kind) && (!q || `${e.title} ${e.titleAr || ''}`.toLocaleLowerCase().includes(q))); };
 const addMin = (hm, m) => { const [h, mi] = hm.split(':').map(Number), x = h * 60 + mi + m; return `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
 
 /* ═══════════════ 4 · calendar ═══════════════ */
-const CALTABS = () => [['', 'Month', 'شهر'], ['week', 'Week', 'أسبوع'], ['day', 'Day', 'يوم'], ['agenda', 'Agenda', 'جدول'], ['templates', 'Templates', 'قوالب']];
+/* Month, week and day are one calendar with period navigation; the list is separate and paged. */
+const CALTABS = () => [['', 'Calendar', 'الرزنامة'], ['list', 'List', 'لائحة'], ['templates', 'Templates', 'قوالب']];
+const GRID_VIEWS = [['', 'Month', 'شهر'], ['week', 'Week', 'أسبوع'], ['day', 'Day', 'يوم']];
 
 export function calendar(tab = '') {
+  if (tab === 'agenda') tab = 'list';
+  const gridView = ['', 'week', 'day'].includes(tab);
+  const wk = calWeekStart(), wkEnd = new Date(wk.getFullYear(), wk.getMonth(), wk.getDate() + 6);
+  const period = tab === 'week' ? `${fmtDate(iso(wk))} – ${fmtDate(iso(wkEnd))}` : tab === 'day' ? fmtLong(S.ui.calDay || iso(TODAY))
+    : tab === 'list' ? L('All events', 'كل الأحداث') : `${month(calMonth().m)} ${calMonth().y}`;
   const head = pageHead({
     crumbs: [{ label: L('Parish life', 'حياة الرعية') }, { label: L('Calendar', 'الرزنامة') }],
-    title: `${month(calMonth().m)} ${calMonth().y}`,
+    title: period,
     sub: L('One event system with filtered views — personal, group, parish, facility and eparchy. Pending reservations are shown only to those allowed to see them.',
            'نظام أحداث واحد بعروض مرشّحة — شخصي ومجموعة ورعية ومرفق وأبرشية. الحجوزات المعلّقة تظهر فقط لمن يحقّ له.'),
     actions: `${is('priest')?`<button class="btn btn-secondary" id="priest-schedule">${icon('print',17)}${L('Priest schedule','جدول الكهنة')}</button>`:''}
       <button class="btn btn-secondary" id="printweek">${icon('print', 17)}${L('Print my schedule', 'اطبع جدولي')}</button>
       <button class="btn btn-secondary" id="subscribe">${icon('link', 17)}${L('Subscribe', 'اشتراك')}</button>
       ${is('priest','secretary','bishop') ? C.splitBtn(L('New event', 'حدث جديد'), 'newev') : ''}`
-  }) + tabBar('calendar', CALTABS(), tab);
+  }) + tabBar('calendar', CALTABS(), gridView ? '' : tab);
 
-  const filters = `<div class="toolbar" style="margin:20px 0 16px">
+  const step = tab === 'week' ? ['cal-week:-1', 'cal-week:0', 'cal-week:1', L('Previous week', 'الأسبوع السابق'), L('Next week', 'الأسبوع التالي')]
+    : tab === 'day' ? ['cal-day:-1', 'cal-day:0', 'cal-day:1', L('Previous day', 'اليوم السابق'), L('Next day', 'اليوم التالي')]
+    : ['cal-prev', 'cal-today', 'cal-next', L('Previous month', 'الشهر السابق'), L('Next month', 'الشهر التالي')];
+  const filters = `<div class="toolbar cal-toolbar" style="margin:20px 0 16px">
+      ${gridView ? `<div class="seg" role="group" aria-label="${L('Calendar view', 'عرض الرزنامة')}">${GRID_VIEWS.map(([v, en, ar]) => `<button data-go="calendar${v ? '/' + v : ''}" aria-pressed="${tab === v}">${L(en, ar)}</button>`).join('')}</div>
       <div style="display:flex;gap:6px">
-        ${C.iconBtn('chevL', L('Previous month', 'الشهر السابق'), 'data-act="cal-prev"')}
-        <button class="btn btn-secondary btn-dense" data-act="cal-today">${L('Today', 'اليوم')}</button>
-        ${C.iconBtn('chevR', L('Next month', 'الشهر التالي'), 'data-act="cal-next"')}
-      </div>
+        ${C.iconBtn('chevL', step[3], `data-act="${step[0]}"`)}
+        <button class="btn btn-secondary btn-dense" data-act="${step[1]}">${L('Today', 'اليوم')}</button>
+        ${C.iconBtn('chevR', step[4], `data-act="${step[2]}"`)}
+      </div>` : `<div class="seg" role="group" aria-label="${L('Which events', 'أي أحداث')}">${[['upcoming', 'Upcoming', 'القادمة'], ['past', 'Past', 'السابقة']].map(([v, en, ar]) => `<button data-cal-when="${v}" aria-pressed="${(S.ui.calWhen || 'upcoming') === v}">${L(en, ar)}</button>`).join('')}</div>`}
+      <form class="cal-search" role="search" data-cal-search><input class="input" type="search" id="cal-q" value="${esc(S.ui.calQ || '')}" placeholder="${L('Search events by name', 'ابحث في الأحداث بالاسم')}" aria-label="${L('Search events by name', 'ابحث في الأحداث بالاسم')}">
+        ${gridView ? `<input class="input" type="date" id="cal-date" value="${esc(S.ui.calDay || iso(TODAY))}" aria-label="${L('Go to a date', 'انتقل إلى تاريخ')}">` : ''}
+        <button class="btn btn-secondary btn-dense">${icon('search', 15)}${L('Search', 'بحث')}</button></form>
       <div class="chipset" role="group" aria-label="${L('Show on the calendar', 'اعرض على الرزنامة')}" style="margin-inline-start:auto">
         ${CAL_KINDS.map(([k, en, ar]) => { const on = !(S.ui.calOff || []).includes(k);
           return `<button class="chip ${on ? 'chip-on' : ''}" aria-pressed="${on}" data-act="cal-kind:${k}">${on ? icon('check', 13) : ''}${esc(L(en, ar))}</button>`; }).join('')}</div>
@@ -69,16 +87,24 @@ export function calendar(tab = '') {
         `<span class="row" style="gap:6px">${is('priest','secretary','bishop') ? `<button class="btn btn-secondary btn-dense" data-tpl-use="${esc(tpl.id)}">${L('Use','استعمال')}</button>
         ${C.iconBtn('edit',L('Edit template','تعديل القالب'),`data-tpl-edit="${esc(tpl.id)}"`)}${C.iconBtn('trash',L('Delete template','حذف القالب'),`data-tpl-delete="${esc(tpl.id)}"`)}` : ''}</span>`]})) })}`;
 
-  if (tab === 'agenda') return head + filters + table({
+  /* list: upcoming events nearest first, past ones newest first; ten a page */
+  if (tab === 'list') {
+    const past = S.ui.calWhen === 'past', today = iso(TODAY);
+    const rows = calEvents().filter(e => past ? e.d < today : e.d >= today).sort((a, b) => past ? byTime(b, a) : byTime(a, b));
+    return head + filters + table({
+    id: 'cal-list',
     cols: [{ label: L('When', 'الموعد') }, { label: L('Event', 'الحدث') }, { label: L('Where', 'المكان'), cls: 'hide-sm' },
            { label: L('Kind', 'النوع'), cls: 'shrink' }, { label: '', cls: 'shrink' }],
-    rows: calEvents().sort(byTime).map(e => ({ cells: [
+    empty: empty('events', S.ui.calQ ? L('No events match this search', 'لا أحداث تطابق هذا البحث') : past ? L('No past events', 'لا أحداث سابقة') : L('No upcoming events', 'لا أحداث قادمة'),
+      L('Change the search or the kinds shown.', 'غيّر البحث أو الأنواع المعروضة.')),
+    rows: rows.map(e => ({ cells: [
       `<span class="mono dim">${fmtDate(e.d)} ${e.t}</span>`,
       `<b>${esc(L(e.title, e.titleAr))}</b>`,
       `<span class="dim">${esc(L(venue(e.venue).name, venue(e.venue).ar))}</span>`,
       e.kind === 'pending' ? status('pending') : pill(L(e.kind, e.kind)),
       `<button class="btn btn-secondary btn-dense" data-ev="${e.id}">${L('Open', 'فتح')}</button>`]}))
-  });
+    }) + `<p class="help">${L(`${rows.length} ${past ? 'past' : 'upcoming'} events`, `${rows.length} حدثاً ${past ? 'سابقاً' : 'قادماً'}`)}</p>`;
+  }
 
   /* day — the same event chip as the week, laid on an hour grid */
   if (tab === 'day') {
@@ -87,14 +113,7 @@ export function calendar(tab = '') {
     const top = hm => { const [h, mi] = hm.split(':').map(Number); return (h - H0 + mi / 60) * ROW; };
     const mins = e => e.kind === 'mass' ? 60 : e.kind === 'sacr' ? 90 : 75;   // ponytail: events carry no end time yet; typical length by kind
     const rooms = [...new Set(evs.map(e => e.venue))].map(venue);
-    return head + `<div class="toolbar" style="margin:20px 0 16px">
-        <div style="display:flex;gap:6px">
-          ${C.iconBtn('chevL', L('Previous day', 'اليوم السابق'), 'data-act="cal-day:-1"')}
-          <button class="btn btn-secondary btn-dense" data-act="cal-day:0">${L('Today', 'اليوم')}</button>
-          ${C.iconBtn('chevR', L('Next day', 'اليوم التالي'), 'data-act="cal-day:1"')}
-        </div>
-        <b class="dv-title">${fmtLong(key)}</b>
-      </div>
+    return head + filters + `
       <div class="splitview">
         <div class="cal dayview" style="--row:${ROW}px">
           ${Array.from({ length: 15 }, (_, i) => `<div class="dv-h"><span>${String(H0 + i).padStart(2, '0')}:00</span></div>`).join('')}
@@ -117,9 +136,9 @@ export function calendar(tab = '') {
   }
 
   if (tab === 'week') {
-    const days = [4, 5, 6, 7, 8, 9, 10].map(d => new Date(2026, 9, d));
+    const days = Array.from({ length: 7 }, (_, i) => new Date(wk.getFullYear(), wk.getMonth(), wk.getDate() + i));
     return head + filters + `<div class="cal"><div class="cal-head">
-      ${days.map(d => `<div>${esc(dayShort(d.getDay()))} ${d.getDate()}</div>`).join('')}</div>
+      ${days.map(d => `<div class="${iso(d) === iso(TODAY) ? 'today' : ''}">${esc(dayShort(d.getDay()))} ${d.getDate()}</div>`).join('')}</div>
       <div class="cal-grid">${days.map(d => {
         const evs = calEvents().filter(e => e.d === iso(d)).sort(byTime);
         return `<div class="cal-day" style="min-height:280px">
@@ -161,6 +180,19 @@ export function calendar(tab = '') {
 
 calendar.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelector('[data-cal-search]')?.addEventListener('submit', e => {
+    e.preventDefault();
+    S.ui.calQ = host.querySelector('#cal-q').value;
+    const date = host.querySelector('#cal-date')?.value;
+    if (date && date !== (S.ui.calDay || iso(TODAY))) {   // a date moves every view of the calendar to it
+      const [y, m, d] = date.split('-').map(Number), target = new Date(y, m - 1, d);
+      S.ui.calDay = date;
+      S.ui.calOffset = (y - TODAY.getFullYear()) * 12 + (m - 1 - TODAY.getMonth());
+      S.ui.calWeek = Math.floor((target - new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - TODAY.getDay())) / (7 * 86400000));
+    }
+    bus.refresh();
+  });
+  host.querySelectorAll('[data-cal-when]').forEach(b => b.addEventListener('click', () => { S.ui.calWhen = b.dataset.calWhen; bus.refresh(); }));
   host.querySelector('#priest-schedule')?.addEventListener('click', priestScheduleDialog);
   host.querySelectorAll('[data-ev]').forEach(el => el.addEventListener('click', () => eventDrawer(el.dataset.ev)));
   host.querySelector('[data-split="newev"]')?.addEventListener('click', () => eventDrawer(null, true));
@@ -652,7 +684,7 @@ export function groups(id, tab) {
       actions: `<button class="btn btn-secondary" id="qr">${icon('qr', 17)}${L('Signup QR', 'رمز التسجيل')}</button>
         ${!is('leader') ? `<button class="btn btn-primary" data-act="group-new">${icon('plus', 17)}${L('New group', 'مجموعة جديدة')}</button>` : ''}`
     })}
-    <div class="gridcards">${cards}</div>
+    <div class="gridcards" data-paginate="groups">${cards}</div>
     <p class="t-caption dim" style="margin-top:20px">${L(
       'People are placed into roles, not roles into people. When a leader hands over, the ongoing tasks follow the role to whoever takes it.',
       'يوضع الأشخاص في الأدوار لا الأدوار في الأشخاص. وعند التسليم تنتقل المهام الجارية مع الدور إلى من يتسلّمه.')}</p>`;
@@ -728,10 +760,11 @@ function groupDetail(id, tab) {
         ${panel(L('Leadership', 'المسؤوليات'), d.roles.map(([p, en, ar]) => `<div class="listrow">
           ${who(person(p))}<span class="grow"></span><span class="chip">${esc(L(en, ar))}</span></div>`).join(''), { tight: true })}
         ${panel(L('Join requests', 'طلبات الانتساب'), d.requests.length ? d.requests.map(r => `<div class="listrow">
-            ${who(person(r.p))}<span class="grow"><small class="mono">${fmtDate(r.at)}</small></span>
-            <button class="btn btn-secondary btn-dense" data-act="join-decline:${r.p}">${L('Decline', 'رفض')}</button>
-            <button class="btn btn-primary btn-dense" data-act="join-approve:${r.p}">${L('Approve', 'قبول')}</button></div>`).join('')
+            ${who(person(r.p))}<span class="grow"><small class="mono">${fmtDate(r.at)}</small> ${MO.joinRequestStage(r)}</span>
+            ${MO.canApproveJoin(g, r) ? `<button class="btn btn-secondary btn-dense" data-act="join-decline:${r.p}">${L('Decline', 'رفض')}</button>
+            <button class="btn btn-primary btn-dense" data-act="join-approve:${r.p}">${MO.isLeaderStage(g) ? L('Approve and send to the priest', 'موافقة وإرسال إلى الكاهن') : L('Approve', 'قبول')}</button>` : ''}</div>`).join('')
           : empty('groups', L('No requests', 'لا طلبات'), L('Nobody is waiting.', 'لا أحد ينتظر.')), { tight: true })}
+        ${MO.ministryPanels(g)}
       </div>
       <div class="sidecol">
         ${!is('leader')?panel(L('Leadership handover','تسليم المسؤولية'),`<p class="t-caption dim">${L('Transfer the group role and open tasks to an existing member. The person’s history stays intact.','انقل مسؤولية المجموعة ومهامها المفتوحة إلى عضو موجود. يبقى تاريخ الشخص محفوظاً.')}</p>
@@ -880,7 +913,7 @@ function chooseAttendance(anchor, meeting, pid, afterSave = () => {}) {
 
 export function ministryAttendance(){
   return pageHead({crumbs:[{label:L('My ministry','خدمتي')},{label:L('Attendance','الحضور')}],title:L('Attendance','الحضور'),sub:L('Open the attendance register for each group you lead.','افتح سجل الحضور لكل مجموعة تقودها.')})+
-    `<div class="gridcards">${groupCards(GROUPS, 'attendance')}</div>`;
+    `<div class="gridcards" data-paginate="attendance-groups">${groupCards(GROUPS, 'attendance')}</div>`;
 }
 
 function meetingReview(mid) {
@@ -1047,7 +1080,7 @@ function attendanceImport(gid) {
 }
 
 groups.mount = host => {
-  C.wire(host); wireTables(host);
+  C.wire(host); wireTables(host); MO.wireMinistryPanels(host);
   const bindFilter=(selector,key)=>{const el=host.querySelector(selector);if(!el)return;el.value=S.ui[key]||el.value;el.addEventListener(el.tagName==='INPUT'?'input':'change',()=>{const caret=el.tagName==='INPUT'?el.selectionStart:0;S.ui[key]=el.value;bus.refresh();if(el.tagName==='INPUT'){const next=host.querySelector(selector);next?.focus();next?.setSelectionRange(caret,caret);}});};
   bindFilter('[data-roster-search]','rosterQuery');bindFilter('[data-roster-filter]','rosterFilter');
   bindFilter('[data-resource-search]','resourceQuery');bindFilter('[data-resource-filter]','resourceFilter');

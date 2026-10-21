@@ -128,11 +128,12 @@ export const VERBS = {
   },
 
   /* sacraments -------------------------------------------------- */
+  /* Quick release from a list; the server refuses it when the diocese's policy or the bishop's acceptance requires the full dialog. */
   'sacr-sign': async (btn, id) => {
     const s = find(D.SACRAMENTS, id); if (!s) return;
     try { await serverWorkflow('issue', id, { verified: true }); closeOverlays(); refresh();
-      ok(L('Signed and issued', 'وُقّعت وصدرت'), L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`));
-    } catch (e) { toast(L('Could not issue certificate', 'تعذّر إصدار الشهادة'), e.message, 'danger'); }
+      ok(L('Released', 'سُلّمت'), L(`${s.reg} is now in the release history.`, `${s.reg} في سجل التسليم الآن.`));
+    } catch (e) { toast(L('Could not release the certificate', 'تعذّر تسليم الشهادة'), e.message, 'danger'); }
   },
 
   /* giving & finance -------------------------------------------- */
@@ -204,9 +205,16 @@ export const VERBS = {
 
 
   /* groups ------------------------------------------------------ */
+  /* The leader approves first and the parish priest last (the priest may also approve straight away). */
   'join-approve': (btn, pid) => {
-    const gid = (S.route === 'groups' && S.params[0]) || 'g1', g = D.groupInfo(gid); g.requests = g.requests.filter(r => r.p !== pid);
-    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 }); const grp = D.group(gid); if (grp && S.role !== 'leader') grp.members += 1; }
+    const gid = (S.route === 'groups' && S.params[0]) || 'g1', g = D.groupInfo(gid), grp = D.group(gid);
+    const request = g.requests.find(r => r.p === pid);
+    if (request && S.role !== 'priest') {
+      request.leaderApproved = { by: session.user?.name || '', at: new Date().toISOString().slice(0, 10) };
+      refresh(); return ok(L('Sent to the parish priest', 'أُرسل إلى كاهن الرعية'), L('The priest makes the final decision.', 'القرار الأخير للكاهن.'));
+    }
+    g.requests = g.requests.filter(r => r.p !== pid);
+    if (!g.roster.some(r => r.p === pid)) { g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: String(new Date().getFullYear()), att: 0 }); if (grp) grp.members = (Number(grp.members) || 0) + 1; }
     refresh(); ok(L('Added to the group', 'أُضيف إلى المجموعة'), L('They are on the roster and will be messaged.', 'أصبح على اللائحة وستصله الرسائل.'));
   },
   'join-decline': (btn, pid) => {
@@ -346,10 +354,9 @@ export const VERBS = {
   'cal-next':     () => F.calShift(1),
   'cal-today':    () => F.calShift(0),
   'cal-day':      (b, a) => F.calDay(+a),
+  'cal-week':     (b, a) => F.calWeek(+a),
   view:           (b, a) => { const [k, v] = a.split('|'); S.ui[k] = +v; refresh(); },
   'people-env':   () => { S.ui.peopleEnv = !S.ui.peopleEnv; S.ui.peoplePage = 0; refresh(); },
-  'people-new':   () => { S.ui.peopleNew = !S.ui.peopleNew; S.ui.peoplePage = 0; refresh(); },
-  'people-new-open': () => { S.ui.peopleNew = true; S.ui.peoplePage = 0; location.hash = '#/people'; },
   'music-clear':  () => { S.ui.music = {}; refresh(); },
   transpose:      (b, a) => { const [id, n] = a.split('|'); S.ui.transpose = { ...S.ui.transpose, [id]: +n }; refresh(); },
   'cal-kind':     (b, k) => { const off = S.ui.calOff || []; S.ui.calOff = off.includes(k) ? off.filter(x => x !== k) : [...off, k]; refresh(); },
@@ -416,7 +423,7 @@ export const VERBS = {
                         .map(x => [x.lat, x.ar, x.town, x.phone, x.status])];
                     download(`parishlife-selected-${rows.length - 1}.csv`, csv(rows));
                     ok(L('Exported', 'تمّ التصدير'), rows.length === 2 ? L('1 row', 'صفّ واحد') : `${rows.length - 1} ${L('rows', 'صفوف')}`); },
-  'bulk-archive': () => { const ids = picked(); if (!ids.length) return toast(L('Tick the people to archive first', 'حدّد الأشخاص أولاً'), '', 'warning'); F.archivePeople(ids); },
+  'bulk-archive': () => { const ids = picked(); if (!ids.length) return toast(L('Tick the people to deactivate first', 'حدّد الأشخاص أولاً'), '', 'warning'); F.archivePeople(ids); },
 
   /* eparchy, workflows, reports, settings ------------------------- */
   'eparchy-msg':  () => F.compose('eparchy', { title: L('Eparchy announcement', 'إعلان أبرشي') }),

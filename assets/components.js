@@ -181,14 +181,15 @@ export const dateRange = () => `<div class="formrow"><label class="label">${t('D
   </div></div>`;
 
 /* ---------------- uploads ---------------- */
-export const dropzone = (id = 'dz', { scope = '', ownerId = '' } = {}) => `
-  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}"></div>
+export const dropzone = (id = 'dz', { scope = '', ownerId = '', images = false } = {}) => `
+  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}" ${images ? 'data-images' : ''}></div>
   <div class="drop" data-drop="${esc(id)}">${icon('export', 26)}
     <b style="margin-top:8px">${t('Drop the file here, or', 'أفلت الملف هنا، أو')}
       <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${esc(id)}"
-        accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf"></label></b>
-    <span class="hint">${scope ? t('JPG, PNG or PDF up to 10 MB. Files are saved to this parish.', 'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.')
-      : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}</span></div>`;
+        accept="${images ? '.jpg,.jpeg,.png,image/jpeg,image/png' : '.jpg,.jpeg,.png,.pdf,image/*,application/pdf'}"></label></b>
+    <span class="hint">${!scope ? t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')
+      : images ? t('JPG or PNG pictures up to 10 MB. They appear on the public parish page.', 'صور JPG أو PNG حتى ١٠ ميغابايت. تظهر في صفحة الرعية العامة.')
+      : t('JPG, PNG or PDF up to 10 MB. Files are saved to this parish.', 'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.')}</span></div>`;
 
 export const avatarUpload = (key = 'specimen') => {
   const ph = PHOTOS[key], label = key === 'parish' ? 'P' : key === 'new' || key === 'specimen' ? 'GH' : initials(person(key));
@@ -237,7 +238,7 @@ export const bulkBar = n => `<div class="bulkbar">
   <button class="btn btn-secondary" data-act="bulk-message">${icon('msg', 16)}${t('Message', 'مراسلة')}</button>
   <button class="btn btn-secondary" data-act="bulk-group">${icon('groups', 16)}${t('Add to group', 'إضافة إلى مجموعة')}</button>
   <button class="btn btn-secondary" data-act="bulk-export">${icon('export', 16)}${t('Export', 'تصدير')}</button>
-  <button class="btn btn-secondary last" data-act="bulk-archive">${icon('trash', 16)}${t('Archive', 'أرشفة')}</button></div>`;
+  <button class="btn btn-secondary last" data-act="bulk-archive">${icon('lock', 16)}${t('Deactivate', 'إيقاف')}</button></div>`;
 
 export const ratePopover = (amount = 50) => `<div class="popover" style="position:static;width:auto;padding:14px 16px">
   <b style="display:block;font:600 13px/18px var(--sans);margin-bottom:10px">${t('How the LBP figure is worked out', 'كيف يُحتسب المبلغ بالليرة')}</b>
@@ -487,9 +488,9 @@ export function wire(host) {
   const takeFiles=async(id,files)=>{
     const list=listFor(id);if(!list)return;
     for(const f of files){
-      const supported=/\.(jpe?g|png|pdf)$/i.test(f.name),large=f.size>10_000_000;
+      const supported=(list.hasAttribute('data-images')?/\.(jpe?g|png)$/i:/\.(jpe?g|png|pdf)$/i).test(f.name),large=f.size>10_000_000;
       const row=document.createElement('div');row.className='filerow'+(supported&&!large?'':' err');
-      row.innerHTML=`${icon(supported&&!large?'doc':'warn',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${large?t('File is larger than 10 MB','الملف أكبر من ١٠ ميغابايت'):!supported?t('Use JPG, PNG or PDF','استخدم JPG أو PNG أو PDF'):list.dataset.uploadScope?t('Uploading…','جارٍ الرفع…'):t('Selected for preview only','مختار للمعاينة فقط')}</small></span>`;
+      row.innerHTML=`${icon(supported&&!large?'doc':'warn',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${large?t('File is larger than 10 MB','الملف أكبر من ١٠ ميغابايت'):!supported?(list.hasAttribute('data-images')?t('Use a JPG or PNG picture','استخدم صورة JPG أو PNG'):t('Use JPG, PNG or PDF','استخدم JPG أو PNG أو PDF')):list.dataset.uploadScope?t('Uploading…','جارٍ الرفع…'):t('Selected for preview only','مختار للمعاينة فقط')}</small></span>`;
       list.prepend(row);
       if(!supported||large||!list.dataset.uploadScope)continue;
       const bytes=new Uint8Array(await f.arrayBuffer());let binary='';

@@ -285,3 +285,175 @@ a.contact-row:hover{text-decoration:underline}
 .request-grid-2 .request-card:nth-child(1) .request-icon{background:#f3eee3;color:#9a885e}
 .request-grid-2 .request-card:nth-child(2) .request-icon{background:#eaf0ef;color:#607d79}
 @media(max-width:700px){.request-grid-2{grid-template-columns:1fr}}
+/* Ministries on a parish page, and the interest form */
+.ministry-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.ministry-card{display:flex;flex-direction:column;gap:12px;padding:26px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.ministry-card h3{font-size:22px;line-height:1.25}
+.ministry-card p{font-size:14px;line-height:1.6;color:var(--muted)}
+.ministry-card dl{display:grid;gap:4px;margin:0;font-size:13px}
+.ministry-card dt{font-weight:600;color:var(--ink);margin-top:6px}
+.ministry-card dd{margin:0;color:var(--muted);line-height:1.55}
+.ministry-card .text-button{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:8px}
+.ministry-form{display:grid;gap:14px;max-width:640px;margin-top:28px;padding:28px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.ministry-form label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.ministry-form input,.ministry-form select,.ministry-form textarea{min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;font-weight:400;background:#fff;color:var(--ink)}
+.ministry-form small{color:var(--muted)}
+.ministry-form .form-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ministry-form .form-status{min-height:1.4em;font-size:14px;color:var(--ink)}
+.ministry-form .hp{position:absolute;inset-inline-start:-10000px;width:1px;height:1px;overflow:hidden}
+.ministry-form .button{justify-self:start}
+@media(max-width:900px){.ministry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.ministry-grid{grid-template-columns:1fr}.ministry-form{padding:22px}.ministry-form .form-pair{grid-template-columns:1fr}}
+/* A certificate without an account, and its tracking page */
+.guest-doc{margin-top:28px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.guest-doc>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;cursor:pointer;list-style:none}
+.guest-doc>summary::-webkit-details-marker{display:none}
+.guest-doc>summary b{display:block;font-size:16px}
+.guest-doc>summary small{display:block;margin-top:4px;color:var(--muted);font-size:13px}
+.guest-doc[open]>summary .icon{transform:rotate(90deg)}
+.guest-doc .guest-form{margin:0 24px 24px;padding:0;border:0;max-width:none}
+.guest-form fieldset{display:grid;gap:12px;margin:0;padding:16px 0 0;border:0;border-top:1px solid var(--line)}
+.guest-form legend{font-weight:600;font-size:14px;padding-bottom:8px}
+.guest-form .radio{display:flex;align-items:center;gap:10px;font-weight:400}
+.guest-form .radio input{min-height:0;width:18px;height:18px}
+.guest-done{margin:0 24px 24px;padding:20px;border-radius:8px;background:var(--soft)}
+.guest-done h3{font-size:20px;margin-bottom:8px}
+.track-link{margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:8px;background:#fff;font-size:13px;overflow-wrap:anywhere}
+.track-page{max-width:760px}
+.track-page h1{font-size:clamp(32px,5vw,48px);line-height:1.15;margin:14px 0 6px}
+.track-subject{font-size:18px;color:var(--muted)}
+.track-stage{margin:22px 0 12px;font-size:18px}
+.track-message{padding:14px 16px;border-radius:8px;background:var(--soft)}
+.track-events{display:grid;gap:12px;margin:24px 0;padding-inline-start:20px}
+.track-events small{display:block;color:var(--muted);font-size:12px}
+.track-note{font-size:13px;color:var(--muted)}
+/* Plans for parishes */
+.plans-hero{background:var(--soft);border-bottom:1px solid var(--line);padding:72px 0 56px}
+.plans-hero h1{font-size:clamp(38px,5vw,64px);margin-block:14px 18px}
+.plans-hero p{max-width:680px}
+.plans-note{margin-top:16px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;color:var(--ink);font-size:14px}
+.plan-modules{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.plan-modules li{display:flex;flex-direction:column;gap:6px;padding:18px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.plan-modules span{color:var(--muted);font-size:14px}
+.plan-bundles{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:28px}
+.plan-bundle{padding:22px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;flex-direction:column;gap:10px}
+.plan-demo{align-self:flex-start;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:#f6ecd5;color:#6b5420}
+.plan-count{font-size:13px}
+.plan-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+.plan-table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+.plan-table caption{text-align:start;padding:14px 16px;font-weight:600}
+.plan-table th,.plan-table td{padding:10px 14px;border-top:1px solid var(--line);text-align:start}
+.plan-table td{text-align:center}
+.plan-steps{margin:0 0 24px;padding-inline-start:20px;display:grid;gap:12px}
+.plan-steps li span{display:block;color:var(--muted)}
+@media (max-width:700px){.plans-hero{padding:48px 0 36px}}
+/* Directory: one set of filters for the list and the map */
+.directory-filters{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+.directory-filters .search-field{border:1px solid var(--line);border-radius:8px}
+.filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.filter-field{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--muted)}
+.filter-field select{border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px;font-size:13px;color:var(--ink)}
+.filter-field select:disabled{opacity:.55}
+.filter-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px}
+.filter-actions .text-button{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--forest)}
+.filter-actions .text-button .icon{width:16px}
+.geo-status{flex:1 1 260px;font-size:12px;margin:0}
+.layout-switch{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.layout-switch button{border:0;background:transparent;padding:8px 16px;font-size:12px;font-weight:600}
+.layout-switch button[aria-pressed=true]{background:var(--forest);color:#fff}
+.results-bar{flex-wrap:wrap;gap:10px 18px}
+.beyond{margin-top:22px;padding:18px;border:1px dashed var(--line);border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px}
+.beyond p{flex:1 1 260px;margin:0}
+.button-outline:not(.button-light){color:var(--forest);border-color:var(--forest)}
+.button-outline:not(.button-light):hover{background:var(--soft)}
+.demo-badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:#f6ecd5;color:#6b5420}
+.map-frame{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.map-label{margin:0;padding:12px 16px;font-size:12px;border-bottom:1px solid var(--line);background:var(--soft);color:var(--ink)}
+.map-svg{display:block;width:100%;height:auto}
+.map-bg{fill:#eef1e9}
+.map-pin circle{fill:var(--forest);stroke:#fff;stroke-width:3}
+.map-pin text,.map-origin text{font-size:15px;fill:var(--ink);font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:4px}
+.map-pin:focus-visible circle{stroke:#a38c55;stroke-width:6}
+.map-origin circle{fill:#a99467;stroke:#fff;stroke-width:3}
+.map-empty{padding:32px 16px;margin:0;text-align:center}
+.live-map{height:520px}
+.map-unplaced{margin-top:18px}
+.map-unplaced ul{margin:8px 0 0;padding-inline-start:18px}
+.map-unplaced a{text-decoration:underline}
+/* "More than a place": the community section with its slider */
+.community-section{background:linear-gradient(180deg,#172d23,#22382e);color:#fff;padding-block:80px 0}
+.community-section .eyebrow{color:#e0e7d9}
+.community-head h2{font-size:clamp(40px,4.6vw,61px);margin-top:20px;line-height:1.13}
+.community-head p{color:#e2e5dd;font-size:14px;margin-top:18px;max-width:640px;line-height:1.9}
+.community-events{background:var(--paper);color:var(--ink);margin-top:56px;padding-top:56px}
+.community-section>.community-events{width:auto;padding-inline:max(48px,calc((100% - 1200px) / 2))}
+.slider{position:relative;margin-top:36px;border-radius:14px;overflow:hidden;background:#0f2019}
+.slide{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);min-height:380px}
+.slide-media{position:relative;min-height:260px}
+.slide-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slide-tag{position:absolute;inset-block-end:12px;inset-inline-start:12px;background:rgb(0 0 0 / .55);color:#fff;font-size:11px;padding:4px 10px;border-radius:999px}
+.slide-copy{padding:40px 40px 72px;display:flex;flex-direction:column;justify-content:center;gap:14px}
+.slide-copy h3{font-size:clamp(24px,2.4vw,34px);color:#fff}
+.slide-copy p{color:#d8dfd3}
+.slide-copy .text-link{color:#fff}
+.slide-arrow{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:0;background:rgb(255 255 255 / .9);color:var(--forest);display:grid;place-items:center;opacity:0;transition:opacity .2s}
+.slide-arrow .icon{width:20px;height:20px}
+.slide-prev{inset-inline-start:14px}
+.slide-prev .icon{transform:scaleX(-1)}
+[dir=rtl] .slide-prev .icon{transform:none}
+[dir=rtl] .slide-next .icon{transform:scaleX(-1)}
+.slide-next{inset-inline-end:14px}
+.slider:hover .slide-arrow,.slider:focus-within .slide-arrow,.slide-arrow:focus-visible{opacity:1}
+@media (hover:none){.slide-arrow{opacity:1;width:40px;height:40px}}
+.slide-bar{position:absolute;inset-inline:0;inset-block-end:0;display:flex;align-items:center;gap:16px;padding:14px 20px;background:linear-gradient(0deg,rgb(0 0 0 / .45),transparent)}
+.slide-pause{border:1px solid rgb(255 255 255 / .6);background:transparent;color:#fff;border-radius:999px;padding:4px 12px;font-size:11px;font-weight:600}
+.slide-dots{display:flex;gap:8px;flex:1}
+.slide-dot{flex:1;max-width:72px;height:24px;border:0;background:transparent;padding:0;display:flex;align-items:center}
+.slide-dot span{display:block;width:100%;height:4px;border-radius:2px;background:rgb(255 255 255 / .35);overflow:hidden;position:relative}
+.slide-dot span::after{content:"";position:absolute;inset:0;background:#fff;transform:scaleX(0);transform-origin:left}
+[dir=rtl] .slide-dot span::after{transform-origin:right}
+.slide-dot[aria-current=true] span::after{transform:scaleX(1)}
+.slider.is-running .slide-dot[aria-current=true] span::after{transform:scaleX(0);animation:slide-progress 5s linear forwards}
+@keyframes slide-progress{to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){.slider.is-running .slide-dot[aria-current=true] span::after{animation:none;transform:scaleX(1)}.slide-arrow{transition:none}}
+/* Parish profiles */
+.demo-note{display:flex;gap:10px;align-items:flex-start;margin-block:16px 0;padding:12px 16px;border:1px solid #e4d3a7;border-radius:10px;background:#fbf4e3;color:#4d3d15;font-size:13px}
+.demo-note .icon{width:18px;flex:none;margin-top:2px}
+.profile-facts{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:12px 28px;font-size:14px}
+.profile-facts li{display:flex;align-items:center;gap:8px;color:#edf0e4}
+.profile-facts .icon{width:17px}
+.profile-facts a{text-decoration:underline}
+.profile-hero-small{padding-block:48px 52px}
+.clergy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.clergy-card{display:flex;align-items:center;gap:16px;padding:18px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.clergy-card img,.clergy-initials{width:72px;height:72px;border-radius:50%;object-fit:cover;flex:none}
+.clergy-initials{display:grid;place-items:center;background:var(--soft);color:var(--forest);font-weight:700;font-size:22px}
+.clergy-card h3{font-size:17px}
+.clergy-card p{font-size:13px;margin-top:4px}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.gallery-grid figure{margin:0;position:relative;aspect-ratio:3/2;border-radius:10px;overflow:hidden;background:var(--soft)}
+.gallery-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery-grid figcaption{position:absolute;inset-block-end:8px;inset-inline-start:8px;background:rgb(0 0 0 / .55);color:#fff;font-size:11px;padding:3px 9px;border-radius:999px}
+.gallery-note{margin-top:12px;font-size:13px}
+.contact-block{margin-top:18px}
+.contact-block h4{font-size:13px;margin:0 0 4px}
+.public-calendar .calendar-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.calendar-toolbar h2{font-size:28px;margin-inline-start:8px;flex:1}
+.calendar-toolbar .button{min-height:40px;padding:8px 14px}
+.month-grid{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.month-head,.month-cells{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.month-head span{padding:8px;font-size:11px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line)}
+.month-cell{min-height:92px;padding:6px;border-inline-end:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}
+.month-cell.out{background:#fafaf6;color:#a5aea7}
+.month-cell.today time{background:var(--forest);color:#fff;border-radius:50%;width:24px;height:24px;display:grid;place-items:center}
+.month-cell time{font-size:12px;font-weight:600}
+.month-event{font-size:11px;line-height:1.3;padding:3px 6px;border-radius:4px;background:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:900px){.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.slide{grid-template-columns:1fr}.slide-copy{padding:26px 22px 70px}}
+@media(max-width:700px){.filter-grid{grid-template-columns:1fr}.community-section{padding-top:58px}.community-section>.community-events{padding-inline:20px}.month-cell{min-height:64px}.month-event{white-space:normal}.live-map{height:380px}}
+@media print{.slider,.layout-switch,.filter-actions{display:none}}
+.public-pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:22px;flex-wrap:wrap;font-size:13px}
+.public-pager .button{min-height:40px;padding:8px 16px}
+.public-pager .button:disabled{opacity:.45;cursor:default;transform:none}
+.calendar-search{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
+.calendar-search input{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff;font-size:13px}
+.calendar-search .button{min-height:40px;padding:8px 16px}

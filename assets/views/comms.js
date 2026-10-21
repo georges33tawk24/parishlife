@@ -127,7 +127,7 @@ export function notices() {
         <button class="btn btn-primary" data-act="notice-add">${icon('plus', 17)}${L('New notice', 'إعلان جديد')}</button>`
     })}
     <div class="splitview">
-      ${panel(L('Published notices', 'الإعلانات المنشورة'), rows, { tight: true })}
+      ${panel(L('Published notices', 'الإعلانات المنشورة'), NOTICES.length ? `<div data-paginate="notices">${rows}</div>` : rows, { tight: true })}
       <div class="sidecol">
         ${panel(L('Upcoming Masses', 'القداديس المقبلة'), EVENTS.filter(m => m.kind === 'mass' && m.d >= new Date().toISOString().slice(0,10)).slice(0,8).map(m => `
           <div class="listrow" style="padding-inline:0"><span class="mono dim" style="width:94px;flex:none">${esc(m.d)} · ${esc(m.t)}</span>
@@ -377,7 +377,10 @@ const portalSections=[
   ['history','History & patron saint','التاريخ والشفيع','Share the story and identity of your parish.','شارك تاريخ رعيتك وهويتها.'],
   ['massTimes','Mass & confession','القداديس والاعتراف','Help visitors plan their next visit.','ساعد الزوّار على التخطيط لزيارتهم المقبلة.'],
   ['contact','Contact & visiting','التواصل والزيارة','Make it easy to find and contact the parish.','سهّل الوصول إلى الرعية والتواصل معها.'],
-  ['sacraments','Sacraments & certificates','الأسرار والشهادات','Tell families what to know before they ask for a baptism, a wedding or a certificate.','أخبر العائلات بما يجب معرفته قبل طلب معمودية أو إكليل أو شهادة.']
+  ['sacraments','Sacraments & certificates','الأسرار والشهادات','Tell families what to know before they ask for a baptism, a wedding or a certificate.','أخبر العائلات بما يجب معرفته قبل طلب معمودية أو إكليل أو شهادة.'],
+  ['officeHours','Office hours','ساعات عمل المكتب','When the parish office is open, and how to reach it outside those hours.','متى يكون مكتب الرعية مفتوحاً، وكيف يُتواصل معه خارج هذه الساعات.'],
+  ['directions','Directions','الوصول إلى الرعية','How to get here: landmarks, parking and public transport.','كيف يُوصل إلى هنا: معالم ومواقف ووسائل نقل عامة.'],
+  ['accessibility','Accessibility','تسهيلات الوصول','Step-free entrances, seating, sound and help for visitors who need it.','مداخل دون درج ومقاعد وصوت ومساعدة للزوّار الذين يحتاجون إليها.']
 ];
 function portalContent(){
   const hasText=c=>!!(c.en?.trim()||c.ar?.trim());
@@ -405,7 +408,12 @@ function portalContent(){
       </article>`;
     }).join('')}</div>
     <aside class="cms-publishing-note">${icon('info',18)}<p>${L('Save a draft while you work. A draft section stays off the public page until you publish it. Add both languages before publishing.','احفظ مسودة أثناء العمل. يبقى القسم المسودة خارج الصفحة العامة حتى تنشره. أضف اللغتين قبل النشر.')}</p></aside>
-    <section class="cms-related" aria-labelledby="cms-related-title"><div><span class="cms-eyebrow">${L('02 / Parish updates','02 / مستجدات الرعية')}</span><h2 id="cms-related-title">${L('Keep your community up to date.','أبقِ جماعتك على اطّلاع.')}</h2><p>${L('Public events and announcements are managed in their own spaces.','تُدار الأحداث العامة والإعلانات في أقسامها الخاصة.')}</p></div>
+    <section class="cms-related cms-pictures" aria-labelledby="cms-pictures-title"><div><span class="cms-eyebrow">${L('02 / Pictures','02 / الصور')}</span><h2 id="cms-pictures-title">${L('Show parish life.','أظهِر حياة الرعية.')}</h2>
+      <p>${L('Photos replace the illustrative pictures shown until the parish publishes its own. Use JPG or PNG pictures the parish may publish, without anyone who has not agreed to appear.','تحلّ الصور محلّ الرسوم التوضيحية التي تظهر إلى أن تنشر الرعية صورها. استخدم صور JPG أو PNG يحقّ للرعية نشرها، دون أشخاص لم يوافقوا على الظهور.')}</p></div>
+      <div class="stack" style="gap:18px;min-width:0"><div><h3 class="t-ui">${L('Photo gallery','معرض الصور')}</h3>${C.dropzone('cms-gallery',{scope:'gallery',ownerId:PARISH.id,images:true})}</div>
+        <div id="cms-clergy-photos" data-parish="${esc(PARISH.id)}"><h3 class="t-ui">${L('Clergy photos','صور الإكليروس')}</h3><p class="help">${L('Loading the clergy serving the parish…','جارٍ تحميل الإكليروس الذين يخدمون الرعية…')}</p></div></div>
+    </section>
+    <section class="cms-related" aria-labelledby="cms-related-title"><div><span class="cms-eyebrow">${L('03 / Parish updates','03 / مستجدات الرعية')}</span><h2 id="cms-related-title">${L('Keep your community up to date.','أبقِ جماعتك على اطّلاع.')}</h2><p>${L('Public events and announcements are managed in their own spaces.','تُدار الأحداث العامة والإعلانات في أقسامها الخاصة.')}</p></div>
       <div class="cms-related-links"><a href="#/calendar">${icon('events',21)}<span><strong>${L('Public calendar','الرزنامة العامة')}</strong><small>${L('Service times and upcoming events','مواعيد الخدمات والأحداث المقبلة')}</small></span>${icon('arrowR',18)}</a>
       <a href="#/memberhub">${icon('bell',21)}<span><strong>${L('Announcements','الإعلانات')}</strong><small>${L('News and updates for your community','أخبار ومستجدات جماعتك')}</small></span>${icon('arrowR',18)}</a></div>
     </section>
@@ -471,4 +479,14 @@ export function portal(tab = '') {
 
   return `<div class="cms-page">${head}${portalContent()}</div>`;
 }
-portal.mount = host => { C.wire(host); wireTables(host); };
+portal.mount = host => {
+  C.wire(host); wireTables(host);
+  /* The clergy shown on the public page come from the diocese's clergy assignments; each can have a photo. */
+  const box = host.querySelector('#cms-clergy-photos');
+  if (box) fetch('/api/public/parishes/' + encodeURIComponent(box.dataset.parish)).then(r => r.ok ? r.json() : Promise.reject(new Error())).then(d => {
+    if (!box.isConnected) return;
+    box.innerHTML = `<h3 class="t-ui">${L('Clergy photos','صور الإكليروس')}</h3>` + (d.clergy?.length ? d.clergy.map(c => `<div style="margin-top:10px"><b>${esc([c.title, L(c.name, c.nameAr || c.name)].filter(Boolean).join(' '))}</b> <small class="dim">${esc(L(c.officeEn, c.officeAr))}</small>${C.dropzone('cms-clergy-' + c.id, { scope: 'clergy', ownerId: c.id, images: true })}</div>`).join('')
+      : `<p class="help">${L('No clergy are assigned to this parish yet. Assignments are recorded by the diocese in Administration.','لا إكليروس معيَّنين لهذه الرعية بعد. تسجّل الأبرشية التعيينات في الإدارة.')}</p>`);
+    C.wire(box);
+  }).catch(() => { box.querySelector('.help').textContent = L('The clergy list could not be loaded.','تعذّر تحميل لائحة الإكليروس.'); });
+};

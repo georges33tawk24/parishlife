@@ -113,7 +113,7 @@ export function facilities(tab = '') {
     <button class="btn btn-ghost roomblock" data-block="${v.id}">${icon('warn', 15)}${L('Block for maintenance', 'إغلاق للصيانة')}</button>
     </div></section>`).join('');
 
-  return head + `<div style="margin-top:20px" class="gridcards">${cards || empty('rooms', L('No rooms yet', 'لا قاعات بعد'), L('Add the church, the hall and every room people can book.', 'أضف الكنيسة والقاعة وكل مكان يمكن حجزه.'))}</div>
+  return head + `<div style="margin-top:20px" class="gridcards" data-paginate="rooms">${cards || empty('rooms', L('No rooms yet', 'لا قاعات بعد'), L('Add the church, the hall and every room people can book.', 'أضف الكنيسة والقاعة وكل مكان يمكن حجزه.'))}</div>
     <p class="t-caption dim" style="margin-top:16px">${L(
       'Every room carries its capacity, accessibility, photos and usage policy, so a request does not need a phone call to answer.',
       'تحمل كل قاعة سعتها وإمكانية الوصول والصور وقواعد الاستعمال، فلا يحتاج الطلب إلى مكالمة هاتفية.')}</p>`;

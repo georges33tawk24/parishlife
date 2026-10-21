@@ -326,31 +326,46 @@ async function main() {
   await both('tony follows his booking', async s => portal(s, 'tony'));
   await both('carla follows hers', async s => portal(s, 'carla'));
 
-  /* Accounts parishioners open themselves */
-  const signup = (s, who, body) => s.client(who).req('POST', '/api/signup', { parish: 'p-elias', password: 'rosary2026', ...body });
-  await both('sign up with a phone number', async s => view(await signup(s, 'visitor', { method: 'phone', phone: '03 777 888', name: ' Antoinette  Khoury ' })));
+  /* Accounts people open themselves (no parish), then membership through the parish office */
+  const signup = (s, who, body) => s.client(who).req('POST', '/api/signup', { firstName: 'Antoinette', lastName: 'Khoury', birthDate: '1990-05-14', password: 'rosary2026', confirm: 'rosary2026', ...body });
+  await both('sign up with a phone number', async s => view(await signup(s, 'visitor', { phone: '03 777 888', firstName: ' Antoinette ' })));
   await both('new account session', async s => {
     const r = await s.client('visitor').req('GET', '/api/session');
     s.client('visitor').csrf = r.json?.csrf ?? '';
-    s.visitorPerson = r.json?.user?.person_id;
     return { status: r.status, user: { ...r.json?.user, id: '<user>' }, parishes: r.json?.parishes };
   });
-  await both('same phone refused', async s => view(await signup(s, 'visitor2', { method: 'phone', phone: '+961 3 777 888', name: 'Someone Else' })));
-  await both('sign up with an email address', async s => view(await signup(s, 'visitor3', { method: 'email', email: ' Marie@Example.com ', name: 'Marie Sfeir' })));
+  await both('no member portal before membership', async s => (await s.client('visitor').req('GET', '/api/parishes/p-elias/member')).status);
+  await both('same phone refused', async s => view(await signup(s, 'visitor2', { phone: '+961 3 777 888', firstName: 'Someone', lastName: 'Else' })));
+  await both('sign up with an email address', async s => view(await signup(s, 'visitor3', { email: ' Marie@Example.com ', firstName: 'Marie', lastName: 'Sfeir' })));
   await both('bad sign-ups refused', async s => {
     const out = [];
-    for (const body of [{ method: 'phone', phone: '12', name: 'A Person' }, { method: 'email', email: 'nope', name: 'A Person' },
-      { method: 'phone', phone: '03 999 000', name: 'A' }, { method: 'phone', phone: '03 999 000', name: 'A Person', password: 'short' },
-      { method: 'phone', phone: '03 999 000', name: 'A Person', parish: 'nowhere' }, { method: 'post', name: 'A Person' },
-      { method: 'phone', phone: '03 999 000', name: 'A Person', website: 'spam' }]) out.push(view(await signup(s, 'visitor4', body)));
+    for (const body of [{ phone: '12' }, { email: 'nope' }, {}, { phone: '03 999 000', firstName: ' ' }, { phone: '03 999 000', lastName: '' },
+      { phone: '03 999 000', password: 'short', confirm: 'short' }, { phone: '03 999 000', confirm: 'rosary2027' },
+      { phone: '03 999 000', birthDate: '' }, { phone: '03 999 000', birthDate: `${new Date().getFullYear() - 5}-01-10` },
+      { phone: '03 999 000', website: 'spam' }]) out.push(view(await signup(s, 'visitor4', body)));
     return out;
   });
   await both('sign in with the phone however it is typed', async s => {
     const out = [];
     for (const typed of ['03777888', '+961 3 777 888', '00961-3-777888', '٠٣ ٧٧٧ ٨٨٨', '03 777 889']) out.push((await s.client('login ' + typed).req('POST', '/api/login', { username: typed, password: 'rosary2026' })).status);
     out.push((await s.client('login email').req('POST', '/api/login', { username: 'MARIE@example.com', password: 'rosary2026' })).status);
+    out.push((await s.client('login phone tab').req('POST', '/api/login', { method: 'phone', identifier: '03 777 888', password: 'rosary2026' })).status);
+    out.push(view(await s.client('login email tab').req('POST', '/api/login', { method: 'email', identifier: '03 777 888', password: 'rosary2026' })));
     return out;
   });
+  await both('ask to join Saint Elias', async s => {
+    const r = await s.client('visitor').req('POST', '/api/connections', { op: 'requestMembership', parish: 'p-elias' });
+    s.membership = r.json?.id;
+    return { status: r.status, parish: r.json?.parish, id: /^mr-[0-9a-f]{16}$/.test(r.json?.id ?? '') };
+  });
+  await both('asking twice refused', async s => view(await s.client('visitor').req('POST', '/api/connections', { op: 'requestMembership', parish: 'p-elias' })));
+  await both('office sees the request', async s => (await getState(s, 'rita')).d.MEMBERSHIP_REQUESTS.map(r => ({ status: r.status, profile: r.profile, account: r.account })));
+  await both('office approves it with a new person record', async s => {
+    const r = await s.client('rita').req('POST', '/api/parishes/p-elias/connections', { op: 'approveMembership', id: s.membership, create: true });
+    s.visitorPerson = r.json?.personId;
+    return view(r);
+  });
+  await both('member session', async s => (await s.client('visitor').req('GET', '/api/session')).json?.parishes);
   await both('the new member asks for a booking', async s => ask(s, 'visitor', 'visitorBooking', booking('v7', day(50), '11:00', '15:00', { guests: 60, occasion: 'Family lunch' })));
   await both('the new member portal', async s => portal(s, 'visitor'));
   await both('wrong current password refused', async s => view(await member(s, 'visitor', { op: 'changePassword', current: 'nope', password: 'new-rosary-2026' })));

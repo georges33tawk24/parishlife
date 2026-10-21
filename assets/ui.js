@@ -200,6 +200,63 @@ export function wireTables(host, { onBulk } = {}) {
   });
 }
 
+/* Pagination for full lists and card collections: 10 items a page. Search and filters hide items with
+   `hidden`; paging then hides the rest of what still matches with a class, so search, filters, sorting and
+   totals always work on the whole collection, and changing page never touches a filter. A list that is
+   filtered again goes back to its first page; one that is only re-sorted or re-drawn keeps its page. */
+export const PER_PAGE = 10;
+const pageMemory = new Map();
+const LISTS = '[data-table] tbody, [data-paginate], .member-list';
+export function paginateLists(host, scope = location.hash) {
+  host.querySelectorAll(LISTS).forEach((list, index) => {
+    if (list.dataset.paginated || list.closest('[data-no-paginate]')) return;
+    list.dataset.paginated = '1';
+    const wrap = list.closest('[data-table]') || list;
+    const key = scope + '|' + (wrap.dataset.table || wrap.dataset.paginate || 'list') + '|' + index;
+    const items = () => [...list.children].filter(el => !el.classList.contains('detail') && !el.classList.contains('member-empty') && !el.classList.contains('pg-skip'));
+    const pager = document.createElement('nav');
+    pager.className = 'pager';
+    pager.setAttribute('aria-label', t('Pages', 'الصفحات'));
+    wrap.after(pager);
+    let page = 0, shownKey = '';
+    const apply = filtered => {
+      const all = items(), shown = all.filter(el => !el.hidden);
+      const remembered = pageMemory.get(key);
+      const signature = shown.length + ':' + shown.slice(0, 3).map(el => el.dataset.ri || el.textContent.slice(0, 24)).join('|');
+      if (filtered && signature !== shownKey) page = 0;
+      else if (!shownKey && remembered && remembered.total === shown.length) page = remembered.page;
+      shownKey = signature;
+      const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
+      page = Math.min(page, pages - 1);
+      all.forEach(el => el.classList.remove('pg-out'));
+      shown.forEach((el, i) => {
+        const out = i < page * PER_PAGE || i >= (page + 1) * PER_PAGE;
+        el.classList.toggle('pg-out', out);
+        const detail = el.dataset.ri !== undefined ? list.querySelector(`[data-detail="${el.dataset.ri}"]`) : null;
+        if (detail) detail.classList.toggle('pg-out', out);
+      });
+      pageMemory.set(key, { page, total: shown.length });
+      if (pages <= 1) { pager.hidden = true; pager.innerHTML = ''; return; }
+      pager.hidden = false;
+      const from = page * PER_PAGE + 1, to = Math.min(shown.length, (page + 1) * PER_PAGE);
+      pager.innerHTML = `<button class="btn btn-secondary btn-dense" data-page="${page - 1}" ${page === 0 ? 'disabled' : ''}>${icon('chevL', 15)}${t('Previous', 'السابق')}</button>
+        <span>${t(`${from}–${to} of ${shown.length} · page ${page + 1} of ${pages}`, `${from}–${to} من ${shown.length} · الصفحة ${page + 1} من ${pages}`)}</span>
+        <button class="btn btn-secondary btn-dense" data-page="${page + 1}" ${page >= pages - 1 ? 'disabled' : ''}>${t('Next', 'التالي')}${icon('chevR', 15)}</button>`;
+      pager.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => {
+        page = +b.dataset.page; apply(false);
+        (wrap.closest('.panel') || wrap).scrollIntoView({ block: 'nearest' });
+      }));
+    };
+    new MutationObserver(records => {
+      if (!list.isConnected) return;
+      const filtered = records.some(r => r.type === 'attributes' && r.target.parentElement === list);
+      const changed = filtered || records.some(r => r.type === 'childList');
+      if (changed) apply(filtered);
+    }).observe(list, { childList: true, attributes: true, attributeFilter: ['hidden'], subtree: true });
+    apply(false);
+  });
+}
+
 /* Every control is wired by its view, its verb (data-act) or its component. This
    only flags a button that slipped through, in the console, so it is caught in
    development instead of shipping as a dead click. */

@@ -1,13 +1,14 @@
 /* A member sees a server-built projection, never the parish administration state. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
-import { session } from '../api.js';
+import { session, currentRole } from '../api.js';
 import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 import { safeRichText } from '../rich-text.js';
 import { homeCard } from './member-requests.js';
 import { noticeText, phoneShow } from '../sacrament-requests.js';
+import { composeMessage } from './inbox.js';
 
 const L = (en, ar) => t(en, ar);
 const date = value => value ? fmtDate(value) : '—';
@@ -29,24 +30,37 @@ const attendance = () => {
 };
 const status = value => `<span class="member-badge">${txt(value)}</span>`;
 const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind === kind && filter(x));
-const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'list', offset:0 };
+const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'month', offset:0, when:'upcoming', q:'' };
+/* The same calendar everywhere: Month and Week together with period navigation and Today, the List apart
+   (upcoming nearest first, past newest first, ten a page), and a search by name over every view. */
 const schedule = (key, items, emptyMessage) => {
-  const state = scheduleState(key), mode = state.mode;
+  const state = scheduleState(key), mode = state.mode === 'list' ? 'list' : state.mode === 'week' ? 'week' : 'month';
   const now = new Date(), start = mode === 'week'
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + state.offset * 7)
     : new Date(now.getFullYear(), now.getMonth() + state.offset, 1);
   const end = mode === 'week' ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
     : new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  const ordered = [...items].filter(x => x.date).sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+  const q = (state.q || '').trim().toLocaleLowerCase();
+  const matching = items.filter(x => x.date && (!q || `${x.title} ${x.subtitle || ''}`.toLocaleLowerCase().includes(q)));
+  const ordered = [...matching].sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
   const chip = x => `<button class="member-event member-filter-row" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}" title="${txt(x.title)}"><time>${txt(x.time || '')}</time><span>${txt(x.title)}</span></button>`;
-  const toolbar = `<div class="member-toolbar member-schedule-toolbar"><div class="seg" role="group" aria-label="${L('Schedule view', 'عرض المواعيد')}">${[['list','List','قائمة'],['week','Week','أسبوع'],['month','Month','شهر']].map(([id,en,ar]) => `<button data-schedule-mode="${id}" data-schedule-key="${key}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>${mode === 'list' ? '' : `<div class="member-schedule-nav"><button class="btn btn-secondary btn-dense" data-schedule-offset="-1" data-schedule-key="${key}" aria-label="${L('Previous', 'السابق')}">‹</button><button class="btn btn-secondary btn-dense" data-schedule-today data-schedule-key="${key}">${L('Today', 'اليوم')}</button><strong>${txt(mode === 'month' ? start.toLocaleDateString(undefined, {month:'long',year:'numeric'}) : date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))))}</strong><button class="btn btn-secondary btn-dense" data-schedule-offset="1" data-schedule-key="${key}" aria-label="${L('Next', 'التالي')}">›</button></div>`}</div>`;
-  if (mode === 'list') return toolbar + `<div class="member-list">${ordered.map(x => `<div class="member-card member-schedule-row member-filter-row" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}"><div class="member-date"><b>${date(x.date)}</b><small>${txt(x.time || '')}</small></div><div class="member-schedule-content"><h2>${txt(x.title)}</h2><p>${txt(x.subtitle || '')}</p></div>${status(x.badge || x.source || '')}<button class="btn btn-secondary btn-dense" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}">${L('Details', 'التفاصيل')}</button></div>`).join('') || blank(emptyMessage)}</div>`;
+  const search = `<form class="member-schedule-search" role="search" data-schedule-search="${key}"><input class="input" type="search" name="q" value="${txt(state.q || '')}" placeholder="${L('Search by name', 'ابحث بالاسم')}" aria-label="${L('Search by name', 'ابحث بالاسم')}">${mode === 'list' ? '' : `<input class="input" type="date" name="date" aria-label="${L('Go to a date', 'انتقل إلى تاريخ')}">`}<button class="btn btn-secondary btn-dense">${L('Search', 'بحث')}</button></form>`;
+  const toolbar = `<div class="member-toolbar member-schedule-toolbar"><div class="seg" role="group" aria-label="${L('Calendar view', 'عرض الرزنامة')}">${[['month','Month','شهر'],['week','Week','أسبوع']].map(([id,en,ar]) => `<button data-schedule-mode="${id}" data-schedule-key="${key}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>
+    <button class="btn btn-secondary btn-dense" data-schedule-mode="list" data-schedule-key="${key}" aria-pressed="${mode === 'list'}">${L('List', 'لائحة')}</button>
+    ${mode === 'list' ? `<div class="seg" role="group" aria-label="${L('Which', 'أيّها')}">${[['upcoming','Upcoming','القادمة'],['past','Past','السابقة']].map(([id,en,ar]) => `<button data-schedule-when="${id}" data-schedule-key="${key}" aria-pressed="${(state.when || 'upcoming') === id}">${L(en,ar)}</button>`).join('')}</div>`
+      : `<div class="member-schedule-nav"><button class="btn btn-secondary btn-dense" data-schedule-offset="-1" data-schedule-key="${key}" aria-label="${mode === 'week' ? L('Previous week', 'الأسبوع السابق') : L('Previous month', 'الشهر السابق')}">‹</button><button class="btn btn-secondary btn-dense" data-schedule-today data-schedule-key="${key}">${L('Today', 'اليوم')}</button><strong>${txt(mode === 'month' ? start.toLocaleDateString(undefined, {month:'long',year:'numeric'}) : date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))))}</strong><button class="btn btn-secondary btn-dense" data-schedule-offset="1" data-schedule-key="${key}" aria-label="${mode === 'week' ? L('Next week', 'الأسبوع التالي') : L('Next month', 'الشهر التالي')}">›</button></div>`}
+    ${search}</div>`;
+  if (mode === 'list') {
+    const past = state.when === 'past', today = todayKey();
+    const rows = past ? ordered.filter(x => x.date < today).reverse() : ordered.filter(x => x.date >= today);
+    return toolbar + `<div class="member-list">${rows.map(x => `<div class="member-card member-schedule-row member-filter-row" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}"><div class="member-date"><b>${date(x.date)}</b><small>${txt(x.time || '')}</small></div><div class="member-schedule-content"><h2>${txt(x.title)}</h2><p>${txt(x.subtitle || '')}</p></div>${status(x.badge || x.source || '')}<button class="btn btn-secondary btn-dense" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}">${L('Details', 'التفاصيل')}</button></div>`).join('') || blank(emptyMessage)}</div>`;
+  }
   const days = mode === 'week' ? Array.from({length:7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),start.getDate()+i))
     : Array.from({length:Math.ceil((new Date(start.getFullYear(),start.getMonth(),1).getDay()+new Date(start.getFullYear(),start.getMonth()+1,0).getDate())/7)*7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),i+1-start.getDay()));
   return toolbar + `<div class="member-calendar" role="grid" aria-label="${L('Calendar', 'الرزنامة')}"><div class="member-calendar-head">${Array.from({length:7},(_,i) => `<span>${txt(new Date(2026,7,2+i).toLocaleDateString(undefined,{weekday:'short'}))}</span>`).join('')}</div><div class="member-calendar-grid">${days.map(d => {
     const keyDate = dayKey(d), dayItems = ordered.filter(x=>x.date===keyDate);
     return `<div class="member-calendar-day ${mode==='month' && d.getMonth()!==start.getMonth()?'out':''} ${keyDate===todayKey()?'today':''}"><time datetime="${keyDate}">${d.getDate()}</time><div class="member-day-items">${dayItems.map(chip).join('')}</div></div>`;
-  }).join('')}</div></div>${ordered.filter(x => x.date>=dayKey(start) && x.date<dayKey(end)).length ? '' : blank(emptyMessage)}`;
+  }).join('')}</div></div>${ordered.filter(x => x.date>=dayKey(start) && x.date<dayKey(end)).length ? '' : blank(q ? L('Nothing matches this search in this period.', 'لا شيء يطابق هذا البحث في هذه الفترة.') : emptyMessage)}`;
 };
 
 export function home() {
@@ -71,9 +85,57 @@ export function home() {
     </div><div class="member-actions">${link('myrequests', L('My requests', 'طلباتي'))}${link('mynotes', L('My Notes', 'ملاحظاتي'))}${link('myresources', L('Resources', 'الموارد'))}${link('membernotifications', L('Notifications', 'الإشعارات'))}${link('myconcerns', L('Submit a Concern', 'تقديم ملاحظة أو قلق'))}${link('myprofile', L('Update my information', 'تحديث معلوماتي'))}</div></div>`;
 }
 
+/* Ministries the member belongs to, applications to others, and a private request to leave one.
+   Joining needs the ministry leader's and then the parish priest's approval; a request to leave is read
+   by the parish's priests only. */
+const APPLICATION_STATE = {
+  pending: ['Waiting for the leader', 'بانتظار المسؤول'], 'leader-approved': ['Leader approved · waiting for the priest', 'وافق المسؤول · بانتظار الكاهن'],
+  approved: ['Approved', 'مقبول'], declined: ['Not accepted', 'غير مقبول'], withdrawn: ['Withdrawn', 'مسحوب']
+};
+const ministryName = id => { const g = M.groups.find(x => x.id === id) || M.openMinistries.find(x => x.id === id); return g ? t(g.name, g.ar || g.name) : ''; };
 export function ministries() {
+  const leaving = new Set(M.ministryDepartures.filter(x => x.status === 'pending').map(x => x.groupId));
+  const open = new Set(M.ministryApplications.filter(a => ['pending', 'leader-approved'].includes(a.status)).map(a => a.groupId));
+  const mine = M.groups.map(g => {
+    const leads = ['Leader', 'Assistant'].includes(g.position);
+    return card(`<h2>${txt(g.name)}</h2><p>${txt(g.category)}</p><p>${status(g.position || L('Member', 'عضو'))}${leaving.has(g.id) ? ' ' + status(L('Request to leave sent', 'أُرسل طلب المغادرة')) : ''}</p>
+      <div class="member-actions">${link('mymeetings', L('Meetings', 'الاجتماعات'))}${link('myresources', L('Resources', 'الموارد'))}
+      ${!leads && !leaving.has(g.id) && currentRole() === 'member' ? `<button class="btn btn-ghost btn-dense" type="button" data-ministry-leave="${txt(g.id)}">${L('Leave this ministry', 'مغادرة هذه الخدمة')}</button>` : ''}</div>`);
+  }).join('');
+  const apps = M.ministryApplications.filter(a => a.status !== 'approved').slice(0, 10).map(a => `<div class="member-simple-row"><span><b>${txt(ministryName(a.groupId))}</b> · ${txt(L(...(APPLICATION_STATE[a.status] || [a.status, a.status])))}
+      ${a.withdrawRequested ? ' · ' + txt(L('you asked to withdraw', 'طلبت السحب')) : ''}${a.note ? `<br><small>${txt(a.note)}</small>` : ''}</span>
+      ${['pending', 'leader-approved'].includes(a.status) && !a.withdrawRequested ? `<button class="btn btn-secondary btn-dense" type="button" data-ministry-withdraw="${txt(a.id)}" data-approved="${a.status === 'leader-approved'}">${a.status === 'pending' ? L('Withdraw', 'سحب') : L('Ask to withdraw', 'طلب السحب')}</button>` : ''}</div>`).join('');
+  const joinable = (M.parish.modules && !M.parish.modules.includes('ministries') ? [] : M.openMinistries).filter(g => !open.has(g.id)).map(g => card(`<h2>${txt(t(g.name, g.ar || g.name))}</h2><p>${txt(t(g.cat, g.catAr || g.cat))}${g.meets ? ' · ' + txt(t(g.meets, g.meetsAr || g.meets)) : ''}</p>
+      ${g.about || g.aboutAr ? `<p>${txt(t(g.about, g.aboutAr || g.about))}</p>` : ''}
+      <div class="member-actions"><button class="btn btn-primary btn-dense" type="button" data-ministry-apply="${txt(g.id)}">${L('Ask to join', 'طلب الانضمام')}</button></div>`)).join('');
   return `<div class="member-page">${title(L('My ministries', 'خدماتي'), L('Your membership is separate from a leadership position.', 'عضويتك منفصلة عن أي منصب قيادي.'))}
-    <div class="member-grid">${M.groups.map(g => card(`<h2>${txt(g.name)}</h2><p>${txt(g.category)}</p><p>${status(g.position || L('Member', 'عضو'))}</p><div class="member-actions">${link('mymeetings', L('Meetings', 'الاجتماعات'))}${link('myresources', L('Resources', 'الموارد'))}</div>`)).join('') || blank(L('No ministry membership is recorded for your account.', 'لا توجد عضوية خدمة مسجّلة لحسابك.'))}</div></div>`;
+    <div class="member-grid">${mine || blank(L('No ministry membership is recorded for your account.', 'لا توجد عضوية خدمة مسجّلة لحسابك.'))}</div>
+    ${apps ? card(`<h2>${L('Your applications', 'طلباتك')}</h2>${apps}<p><small>${L('The ministry’s leader approves first, then the parish priest. Before anyone approves, you can withdraw at once; afterwards, withdrawing is a request.',
+      'يوافق مسؤول الخدمة أولاً ثم كاهن الرعية. قبل أي موافقة يمكنك السحب فوراً؛ وبعدها يصبح السحب طلباً.')}</small></p>`) : ''}
+    ${currentRole() === 'member' && joinable ? `<h2 class="member-subhead">${L('Join a ministry', 'انضمّ إلى خدمة')}</h2><div class="member-grid">${joinable}</div>` : ''}</div>`;
+}
+function ministryDialog(kind, id, approved = false) {
+  const leave = kind === 'leave', withdraw = kind === 'withdraw';
+  openModal({
+    title: leave ? L(`Leave ${ministryName(id)}?`, `مغادرة ${ministryName(id)}؟`) : withdraw ? (approved ? L('Ask to withdraw your application?', 'طلب سحب طلبك؟') : L('Withdraw your application?', 'سحب طلبك؟'))
+      : L(`Ask to join ${ministryName(id)}`, `طلب الانضمام إلى ${ministryName(id)}`),
+    body: `<form id="mform" class="stack" novalidate><p>${leave ? L('Your request goes to the parish priest only. The ministry leader does not see it or your reason; they will only see that the roster changed once the priest approves.',
+        'يصل طلبك إلى كاهن الرعية وحده. لا يرى مسؤول الخدمة الطلب ولا السبب؛ ولا يرى إلا تغيّر اللائحة بعد موافقة الكاهن.')
+      : withdraw ? (approved ? L('Your application was already approved by the leader, so withdrawing it is a request the leader or the priest confirms.', 'وافق المسؤول على طلبك، لذلك يصبح السحب طلباً يؤكّده المسؤول أو الكاهن.')
+        : L('Nobody has approved it yet, so it ends now.', 'لم يوافق عليه أحد بعد، لذلك ينتهي الآن.'))
+      : L('The ministry’s leader looks at it first, then the parish priest.', 'ينظر فيه مسؤول الخدمة أولاً ثم كاهن الرعية.')}</p>
+      ${withdraw && !approved ? '' : `<div class="formrow"><label class="label" for="m-text">${leave ? L('Reason (optional, seen by the priest only)', 'السبب (اختياري، يراه الكاهن وحده)') : L('Message (optional)', 'رسالة (اختيارية)')}</label>
+        <textarea class="textarea" id="m-text" rows="4" maxlength="${leave ? 1000 : 500}"></textarea></div>`}</form>`,
+    foot: footer(leave ? L('Send to the priest', 'إرسال إلى الكاهن') : withdraw ? (approved ? L('Send request', 'إرسال الطلب') : L('Withdraw', 'سحب')) : L('Send application', 'إرسال الطلب')),
+    onMount(el) {
+      el.querySelector('#member-save').addEventListener('click', () => {
+        const text = val(el, 'm-text');
+        if (leave) run('ministryLeave', { groupId: id, reason: text }, L('Sent to the parish priest', 'أُرسل إلى كاهن الرعية'));
+        else if (withdraw) run('ministryWithdraw', { id, note: text }, approved ? L('Request sent', 'أُرسل الطلب') : L('Application withdrawn', 'سُحب الطلب'));
+        else run('ministryApply', { groupId: id, message: text }, L('Application sent', 'أُرسل الطلب'));
+      });
+    }
+  });
 }
 
 export function meetings() {
@@ -111,8 +173,8 @@ export function messages() {
   const selected = rows.filter(x => filter === 'archived' ? x.archived : !x.archived &&
     (filter === 'all' || filter === 'sent' && x.authorId === session.user?.id ||
      filter === 'announcements' && x.kind === 'announcement' || filter === 'inbox' && x.authorId !== session.user?.id));
-  return `<div class="member-page">${title(L('Messages', 'الرسائل'), L('Announcements are one-way; conversations can receive replies.', 'الإعلانات باتجاه واحد، ويمكن الرد على المحادثات.'))}
-    ${M.groups.length ? `<div class="member-actions"><button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button></div>` : ''}
+  return `<div class="member-page">${title(L('Parish messages', 'رسائل الرعية'), L('Announcements are one-way; group conversations can receive replies. Private messages are in your inbox.', 'الإعلانات باتجاه واحد، ويمكن الرد على المحادثات الجماعية. أما الرسائل الخاصة ففي بريدك.'))}
+    <div class="member-actions">${M.groups.length ? `<button class="btn btn-primary" data-member-compose>${L('Message my ministry', 'مراسلة خدمتي')}</button>` : ''}${link('inbox', L('Private messages', 'الرسائل الخاصة'))}</div>
     <div class="member-toolbar"><div class="seg" role="group">${[['inbox','Inbox','الوارد'],['sent','Sent','المرسل'],['announcements','Announcements','الإعلانات'],['archived','Archived','الأرشيف'],['all','All','الكل']].map(([id,en,ar]) => `<button data-message-filter="${id}" aria-pressed="${filter === id}">${L(en,ar)}</button>`).join('')}</div><input class="input" type="search" data-member-search placeholder="${L('Search communications', 'البحث في الرسائل')}"></div>
     <div class="member-list">${selected.map(x => `<div class="member-card member-search-row" data-search="${txt(x.title + ' ' + x.body)}"><div class="member-row"><div><h2>${txt(x.title)} ${!x.read ? status(L('Unread', 'غير مقروء')) : ''}</h2><p>${txt(groupName(x.groupId))} · ${date(x.at)}</p></div>${status(x.kind === 'announcement' ? L('Announcement', 'إعلان') : x.kind === 'discussion' ? L('Group conversation', 'محادثة جماعية') : L('Message', 'رسالة'))}</div><p>${txt(x.body)}</p>${x.attachment ? `<a class="btn btn-secondary btn-dense" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download attachment', 'تنزيل المرفق')}</a>` : ''}<div class="member-actions">${x.kind === 'discussion' ? `<button class="btn btn-primary btn-dense" data-discussion="${txt(x.id)}">${L('Open conversation', 'فتح المحادثة')}</button>` : ''}${x.read ? '' : `<button class="btn btn-secondary btn-dense" data-member-read="${txt(x.id)}">${L('Mark read', 'تعليم كمقروء')}</button>`}<button class="btn btn-secondary btn-dense" data-member-archive="${txt(x.id)}" data-archive-op="${x.archived ? 'unarchive' : 'archive'}">${x.archived ? L('Restore', 'استعادة') : L('Archive', 'أرشفة')}</button></div></div>`).join('') || blank(L('No communications in this view.', 'لا رسائل في هذا العرض.'))}</div></div>`;
 }
@@ -164,7 +226,7 @@ export function profile() {
 
 export function concerns() {
   return `<div class="member-page">${title(L('Submit a Concern', 'تقديم ملاحظة أو قلق'), L('Your submissions and their updates appear here automatically.', 'تظهر طلباتك وتحديثاتها هنا تلقائياً.'))}<div class="member-actions"><button class="btn btn-primary" data-concern-new>${L('Submit a concern', 'تقديم ملاحظة')}</button></div>
-    <div class="member-section-head"><h2>${L('My concerns', 'ملاحظاتي المقدّمة')}</h2></div><div class="member-list">${M.concerns.map(x => card(`<div class="member-row"><h2>${txt(x.subject)}</h2>${status(x.status)}</div><p>${date(x.created_at)} · ${x.anonymous ? L('Anonymous to reviewers', 'مجهول الهوية للمراجعين') : L('Identified', 'معرّف')}</p><div class="member-updates">${x.updates.map(y=>`<p><b>${date(y.at)} · ${txt(y.status)}</b><br>${txt(y.text)}</p>`).join('')}</div><button class="btn btn-secondary btn-dense" data-concern-follow="${txt(x.id)}">${L('Add information', 'إضافة معلومات')}</button>`)).join('') || blank(L('You have no submissions yet.', 'ليس لديك طلبات بعد.'))}</div></div>`;
+    <div class="member-section-head"><h2>${L('My concerns', 'ملاحظاتي المقدّمة')}</h2></div><div class="member-list">${M.concerns.map(x => card(`<div class="member-row"><h2>${txt(x.subject)}</h2>${status(x.status)}</div><p>${date(x.created_at)} · ${x.anonymous ? L('Anonymous to its recipients', 'مجهول الهوية لمستلميها') : L('Identified', 'معرّف')}</p><p class="dim">${L('Sent to', 'أُرسلت إلى')}: ${txt((x.recipients || []).join(', ') || '—')}</p><div class="member-updates">${x.updates.map(y=>`<p><b>${date(y.at)} · ${txt(y.status)}</b><br>${txt(y.text)}</p>`).join('')}</div><div class="member-actions"><button class="btn btn-secondary btn-dense" data-concern-follow="${txt(x.id)}">${L('Add information', 'إضافة معلومات')}</button><button class="btn btn-secondary btn-dense" data-concern-more="${txt(x.id)}">${L('Send to someone else too', 'إرسالها إلى شخص آخر أيضاً')}</button></div>`)).join('') || blank(L('You have no submissions yet.', 'ليس لديك طلبات بعد.'))}</div></div>`;
 }
 
 export function notificationsPage() {
@@ -173,21 +235,20 @@ export function notificationsPage() {
 }
 
 export function hub() {
-  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${session.user?.role !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
-    ${session.user?.role==='leader'?card(`<h2>${L('Complaints received','الشكاوى الواردة')}</h2><p class="help">${L('Related to your ministries; sensitive cases and cases involving you are handled by an independent reviewer.','المرتبطة بخدماتك؛ الحالات الحساسة والحالات التي تتعلق بك يتولاها مراجع مستقل.')}</p>${M.leaderConcerns.map(x=>`<div class="member-simple-row"><span><b>${txt(x.subject)}</b><small style="display:block">${txt(groupName(x.group_id))} · ${txt(x.reference)} · ${txt(x.category)} · ${txt(x.status)}</small><span>${txt(x.description)}</span></span></div>`).join('')||blank(L('No complaints received for your groups.','لا شكاوى واردة لمجموعاتك.'))}`):''}
-    ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2>${M.content.filter(x=>x.kind==='message' && x.recipientId===session.user?.id).map(x=>`<div class="member-simple-row"><span>${txt(groupName(x.groupId))} · ${txt(x.body)}</span><button class="btn btn-secondary btn-dense" data-reply-message="${txt(x.id)}">${L('Reply', 'رد')}</button></div>`).join('') || blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))}`)}
+  return `<div class="member-page">${title(L('Member communication', 'التواصل مع الأعضاء'), L('Publish to your ministries and review permitted member requests.', 'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'))}${currentRole() !== 'member' ? `<div class="member-actions"><button class="btn btn-primary" data-publish>${L('Publish update', 'نشر مستجد')}</button></div>` : ''}
+    ${card(`<h2>${L('Member messages', 'رسائل الأعضاء')}</h2><p>${L('Messages from members to the parish office or to your ministries arrive in Private messages, where you can reply.', 'تصل رسائل الأعضاء إلى مكتب الرعية أو إلى خدماتك في الرسائل الخاصة، حيث يمكنك الرد.')}</p>${link('inbox', L('Open private messages', 'فتح الرسائل الخاصة'))}`)}
     ${card(`<h2>${L('Volunteer responses', 'ردود المتطوعين')}</h2>${M.volunteerReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.title)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-confirm-volunteer="${txt(x.content_id)}" data-user="${txt(x.user_id)}">${L('Confirm', 'تأكيد')}</button></div>`).join('') || blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))}`)}
     ${M.profileReview.length ? card(`<h2>${L('Profile update requests', 'طلبات تحديث الملفات')}</h2>${M.profileReview.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} · ${txt(x.field)}: ${txt(x.requested_value)} · ${txt(x.status)}</span><button class="btn btn-secondary btn-dense" data-profile-review="${txt(x.id)}">${L('Mark reviewed', 'تعليم كمراجَع')}</button></div>`).join('')}`) : ''}
-    ${M.complaintPermissions.includes('Review') ? card(`<h2>${L('Concern review', 'مراجعة الطلبات السرية')}</h2><p>${L('Only explicitly appointed reviewers can see these cases.', 'هذه الحالات متاحة فقط للمراجعين المعيّنين صراحةً.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Review', 'مراجعة')}</button></div>`).join('') || blank(L('No cases assigned to this parish.', 'لا حالات مسجّلة في هذه الرعية.'))}`) : ''}
+    ${card(`<h2>${L('Concerns sent to you', 'الملاحظات المرسلة إليك')}</h2><p class="help">${L('Only the people a submitter chose can see a concern. A case that names you is handled by someone else.', 'لا يرى الملاحظة إلا من اختارهم مقدّمها. والحالة التي تذكرك يتولاها شخص آخر.')}</p>${M.review.map(x=>`<div class="member-simple-row"><span>${txt(x.reference)} · ${txt(x.subject)} · ${txt(x.status)} ${x.anonymous ? L('(anonymous)','(مجهول)') : ''}</span><button class="btn btn-secondary btn-dense" data-review-concern="${txt(x.id)}">${L('Open', 'فتح')}</button></div>`).join('') || blank(L('No concern has been sent to you.', 'لم تُرسل إليك أي ملاحظة.'))}`)}
     ${M.complaintPermissions.includes('ManageCategories') ? card(`<h2>${L('Concern categories', 'فئات الملاحظات')}</h2><button class="btn btn-secondary btn-dense" data-category-add>${L('Add category', 'إضافة فئة')}</button>${M.categories.map(x=>`<div class="member-simple-row"><span>${txt(x.name)} ${status(x.active ? L('Active', 'نشطة') : L('Hidden', 'مخفية'))}</span><button class="btn btn-secondary btn-dense" data-category-toggle="${txt(x.name)}" data-active="${!x.active}">${x.active ? L('Hide', 'إخفاء') : L('Activate', 'تفعيل')}</button></div>`).join('')}`) : ''}</div>`;
 }
 
 async function run(op, values, success = L('Saved', 'حُفظ')) {
   try {
     const result = await memberAction(op, values);
-    if (session.user?.role === 'member') await hydrate(); else await loadMember();
+    if (currentRole() === 'member') await hydrate(); else await loadMember();
     closeOverlays();
-    if (session.user?.role === 'member') bus.renderAll(); else bus.refresh();
+    if (currentRole() === 'member') bus.renderAll(); else bus.refresh();
     if (success) toast(success, '', 'success');
     return result;
   } catch (error) { toast(L('Could not save', 'تعذّر الحفظ'), error.message, 'danger'); return null; }
@@ -301,35 +362,50 @@ function passwordModal() {
 }
 
 function messageDrawer() {
-  openDrawer({ title:L('Message my ministry', 'مراسلة خدمتي'),
-    sub:L('Your message goes to the ministry leader if they have a linked account.', 'تصل رسالتك إلى مسؤول الخدمة إذا كان له حساب مرتبط.'),
-    body:`<div class="formrow"><label class="label" for="message-group">${L('Ministry', 'الخدمة')}</label><select class="select" id="message-group">${M.groups.map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>${area(L('Message', 'الرسالة'),'message-body')}`,
-    foot:footer(L('Send message', 'إرسال الرسالة')), onMount(el) { el.querySelector('#member-save').addEventListener('click', () => {
-      if (!val(el,'message-body')) { el.querySelector('#message-body').focus(); return; }
-      run('message',{groupId:val(el,'message-group'),body:val(el,'message-body')});
-    }); }
+  composeMessage({ kind:'ministry', parish:session.parishId, group:M.groups[0]?.id });
+}
+
+/* Who receives a concern is the submitter's choice; the suggestions follow the ministry and category chosen. */
+const recipientRows = (options, name) => options.map(o => `<label class="check concern-recipient" data-recipient="${txt(o.id)}"><input type="checkbox" name="${name}" value="${txt(o.id)}"><span>${txt(o.name)} <small class="dim">${o.roles.map(r => txt(L(r.en, r.ar))).join(' · ')}</small> <span class="member-badge" data-suggested hidden>${L('Suggested', 'مقترح')}</span></span></label>`).join('');
+function suggestRecipients(el, touched) {
+  const group = el.querySelector('#concern-group')?.value, category = M.categories.find(c => c.name === el.querySelector('#concern-category')?.value);
+  const wanted = new Set([group ? 'group:' + group : 'parish', ...(category?.sensitive ? ['sensitive'] : [])]);
+  el.querySelectorAll('[data-recipient]').forEach(row => {
+    const option = M.concernRecipients.find(o => o.id === row.dataset.recipient), on = option.suggested.some(s => wanted.has(s));
+    row.querySelector('[data-suggested]').hidden = !on;
+    if (!touched) row.querySelector('input').checked = on;
   });
 }
 
 function concernDrawer() {
   openDrawer({ title:L('Submit a Concern', 'تقديم ملاحظة أو قلق'),
-    sub:L('Your concern is visible only to explicitly authorized reviewers.', 'تُعرض ملاحظتك فقط على المراجعين المخوّلين صراحةً.'),
+    sub:L('Only the people you choose below will see your concern, its status or that it exists.', 'لا يرى ملاحظتك أو حالتها أو وجودها إلا من تختارهم أدناه.'),
     body:`<div class="formrow"><label class="label" for="concern-category">${L('Category', 'الفئة')}</label><select class="select" id="concern-category">${M.categories.filter(x=>x.active).map(x=>`<option>${txt(x.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-group">${L('Related ministry (optional)', 'الخدمة المرتبطة (اختياري)')}</label><select class="select" id="concern-group"><option value="">—</option>${M.groups.map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="concern-event">${L('Related event or meeting (optional)', 'المناسبة أو الاجتماع المرتبط (اختياري)')}</label><select class="select" id="concern-event"><option value="">—</option>${[...M.events,...M.meetings].map(x=>`<option value="${txt(x.id)}">${txt(x.title)}</option>`).join('')}</select></div>
       ${field(L('Subject', 'الموضوع'),'concern-subject')}${area(L('Description', 'الوصف'),'concern-description')}
       ${field(L('When did this happen? (optional)', 'متى حصل هذا؟ (اختياري)'),'concern-when','','datetime-local')}${field(L('People involved (optional)', 'الأشخاص المعنيون (اختياري)'),'concern-people')}
       <div class="formrow"><label class="label" for="concern-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق (اختياري، بحد أقصى ١ ميغابايت)')}</label><input class="input" id="concern-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div>
+      <fieldset class="formrow"><legend class="label">${L('Send it to', 'أرسلها إلى')} <span class="req">*</span></legend>
+        <p class="help">${L('Suggestions follow the ministry and category you chose. Change them as you wish; nobody else is told.', 'تتبع الاقتراحات الخدمة والفئة اللتين اخترتهما. غيّرها كما تشاء؛ ولا يُبلَّغ أحد سواهم.')}</p>
+        ${M.concernRecipients.length ? recipientRows(M.concernRecipients, 'concern-recipient') : `<p class="dim">${L('Nobody in this parish can receive concerns yet. Speak to the parish office.', 'لا أحد في هذه الرعية يمكنه استلام الملاحظات بعد. تحدّث إلى مكتب الرعية.')}</p>`}</fieldset>
       <label class="member-toggle"><span>${L('Submit anonymously', 'إرسال دون إظهار الهوية')}</span><input type="checkbox" id="concern-anonymous"></label>
-      <p class="help">${L('Reviewers will not see your account identity. You can follow the status here after submitting.', 'لن يرى المراجعون هوية حسابك. يمكنك متابعة الحالة هنا بعد الإرسال.')}</p>
+      <p class="help">${L('If you submit anonymously, the people you chose will not see who you are, and neither will anyone else. You can follow the status here after submitting.', 'إذا أرسلتها دون إظهار الهوية، فلن يعرف من اخترتهم ولا أي أحد آخر من أنت. يمكنك متابعة الحالة هنا بعد الإرسال.')}</p>
       <div class="formrow"><label class="label" for="concern-follow">${L('Preferred follow-up (identified submissions)', 'طريقة المتابعة للطلبات المعرّفة')}</label><select class="select" id="concern-follow"><option value="system">${L('In-system message', 'رسالة في النظام')}</option><option value="email">${L('Email', 'البريد الإلكتروني')}</option><option value="phone">${L('Phone', 'الهاتف')}</option><option value="none">${L('No response required', 'لا حاجة للرد')}</option></select></div>`,
-    foot:footer(L('Submit concern', 'إرسال الملاحظة')), onMount(el) { el.querySelector('#member-save').addEventListener('click', async () => {
+    foot:footer(L('Submit concern', 'إرسال الملاحظة')), onMount(el) {
+      let touched = false;
+      el.querySelectorAll('[name=concern-recipient]').forEach(x => x.addEventListener('change', () => { touched = true; }));
+      ['#concern-group', '#concern-category'].forEach(id => el.querySelector(id)?.addEventListener('change', () => suggestRecipients(el, touched)));
+      suggestRecipients(el, false);
+      el.querySelector('#member-save').addEventListener('click', async () => {
       if (!val(el,'concern-subject') || !val(el,'concern-description')) { el.querySelector(!val(el,'concern-subject')?'#concern-subject':'#concern-description').focus(); return; }
+      const recipients = [...el.querySelectorAll('[name=concern-recipient]:checked')].map(x => x.value);
+      if (!recipients.length) { toast(L('Choose who should receive it', 'اختر من يجب أن يستلمها'), '', 'warning'); el.querySelector('[name=concern-recipient]')?.focus(); return; }
       try {
         const values = { category:val(el,'concern-category'), groupId:val(el,'concern-group') || null,
           eventId:val(el,'concern-event') || null, subject:val(el,'concern-subject'), description:val(el,'concern-description'),
           happenedAt:val(el,'concern-when'), peopleInvolved:val(el,'concern-people'),
-          anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el) };
+          anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el), recipients };
         const result = await run('concern', values, '');
         if (result?.id) openDrawer({title:L('Concern received', 'تم استلام الملاحظة'),
           body:`<p>${L('You can follow its status any time on this page.', 'يمكنك متابعة حالتها في هذه الصفحة في أي وقت.')}</p>`,
@@ -342,7 +418,7 @@ function concernDrawer() {
 function publishDrawer() {
   openDrawer({ title:L('Publish to members', 'النشر للأعضاء'),
     body:`<div class="formrow"><label class="label" for="publish-kind">${L('Type', 'النوع')}</label><select class="select" id="publish-kind">${[['post','Post'],['announcement','Announcement'],['resource','Resource'],['opportunity','Volunteer opportunity'],['discussion','Group conversation']].map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select></div>
-      <div class="formrow"><label class="label" for="publish-group">${L('Audience', 'الجمهور')}</label><select class="select" id="publish-group">${session.user?.role === 'priest' || session.user?.role === 'secretary' ? `<option value="">${L('Parish', 'الرعية')}</option>` : ''}${M.groups.filter(g=>M.managedGroups.includes(g.id)).map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
+      <div class="formrow"><label class="label" for="publish-group">${L('Audience', 'الجمهور')}</label><select class="select" id="publish-group">${['priest','parishadmin','secretary'].includes(currentRole()) ? `<option value="">${L('Parish', 'الرعية')}</option>` : ''}${M.groups.filter(g=>M.managedGroups.includes(g.id)).map(g=>`<option value="${txt(g.id)}">${txt(g.name)}</option>`).join('')}</select></div>
       <div class="formrow"><label class="label" for="publish-meeting">${L('Linked meeting (optional)', 'اجتماع مرتبط (اختياري)')}</label><select class="select" id="publish-meeting"><option value="">—</option>${M.meetings.map(m=>`<option value="${txt(m.id)}" data-group="${txt(m.groupId)}">${txt(m.title)} · ${date(m.date)}</option>`).join('')}</select></div>
       ${field(L('Title', 'العنوان'),'publish-title')}${area(L('Content', 'المحتوى'),'publish-body')}${field(L('Category or tags', 'الفئة أو الوسوم'),'publish-category')}
       <div class="formrow"><label class="label" for="publish-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق اختياري بحد ١ ميغابايت')}</label><input class="input" id="publish-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div><label class="member-toggle"><span>${L('Pin post', 'تثبيت المنشور')}</span><input type="checkbox" id="publish-pinned"></label>`,
@@ -360,17 +436,16 @@ function publishDrawer() {
 }
 
 function reviewDrawer(x) {
-  const canResolve = M.complaintPermissions.includes('Resolve');
-  const canRespond = (M.complaintPermissions.includes('Respond') || canResolve) &&
-    (canResolve || !['Resolved','Closed'].includes(x.status));
-  const statuses = ['Submitted','Under Review','Additional Information Requested','Referred',
-    ...(canResolve ? ['Resolved','Closed'] : [])];
+  const statuses = ['Submitted','Under Review','Additional Information Requested','Referred','Resolved','Closed'];
+  const identity = x.identity ? [x.identity.name, x.identity.phone, x.identity.email].filter(Boolean).join(' · ') : '';
   openDrawer({title:x.reference, sub:`${x.status} · ${x.category}`,
-    body:`<h3>${txt(x.subject)}</h3><p>${txt(x.description)}</p><p>${L('People involved', 'الأشخاص المعنيون')}: ${txt(x.people_involved || '—')}</p>${x.identity ? `<p>${L('Identity', 'الهوية')}: ${txt(x.identity.name)} · ${txt(x.identity.phone)}</p>` : ''}${x.attachment ? `<a class="btn btn-secondary" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download evidence', 'تنزيل المرفق')}</a>` : ''}
-      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}${y.internal ? `<br><small>${L('Internal note', 'ملاحظة داخلية')}: ${txt(y.internal)}</small>` : ''}</p>`).join('')}
-      ${M.complaintPermissions.includes('Assign') ? `<div class="formrow"><label class="label" for="review-assignee">${L('Assign to independent reviewer', 'تعيين مراجع مستقل')}</label><select class="select" id="review-assignee"><option value="">${L('Choose reviewer', 'اختر مراجعاً')}</option>${M.reviewers.map(r=>`<option value="${txt(r.id)}" ${x.assignedTo===r.id?'selected':''}>${txt(r.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-dense" id="assign-reviewer">${L('Assign', 'تعيين')}</button></div>` : ''}
-      ${canRespond ? `<div class="formrow"><label class="label" for="review-status">${L('Public status', 'الحالة العامة')}</label><select class="select" id="review-status">${statuses.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Public response', 'الرد العام'),'review-public')}${area(L('Internal note', 'ملاحظة داخلية'),'review-internal')}` : ''}`,
-    foot:canRespond ? footer(L('Save update', 'حفظ التحديث')) : `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>`, onMount(el) {
+    body:`<h3>${txt(x.subject)}</h3><p>${txt(x.description)}</p><p>${L('People involved', 'الأشخاص المعنيون')}: ${txt(x.people_involved || '—')}</p>
+      <p>${L('Submitted by', 'مقدّم الملاحظة')}: ${x.anonymous ? L('Anonymous — the submitter chose not to say who they are.', 'مجهول — اختار مقدّمها ألّا يُعرّف بنفسه.') : txt(identity)}</p>
+      <p class="help">${L('Sent to', 'أُرسلت إلى')}: ${x.recipients.map(r=>txt(r.name)).join(', ')}</p>${x.attachment ? `<a class="btn btn-secondary" download="${txt(x.attachment.name)}" href="${txt(x.attachment.data)}">${L('Download evidence', 'تنزيل المرفق')}</a>` : ''}
+      ${x.updates.map(y=>`<p>${date(y.at)} · ${txt(y.status)} · ${txt(y.text)}${y.internal ? `<br><small>${L('Note for the recipients', 'ملاحظة للمستلمين')}: ${txt(y.internal)}</small>` : ''}</p>`).join('')}
+      ${x.recipients.length > 1 ? `<div class="formrow"><label class="label" for="review-assignee">${L('Who takes the lead', 'من يتولّى المتابعة')}</label><select class="select" id="review-assignee"><option value="">${L('Choose one of the recipients', 'اختر أحد المستلمين')}</option>${x.recipients.map(r=>`<option value="${txt(r.id)}" ${x.assignedTo===r.id?'selected':''}>${txt(r.name)}</option>`).join('')}</select><button class="btn btn-secondary btn-dense" id="assign-reviewer">${L('Save', 'حفظ')}</button></div>` : ''}
+      <div class="formrow"><label class="label" for="review-status">${L('Status the submitter sees', 'الحالة التي يراها مقدّم الملاحظة')}</label><select class="select" id="review-status">${statuses.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></div>${area(L('Response to the submitter', 'الرد على مقدّم الملاحظة'),'review-public')}${area(L('Note for the other recipients only', 'ملاحظة للمستلمين الآخرين فقط'),'review-internal')}`,
+    foot:footer(L('Save update', 'حفظ التحديث')), onMount(el) {
       el.querySelector('#member-save')?.addEventListener('click',()=>run('concernUpdate',{id:x.id,status:val(el,'review-status'),publicText:val(el,'review-public'),internalText:val(el,'review-internal')}));
       el.querySelector('#assign-reviewer')?.addEventListener('click',()=>run('concernAssign',{id:x.id,reviewerId:val(el,'review-assignee')}));
     }
@@ -384,6 +459,9 @@ function discussionDrawer(x) {
 }
 
 export function mount(host) {
+  host.querySelectorAll('[data-ministry-apply]').forEach(b=>b.addEventListener('click',()=>ministryDialog('apply',b.dataset.ministryApply)));
+  host.querySelectorAll('[data-ministry-leave]').forEach(b=>b.addEventListener('click',()=>ministryDialog('leave',b.dataset.ministryLeave)));
+  host.querySelectorAll('[data-ministry-withdraw]').forEach(b=>b.addEventListener('click',()=>ministryDialog('withdraw',b.dataset.ministryWithdraw,b.dataset.approved==='true')));
   host.querySelectorAll('[data-member-item]').forEach(b=>b.addEventListener('click',()=>memberItem(b.dataset.memberItem,b.dataset.itemId)));
   host.querySelectorAll('[data-meeting]').forEach(b=>b.addEventListener('click',()=>memberItem('meeting',b.dataset.meeting)));
   host.querySelectorAll('[data-note-edit]').forEach(b=>b.addEventListener('click',()=>noteDrawer(M.notes.find(x=>x.id===b.dataset.noteEdit))));
@@ -418,12 +496,17 @@ export function mount(host) {
   host.querySelector('[data-category-add]')?.addEventListener('click',()=>openDrawer({title:L('Add concern category', 'إضافة فئة للملاحظات'),body:field(L('Category name', 'اسم الفئة'),'category-name'),foot:footer(L('Add category', 'إضافة فئة')),
     onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('categoryManage',{name:val(el,'category-name'),active:true}));}}));
   host.querySelectorAll('[data-category-toggle]').forEach(b=>b.addEventListener('click',()=>run('categoryManage',{name:b.dataset.categoryToggle,active:b.dataset.active==='true'})));
-  host.querySelectorAll('[data-reply-message]').forEach(b=>b.addEventListener('click',()=>{
-    const x=M.content.find(x=>x.id===b.dataset.replyMessage); if(!x) return;
-    openDrawer({title:L('Reply to member', 'الرد على العضو'),body:`<p>${txt(x.body)}</p>${area(L('Reply', 'الرد'),'reply-body')}`,
-      foot:footer(L('Send reply', 'إرسال الرد')),onMount(el){el.querySelector('#member-save').addEventListener('click',()=>run('messageReply',{id:x.id,body:val(el,'reply-body')}));}});
-  }));
   host.querySelectorAll('[data-discussion]').forEach(b=>b.addEventListener('click',()=>{ const x=M.content.find(x=>x.id===b.dataset.discussion); if(x) discussionDrawer(x); }));
+  host.querySelectorAll('[data-concern-more]').forEach(b=>b.addEventListener('click',()=>{
+    const x=M.concerns.find(item=>item.id===b.dataset.concernMore); if(!x) return;
+    const options=M.concernRecipients.filter(o=>!(x.recipientIds||[]).includes(o.id));
+    openDrawer({title:x.subject,sub:L('Choose who else should receive this concern. They see it as it is now, with its history.','اختر من يجب أن يستلم هذه الملاحظة أيضاً. يرونها كما هي الآن مع سجلّها.'),
+      body:options.length?`<fieldset class="formrow"><legend class="label">${L('Also send it to','أرسلها أيضاً إلى')}</legend>${recipientRows(options,'concern-more')}</fieldset>`:blank(L('Everyone who can receive it already has it.','كل من يمكنه استلامها قد استلمها.')),
+      foot:footer(L('Send','إرسال')),onMount(el){ el.querySelectorAll('[data-suggested]').forEach(s=>{s.hidden=true;});
+        el.querySelector('#member-save').addEventListener('click',()=>{
+        const recipients=[...el.querySelectorAll('[name=concern-more]:checked')].map(i=>i.value); if(recipients.length) run('concernAddRecipients',{id:x.id,recipients});
+      });}});
+  }));
   host.querySelectorAll('[data-concern-follow]').forEach(b=>b.addEventListener('click',()=>{
     const x=M.concerns.find(item=>item.id===b.dataset.concernFollow); if(!x) return;
     openDrawer({title:x.subject,sub:x.status,body:area(L('Provide additional information','إضافة معلومات'),'concern-follow-message'),
@@ -433,6 +516,14 @@ export function mount(host) {
   }));
   host.querySelectorAll('[data-message-filter]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberMessageFilter=b.dataset.messageFilter; bus.refresh(); }));
   host.querySelectorAll('[data-schedule-mode]').forEach(b=>b.addEventListener('click',()=>{ const state=scheduleState(b.dataset.scheduleKey); state.mode=b.dataset.scheduleMode; state.offset=0; bus.refresh(); }));
+  host.querySelectorAll('[data-schedule-when]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).when=b.dataset.scheduleWhen; bus.refresh(); }));
+  host.querySelectorAll('[data-schedule-search]').forEach(f=>f.addEventListener('submit',e=>{
+    e.preventDefault(); const state=scheduleState(f.dataset.scheduleSearch); state.q=f.elements.q.value;
+    const day=f.elements.date?.value;
+    if(day){ const [y,m,d]=day.split('-').map(Number), now=new Date(), target=new Date(y,m-1,d);   // a date moves the month or week to it
+      state.offset = state.mode==='week' ? Math.floor((target-new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()))/(7*86400000)) : (y-now.getFullYear())*12+(m-1-now.getMonth()); }
+    bus.refresh();
+  }));
   host.querySelectorAll('[data-notes-view]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberNotesView=b.dataset.notesView; if(b.dataset.notesView==='calendar') scheduleState('notes').mode='month'; bus.refresh(); }));
   host.querySelectorAll('[data-schedule-offset]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).offset+=Number(b.dataset.scheduleOffset); bus.refresh(); }));
   host.querySelectorAll('[data-schedule-today]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).offset=0; bus.refresh(); }));

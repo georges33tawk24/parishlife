@@ -21,12 +21,15 @@ function calendar(events) {
   const [year, month] = monthKey().split('-').map(Number);
   const first = new Date(year, month-1, 1), start = new Date(year, month-1, 1-first.getDay());
   const cells = Math.ceil((first.getDay()+new Date(year,month,0).getDate())/7)*7;
-  const weekdays = Array.from({length:7},(_,i)=>new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-US',{weekday:'short'}).format(new Date(2026,9,4+i)));
-  const byDate = new Map();
-  for (const event of events) if(event.date) byDate.set(event.date,[...(byDate.get(event.date)||[]),event]);
-  return `<div class="toolbar" style="justify-content:center;padding:14px"><button class="btn btn-secondary btn-dense" data-oversight-month="-1" aria-label="${L('Previous month','الشهر السابق')}">‹</button>
+  const weekdays = Array.from({length:7},(_,i)=>new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-US',{weekday:'short'}).format(new Date(2026,9,4+i)));   // a Sunday-to-Saturday week, for the day names
+  const byDate = new Map(), q = (S.ui.oversightQ || '').trim().toLocaleLowerCase();
+  for (const event of events) if(event.date && (!q || `${event.title} ${event.titleAr||''}`.toLocaleLowerCase().includes(q))) byDate.set(event.date,[...(byDate.get(event.date)||[]),event]);
+  return `<div class="toolbar cal-toolbar" style="padding:14px"><button class="btn btn-secondary btn-dense" data-oversight-month="-1" aria-label="${L('Previous month','الشهر السابق')}">‹</button>
+    <button class="btn btn-secondary btn-dense" data-oversight-month="0">${L('Today','اليوم')}</button>
     <b>${esc(new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-US',{month:'long',year:'numeric'}).format(first))}</b>
-    <button class="btn btn-secondary btn-dense" data-oversight-month="1" aria-label="${L('Next month','الشهر التالي')}">›</button></div>
+    <button class="btn btn-secondary btn-dense" data-oversight-month="1" aria-label="${L('Next month','الشهر التالي')}">›</button>
+    <form class="cal-search" role="search" data-oversight-search><input class="input" type="search" name="q" value="${esc(S.ui.oversightQ||'')}" placeholder="${L('Search events by name','ابحث في الأحداث بالاسم')}" aria-label="${L('Search events by name','ابحث في الأحداث بالاسم')}">
+      <input class="input" type="date" name="date" aria-label="${L('Go to a date','انتقل إلى تاريخ')}"><button class="btn btn-secondary btn-dense">${L('Search','بحث')}</button></form></div>
     <div class="oversight-calendar-scroll"><div class="cal oversight-calendar"><div class="cal-head">${weekdays.map(day=>`<div>${esc(day)}</div>`).join('')}</div><div class="cal-grid">
     ${Array.from({length:cells},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return `<div class="cal-day${d.getMonth()===first.getMonth()?'':' out'}"><span class="dn">${d.getDate()}</span>
       ${(byDate.get(dateKey(d))||[]).map(e=>`<div class="cal-ev" title="${esc(e.title)}"><span class="t">${esc(e.time||'')}</span>${esc(L(e.title,e.titleAr||e.title))}</div>`).join('')}</div>`;}).join('')}</div></div></div>`;
@@ -104,7 +107,8 @@ oversight.mount=(host,id='')=>{
       if(selection!==null){const replacement=document.querySelector(selector);replacement?.focus();replacement?.setSelectionRange(selection,selection);}
     });
   host.querySelectorAll('[data-oversight-view]').forEach(b=>b.addEventListener('click',()=>{S.ui.oversightEventsView=b.dataset.oversightView;bus.refresh();}));
-  host.querySelectorAll('[data-oversight-month]').forEach(b=>b.addEventListener('click',()=>{const [y,m]=monthKey().split('-').map(Number);S.ui.oversightMonth=dateKey(new Date(y,m-1+Number(b.dataset.oversightMonth),1)).slice(0,7);bus.refresh();}));
+  host.querySelectorAll('[data-oversight-month]').forEach(b=>b.addEventListener('click',()=>{const step=Number(b.dataset.oversightMonth),[y,m]=monthKey().split('-').map(Number);S.ui.oversightMonth=step?dateKey(new Date(y,m-1+step,1)).slice(0,7):null;bus.refresh();}));
+  host.querySelector('[data-oversight-search]')?.addEventListener('submit',e=>{e.preventDefault();const f=e.currentTarget;S.ui.oversightQ=f.elements.q.value;if(f.elements.date.value)S.ui.oversightMonth=f.elements.date.value.slice(0,7);bus.refresh();});
   const k=key(id),old=cache.get(k);
   if(old&&(old.loading||Date.now()-(old.loadedAt||0)<60_000))return;
   if(!old)cache.set(k,{loading:true});
@@ -112,10 +116,10 @@ oversight.mount=(host,id='')=>{
     .catch(error=>cache.set(k,{error:error.message,loadedAt:Date.now()})).finally(()=>bus.refresh());
 };
 
-export function eparchy(){const parishes=session.parishes||[];return pageHead({title:L('Eparchy','الأبرشية'),sub:L('Read-only overview of parishes in your archdiocese.','نظرة عامة للقراءة فقط على رعايا الأبرشية.')})+
+export function eparchy(){const parishes=session.parishes||[];return pageHead({title:L('Eparchy','الأبرشية'),sub:L('Overview of the parishes in your diocese. Parishes, clergy and appointments are managed in Administration.','نظرة عامة على رعايا أبرشيتك. تُدار الرعايا والإكليروس والتعيينات من الإدارة.')})+
   `<div class="stats" style="margin:18px 0">${stat(L('Parishes','الرعايا'),parishes.length)}${stat(L('People','المؤمنون'),parishes.reduce((n,p)=>n+(p.people||0),0))}</div>`+
   rows(parishes.map(p=>[`${esc(p.name)}<small style="display:block">${esc(p.ar)}</small>`,esc(L(p.town,p.townAr||p.town)),link(`#/oversight/${esc(p.id)}`,L('View oversight','عرض الإشراف'))]),
-    [L('Parish','الرعية'),L('Town','البلدة'),''])+`<p style="margin-top:18px">${link('#/assignments',L('View priest assignments','عرض تعيينات الكهنة'))}</p>`;}
+    [L('Parish','الرعية'),L('Town','البلدة'),''])+`<p style="margin-top:18px">${link('#/administration/clergy',L('Clergy titles and assignments','ألقاب الإكليروس وتعييناتهم'))}</p>`;}
 
 export function mapView(){const parishes=session.parishes||[];return pageHead({title:L('Parish map','خريطة الرعايا'),sub:L('Find parishes in the eparchy.','تعرّف إلى رعايا الأبرشية.')})+
   `<p class="alert alert-info">${L('Exact parish coordinates have not been recorded. This list gives the known town without placing inaccurate map markers.',

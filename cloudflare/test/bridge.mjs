@@ -8,6 +8,7 @@ import { Tx } from '../src/db.js';
 import { Problem, PyError, setTimeZone, overrideToday } from '../src/py.js';
 import { initialize, save_patch, workflow, visible, oversight, file_access, audit } from '../src/app.js';
 import { member_view, member_action } from '../src/member.js';
+import { officeConnectionAction } from '../src/connections.js';
 import { xlsx_preview } from '../src/xlsx.js';
 import { migrate_state, validate } from '../src/state.js';
 import worker from '../src/worker.js';
@@ -40,6 +41,7 @@ const calls = {
   file_access: ({ db, args: [u, pid, scope, owner, write] }) => inTx(db, c => file_access(c, u, pid, scope, owner, write ?? false), false),
   member_view: ({ db, args: [u, pid] }) => inTx(db, c => member_view(c, u, pid)),
   member_action: ({ db, args: [u, pid, q] }) => inTx(db, c => member_action(c, u, pid, q)),
+  office_connection_action: ({ db, args: [u, pid, q, base] }) => inTx(db, c => officeConnectionAction(c, { env: {}, dev: false }, u, pid, q, [], base)),
   xlsx_preview: ({ args: [encoded] }) => xlsx_preview(encoded),
   migrate_state: ({ args: [d] }) => migrate_state(d),
   validate: ({ args: [d] }) => { validate(d); return null; },

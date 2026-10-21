@@ -12,9 +12,24 @@ import {
   ROLES, ensureDatabase, access, file_access, parishes, oversight, visible, save_patch, workflow, audit
 } from './app.js';
 import { parish_theme } from './state.js';
+import { authority, parishUser, sessionAuthority, loginAllowed, adminView, adminAction } from './authority.js';
 import { member_view, member_action } from './member.js';
-import { loginName, signup } from './accounts.js';
+import {
+  authConfig, signIn, mfaTurnedOn, mfaChallenge, challengeInfo, mfaSend, mfaVerify, register, providerTicket, providerComplete,
+  accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish, userTheme
+} from './identity.js';
 import { xlsx_preview } from './xlsx.js';
+import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction, publicDirectory, publicConfig, publicImage } from './connections.js';
+import { ministryInquiry, ministryAction, accountNotificationsView, accountNotificationsAction } from './ministries.js';
+import { guestRequestCreate, guestRequestRow, guestRequestView, guestDocument, guestRequestAction, dioceseDocuments, dioceseDocumentAction } from './documents.js';
+import { messagesList, messagesAction } from './privacy.js';
+import { plansPublic, plansView, plansAction } from './plans.js';
+
+function fileReply(row, data) {
+  const headers = new Headers({ 'Content-Type': row.mime, 'Content-Length': String(row.size), 'Content-Disposition': "inline; filename*=UTF-8''" + quote(row.name) });
+  for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
+  return new Response(data, { status: 200, headers });
+}
 
 const HEADERS = {
   'Cache-Control': 'no-store',
@@ -58,13 +73,13 @@ function errorPage(status, message, explanation, head = false) {
   return new Response(head ? null : body, { status, headers });
 }
 
-/* http.cookies.SimpleCookie(header).get('pl_session') */
-function sessionCookie(header) {
+/* http.cookies.SimpleCookie(header).get(name) */
+function sessionCookie(header, name = 'pl_session') {
   let value = null;
   for (const part of (header || '').split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
-    if (part.slice(0, eq).trim() !== 'pl_session') continue;
+    if (part.slice(0, eq).trim() !== name) continue;
     let v = part.slice(eq + 1).trim();
     if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
     value = v;
@@ -82,6 +97,23 @@ function pathParts(path) {
   return path.replace(/^\/+|\/+$/g, '').split('/');
 }
 
+function redirect(location, cookies = []) {
+  const headers = new Headers({ Location: location, 'Content-Length': '0' });
+  for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
+  return new Response(null, { status: 302, headers });
+}
+
+function newSession(c, userId, secureCookie) {
+  const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
+  c.run('DELETE FROM sessions WHERE expires<?', time());
+  c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
+  return `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`;
+}
+
+/* Codes may be written to the log instead of sent only on a local `wrangler dev`. */
+const deliveryContext = (env, url) => ({ env, dev: env.PARISHLIFE_DEV_OUTBOX === '1' && ['localhost', '127.0.0.1'].includes(url.hostname) });
+
 async function storedFile(c, row) {
   const chunks = await c.all('SELECT data FROM cf_file_chunks WHERE file_id=? ORDER BY seq', row.id);
   return Buffer.from(chunks.map(chunk => chunk.data).join(''), 'base64');
@@ -92,57 +124,77 @@ async function storedFile(c, row) {
 async function handle(c, env, request, url, q, secureCookie) {
   const method = request.method;
   const path = url.pathname;
-  if (path === '/api/public/parishes' && method === 'GET') {
-    const rows = await c.all('SELECT id,metadata FROM parishes');
-    return reply(200, { parishes: rows.map(row => {
-      const meta = JSON.parse(row.metadata);
-      return { id: row.id, name: get(meta, 'name', ''), ar: get(meta, 'ar', ''), town: get(meta, 'town', ''), townAr: get(meta, 'townAr', '') };
-    }) });
+  if (path === '/api/public/plans' && method === 'GET') return reply(200, await plansPublic(c));
+  if (path === '/api/public/parishes' && method === 'GET') return reply(200, { parishes: await publicDirectory(c) });
+  if (path === '/api/public/config' && method === 'GET') return reply(200, publicConfig(env));
+  if (/^\/api\/public\/parishes\/[^/]+\/images\/[^/]+$/.test(path) && method === 'GET') {
+    const parts = path.split('/');
+    const row = await publicImage(c, parts[4], parts[6]);
+    return fileReply(row, await storedFile(c, row));
   }
-  if (path.startsWith('/api/public/parishes/') && method === 'GET') {
-    const publicId = path.slice(path.lastIndexOf('/') + 1);
-    const row = await c.first('SELECT data FROM states WHERE parish_id=?', publicId);
-    need(row !== null, 'Parish not found.', 404);
-    const publicState = JSON.parse(row.data);
-    const parish = K(publicState, 'PARISH');
-    const content = {};
-    for (const [key, item] of items(get(publicState, 'CONTENT', {}))) {
-      if (isObject(item) && truthy(get(item, 'published', true))) content[key] = { en: get(item, 'en', ''), ar: get(item, 'ar', '') };
-    }
-    const events = [];
-    for (const event of iter(get(publicState, 'EVENTS', []))) {
-      const detail = get(get(publicState, 'EVENT_DETAIL', {}), get(event, 'id'), {});
-      if (eq(get(event, 'kind'), 'pending') || (!eq(get(detail, 'visibility'), 'public') &&
-        !(!truthy(detail) && has(new Set(['mass', 'event']), get(event, 'kind'))))) continue;
-      const item = {};
-      for (const key of ['id', 'd', 't', 'title', 'titleAr', 'kind']) item[key] = get(event, key, '');
-      events.push(item);
-    }
-    const postRows = await c.all("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", publicId);
-    const posts = postRows.map(item => ({ title: item.title, body: item.body, at: item.created_at }));
-    for (const n of iter(get(publicState, 'NOTICES', []))) {
-      if (eq(get(n, 'audience'), 'Parish') && !truthy(get(n, 'groupId'))) posts.push({ title: get(n, 'title', ''), body: get(n, 'ar', ''), at: get(n, 'at', '') });
-    }
-    const orderedPosts = sorted(posts, item => item.at, true);
-    const publicParish = {};
-    for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) publicParish[key] = get(parish, key, '');
-    publicParish.theme = parish_theme(parish);
-    if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
-    return reply(200, { parish: publicParish, content, events, posts: orderedPosts });
-  }
-  const startSession = async userId => {
-    const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
-    c.run('DELETE FROM sessions WHERE expires<?', time());
-    c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
+  if (path.startsWith('/api/public/parishes/') && method === 'GET') return reply(200, await publicParish(c, path.slice(path.lastIndexOf('/') + 1)));
+  if (path.startsWith('/api/public/parishes/') && path.endsWith('/inquiries') && method === 'POST') {
+    const result = await ministryInquiry(c, path.split('/')[4], q);
     await c.commit();
-    return reply(200, { ok: true }, `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+    return reply(200, result);
+  }
+  if (path.startsWith('/api/public/parishes/') && path.endsWith('/document-requests') && method === 'POST') {
+    const outbox = [], ctx = deliveryContext(env, url);
+    const result = await guestRequestCreate(c, ctx, path.split('/')[4], q, outbox, String(env.PARISHLIFE_PUBLIC_URL || '').replace(/\/+$/, '') || url.origin);
+    await c.commit();
+    if (outbox.length) {
+      await sendOutbox(ctx, outbox);
+      result.linkDelivery = outbox[0].status;
+    }
+    return reply(200, result);
+  }
+  if (path === '/api/public/requests/track' && method === 'POST') return reply(200, await guestRequestView(c, await guestRequestRow(c, get(q, 'token'))));
+  if (path === '/api/public/requests/document' && method === 'POST') {
+    const row = await guestDocument(c, get(q, 'token'));
+    const data = await storedFile(c, row);
+    await c.commit();
+    return fileReply(row, data);
+  }
+  if (path === '/api/invitations/info' && method === 'POST') return reply(200, await invitationInfo(c, get(q, 'token')));
+  const ctx = deliveryContext(env, url);
+  /* Codes are handed to the delivery service only after the commit, so a retried request never sends twice. */
+  const startSession = async (userId, outbox = [], delivery = null) => {
+    const cookie = newSession(c, userId, secureCookie);
+    await c.commit();
+    const body = { ok: true };
+    if (delivery !== null) {
+      await sendOutbox(ctx, outbox);
+      body.delivery = settle(delivery, outbox);
+    }
+    return reply(200, body, cookie);
   };
+  if (path === '/api/auth/config' && method === 'GET') return reply(200, authConfig(ctx));
   if (path === '/api/login' && method === 'POST') {
-    const u = await c.first('SELECT * FROM users WHERE username=?', loginName(get(q, 'username')));
-    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    const u = await signIn(c, q);
+    if (await mfaTurnedOn(c, ctx, u.id)) {   // two-step verification: a challenge instead of a session
+      const token = await mfaChallenge(c, ctx, u.id);
+      await c.commit();
+      return reply(200, (await challengeInfo(c, token))[1]);
+    }
     return startSession(u.id);
   }
-  if (path === '/api/signup' && method === 'POST') return startSession(await signup(c, q));
+  if (path === '/api/login/challenge' && method === 'POST') return reply(200, (await challengeInfo(c, get(q, 'challenge')))[1]);
+  if (path === '/api/login/send' && method === 'POST') {
+    const outbox = [], result = await mfaSend(c, ctx, q, outbox);
+    await c.commit();
+    await sendOutbox(ctx, outbox);
+    return reply(200, { ...result, delivery: outbox.length ? outbox[0].status : result.delivery });
+  }
+  if (path === '/api/login/verify' && method === 'POST') return startSession((await mfaVerify(c, q)).id);
+  if (path === '/api/signup' && method === 'POST') {
+    const outbox = [], [userId, delivery] = await register(c, ctx, q, outbox);
+    return startSession(userId, outbox, delivery);
+  }
+  if (path === '/api/auth/ticket' && method === 'POST') return reply(200, (await providerTicket(c, get(q, 'ticket')))[2]);
+  if (path === '/api/auth/complete' && method === 'POST') {
+    const outbox = [], [userId, delivery] = await providerComplete(c, ctx, q, outbox);
+    return startSession(userId, outbox, delivery);
+  }
   const token = sessionCookie(request.headers.get('Cookie'));
   const [sessions, users] = await c.reads([
     ['SELECT * FROM sessions WHERE token=? AND expires>?', [sha256hex(token ?? ''), time()]],
@@ -150,32 +202,107 @@ async function handle(c, env, request, url, q, secureCookie) {
   ]);
   const session = sessions[0] ?? null;
   need(session !== null, 'Sign in to continue.', 401);
-  const u = users[0] ?? null;
-  need(u !== null && ROLES.has(u.role), 'Sign in to continue.', 401);
+  let u = users[0] ?? null;
+  need(await loginAllowed(c, u), 'Sign in to continue.', 401);
   if (method !== 'GET') need(compareDigest(request.headers.get('X-CSRF-Token') ?? '', session.csrf), 'Invalid request token.', 403);
   if (path === '/api/session' && method === 'GET') {
     const user = {};
     for (const k of ['id', 'username', 'name', 'role', 'person_id']) user[k] = u[k];
-    return reply(200, { user, csrf: session.csrf, parishes: await parishes(c, u) });
+    user.theme = await userTheme(c, u.id);
+    const auth = await authority(c, u);
+    return reply(200, { user, csrf: session.csrf, parishes: await parishes(c, u, {}, auth), authority: await sessionAuthority(c, u, auth) });
   }
   if (path === '/api/logout' && method === 'POST') {
     c.run('DELETE FROM sessions WHERE token=?', session.token);
     await c.commit();
     return reply(200, { ok: true }, `pl_session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
   }
-  need(u.role !== 'bishop' || method === 'GET', 'Bishop oversight is read-only.', 403);
+  if (path === '/api/account') {
+    if (method === 'GET') return reply(200, await accountView(c, ctx, u));
+    if (method === 'POST') {
+      const outbox = [], result = await accountAction(c, ctx, u, session, q, outbox);
+      await c.commit();
+      if (outbox.length) {
+        await sendOutbox(ctx, outbox);
+        result.delivery = outbox[outbox.length - 1].status;
+      }
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/diocese/documents') {
+    if (method === 'GET') return reply(200, await dioceseDocuments(c, u));
+    if (method === 'POST') {
+      const result = await dioceseDocumentAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/plans') {
+    if (method === 'GET') return reply(200, await plansView(c, u));
+    if (method === 'POST') {
+      const result = await plansAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/messages') {
+    if (method === 'GET') return reply(200, await messagesList(c, u, {}));
+    if (method === 'POST') {
+      const result = await messagesAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/notifications') {
+    if (method === 'GET') return reply(200, await accountNotificationsView(c, u));
+    if (method === 'POST') {
+      const result = accountNotificationsAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
+  if (path === '/api/connections') {
+    if (method === 'GET') return reply(200, await connectionsView(c, u));
+    if (method === 'POST') {
+      const result = await connectionsAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
   if (path === '/api/oversight' && method === 'GET') return reply(200, { parishes: await oversight(c, u) });
+  if (path === '/api/admin') {
+    if (method === 'GET') return reply(200, await adminView(c, u));
+    if (method === 'POST') {
+      const result = await adminAction(c, u, q);
+      await c.commit();
+      return reply(200, result);
+    }
+    throw new Problem(405, 'Method not allowed.');
+  }
   if (path === '/api/assignments') {
-    need(u.role === 'bishop', 'Archdiocese administration is restricted to the bishop.', 403);
-    need(method === 'GET', 'Bishop oversight is read-only.', 403);
-    const priests = await c.all("SELECT * FROM users WHERE role='priest' AND diocese=?", u.diocese);
-    const assigned = priests.length ? await c.reads(priests.map(x => ['SELECT parish_id FROM assignments WHERE user_id=?', [x.id]])) : [];
-    return reply(200, { priests: priests.map((x, i) => ({ id: x.id, name: x.name, parishes: assigned[i].map(r => r.parish_id) })), parishes: await parishes(c, u) });
+    need(method === 'GET', 'Method not allowed.', 405);
+    const auth = await authority(c, u);
+    const dioceses = auth.assignments.filter(a => a.role === 'bishop' && a.scope === 'diocese').map(a => a.scope_id);
+    need(dioceses.length, 'Archdiocese administration is restricted to the bishop.', 403);
+    const inDiocese = new Set((await c.all(`SELECT id FROM parishes WHERE diocese IN (${dioceses.map(() => '?').join(',')})`, ...dioceses)).map(r => r.id));
+    const priests = new Map();
+    for (const a of await c.all("SELECT r.user_id,r.scope_id,u.name FROM role_assignments r JOIN users u ON u.id=r.user_id WHERE r.role='priest' AND r.scope='parish' AND r.status='active' ORDER BY u.name,r.scope_id")) {
+      if (!inDiocese.has(a.scope_id)) continue;
+      if (!priests.has(a.user_id)) priests.set(a.user_id, { id: a.user_id, name: a.name, parishes: [] });
+      priests.get(a.user_id).parishes.push(a.scope_id);
+    }
+    return reply(200, { priests: [...priests.values()], parishes: await parishes(c, u, {}, auth) });
   }
   const parts = pathParts(path);
   if (parts.length === 5 && parts[0] === 'api' && parts[1] === 'parishes' && parts[3] === 'files') {
     const [, , pid, , fileId] = parts;
-    await access(c, u, pid);
+    u = await parishUser(c, u, pid);
     const row = await c.first('SELECT id,parish_id,scope,owner_id,name,mime,size,uploaded_by,created_at FROM uploaded_files WHERE parish_id=? AND id=?', pid, fileId);
     need(row !== null, 'File not found.', 404);
     await file_access(c, u, pid, row.scope, row.owner_id, method === 'DELETE');
@@ -199,7 +326,8 @@ async function handle(c, env, request, url, q, secureCookie) {
   }
   need(parts.length === 4 && parts[0] === 'api' && parts[1] === 'parishes', 'Endpoint not found.', 404);
   const [, , pid, endpoint] = parts;
-  await access(c, u, pid);
+  u = await parishUser(c, u, pid);
+  need(u.role !== 'bishop' || (endpoint === 'oversight' && method === 'GET'), 'Bishop oversight of a parish is read-only.', 403);
   if (endpoint === 'files') {
     if (method === 'GET') {
       const scope = url.searchParams.get('scope') ?? '', ownerId = url.searchParams.get('id') ?? '';
@@ -215,6 +343,7 @@ async function handle(c, env, request, url, q, secureCookie) {
       const extension = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1).toLowerCase() : filename.toLowerCase();
       const mime = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' }[extension] ?? null;
       need(mime !== null, 'Only PDF, JPG, and PNG files are supported.');
+      need(!['gallery', 'clergy'].includes(scope) || mime.startsWith('image/'), 'Use a JPG or PNG picture.');
       const encoded = get(q, 'data');
       need(typeof encoded === 'string' && len(encoded) <= 13500000, 'File is too large.', 413);
       if (/[^\x00-\x7f]/.test(encoded)) throw new PyError('string argument should contain only ASCII characters');
@@ -252,6 +381,26 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { rows: xlsx_preview(get(q, 'data')) });
   }
   if (endpoint === 'oversight' && method === 'GET') return reply(200, await oversight(c, u, pid));
+  if (endpoint === 'guest-requests' && method === 'POST') {
+    const result = await guestRequestAction(c, u, pid, q);
+    await c.commit();
+    return reply(200, result);
+  }
+  if (endpoint === 'ministries' && method === 'POST') {
+    const result = await ministryAction(c, u, pid, q);
+    await c.commit();
+    return reply(200, result);
+  }
+  if (endpoint === 'connections' && method === 'POST') {
+    const outbox = [], base = String(env.PARISHLIFE_PUBLIC_URL || '').replace(/\/+$/, '') || url.origin;
+    const result = await officeConnectionAction(c, ctx, u, pid, q, outbox, base);
+    await c.commit();
+    if (outbox.length) {
+      await sendOutbox(ctx, outbox);
+      result.delivery = outbox[0].status;
+    }
+    return reply(200, result);
+  }
   if (endpoint === 'member') {
     if (method === 'GET') {
       const view = await member_view(c, u, pid);
@@ -345,6 +494,73 @@ async function api(request, env, url) {
 }
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/* A piece of work in a transaction of its own, run again from the start if another request committed first. */
+async function inTransaction(db, work) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await work(new Tx(db));
+    } catch (error) {
+      if (!(error instanceof Conflict) || attempt >= ATTEMPTS) throw error;
+      await delay(Math.random() * Math.min(250, 4 * 2 ** Math.min(attempt, 6)));
+    }
+  }
+}
+
+/* Google, Apple and Microsoft send the browser here; every outcome is a redirect back to the sign-in page. */
+async function oauth(request, env, url) {
+  const [, , , provider, step] = url.pathname.split('/');
+  const clear = 'pl_oauth=; Max-Age=0; HttpOnly; Secure; SameSite=None; Path=/api/auth/';
+  const ctx = deliveryContext(env, url);
+  const secureCookie = url.protocol === 'https:' || env.PARISHLIFE_SECURE_COOKIE === '1' ? '; Secure' : '';
+  try {
+    await ensureDatabase(env.DB);
+    if (step === 'start') {
+      need(request.method === 'GET', 'Method not allowed.', 405);
+      const intent = url.searchParams.get('intent') ?? 'signin';
+      if (providerSettings(env, provider) === null || !['signin', 'signup', 'link'].includes(intent)) return redirect('/index.html?auth_error=unavailable');
+      return await inTransaction(env.DB, async c => {
+        let userId = null;
+        if (intent === 'link') {
+          const token = sessionCookie(request.headers.get('Cookie'));
+          const u = await c.first('SELECT * FROM users WHERE id=(SELECT user_id FROM sessions WHERE token=? AND expires>?)', sha256hex(token ?? ''), time());
+          if (!(await loginAllowed(c, u))) return redirect('/index.html?auth_error=expired');
+          userId = u.id;
+        }
+        const [target, state] = oauthStart(c, env, provider, intent, userId);
+        await c.commit();
+        return redirect(target, [`pl_oauth=${state}; Max-Age=600; HttpOnly; Secure; SameSite=None; Path=/api/auth/`]);
+      });
+    }
+    let params;
+    if (request.method === 'POST') {   // Apple posts its answer as a form
+      need(provider === 'apple' && contentType(request.headers.get('Content-Type')) === 'application/x-www-form-urlencoded', 'Method not allowed.', 405);
+      const text = await request.text();
+      need(text.length > 0 && text.length <= 20000, 'Request too large or empty.', 413);
+      params = Object.fromEntries(new URLSearchParams(text));
+    } else {
+      need(request.method === 'GET', 'Method not allowed.', 405);
+      params = Object.fromEntries(url.searchParams);
+    }
+    const [location, userId] = await oauthFinish(env, provider, params, sessionCookie(request.headers.get('Cookie'), 'pl_oauth'), work => inTransaction(env.DB, work));
+    if (userId === null) return redirect(location, [clear]);
+    return await inTransaction(env.DB, async c => {
+      const u = await c.first('SELECT * FROM users WHERE id=?', userId);
+      if (!(await loginAllowed(c, u))) return redirect('/index.html?auth_error=blocked', [clear]);
+      if (await mfaTurnedOn(c, ctx, userId)) {
+        const token = await mfaChallenge(c, ctx, userId);
+        await c.commit();
+        return redirect('/index.html?mfa=' + token, [clear]);
+      }
+      const cookie = newSession(c, userId, secureCookie);
+      await c.commit();
+      return redirect(location, [clear, cookie]);
+    });
+  } catch (error) {
+    if (!(error instanceof Problem || error instanceof PyError || error instanceof TypeError || error instanceof SyntaxError)) console.error(error);
+    return redirect('/index.html?auth_error=failed', [clear]);
+  }
+}
+
 function failure(error) {
   if (error instanceof Problem) return reply(error.status, { error: error.message });
   if (error instanceof PyError || error instanceof TypeError || error instanceof SyntaxError) {
@@ -360,6 +576,7 @@ export default {
     setTimeZone(env.PARISH_TIMEZONE || 'Asia/Beirut');
     const url = new URL(request.url);
     const method = request.method;
+    if (/^\/api\/auth\/[a-z]+\/(start|callback)$/.test(url.pathname)) return oauth(request, env, url);
     if (method === 'GET' && url.pathname.startsWith('/api/')) return api(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return api(request, env, url);
     if (method === 'GET' || method === 'HEAD') {

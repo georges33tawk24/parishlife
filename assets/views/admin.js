@@ -1,6 +1,11 @@
 /* Modules 1, 15, 16, 17 — eparchy, workflows, reporting, audit, security. */
 import { t, isAr, num, usd, fmtDate } from '../i18n.js';
-import { S, ROLES, is, go, bus } from '../store.js';
+import { S, ROLES, is, go, bus, parishModules } from '../store.js';
+const MODULE_NAMES = [['presence', 'Public presence', 'الحضور العام'], ['members', 'Members and member portal', 'الأعضاء وبوّابتهم'], ['office', 'Parish office and records', 'مكتب الرعية والسجلات'],
+  ['sacraments', 'Sacraments and certificates', 'الأسرار والشهادات'], ['requests', 'Requests, forms and workflows', 'الطلبات والاستمارات والمسارات'],
+  ['documents', 'Document requests without an account', 'طلب الوثائق دون حساب'], ['ministries', 'Ministries and volunteers', 'الخدمات والمتطوّعون'],
+  ['events', 'Calendar, services and registrations', 'الرزنامة والخدم والتسجيلات'], ['reservations', 'Reservations', 'الحجوزات'], ['resources', 'Facilities and resources', 'المرافق والموارد'],
+  ['communications', 'Communications', 'التواصل'], ['finance', 'Giving and finance', 'التقدمات والمالية']];
 import { icon, pageHead, sectionH, panel, who, status, pill, esc, table, wireTables, empty, stat,
          searchField, openDrawer, openModal, closeOverlays, toast, tabBar, avatar, amount, openMenu } from '../ui.js';
 import * as C from '../components.js';
@@ -12,7 +17,6 @@ import { WORKFLOWS, RUNS, RUN_LOG, AUDIT, FUNDS, RATE, PARISH, PARISHES, EPARCHY
          SESSIONS, SECURITY_ALERTS, RETENTION, WEBHOOKS, PERMISSIONS, ATTENDANCE_SERIES,
          GIVING_SERIES, PAYMENT_MIX, VOLUNTEERS, ARCHIVED, PHOTOS, FORM_FIELDS, FORM_RULES, EXCEPTIONS, TODAY, PREFS, GROUP_DETAIL, REGISTRATIONS, REGISTRANTS, CHECKIN, EVENTS, person } from '../data.js';
 import { FIELD_TYPES } from '../crud.js';
-import { SCHEMES, schemeOf, palette, readable, applyTheme, isHex } from '../theme.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -244,7 +248,7 @@ forms.mount = host => {
 /* ═══════════ 16 · reporting ═══════════ */
 const REPORTS = [
   ['attendance', 'attend', 'Group meeting attendance', 'حضور اجتماعات المجموعات', 'Recorded attendance at group meetings and activities only', 'حضور مسجّل في اجتماعات المجموعات وأنشطتها فقط'],
-  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and archived parish records', 'سجلات الرعية الحالية والمؤرشفة'],
+  ['membership', 'people', 'Membership records', 'سجلات الانتساب', 'Current and deactivated parish records', 'سجلات الرعية الحالية والموقوفة'],
   ['groups', 'groups', 'Group participation', 'مشاركة المجموعات', 'Roster size, attendance rate, course completion', 'حجم اللائحة ونسبة الحضور وإتمام الدورات'],
   ['volunteers', 'vol', 'Volunteer workload', 'عبء المتطوّعين', 'Availability, conflicts, who is serving too often', 'التوفّر والتعارضات ومن يخدم كثيراً'],
   ['facilities', 'rooms', 'Facility utilisation', 'استخدام المرافق', 'Hours booked, refusals, equipment loans', 'ساعات الحجز والرفض وإعارات التجهيزات'],
@@ -323,7 +327,7 @@ function reportDetail(slug) {
       rows:REGISTRATIONS.filter(r=>EVENTS.some(e=>e.id===r.eventId&&e.kind!=='mass'&&!e.liturgy&&!e.feastLiturgy)).map(r=>({cells:[esc(L(r.event,r.eventAr)),REGISTRANTS.filter(p=>p.registrationId===r.id).length,(CHECKIN.sessions?.[r.eventId]?.rows||[]).length]}))
     })),
     membership: () => panel(`${L('Membership records', 'سجلات الانتساب')} · ${inPeriod}`, bars([
-      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Archived records', 'السجلات المؤرشفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
+      [L('Current records', 'السجلات الحالية'), PARISH.people], [L('Deactivated records', 'السجلات الموقوفة'), ARCHIVED.length]], Math.max(1, PARISH.people, ARCHIVED.length))),
     facilities: () => panel(`${L('Room utilisation', 'استخدام القاعات')} · ${inPeriod}`, C.barChart([
       [L('Parish Hall', 'قاعة الرعية'), 68], [L('Meeting Room 1', 'قاعة اجتماعات ١'), 41], [L('Catechism Room A', 'صف التعليم أ'), 88], [L('Courtyard', 'ساحة الكنيسة'), 22]]
       .map(([label, v]) => ({ label, v: Math.min(av(v), 100), max: 100, text: `${Math.min(av(v), 100)}%` }))))
@@ -399,7 +403,7 @@ export function audit() {
 audit.mount = host => { C.wire(host); wireTables(host); };
 
 /* ═══════════ 17 · settings & security ═══════════ */
-const SETTABS = () => [['', 'Parish', 'الرعية'], ['appearance', 'Colours', 'الألوان'], ['currency', 'Currency', 'العملة'], ['languages', 'Languages', 'اللغات'],
+const SETTABS = () => [['', 'Parish', 'الرعية'], ['currency', 'Currency', 'العملة'], ['languages', 'Languages', 'اللغات'],
                  ['modules', 'Modules', 'الوحدات'], ['roles', 'Roles & permissions', 'الأدوار والصلاحيات'],
                  ['security', 'Security', 'الأمان'], ['data', 'Data & retention', 'البيانات والحفظ'],
                  ['api', 'API & webhooks', 'الواجهة البرمجية']];
@@ -410,30 +414,36 @@ export function settings(tab = '') {
     title: L('Parish settings', 'إعدادات الرعية'),
     sub: L('Branding, enabled modules, languages, currency, permissions and local workflow rules.',
            'الهوية والوحدات المفعّلة واللغات والعملة والصلاحيات وقواعد العمل المحلية.'),
-    actions: tab === 'appearance' ? '' : `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
+    actions: ['', 'modules'].includes(tab) ? '' : `<button class="btn btn-primary" data-act="settings-save">${icon('check', 17)}${L('Save changes', 'حفظ التعديلات')}</button>`
   }) + tabBar('settings', SETTABS(), tab);
 
   const T = {
     '': () => `<div class="splitview">
       <div class="stack" style="gap:16px">
-        ${panel(L('Parish', 'الرعية'), `<div class="formgrid">
-          ${C.field({ label: L('Name (English)', 'الاسم (إنكليزي)'), value: PARISH.name })}
-          ${C.field({ label: L('Name (Arabic)', 'الاسم (عربي)'), value: PARISH.nameAr, dir: 'rtl', ar: true })}
-          ${C.field({ label: L('Eparchy', 'الأبرشية'), value: L(PARISH.eparchy, PARISH.eparchyAr) })}
-          ${C.field({ label: L('Patron saint', 'الشفيع'), value: L('Saint Elias the Prophet', 'مار الياس النبي') })}</div>
-          ${C.riteSelect()}
-          ${C.field({ label: L('Phone', 'الهاتف'), value: PARISH.phone, dir: 'ltr' })}
-          ${C.field({ label: L('Address', 'العنوان'), value: L(PARISH.address, PARISH.addressAr) })}`)}
+        ${panel(L('Parish', 'الرعية'), `<dl class="dl">
+            <dt>${L('Name', 'الاسم')}</dt><dd>${esc(PARISH.name)} · <span dir="rtl">${esc(PARISH.nameAr || '')}</span></dd>
+            <dt>${L('Eparchy', 'الأبرشية')}</dt><dd>${esc(L(PARISH.eparchy || '—', PARISH.eparchyAr || PARISH.eparchy || '—'))}</dd>
+            <dt>${L('Rite', 'الطقس')}</dt><dd>${esc(L(PARISH.rite || '—', PARISH.riteAr || PARISH.rite || '—'))}</dd></dl>
+          <p class="help">${L('The name, diocese and rite are recorded with the diocese, in Administration.', 'يُسجَّل الاسم والأبرشية والطقس لدى الأبرشية، في الإدارة.')}</p>
+          <div class="divider"></div>
+          <div class="formgrid">
+            <div class="formrow"><label class="label" for="set-phone">${L('Phone', 'الهاتف')}</label><input class="input" id="set-phone" dir="ltr" maxlength="40" value="${esc(PARISH.phone || '')}"></div>
+            <div class="formrow"><label class="label" for="set-address">${L('Address', 'العنوان')}</label><input class="input" id="set-address" maxlength="200" value="${esc(PARISH.address || '')}"></div>
+            <div class="formrow"><label class="label" for="set-address-ar">${L('Address in Arabic', 'العنوان بالعربية')}</label><input class="input" id="set-address-ar" dir="rtl" maxlength="200" value="${esc(PARISH.addressAr || '')}"></div></div>
+          <fieldset class="formrow"><legend class="label">${L('Location on the public map', 'الموقع على الخريطة العامة')}</legend>
+            <div class="formgrid"><div class="formrow"><label class="label" for="set-lat">${L('Latitude', 'خط العرض')}</label><input class="input" id="set-lat" dir="ltr" inputmode="decimal" placeholder="33.8938" value="${PARISH.location ? esc(String(PARISH.location.lat)) : ''}"></div>
+              <div class="formrow"><label class="label" for="set-lng">${L('Longitude', 'خط الطول')}</label><input class="input" id="set-lng" dir="ltr" inputmode="decimal" placeholder="35.5018" value="${PARISH.location ? esc(String(PARISH.location.lng)) : ''}"></div></div>
+            <button class="btn btn-secondary btn-dense" type="button" id="set-here">${icon('globe', 15)}${L('Use this device’s location', 'استخدم موقع هذا الجهاز')}</button>
+            <p class="help" id="set-loc-help">${L('Shown on the public map and used for distance search. Leave both empty to keep the parish off the map. Address and phone appear publicly only when “Contact & visiting” is published.', 'تُعرض على الخريطة العامة وتُستعمل للبحث بالمسافة. اترك الحقلين فارغين لإبقاء الرعية خارج الخريطة. ولا يظهر العنوان والهاتف للعموم إلا عند نشر قسم «التواصل والزيارة».')}</p></fieldset>
+          <button class="btn btn-primary" type="button" id="set-parish-save">${icon('check', 16)}${L('Save parish details', 'حفظ معلومات الرعية')}</button>`)}
         ${panel(L('Branding', 'الهوية'), `${C.avatarUpload('parish')}
-          <div class="scheme-current"><span class="scheme-dot" aria-hidden="true"></span>
-            <span class="grow"><b>${L('Colour scheme', 'نظام الألوان')}</b><small>${esc(L(schemeOf(PARISH.theme).en, schemeOf(PARISH.theme).ar))}</small></span>
-            <a class="btn btn-secondary btn-dense" href="#/settings/appearance">${L('Change colours', 'تغيير الألوان')}</a></div>`)}
+          <p class="help">${L('Screen colours are personal: each person chooses their own, with light or dark mode, in My account → Appearance. The public parish pages share one ParishLife website theme.',
+            'ألوان الشاشات شخصية: يختار كل شخص ألوانه، مع الوضع الفاتح أو الداكن، من حسابي ← المظهر. وتتشارك صفحات الرعايا العامة سمة موقع ParishLife واحدة.')}</p>
+          <a class="btn btn-secondary btn-dense" href="#/account/appearance">${L('My colours', 'ألواني')}</a>`)}
       </div>
       <div class="sidecol">${panel(L('Clergy and staff', 'الإكليروس والموظّفون'),
         ['p17', 'p18', 'p4', 'p15'].map(id => `<div class="listrow" style="padding-inline:0">${who(person(id))}
           <span class="grow"></span>${C.iconBtn('edit', L('Edit', 'تعديل'), `data-act="person-edit:${id}"`)}</div>`).join(''), { tight: true })}</div></div>`,
-
-    appearance: appearance,
 
     currency: () => `<div class="splitview">
       <div>${panel(L('Currency and rate', 'العملة والسعر'), `<div class="formgrid">
@@ -470,16 +480,11 @@ export function settings(tab = '') {
         <p class="help" style="margin-top:10px">${L('The calendar in use must be approved by the parish. Feast days drive the gold markers everywhere in the product.',
           'يجب أن توافق الرعية على الرزنامة المستعملة. والأعياد تقود العلامات الذهبية في كل المنتج.')}</p>`)}</div></div>`,
 
-    modules: () => `<div style="max-width:760px">${panel(L('Enabled modules', 'الوحدات المفعّلة'), `
-      <div class="stack" style="gap:12px">
-        ${[[L('Sacramental registers', 'سجلات الأسرار'), true], [L('Giving and finance', 'التقدمات والمالية'), true],
-           [L('Child check-in and safeguarding', 'تسجيل الأطفال والحماية'), true], [L('Music library', 'مكتبة الألحان'), true],
-           [L('Member portal', 'بوّابة المؤمنين'), true], [L('Facilities and reservations', 'المرافق والحجوزات'), true],
-           [L('Volunteer scheduling', 'جدولة المتطوّعين'), true], [L('Online payments', 'الدفع الإلكتروني'), false],
-           [L('AI assistance', 'مساعدة الذكاء الاصطناعي'), false]]
-          .map(([l, on], i) => C.switchRow(l, { checked: on, pref: `mod.${i}` })).join('')}</div>
-      <p class="help" style="margin-top:14px">${L('A module that is switched off disappears from every rail, for every role.',
-        'الوحدة المعطَّلة تختفي من كل شريط ولكل دور.')}</p>`)}</div>`,
+    modules: () => { const on = parishModules() || []; return `<div style="max-width:760px">${panel(L('Modules in the parish plan', 'الوحدات في خطة الرعية'), `
+      <div class="plan-chips">${MODULE_NAMES.map(([id, en, ar]) => `<span class="plan-chip ${on.includes(id) ? 'on' : 'off'}">${icon(on.includes(id) ? 'check' : 'close', 13)}${esc(L(en, ar))}</span>`).join('')}</div>
+      <p class="help" style="margin-top:14px">${L('The parish plan decides which modules are switched on. It never gives anyone access by itself: each person still needs their role’s permissions. Online payments and AI assistance are not available in ParishLife.',
+        'تحدّد خطة الرعية الوحدات المفعّلة. ولا تمنح أحداً وصولاً بذاتها: يبقى كل شخص بحاجة إلى صلاحيات دوره. والدفع الإلكتروني ومساعدة الذكاء الاصطناعي غير متاحين في ParishLife.')}</p>
+      <a class="btn btn-secondary" href="#/administration/plans">${L('Open Administration → Plans', 'افتح الإدارة ← الخطط')}</a>`)}</div>`; },
 
     roles: () => `<div class="splitview">
       <div>${panel(L('Permission matrix', 'مصفوفة الصلاحيات'), `<div class="tablescroll"><table class="tbl">
@@ -590,154 +595,48 @@ export function settings(tab = '') {
 settings.mount = (host, tab = '') => {
   C.wire(host); wireTables(host);
   host.querySelector('#perm')?.addEventListener('click', reviewDeletions);
-  if (tab === 'appearance') wireAppearance(host);
+  host.querySelector('#set-here')?.addEventListener('click', () => {
+    const help = host.querySelector('#set-loc-help');
+    if (!navigator.geolocation) { help.textContent = L('This device cannot share its location. Enter the coordinates instead.', 'لا يستطيع هذا الجهاز مشاركة موقعه. أدخل الإحداثيات بدلاً من ذلك.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      host.querySelector('#set-lat').value = pos.coords.latitude.toFixed(5); host.querySelector('#set-lng').value = pos.coords.longitude.toFixed(5);
+      help.textContent = L(`Filled from this device (accurate to about ${Math.round(pos.coords.accuracy)} m). Check it before saving.`, `مُلئت من هذا الجهاز (بدقّة نحو ${Math.round(pos.coords.accuracy)} م). تحقّق منها قبل الحفظ.`);
+    }, () => { help.textContent = L('The location was not shared. Enter the coordinates instead.', 'لم يُشارَك الموقع. أدخل الإحداثيات بدلاً من ذلك.'); });
+  });
+  host.querySelector('#set-parish-save')?.addEventListener('click', async e => {
+    const lat = host.querySelector('#set-lat').value.trim(), lng = host.querySelector('#set-lng').value.trim();
+    const la = Number(lat), ln = Number(lng);
+    if ((lat || lng) && !(lat && lng && Number.isFinite(la) && Number.isFinite(ln) && Math.abs(la) <= 90 && Math.abs(ln) <= 180)) {
+      toast(L('Check the coordinates', 'تحقّق من الإحداثيات'), L('Enter both latitude and longitude as numbers, or leave both empty.', 'أدخل خطّي العرض والطول أرقاماً، أو اترك الحقلين فارغين.'), 'warning');
+      host.querySelector('#set-lat').focus(); return;
+    }
+    const before = { phone: PARISH.phone, address: PARISH.address, addressAr: PARISH.addressAr, location: PARISH.location };
+    Object.assign(PARISH, { phone: host.querySelector('#set-phone').value.trim(), address: host.querySelector('#set-address').value.trim(),
+      addressAr: host.querySelector('#set-address-ar').value.trim(), location: lat && lng ? { lat: la, lng: ln } : null });
+    e.currentTarget.disabled = true;
+    if (!await persist()) { Object.assign(PARISH, before); e.currentTarget.disabled = false; return; }
+    bus.refresh(); toast(L('Parish details saved', 'حُفظت معلومات الرعية'), '', 'success');
+  });
 };
 
-/* ── Colours: a scheme for the whole parish, previewed live and saved by the priest ── */
-const sameTheme = (a, b) => schemeOf(a).id === schemeOf(b).id && schemeOf(a).primary === schemeOf(b).primary;
-const themeDraft = () => S.themeDraft || schemeOf(PARISH.theme);
-const canTheme = () => is('priest');
-
-const SAMPLE = `<i class="ss-rail"><i></i><i></i><i></i></i>
-      <i class="ss-page"><i class="ss-line"></i><i class="ss-line short"></i><i class="ss-chip"></i><i class="ss-btn"></i></i>`;
-
-/* The own-colour card shows a colour wheel until a colour of the parish's own has been picked. */
-function schemeCard(scheme, chosen, locked, wheel = false) {
-  const p = palette(scheme.primary), on = chosen.id === scheme.id;
-  return `<label class="scheme-card${on ? ' on' : ''}" style="--sw-1:${p.primary};--sw-2:${p.muted};--sw-3:${p.selection};--sw-4:${p.bg}">
-    <input type="radio" name="scheme" value="${scheme.id}" class="sr" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-    <span class="scheme-sample${wheel ? ' wheel' : ''}" aria-hidden="true">${wheel ? `<i class="ss-wheel">${icon('plus', 18)}</i>` : SAMPLE}</span>
-    <span class="scheme-name">${esc(L(scheme.en, scheme.ar))}${on ? `<span class="scheme-tick">${icon('check', 15)}</span>` : ''}</span>
-  </label>`;
-}
-
-function appearance() {
-  const saved = schemeOf(PARISH.theme), chosen = themeDraft(), locked = !canTheme();
-  const custom = chosen.id === 'custom' ? chosen : { id: 'custom', en: 'Your own colour', ar: 'لونك الخاص', primary: saved.id === 'custom' ? saved.primary : '#7A2E3A' };
-  const changed = !sameTheme(chosen, saved);
-  const shown = readable(custom.primary);
-  return `<div class="splitview">
-    <div class="stack" style="gap:16px">
-      ${panel(L('Colour scheme', 'نظام الألوان'), `
-        <p class="t-body dim scheme-intro">${L('Choose the colour of your parish. It is used everywhere: on the office screens, in the members’ portal and on your parish website.',
-          'اختر لون رعيتك. يُستعمل في كل مكان: في شاشات المكتب وفي بوّابة المؤمنين وعلى موقع رعيتك.')}</p>
-        ${locked ? C.inlineAlert('info', L('Only the parish priest can change the colours', 'وحده كاهن الرعية يغيّر الألوان'),
-          L('You can see the scheme in use. Ask the parish priest if it should change.', 'يمكنك رؤية النظام المستعمل. اطلب من كاهن الرعية إن كان يجب تغييره.')) : ''}
-        <fieldset class="scheme-grid" ${locked ? 'disabled' : ''}><legend class="sr">${L('Colour scheme', 'نظام الألوان')}</legend>
-          ${SCHEMES.map(scheme => schemeCard(scheme, chosen, locked)).join('')}
-          ${schemeCard({ ...custom, en: 'Your own colour', ar: 'لونك الخاص' }, chosen, locked, chosen.id !== 'custom' && saved.id !== 'custom')}
-        </fieldset>
-        <div class="scheme-custom" id="th-custom" ${chosen.id === 'custom' ? '' : 'hidden'}>
-          <label class="label" for="th-color">${L('Your colour', 'لونك')}</label>
-          <div class="scheme-custom-row">
-            <input type="color" id="th-color" value="${esc(custom.primary.toLowerCase())}" ${locked ? 'disabled' : ''} aria-describedby="th-note">
-            <input class="input mono" id="th-hex" value="${esc(custom.primary)}" maxlength="7" dir="ltr" spellcheck="false" autocomplete="off"
-              aria-label="${L('Colour code', 'رمز اللون')}" ${locked ? 'disabled' : ''} aria-describedby="th-note">
-          </div>
-          <p class="help" id="th-note" aria-live="polite">${customNote(custom.primary, shown)}</p>
-        </div>
-        ${locked ? '' : `<div class="scheme-actions">
-          <button class="btn btn-primary" id="th-save" ${changed ? '' : 'disabled'}>${icon('check', 17)}${L('Save colours', 'حفظ الألوان')}</button>
-          <button class="btn btn-secondary" id="th-undo" ${changed ? '' : 'disabled'}>${L('Discard', 'تجاهل')}</button>
-          <span class="t-caption dim" id="th-state" aria-live="polite">${changed
-            ? L('You are previewing this scheme. Save it so everyone sees it.', 'أنت تعاين هذا النظام. احفظه ليراه الجميع.')
-            : L('This is the scheme everyone sees.', 'هذا هو النظام الذي يراه الجميع.')}</span></div>`}`)}
-    </div>
-    <div class="sidecol">
-      ${panel(L('How it looks', 'كيف يبدو'), `<div class="scheme-preview" aria-hidden="true">
-          <div class="sp-site"><span class="sp-seal"></span><b>${esc(L(PARISH.name, PARISH.nameAr))}</b><span class="sp-pill">${L('Members', 'المؤمنون')}</span></div>
-          <div class="sp-body"><span class="sp-eyebrow">${L('This Sunday', 'هذا الأحد')}</span>
-            <b>${L('Divine Liturgy', 'القداس الإلهي')}</b><span class="sp-text">${L('9:00 and 11:00 in the main church', '٩:٠٠ و١١:٠٠ في الكنيسة الكبرى')}</span>
-            <span class="sp-row"><span class="sp-btn">${L('Ask for a certificate', 'اطلب شهادة')}</span><span class="sp-tag">${L('Confirmed', 'مؤكَّد')}</span></span></div></div>
-        <p class="t-caption dim" style="margin-top:12px">${L('Text colours are checked and darkened when needed, so every word stays easy to read.',
-          'تُفحص ألوان النص وتُغمَّق عند الحاجة، لتبقى كل كلمة سهلة القراءة.')}</p>`)}
-      ${panel(L('Where it shows', 'أين يظهر'), `<ul class="scheme-where">
-          ${[['dash', L('Office screens, for every role', 'شاشات المكتب، لكل الأدوار')],
-             ['people', L('The members’ portal', 'بوّابة المؤمنين')],
-             ['globe', L('Your parish website', 'موقع رعيتك')]].map(([i, x]) => `<li>${icon(i, 17, 'dimmer')}<span>${esc(x)}</span></li>`).join('')}</ul>
-        <p class="t-caption dim">${L('Certificates and printed pages keep their classic dark ink.', 'تحتفظ الشهادات والصفحات المطبوعة بحبرها الداكن الكلاسيكي.')}</p>`)}
-    </div></div>`;
-}
-
-const customNote = (picked, shown) => picked.toUpperCase() === shown
-  ? L('Good choice — white text reads clearly on this colour.', 'اختيار جيد — النص الأبيض واضح على هذا اللون.')
-  : L(`This colour is quite light, so it is shown a little darker (${shown}) to keep text readable.`,
-      `هذا اللون فاتح بعض الشيء، لذا يظهر أغمق قليلاً (${shown}) ليبقى النص مقروءاً.`);
-
-function wireAppearance(host) {
-  applyTheme(themeDraft());
-  if (!canTheme()) return;
-  const preview = next => {
-    S.themeDraft = sameTheme(next, PARISH.theme) ? null : { id: next.id, en: next.en, ar: next.ar, primary: next.primary };
-    applyTheme(themeDraft());
-    const changed = !!S.themeDraft;
-    host.querySelectorAll('.scheme-card').forEach(card => {
-      const on = card.querySelector('input').value === next.id;
-      card.classList.toggle('on', on);
-      card.querySelector('.scheme-tick')?.remove();
-      if (on) card.querySelector('.scheme-name').insertAdjacentHTML('beforeend', `<span class="scheme-tick">${icon('check', 15)}</span>`);
-    });
-    host.querySelector('#th-custom').hidden = next.id !== 'custom';
-    host.querySelector('#th-save').disabled = host.querySelector('#th-undo').disabled = !changed;
-    host.querySelector('#th-state').textContent = changed
-      ? L('You are previewing this scheme. Save it so everyone sees it.', 'أنت تعاين هذا النظام. احفظه ليراه الجميع.')
-      : L('This is the scheme everyone sees.', 'هذا هو النظام الذي يراه الجميع.');
-  };
-  const customCard = host.querySelector('.scheme-card input[value=custom]').closest('.scheme-card');
-  const setCustom = (color, from) => {
-    const value = color.toUpperCase();
-    if (from !== 'hex') host.querySelector('#th-hex').value = value;
-    if (from !== 'color') host.querySelector('#th-color').value = value.toLowerCase();
-    const p = palette(value), sample = customCard.querySelector('.scheme-sample');
-    if (sample.classList.contains('wheel')) { sample.classList.remove('wheel'); sample.innerHTML = SAMPLE; }
-    Object.entries({ '--sw-1': p.primary, '--sw-2': p.muted, '--sw-3': p.selection, '--sw-4': p.bg }).forEach(([k, v]) => customCard.style.setProperty(k, v));
-    host.querySelector('#th-note').textContent = customNote(value, readable(value));
-    customCard.querySelector('input').checked = true;
-    preview({ id: 'custom', en: 'Custom colour', ar: 'لون مخصّص', primary: value });
-  };
-  host.querySelectorAll('.scheme-card input').forEach(input => input.addEventListener('change', () => {
-    if (input.value === 'custom') return setCustom(host.querySelector('#th-hex').value);
-    preview(SCHEMES.find(scheme => scheme.id === input.value));
-  }));
-  let frame = 0;
-  host.querySelector('#th-color').addEventListener('input', e => {
-    cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setCustom(e.target.value, 'color'));
-  });
-  host.querySelector('#th-hex').addEventListener('input', e => {
-    let value = e.target.value.trim(); if (value && value[0] !== '#') value = '#' + value;
-    const ok = isHex(value);
-    e.target.setAttribute('aria-invalid', ok || value.length < 7 ? 'false' : 'true');
-    if (ok) setCustom(value, 'hex');
-  });
-  host.querySelector('#th-undo').addEventListener('click', () => { S.themeDraft = null; bus.refresh(); });
-  host.querySelector('#th-save').addEventListener('click', async () => {
-    const next = themeDraft();
-    PARISH.theme = { scheme: next.id, primary: next.primary.toUpperCase() };
-    S.themeDraft = null; bus.refresh();
-    if (!await persist()) return bus.refresh();   // refused: the saved colours come back, and the error is already on screen
-    toast(L('Colours saved', 'حُفظت الألوان'), L(`${L(next.en, next.ar)} is now used in the office, the members’ portal and on your parish website.`,
-      `يُستعمل «${L(next.en, next.ar)}» الآن في المكتب وبوّابة المؤمنين وعلى موقع رعيتك.`), 'success');
-  });
-}
-
-/* Deletion requests made from People → Archived. Approving is permanent and typed; declining keeps the archived record. */
+/* Deletion requests made earlier from the archive (deactivated records now). Approving is permanent; declining keeps the record. */
 function reviewDeletions() {
   const reqs = ARCHIVED.filter(p => p.deletionRequested);
   openModal({
     title: L('Deletion requests', 'طلبات الحذف'),
-    sub: reqs.length ? L('Each record was archived first. Deleting removes it for good; sacramental entries stay in the registers.',
+    sub: reqs.length ? L('Each record was deactivated first. Deleting removes it for good; sacramental entries stay in the registers.',
                          'أُرشف كل سجل أولاً. والحذف يزيله نهائياً؛ وتبقى قيود الأسرار في السجلات.') : '',
     body: reqs.length ? reqs.map(p => `<div class="listrow" style="padding-inline:0">${who(p)}<span class="grow"></span>
         <button class="btn btn-secondary btn-dense" data-del-no="${p.id}">${L('Decline', 'رفض')}</button>
         <button class="btn btn-danger btn-dense" data-del-yes="${p.id}">${L('Delete', 'حذف')}</button></div>`).join('')
-      : empty('check', L('No deletion requests', 'لا طلبات حذف'), L('They are made from People → Archived, after a record has been archived.', 'تُقدَّم من المؤمنون ← المؤرشفون، بعد أرشفة السجل.'),
-          `<a class="btn btn-secondary btn-dense" href="#/people/archived">${L('Open archived records', 'فتح السجلات المؤرشفة')}</a>`),
+      : empty('check', L('No deletion requests', 'لا طلبات حذف'), L('Records are deactivated, not deleted: their history stays. Earlier requests would appear here.', 'تُوقَف السجلات ولا تُحذف، ويبقى تاريخها. وتظهر هنا الطلبات السابقة إن وُجدت.'),
+          `<a class="btn btn-secondary btn-dense" href="#/people/archived">${L('Open deactivated records', 'فتح السجلات الموقوفة')}</a>`),
     foot: `<button class="btn btn-secondary" data-close style="margin-inline-start:auto">${L('Close', 'إغلاق')}</button>`,
     onMount(el) {
       el.querySelectorAll('[data-del-no]').forEach(b => b.addEventListener('click', () => {
         const p = ARCHIVED.find(x => x.id === b.dataset.delNo); if (!p) return;
         delete p.deletionRequested; bus.refresh(); reviewDeletions();
-        toast(L('Request declined', 'رُفض الطلب'), L(`${p.lat} stays archived.`, `يبقى ${p.ar} مؤرشفاً.`));
+        toast(L('Request declined', 'رُفض الطلب'), L(`${p.lat} stays deactivated.`, `يبقى ${p.ar} موقوفاً.`));
       }));
       el.querySelectorAll('[data-del-yes]').forEach(b => b.addEventListener('click', () => confirmDeletion(ARCHIVED.find(x => x.id === b.dataset.delYes))));
     }

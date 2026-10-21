@@ -14,7 +14,7 @@ const ONCE_ONLY = new Set(['baptism', 'communion', 'confirmation', 'funeral']);
 export const ACTIVE_ENTRY = new Set(['requested', 'office-reviewed', 'preparing', 'scheduled', 'draft', 'awaiting-signature']);
 export const OFFICIAL_ENTRY = new Set(['registered', 'issued']);
 const PROGRESS_EVENTS = { 'request accepted for preparation': 'priest-accepted', 'preparation completed': 'prepared',
-  'sacrament celebrated': 'celebrated', approve: 'approved', issue: 'issued',
+  'sacrament celebrated': 'celebrated', approve: 'approved', issue: 'issued', 'bishop accepted': 'bishop-accepted',
   'request declined': 'declined', reject: 'declined',
   'preparation cancelled': 'cancelled', cancelled: 'cancelled' };
 const CERTIFICATE_STAGES = { approved: 'signing', issued: 'ready', rejected: 'declined', cancelled: 'cancelled' };
@@ -81,6 +81,8 @@ export function member_request_progress(d, row, details) {
       const status = get(s, 'status'), certificate = eq(get(s, 'kind'), 'certificate');
       if (certificate) {
         stage = get(CERTIFICATE_STAGES, status, 'review');
+        const acceptance = get(get(s, 'acceptance') ?? {}, 'status');
+        if (status === 'approved' && (acceptance === 'awaiting' || acceptance === 'accepted')) stage = acceptance === 'awaiting' ? 'acceptance' : 'accepted';
       } else {
         stage = get(SACRAMENT_STAGES, status, 'review');
         if (truthy(get(s, 'date')) && (has(set(['scheduled', 'celebrated', 'completed']), stage) || !eq(K(s, 'date'), get(details, 'date', ''))))

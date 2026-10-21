@@ -3,7 +3,7 @@
    Requests page. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
-import { session } from '../api.js';
+import { session, currentRole } from '../api.js';
 import { hydrate } from '../persist.js';
 import { bus, go, S } from '../store.js';
 import { esc, icon, pill, openModal, closeOverlays, toast } from '../ui.js';
@@ -17,6 +17,9 @@ const nameOf = x => (isAr() ? x.ar || x.lat : x.lat || x.ar) || '';
 const otherName = x => { const other = isAr() ? x.lat : x.ar; return other && other !== nameOf(x) ? other : ''; };
 const ONCE = new Set(['baptism', 'communion', 'confirmation', 'funeral']);
 const OWN = new Set(['booking', 'custom']); // asked by the member for themselves
+/* Only the kinds this parish's plan takes; requests already made stay listed whatever the plan. */
+const KIND_MODULE = { booking: 'reservations', custom: 'requests' };
+const offered = kinds => kinds.filter(k => !M.parish.modules || M.parish.modules.includes(KIND_MODULE[k.id] || 'sacraments'));
 const venueOf = id => (M.requestOptions?.venues || []).find(v => v.id === id);
 const venueName = id => { const v = venueOf(id); return v ? t(v.name, v.ar || v.name) : String(id || ''); };
 const titleOf = r => r.kind === 'certificate' ? certificateName(r.details.certificateOf)
@@ -26,8 +29,8 @@ const titleOf = r => r.kind === 'certificate' ? certificateName(r.details.certif
 const aboutOf = r => r.kind === 'booking' ? `${fmtDay(r.details.date)}, ${r.details.from}–${r.details.to}` : r.kind === 'custom' ? '' : nameOf(r.subject);
 const phoneLink = phone => phone ? `<a class="mr-phone" href="tel:${txt(String(phone).replace(/[^\d+]/g, ''))}">${icon('phone', 16)}<bdi dir="ltr">${txt(phone)}</bdi></a>` : '';
 const back = () => `<a class="mr-back" href="#/myrequests">${icon('chevL', 16)}${L('My requests', 'طلباتي')}</a>`;
-async function reload() { if (session.user?.role === 'member') await hydrate(); else await loadMember(); }
-const redraw = () => { if (session.user?.role === 'member') bus.renderAll(); else bus.refresh(); };
+async function reload() { if (currentRole() === 'member') await hydrate(); else await loadMember(); }
+const redraw = () => { if (currentRole() === 'member') bus.renderAll(); else bus.refresh(); };
 const yearsAhead = n => `${Number(todayKey().slice(0, 4)) + n}-12-31`;
 const minutes = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 /* Half-hour steps for start and end times: a list is easier than a clock to set on any phone. */
@@ -82,11 +85,26 @@ function listPage() {
       <p>${L('Ask the parish for a sacrament, a certificate, a hall or anything else, then follow every step here.', 'اطلب من الرعية سرّاً أو شهادة أو قاعة أو أي أمر آخر، ثم تابع كل خطوة هنا.')}</p></header>
     ${linked ? '' : unlinked()}
     ${active.length ? section('active', L('Current requests', 'طلباتك الحالية'), `<div class="mr-cards">${active.map(requestCard).join('')}</div>`) : ''}
-    ${section('sacraments', L('Sacraments and certificates', 'الأسرار والشهادات'), kindGrid(REQUEST_KINDS.filter(k => !k.other)))}
-    ${section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(REQUEST_KINDS.filter(k => k.other), ' mr-kinds-2'))}
+    ${offered(REQUEST_KINDS.filter(k => !k.other)).length ? section('sacraments', L('Sacraments and certificates', 'الأسرار والشهادات'), kindGrid(offered(REQUEST_KINDS.filter(k => !k.other)))) : ''}
+    ${offered(REQUEST_KINDS.filter(k => k.other)).length ? section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(offered(REQUEST_KINDS.filter(k => k.other)), ' mr-kinds-2')) : ''}
     ${M.requests.length ? '' : howItWorks()}
-    ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
+    ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div data-paginate class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
+    ${section('guest', L('Requests you made without an account', 'طلبات قدّمتها دون حساب'), guestRequests())}
   </div>`;
+}
+
+/* A certificate asked for on the public page, without an account. Holding its private link proves it is
+   yours; the parish office still confirms before it appears here. Nothing is matched by name or phone. */
+const GUEST_STAGE = { received: ['Received', 'استُلم'], review: ['Being prepared', 'قيد التحضير'], signed: ['Signed · with the bishop', 'موقّعة · لدى المطران'],
+  accepted: ['Accepted by the bishop', 'قبلها المطران'], ready: ['Ready', 'جاهزة'], collected: ['Collected', 'استُلمت'], declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي'] };
+function guestRequests() {
+  const list = M.guestRequests || [];
+  return (list.length ? `<div class="mr-cards" data-paginate>${list.map(g => `<article class="member-card"><h3>${txt(g.reference)} · ${txt(g.subject)}</h3>
+      <p>${txt(L(...(GUEST_STAGE[g.stage] || GUEST_STAGE.received)))}${g.claim === 'pending' ? ' · ' + txt(L('waiting for the parish office to confirm it is yours', 'بانتظار تأكيد مكتب الرعية أنه لك')) : ''}</p></article>`).join('')}</div>` : '') +
+    `<form class="mr-claim" id="mr-claim" novalidate><label class="label" for="mr-claim-link">${L('Paste the private link you were given', 'الصق الرابط الخاص الذي حصلت عليه')}</label>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><input class="input" id="mr-claim-link" dir="ltr" autocomplete="off" style="flex:1;min-width:14em">
+      <button class="btn btn-secondary" type="submit">${L('Ask to add it', 'اطلب إضافته')}</button></div>
+      <p class="help">${L('The parish office confirms it before it is linked to your account.', 'يؤكّد مكتب الرعية ذلك قبل ربطه بحسابك.')}</p></form>`;
 }
 
 /* ---- a new request ------------------------------------------------------------ */
@@ -628,6 +646,16 @@ function mountForm(host) {
 
 requestsPage.mount = host => {
   mountForm(host);
+  host.querySelector('#mr-claim')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const raw = host.querySelector('#mr-claim-link').value.trim();
+    let token = raw;
+    try { token = new URL(raw, location.href).searchParams.get('track') || raw; } catch { /* a bare token */ }
+    if (!token) return;
+    try { await memberAction('claimGuestRequest', { token }); await loadMember(); bus.refresh();
+      toast(L('Sent to the parish office', 'أُرسل إلى مكتب الرعية'), L('It appears here once they confirm it.', 'يظهر هنا بعد تأكيدهم.'), 'success'); }
+    catch (error) { toast(L('Not added', 'لم يُضف'), error.message, 'danger'); }
+  });
   host.querySelectorAll('[data-mr-withdraw]').forEach(b => b.addEventListener('click', () => {
     const r = M.requests.find(x => x.id === b.dataset.mrWithdraw);
     if (!r) return;

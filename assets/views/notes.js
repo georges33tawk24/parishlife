@@ -1,10 +1,12 @@
-/* Clergy-only pastoral notes and follow-up tasks share one parish-scoped collection. */
+/* Pastoral notes and follow-up tasks. Each is its author's alone (Personal) unless the author shares it
+   with the priests serving the parish now; the server only ever sends the notes this priest may see. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { S, is, bus } from '../store.js';
 import { NOTES, PEOPLE, person } from '../data.js';
 import { icon } from '../icons.js';
 import { persist } from '../persist.js';
 import { pageHead, panel, table, pill, who, esc, empty, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
+import { session } from '../api.js';
 
 const L = (en, ar) => t(en, ar);
 const priorities = [
@@ -15,6 +17,10 @@ const today = () => new Date().toISOString().slice(0, 10);
 const recent = (a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0);
 const label = n => L(n.body, n.bodyAr || n.body);
 const kind = n => n.kind === 'task' ? L('Task', 'مهمة') : L('Note', 'ملاحظة');
+const mine = n => !n.authorId || n.authorId === session.user?.id;
+const canTick = n => n.kind === 'task' && (mine(n) || n.assignee && n.assignee === session.user?.person_id);
+const shared = n => n.visibility === 'shared';
+const visibilityPill = n => shared(n) ? pill(L('Shared with parish priests', 'مشتركة مع كهنة الرعية'), 'info', false) : pill(L('Personal', 'شخصية'), '', false);
 
 export function notes() {
   if (!is('priest')) return empty('shield', L('Not available for this role', 'غير متاح لهذا الدور'),
@@ -39,20 +45,20 @@ export function notes() {
     const search = `${n.body} ${n.bodyAr || ''} ${p?.lat || ''} ${p?.ar || ''}`.toLocaleLowerCase();
     return {attrs:`data-note="${esc(n.id)}" data-search="${esc(search)}"`,cells:[
       p?`<a href="#/person/${esc(p.id)}">${esc(p.lat)}</a>`:'—',
-      `<b>${esc(label(n))}</b>${n.kind==='task'&&n.assignee?`<small>${L('Assigned to','المكلّف')} ${esc(person(n.assignee)?.lat||'—')}</small>`:''}`,
+      `<b>${esc(label(n))}</b>${n.kind==='task'&&n.assignee?`<small>${L('Assigned to','المكلّف')} ${esc(person(n.assignee)?.lat||'—')}</small>`:''}<small>${visibilityPill(n)}${mine(n) ? '' : ` ${L('Written by','كتبها')} ${esc(person(n.by)?.lat || L('another priest','كاهن آخر'))}`}</small>`,
       n.priority==='urgent'?pill(L('High','عالية'),'danger'):n.priority==='attention'?pill(L('Medium','متوسطة'),'warning'):pill(L('Low','منخفضة')),
       n.kind==='task'?n.due?fmtDate(n.due):'—':n.at?fmtDate(n.at):'—',
       n.kind==='task'?pill(n.done?L('Completed','مكتملة'):L('Pending','معلّقة'),n.done?'success':'warning'):'—',
-      `<span class="rowacts">${n.kind==='task'?`<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done?L('Reopen task','إعادة فتح المهمة'):L('Complete task','إكمال المهمة')}">${icon('check',17)}</button>`:''}
-        <button class="btn-icon" data-note-pin="${esc(n.id)}" aria-label="${n.pinned?L('Unpin','إلغاء التثبيت'):L('Pin','تثبيت')}" aria-pressed="${!!n.pinned}">${icon('pin',17)}</button>
-        <button class="btn btn-secondary btn-dense" data-note-edit="${esc(n.id)}">${L('Edit','تعديل')}</button></span>`]};
+      `<span class="rowacts">${canTick(n)?`<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done?L('Reopen task','إعادة فتح المهمة'):L('Complete task','إكمال المهمة')}">${icon('check',17)}</button>`:''}
+        ${mine(n) ? `<button class="btn-icon" data-note-pin="${esc(n.id)}" aria-label="${n.pinned?L('Unpin','إلغاء التثبيت'):L('Pin','تثبيت')}" aria-pressed="${!!n.pinned}">${icon('pin',17)}</button>
+        <button class="btn btn-secondary btn-dense" data-note-edit="${esc(n.id)}">${L('Edit','تعديل')}</button>` : `<span class="dim">${L('Read only','للقراءة فقط')}</span>`}</span>`]};
   };
   const columns=[{label:L('Person','الشخص')},{label:L('Content','المحتوى')},{label:L('Priority','الأولوية')},{label:L('Due or recorded','الاستحقاق أو التسجيل')},{label:L('Status','الحالة')},{label:''}];
   return `${pageHead({
     crumbs: [{ label: L('Records', 'السجلات') }, { label: L('Pastoral notes', 'ملاحظات رعوية') }],
     title: L('Pastoral notes & tasks', 'الملاحظات والمهام الرعوية'),
-    sub: L('Tasks are work to complete, with an optional clergy assignee and due date. Notes are reference information and observations, without a deadline.',
-      'المهام أعمال تُنجز مع كاهن مكلّف وموعد اختياريين. الملاحظات معلومات مرجعية ومشاهدات دون موعد إنجاز.'),
+    sub: L('Personal notes are seen by you alone. Notes you share are seen by the priests serving this parish now — not by bishops, administrators or later priests unless they serve here.',
+      'الملاحظات الشخصية لا يراها سواك. والملاحظات التي تشاركها يراها الكهنة الذين يخدمون هذه الرعية الآن — لا المطران ولا الإداريون ولا الكهنة اللاحقون ما لم يخدموا هنا.'),
     actions: `<button class="btn btn-secondary" data-note-new="note">${icon('notes', 17)}${L('New note', 'ملاحظة جديدة')}</button>
       <button class="btn btn-primary" data-note-new="task">${icon('plus', 17)}${L('New task', 'مهمة جديدة')}</button>`
   })}
@@ -78,7 +84,7 @@ export function notes() {
 }
 
 export function openPastoralForm(item = null, type = 'note', initialPerson = null) {
-  if (!is('priest')) return;
+  if (!is('priest') || item && !mine(item)) return;
   const editing = !!item, itemKind = item?.kind || type;
   openDrawer({
     title: editing ? (itemKind==='task'?L('Edit task','تعديل مهمة'):L('Edit note','تعديل ملاحظة')) : itemKind === 'task' ? L('New follow-up task', 'مهمة متابعة جديدة') : L('New pastoral note', 'ملاحظة رعوية جديدة'),
@@ -95,6 +101,10 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         <select class="select" id="pastoral-priority">${priorities.map(([key,en,ar]) => `<option value="${key}" ${(item?.priority || 'ordinary') === key ? 'selected' : ''}>${L(en,ar)}</option>`).join('')}</select></div>
         ${itemKind === 'task' ? `<div class="formrow"><label class="label" for="pastoral-due">${L('Due date', 'تاريخ الاستحقاق')}</label><input class="input" id="pastoral-due" type="date" value="${esc(item?.due || '')}"></div>` : ''}</div>
       ${itemKind==='task'?`<div class="formrow"><label class="label" for="pastoral-assignee">${L('Assigned clergy (optional)','الكاهن المكلّف (اختياري)')}</label><select class="select" id="pastoral-assignee"><option value="">${L('Unassigned','دون تكليف')}</option>${PEOPLE.filter(p=>p.status==='clergy').map(p=>`<option value="${esc(p.id)}" ${item?.assignee===p.id?'selected':''}>${esc(p.lat)} · ${esc(p.ar)}</option>`).join('')}</select></div>`:''}
+      <fieldset class="formrow"><legend class="label">${L('Who can see this', 'من يمكنه رؤية هذا')}</legend>
+        <label class="check"><input type="radio" name="pastoral-visibility" value="personal" ${item?.visibility !== 'shared' ? 'checked' : ''}><span><b>${L('Personal', 'شخصية')}</b> — ${L('only you', 'أنت فقط')}</span></label>
+        <label class="check"><input type="radio" name="pastoral-visibility" value="shared" ${item?.visibility === 'shared' ? 'checked' : ''}><span><b>${L('Shared with parish priests', 'مشتركة مع كهنة الرعية')}</b> — ${L('the priests serving this parish now', 'الكهنة الذين يخدمون هذه الرعية الآن')}</span></label>
+        <p class="help">${L('Nothing is ever shared on your behalf. An assigned priest sees a task only if it is shared.', 'لا يُشارك شيء نيابةً عنك أبداً. ولا يرى الكاهن المكلّف المهمة إلا إذا كانت مشتركة.')}</p></fieldset>
       <label class="check"><input type="checkbox" id="pastoral-pinned" ${item?.pinned ? 'checked' : ''}><span>${L('Keep this pinned', 'تثبيت هذا العنصر')}</span></label>`,
     foot: `${editing ? `<button class="btn btn-danger-quiet" id="pastoral-delete">${icon('trash', 16)}${L('Delete', 'حذف')}</button>` : ''}
       <button class="btn btn-secondary" data-close style="margin-inline-start:auto">${L('Cancel', 'إلغاء')}</button>
@@ -108,9 +118,10 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         const values = { kind: itemKind, p: p || null, body, bodyAr: el.querySelector('#pastoral-body-ar').value.trim() || body,
           priority: el.querySelector('#pastoral-priority').value, due: el.querySelector('#pastoral-due')?.value || '',
           assignee: itemKind==='task' ? el.querySelector('#pastoral-assignee').value || null : null,
-          pinned: el.querySelector('#pastoral-pinned').checked };
+          pinned: el.querySelector('#pastoral-pinned').checked,
+          visibility: el.querySelector('input[name=pastoral-visibility]:checked')?.value === 'shared' ? 'shared' : 'personal' };
         if (editing) Object.assign(item, values);
-        else NOTES.unshift({ id: 'nt' + crypto.randomUUID(), at: today(), done: false, ...values });
+        else NOTES.unshift({ id: 'nt' + crypto.randomUUID(), at: today(), done: false, authorId: session.user?.id, by: session.user?.person_id || null, ...values });
         if (!await persist()) { el.querySelector('#pastoral-save').disabled=false; return; }
         closeOverlays(); bus.refresh(); toast(editing ? L('Updated', 'حُدّث') : L('Saved', 'حُفظ'), body, 'success');
       });
@@ -140,11 +151,11 @@ notes.mount = host => {
     const none = host.querySelector('#note-no-search'); if (none) none.hidden = shown > 0;
   });
   host.querySelectorAll('[data-note-done]').forEach(b => b.addEventListener('click', async () => {
-    const item = NOTES.find(n => n.id === b.dataset.noteDone); if (!item || item.kind !== 'task') return;
+    const item = NOTES.find(n => n.id === b.dataset.noteDone); if (!item || !canTick(item)) return;
     item.done = !item.done;if(!await persist())return; bus.refresh(); toast(item.done ? L('Task completed', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), '', 'success');
   }));
   host.querySelectorAll('[data-note-pin]').forEach(b => b.addEventListener('click', async () => {
-    const item = NOTES.find(n => n.id === b.dataset.notePin); if (!item) return;
+    const item = NOTES.find(n => n.id === b.dataset.notePin); if (!item || !mine(item)) return;
     item.pinned = !item.pinned;if(!await persist())return;bus.refresh();
   }));
   host.querySelectorAll('[data-note-edit]').forEach(b => b.addEventListener('click', () => {

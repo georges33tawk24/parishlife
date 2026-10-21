@@ -21,18 +21,42 @@ const L = id => ['l', id];
 
 export const ROLES = {
   member: {
-    en:'Ministry member', ar:'عضو خدمة', who:null,
-    noteEn:'Your ministries, meetings and personal parish life.',
-    noteAr:'خدماتك واجتماعاتك وحياتك الرعوية.',
-    nav:[L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
+    en:'Parish member', ar:'عضو في الرعية', who:null,
+    noteEn:'Your requests, ministries, meetings and personal parish life.',
+    noteAr:'طلباتك وخدماتك واجتماعاتك وحياتك الرعوية.',
+    nav:[L('home'), L('inbox'), H('This parish','هذه الرعية'), L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
       L('mymessages'), L('myfeed'), L('myresources'), L('mycommitments'), L('mynotes'),
       L('myprofile'), L('myconcerns'), L('membernotifications')]
   },
   bishop: {
     en:'Bishop', ar:'المطران', who:null,
-    noteEn:'Read-only oversight of parishes and their activities.',
-    noteAr:'إشراف للقراءة فقط على الرعايا وأنشطتها.',
-    nav:[L('oversight'), H('Eparchy','الأبرشية'), L('bishopeparchy'), L('bishopmap'), L('assignments')]
+    noteEn:'Oversight of the diocese’s parishes, and its administration: parishes, clergy, appointments and access. Pastoral notes, private messages and complaints stay out of reach.',
+    noteAr:'الإشراف على رعايا الأبرشية وإدارتها: الرعايا والإكليروس والتعيينات والوصول. وتبقى الملاحظات الرعوية والرسائل الخاصة والشكاوى خارج متناوله.',
+    nav:[L('oversight'), L('inbox'), H('Eparchy','الأبرشية'), L('bishopeparchy'), L('bishopmap'), H('Administration','الإدارة'), L('administration')]
+  },
+  superadmin: {
+    en:'Super admin', ar:'المدير العام', who:null,
+    noteEn:'Creates dioceses and the first bishop accounts, and administers ParishLife. Pastoral notes, complaints and clergy titles stay outside this role; a private conversation is opened only as a recorded emergency review of a reported problem.',
+    noteAr:'ينشئ الأبرشيات وحسابات المطارنة الأولى ويدير ParishLife. وتبقى الملاحظات الرعوية والشكاوى وألقاب الإكليروس خارج هذا الدور؛ ولا تُفتح محادثة خاصة إلا كمراجعة طارئة مسجّلة لمشكلة مُبلَّغ عنها.',
+    nav:[H('Administration','الإدارة'), L('administration'), L('inbox')]
+  },
+  diocesanadmin: {
+    en:'Diocesan admin', ar:'إداري الأبرشية', who:null,
+    noteEn:'Administers the diocese for the bishop: parishes, clergy assignments, admins and access, as delegated.',
+    noteAr:'يدير الأبرشية باسم المطران: الرعايا وتعيينات الإكليروس والإداريين والوصول، بحسب التفويض.',
+    nav:[H('Administration','الإدارة'), L('administration'), L('inbox')]
+  },
+  user: {
+    en:'ParishLife account', ar:'حساب ParishLife', who:null,
+    noteEn:'Your own account. Follow a parish or ask to become a member to see more.',
+    noteAr:'حسابك الخاص. تابع رعية أو اطلب الانتساب إليها لترى المزيد.',
+    nav:[L('home'), L('inbox'), L('account')]
+  },
+  follower: {
+    en:'Following', ar:'متابِع', who:null,
+    noteEn:'You follow this parish: its public news reaches you. Ask to become a member to use its member portal.',
+    noteAr:'تتابع هذه الرعية فتصلك أخبارها العامة. اطلب الانتساب لتستعمل بوابة أعضائها.',
+    nav:[L('home'), L('inbox'), L('account')]
   },
   priest: {
     en:'Parish priest', ar:'كاهن الرعية', who:'p17',
@@ -42,9 +66,20 @@ export const ROLES = {
       H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'), L('notes'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
-      H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'), L('memberhub'),
+      H('Communicate','التواصل'), L('inbox'), L('messaging'), L('notices'), L('music'), L('portal'), L('memberhub'),
       H('Money','المال'), L('giving'), L('finance'),
-      H('Administration','الإدارة'), L('forms'), L('reports'), L('audit'), L('settings'), L('styleguide')]
+      H('Administration','الإدارة'), L('forms'), L('reports'), L('audit'), L('settings'), L('administration'), L('styleguide')]
+  },
+  parishadmin: {
+    en:'Parish admin', ar:'إداري الرعية', who:null,
+    noteEn:'Runs the parish office: people, requests, events, spaces and settings, and appoints staff below this role. Finance, pastoral notes and signing stay with the priest unless delegated.',
+    noteAr:'يدير مكتب الرعية: المؤمنون والطلبات والأحداث والمرافق والإعدادات، ويعيّن العاملين دون هذا الدور. وتبقى المالية والملاحظات الرعوية والتوقيع للكاهن ما لم تُفوَّض.',
+    nav:[L('dashboard'),
+      H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'),
+      H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
+      H('Spaces','المرافق'), L('facilities'), L('reservations'),
+      H('Communicate','التواصل'), L('inbox'), L('messaging'), L('notices'), L('portal'), L('memberhub'),
+      H('Administration','الإدارة'), L('forms'), L('reports'), L('audit'), L('settings'), L('administration')]
   },
   secretary: {
     en:'Secretary', ar:'أمينة السرّ', who:'p4',
@@ -54,7 +89,7 @@ export const ROLES = {
       H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
-      H('Communicate','التواصل'), L('messaging'), L('notices'), L('portal'), L('memberhub'),
+      H('Communicate','التواصل'), L('inbox'), L('messaging'), L('notices'), L('portal'), L('memberhub'),
       H('Administration','الإدارة'), L('forms'), L('reports')]
   },
   treasurer: {
@@ -64,6 +99,7 @@ export const ROLES = {
     nav:[L('dashboard'),
       H('Money','المال'), L('giving'), L('finance'),
       H('Records','السجلات'), L('people'), L('households'),
+      H('Communicate','التواصل'), L('inbox'),
       H('Administration','الإدارة'), L('reports'), L('settings')]
   },
   leader: {
@@ -73,27 +109,52 @@ export const ROLES = {
     nav:[L('dashboard'),
       H('My ministry','خدمتي'), L('groups'), L('attendance'), L('volunteers'), L('checkin'), L('music'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'),
-      H('Communicate','التواصل'), L('messaging'), L('memberhub')]
+      H('Communicate','التواصل'), L('inbox'), L('messaging'), L('memberhub')]
   }
 };
 
 export const MOBILE_NAV = {
-  member:    ['memberhome','myrequests','mymessages','mycalendar','myprofile'],
-  bishop: ['oversight','bishopmap','bishopeparchy'],
+  member:    ['home','memberhome','myrequests','inbox','myprofile'],
+  bishop: ['oversight','bishopmap','bishopeparchy','administration'],
+  superadmin: ['administration'],
+  diocesanadmin: ['administration'],
+  user: ['home', 'inbox', 'account'],
+  follower: ['home', 'inbox', 'account'],
+  parishadmin: ['dashboard','people','calendar','requests'],
   priest:    ['dashboard','people','calendar','giving'],
   secretary: ['dashboard','people','calendar','messaging'],
   treasurer: ['dashboard','giving','finance','reports'],
   leader:    ['dashboard','groups','calendar','messaging']
 };
 
-export const role = () => S.role === 'member'
+/* The plan module each page belongs to. A page whose module the parish has switched off leaves the rail;
+   its records are kept and can still be opened to finish what is waiting. Unlisted pages are always there. */
+export const ROUTE_MODULE = {
+  people:'office', households:'office', person:'office', household:'office', notes:'office', reports:'office',
+  sacraments:'sacraments', certificate:'sacraments', forms:'requests',
+  calendar:'events', services:'events', music:'events', registrations:'events', checkin:'events',
+  groups:'ministries', volunteers:'ministries', attendance:'ministries',
+  facilities:'resources', reservations:'reservations',
+  messaging:'communications', notices:'communications', memberhub:'communications',
+  giving:'finance', finance:'finance',
+  memberhome:'members', myrequests:'members', myministries:'ministries', mymeetings:'ministries', mycalendar:'members',
+  myattendance:'ministries', mymessages:'members', myfeed:'members', myresources:'ministries', myformation:'ministries',
+  mycommitments:'ministries', mynotes:'members', myprofile:'members', myconcerns:'members', membernotifications:'members'
+};
+export const parishModules = () => session.parishes.find(p => p.id === session.parishId)?.modules || null;
+export const moduleOn = route => { const m = ROUTE_MODULE[route], list = parishModules(); return !m || !list || list.includes(m); };
+const fullRole = () => S.role === 'member'
   ? { ...ROLES.member, nav:[...ROLES.member.nav,
       ...(M.formation.length ? [L('myformation')] : []),
-      ...(M.complaintPermissions.some(x=>['Review','ManageCategories'].includes(x)) ? [L('memberhub')] : [])] }
-  : ROLES[S.role] || ROLES.priest;
+      ...(M.review.length || M.complaintPermissions.includes('ManageCategories') ? [L('memberhub')] : [])] }
+  : ROLES[S.role] || ROLES.user;
+export const role = () => { const r = fullRole(); return { ...r, nav: r.nav.filter(n => n[0] !== 'l' || moduleOn(n[1])) }; };
 export const me = () => person(session.user?.person_id || role().who) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
-export const is = (...roles) => roles.includes(S.role);
+/* A parish admin works in the office workspace, so it counts as the secretary wherever a screen asks. */
+export const is = (...roles) => roles.includes(S.role) || (S.role === 'parishadmin' && roles.includes('secretary'));
 export const canSee = id => role().nav.some(n => n[0] === 'l' && n[1] === id);
+/* Reachable by its address even when the plan has taken it out of the rail. */
+export const inRole = id => fullRole().nav.some(n => n[0] === 'l' && n[1] === id);
 export const go = h => { location.hash = h.startsWith('#') ? h : '#/' + h; };
 
 /* Set by app.js once the router exists. Actions call bus.refresh() after they

@@ -35,9 +35,10 @@ class PastoralStateTests(unittest.TestCase):
             validate(self.state)
 
     def test_non_clergy_cannot_write_pastoral_items(self):
-        self.assertTrue(writable('priest', 'NOTES'))
+        # writable() takes the account as it acts in the parish; without its own permissions it uses the role's template.
+        self.assertTrue(writable({'role': 'priest'}, 'NOTES'))
         for role in ('bishop', 'secretary', 'treasurer', 'leader', 'member'):
-            self.assertFalse(writable(role, 'NOTES'))
+            self.assertFalse(writable({'role': role}, 'NOTES'))
 
     def test_attendance_cannot_reference_a_person_outside_the_parish(self):
         meeting = self.state['GROUP_DETAIL']['g1']['meetings'][0]
@@ -57,9 +58,9 @@ class PastoralStateTests(unittest.TestCase):
 
     def test_template_and_plan_writes_follow_office_roles(self):
         for key in ('EVENT_TEMPLATES', 'SERVICE_TEMPLATES', 'SERVICE_PLANS'):
-            self.assertTrue(writable('priest', key))
-            self.assertTrue(writable('secretary', key))
-            self.assertFalse(writable('leader', key))
+            self.assertTrue(writable({'role': 'priest'}, key))
+            self.assertTrue(writable({'role': 'secretary'}, key))
+            self.assertFalse(writable({'role': 'leader'}, key))
 
 
 if __name__ == '__main__':

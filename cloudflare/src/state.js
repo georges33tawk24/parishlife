@@ -13,8 +13,10 @@ export const ROLES = new Set(['bishop', 'priest', 'secretary', 'treasurer', 'lea
 export const CLERGY = new Set(['priest']); // Bishops use the separate, read-only oversight API.
 export const FINANCE = new Set(['BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX']);
 export const OFFICE = new Set(['PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS']);
-export const READONLY = new Set(['PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS']);
-export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference']);
+export const READONLY = new Set(['PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS',
+  'MEMBERSHIP_REQUESTS', 'INVITATIONS', 'MINISTRY_APPLICATIONS', 'MINISTRY_INQUIRIES', 'MINISTRY_DEPARTURES', 'GUEST_REQUESTS', 'POLICIES']);
+export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference',
+  'acceptance', 'guestRequest']);
 
 /* Idempotent migration for parish records and working templates. */
 export function migrate_state(d) {
@@ -262,6 +264,9 @@ export function validate(d) {
   need(theme === null || (isDict(theme) && eq(Object.keys(theme).sort(), ['primary', 'scheme'])
     && isStr(K(theme, 'scheme')) && THEME_SCHEMES.has(K(theme, 'scheme'))
     && isStr(K(theme, 'primary')) && HEX_COLOUR.test(K(theme, 'primary'))), 'Invalid colour scheme.');
+  const loc = get(K(d, 'PARISH'), 'location');
+  need(loc === null || (isDict(loc) && eq(Object.keys(loc).sort(), ['lat', 'lng']) && ['lat', 'lng'].every(k => typeof loc[k] === 'number' && Number.isFinite(loc[k]))
+    && loc.lat >= -90 && loc.lat <= 90 && loc.lng >= -180 && loc.lng <= 180), 'Check the parish coordinates.');
   const pp = index(d, 'PEOPLE');
   for (const [k, v] of index(d, 'ARCHIVED').entries()) pp.set(k, v);
   const content = get(d, 'CONTENT', {});
@@ -420,6 +425,7 @@ export function validate(d) {
       && isStr(get(n, 'due')), 'A pastoral item needs valid content, priority, and person if it is a note.');
     need(!truthy(get(n, 'assignee')) || (eq(K(n, 'kind'), 'task') && pp.has(K(n, 'assignee')) && eq(get(pp.get(K(n, 'assignee')), 'status'), 'clergy')),
       'Task assignee must be clergy in this parish.');
+    need(has(new Set(['personal', 'shared']), get(n, 'visibility', 'personal')), 'Choose who can see this pastoral item.');
   }
   const events = index(d, 'EVENTS');
   const clergy = set(pp.values().filter(p => eq(get(p, 'status'), 'clergy')).map(p => K(p, 'id')));
@@ -490,15 +496,5 @@ export function validate(d) {
   }
 }
 
-export function writable(role, key) {
-  if (role === 'bishop' || role === 'member') return false;
-  if (READONLY.has(key)) return false;
-  if (CLERGY.has(role)) return true;
-  if (key === 'NOTIFICATIONS' || key === 'PREFS') return true;
-  if (role === 'secretary') return OFFICE.has(key);
-  if (role === 'treasurer') return FINANCE.has(key) || key === 'RATE';
-  if (role === 'leader') return ['GROUP_DETAIL', 'MUSIC', 'MUSIC_DETAIL', 'SETLISTS', 'CHECKIN', 'PICKUP'].includes(key);
-  return false;
-}
-
+/* writable() is in authority.js: it needs the account's permissions. */
 export { Problem };
