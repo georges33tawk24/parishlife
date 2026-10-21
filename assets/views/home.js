@@ -87,10 +87,10 @@ function feed(d, followed) {
       ${followed.map(p => `<button type="button" class="chip-toggle" data-home-parish="${esc(p.id)}" aria-pressed="${pick === p.id}">${p.primary ? icon('check', 14) : ''}${esc(nameOf(p))}</button>`).join('')}
     </div>
     <div class="grid g2 home-feed">
-      ${panel(L('Coming up', 'القادم'), events.length ? `<ul class="admin-list">${events.map(e => `<li>${icon(e.kind === 'mass' ? 'chalice' : 'events', 16, 'dimmer')}
+      ${panel(L('Coming up', 'القادم'), events.length ? `<ul class="admin-list" data-paginate>${events.map(e => `<li>${icon(e.kind === 'mass' ? 'chalice' : 'events', 16, 'dimmer')}
         <span><b>${esc(L(e.title, e.titleAr || e.title))}</b><small>${esc(fmtDate(e.d))}${e.t ? ' · ' + esc(e.t) : ''}</small>${tag(e.parish)}</span></li>`).join('')}</ul>`
         : `<p class="dim">${L('Nothing published for the coming days.', 'لا شيء منشور للأيام القادمة.')}</p>`)}
-      ${panel(L('News', 'الأخبار'), posts.length ? `<ul class="admin-list">${posts.map(p => `<li>${icon('bell', 16, 'dimmer')}
+      ${panel(L('News', 'الأخبار'), posts.length ? `<ul class="admin-list" data-paginate>${posts.map(p => `<li>${icon('bell', 16, 'dimmer')}
         <span><b>${esc(p.title)}</b><small>${esc(fmtDate(p.at))}</small>${tag(p.parish)}${p.body ? `<small class="home-post">${esc(String(p.body).slice(0, 220))}</small>` : ''}</span></li>`).join('')}</ul>`
         : `<p class="dim">${L('No news yet.', 'لا أخبار بعد.')}</p>`)}
     </div>`;

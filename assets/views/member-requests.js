@@ -88,7 +88,7 @@ function listPage() {
     ${offered(REQUEST_KINDS.filter(k => !k.other)).length ? section('sacraments', L('Sacraments and certificates', 'الأسرار والشهادات'), kindGrid(offered(REQUEST_KINDS.filter(k => !k.other)))) : ''}
     ${offered(REQUEST_KINDS.filter(k => k.other)).length ? section('other', L('Book a place, or ask for something else', 'احجز مكاناً، أو اطلب أمراً آخر'), kindGrid(offered(REQUEST_KINDS.filter(k => k.other)), ' mr-kinds-2')) : ''}
     ${M.requests.length ? '' : howItWorks()}
-    ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
+    ${earlier.length ? section('earlier', L('Completed and closed', 'المنجزة والمغلقة'), `<div data-paginate class="mr-cards">${earlier.map(requestCard).join('')}</div>`) : ''}
     ${section('guest', L('Requests you made without an account', 'طلبات قدّمتها دون حساب'), guestRequests())}
   </div>`;
 }
@@ -99,7 +99,7 @@ const GUEST_STAGE = { received: ['Received', 'استُلم'], review: ['Being pr
   accepted: ['Accepted by the bishop', 'قبلها المطران'], ready: ['Ready', 'جاهزة'], collected: ['Collected', 'استُلمت'], declined: ['Not accepted', 'لم يُقبل'], cancelled: ['Cancelled', 'أُلغي'] };
 function guestRequests() {
   const list = M.guestRequests || [];
-  return (list.length ? `<div class="mr-cards">${list.map(g => `<article class="member-card"><h3>${txt(g.reference)} · ${txt(g.subject)}</h3>
+  return (list.length ? `<div class="mr-cards" data-paginate>${list.map(g => `<article class="member-card"><h3>${txt(g.reference)} · ${txt(g.subject)}</h3>
       <p>${txt(L(...(GUEST_STAGE[g.stage] || GUEST_STAGE.received)))}${g.claim === 'pending' ? ' · ' + txt(L('waiting for the parish office to confirm it is yours', 'بانتظار تأكيد مكتب الرعية أنه لك')) : ''}</p></article>`).join('')}</div>` : '') +
     `<form class="mr-claim" id="mr-claim" novalidate><label class="label" for="mr-claim-link">${L('Paste the private link you were given', 'الصق الرابط الخاص الذي حصلت عليه')}</label>
       <div class="row" style="gap:8px;flex-wrap:wrap"><input class="input" id="mr-claim-link" dir="ltr" autocomplete="off" style="flex:1;min-width:14em">

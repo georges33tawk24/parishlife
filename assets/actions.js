@@ -354,6 +354,7 @@ export const VERBS = {
   'cal-next':     () => F.calShift(1),
   'cal-today':    () => F.calShift(0),
   'cal-day':      (b, a) => F.calDay(+a),
+  'cal-week':     (b, a) => F.calWeek(+a),
   view:           (b, a) => { const [k, v] = a.split('|'); S.ui[k] = +v; refresh(); },
   'people-env':   () => { S.ui.peopleEnv = !S.ui.peopleEnv; S.ui.peoplePage = 0; refresh(); },
   'music-clear':  () => { S.ui.music = {}; refresh(); },

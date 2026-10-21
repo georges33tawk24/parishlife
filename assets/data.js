@@ -3,7 +3,7 @@
    session. Every name is stored as a pair because the Arabic name is the record
    of truth for certificates and the English one is what the office searches by. */
 
-export const TODAY = new Date(2026, 9, 4);      // Sunday 4 October 2026
+export const TODAY = (d => new Date(d.getFullYear(), d.getMonth(), d.getDate()))(new Date());   // today, at midnight
 export const RATE = { value: 89500, setOn: new Date(2026, 9, 4), setBy: 'Fr. Antoine Khoury' };
 export const RATE_AGE_DAYS = 0;
 

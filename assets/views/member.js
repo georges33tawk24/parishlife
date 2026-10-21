@@ -30,24 +30,37 @@ const attendance = () => {
 };
 const status = value => `<span class="member-badge">${txt(value)}</span>`;
 const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind === kind && filter(x));
-const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'list', offset:0 };
+const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'month', offset:0, when:'upcoming', q:'' };
+/* The same calendar everywhere: Month and Week together with period navigation and Today, the List apart
+   (upcoming nearest first, past newest first, ten a page), and a search by name over every view. */
 const schedule = (key, items, emptyMessage) => {
-  const state = scheduleState(key), mode = state.mode;
+  const state = scheduleState(key), mode = state.mode === 'list' ? 'list' : state.mode === 'week' ? 'week' : 'month';
   const now = new Date(), start = mode === 'week'
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + state.offset * 7)
     : new Date(now.getFullYear(), now.getMonth() + state.offset, 1);
   const end = mode === 'week' ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
     : new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  const ordered = [...items].filter(x => x.date).sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+  const q = (state.q || '').trim().toLocaleLowerCase();
+  const matching = items.filter(x => x.date && (!q || `${x.title} ${x.subtitle || ''}`.toLocaleLowerCase().includes(q)));
+  const ordered = [...matching].sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
   const chip = x => `<button class="member-event member-filter-row" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}" title="${txt(x.title)}"><time>${txt(x.time || '')}</time><span>${txt(x.title)}</span></button>`;
-  const toolbar = `<div class="member-toolbar member-schedule-toolbar"><div class="seg" role="group" aria-label="${L('Schedule view', 'عرض المواعيد')}">${[['list','List','قائمة'],['week','Week','أسبوع'],['month','Month','شهر']].map(([id,en,ar]) => `<button data-schedule-mode="${id}" data-schedule-key="${key}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>${mode === 'list' ? '' : `<div class="member-schedule-nav"><button class="btn btn-secondary btn-dense" data-schedule-offset="-1" data-schedule-key="${key}" aria-label="${L('Previous', 'السابق')}">‹</button><button class="btn btn-secondary btn-dense" data-schedule-today data-schedule-key="${key}">${L('Today', 'اليوم')}</button><strong>${txt(mode === 'month' ? start.toLocaleDateString(undefined, {month:'long',year:'numeric'}) : date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))))}</strong><button class="btn btn-secondary btn-dense" data-schedule-offset="1" data-schedule-key="${key}" aria-label="${L('Next', 'التالي')}">›</button></div>`}</div>`;
-  if (mode === 'list') return toolbar + `<div class="member-list">${ordered.map(x => `<div class="member-card member-schedule-row member-filter-row" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}"><div class="member-date"><b>${date(x.date)}</b><small>${txt(x.time || '')}</small></div><div class="member-schedule-content"><h2>${txt(x.title)}</h2><p>${txt(x.subtitle || '')}</p></div>${status(x.badge || x.source || '')}<button class="btn btn-secondary btn-dense" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}">${L('Details', 'التفاصيل')}</button></div>`).join('') || blank(emptyMessage)}</div>`;
+  const search = `<form class="member-schedule-search" role="search" data-schedule-search="${key}"><input class="input" type="search" name="q" value="${txt(state.q || '')}" placeholder="${L('Search by name', 'ابحث بالاسم')}" aria-label="${L('Search by name', 'ابحث بالاسم')}">${mode === 'list' ? '' : `<input class="input" type="date" name="date" aria-label="${L('Go to a date', 'انتقل إلى تاريخ')}">`}<button class="btn btn-secondary btn-dense">${L('Search', 'بحث')}</button></form>`;
+  const toolbar = `<div class="member-toolbar member-schedule-toolbar"><div class="seg" role="group" aria-label="${L('Calendar view', 'عرض الرزنامة')}">${[['month','Month','شهر'],['week','Week','أسبوع']].map(([id,en,ar]) => `<button data-schedule-mode="${id}" data-schedule-key="${key}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>
+    <button class="btn btn-secondary btn-dense" data-schedule-mode="list" data-schedule-key="${key}" aria-pressed="${mode === 'list'}">${L('List', 'لائحة')}</button>
+    ${mode === 'list' ? `<div class="seg" role="group" aria-label="${L('Which', 'أيّها')}">${[['upcoming','Upcoming','القادمة'],['past','Past','السابقة']].map(([id,en,ar]) => `<button data-schedule-when="${id}" data-schedule-key="${key}" aria-pressed="${(state.when || 'upcoming') === id}">${L(en,ar)}</button>`).join('')}</div>`
+      : `<div class="member-schedule-nav"><button class="btn btn-secondary btn-dense" data-schedule-offset="-1" data-schedule-key="${key}" aria-label="${mode === 'week' ? L('Previous week', 'الأسبوع السابق') : L('Previous month', 'الشهر السابق')}">‹</button><button class="btn btn-secondary btn-dense" data-schedule-today data-schedule-key="${key}">${L('Today', 'اليوم')}</button><strong>${txt(mode === 'month' ? start.toLocaleDateString(undefined, {month:'long',year:'numeric'}) : date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))))}</strong><button class="btn btn-secondary btn-dense" data-schedule-offset="1" data-schedule-key="${key}" aria-label="${mode === 'week' ? L('Next week', 'الأسبوع التالي') : L('Next month', 'الشهر التالي')}">›</button></div>`}
+    ${search}</div>`;
+  if (mode === 'list') {
+    const past = state.when === 'past', today = todayKey();
+    const rows = past ? ordered.filter(x => x.date < today).reverse() : ordered.filter(x => x.date >= today);
+    return toolbar + `<div class="member-list">${rows.map(x => `<div class="member-card member-schedule-row member-filter-row" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}"><div class="member-date"><b>${date(x.date)}</b><small>${txt(x.time || '')}</small></div><div class="member-schedule-content"><h2>${txt(x.title)}</h2><p>${txt(x.subtitle || '')}</p></div>${status(x.badge || x.source || '')}<button class="btn btn-secondary btn-dense" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}">${L('Details', 'التفاصيل')}</button></div>`).join('') || blank(emptyMessage)}</div>`;
+  }
   const days = mode === 'week' ? Array.from({length:7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),start.getDate()+i))
     : Array.from({length:Math.ceil((new Date(start.getFullYear(),start.getMonth(),1).getDay()+new Date(start.getFullYear(),start.getMonth()+1,0).getDate())/7)*7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),i+1-start.getDay()));
   return toolbar + `<div class="member-calendar" role="grid" aria-label="${L('Calendar', 'الرزنامة')}"><div class="member-calendar-head">${Array.from({length:7},(_,i) => `<span>${txt(new Date(2026,7,2+i).toLocaleDateString(undefined,{weekday:'short'}))}</span>`).join('')}</div><div class="member-calendar-grid">${days.map(d => {
     const keyDate = dayKey(d), dayItems = ordered.filter(x=>x.date===keyDate);
     return `<div class="member-calendar-day ${mode==='month' && d.getMonth()!==start.getMonth()?'out':''} ${keyDate===todayKey()?'today':''}"><time datetime="${keyDate}">${d.getDate()}</time><div class="member-day-items">${dayItems.map(chip).join('')}</div></div>`;
-  }).join('')}</div></div>${ordered.filter(x => x.date>=dayKey(start) && x.date<dayKey(end)).length ? '' : blank(emptyMessage)}`;
+  }).join('')}</div></div>${ordered.filter(x => x.date>=dayKey(start) && x.date<dayKey(end)).length ? '' : blank(q ? L('Nothing matches this search in this period.', 'لا شيء يطابق هذا البحث في هذه الفترة.') : emptyMessage)}`;
 };
 
 export function home() {
@@ -503,6 +516,14 @@ export function mount(host) {
   }));
   host.querySelectorAll('[data-message-filter]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberMessageFilter=b.dataset.messageFilter; bus.refresh(); }));
   host.querySelectorAll('[data-schedule-mode]').forEach(b=>b.addEventListener('click',()=>{ const state=scheduleState(b.dataset.scheduleKey); state.mode=b.dataset.scheduleMode; state.offset=0; bus.refresh(); }));
+  host.querySelectorAll('[data-schedule-when]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).when=b.dataset.scheduleWhen; bus.refresh(); }));
+  host.querySelectorAll('[data-schedule-search]').forEach(f=>f.addEventListener('submit',e=>{
+    e.preventDefault(); const state=scheduleState(f.dataset.scheduleSearch); state.q=f.elements.q.value;
+    const day=f.elements.date?.value;
+    if(day){ const [y,m,d]=day.split('-').map(Number), now=new Date(), target=new Date(y,m-1,d);   // a date moves the month or week to it
+      state.offset = state.mode==='week' ? Math.floor((target-new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()))/(7*86400000)) : (y-now.getFullYear())*12+(m-1-now.getMonth()); }
+    bus.refresh();
+  }));
   host.querySelectorAll('[data-notes-view]').forEach(b=>b.addEventListener('click',()=>{ S.ui.memberNotesView=b.dataset.notesView; if(b.dataset.notesView==='calendar') scheduleState('notes').mode='month'; bus.refresh(); }));
   host.querySelectorAll('[data-schedule-offset]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).offset+=Number(b.dataset.scheduleOffset); bus.refresh(); }));
   host.querySelectorAll('[data-schedule-today]').forEach(b=>b.addEventListener('click',()=>{ scheduleState(b.dataset.scheduleKey).offset=0; bus.refresh(); }));

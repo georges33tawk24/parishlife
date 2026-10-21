@@ -935,8 +935,26 @@ def confirm_identity(c, u, q):
         require(mfa_check(c, u['id'], 'totp', q.get('code')), 'Enter a current code from your authenticator app.', 403)
 
 
+THEME_MODES = ('light', 'dark', 'system')
+
+
+def user_theme(c, user_id):
+    """The account's own dashboard colours and light or dark mode. Nobody else sees them, and the public site never does."""
+    row = c.execute("SELECT value FROM settings WHERE scope='user' AND scope_id=? AND key='theme'", (user_id,)).fetchone()
+    return json.loads(row['value']) if row else None
+
+
 def account_action(c, u, session, q, outbox):
     op, at = q.get('op'), NOW()
+    if op == 'saveTheme':
+        theme = q.get('theme')
+        require(isinstance(theme, dict) and set(theme) == {'scheme', 'primary', 'mode'} and theme['scheme'] in THEME_SCHEMES
+                and isinstance(theme['primary'], str) and HEX_COLOUR.fullmatch(theme['primary']) is not None
+                and theme['mode'] in THEME_MODES, 'Choose a colour scheme and a light or dark mode.')
+        value = dict(scheme=theme['scheme'], primary=theme['primary'].upper(), mode=theme['mode'])
+        c.execute("INSERT INTO settings VALUES('user',?,'theme',?,?,?) ON CONFLICT(scope,scope_id,key) DO UPDATE SET "
+                  "value=excluded.value,updated_at=excluded.updated_at,updated_by=excluded.updated_by", (u['id'], json.dumps(value), at, u['id']))
+        return dict(theme=value)
     if op == 'updateProfile':
         first, last = clean(q.get('firstName'), 60, 'Enter your first name.'), clean(q.get('lastName'), 60, 'Enter your last name.')
         c.execute('INSERT INTO user_profiles(user_id,first_name,last_name,updated_at) VALUES(?,?,?,?) '
@@ -5974,7 +5992,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if self.command != 'GET': require(hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), session['csrf']), 'Invalid request token.', 403)
                 if path == '/api/session' and self.command == 'GET':
                     auth = authority(c, u)
-                    return self.reply(200, dict(user={k: u[k] for k in ('id', 'username', 'name', 'role', 'person_id')}, csrf=session['csrf'],
+                    return self.reply(200, dict(user={**{k: u[k] for k in ('id', 'username', 'name', 'role', 'person_id')}, 'theme': user_theme(c, u['id'])}, csrf=session['csrf'],
                                                 parishes=parishes(c, u, auth), authority=session_authority(c, u, auth)))
                 if path == '/api/logout' and self.command == 'POST':
                     c.execute('DELETE FROM sessions WHERE token=?', (session['token'],)); c.commit()

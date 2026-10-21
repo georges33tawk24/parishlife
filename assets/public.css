@@ -451,3 +451,9 @@ a.contact-row:hover{text-decoration:underline}
 @media(max-width:900px){.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.slide{grid-template-columns:1fr}.slide-copy{padding:26px 22px 70px}}
 @media(max-width:700px){.filter-grid{grid-template-columns:1fr}.community-section{padding-top:58px}.community-section>.community-events{padding-inline:20px}.month-cell{min-height:64px}.month-event{white-space:normal}.live-map{height:380px}}
 @media print{.slider,.layout-switch,.filter-actions{display:none}}
+.public-pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:22px;flex-wrap:wrap;font-size:13px}
+.public-pager .button{min-height:40px;padding:8px 16px}
+.public-pager .button:disabled{opacity:.45;cursor:default;transform:none}
+.calendar-search{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
+.calendar-search input{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff;font-size:13px}
+.calendar-search .button{min-height:40px;padding:8px 16px}

@@ -4,7 +4,7 @@ import { icon } from './icons.js';
 import { t, isAr, lang, setLang, num, fmtLong, matches } from './i18n.js';
 import { PARISH, PARISHES, RATE, TODAY, PEOPLE, PHOTOS, person, initials } from './data.js';
 import * as D from './data.js';
-import { closeOverlays, toast, openModal, openDrawer, esc, avatar, catchAll, openPopover, closeMenu } from './ui.js';
+import { closeOverlays, toast, openModal, openDrawer, esc, avatar, catchAll, openPopover, closeMenu, paginateLists } from './ui.js';
 import { S, ROLES, MOBILE_NAV, role, me, canSee, inRole, moduleOn, go, save, bus } from './store.js';
 import { wireActions } from './actions.js';
 import { hydrate, persist, saveFailed } from './persist.js';
@@ -727,9 +727,9 @@ function updateRail() {
    the reader exactly where they were. The rail never moves either way. */
 function renderView({ keepScroll = false } = {}) {
   const rt = ROUTES[S.route] || ROUTES.dashboard;
-  /* the parish colours; a scheme being previewed in Settings → Colours lasts only while that tab is open */
-  if (!(S.route === 'settings' && S.params[0] === 'appearance')) S.themeDraft = null;
-  applyTheme(S.themeDraft || PARISH.theme);
+  /* the account's own colours and mode; a preview in My account → Appearance lasts only while that page is open */
+  if (S.route !== 'account') S.themeDraft = null;
+  applyTheme(S.themeDraft || session.user?.theme);
   const host = document.getElementById('view');
   const well = document.getElementById('well'), y = well?.scrollTop || 0;
   if (MEMBER_ROUTES.has(S.route) && M.loadedFor !== `${session.user?.id}:${session.parishId}`) {
@@ -759,6 +759,7 @@ function renderView({ keepScroll = false } = {}) {
     el.addEventListener('click', e => { e.preventDefault(); go(el.dataset.go); }));
   wireActions(host);
   catchAll(host);
+  paginateLists(host, S.route + '/' + S.params.join('/'));
   closeDropdown(); enhanceSelects(host);
   document.title = `${t(rt.en, rt.ar)} · ParishLife`;
   if (well) well.scrollTop = keepScroll ? y : 0;

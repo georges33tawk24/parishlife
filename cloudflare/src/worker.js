@@ -16,7 +16,7 @@ import { authority, parishUser, sessionAuthority, loginAllowed, adminView, admin
 import { member_view, member_action } from './member.js';
 import {
   authConfig, signIn, mfaTurnedOn, mfaChallenge, challengeInfo, mfaSend, mfaVerify, register, providerTicket, providerComplete,
-  accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish
+  accountView, accountAction, sendOutbox, settle, providerSettings, oauthStart, oauthFinish, userTheme
 } from './identity.js';
 import { xlsx_preview } from './xlsx.js';
 import { publicParish, invitationInfo, connectionsView, connectionsAction, officeConnectionAction, publicDirectory, publicConfig, publicImage } from './connections.js';
@@ -208,6 +208,7 @@ async function handle(c, env, request, url, q, secureCookie) {
   if (path === '/api/session' && method === 'GET') {
     const user = {};
     for (const k of ['id', 'username', 'name', 'role', 'person_id']) user[k] = u[k];
+    user.theme = await userTheme(c, u.id);
     const auth = await authority(c, u);
     return reply(200, { user, csrf: session.csrf, parishes: await parishes(c, u, {}, auth), authority: await sessionAuthority(c, u, auth) });
   }

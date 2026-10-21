@@ -7,6 +7,7 @@ import { t, lang, setLang, fmtDate } from '../i18n.js';
 import { bus, ROLES } from '../store.js';
 import { pageHead, panel, esc, pill, openModal, closeOverlays, toast } from '../ui.js';
 import { icon } from '../icons.js';
+import { appearancePanel, wireAppearance } from './appearance.js';
 
 const L = (en, ar) => t(en, ar);
 const state = { data: null, loading: false, error: '', open: {} };
@@ -64,6 +65,7 @@ export function account(section = '') {
         <button type="button" data-acct-lang="en" aria-pressed="${lang === 'en'}">English</button>
         <button type="button" data-acct-lang="ar" aria-pressed="${lang === 'ar'}" lang="ar">العربية</button></div>`)}
     </div>
+    <div id="acct-appearance">${panel(L('Appearance', 'المظهر'), appearancePanel())}</div>
     ${panel(L('Two-step verification', 'التحقّق بخطوتين'), twoStep(a))}
     ${panel(L('Google, Apple and Microsoft', 'Google وApple وMicrosoft'), providers(a))}`;
 }
@@ -337,6 +339,8 @@ account.mount = (host, section) => {
   const a = state.data;
   if (!a) return;
   if (section === 'profile') requestAnimationFrame(() => host.querySelector('#acct-profile')?.scrollIntoView({ block: 'start' }));
+  if (section === 'appearance') requestAnimationFrame(() => host.querySelector('#acct-appearance')?.scrollIntoView({ block: 'start' }));
+  wireAppearance(host);
   host.querySelector('[data-acct-form="profile"]')?.addEventListener('submit', async e => {
     e.preventDefault();
     const f = e.currentTarget, error = f.querySelector('#pf-error'), v = name => f.elements[name]?.value ?? '';

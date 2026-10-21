@@ -1,7 +1,9 @@
-/* Parish colour schemes.
-   The stylesheets are written in Forest; every other scheme is derived from one colour and
-   overrides the same tokens on <html>, so the office, the member portal, the CMS and the
-   parish website all follow it. Text colours are checked for contrast before they are used. */
+/* Colour schemes.
+   The stylesheets are written in Forest, light. Each account chooses its own dashboard scheme
+   (a preset or a colour of its own) and a light, dark or device-following mode; every other
+   combination is derived from one colour and overrides the same tokens on <html>. The public
+   website has one shared theme (applySiteTheme with no scheme). Text colours are checked for
+   contrast before they are used. */
 
 export const DEFAULT_PRIMARY = '#233B32';
 
@@ -67,6 +69,12 @@ function atLeast(L, C, H, ratio, backgrounds) {
   while (L > 0.05 && backgrounds.some(bg => contrast(out, bg) < ratio)) { L -= 0.01; out = hex(L, C, H); }
   return out;
 }
+/* The same, lightening — for text and accents on dark backgrounds. */
+function lightAtLeast(L, C, H, ratio, backgrounds) {
+  let out = hex(L, C, H);
+  while (L < 0.98 && backgrounds.some(bg => contrast(out, bg) < ratio)) { L += 0.01; out = hex(L, C, H); }
+  return out;
+}
 
 /* The colour the parish chose, made dark enough for white button text and for links on tinted panels. */
 export function readable(color) {
@@ -99,6 +107,37 @@ export function palette(color) {
   };
 }
 
+/* Dark mode: deep tinted surfaces, light text, and the chosen colour lightened so links and buttons stay readable. */
+export function darkPalette(color) {
+  const { c, h } = oklch(readable(color));
+  const quiet = k => Math.min(k, c);
+  const bg = hex(0.17, quiet(0.012), h), surface = hex(0.21, quiet(0.014), h), soft = hex(0.19, quiet(0.012), h), muted = hex(0.26, quiet(0.022), h);
+  const ink = hex(0.13, quiet(0.012), h);
+  const primary = lightAtLeast(0.74, Math.min(c, 0.11), h, 7, [bg, surface]);
+  return {
+    primary, hover: lightAtLeast(oklch(primary).l + 0.06, Math.min(c, 0.11), h, 7, [bg, surface]),
+    onPrimary: atLeast(0.2, quiet(0.02), h, 7, [primary]), text: lightAtLeast(0.92, quiet(0.012), h, 12, [bg, surface]),
+    secondary: lightAtLeast(0.76, quiet(0.02), h, 5, [bg, surface, muted]), bg, surface, soft, muted,
+    border: hex(0.32, quiet(0.02), h), strong: hex(0.47, quiet(0.03), h), selection: hex(0.32, quiet(0.045), h),
+    ink, onInk: lightAtLeast(0.9, quiet(0.01), h, 12, [ink]), danger: atLeast(0.55, Math.max(c, 0.08), h, 4.6, ['#FFFFFF'])
+  };
+}
+
+const APP_DARK_TOKENS = p => ({
+  '--primary': p.primary, '--primary-hover': p.hover, '--primary-subtle': p.muted, '--primary-rgb': rgbOf(p.primary), '--on-primary': p.onPrimary,
+  '--ink': p.ink, '--on-dark': p.onInk, '--on-dark-rgb': rgbOf(p.onInk), '--on-ink-quiet': p.secondary, '--accent': p.primary,
+  '--selection': p.selection, '--selection-hover': p.border,
+  '--chart-1': p.primary, '--chart-2': p.secondary, '--chart-3': p.strong, '--chart-4': p.selection,
+  '--text': p.text, '--text-2': p.secondary, '--text-3': p.secondary,
+  '--bg': p.bg, '--surface': p.surface, '--surface-soft': p.soft, '--muted': p.muted, '--border': p.border, '--border-strong': p.strong,
+  /* status colours keep their meaning: green, amber, and the danger tone */
+  '--success': '#8CCBA4', '--success-subtle': '#16261D', '--success-ink': '#A7D9B9', '--success-border': '#2C4A3B',
+  '--warning': '#E2C285', '--warning-subtle': '#2A2416', '--warning-ink': '#EBD3A2', '--warning-border': '#4D4226',
+  '--danger': p.danger, '--danger-subtle': p.muted, '--danger-ink': p.text, '--danger-border': p.strong,
+  '--info': p.secondary, '--info-subtle': p.soft, '--info-ink': p.text, '--info-border': p.border,
+  '--e1': '0 1px 2px rgb(0 0 0 / .35)', '--e2': '0 4px 12px rgb(0 0 0 / .4)', '--e3': '0 16px 40px rgb(0 0 0 / .5)'
+});
+
 const APP_TOKENS = p => ({
   '--primary': p.primary, '--primary-hover': p.hover, '--primary-subtle': p.muted, '--primary-rgb': rgbOf(p.primary),
   '--ink': p.primary, '--on-dark': p.muted, '--on-dark-rgb': rgbOf(p.muted), '--on-ink-quiet': p.onInkQuiet, '--accent': p.primary,
@@ -116,7 +155,7 @@ const SITE_TOKENS = p => ({
   '--sage': p.sage, '--sage-soft': p.strong, '--line': p.border, '--soft': p.muted, '--paper': p.bg, '--paper-rgb': rgbOf(p.bg)
 });
 
-/* A stored theme is { scheme, primary }; a scheme from SCHEMES is accepted too. Anything else is Forest. */
+/* A stored theme is { scheme, primary, mode }; a scheme from SCHEMES is accepted too. Anything else is Forest. */
 export function schemeOf(theme) {
   if (!theme || typeof theme !== 'object') return SCHEMES[0];
   const known = SCHEMES.find(s => s.id === (theme.scheme ?? theme.id));
@@ -125,9 +164,9 @@ export function schemeOf(theme) {
 }
 
 const applied = new WeakMap();
-function paint(theme, tokens, root) {
+function paint(theme, tokens, root, dark = false) {
   const scheme = schemeOf(theme);
-  const next = scheme.id === 'forest' ? {} : tokens(palette(scheme.primary));
+  const next = dark ? APP_DARK_TOKENS(darkPalette(scheme.primary)) : scheme.id === 'forest' ? {} : tokens(palette(scheme.primary));
   for (const name of applied.get(root) || []) if (!(name in next)) root.style.removeProperty(name);
   for (const [name, value] of Object.entries(next)) root.style.setProperty(name, value);
   applied.set(root, Object.keys(next));
@@ -135,5 +174,17 @@ function paint(theme, tokens, root) {
   return scheme;
 }
 
-export const applyTheme = (theme, root = document.documentElement) => paint(theme, APP_TOKENS, root);
+export const MODES = ['light', 'dark', 'system'];
+const deviceDark = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+export const resolvedMode = mode => mode === 'dark' || (mode === 'system' && deviceDark?.matches) ? 'dark' : 'light';
+let lastTheme = null;
+/* The account's dashboard theme. "system" follows the device, and changes with it. */
+export function applyTheme(theme, root = document.documentElement) {
+  lastTheme = theme;
+  const mode = resolvedMode(theme?.mode);
+  root.dataset.mode = mode;
+  root.style.colorScheme = mode;
+  return paint(theme, APP_TOKENS, root, mode === 'dark');
+}
+deviceDark?.addEventListener?.('change', () => { if (lastTheme?.mode === 'system') applyTheme(lastTheme); });
 export const applySiteTheme = (theme, root = document.documentElement) => paint(theme, SITE_TOKENS, root);

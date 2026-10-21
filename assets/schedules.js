@@ -135,7 +135,7 @@ const RANGES = () => [['week', L('This week', 'هذا الأسبوع')], ['month
 function rangeOf(r) {
   if (r === 'week') { const a = weekOf(0); return [a, addDays(a, 6), span(a, addDays(a, 6))]; }
   if (r === 'next') return [TODAY, addDays(TODAY, 27), span(TODAY, addDays(TODAY, 27))];
-  const m = new Date(2026, 9 + (S.ui.calOffset || 0), 1), last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+  const m = new Date(TODAY.getFullYear(), TODAY.getMonth() + (S.ui.calOffset || 0), 1), last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
   return [m, last, fmtDate(m).split(' ').slice(1).join(' ')];
 }
 const massesIn = r => { const [a, b] = rangeOf(r); return EVENTS.filter(e => e.kind === 'mass' && e.d >= iso(a) && e.d <= iso(b)).sort((x, y) => (x.d + x.t).localeCompare(y.d + y.t)); };

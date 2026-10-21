@@ -15,6 +15,7 @@ import {
 } from './py.js';
 import { Tx, Conflict } from './db.js';
 import { audit } from './app.js';
+import { THEME_SCHEMES } from './state.js';
 import { loginAllowed, clean, contactKind } from './authority.js';
 import { loginName } from './accounts.js';
 import { ROUNDS } from './member.js';
@@ -590,8 +591,25 @@ async function confirmIdentity(c, u, q) {
   if (totp?.enabled_at) need(await mfaCheck(c, u.id, 'totp', get(q, 'code')), 'Enter a current code from your authenticator app.', 403);
 }
 
+export const THEME_MODES = ['light', 'dark', 'system'];
+/* The account's own dashboard colours and light or dark mode. Nobody else sees them, and the public site never does. */
+export async function userTheme(c, userId) {
+  const row = await c.first("SELECT value FROM settings WHERE scope='user' AND scope_id=? AND key='theme'", userId);
+  return row ? JSON.parse(row.value) : null;
+}
+
 export async function accountAction(c, ctx, u, session, q, outbox) {
   const op = get(q, 'op'), at = NOW();
+  if (op === 'saveTheme') {
+    const theme = get(q, 'theme');
+    need(theme !== null && typeof theme === 'object' && !Array.isArray(theme) && Object.keys(theme).sort().join() === 'mode,primary,scheme'
+      && THEME_SCHEMES.has(theme.scheme) && typeof theme.primary === 'string' && /^#[0-9A-Fa-f]{6}$/.test(theme.primary) && THEME_MODES.includes(theme.mode),
+      'Choose a colour scheme and a light or dark mode.');
+    const value = { scheme: theme.scheme, primary: theme.primary.toUpperCase(), mode: theme.mode };
+    c.run("INSERT INTO settings VALUES('user',?,'theme',?,?,?) ON CONFLICT(scope,scope_id,key) DO UPDATE SET " +
+      'value=excluded.value,updated_at=excluded.updated_at,updated_by=excluded.updated_by', u.id, JSON.stringify(value), at, u.id);
+    return { theme: value };
+  }
   if (op === 'updateProfile') {
     const first = clean(get(q, 'firstName'), 60, 'Enter your first name.'), last = clean(get(q, 'lastName'), 60, 'Enter your last name.');
     c.run('INSERT INTO user_profiles(user_id,first_name,last_name,updated_at) VALUES(?,?,?,?) ' +

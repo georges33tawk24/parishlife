@@ -202,13 +202,10 @@ export function people(tab = '') {
   if (tab === 'import') return head + importView();
   if (tab === 'archived') return head + archived();
 
-  /* Real pagination over what is loaded — ten rows a page, as a secretary scans a page at a time. */
+  /* Every match is in the table, so sorting and selection work across all of them; the shared pager shows ten a page. */
   const q = S.ui.peopleQ || '', town = S.ui.peopleTown || '', rite = S.ui.peopleRite || '';
   const visible = filteredPeople();
-  const PER = 10, pages = Math.max(1, Math.ceil(visible.length / PER));
-  S.ui.peoplePage = Math.min(S.ui.peoplePage, pages - 1);
-  const from = S.ui.peoplePage * PER, pageRows = visible.slice(from, from + PER);
-  const rows = pageRows.map(p => ({
+  const rows = visible.map(p => ({
     cls: 'clickable', attrs: `data-ri-p="${p.id}"`,
     detail: `<div class="grid g3" style="gap:20px">
         <dl class="dl"><dt>${t('Household', 'العائلة')}</dt><dd>${hh(p.hh) ? esc(t(hh(p.hh).name, hh(p.hh).ar)) : '—'}</dd>
@@ -246,13 +243,7 @@ export function people(tab = '') {
              { label: t('Phone', 'الهاتف'), cls: 'hide-sm' }, { label: t('Status', 'الحالة'), cls: 'shrink' },
              { label: '', cls: 'shrink' }],
       rows,
-      foot: `<span class="tnum">${pageRows.length ? from + 1 : 0}–${from + pageRows.length} ${t('of', 'من')} ${visible.length}</span>
-        <span style="margin-inline-start:auto;display:flex;gap:6px;align-items:center">
-          <button class="btn-icon dense" data-act="page:prev" aria-label="${t('Previous page', 'الصفحة السابقة')}"
-            ${S.ui.peoplePage === 0 ? 'disabled' : ''}>${icon('chevL', 15)}</button>
-          <span class="mono t-caption" style="min-width:44px;text-align:center">${S.ui.peoplePage + 1} / ${pages}</span>
-          <button class="btn-icon dense" data-act="page:next" aria-label="${t('Next page', 'الصفحة التالية')}"
-            ${S.ui.peoplePage >= pages - 1 ? 'disabled' : ''}>${icon('chevR', 15)}</button></span>`
+      foot: `<span class="tnum">${visible.length} ${t(visible.length === 1 ? 'person' : 'people', 'شخص')}</span>`
     })}
     <div id="bulkhost"></div>`;
 }
@@ -883,7 +874,7 @@ export function households() {
         <button aria-pressed="${S.ui.hhView !== 'table'}" data-act="hh-view:cards">${t('Cards', 'بطاقات')}</button>
         <button aria-pressed="${S.ui.hhView === 'table'}" data-act="hh-view:table">${t('Table', 'جدول')}</button></span>
     </div>
-    ${S.ui.hhView === 'table' ? tableView : HOUSEHOLDS.length ? `<div class="gridcards">${cards}</div>` : tableView}
+    ${S.ui.hhView === 'table' ? tableView : HOUSEHOLDS.length ? `<div class="gridcards" data-paginate="households">${cards}</div>` : tableView}
     <p class="help" style="margin-top:18px">${t('New households reuse existing people. Review suggested surname matches, select several members, and enter one shared address. No people or households are merged automatically. An offering-envelope identifier is optional.','تستخدم العائلات الجديدة أشخاصاً مسجّلين. راجع اقتراحات اسم العائلة، واختر عدة أفراد، وأدخل عنواناً مشتركاً واحداً. لا تُدمج السجلات تلقائياً. رمز مظروف العطاء اختياري.')}</p>
     <div class="find-empty" hidden>${empty('search', t('No household matches', 'لا عائلة مطابقة'), t('Try part of the family name or the envelope number.', 'جرّب جزءاً من اسم العائلة أو رقم المظروف.'))}</div>`;
 }

@@ -72,13 +72,13 @@ export function ministryPanels(g) {
       <span class="acct-acts"><button class="btn btn-ghost btn-dense" data-mdep-decline="${esc(x.id)}">${L('Talk first', 'التحدث أولاً')}</button>
         <button class="btn btn-primary btn-dense" data-mdep-approve="${esc(x.id)}">${L('End membership', 'إنهاء العضوية')}</button></span></li>`;
   return [
-    panel(L('Applications', 'طلبات الانضمام'), (apps.length ? `<ul class="admin-list">${apps.map(appRow).join('')}</ul>`
+    panel(L('Applications', 'طلبات الانضمام'), (apps.length ? `<ul class="admin-list" data-paginate>${apps.map(appRow).join('')}</ul>`
       : `<p class="dim">${L('No application is waiting.', 'لا طلب بانتظار القرار.')}</p>`) +
       `<p class="t-caption dim" style="margin-top:10px">${L('The ministry’s leader approves first, then the parish priest. The priest may approve without waiting.',
         'يوافق مسؤول الخدمة أولاً ثم كاهن الرعية. ويمكن للكاهن الموافقة دون انتظار.')}</p>`),
-    inquiries.length ? panel(L('Guests who are interested', 'ضيوف مهتمّون'), `<ul class="admin-list">${inquiries.map(inquiryRow).join('')}</ul>
+    inquiries.length ? panel(L('Guests who are interested', 'ضيوف مهتمّون'), `<ul class="admin-list" data-paginate>${inquiries.map(inquiryRow).join('')}</ul>
       <p class="t-caption dim" style="margin-top:10px">${L('Sent from the public parish page. A message makes nobody a member.', 'أُرسلت من صفحة الرعية العامة. الرسالة لا تجعل أحداً عضواً.')}</p>`) : '',
-    priest ? panel(L('Requests to leave', 'طلبات المغادرة'), (departures.length ? `<ul class="admin-list">${departures.map(departureRow).join('')}</ul>`
+    priest ? panel(L('Requests to leave', 'طلبات المغادرة'), (departures.length ? `<ul class="admin-list" data-paginate>${departures.map(departureRow).join('')}</ul>`
       : `<p class="dim">${L('No request to leave.', 'لا طلب مغادرة.')}</p>`) +
       `<p class="t-caption dim" style="margin-top:10px">${icon('lock', 13)} ${L('Only the parish’s priests see these requests and their reasons. The leader sees only that the roster changed.',
         'لا يرى هذه الطلبات وأسبابها إلا كهنة الرعية. ولا يرى المسؤول إلا تغيّر اللائحة.')}</p>`) : ''

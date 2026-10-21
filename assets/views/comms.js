@@ -127,7 +127,7 @@ export function notices() {
         <button class="btn btn-primary" data-act="notice-add">${icon('plus', 17)}${L('New notice', 'إعلان جديد')}</button>`
     })}
     <div class="splitview">
-      ${panel(L('Published notices', 'الإعلانات المنشورة'), rows, { tight: true })}
+      ${panel(L('Published notices', 'الإعلانات المنشورة'), NOTICES.length ? `<div data-paginate="notices">${rows}</div>` : rows, { tight: true })}
       <div class="sidecol">
         ${panel(L('Upcoming Masses', 'القداديس المقبلة'), EVENTS.filter(m => m.kind === 'mass' && m.d >= new Date().toISOString().slice(0,10)).slice(0,8).map(m => `
           <div class="listrow" style="padding-inline:0"><span class="mono dim" style="width:94px;flex:none">${esc(m.d)} · ${esc(m.t)}</span>

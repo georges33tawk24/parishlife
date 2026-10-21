@@ -52,9 +52,9 @@ export function membershipRequests() {
     <span class="acct-acts">${r.status === 'pending' ? `<button class="btn btn-primary btn-dense" type="button" data-mreq="${esc(r.id)}">${L('Review', 'مراجعة')}</button>` : ''}</span></li>`;
   return `<div class="stack" style="margin-top:20px;gap:16px">
     <section class="panel"><div class="panel-h"><h3>${L('Waiting for review', 'بانتظار المراجعة')}</h3></div><div class="panel-b">
-      ${open.length ? `<ul class="admin-list">${open.map(row).join('')}</ul>` : `<p class="dim">${L('Nothing is waiting.', 'لا شيء بانتظارك.')}</p>`}</div></section>
+      ${open.length ? `<ul class="admin-list" data-paginate>${open.map(row).join('')}</ul>` : `<p class="dim">${L('Nothing is waiting.', 'لا شيء بانتظارك.')}</p>`}</div></section>
     ${done.length ? `<section class="panel"><div class="panel-h"><h3>${L('Decided in the last 60 days', 'ما بُتّ فيه خلال آخر ٦٠ يوماً')}</h3></div><div class="panel-b">
-      <ul class="admin-list">${done.map(row).join('')}</ul></div></section>` : ''}</div>`;
+      <ul class="admin-list" data-paginate>${done.map(row).join('')}</ul></div></section>` : ''}</div>`;
 }
 
 async function decide(body, done) {

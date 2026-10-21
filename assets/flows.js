@@ -915,6 +915,7 @@ export function handover() {
 
 /* ═════════════ calendar & services ═════════════ */
 export function calShift(n) { S.ui.calOffset = n === 0 ? 0 : S.ui.calOffset + n; refresh(); }
+export function calWeek(n) { S.ui.calWeek = n === 0 ? 0 : (S.ui.calWeek || 0) + n; refresh(); }
 export function calDay(n) {
   const [y, m, d] = (S.ui.calDay || today).split('-').map(Number);
   const x = n ? new Date(y, m - 1, d + n) : new Date(D.TODAY);

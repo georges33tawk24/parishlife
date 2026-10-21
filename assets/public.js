@@ -87,6 +87,34 @@ function updateChrome() {
   document.querySelector('#year').textContent = new Date().getFullYear();
 }
 
+/* Full collections are shown ten at a time. Filters and search run on the whole collection first, then the
+   result is paged; a new search starts again at its first page. */
+const PER_PAGE = 10;
+function paginate(root = document) {
+  root.querySelectorAll('[data-paginate]').forEach(list => {
+    if (list.dataset.paged) return;
+    list.dataset.paged = '1';
+    const items = [...list.children];
+    if (items.length <= PER_PAGE) return;
+    let page = 0;
+    const pages = Math.ceil(items.length / PER_PAGE);
+    const nav = document.createElement('nav');
+    nav.className = 'public-pager';
+    nav.setAttribute('aria-label', L('Pages', 'الصفحات'));
+    list.after(nav);
+    const show = (focus = false) => {
+      items.forEach((el, i) => { el.hidden = i < page * PER_PAGE || i >= (page + 1) * PER_PAGE; });
+      const from = page * PER_PAGE + 1, to = Math.min(items.length, (page + 1) * PER_PAGE);
+      nav.innerHTML = '<button class="button button-outline" type="button" data-page="-1"' + (page === 0 ? ' disabled' : '') + '>' + L('Previous', 'السابق') + '</button>' +
+        '<span>' + L(from + '–' + to + ' of ' + items.length + ' · page ' + (page + 1) + ' of ' + pages, number(from) + '–' + number(to) + ' من ' + number(items.length) + ' · الصفحة ' + number(page + 1) + ' من ' + number(pages)) + '</span>' +
+        '<button class="button button-outline" type="button" data-page="1"' + (page >= pages - 1 ? ' disabled' : '') + '>' + L('Next', 'التالي') + '</button>';
+      nav.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => { page += +b.dataset.page; show(true); }));
+      if (focus) { list.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); nav.querySelector('[data-page="1"]:not([disabled]), [data-page="-1"]')?.focus({ preventScroll: true }); }
+    };
+    show();
+  });
+}
+
 /* ---- directory: list and map share one set of filters ------------------------------------------------
    A visitor may use their own location to sort by distance; it stays in this page (never sent anywhere,
    never put in the address) and nothing is ever placed on the map or measured without published coordinates. */
@@ -165,12 +193,13 @@ function renderCards(updateURL = false) {
     '</p><button class="button button-outline" type="button" id="show-all">' + L('Show all parishes', 'اعرض كل الرعايا') + icon('arrow') + '</button>' +
     (filters.radius !== '50' ? '<button class="text-button" type="button" id="widen">' + L('Widen the search', 'وسّع البحث') + '</button>' : '') + '</div>' : '';
   if (filters.layout === 'map') host.innerHTML = mapView(shown) + more;
-  else host.innerHTML = (shown.length ? '<div class="parish-grid">' + shown.map(parishCard).join('') + '</div>'
+  else host.innerHTML = (shown.length ? '<div class="parish-grid" data-paginate>' + shown.map(parishCard).join('') + '</div>'
     : empty(L('No parishes found', 'لم نعثر على رعايا'), L('Try a different name, or reset the filters.', 'جرّب اسمًا مختلفًا أو أعد ضبط التصفية.'), '<button class="text-link" id="clear-filters" type="button">' + L('Reset filters', 'إعادة ضبط التصفية') + icon('arrow') + '</button>')) + more;
   host.querySelector('#clear-filters')?.addEventListener('click', resetFilters);
   host.querySelector('#show-all')?.addEventListener('click', () => { filters.radius = ''; syncFilterControls(); renderCards(true); });
   host.querySelector('#widen')?.addEventListener('click', () => { filters.radius = RADII[Math.min(RADII.length - 1, RADII.indexOf(filters.radius) + 1)]; syncFilterControls(); renderCards(true); });
   if (filters.layout === 'map' && mapsConfig?.maps && !mapsFailed) liveMap(shown);
+  paginate(host);
   if (updateURL) {
     const url = new URL(location.href);
     for (const key of ['q', 'town', 'diocese', 'rite', 'sort', 'layout']) filters[key] && !(key === 'sort' && filters[key] === 'name') && !(key === 'layout' && filters[key] === 'list') ? url.searchParams.set(key, filters[key]) : url.searchParams.delete(key);
@@ -384,7 +413,7 @@ function communitySection() {
 
 function eventsSection(parishes, embedded = false) {
   const events = eventsFor(parishes), single = parishes.length === 1, visible = single ? events.slice(0, 5) : showAllEvents ? events : events.slice(0, 6);
-  const list = '<div class="event-list">' + (visible.length ? visible.map(e => {
+  const list = '<div class="event-list"' + (showAllEvents && !single ? ' data-paginate' : '') + '>' + (visible.length ? visible.map(e => {
       const [day, month] = dateParts(e.d);
       return '<article class="event-row"><time class="event-date" datetime="' + safe(e.d) + '"><b>' + safe(day) + '</b><span>' + safe(month) + '</span></time><div class="event-info"><span class="eyebrow">' + safe(eventKind(e.kind)) + '</span><h3>' + safe(pair(e, 'title', 'titleAr')) + '</h3><p>' + safe(parishName(e.parish)) + ' · ' + safe(townName(e.parish)) + '</p></div><span class="event-time">' + (e.t ? icon('clock') + safe(e.t) : '') + '</span>' + (single ? '' : '<a class="round-link" href="' + pageURL(e.parish.id, 'calendar') + '" aria-label="' + safe(L('Calendar of ', 'رزنامة ') + parishName(e.parish)) + '">' + icon('arrow') + '</a>') + '</article>';
     }).join('') : empty(L('A little quiet for now', 'لحظات هادئة حاليًا'), L('Upcoming public events will appear here when a parish publishes them.', 'ستظهر الأحداث العامة القادمة هنا عندما تنشرها الرعية.'))) + '</div>';
@@ -426,7 +455,7 @@ function clergySection(d) {
 
 function updatesSection(p, d, limit) {
   const posts = d.posts || [], shown = limit ? posts.slice(0, limit) : posts;
-  return '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid">' +
+  return '<section id="updates" class="updates-section"><div class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('FROM YOUR PARISH', 'من رعيتك') + '</span><h2>' + L('The latest, together.', 'جديد جماعتنا.') + '</h2></div></div><div class="updates-grid"' + (limit ? '' : ' data-paginate') + '>' +
     (shown.length ? shown.map(post => '<article class="update-card">' + (publishedDate(post.at) ? '<time datetime="' + safe(post.at) + '">' + safe(publishedDate(post.at)) + '</time>' : '') + '<h3>' + safe(post.title) + '</h3><div class="published-body">' + (/<[a-z][\s\S]*>/i.test(post.body || '') ? safeRichText(post.body) : htmlText(post.body)) + '</div></article>').join('') :
       empty(L('Updates will find a home here', 'هنا تجد مستجدّات الرعية'), L('Published parish announcements will appear in this space.', 'ستظهر إعلانات الرعية المنشورة في هذه المساحة.'))) + '</div>' +
     (limit && posts.length > limit ? '<a class="text-link more-events" href="' + pageURL(p.id, 'announcements') + '">' + L('View all ' + posts.length + ' announcements', 'اعرض كل الإعلانات (' + number(posts.length) + ')') + icon('arrow') + '</a>' : '') + '</div></section>';
@@ -435,7 +464,7 @@ function updatesSection(p, d, limit) {
 /* Photos the parish published; until it has, illustrative pictures that say so. */
 function gallerySection(p, d, limit) {
   const photos = d.gallery || [], shown = limit ? photos.slice(0, limit) : photos;
-  const body = shown.length ? '<div class="gallery-grid">' + shown.map(g => '<figure><img src="' + safe(g.url) + '" alt="' + safe(g.name.replace(/\.[a-z]+$/i, '')) + '" loading="lazy"></figure>').join('') + '</div>'
+  const body = shown.length ? '<div class="gallery-grid"' + (limit ? '' : ' data-paginate') + '>' + shown.map(g => '<figure><img src="' + safe(g.url) + '" alt="' + safe(g.name.replace(/\.[a-z]+$/i, '')) + '" loading="lazy"></figure>').join('') + '</div>'
     : '<div class="gallery-grid">' + ['church', 'community', 'candle'].map(a => '<figure class="illustrative"><img src="assets/images/illustrations/' + a + '.svg" alt="" loading="lazy"><figcaption>' + L('Illustrative image', 'صورة توضيحية') + '</figcaption></figure>').join('') + '</div>' +
       '<p class="gallery-note">' + L('This parish has not published photos yet; these are illustrations, not pictures of the parish.', 'لم تنشر هذه الرعية صوراً بعد؛ هذه رسوم توضيحية وليست صوراً للرعية.') + '</p>';
   return '<section id="gallery" class="section site-wrap"><div class="section-head"><div><span class="eyebrow">' + L('PARISH LIFE IN PICTURES', 'حياة الرعية بالصور') + '</span><h2>' + L('Gallery', 'الصور') + '</h2></div></div>' + body +
@@ -455,7 +484,7 @@ function contactSection(p, d, name, phone) {
 }
 
 /* "View more": the parish's full calendar, all its announcements, or its whole gallery, each on its own page. */
-let calendarOffset = 0;
+let calendarOffset = 0, calendarQuery = '';
 function morePage(p, d, page) {
   const name = pair(d.parish, 'name', 'nameAr') || parishName(p);
   const titles = { calendar: L('Calendar', 'الرزنامة'), announcements: L('Announcements', 'الإعلانات'), gallery: L('Gallery', 'الصور') };
@@ -468,22 +497,26 @@ function calendarPage(p, d) {
   const now = new Date(), start = new Date(now.getFullYear(), now.getMonth() + calendarOffset, 1);
   const key = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  const events = (d.events || []).filter(e => e.d >= key(start) && e.d < key(end)).sort((a, b) => (a.d + (a.t || '')).localeCompare(b.d + (b.t || '')));
+  const q = normalize(calendarQuery.trim());
+  const events = (d.events || []).filter(e => e.d >= key(start) && e.d < key(end) && (!q || normalize([e.title, e.titleAr].join(' ')).includes(q)))
+    .sort((a, b) => (a.d + (a.t || '')).localeCompare(b.d + (b.t || '')));
   const lead = start.getDay(), days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate(), cells = Math.ceil((lead + days) / 7) * 7;
   const fmt = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en', { month: 'long', year: 'numeric' });
   const weekday = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en', { weekday: 'short' });
   return '<section class="section site-wrap public-calendar"><div class="calendar-toolbar"><button class="button button-outline" type="button" data-cal="-1" aria-label="' + L('Previous month', 'الشهر السابق') + '">‹</button>' +
     '<button class="text-button" type="button" data-cal="0">' + L('Today', 'اليوم') + '</button><h2 aria-live="polite">' + safe(fmt.format(start)) + '</h2>' +
-    '<button class="button button-outline" type="button" data-cal="1" aria-label="' + L('Next month', 'الشهر التالي') + '">›</button></div>' +
+    '<button class="button button-outline" type="button" data-cal="1" aria-label="' + L('Next month', 'الشهر التالي') + '">›</button>' +
+    '<form class="calendar-search" role="search" id="calendar-search"><label class="sr-only" for="calendar-q">' + L('Search events by name', 'ابحث في الأحداث بالاسم') + '</label><input id="calendar-q" type="search" value="' + safe(calendarQuery) + '" placeholder="' + L('Search events by name', 'ابحث في الأحداث بالاسم') + '">' +
+    '<label class="sr-only" for="calendar-date">' + L('Go to a date', 'انتقل إلى تاريخ') + '</label><input id="calendar-date" type="date"><button class="button" type="submit">' + L('Search', 'بحث') + '</button></form></div>' +
     '<div class="month-grid" role="grid" aria-label="' + safe(fmt.format(start)) + '"><div class="month-head" role="row">' + Array.from({ length: 7 }, (_, i) => '<span role="columnheader">' + safe(weekday.format(new Date(2026, 7, 2 + i))) + '</span>').join('') + '</div><div class="month-cells">' +
     Array.from({ length: cells }, (_, i) => {
       const day = new Date(start.getFullYear(), start.getMonth(), i - lead + 1), inMonth = day.getMonth() === start.getMonth(), dayEvents = events.filter(e => e.d === key(day));
       return '<div class="month-cell' + (inMonth ? '' : ' out') + (key(day) === localToday() ? ' today' : '') + '" role="gridcell"><time datetime="' + key(day) + '">' + day.getDate() + '</time>' +
         dayEvents.map(e => '<span class="month-event">' + safe((e.t ? e.t + ' ' : '') + pair(e, 'title', 'titleAr')) + '</span>').join('') + '</div>';
     }).join('') + '</div></div>' +
-    '<h3 class="request-group">' + L('This month', 'هذا الشهر') + '</h3><div class="event-list">' + (events.length ? events.map(e => { const [dd, mm] = dateParts(e.d);
+    '<h3 class="request-group">' + L('This month', 'هذا الشهر') + '</h3><div class="event-list" data-paginate>' + (events.length ? events.map(e => { const [dd, mm] = dateParts(e.d);
       return '<article class="event-row"><time class="event-date" datetime="' + safe(e.d) + '"><b>' + safe(dd) + '</b><span>' + safe(mm) + '</span></time><div class="event-info"><span class="eyebrow">' + safe(eventKind(e.kind)) + '</span><h3>' + safe(pair(e, 'title', 'titleAr')) + '</h3></div><span class="event-time">' + (e.t ? icon('clock') + safe(e.t) : '') + '</span></article>'; }).join('')
-      : empty(L('Nothing published this month', 'لا شيء منشور هذا الشهر'), L('Try another month, or contact the parish office.', 'جرّب شهراً آخر أو تواصل مع مكتب الرعية.'))) + '</div></section>';
+      : empty(q ? L('No event matches this search this month', 'لا حدث يطابق هذا البحث هذا الشهر') : L('Nothing published this month', 'لا شيء منشور هذا الشهر'), L('Try another month, or contact the parish office.', 'جرّب شهراً آخر أو تواصل مع مكتب الرعية.'))) + '</div></section>';
 }
 
 /* Public ministries: what each does, who leads it (by name only — never a leader's personal number or
@@ -707,6 +740,14 @@ function render() {
   bindEventToggle(selected && p ? [p] : directory);
   if (selected && p && d) { bindMinistryForm(p); bindGuestForm(p); }
   document.querySelectorAll('[data-cal]').forEach(b => b.addEventListener('click', () => { calendarOffset = +b.dataset.cal ? calendarOffset + +b.dataset.cal : 0; render(); document.querySelector('[data-cal="' + b.dataset.cal + '"]')?.focus(); }));
+  document.querySelector('#calendar-search')?.addEventListener('submit', event => {
+    event.preventDefault();
+    calendarQuery = document.querySelector('#calendar-q').value;
+    const day = document.querySelector('#calendar-date').value;
+    if (day) { const now = new Date(); calendarOffset = (+day.slice(0, 4) - now.getFullYear()) * 12 + (+day.slice(5, 7) - 1 - now.getMonth()); }
+    render(); document.querySelector('#calendar-q')?.focus();
+  });
+  paginate();
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     observer = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
