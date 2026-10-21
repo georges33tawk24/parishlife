@@ -67,6 +67,7 @@ def oversight(c, u, pid=None): return _call('oversight', _user(u), pid, connecti
 def file_access(c, u, pid, scope, owner_id, write=False): return _call('file_access', _user(u), pid, scope, owner_id, write, connection=c)
 def member_view(c, u, pid): return _call('member_view', _user(u), pid, connection=c)
 def member_action(c, u, pid, q): return _call('member_action', _user(u), pid, q, connection=c)
+def office_connection_action(c, u, pid, q, outbox, base_url): return _call('office_connection_action', _user(u), pid, q, base_url, connection=c)
 def xlsx_preview(encoded): return _call('xlsx_preview', encoded)
 def migrate_state(d): return _call('migrate_state', d)
 def validate(d): return _call('validate', d)

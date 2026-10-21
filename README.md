@@ -104,7 +104,7 @@ Every version 2 change to the database is additive and runs once at start-up (`s
 
 ### Verification status
 
-The version 2 changes were checked statically only: Python compilation, JavaScript syntax checks, import resolution and a review of the edited source. No automated tests, browser test suites or penetration tests were run for them; testing remains with the project owner. The owner test suites (`backend/test_accounts.py`, `cloudflare/test/`) were written for version 1 and may need updating before they pass. The Google Maps loader, provider sign-in and delivery webhooks have not been exercised against the real services.
+The version 2 changes were checked statically only: Python compilation, JavaScript syntax checks, import resolution and a review of the edited source. No automated tests, browser test suites or penetration tests were run for them; testing remains with the project owner. `backend/test_accounts.py`, `backend/test_notes.py` and the sign-up part of `cloudflare/test/differential.mjs` were updated to the version 2 account rules but not run; the other owner suites were written for version 1 and were not reviewed against every version 2 rule, so some may need updating before they pass. The Google Maps loader, provider sign-in and delivery webhooks have not been exercised against the real services.
 
 ## Database migration and operating limits
 
