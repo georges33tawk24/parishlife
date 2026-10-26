@@ -22,7 +22,7 @@
   /* Status always includes a word or icon; amber is reserved for pending work. */
   --success:#365546; --success-subtle:#F2F6EF; --success-ink:#365546; --success-border:#D6E1D0;
   --warning:#795C2F; --warning-subtle:#FAF5E9; --warning-ink:#795C2F; --warning-border:#E9DDC4;
-  --danger:#233B32; --danger-subtle:#EDF0E8; --danger-ink:#172B23; --danger-border:#9BAC9F;
+  --danger:#B42318; --danger-subtle:#FFF1F0; --danger-ink:#8A1C13; --danger-border:#F2B8B3;
   --info:#607068; --info-subtle:#F7F7F2; --info-ink:#233B32; --info-border:#DCE2DB;
 
   /* Compatibility names used by older marketing templates. */

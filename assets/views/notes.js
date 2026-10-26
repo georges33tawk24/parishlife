@@ -4,6 +4,7 @@ import { S, is, bus } from '../store.js';
 import { NOTES, PEOPLE, person } from '../data.js';
 import { icon } from '../icons.js';
 import { persist } from '../persist.js';
+import { session } from '../api.js';
 import { pageHead, panel, table, pill, who, esc, empty, openDrawer, openModal, closeOverlays, toast } from '../ui.js';
 
 const L = (en, ar) => t(en, ar);
@@ -43,14 +44,14 @@ export function notes() {
       n.priority==='urgent'?pill(L('High','عالية'),'danger'):n.priority==='attention'?pill(L('Medium','متوسطة'),'warning'):pill(L('Low','منخفضة')),
       n.kind==='task'?n.due?fmtDate(n.due):'—':n.at?fmtDate(n.at):'—',
       n.kind==='task'?pill(n.done?L('Completed','مكتملة'):L('Pending','معلّقة'),n.done?'success':'warning'):'—',
-      `<span class="rowacts">${n.kind==='task'?`<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done?L('Reopen task','إعادة فتح المهمة'):L('Complete task','إكمال المهمة')}">${icon('check',17)}</button>`:''}
+      n.authorUserId!==session.user.id ? pill(L('Shared by another priest','شاركها كاهن آخر')) : `<span class="rowacts">${n.kind==='task'?`<button class="btn-icon" data-note-done="${esc(n.id)}" aria-label="${n.done?L('Reopen task','إعادة فتح المهمة'):L('Complete task','إكمال المهمة')}">${icon('check',17)}</button>`:''}
         <button class="btn-icon" data-note-pin="${esc(n.id)}" aria-label="${n.pinned?L('Unpin','إلغاء التثبيت'):L('Pin','تثبيت')}" aria-pressed="${!!n.pinned}">${icon('pin',17)}</button>
         <button class="btn btn-secondary btn-dense" data-note-edit="${esc(n.id)}">${L('Edit','تعديل')}</button></span>`]};
   };
   const columns=[{label:L('Person','الشخص')},{label:L('Content','المحتوى')},{label:L('Priority','الأولوية')},{label:L('Due or recorded','الاستحقاق أو التسجيل')},{label:L('Status','الحالة')},{label:''}];
   return `${pageHead({
-    crumbs: [{ label: L('Records', 'السجلات') }, { label: L('Pastoral notes', 'ملاحظات رعوية') }],
-    title: L('Pastoral notes & tasks', 'الملاحظات والمهام الرعوية'),
+    crumbs: [{ label: L('Records', 'السجلات') }, { label: L('Notes & Tasks', 'الملاحظات والمهام') }],
+    title: L('Notes & Tasks', 'الملاحظات والمهام'),
     sub: L('Tasks are work to complete, with an optional clergy assignee and due date. Notes are reference information and observations, without a deadline.',
       'المهام أعمال تُنجز مع كاهن مكلّف وموعد اختياريين. الملاحظات معلومات مرجعية ومشاهدات دون موعد إنجاز.'),
     actions: `<button class="btn btn-secondary" data-note-new="note">${icon('notes', 17)}${L('New note', 'ملاحظة جديدة')}</button>
@@ -62,23 +63,24 @@ export function notes() {
     <div class="stat"><span class="k">${L('Pinned', 'مثبّتة')}</span><span class="v">${counts.pinned}</span></div>
   </div>
   <div class="toolbar pastoral-tools" style="margin-bottom:14px">
+    <input class="input" id="note-search" type="search" placeholder="${L('Search notes and tasks', 'ابحث في الملاحظات والمهام')}" aria-label="${L('Search notes and tasks', 'البحث في الملاحظات والمهام')}" value="${esc(S.ui.noteQuery || '')}">
     <div class="seg" role="group" aria-label="${L('Filter notes and tasks', 'تصفية الملاحظات والمهام')}">
       ${[['all','All','الكل'],['pinned','Pinned','مثبّتة'],['pending','Pending','معلّقة'],['completed','Completed','مكتملة'],['high','High priority','عالية الأولوية']]
         .map(([key,en,ar]) => `<button data-note-filter="${key}" aria-pressed="${filter === key}">${L(en,ar)} <span class="tnum">${counts[key]}</span></button>`).join('')}
     </div>
-    <input class="input" id="note-search" type="search" placeholder="${L('Search notes, tasks, people', 'ابحث في الملاحظات والمهام والأشخاص')}" aria-label="${L('Search notes and tasks', 'البحث في الملاحظات والمهام')}" value="${esc(S.ui.noteQuery || '')}">
     <select class="select" id="note-sort" aria-label="${L('Sort notes and tasks', 'ترتيب الملاحظات والمهام')}">
       ${[['recent','Newest','الأحدث'],['priority','Priority','الأولوية'],['due','Due date','تاريخ الاستحقاق']]
         .map(([key,en,ar]) => `<option value="${key}" ${sort === key ? 'selected' : ''}>${L(en,ar)}</option>`).join('')}
     </select>
   </div>
-  ${panel(L('Notes','الملاحظات'),table({cols:columns,rows:rows.filter(n=>n.kind!=='task').map(row),empty:empty('notes',L('No notes in this view','لا ملاحظات في هذا العرض'),L('Create a note or change the filter.','أنشئ ملاحظة أو غيّر المرشّح.'))}),{tight:true})}
+  <div class="pastoral-columns">${panel(L('Notes','الملاحظات'),table({cols:columns,rows:rows.filter(n=>n.kind!=='task').map(row),empty:empty('notes',L('No notes in this view','لا ملاحظات في هذا العرض'),L('Create a note or change the filter.','أنشئ ملاحظة أو غيّر المرشّح.'))}),{tight:true})}
   ${panel(L('Tasks','المهام'),table({cols:columns,rows:rows.filter(n=>n.kind==='task').map(row),empty:empty('notes',L('No tasks in this view','لا مهام في هذا العرض'),L('Create a task or change the filter.','أنشئ مهمة أو غيّر المرشّح.'))}),{tight:true})}
-  <p class="help" id="note-no-search" hidden>${L('No matching items.', 'لا عناصر مطابقة.')}</p>`;
+  </div><p class="help" id="note-no-search" hidden>${L('No matching items.', 'لا عناصر مطابقة.')}</p>`;
 }
 
 export function openPastoralForm(item = null, type = 'note', initialPerson = null) {
   if (!is('priest')) return;
+  if (item && item.authorUserId !== session.user.id) return;
   const editing = !!item, itemKind = item?.kind || type;
   openDrawer({
     title: editing ? (itemKind==='task'?L('Edit task','تعديل مهمة'):L('Edit note','تعديل ملاحظة')) : itemKind === 'task' ? L('New follow-up task', 'مهمة متابعة جديدة') : L('New pastoral note', 'ملاحظة رعوية جديدة'),
@@ -95,6 +97,8 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         <select class="select" id="pastoral-priority">${priorities.map(([key,en,ar]) => `<option value="${key}" ${(item?.priority || 'ordinary') === key ? 'selected' : ''}>${L(en,ar)}</option>`).join('')}</select></div>
         ${itemKind === 'task' ? `<div class="formrow"><label class="label" for="pastoral-due">${L('Due date', 'تاريخ الاستحقاق')}</label><input class="input" id="pastoral-due" type="date" value="${esc(item?.due || '')}"></div>` : ''}</div>
       ${itemKind==='task'?`<div class="formrow"><label class="label" for="pastoral-assignee">${L('Assigned clergy (optional)','الكاهن المكلّف (اختياري)')}</label><select class="select" id="pastoral-assignee"><option value="">${L('Unassigned','دون تكليف')}</option>${PEOPLE.filter(p=>p.status==='clergy').map(p=>`<option value="${esc(p.id)}" ${item?.assignee===p.id?'selected':''}>${esc(p.lat)} · ${esc(p.ar)}</option>`).join('')}</select></div>`:''}
+      <label class="formrow"><span class="label">${L('Who can read this?','من يقرأ هذا؟')}</span><select class="select" id="pastoral-visibility"><option value="personal">${L('Only me','أنا فقط')}</option><option value="parish-priests" ${item?.visibility==='parish-priests'?'selected':''}>${L('Priests assigned to this parish','الكهنة المعيّنون في هذه الرعية')}</option></select></label>
+      <p class="help">${L('Personal notes remain private to their author, including after a priest changes parish.','تبقى الملاحظات الشخصية خاصة بكاتبها، حتى بعد انتقال الكاهن.')}</p>
       <label class="check"><input type="checkbox" id="pastoral-pinned" ${item?.pinned ? 'checked' : ''}><span>${L('Keep this pinned', 'تثبيت هذا العنصر')}</span></label>`,
     foot: `${editing ? `<button class="btn btn-danger-quiet" id="pastoral-delete">${icon('trash', 16)}${L('Delete', 'حذف')}</button>` : ''}
       <button class="btn btn-secondary" data-close style="margin-inline-start:auto">${L('Cancel', 'إلغاء')}</button>
@@ -108,7 +112,7 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         const values = { kind: itemKind, p: p || null, body, bodyAr: el.querySelector('#pastoral-body-ar').value.trim() || body,
           priority: el.querySelector('#pastoral-priority').value, due: el.querySelector('#pastoral-due')?.value || '',
           assignee: itemKind==='task' ? el.querySelector('#pastoral-assignee').value || null : null,
-          pinned: el.querySelector('#pastoral-pinned').checked };
+          pinned: el.querySelector('#pastoral-pinned').checked, visibility: el.querySelector('#pastoral-visibility').value };
         if (editing) Object.assign(item, values);
         else NOTES.unshift({ id: 'nt' + crypto.randomUUID(), at: today(), done: false, ...values });
         if (!await persist()) { el.querySelector('#pastoral-save').disabled=false; return; }

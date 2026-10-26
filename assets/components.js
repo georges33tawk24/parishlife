@@ -181,14 +181,14 @@ export const dateRange = () => `<div class="formrow"><label class="label">${t('D
   </div></div>`;
 
 /* ---------------- uploads ---------------- */
-export const dropzone = (id = 'dz', { scope = '', ownerId = '' } = {}) => `
-  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}"></div>
-  <div class="drop" data-drop="${esc(id)}">${icon('export', 26)}
+export const dropzone = (id = 'dz', { scope = '', ownerId = '', readOnly = false } = {}) => `
+  <div class="files" data-files="${esc(id)}" data-upload-scope="${esc(scope)}" data-upload-owner="${esc(ownerId)}" data-files-readonly="${readOnly}"></div>
+  ${readOnly?'':`<div class="drop" data-drop="${esc(id)}">${icon('export', 26)}
     <b style="margin-top:8px">${t('Drop the file here, or', 'أفلت الملف هنا، أو')}
       <label class="linkbtn">${t('choose a file', 'اختر ملفاً')}<input type="file" multiple hidden data-pick="${esc(id)}"
         accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf"></label></b>
     <span class="hint">${scope ? t('JPG, PNG or PDF up to 10 MB. Files are saved to this parish.', 'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.')
-      : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}</span></div>`;
+      : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}</span></div>`}`;
 
 export const avatarUpload = (key = 'specimen') => {
   const ph = PHOTOS[key], label = key === 'parish' ? 'P' : key === 'new' || key === 'specimen' ? 'GH' : initials(person(key));
@@ -477,7 +477,7 @@ export function wire(host) {
       if(!list.isConnected)return;
       list.innerHTML=data.files.map(f=>`<div class="filerow">${icon('doc',18,'dimmer')}<span class="grow"><b>${esc(f.name)}</b><small>${(f.size/1048576).toFixed(1)} MB · ${esc(f.created_at.slice(0,10))}</small></span>
         <a class="btn btn-secondary btn-dense" href="/api/parishes/${encodeURIComponent(session.parishId)}/files/${encodeURIComponent(f.id)}" target="_blank" rel="noopener">${t('Open','فتح')}</a>
-        <button class="btn-icon" data-delete-file="${esc(f.id)}" aria-label="${t('Delete file','حذف الملف')}">${icon('trash',16)}</button></div>`).join('');
+        ${list.dataset.filesReadonly==='true'?'':`<button class="btn-icon" data-delete-file="${esc(f.id)}" aria-label="${t('Delete file','حذف الملف')}">${icon('trash',16)}</button>`}</div>`).join('')||`<p class="help">${t('No attachments yet.','لا مرفقات بعد.')}</p>`;
       list.querySelectorAll('[data-delete-file]').forEach(button=>button.addEventListener('click',async()=>{
         try{await parishAPI(`files/${encodeURIComponent(button.dataset.deleteFile)}`,'DELETE',{});await loadFiles(id);}
         catch(error){toast(t('Could not delete file','تعذّر حذف الملف'),error.message,'danger');}

@@ -24,13 +24,14 @@ export function applyData(data) {
   if (typeof D.RATE.setOn === 'string') D.RATE.setOn = new Date(D.RATE.setOn);
 }
 export async function hydrate() {
+  if (!session.parishId ||
+      session.user?.role === 'member' && !session.user.person_id) {
+    applyData({PARISH:{name:'ParishLife',nameAr:'حياة الرعية',town:'My account',townAr:'حسابي',rite:'',riteAr:''},PARISHES:session.parishes,ROTA:{teams:[]},SERVICE:{order:[]},CHECKIN:{rows:[],sessions:{}},BATCH:{lines:[],counters:[]}});
+    baseline=snapshot();saveFailed=false;return true;
+  }
   if (session.user?.role === 'member') {
     const data = await loadMember();
     applyData({ PARISH: data.parish, PEOPLE: [data.person] });
-    baseline = snapshot(); saveFailed = false; return true;
-  }
-  if (session.user?.role === 'bishop') {
-    applyData({ PARISHES: session.parishes, PARISH: { name: 'Archdiocese oversight', nameAr: 'إشراف الأبرشية', town: 'Read-only', townAr: 'للقراءة فقط', rite: '', riteAr: '' } });
     baseline = snapshot(); saveFailed = false; return true;
   }
   const data = await parishAPI('state');
@@ -39,7 +40,7 @@ export async function hydrate() {
   return true;
 }
 export function persist() {
-  if (session.user?.role === 'bishop' || session.user?.role === 'member') return Promise.resolve(true);
+  if (['member','finance_view'].includes(session.user?.role) || !session.parishId) return Promise.resolve(true);
   if (!session.user || !session.parishId) return Promise.resolve(false);
   again = true;
   if (running) return running;

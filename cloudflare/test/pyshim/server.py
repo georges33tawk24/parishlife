@@ -6,8 +6,10 @@ import http.server
 import importlib.util
 import itertools
 import json
+import os
 import sqlite3
 import subprocess
+import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -21,20 +23,33 @@ for _name in dir(_real):
 
 DB = _real.DB
 ROOT = _real.ROOT
-_bridge = subprocess.Popen(['node', '--no-warnings', str(HERE.parent / 'bridge.mjs')], stdin=subprocess.PIPE,
-                           stdout=subprocess.PIPE, text=True, bufsize=1)
+_bridge = subprocess.Popen([os.environ.get('PARISHLIFE_TEST_NODE', 'node'), '--no-warnings', str(HERE.parent / 'bridge.mjs')], stdin=subprocess.PIPE,
+                           stdout=subprocess.PIPE, text=True, encoding='utf-8', bufsize=1)
 atexit.register(_bridge.terminate)
 _ids = itertools.count()
+_bridge_lock = threading.RLock()
 
 
 def _call(fn, *args, connection=None):
+    # HTTP handlers run on different threads; one request/response pair owns
+    # the bridge at a time. Node emits UTF-8 even on a Windows test host.
+    with _bridge_lock:
+        return _locked_call(fn,*args,connection=connection)
+
+
+def _locked_call(fn, *args, connection=None):
     if connection is not None and connection.in_transaction:
         connection.commit()
     today = TODAY() if TODAY is not _real.TODAY else None
     request = dict(id=next(_ids), fn=fn, db=str(DB), root=str(ROOT), today=today, args=list(args))
     _bridge.stdin.write(json.dumps(request) + '\n')
     _bridge.stdin.flush()
-    reply = json.loads(_bridge.stdout.readline())
+    line = _bridge.stdout.readline()
+    if not line:
+        raise RuntimeError('The Worker test bridge stopped before returning a response.')
+    reply = json.loads(line)
+    if reply.get('id') != request['id']:
+        raise RuntimeError('The Worker test bridge returned an out-of-order response.')
     if 'problem' in reply:
         raise Problem(*reply['problem'])
     if 'pyerror' in reply:

@@ -312,14 +312,21 @@ export const ENT = {
     fields: () => [{k:'eventId',label:L('Event','الحدث'),type:'select',req:true,full:true,
         options:()=>[['', 'Select an event', 'اختر حدثاً'],...eligibleEvents().map(e=>[e.id,`${e.title} · ${e.d} ${e.t}`,`${e.titleAr} · ${e.d} ${e.t}`])]},
       { k: 'cap', label: L('Places', 'المقاعد'), type: 'number', min: 1, req: true },
-      { k: 'fee', label: L('Fee (USD)', 'الرسم (دولار)'), type: 'number', min: 0 },
+      { k: 'fee', label: L('Fee', 'الرسم'), type: 'number', min: 0 },
+      { k: 'currency', label:L('Currency','العملة'),type:'select',options:()=>[['USD','USD','دولار'],['LBP','LBP','ليرة']],get:x=>x.currency||'USD' },
+      { k: 'parentalConsent',label:L('Require parental consent for under-18s','موافقة الأهل لمن دون ١٨'),type:'select',options:yesNo,get:bool.get('parentalConsent'),set:bool.set('parentalConsent') },
+      { k: 'ownTransport',label:L('Offer own transport','إتاحة النقل الخاص'),type:'select',options:yesNo,get:x=>(x.transportOptions||[]).some(o=>o.id==='own')?'yes':'no',set:(x,v)=>x.ownTransport=v==='yes' },
+      { k: 'busTransport',label:L('Offer parish bus','توفير باص الرعية'),type:'select',options:yesNo,get:x=>(x.transportOptions||[]).some(o=>o.id==='bus')?'yes':'no',set:(x,v)=>x.busTransport=v==='yes' },
+      { k: 'busFee',label:L('Bus fee (event currency)','رسم الباص (عملة الحدث)'),type:'number',min:0,get:x=>(x.transportOptions||[]).find(o=>o.id==='bus')?.fee||0 },
       { k: 'deadline', label: L('Closes', 'يقفل'), type: 'date', req: true },
       { k: 'open', label: L('Open for registration', 'مفتوح للتسجيل'), type: 'select', options: yesNo, get: bool.get('open'), set: bool.set('open') }],
     blank: () => ({ id: uid('rg'), eventId:'',event: '', eventAr: '', open: true, cap: 40, taken: 0, fee: 0, deadline: '', waiting: 0,fields:[],discounts:[],installments:[] }),
     check: (v, x) => !eventById(v.eventId)||!eligibleEvents().some(e=>e.id===v.eventId)
       ? ['eventId',L('Choose an eligible event','اختر حدثاً صالحاً')]
       : +v.cap < (x.taken || 0) ? ['cap', L(`${x.taken} people are already registered`, `${x.taken} مسجّلون أصلاً`)] : null,
-    prepare:x=>{const event=eventById(x.eventId);x.event=event.title;x.eventAr=event.titleAr;},
+    prepare:x=>{const event=eventById(x.eventId);x.event=event.title;x.eventAr=event.titleAr;
+      x.transportOptions=[...(x.transportOptions||[]).filter(o=>!['own','bus'].includes(o.id)),...(x.ownTransport?[{id:'own',name:'Own transport',nameAr:'نقل خاص',fee:0}]:[]),...(x.busTransport?[{id:'bus',name:'Parish bus',nameAr:'باص الرعية',fee:Number(x.busFee)||0}]:[])];
+      delete x.ownTransport;delete x.busTransport;delete x.busFee;},
     canDelete: r => r.taken > 0 ? L('People have registered. Close it instead, so their records and refunds stay traceable.',
       'هناك مسجّلون. أقفله بدل حذفه كي تبقى سجلاتهم والمبالغ المستردّة قابلة للتتبّع.') : true
   },

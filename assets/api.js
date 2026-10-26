@@ -25,7 +25,14 @@ export async function api(path, method = 'GET', body) {
 export async function loadSession() {
   const data = await api('session'); Object.assign(session, data);
   if (!session.parishes.some(p => p.id === session.parishId)) session.parishId = session.parishes[0]?.id || null;
+  session.accountUser={...data.user,role:data.platformRole||data.user.role};
+  selectParish(session.parishId);
   return session;
+}
+export function selectParish(id) {
+  session.parishId=id;
+  const base=session.accountUser||session.user,p=session.parishes.find(p=>p.id===id);
+  if(base)session.user={...base,platformRole:base.role,role:p?.effectiveRole||base.role,canViewFinance:!!p?.canViewFinance,roles:p?.roles||[],person_id:p?p.personId:base.person_id};
 }
 export const parishAPI = (path, method, body) => {
   if (!session.parishId) throw new Error('No parish is assigned to this account.');

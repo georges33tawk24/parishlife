@@ -1,0 +1,20 @@
+import {api,session} from '../api.js';
+import {t} from '../i18n.js';
+import {esc,panel,openDrawer,closeOverlays} from '../ui.js';
+import {paginateCollections} from '../collection-ui.js';
+
+const status=s=>({pending:t('Office review pending','بانتظار مراجعة المكتب'),approved:t('Account linked','تم ربط الحساب'),declined:t('Link declined','رُفض الربط')})[s]||s;
+export async function mountGuestLinks(host){
+  const data=await api('account/guest-requests');if(!host.isConnected)return;
+  host.innerHTML=panel(t('Requests made before signing in','طلبات قُدّمت قبل تسجيل الدخول'),`<p class="help">${t('Paste the private tracking link for a request you made as a guest. The office verifies your identity before linking it. This does not enrol you in the parish.','الصق رابط المتابعة الخاص بطلب قدّمته كزائر. يتحقق المكتب من هويتك قبل ربطه بحسابك. لا يمنحك ذلك عضوية في الرعية.')}</p><form data-link-request><label class="formrow"><span class="label">${t('Private tracking link','رابط المتابعة الخاص')}</span><input class="input" name="tracking" required autocomplete="off"></label><p role="alert" class="help-error"></p><button class="btn btn-secondary">${t('Request account link','طلب الربط بالحساب')}</button></form><div class="account-parishes" data-paginate>${data.requests.map(r=>`<article><div><h3>${esc(r.parishName)}</h3><p>${status(r.status)}</p>${r.details?`<p>${esc(r.details.description)}</p><p>${esc(r.requestStatus.replaceAll('-',' '))}</p><p>${esc(r.response)}</p>${r.files.map(f=>`<p><a href="/api/account/guest-files/${encodeURIComponent(r.requestId)}/${encodeURIComponent(f.id)}" download>${t('Download','تنزيل')}: ${esc(f.name)}</a></p>`).join('')}`:''}</div></article>`).join('')}</div>`);
+  const form=host.querySelector('form');form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('button');b.disabled=true;try{const value=form.elements.tracking.value.trim();let token=value;try{token=new URLSearchParams(new URL(value).hash.slice(1)).get('track')||value;}catch{}await api('account/guest-requests','POST',{token});await mountGuestLinks(host);}catch(err){form.querySelector('[role=alert]').textContent=err.message;b.disabled=false;}};paginateCollections(host);
+}
+export function reviewGuestLinks(request){
+  openDrawer({title:t('Requested account links','طلبات ربط الحسابات'),body:'<div data-links></div><p role="alert" class="help-error"></p>',async onMount(el){
+    try{
+      const data=await api('workspace/guest-links?parish='+encodeURIComponent(session.parishId)+'&id='+encodeURIComponent(request.id));if(!el.isConnected)return;
+      el.querySelector('[data-links]').innerHTML=`<p>${t('Compare the account holder’s identity with the original applicant before approving.','قارن هوية صاحب الحساب بمقدّم الطلب الأصلي قبل الموافقة.')}</p><div class="account-parishes" data-paginate>${data.links.map(l=>`<article><div><h3>${esc(l.name)}</h3><p>${esc(l.username)} · ${status(l.status)}</p>${l.status==='pending'?`<label class="check"><input type="checkbox" data-identity="${esc(l.user_id)}">${t('I verified this is the applicant’s account.','تحققت من أن هذا حساب مقدّم الطلب.')}</label><div class="account-actions"><button class="btn btn-primary" data-user="${esc(l.user_id)}" data-decision="approved">${t('Approve link','الموافقة على الربط')}</button><button class="btn btn-secondary" data-user="${esc(l.user_id)}" data-decision="declined">${t('Decline','رفض')}</button></div>`:''}</div></article>`).join('')||`<p>${t('No account-link requests.','لا طلبات ربط حسابات.')}</p>`}</div>`;
+      el.querySelectorAll('[data-decision]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('workspace/guest-links','POST',{parish:session.parishId,id:request.id,userId:b.dataset.user,status:b.dataset.decision,verified:[...el.querySelectorAll('[data-identity]')].find(c=>c.dataset.identity===b.dataset.user)?.checked===true});closeOverlays();reviewGuestLinks(request);}catch(err){el.querySelector('[role=alert]').textContent=err.message;b.disabled=false;}});paginateCollections(el);
+    }catch(e){if(el.isConnected)el.querySelector('[role=alert]').textContent=e.message;}
+  }});
+}

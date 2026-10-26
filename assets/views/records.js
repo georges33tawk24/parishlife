@@ -1,13 +1,15 @@
 /* Module 7 — sacrament requests, preparation, register entries and certificates. */
 import { t, isAr, fmtDate, fmtDateIn, num } from '../i18n.js';
-import { is, bus, S } from '../store.js';
+import { is, bus, S, save } from '../store.js';
+import { session,api } from '../api.js';
+import { requestDocumentPanel, mountRequestDocuments } from '../request-documents.js';
 import { icon, pageHead, sectionH, panel, who, status, statusLabel, pill, esc, table, wireTables, empty,
          searchField, openDrawer, openModal, openMenu, closeOverlays, toast, stat, tabBar, avatar } from '../ui.js';
 import * as C from '../components.js';
 import * as CR from '../crud.js';
 import { download } from '../actions.js';
 import { need } from '../flows.js';
-import { workflow as serverWorkflow } from '../persist.js';
+import { workflow as serverWorkflow,hydrate } from '../persist.js';
 import { printSheet, saveBlob, svgToPng, fileName } from '../print.js';
 import { SACRAMENTS, anniversaryItems, PARISH, PREP_REQUIREMENTS, PEOPLE, person, RESERVATIONS, SERVICE_REQUESTS, PORTAL_REQUESTS, REQUEST_HISTORY, REGISTRATIONS, venue } from '../data.js';
 import { onlineItems, openOnlineRequest, onlineMark, sharedNote } from './online-requests.js';
@@ -88,9 +90,9 @@ export function sacraments(tab = '') {
       ...SACRAMENTS.filter(s => s.kind === 'certificate').map(s => ({ category:'certificate', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.reg}`, who:person(s.person), state:s.status, waitingSource:!sourceFor(s)&&!['cancelled','rejected'].includes(s.status), open:!['issued','rejected','cancelled'].includes(s.status), date:s.date, priority:s.priority || '', owner:nextStep(s)[1], next:nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.reg })),
       ...SACRAMENTS.filter(s => s.kind !== 'certificate' && (['requested','office-reviewed','awaiting-signature','rejected','cancelled'].includes(s.status) || s.requestApprovedAt)).map(s => ({ category:'sacrament', mark:onlineMark(s), title:`${kindLabel(s.kind)} · ${s.requestReference||s.reg}`, who:person(s.person), state:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? 'approved' : s.status, open:['requested','office-reviewed','awaiting-signature'].includes(s.status), date:s.requestedAt || s.date, priority:'', owner:nextStep(s)[1], next:s.requestApprovedAt && !['awaiting-signature','rejected','cancelled'].includes(s.status) ? s.status==='registered' ? L('Official record available','القيد الرسمي متاح') : L('Continue in Preparation','تابع التحضير') : nextStep(s)[0], href:`#/certificate/${s.id}`, ref:s.requestReference||s.reg })),
       ...RESERVATIONS.map(r => ({ category:'facility', mark:onlineMark(r), title:r.memberRequestId ? `${occasionText(r.title)} · ${L(venue(r.venue)?.name || '', venue(r.venue)?.ar || '')}` : L(r.title, r.titleAr), who:person(r.by), state:r.status, open:r.status === 'pending', date:r.date || r.at, priority:r.priority || '', owner:r.stage==='priest'?L('Priest','الكاهن'):L('Parish office','مكتب الرعية'), next:r.status === 'pending' ? (r.stage === 'priest' ? L('Confirm or refuse the booking','تأكيد الحجز أو رفضه') : L('Review reservation','مراجعة الحجز')) : L('Completed','مكتمل'), href:`#/reservations/${r.id}`, ref:r.ref||r.id })),
-      ...SERVICE_REQUESTS.map(r => ({ category:'service', title:`${L(r.kind, r.kindAr)} · ${fmtDate(r.date)}`, who:person(r.by), state:r.status, open:['pending','awaiting-approval'].includes(r.status), date:r.date, priority:r.priority || '', owner:L('Priest or service team','الكاهن أو فريق الخدمة'), next:r.prep === 'documents missing' ? L('Collect missing documents','استكمال المستندات الناقصة') : L('Review service request','مراجعة طلب الخدمة'), href:'#/services/requests', ref:r.ref||'' })),
-      ...PORTAL_REQUESTS.map(r => ({ category:'portal', title:L(r.what, r.whatAr), who:person(r.by), state:'pending', open:true, date:r.at, priority:r.priority || '', owner:L('Parish office','مكتب الرعية'), next:L('Accept or decline','قبول أو رفض'), href:'#/portal', ref:r.ref||'' })),
-      ...REQUEST_HISTORY.map(r => ({ category:'portal', title:L(r.title, r.titleAr), who:person(r.by), state:r.status, open:false, date:r.at, priority:'', owner:L('Parish office','مكتب الرعية'), next:L('Completed','مكتمل'), href:'#/portal', ref:r.ref||'' })),
+      ...SERVICE_REQUESTS.map(r => ({ category:'service', title:`${L(r.kind, r.kindAr)} · ${fmtDate(r.date)}`, who:person(r.by), state:r.status, open:!['celebrated','rejected'].includes(r.status), date:r.date, priority:r.priority || '', owner:L('Priest or service team','الكاهن أو فريق الخدمة'), next:r.prep === 'documents missing' ? L('Collect missing documents','استكمال المستندات الناقصة') : L('Review service request','مراجعة طلب الخدمة'), href:'#/services/requests/'+encodeURIComponent(r.id), ref:r.ref||r.id })),
+      ...PORTAL_REQUESTS.map(r => ({ category:'portal', portalId:r.id, title:L(r.what, r.whatAr), who:person(r.by), state:'pending', open:true, date:r.at, priority:r.priority || '', owner:L('Parish office','مكتب الرعية'), next:L('Accept or decline','قبول أو رفض'), href:'#/requests', ref:r.ref||'' })),
+      ...REQUEST_HISTORY.map(r => ({ category:'portal', historyId:r.id, title:L(r.title, r.titleAr), who:person(r.by), state:r.status, open:false, date:r.at, priority:'', owner:L('Parish office','مكتب الرعية'), next:L('Completed','مكتمل'), href:'#/requests', ref:r.ref||'' })),
       ...REGISTRATIONS.filter(r => r.waiting > 0).map(r => ({ category:'registration', title:`${L(r.event, r.eventAr)} · ${r.waiting} ${L('on waitlist','على لائحة الانتظار')}`, who:null, state:'pending', open:true, date:r.date, priority:'', owner:L('Registration team','فريق التسجيل'), next:L('Review waitlist','مراجعة لائحة الانتظار'), href:'#/registrations', ref:'' }))
     ];
     const f = S.ui.requestFilter === 'open' ? 'action' : S.ui.requestFilter || 'action', cat = S.ui.requestCategory || '', owner = S.ui.requestOwner || '', date = S.ui.requestDate || '', priority = S.ui.requestPriority || '', state = S.ui.requestStatus || '';
@@ -107,23 +109,34 @@ export function sacraments(tab = '') {
         <select class="select" id="reqowner" aria-label="${L('Responsible role','الدور المسؤول')}" style="width:auto"><option value="">${L('All responsible roles','كل المسؤولين')}</option>${[...new Set(items.map(x=>x.owner).filter(Boolean))].map(v=>`<option value="${esc(v)}" ${owner===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
       </div>
       <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap"><label class="t-caption dim" for="reqdate">${L('Date since','التاريخ منذ')}</label><input class="input" id="reqdate" type="date" value="${esc(date)}" style="width:auto">${items.some(x=>x.priority)?`<select class="select" id="reqpriority" aria-label="${L('Priority','الأولوية')}" style="width:auto"><option value="">${L('Any priority','أي أولوية')}</option>${[...new Set(items.map(x=>x.priority).filter(Boolean))].map(v=>`<option value="${esc(v)}" ${priority===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:''}<span class="t-caption dim">${shown.length} ${L('shown','معروض')}</span>${cat||state||owner||date||priority?`<button class="btn btn-ghost btn-dense" id="reqclear">${L('Clear filters','مسح المرشّحات')}</button>`:''}</div>
-      ${table({cols:[{label:L('Type / reference','النوع / المرجع')},{label:L('Person / subject','الشخص / الموضوع')},{label:L('Submitted / date','التقديم / التاريخ'),cls:'hide-md'},{label:L('Status','الحالة')},{label:L('Next action','الخطوة التالية')},{label:L('Responsible','المسؤول'),cls:'hide-md'},{label:'',cls:'shrink'}],rows:shown.map(x=>({attrs:'data-find-item',cells:[`<b>${esc(x.title)}</b>${x.online?`<span class="or-mark">${icon('globe',12)}${L('Online','إلكتروني')}</span>`:x.mark||''}${x.ref?`<small class="t-caption dim mono" style="display:block" dir="ltr">${esc(x.ref)}</small>`:''}`,x.who?who(x.who):'—',esc(fmtDate(x.date||'')),x.waitingSource?pill(L('Waiting for official entry','بانتظار قيد رسمي'),'warning'):x.state==='draft'&&x.category==='certificate'?pill(L('Request received','استُلم الطلب'),'info'):x.state==='legacy'?pill(L('Needs linked record','يحتاج قيداً مرتبطاً'),'warning'):status(x.state),`<b>${esc(x.next)}</b>`,esc(x.owner),`<span class="row" style="gap:6px">${x.state==='legacy'?`<span class="t-caption dim">${L('Legacy record','قيد قديم')}</span>`:`<a class="btn ${x.online&&x.open?'btn-primary':'btn-secondary'} btn-dense" href="${x.href}">${x.online&&x.open?L('Review','مراجعة'):L('View','عرض')}</a>`}</span>`]})),empty:empty('check',L('No requests match','لا طلبات مطابقة'),L('Clear a filter or create a request.','امسح مرشّحاً أو أنشئ طلباً.'))})}
+      ${table({cols:[{label:L('Type / reference','النوع / المرجع')},{label:L('Person / subject','الشخص / الموضوع')},{label:L('Submitted / date','التقديم / التاريخ'),cls:'hide-md'},{label:L('Status','الحالة')},{label:L('Next action','الخطوة التالية')},{label:L('Responsible','المسؤول'),cls:'hide-md'},{label:'',cls:'shrink'}],rows:shown.map(x=>({attrs:'data-find-item',cells:[`<b>${esc(x.title)}</b>${x.online?`<span class="or-mark">${icon('globe',12)}${L('Online','إلكتروني')}</span>`:x.mark||''}${x.ref?`<small class="t-caption dim mono" style="display:block" dir="ltr">${esc(x.ref)}</small>`:''}`,x.who?who(x.who):'—',esc(fmtDate(x.date||'')),x.waitingSource?pill(L('Waiting for official entry','بانتظار قيد رسمي'),'warning'):x.state==='draft'&&x.category==='certificate'?pill(L('Request received','استُلم الطلب'),'info'):x.state==='legacy'?pill(L('Needs linked record','يحتاج قيداً مرتبطاً'),'warning'):status(x.state),`<b>${esc(x.next)}</b>`,esc(x.owner),`<span class="row" style="gap:6px">${x.portalId?`<button class="btn btn-secondary btn-dense" data-act="portal-compare:${esc(x.portalId)}">${L('Review','مراجعة')}</button>`:x.historyId?`<button class="btn btn-secondary btn-dense" data-request-history="${esc(x.historyId)}">${L('View','عرض')}</button>`:x.state==='legacy'?`<span class="t-caption dim">${L('Legacy record','قيد قديم')}</span>`:`<a class="btn btn-secondary btn-dense" href="${x.href}">${L('View','عرض')}</a>`}</span>`]})),empty:empty('check',L('No requests match','لا طلبات مطابقة'),L('Clear a filter or create a request.','امسح مرشّحاً أو أنشئ طلباً.'))})}
       <div class="find-empty" hidden>${empty('search',L('No matching request','لا طلب مطابق'),L('Try a parishioner name or reference number.','جرّب اسم الشخص أو رقم المرجع.'))}</div>
     </div>`;
   }
 
-  if (tab === 'anniversaries') return head + `<div class="tabbody">${table({
+  if (tab === 'anniversaries') {
+    const key = `pl-anniversaries-${session.user?.id || 'user'}`;
+    let layout = S.ui.anniversaryLayoutUser===session.user?.id?S.ui.anniversaryLayout:null;
+    if (!layout) { try { layout = localStorage.getItem(key); } catch {} }
+    layout = layout === 'grouped' ? 'grouped' : 'combined';
+    const items = anniversaryItems().map((a, index) => ({...a, index}));
+    const renderTable = rows => table({
       cols: [{ label: L('Person or couple', 'الشخص أو الزوجان') }, { label: L('Sacrament', 'السرّ') }, { label: L('Years', 'السنوات'), cls: 'num' },
              { label: L('Date', 'التاريخ') }, { label: '', cls: 'shrink' }],
-      rows: anniversaryItems().map((a, ai) => ({ cells: [
+      rows: rows.map(a => ({ cells: [
         `<b>${esc(isAr() ? a.ar : a.couple)}</b>`,
         `<span>${esc(kindLabel(a.kind))}${a.source === 'legacy' ? ` <small class="dim">${L('legacy', 'قديم')}</small>` : ''}</span>`,
         `<span class="num">${a.years}</span>`, `<span class="mono dim">${fmtDate(a.on)}</span>`,
-        `<button class="btn btn-secondary btn-dense" data-act="greet:${ai}">${icon('msg', 15)}${L('Send greeting', 'إرسال تهنئة')}</button>`]}))
-    })}
+        `<button class="btn btn-secondary btn-dense" data-act="greet:${a.index}">${icon('msg', 15)}${L('Send greeting', 'إرسال تهنئة')}</button>`]})),
+      empty: empty('sacr',L('No anniversaries','لا ذكريات'),L('Anniversaries appear when register entries are available.','تظهر الذكريات عند توفّر قيود السجل.'))
+    });
+    return head + `<div class="tabbody"><div class="toolbar anniversary-toolbar"><span class="t-ui">${L('Display anniversaries','عرض الذكريات')}</span><div class="seg" role="group" aria-label="${L('Anniversary layout','طريقة عرض الذكريات')}">
+      <button data-anniversary-layout="combined" aria-pressed="${layout==='combined'}">${L('Combined table','جدول موحّد')}</button><button data-anniversary-layout="grouped" aria-pressed="${layout==='grouped'}">${L('By sacrament','بحسب السرّ')}</button></div></div>
+    ${layout==='combined' || !items.length ? renderTable(items) : [...new Set(items.map(a=>a.kind))].map(kind=>panel(kindLabel(kind),renderTable(items.filter(a=>a.kind===kind)),{tight:true})).join('')}
     <p class="t-caption dim" style="margin-top:16px">${L(
       'Baptism, chrismation, first Communion, and marriage anniversaries are derived from their registers. Earlier marriage reminders are labeled as legacy entries until linked to a register.',
       'تُستخرج ذكريات المعمودية والميرون والمناولة الأولى والإكليل من سجلاتها. وتبقى ذكريات الإكليل السابقة قيوداً قديمة حتى ربطها بسجل.')}</p></div>`;
+  }
 
   const entries = SACRAMENTS.filter(s => s.kind !== 'certificate' && ['preparing','scheduled','draft'].includes(s.status));
   return head + `<div class="tabbody">
@@ -136,10 +149,19 @@ export function sacraments(tab = '') {
 
 sacraments.mount = host => {
   C.wire(host); wireTables(host);
+  host.querySelectorAll('[data-anniversary-layout]').forEach(button=>button.addEventListener('click',()=>{
+    S.ui.anniversaryLayout=button.dataset.anniversaryLayout;
+    S.ui.anniversaryLayoutUser=session.user?.id;
+    save(`pl-anniversaries-${session.user?.id || 'user'}`,S.ui.anniversaryLayout);bus.refresh();
+  }));
   for (const [selector, key] of [['#reqcategory','requestCategory'],['#reqstatus','requestStatus'],['#reqowner','requestOwner'],['#reqdate','requestDate'],['#reqpriority','requestPriority']])
     host.querySelector(selector)?.addEventListener('change', e => { S.ui[key] = e.target.value; bus.refresh(); });
   host.querySelector('#reqclear')?.addEventListener('click', () => { for (const key of ['requestCategory','requestStatus','requestOwner','requestDate','requestPriority']) S.ui[key] = ''; bus.refresh(); });
   host.querySelector('#sacexport')?.addEventListener('click', exportRegister);
+  host.querySelectorAll('[data-request-history]').forEach(button=>button.addEventListener('click',()=>{
+    const item=REQUEST_HISTORY.find(r=>r.id===button.dataset.requestHistory);if(!item)return;
+    openModal({title:L(item.title,item.titleAr),body:`<p>${status(item.status)} · ${fmtDate(item.at)}</p><p>${esc(nameIn(person(item.by)))}</p>`,foot:`<button class="btn btn-secondary" data-close>${L('Close','إغلاق')}</button>`});
+  }));
   host.querySelector('#newcertreq')?.addEventListener('click', () => {
     const sources = eligibleSources(), pending = pendingSacraments();
     const selected = S.ui.newCertificateSource || '';
@@ -220,9 +242,10 @@ sacraments.mount = host => {
 
 };
 
-export const requests = () => sacraments('requests');
+export const requests = () => `<div class="account-actions"><a class="btn btn-secondary" href="#/membershipreviews">${L('Parish memberships','عضويات الرعية')} <span data-queue-count="membershipreviews"></span></a><a class="btn btn-secondary" href="#/guestrequests">${L('Guest requests · no account','طلبات الزوّار · دون حساب')} <span data-queue-count="guestrequests"></span></a><a class="btn btn-secondary" href="#/profilereviews">${t('Profile corrections','تصحيحات الملفات')} <span data-queue-count="profilereviews"></span></a></div>`+sacraments('requests');
 /* #/requests/online/<id> opens that online request over the list; the address then settles back on Requests. */
 requests.mount = (host, first, second) => {
+  api('workspace/request-counts?parish='+encodeURIComponent(session.parishId)).then(counts=>{if(host.isConnected)host.querySelectorAll('[data-queue-count]').forEach(el=>{el.textContent=counts[el.dataset.queueCount]?String(counts[el.dataset.queueCount]):'';});}).catch(()=>{});
   sacraments.mount(host);
   if (first === 'online' && second) { S.params = []; history.replaceState(null, '', '#/requests'); openOnlineRequest(second); }
 };
@@ -488,6 +511,7 @@ export function certificate(id, lang = '') {
     ];
   if (s.memberReference) dlRows.push([L('Sent online', 'أُرسل إلكترونياً'), `<span class="mono" dir="ltr">${esc(s.memberReference)}</span> <small class="dim">· ${L('member portal', 'بوّابة المؤمنين')}</small>`],
     s.contactPhone ? [L('Phone for this request', 'هاتف هذا الطلب'), telLink(s.contactPhone)] : null);
+  if(s.bishopReview)dlRows.push([L('Bishop acceptance','قبول المطران'),esc(s.bishopReview==='pending'?L('Awaiting bishop','بانتظار المطران'):s.bishopReview==='accepted'?L('Accepted','مقبولة'):L('Returned to priest','أُعيدت للكاهن'))]);
   const details = panel(L('Details', 'التفاصيل'), `<dl class="dl">${dlRows.filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     ${s.requestNotes ? `<p class="t-caption" style="margin-top:14px"><b>${L('From the family', 'من العائلة')}:</b> ${esc(s.requestNotes)}</p>` : ''}
     ${s.pendingAmendment?`<div class="alert alert-warning" style="margin-top:14px"><b>${L('Amendment awaiting priest decision','تعديل بانتظار قرار الكاهن')}</b><br>${esc(s.pendingAmendment.reason)}<br>${L('Requested date','التاريخ المطلوب')}: ${esc(s.pendingAmendment.date||'—')} · ${L('Notes','ملاحظات')}: ${esc(s.pendingAmendment.notes||'—')}</div>`:''}`);
@@ -504,7 +528,7 @@ export function certificate(id, lang = '') {
       sub: `<bdi>${esc(nameIn(p))}</bdi> · <bdi class="mono" dir="ltr">${esc(s.reg)}</bdi>${s.date ? ` · <bdi>${s.kind === 'certificate' ? fmtDate(s.date) : celebrationText(s)}</bdi>` : ''}${onlineMark(s)}`,
       actions: `${s.kind !== 'certificate' && ['requested','office-reviewed'].includes(s.status) && is('priest')
         ? `<button class="btn btn-primary" id="acceptrequest">${icon('check',17)}${L('Accept request','قبول الطلب')}</button><button class="btn btn-secondary" id="declinerequest">${L('Decline','رفض')}</button>`
-        : s.kind !== 'certificate' && s.status === 'requested' && is('secretary')
+        : s.kind !== 'certificate' && s.status === 'requested' && is('secretary','super_admin','bishop','diocesan_admin','parish_admin')
         ? `<button class="btn btn-primary" id="officereview">${icon('check',17)}${L('Mark as reviewed by the office','تعليم كمراجَع من المكتب')}</button>`
         : s.kind !== 'certificate' && s.status === 'preparing'
         ? `<a class="btn btn-primary" href="#/sacraments">${L('Continue preparation','متابعة التحضير')}</a>`
@@ -529,6 +553,7 @@ export function certificate(id, lang = '') {
         ${s.status === 'awaiting-signature' && is('priest') ? `<button class="btn btn-secondary" id="reject">${L('Reject','رفض')}</button>` : ''}
         ${s.kind === 'certificate' && ['draft','awaiting-signature'].includes(s.status) && is('secretary','priest') ? `<button class="btn btn-ghost" id="cancelrequest">${L('Cancel request','إلغاء الطلب')}</button>` : ''}`
     })}
+    ${s.bishopReview==='returned'?`<div class="alert alert-warning"><b>${L('Returned by the bishop','أعادها المطران')}</b><p>${esc(s.bishopReviewNote||'')}</p>${is('priest')?`<button class="btn btn-primary" id="resubmit-bishop">${L('Review and resubmit','مراجعة وإعادة تقديم')}</button>`:''}</div>`:''}
     ${progressPanel(s)}
     ${s.kind !== 'certificate' && s.status === 'scheduled' && s.date > today() ? C.inlineAlert('info', L('Scheduled, not celebrated yet', 'مجدول ولم يُحتفل به بعد'), L(`On or after ${fmtDate(s.date)}, confirm it was celebrated and send it to the priest for approval.`, `في ${fmtDate(s.date)} أو بعده، أكّد الاحتفال وأرسله إلى الكاهن للاعتماد.`)) : ''}
     <div class="recordview">
@@ -542,6 +567,7 @@ export function certificate(id, lang = '') {
             : ['cancelled','rejected'].includes(s.status) ? L('This request was closed, so there is no register entry.', 'أُغلق هذا الطلب، فلا قيد له.')
             : L('The register entry can be previewed once the sacrament is celebrated and approved by the priest.', 'يمكن معاينة القيد بعد الاحتفال بالسرّ واعتماد الكاهن له.')}</p></div>`)}
         ${details}
+        ${requestDocumentPanel(s,'sacrament-request')}
       </div>
       <aside class="sidecol">${activity}</aside>
     </div>`;
@@ -551,6 +577,7 @@ certificate.mount = (host, id, lang = '') => {
   C.wire(host);
   const doc = SACRAMENTS.find(x => x.id === id);
   lang = docLang(doc, lang);
+  if(doc)mountRequestDocuments(host,doc,'sacrament-request',()=>bus.refresh());
   host.querySelectorAll('[data-docview]').forEach(b => b.addEventListener('click', () => viewDoc(doc, lang)));
   host.querySelector('[data-docdl]')?.addEventListener('click', e => downloadMenu(e.currentTarget, doc, () => lang));
   host.querySelector('[data-docprint]')?.addEventListener('click', () => printDoc(doc, lang));
@@ -645,12 +672,13 @@ certificate.mount = (host, id, lang = '') => {
         try { await serverWorkflow(action, id, { verified: true }); closeOverlays(); bus.refresh();
           const cert = SACRAMENTS.find(s=>s.id===id)?.kind === 'certificate';
           toast(action === 'issue' ? L('Certificate issued', 'صدرت الشهادة') : cert ? L('Request approved', 'اعتُمد الطلب') : L('Entry approved', 'اعتُمد القيد'),
-            action === 'issue' ? L('It is signed and ready to print, download or send.', 'موقّعة وجاهزة للطباعة أو التنزيل أو الإرسال.')
+            action === 'issue' ? L('It is signed and has been sent for bishop acceptance before release.', 'تم توقيعها وإرسالها لقبول المطران قبل تسليمها.')
               : cert ? L('Next: sign and issue the certificate.', 'التالي: توقيع الشهادة وإصدارها.') : L('It now has its official register number.', 'صار له رقم القيد الرسمي.'), 'success'); }
         catch (e) { toast(L('Action could not be completed', 'تعذّر إتمام الإجراء'), e.message, 'danger'); }
       });
     }
   }));
+  host.querySelector('#resubmit-bishop')?.addEventListener('click',()=>openDrawer({title:L('Resubmit to the bishop','إعادة تقديم للمطران'),body:`<form><label class="formrow"><span class="label">${L('How was the bishop’s note addressed?','كيف تمت معالجة ملاحظة المطران؟')}</span><textarea class="textarea" name="note" required minlength="3" maxlength="1000"></textarea></label><label class="check"><input type="checkbox" required name="verified">${L('I reviewed the certificate and its source register entry.','راجعت الشهادة وقيدها الأصلي.')}</label><p role="alert" class="help-error"></p><button class="btn btn-primary">${L('Resubmit','إعادة تقديم')}</button></form>`,onMount(el){const f=el.querySelector('form');f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{await api('workspace/certificate-resubmit','POST',{parish:session.parishId,id,revision:session.revision,note:f.elements.note.value,verified:f.elements.verified.checked});await hydrate();closeOverlays();bus.refresh();}catch(err){f.querySelector('[role=alert]').textContent=err.message;b.disabled=false;}};}}));
   confirm(host.querySelector('#approve'), 'approve'); confirm(host.querySelector('#sign'), 'issue');
   const decision = (selector, action) => host.querySelector(selector)?.addEventListener('click', () => openModal({
     title: action==='reject' ? L('Reject this request or entry?','رفض هذا الطلب أو القيد؟') : L('Cancel this certificate request?','إلغاء طلب الشهادة؟'),

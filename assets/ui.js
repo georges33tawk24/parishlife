@@ -158,13 +158,15 @@ export function wireTables(host, { onBulk } = {}) {
   host.querySelectorAll('[data-table]').forEach(wrap => {
     const all = wrap.querySelector('[data-all]');
     const rows = [...wrap.querySelectorAll('[data-row]')];
+    const visibleRows=()=>rows.filter(r=>!r.closest('tr').hidden&&r.closest('tr').style.display!=='none'&&r.closest('tr').dataset.pageHidden!=='true');
     const sync = () => {
-      const n = rows.filter(r => r.checked).length;
-      if (all) { all.checked = n === rows.length && n > 0; all.indeterminate = n > 0 && n < rows.length; }
+      const n = rows.filter(r => r.checked).length, visible=visibleRows(),checked=visible.filter(r=>r.checked).length;
+      if (all) { all.checked = checked === visible.length && checked > 0; all.indeterminate = checked > 0 && checked < visible.length; }
       onBulk?.(n, wrap);
     };
-    all?.addEventListener('change', () => { rows.forEach(r => { r.checked = all.checked; }); sync(); });
+    all?.addEventListener('change', () => { visibleRows().forEach(r => { r.checked = all.checked; }); sync(); });
     rows.forEach(r => r.addEventListener('change', sync));
+    wrap.addEventListener('paginationchange',sync);
 
     wrap.querySelectorAll('[data-sort]').forEach(th => {
       const go = () => {

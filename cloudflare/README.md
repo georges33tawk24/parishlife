@@ -28,12 +28,12 @@ Differences from `server.py`, all invisible to the browser:
   2 MB); `uploaded_files` keeps the same metadata.
 - **Dates.** `server.py` used the computer's local date; the Worker uses
   `PARISH_TIMEZONE` (`Asia/Beirut`) from `wrangler.jsonc`.
-- **Passwords.** `server.py` stores PBKDF2-SHA256 with 600,000 iterations (`salt:hex`). On
-  the Workers Free plan a request may use only about 10 ms of CPU, so accounts made with
-  `tools/accounts.mjs` use `pbkdf2_sha256$10000$salt$hex` with long random passwords. The
-  Worker accepts both formats, and so does `server.py`. Accounts parishioners open
-  themselves (`/api/signup`) and passwords changed or reset in the portal use the same
-  10,000-iteration format on the Worker.
+- **Passwords.** New accounts, password changes and resets use PBKDF2-SHA256 with
+  600,000 iterations, matching Python. Legacy stored formats remain readable.
+  Configure sufficient Worker CPU capacity for authentication. Use the dedicated
+  [secure Super Admin provisioning workflow](../docs/administration.md#cloudflare-installation)
+  for developer access; it never prints a plaintext privileged password.
+- **Account workspace.** The shared additive `backend/workspace-schema.json` supplies account preferences, scoped grants, affiliations, private request links and review history. Worker-specific service modules mirror the Python implementation. Normal startup does not seed a known super administrator password. OAuth, verification, messaging delivery and live Google Maps remain unconfigured.
 - **Schema additions.** The Worker adds the `member_requests.log` column on its first
   request if the database predates it (`addRequestLog` in `src/app.js`), as `server.py`
   does at start-up.
@@ -46,7 +46,7 @@ the Worker's **production branch** runs `npx wrangler deploy`; pushes to other b
 upload a preview version. To make this branch the live site:
 
 1. Cloudflare dashboard → **Workers & Pages** → **parishlife** → **Settings** → **Build** →
-   **Branch control** → set **Production branch** to `cloudflare-server`.
+   **Branch control** → choose the branch you intend to publish (`colin` for this requested source update). Inspect the configured build rules before deploying.
 2. Push to the branch (or retry its latest build) to deploy.
 
 Older branches keep their static-only deploy, so switching the production branch back
@@ -54,7 +54,7 @@ restores the previous site. The D1 data is independent of deploys.
 
 ## Accounts
 
-There is no sign-up page; accounts are created by an operator, as with `server.py`:
+Public sign-up creates an unlinked user account. Authorized staff can create and manage scoped accounts through Administration. The operator tool remains available for existing deployments:
 
 ```sh
 node cloudflare/tools/accounts.mjs create-user rita --role secretary --name "Rita Nassar" --person-id p4 --parish p-elias
@@ -88,3 +88,5 @@ WRANGLER=/path/to/wrangler cloudflare/test/run_differential.sh
 ```
 
 `wrangler dev` runs the Worker locally with a local D1 database.
+
+The scoped administration update has 49 shared HTTP tests passing against both Python and the Worker, plus explicit D1 concurrency checks. See [administration verification](../docs/administration.md#verification) for commands, browser workflows and existing broader-suite failures. No production deployment or remote D1 migration was performed.

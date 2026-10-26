@@ -45,7 +45,7 @@
         ['l', 'People', 'المؤمنون', 'people', '1,380'],
         ['l', 'Families', 'العائلات', 'family', '412'],
         ['l', 'Sacraments', 'الأسرار', 'sacr', '3'],
-        ['l', 'Pastoral notes', 'ملاحظات رعوية', 'notes', ''],
+        ['l', 'Notes & Tasks', 'الملاحظات والمهام', 'notes', ''],
         ['h', 'Parish life', 'حياة الرعية'],
         ['l', 'Attendance', 'الحضور', 'attend', ''],
         ['l', 'Events', 'الأحداث', 'events', ''],

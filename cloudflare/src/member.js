@@ -1,18 +1,21 @@
+import { requireModules, parishContext, isOffice, protectedCredentials } from './workspace.js';
+import { caseAccess, reviewers as caseReviewers } from './workspace.js';
 /* Member portal logic ported from server.py (member_view, member_action and helpers). */
 import {
   Problem, PyError, need, truthy, eq, has, get, K, setItem, iter, len, slice, strip, str, set, union, intersection,
   subset, intersects, any, all, items, add, ge, lt, sorted, isDict, isList, isStr, isBool, isdigit, fromisoformat,
-  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, sha256hex, b64decode, keyed, isoDate, le, pad3,
+  toOrdinal, casefold, NOW, TODAY, localToday, nowHM, tokenHex, tokenUrlsafe, sha256hex, b64decode, keyed, isoDate, le, pad3,
   passwordHash, passwordMatches
 } from './py.js';
-import { randomBytes } from 'node:crypto';
 import { parish_theme } from './state.js';
-import { access, audit, notify_member, memberPrivateRows, privateData, CONCERN_CATEGORIES, CONCERN_STATUSES } from './app.js';
+import { access, audit, notify_member, memberPrivateRows, privateData } from './app.js';
+import { CONCERN_CATEGORIES, CONCERN_STATUSES } from './concern-policy.js';
 import { REQUEST_LABELS, CERTIFICATE_OF, CERTIFICATE_LANGUAGES, OWN_REQUESTS, CLOCK, request_subjects, sacrament_conflict,
   request_subject_key, member_request_item, member_request_options, bookable_venues, booking_clash } from './requests.js';
 
-/* Accounts made on Cloudflare hash with 10,000 rounds so a sign-in fits the plan's CPU allowance (see README). */
-export const ROUNDS = 10000;
+/* New hashes use the same work factor as the Python backend. Legacy stored
+   hashes remain readable; deployment CPU limits must accommodate authentication. */
+export const ROUNDS = 600000;
 
 const SENSITIVE_CONCERNS = new Set(['Leadership', 'Behaviour or conduct', 'Safety', 'Financial concerns',
   'Harassment or inappropriate behaviour']);
@@ -25,9 +28,9 @@ export function complaint_log(c, concernId, actorId, action, detail = '') {
   c.run('INSERT INTO complaint_audit(concern_id,actor_id,action,detail,created_at) VALUES(?,?,?,?,?)', concernId, actorId, action, detail, NOW());
 }
 
-export async function member_context(c, u, pid) {
+export async function member_context(c, u, pid,officeAction=false) {
   await access(c, u, pid);
-  need(K(u, 'role') !== 'bishop', 'This portal is not available to a bishop account.', 403);
+  need(K(u, 'role') !== 'bishop'||officeAction, 'This portal is not available to a bishop account.', 403);
   const row = await c.first('SELECT data FROM states WHERE parish_id=?', pid);
   if (row === null) throw new PyError("'NoneType' object is not subscriptable");
   const d = JSON.parse(row.data);
@@ -139,7 +142,9 @@ export function member_attachment(value) {
 
 async function complaint_permissions(c, u, pid) {
   const row = await c.first('SELECT permissions FROM complaint_reviewers WHERE parish_id=? AND user_id=?', pid, K(u, 'id'));
-  return row ? set(JSON.parse(row.permissions)) : new Set();
+  const result=row?set(JSON.parse(row.permissions)):new Set();
+  if(await c.first('SELECT 1 FROM pl_case_reviewers r JOIN member_concerns m ON m.id=r.concern_id WHERE r.user_id=? AND m.parish_id=?',u.id,pid))for(const p of ['Review','Respond','Resolve','ViewSensitive','ViewIdentity'])result.add(p);
+  return result;
 }
 
 /* concern_public(); `updates` are that concern's member_concern_updates rows in created_at order. */
@@ -173,7 +178,7 @@ export async function member_view(c, u, pid) {
   const priv = await member_private(c, u, pid);
   d._viewer = K(person, 'id');
   const role = K(u, 'role');
-  const managedGroups = set(iter(K(d, 'GROUPS')).filter(g => role === 'priest' || role === 'secretary' ||
+  const managedGroups = set(iter(K(d, 'GROUPS')).filter(g => isOffice(u) ||
     (role === 'leader' && has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id')))).map(g => K(g, 'id')));
   const visibleGroups = union(gids, managedGroups);
   const groups = member_groups(d, visibleGroups);
@@ -227,7 +232,7 @@ export async function member_view(c, u, pid) {
   const contentRows = await c.all('SELECT * FROM member_content WHERE parish_id=? ORDER BY created_at DESC', pid);
   const shown = contentRows.filter(r => {
     if (truthy(r.group_id) && !has(visibleGroups, r.group_id)) return false;
-    if (r.kind === 'message' && !(r.recipient_id === null || r.recipient_id === K(u, 'id')) && r.author_id !== K(u, 'id')) return false;
+    if (r.kind === 'message' && !(r.recipient_id === K(u, 'id')) && r.author_id !== K(u, 'id')) return false;
     if (r.kind === 'message' && !truthy(r.recipient_id) && r.author_id === K(u, 'id')) return false;
     return true;
   });
@@ -261,7 +266,9 @@ export async function member_view(c, u, pid) {
   const perms = await complaint_permissions(c, u, pid);
   let review = [];
   if (perms.has('Review')) {
-    const rows = (await c.all('SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', pid)).filter(r =>
+    const eligible=[];
+    for(const row of await c.all('SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC',pid))if(await caseAccess(c,u.id,row))eligible.push(row);
+    const rows = eligible.filter(r =>
       !reviewer_conflict(u, person, r) && (!truthy(r.assigned_to) || r.assigned_to === K(u, 'id') || perms.has('Assign')) &&
       (!sensitive_concern(r.category) || perms.has('ViewSensitive')));
     const updates = await concernUpdates(c, rows);
@@ -278,13 +285,6 @@ export async function member_view(c, u, pid) {
     for (const item of review) complaint_log(c, item.id, K(u, 'id'), 'view');
   }
   let leaderConcerns = [];
-  if (role === 'leader') {
-    const rows = (await c.all('SELECT * FROM member_concerns WHERE parish_id=? ORDER BY created_at DESC', pid)).filter(r =>
-      has(managedGroups, r.group_id) && !sensitive_concern(r.category) && !reviewer_conflict(u, person, r));
-    const updates = await concernUpdates(c, rows);
-    leaderConcerns = rows.map((r, i) => concern_public(r, updates[i]));
-    for (const item of leaderConcerns) complaint_log(c, item.id, K(u, 'id'), 'ministry-view');
-  }
   const own = {};
   for (const k of ['id', 'lat', 'ar', 'phone', 'born', 'town', 'townAr', 'status']) own[k] = get(person, k, '');
   own.email = get(get(get(d, 'PERSON_EXTRA', {}), K(person, 'id'), {}), 'email', '');
@@ -302,7 +302,7 @@ export async function member_view(c, u, pid) {
       }
     });
   }
-  const office = role === 'priest' || role === 'secretary';
+  const office = isOffice(u);
   const [requests, notificationRows, volunteerRows, profileRows, reviewerRows, categoryRows, requestRows] = await c.reads([
     ['SELECT id,field,requested_value,status,created_at FROM member_profile_requests WHERE parish_id=? AND user_id=? ORDER BY created_at DESC', [pid, K(u, 'id')]],
     ['SELECT * FROM member_notifications WHERE parish_id=? AND user_id=? ORDER BY created_at DESC LIMIT 100', [pid, K(u, 'id')]],
@@ -330,7 +330,7 @@ export async function member_view(c, u, pid) {
     concerns: sortedConcerns, review, leaderConcerns, complaintPermissions: sorted([...perms]), profileRequests: requests,
     volunteerReview: volunteerRows.filter(r => has(managedGroups, r.group_id)), profileReview: office ? profileRows : [],
     managedGroups: sorted([...managedGroups]), formation,
-    reviewers: perms.has('Assign') ? reviewerRows.filter(r => has(set(JSON.parse(r.permissions)), 'Review')).map(r => ({ id: r.user_id, name: r.name })) : [],
+    reviewers: await caseReviewers(c,pid),
     categories: categoryRows.map(r => ({ name: r.name, active: truthy(r.active) })), notifications,
     requests: requestRows.map(r => member_request_item(d, r)), requestOptions: member_request_options(d, person)
   };
@@ -338,7 +338,8 @@ export async function member_view(c, u, pid) {
 
 /* member_action(): `members` holds each target's member_private row for notify_member. */
 export async function member_action(c, u, pid, q) {
-  const [d, person, gids] = await member_context(c, u, pid);
+  const officeAction=['accountReset','profileReview','publish','staffMessage','confirmVolunteer'].includes(q.op)&&isOffice(u);
+  const [d, person, gids] = await member_context(c, u, pid,officeAction);
   const priv = await member_private(c, u, pid);
   const op = get(q, 'op');
   const groupId = get(q, 'groupId');
@@ -347,7 +348,7 @@ export async function member_action(c, u, pid, q) {
     const rows = await memberPrivateRows(c, pid, [userId]);
     notify_member(c, pid, userId, kind, title, body, route, rows.get(userId));
   };
-  const leads = g => role === 'priest' || role === 'secretary' || has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id'));
+  const leads = g => isOffice(u) || has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id'));
   if (op === 'note') {
     const noteId = get(q, 'id');
     if (truthy(get(q, 'delete'))) {
@@ -412,14 +413,14 @@ export async function member_action(c, u, pid, q) {
   } else if (op === 'read' || op === 'archive' || op === 'unarchive') {
     const row = await c.first('SELECT * FROM member_content WHERE id=? AND parish_id=?', get(q, 'id'), pid);
     need(row && (!truthy(row.group_id) || has(gids, row.group_id)) &&
-      (row.kind !== 'message' || row.recipient_id === null || row.recipient_id === K(u, 'id') || row.author_id === K(u, 'id')), 'Item not available.', 403);
+      (row.kind !== 'message' || row.recipient_id === K(u, 'id') || row.author_id === K(u, 'id')), 'Item not available.', 403);
     const key = op === 'read' ? 'readIds' : 'archivedIds';
     if (op === 'unarchive') priv[key] = iter(K(priv, key)).filter(item => !eq(item, row.id));
     else if (!has(K(priv, key), row.id)) K(priv, key).push(row.id);
     save_member_private(c, u, pid, priv);
   } else if (op === 'readAll') {
     for (const r of await c.all('SELECT id,group_id,kind,recipient_id,author_id FROM member_content WHERE parish_id=?', pid)) {
-      if ((!truthy(r.group_id) || has(gids, r.group_id)) && (r.kind !== 'message' || r.recipient_id === null || r.recipient_id === K(u, 'id') || r.author_id === K(u, 'id'))) {
+      if ((!truthy(r.group_id) || has(gids, r.group_id)) && (r.kind !== 'message' || r.recipient_id === K(u, 'id') || r.author_id === K(u, 'id'))) {
         if (!has(K(priv, 'readIds'), r.id)) K(priv, 'readIds').push(r.id);
       }
     }
@@ -453,6 +454,7 @@ export async function member_action(c, u, pid, q) {
     }
     audit(c, u, pid, 'volunteer.confirm', row.content_id);
   } else if (op === 'sacramentRequest') {
+    await requireModules(c,pid,['PORTAL_REQUESTS']);
     const kind = get(q, 'kind');
     need(isStr(kind) && has(REQUEST_LABELS, kind), 'Choose what you would like to request.');
     const subjects = keyed(request_subjects(d, person), p => K(p, 'id'));
@@ -549,16 +551,16 @@ export async function member_action(c, u, pid, q) {
   } else if (op === 'changePassword') {
     need(passwordMatches(K(u, 'password'), str(get(q, 'current', ''))), 'Your current password is not correct.');
     const password = get(q, 'password');
-    need(isStr(password) && len(password) >= 8 && len(password) <= 200, 'Choose a password of at least 8 characters.');
+    const minimum=await protectedCredentials(c,u)?16:8;
+    need(isStr(password) && len(password) >= minimum && len(password) <= 200, `Choose a password of at least ${minimum} characters.`);
     c.run('UPDATE users SET password=? WHERE id=?', passwordHash(password, tokenHex(16), ROUNDS), K(u, 'id'));
     audit(c, u, pid, 'member.password', {});
   } else if (op === 'accountReset') {
-    need(role === 'priest' || role === 'secretary', 'Parish office access required.', 403);
+    need(isOffice(u), 'Parish office access required.', 403);
     const personId = get(q, 'personId');
-    const target = isStr(personId) ? await c.first("SELECT u.* FROM users u JOIN assignments a ON a.user_id=u.id WHERE a.parish_id=? AND u.person_id=? "
-      + "AND u.role IN ('member','leader')", pid, personId) : null;
-    need(target !== null, 'This person has no online account to reset.', 404);
-    const temporary = Array.from(randomBytes(8), b => '23456789'[b % 8]).join('');
+    const target = isStr(personId) ? await c.first("SELECT u.* FROM users u WHERE u.role='member' AND (EXISTS(SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.parish_id=? AND u.person_id=?) OR EXISTS(SELECT 1 FROM pl_affiliations f WHERE f.user_id=u.id AND f.parish_id=? AND f.person_id=? AND f.membership='approved'))",pid,personId,pid,personId) : null;
+    need(target !== null&&!await protectedCredentials(c,target), 'This person has no member-only account to reset. Staff credentials require Super Admin recovery.', 404);
+    const temporary = tokenUrlsafe(18);
     c.run('UPDATE users SET password=? WHERE id=?', passwordHash(temporary, tokenHex(16), ROUNDS), target.id);
     c.run('DELETE FROM sessions WHERE user_id=?', target.id);
     audit(c, u, pid, 'member.password-reset', { person: personId });
@@ -570,7 +572,7 @@ export async function member_action(c, u, pid, q) {
     c.run('INSERT INTO member_profile_requests VALUES(?,?,?,?,?,?,?)', tokenHex(12), pid, K(u, 'id'), K(q, 'field'), strip(value), 'Submitted', NOW());
     audit(c, u, pid, 'profile.update-request', K(q, 'field'));
   } else if (op === 'profileReview') {
-    need(role === 'priest' || role === 'secretary', 'Parish office permission required.', 403);
+    need(isOffice(u), 'Parish office permission required.', 403);
     need(has(new Set(['Reviewed', 'Needs Information', 'Closed']), get(q, 'status')), 'Invalid request status.');
     const row = await c.first('SELECT id,user_id FROM member_profile_requests WHERE id=? AND parish_id=?', get(q, 'id'), pid);
     need(row !== null, 'Request not found.', 404);
@@ -578,11 +580,11 @@ export async function member_action(c, u, pid, q) {
     await notify(row.user_id, 'profile', add('Information request ', K(q, 'status')), '', 'myprofile');
     audit(c, u, pid, 'profile.request-reviewed', row.id);
   } else if (op === 'publish') {
-    need(['priest', 'secretary', 'leader'].includes(role), 'Publishing permission required.', 403);
+    need((isOffice(u)||role==='leader'), 'Publishing permission required.', 403);
     need(has(new Set(['post', 'announcement', 'resource', 'opportunity', 'discussion']), get(q, 'kind')), 'Invalid content type.');
     if (eq(get(q, 'kind'), 'discussion')) need(groupId, 'Choose a ministry for a group conversation.');
     if (truthy(groupId)) need(any(K(d, 'GROUPS'), g => eq(K(g, 'id'), groupId) && leads(g)), 'Leadership of this ministry required.', 403);
-    else need(role === 'priest' || role === 'secretary', 'Parish publishing permission required.', 403);
+    else need(isOffice(u), 'Parish publishing permission required.', 403);
     const title = get(q, 'title'), body = get(q, 'body', '');
     need(isStr(title) && len(strip(title)) > 0 && len(strip(title)) <= 160 && isStr(body) && len(body) <= 10000, 'Invalid content.');
     const eventId = truthy(get(q, 'eventId')) ? get(q, 'eventId') : null;
@@ -604,7 +606,7 @@ export async function member_action(c, u, pid, q) {
     }
     audit(c, u, pid, 'member.publish', K(q, 'kind'));
   } else if (op === 'staffMessage') {
-    need(['priest', 'secretary', 'leader'].includes(role), 'Staff messaging permission required.', 403);
+    need((isOffice(u)||role==='leader'), 'Staff messaging permission required.', 403);
     const recipientPersonId = get(q, 'recipientPersonId');
     need(has(set(iter(K(d, 'PEOPLE')).map(item => K(item, 'id'))), recipientPersonId), 'Choose a person in this parish.');
     if (role === 'leader') {
@@ -638,9 +640,9 @@ export async function member_action(c, u, pid, q) {
   } else if (op === 'messageReply') {
     const original = await c.first("SELECT * FROM member_content WHERE id=? AND parish_id=? AND kind='message'", get(q, 'id'), pid);
     need(original && original.recipient_id === K(u, 'id') &&
-      (role === 'priest' || role === 'secretary' || any(K(d, 'GROUPS'), g => eq(K(g, 'id'), original.group_id) &&
+      (isOffice(u) || any(K(d, 'GROUPS'), g => eq(K(g, 'id'), original.group_id) &&
         has(set([get(g, 'leader'), get(g, 'assistant')]), K(u, 'person_id')))), 'Message not available for reply.', 403);
-    need(['leader', 'priest', 'secretary'].includes(role), 'Ministry communication permission required.', 403);
+    need((isOffice(u)||role==='leader'), 'Ministry communication permission required.', 403);
     const body = get(q, 'body', '');
     need(isStr(body) && len(strip(body)) > 0 && len(strip(body)) <= 5000, 'Enter a message under 5000 characters.');
     c.run('INSERT INTO member_content VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', tokenHex(12), pid, original.group_id, 'message', K(u, 'id'), original.author_id,
@@ -673,13 +675,20 @@ export async function member_action(c, u, pid, q) {
     need(anonymous || has(new Set(['system', 'email', 'phone', 'none']), followUp), 'Invalid follow-up choice.');
     const ref = 'CMP-' + tokenHex(8).toUpperCase();
     const concernId = tokenHex(12);
+    const chosen=q.reviewers,candidates=new Set((await caseReviewers(c,pid)).map(r=>r.id));
+    need(Array.isArray(chosen)&&chosen.length>=1&&chosen.length<=10&&chosen.every(id=>candidates.has(id))&&!chosen.includes(u.id),'Choose one or more independent reviewers.');
     const happenedAt = slice(str(get(q, 'happenedAt', '')), 0, 40);
     const peopleInvolved = slice(str(get(q, 'peopleInvolved', '')), 0, 500);
+    for(const reviewerId of new Set(chosen)){
+      const target=await c.first('SELECT * FROM users WHERE id=?',reviewerId),ctx=await parishContext(c,target,pid),targetPerson=d.PEOPLE.find(p=>p.id===ctx?.person_id)||{};
+      need(!reviewer_conflict(target,targetPerson,{people_involved:peopleInvolved}),'Choose a reviewer who is not involved in the complaint.');
+    }
     const attachment = member_attachment(get(q, 'attachment'));
     c.run('INSERT INTO member_concerns VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       concernId, pid, ref, anonymous ? null : K(u, 'id'), K(q, 'category'), groupId,
       eventId, strip(subject), strip(description), happenedAt, peopleInvolved, attachment,
       anonymous ? null : followUp, 'Submitted', NOW(), null);
+    for(const reviewer of new Set(chosen))c.run('INSERT INTO pl_case_reviewers VALUES(?,?)',concernId,reviewer);
     if (anonymous) {
       K(priv, 'concernIds').push(concernId);
       save_member_private(c, u, pid, priv);
@@ -698,7 +707,7 @@ export async function member_action(c, u, pid, q) {
     const perms = await complaint_permissions(c, u, pid);
     need(perms.has('Review') && (perms.has('Respond') || perms.has('Resolve')), 'Complaint reviewer permission required.', 403);
     const row = await c.first('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', get(q, 'id'), pid);
-    need(row !== null, 'Case not found.', 404);
+    need(row!==null&&await caseAccess(c,u.id,row),'Case not found.',404);
     need(!reviewer_conflict(u, person, row), 'A different reviewer must handle a case involving you.', 403);
     need(!truthy(row.assigned_to) || row.assigned_to === K(u, 'id') || perms.has('Assign'), 'Case is assigned to another reviewer.', 403);
     need(!sensitive_concern(row.category) || perms.has('ViewSensitive'), 'Sensitive complaint permission required.', 403);
@@ -714,11 +723,12 @@ export async function member_action(c, u, pid, q) {
     const perms = await complaint_permissions(c, u, pid);
     need(perms.has('Review') && perms.has('Assign'), 'Complaint assignment permission required.', 403);
     const row = await c.first('SELECT * FROM member_concerns WHERE id=? AND parish_id=?', get(q, 'id'), pid);
-    need(row !== null && !reviewer_conflict(u, person, row), 'Case not available for assignment.', 403);
+    need(row !== null && await caseAccess(c,u.id,row) && !reviewer_conflict(u, person, row), 'Case not available for assignment.', 403);
     const target = await c.first('SELECT * FROM users WHERE id=?', get(q, 'reviewerId'));
     const targetPerson = target ? iter(K(d, 'PEOPLE')).find(p => eq(K(p, 'id'), target.person_id)) ?? {} : {};
     need(target !== null && !reviewer_conflict(target, targetPerson, row) &&
       (await complaint_permissions(c, target, pid)).has('Review'), 'Choose an independent authorized reviewer.', 403);
+    need(await caseAccess(c,target.id,row),'The submitter has not selected this reviewer.',403);
     if (sensitive_concern(row.category)) need((await complaint_permissions(c, target, pid)).has('ViewSensitive'), 'Reviewer needs sensitive-case permission.', 403);
     c.run('UPDATE member_concerns SET assigned_to=? WHERE id=?', target.id, row.id);
     complaint_log(c, row.id, K(u, 'id'), 'assigned', target.id);

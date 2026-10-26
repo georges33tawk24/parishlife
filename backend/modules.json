@@ -1,0 +1,68 @@
+{
+  "office": [
+    "PEOPLE",
+    "ARCHIVED",
+    "HOUSEHOLDS",
+    "FAMILIES",
+    "BRANCHES",
+    "PERSON_EXTRA",
+    "PHOTOS",
+    "OFFICE_LEDGER",
+    "SERVICE",
+    "SERVICE_PLANS",
+    "SERVICE_TEMPLATES",
+    "ROTA"
+  ],
+  "requests": [
+    "PORTAL_REQUESTS",
+    "REQUEST_HISTORY",
+    "SERVICE_REQUESTS"
+  ],
+  "sacraments": [
+    "SACRAMENTS",
+    "CORRECTIONS",
+    "PRAYERS"
+  ],
+  "ministries": [
+    "GROUPS",
+    "GROUP_DETAIL",
+    "VOLUNTEERS",
+    "SIGNUP_SHEETS",
+    "REGISTRATIONS",
+    "REGISTRANTS",
+    "REG_FORM",
+    "REFUNDS",
+    "CHECKIN",
+    "PICKUP",
+    "INCIDENTS",
+    "EVACUATION",
+    "MUSIC",
+    "MUSIC_DETAIL",
+    "SETLISTS"
+  ],
+  "facilities": [
+    "VENUES",
+    "RESERVATIONS",
+    "EQUIPMENT",
+    "MAINTENANCE",
+    "ISSUES",
+    "RENTALS"
+  ],
+  "finance": [
+    "GIVING",
+    "BATCH",
+    "FUNDS",
+    "EXPENSES",
+    "BUDGET",
+    "PAYMENTS",
+    "PLEDGES",
+    "ENVELOPES",
+    "CAMPAIGNS",
+    "PAYMENT_MIX",
+    "RATE",
+    "RECURRING",
+    "RECEIPTS",
+    "BANKLINES",
+    "GIVING_SERIES"
+  ]
+}

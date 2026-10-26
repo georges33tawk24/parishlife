@@ -9,12 +9,14 @@ import {
 
 export const SEED = seed;
 const GEOGRAPHY = geography.governorates;
-export const ROLES = new Set(['bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member']);
-export const CLERGY = new Set(['priest']); // Bishops use the separate, read-only oversight API.
+export const ROLES = new Set(['bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member', 'super_admin', 'diocesan_admin', 'parish_admin']);
+export const CLERGY = new Set(['priest']); // Signing authority remains separate from diocesan management.
 export const FINANCE = new Set(['BATCH', 'FUNDS', 'EXPENSES', 'PLEDGES', 'CAMPAIGNS', 'RECURRING', 'RECEIPTS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX']);
 export const OFFICE = new Set(['PEOPLE', 'ARCHIVED', 'HOUSEHOLDS', 'FAMILIES', 'BRANCHES', 'PERSON_EXTRA', 'PHOTOS', 'GROUPS', 'GROUP_DETAIL', 'EVENTS', 'EVENT_DETAIL', 'EVENT_TEMPLATES', 'RESERVATIONS', 'VENUES', 'EQUIPMENT', 'MAINTENANCE', 'ISSUES', 'RENTALS', 'SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES', 'SERVICE_REQUESTS', 'ROTA', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'CHECKIN', 'PICKUP', 'INCIDENTS', 'EVACUATION', 'REGISTRATIONS', 'REG_FORM', 'REGISTRANTS', 'REFUNDS', 'MESSAGES', 'NOTICES', 'PRAYERS', 'PORTAL_REQUESTS', 'REQUEST_HISTORY', 'WORKFLOWS', 'RUNS', 'RUN_LOG', 'FORM_FIELDS', 'FORM_RULES', 'CONTENT', 'AUTOMATIONS', 'DUPLICATES', 'SACRAMENTS']);
+OFFICE.add('OFFICE_LEDGER');
+for(const key of ['MESSAGES','NOTICES','PRAYERS','WORKFLOWS','RUNS','RUN_LOG','FORM_FIELDS','FORM_RULES','CONTENT','AUTOMATIONS'])OFFICE.delete(key);
 export const READONLY = new Set(['PARISHES', 'AUDIT', 'CORRECTIONS', 'ANNIVERSARIES', 'EPARCHY_NEWS', 'PERMISSIONS', 'EXCEPTIONS', 'TRANSFERS', 'MEMBER_REQUESTS', 'ACCOUNTS']);
-export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference']);
+export const PROTECTED = new Set(['status', 'approvedBy', 'approvedAt', 'issuedBy', 'issuedAt', 'history', 'original', 'revision', 'memberRequestId', 'memberReference', 'bishopReview', 'bishopReviewedBy', 'bishopReviewedAt', 'bishopReviewNote', 'signedByUserId','resubmissionNote']);
 
 /* Idempotent migration for parish records and working templates. */
 export function migrate_state(d) {
@@ -23,7 +25,7 @@ export function migrate_state(d) {
   iter(get(d, 'PAYMENT_MIX', [])).forEach((item, index) => {
     if (isDict(item)) item.color = chartBlues[index % chartBlues.length];
   });
-  for (const key of ['FAMILIES', 'BRANCHES', 'REQUEST_HISTORY']) setdefault(d, key, []);
+  for (const key of ['FAMILIES', 'BRANCHES', 'REQUEST_HISTORY', 'OFFICE_LEDGER']) setdefault(d, key, []);
   setdefault(d, 'SERVICE_PLANS', []);
   for (const key of ['EVENT_TEMPLATES', 'SERVICE_TEMPLATES']) {
     setdefault(d, key, []);
@@ -134,6 +136,8 @@ export function migrate_state(d) {
   }
   for (const form of iter(K(d, 'REGISTRATIONS'))) {
     setdefault(form, 'eventId', null);
+    setdefault(form, 'currency', 'USD');
+    setdefault(form, 'transportOptions', []);
     for (const key of ['fields', 'discounts', 'installments']) {
       const regForm = K(d, 'REG_FORM');
       setdefault(form, key, eq(K(form, 'id'), get(regForm, 'id')) ? deepcopy(get(regForm, key, [])) : []);
@@ -144,6 +148,15 @@ export function migrate_state(d) {
     setdefault(row, 'id', `legacy-registrant-${index + 1}`);
     setdefault(row, 'registrationId', any(K(d, 'REGISTRATIONS'), r => eq(K(r, 'id'), legacyForm)) ? legacyForm : null);
   });
+  for(const r of d.REGISTRANTS){
+    const form=d.REGISTRATIONS.find(f=>f.id===r.registrationId)||{};
+    r.baseFee??=form.fee||0;r.transportFee??=(form.transportOptions||[]).find(o=>o.id===r.transport)?.fee||0;r.transport??='';
+  }
+  for(const request of d.SERVICE_REQUESTS||[]){
+    request.paperDocuments??=structuredClone(request.documents||{});
+    const kind=(request.kind||'').toLowerCase(),requirements=d.PREP_REQUIREMENTS?.[kind==='wedding'?'marriage':kind]||[];
+    request.prep=requirements.filter(r=>r[2]).every(r=>request.documents?.[r[0]])?'complete':'documents missing';
+  }
   setdefault(K(d, 'CHECKIN'), 'eventId', null);
   setdefault(K(d, 'CHECKIN'), 'sessions', {});
   for (const extra of values(K(d, 'PERSON_EXTRA'))) pop(extra, 'preferred', null);
@@ -491,9 +504,10 @@ export function validate(d) {
 }
 
 export function writable(role, key) {
-  if (role === 'bishop' || role === 'member') return false;
+  if (role === 'member') return false;
   if (READONLY.has(key)) return false;
   if (CLERGY.has(role)) return true;
+  if (['super_admin','bishop','diocesan_admin','parish_admin'].includes(role)) return key!=='NOTES';
   if (key === 'NOTIFICATIONS' || key === 'PREFS') return true;
   if (role === 'secretary') return OFFICE.has(key);
   if (role === 'treasurer') return FINANCE.has(key) || key === 'RATE';

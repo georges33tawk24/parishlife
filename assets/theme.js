@@ -1,7 +1,6 @@
-/* Parish colour schemes.
-   The stylesheets are written in Forest; every other scheme is derived from one colour and
-   overrides the same tokens on <html>, so the office, the member portal, the CMS and the
-   parish website all follow it. Text colours are checked for contrast before they are used. */
+/* Personal dashboard palettes derive shared tokens from one primary colour.
+   Public websites use applySiteTheme so all parishes share the same public palette.
+   Contrast calculations select readable foreground colours. */
 
 export const DEFAULT_PRIMARY = '#233B32';
 
@@ -106,7 +105,7 @@ const APP_TOKENS = p => ({
   '--chart-1': p.primary, '--chart-2': p.secondary, '--chart-3': p.strong, '--chart-4': p.selection,
   '--text': p.text, '--text-2': p.secondary, '--text-3': p.secondary,
   '--bg': p.bg, '--surface-soft': p.bg, '--muted': p.muted, '--border': p.border, '--border-strong': p.strong,
-  '--danger': p.primary, '--danger-subtle': p.muted, '--danger-ink': p.hover, '--danger-border': p.strong,
+  '--danger': '#B42318', '--danger-subtle': '#FFF1F0', '--danger-ink': '#8A1C13', '--danger-border': '#F2B8B3',
   '--info': p.secondary, '--info-subtle': p.bg, '--info-ink': p.text, '--info-border': p.border
 });
 
@@ -135,5 +134,29 @@ function paint(theme, tokens, root) {
   return scheme;
 }
 
-export const applyTheme = (theme, root = document.documentElement) => paint(theme, APP_TOKENS, root);
-export const applySiteTheme = (theme, root = document.documentElement) => paint(theme, SITE_TOKENS, root);
+export function applyTheme(theme, root = document.documentElement) {
+  const scheme = paint(theme, APP_TOKENS, root);
+  const dark = theme?.mode === 'dark';
+  root.dataset.mode = dark ? 'dark' : 'light';
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  // Mode tokens are removed on every switch, including a return to Forest.
+  const modeTokens = dark ? {
+    '--bg':'#11161E', '--surface':'#1A2230', '--surface-soft':'#202A39', '--muted':'#263244',
+    '--text':'#F3F6FC', '--text-2':'#CBD5E4', '--text-3':'#B5C4D8',
+    '--border':'#415169', '--border-strong':'#8193AC', '--selection':'#34465F',
+    '--selection-hover':'#3D5472', '--primary-subtle':'#2B3C52',
+    '--link':overlay(scheme.primary,.72),
+    '--success-subtle':'#173B2A', '--success-ink':'#A5E6BD', '--success-border':'#397B54',
+    '--warning-subtle':'#473A14', '--warning-ink':'#FFE28A', '--warning-border':'#967B2E',
+    '--info-subtle':'#21364B', '--info-ink':'#B9DCFF', '--info-border':'#507699',
+    '--danger':'#FFB4AB', '--danger-subtle':'#48201F', '--danger-ink':'#FFDAD5', '--danger-border':'#97524D'
+  } : {'--surface':'#FFFFFF'};
+  for (const name of root._modeTokens || []) root.style.removeProperty(name);
+  // Restore the light palette before overlaying the mode.
+  if (!dark) paint(theme, APP_TOKENS, root);
+  for (const [name,value] of Object.entries(modeTokens)) root.style.setProperty(name,value);
+  root._modeTokens = Object.keys(modeTokens);
+  return scheme;
+}
+// Public pages deliberately use one shared visual identity, independent of user/parish preferences.
+export const applySiteTheme = (_theme, root = document.documentElement) => paint(null, SITE_TOKENS, root);

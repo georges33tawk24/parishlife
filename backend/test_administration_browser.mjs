@@ -1,0 +1,103 @@
+const { chromium } = await import(process.env.PARISHLIFE_PLAYWRIGHT_MODULE || 'playwright');
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+
+const credentials=JSON.parse(readFileSync(process.env.PARISHLIFE_PREVIEW_CREDENTIALS || new URL('../var/administration-preview.json',import.meta.url),'utf8'));
+const browser=await chromium.launch({channel:process.platform==='win32'?'msedge':undefined,headless:true});
+const failures=[];
+async function login(username,viewport={width:1440,height:1000}){
+  const context=await browser.newContext({viewport});
+  const page=await context.newPage();
+  page.on('pageerror',error=>failures.push(error.message));
+  await page.goto(`http://127.0.0.1:${credentials.port}/index.html`);
+  await page.locator('[name=username]').fill(username);
+  await page.locator('[name=password]').fill(credentials.password);
+  await page.locator('#account-auth-form [type=submit]').click();
+  try{await page.locator('[data-access-scope]').waitFor();}
+  catch(error){console.error(username,await page.locator('body').innerText());console.error(failures);await page.screenshot({path:'var/administration-browser-failure.png',fullPage:true});throw error;}
+  return {page,context};
+}
+try{
+  const {page:root,context:rootContext}=await login('preview-root');
+  await root.locator('[data-access-scope]').selectOption('global:*');
+  await root.getByText('Entire system',{exact:true}).first().waitFor({state:'attached'});
+  await root.locator('[data-access-assign]').click();
+  await root.locator('[data-access-form] [name=username]').fill('preview-secretary');
+  await root.locator('[data-access-form] [name=role]').selectOption('super_admin');
+  await root.locator('[data-access-form] [name=currentPassword]').fill(credentials.password);
+  await root.locator('[data-access-form] [type=submit]').click();
+  await root.locator('[data-access-form]').waitFor({state:'detached'});
+  await root.locator('[data-access-management] article').filter({hasText:'preview-secretary'}).getByRole('button',{name:'Revoke access'}).click();
+  await root.locator('[data-access-form] [name=currentPassword]').fill(credentials.password);
+  await root.locator('[data-access-form] [type=submit]').click();
+  await root.locator('[data-access-form]').waitFor({state:'detached'});
+  await root.screenshot({path:'var/administration-system-desktop.png',fullPage:true});
+  await root.locator('[data-global-password="preview-secretary"]').click();
+  await root.locator('[data-access-form] [name=currentPassword]').fill(credentials.password);
+  await root.locator('[data-access-form] [name=reason]').fill('Browser fixture identity verification');
+  const recoveredPassword='A browser recovery password 71!';
+  await root.locator('[data-access-form] [name=newPassword]').fill(recoveredPassword);
+  await root.locator('[data-access-form] [name=confirmPassword]').fill(recoveredPassword);
+  await root.locator('[data-access-form] [type=submit]').click();
+  await root.locator('[data-access-form]').waitFor({state:'detached'});
+  await root.evaluate(()=>{location.hash='#/account';});
+  await root.locator('[data-change-password]').click();
+  await root.locator('[data-account-password] [name=currentPassword]').fill(credentials.password);
+  const ownPassword='A changed browser operator password 85!';
+  await root.locator('[data-account-password] [name=newPassword]').fill(ownPassword);
+  await root.locator('[data-account-password] [name=confirmPassword]').fill(ownPassword);
+  await root.locator('[data-account-password] [type=submit]').click();
+  await root.locator('[data-account-password]').waitFor({state:'detached'});
+  await rootContext.close();
+
+  const {page:parish,context:parishContext}=await login('preview-parish');
+  await parish.locator('[data-access-assign]').click();
+  const roles=await parish.locator('[data-access-form] [name=role] option').evaluateAll(options=>options.map(option=>option.value));
+  assert(!roles.includes('parish_admin')&&!roles.includes('diocesan_admin')&&!roles.includes('super_admin'));
+  await parish.locator('[data-access-form] [name=username]').fill('preview-secretary');
+  await parish.locator('[data-access-form] [name=role]').selectOption('secretary');
+  await parish.locator('[data-access-form] [type=submit]').click();
+  await parish.locator('[data-access-form]').waitFor({state:'detached'});
+  await parish.locator('[data-access-secretaries]').click();
+  await parish.locator('[data-access-form] [name=secretary]:checked').uncheck();
+  await parish.locator('[data-access-form] [type=submit]').click();
+  await parish.locator('[data-access-form]').waitFor({state:'detached'});
+  await parish.getByText('No secretary assigned.',{exact:false}).waitFor();
+  await parish.locator('[data-access-history]').click();
+  await parish.locator('[data-access-history-list] article').first().waitFor();
+  await parish.setViewportSize({width:390,height:844});
+  await parish.screenshot({path:'var/administration-parish-mobile.png',fullPage:true});
+  await parishContext.close();
+
+  const {page:arch,context:archContext}=await login('preview-arch');
+  await arch.locator('[data-new-parish]').click();
+  await arch.locator('#workspace-form [name=name]').fill('First parish without a secretary');
+  await arch.locator('#workspace-form [name=nameAr]').fill('الرعية الأولى');
+  await arch.locator('#workspace-form [name=town]').fill('Beirut');
+  await arch.locator('#workspace-form [name=rite]').fill('Maronite');
+  await arch.locator('#workspace-form [type=submit]').click();
+  await arch.locator('#workspace-form').waitFor({state:'detached'});
+  await arch.locator('[data-access-scope]').waitFor();
+  const newParishScope=await arch.locator('[data-access-scope] option').evaluateAll(options=>options.find(option=>option.value.startsWith('parish:')).value);
+  await arch.locator('[data-access-scope]').selectOption(newParishScope);
+  await arch.locator('[data-access-secretaries]').waitFor();
+  await arch.screenshot({path:'var/administration-first-parish.png',fullPage:true});
+  await archContext.close();
+  const arabicContext=await browser.newContext({viewport:{width:390,height:844}});
+  await arabicContext.addInitScript(()=>localStorage.setItem('pl-lang','ar'));
+  const arabic=await arabicContext.newPage();
+  arabic.on('pageerror',error=>failures.push(error.message));
+  await arabic.goto(`http://127.0.0.1:${credentials.port}/index.html`);
+  await arabic.locator('[name=username]').fill('preview-parish');
+  await arabic.locator('[name=password]').fill(credentials.password);
+  await arabic.locator('#account-auth-form [type=submit]').click();
+  await arabic.locator('[data-access-scope]').waitFor();
+  assert.equal(await arabic.locator('html').getAttribute('dir'),'rtl');
+  await arabic.locator('[data-access-assign]').click();
+  assert((await arabic.locator('[data-access-form] [name=role]').textContent()).includes('أمين السر'));
+  assert(await arabic.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+  await arabic.screenshot({path:'var/administration-arabic-mobile.png',fullPage:true});
+  await arabicContext.close();
+  assert.deepEqual(failures,[]);
+  console.log('Browser workflows passed: Super Admin grant/revocation, staff password recovery, own password change, scoped Parish Admin options, secretary assignment/removal, history, mobile view, first parish creation in an empty archdiocese, and Arabic right-to-left mobile forms.');
+}finally{await browser.close();}

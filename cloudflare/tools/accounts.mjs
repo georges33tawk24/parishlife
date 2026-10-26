@@ -10,8 +10,8 @@
      node cloudflare/tools/accounts.mjs grant-complaints fr-antoine --parish p-elias --permission Review --permission Respond
 
    A strong random password is generated unless --password is given (12+ characters).
-   Hashes use PBKDF2-SHA256 with 10,000 iterations by default, which keeps a sign-in
-   within the Workers Free plan's CPU allowance; on Workers Paid use --iterations 600000. */
+   New hashes use PBKDF2-SHA256 with at least 600,000 iterations. Configure
+   deployment CPU capacity to accommodate authentication. */
 import { randomBytes, randomInt } from 'node:crypto';
 import { passwordHash } from '../src/py.js';
 
@@ -38,8 +38,8 @@ function newPassword() {
   const letters = 'abcdefghjkmnpqrstuvwxyz23456789';
   return Array.from({ length: 4 }, () => Array.from({ length: 5 }, () => letters[randomInt(letters.length)]).join('')).join('-');
 }
-const iterations = Number(options.iterations ?? 10000);
-if (!Number.isInteger(iterations) || iterations < 10000) fail('Use at least 10000 iterations.');
+const iterations = Number(options.iterations ?? 600000);
+if (!Number.isInteger(iterations) || iterations < 600000) fail('Use at least 600000 iterations.');
 const hash = password => passwordHash(password, randomBytes(16).toString('hex'), iterations);
 const user = `(SELECT id FROM users WHERE username=${quote(username)})`;
 const statements = [];

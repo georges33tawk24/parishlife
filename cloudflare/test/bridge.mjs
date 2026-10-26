@@ -2,7 +2,7 @@
    One JSON request per line on stdin, one JSON reply per line on stdout. */
 import { createInterface } from 'node:readline';
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { join, normalize } from 'node:path';
+import { join, posix } from 'node:path';
 import { LocalD1 } from './d1-sqlite.mjs';
 import { Tx } from '../src/db.js';
 import { Problem, PyError, setTimeZone, overrideToday } from '../src/py.js';
@@ -11,8 +11,11 @@ import { member_view, member_action } from '../src/member.js';
 import { xlsx_preview } from '../src/xlsx.js';
 import { migrate_state, validate } from '../src/state.js';
 import worker from '../src/worker.js';
+import { initializeWorkspace } from '../src/workspace.js';
 
 setTimeZone(process.env.PARISH_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone);
+// URL paths remain POSIX paths when the test adapter runs on Windows.
+const normalize=path=>posix.normalize(path.replaceAll('\\','/'));
 
 /* The files Workers Static Assets would publish (see .assetsignore). */
 const published = path => path === 'index.html' || path === 'landing.html' || path === 'public.html'
@@ -32,7 +35,7 @@ async function inTx(dbPath, fn, commit = true) {
 }
 
 const calls = {
-  init_db: ({ db }) => { const d1 = new LocalD1(db); return initialize(d1, true).finally(() => d1.close()); },
+  init_db: async ({ db }) => { const d1 = new LocalD1(db); try { await initialize(d1, true); await initializeWorkspace(d1); } finally { d1.close(); } },
   save_patch: ({ db, args: [u, pid, payload] }) => inTx(db, c => save_patch(c, u, pid, payload)),
   workflow: ({ db, args: [u, pid, q] }) => inTx(db, c => workflow(c, u, pid, q)),
   visible: ({ db, args: [u, pid, d] }) => inTx(db, c => visible(c, u, pid, d), false),

@@ -12,6 +12,8 @@ import { openPastoralForm } from './views/notes.js';
 import { download } from './actions.js';
 import { persist } from './persist.js';
 import { safeRichText } from './rich-text.js';
+import { requestRequirements, requestDocumentPanel, mountRequestDocuments } from './request-documents.js';
+import { participantForm, canCheckIn } from './registration.js';
 import { memberAction } from './member-data.js';
 import { readAddressCascade } from './geography.js';
 import { eligibleEvents, eventById, selectedRegistration, selectRegistration, selectableCheckinEvents,
@@ -792,7 +794,7 @@ export function meetingEdit(id) {
       ${C.field({label:L('Place (optional)','المكان (اختياري)'),id:'me_place',value:meeting.place||''})}</div>
       <label class="check" style="margin-top:16px"><input type="checkbox" id="me_specific" ${meeting.participants?.length?'checked':''}><span>${L('Invite specific group members','دعوة أعضاء محدّدين من المجموعة')}</span></label>
       <fieldset class="formrow" id="me_people" ${meeting.participants?.length?'':'hidden'}><legend class="label">${L('Participants','المشاركون')}</legend><div class="choice-grid">${gd().roster.map(r=>`<label class="check"><input type="checkbox" value="${esc(r.p)}" ${meeting.participants?.includes(r.p)?'checked':''}><span>${esc(L(D.person(r.p)?.lat||r.p,D.person(r.p)?.ar||r.p))}</span></label>`).join('')}</div></fieldset>
-      <p class="t-caption dim">${L('Changing this date keeps its attendance linked to the meeting.','تغيير التاريخ يبقي الحضور مرتبطاً بالاجتماع.')}</p>`,
+      <p class="t-caption dim">${is('secretary')?L('Update the meeting date, place and invited members.','عدّل موعد الاجتماع ومكانه والأعضاء المدعوين.'):L('Changing this date keeps its attendance linked to the meeting.','تغيير التاريخ يبقي الحضور مرتبطاً بالاجتماع.')}</p>`,
     foot:`<button class="btn btn-danger-quiet" id="me_delete">${L('Delete meeting','حذف الاجتماع')}</button>
       <button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="me_save">${L('Save','حفظ')}</button>`,
     onMount(el){C.wire(el);el.querySelector('#me_specific').addEventListener('change',e=>{el.querySelector('#me_people').hidden=!e.target.checked;});el.querySelector('#me_save').addEventListener('click',async()=>{
@@ -1198,7 +1200,9 @@ export function formNew() {
         </div>` : ''}
       <div class="formgrid">${C.stepper({ label: L('Capacity', 'السعة'), value: 60, id: 'rf_cap' })}
         ${C.field({ label: L('Closes', 'يقفل'), type: 'date', value: deadline.toLocaleDateString('sv-SE'), id: 'rf_dl' })}</div>
-      ${C.currencyField({ label: L('Fee', 'الرسم'), value: '0.00', id: 'rf_fee' })}
+      ${C.field({label:L('Fee','الرسم'),id:'rf_fee',type:'number',value:0})}
+      <div class="formrow"><label class="label" for="rf_currency">${L('Currency','العملة')}</label><select class="select" id="rf_currency"><option>USD</option><option>LBP</option></select></div>
+      <div class="registration-section"><h3>${L('Transport options','خيارات النقل')}</h3>${C.checkRow(L('Allow own transport','السماح بالنقل الخاص'),{id:'rf_own',checked:true})}${C.checkRow(L('Offer parish bus','توفير باص الرعية'),{id:'rf_bus'})}${C.field({label:L('Bus fee (event currency)','رسم الباص (عملة الحدث)'),id:'rf_bus_fee',type:'number',value:0})}</div>
       <div class="stack" style="gap:10px">${C.checkRow(L('Household registration', 'تسجيل عائلي'), { checked: true,id:'rf_household' })}
         ${C.checkRow(L('Waiting list once full', 'لائحة انتظار عند الامتلاء'), { checked: true,id:'rf_waitlist' })}
         ${C.checkRow(L('Parental consent for under-18s', 'موافقة الأهل لمن دون ١٨'), { checked: true,id:'rf_consent' })}</div>`,
@@ -1259,7 +1263,7 @@ export function formNew() {
             visibleGroupIds:e.kind==='group'?[e.groupId]:[],priestIds:[] };
         }
         const form = { id: 'rg' + Date.now(), eventId: e.id, event: e.title, eventAr: e.titleAr, open: true, cap: +val(el, '#rf_cap') || 60,
-          taken: 0, fee: parseFloat(val(el, '#rf_fee')) || 0, deadline: val(el, '#rf_dl'), waiting: 0, fields: [], discounts: [], installments: [],
+          taken: 0, currency:val(el,'#rf_currency'),transportOptions:[...(el.querySelector('#rf_own').checked?[{id:'own',name:'Own transport',nameAr:'نقل خاص',fee:0}]:[]),...(el.querySelector('#rf_bus').checked?[{id:'bus',name:'Parish bus',nameAr:'باص الرعية',fee:Number(val(el,'#rf_bus_fee'))||0}]:[])], fee: parseFloat(val(el, '#rf_fee')) || 0, deadline: val(el, '#rf_dl'), waiting: 0, fields: [], discounts: [], installments: [],
           household:el.querySelector('#rf_household').checked,waitingList:el.querySelector('#rf_waitlist').checked,parentalConsent:el.querySelector('#rf_consent').checked };
         D.REGISTRATIONS.unshift(form); selectRegistration(form.id);
         if(!await persist())return;closeOverlays(); refresh();
@@ -1270,36 +1274,7 @@ export function formNew() {
   });
 }
 
-export function registerParticipant() {
-  const form=selectedRegistration(), event=linkedEvent(form);
-  if(!form||!event)return toast(L('Select a linked event form first','اختر استمارة مرتبطة بحدث أولاً'),'','warning');
-  if(!form.open)return toast(L('This registration form is closed','استمارة التسجيل هذه مغلقة'),'','warning');
-  const registered=new Set(D.REGISTRANTS.filter(row=>D.REGISTRATIONS.some(other=>other.id===row.registrationId&&other.eventId===event.id)).map(row=>row.p));
-  const available=D.PEOPLE.filter(person=>!registered.has(person.id)).sort((a,b)=>a.lat.localeCompare(b.lat));
-  openModal({title:L('Register participant','تسجيل مشترك'),
-    sub:`${esc(L(event.title,event.titleAr))} · ${fmtDate(event.d)} ${esc(event.t)} · ${esc(L(D.venue(event.venue)?.name||'',D.venue(event.venue)?.ar||''))}`,
-    body:`<p class="help">${L('Registration reserves a place at this event. Arrival is recorded separately at check-in.','يحجز التسجيل مكاناً في هذا الحدث. يسجّل الوصول بصورة منفصلة عند الباب.')}</p>
-      <div class="formrow" style="margin-top:14px"><label class="label" for="rp_person">${L('Parishioner','المؤمن')} <span class="req">*</span></label>
-        <select class="select" id="rp_person"><option value="">${L('Select existing person','اختر شخصاً مسجّلاً')}</option>
-          ${available.map(person=>`<option value="${esc(person.id)}">${esc(person.lat)} · ${esc(person.ar)}</option>`).join('')}</select></div>
-      ${C.checkRow(L('Required consent has been received','استُلمت الموافقة المطلوبة'),{id:'rp_consent'})}
-      <p class="help">${L('Leave consent unchecked until it has actually been received.','اترك الموافقة غير محدّدة حتى تُستلم فعلياً.')}</p>`,
-    foot:`<button class="btn btn-secondary" data-close>${L('Cancel','إلغاء')}</button><button class="btn btn-primary" id="rp_save">${L('Save registration','حفظ التسجيل')}</button>`,
-    onMount(el){C.wire(el);const save=el.querySelector('#rp_save');save.addEventListener('click',async()=>{
-      const personId=val(el,'#rp_person');if(!personId)return toast(L('Choose a parishioner','اختر مؤمناً'),'','warning');
-      if(D.REGISTRANTS.some(row=>row.p===personId&&D.REGISTRATIONS.some(other=>other.id===row.registrationId&&other.eventId===event.id)))
-        return toast(L('Already registered for this event','مسجّل لهذا الحدث سابقاً'),'','warning');
-      if(form.taken>=form.cap)return toast(L('This event is full','هذا الحدث مكتمل العدد'),'','warning');
-      save.disabled=true;
-      const id='rgr'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-      D.REGISTRANTS.push({id,registrationId:form.id,p:personId,paid:0,status:form.fee||!el.querySelector('#rp_consent').checked?'pending':'registered',
-        consent:!!el.querySelector('#rp_consent').checked,transport:'own'});
-      form.taken+=1;
-      if(!await persist()){save.disabled=false;return;}
-      closeOverlays();refresh();ok(L('Participant registered','سُجّل المشترك'),`${nameOf(D.person(personId))} · ${L(event.title,event.titleAr)}`);
-    });}
-  });
-}
+export function registerParticipant() { participantForm(selectedRegistration()); }
 
 export function fieldAdd() {
   const form=selectedRegistration();if(!form||!linkedEvent(form))return toast(L('Select a linked registration form','اختر استمارة مرتبطة بحدث'),'','warning');
@@ -1354,6 +1329,7 @@ export function scan() {
         const forms=D.REGISTRATIONS.filter(f=>f.eventId===event.id).map(f=>f.id);
         const registrant=D.REGISTRANTS.find(r=>r.id===val(el,'#sc_code')&&forms.includes(r.registrationId));
         if(!registrant)return toast(L('Reference not registered for this event','الرقم غير مسجّل لهذا الحدث'),'','warning');
+        if(!canCheckIn(registrant,D.REGISTRATIONS.find(f=>f.id===registrant.registrationId)))return toast(L('Confirm the place and required consent first','ثبّت المقعد والموافقة المطلوبة أولاً'),'','warning');
         const session=ensureCheckinSession(event.id);
         if(session.rows.some(r=>r.p===registrant.p))return toast(L('Already checked in','مسجّل مسبقاً'),'','warning');
         const pickup=D.PICKUP[registrant.p],required=pickup?.required!==false&&!!pickup;
@@ -1371,7 +1347,7 @@ export function checkinManual() {
   const event=selectableCheckinEvents().find(e=>e.id===S.ui.checkinEventId);
   if(!event)return toast(L('Select an event first','اختر حدثاً أولاً'),'','warning');
   const forms=D.REGISTRATIONS.filter(f=>f.eventId===event.id).map(f=>f.id);
-  const allowed=D.REGISTRANTS.filter(r=>forms.includes(r.registrationId)).map(r=>r.p);
+  const allowed=D.REGISTRANTS.filter(r=>forms.includes(r.registrationId)&&canCheckIn(r,D.REGISTRATIONS.find(f=>f.id===r.registrationId))).map(r=>r.p);
   pickPerson({
     title: L('Manual check-in', 'تسجيل يدوي'),
     sub: `${L(event.title,event.titleAr)} · ${event.d} ${event.t} · ${L(D.venue(event.venue)?.name||'',D.venue(event.venue)?.ar||'')}`,
@@ -1512,9 +1488,7 @@ export function lineReverse(i) {
 /* ═════════════ services: requests ═════════════ */
 export function svcRequestOpen(id) {
   const r = D.SERVICE_REQUESTS.find(x => x.id === id); if (!r) return;
-  const reqs = D.PREP_REQUIREMENTS[r.kind.toLowerCase()] || [];
-  const documents = r.documents || {};
-  const missing = reqs.filter(([en]) => !documents[en]);
+  const reqs = requestRequirements(r);
   const stage = r.stage || (r.status === 'pending' ? 'request' : r.status === 'approved' ? 'preparation' : r.status);
   const stageLabel={request:L('Request','طلب'),approval:L('Approved','موافَق عليه'),preparation:L('Preparation','تحضير'),
     celebration:L('Celebrated','احتُفل به'),rejected:L('Declined','مرفوض')}[stage]||stage;
@@ -1533,9 +1507,7 @@ export function svcRequestOpen(id) {
       <div class="divider"></div><h4 class="t-ui" style="margin-bottom:10px">${L('Progress','التقدّم')}</h4>
       <p class="t-caption dim">${L('Request → priest approval → preparation → celebration','طلب ← موافقة الكاهن ← تحضير ← احتفال')}</p>
       <p class="t-caption">${L('Current stage','المرحلة الحالية')}: <b>${esc(stageLabel)}</b></p>
-      ${reqs.length ? `<div class="divider"></div><h4 class="t-ui">${L('Required documents and preparation','المستندات والتحضير المطلوب')}</h4>
-      <div class="stack" style="gap:8px">${reqs.map(([en, ar])=>`<label class="check"><input type="checkbox" data-sr-doc="${esc(en)}" ${documents[en]?'checked':''} ${['rejected','celebrated'].includes(r.status)?'disabled':''}><span>${esc(L(en,ar))}</span></label>`).join('')}</div>
-      <p class="help">${missing.length ? `${L('Missing','الناقص')}: ${missing.map(([en,ar])=>esc(L(en,ar))).join(', ')}` : L('All required items are recorded.','سُجّلت جميع المتطلبات.')}</p>` : ''}
+      ${requestDocumentPanel(r,'service-request')}
       ${r.status==='ready'?C.field({label:L('Actual celebration date','تاريخ الاحتفال الفعلي'),id:'sr_actual',type:'date',value:new Date().toLocaleDateString('sv-SE')}):''}
       ${r.status==='celebrated'?C.inlineAlert('success',L('Celebration recorded','سُجّل الاحتفال'),L('This service request does not create an official sacramental register entry.','لا ينشئ طلب الخدمة هذا قيداً رسمياً في سجل الأسرار.')):''}`,
     foot: `<button class="btn btn-secondary" data-close>${L('Close', 'إغلاق')}</button>
@@ -1543,14 +1515,9 @@ export function svcRequestOpen(id) {
       ${canAdvance?`<button class="btn btn-primary" id="srok" style="margin-inline-start:auto">${r.status==='pending'?L('Approve request','الموافقة على الطلب'):r.status==='approved'?L('Start preparation','بدء التحضير'):r.status==='preparing'?L('Mark ready','جاهز للاحتفال'):L('Record celebration','تسجيل الاحتفال')}</button>`:''}`,
     onMount(el) {
       C.wire(el);
-      el.querySelectorAll('[data-sr-doc]').forEach(box=>box.addEventListener('change',async()=>{
-        r.documents ||= {};r.documents[box.dataset.srDoc]=box.checked;
-        r.prep=reqs.every(([en])=>r.documents[en])?'complete':'documents missing';
-        if(!await persist()){box.checked=!box.checked;return;}
-        closeOverlays();svcRequestOpen(id);
-      }));
+      mountRequestDocuments(el,r,'service-request',()=>{closeOverlays();svcRequestOpen(id);});
       el.querySelector('#srok')?.addEventListener('click',async()=>{
-        if(r.status==='preparing'&&reqs.some(([en])=>!r.documents?.[en]))return toast(L('Complete the missing requirements first','أكمل المتطلبات الناقصة أولاً'),'','warning');
+        if(['preparing','ready'].includes(r.status)&&reqs.some(([en,,required])=>required&&!r.documents?.[en]))return toast(L('Complete the missing requirements first','أكمل المتطلبات الناقصة أولاً'),'','warning');
         const next={pending:'approved',approved:'preparing',preparing:'ready',ready:'celebrated'}[r.status];
         if(!next)return;
         if(next==='celebrated'){
@@ -1594,7 +1561,7 @@ export function svcRequestNew(kind = 'Mass|قدّاس') {
           !need(el,'#sq_i',L('Describe the purpose','اشرح الغاية')))return;
         D.SERVICE_REQUESTS.unshift({ id: 'sr' + Date.now(), kind: en, kindAr: ar, by: val(el,'#sq_p'), date: val(el, '#sq_d'),
           time:val(el,'#sq_t'),venue:val(el,'#sq_v'),contact:val(el,'#sq_c'),purpose:val(el,'#sq_i'),language:val(el,'#sq_l'),notes:val(el,'#sq_n'),
-          documents:{},prep:'documents missing',status:'pending',stage:'request',history:[] });
+          documents:{},paperDocuments:{},prep:requestRequirements({kind:en}).some(([, ,required])=>required)?'documents missing':'complete',status:'pending',stage:'request',history:[] });
         if(!await persist())return;closeOverlays(); refresh(); ok(L('Request sent', 'أُرسل الطلب'), L(`${en} · awaiting priest review`, `${ar} · بانتظار مراجعة الكاهن`));
       });
     }

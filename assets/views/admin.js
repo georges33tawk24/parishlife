@@ -375,8 +375,8 @@ export function audit() {
   return `${pageHead({
       crumbs: [{ label: L('Administration', 'الإدارة') }, { label: L('Audit trail', 'سجل التدقيق') }],
       title: L('Audit trail', 'سجل التدقيق'),
-      sub: L('Who did what, and when. Visible to the parish priest only, and it cannot be edited from inside the application.',
-             'من فعل ماذا ومتى. يظهر لكاهن الرعية وحده، ولا يمكن تعديله من داخل التطبيق.'),
+      sub: L('Who did what, and when. Available to authorized clergy and administrators in this parish. Audit records cannot be edited.',
+             'من فعل ماذا ومتى. متاح للكهنة والمديرين المخوّلين في الرعية. لا يمكن تعديل سجل التدقيق.'),
       actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${L('Export', 'تصدير')}</button>`
     })}
     <div class="toolbar">
@@ -426,21 +426,21 @@ export function settings(tab = '') {
           ${C.field({ label: L('Address', 'العنوان'), value: L(PARISH.address, PARISH.addressAr) })}`)}
         ${panel(L('Branding', 'الهوية'), `${C.avatarUpload('parish')}
           <div class="scheme-current"><span class="scheme-dot" aria-hidden="true"></span>
-            <span class="grow"><b>${L('Colour scheme', 'نظام الألوان')}</b><small>${esc(L(schemeOf(PARISH.theme).en, schemeOf(PARISH.theme).ar))}</small></span>
-            <a class="btn btn-secondary btn-dense" href="#/settings/appearance">${L('Change colours', 'تغيير الألوان')}</a></div>`)}
+            <span class="grow"><b>${L('Personal appearance', 'المظهر الشخصي')}</b><small>${L('Choose your own dashboard palette in My account. Public websites share one theme.','اختر ألوان حسابك في حسابي. للمواقع العامة مظهر موحّد.')}</small></span>
+            <a class="btn btn-secondary btn-dense" href="#/account">${L('Change colours', 'تغيير الألوان')}</a></div>`)}
       </div>
       <div class="sidecol">${panel(L('Clergy and staff', 'الإكليروس والموظّفون'),
         ['p17', 'p18', 'p4', 'p15'].map(id => `<div class="listrow" style="padding-inline:0">${who(person(id))}
           <span class="grow"></span>${C.iconBtn('edit', L('Edit', 'تعديل'), `data-act="person-edit:${id}"`)}</div>`).join(''), { tight: true })}</div></div>`,
 
-    appearance: appearance,
+    appearance: () => panel(L('Personal appearance','المظهر الشخصي'), `<p>${L('Each user chooses their own dashboard colors and light or dark mode.','يختار كل مستخدم ألوان حسابه والوضع الفاتح أو الداكن.')}</p><a class="btn btn-primary" href="#/account">${L('Open my account','افتح حسابي')}</a>`),
 
     currency: () => `<div class="splitview">
       <div>${panel(L('Currency and rate', 'العملة والسعر'), `<div class="formgrid">
         <div class="formrow"><label class="label">${L('Leading currency', 'العملة الأساسية')}</label>
           <select class="select" data-pref="cur.lead" aria-label="${L('Leading currency', 'العملة الأساسية')}"><option>USD</option><option>L.L</option></select></div>
         ${C.field({ label: L('Rate (lira to the dollar)', 'السعر (ليرة للدولار)'), value: num(RATE.value), dir: 'ltr',
-                    state: is('priest', 'treasurer') ? '' : 'disabled' })}</div>
+                    state: is('priest','treasurer','super_admin','bishop','diocesan_admin','parish_admin') ? '' : 'disabled' })}</div>
         <p class="help">${L('Changing the rate applies to new records only. Everything already recorded keeps the rate it was created with.',
           'تغيير السعر يسري على السجلات الجديدة فقط. وما سُجّل يحتفظ بالسعر الذي أُنشئ به.')}</p>
         <div class="stack" style="gap:12px;margin-top:16px">
@@ -533,7 +533,7 @@ export function settings(tab = '') {
           ${[[L('Medical and allergy alerts', 'التنبيهات الطبية والحساسية'), 'shield'],
              [L('Safeguarding and incident reports', 'تقارير الحماية والحوادث'), 'shield'],
              [L('Donor details and amounts', 'تفاصيل المتبرّعين والمبالغ'), 'give'],
-             [L('Pastoral notes', 'الملاحظات الرعوية'), 'notes']]
+             [L('Notes & Tasks', 'الملاحظات والمهام'), 'notes']]
             .map(([x, i]) => `<li class="row" style="gap:10px;align-items:flex-start">${icon(i, 17, 'dimmer')}
               <span class="t-caption">${esc(x)}</span></li>`).join('')}</ul>
         <div class="divider"></div>
@@ -590,13 +590,13 @@ export function settings(tab = '') {
 settings.mount = (host, tab = '') => {
   C.wire(host); wireTables(host);
   host.querySelector('#perm')?.addEventListener('click', reviewDeletions);
-  if (tab === 'appearance') wireAppearance(host);
+  // Appearance is managed per account through My account.
 };
 
 /* ── Colours: a scheme for the whole parish, previewed live and saved by the priest ── */
 const sameTheme = (a, b) => schemeOf(a).id === schemeOf(b).id && schemeOf(a).primary === schemeOf(b).primary;
 const themeDraft = () => S.themeDraft || schemeOf(PARISH.theme);
-const canTheme = () => is('priest');
+const canTheme = () => is('priest','super_admin','bishop','diocesan_admin','parish_admin');
 
 const SAMPLE = `<i class="ss-rail"><i></i><i></i><i></i></i>
       <i class="ss-page"><i class="ss-line"></i><i class="ss-line short"></i><i class="ss-chip"></i><i class="ss-btn"></i></i>`;

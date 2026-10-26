@@ -1,0 +1,15 @@
+import { api } from '../api.js';
+import { t } from '../i18n.js';
+import { esc,openDrawer,closeOverlays,toast } from '../ui.js';
+
+export async function editPublicProfile(parish,refresh){
+  try{
+    const data=await api('workspace/public-profile?parish='+encodeURIComponent(parish)),p=data.profile;
+    const fields=[['phone','Office phone','هاتف المكتب','tel'],['email','Office email','بريد المكتب','email'],['address','Parish address','عنوان الرعية','text'],['website','Parish website (HTTPS)','موقع الرعية (HTTPS)','url'],['officeHours','Office hours','ساعات المكتب','text'],['confessionTimes','Confession times','مواعيد الاعتراف','text'],['accessibility','Accessibility information','معلومات إمكانية الوصول','text'],['latitude','Latitude (optional)','خط العرض (اختياري)','number'],['longitude','Longitude (optional)','خط الطول (اختياري)','number']];
+    openDrawer({title:t('Public parish profile','صفحة الرعية العامة'),body:`<form><p class="help">${t('These details are public. Use the parish office’s contact information, rather than personal clergy or ministry leader contacts.','هذه المعلومات علنية. استخدم معلومات التواصل الخاصة بمكتب الرعية بدلاً من المعلومات الشخصية للكهنة والمسؤولين.')}</p><div class="formgrid">${fields.map(([k,en,ar,type])=>`<label class="formrow"><span class="label">${t(en,ar)}</span><input class="input" name="${k}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(p[k])}" maxlength="2000"></label>`).join('')}</div>${[['massTimes','Mass times (English)','مواعيد القداديس (الإنكليزية)'],['massTimesAr','Mass times (Arabic)','مواعيد القداديس (العربية)'],['gallery','Gallery · one HTTPS image URL per line (up to 12)','الصور · رابط HTTPS واحد في كل سطر (حتى ١٢)']].map(([k,en,ar])=>`<label class="formrow"><span class="label">${t(en,ar)}</span><textarea class="textarea" name="${k}" rows="4" ${k==='gallery'?'':'maxlength="2000"'}>${esc(k==='gallery'?p.gallery.join('\n'):p[k])}</textarea></label>`).join('')}<p class="help">${t('Leave the gallery empty to use the default photographs. Coordinates support nearby sorting; the live map remains a preview until configured.','اترك الصور فارغة لاستخدام الصور الافتراضية. تساعد الإحداثيات على ترتيب الرعايا القريبة؛ وتبقى الخريطة معاينة حتى إعدادها.')}</p><p class="help-error" role="alert"></p><button class="btn btn-primary">${t('Publish parish details','نشر معلومات الرعية')}</button></form>`,onMount(el){const f=el.querySelector('form');f.onsubmit=async e=>{
+      e.preventDefault();const b=f.querySelector('button');b.disabled=true;
+      try{const q=Object.fromEntries(new FormData(f));await api('workspace/public-profile','PUT',{...q,parish,revision:data.revision,gallery:q.gallery.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)});closeOverlays();await refresh();toast(t('Parish details published','نُشرت معلومات الرعية'),'','success');}
+      catch(error){f.querySelector('[role=alert]').textContent=error.message;b.disabled=false;}
+    };}});
+  }catch(error){toast(t('Could not open parish details','تعذّر فتح معلومات الرعية'),error.message,'danger');}
+}

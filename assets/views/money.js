@@ -10,6 +10,16 @@ import { BATCH, FUNDS, EXPENSES, PLEDGES, RATE, CAMPAIGNS, RECURRING, RECEIPTS, 
          GIVING_SERIES, PAYMENT_MIX, person } from '../data.js';
 
 const L = (en, ar) => t(en, ar);
+function applyFinanceAccess(host) {
+  if (is('priest','treasurer','super_admin','bishop','diocesan_admin','parish_admin')) return;
+  host.querySelectorAll('#addenv,#close,[data-act]').forEach(el=>{
+    const action=(el.dataset.act||'').split(':')[0];
+    if(!['print','export','receipt','doc','statements-all'].includes(action))el.remove();
+  });
+  const note=document.createElement('p');note.className='help';
+  note.textContent=L('You can view, print and export these financial records. Recording or changing transactions requires a priest or treasurer.','يمكنك عرض السجلات المالية وطباعتها وتصديرها. يتطلب تسجيل المعاملات أو تعديلها كاهناً أو أمين صندوق.');
+  host.querySelector('.tabs')?.insertAdjacentElement('afterend',note);
+}
 const fundName = id => { const f = FUNDS.find(x => x.id === id); return f ? L(f.name, f.ar) : id; };
 const GTABS = () => [['', 'Counting session', 'جلسة العدّ'], ['contributions', 'Contributions', 'المساهمات'],
                ['pledges', 'Pledges', 'التعهّدات', PLEDGES.length], ['recurring', 'Recurring', 'الدائمة', RECURRING.length],
@@ -153,6 +163,7 @@ export function giving(tab = '') {
 }
 
 giving.mount = host => {
+  applyFinanceAccess(host);
   C.wire(host); wireTables(host);
   host.querySelectorAll('[data-rate-pop]').forEach(b => b.addEventListener('click', () =>
     openModal({ title: L('Rate applied', 'السعر المطبَّق'), body: C.ratePopover(50) })));
@@ -230,7 +241,7 @@ export function finance(tab = '') {
         `<span class="dim">${esc(fundName(x.fund))}</span>`,
         `<span class="num">${usd(x.usd)}</span>`, `<span class="num dim">${num(x.usd * RATE.value)}</span>`,
         status(x.status),
-        `<span class="row" style="gap:6px;justify-content:flex-end">${x.status === 'awaiting-approval' && is('priest', 'treasurer')
+        `<span class="row" style="gap:6px;justify-content:flex-end">${x.status === 'awaiting-approval' && is('priest','treasurer','super_admin','bishop','diocesan_admin','parish_admin')
           ? `<button class="btn btn-primary btn-dense" data-act="exp-approve:${x.id}">${L('Approve', 'موافقة')}</button>` : ''}${CR.recBtn('expense', x.id)}</span>`
       ]})),
       empty: empty('fin', L('No expenses recorded', 'لا مصاريف مسجّلة'), L('Record the first one — a receipt photo is enough.', 'سجّل الأول — تكفي صورة الإيصال.'),
@@ -285,6 +296,7 @@ export function finance(tab = '') {
 }
 
 finance.mount = host => {
+  applyFinanceAccess(host);
   C.wire(host); wireTables(host);
 
 };

@@ -20,8 +20,12 @@ const H = (en, ar) => ['h', en, ar];
 const L = id => ['l', id];
 
 export const ROLES = {
+  finance_view: { en:'Finance viewer',ar:'مشاهد المالية',who:null,nav:[L('giving'),L('finance')] },
+  super_admin: { en:'Super Admin',ar:'المشرف العام',who:null,nav:[L('workspace'),L('people'),L('households'),L('calendar'),L('groups'),L('finance'),L('settings')] },
+  diocesan_admin: { en:'Archdiocese Admin',ar:'مدير الأبرشية',who:null,nav:[L('workspace'),L('people'),L('households'),L('calendar'),L('groups'),L('settings')] },
+  parish_admin: { en:'Parish Admin',ar:'مدير الرعية',who:null,nav:[L('workspace'),L('people'),L('households'),L('calendar'),L('groups'),L('settings')] },
   member: {
-    en:'Ministry member', ar:'عضو خدمة', who:null,
+    en:'User', ar:'مستخدم', who:null,
     noteEn:'Your ministries, meetings and personal parish life.',
     noteAr:'خدماتك واجتماعاتك وحياتك الرعوية.',
     nav:[L('memberhome'), L('myrequests'), L('myministries'), L('mymeetings'), L('mycalendar'), L('myattendance'),
@@ -30,9 +34,9 @@ export const ROLES = {
   },
   bishop: {
     en:'Bishop', ar:'المطران', who:null,
-    noteEn:'Read-only oversight of parishes and their activities.',
-    noteAr:'إشراف للقراءة فقط على الرعايا وأنشطتها.',
-    nav:[L('oversight'), H('Eparchy','الأبرشية'), L('bishopeparchy'), L('bishopmap'), L('assignments')]
+    noteEn:'Manage the parishes and appointments in your diocese.',
+    noteAr:'إدارة رعايا أبرشيتك وتعييناتها.',
+    nav:[L('oversight'), H('Eparchy','الأبرشية'), L('bishopeparchy'), L('bishopmap')]
   },
   priest: {
     en:'Parish priest', ar:'كاهن الرعية', who:'p17',
@@ -43,19 +47,18 @@ export const ROLES = {
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
       H('Communicate','التواصل'), L('messaging'), L('notices'), L('music'), L('portal'), L('memberhub'),
-      H('Money','المال'), L('giving'), L('finance'),
+      H('Money','المال'), L('giving'), L('finance'), L('officeexpenses'),
       H('Administration','الإدارة'), L('forms'), L('reports'), L('audit'), L('settings'), L('styleguide')]
   },
   secretary: {
     en:'Secretary', ar:'أمينة السرّ', who:'p4',
-    noteEn:'People, records, events and messaging. Giving and finance do not appear in the rail.',
-    noteAr:'المؤمنون والسجلات والأحداث والمراسلة. التقدمات والمالية غائبة كلياً عن الشريط — الإخفاء أفضل من الإطفاء.',
+    noteEn:'Parish records, activities, members and office expenses.',
+    noteAr:'سجلات الرعية والأنشطة والأعضاء ومصاريف المكتب.',
     nav:[L('dashboard'),
       H('Records','السجلات'), L('people'), L('households'), L('sacraments'), L('requests'),
       H('Parish life','حياة الرعية'), L('calendar'), L('services'), L('groups'), L('volunteers'), L('registrations'), L('checkin'),
       H('Spaces','المرافق'), L('facilities'), L('reservations'),
-      H('Communicate','التواصل'), L('messaging'), L('notices'), L('portal'), L('memberhub'),
-      H('Administration','الإدارة'), L('forms'), L('reports')]
+      H('Office','المكتب'), L('officeexpenses')]
   },
   treasurer: {
     en:'Treasurer', ar:'أمين الصندوق', who:'p15',
@@ -78,21 +81,45 @@ export const ROLES = {
 };
 
 export const MOBILE_NAV = {
+  super_admin: ['workspace','dashboard','people','calendar','settings'],
+  diocesan_admin: ['workspace','dashboard','people','calendar','settings'],
+  parish_admin: ['workspace','dashboard','people','calendar','settings'],
   member:    ['memberhome','myrequests','mymessages','mycalendar','myprofile'],
   bishop: ['oversight','bishopmap','bishopeparchy'],
   priest:    ['dashboard','people','calendar','giving'],
-  secretary: ['dashboard','people','calendar','messaging'],
+  secretary: ['dashboard','people','calendar','officeexpenses'],
   treasurer: ['dashboard','giving','finance','reports'],
   leader:    ['dashboard','groups','calendar','messaging']
 };
 
-export const role = () => S.role === 'member'
-  ? { ...ROLES.member, nav:[...ROLES.member.nav,
-      ...(M.formation.length ? [L('myformation')] : []),
-      ...(M.complaintPermissions.some(x=>['Review','ManageCategories'].includes(x)) ? [L('memberhub')] : [])] }
-  : ROLES[S.role] || ROLES.priest;
-export const me = () => person(session.user?.person_id || role().who) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
-export const is = (...roles) => roles.includes(S.role);
+export const role = () => {
+  const base=ROLES[S.role]||{en:'Administrator',ar:'مدير',who:null,nav:[]};
+  let nav=[...base.nav];
+  if(['super_admin','diocesan_admin','parish_admin'].includes(S.role))nav=[L('workspace'),...ROLES.priest.nav.filter(n=>n[0]==='l'&&!['notes','styleguide','workspace','memberhub'].includes(n[1]))];
+  if(S.role==='bishop')nav.push(L('activity'),L('sacraments'),L('people'),L('households'),L('requests'),L('calendar'),L('groups'),L('giving'),L('finance'));
+  if(S.role==='member'){
+    if(!session.user?.person_id)nav=[];
+    else{
+      if(M.formation.length)nav.push(L('myformation'));
+      if(M.complaintPermissions.some(x=>['Review','ManageCategories'].includes(x)))nav.push(L('memberhub'));
+    }
+  }
+  if(S.role==='member')nav.unshift(L('activity'));
+  if(['bishop','priest'].includes(S.role)||(session.user?.platformRole==='diocesan_admin'))nav.push(L('workspace'));
+  if(S.role!=='member'||!session.user?.person_id)nav.push(L('inbox'));
+  if(['member','leader','priest'].includes(S.role))nav.push(L('ministryrequests'));
+  if(session.user?.canViewFinance)for(const id of ['giving','finance'])if(!nav.some(n=>n[0]==='l'&&n[1]===id))nav.push(L(id));
+  if((session.user?.roles||[]).includes('priest')&&!nav.some(item=>item[0]==='l'&&item[1]==='notes'))nav.push(L('notes'));
+  if((session.user?.roles||[]).includes('treasurer')&&!nav.some(item=>item[0]==='l'&&item[1]==='settings'))nav.push(L('settings'));
+  nav.push(L('account'));
+  if(!session.parishId)nav=nav.filter(item=>item[0]==='l'&&['workspace','activity','inbox','account'].includes(item[1]));
+  return {...base,nav};
+};
+export const me = () => person(session.user?.person_id) || { id: session.user?.id, lat: session.user?.name || 'User', ar: session.user?.name || 'User', tags: [] };
+export const is = (...roles) => roles.includes(S.role)
+  || roles.includes('priest') && (session.user?.roles||[]).includes('priest')
+  || roles.includes('treasurer') && (session.user?.roles||[]).includes('treasurer')
+  || roles.includes('priest') && roles.includes('secretary') && ['super_admin','bishop','diocesan_admin','parish_admin'].includes(S.role);
 export const canSee = id => role().nav.some(n => n[0] === 'l' && n[1] === id);
 export const go = h => { location.hash = h.startsWith('#') ? h : '#/' + h; };
 

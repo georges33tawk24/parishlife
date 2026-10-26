@@ -142,9 +142,7 @@ function secretary() {
       <small class="mono">${s.reg}</small></span>${!s.sourceRecordId&&!['rejected','cancelled'].includes(s.status)
         ?pill(t('Waiting for official entry','بانتظار قيد رسمي'),'warning'):status(s.status)}</a>`;
   }).join('');
-  const noticeRows = NOTICES.map(n => `<a class="listrow" href="#/notices">
-      <span class="grow"><b>${esc(t(n.title, n.ar))}</b><small>${fmtDate(n.at)} · ${esc(t(n.audience, n.audienceAr))}</small></span>
-      ${n.pri === 'urgent' ? status('conflict') : ''}</a>`).join('');
+
 
   return `
     ${pageHead({
@@ -164,8 +162,8 @@ function secretary() {
     <div class="grid g2">
       ${panel(t('Requests in your queue', 'طلبات في صندوقك'), onlineRows() + rows, { tight: true, more: `<a href="#/requests">${t('All requests', 'كل الطلبات')}</a>` })}
       ${todayPanel()}
-      ${panel(t('Notices', 'الإعلانات'), noticeRows, { more: `<a href="#/notices">${t('All notices', 'كل الإعلانات')}</a>`, tight: true })}
-      ${activityPanel(4)}
+      ${panel(t('Office Expenses', 'مصاريف المكتب'), `<p>${t('Record the monthly allowance, attach purchase receipts and print expense vouchers.','سجّل المخصّص الشهري وأرفق إيصالات المشتريات واطبع سندات المصروفات.')}</p><a class="btn btn-secondary" href="#/officeexpenses">${t('Open office account','فتح حساب المكتب')}</a>`)}
+      ${panel(t('Groups & contacts','المجموعات والتواصل'),GROUPS.map(g=>`<a class="listrow" href="#/groups/${esc(g.id)}/roster"><span class="grow"><b>${esc(t(g.name,g.ar))}</b><small>${esc(t(person(g.leader)?.lat||'',person(g.leader)?.ar||''))}</small></span><span>${g.members} ${t('members','أعضاء')}</span></a>`).join(''),{tight:true})}
     </div>`;
 }
 

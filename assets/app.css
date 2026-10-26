@@ -1502,3 +1502,31 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .scheme-where li{display:flex;align-items:center;gap:10px;font:400 14px/20px var(--sans)}
 [dir=rtl] .sp-eyebrow{letter-spacing:0}
 @media (max-width:560px){.scheme-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.scheme-sample{height:64px}}
+/* Compact office workspaces share the existing parish palette. */
+.pastoral-tools.toolbar {display:flex;flex-wrap:nowrap;gap:10px;align-items:center}
+.pastoral-tools #note-search {flex:0 1 220px;width:220px;min-width:150px;max-width:220px}
+.pastoral-tools .seg {flex:1 1 auto;display:flex;flex-wrap:wrap;gap:3px}
+.pastoral-tools .seg button {white-space:nowrap}
+.pastoral-tools #note-sort,.pastoral-tools .select-shell {flex:0 0 155px;width:155px}
+.pastoral-columns {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.pastoral-columns>.panel {min-width:0;margin:0}
+.pastoral-columns .tablewrap {max-width:100%;overflow-x:auto}
+.pastoral-columns td {white-space:normal}
+.pastoral-columns td:nth-child(2) {min-width:160px;overflow-wrap:anywhere}
+.anniversary-toolbar {margin-bottom:18px;gap:14px;flex-wrap:wrap}
+.office-toolbar {display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:18px 0}
+.office-toolbar .formrow {margin:0}
+.office-toolbar .input,.office-toolbar .select {width:auto;min-width:140px}
+.office-summary {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.office-summary .stat {border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface,#fff);padding:16px}
+.office-summary .stat:last-child {background:var(--warning-bg,#FFF5C9)}
+.office-ledger .rowacts {flex-wrap:wrap}
+.request-documents {display:grid;gap:12px;margin:16px 0}
+.request-document {padding:14px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface,#fff)}
+.request-document h4 {margin:0 0 10px;font-size:14px}
+.request-document .drop {padding:14px;margin-top:10px}
+.request-document .filerow {flex-wrap:wrap;gap:8px}
+.registration-section {margin:18px 0;padding:16px;border:1px solid var(--border);border-radius:var(--r-card)}
+.registration-section h3 {margin:0 0 12px;font-size:16px}
+@media(max-width:1150px){.pastoral-tools.toolbar{flex-wrap:wrap}.pastoral-tools .seg{order:2;flex-basis:100%}.pastoral-columns{grid-template-columns:1fr}}
+@media(max-width:650px){.office-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.pastoral-tools #note-search{flex:1 1 170px;max-width:none;width:auto}.office-toolbar{align-items:stretch}.office-toolbar .formrow{flex:1 1 140px}.office-toolbar .input,.office-toolbar .select{width:100%}}

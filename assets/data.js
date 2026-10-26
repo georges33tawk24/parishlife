@@ -732,3 +732,5 @@ export const CONTENT = {
   history:{ en:'Saint Elias was built in 1908 on land given by the Sfeir family, and rebuilt after 1983. The parish serves Hadath and the upper part of Baabda.',
             ar:'بُنيت كنيسة مار الياس سنة ١٩٠٨ على أرض قدّمتها عائلة صفير، وأُعيد بناؤها بعد ١٩٨٣. تخدم الرعية الحدث والقسم الأعلى من بعبدا.' }
 };
+// Office allowance and purchases are stored once, separately from parish finance.
+export const OFFICE_LEDGER = [];

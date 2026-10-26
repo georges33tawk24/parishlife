@@ -2,7 +2,8 @@
 import { api, session } from '../api.js';
 import { t, fmtDate } from '../i18n.js';
 import { S, bus } from '../store.js';
-import { pageHead, table, stat, esc, status } from '../ui.js';
+import { pageHead, table, stat, esc, status, openDrawer } from '../ui.js';
+import { calendarView, bindCalendar } from '../collection-ui.js';
 import { icon } from '../icons.js';
 
 const cache = new Map();
@@ -14,23 +15,8 @@ const rows = (items, cols) => items.length ? table({cols:cols.map(label=>({label
   `<p class="help" style="padding:18px">${L('No records to show.','لا سجلات لعرضها.')}</p>`;
 const block = (id, title, body) => `<details class="panel oversight-section" id="oversight-${id}" open>
   <summary class="panel-h"><b>${title}</b><span class="oversight-chevron" aria-hidden="true">${icon('chevD',16)}</span></summary><div class="panel-b tight">${body}</div></details>`;
-const dateKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-const monthKey = () => S.ui.oversightMonth || dateKey(new Date()).slice(0,7);
-
-function calendar(events) {
-  const [year, month] = monthKey().split('-').map(Number);
-  const first = new Date(year, month-1, 1), start = new Date(year, month-1, 1-first.getDay());
-  const cells = Math.ceil((first.getDay()+new Date(year,month,0).getDate())/7)*7;
-  const weekdays = Array.from({length:7},(_,i)=>new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-US',{weekday:'short'}).format(new Date(2026,9,4+i)));
-  const byDate = new Map();
-  for (const event of events) if(event.date) byDate.set(event.date,[...(byDate.get(event.date)||[]),event]);
-  return `<div class="toolbar" style="justify-content:center;padding:14px"><button class="btn btn-secondary btn-dense" data-oversight-month="-1" aria-label="${L('Previous month','الشهر السابق')}">‹</button>
-    <b>${esc(new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-US',{month:'long',year:'numeric'}).format(first))}</b>
-    <button class="btn btn-secondary btn-dense" data-oversight-month="1" aria-label="${L('Next month','الشهر التالي')}">›</button></div>
-    <div class="oversight-calendar-scroll"><div class="cal oversight-calendar"><div class="cal-head">${weekdays.map(day=>`<div>${esc(day)}</div>`).join('')}</div><div class="cal-grid">
-    ${Array.from({length:cells},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return `<div class="cal-day${d.getMonth()===first.getMonth()?'':' out'}"><span class="dn">${d.getDate()}</span>
-      ${(byDate.get(dateKey(d))||[]).map(e=>`<div class="cal-ev" title="${esc(e.title)}"><span class="t">${esc(e.time||'')}</span>${esc(L(e.title,e.titleAr||e.title))}</div>`).join('')}</div>`;}).join('')}</div></div></div>`;
-}
+const calendarStates = new Map();
+const calendarState = id => { if(!calendarStates.has(id))calendarStates.set(id,{mode:'month'});return calendarStates.get(id); };
 
 function personDetail(entry, parishId, personId) {
   const p=entry.people.find(x=>x.id===personId);
@@ -59,7 +45,7 @@ function groupDetail(entry, parishId, groupId) {
 
 export function oversight(id='', detail='', detailId='') {
   const entry=cache.get(key(id));
-  const head=pageHead({title:L('Parish oversight','الإشراف على الرعايا'),sub:L('Read-only parish activity and records. Parish staff make operational changes.','أنشطة الرعايا وسجلاتها للقراءة فقط. يتولّى موظفو الرعية التغييرات التشغيلية.')});
+  const head=pageHead({title:L('Parish oversight','الإشراف على الرعايا'),sub:L('Parish activity and records. Use Administration to manage parishes, accounts and bundles.','أنشطة الرعايا وسجلاتها. استخدم الإدارة لإدارة الرعايا والحسابات والباقات.')});
   const picker=`<div class="toolbar" style="margin:18px 0"><label for="oversight-parish">${L('Parish','الرعية')}</label><select class="select" id="oversight-parish"><option value="">${L('All parishes','كل الرعايا')}</option>
     ${session.parishes.map(p=>`<option value="${esc(p.id)}" ${id===p.id?'selected':''}>${esc(p.name)} — ${esc(p.ar)}</option>`).join('')}</select></div>`;
   if(!entry||entry.loading)return head+picker+`<p role="status">${L('Loading oversight…','جارٍ تحميل بيانات الإشراف…')}</p>`;
@@ -71,7 +57,6 @@ export function oversight(id='', detail='', detailId='') {
   if(detail==='group')return head+picker+groupDetail(entry,id,detailId);
   const q=(S.ui.oversightRecordQ||'').toLocaleLowerCase(),kind=S.ui.oversightRecordKind||'',state=S.ui.oversightRecordStatus||'';
   const filtered=entry.records.filter(r=>(!kind||r.kind===kind)&&(!state||r.status===state)&&(!q||`${r.reference} ${r.kind} ${r.person?.lat} ${r.person?.ar}`.toLocaleLowerCase().includes(q)));
-  const eventsView=S.ui.oversightEventsView||'list';
   const titles=[['people',L('People','المؤمنون')],['records',L('Sacraments & requests','الأسرار والطلبات')],['events',L('Calendar','الرزنامة')],['groups',L('Groups','المجموعات')],['activity',L('Activity','النشاط')]];
   return head+picker+`<h2>${esc(entry.parish.name)} <small dir="rtl">${esc(entry.parish.ar)}</small></h2><div class="stats" style="margin:16px 0">${stat(L('People','المؤمنون'),entry.counts.people)}
     ${stat(L('Groups','المجموعات'),entry.counts.groups)}${stat(L('Official entries','القيود الرسمية'),entry.counts.registers)}</div>
@@ -83,10 +68,7 @@ export function oversight(id='', detail='', detailId='') {
       <select class="select" id="oversight-record-status" aria-label="${L('Status','الحالة')}"><option value="">${L('All statuses','كل الحالات')}</option>${[...new Set(entry.records.map(r=>r.status))].sort().map(x=>`<option value="${esc(x)}" ${state===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
       ${rows(filtered.map(r=>[esc(r.reference||'—'),r.personId?link(`#/oversight/${esc(id)}/person/${esc(r.personId)}`,personName(r.person)):personName(r.person),esc(r.kind),fmtDate(r.date),status(r.status)]),
         [L('Reference','المرجع'),L('Person','الشخص'),L('Type','النوع'),L('Date','التاريخ'),L('Status','الحالة')])}`)}
-    ${block('events',L('Calendar activities','أنشطة الرزنامة'),`<div class="toolbar" style="padding:14px"><div class="seg" role="group" aria-label="${L('View','العرض')}">
-      <button data-oversight-view="list" aria-pressed="${eventsView==='list'}">${L('List','قائمة')}</button><button data-oversight-view="calendar" aria-pressed="${eventsView==='calendar'}">${L('Calendar','رزنامة')}</button></div></div>
-      ${eventsView==='calendar'?calendar(entry.events):rows(entry.events.map(e=>[`<b>${esc(L(e.title,e.titleAr||e.title))}</b>`,fmtDate(e.date),esc(e.time||'—'),esc(e.kind)]),
-        [L('Event','الحدث'),L('Date','التاريخ'),L('Time','الوقت'),L('Type','النوع')])}`)}
+    ${block('events',L('Calendar activities','أنشطة الرزنامة'),'<div data-oversight-calendar></div>')}
     ${block('groups',L('Group activity','نشاط المجموعات'),rows(entry.groups.map(g=>[link(`#/oversight/${esc(id)}/group/${esc(g.id)}`,`${esc(L(g.name,g.ar||g.name))}${icon('ext',13,'ext-mark')}`),String(g.members),String(g.meetings.length),
       g.attendance.percentage===null?'—':`${g.attendance.percentage}%`]),[L('Group','المجموعة'),L('Members','الأعضاء'),L('Meetings','الاجتماعات'),L('Recorded attendance','الحضور المسجل')]))}
     ${block('activity',L('Recent administrative activity','النشاط الإداري الأخير'),rows(entry.activity.map(a=>[esc(new Date(a.at).toLocaleString(document.documentElement.lang==='ar'?'ar-LB':'en-GB')),
@@ -103,8 +85,13 @@ oversight.mount=(host,id='')=>{
       bus.refresh();
       if(selection!==null){const replacement=document.querySelector(selector);replacement?.focus();replacement?.setSelectionRange(selection,selection);}
     });
-  host.querySelectorAll('[data-oversight-view]').forEach(b=>b.addEventListener('click',()=>{S.ui.oversightEventsView=b.dataset.oversightView;bus.refresh();}));
-  host.querySelectorAll('[data-oversight-month]').forEach(b=>b.addEventListener('click',()=>{const [y,m]=monthKey().split('-').map(Number);S.ui.oversightMonth=dateKey(new Date(y,m-1+Number(b.dataset.oversightMonth),1)).slice(0,7);bus.refresh();}));
+  const calendarHost=host.querySelector('[data-oversight-calendar]'),entry=cache.get(key(id));
+  if(calendarHost&&entry?.events){
+    const state=calendarState(id),events=entry.events.map(e=>({...e,title:L(e.title,e.titleAr||e.title),subtitle:e.kind}));
+    const render=()=>{calendarHost.innerHTML=calendarView(events,state);bindCalendar(calendarHost,state,render,eventId=>{
+      const e=events.find(e=>e.id===eventId);if(e)openDrawer({title:e.title,body:`<p>${esc(e.date)} · ${esc(e.time||'')}</p><p>${esc(e.kind)}</p>`});
+    });};render();
+  }
   const k=key(id),old=cache.get(k);
   if(old&&(old.loading||Date.now()-(old.loadedAt||0)<60_000))return;
   if(!old)cache.set(k,{loading:true});

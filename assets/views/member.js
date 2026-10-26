@@ -1,3 +1,4 @@
+import { calendarView, bindCalendar } from '../collection-ui.js';
 /* A member sees a server-built projection, never the parish administration state. */
 import { t, isAr, fmtDate } from '../i18n.js';
 import { M, memberAction, loadMember } from '../member-data.js';
@@ -29,24 +30,13 @@ const attendance = () => {
 };
 const status = value => `<span class="member-badge">${txt(value)}</span>`;
 const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind === kind && filter(x));
-const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'list', offset:0 };
+const scheduleState = key => (S.ui.memberSchedules ||= {})[key] ||= { mode:'month', offset:0 };
+const scheduleItems=new Map();
 const schedule = (key, items, emptyMessage) => {
-  const state = scheduleState(key), mode = state.mode;
-  const now = new Date(), start = mode === 'week'
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + state.offset * 7)
-    : new Date(now.getFullYear(), now.getMonth() + state.offset, 1);
-  const end = mode === 'week' ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-    : new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  const ordered = [...items].filter(x => x.date).sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
-  const chip = x => `<button class="member-event member-filter-row" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}" title="${txt(x.title)}"><time>${txt(x.time || '')}</time><span>${txt(x.title)}</span></button>`;
-  const toolbar = `<div class="member-toolbar member-schedule-toolbar"><div class="seg" role="group" aria-label="${L('Schedule view', 'عرض المواعيد')}">${[['list','List','قائمة'],['week','Week','أسبوع'],['month','Month','شهر']].map(([id,en,ar]) => `<button data-schedule-mode="${id}" data-schedule-key="${key}" aria-pressed="${mode === id}">${L(en,ar)}</button>`).join('')}</div>${mode === 'list' ? '' : `<div class="member-schedule-nav"><button class="btn btn-secondary btn-dense" data-schedule-offset="-1" data-schedule-key="${key}" aria-label="${L('Previous', 'السابق')}">‹</button><button class="btn btn-secondary btn-dense" data-schedule-today data-schedule-key="${key}">${L('Today', 'اليوم')}</button><strong>${txt(mode === 'month' ? start.toLocaleDateString(undefined, {month:'long',year:'numeric'}) : date(dayKey(start)) + ' – ' + date(dayKey(new Date(end.getTime()-86400000))))}</strong><button class="btn btn-secondary btn-dense" data-schedule-offset="1" data-schedule-key="${key}" aria-label="${L('Next', 'التالي')}">›</button></div>`}</div>`;
-  if (mode === 'list') return toolbar + `<div class="member-list">${ordered.map(x => `<div class="member-card member-schedule-row member-filter-row" data-group="${txt(x.groupId || '')}" data-source="${txt(x.source || '')}"><div class="member-date"><b>${date(x.date)}</b><small>${txt(x.time || '')}</small></div><div class="member-schedule-content"><h2>${txt(x.title)}</h2><p>${txt(x.subtitle || '')}</p></div>${status(x.badge || x.source || '')}<button class="btn btn-secondary btn-dense" data-member-item="${txt(x.type)}" data-item-id="${txt(x.id)}">${L('Details', 'التفاصيل')}</button></div>`).join('') || blank(emptyMessage)}</div>`;
-  const days = mode === 'week' ? Array.from({length:7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),start.getDate()+i))
-    : Array.from({length:Math.ceil((new Date(start.getFullYear(),start.getMonth(),1).getDay()+new Date(start.getFullYear(),start.getMonth()+1,0).getDate())/7)*7}, (_,i) => new Date(start.getFullYear(),start.getMonth(),i+1-start.getDay()));
-  return toolbar + `<div class="member-calendar" role="grid" aria-label="${L('Calendar', 'الرزنامة')}"><div class="member-calendar-head">${Array.from({length:7},(_,i) => `<span>${txt(new Date(2026,7,2+i).toLocaleDateString(undefined,{weekday:'short'}))}</span>`).join('')}</div><div class="member-calendar-grid">${days.map(d => {
-    const keyDate = dayKey(d), dayItems = ordered.filter(x=>x.date===keyDate);
-    return `<div class="member-calendar-day ${mode==='month' && d.getMonth()!==start.getMonth()?'out':''} ${keyDate===todayKey()?'today':''}"><time datetime="${keyDate}">${d.getDate()}</time><div class="member-day-items">${dayItems.map(chip).join('')}</div></div>`;
-  }).join('')}</div></div>${ordered.filter(x => x.date>=dayKey(start) && x.date<dayKey(end)).length ? '' : blank(emptyMessage)}`;
+  const filters=S.ui.memberFilters?.[S.route]||{};
+  const rows=items.filter(x=>x.date&&(!filters.group||x.groupId===filters.group)&&(!filters.source||x.source===filters.source));
+  scheduleItems.set(key,rows);
+  return `<div data-shared-schedule="${key}">${calendarView(rows.map(x=>({...x,id:x.type+':'+x.id})),scheduleState(key))}</div>`;
 };
 
 export function home() {
@@ -320,6 +310,7 @@ function concernDrawer() {
       ${field(L('Subject', 'الموضوع'),'concern-subject')}${area(L('Description', 'الوصف'),'concern-description')}
       ${field(L('When did this happen? (optional)', 'متى حصل هذا؟ (اختياري)'),'concern-when','','datetime-local')}${field(L('People involved (optional)', 'الأشخاص المعنيون (اختياري)'),'concern-people')}
       <div class="formrow"><label class="label" for="concern-attachment">${L('Attachment (optional, max 1 MB)', 'مرفق (اختياري، بحد أقصى ١ ميغابايت)')}</label><input class="input" id="concern-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt"></div>
+      <fieldset><legend>${L('Choose who may review this concern','اختر من يمكنه مراجعة هذه الشكوى')}</legend>${M.reviewers.filter(r=>r.id!==session.user.id).map(r=>`<label class="member-toggle"><span>${txt(r.name)}</span><input type="checkbox" data-concern-reviewer value="${txt(r.id)}"></label>`).join('')}</fieldset>
       <label class="member-toggle"><span>${L('Submit anonymously', 'إرسال دون إظهار الهوية')}</span><input type="checkbox" id="concern-anonymous"></label>
       <p class="help">${L('Reviewers will not see your account identity. You can follow the status here after submitting.', 'لن يرى المراجعون هوية حسابك. يمكنك متابعة الحالة هنا بعد الإرسال.')}</p>
       <div class="formrow"><label class="label" for="concern-follow">${L('Preferred follow-up (identified submissions)', 'طريقة المتابعة للطلبات المعرّفة')}</label><select class="select" id="concern-follow"><option value="system">${L('In-system message', 'رسالة في النظام')}</option><option value="email">${L('Email', 'البريد الإلكتروني')}</option><option value="phone">${L('Phone', 'الهاتف')}</option><option value="none">${L('No response required', 'لا حاجة للرد')}</option></select></div>`,
@@ -329,7 +320,7 @@ function concernDrawer() {
         const values = { category:val(el,'concern-category'), groupId:val(el,'concern-group') || null,
           eventId:val(el,'concern-event') || null, subject:val(el,'concern-subject'), description:val(el,'concern-description'),
           happenedAt:val(el,'concern-when'), peopleInvolved:val(el,'concern-people'),
-          anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el) };
+          reviewers:[...el.querySelectorAll('[data-concern-reviewer]:checked')].map(x=>x.value),anonymous:el.querySelector('#concern-anonymous').checked, followUp:val(el,'concern-follow'), attachment:await attachment(el) };
         const result = await run('concern', values, '');
         if (result?.id) openDrawer({title:L('Concern received', 'تم استلام الملاحظة'),
           body:`<p>${L('You can follow its status any time on this page.', 'يمكنك متابعة حالتها في هذه الصفحة في أي وقت.')}</p>`,
@@ -384,6 +375,10 @@ function discussionDrawer(x) {
 }
 
 export function mount(host) {
+  host.querySelectorAll('[data-shared-schedule]').forEach(el=>{
+    const key=el.dataset.sharedSchedule;
+    bindCalendar(el,scheduleState(key),()=>bus.refresh(),id=>{const row=scheduleItems.get(key)?.find(x=>x.type+':'+x.id===id);if(row)memberItem(row.type,row.id);});
+  });
   host.querySelectorAll('[data-member-item]').forEach(b=>b.addEventListener('click',()=>memberItem(b.dataset.memberItem,b.dataset.itemId)));
   host.querySelectorAll('[data-meeting]').forEach(b=>b.addEventListener('click',()=>memberItem('meeting',b.dataset.meeting)));
   host.querySelectorAll('[data-note-edit]').forEach(b=>b.addEventListener('click',()=>noteDrawer(M.notes.find(x=>x.id===b.dataset.noteEdit))));
@@ -449,7 +444,7 @@ export function mount(host) {
   const savedFilters=(S.ui.memberFilters ||= {})[S.route] ||= {};
   host.querySelectorAll('[data-filter]').forEach(x=>{
     x.value=savedFilters[x.dataset.filter] || '';
-    x.addEventListener('change',()=>{savedFilters[x.dataset.filter]=x.value; filter();});
+    x.addEventListener('change',()=>{savedFilters[x.dataset.filter]=x.value; if(host.querySelector('[data-shared-schedule]'))bus.refresh();else filter();});
   });
   host.querySelectorAll('[data-member-search], [data-note-search]').forEach(x=>x.addEventListener('input',filter));
   filter();

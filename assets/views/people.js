@@ -9,8 +9,9 @@ import * as CR from '../crud.js';
 import * as F from '../flows.js';
 import { download, wireActions } from '../actions.js';
 import { persist } from '../persist.js';
-import { printSheet } from '../print.js';
+import { printSheet, saveBlob, fileName } from '../print.js';
 import { readAddressCascade } from '../geography.js';
+import { api, session } from '../api.js';
 import { memberAction } from '../member-data.js';
 import { phoneShow } from '../sacrament-requests.js';
 import * as D from '../data.js';
@@ -141,14 +142,14 @@ const hh = id => HOUSEHOLDS.find(h => h.id === id);
 /* People records keep Lebanese numbers without +961; a number from abroad is kept whole. */
 const phoneText = v => !v || v === '—' ? '—' : String(v).startsWith('+') ? String(v) : '+961 ' + v;
 const unverified = p => !!p.registeredOnline && !p.registeredOnline.verified;
-const onlineNew = p => unverified(p) ? `<span class="or-mark" title="${esc(t('Registered online — not verified yet', 'مسجّل إلكترونياً — لم يُتحقّق منه بعد'))}">${icon('globe', 12)}${t('New online', 'جديد إلكترونياً')}</span>` : '';
+const onlineNew = () => '';
 const signInName = v => /^\+\d+$/.test(v) ? phoneShow(v) : v;
-const ACCESS = { member: ['Member portal', 'بوّابة المؤمنين'], leader: ['Member portal · ministry leader', 'بوّابة المؤمنين · مسؤول خدمة'] };
+const ACCESS = { super_admin:['Super Admin','المشرف العام'],diocesan_admin:['Archdiocese Admin','مدير الأبرشية'],parish_admin:['Parish Admin','مدير الرعية'],secretary:['Secretary','أمين السر'],priest:['Parish priest','كاهن الرعية'],treasurer:['Treasurer','أمين الصندوق'],member: ['Member portal', 'بوّابة المؤمنين'], leader: ['Member portal · ministry leader', 'بوّابة المؤمنين · مسؤول خدمة'] };
 const RITE_AR = { Maronite: 'ماروني', Melkite: 'روم كاثوليك', 'Greek Orthodox': 'روم أرثوذكس', Armenian: 'أرمني', 'Roman Catholic': 'لاتيني', Syriac: 'سرياني' };
 const riteLabel = r => t(r, RITE_AR[r] || r);
 const filteredPeople = () => PEOPLE.filter(x => (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status))
   && (!S.ui.peopleTown || x.town === S.ui.peopleTown) && (!S.ui.peopleRite || x.rite === S.ui.peopleRite)
-  && (!S.ui.peopleEnv || hh(x.hh)?.envelope) && (!S.ui.peopleNew || unverified(x))
+  && (!S.ui.peopleEnv || hh(x.hh)?.envelope)
   && matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, S.ui.peopleQ || ''));
 const csvCell = value => `"${String(value ?? '').replace(/"/g,'""')}"`;
 function peopleExport() {
@@ -178,8 +179,7 @@ function peopleExport() {
   });
 }
 const TABS = () => [['', 'All people', 'كل المؤمنين'], ['duplicates', 'Duplicates', 'التكرارات', DUPLICATES.length],
-              ['import', 'Import', 'استيراد'],
-              ['archived', 'Archived', 'المؤرشفون', ARCHIVED.length]];
+              ['import', 'Import', 'استيراد']];
 
 /* ---------------- list ---------------- */
 export function people(tab = '') {
@@ -194,7 +194,7 @@ export function people(tab = '') {
 
   if (tab === 'duplicates') return head + duplicates();
   if (tab === 'import') return head + importView();
-  if (tab === 'archived') return head + archived();
+  // Archived records are retained for history; account status is managed separately.
 
   /* Real pagination over what is loaded — ten rows a page, as a secretary scans a page at a time. */
   const q = S.ui.peopleQ || '', town = S.ui.peopleTown || '', rite = S.ui.peopleRite || '';
@@ -230,7 +230,7 @@ export function people(tab = '') {
         ${[...new Map(PEOPLE.filter(x => x.town).map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => `<option value="${esc(en)}" ${town === en ? 'selected' : ''}>${esc(t(en, ar))}</option>`).join('')}</select>
       <select class="select" style="width:auto" id="prite" aria-label="${t('Rite', 'الطقس')}"><option value="">${t('All rites', 'كل الطقوس')}</option>
         ${[...new Set(PEOPLE.map(x => x.rite).filter(Boolean))].sort().map(r => `<option value="${esc(r)}" ${rite === r ? 'selected' : ''}>${esc(riteLabel(r))}</option>`).join('')}</select>
-      ${PEOPLE.some(unverified) || S.ui.peopleNew ? `<button class="savedview" data-act="people-new" aria-pressed="${!!S.ui.peopleNew}" style="margin-inline-start:auto">${icon(S.ui.peopleNew ? 'check' : 'globe', 14)}${t('New online', 'جدد إلكترونياً')}<span class="badge" style="margin-inline-start:6px">${PEOPLE.filter(unverified).length}</span></button>` : ''}
+
       <button class="savedview" data-act="people-env" aria-pressed="${!!S.ui.peopleEnv}" ${PEOPLE.some(unverified) || S.ui.peopleNew ? '' : 'style="margin-inline-start:auto"'}>${icon(S.ui.peopleEnv ? 'check' : 'filter', 14)}${t('Household envelopes', 'مظاريف العائلات')}</button>
     </div>
     ${S.ui.peopleEnv ? `<p class="help" style="margin-bottom:12px">${t('A numbered giving envelope belongs to a household. It connects counted gifts and statements to that household; its members are listed for lookup, not as individual donors.', 'المظروف المرقّم للعطاء يتبع العائلة المنزلية. يربط التقدمات وكشوفها بها؛ ويظهر أفرادها للبحث لا لأن كل فرد متبرّع.')}</p>` : ''}
@@ -267,11 +267,27 @@ export function personMenu(anchor, pid) {
       { label: t('Arabic — A4', 'عربي — A4'), fn: () => cert('arabic') },
       { label: t('English — A4', 'إنكليزي — A4'), fn: () => cert('english') },
       { label: t('Bilingual — A4', 'ثنائي — A4'), fn: () => cert('bilingual') }] }] : []),
-    ...(ARCHIVED.includes(p)?[{ label:t('Restore to active list','استرجاع إلى اللائحة النشطة'),icon:'box',fn:()=>F.restorePerson(pid) }]:
-      [{ label: t('Archive — hide from active list', 'أرشفة — إخفاء من اللائحة النشطة'), icon: 'box', fn: () => { F.archivePeople([pid]); if (S.route === 'person') go('people'); } }]),
+    ...(!D.ACCOUNTS[pid]?.id && is('priest','secretary','super_admin','parish_admin','diocesan_admin')?[{label:t('Invite to complete account','دعوة لإكمال الحساب'),icon:'mail',fn:()=>inviteAccount(p)}]:[]),
+    ...(D.ACCOUNTS[pid]?.id && is('priest','super_admin','bishop','parish_admin','diocesan_admin') ? [{label:D.ACCOUNTS[pid].inactive?t('Reactivate parish access','إعادة تفعيل الوصول للرعية'):t('Deactivate parish access','تعطيل الوصول للرعية'),icon:'shield',fn:()=>accountAccess(p)}]:[]),
     { sep: true },
     { label: t('Delete permanently — cannot be undone', 'حذف نهائي — لا تراجع'), icon: 'trash', danger: true, fn: () => deleteGuard(p) }
   ], { width: 230 });
+}
+
+async function inviteAccount(p){
+  try{
+    const result=await api('workspace/invitations','POST',{parish:session.parishId,personId:p.id});
+    const link=new URL('index.html',location.href);link.hash='invite='+result.token;
+    openModal({title:t('Account invitation','دعوة الحساب'),body:`<p>${esc(p.lat)}</p><p>${t('Give this private link directly to the person. Email and SMS delivery are not configured, so no message has been sent. The link expires after seven days.','أعطِ هذا الرابط الخاص للشخص مباشرة. لم يتم إعداد إرسال البريد والرسائل النصية لذلك لم تُرسل رسالة. تنتهي الدعوة بعد سبعة أيام.')}</p><label class="formrow"><span class="label">${t('Private invitation link','رابط الدعوة الخاص')}</span><input class="input" readonly value="${esc(link.href)}"></label>`,foot:`<button class="btn btn-primary" data-close>${t('Done','تم')}</button>`,onMount(el){el.querySelector('input').onclick=e=>e.target.select();}});
+  }catch(e){toast(t('Could not create invitation','تعذّر إنشاء الدعوة'),e.message,'danger');}
+}
+
+function accountAccess(p) {
+  const account=D.ACCOUNTS[p.id];
+  openModal({title:account.inactive?t('Reactivate parish access','إعادة تفعيل الوصول'):t('Deactivate parish access','تعطيل الوصول'),
+    body:`<p>${t('All records and activity will be preserved. Access to other parishes is unchanged.','تبقى جميع السجلات والأنشطة محفوظة. لا يتأثر الوصول إلى الرعايا الأخرى.')}</p><label class="label">${t('Reason','السبب')}<textarea class="textarea" id="account-access-reason" maxlength="500"></textarea></label>`,
+    foot:`<button class="btn btn-secondary" data-close>${t('Cancel','إلغاء')}</button><button class="btn btn-primary" id="account-access-save">${t('Confirm','تأكيد')}</button>`,
+    onMount(el){el.querySelector('#account-access-save').onclick=async e=>{const b=e.currentTarget;b.disabled=true;try{await api('workspace/suspension','POST',{parish:session.parishId,userId:account.id,scope:'parish',active:!account.inactive,reason:el.querySelector('#account-access-reason').value});account.inactive=!account.inactive;closeOverlays();bus.refresh();}catch(err){b.disabled=false;toast(t('Could not update access','تعذّر تعديل الوصول'),err.message,'danger');}};}});
 }
 
 /* Destructive — typed confirmation, exactly as sheet 04 draws it. */
@@ -589,7 +605,7 @@ export function personView(id, tab = '') {
 
     family: () => house ? `<div class="splitview"><div>
         ${panel(t('Family tree', 'شجرة العائلة') + ' — ' + t(house.name, house.ar), familyTree(house, p.id),
-          { more: `<button class="btn btn-secondary btn-dense" data-act="family-add:${house.id}">${icon('plus', 15)}${t('Add family member', 'إضافة فرد')}</button>` })}
+          { more: `<button class="btn btn-secondary btn-dense" data-household-export-id="${esc(house.id)}">${icon('export',15)}${t('Export family','تصدير العائلة')}</button><button class="btn btn-secondary btn-dense" data-act="family-add:${house.id}">${icon('plus', 15)}${t('Add family member', 'إضافة فرد')}</button>` })}
         ${panel(t('Members and relationships', 'الأفراد والصلات'), house.members.map(person).filter(Boolean).map(m => `
           <div class="listrow">${who(m)}<span class="grow"></span>
             <span class="dim t-caption">${esc(relLabel(m, house))}${m.emergency ? ` · ${t('emergency contact', 'جهة طوارئ')}` : ''}</span>
@@ -674,8 +690,8 @@ export function personView(id, tab = '') {
       </div></div>`;
     },
 
-    notes: () => `<div class="tabbody">${panel(t('Pastoral notes', 'الملاحظات الرعوية'),
-      NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`)}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Pastoral Notes.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
+    notes: () => `<div class="tabbody">${panel(t('Notes & Tasks', 'الملاحظات والمهام'),
+      NOTES.filter(n => n.p === p.id).map(n => `<div class="listrow" style="align-items:flex-start"><span class="grow"><small class="mono dim">${esc(n.at)}</small><span style="display:block">${esc(t(n.body, n.bodyAr))}</span></span>${n.priority !== 'ordinary' ? pill(t(n.priority === 'urgent' ? 'Urgent' : 'Needs attention', n.priority === 'urgent' ? 'عاجل' : 'تحتاج متابعة'), n.priority === 'urgent' ? 'danger' : 'warning') : ''}${C.iconBtn('edit', t('Edit', 'تعديل'), `data-act="note-edit:${n.id}"`)}</div>`).join('') || empty('notes', t('No pastoral notes yet', 'لا ملاحظات رعوية بعد'), t('A new note will appear here and in Notes & Tasks.', 'ستظهر الملاحظة الجديدة هنا وفي قسم الملاحظات الرعوية.')), { tight: true })}<button class="btn btn-primary" style="margin-top:16px" data-act="note-new:${p.id}">${icon('plus',16)}${t('Add pastoral note', 'إضافة ملاحظة رعوية')}</button></div>`,
 
     files: () => `<div style="max-width:720px">${panel(t('Attachments', 'المرفقات'), `
       <p class="help" style="margin-bottom:12px">${t('Only real uploaded files appear here. Access and deletion are logged.','تظهر هنا الملفات المرفوعة فعلياً فقط. يُسجّل فتحها وحذفها.')}</p>
@@ -716,9 +732,9 @@ function accountPanel(p) {
       ${online ? `<dt>${t('Registered', 'التسجيل')}</dt><dd>${fmtDate(online.at)} · ${online.via === 'email' ? t('with an email address', 'ببريد إلكتروني') : t('with a phone number', 'برقم هاتف')}</dd>
         <dt>${t('Verified', 'التحقّق')}</dt><dd>${online.verified ? `${t('Yes', 'نعم')}${online.verifiedBy ? ` · ${esc(online.verifiedBy)}` : ''}${online.verifiedAt ? ` · ${fmtDate(online.verifiedAt)}` : ''}` : t('Not yet', 'ليس بعد')}</dd>` : ''}
     </dl>
-    ${unverified(p) || (account && ACCESS[account.role]) ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
+    ${unverified(p) || (account && account.canResetPassword) ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
       ${unverified(p) ? `<button class="btn btn-primary btn-dense" data-act="person-verify:${esc(p.id)}">${icon('check', 15)}${t('Mark as verified', 'تعليم كمُتحقَّق منه')}</button>` : ''}
-      ${account && ACCESS[account.role] ? `<button class="btn btn-secondary btn-dense" id="account-reset">${icon('lock', 15)}${t('Reset password', 'إعادة تعيين كلمة المرور')}</button>` : ''}
+      ${account && account.canResetPassword ? `<button class="btn btn-secondary btn-dense" id="account-reset">${icon('lock', 15)}${t('Reset password', 'إعادة تعيين كلمة المرور')}</button>` : ''}
     </div>` : ''}`);
 }
 
@@ -757,6 +773,7 @@ function resetPassword(p) {
 personView.mount = (host, id) => {
   C.wire(host); wireTables(host);
   host.querySelector('#account-reset')?.addEventListener('click', () => { const p = person(id); if (p) resetPassword(p); });
+  host.querySelector('[data-household-export-id]')?.addEventListener('click',e=>exportHouseholds([e.currentTarget.dataset.householdExportId]));
   host.querySelector('[data-pkebab]')?.addEventListener('click', e => personMenu(e.currentTarget, id));
   host.querySelector('#edit-person-groups')?.addEventListener('click',()=>editPersonGroups(id));
   host.querySelector('#edit-profile-extra')?.addEventListener('click',()=>editProfileExtra(id));
@@ -829,13 +846,27 @@ function editProfileExtra(id) {
 }
 
 /* ---------------- households ---------------- */
+export function exportHouseholds(ids) {
+  const selected = HOUSEHOLDS.filter(h=>ids.includes(h.id));
+  if (!selected.length) return toast(t('Select at least one household','اختر عائلة واحدة على الأقل'),'','warning');
+  const headings = ['Household ID','Family (English)','Family (Arabic)','Town','Address','Envelope','Contact person','Person ID','Name (English)','Name (Arabic)','Relationship','Related to','Phone','Date of birth'];
+  const rows = selected.flatMap(h=>{
+    const members=h.members.map(person).filter(Boolean);
+    return (members.length?members:[null]).map(p=>[h.id,h.name,h.ar,t(h.town,h.townAr),t(h.address,h.addressAr),h.envelope||'',label(person(h.head)),p?.id||'',p?.lat||'',p?.ar||'',p?relLabel(p,h):'',label(person(p?.relativeTo)),p?.phone||'',p?.born||'']);
+  });
+  const cell = value => { const s=String(value??''); return '"'+(/^[=+@\-\t\r]/.test(s)?"'"+s:s).replaceAll('"','""')+'"'; };
+  saveBlob(fileName(selected.length===1?selected[0].name:'households',new Date().toLocaleDateString('sv-SE'))+'.csv',new Blob(['\uFEFF'+[headings,...rows].map(row=>row.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+}
+
 export function households() {
+  const selected = new Set(S.ui.householdSelection || []);
+  const selectBox = h => `<input type="checkbox" data-household-select="${esc(h.id)}" ${selected.has(h.id)?'checked':''} aria-label="${esc(t('Select household','اختيار العائلة')+' '+t(h.name,h.ar))}">`;
   const open = h => `<a class="btn btn-ghost btn-dense" href="#/household/${h.id}">${t('Open household', 'فتح العائلة')}</a>`;
   const cards = HOUSEHOLDS.map(h => {
     const members = h.members.map(person).filter(Boolean);
-    return `<section class="panel" data-find-item><div class="panel-b">
+    return `<section class="panel" data-find-item data-household-id="${esc(h.id)}"><div class="panel-b">
       <div class="row" style="gap:12px;align-items:flex-start">
-        <span class="avatar avatar-lg">${esc(t(h.name, h.ar).slice(0, 2))}</span>
+        ${selectBox(h)}<span class="avatar avatar-lg">${esc(t(h.name, h.ar).slice(0, 2))}</span>
         <div style="flex:1;min-width:0">
           <b style="display:block;font:600 16px/22px var(--sans)">${esc(t(h.name, h.ar))}</b>
           <small class="t-caption dim">${esc(t(h.town, h.townAr))}${h.envelope ? ` · ${t('Offering envelope', 'مظروف العطاء')} <span class="mono">${esc(h.envelope)}</span>` : ''}</small>
@@ -849,9 +880,9 @@ export function households() {
       </div></div></section>`;
   }).join('');
   const tableView = table({
-    cols: [{ label: t('Family', 'العائلة'), sort: true }, { label: t('Town', 'البلدة'), cls: 'hide-sm' }, { label: t('Offering envelope', 'مظروف العطاء'), cls: 'shrink' },
+    cols: [{ label: t('Select','اختيار'),cls:'shrink' },{ label: t('Family', 'العائلة'), sort: true }, { label: t('Town', 'البلدة'), cls: 'hide-sm' }, { label: t('Offering envelope', 'مظروف العطاء'), cls: 'shrink' },
            { label: t('Members', 'الأفراد'), cls: 'num' }, { label: '', cls: 'shrink' }],
-    rows: HOUSEHOLDS.map(h => ({ attrs: 'data-find-item', cells: [`<b>${esc(t(h.name, h.ar))}</b>`, `<span class="dim">${esc(t(h.town, h.townAr))}</span>`,
+    rows: HOUSEHOLDS.map(h => ({ attrs: `data-find-item data-household-id="${esc(h.id)}"`, cells: [selectBox(h),`<b>${esc(t(h.name, h.ar))}</b>`, `<span class="dim">${esc(t(h.town, h.townAr))}</span>`,
       `<span class="mono">${esc(h.envelope || '—')}</span>`, `<span class="num">${h.members.length}</span>`,
       `<span class="row" style="gap:6px;justify-content:flex-end">${open(h)}${CR.recBtn('household', h.id)}</span>`] })),
     empty: empty('family', t('No households yet', 'لا عائلات بعد'), t('Add the first one — a household is linked by home and envelope number.', 'أضف الأولى — العائلة مرتبطة بالمنزل ورقم المظروف.'),
@@ -863,11 +894,13 @@ export function households() {
       title: t('Households', 'العائلات'),
       sub: t(`${HOUSEHOLDS.length} households · select existing people and enter their shared address once`,
              `${HOUSEHOLDS.length} عائلة · اختر الأشخاص المسجّلين وأدخل عنوانهم المشترك مرة واحدة`),
-      actions: `<button class="btn btn-secondary" data-act="export">${icon('export', 17)}${t('Export', 'تصدير')}</button>
+      actions: `<button class="btn btn-secondary" data-household-export="filtered">${icon('export', 17)}${t('Export filtered households', 'تصدير العائلات المصفّاة')}</button>
         <button class="btn btn-primary" data-act="household-new">${icon('plus', 17)}${t('New household', 'عائلة جديدة')}</button>`
     })}
     <div class="toolbar" style="margin-bottom:16px">
       <div class="grow" style="max-width:320px">${searchField(t('Family name or envelope', 'اسم العائلة أو المظروف'), 'data-find')}</div>
+      <button class="btn btn-secondary btn-dense" data-household-export="selected" ${selected.size?'':'disabled'}>${t('Export selected households','تصدير العائلات المحدّدة')} <span data-household-count>${selected.size}</span></button>
+      <button class="btn btn-ghost btn-dense" data-household-select-all>${t('Select visible','اختيار المعروض')}</button>
       <span class="seg" role="group" aria-label="${t('View', 'العرض')}">
         <button aria-pressed="${S.ui.hhView !== 'table'}" data-act="hh-view:cards">${t('Cards', 'بطاقات')}</button>
         <button aria-pressed="${S.ui.hhView === 'table'}" data-act="hh-view:table">${t('Table', 'جدول')}</button></span>
@@ -876,7 +909,15 @@ export function households() {
     <p class="help" style="margin-top:18px">${t('New households reuse existing people. Review suggested surname matches, select several members, and enter one shared address. No people or households are merged automatically. An offering-envelope identifier is optional.','تستخدم العائلات الجديدة أشخاصاً مسجّلين. راجع اقتراحات اسم العائلة، واختر عدة أفراد، وأدخل عنواناً مشتركاً واحداً. لا تُدمج السجلات تلقائياً. رمز مظروف العطاء اختياري.')}</p>
     <div class="find-empty" hidden>${empty('search', t('No household matches', 'لا عائلة مطابقة'), t('Try part of the family name or the envelope number.', 'جرّب جزءاً من اسم العائلة أو رقم المظروف.'))}</div>`;
 }
-households.mount = host => { C.wire(host); wireTables(host); };
+households.mount = host => {
+  C.wire(host); wireTables(host);
+  const visibleIds=(pageOnly=false)=>[...host.querySelectorAll('[data-household-id]')].filter(row=>!row.hidden&&row.style.display!=='none'&&(!pageOnly||row.dataset.pageHidden!=='true')).map(row=>row.dataset.householdId);
+  const selected=new Set((S.ui.householdSelection||[]).filter(id=>HOUSEHOLDS.some(h=>h.id===id)));
+  const update=()=>{S.ui.householdSelection=[...selected];host.querySelector('[data-household-count]').textContent=selected.size;host.querySelector('[data-household-export="selected"]').disabled=!selected.size;};
+  host.querySelectorAll('[data-household-select]').forEach(box=>box.addEventListener('change',()=>{box.checked?selected.add(box.dataset.householdSelect):selected.delete(box.dataset.householdSelect);update();}));
+  host.querySelector('[data-household-select-all]')?.addEventListener('click',()=>{visibleIds(true).forEach(id=>selected.add(id));host.querySelectorAll('[data-household-select]').forEach(box=>box.checked=selected.has(box.dataset.householdSelect));update();});
+  host.querySelectorAll('[data-household-export]').forEach(button=>button.addEventListener('click',()=>exportHouseholds(button.dataset.householdExport==='selected'?[...selected]:visibleIds())));
+};
 
 export function householdView(id = '') {
   const h = HOUSEHOLDS.find(x => x.id === id);
@@ -889,7 +930,7 @@ export function householdView(id = '') {
     crumbs: [{ label: t('Households', 'العائلات'), href: '#/households' }, { label: t(h.name, h.ar) }],
     title: t(h.name, h.ar),
     sub: t(`${members.length} household members`, `${members.length} أفراد`),
-    actions: CR.recBtn('household', h.id)
+    actions: `<button class="btn btn-secondary" data-household-export-id="${esc(h.id)}">${icon('export',17)}${t('Export this household','تصدير هذه العائلة')}</button>`+CR.recBtn('household', h.id)
   }) + `<div class="toolbar" style="margin:18px 0"><span class="seg" role="group" aria-label="${t('Household view','عرض العائلة')}">
     ${[['list','List','قائمة'],['tree','Tree','شجرة'],['both','Both','كلاهما']].map(([key,en,ar])=>`<button data-hh-detail-view="${key}" aria-pressed="${view===key}">${t(en,ar)}</button>`).join('')}</span></div>
     <div class="splitview"><div class="stack" style="gap:16px">
@@ -904,7 +945,7 @@ export function householdView(id = '') {
       <dt>${t('Address', 'العنوان')}</dt><dd>${esc(t(h.address, h.addressAr))}</dd>
       <dt>${t('Town', 'البلدة')}</dt><dd>${esc(t(h.town, h.townAr))}</dd></dl>`)}</div></div>`;
 }
-householdView.mount = host => { C.wire(host);host.querySelectorAll('[data-hh-detail-view]').forEach(button=>button.addEventListener('click',()=>{S.ui.householdDetailView=button.dataset.hhDetailView;bus.refresh();})); };
+householdView.mount = host => { C.wire(host);host.querySelector('[data-household-export-id]')?.addEventListener('click',e=>exportHouseholds([e.currentTarget.dataset.householdExportId]));host.querySelectorAll('[data-hh-detail-view]').forEach(button=>button.addEventListener('click',()=>{S.ui.householdDetailView=button.dataset.hhDetailView;bus.refresh();})); };
 
 /* ---------------- new-person drawer ---------------- */
 export function newPersonDrawer() {

@@ -80,7 +80,7 @@ export function member_request_progress(d, row, details) {
     if (s !== null) {
       const status = get(s, 'status'), certificate = eq(get(s, 'kind'), 'certificate');
       if (certificate) {
-        stage = get(CERTIFICATE_STAGES, status, 'review');
+        stage = status==='issued'&&s.bishopReview&&s.bishopReview!=='accepted'?'review':get(CERTIFICATE_STAGES, status, 'review');
       } else {
         stage = get(SACRAMENT_STAGES, status, 'review');
         if (truthy(get(s, 'date')) && (has(set(['scheduled', 'celebrated', 'completed']), stage) || !eq(K(s, 'date'), get(details, 'date', ''))))
@@ -96,6 +96,7 @@ export function member_request_progress(d, row, details) {
       for (const entry of iter(get(s, 'history', []))) {
         let key = get(PROGRESS_EVENTS, get(entry, 'action'));
         if (!truthy(key)) continue;
+        if(certificate&&key==='issued'&&s.bishopReview&&s.bishopReview!=='accepted')continue;
         if (key === 'approved' && !certificate) key = 'registered';
         events.push({ key, at: get(entry, 'at', '') });
         if (has(set(['declined', 'cancelled']), key) && truthy(get(entry, 'reason'))) reason = K(entry, 'reason');

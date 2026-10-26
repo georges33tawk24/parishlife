@@ -1,0 +1,21 @@
+{
+  "roles": {
+    "super_admin": {"label": "Super Admin", "labelAr": "المشرف العام", "scope": "global", "rank": 100},
+    "bishop": {"label": "Bishop", "labelAr": "المطران", "scope": "diocese", "rank": 90},
+    "diocesan_admin": {"label": "Archdiocese Admin", "labelAr": "مدير الأبرشية", "scope": "diocese", "rank": 80},
+    "priest": {"label": "Parish priest", "labelAr": "كاهن الرعية", "scope": "parish", "rank": 70},
+    "parish_admin": {"label": "Parish Admin", "labelAr": "مدير الرعية", "scope": "parish", "rank": 60},
+    "secretary": {"label": "Secretary", "labelAr": "أمين السر", "scope": "parish", "rank": 50},
+    "treasurer": {"label": "Treasurer", "labelAr": "أمين الصندوق", "scope": "parish", "rank": 40},
+    "leader": {"label": "Ministry leader", "labelAr": "مسؤول الخدمة", "scope": "parish", "rank": 30},
+    "finance_view": {"label": "Finance viewer", "labelAr": "مشاهد المالية", "scope": "either", "rank": 20},
+    "clergy_assigner": {"label": "Delegated clergy appointments", "labelAr": "تفويض تعيين الكهنة", "scope": "diocese", "rank": 0}
+  },
+  "assignable": {
+    "super_admin": ["super_admin", "diocesan_admin", "priest", "parish_admin", "secretary", "treasurer", "leader", "finance_view", "clergy_assigner"],
+    "bishop": ["diocesan_admin", "priest", "parish_admin", "secretary", "treasurer", "leader", "finance_view", "clergy_assigner"],
+    "diocesan_admin": ["parish_admin", "secretary", "treasurer", "leader", "finance_view"],
+    "priest": ["parish_admin", "secretary", "treasurer", "leader", "finance_view"],
+    "parish_admin": ["secretary", "treasurer", "leader", "finance_view"]
+  }
+}
