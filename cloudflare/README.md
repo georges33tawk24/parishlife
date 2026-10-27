@@ -34,6 +34,7 @@ Differences from `server.py`, all invisible to the browser:
   [secure Super Admin provisioning workflow](../docs/administration.md#cloudflare-installation)
   for developer access; it never prints a plaintext privileged password.
 - **Account workspace.** The shared additive `backend/workspace-schema.json` supplies account preferences, scoped grants, affiliations, private request links and review history. Worker-specific service modules mirror the Python implementation. Normal startup does not seed a known super administrator password. OAuth, verification, messaging delivery and live Google Maps remain unconfigured.
+- **Homepage content.** `src/site-content.js` mirrors `backend/site_content.py`: the public `GET /api/public/site` and the Super Admin `GET`/`PUT /api/workspace/site-content`, stored in the shared `pl_site_content` table. See [homepage design](../docs/homepage-design.md).
 - **Schema additions.** The Worker adds the `member_requests.log` column on its first
   request if the database predates it (`addRequestLog` in `src/app.js`), as `server.py`
   does at start-up.

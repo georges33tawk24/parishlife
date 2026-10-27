@@ -681,6 +681,10 @@ def create_staff(c,user,q,hash_password,require):
 
 def handle(c, user, path, method, q, require):
     """Return None for routes belonging to the established server."""
+    from .site_content import handle as site_content
+    result = site_content(c, user, path, method, q, require)
+    if result is not None:
+        return result
     if path == '/api/public/auth-options' and method == 'GET':
         return {'providers': [{'id': p, 'available': False} for p in ('google','apple','microsoft')],
                 'verification': {'email': False, 'sms': False, 'authenticator': False}}

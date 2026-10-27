@@ -6,6 +6,7 @@ import { releaseGuestDocument } from './guest-delivery.js';
 import { accountServices } from './account-services.js';
 /* Account-level data is separate from parish records and ministry rosters. */
 import { ministryHandle } from './ministry.js';
+import { siteContent } from './site-content.js';
 import modules from '../../backend/modules.json' with { type: 'json' };
 import schema from '../../backend/workspace-schema.json' with { type: 'json' };
 import { need, NOW, tokenHex, tokenUrlsafe, sha256hex, passwordHash } from './py.js';
@@ -480,6 +481,7 @@ async function adminHandle(c,u,path,method,q) {
   return null;
 }
 export async function workspaceHandle(c,u,path,method,q) {
+  const site=await siteContent(c,u,path,method,q);if(site!==null)return site;
   if(path==='/api/public/auth-options'&&method==='GET')return {providers:['google','apple','microsoft'].map(id=>({id,available:false})),verification:{email:false,sms:false,authenticator:false}};
   if(path==='/api/public/guest-requests'&&method==='POST'){
     const pid=q.parish;

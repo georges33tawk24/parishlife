@@ -1,6 +1,8 @@
 # ParishLife public website and CMS design
 
-Implemented 6 October 2026.
+Implemented 6 October 2026. The homepage was redesigned in October 2026: see
+[homepage-design.md](homepage-design.md). Parish pages still follow this document, with the new
+header, footer, type and palette.
 
 ## Open the result
 

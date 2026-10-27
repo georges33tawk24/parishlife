@@ -11,6 +11,7 @@ import * as F from '../flows.js';
 import { MESSAGES, TEMPLATES, NOTICES, MUSIC, MUSIC_DETAIL, SETLISTS, AUTOMATIONS, PRAYERS,
          PARISH, EVENTS, PORTAL_REQUESTS, HOUSEHOLDS, GROUPS, CONTENT, groupInfo, musicInfo, person, venue } from '../data.js';
 import { waitingOnline } from './online-requests.js';
+import { session } from '../api.js';
 
 const L = (en, ar) => t(en, ar);
 const CHANNEL = { whatsapp: ['WhatsApp', 'واتساب'], sms: ['SMS', 'رسالة قصيرة'], email: ['Email', 'بريد إلكتروني'] };
@@ -407,7 +408,8 @@ function portalContent(){
     <aside class="cms-publishing-note">${icon('info',18)}<p>${L('Save a draft while you work. A draft section stays off the public page until you publish it. Add both languages before publishing.','احفظ مسودة أثناء العمل. يبقى القسم المسودة خارج الصفحة العامة حتى تنشره. أضف اللغتين قبل النشر.')}</p></aside>
     <section class="cms-related" aria-labelledby="cms-related-title"><div><span class="cms-eyebrow">${L('02 / Parish updates','02 / مستجدات الرعية')}</span><h2 id="cms-related-title">${L('Keep your community up to date.','أبقِ جماعتك على اطّلاع.')}</h2><p>${L('Public events and announcements are managed in their own spaces.','تُدار الأحداث العامة والإعلانات في أقسامها الخاصة.')}</p></div>
       <div class="cms-related-links"><a href="#/calendar">${icon('events',21)}<span><strong>${L('Public calendar','الرزنامة العامة')}</strong><small>${L('Service times and upcoming events','مواعيد الخدمات والأحداث المقبلة')}</small></span>${icon('arrowR',18)}</a>
-      <a href="#/memberhub">${icon('bell',21)}<span><strong>${L('Announcements','الإعلانات')}</strong><small>${L('News and updates for your community','أخبار ومستجدات جماعتك')}</small></span>${icon('arrowR',18)}</a></div>
+      <a href="#/memberhub">${icon('bell',21)}<span><strong>${L('Announcements','الإعلانات')}</strong><small>${L('News and updates for your community','أخبار ومستجدات جماعتك')}</small></span>${icon('arrowR',18)}</a>
+      ${session.user?.platformRole==='super_admin'?`<a href="#/workspace" data-act="homepage-edit">${icon('globe',21)}<span><strong>${L('ParishLife homepage','الصفحة الرئيسية لـ ParishLife')}</strong><small>${L('Opening lines, announcement, stories and sections shared by every parish','الافتتاح والإعلان والقصص والأقسام المشتركة بين جميع الرعايا')}</small></span>${icon('arrowR',18)}</a>`:''}</div>
     </section>
   </div>`;
 }
