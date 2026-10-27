@@ -34,6 +34,16 @@ def initialize(c):
             c.execute("INSERT OR IGNORE INTO pl_grants VALUES(?,?, 'diocese',?,'diocesan_admin',1,NULL,?)",
                       (secrets.token_hex(12), user['id'], user['diocese'], now()))
         c.execute('INSERT INTO pl_authorization_migrations VALUES(1,?)', (now(),))
+    if not c.execute('SELECT 1 FROM pl_authorization_migrations WHERE version=2').fetchone():
+        # A database first created by the parishlife-v2 line keeps its Super Admins in
+        # role_assignments. Mirror only the active global ones as grants; nothing else is promoted.
+        tables = {r['name'] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('role_assignments','access_blocks')")}
+        if tables == {'role_assignments', 'access_blocks'}:
+            for row in c.execute("SELECT DISTINCT user_id FROM role_assignments WHERE role='superadmin' AND scope='system' AND status='active' AND ended_at IS NULL "
+                                 "AND user_id NOT IN (SELECT user_id FROM access_blocks WHERE scope='global' AND lifted_at IS NULL)").fetchall():
+                c.execute("INSERT OR IGNORE INTO pl_grants VALUES(?,?,'global','*','super_admin',1,NULL,?)",
+                          (secrets.token_hex(12), row['user_id'], now()))
+        c.execute('INSERT INTO pl_authorization_migrations VALUES(2,?)', (now(),))
 
 
 def history(c, user, scope, action, detail):
@@ -98,7 +108,7 @@ def signup(c, q, normalize, hash_password, require):
     require(c.execute('SELECT COUNT(*) FROM pl_accounts WHERE created_at>?', (since,)).fetchone()[0] < 30,
             'Too many registrations. Please try again later.', 429)
     uid, stamp = 'u-' + secrets.token_hex(12), now()
-    c.execute("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','ParishLife accounts')")
+    c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','ParishLife accounts')")
     c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)',
               (uid, email or phone, first+' '+last, 'member', 'pl-platform', None, hash_password(password)))
     data = {'profile': {'firstName': first, 'lastName': last, 'birthDate': born, 'email': email, 'phone': phone},
@@ -118,7 +128,8 @@ def platform_role(c, user):
         return 'bishop'
     if c.execute("SELECT 1 FROM pl_grants g JOIN dioceses d ON d.id=g.scope_id WHERE g.user_id=? AND g.scope_type='diocese' AND g.role='diocesan_admin' AND g.active=1", (user['id'],)).fetchone():
         return 'diocesan_admin'
-    return 'member' if user['role'] in EXTRA_ROLES else user['role']
+    # parishlife-v2 stored plain accounts with the role "user": they are members here.
+    return 'member' if user['role'] in EXTRA_ROLES or user['role'] == 'user' else user['role']
 
 
 def session_data(c, user):
@@ -802,7 +813,7 @@ def handle(c, user, path, method, q, require):
         name=str(q.get('name') or '').strip()
         require(2<=len(name)<=120,'Enter a diocese name.')
         did='diocese-'+secrets.token_hex(8)
-        c.execute('INSERT INTO dioceses VALUES(?,?)',(did,name))
+        c.execute('INSERT INTO dioceses(id,name) VALUES(?,?)',(did,name))
         history(c,user,did,'diocese.created',{'name':name})
         return {'id':did}
     if path == '/api/workspace/request-counts' and method == 'GET':

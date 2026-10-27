@@ -33,6 +33,8 @@ GEOGRAPHY = json.loads((ROOT / 'backend' / 'geography.json').read_text(encoding=
 from backend import workspace
 
 ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'} | workspace.EXTRA_ROLES
+# Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
+SIGN_IN_ROLES = ROLES | {'user'}
 ADMINISTRATORS = workspace.ADMIN_ROLES
 OFFICE_STAFF = workspace.OFFICE_ROLES
 CLERGY = {'priest'}  # Signing authority remains separate from diocesan management.
@@ -333,7 +335,7 @@ def init_db():
         c.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role='disabled')")
         if 'assigned_to' not in {row['name'] for row in c.execute('PRAGMA table_info(member_concerns)')}:
             c.execute('ALTER TABLE member_concerns ADD COLUMN assigned_to TEXT REFERENCES users(id)')
-        c.execute("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')")
+        c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('beirut','Archeparchy of Beirut')")
         seed = json.loads((ROOT / 'backend' / 'seed.json').read_text(encoding='utf-8'))
         for p in seed['PARISHES']:
             c.execute('INSERT OR IGNORE INTO parishes VALUES(?,?,?)', (p['id'], 'beirut', json.dumps(p)))
@@ -2796,7 +2798,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                              **workspace.public_profile(c, public_id, public_state)})
                 if path == '/api/login' and self.command == 'POST':
                     u = workspace.login_user(c, q, login_name, require)
-                    require(u is not None and u['role'] in ROLES and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
+                    require(u is not None and u['role'] in SIGN_IN_ROLES and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
                     return self.start_session(c, u['id'])
                 if path == '/api/signup' and self.command == 'POST':
                     return self.start_session(c, workspace.signup(c, q, login_name, password_hash, require))
@@ -2805,7 +2807,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 session = c.execute('SELECT * FROM sessions WHERE token=? AND expires>?', (hashlib.sha256((token.value if token else '').encode()).hexdigest(), time.time())).fetchone()
                 require(session is not None, 'Sign in to continue.', 401)
                 u = c.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
-                require(u is not None and u['role'] in ROLES, 'Sign in to continue.', 401)
+                require(u is not None and u['role'] in SIGN_IN_ROLES, 'Sign in to continue.', 401)
                 require(not workspace.suspended(c, u['id']), 'This account is inactive.', 403)
                 if self.command != 'GET': require(hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), session['csrf']), 'Invalid request token.', 403)
                 actor = u
@@ -2977,7 +2979,7 @@ def main():
             c.execute('BEGIN IMMEDIATE')
             require(not c.execute('SELECT 1 FROM users WHERE username=?', (username,)).fetchone(),
                     'This username already exists. No account was changed; choose a new operator identity.')
-            c.execute("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','ParishLife platform')")
+            c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','ParishLife platform')")
             uid = 'u-' + secrets.token_hex(12)
             c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)',
                       (uid, username, args.name or username, 'member', 'pl-platform', None, password_hash(password)))

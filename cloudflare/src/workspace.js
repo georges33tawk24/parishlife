@@ -29,6 +29,15 @@ export function initializeWorkspace(db) {
         db.prepare('INSERT OR IGNORE INTO pl_authorization_migrations VALUES(1,?)').bind(NOW())
       ]);
     }
+    if (!await db.prepare('SELECT 1 FROM pl_authorization_migrations WHERE version=2').first()) {
+      // A database first created by the parishlife-v2 line keeps its Super Admins in
+      // role_assignments. Mirror only the active global ones as grants; nothing else is promoted.
+      const legacy=(await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('role_assignments','access_blocks')").first()).n===2;
+      await db.batch([
+        ...(legacy?[db.prepare("INSERT OR IGNORE INTO pl_grants SELECT 'migration-v2-'||user_id,user_id,'global','*','super_admin',1,NULL,? FROM (SELECT DISTINCT user_id FROM role_assignments WHERE role='superadmin' AND scope='system' AND status='active' AND ended_at IS NULL AND user_id NOT IN (SELECT user_id FROM access_blocks WHERE scope='global' AND lifted_at IS NULL))").bind(NOW())]:[]),
+        db.prepare('INSERT OR IGNORE INTO pl_authorization_migrations VALUES(2,?)').bind(NOW())
+      ]);
+    }
     const columns=await db.prepare("SELECT name FROM pragma_table_info('uploaded_files')").all();
     if(!columns.results.some(c=>c.name==='requirement')){
       try{await db.prepare("ALTER TABLE uploaded_files ADD COLUMN requirement TEXT NOT NULL DEFAULT ''").run();}
@@ -80,7 +89,7 @@ export async function workspaceSignup(c,q) {
   const recent=await c.first('SELECT COUNT(*) AS n FROM pl_accounts WHERE created_at>?',new Date(Date.now()-3600000).toISOString());
   need(recent.n<30,'Too many registrations. Please try again later.',429);
   const uid='u-'+tokenHex(12),stamp=NOW();
-  c.run("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','ParishLife accounts')");
+  c.run("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','ParishLife accounts')");
   c.run('INSERT INTO users VALUES(?,?,?,?,?,?,?)',uid,email||phone,first+' '+last,'member','pl-platform',null,passwordHash(q.password,tokenHex(16),ROUNDS));
   const data={profile:{firstName:first,lastName:last,birthDate:born,email,phone},theme:{scheme:'forest',mode:'light'},profileComplete:false};
   c.run('INSERT INTO pl_accounts VALUES(?,?,?)',uid,JSON.stringify(data),stamp);
@@ -92,7 +101,8 @@ export async function platformRole(c,u) {
   if(await isSuperAdmin(c,u))return 'super_admin';
   if(u.role==='bishop')return 'bishop';
   if(await c.first("SELECT 1 FROM pl_grants g JOIN dioceses d ON d.id=g.scope_id WHERE g.user_id=? AND g.scope_type='diocese' AND g.role='diocesan_admin' AND g.active=1",u.id))return 'diocesan_admin';
-  return EXTRA_ROLES.includes(u.role)?'member':u.role;
+  // parishlife-v2 stored plain accounts with the role "user": they are members here.
+  return EXTRA_ROLES.includes(u.role)||u.role==='user'?'member':u.role;
 }
 export async function sessionData(c,u) {
   const data=await account(c,u);
@@ -567,7 +577,7 @@ export async function workspaceHandle(c,u,path,method,q) {
   if(path==='/api/workspace/dioceses'&&method==='POST'){
     need((await isSuperAdmin(c,u)),'Only the super administrator creates dioceses.',403);
     const name=String(q.name||'').trim();need(name.length>=2&&name.length<=120,'Enter a diocese name.');
-    const id='diocese-'+tokenHex(8);c.run('INSERT INTO dioceses VALUES(?,?)',id,name);history(c,u,id,'diocese.created',{name});return {id};
+    const id='diocese-'+tokenHex(8);c.run('INSERT INTO dioceses(id,name) VALUES(?,?)',id,name);history(c,u,id,'diocese.created',{name});return {id};
   }
   if(path==='/api/workspace/request-counts'&&method==='GET'){
     const pid=q.parish;need(await officeAccess(c,u,pid),'Office access required.',403);

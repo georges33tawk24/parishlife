@@ -22,6 +22,8 @@ import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
 import { initializeWorkspace, workspaceHandle, workspaceSignup, loginUser, sessionData, suspended, publicProfile, parishContext, isOffice } from './workspace.js';
 
+// Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
+const SIGN_IN_ROLES = new Set([...ROLES, 'user']);
 const HEADERS = {
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
@@ -156,7 +158,7 @@ async function handle(c, env, request, url, q, secureCookie) {
   };
   if (path === '/api/login' && method === 'POST') {
     const u = await loginUser(c,q);
-    need(u !== null && ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    need(u !== null && SIGN_IN_ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
     return startSession(u.id);
   }
   if (path === '/api/signup' && method === 'POST') return startSession(await workspaceSignup(c, q));
@@ -168,7 +170,7 @@ async function handle(c, env, request, url, q, secureCookie) {
   const session = sessions[0] ?? null;
   need(session !== null, 'Sign in to continue.', 401);
   let u = users[0] ?? null;
-  need(u !== null && ROLES.has(u.role), 'Sign in to continue.', 401);
+  need(u !== null && SIGN_IN_ROLES.has(u.role), 'Sign in to continue.', 401);
   need(!await suspended(c,u.id),'This account is inactive.',403);
   if (method !== 'GET') need(compareDigest(request.headers.get('X-CSRF-Token') ?? '', session.csrf), 'Invalid request token.', 403);
   if (path === '/api/session' && method === 'GET') {

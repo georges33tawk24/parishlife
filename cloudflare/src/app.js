@@ -128,7 +128,7 @@ export async function init_db(c, force = false) {
      part of CREATE TABLE here, so server.py's ALTER TABLE step never applies.) */
   c.run("UPDATE users SET role='disabled' WHERE role='volunteer'");
   c.run("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role='disabled')");
-  c.run("INSERT OR IGNORE INTO dioceses VALUES('beirut','Archeparchy of Beirut')");
+  c.run("INSERT OR IGNORE INTO dioceses(id,name) VALUES('beirut','Archeparchy of Beirut')");
   const [stored] = await c.reads([['SELECT * FROM states', []]]);
   const states = stored.map(row => ({ parish_id: row.parish_id, data: row.data }));
   const present = new Set(states.map(row => row.parish_id));
