@@ -4,8 +4,9 @@ import { esc } from './ui.js';
 import { applyTheme } from './theme.js';
 import { passkeysSupported, signInWithPasskey, passkeyMessage } from './passkeys.js';
 import { mountTurnstile } from './turnstile.js';
+import { sanctuaryMarkup, mountSanctuary } from './home-sanctuary.js';
 
-/* Sign in and sign up, beside the valley at dusk from the public site. Signing in takes one
+/* Sign in and sign up, beside the church window of the public site. Signing in takes one
    field (an email, a phone number or a username) or a passkey; signing up keeps every check
    of the account form on one screen, with the password rules shown before typing. */
 const state={tab:'',values:{},shown:false,check:null};
@@ -28,8 +29,7 @@ export function authentication(host,enter,error='') {
   host.className='account-auth'+(first?' is-first':'');
   host.innerHTML=`<div class="auth-shell">
     <aside class="auth-art" aria-hidden="true">
-      ${['sky','far','near','glow'].map(part=>`<img src="assets/images/valley/valley-tall-dusk-${part}.webp" alt="" class="art-${part}">`).join('')}
-      <span class="auth-stars"></span><span class="auth-shade"></span>
+      ${sanctuaryMarkup()}<span class="auth-shade"></span>
       <blockquote class="auth-quote"><p>${t('“Let your light shine before others.”','«فليُضِئ نورُكم هكذا قدّام الناس»')}</p><cite>${t('Matthew 5:16','متّى ٥: ١٦')}</cite></blockquote>
     </aside>
     <main class="auth-main"><div class="auth-card">
@@ -61,6 +61,9 @@ export function authentication(host,enter,error='') {
     ${!up&&passkeys?`<div class="auth-or" style="--i:${n++}"><span>${t('or','أو')}</span></div><button type="button" class="auth-passkey" data-passkey style="--i:${n++}">${KEY}<span>${t('Sign in with a passkey','الدخول بمفتاح مرور')}</span></button>`:''}
     <a class="auth-back" href="public.html">${t('Browse parishes or make a request without an account','تصفّح الرعايا أو قدّم طلباً دون حساب')}</a>
     </div></main></div>`;
+  /* the church window beside the form, with a few candles already lit and the rest for the visitor */
+  host._scene?.destroy();
+  host._scene=mountSanctuary(host.querySelector('.auth-art'),[],{tip:null,lit:3,onPick(){},words:{light:'',lit:''}});
   const form=host.querySelector('form'),alert=form.querySelector('[data-error]'),submit=form.querySelector('[type=submit]');
   const remember=()=>{state.values=Object.fromEntries([...new FormData(form)].filter(([k])=>!['password','confirmPassword'].includes(k)));};
   const ink=host.querySelector('.auth-tabs-ink'),tabs=host.querySelector('.auth-tabs'),current=tabs.querySelector('[aria-pressed=true]');

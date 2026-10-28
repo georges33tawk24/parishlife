@@ -324,7 +324,7 @@ export function lightNow(date = new Date()) {
   return hour >= 5 && hour < 8 ? 'dawn' : hour >= 8 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'dusk' : 'night';
 }
 
-export function mountSanctuary(host, places, { tip, onPick, words }) {
+export function mountSanctuary(host, places, { tip, onPick, words, lit = 0 }) {
   const box = host.querySelector('[data-sn-candles]');
   if (!box) return { destroy() {} };
   const scene = host.querySelector('[data-sanctuary]');
@@ -337,7 +337,7 @@ export function mountSanctuary(host, places, { tip, onPick, words }) {
   box.innerHTML = Array.from({ length: total }, (_, i) => {
     const p = parishAt.get(i), h = p ? 70 + random() * 34 : 34 + random() * 36;
     const lean = (random() * 2 - 1) * (p ? 2.6 : 4), x = 6 + (i + .5) * 88 / total + (random() - .5) * 1.2;
-    return `<span class="sn-candle${p ? ' is-lit is-parish' : ''}" style="--x:${r1(x)}%;--h:${r1(h)};--lean:${r1(lean)}deg;--d:${r1(1.7 + random() * 1.6)}s;--o:${r1(-random() * 3)}s"${p ? ` data-candle="${i}"` : ''}><i class="sn-flame"></i><b class="sn-halo"></b></span>`;
+    return `<span class="sn-candle${p ? ' is-lit is-parish' : !p && i % 3 === 1 && i / 3 < lit ? ' is-lit' : ''}" style="--x:${r1(x)}%;--h:${r1(h)};--lean:${r1(lean)}deg;--d:${r1(1.7 + random() * 1.6)}s;--o:${r1(-random() * 3)}s"${p ? ` data-candle="${i}"` : ''}><i class="sn-flame"></i><b class="sn-halo"></b></span>`;
   }).join('') + '<span class="sn-tray" data-sn-tray></span>';
   const haze = host.querySelector('[data-sn-haze]');
   if (haze && !document.documentElement.classList.contains('is-lite')) haze.style.backgroundImage = `url(${hazeTexture()})`;
@@ -348,7 +348,8 @@ export function mountSanctuary(host, places, { tip, onPick, words }) {
   const watch = new MutationObserver(glints);
   watch.observe(box, { subtree: true, attributes: true, attributeFilter: ['class'] });
   const show = (el, text) => {
-    const r = el.getBoundingClientRect(), b = host.closest('[data-hero]').getBoundingClientRect();
+    if (!tip || !text) return;
+    const r = el.getBoundingClientRect(), b = (host.closest('[data-hero]') || host).getBoundingClientRect();
     tip.textContent = text; tip.hidden = false;
     tip.style.left = (r.left + r.width / 2 - b.left) + 'px';
     tip.style.top = (r.top - b.top - 8) + 'px';

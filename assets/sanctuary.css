@@ -1,6 +1,6 @@
-/* The homepage sanctuary (assets/home-sanctuary.js): a stone wall at night, the stained-glass
-   window and the light it lets in, the sanctuary lamp, and a candle on the sill for each parish.
-   Arabic mirrors the scene so the window stays opposite the headline. */
+/* The sanctuary (assets/home-sanctuary.js): a stone wall at night, the stained-glass window and the
+   light it lets in, the sanctuary lamp, and candles on the sill. Used by the public site and the
+   sign-in screen; Arabic mirrors the scene so the window stays opposite the words. */
 .hero-sanctuary .hero-art{background:#0B0807}
 .sanctuary{position:absolute;inset:0;overflow:hidden;--stage-h:min(68svh,46vw * 1300 / 1080);
   --sun-a:#FFF2D6;--sun-b:#FFCF7A;--sun:0;--beam-k:1;--bloom-a:rgb(190 170 255 / .38);--bloom-b:rgb(255 214 150 / .26);--spill-a:rgb(130 120 230 / .26)}
@@ -80,33 +80,6 @@
 @keyframes sn-lamp{from{opacity:.75;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}
 .sn-motes{position:absolute;inset:0;pointer-events:none}
 
-/* the words stay over the darker side of the wall; the candles stay within reach of the pointer */
-.hero-sanctuary .hero-shade{background:linear-gradient(90deg,rgb(9 7 6 / .78) 0%,rgb(9 7 6 / .46) 38%,rgb(9 7 6 / 0) 62%),linear-gradient(0deg,rgb(9 7 6 / .74) 0%,rgb(9 7 6 / 0) 34%),linear-gradient(180deg,rgb(9 7 6 / .55) 0%,rgb(9 7 6 / 0) 22%)}
-[dir=rtl] .hero-sanctuary .hero-shade{background:linear-gradient(270deg,rgb(9 7 6 / .78) 0%,rgb(9 7 6 / .46) 38%,rgb(9 7 6 / 0) 62%),linear-gradient(0deg,rgb(9 7 6 / .74) 0%,rgb(9 7 6 / 0) 34%),linear-gradient(180deg,rgb(9 7 6 / .55) 0%,rgb(9 7 6 / 0) 22%)}
-.hero-sanctuary .hero-inner,.hero-sanctuary .hero-row{pointer-events:none}
-.hero-sanctuary .hero-inner>*,.hero-sanctuary .hero-row>*{pointer-events:auto}
-.hero-sanctuary .hero-tip{background:#1A1210;border-color:rgb(241 199 122 / .28)}
-.hero-sanctuary .hero-note{background:rgb(14 10 9 / .55)}
-.hero-sanctuary .hero-field{background:rgb(16 11 10 / .66)}
-.hero-sanctuary .hero-suggest{background:#16100E}
-/* a gold rule with the cross over the headline */
-.hero-mark{display:flex;align-items:center;gap:14px;margin:0 0 clamp(14px,2.4vh,22px);color:var(--gilt-hi)}
-.hero-mark svg{width:22px;height:30px;flex:none;filter:drop-shadow(0 0 10px rgb(215 165 72 / .55))}
-.hero-mark::after{content:"";height:1px;flex:0 0 clamp(40px,6vw,96px);background:linear-gradient(90deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
-[dir=rtl] .hero-mark::after{background:linear-gradient(270deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
-.hero-mark span{font:600 13px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:#E8D3A6}
-[dir=rtl] .hero-mark span{letter-spacing:0;font-size:15px}
-
-/* a parish's own church: the window a little smaller, clear of the next event card */
-.ph.hero-sanctuary .sanctuary{--stage-h:min(60svh,40vw * 1300 / 1080)}
-/* the banner above a parish's other pages: the top of its window, without the candles */
-.sub-hero.is-sanctuary{background:#0B0807}
-.sub-sanctuary .sanctuary{--stage-h:150%}
-.sub-sanctuary .sn-stage{top:calc(var(--header) * .45)}
-.sub-sanctuary .sn-lamp{display:none}
-.sub-sanctuary .sn-candles,.sub-sanctuary .sn-inscription{display:none}
-.sub-art.sub-sanctuary::after{z-index:1;background:linear-gradient(90deg,rgb(9 7 6 / .9) 12%,rgb(9 7 6 / .5) 55%,rgb(9 7 6 / .1)),linear-gradient(0deg,rgb(9 7 6 / .8),transparent 40%)}
-[dir=rtl] .sub-art.sub-sanctuary::after{background:linear-gradient(270deg,rgb(9 7 6 / .9) 12%,rgb(9 7 6 / .5) 55%,rgb(9 7 6 / .1)),linear-gradient(0deg,rgb(9 7 6 / .8),transparent 40%)}
 /* Narrow and tall screens: the words take the top, so the window rises behind them, dimmer. */
 @media(max-width:1099px),(max-aspect-ratio:4/5){
   .sanctuary{--stage-h:min(70svh,118vw * 1300 / 1080)}
@@ -117,59 +90,10 @@
   .sn-arcade{width:100%;opacity:.7}
   .sn-spill{background:radial-gradient(ellipse 60% 40% at 50% 70%,var(--spill-a),transparent 70%)}
   .sn-wall::after{background:radial-gradient(ellipse 90% 60% at 50% 72%,rgb(8 6 5 / 0) 0,rgb(8 6 5 / .55) 58%,rgb(5 4 3 / .92) 100%)}
-  .hero-sanctuary .hero-shade{background:linear-gradient(180deg,rgb(9 7 6 / .82) 0%,rgb(9 7 6 / .6) 48%,rgb(9 7 6 / .2) 78%,rgb(9 7 6 / .5) 100%)}
 }
-
-/* ---------- the rest of the homepage, in the same church ---------- */
-/* the night sections rise like arches with a gilded edge */
-.directory,.stories,.join,.ph-min,.ph-gallery{box-shadow:inset 0 1.5px 0 rgb(215 165 72 / .55),inset 0 30px 42px -34px rgb(215 165 72 / .3)}
-/* warm limestone for the light sections, and the night sections painted like a chapel ceiling */
-.directory,.stories,.join,.ph-min,.ph-gallery{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='%23E6BF6E'%3E%3Cg transform='translate%2863.3 242.8%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2828.8 68.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%28120.0 118.6%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%28106.3 126.4%29' fill-opacity='0.3'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='123.7' cy='230.3' r='0.8' fill-opacity='0.3'/%3E%3Cg transform='translate%28206.7 102.3%29' fill-opacity='0.18'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2890.6 176.7%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2842.7 23.7%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='44.2' cy='217.9' r='1.5' fill-opacity='0.36'/%3E%3Cg transform='translate%2895.0 222.3%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2831.8 176.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Cg transform='translate%2856.2 44.6%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Ccircle cx='217.0' cy='230.8' r='1.0' fill-opacity='0.3'/%3E%3Cg transform='translate%2810.9 91.7%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3C/svg%3E")}
-.join{background-image:radial-gradient(ellipse 70% 60% at 50% 105%,rgb(215 165 72 / .2),transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='%23E6BF6E'%3E%3Cg transform='translate%2863.3 242.8%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2828.8 68.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%28120.0 118.6%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%28106.3 126.4%29' fill-opacity='0.3'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='123.7' cy='230.3' r='0.8' fill-opacity='0.3'/%3E%3Cg transform='translate%28206.7 102.3%29' fill-opacity='0.18'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2890.6 176.7%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2842.7 23.7%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='44.2' cy='217.9' r='1.5' fill-opacity='0.36'/%3E%3Cg transform='translate%2895.0 222.3%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2831.8 176.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Cg transform='translate%2856.2 44.6%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Ccircle cx='217.0' cy='230.8' r='1.0' fill-opacity='0.3'/%3E%3Cg transform='translate%2810.9 91.7%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3C/svg%3E")}
-/* the verse: a rose window drawn in gold behind the words, turning very slowly, and the cross above */
-.verse{position:relative;isolation:isolate}
-.verse-rose{position:absolute;z-index:-1;left:50%;top:50%;width:min(92vw,820px);aspect-ratio:1;translate:-50% -50%;color:#B88B33;opacity:.17;pointer-events:none}
-.verse-rose svg{width:100%;height:100%;animation:sn-turn 260s linear infinite}
-@keyframes sn-turn{to{transform:rotate(360deg)}}
-.verse-cross{display:block;width:30px;color:var(--gilt);filter:drop-shadow(0 0 14px rgb(215 165 72 / .6))}
-.verse-cross svg{display:block;width:100%;height:auto}
-
-/* Ask your parish: each arch a gilded niche, gold leaf in its lunette and the cross at its crown */
-.arch{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23B88A2E'%3E%3Cpath d='M5.2 1.5h1.6v13H5.2zM1.5 5.6h9v1.6h-9z'/%3E%3C/svg%3E") no-repeat 50% 14px/11px 15px,radial-gradient(ellipse 72% 30% at 50% 0%,rgb(228 186 96 / .42),rgb(228 186 96 / 0) 72%),linear-gradient(180deg,#F0E7D6,#E2D6C1);
-  box-shadow:inset 0 0 0 7px #EFE5D3,inset 0 0 0 8px rgb(199 158 76 / .62)}
-.arch:hover,.arch:focus-visible{box-shadow:inset 0 0 0 7px #F2E9D8,inset 0 0 0 8px rgb(199 158 76 / .85),0 26px 40px -26px rgb(21 32 58 / .45)}
-.arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .55),0 0 0 5px #FBF6EC,0 0 0 6px rgb(199 158 76 / .3)}
-/* the three steps, numbered as on a church clock */
-.steps li::before{content:counter(step,upper-roman);border-color:rgb(199 158 76 / .8);color:var(--gilt-ink);box-shadow:inset 0 0 0 3px var(--mist),inset 0 0 0 4px rgb(199 158 76 / .35)}
-[dir=rtl] .steps li::before{content:counter(step,arabic-indic)}
-/* This week: Sundays carry the cross */
-.wk-day.is-sunday .wk-dow{display:inline-flex;align-items:center;gap:5px;color:var(--gilt-ink)}
-.wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23D7A548'%3E%3Cpath d='M5.1 2h1.8v13H5.1zM1.2 6.1h9.6v1.8H1.2z'/%3E%3Ccircle cx='6' cy='1.6' r='1.3'/%3E%3Ccircle cx='1.1' cy='7' r='1.1'/%3E%3Ccircle cx='10.9' cy='7' r='1.1'/%3E%3C/svg%3E") no-repeat 50%/contain}
-/* Mass times: a bell in its belfry, rung as the section arrives */
-.times .sec-head .times-mark{margin-bottom:6px}
-.times-mark .bell{width:30px;height:30px;overflow:visible}
-.bell-body{transform-box:view-box;transform-origin:50% 12%}
-.bell-clapper{transform-box:view-box;transform-origin:50% 40%}
-.is-in .bell-body,.times-mark:hover .bell-body{animation:bell-ring 2.6s cubic-bezier(.36,.07,.19,.97) .5s 1}
-.is-in .bell-clapper,.times-mark:hover .bell-clapper{animation:bell-clap 2.6s cubic-bezier(.36,.07,.19,.97) .5s 1}
-@keyframes bell-ring{0%,100%{transform:rotate(0)}10%{transform:rotate(22deg)}25%{transform:rotate(-18deg)}40%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}70%{transform:rotate(5deg)}85%{transform:rotate(-2deg)}}
-@keyframes bell-clap{0%,100%{transform:rotate(0)}12%{transform:rotate(30deg)}27%{transform:rotate(-26deg)}42%{transform:rotate(18deg)}57%{transform:rotate(-12deg)}72%{transform:rotate(6deg)}}
-/* About: the first letter illuminated, gold on a manuscript red */
-.about-initial{float:left;display:grid;place-items:center;width:1.32em;height:1.32em;margin:20px .26em 0 0;font-family:var(--display);font-size:72px;line-height:1;color:#F4D488;
-  background:radial-gradient(circle at 30% 25%,#9A2B2B,#5E1316 75%);border:1px solid #C9A24C;box-shadow:inset 0 0 0 4px #5E1316,inset 0 0 0 5px rgb(241 199 122 / .55),0 14px 26px -16px rgb(94 19 22 / .6);text-shadow:0 1px 0 rgb(0 0 0 / .35)}
-.about-copy .has-initial::first-letter,.about-copy .has-initial>:first-child::first-letter{font-size:0}
-/* About: a village church with its bell-cote on the ridge of the valley picture */
-.about-mark{position:relative}
-.about-chapel{position:absolute;left:0;right:0;bottom:0;width:100%;height:auto;filter:drop-shadow(0 -2px 10px rgb(255 200 120 / .18))}
-.chapel-bell{transform-box:fill-box;transform-origin:50% 0;animation:chapel-bell 3.4s ease-in-out infinite alternate}
-@keyframes chapel-bell{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}
-/* the footer opens on a carved frieze of crosses */
-.site-footer::before{content:"";display:block;height:28px;margin:-44px 0 44px;opacity:.4;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='28' viewBox='0 0 96 28' fill='none' stroke='%23D7A548' stroke-width='1.1'%3E%3Cpath d='M0 2.5H96M0 25.5H96' stroke-opacity='.5'/%3E%3Ccircle cx='24' cy='14' r='8' stroke-opacity='.8'/%3E%3Cpath d='M24 8.6v10.8M18.6 14h10.8' stroke-width='1.4'/%3E%3Cpath d='M72 7.5l6.5 6.5-6.5 6.5-6.5-6.5z' stroke-opacity='.7'/%3E%3Ccircle cx='72' cy='14' r='1.6' fill='%23D7A548' stroke='none'/%3E%3Cpath d='M44 14h8M92 14h8M-4 14h8' stroke-opacity='.45'/%3E%3C/svg%3E") repeat-x 0 50%/96px 28px}
 
 @media(prefers-reduced-motion:reduce){
   .sn-haze i,.sn-clouds,.sn-backlight,.sn-beam,.sn-lamp,.sn-lamp-glow,.sn-lamp-flame,.sn-candle.is-lit .sn-flame,.sn-candle.is-lit .sn-halo{animation:none}
   .sn-flame,.sn-halo{transition:none}
-  .bell-body,.bell-clapper,.chapel-bell{animation:none!important}
-  .verse-rose svg{animation:none}
 }
 @media print{.sanctuary{display:none}}
