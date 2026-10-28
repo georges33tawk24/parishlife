@@ -95,19 +95,11 @@ function beamsMarkup() {
   }).join('');
 }
 
-/* The sanctuary lamp, hanging on its chains, with the red glass that says the Lord is here. */
+/* The sanctuary lamp, hanging on its chains, with the red glass that says the Lord is here
+   (assets/images/sanctuary/lamp.webp, rendered by docs/tools/render_candle.py); its flame and glow
+   are the page's, so they can breathe. */
 function lampMarkup() {
-  const links = Array.from({ length: 30 }, (_, i) => `<rect x="${i % 2 ? 28.6 : 27.4}" y="${i * 9}" width="${i % 2 ? 2.8 : 5.2}" height="10" rx="2.6" fill="none" stroke="#9C7A3C" stroke-width="1.6"/>`).join('');
-  return `<div class="sn-lamp" aria-hidden="true"><svg viewBox="0 0 60 380" focusable="false">
-    <defs><radialGradient id="sn-ruby" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#FF8A6A"/><stop offset=".45" stop-color="#C21D2C"/><stop offset="1" stop-color="#5A0B16"/></radialGradient>
-      <linearGradient id="sn-brass" x1="0" x2="1"><stop offset="0" stop-color="#6E4E1C"/><stop offset=".45" stop-color="#E2B860"/><stop offset=".6" stop-color="#B98B3A"/><stop offset="1" stop-color="#5A3F15"/></linearGradient></defs>
-    ${links}
-    <path d="M30 270L12 304M30 270L48 304M30 270V304" stroke="#9C7A3C" stroke-width="1.4"/>
-    <path d="M8 304h44l-3 8H11Z" fill="url(#sn-brass)"/>
-    <path d="M13 312h34c0 24-7 40-17 44c-10-4-17-20-17-44Z" fill="url(#sn-ruby)"/>
-    <ellipse class="sn-lamp-flame" cx="30" cy="326" rx="4" ry="7" fill="#FFE7A6"/>
-    <path d="M24 356h12l-6 14Z" fill="url(#sn-brass)"/><circle cx="30" cy="372" r="3.4" fill="url(#sn-brass)"/>
-  </svg><i class="sn-lamp-glow"></i></div>`;
+  return '<div class="sn-lamp" aria-hidden="true"><i class="sn-lamp-flame"></i><i class="sn-lamp-glow"></i></div>';
 }
 
 /* The nave in shadow: a blind arcade of round arches on pilasters, carved into the same wall.

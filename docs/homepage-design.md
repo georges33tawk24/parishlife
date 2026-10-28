@@ -447,7 +447,8 @@ parish's window (`parish-<ground>-1080.webp`) has a blank left medallion on one 
 (deep blue, wine, moss, violet, chosen from the parish id) where the page sets the parish's initial
 in gold glass, and the cedar on the right. `docs/tools/render_wall.py` renders a seamless tile of
 dressed limestone (1152 by 576 CSS pixels) and `docs/tools/render_candle.py` the flame, the beeswax
-taper with its drips and the brass tray. They need numpy, scipy and Pillow; every random choice is
+taper with its drips, the brass tray and the sanctuary lamp (brass on its chains, ruby glass lit
+from within; the page adds its breathing flame and glow). They need numpy, scipy and Pillow; every random choice is
 seeded, so a render repeats exactly.
 
 ```

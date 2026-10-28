@@ -129,3 +129,69 @@ shade = np.where(t < .34, 1.0, .42 - .25 * (t - .34) / .66)
 rgb = brass * ((.16 + .95 * key) * shade)[..., None] + np.array([1, .86, .6]) * ((spec * (.55 + .08 * brushed)) * shade)[..., None]
 rgb *= (1 - .55 * smooth(.9, 1, t))[..., None]
 save(rgb, smooth(0, .04, t) * smooth(1, .92, t), out / 'tray.webp', (BW // 2, BH // 2))
+
+# ---------------------------------------------------------------- the sanctuary lamp
+# brass chains from the vault, three short chains to the rim, a cup of ruby glass lit from within
+# and a brass finial; drawn in the units of the page's lamp (60 by 380) at four times
+K = 4
+LW, LH = 60 * K, 380 * K
+y, x = np.mgrid[0:LH, 0:LW].astype(np.float32) / K
+rgb = np.zeros((LH, LW, 3))
+alpha = np.zeros((LH, LW))
+brass_c = np.array([.8, .5, .14])
+
+
+def metal(nx, ny, strength=1.0):
+    """Polished brass for a surface facing (nx, ny, nz): the lamp's glow below, a cool light above."""
+    nz = np.sqrt(np.clip(1 - nx ** 2 - ny ** 2, 0, 1))
+    key = np.clip(-.35 * nx - .45 * ny + .82 * nz, 0, 1)
+    spec = np.clip(-.2 * nx - .3 * ny + .93 * nz, 0, 1) ** 40
+    return brass_c * (.06 + .85 * key ** 1.4)[..., None] * strength + np.array([1, .86, .6]) * (spec * .9)[..., None]
+
+
+def paint(mask, colour, cover=None):
+    global rgb, alpha
+    a = mask.astype(np.float32) if cover is None else cover
+    rgb = rgb * (1 - a[..., None]) + colour * a[..., None]
+    alpha = np.maximum(alpha, a)
+
+
+def link(cx, cy, rx, ry, tube, face):
+    """One chain link: a ring seen face-on, or edge-on as a bar."""
+    if face:
+        d = np.hypot((x - cx) / rx, (y - cy) / ry)
+        across = (d - 1) * min(rx, ry) / tube
+        ring = np.abs(across) < 1
+        paint(ring, metal(across * (x - cx) / (rx * d + 1e-3) * .9, across * (y - cy) / (ry * d + 1e-3) * .9))
+    else:
+        across = (x - cx) / tube
+        bar = (np.abs(across) < 1) & (np.abs(y - cy) < ry)
+        paint(bar, metal(across * .9, np.zeros_like(across)))
+
+
+for i in range(30):
+    link(30, 4.5 + i * 9, 2.6, 5.2, .9, i % 2 == 0)
+for tx in (12, 48, 30):
+    for j in range(5):
+        f = (j + .5) / 5
+        link(30 + (tx - 30) * f, 270 + 34 * f, 1.8, 3.6, .7, j % 2 == 0)
+# the rim: a brass band, a little wider at the top
+band = (y >= 304) & (y < 312) & (np.abs(x - 30) < 22 - (y - 304) * .25)
+paint(band, metal((x - 30) / 23 * .8, (y - 308) / 6))
+# the ruby cup, glowing from the flame within
+cup_half = np.where((y >= 312) & (y < 356), 17 * np.clip(1 - np.clip((y - 312) / 44, 0, 1) ** 2.2, 0, 1) ** .5, 0)
+cup = (y >= 312) & (y < 356) & (np.abs(x - 30) < cup_half)
+u = np.clip((x - 30) / np.maximum(cup_half, 1e-3), -1, 1)
+glow_in = np.exp(-(((x - 30) / 9) ** 2 + ((y - 327) / 11) ** 2))
+nz = np.sqrt(np.clip(1 - u ** 2, 0, 1))
+ruby = np.array([.9, .05, .04]) * (.14 + 1.15 * glow_in * (.5 + .5 * nz) + .35 * np.exp(-((1 - np.abs(u)) / .12)))[..., None]
+ruby += np.array([1, .55, .25]) * (glow_in ** 3 * .45)[..., None]
+ruby += np.array([1, .85, .7]) * (np.exp(-((u + .55) / .07) ** 2) * np.clip((y - 316) / 30, 0, 1) * .35)[..., None]
+paint(cup, ruby)
+# the finial: a cone and a ball
+cone = (y >= 356) & (y < 370) & (np.abs(x - 30) < 6 * (1 - (y - 356) / 14))
+paint(cone, metal((x - 30) / 7 * .8, np.full_like(x, .2)))
+ball_d = np.hypot(x - 30, y - 372) / 3.4
+paint(ball_d < 1, metal(np.clip((x - 30) / 3.4, -1, 1) * .9, np.clip((y - 372) / 3.4, -1, 1) * .9))
+alpha = ndi.gaussian_filter(alpha, .5)
+save(np.clip(rgb, 0, None), alpha, out / 'lamp.webp', (120, 760))

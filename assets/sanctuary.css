@@ -71,10 +71,9 @@
 .sn-tray{position:absolute;left:0;right:0;bottom:0;height:2.6cqw;border-radius:.5cqw .5cqw .9cqw .9cqw;background:var(--glints,none),url("images/sanctuary/tray.webp") 0 0/100% 100% no-repeat;box-shadow:0 1.4cqw 2.4cqw rgb(0 0 0 / .55)}
 
 /* the sanctuary lamp, hanging from the vault on its chains */
-.sn-lamp{position:absolute;z-index:2;top:calc((var(--header) + .4svh) * -1);inset-inline-start:11%;width:clamp(34px,7.6cqw,52px);aspect-ratio:60 / 380;transform-origin:50% 0;rotate:-1.6deg;animation:sn-swing 7.5s ease-in-out infinite alternate;will-change:transform}
-.sn-lamp svg{display:block;width:100%;height:100%}
+.sn-lamp{position:absolute;z-index:2;top:calc((var(--header) + .4svh) * -1);inset-inline-start:11%;width:clamp(34px,7.6cqw,52px);aspect-ratio:60 / 380;transform-origin:50% 0;rotate:-1.6deg;animation:sn-swing 7.5s ease-in-out infinite alternate;background:url("images/sanctuary/lamp.webp") 0 0/100% 100% no-repeat;will-change:transform}
 .sn-lamp-glow{position:absolute;left:50%;top:86%;width:520%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,rgb(255 90 70 / .4),rgb(200 30 40 / .14) 38%,transparent 70%);pointer-events:none;animation:sn-halo 3.4s ease-in-out infinite alternate}
-.sn-lamp-flame{animation:sn-lamp 2.2s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.sn-lamp-flame{position:absolute;left:50%;top:83.4%;width:16%;height:4.6%;translate:-50% -50%;border-radius:50%;background:radial-gradient(ellipse 50% 50% at 50% 60%,#FFF7DC 0,#FFD47E 42%,rgb(255 140 60 / 0) 76%);animation:sn-lamp 2.2s ease-in-out infinite alternate}
 @keyframes sn-swing{to{rotate:1.6deg}}
 @keyframes sn-lamp{from{opacity:.75;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}
 .sn-motes{position:absolute;inset:0;pointer-events:none}
