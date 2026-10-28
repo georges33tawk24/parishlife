@@ -199,6 +199,11 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   it), News, Photographs (with a lightbox), and Visit (contact details, Plan your visit: what to
   expect, languages and rite, parking and accessibility; directions, and the map of Lebanon zooming
   in to the parish). Parishes nearby close the page.
+- **The Church's year on parish pages:** the parish calendar sets Sundays in gilt and marks the great
+  feasts with a small cross, naming the feast above the chosen day; each event page says where its
+  day stands in the Maronite year. The About arch of a parish without a photograph is an icon (gold
+  leaf, a haloed initial in cinnabar, a red lamp before it); ministries and request kinds are gilded
+  niches.
 - **Event page** (`&event=…`): one event, with when (and how far away), where and what; saving it to
   the visitor's calendar or to Google Calendar, directions, sharing, and what else is coming at the
   parish. Every event card and calendar entry links to it, and a shared link carries its preview.
