@@ -125,7 +125,8 @@ export function bundlePage(){
   </div>`;
 }
 
-/* A page that could not be shown: an unlit lamp in an arch, what happened, and the way back. */
+/* A page that could not be shown: an unlit candle in an arch (the visitor may light it), what
+   happened, and the way back. */
 export function errorPage(title,body,actions){
-  return `<div class="parish-sub" data-plain-page><section class="lost site-wrap"><div class="lost-card" data-reveal><span class="lost-arch" aria-hidden="true"><span class="lamp is-unlit"></span></span><h1>${title}</h1><p>${body}</p><div class="lost-actions">${actions}</div></div></section></div>`;
+  return `<div class="parish-sub" data-plain-page><section class="lost site-wrap"><div class="lost-card" data-reveal><button type="button" class="lost-arch" aria-pressed="false" aria-label="${L('Light a candle','أضئ شمعة')}"><span class="lost-candle"><i></i></span></button><h1>${title}</h1><p>${body}</p><div class="lost-actions">${actions}</div></div></section></div>`;
 }

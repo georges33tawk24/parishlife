@@ -144,9 +144,18 @@
 @keyframes menu-candles{from{opacity:.82}to{opacity:1}}
 .mobile-nav a{position:relative}
 
+/* a page that could not be shown: an unlit candle in its arch, which the visitor may light */
+button.lost-arch{border:0;padding:0 0 30px;cursor:pointer;font:inherit;transition:box-shadow .8s}
+.lost-candle{position:relative;width:8px;height:46px;border-radius:2px 2px 1px 1px;background:linear-gradient(90deg,#9E8256,#F2E2B8 45%,#B8996A)}
+.lost-candle::before{content:"";position:absolute;left:50%;top:-6px;width:1.6px;height:6px;margin-left:-.8px;background:#2A1A10}
+.lost-candle i{position:absolute;left:50%;bottom:calc(100% + 4px);width:11px;height:22px;margin-left:-5.5px;border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
+  background:radial-gradient(ellipse 50% 62% at 50% 74%,#FFF 0,#FFF0C2 24%,#FFB84A 56%,rgb(255 130 40 / 0) 82%);opacity:0;scale:.1;transform-origin:50% 90%;transition:opacity .5s,scale .9s cubic-bezier(.2,1.5,.4,1)}
+.lost-arch.is-lit{box-shadow:inset 0 -60px 70px -30px rgb(255 190 100 / .45),0 30px 60px -30px rgb(14 26 49 / .5)}
+.lost-arch.is-lit .lost-candle i{opacity:1;scale:1;animation:sn-flicker 2s ease-in-out .9s infinite}
+
 @media(prefers-reduced-motion:reduce){
   .bell-body,.bell-clapper,.chapel-bell{animation:none!important}
   .verse-rose svg{animation:none}
   .track-steps li span::after{animation:none;transition:none}
-  .map-light .core,.brand-light,.mobile-nav::before{animation:none}
+  .map-light .core,.brand-light,.mobile-nav::before,.lost-arch.is-lit .lost-candle i{animation:none}
 }

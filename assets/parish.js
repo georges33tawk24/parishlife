@@ -605,5 +605,7 @@ export function mountPlain(root) {
   if (!page) return;
   teardown.push(watchHero(page.querySelector('[data-hero]')));
   teardown.push(bannerMount(page));
+  // a page that could not be shown: its candle can be lit
+  page.querySelector('.lost-arch')?.addEventListener('click', e => { e.currentTarget.classList.add('is-lit'); e.currentTarget.setAttribute('aria-pressed', 'true'); });
   animateHome(page, {});
 }
