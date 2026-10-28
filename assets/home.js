@@ -2,9 +2,9 @@
    (Administration → Homepage), each parish's Website content and public profile,
    and the events and announcements parishes publish. Empty sections say what a
    parish office can publish, rather than filling the page with placeholders. */
-import { heroScene, mulberry, ridge, fillPath, cedar, yAt } from './home-scene.js';
+import { valleyMarkup, mountValley } from './home-valley.js';
 import { mapMarkup, locate, mountMap, projection } from './home-map.js';
-import { animateHome, stopHomeMotion } from './home-motion.js';
+import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
 import { HOME_DEFAULTS } from './site-defaults.js';
 
 let teardown = [];
@@ -18,6 +18,34 @@ const PREV = svgIcon('<path d="m15 5-7 7 7 7"/>'), NEXT = svgIcon('<path d="m9 5
 const CLOSE = svgIcon('<path d="M6 6l12 12M18 6 6 18"/>');
 
 /* Bilingual CMS text: the visitor's language, else the built-in wording in that language. */
+/* Arabic counts agree with the number: one, two, three to ten, eleven and more. */
+const PLURAL_AR = new Intl.PluralRules('ar');
+const FORMS = {
+  parish: { en: ['parish', 'parishes'], ar: { one: 'رعية', two: 'رعيتان', few: 'رعايا', many: 'رعية', other: 'رعية', zero: 'رعية' } },
+  diocese: { en: ['diocese', 'dioceses'], ar: { one: 'أبرشية', two: 'أبرشيتان', few: 'أبرشيات', many: 'أبرشية', other: 'أبرشية', zero: 'أبرشية' } },
+  celebration: { en: ['celebration this week', 'celebrations this week'], ar: { one: 'احتفال هذا الأسبوع', two: 'احتفالان هذا الأسبوع', few: 'احتفالات هذا الأسبوع', many: 'احتفالاً هذا الأسبوع', other: 'احتفال هذا الأسبوع', zero: 'احتفال هذا الأسبوع' } },
+  town: { en: ['town or village', 'towns and villages'], ar: { one: 'بلدة', two: 'بلدتان', few: 'بلدات وقرى', many: 'بلدة وقرية', other: 'بلدة وقرية', zero: 'بلدة' } }
+};
+const noun = (c, n, key) => c.lang === 'ar' ? FORMS[key].ar[PLURAL_AR.select(n)] : FORMS[key].en[n === 1 ? 0 : 1];
+/* "3 parishes" as a phrase: Arabic says "رعية واحدة", "رعيتان", "٣ رعايا". */
+function counted(c, n, key) {
+  if (c.lang !== 'ar') return `${c.number(n)} ${noun(c, n, key)}`;
+  const form = PLURAL_AR.select(n);
+  if (form === 'one') return key === 'parish' ? 'رعية واحدة' : `${noun(c, n, key)} واحدة`;
+  if (form === 'two') return noun(c, n, key);
+  return `${c.number(n)} ${noun(c, n, key)}`;
+}
+const digits = (c, text) => c.lang === 'ar' ? String(text).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]) : String(text);
+/* Diocese names are stored in English; the common forms read in Arabic. */
+const SEES = { beirut: 'بيروت', byblos: 'جبيل', jbeil: 'جبيل', batroun: 'البترون', tripoli: 'طرابلس', zahle: 'زحلة', 'zahlé': 'زحلة', sidon: 'صيدا', saida: 'صيدا',
+  tyre: 'صور', sour: 'صور', baalbek: 'بعلبك', jounieh: 'جونية', 'mount lebanon': 'جبل لبنان', 'the mountain': 'الجبل', akkar: 'عكار', jezzine: 'جزين', marjayoun: 'مرجعيون' };
+function dioceseName(c, name) {
+  if (c.lang !== 'ar' || !name) return name || '';
+  const m = String(name).match(/^(?:(?:maronite|melkite|greek orthodox|syriac|armenian|latin)\s+)?(arch)?(?:eparchy|diocese|archdiocese)\s+of\s+(.+?)(?:\s+of the\s+(maronites|melkites))?$/i);
+  if (!m) return name;
+  const sees = m[2].split(/\s+and\s+/i).map(x => SEES[x.trim().toLowerCase()]);
+  return sees.every(Boolean) ? 'أبرشية ' + sees.join(' و') : name;
+}
 const words = (c, value, fallback) => value?.[c.lang]?.trim() || fallback?.[c.lang] || '';
 /* CMS text without a default: the visitor's language, else the other one, marked as such. */
 function either(c, value) {
@@ -31,16 +59,12 @@ const plain = html => String(html || '').replace(/<(br|\/p|\/li|\/h\d)\s*\/?>/gi
 const clip = (text, n) => text.length > n ? text.slice(0, n).replace(/\s+\S*$/, '') + '…' : text;
 const hash = value => [...String(value)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
-/* A parish without photographs gets an arch of night sky over the hills, with its light. */
-function archCover(seed) {
-  const h = hash(seed), crest = 44 + (h % 9), x = 18 + (h % 25);
-  return `<svg class="arch-cover" viewBox="0 0 60 76" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-    <rect width="60" height="76" fill="url(#cover-sky)"/>
-    <circle cx="${12 + (h % 30)}" cy="${10 + (h % 7)}" r=".7" fill="#EEF1F6"/><circle cx="${40 - (h % 13)}" cy="${18 + (h % 5)}" r=".6" fill="#EEF1F6" opacity=".7"/>
-    <path d="M0 ${crest - 4}L${8 + (h % 6)} ${crest - 14}L${20 + (h % 7)} ${crest - 6}L${32 + (h % 5)} ${crest - 19}L${46 - (h % 6)} ${crest - 8}L60 ${crest - 12}V76H0Z" fill="#33456F"/>
-    <path d="M0 ${crest + 6}Q14 ${crest - 6} 26 ${crest + 2}T60 ${crest - 4}V76H0Z" fill="#1C2A4D"/>
-    <path d="M0 ${crest + 16}Q20 ${crest + 6} 34 ${crest + 13}T60 ${crest + 10}V76H0Z" fill="#101A33"/>
-    <circle cx="${x + 8}" cy="${crest + 12}" r="9" fill="url(#cover-lamp)"/><circle cx="${x + 8}" cy="${crest + 12}" r="1.7" fill="#FFE6AE"/></svg>`;
+/* A parish or story without a photograph gets a monogram in a stone arch: honest, never a borrowed picture. */
+const PREFIX = /^(saint|st\.?|sts\.?|our lady of|notre[- ]dame( de)?|mar|mart|سيدة|القديس(ة)?|مار|مارت)\s+/i;
+function monogram(name) {
+  const clean = String(name || '').trim().replace(PREFIX, '').replace(/^(ال)/, '');
+  const ch = [...clean][0] || [...String(name || '·')][0];
+  return `<span class="monogram" aria-hidden="true"><b>${ch.replace(/[&<>"']/g, '')}</b></span>`;
 }
 
 export function homeView(c) {
@@ -48,10 +72,6 @@ export function homeView(c) {
   const sections = [hero(c), on('week') ? week(c) : '', on('map') ? directory(c) : '', on('requests') ? requests(c) : '',
     on('times') ? times(c) : '', on('news') ? news(c) : '', on('stories') ? stories(c) : '', on('about') ? about(c) : '', on('join') ? join(c) : ''];
   return `<div class="home" data-home>
-    <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>
-      <linearGradient id="cover-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B1428"/><stop offset=".55" stop-color="#22365F"/><stop offset=".85" stop-color="#5E5A80"/><stop offset="1" stop-color="#9C7A78"/></linearGradient>
-      <radialGradient id="cover-lamp" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFE3A3"/><stop offset=".45" stop-color="#D7A548" stop-opacity=".5"/><stop offset="1" stop-color="#D7A548" stop-opacity="0"/></radialGradient>
-    </defs></svg>
     ${sections.join('')}
     <dialog class="parish-picker" data-picker aria-labelledby="picker-title"><form method="dialog" class="picker-head"><h2 id="picker-title"></h2><button class="icon-button" aria-label="${L('Close', 'إغلاق')}">${CLOSE}</button></form>
       <label class="picker-search">${SEARCH}<span class="sr-only">${L('Search parishes', 'ابحث عن رعية')}</span><input type="search" data-picker-filter placeholder="${safe(L('Search parishes', 'ابحث عن رعية'))}"></label>
@@ -76,9 +96,9 @@ function hero(c) {
   const { L, safe, site } = c, f = facts(c);
   const note = site?.announcement, text = note && either(c, note.text), label = note && either(c, note.linkLabel);
   const announcement = text ? `<p class="hero-note" data-hero-rise><span class="note-mark" aria-hidden="true"></span><span${text.attrs}>${safe(text.text)}</span>${note.link ? ` <a href="${safe(note.link)}"${label?.attrs || ''}>${safe(label?.text || L('Read more', 'اقرأ المزيد'))}</a>` : ''}</p>` : '';
-  const stat = (n, [one, many], ar) => `<li><b>${c.number(n)}</b><span>${L(n === 1 ? one : many, ar)}</span></li>`;
+  const stat = (n, key) => `<li><b data-count="${n}">${c.number(n)}</b><span>${noun(c, n, key)}</span></li>`;
   return `<section class="hero" id="top" data-hero aria-labelledby="hero-title">
-    <div class="hero-art" data-scene></div><div class="hero-shade" aria-hidden="true"></div>
+    <div class="hero-art" data-scene>${valleyMarkup()}</div><div class="hero-shade" aria-hidden="true"></div>
     <div class="site-wrap hero-inner">
       ${announcement}
       <h1 class="hero-title" id="hero-title">${safe(words(c, site?.hero?.title, HOME_DEFAULTS.hero.title))}</h1>
@@ -90,7 +110,7 @@ function hero(c) {
         <ul class="hero-suggest" id="hero-suggest" role="listbox" aria-label="${safe(L('Suggestions', 'اقتراحات'))}" hidden></ul>
       </form>
       <ul class="hero-facts" data-hero-rise aria-label="${safe(L('ParishLife in numbers', 'ParishLife بالأرقام'))}">
-        ${stat(f.parishes, ['parish', 'parishes'], 'رعايا')}${stat(f.dioceses, ['diocese', 'dioceses'], 'أبرشيات')}${f.week ? stat(f.week, ['celebration this week', 'celebrations this week'], 'احتفالات هذا الأسبوع') : stat(f.towns, ['town or village', 'towns and villages'], 'بلدات وقرى')}
+        ${stat(f.parishes, 'parish')}${stat(f.dioceses, 'diocese')}${f.week ? stat(f.week, 'celebration') : stat(f.towns, 'town')}
       </ul>
     </div>
     <p class="hero-tip" data-hero-tip role="status" hidden></p>
@@ -107,39 +127,39 @@ function week(c) {
     const when = next && new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(next.d + 'T12:00:00'));
     return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}
       <div class="week-empty" data-reveal><span class="lamp is-unlit" aria-hidden="true"></span><div><p class="lead">${L('No celebrations have been published for the next seven days yet.', 'لم تُنشر احتفالات للأيام السبعة المقبلة بعد.')}</p>
-      <p>${next ? `${L('The next one is', 'الاحتفال التالي')} <a href="${safe(c.calendarURL(next.parish.id))}">${safe(c.pair(next, 'title', 'titleAr') || kind(next))}, ${safe(when)}, ${safe(c.parishName(next.parish))}</a>.` : L('Parish offices add public Masses and events from their parish calendar in ParishLife.', 'تضيف مكاتب الرعايا القداديس والأحداث العامة من رزنامة الرعية في ParishLife.')}</p></div></div></div></section>`;
+      <p>${next ? `${L('The next one is', 'الاحتفال المقبل:')} <a href="${safe(c.calendarURL(next.parish.id))}">${safe(c.pair(next, 'title', 'titleAr') || kind(next))}, ${safe(when)}, ${safe(c.parishName(next.parish))}</a>.` : L('Parish offices add public Masses and events from their parish calendar in ParishLife.', 'تضيف مكاتب الرعايا القداديس والأحداث العامة من رزنامة الرعية في ParishLife.')}</p></div></div></div></section>`;
   }
   const columns = days.map((d, i) => {
     const date = new Date(d + 'T12:00:00'), list = inWeek.filter(e => e.d === d), shown = list.slice(0, 4);
     const dow = new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(date), dm = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short' }).format(date);
     return `<li class="day${i === 0 ? ' is-today' : ''}${list.length ? '' : ' is-quiet'}" data-reveal-item>
       <h3><span class="dow">${safe(dow)}</span><time datetime="${d}">${safe(dm)}</time>${i === 0 ? `<span class="today"><span class="lamp" aria-hidden="true"></span>${L('Today', 'اليوم')}</span>` : ''}</h3>
-      ${list.length ? `<ul>${shown.map(e => `<li><a href="${safe(c.calendarURL(e.parish.id))}">${e.t ? `<time>${safe(e.t)}</time>` : ''}<strong>${safe(c.pair(e, 'title', 'titleAr') || kind(e))}</strong><span>${safe(c.parishName(e.parish))}</span></a></li>`).join('')}</ul>${list.length > shown.length ? `<p class="more">${L(`${list.length - shown.length} more`, `و${c.number(list.length - shown.length)} غيرها`)}</p>` : ''}` : `<p class="quiet"><span aria-hidden="true">—</span><span class="sr-only">${L('Nothing published', 'لا شيء منشور')}</span></p>`}
+      ${list.length ? `<ul>${shown.map(e => `<li><a href="${safe(c.calendarURL(e.parish.id))}">${e.t ? `<time>${safe(digits(c, e.t))}</time>` : ''}<strong>${safe(c.pair(e, 'title', 'titleAr') || kind(e))}</strong><span>${safe(c.parishName(e.parish))}</span></a></li>`).join('')}</ul>${list.length > shown.length ? `<p class="more">${L(`${list.length - shown.length} more`, `وغيرها (${c.number(list.length - shown.length)})`)}</p>` : ''}` : `<p class="quiet"><span aria-hidden="true">—</span><span class="sr-only">${L('Nothing published', 'لا شيء منشور')}</span></p>`}
     </li>`;
   }).join('');
   return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}<ol class="week-days">${columns}</ol></div></section>`;
 }
 
 /* ---------- directory ---------- */
-function choices(c, key, label, values, current) {
-  return `<label class="dir-select"><span class="sr-only">${label}</span><select data-filter="${key}"><option value="">${label}</option>${values.map(v => `<option value="${c.safe(v)}" ${current === v ? 'selected' : ''}>${c.safe(v)}</option>`).join('')}</select></label>`;
+function choices(c, key, label, values, current, show = v => v) {
+  return `<label class="dir-select"><span class="sr-only">${label}</span><select data-filter="${key}"><option value="">${label}</option>${values.map(v => `<option value="${c.safe(v)}" ${current === v ? 'selected' : ''}>${c.safe(show(v))}</option>`).join('')}</select></label>`;
 }
 function directory(c) {
   const { L, safe, filters } = c, uniq = list => [...new Set(list.filter(Boolean))].sort((a, b) => a.localeCompare(b, c.lang));
   return `<section class="directory" id="directory" aria-labelledby="directory-title"><div class="site-wrap dir-grid">
-    <header class="sec-head dir-head" data-reveal><h2 id="directory-title">${L('Find a parish', 'ابحث عن رعية')}</h2><p>${L('Every parish on ParishLife, on the map of Lebanon. Choose a light, or search by name or town.', 'كل الرعايا المسجّلة على ParishLife على خريطة لبنان. اختر نوراً، أو ابحث بالاسم أو البلدة.')}</p></header>
+    <header class="sec-head dir-head" data-reveal><h2 id="directory-title">${L('Find a parish', 'ابحث عن رعية')}</h2><p>${L('Every parish on ParishLife, on the map of Lebanon. Choose a light, or search by name or town.', 'جميع الرعايا المسجّلة في ParishLife على خريطة لبنان. اختر نوراً، أو ابحث باسم الرعية أو البلدة.')}</p></header>
     <div class="dir-map" data-reveal>${mapMarkup(L)}</div>
     <div class="dir-list">
       <form class="dir-filters" role="search" data-dir-form data-reveal>
         <label class="dir-search">${SEARCH}<span class="sr-only">${L('Search parish or town', 'ابحث عن رعية أو بلدة')}</span><input id="directory-filter" type="search" value="${safe(filters.q)}" placeholder="${safe(L('Parish, town or village', 'رعية أو بلدة أو قرية'))}"></label>
         <div class="dir-row">
           ${choices(c, 'town', L('All towns', 'كل البلدات'), uniq(c.directory.map(p => p.town)), filters.town)}
-          ${choices(c, 'diocese', L('All dioceses', 'كل الأبرشيات'), uniq(c.directory.map(p => p.diocese)), filters.diocese)}
+          ${choices(c, 'diocese', L('All dioceses', 'كل الأبرشيات'), uniq(c.directory.map(p => p.diocese)), filters.diocese, v => dioceseName(c, v))}
           ${choices(c, 'rite', L('All rites', 'كل الطقوس'), uniq(c.directory.map(p => c.details.get(p.id)?.parish?.rite)), filters.rite)}
         </div>
         <div class="dir-row dir-tools">
           <button type="button" class="chip" data-near aria-pressed="${filters.location ? 'true' : 'false'}">${NEAR}${L('Near me', 'بالقرب مني')}</button>
-          <label class="dir-sort">${L('Sort by', 'الترتيب')} <select data-filter="sort"><option value="name" ${filters.sort === 'name' ? 'selected' : ''}>${L('Name', 'الاسم')}</option><option value="town" ${filters.sort === 'town' ? 'selected' : ''}>${L('Town', 'البلدة')}</option></select></label>
+          <label class="dir-sort">${L('Sort by', 'ترتيب حسب')} <select data-filter="sort"><option value="name" ${filters.sort === 'name' ? 'selected' : ''}>${L('Name', 'الاسم')}</option><option value="town" ${filters.sort === 'town' ? 'selected' : ''}>${L('Town', 'البلدة')}</option></select></label>
           <button type="reset" class="text-button" data-dir-reset>${L('Clear', 'مسح')}</button>
         </div>
         <p class="dir-status" data-dir-status role="status"></p>
@@ -167,7 +187,7 @@ function filtered(c, places) {
 }
 function thumb(c, p) {
   const photo = c.parishPhotos(c.details.get(p.id))[0];
-  return `<span class="arch-thumb">${photo ? `<img src="${c.safe(photo)}" alt="" loading="lazy" decoding="async">` : archCover(p.id)}</span>`;
+  return `<span class="arch-thumb">${photo ? `<img src="${c.safe(photo)}" alt="" loading="lazy" decoding="async">` : monogram(c.parishName(p))}</span>`;
 }
 function listItems(c, rows, places) {
   const { L, safe } = c;
@@ -175,7 +195,7 @@ function listItems(c, rows, places) {
   return rows.map(({ p, d }) => {
     const rite = c.details.get(p.id)?.parish, riteName = c.pair(rite, 'rite', 'riteAr'), placed = places.get(p.id);
     return `<li class="parish-item" data-parish="${safe(p.id)}" data-reveal-item><a href="${safe(c.profileURL(p.id))}">${thumb(c, p)}
-      <span class="pi-text"><strong>${safe(c.parishName(p))}</strong><span class="pi-town">${PIN}${safe(c.townName(p) || L('Town not published', 'البلدة غير منشورة'))}</span><small>${[p.diocese, riteName].filter(Boolean).map(safe).join(L(', ', '، '))}</small></span>
+      <span class="pi-text"><strong>${safe(c.parishName(p))}</strong><span class="pi-town">${PIN}${safe(c.townName(p) || L('Town not published', 'البلدة غير منشورة'))}</span><small>${[dioceseName(c, p.diocese), riteName].filter(Boolean).map(safe).join(L(', ', '، '))}</small></span>
       ${d !== null ? `<span class="pi-km">${c.number(Math.round(d * 10) / 10)} ${L('km', 'كم')}</span>` : placed ? '' : `<span class="pi-km is-off">${L('Not on the map yet', 'ليست على الخريطة بعد')}</span>`}</a></li>`;
   }).join('');
 }
@@ -205,7 +225,7 @@ function times(c) {
   const body = rows.length ? `<div class="times-board">${rows.map((p, i) => `<article class="times-entry" data-reveal-item ${i >= 6 ? 'data-extra hidden' : ''}>
       <h3><a href="${safe(c.profileURL(p.id, '#times'))}">${safe(c.parishName(p))}</a></h3><p class="times-town">${safe(c.townName(p))}</p>
       <div class="times-text" dir="auto">${c.htmlText(c.content(c.details.get(p.id), 'massTimes'))}</div></article>`).join('')}</div>
-      ${rows.length > 6 ? `<button type="button" class="text-button times-all" data-times-all>${L(`Show all ${rows.length} parishes`, `عرض كل الرعايا (${c.number(rows.length)})`)}</button>` : ''}`
+      ${rows.length > 6 ? `<button type="button" class="text-button times-all" data-times-all>${L(`Show all ${rows.length} parishes`, `عرض جميع الرعايا (${c.number(rows.length)})`)}</button>` : ''}`
     : `<div class="soft-empty" data-reveal><p class="lead">${L('No parish has published its Mass times yet.', 'لم تنشر أي رعية مواعيد قداديسها بعد.')}</p><p>${L('Parish offices add them under Website content in ParishLife.', 'تضيفها مكاتب الرعايا ضمن محتوى الموقع في ParishLife.')}</p></div>`;
   return `<section class="times" id="times" aria-labelledby="times-title"><div class="site-wrap times-grid">${head}<div>${body}</div></div></section>`;
 }
@@ -233,44 +253,30 @@ function stories(c) {
     <h2 id="stories-title" data-reveal>${L('Stories', 'قصص')}</h2>
     ${list.length > 1 ? `<div class="story-nav"><button type="button" class="icon-button" data-story-step="-1" aria-label="${safe(L('Previous story', 'القصة السابقة'))}">${PREV}</button><button type="button" class="icon-button" data-story-step="1" aria-label="${safe(L('Next story', 'القصة التالية'))}">${NEXT}</button></div>` : ''}</div>
     <div class="story-track" data-story-track tabindex="0" role="region" aria-label="${safe(L('Stories', 'قصص'))}">${list.map(s => `<article class="story" data-reveal-item>
-      <figure class="story-arch">${s.image ? `<img src="${safe(s.image)}" alt="" loading="lazy" decoding="async">` : archCover(s.id)}</figure>
+      <figure class="story-arch">${s.image ? `<img src="${safe(s.image)}" alt="" loading="lazy" decoding="async">` : `<img src="assets/images/valley/crest-dawn.webp" alt="" loading="lazy" decoding="async">`}</figure>
       <h3${s.t.attrs}>${safe(s.t.text)}</h3>${s.b ? `<p${s.b.attrs}>${safe(s.b.text)}</p>` : ''}
       ${s.link ? `<a class="story-link" href="${safe(s.link)}">${L('Read more', 'اقرأ المزيد')}<span class="sr-only">: ${safe(s.t.text)}</span></a>` : ''}</article>`).join('')}</div></section>`;
 }
 
 /* ---------- about and join ---------- */
-/* The cedar emblem beside the About text, drawn with the same cedar as the hero. */
-function cedarMark() {
-  return `<svg class="cedar-mark" viewBox="0 0 240 300" aria-hidden="true" focusable="false"><path d="M-10 300V272Q120 238 250 272V300Z" fill="currentColor" opacity=".18"/>
-    <path d="${cedar(mulberry(31), 122, 260, 205)}" fill="currentColor"/></svg>`;
-}
 function about(c) {
   if (c.site && !c.site.about) return '';
   const { L, safe } = c, a = c.site?.about, f = facts(c);
   return `<section class="about" id="about" aria-labelledby="about-title"><div class="site-wrap about-grid">
-    <div class="about-mark" data-reveal>${cedarMark()}</div>
-    <div class="about-copy" data-reveal><h2 id="about-title">${safe(words(c, a?.title, HOME_DEFAULTS.about.title))}</h2>${paragraphs(c, words(c, a?.body, HOME_DEFAULTS.about.body))}
-      <dl class="about-facts">${[[f.parishes, 'Parish', 'Parishes', 'رعايا'], [f.dioceses, 'Diocese', 'Dioceses', 'أبرشيات'], [f.towns, 'Town or village', 'Towns and villages', 'بلدات وقرى']]
-        .map(([n, one, many, ar]) => `<div><dt>${L(n === 1 ? one : many, ar)}</dt><dd>${c.number(n)}</dd></div>`).join('')}</dl></div>
+    <figure class="about-mark" data-reveal><img src="assets/images/valley/crest-dawn.webp" alt="" loading="lazy" decoding="async" data-parallax="-8"></figure>
+    <div class="about-copy" data-reveal data-lit><h2 id="about-title">${safe(words(c, a?.title, HOME_DEFAULTS.about.title))}</h2>${paragraphs(c, words(c, a?.body, HOME_DEFAULTS.about.body))}
+      <dl class="about-facts">${[[f.parishes, 'parish'], [f.dioceses, 'diocese'], [f.towns, 'town']]
+        .map(([n, key]) => `<div><dt>${noun(c, n, key).replace(/^./, ch => ch.toUpperCase())}</dt><dd data-count="${n}">${c.number(n)}</dd></div>`).join('')}</dl></div>
   </div></section>`;
 }
 function join(c) {
   if (c.site && !c.site.join) return '';
   const { L, safe } = c, j = c.site?.join;
-  return `<section class="join" id="join" aria-labelledby="join-title"><div class="join-art" aria-hidden="true">${joinRidges()}</div><div class="site-wrap join-inner" data-reveal>
+  return `<section class="join" id="join" aria-labelledby="join-title"><div class="join-art" aria-hidden="true">${['sky', 'far', 'near'].map(part => `<img src="assets/images/valley/valley-wide-dusk-${part}.webp" alt="" loading="lazy" decoding="async">`).join('')}</div><div class="site-wrap join-inner" data-reveal>
     <h2 id="join-title">${safe(words(c, j?.title, HOME_DEFAULTS.join.title))}</h2>${paragraphs(c, words(c, j?.body, HOME_DEFAULTS.join.body))}
     <div class="join-actions"><a class="btn btn-gilt" href="index.html">${L('Open the members portal', 'ادخل إلى بوّابة المؤمنين')}</a><a class="btn btn-line" href="index.html?signup=1">${L('Create an account', 'أنشئ حساباً')}</a><a class="text-button" href="public.html?view=bundles">${L('ParishLife bundles', 'باقات ParishLife')}</a></div>
   </div></section>`;
 }
-function joinRidges() {
-  const rand = mulberry(9), W = 1600, H = 400;
-  const layers = [[H * 0.62, H * 0.42, '#15233F'], [H * 0.78, H * 0.3, '#101B33'], [H * 0.93, H * 0.16, '#0B1428']].map(([base, amp, fill]) => ({ pts: ridge(rand, W, base, amp, { octaves: 6, crag: 0.1 }), fill }));
-  const lights = [0.14, 0.38, 0.61, 0.79, 0.92].map(t => { const x = W * t; return [x, yAt(layers[1].pts, x) + 14 + rand() * 30]; });
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice">${layers.slice(0, 2).map(l => `<path d="${fillPath(l.pts, H)}" fill="${l.fill}"/>`).join('')}
-    ${lights.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="16" fill="url(#cover-lamp)"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#FFE6AE"/>`).join('')}
-    <path d="${fillPath(layers[2].pts, H)}" fill="${layers[2].fill}"/></svg>`;
-}
-
 /* ---------- behaviour ---------- */
 export function mountHome(root, c) {
   unmountHome();
@@ -285,7 +291,7 @@ export function mountHome(root, c) {
   home.querySelector('[data-times-all]')?.addEventListener('click', e => { home.querySelectorAll('.times-entry[data-extra]').forEach(el => el.hidden = false); e.currentTarget.remove(); });
   storiesMount(home);
   headerMount(home);
-  animateHome(home);
+  animateHome(home, { onDawn: () => home._valley?.loadDawn() });
 }
 export function unmountHome() { stopHomeMotion(); teardown.forEach(fn => fn()); teardown = []; }
 
@@ -293,27 +299,9 @@ function sceneMount(home, c) {
   const host = home.querySelector('[data-scene]'), tip = home.querySelector('[data-hero-tip]');
   if (!host) return;
   const places = c.directory.map(p => ({ id: p.id, name: c.parishName(p), town: c.townName(p) }));
-  let shape = '';
-  const draw = () => {
-    const w = innerWidth, h = Math.max(1, host.clientHeight || innerHeight), ratio = w / h, next = (ratio < 0.8 ? 'p' : 'l') + Math.round(ratio * 4);
-    if (next === shape) return false;
-    shape = next;
-    host.innerHTML = heroScene({ width: Math.round(1000 * ratio), height: 1000, places, mirror: c.lang === 'ar' }).svg;
-    host.querySelectorAll('.parish-light').forEach(light => {
-      const p = places.find(x => x.id === light.dataset.light);
-      light.addEventListener('pointerenter', () => { const r = light.getBoundingClientRect(), box = home.querySelector('[data-hero]').getBoundingClientRect();
-        tip.textContent = p.town ? `${p.name}, ${p.town}` : p.name; tip.hidden = false;
-        tip.style.left = (r.left + r.width / 2 - box.left) + 'px'; tip.style.top = (r.top - box.top) + 'px'; });
-      light.addEventListener('pointerleave', () => { tip.hidden = true; });
-      light.addEventListener('click', () => { location.href = c.profileURL(p.id); });
-    });
-    return true;
-  };
-  draw();
-  let timer;
-  const resize = () => { clearTimeout(timer); timer = setTimeout(() => { if (draw()) animateHome(home, { heroOnly: true }); }, 220); };
-  addEventListener('resize', resize, { passive: true });
-  teardown.push(() => { removeEventListener('resize', resize); clearTimeout(timer); });
+  const valley = mountValley(host, places, { tip, onPick: id => { location.href = c.profileURL(id); } });
+  home._valley = valley;
+  teardown.push(() => valley.destroy());
 }
 
 function directoryMount(home, c, places) {
@@ -338,10 +326,10 @@ function directoryMount(home, c, places) {
   const paint = (updateURL = false) => {
     const rows = filtered(c, places);
     list.innerHTML = listItems(c, rows, places);
-    status.textContent = rows.length === c.directory.length ? L(`${rows.length} parishes`, `عدد الرعايا: ${c.number(rows.length)}`) : L(`${rows.length} of ${c.directory.length} parishes`, `${c.number(rows.length)} من أصل ${c.number(c.directory.length)} رعية`);
+    status.textContent = rows.length === c.directory.length ? counted(c, rows.length, 'parish') : L(`${rows.length} of ${c.directory.length} parishes`, `${c.number(rows.length)} من أصل ${counted(c, c.directory.length, 'parish')}`);
     map.filter(rows.map(r => r.p.id));
     const off = c.directory.filter(p => !places.has(p.id)).length;
-    note.textContent = off ? L(`${off} ${off === 1 ? 'parish is' : 'parishes are'} not on the map yet. A parish office places its parish by adding coordinates to its public parish profile.`, `${c.number(off)} من الرعايا ليست على الخريطة بعد. يضع مكتب الرعية رعيته على الخريطة بإضافة الإحداثيات إلى صفحة الرعية العامة.`) : '';
+    note.textContent = off ? L(`${off} ${off === 1 ? 'parish is' : 'parishes are'} not on the map yet. A parish office places its parish by adding coordinates to its public parish profile.`, `عدد الرعايا التي لا تظهر على الخريطة بعد: ${c.number(off)}. يضع مكتب الرعية رعيته على الخريطة بإضافة الإحداثيات إلى صفحة الرعية العامة.`) : '';
     list.querySelectorAll('.parish-item').forEach(row => {
       const id = row.dataset.parish;
       row.addEventListener('pointerenter', () => map.mark(id));
@@ -407,7 +395,7 @@ function searchMount(home, c, dir) {
     dir.sync(); dir.paint(true);
     const ids = filtered(c, new Map()).map(r => r.p.id);
     if (ids.length && ids.length < c.directory.length) dir.map.focus(ids);
-    dir.section.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    scrollToTarget(dir.section);
   };
   const highlight = i => {
     const opts = [...box.querySelectorAll('[data-index]')];
@@ -444,7 +432,7 @@ function pickerMount(home, c) {
     e.preventDefault();
     kind = link.dataset.request;
     const label = [...c.REQUESTS, ...c.OTHER_REQUESTS].find(r => r[0] === kind);
-    title.textContent = L(`${label ? label[2][0] : 'Request'}: which parish?`, `${label ? label[2][1] : 'طلب'}: من أي رعية؟`);
+    title.textContent = L(`${label ? label[2][0] : 'Request'}: which parish?`, `${label ? label[2][1] : 'طلب'}: في أي رعية؟`);
     filter.value = ''; paint(); dialog.showModal(); filter.focus();
   }));
   filter.addEventListener('input', paint);

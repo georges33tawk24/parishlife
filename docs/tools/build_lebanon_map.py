@@ -226,8 +226,8 @@ for en, ar, la, lo in TOWNS:
     x, y = P(lo, la); towns.append({'en': en, 'ar': ar, 'x': round(x, 1), 'y': round(y, 1)})
 
 LABELS = [('Mediterranean Sea', 'البحر المتوسط', 33.95, 35.30, 'sea', -62), ('Mount Lebanon', 'جبل لبنان', 34.05, 35.93, 'range', -55),
-          ('Bekaa', 'البقاع', 33.86, 36.05, 'valley', -52), ('Anti-Lebanon', 'السلسلة الشرقية', 34.13, 36.47, 'range', -55),
-          ('Qadisha Valley', 'وادي قاديشا', 34.40, 35.80, 'valley', 38)]
+          ('Bekaa', 'البقاع', 33.85, 36.095, 'valley', -52), ('Anti-Lebanon', 'السلسلة الشرقية', 34.13, 36.47, 'range', -55),
+          ('Qadisha Valley', 'وادي قاديشا', 34.33, 35.845, 'valley', 62)]
 labels = []
 for en, ar, la, lo, kind, rot in LABELS:
     x, y = P(lo, la); labels.append({'en': en, 'ar': ar, 'x': round(x, 1), 'y': round(y, 1), 'kind': kind, 'rotate': rot})

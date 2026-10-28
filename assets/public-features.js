@@ -37,7 +37,7 @@ export function bindSlider(host) {
 }
 const calendarState={mode:'month'};
 export function parishExtras(p,d,calendarOnly=false) {
-  if(calendarOnly)return `<section class="section site-wrap"><a class="text-link" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Back to parish','العودة إلى الرعية')}</a><h1>${esc(p.name)} · ${L('Calendar','الرزنامة')}</h1><div data-public-calendar></div><div data-event-detail role="status"></div></section>`;
+  if(calendarOnly)return `<section class="section site-wrap"><a class="text-link" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Back to parish','العودة إلى الرعية')}</a><h1>${L('Calendar','رزنامة')} ${esc(L(p.name,p.ar||p.name))}</h1><div data-public-calendar></div><div data-event-detail role="status"></div></section>`;
   const visit=d.visit||{};
   const custom=parishPhotos(d);
   const gallery=custom.length?custom:photos;
@@ -57,11 +57,12 @@ export function bindPublicCalendar(host,d) {
     if(e&&detail){detail.innerHTML=`<article class="contact-panel"><h3>${esc(e.title)}</h3><p>${esc(e.date)} · ${esc(e.time)}</p><p>${L('Contact the parish office for further details.','تواصل مع مكتب الرعية لمزيد من التفاصيل.')}</p></article>`;detail.scrollIntoView({block:'nearest'});}
   });};render();
 }
+const REQUEST_STATUS={submitted:['Sent to the parish office','أُرسل إلى مكتب الرعية'],'office-review':['The parish office is reviewing it','قيد المراجعة لدى مكتب الرعية'],'missing-documents':['Documents are missing','مستندات ناقصة'],'ready-for-collection':['Ready to collect from the parish','جاهز للاستلام من الرعية'],'ready-for-download':['Ready to download','جاهز للتنزيل'],closed:['Closed','مُغلق']};
 const REQUEST_KINDS={certificate:['Certificate','شهادة'],baptism:['Baptism','المعمودية'],communion:['First Communion','المناولة الأولى'],confirmation:['Confirmation','الميرون'],marriage:['Marriage','الإكليل'],funeral:['Funeral','الجنّاز'],
   booking:['Book a hall or room','حجز قاعة أو مكان'],custom:['Something else','طلب آخر'],appointment:['Appointment with the parish office','موعد مع مكتب الرعية'],ministry:['Joining a ministry','الانضمام إلى خدمة']};
 export function requestPage(p,kind) {
   const ministry=new URLSearchParams(location.search).get('ministry');
-  return `<section class="section site-wrap guest-request"><a class="text-link" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Back to parish','العودة إلى الرعية')}</a><h1>${L('Request from','طلب من')} ${esc(p.name)}</h1><p>${L('No account is required. Keep your private tracking link after submitting. The office will review the request.','لا حاجة لحساب. احتفظ برابط المتابعة الخاص بعد الإرسال. سيراجع المكتب طلبك.')}</p>
+  return `<section class="section site-wrap guest-request"><a class="text-link" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Back to parish','العودة إلى الرعية')}</a><h1>${L('Request from','طلب إلى رعية')} ${esc(L(p.name,p.ar||p.name))}</h1><p>${L('No account is required. Keep your private tracking link after submitting. The office will review the request.','لا حاجة لحساب. احتفظ برابط المتابعة الخاص بعد الإرسال. سيراجع المكتب طلبك.')}</p>
     <form data-guest-request><label>${L('Request type','نوع الطلب')}<select name="kind">${Object.entries(REQUEST_KINDS).map(([k,[en,ar]])=>`<option value="${k}" ${kind===k?'selected':''}>${esc(L(en,ar))}</option>`).join('')}</select></label>
     <div class="public-info-grid"><label>${L('Your full name','اسمك الكامل')}<input name="name" required maxlength="120" autocomplete="name"></label><label>${L('On behalf of (optional)','بالنيابة عن (اختياري)')}<input name="behalf" maxlength="120"></label><label>${L('Email','البريد الإلكتروني')}<input type="email" name="email" autocomplete="email" maxlength="120"></label><label>${L('Phone','الهاتف')}<input type="tel" name="phone" autocomplete="tel" maxlength="40"></label></div>
     <p>${L('Provide at least one contact method.','أدخل وسيلة تواصل واحدة على الأقل.')}</p><label>${L('Request details','تفاصيل الطلب')}<textarea name="description" required minlength="5" maxlength="4000" rows="5">${ministry?esc(L('I would like to learn about joining ','أود الاستفسار عن الانضمام إلى ')+ministry):''}</textarea></label>
@@ -79,7 +80,7 @@ export function bindRequest(host,p) {
       const response=await fetch('/api/public/guest-requests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not send request.');
       const link=new URL('public.html',location.href);link.hash='track='+data.trackingToken;
-      form.hidden=true;host.querySelector('[data-request-result]').innerHTML=`<div class="contact-panel"><h2>${L('Request received','تم استلام الطلب')}</h2><p>${L('Save this private link. Anyone with it can see this request’s status. No email or SMS has been sent.','احفظ هذا الرابط الخاص. يمكن لمن يملكه الاطلاع على حالة الطلب. لم تُرسل رسالة بريد أو هاتف.')}</p><a class="button" href="${esc(link.href)}">${L('Track my request','متابعة طلبي')}</a><label>${L('Private tracking link','رابط المتابعة الخاص')}<input readonly value="${esc(link.href)}"></label></div>`;
+      form.hidden=true;host.querySelector('[data-request-result]').innerHTML=`<div class="contact-panel"><h2>${L('Request received','تم استلام الطلب')}</h2><p>${L('Save this private link. Anyone with it can see this request’s status. No email or SMS has been sent.','احفظ هذا الرابط الخاص. يستطيع كل من يملكه الاطّلاع على حالة الطلب. لم تُرسل أي رسالة عبر البريد الإلكتروني أو الرسائل النصية.')}</p><a class="button" href="${esc(link.href)}">${L('Track my request','متابعة طلبي')}</a><label>${L('Private tracking link','رابط المتابعة الخاص')}<input readonly value="${esc(link.href)}"></label></div>`;
     }catch(err){error.textContent=err.message;b.disabled=false;}
   };
 }
@@ -87,7 +88,8 @@ export async function trackingPage(host,token) {
   host.innerHTML=`<section class="section site-wrap"><h1>${L('Request tracking','متابعة الطلب')}</h1><p role="status">${L('Loading…','جارٍ التحميل…')}</p></section>`;
   try{
     const r=await fetch('/api/public/track/'+encodeURIComponent(token)),d=await r.json();if(!r.ok)throw new Error(d.error);
-    host.querySelector('section').innerHTML=`<h1>${L('Request tracking','متابعة الطلب')}</h1><article class="contact-panel"><h2>${esc(d.status.replaceAll('-',' '))}</h2><p>${esc(d.response||L('The parish office has received your request.','استلم مكتب الرعية طلبك.'))}</p><small>${esc(d.updated_at)}</small>${(d.files||[]).map(f=>`<p><a class="button" referrerpolicy="no-referrer" href="/api/public/guest-files/${encodeURIComponent(token)}/${encodeURIComponent(f.id)}" download>${L('Download','تنزيل')}: ${esc(f.name)}</a></p>`).join('')}</article>`;
+    const updated=new Date(d.updated_at);
+    host.querySelector('section').innerHTML=`<h1>${L('Request tracking','متابعة الطلب')}</h1><article class="contact-panel"><h2>${esc(L(...(REQUEST_STATUS[d.status]||[d.status.replaceAll('-',' '),d.status.replaceAll('-',' ')])))}</h2><p>${esc(d.response||L('The parish office has received your request.','استلم مكتب الرعية طلبك.'))}</p><small>${Number.isNaN(updated.valueOf())?'':esc(L('Updated ','آخر تحديث: ')+new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-GB',{dateStyle:'long',timeStyle:'short'}).format(updated))}</small>${(d.files||[]).map(f=>`<p><a class="button" referrerpolicy="no-referrer" href="/api/public/guest-files/${encodeURIComponent(token)}/${encodeURIComponent(f.id)}" download>${L('Download','تنزيل')}: ${esc(f.name)}</a></p>`).join('')}</article>`;
   }catch(e){host.querySelector('p').textContent=e.message;}
 }
 export { paginateCollections };

@@ -7,7 +7,7 @@ export const HOME_DEFAULTS = {
                ar:'مواعيد القداديس واحتفالات هذا الأسبوع وتواصل مباشر مع مكتب الرعية، لكل رعية على ParishLife.'}
   },
   about: {
-    title: {en:'Kept by the parishes themselves', ar:'تحفظه الرعايا بنفسها'},
+    title: {en:'Run by the parishes, for their people', ar:'تديره الرعايا، لأبنائها'},
     body: {en:'Each parish office keeps its registers, calendar and announcements on ParishLife. What the parish chooses to publish appears here: Mass times, celebrations, news, and the way to ask for a baptism, a wedding or a certificate. Personal records stay with the parish.',
            ar:'يحفظ كل مكتب رعية سجلاته ورزنامته وإعلاناته على ParishLife. وما تختار الرعية نشره يظهر هنا: مواعيد القداديس والاحتفالات والأخبار، وطريقة طلب معمودية أو إكليل أو شهادة. أما السجلات الشخصية فتبقى لدى الرعية.'}
   },

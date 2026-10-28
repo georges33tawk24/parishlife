@@ -119,6 +119,24 @@ export function mountMap(figure, items, { L, onChoose, card }) {
     }));
     mark(hot, true);
     if (chosen) showCard(chosen);
+    declutter();
+  }
+  /* A town name under a parish light gives way to the light. */
+  function declutter() {
+    const u = unit(), marks = [...world.children].map(g => {
+      const m = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(g.getAttribute('transform'));
+      return m && { x: +m[1], y: +m[2], r: (g.classList.contains('map-cluster') ? 13 : 9) * u };
+    }).filter(Boolean);
+    svg.querySelectorAll('.map-places > g, .map-towns > g').forEach(g => {
+      const m = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(g.getAttribute('transform')), text = g.querySelector('text');
+      if (!m || !text) return;
+      let b;
+      try { b = text.getBBox(); } catch { return; }
+      if (!b.width) return;
+      // the font box carries generous ascent and descent (Arabic most of all); test the ink band
+      const x0 = +m[1] + b.x * u, x1 = +m[1] + (b.x + b.width) * u, y0 = +m[2] + (b.y + b.height * 0.22) * u, y1 = +m[2] + (b.y + b.height * 0.78) * u;
+      g.classList.toggle('is-covered', marks.some(k => k.x + k.r > x0 && k.x - k.r < x1 && k.y + k.r > y0 && k.y - k.r < y1));
+    });
   }
   function animate(to) {
     cancelAnimationFrame(frame);

@@ -63,7 +63,8 @@ Left-aligned in English and mirrored in Arabic. The map never mirrors: geography
 
 1. **Light is information.** Gold marks a parish; red marks today. Nothing glows for decoration.
 2. **Arches, not cards.** Images sit in the round arch of Lebanese stone windows, on stone
-   and mist planes, instead of rows of identical rounded cards.
+   and mist planes, instead of rows of identical rounded cards. A parish without photographs gets
+   a monogram arch (its initial in gold), never a borrowed picture of another church.
 3. **Bilingual parity.** Arabic has its own display face and spacing, not a fallback. Headlines
    split by word, never by letter, so Arabic letters stay joined.
 4. **One orchestrated moment.** Dawn breaks once, on load and as the visitor scrolls out of
@@ -84,22 +85,25 @@ Checked against the common generated-page defaults, and changed:
 
 ## Motion
 
-GSAP 3.15 (ScrollTrigger and SplitText, vendored in `assets/vendor/gsap/`), all inside
-`gsap.matchMedia()` in `assets/home-motion.js`:
+GSAP 3.15 (ScrollTrigger and SplitText, vendored in `assets/vendor/gsap/`) and Lenis 1.3 smooth
+scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/home-motion.js`:
 
-- **Load:** the sky lifts from night, the ridges rise into place, the headline reveals word by
-  word, then the parish lights come on one after another. It plays once per visit; switching
-  language shows the final frame.
-- **Scroll out of the hero:** the sky moves to morning, ridge layers part at different speeds, and
-  the lights fade as day comes. The header is clear at the very top, dark glass over the hero
-  once the visitor scrolls, and light glass after it.
-- **Sections settle once** as they arrive (IntersectionObserver, so late-loading fonts and images
-  above can never leave a section hidden).
-- **Map:** relief lines and rivers draw once when the map enters view, then the lights come on.
-- **Answering the visitor:** hovering or focusing a parish in the list lights its place on the
-  map; choosing a light selects the parish in the list and opens a card; a numbered cluster zooms in.
-- **Reduced motion, or GSAP failing to load:** every element is shown in its final state. Hidden
-  starting states are only ever set by the motion code, never by CSS.
+- **Loader:** a night screen with the arch mark, its gold light breathing, until the page is ready.
+  It also fades on its own after eight seconds, so a failed script can never leave it in place.
+- **Load:** the camera settles on the valley while the sky, crest and valley layers rise into place,
+  the mist drifts in, the villages light up, the headline rises word by word, and then each parish
+  on ParishLife lights its gold light on a village. It plays once per visit.
+- **Pointer:** on a mouse or trackpad, the layers shift at different depths as the pointer moves.
+- **Scroll out of the hero:** the night render crossfades into the dawn render while the layers part,
+  the village glow fades with the daylight, and the header turns to dark glass, then light glass.
+- **Always:** two mist layers drift across the valley; a shooting star crosses the sky now and then;
+  the parish lights breathe; on the map, lights pulse and relief lines draw once.
+- **Sections:** headings rise word by word, blocks settle once (IntersectionObserver, so late-loading
+  fonts and images above can never leave a section hidden), the arcade of arches is built arch by
+  arch, numbers count up, the About text lights up word by word as it is read, and photographs in
+  arches drift slightly against the scroll.
+- **Reduced motion, or a script failing to load:** every element shows in its final state, with the
+  night valley and no smooth scrolling. Hidden starting states are only ever set by motion code.
 
 ## Content and the dashboard
 
@@ -118,7 +122,7 @@ GSAP 3.15 (ScrollTrigger and SplitText, vendored in `assets/vendor/gsap/`), all 
 | --- | --- |
 | Page shell, header, footer | `public.html`, `assets/site.css` (fonts, tokens, chrome; shared by every public page) |
 | Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
-| Hero valley | `assets/home-scene.js`: SVG generated from a fixed seed; its width follows the viewport, so phones get their own composition; mirrored in Arabic |
+| Hero valley | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
 | Motion | `assets/home-motion.js` |
 | Built-in wording | `assets/site-defaults.js`, shared by the homepage and the editor |
@@ -156,10 +160,37 @@ It needs numpy, shapely and pillow, and a checkout of
 [natural-earth-vector](https://github.com/nvkelso/natural-earth-vector). The relief is stylized from
 the main summits and river gorges, not survey data; the Litani and Orontes courses are approximate.
 
+### The valley render
+
+The hero is not a photograph: `docs/tools/render_valley.py` generates it. An eroded heightfield
+(ridged and slope-damped fractal noise) rises to a snow-capped crest. It is coloured by slope and
+altitude (limestone, scrub, pine, snow with gullies, villages) and lit for blue hour (moonlight,
+afterglow on the peaks) or dawn (low raking sun). A voxel-space renderer draws it with aerial
+perspective and valley mist. About four thousand warm windows and three illuminated crosses are
+projected, occluded by the terrain and bloomed.
+
+Each mood is written as layers so the page can move them: sky, far crest (beyond 14 km), and the
+valley, plus the village glow as an alpha layer. Every layer is complete behind the next, so
+nothing tears when they part. The centres of the brightest village clusters are written to
+`assets/data/valley.js`; the page places one gold light per parish on them, away from the headline.
+
+The wide frame looks 14 degrees left of the valley axis so the brightest town sits opposite the
+headline; Arabic mirrors the images (never the animated container, which GSAP would read as a
+rotation). Clouds and mist use noise tied to view angles, so they keep their shape in the tall
+phone frame, and the village glow is normalised for resolution, so a preview and the final render
+match.
+
+```
+python docs/tools/render_valley.py /tmp/valley --size 2560x1440 --portrait 1080x1920
+python docs/tools/render_valley.py /tmp/valley --publish .
+```
+
 ### Assets and licences
 
 - Marcellus, Amiri and Source Sans 3: SIL Open Font License, notices in `assets/fonts/`.
 - GSAP 3.15.0: GreenSock Standard "No Charge" License, see `assets/vendor/gsap/README.md`.
+- Lenis 1.3.26: MIT License, `assets/vendor/lenis/LICENSE.txt`.
+- The valley images, mist and `crest-dawn.webp` are generated by `docs/tools/render_valley.py`.
 - Lebanon outline and governorates: Natural Earth 1:10m, public domain.
 - `church-light.webp` and `church-interior.webp` are resized copies of the Unsplash photographs
-  credited in `docs/public-site-design.md`. `og-home.jpg` is rendered from the hero scene.
+  credited in `docs/public-site-design.md`. `og-home.jpg` is the dusk valley layers with the headline.

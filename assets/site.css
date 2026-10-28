@@ -22,7 +22,7 @@
   --display:"Marcellus","Amiri",Georgia,"Times New Roman",serif;
   --sans:"Source Sans 3","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
   --arabic:"Noto Sans Arabic","Source Sans 3",system-ui,sans-serif;
-  --arabic-display:"Amiri","Noto Sans Arabic",serif;
+  --arabic-display:"Amiri","Marcellus","Noto Sans Arabic",serif;
   --step-3:clamp(30px,1.2rem + 2.4vw,43px);--step-4:clamp(36px,1.3rem + 3.6vw,60px);
   --header:76px;--gutter:clamp(16px,4vw,48px);--ease-out:cubic-bezier(.16,1,.3,1);
   /* the earlier public tokens, retuned so parish pages share the new identity */
@@ -37,7 +37,8 @@ h1,h2{letter-spacing:0;text-wrap:balance}
 p{color:inherit}
 [dir=rtl] body,[dir=rtl] button,[dir=rtl] input,[dir=rtl] select,[dir=rtl] textarea{font-family:var(--arabic)}
 [dir=rtl] body{font-size:18px;line-height:1.75}
-[dir=rtl] h1,[dir=rtl] h2,[dir=rtl] h3{font-family:var(--arabic-display);font-weight:700;line-height:1.35}
+/* Latin words in an Arabic heading (ParishLife) take Marcellus at its own weight, not a faked bold */
+[dir=rtl] h1,[dir=rtl] h2,[dir=rtl] h3{font-family:var(--arabic-display);font-weight:700;line-height:1.35;font-synthesis-weight:none}
 .site-wrap{width:min(1240px,calc(100% - var(--gutter) * 2))}
 :focus-visible{outline:2px solid var(--lapis);outline-offset:3px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--lapis);outline-offset:3px}
@@ -116,3 +117,23 @@ body.over-hero .sign-in{border-color:rgb(238 241 246 / .38)}
 }
 @media(prefers-reduced-motion:reduce){.btn,.desktop-nav a::after{transition:none}.btn:hover{transform:none}}
 @media print{.site-header,.site-footer{display:none}}
+
+/* ---------- loader: the night before the valley appears ---------- */
+.page-loader{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:radial-gradient(ellipse 60% 50% at 50% 60%,#14244A,#08101F 70%);
+  transition:opacity .9s var(--ease-out),visibility .9s;animation:loader-out .9s 8s forwards}
+body.is-ready .page-loader{opacity:0;visibility:hidden}
+.loader-mark{display:grid;justify-items:center;gap:16px;color:var(--on-night)}
+.loader-mark svg{width:56px;height:68px;overflow:visible}
+.loader-light{filter:drop-shadow(0 0 6px #F1C77A) drop-shadow(0 0 16px #D7A548);animation:loader-glow 1.6s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+.loader-mark span{font-family:var(--display);font-size:26px;letter-spacing:.04em;opacity:.92}
+.loader-mark i{display:block;width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gilt),transparent);transform-origin:center;animation:loader-line 1.8s ease-in-out infinite}
+@keyframes loader-glow{from{opacity:.55;transform:scale(.85)}to{opacity:1;transform:scale(1.15)}}
+@keyframes loader-line{0%{transform:scaleX(.1);opacity:.3}50%{transform:scaleX(1);opacity:1}100%{transform:scaleX(.1);opacity:.3}}
+@keyframes loader-out{to{opacity:0;visibility:hidden}}
+@media(prefers-reduced-motion:reduce){.loader-light,.loader-mark i{animation:none}.page-loader{transition:none}}
+/* Lenis drives smooth scrolling; native smooth scrolling would fight it */
+html.lenis,html.lenis body{height:auto}
+html.lenis{scroll-behavior:auto}
+.lenis.lenis-stopped{overflow:clip}
+.lenis [data-lenis-prevent]{overscroll-behavior:contain}
+@media print{.page-loader{display:none}}
