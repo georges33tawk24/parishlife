@@ -18,6 +18,14 @@ The light through the glass follows the hour in Beirut: rose and gold at dawn, s
 shafts by day, amber in the evening, moonlight at night (`?light=dawn`, `day`, `dusk` or `night`
 shows another hour).
 
+The sanctuary also keeps the season of the Church's year (`assets/liturgy.js`): in the Season of
+the Holy Cross the window throws a cross of light on the wall; at the Birth and the Epiphany a
+star shines over the window; in Lent and Passion Week a violet veil hangs across it; at the
+Resurrection white lilies stand at the ends of the sill; at Pentecost the light turns red
+(`?season=cross`, `birth`, `epiphany`, `lent`, `passion`, `resurrection`, `pentecost` or `church`
+shows another season). The bell of Mass times rings when pressed: a bronze bell's partials, made
+in the browser, and only on a press.
+
 Further down, the same idea runs through the page: at dusk in the Lebanese mountains the village
 churches light up across the valley, and on the hand-drawn map of Lebanon each gold light is a
 parish. The valley render stays on the sign-in screen and the closing section.

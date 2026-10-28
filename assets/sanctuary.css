@@ -80,6 +80,29 @@
 @keyframes sn-lamp{from{opacity:.75;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}
 .sn-motes{position:absolute;inset:0;pointer-events:none}
 
+/* the season of the Church's year (assets/liturgy.js): only its own sign shows */
+.sn-season>*{display:none}
+.sanctuary[data-season=cross] .sn-cross-light,.sanctuary[data-season=birth] .sn-star,.sanctuary[data-season=epiphany] .sn-star,
+.sanctuary[data-season=lent] .sn-veil,.sanctuary[data-season=passion] .sn-veil,.sanctuary[data-season=resurrection] .sn-lily{display:block}
+.sanctuary[data-season=pentecost]{--spill-a:rgb(232 80 56 / .28);--bloom-a:rgb(255 128 96 / .38)}
+.sanctuary[data-season=passion] .sn-candle:not(.is-parish){filter:brightness(.5)}
+/* the Holy Cross: the window throws a cross of light on the wall */
+.sn-cross-light{position:absolute;top:7%;inset-inline-start:-25%;width:12%;aspect-ratio:3 / 5;transform:skewY(-5deg);filter:blur(3px);animation:sn-cross 17s ease-in-out infinite alternate;pointer-events:none}
+.sn-cross-light::before,.sn-cross-light::after{content:"";position:absolute;background:rgb(255 238 200 / .86);box-shadow:0 0 22px 7px rgb(255 214 150 / .5),0 0 70px 22px rgb(255 190 110 / .2)}
+.sn-cross-light::before{left:38%;width:24%;top:0;bottom:0}
+.sn-cross-light::after{top:22%;height:15%;left:0;right:0}
+@keyframes sn-cross{from{opacity:.62}to{opacity:.95}}
+/* the Birth and the Epiphany: the star over the window */
+.sn-star{position:absolute;left:50%;top:-1%;width:19%;aspect-ratio:1;translate:-50% 0;pointer-events:none}
+.sn-star::before{content:"";position:absolute;inset:-60%;border-radius:50%;background:repeating-conic-gradient(rgb(255 236 190 / .32) 0 2deg,transparent 2deg 15deg);-webkit-mask:radial-gradient(circle,#000 8%,transparent 62%);mask:radial-gradient(circle,#000 8%,transparent 62%);animation:sn-turn-rays 60s linear infinite}
+.sn-star i{position:absolute;inset:18%;background:radial-gradient(circle,#FFFFFF 0,#FFF2C6 30%,#F1C77A 60%);clip-path:polygon(50% 0,59% 35%,85% 15%,65% 41%,100% 50%,65% 59%,85% 85%,59% 65%,50% 100%,41% 65%,15% 85%,35% 59%,0 50%,35% 41%,15% 15%,41% 35%);filter:drop-shadow(0 0 10px #FFE7A8);animation:sn-twinkle 3.2s ease-in-out infinite alternate}
+@keyframes sn-turn-rays{to{transform:rotate(360deg)}}
+@keyframes sn-twinkle{from{scale:.9;opacity:.85}to{scale:1.06;opacity:1}}
+/* Lent and Passion Week: a violet veil across the window */
+.sn-veil{position:absolute;left:5%;right:5%;top:36%;width:90%;height:19%;filter:drop-shadow(0 8px 10px rgb(0 0 0 / .45));pointer-events:none}
+/* the Resurrection: white lilies at the ends of the sill */
+.sn-lily{position:absolute;bottom:7.2%;inset-inline-start:-2%;width:14%;height:auto;pointer-events:none;filter:drop-shadow(0 6px 8px rgb(0 0 0 / .45))}
+.sn-lily.is-flip{inset-inline-start:auto;inset-inline-end:-1%;scale:-1 1}
 /* Narrow and tall screens: the words take the top, so the window rises behind them, dimmer. */
 @media(max-width:1099px),(max-aspect-ratio:4/5){
   .sanctuary{--stage-h:min(70svh,118vw * 1300 / 1080)}
@@ -87,6 +110,7 @@
   [dir=rtl] .sn-stage{translate:-50% 0}
   .sn-lamp{display:none}
   .sn-candles,.sn-inscription{display:none}
+  .sanctuary[data-season] .sn-cross-light,.sanctuary[data-season] .sn-lily{display:none}
   .sn-arcade{width:100%;opacity:.7}
   .sn-spill{background:radial-gradient(ellipse 60% 40% at 50% 70%,var(--spill-a),transparent 70%)}
   .sn-wall::after{background:radial-gradient(ellipse 90% 60% at 50% 72%,rgb(8 6 5 / 0) 0,rgb(8 6 5 / .55) 58%,rgb(5 4 3 / .92) 100%)}
@@ -95,5 +119,6 @@
 @media(prefers-reduced-motion:reduce){
   .sn-haze i,.sn-clouds,.sn-backlight,.sn-beam,.sn-lamp,.sn-lamp-glow,.sn-lamp-flame,.sn-candle.is-lit .sn-flame,.sn-candle.is-lit .sn-halo{animation:none}
   .sn-flame,.sn-halo{transition:none}
+  .sn-cross-light,.sn-star::before,.sn-star i{animation:none}
 }
 @media print{.sanctuary{display:none}}

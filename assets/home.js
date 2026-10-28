@@ -20,7 +20,26 @@ const PIN = svgIcon('<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><
 const NEAR = svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="7.5"/>');
 const PREV = svgIcon('<path d="m15 5-7 7 7 7"/>'), NEXT = svgIcon('<path d="m9 5 7 7-7 7"/>');
 const CLOSE = svgIcon('<path d="M6 6l12 12M18 6 6 18"/>');
-/* A bell in its belfry, for Mass times: it rings when the section arrives and under the pointer. */
+/* A bell in its belfry, for Mass times: it swings when the section arrives and under the pointer,
+   and rings when it is pressed. The sound is made here, from the partials of a cast bronze bell
+   (hum, prime, tierce, quint, nominal...), each dying away at its own pace; nothing plays unasked. */
+let bellAudio = null;
+function ringBell() {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return;
+  const ctx = bellAudio ||= new Context(), now = ctx.currentTime + .02, strike = 196;
+  const out = ctx.createGain();
+  out.gain.value = .2; out.connect(ctx.destination);
+  for (const [ratio, level, fade] of [[.5, .55, 5.5], [1, .9, 4], [1.2, .5, 3], [1.5, .32, 2.4], [2, .4, 2], [2.52, .22, 1.4], [3.01, .14, 1], [4.07, .08, .6]]) {
+    const tone = ctx.createOscillator(), gain = ctx.createGain();
+    tone.frequency.value = strike * ratio;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(level, now + .006);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + fade);
+    tone.connect(gain); gain.connect(out);
+    tone.start(now); tone.stop(now + fade + .05);
+  }
+}
 const BELL = `<svg class="bell" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="bell-body"><path d="M13.5 5.5a2.5 2.5 0 0 1 5 0"/><path d="M16 6.5c-4.6 0-6 3.6-6 7.6 0 3.8-1.4 5.9-3.2 7.4h18.4c-1.8-1.5-3.2-3.6-3.2-7.4 0-4-1.4-7.6-6-7.6Z"/><path d="M10.6 17.8h10.8" opacity=".5"/></g><circle class="bell-clapper" cx="16" cy="24.6" r="2" fill="currentColor" stroke="none"/></svg>`;
 /* The cross of the Maronites, each arm ending in three small circles. */
 const CROSS = `<svg viewBox="0 0 22 30" fill="currentColor" aria-hidden="true" focusable="false"><path d="M9.6 4h2.8v24H9.6zM2.5 11.6h17v2.8h-17z"/>${[[11, 3], [11, 27.6], [2.4, 13], [19.6, 13]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1"/>`).join('')}${[[8.4, 4.4], [13.6, 4.4], [3.8, 10.4], [3.8, 15.6], [18.2, 10.4], [18.2, 15.6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.5"/>`).join('')}</svg>`;
@@ -267,7 +286,7 @@ function requests(c) {
 /* ---------- Mass times ---------- */
 function times(c) {
   const { L, safe } = c, rows = c.directory.filter(p => c.content(c.details.get(p.id), 'massTimes').trim());
-  const head = `<header class="sec-head" data-reveal><span class="times-mark" aria-hidden="true">${BELL}</span><h2 id="times-title">${L('Mass times', 'مواعيد القداديس')}</h2><p>${L('As published by each parish office. On feast days, check the parish page for changes.', 'كما ينشرها مكتب كل رعية. في الأعياد، راجع صفحة الرعية لمعرفة أي تغيير.')}</p></header>`;
+  const head = `<header class="sec-head" data-reveal><button type="button" class="times-mark" aria-label="${L('Ring the bell', 'اقرع الجرس')}">${BELL}</button><h2 id="times-title">${L('Mass times', 'مواعيد القداديس')}</h2><p>${L('As published by each parish office. On feast days, check the parish page for changes.', 'كما ينشرها مكتب كل رعية. في الأعياد، راجع صفحة الرعية لمعرفة أي تغيير.')}</p></header>`;
   const body = rows.length ? `<div class="times-board">${rows.map((p, i) => `<article class="times-entry" data-reveal-item ${i >= 6 ? 'data-extra hidden' : ''}>
       <h3><a href="${safe(c.profileURL(p.id, '#times'))}">${safe(c.parishName(p))}</a></h3><p class="times-town">${safe(c.townName(p))}</p>
       <div class="times-text" dir="auto">${c.htmlText(c.content(c.details.get(p.id), 'massTimes'))}</div></article>`).join('')}</div>
@@ -275,7 +294,7 @@ function times(c) {
     : '';
   /* Until a parish publishes its times, the section is a slim band rather than a page of white. */
   if (!rows.length) return `<section class="times is-empty" id="times" aria-labelledby="times-title"><div class="site-wrap times-slim" data-reveal>
-      <span class="times-mark" aria-hidden="true">${BELL}</span>
+      <button type="button" class="times-mark" aria-label="${L('Ring the bell', 'اقرع الجرس')}">${BELL}</button>
       <div><h2 id="times-title">${L('Mass times', 'مواعيد القداديس')}</h2><p>${L('No parish has published its Mass times yet. Parish offices add them under Website content in ParishLife, and they appear here and on the parish’s page.', 'لم تنشر أي رعية مواعيد قداديسها بعد. تضيفها مكاتب الرعايا ضمن محتوى الموقع في ParishLife، فتظهر هنا وفي صفحة الرعية.')}</p></div>
       <a class="btn btn-ink-line btn-small" href="#directory" data-jump>${L('Find a parish', 'ابحث عن رعية')}</a></div></section>`;
   return `<section class="times" id="times" aria-labelledby="times-title"><div class="site-wrap times-grid">${head}<div>${body}</div></div></section>`;
@@ -376,6 +395,9 @@ export function mountHome(root, c) {
   pickerMount(home, c);
   home.querySelector('[data-times-all]')?.addEventListener('click', e => { home.querySelectorAll('.times-entry[data-extra]').forEach(el => el.hidden = false); e.currentTarget.remove(); });
   storiesMount(home);
+  home.querySelectorAll('.times-mark').forEach(bell => bell.addEventListener('click', () => {
+    ringBell(); bell.classList.remove('is-ringing'); void bell.offsetWidth; bell.classList.add('is-ringing');
+  }));
   const verse = home.querySelector('.verse');   // the gold mosaic of the apse behind the verse
   if (verse && !document.documentElement.classList.contains('is-lite')) verse.style.setProperty('--mosaic', `url(${mosaicTexture()})`);
   weekMount(home, c);
