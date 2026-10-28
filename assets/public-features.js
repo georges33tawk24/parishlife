@@ -1,4 +1,5 @@
 import { mountTurnstile } from './turnstile.js';
+import { trackAction } from './beacon.js';
 import { paginateCollections } from './collection-ui.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const L=(en,ar)=>document.documentElement.lang==='ar'?ar:en;
@@ -16,6 +17,7 @@ export function bindRequest(host,p) {
       const q={...Object.fromEntries(new FormData(form)),parish:p.id,responsibleAdult:form.elements.responsibleAdult.checked,...(check?{turnstile:check.token}:{})};
       const response=await fetch('/api/public/guest-requests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not send request.');
+      trackAction('request-sent',p.id);
       const link=new URL('public.html',location.href);link.hash='track='+data.trackingToken;
       form.hidden=true;
       const result=host.querySelector('[data-request-result]');

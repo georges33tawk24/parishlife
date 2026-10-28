@@ -7,6 +7,7 @@ import { mapMarkup, locate, mountMap, projection } from './home-map.js';
 import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
 import { icsHref, icsName, kindName, beirutNow, ADD_ICON } from './public-calendar.js';
 import { find } from './search.js';
+import { trackAction } from './beacon.js';
 import { HOME_DEFAULTS } from './site-defaults.js';
 
 let teardown = [];
@@ -131,7 +132,7 @@ function week(c) {
   const head = `<header class="sec-head" data-reveal><h2 id="week-title">${L('This week', 'هذا الأسبوع')}</h2><p>${L('Masses and celebrations the parishes have published for the next seven days.', 'القداديس والاحتفالات التي نشرتها الرعايا للأيام السبعة المقبلة.')}</p></header>`;
   const card = (e, later = false) => {
     const title = c.pair(e, 'title', 'titleAr') || kind(e), d = date(e.d), place = [c.parishName(e.parish), c.townName(e.parish)].filter(Boolean).join(L(', ', '، '));
-    return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-day="${safe(e.d)}" data-reveal-item>
+    return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-day="${safe(e.d)}" data-parish="${safe(e.parish.id)}" data-reveal-item>
       <a class="wk-ev-link" href="${safe(e.id ? c.eventURL(e.parish.id, e.id) : c.calendarURL(e.parish.id))}">
         <span class="wk-date" aria-hidden="true"><small>${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(d))}</small><b>${safe(digits(c, d.getDate()))}</b><small>${safe(new Intl.DateTimeFormat(loc, { month: 'short' }).format(d))}</small></span>
         <span class="wk-body">${later ? `<span class="wk-later">${L('Coming later', 'لاحقاً')}</span>` : ''}
@@ -399,7 +400,8 @@ function directoryMount(home, c, places) {
   };
   const form = section.querySelector('[data-dir-form]'), input = form.querySelector('#directory-filter');
   const sync = () => { input.value = c.filters.q; form.querySelectorAll('[data-filter]').forEach(s => { s.value = c.filters[s.dataset.filter] || (s.dataset.filter === 'sort' ? 'name' : ''); }); };
-  input.addEventListener('input', () => { c.filters.q = input.value; paint(true); });
+  let typed = 0;   // a search counts once the visitor stops typing
+  input.addEventListener('input', () => { c.filters.q = input.value; paint(true); clearTimeout(typed); typed = setTimeout(() => input.value.trim().length >= 3 && trackAction('search', '', input.value), 1500); });
   form.addEventListener('submit', e => { e.preventDefault(); paint(true); });
   form.querySelectorAll('[data-filter]').forEach(s => s.addEventListener('change', () => { c.filters[s.dataset.filter] = s.value; paint(true); }));
   form.addEventListener('reset', e => { e.preventDefault(); Object.assign(c.filters, { q: '', town: '', diocese: '', rite: '', sort: 'name', location: null }); near.setAttribute('aria-pressed', 'false'); sync(); paint(true); map.reset(); });
@@ -437,6 +439,7 @@ function searchMount(home, c, dir) {
   };
   const pick = o => {
     if (!o) return;
+    trackAction('search', o.kind === 'parish' ? o.id : '', input.value);
     if (o.kind === 'parish') { location.href = c.profileURL(o.id); return; }
     Object.assign(c.filters, { q: '', town: o.town || '' });
     go();
@@ -465,7 +468,7 @@ function searchMount(home, c, dir) {
   });
   box.addEventListener('pointerdown', e => { const li = e.target.closest('[data-index]'); if (li) { e.preventDefault(); pick(options[Number(li.dataset.index)]); } });
   input.addEventListener('blur', () => setTimeout(close, 120));
-  form.addEventListener('submit', e => { e.preventDefault(); Object.assign(c.filters, { q: input.value.trim(), town: '' }); go(); });
+  form.addEventListener('submit', e => { e.preventDefault(); trackAction('search', '', input.value); Object.assign(c.filters, { q: input.value.trim(), town: '' }); go(); });
 }
 
 function pickerMount(home, c) {

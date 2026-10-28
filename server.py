@@ -33,6 +33,7 @@ GEOGRAPHY = json.loads((ROOT / 'backend' / 'geography.json').read_text(encoding=
 from backend import workspace
 from backend import sign_in
 from backend import public_site
+from backend import analytics
 
 ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'} | workspace.EXTRA_ROLES
 # Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
@@ -2791,6 +2792,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     q = json.loads(self.rfile.read(length))
                     require(isinstance(q, dict), 'Expected an object.')
                 path = urlsplit(self.path).path
+                if path == '/api/public/hit' and self.command == 'POST':
+                    analytics.record(c, q, self.client_address[0], self.headers.get('User-Agent', ''), self.headers.get('Host', ''))
+                    c.commit()
+                    self.send_response(204); self.end_headers()
+                    return
                 if path.startswith('/api/public/guest-files/') and self.command=='GET':
                     from backend.guest_delivery import public_file
                     pieces=path.strip('/').split('/')
@@ -2845,6 +2851,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         sign_in.login_failed(c, q, address, login_name)
                         require(False, 'Incorrect username or password.', 401)
                     sign_in.login_succeeded(c, q, login_name)
+                    analytics.stat(c, 'account', 'login')
                     return self.start_session(c, u['id'])
                 if path == '/api/passkey/options' and self.command == 'POST':
                     ctx = self.passkey_context()
@@ -2904,7 +2911,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     result = workspace.create_staff(c, u, q, password_hash, require)
                     c.commit()
                     return self.reply(200, result)
-                result = workspace.handle(c, u, path, self.command, workspace_query, require)
+                result = analytics.handle(c, u, path, self.command, workspace_query, require)
+                if result is None:
+                    result = workspace.handle(c, u, path, self.command, workspace_query, require)
                 if result is not None:
                     c.commit()
                     return self.reply(200, result)

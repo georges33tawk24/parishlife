@@ -184,7 +184,7 @@ function hero(c, p, d, f) {
       <div class="ph-actions" data-hero-rise>
         ${f.open ? `<a class="btn btn-gilt" href="#sacraments" data-ph-jump>${L('Ask the parish office', 'اطلب من مكتب الرعية')}</a>` : ''}
         <a class="btn btn-line" href="#calendar" data-ph-jump>${I.cal}${L('Events and calendar', 'المناسبات والرزنامة')}</a>
-        ${live ? `<a class="btn btn-line" href="${safe(live)}" target="_blank" rel="noopener">${I.play}${L('Watch Mass live', 'شاهد القداس مباشرة')}</a>` : ''}
+        ${live ? `<a class="btn btn-line" href="${safe(live)}" target="_blank" rel="noopener" data-track="livestream">${I.play}${L('Watch Mass live', 'شاهد القداس مباشرة')}</a>` : ''}
         ${f.phone ? `<a class="btn btn-line" href="tel:${safe(f.phone)}">${I.phone}<bdi>${safe(d.parish.phone)}</bdi></a>` : ''}
       </div>
       ${stats ? `<ul class="hero-facts ph-facts" data-hero-rise>${stats}</ul>` : ''}
@@ -225,7 +225,7 @@ function times(c, f) {
       ${f.massTimes ? `<div class="ph-board" data-reveal><span class="ph-board-mark" aria-hidden="true">${I.cross}</span><div class="ph-board-text" dir="auto">${c.htmlText(f.massTimes)}</div></div>` : ''}
       ${masses.length ? `<div class="ph-week-masses" data-reveal><h3>${L('Masses in the next seven days', 'القداديس في الأيام السبعة المقبلة')}</h3><ul>${masses.map(e => `<li data-reveal-item><time>${safe(new Intl.DateTimeFormat(loc(c), { weekday: 'short', day: 'numeric' }).format(new Date(e.d + 'T12:00:00')))}</time><b>${safe(digits(c, e.t || ''))}</b><span dir="auto">${safe(title(c, e))}</span></li>`).join('')}</ul></div>` : ''}
       ${visitRows.length || live ? `<dl class="ph-hours" data-reveal>${visitRows.map(([k, label, icon]) => `<div>${icon}<dt>${label}</dt><dd dir="auto">${c.htmlText(f.visit[k])}</dd></div>`).join('')}
-        ${live ? `<div>${I.play}<dt>${L('Livestream', 'البث المباشر')}</dt><dd><a href="${safe(live)}" target="_blank" rel="noopener">${L('Watch the parish’s Masses online', 'شاهد قداديس الرعية عبر الإنترنت')}</a></dd></div>` : ''}</dl>` : ''}
+        ${live ? `<div>${I.play}<dt>${L('Livestream', 'البث المباشر')}</dt><dd><a href="${safe(live)}" target="_blank" rel="noopener" data-track="livestream">${L('Watch the parish’s Masses online', 'شاهد قداديس الرعية عبر الإنترنت')}</a></dd></div>` : ''}</dl>` : ''}
     </div></div></section>`;
 }
 
@@ -265,7 +265,7 @@ function follow(c, p, f) {
     <div class="ph-follow-actions">
       <a class="btn btn-gilt btn-small" href="${safe(webcal)}">${I.cal}${L('Subscribe in my calendar', 'اشترك في رزنامتي')}</a>
       <a class="btn btn-ink-line btn-small" href="${safe('https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(feed))}" target="_blank" rel="noopener">${I.google}${L('Google Calendar', 'رزنامة Google')}</a>
-      ${whatsapp ? `<a class="btn btn-ink-line btn-small is-wa" href="${safe(whatsapp)}" target="_blank" rel="noopener">${I.whatsapp}${L('Follow on WhatsApp', 'تابع عبر واتساب')}</a>` : ''}
+      ${whatsapp ? `<a class="btn btn-ink-line btn-small is-wa" href="${safe(whatsapp)}" target="_blank" rel="noopener" data-track="whatsapp-follow">${I.whatsapp}${L('Follow on WhatsApp', 'تابع عبر واتساب')}</a>` : ''}
     </div>
     <p class="ph-follow-more">${L('Another calendar app?', 'تطبيق رزنامة آخر؟')} <button type="button" class="text-button" data-copy-link data-url="${safe(feed)}"><span data-copy-label>${L('Copy the calendar address', 'انسخ عنوان الرزنامة')}</span></button>
       · <a class="text-button" href="${safe('index.html?parish=' + encodeURIComponent(p.id) + '#/account')}">${L('Follow in your ParishLife account', 'تابع الرعية من حسابك على ParishLife')}</a></p></div>`;

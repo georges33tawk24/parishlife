@@ -23,6 +23,7 @@ import { xlsx_preview } from './xlsx.js';
 import { initializeWorkspace, workspaceHandle, workspaceSignup, loginUser, sessionData, suspended, publicProfile, parishContext, isOffice, parishPlan } from './workspace.js';
 import { overview, calendarFeed, publishedContent, publicEvents, notices, shareMeta, sharePage } from './public-site.js';
 import { loginGuard, loginFailed, loginSucceeded, humanCheck, passkeyContext, passkeyOptions, passkeyUser, accountPasskeys } from './sign-in.js';
+import { record as recordVisit, stat, analyticsHandle } from './analytics.js';
 
 // Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
 const SIGN_IN_ROLES = new Set([...ROLES, 'user']);
@@ -160,6 +161,7 @@ async function handle(c, env, request, url, q, secureCookie) {
       throw new Problem(401, 'Incorrect username or password.');
     }
     loginSucceeded(c, q);
+    stat(c, 'account', 'login');
     return startSession(u.id);
   }
   if (path === '/api/passkey/options' && method === 'POST') {
@@ -212,6 +214,8 @@ async function handle(c, env, request, url, q, secureCookie) {
   if (passkeyResult !== null) { await c.commit(); return reply(200, passkeyResult, method === 'POST' && path === '/api/account/passkeys' ? passkey.cookie('') : null); }
   const securityResult=await accountSecurity(c,u,path,method,q,session.token);
   if(securityResult!==null){await c.commit();return reply(200,securityResult);}
+  const insightResult=await analyticsHandle(c,u,path,method,method==='GET'?Object.fromEntries(url.searchParams):q);
+  if(insightResult!==null){await c.commit();return reply(200,insightResult);}
   const workspaceResult=await workspaceHandle(c,u,path,method,method==='GET'?Object.fromEntries(url.searchParams):q);
   if(workspaceResult!==null){await c.commit();return reply(200,workspaceResult);}
   if (path === '/api/oversight' && method === 'GET') return reply(200, { parishes: await oversight(c, u) });
@@ -458,10 +462,24 @@ function failure(error) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     setTimeZone(env.PARISH_TIMEZONE || 'Asia/Beirut');
     const url = new URL(request.url);
     const method = request.method;
+    /* A visit to the public site (assets/beacon.js): answered at once, counted after. */
+    if (method === 'POST' && url.pathname === '/api/public/hit') {
+      const origin = request.headers.get('Origin');
+      let sameSite = true;
+      try { sameSite = !origin || new URL(origin).host === request.headers.get('Host'); } catch { sameSite = false; }
+      const text = sameSite ? await request.text().catch(() => '') : '';
+      if (text && text.length <= 2000) ctx.waitUntil((async () => {
+        try {
+          await ensureDatabase(env.DB); await initializeWorkspace(env.DB);
+          await recordVisit(env.DB, JSON.parse(text), request.headers.get('CF-Connecting-IP') || '', request.headers.get('User-Agent') || '', url.host);
+        } catch (error) { console.error('A visit could not be counted.', error); }
+      })());
+      return new Response(null, { status: 204, headers: HEADERS });
+    }
     if (method === 'GET' && url.pathname.startsWith('/api/')) return tracedApi(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return tracedApi(request, env, url);
     if (method === 'GET' || method === 'HEAD') {
