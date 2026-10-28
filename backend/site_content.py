@@ -7,7 +7,7 @@ import re
 import secrets
 from . import workspace as w
 
-SECTIONS = ('week', 'map', 'requests', 'times', 'news', 'stories', 'about', 'join')
+SECTIONS = ('week', 'map', 'requests', 'times', 'news', 'stories', 'verse', 'about', 'join')
 BLOCKS = {'hero': {'title': 140, 'subtitle': 320},
           'announcement': {'text': 280, 'linkLabel': 60},
           'about': {'title': 140, 'body': 2400},

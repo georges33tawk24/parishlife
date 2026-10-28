@@ -55,8 +55,10 @@ Left-aligned in English and mirrored in Arabic. The map never mirrors: geography
 ├─ MASS TIMES: one entry per parish, from each parish's Website content
 ├─ FROM THE PARISHES: latest published announcements
 ├─ STORIES: slides managed in the dashboard Homepage editor
+├─ VERSE: "Let your light shine before others" (Matthew 5:16), lit word by word as it is read
+├─ ABOUT: what ParishLife is, with its numbers
 ├─ JOIN: members portal and account creation
-└─ footer
+└─ footer, ending in the ParishLife name, large and faint
 ```
 
 ## Principles
@@ -78,8 +80,8 @@ Left-aligned in English and mirrored in Arabic. The map never mirrors: geography
 Checked against the common generated-page defaults, and changed:
 
 - No warm cream background: the page is a cool mist white. Limestone appears only as a surface.
-- No all-caps labels above headings, no single accented word in a headline, no `·`-joined meta
-  strings and no `→` appended to links.
+- No all-caps labels above headings, no single accented word in a headline, and no `·`-joined
+  meta strings. An arrow marks only a card or row that opens another page, never inline text.
 - Numbers appear only where content is a real sequence (the three request steps).
 - The directory is a map and a list, not a grid of identical cards.
 
@@ -102,14 +104,53 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   fonts and images above can never leave a section hidden), the arcade of arches is built arch by
   arch, numbers count up, the About text lights up word by word as it is read, and photographs in
   arches drift slightly against the scroll.
+- **Under the pointer** (mouse or trackpad only): gold buttons lean toward it, arches and ministry
+  cards tilt a few degrees with a sheen that follows it, and on the night sections a candle's glow
+  follows it. The stories row can be dragged and glides to a stop.
+- **Small things:** a gold rule draws under each section heading as it arrives; map lights send out
+  a slow ripple; a scroll cue sits at the foot of the hero; a gold line under the header shows how
+  far the page has been read; moving between public pages cross-fades (cross-document view
+  transitions, where the browser supports them); the footer ends in the ParishLife name, which a
+  band of light crosses now and then.
 - **Reduced motion, or a script failing to load:** every element shows in its final state, with the
   night valley and no smooth scrolling. Hidden starting states are only ever set by motion code.
+
+## Parish pages
+
+A parish's page (`public.html?parish=…`) speaks the homepage's language:
+
+- **Hero:** without a photograph, the valley flies in to the parish's own gold light, named, at a
+  village of its own (chosen from the parish id, so it stays put). With a photograph, the photograph
+  fills the hero. Then the parish's name in both languages, a plain line built from its town, rite
+  and diocese (or its own welcome text), the way to ask the office, and the next published event,
+  counting down.
+- **Section bar:** sticks under the header, names the parish once the hero is behind, and slides a
+  gold line under the section being read.
+- **Sections,** each shown only when the parish has published something for it: About (history and
+  facts), Mass times (the published text, the Masses of the next seven days, confession and office
+  hours), Calendar (a month of days with dots, the chosen day or the rest of the month beside it, a
+  coming-up list, search, and any event saved to the visitor's calendar as an `.ics` file),
+  Ministries and clergy, Requests (the arcade, straight to this parish), News, Photographs (with a
+  lightbox), and Visit (contact details, directions, and the map of Lebanon zooming in to the
+  parish). Parishes nearby close the page.
+- **Request form** (`&request=…`): the request type as a choice of arches, then who is asking and the
+  request itself, with what happens next beside it. Sending it draws a gold check and gives the
+  private tracking link with a copy button. **Tracking** (`#track=…`) shows where the request stands
+  as four steps. **Calendar page** (`&view=calendar`): the calendar on its own.
+
+## Sign in and sign up
+
+The members portal opens on the valley at dusk beside a compact form, in the public site's type
+and colours (`assets/auth.css`, scoped to `.account-auth`). Every field and check of the account
+form is kept; sign-up pairs its fields (names, email and phone, the two passwords) so it fits one
+screen, and passwords can be shown. The way to sign in (username, email or phone) is a choice of
+three, not a dropdown.
 
 ## Content and the dashboard
 
 - **Homepage editor** (dashboard → Administration → Homepage, Super Admin): hero title and
-  subtitle, a seasonal announcement, stories, the about text, and which sections are shown,
-  in English and Arabic, with drafts and publishing.
+  subtitle, a seasonal announcement, stories, the about text, and which sections are shown
+  (the verse among them), in English and Arabic, with drafts and publishing.
 - **Parish Website content** (each parish): welcome, history, Mass times, contact and
   sacraments text, already edited under Website content.
 - **Public parish profile** (each parish): photos, coordinates, visiting information.
@@ -124,7 +165,9 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
 | Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
 | Hero valley | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
-| Motion | `assets/home-motion.js` |
+| Motion | `assets/home-motion.js` (homepage and parish pages) |
+| Parish pages | `assets/parish.js`, `assets/parish.css`, calendar in `assets/public-calendar.js`; request sending and tracking in `assets/public-features.js` |
+| Sign in and sign up | `assets/auth.js`, `assets/auth.css` |
 | Built-in wording | `assets/site-defaults.js`, shared by the homepage and the editor |
 | Homepage editor | `assets/views/homepage-editor.js` |
 | Homepage content API | `backend/site_content.py` and `cloudflare/src/site-content.js` (kept in parity), table `pl_site_content` in `backend/workspace-schema.json` |

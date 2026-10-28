@@ -25,6 +25,7 @@ export const HOME_SECTIONS = [
   ['times', 'Mass times', 'مواعيد القداديس'],
   ['news', 'From the parishes', 'من الرعايا'],
   ['stories', 'Stories', 'قصص'],
+  ['verse', 'Scripture: “Let your light shine”', 'آية: «فليضئ نوركم»'],
   ['about', 'About ParishLife', 'عن ParishLife'],
   ['join', 'Join', 'الانضمام']
 ];

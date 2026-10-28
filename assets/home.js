@@ -26,20 +26,20 @@ const FORMS = {
   celebration: { en: ['celebration this week', 'celebrations this week'], ar: { one: 'احتفال هذا الأسبوع', two: 'احتفالان هذا الأسبوع', few: 'احتفالات هذا الأسبوع', many: 'احتفالاً هذا الأسبوع', other: 'احتفال هذا الأسبوع', zero: 'احتفال هذا الأسبوع' } },
   town: { en: ['town or village', 'towns and villages'], ar: { one: 'بلدة', two: 'بلدتان', few: 'بلدات وقرى', many: 'بلدة وقرية', other: 'بلدة وقرية', zero: 'بلدة' } }
 };
-const noun = (c, n, key) => c.lang === 'ar' ? FORMS[key].ar[PLURAL_AR.select(n)] : FORMS[key].en[n === 1 ? 0 : 1];
+export const noun = (c, n, key) => c.lang === 'ar' ? FORMS[key].ar[PLURAL_AR.select(n)] : FORMS[key].en[n === 1 ? 0 : 1];
 /* "3 parishes" as a phrase: Arabic says "رعية واحدة", "رعيتان", "٣ رعايا". */
-function counted(c, n, key) {
+export function counted(c, n, key) {
   if (c.lang !== 'ar') return `${c.number(n)} ${noun(c, n, key)}`;
   const form = PLURAL_AR.select(n);
   if (form === 'one') return key === 'parish' ? 'رعية واحدة' : `${noun(c, n, key)} واحدة`;
   if (form === 'two') return noun(c, n, key);
   return `${c.number(n)} ${noun(c, n, key)}`;
 }
-const digits = (c, text) => c.lang === 'ar' ? String(text).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]) : String(text);
+export const digits = (c, text) => c.lang === 'ar' ? String(text).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]) : String(text);
 /* Diocese names are stored in English; the common forms read in Arabic. */
 const SEES = { beirut: 'بيروت', byblos: 'جبيل', jbeil: 'جبيل', batroun: 'البترون', tripoli: 'طرابلس', zahle: 'زحلة', 'zahlé': 'زحلة', sidon: 'صيدا', saida: 'صيدا',
   tyre: 'صور', sour: 'صور', baalbek: 'بعلبك', jounieh: 'جونية', 'mount lebanon': 'جبل لبنان', 'the mountain': 'الجبل', akkar: 'عكار', jezzine: 'جزين', marjayoun: 'مرجعيون' };
-function dioceseName(c, name) {
+export function dioceseName(c, name) {
   if (c.lang !== 'ar' || !name) return name || '';
   const m = String(name).match(/^(?:(?:maronite|melkite|greek orthodox|syriac|armenian|latin)\s+)?(arch)?(?:eparchy|diocese|archdiocese)\s+of\s+(.+?)(?:\s+of the\s+(maronites|melkites))?$/i);
   if (!m) return name;
@@ -54,15 +54,16 @@ function either(c, value) {
   const alt = value?.[other(c.lang)]?.trim(), l = other(c.lang);
   return alt ? { text: alt, attrs: ` lang="${l}" dir="${l === 'ar' ? 'rtl' : 'ltr'}"` } : null;
 }
-const paragraphs = (c, text) => String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean).map(p => `<p>${c.htmlText(p)}</p>`).join('');
+export const paragraphs = (c, text) => String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean).map(p => `<p>${c.htmlText(p)}</p>`).join('');
 const plain = html => String(html || '').replace(/<(br|\/p|\/li|\/h\d)\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
 const clip = (text, n) => text.length > n ? text.slice(0, n).replace(/\s+\S*$/, '') + '…' : text;
 const hash = value => [...String(value)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
 /* A parish or story without a photograph gets a monogram in a stone arch: honest, never a borrowed picture. */
 const PREFIX = /^(saint|st\.?|sts\.?|our lady of|notre[- ]dame( de)?|mar|mart|سيدة|القديس(ة)?|مار|مارت)\s+/i;
-function monogram(name) {
-  const clean = String(name || '').trim().replace(PREFIX, '').replace(/^(ال)/, '');
+export function monogram(name) {
+  // the article goes (المخلّص → م), but not from names that begin with it (الياس → ا)
+  const clean = String(name || '').trim().replace(PREFIX, '').replace(/^ال(?!ي)/, '');
   const ch = [...clean][0] || [...String(name || '·')][0];
   return `<span class="monogram" aria-hidden="true"><b>${ch.replace(/[&<>"']/g, '')}</b></span>`;
 }
@@ -70,7 +71,7 @@ function monogram(name) {
 export function homeView(c) {
   const { L, safe, site } = c, on = key => site?.sections?.[key] !== false;
   const sections = [hero(c), on('week') ? week(c) : '', on('map') ? directory(c) : '', on('requests') ? requests(c) : '',
-    on('times') ? times(c) : '', on('news') ? news(c) : '', on('stories') ? stories(c) : '', on('about') ? about(c) : '', on('join') ? join(c) : ''];
+    on('times') ? times(c) : '', on('news') ? news(c) : '', on('stories') ? stories(c) : '', on('verse') ? verse(c) : '', on('about') ? about(c) : '', on('join') ? join(c) : ''];
   return `<div class="home" data-home>
     ${sections.join('')}
     <dialog class="parish-picker" data-picker aria-labelledby="picker-title"><form method="dialog" class="picker-head"><h2 id="picker-title"></h2><button class="icon-button" aria-label="${L('Close', 'إغلاق')}">${CLOSE}</button></form>
@@ -114,6 +115,7 @@ function hero(c) {
       </ul>
     </div>
     <p class="hero-tip" data-hero-tip role="status" hidden></p>
+    <a class="scroll-cue" href="#week" data-scroll-cue aria-label="${safe(L('Scroll to this week', 'انتقل إلى هذا الأسبوع'))}"><span aria-hidden="true"></span></a>
   </section>`;
 }
 
@@ -205,7 +207,7 @@ function requests(c) {
   const { L, safe } = c, open = c.directory.filter(p => c.details.get(p.id)?.publicRequests !== false);
   if (!open.length) return '';
   const href = kind => open.length === 1 ? c.requestURL(open[0].id, kind) : '#requests';
-  const arch = ([kind, art, title, sub]) => `<li data-reveal-item><a class="arch" href="${safe(href(kind))}" data-request="${kind}"><span class="arch-icon">${c.icon(art)}</span><strong>${L(...title)}</strong><small>${L(...sub)}</small></a></li>`;
+  const arch = ([kind, art, title, sub]) => `<li data-reveal-item><a class="arch" href="${safe(href(kind))}" data-request="${kind}" data-tilt><span class="arch-icon">${c.icon(art)}</span><strong>${L(...title)}</strong><small>${L(...sub)}</small></a></li>`;
   const wide = ([kind, art, title, sub]) => `<a class="ask-wide" href="${safe(href(kind))}" data-request="${kind}" data-reveal-item><span class="arch-icon">${c.icon(art)}</span><span><strong>${L(...title)}</strong><small>${L(...sub)}</small></span></a>`;
   return `<section class="ask" id="requests" aria-labelledby="requests-title"><div class="site-wrap">
     <header class="sec-head" data-reveal><h2 id="requests-title">${L('Ask your parish', 'اطلب من رعيتك')}</h2><p>${L('Baptisms, weddings, certificates and more. Send your request to the parish office without an account, and follow it with a private link.', 'معموديات وأكاليل وشهادات وغيرها. أرسل طلبك إلى مكتب الرعية من دون حساب، وتابعه برابط خاص.')}</p></header>
@@ -258,6 +260,17 @@ function stories(c) {
       ${s.link ? `<a class="story-link" href="${safe(s.link)}">${L('Read more', 'اقرأ المزيد')}<span class="sr-only">: ${safe(s.t.text)}</span></a>` : ''}</article>`).join('')}</div></section>`;
 }
 
+/* ---------- the verse: every parish is one of these lights ---------- */
+function verse(c) {
+  const { L } = c;
+  return `<section class="verse" id="verse" aria-labelledby="verse-text"><div class="site-wrap verse-inner">
+    <span class="verse-lamp" aria-hidden="true"></span>
+    <blockquote class="verse-quote" data-lit><p id="verse-text">${L('Let your <em>light</em> shine before others, so that they may see your good works and give glory to your Father in heaven.', 'فَلْيُضِئْ <em>نُورُكُمْ</em> هكَذَا قُدَّامَ النَّاسِ، لِكَيْ يَرَوْا أَعْمَالَكُمُ الْحَسَنَةَ، وَيُمَجِّدُوا أَبَاكُمُ الَّذِي فِي السَّمَاوَاتِ.')}</p>
+      <footer><cite>${L('Matthew 5:16', 'متّى ٥: ١٦')}</cite></footer></blockquote>
+    <p class="verse-note" data-reveal>${L('Every parish on ParishLife is one of those lights.', 'وكلّ رعية على ParishLife نورٌ من هذه الأنوار.')}</p>
+  </div></section>`;
+}
+
 /* ---------- about and join ---------- */
 function about(c) {
   if (c.site && !c.site.about) return '';
@@ -291,6 +304,8 @@ export function mountHome(root, c) {
   home.querySelector('[data-times-all]')?.addEventListener('click', e => { home.querySelectorAll('.times-entry[data-extra]').forEach(el => el.hidden = false); e.currentTarget.remove(); });
   storiesMount(home);
   headerMount(home);
+  const cue = home.querySelector('[data-scroll-cue]');
+  cue?.addEventListener('click', e => { e.preventDefault(); scrollToTarget(cue.closest('section').nextElementSibling); });
   animateHome(home, { onDawn: () => home._valley?.loadDawn() });
 }
 export function unmountHome() { stopHomeMotion(); teardown.forEach(fn => fn()); teardown = []; }
@@ -454,14 +469,14 @@ function storiesMount(home) {
   }));
 }
 
-/* The header sits clear over the night sky, and turns solid once the hero is behind it. */
-function headerMount(home) {
-  const hero = home.querySelector('[data-hero]');
+function headerMount(home) { teardown.push(watchHero(home.querySelector('[data-hero]'))); }
+/* The header sits clear over a dark hero, and turns solid once the hero is behind it. */
+export function watchHero(hero) {
   document.body.classList.toggle('over-hero', !!hero);
-  if (!hero || !('IntersectionObserver' in window)) return;
+  if (!hero || !('IntersectionObserver' in window)) return () => {};
   const watch = new IntersectionObserver(([entry]) => document.body.classList.toggle('over-hero', entry.isIntersecting), { rootMargin: '-76px 0px 0px 0px', threshold: 0 });
   const scrolled = () => document.body.classList.toggle('is-scrolled', scrollY > 24);
   watch.observe(hero); scrolled();
   addEventListener('scroll', scrolled, { passive: true });
-  teardown.push(() => { watch.disconnect(); removeEventListener('scroll', scrolled); document.body.classList.remove('over-hero', 'is-scrolled'); });
+  return () => { watch.disconnect(); removeEventListener('scroll', scrolled); document.body.classList.remove('over-hero', 'is-scrolled'); };
 }

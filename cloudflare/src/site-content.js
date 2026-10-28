@@ -4,7 +4,7 @@
 import { need, NOW, tokenHex } from './py.js';
 import { history, isSuperAdmin } from './workspace.js';
 
-const SECTIONS = ['week','map','requests','times','news','stories','about','join'];
+const SECTIONS = ['week','map','requests','times','news','stories','verse','about','join'];
 const BLOCKS = {hero:{title:140,subtitle:320},announcement:{text:280,linkLabel:60},about:{title:140,body:2400},join:{title:140,body:600}};
 const LINK = /^(?:https:\/\/\S{1,490}|#[A-Za-z][A-Za-z0-9_-]{0,60}|\/(?![/\\])[^\s\\]{0,200}|public\.html\S{0,200})$/;
 const IMAGE = /^(?:https:\/\/\S{1,1990}|assets\/images\/[A-Za-z0-9_-]{1,80}\.(?:jpg|jpeg|png|webp))$/;

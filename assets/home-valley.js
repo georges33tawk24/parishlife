@@ -21,8 +21,10 @@ export function valleyMarkup() {
   </div>`;
 }
 
-/* places: [{id, name, town}]. Returns a controller; positions follow resizes. */
-export function mountValley(host, places, { tip, onPick }) {
+/* places: [{id, name, town}]. start skips that many village spots (a parish page picks its
+   own village); label writes the name beside each light. Returns a controller; positions
+   follow resizes. */
+export function mountValley(host, places, { tip, onPick, start = 0, label = false }) {
   const valley = host.querySelector('[data-valley]'), lightsBox = host.querySelector('[data-lights]');
   let frame = null, dawnWanted = false;
   const pick = () => (innerWidth / Math.max(1, host.clientHeight || innerHeight) < 0.85 ? 'tall' : 'wide');
@@ -41,7 +43,7 @@ export function mountValley(host, places, { tip, onPick }) {
     const w = lightsBox.clientWidth || box.width, h = lightsBox.clientHeight || box.height;
     const scale = Math.max(w / meta.width, h / meta.height);
     const ox = (w - meta.width * scale) / 2, oy = (h - meta.height * scale) * 0.5;
-    const spots = slotsFor(meta.slots, places.length, frame);
+    const spots = slotsFor(meta.slots, places.length + start, frame).slice(start);
     lightsBox.querySelectorAll('.valley-light').forEach((el, i) => {
       const s = spots[i];
       el.style.left = (ox + s.x * meta.width * scale) + 'px';
@@ -49,7 +51,8 @@ export function mountValley(host, places, { tip, onPick }) {
       el.hidden = s.y * meta.height * scale + oy > h * 0.92;
     });
   }
-  lightsBox.innerHTML = places.slice(0, 60).map((p, i) => `<span class="valley-light" data-light="${i}" style="--i:${i}"><i></i></span>`).join('');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  lightsBox.innerHTML = places.slice(0, 60).map((p, i) => `<span class="valley-light${label ? ' is-named' : ''}" data-light="${i}" style="--i:${i}"><i></i>${label ? `<b>${esc(p.name)}</b>` : ''}</span>`).join('');
   lightsBox.querySelectorAll('.valley-light').forEach((el, i) => {
     const p = places[i];
     el.addEventListener('pointerenter', () => {

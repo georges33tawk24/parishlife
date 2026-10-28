@@ -9,11 +9,12 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function stopHomeMotion() { mm?.revert(); mm = null; }
 
-/* Scroll to a section, smoothly when motion is welcome; the sticky header is accounted for. */
-export function scrollToTarget(el) {
+/* Scroll to a section, smoothly when motion is welcome; offset clears the sticky header (and a
+   parish page's section bar). */
+export function scrollToTarget(el, offset = 72) {
   if (!el) return;
-  if (lenis) lenis.scrollTo(el, { offset: -72, duration: 1.4 });
-  else el.scrollIntoView({ behavior: still() ? 'auto' : 'smooth' });
+  if (lenis) lenis.scrollTo(el, { offset: -offset, duration: 1.4 });
+  else scrollTo({ top: el.getBoundingClientRect().top + scrollY - offset, behavior: still() ? 'auto' : 'smooth' });
 }
 
 function smoothScroll(gsap, ScrollTrigger) {
@@ -38,6 +39,10 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
     const stops = [
       hero && heroMotion(gsap, hero, onDawn),
       hero && context.conditions.fine && pointerDepth(gsap, hero),
+      context.conditions.fine && magnetic(gsap, root),
+      context.conditions.fine && tilt(root),
+      context.conditions.fine && candle(root),
+      context.conditions.fine && dragScroll(root),
       headings(gsap, root),
       reveals(gsap, root),
       counters(gsap, root),
@@ -55,24 +60,34 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
 }
 
 function heroMotion(gsap, hero, onDawn) {
-  const q = s => hero.querySelectorAll(s);
   const title = hero.querySelector('.hero-title');
   let dawnAsked = false;
   const askDawn = () => { if (!dawnAsked) { dawnAsked = true; onDawn?.(); } };
+  /* Tweens only for what this hero has: the homepage valley, a parish's valley or photograph. */
+  const add = (tl, method, selector, ...args) => { const els = hero.querySelectorAll(selector); if (els.length) tl[method](els, ...args); return tl; };
   const intro = gsap.timeline({ defaults: { ease: 'expo.out' }, onComplete: askDawn });
-  intro.fromTo(q('.valley'), { scale: 1.16, opacity: 0 }, { scale: 1.04, opacity: 1, duration: 3.6, ease: 'power3.out' }, 0)
-    .from(q('.vl-sky'), { yPercent: -4, duration: 3 }, 0)
-    .from(q('.vl-far'), { yPercent: 5, duration: 3 }, 0.1)
-    .from(q('.vl-near'), { yPercent: 9, duration: 3 }, 0.2)
-    .fromTo(q('.vl-mist'), { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6)
-    .fromTo(q('.vl-glow'), { opacity: 0 }, { opacity: 1, duration: 2.6, ease: 'sine.inOut' }, 1.0);
+  /* The homepage settles on the whole valley; a parish page flies in to its own light. */
+  const push = Number(hero.dataset.push) || 0;
+  if (push) {
+    add(intro, 'fromTo', '.valley', { opacity: 0 }, { opacity: 1, duration: 1.8, ease: 'sine.out' }, 0);
+    add(intro, 'fromTo', '.valley', { scale: 1.04 }, { scale: push, duration: 5.2, ease: 'power2.inOut' }, 0);
+  } else add(intro, 'fromTo', '.valley', { scale: 1.16, opacity: 0 }, { scale: 1.04, opacity: 1, duration: 3.6, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.ph-photo img', { scale: 1.2, opacity: 0 }, { scale: 1.04, opacity: 1, duration: 3.4, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.sub-art img', { scale: 1.12, opacity: 0 }, { scale: 1, opacity: 0.55, duration: 2.6, ease: 'power3.out', stagger: 0.2 }, 0);
+  add(intro, 'from', '.vl-sky', { yPercent: -4, duration: 3 }, 0);
+  add(intro, 'from', '.vl-far', { yPercent: 5, duration: 3 }, 0.1);
+  add(intro, 'from', '.vl-near', { yPercent: 9, duration: 3 }, 0.2);
+  add(intro, 'fromTo', '.vl-mist', { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6);
+  add(intro, 'fromTo', '.vl-glow', { opacity: 0 }, { opacity: 1, duration: 2.6, ease: 'sine.inOut' }, 1.0);
   if (title && window.SplitText) {
     // Words only: Arabic letters must stay joined.
     const split = window.SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
     intro.from(split.words, { yPercent: 118, rotate: 3, duration: 1.5, stagger: 0.075 }, 0.55);
   } else if (title) intro.from(title, { y: 30, opacity: 0, duration: 1.2 }, 0.55);
-  intro.from(q('[data-hero-rise]'), { y: 26, opacity: 0, duration: 1.2, stagger: 0.12 }, 1.15)
-    .from(q('.valley-light'), { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, 1.9);
+  add(intro, 'from', '[data-hero-rise]', { y: 26, opacity: 0, duration: 1.2, stagger: 0.12 }, 1.15);
+  add(intro, 'from', '.valley-light', { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, push ? 3.4 : 1.9);
+  add(intro, 'from', '.valley-light b', { opacity: 0, x: -10, duration: 1.2 }, push ? 4.1 : 2.6);
+  add(intro, 'from', '.ph-next', { y: 40, opacity: 0, duration: 1.4 }, 1.6);
   introPlayedBefore = introPlayed;
   if (introPlayed) intro.progress(1);
   introPlayed = true;
@@ -82,13 +97,16 @@ function heroMotion(gsap, hero, onDawn) {
     defaults: { ease: 'none' },
     scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: 0.8, onUpdate: self => { if (self.progress > 0.02) askDawn(); } }
   });
-  day.to(q('.vl-sky'), { yPercent: 16 }, 0)
-    .to(q('.vl-far'), { yPercent: 10 }, 0)
-    .to(q('.vl-near'), { yPercent: 3, scale: 1.06, transformOrigin: '50% 100%' }, 0)
-    .to(q('.vl-dawn'), { opacity: 1, ease: 'sine.inOut' }, 0.05)
-    .to(q('.vl-glow, .shooting-star'), { opacity: 0 }, 0)
-    .to(q('.vl-lights'), { opacity: 0.2 }, 0.1)
-    .to(q('.hero-inner'), { yPercent: -18, opacity: 0, ease: 'power1.in' }, 0);
+  add(day, 'to', '.vl-sky', { yPercent: 16 }, 0);
+  add(day, 'to', '.vl-far', { yPercent: 10 }, 0);
+  add(day, 'to', '.vl-near', { yPercent: 3, scale: 1.06, transformOrigin: '50% 100%' }, 0);
+  add(day, 'to', '.vl-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
+  add(day, 'to', '.vl-glow, .shooting-star', { opacity: 0 }, 0);
+  add(day, 'to', '.vl-lights', { opacity: 0.2 }, 0.1);
+  add(day, 'to', '.ph-photo img', { yPercent: 12, scale: 1.1 }, 0);
+  add(day, 'to', '.sub-art', { yPercent: 18 }, 0);
+  add(day, 'to', '.ph-next', { yPercent: -40, opacity: 0, ease: 'power1.in' }, 0);
+  add(day, 'to', '.hero-inner, .sub-inner', { yPercent: -18, opacity: 0, ease: 'power1.in' }, 0);
   return () => intro.kill();
 }
 
@@ -105,6 +123,74 @@ function pointerDepth(gsap, hero) {
   };
   addEventListener('pointermove', move, { passive: true });
   return () => removeEventListener('pointermove', move);
+}
+
+/* Gold buttons lean toward the pointer, and spring back when it leaves. */
+function magnetic(gsap, root) {
+  const off = [];
+  root.querySelectorAll('.btn-gilt, .hero-field button, .ph-next').forEach(el => {
+    const x = gsap.quickTo(el, 'x', { duration: 0.6, ease: 'power3.out' }), y = gsap.quickTo(el, 'y', { duration: 0.6, ease: 'power3.out' });
+    const move = e => { const r = el.getBoundingClientRect(); x((e.clientX - r.left - r.width / 2) * 0.22); y((e.clientY - r.top - r.height / 2) * 0.3); };
+    const leave = () => { x(0); y(0); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave);
+    off.push(() => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); gsap.set(el, { clearProps: 'x,y' }); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* Arches and cards turn a few degrees toward the pointer; a sheen follows it. */
+function tilt(root) {
+  const off = [];
+  root.querySelectorAll('[data-tilt]').forEach(el => {
+    const move = e => {
+      const r = el.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+      el.style.setProperty('--ry', ((px - 0.5) * 9).toFixed(2) + 'deg');
+      el.style.setProperty('--rx', ((0.5 - py) * 7).toFixed(2) + 'deg');
+      el.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
+      el.style.setProperty('--gy', (py * 100).toFixed(1) + '%');
+    };
+    const leave = () => { el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave);
+    off.push(() => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* On the night sections a candle's glow follows the pointer. */
+function candle(root) {
+  const off = [];
+  root.querySelectorAll('.hero, .directory, .stories, .join, .ph-min, .ph-gallery').forEach(section => {
+    section.classList.add('has-candle');
+    const move = e => { const r = section.getBoundingClientRect(); section.style.setProperty('--mx', (e.clientX - r.left) + 'px'); section.style.setProperty('--my', (e.clientY - r.top) + 'px'); section.classList.add('is-lit'); };
+    const leave = () => section.classList.remove('is-lit');
+    section.addEventListener('pointermove', move, { passive: true }); section.addEventListener('pointerleave', leave);
+    off.push(() => { section.removeEventListener('pointermove', move); section.removeEventListener('pointerleave', leave); section.classList.remove('has-candle', 'is-lit'); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* The stories row can be dragged with a mouse, and keeps a little momentum. */
+function dragScroll(root) {
+  const track = root.querySelector('[data-story-track]');
+  if (!track) return null;
+  let down = null, moved = false, velocity = 0, last = 0, frame = 0;
+  const start = e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; cancelAnimationFrame(frame); down = { x: e.clientX, left: track.scrollLeft }; moved = false; last = e.clientX; velocity = 0; };
+  const move = e => {
+    if (!down) return;
+    const dx = e.clientX - down.x;
+    if (Math.abs(dx) > 4 && !moved) { moved = true; track.classList.add('is-dragging'); track.setPointerCapture?.(e.pointerId); }
+    if (moved) { track.scrollLeft = down.left - dx; velocity = e.clientX - last; last = e.clientX; }
+  };
+  const end = () => {
+    if (!down) return;
+    down = null;
+    // snapping waits until the glide has settled
+    const glide = () => { if (Math.abs(velocity) < 0.5) { track.classList.remove('is-dragging'); return; } track.scrollLeft -= velocity; velocity *= 0.92; frame = requestAnimationFrame(glide); };
+    if (moved) glide(); else track.classList.remove('is-dragging');
+  };
+  const click = e => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } };
+  track.addEventListener('pointerdown', start); addEventListener('pointermove', move); addEventListener('pointerup', end); track.addEventListener('click', click, true);
+  return () => { cancelAnimationFrame(frame); track.removeEventListener('pointerdown', start); removeEventListener('pointermove', move); removeEventListener('pointerup', end); track.removeEventListener('click', click, true); };
 }
 
 /* Reveals use IntersectionObserver rather than measured scroll positions, so content
@@ -137,10 +223,10 @@ function reveals(gsap, root) {
   const blocks = [...root.querySelectorAll('[data-reveal]')];
   const items = [...root.querySelectorAll('[data-reveal-item]')].filter(el => !el.closest('.arcade'));
   const arches = [...root.querySelectorAll('.arcade > li')];
-  gsap.set(blocks, { y: 32, opacity: 0 });
-  gsap.set(items, { y: 28, opacity: 0 });
-  gsap.set(arches, { y: 60, scaleY: 0.86, opacity: 0, transformOrigin: '50% 100%' });
-  const a = whenSeen(blocks, els => gsap.to(els, { y: 0, opacity: 1, duration: 1.1, ease: 'expo.out', stagger: 0.08, overwrite: true }));
+  if (blocks.length) gsap.set(blocks, { y: 32, opacity: 0 });
+  if (items.length) gsap.set(items, { y: 28, opacity: 0 });
+  if (arches.length) gsap.set(arches, { y: 60, scaleY: 0.86, opacity: 0, transformOrigin: '50% 100%' });
+  const a = whenSeen(blocks, els => { els.forEach(el => el.classList.add('is-in')); gsap.to(els, { y: 0, opacity: 1, duration: 1.1, ease: 'expo.out', stagger: 0.08, overwrite: true }); });
   const b = whenSeen(items, els => gsap.to(els, { y: 0, opacity: 1, duration: 1, ease: 'expo.out', stagger: 0.07, overwrite: true }));
   // the arcade is built arch by arch
   const c = whenSeen(arches.slice(0, 1), () => gsap.to(arches, { y: 0, scaleY: 1, opacity: 1, duration: 1.3, ease: 'expo.out', stagger: 0.09, overwrite: true }));

@@ -98,19 +98,20 @@ export function mountMap(figure, items, { L, onChoose, card }) {
     svg.querySelectorAll('.px').forEach(el => el.setAttribute('transform', `scale(${u})`));
     figure.classList.toggle('is-zoomed', view.w < W - 1);
     reset.hidden = view.w >= W - 1;
-    world.replaceChildren(...clusters().map(c => {
+    world.replaceChildren(...clusters().map((c, i) => {
       const g = document.createElementNS(NS, 'g');
+      g.style.setProperty('--i', i);
       g.setAttribute('transform', `translate(${c.x} ${c.y}) scale(${u})`);
       if (c.members.length > 1) {
         g.setAttribute('class', 'map-cluster' + (visible && !c.members.some(m => visible.has(m.id)) ? ' is-dim' : ''));
         g.dataset.members = c.members.map(m => m.id).join(' ');
-        g.innerHTML = `<circle class="halo" r="26"/><circle class="disc" r="13"/><text dy="4.6">${c.members.length}</text>`;
+        g.innerHTML = `<circle class="pulse" r="13"/><circle class="halo" r="26"/><circle class="disc" r="13"/><text dy="4.6">${c.members.length}</text>`;
         g.addEventListener('click', () => zoomTo(c.members));
       } else {
         const m = c.members[0];
         g.setAttribute('class', 'map-light' + (m.exact ? '' : ' is-approx') + (visible && !visible.has(m.id) ? ' is-dim' : ''));
         g.dataset.id = m.id;
-        g.innerHTML = `<circle class="halo" r="20"/><circle class="ring" r="9"/><circle class="core" r="3.6"/><text class="tag" x="13" y="4.5">${escapeXML(m.name)}</text>`;
+        g.innerHTML = `<circle class="pulse" r="8"/><circle class="halo" r="20"/><circle class="ring" r="9"/><circle class="core" r="3.6"/><text class="tag" x="13" y="4.5">${escapeXML(m.name)}</text>`;
         g.addEventListener('click', () => { choose(m.id); onChoose?.(m.id); });
         g.addEventListener('pointerenter', () => mark(m.id, true));
         g.addEventListener('pointerleave', () => mark(null, true));
