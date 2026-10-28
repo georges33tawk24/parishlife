@@ -161,23 +161,17 @@ function hazeTexture() {
   return canvas.toDataURL('image/png');
 }
 
-/* What the season brings into the sanctuary: in the Season of the Holy Cross a cross of light on
-   the wall; at the Birth and the Epiphany the star over the window; in Lent and Passion Week a
-   violet veil across it; at the Resurrection white lilies on the sill. Only one shows (CSS). */
+/* What the season brings into the sanctuary (pictures rendered by docs/tools/render_seasons.py): in
+   the Season of the Holy Cross a cross of light on the wall; at the Birth and the Epiphany the star
+   over the window; in Lent and Passion Week a violet veil across it; at the Resurrection the paschal
+   candle, bearing the Alpha, the Omega and the year. Only one shows (CSS). */
 function seasonMarkup() {
-  const lily = flip => `<svg class="sn-lily${flip ? ' is-flip' : ''}" viewBox="0 0 80 160" aria-hidden="true" focusable="false">
-    <defs><linearGradient id="sn-vase${flip ? 'b' : 'a'}" x1="0" x2="1"><stop offset="0" stop-color="#6E4E1C"/><stop offset=".45" stop-color="#E2B860"/><stop offset="1" stop-color="#5A3F15"/></linearGradient></defs>
-    <g stroke="#3E6B3A" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M40 128C38 96 30 70 20 46"/><path d="M40 128C42 92 48 64 60 40"/><path d="M40 128V30"/></g>
-    <g fill="#4D7F45"><path d="M33 98c-12-4-18-14-18-14s13 1 20 9Z"/><path d="M47 88c12-5 17-15 17-15s-13 2-19 10Z"/></g>
-    ${[[20, 46, -30], [60, 40, 30], [40, 30, 0]].map(([x, y, r]) => `<g transform="translate(${x} ${y}) rotate(${r})"><path d="M0 0C-9-6-11-18-6-26C-2-18 0-12 0 0Z" fill="#FFFDF6"/><path d="M0 0C9-6 11-18 6-26C2-18 0-12 0 0Z" fill="#F4EFE2"/><path d="M0 0C-3-10-2-22 0-30C2-22 3-10 0 0Z" fill="#FFFFFF"/><path d="M0-4v-12" stroke="#E2B860" stroke-width="1.2"/></g>`).join('')}
-    <path d="M24 128h32l-4 30H28Z" fill="url(#sn-vase${flip ? 'b' : 'a'})"/><path d="M22 126h36v5H22Z" fill="#C9993F"/></svg>`;
+  const year = [...String(new Date().getFullYear())].map((digit, i) => `<b class="sn-pa-year sn-pa-y${i}">${digit}</b>`).join('');
   return `<div class="sn-season" aria-hidden="true">
     <span class="sn-cross-light"></span>
-    <span class="sn-star"><i></i></span>
-    <svg class="sn-veil" viewBox="0 0 1000 300" preserveAspectRatio="none" focusable="false"><defs><linearGradient id="sn-violet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6B3FA0"/><stop offset=".6" stop-color="#4A2577"/><stop offset="1" stop-color="#2E1650"/></linearGradient></defs>
-      <path d="M40 20C200 40 320 220 500 230S800 40 960 20V60C820 80 700 260 500 270S180 80 40 60Z" fill="url(#sn-violet)"/><path d="M40 20C200 40 320 220 500 230S800 40 960 20" fill="none" stroke="#C9A24C" stroke-width="4"/>
-      <path d="M150 52C250 120 330 210 420 238M850 52C750 120 670 210 580 238" stroke="#2A1446" stroke-width="3" fill="none" opacity=".5"/><path d="M490 230v60M510 230v66" stroke="#C9A24C" stroke-width="3"/></svg>
-    ${lily(false)}${lily(true)}
+    <span class="sn-star"></span>
+    <span class="sn-veil"></span>
+    <span class="sn-paschal"><i class="sn-paschal-flame"></i><b class="sn-pa-alpha">\u0391</b><b class="sn-pa-omega">\u03A9</b>${year}</span>
   </div>`;
 }
 

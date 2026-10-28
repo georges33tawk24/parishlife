@@ -82,26 +82,28 @@
 /* the season of the Church's year (assets/liturgy.js): only its own sign shows */
 .sn-season>*{display:none}
 .sanctuary[data-season=cross] .sn-cross-light,.sanctuary[data-season=birth] .sn-star,.sanctuary[data-season=epiphany] .sn-star,
-.sanctuary[data-season=lent] .sn-veil,.sanctuary[data-season=passion] .sn-veil,.sanctuary[data-season=resurrection] .sn-lily{display:block}
+.sanctuary[data-season=lent] .sn-veil,.sanctuary[data-season=passion] .sn-veil,.sanctuary[data-season=resurrection] .sn-paschal{display:block}
 .sanctuary[data-season=pentecost]{--spill-a:rgb(232 80 56 / .28);--bloom-a:rgb(255 128 96 / .38)}
 .sanctuary[data-season=passion] .sn-candle:not(.is-parish){filter:brightness(.5)}
+/* the pictures are rendered by docs/tools/render_seasons.py */
 /* the Holy Cross: the window throws a cross of light on the wall */
-.sn-cross-light{position:absolute;top:7%;inset-inline-start:-25%;width:12%;aspect-ratio:3 / 5;transform:skewY(-5deg);filter:blur(3px);animation:sn-cross 17s ease-in-out infinite alternate;pointer-events:none}
-.sn-cross-light::before,.sn-cross-light::after{content:"";position:absolute;background:rgb(255 238 200 / .86);box-shadow:0 0 22px 7px rgb(255 214 150 / .5),0 0 70px 22px rgb(255 190 110 / .2)}
-.sn-cross-light::before{left:38%;width:24%;top:0;bottom:0}
-.sn-cross-light::after{top:22%;height:15%;left:0;right:0}
-@keyframes sn-cross{from{opacity:.62}to{opacity:.95}}
+.sn-cross-light{position:absolute;top:7%;inset-inline-start:-25%;width:12%;aspect-ratio:3 / 5;transform:skewY(-5deg);background:url("images/sanctuary/cross-light.webp") 0 0/100% 100% no-repeat;animation:sn-cross 17s ease-in-out infinite alternate;pointer-events:none}
+@keyframes sn-cross{from{opacity:.6}to{opacity:.92}}
 /* the Birth and the Epiphany: the star over the window */
-.sn-star{position:absolute;left:50%;top:-1%;width:19%;aspect-ratio:1;translate:-50% 0;pointer-events:none}
-.sn-star::before{content:"";position:absolute;inset:-60%;border-radius:50%;background:repeating-conic-gradient(rgb(255 236 190 / .32) 0 2deg,transparent 2deg 15deg);-webkit-mask:radial-gradient(circle,#000 8%,transparent 62%);mask:radial-gradient(circle,#000 8%,transparent 62%);animation:sn-turn-rays 60s linear infinite}
-.sn-star i{position:absolute;inset:18%;background:radial-gradient(circle,#FFFFFF 0,#FFF2C6 30%,#F1C77A 60%);clip-path:polygon(50% 0,59% 35%,85% 15%,65% 41%,100% 50%,65% 59%,85% 85%,59% 65%,50% 100%,41% 65%,15% 85%,35% 59%,0 50%,35% 41%,15% 15%,41% 35%);filter:drop-shadow(0 0 10px #FFE7A8);animation:sn-twinkle 3.2s ease-in-out infinite alternate}
-@keyframes sn-turn-rays{to{transform:rotate(360deg)}}
-@keyframes sn-twinkle{from{scale:.9;opacity:.85}to{scale:1.06;opacity:1}}
+.sn-star{position:absolute;left:50%;top:-16%;width:50%;aspect-ratio:1;translate:-50% 0;background:url("images/sanctuary/star.webp") 50% 50%/100% 100% no-repeat;pointer-events:none;animation:sn-twinkle 3.2s ease-in-out infinite alternate}
+@keyframes sn-twinkle{from{scale:.92;opacity:.82}to{scale:1.05;opacity:1}}
 /* Lent and Passion Week: a violet veil across the window */
-.sn-veil{position:absolute;left:5%;right:5%;top:36%;width:90%;height:19%;filter:drop-shadow(0 8px 10px rgb(0 0 0 / .45));pointer-events:none}
-/* the Resurrection: white lilies at the ends of the sill */
-.sn-lily{position:absolute;bottom:7.2%;inset-inline-start:-2%;width:14%;height:auto;pointer-events:none;filter:drop-shadow(0 6px 8px rgb(0 0 0 / .45))}
-.sn-lily.is-flip{inset-inline-start:auto;inset-inline-end:-1%;scale:-1 1}
+.sn-veil{position:absolute;left:7%;width:86%;top:40%;aspect-ratio:1000 / 450;background:url("images/sanctuary/veil.webp") 0 0/100% 100% no-repeat;filter:drop-shadow(0 1.2cqw 1.2cqw rgb(0 0 0 / .45));pointer-events:none}
+/* the Resurrection: the paschal candle on its stand at the end of the sill, the Alpha above its
+   cross, the Omega below, and the year's four figures between the arms */
+.sn-paschal{position:absolute;bottom:8%;inset-inline-start:.5%;height:42%;aspect-ratio:160 / 900;background:url("images/sanctuary/paschal.webp") 0 0/100% 100% no-repeat;pointer-events:none;filter:drop-shadow(0 .8cqw 1cqw rgb(0 0 0 / .45))}
+.sn-paschal b{position:absolute;translate:-50% -50%;font:400 1.3cqw/1 Georgia,"Times New Roman",serif;color:#9E1B17;text-shadow:0 .06cqw 0 rgb(255 240 210 / .5)}
+.sn-pa-alpha,.sn-pa-omega{left:50%;font-size:2.3cqw!important}
+.sn-pa-alpha{top:13.6%}
+.sn-pa-omega{top:50.4%}
+.sn-pa-y0{left:36%;top:24%}.sn-pa-y1{left:64%;top:24%}.sn-pa-y2{left:36%;top:33%}.sn-pa-y3{left:64%;top:33%}
+.sn-paschal-flame{position:absolute;left:50%;bottom:calc(98.9% - .8cqw);width:4cqw;height:10cqw;margin-left:-2cqw;background:url("images/sanctuary/flame.webp") 50% 100%/100% 100% no-repeat;transform-origin:50% 90%;animation:sn-flicker 2.6s ease-in-out infinite}
+.sn-paschal-flame::after{content:"";position:absolute;left:50%;top:62%;width:26cqw;aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,rgb(255 200 120 / .42),rgb(255 150 60 / .12) 38%,transparent 70%)}
 /* Narrow and tall screens: the words take the top, so the window rises behind them, dimmer. */
 @media(max-width:1099px),(max-aspect-ratio:4/5){
   .sanctuary{--stage-h:min(70svh,118vw * 1300 / 1080)}
@@ -109,7 +111,7 @@
   [dir=rtl] .sn-stage{translate:-50% 0}
   .sn-lamp{display:none}
   .sn-candles,.sn-inscription{display:none}
-  .sanctuary[data-season] .sn-cross-light,.sanctuary[data-season] .sn-lily{display:none}
+  .sanctuary[data-season] .sn-cross-light,.sanctuary[data-season] .sn-paschal{display:none}
   .sn-arcade{width:100%;opacity:.7}
   .sn-wall{background-size:806px 403px}
   .sn-spill{background:radial-gradient(ellipse 60% 40% at 50% 70%,var(--spill-a),transparent 70%)}
@@ -119,6 +121,6 @@
 @media(prefers-reduced-motion:reduce){
   .sn-haze i,.sn-clouds,.sn-backlight,.sn-beam,.sn-lamp,.sn-lamp-glow,.sn-lamp-flame,.sn-candle.is-lit .sn-flame,.sn-candle.is-lit .sn-halo{animation:none}
   .sn-flame,.sn-halo{transition:none}
-  .sn-cross-light,.sn-star::before,.sn-star i{animation:none}
+  .sn-cross-light,.sn-star,.sn-paschal-flame{animation:none}
 }
 @media print{.sanctuary{display:none}}
