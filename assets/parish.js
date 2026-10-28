@@ -1,12 +1,12 @@
-/* A parish's public page, in the homepage's language. Without a photograph the valley at
-   night flies in to the parish's own light; with one, the photograph fills the hero. Then
+/* A parish's public page, in the homepage's language. Without a photograph the hero is the
+   parish's own church at night, its candle lit on the sill; with one, the photograph fills it. Then
    the parish's story, Mass times, calendar, ministries and clergy, requests, news,
    photographs and the way there, with its neighbours on the map. A section the parish has
    not published stays out rather than fill the page with placeholders. */
-import { valleyMarkup, mountValley } from './home-valley.js';
 import { mapMarkup, mountMap, locate, projection } from './home-map.js';
 import { animateHome, scrollToTarget } from './home-motion.js';
-import { monogram, dioceseName, digits, noun, paragraphs, watchHero } from './home.js';
+import { monogram, initialOf, dioceseName, digits, noun, paragraphs, watchHero } from './home.js';
+import { sanctuaryMarkup, mountSanctuary } from './home-sanctuary.js';
 import { calendarMarkup, mountCalendar, kindName, icsHref, icsAllHref, icsName, googleHref, beirutNow as beirut, ADD_ICON } from './public-calendar.js';
 import { safeRichText } from './rich-text.js';
 
@@ -43,7 +43,6 @@ const FORMS = {
   post: { en: ['announcement', 'announcements'], ar: { one: 'إعلان', two: 'إعلانان', few: 'إعلانات', many: 'إعلاناً', other: 'إعلان', zero: 'إعلان' } }
 };
 const term = (c, n, key) => FORMS[key] ? (c.lang === 'ar' ? FORMS[key].ar[PLURAL_AR.select(n)] : FORMS[key].en[n === 1 ? 0 : 1]) : noun(c, n, key);
-const hash = value => [...String(value)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const KM = projection.ky / 111.2;   // map units per kilometre, north to south
 let teardown = [];
 
@@ -169,8 +168,11 @@ function hero(c, p, d, f) {
   const fe = feast(c, f), live = https(f.visit.livestream), massTime = mass && massWhen(c, mass);
   const stat = (n, key) => n ? `<li><b data-count="${n}">${c.number(n)}</b><span>${term(c, n, key)}</span></li>` : '';
   const stats = [stat(month, 'upcoming'), stat((d.ministries || []).length, 'ministry'), stat((d.posts || []).length, 'post')].join('');
-  const art = f.photos[0] ? `<div class="ph-photo"><img src="${safe(f.photos[0])}" alt="" decoding="async" fetchpriority="high"></div>` : valleyMarkup();
-  return `<section class="hero ph" id="top" data-hero ${f.photos[0] ? 'data-photo' : 'data-push="1.22"'} aria-labelledby="ph-title">
+  /* Without a photograph, the parish's own church at night: its initial in the glass, its name
+     gilded on the sill, and its candle among the others (assets/home-sanctuary.js). */
+  const art = f.photos[0] ? `<div class="ph-photo"><img src="${safe(f.photos[0])}" alt="" decoding="async" fetchpriority="high"></div>`
+    : sanctuaryMarkup({ inscription: f.name, seed: p.id, initial: initialOf(f.name) });
+  return `<section class="hero ph${f.photos[0] ? '' : ' hero-sanctuary'}" id="top" data-hero ${f.photos[0] ? 'data-photo' : ''} aria-labelledby="ph-title">
     <div class="hero-art" data-scene>${art}</div><div class="hero-shade" aria-hidden="true"></div>
     <div class="site-wrap hero-inner ph-inner">
       <nav class="ph-crumbs" aria-label="${safe(L('Breadcrumb', 'مسار التنقّل'))}" data-hero-rise><a href="public.html#directory">${L('All parishes', 'كل الرعايا')}</a><span aria-hidden="true">/</span><span aria-current="page">${safe(f.name)}</span></nav>
@@ -391,19 +393,13 @@ export function mountParish(root, c, p, d) {
   if (!page) return;
   const f = facts(c, p, d), hero = page.querySelector('[data-hero]');
   teardown.push(watchHero(hero));
-  /* The valley: one light, this parish's, at a village of its own; the camera flies in to it. */
+  /* The parish's church: its own candle is lit on the sill; choosing it goes to the visit details. */
   const host = page.querySelector('[data-scene]');
-  if (host?.querySelector('[data-valley]')) {
-    const valley = mountValley(host, [{ id: p.id, name: f.name, town: f.town }], { start: hash(p.id) % 4, label: true, tip: page.querySelector('[data-hero-tip]'), onPick: () => scrollToTarget(page.querySelector('#contact')) });
-    const aim = () => {
-      const light = host.querySelector('.valley-light'), box = valley.valley.getBoundingClientRect();
-      if (!light || light.hidden || !box.width) return;
-      const r = light.getBoundingClientRect();
-      valley.valley.style.transformOrigin = `${((r.left + r.width / 2 - box.left) / box.width * 100).toFixed(2)}% ${((r.top + r.height / 2 - box.top) / box.height * 100).toFixed(2)}%`;
-    };
-    aim();
-    page._valley = valley;
-    teardown.push(() => valley.destroy());
+  if (host?.querySelector('[data-sanctuary]')) {
+    const { L } = c;
+    const scene = mountSanctuary(host, [{ id: p.id, name: f.name, town: f.town }], { tip: page.querySelector('[data-hero-tip]'),
+      words: { light: L('Light a candle', 'أضئ شمعة'), lit: L('A candle lit for your intention', 'شمعة مضاءة على نيّتك') }, onPick: () => scrollToTarget(page.querySelector('#contact')) });
+    teardown.push(() => scene.destroy());
   }
   const removeNav = navMount(page);
   teardown.push(removeNav);
@@ -416,7 +412,7 @@ export function mountParish(root, c, p, d) {
   shareMount(page, c);
   mapMount(page, c, p, f);
   lightboxMount(page, c, f);
-  animateHome(page, { onDawn: () => page._valley?.loadDawn() });
+  animateHome(page);
 }
 export function unmountParish() { teardown.forEach(fn => fn?.()); teardown = []; }
 
@@ -490,8 +486,8 @@ function lightboxMount(page, c, f) {
 }
 
 /* ---------- the parish's other pages: a request, the full calendar ---------- */
-const subHero = (c, p, f, here, heading, lede) => `<section class="sub-hero" data-hero aria-labelledby="sub-title">
-    <div class="sub-art" aria-hidden="true"><img src="assets/images/valley/valley-wide-dusk-far.webp" alt=""><img src="assets/images/valley/valley-wide-dusk-near.webp" alt=""></div>
+const subHero = (c, p, f, here, heading, lede) => `<section class="sub-hero is-sanctuary" data-hero aria-labelledby="sub-title">
+    <div class="sub-art sub-sanctuary" aria-hidden="true">${sanctuaryMarkup({ seed: p.id, initial: initialOf(f.name) })}</div>
     <div class="site-wrap sub-inner">
       <nav class="ph-crumbs" aria-label="${c.safe(c.L('Breadcrumb', 'مسار التنقّل'))}" data-hero-rise><a href="public.html#directory">${c.L('All parishes', 'كل الرعايا')}</a><span aria-hidden="true">/</span><a href="${c.safe(c.profileURL(p.id))}">${c.safe(f.name)}</a><span aria-hidden="true">/</span><span aria-current="page">${c.safe(here)}</span></nav>
       <h1 class="hero-title" id="sub-title">${heading}</h1>${lede ? `<p data-hero-rise>${lede}</p>` : ''}
@@ -593,7 +589,13 @@ export function mountSubpage(root, c, p, d) {
   teardown.push(watchHero(page.querySelector('[data-hero]')));
   if (page.querySelector('[data-pcal]')) teardown.push(mountCalendar(page, d.events || [], { L: c.L, lang: c.lang, place: [f.name, f.town].filter(Boolean).join(', '), link: e => c.eventURL(p.id, e.id) }));
   shareMount(page, c);
+  teardown.push(bannerMount(page));
   animateHome(page, {});
+}
+/* The parish's window above its other pages: its light by the hour, without the candles. */
+function bannerMount(page) {
+  const host = page.querySelector('.sub-sanctuary');
+  return host ? mountSanctuary(host, [], { tip: null, words: { light: '', lit: '' }, onPick() {} }).destroy : () => {};
 }
 
 /* Pages without a parish (For parishes, a page that could not be shown): the header and motion only. */
@@ -602,5 +604,6 @@ export function mountPlain(root) {
   const page = root.querySelector('[data-plain-page]');
   if (!page) return;
   teardown.push(watchHero(page.querySelector('[data-hero]')));
+  teardown.push(bannerMount(page));
   animateHome(page, {});
 }

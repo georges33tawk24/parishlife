@@ -20,8 +20,8 @@ html{scroll-padding-top:calc(var(--header) + 72px)}
   /* palette: see the token table in docs/homepage-design.md */
   --night:#0E1A31;--night-deep:#08101F;--night-2:#15233F;--lapis:#2A4A96;--lapis-ink:#213C80;
   --gilt:#D7A548;--gilt-hi:#F1C77A;--gilt-ink:#80601C;--limestone:#E6DED0;--stone-line:#D6CAB6;
-  --mist:#F3F5F7;--white:#FFFFFF;--cedar:#1F3A2E;--sanctuary:#B23A2B;
-  --ink:#15203A;--ink-2:#4A5468;--hair:#D7DCE4;--hair-dark:rgba(230,222,208,.16);
+  --mist:#F5F1E8;--white:#FFFFFF;--cedar:#1F3A2E;--sanctuary:#B23A2B;
+  --ink:#15203A;--ink-2:#4A5468;--hair:#E0D7C7;--hair-dark:rgba(230,222,208,.16);
   --on-night:#EEF1F6;--on-night-2:#B9C3D6;--on-night-3:#8E9AB2;
   --display:"Marcellus","Amiri",Georgia,"Times New Roman",serif;
   --sans:"Source Sans 3","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -33,8 +33,8 @@ html{scroll-padding-top:calc(var(--header) + 72px)}
   --section-pad:clamp(64px,min(9vw,15svh),136px);
   --arch:clamp(26px,5vw,76px);
   /* the earlier public tokens, retuned so parish pages share the new identity */
-  --paper:#F3F5F7;--paper-rgb:243 245 247;--forest:#1F3A2E;--forest-rgb:31 58 46;--forest-hover:#2B4C3D;--deep-rgb:14 26 49;
-  --muted:#4A5468;--line:#D7DCE4;--soft:#EAEEF3;--gold:#D7A548;--sage:#6D7F99;--sage-soft:#AAB5C6;--icon:#2A4A96;
+  --paper:#F5F1E8;--paper-rgb:245 241 232;--forest:#1F3A2E;--forest-rgb:31 58 46;--forest-hover:#2B4C3D;--deep-rgb:14 26 49;
+  --muted:#4A5468;--line:#E0D7C7;--soft:#EEE7DA;--gold:#D7A548;--sage:#6D7F99;--sage-soft:#AAB5C6;--icon:#2A4A96;
   font-family:var(--sans);color:var(--ink);background:var(--mist)
 }
 body{font-family:var(--sans);font-size:17px;line-height:1.6;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
@@ -54,7 +54,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .skip-link{background:var(--night);color:var(--on-night);border-radius:0 0 10px 10px;z-index:100}
 
 /* ---------- header ---------- */
-.site-header{position:sticky;top:0;z-index:40;color:var(--ink);background:rgb(243 245 247 / .88);backdrop-filter:saturate(1.3) blur(14px);-webkit-backdrop-filter:saturate(1.3) blur(14px);
+.site-header{position:sticky;top:0;z-index:40;color:var(--ink);background:rgb(var(--paper-rgb) / .88);backdrop-filter:saturate(1.3) blur(14px);-webkit-backdrop-filter:saturate(1.3) blur(14px);
   border-bottom:1px solid var(--hair);transition:background-color .45s,color .45s,border-color .45s}
 body.over-hero .site-header{background:transparent;border-color:transparent;color:var(--on-night);backdrop-filter:none;-webkit-backdrop-filter:none}
 body.over-hero.is-scrolled .site-header{background:rgb(8 16 31 / .72);border-color:rgb(230 222 208 / .1);backdrop-filter:saturate(1.2) blur(16px);-webkit-backdrop-filter:saturate(1.2) blur(16px)}

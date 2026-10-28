@@ -56,7 +56,7 @@ function rose(random) {
 }
 
 /* A lancet: a jewelled border, pale diamond quarries, and a medallion. */
-function lancet(random, x0, motif) {
+function lancet(random, x0, motif, ground = GLASS.deep) {
   const w = 350, cx = x0 + w / 2, cy = 760, r = w / 2, bottom = 1170, band = 20, out = [];
   const id = `sn-l${x0}`;
   out.push(`<clipPath id="${id}"><path d="M${x0 + band} ${bottom - band}V${cy}A${r - band} ${r - band} 0 0 1 ${x0 + w - band} ${cy}V${bottom - band}Z"/></clipPath>`);
@@ -81,13 +81,19 @@ function lancet(random, x0, motif) {
   // the medallion
   const mx = cx, my = 920, mr = 116;
   out.push(`<circle cx="${mx}" cy="${my}" r="${mr}" fill="${vary(GLASS.gold, random, .06)}"/>`);
-  for (let i = 0; i < 8; i++) out.push(piece(sector(mx, my, 0, mr - 14, i * Math.PI / 4, (i + 1) * Math.PI / 4), vary(GLASS.deep, random, .1)));
+  for (let i = 0; i < 8; i++) out.push(piece(sector(mx, my, 0, mr - 14, i * Math.PI / 4, (i + 1) * Math.PI / 4), vary(ground, random, .1)));
   out.push(motif(mx, my, random));
   out.push(`</g><g class="sn-tracery" fill="none"><circle cx="${mx}" cy="${my}" r="${mr}" stroke-width="6"/><circle cx="${mx}" cy="${my}" r="${mr - 14}" stroke-width="4"/>
     <path d="M${x0} 700H${x0 + w}M${x0} 1050H${x0 + w}" stroke-width="7"/></g>`);
   out.push(`<path class="sn-frame" d="M${x0} ${bottom}V${cy}A${r} ${r} 0 0 1 ${x0 + w} ${cy}V${bottom}Z" fill="none" stroke-width="16"/>`);
   return out.join('');
 }
+/* A parish's initial, in gold, as the medallion of its own window. Arabic mirrors the window,
+   so the letter is turned back to read rightly. */
+const letter = ch => (mx, my) => {
+  const rtl = document.documentElement.dir === 'rtl', ar = /[\u0600-\u06FF]/.test(ch);
+  return `<text x="${mx}" y="${my + (ar ? 30 : 44)}" text-anchor="middle" font-family="${ar ? 'Amiri, serif' : 'Marcellus, Georgia, serif'}" font-weight="${ar ? 700 : 400}" font-size="${ar ? 128 : 124}" fill="${GLASS.gold}" stroke="${LEAD}" stroke-width="3" paint-order="stroke"${rtl ? ` transform="translate(${mx * 2} 0) scale(-1 1)"` : ''}>${ch}</text>`;
+};
 /* The cedar of Lebanon, in tiers of green glass. */
 function cedar(mx, my, random) {
   const tiers = [[-78, 46, 44], [-64, 38, 18], [-50, 30, -6], [-36, 22, -30], [-22, 15, -52]];
@@ -118,8 +124,10 @@ const glassClip = id => `<clipPath id="${id}">${Object.values(GLASS_SHAPES).join
 
 /* The window: stone surround, glass, tracery and sill. It never changes once drawn, so the
    browser paints its textures once; the light that moves is a second layer (lightSVG). */
-function windowSVG() {
-  const random = rng(19);
+const GROUNDS = [GLASS.deep, GLASS.wine, GLASS.moss, GLASS.violet];
+const seedOf = text => [...String(text)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+function windowSVG({ seed = '', initial = '' } = {}) {
+  const random = rng(seed ? seedOf(seed) : 19), ground = seed ? GROUNDS[seedOf(seed) % GROUNDS.length] : GLASS.deep;
   const voussoirs = [];
   for (let a = 180; a <= 360; a += 7.5) {
     const t = a * Math.PI / 180, [x0, y0] = polar(500, 500, 430, t), [x1, y1] = polar(500, 500, 490, t);
@@ -142,7 +150,7 @@ function windowSVG() {
     <path d="M478 22h44l6 50h-56Z" fill="#7A6754" stroke="#16110E" stroke-width="3"/>
     <path d="M70 1190V500A430 430 0 0 1 930 500V1190" fill="none" stroke="#7E6B57" stroke-width="5" opacity=".6"/>
     <g class="sn-glass" stroke="${LEAD}" stroke-width="3.2" stroke-linejoin="round">
-      ${rose(random)}${lancet(random, 120, cedar)}${lancet(random, 530, chalice)}${oculus(random, 185, 445)}${oculus(random, 815, 445)}
+      ${rose(random)}${initial ? lancet(random, 120, letter(initial), ground) + lancet(random, 530, cedar) : lancet(random, 120, cedar) + lancet(random, 530, chalice)}${oculus(random, 185, 445)}${oculus(random, 815, 445)}
     </g>
     <rect x="0" y="0" width="1000" height="1200" filter="url(#sn-mottle)" opacity=".42" clip-path="url(#sn-glass)" pointer-events="none"/>
     <g class="sn-stonework" stroke-linejoin="round">
@@ -158,6 +166,7 @@ function lightSVG() {
   return `<svg class="sn-light" viewBox="-40 0 1080 1300" aria-hidden="true" focusable="false">
     <defs>
       <radialGradient id="sn-back" cx="50%" cy="40%" r="62%"><stop offset="0" stop-color="#FFF7DE" stop-opacity=".7"/><stop offset=".5" stop-color="#FFE3B0" stop-opacity=".22"/><stop offset="1" stop-color="#FFE3B0" stop-opacity="0"/></radialGradient>
+      <radialGradient id="sn-sun" cx="50%" cy="36%" r="64%"><stop offset="0" style="stop-color:var(--sun-a)" stop-opacity=".85"/><stop offset=".55" style="stop-color:var(--sun-b)" stop-opacity=".3"/><stop offset="1" style="stop-color:var(--sun-b)" stop-opacity="0"/></radialGradient>
       <radialGradient id="sn-warm" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#FFC56A" stop-opacity=".5"/><stop offset="1" stop-color="#FF9A3C" stop-opacity="0"/></radialGradient>
       <linearGradient id="sn-cloud" x1="0" y1="0" x2="1" y2=".35"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".22" stop-color="#000" stop-opacity=".24"/><stop offset=".4" stop-color="#000" stop-opacity="0"/><stop offset=".62" stop-color="#000" stop-opacity=".18"/><stop offset=".8" stop-color="#000" stop-opacity="0"/></linearGradient>
       ${glassClip('sn-glass-light')}
@@ -165,6 +174,7 @@ function lightSVG() {
     <g clip-path="url(#sn-glass-light)">
       <rect class="sn-clouds" x="-1000" y="0" width="3000" height="1200" fill="url(#sn-cloud)"/>
       <rect class="sn-backlight" x="-100" y="0" width="1200" height="1200" fill="url(#sn-back)"/>
+      <rect class="sn-sun" x="0" y="0" width="1000" height="1200" fill="url(#sn-sun)"/>
       <rect class="sn-dawn" x="0" y="0" width="1000" height="1200" fill="url(#sn-warm)"/>
     </g>
     <g fill="#070505">${Object.values(GLASS_SHAPES).map(shape => `<g class="sn-dark">${shape}</g>`).join('')}</g>
@@ -216,7 +226,7 @@ function beamsMarkup() {
   return BEAMS.map((beam, i) => {
     const { outline, from, to } = beamOutline(beam);
     return `<svg class="sn-beam sn-beam-${beam.k}" viewBox="-1600 0 2640 2100" aria-hidden="true" focusable="false"><defs><linearGradient id="sn-beam-${i}" gradientUnits="userSpaceOnUse" x1="${r1(from[0])}" y1="${r1(from[1])}" x2="${r1(to[0])}" y2="${r1(to[1])}">
-      <stop offset=".08" stop-color="rgb(${beam.tint[0]})" stop-opacity="0"/><stop offset=".3" stop-color="rgb(${beam.tint[0]})" stop-opacity=".4"/><stop offset=".66" stop-color="rgb(${beam.tint[1]})" stop-opacity=".14"/><stop offset="1" stop-color="rgb(${beam.tint[1]})" stop-opacity="0"/></linearGradient></defs>
+      <stop offset=".08" stop-color="rgb(${beam.tint[0]})" stop-opacity="0"/><stop offset=".3" stop-color="rgb(${beam.tint[0]})" style="stop-opacity:calc(.4 * var(--beam-k, 1))"/><stop offset=".66" stop-color="rgb(${beam.tint[1]})" style="stop-opacity:calc(.14 * var(--beam-k, 1))"/><stop offset="1" stop-color="rgb(${beam.tint[1]})" stop-opacity="0"/></linearGradient></defs>
       <polygon points="${pts(outline)}" fill="url(#sn-beam-${i})"/></svg>`;
   }).join('');
 }
@@ -287,14 +297,14 @@ function hazeTexture() {
   return canvas.toDataURL('image/png');
 }
 
-export function sanctuaryMarkup({ inscription = '' } = {}) {
+export function sanctuaryMarkup({ inscription = '', seed = '', initial = '' } = {}) {
   return `<div class="sanctuary" data-sanctuary aria-hidden="true">
     <div class="sn-wall">${wallSVG()}</div>
     <div class="sn-arcade">${arcadeSVG()}</div>
     <div class="sn-spill"></div>
     <div class="sn-stage" data-sn-stage>
       <div class="sn-bloom"></div>
-      <div class="sn-window">${windowSVG()}${lightSVG()}</div>
+      <div class="sn-window">${windowSVG({ seed, initial })}${lightSVG()}</div>
       ${inscription ? `<p class="sn-inscription">${inscription.replace(/[&<>"']/g, '')}</p>` : ''}
       <div class="sn-beams">${beamsMarkup()}<div class="sn-haze" style='--mask:${hazeMask()}'><i data-sn-haze></i></div></div>
       <div class="sn-candles" data-sn-candles></div>
@@ -305,9 +315,20 @@ export function sanctuaryMarkup({ inscription = '' } = {}) {
 
 /* places: [{id, name, town}]. Each parish lights one candle on the sill; the empty places keep
    unlit candles, and a visitor may light one. Returns a controller like the valley's. */
+/* The light through the glass follows the hour in Beirut: moonlight, dawn, day or evening.
+   ?light=dawn (or day, dusk, night) shows another hour. */
+export function lightNow(date = new Date()) {
+  const asked = new URLSearchParams(location.search).get('light');
+  if (['night', 'dawn', 'day', 'dusk'].includes(asked)) return asked;
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Beirut', hour: 'numeric', hourCycle: 'h23' }).format(date));
+  return hour >= 5 && hour < 8 ? 'dawn' : hour >= 8 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'dusk' : 'night';
+}
+
 export function mountSanctuary(host, places, { tip, onPick, words }) {
   const box = host.querySelector('[data-sn-candles]');
   if (!box) return { destroy() {} };
+  const scene = host.querySelector('[data-sanctuary]');
+  scene.dataset.light = lightNow();
   host._beams = BEAMS.map(beamOutline);   // for the dust in the light (home-motion.js)
   const random = rng(places.length + 3), total = Math.min(40, Math.max(9, places.length + 5));
   // the parishes stand in the middle of the sill, the unlit candles to either side

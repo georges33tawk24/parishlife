@@ -14,9 +14,13 @@ the nave, a sanctuary lamp on its chains, and candles on the window sill. **Each
 ParishLife is one lit candle**; the shorter candles beside them wait, and a visitor may light one
 for their intention. Everything in it is drawn by the page (SVG and CSS), not downloaded.
 
+The light through the glass follows the hour in Beirut: rose and gold at dawn, strong golden
+shafts by day, amber in the evening, moonlight at night (`?light=dawn`, `day`, `dusk` or `night`
+shows another hour).
+
 Further down, the same idea runs through the page: at dusk in the Lebanese mountains the village
 churches light up across the valley, and on the hand-drawn map of Lebanon each gold light is a
-parish. The valley render stays on parish pages, the sign-in screen and the closing section.
+parish. The valley render stays on the sign-in screen and the closing section.
 
 ## Tokens
 
@@ -26,7 +30,7 @@ parish. The valley render stays on parish pages, the sign-in screen and the clos
 | Lapis | `#2A4A96` | Links, focus, interactive accents (the blue of icon mantles) |
 | Gilt | `#D7A548` | Parish lights, the selected state, primary buttons on dark |
 | Limestone | `#E6DED0` | Stone planes behind images and quotes |
-| Mist | `#F3F5F7` | Page background, a cool morning white (warm limestone `#F5F1E8` on the homepage) |
+| Mist | `#F5F1E8` | Page background, warm limestone; hairlines `#E0D7C7` |
 | Cedar | `#1F3A2E` | Brand mark and the land on the map |
 | Sanctuary red | `#B23A2B` | Only "today": an event happening today, like the lamp that is always lit |
 
@@ -147,9 +151,11 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
 
 A parish's page (`public.html?parish=…`) speaks the homepage's language:
 
-- **Hero:** without a photograph, the valley flies in to the parish's own gold light, named, at a
-  village of its own (chosen from the parish id, so it stays put). With a photograph, the photograph
-  fills the hero. Then the parish's name in both languages, a plain line built from its town, rite
+- **Hero:** without a photograph, the parish's own church at night: the same window, with the
+  parish's initial in gold in one medallion (on a ground of its own colour, chosen from the parish
+  id) and the cedar in the other, its name gilded on the sill, and its candle lit among the others
+  (choosing it goes to the visit details). With a photograph, the photograph fills the hero. The
+  parish's other pages (request, calendar, event) open under the top of its window. Then the parish's name in both languages, a plain line built from its town, rite
   and diocese (or its own welcome text), the next Mass ("Today at 18:00 · in 2 hours", by Beirut's
   clock, marked "Beirut time" for a visitor abroad), the way to ask the office, the livestream when
   there is one, sharing (WhatsApp, copy the link, the phone's own sheet), and the next published

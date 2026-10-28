@@ -1,3 +1,4 @@
+import { sanctuaryMarkup } from './home-sanctuary.js';
 import { mountTurnstile } from './turnstile.js';
 import { trackAction } from './beacon.js';
 import { paginateCollections } from './collection-ui.js';
@@ -108,7 +109,7 @@ export function bundlePage(){
     [L('No online payment','لا دفع إلكتروني'),L('Subscriptions are managed manually at present. No online payment or automatic billing is configured.','تُدار الاشتراكات يدوياً حالياً. لا توجد دفعات إلكترونية أو فوترة تلقائية.')],
     [L('Records stay readable','تبقى السجلات قابلة للقراءة'),L('Existing records remain available to read when a module is removed.','تبقى السجلات قابلة للقراءة عند إزالة وحدة.')]];
   return `<div class="parish-sub fp" data-plain-page>
-    <section class="sub-hero" data-hero aria-labelledby="sub-title"><div class="sub-art" aria-hidden="true"><img src="assets/images/valley/valley-wide-dusk-far.webp" alt=""><img src="assets/images/valley/valley-wide-dusk-near.webp" alt=""></div>
+    <section class="sub-hero is-sanctuary" data-hero aria-labelledby="sub-title"><div class="sub-art sub-sanctuary" aria-hidden="true">${sanctuaryMarkup()}</div>
       <div class="site-wrap sub-inner"><nav class="ph-crumbs" aria-label="${L('Breadcrumb','مسار التنقّل')}" data-hero-rise><a href="public.html">ParishLife</a><span aria-hidden="true">/</span><span aria-current="page">${L('For parishes','للرعايا')}</span></nav>
         <h1 class="hero-title" id="sub-title">${L('Choose what your parish needs','اختر ما تحتاجه رعيتك')}</h1>
         <p data-hero-rise>${L('Start with a public presence or add tools for your parish office and community. Arrangements can cover one parish or several parishes in a diocese.','ابدأ بحضور عام أو أضف أدوات للمكتب والمجتمع الرعوي. يمكن أن يشمل الترتيب رعية واحدة أو عدة رعايا في أبرشية.')}</p></div></section>

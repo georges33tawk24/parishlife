@@ -68,11 +68,13 @@ const hash = value => [...String(value)].reduce((h, ch) => (h * 31 + ch.charCode
 
 /* A parish or story without a photograph gets a monogram in a stone arch: honest, never a borrowed picture. */
 const PREFIX = /^(saint|st\.?|sts\.?|our lady of|notre[- ]dame( de)?|mar|mart|سيدة|القديس(ة)?|مار|مارت)\s+/i;
-export function monogram(name) {
+export function initialOf(name) {
   // the article goes (المخلّص → م), but not from names that begin with it (الياس → ا)
   const clean = String(name || '').trim().replace(PREFIX, '').replace(/^ال(?!ي)/, '');
-  const ch = [...clean][0] || [...String(name || '·')][0];
-  return `<span class="monogram" aria-hidden="true"><b>${ch.replace(/[&<>"']/g, '')}</b></span>`;
+  return ([...clean][0] || [...String(name || '·')][0]).replace(/[&<>"']/g, '');
+}
+export function monogram(name) {
+  return `<span class="monogram" aria-hidden="true"><b>${initialOf(name)}</b></span>`;
 }
 
 export function homeView(c) {
