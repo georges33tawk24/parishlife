@@ -45,14 +45,15 @@ Left-aligned in English and mirrored in Arabic. The map never mirrors: geography
 │    wherever you are in Lebanon.
 │    [ Parish, town or village ……………… ] [Search]
 │
-├─ THIS WEEK: the next Masses and events across parishes; a red lamp marks today
+├─ THIS WEEK: the seven days as a ribbon (a red lamp marks today, dots mark what is published) and the
+│    week's celebrations as cards with a date arch and an add-to-calendar button; a day narrows them
 │
 ├─ DIRECTORY: [ map of Lebanon, relief lines, parish lights ] [ parish list, arch photos ]
 │
 ├─ ASK YOUR PARISH: baptism · first communion · confirmation · marriage · funeral · certificate,
 │    then the three steps (send · the office reviews · follow with your private link)
 │
-├─ MASS TIMES: one entry per parish, from each parish's Website content
+├─ MASS TIMES: one entry per parish, from each parish's Website content (a slim band until one is published)
 ├─ FROM THE PARISHES: latest published announcements
 ├─ STORIES: slides managed in the dashboard Homepage editor
 ├─ VERSE: "Let your light shine before others" (Matthew 5:16), lit word by word as it is read
@@ -107,6 +108,10 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
 - **Under the pointer** (mouse or trackpad only): gold buttons lean toward it, arches and ministry
   cards tilt a few degrees with a sheen that follows it, and on the night sections a candle's glow
   follows it. The stories row can be dragged and glides to a stop.
+- **Fireflies:** warm sparks rise slowly from the villages and flicker out (a small canvas that sleeps
+  while the hero is out of view).
+- **Arched edges:** each night section rises into the section above with the curve of a window's arch,
+  and the first light section rises the same way over the hero.
 - **Small things:** a gold rule draws under each section heading as it arrives; map lights send out
   a slow ripple; a scroll cue sits at the foot of the hero; a gold line under the header shows how
   far the page has been read; moving between public pages cross-fades (cross-document view
@@ -138,13 +143,25 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   private tracking link with a copy button. **Tracking** (`#track=…`) shows where the request stands
   as four steps. **Calendar page** (`&view=calendar`): the calendar on its own.
 
+## Other public pages
+
+- **For parishes** (`public.html?view=bundles`, "ParishLife bundles" in the footer): the four bundles as
+  arches, one gold light for each step up, with what each includes; how a parish joins; the practical
+  notes on subscriptions; and a call to the members portal.
+- **A page that could not be shown** (an unknown parish, a directory that did not load, a parish that
+  takes requests only through its office): an unlit lamp in an arch, what happened, and the way back.
+- **Phone menu:** the whole screen at night, the links rising one by one, the valley's villages at the
+  foot and the members portal as the one gold button.
+
 ## Sign in and sign up
 
 The members portal opens on the valley at dusk beside a compact form, in the public site's type
 and colours (`assets/auth.css`, scoped to `.account-auth`). Every field and check of the account
 form is kept; sign-up pairs its fields (names, email and phone, the two passwords) so it fits one
 screen, and passwords can be shown. The way to sign in (username, email or phone) is a choice of
-three, not a dropdown.
+three, not a dropdown. The portal stops the page itself from scrolling (its panels scroll inside), so the
+sign-in screen is its own scrolling area, with the valley pinned beside the form; on short laptop screens
+the spacing tightens so signing in fits without scrolling.
 
 ## Content and the dashboard
 

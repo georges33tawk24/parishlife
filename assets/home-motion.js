@@ -39,6 +39,7 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
     const stops = [
       hero && heroMotion(gsap, hero, onDawn),
       hero && context.conditions.fine && pointerDepth(gsap, hero),
+      hero && fireflies(hero),
       context.conditions.fine && magnetic(gsap, root),
       context.conditions.fine && tilt(root),
       context.conditions.fine && candle(root),
@@ -82,7 +83,7 @@ function heroMotion(gsap, hero, onDawn) {
   if (title && window.SplitText) {
     // Words only: Arabic letters must stay joined.
     const split = window.SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
-    intro.from(split.words, { yPercent: 118, rotate: 3, duration: 1.5, stagger: 0.075 }, 0.55);
+    intro.from(split.words, { yPercent: 145, rotate: 3, duration: 1.5, stagger: 0.075 }, 0.55);
   } else if (title) intro.from(title, { y: 30, opacity: 0, duration: 1.2 }, 0.55);
   add(intro, 'from', '[data-hero-rise]', { y: 26, opacity: 0, duration: 1.2, stagger: 0.12 }, 1.15);
   add(intro, 'from', '.valley-light', { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, push ? 3.4 : 1.9);
@@ -103,11 +104,65 @@ function heroMotion(gsap, hero, onDawn) {
   add(day, 'to', '.vl-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
   add(day, 'to', '.vl-glow, .shooting-star', { opacity: 0 }, 0);
   add(day, 'to', '.vl-lights', { opacity: 0.2 }, 0.1);
+  add(day, 'to', '.vl-embers', { opacity: 0 }, 0);
   add(day, 'to', '.ph-photo img', { yPercent: 12, scale: 1.1 }, 0);
   add(day, 'to', '.sub-art', { yPercent: 18 }, 0);
   add(day, 'to', '.ph-next', { yPercent: -40, opacity: 0, ease: 'power1.in' }, 0);
   add(day, 'to', '.hero-inner, .sub-inner', { yPercent: -18, opacity: 0, ease: 'power1.in' }, 0);
   return () => intro.kill();
+}
+
+/* Warm sparks rise slowly from the villages, flicker and fade: the valley breathing at night.
+   A canvas inside the valley art; it sleeps while the hero is out of view or the tab is hidden. */
+function fireflies(hero) {
+  const art = hero.querySelector('.hero-art');
+  if (!art || !hero.querySelector('[data-valley]')) return null;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'vl-embers';
+  canvas.setAttribute('aria-hidden', 'true');
+  art.appendChild(canvas);
+  const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1), rtl = document.documentElement.dir === 'rtl';
+  const sprite = document.createElement('canvas');
+  sprite.width = sprite.height = 32;
+  const s = sprite.getContext('2d'), g = s.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(0.25, 'rgba(255,205,120,.7)'); g.addColorStop(1, 'rgba(215,165,72,0)');
+  s.fillStyle = g; s.fillRect(0, 0, 32, 32);
+  let w = 0, h = 0, frame = 0, last = 0, running = false;
+  const sparks = [];
+  const size = () => { w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; };
+  const spawn = (fresh = false) => {
+    // mostly over the far side of the valley, where the villages glow
+    const side = Math.random() < 0.75 ? 0.42 + Math.random() * 0.56 : Math.random() * 0.42;
+    return { x: (rtl ? 1 - side : side) * w, y: h * (0.5 + Math.random() * 0.32), vy: -(5 + Math.random() * 12), sway: 6 + Math.random() * 14,
+      phase: Math.random() * 6.28, r: 3 + Math.random() * 5, life: 0, span: 7 + Math.random() * 9, age: fresh ? Math.random() * 6 : 0 };
+  };
+  const tick = now => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of sparks) {
+      p.age += dt;
+      const t = p.age / p.span;
+      if (t >= 1) { Object.assign(p, spawn()); continue; }
+      p.y += p.vy * dt;
+      const x = p.x + Math.sin(p.phase + p.age * 0.9) * p.sway;
+      const flicker = 0.65 + 0.35 * Math.sin(p.phase * 3 + p.age * 5.3);
+      ctx.globalAlpha = Math.sin(Math.PI * t) * flicker * 0.55;
+      ctx.drawImage(sprite, x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+    }
+    if (running) frame = requestAnimationFrame(tick);
+  };
+  const start = () => { if (running || document.hidden) return; running = true; last = 0; frame = requestAnimationFrame(tick); };
+  const stop = () => { running = false; cancelAnimationFrame(frame); };
+  size();
+  for (let i = 0; i < 38; i++) sparks.push(spawn(true));
+  const ro = new ResizeObserver(size); ro.observe(art);
+  const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
+  io.observe(hero);
+  const vis = () => (document.hidden ? stop() : start());
+  document.addEventListener('visibilitychange', vis);
+  return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
 }
 
 /* The layers drift with the pointer at different depths. */
@@ -211,7 +266,7 @@ function headings(gsap, root) {
   if (!window.SplitText) return null;
   const list = [...root.querySelectorAll('section:not([data-hero]) h2')];
   const splits = list.map(h => window.SplitText.create(h, { type: 'words', mask: 'words', aria: 'auto' }));
-  splits.forEach(s => gsap.set(s.words, { yPercent: 115 }));
+  splits.forEach(s => gsap.set(s.words, { yPercent: 145 }));
   const stop = whenSeen(list, els => els.forEach(h => {
     const s = splits[list.indexOf(h)];
     gsap.to(s.words, { yPercent: 0, duration: 1.3, ease: 'expo.out', stagger: 0.06 });

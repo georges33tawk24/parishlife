@@ -5,6 +5,7 @@
 import { valleyMarkup, mountValley } from './home-valley.js';
 import { mapMarkup, locate, mountMap, projection } from './home-map.js';
 import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
+import { icsHref, icsName, kindName, ADD_ICON } from './public-calendar.js';
 import { HOME_DEFAULTS } from './site-defaults.js';
 
 let teardown = [];
@@ -104,7 +105,7 @@ function hero(c) {
       ${announcement}
       <h1 class="hero-title" id="hero-title">${safe(words(c, site?.hero?.title, HOME_DEFAULTS.hero.title))}</h1>
       <p class="hero-lede" data-hero-rise>${safe(words(c, site?.hero?.subtitle, HOME_DEFAULTS.hero.subtitle))}</p>
-      <form class="hero-search" role="search" data-hero-search data-hero-rise>
+      <div class="hero-row"><form class="hero-search" role="search" data-hero-search data-hero-rise>
         <label class="sr-only" for="hero-q">${L('Parish, town or village', 'رعية أو بلدة أو قرية')}</label>
         <div class="hero-field">${SEARCH}<input id="hero-q" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="hero-suggest" placeholder="${safe(L('Parish, town or village', 'رعية أو بلدة أو قرية'))}">
           <button type="submit">${L('Search', 'ابحث')}</button></div>
@@ -112,7 +113,7 @@ function hero(c) {
       </form>
       <ul class="hero-facts" data-hero-rise aria-label="${safe(L('ParishLife in numbers', 'ParishLife بالأرقام'))}">
         ${stat(f.parishes, 'parish')}${stat(f.dioceses, 'diocese')}${f.week ? stat(f.week, 'celebration') : stat(f.towns, 'town')}
-      </ul>
+      </ul></div>
     </div>
     <p class="hero-tip" data-hero-tip role="status" hidden></p>
     <a class="scroll-cue" href="#week" data-scroll-cue aria-label="${safe(L('Scroll to this week', 'انتقل إلى هذا الأسبوع'))}"><span aria-hidden="true"></span></a>
@@ -120,26 +121,44 @@ function hero(c) {
 }
 
 /* ---------- this week ---------- */
+/* The seven days as a ribbon (a red lamp marks today, dots mark what is published), and the
+   week's celebrations as cards beneath; choosing a day narrows the cards to it. */
 function week(c) {
   const { L, safe } = c, { days, all, inWeek } = weekEvents(c), loc = c.lang === 'ar' ? 'ar-LB' : 'en-GB';
-  const kind = e => ({ mass: L('Mass', 'قدّاس'), event: L('Gathering', 'لقاء'), wedding: L('Wedding', 'إكليل'), baptism: L('Baptism', 'معمودية'), funeral: L('Funeral', 'جنّاز') })[e.kind] || L('Parish event', 'حدث رعوي');
+  const kind = e => kindName(L, e.kind);
+  const date = d => new Date(d + 'T12:00:00');
   const head = `<header class="sec-head" data-reveal><h2 id="week-title">${L('This week', 'هذا الأسبوع')}</h2><p>${L('Masses and celebrations the parishes have published for the next seven days.', 'القداديس والاحتفالات التي نشرتها الرعايا للأيام السبعة المقبلة.')}</p></header>`;
+  const card = (e, later = false) => {
+    const title = c.pair(e, 'title', 'titleAr') || kind(e), d = date(e.d), place = [c.parishName(e.parish), c.townName(e.parish)].filter(Boolean).join(L(', ', '، '));
+    return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-day="${safe(e.d)}" data-reveal-item>
+      <a class="wk-ev-link" href="${safe(c.calendarURL(e.parish.id))}">
+        <span class="wk-date" aria-hidden="true"><small>${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(d))}</small><b>${safe(digits(c, d.getDate()))}</b><small>${safe(new Intl.DateTimeFormat(loc, { month: 'short' }).format(d))}</small></span>
+        <span class="wk-body">${later ? `<span class="wk-later">${L('Coming later', 'لاحقاً')}</span>` : ''}
+          <span class="wk-meta">${e.t ? `<time>${safe(digits(c, e.t))}</time>` : ''}<span class="wk-kind">${safe(kind(e))}</span></span>
+          <strong dir="auto">${safe(title)}</strong>
+          <span class="wk-where">${PIN}${safe(place)}</span>
+          <span class="sr-only">${safe(new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d))}</span></span></a>
+      <a class="wk-add" href="${icsHref(e, title, place)}" download="${safe(icsName(title))}" aria-label="${safe(L(`Add ${title} to my calendar`, `أضف «${title}» إلى رزنامتي`))}" title="${safe(L('Add to my calendar', 'أضف إلى رزنامتي'))}">${ADD_ICON}</a></li>`;
+  };
+  const tag = inWeek.length ? 'button' : 'span';    // with nothing to filter, the ribbon is only a picture of the week
+  const ribbon = `<ol class="wk-days" aria-label="${safe(L('The next seven days', 'الأيام السبعة المقبلة'))}">${days.map((d, i) => {
+    const n = inWeek.filter(e => e.d === d).length;
+    return `<li><${tag} ${tag === 'button' ? 'type="button" aria-pressed="false" ' : ''}class="wk-day${i === 0 ? ' is-today' : ''}${n ? '' : ' is-quiet'}" data-wk-day="${d}">
+      <span class="wk-dow">${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(date(d)))}</span><b>${safe(digits(c, date(d).getDate()))}</b>
+      <span class="wk-dots" aria-hidden="true">${i === 0 ? '<span class="lamp"></span>' : ''}${'<i></i>'.repeat(Math.min(n, 3))}</span>
+      <span class="sr-only">${safe(i === 0 ? L('Today, ', 'اليوم، ') : '')}${n ? safe(L(`${n} published`, `منشور: ${c.number(n)}`)) : safe(L('nothing published', 'لا شيء منشور'))}</span></${tag}></li>`;
+  }).join('')}</ol>`;
   if (!inWeek.length) {
     const next = all.find(e => e.d > days[6]);
-    const when = next && new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(next.d + 'T12:00:00'));
     return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}
-      <div class="week-empty" data-reveal><span class="lamp is-unlit" aria-hidden="true"></span><div><p class="lead">${L('No celebrations have been published for the next seven days yet.', 'لم تُنشر احتفالات للأيام السبعة المقبلة بعد.')}</p>
-      <p>${next ? `${L('The next one is', 'الاحتفال المقبل:')} <a href="${safe(c.calendarURL(next.parish.id))}">${safe(c.pair(next, 'title', 'titleAr') || kind(next))}, ${safe(when)}, ${safe(c.parishName(next.parish))}</a>.` : L('Parish offices add public Masses and events from their parish calendar in ParishLife.', 'تضيف مكاتب الرعايا القداديس والأحداث العامة من رزنامة الرعية في ParishLife.')}</p></div></div></div></section>`;
+      <div class="wk" data-reveal>${ribbon}
+        <div class="wk-quiet"><span class="lamp is-unlit" aria-hidden="true"></span><p>${L('No celebrations have been published for the next seven days yet.', 'لم تُنشر احتفالات للأيام السبعة المقبلة بعد.')}${next ? '' : ` ${L('Parish offices add public Masses and events from their parish calendar in ParishLife.', 'تضيف مكاتب الرعايا القداديس والأحداث العامة من رزنامة الرعية في ParishLife.')}`}</p></div>
+        ${next ? `<ul class="wk-list">${card(next, true)}</ul>` : ''}</div></div></section>`;
   }
-  const columns = days.map((d, i) => {
-    const date = new Date(d + 'T12:00:00'), list = inWeek.filter(e => e.d === d), shown = list.slice(0, 4);
-    const dow = new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(date), dm = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short' }).format(date);
-    return `<li class="day${i === 0 ? ' is-today' : ''}${list.length ? '' : ' is-quiet'}" data-reveal-item>
-      <h3><span class="dow">${safe(dow)}</span><time datetime="${d}">${safe(dm)}</time>${i === 0 ? `<span class="today"><span class="lamp" aria-hidden="true"></span>${L('Today', 'اليوم')}</span>` : ''}</h3>
-      ${list.length ? `<ul>${shown.map(e => `<li><a href="${safe(c.calendarURL(e.parish.id))}">${e.t ? `<time>${safe(digits(c, e.t))}</time>` : ''}<strong>${safe(c.pair(e, 'title', 'titleAr') || kind(e))}</strong><span>${safe(c.parishName(e.parish))}</span></a></li>`).join('')}</ul>${list.length > shown.length ? `<p class="more">${L(`${list.length - shown.length} more`, `وغيرها (${c.number(list.length - shown.length)})`)}</p>` : ''}` : `<p class="quiet"><span aria-hidden="true">—</span><span class="sr-only">${L('Nothing published', 'لا شيء منشور')}</span></p>`}
-    </li>`;
-  }).join('');
-  return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}<ol class="week-days">${columns}</ol></div></section>`;
+  return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}
+    <div class="wk" data-wk>${ribbon}
+      <ul class="wk-list" data-wk-list>${inWeek.map(e => card(e)).join('')}</ul>
+      <p class="wk-none" data-wk-none hidden></p></div></div></section>`;
 }
 
 /* ---------- directory ---------- */
@@ -228,7 +247,12 @@ function times(c) {
       <h3><a href="${safe(c.profileURL(p.id, '#times'))}">${safe(c.parishName(p))}</a></h3><p class="times-town">${safe(c.townName(p))}</p>
       <div class="times-text" dir="auto">${c.htmlText(c.content(c.details.get(p.id), 'massTimes'))}</div></article>`).join('')}</div>
       ${rows.length > 6 ? `<button type="button" class="text-button times-all" data-times-all>${L(`Show all ${rows.length} parishes`, `عرض جميع الرعايا (${c.number(rows.length)})`)}</button>` : ''}`
-    : `<div class="soft-empty" data-reveal><p class="lead">${L('No parish has published its Mass times yet.', 'لم تنشر أي رعية مواعيد قداديسها بعد.')}</p><p>${L('Parish offices add them under Website content in ParishLife.', 'تضيفها مكاتب الرعايا ضمن محتوى الموقع في ParishLife.')}</p></div>`;
+    : '';
+  /* Until a parish publishes its times, the section is a slim band rather than a page of white. */
+  if (!rows.length) return `<section class="times is-empty" id="times" aria-labelledby="times-title"><div class="site-wrap times-slim" data-reveal>
+      <span class="times-mark" aria-hidden="true">${c.icon('cross')}</span>
+      <div><h2 id="times-title">${L('Mass times', 'مواعيد القداديس')}</h2><p>${L('No parish has published its Mass times yet. Parish offices add them under Website content in ParishLife, and they appear here and on the parish’s page.', 'لم تنشر أي رعية مواعيد قداديسها بعد. تضيفها مكاتب الرعايا ضمن محتوى الموقع في ParishLife، فتظهر هنا وفي صفحة الرعية.')}</p></div>
+      <a class="btn btn-ink-line btn-small" href="#directory" data-jump>${L('Find a parish', 'ابحث عن رعية')}</a></div></section>`;
   return `<section class="times" id="times" aria-labelledby="times-title"><div class="site-wrap times-grid">${head}<div>${body}</div></div></section>`;
 }
 
@@ -303,7 +327,9 @@ export function mountHome(root, c) {
   pickerMount(home, c);
   home.querySelector('[data-times-all]')?.addEventListener('click', e => { home.querySelectorAll('.times-entry[data-extra]').forEach(el => el.hidden = false); e.currentTarget.remove(); });
   storiesMount(home);
+  weekMount(home, c);
   headerMount(home);
+  home.querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { const t = home.querySelector(a.getAttribute('href')); if (t) { e.preventDefault(); scrollToTarget(t); } }));
   const cue = home.querySelector('[data-scroll-cue]');
   cue?.addEventListener('click', e => { e.preventDefault(); scrollToTarget(cue.closest('section').nextElementSibling); });
   animateHome(home, { onDawn: () => home._valley?.loadDawn() });
@@ -452,6 +478,20 @@ function pickerMount(home, c) {
   }));
   filter.addEventListener('input', paint);
   dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+}
+
+function weekMount(home, c) {
+  const box = home.querySelector('[data-wk]');
+  if (!box) return;
+  const cards = [...box.querySelectorAll('.wk-ev')], none = box.querySelector('[data-wk-none]'), loc = c.lang === 'ar' ? 'ar-LB' : 'en-GB';
+  box.querySelectorAll('[data-wk-day]').forEach(button => button.addEventListener('click', () => {
+    const day = button.getAttribute('aria-pressed') === 'true' ? '' : button.dataset.wkDay;
+    box.querySelectorAll('[data-wk-day]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.wkDay === day)));
+    let shown = 0;
+    cards.forEach(card => { const on = !day || card.dataset.day === day; card.hidden = !on; if (on) { shown++; card.animate?.([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.16,1,.3,1)' }); } });
+    none.hidden = shown > 0;
+    if (!shown) none.textContent = c.L(`Nothing has been published for ${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(day + 'T12:00:00'))}.`, `لم يُنشر شيء ليوم ${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(day + 'T12:00:00'))}.`);
+  }));
 }
 
 function storiesMount(home) {

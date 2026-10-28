@@ -14,6 +14,21 @@ export const KINDS = { mass: ['Mass', 'قدّاس'], sacr: ['Sacrament', 'سرّ
   wedding: ['Wedding', 'إكليل'], baptism: ['Baptism', 'معمودية'], funeral: ['Funeral', 'جنّاز'] };
 export const kindName = (L, kind) => L(...(KINDS[kind] || KINDS.event));
 
+/* An .ics file for one event, as a data link the visitor's calendar opens. */
+export function icsHref(e, name, place = '') {
+  const start = e.d.replace(/-/g, '') + (e.t ? 'T' + e.t.replace(':', '') + '00' : '');
+  const end = e.t ? new Date(`${e.d}T${e.t}`) : null;
+  if (end) end.setHours(end.getHours() + 1);
+  const text = v => String(v).replace(/[,;\\]/g, m => '\\' + m);
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', 'BEGIN:VEVENT', `UID:${e.id || start}@parishlife`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`, e.t ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${start}`,
+    end ? `DTEND:${dayKey(end).replace(/-/g, '')}T${pad(end.getHours())}${pad(end.getMinutes())}00` : '', `SUMMARY:${text(name)}`,
+    place ? `LOCATION:${text(place)}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean);
+  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n'));
+}
+export const icsName = name => (String(name || 'event').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'event') + '.ics';
+export const ADD_ICON = ADD;
+
 export function calendarMarkup(L) {
   return `<div class="pcal" data-pcal>
     <div class="pcal-bar">
@@ -48,18 +63,9 @@ export function mountCalendar(root, events, { L, lang, place = '' }) {
   const shown = () => { const q = fold(state.q.trim()); return q ? all.filter(e => fold(`${e.title} ${e.titleAr} ${kindName(L, e.kind)}`).includes(q)) : all; };
   const date = key => new Date(key + 'T12:00:00');
   const time = t => t ? new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit', hour12: false }).format(new Date(`2000-01-01T${t}`)) : L('All day', 'طوال اليوم');
-  const ics = e => {
-    const start = e.d.replace(/-/g, '') + (e.t ? 'T' + e.t.replace(':', '') + '00' : '');
-    const end = e.t ? new Date(`${e.d}T${e.t}`) : null;
-    if (end) end.setHours(end.getHours() + 1);
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', 'BEGIN:VEVENT', `UID:${e.id || start}@parishlife`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`, e.t ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${start}`,
-      end ? `DTEND:${dayKey(end).replace(/-/g, '')}T${pad(end.getHours())}${pad(end.getMinutes())}00` : '', `SUMMARY:${e.name.replace(/[,;\\]/g, m => '\\' + m)}`,
-      place ? `LOCATION:${place.replace(/[,;\\]/g, m => '\\' + m)}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean);
-    return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n'));
-  };
+  const ics = e => icsHref(e, e.name, place);
   const row = e => `<li class="pcal-ev k-${esc(e.kind || 'event')}"><time>${esc(time(e.t))}</time><div><strong dir="auto">${esc(e.name)}</strong><span>${esc(kindName(L, e.kind))}</span></div>
-    <a class="pcal-add" href="${ics(e)}" download="${esc((e.name || 'event').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'event')}.ics" title="${esc(L('Add to my calendar', 'أضف إلى رزنامتي'))}" aria-label="${esc(L(`Add ${e.name} to my calendar`, `أضف «${e.name}» إلى رزنامتي`))}">${ADD}</a></li>`;
+    <a class="pcal-add" href="${ics(e)}" download="${esc(icsName(e.name))}" title="${esc(L('Add to my calendar', 'أضف إلى رزنامتي'))}" aria-label="${esc(L(`Add ${e.name} to my calendar`, `أضف «${e.name}» إلى رزنامتي`))}">${ADD}</a></li>`;
   const group = list => {
     const days = [...new Set(list.map(e => e.d))];
     return days.map(k => `<section class="pcal-group"><h4><span>${esc(new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(date(k)))}</span> ${esc(new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long' }).format(date(k)))}${k === today ? ` <b class="pcal-today-tag">${L('Today', 'اليوم')}</b>` : ''}</h4>

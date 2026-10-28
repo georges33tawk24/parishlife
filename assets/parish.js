@@ -444,3 +444,12 @@ export function mountSubpage(root, c, p, d) {
   if (page.querySelector('[data-pcal]')) teardown.push(mountCalendar(page, d.events || [], { L: c.L, lang: c.lang, place: [f.name, f.town].filter(Boolean).join(', ') }));
   animateHome(page, {});
 }
+
+/* Pages without a parish (For parishes, a page that could not be shown): the header and motion only. */
+export function mountPlain(root) {
+  unmountParish();
+  const page = root.querySelector('[data-plain-page]');
+  if (!page) return;
+  teardown.push(watchHero(page.querySelector('[data-hero]')));
+  animateHome(page, {});
+}

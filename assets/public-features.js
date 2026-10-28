@@ -43,7 +43,38 @@ export async function trackingPage(host,token) {
 }
 export { paginateCollections };
 
+/* For parishes: the four bundles as arches (one gold light for each step up), how a parish
+   joins, and the practical notes, in the words the bundles have always used. */
 export function bundlePage(){
-  const bundles=[['Presence','التعريف بالرعية','Public parish profile, contact details, ministries and public calendar.','صفحة الرعية العامة والتواصل والخدمات والرزنامة.'],['Office','المكتب','People, households, office expenses, requests and sacramental records.','الأشخاص والعائلات ومصاريف المكتب والطلبات وسجلات الأسرار.'],['Community','المجتمع','Office records, requests, ministries, registrations, resources and facilities.','سجلات المكتب والطلبات والخدمات والتسجيل والموارد والمرافق.'],['Complete','الكاملة','All available modules, including sacraments and parish finance.','كل الوحدات المتاحة بما فيها الأسرار ومالية الرعية.']];
-  return `<section class="section site-wrap"><span class="eyebrow">ParishLife</span><h1>${L('Choose what your parish needs','اختر ما تحتاجه رعيتك')}</h1><p>${L('Start with a public presence or add tools for your parish office and community. Arrangements can cover one parish or several parishes in a diocese.','ابدأ بحضور عام أو أضف أدوات للمكتب والمجتمع الرعوي. يمكن أن يشمل الترتيب رعية واحدة أو عدة رعايا في أبرشية.')}</p><div class="public-info-grid">${bundles.map(([en,ar,desc,descAr])=>`<article class="contact-panel"><h2>${L(en,ar)}</h2><p>${L(desc,descAr)}</p><a class="button" href="index.html#/workspace">${L('Manage or request this bundle','إدارة الباقة أو طلبها')}</a></article>`).join('')}</div><p>${L('Subscriptions are managed manually at present. No online payment or automatic billing is configured. Parish priests may activate parish-managed bundles; diocese-sponsored changes are requests for diocesan approval. Existing records remain available to read when a module is removed.','تُدار الاشتراكات يدوياً حالياً. لا توجد دفعات إلكترونية أو فوترة تلقائية. يستطيع الكاهن تفعيل باقات الرعية؛ وتتطلب الباقات برعاية الأبرشية طلب موافقتها. تبقى السجلات قابلة للقراءة عند إزالة وحدة.')}</p></section>`;
+  const bundles=[
+    ['presence','Presence','التعريف بالرعية',['Public parish page','Contact details','Ministries','Public calendar'],['صفحة الرعية العامة','معلومات التواصل','الخدمات','الرزنامة العامة']],
+    ['office','Office','المكتب',['People and households','Requests','Sacramental records','Office expenses'],['الأشخاص والعائلات','الطلبات','سجلات الأسرار','مصاريف المكتب']],
+    ['community','Community','المجتمع',['Office records and requests','Ministries and registrations','Resources and facilities'],['سجلات المكتب والطلبات','الخدمات والتسجيل','الموارد والمرافق']],
+    ['complete','Complete','الكاملة',['Every available module','Sacraments','Parish finance'],['كل الوحدات المتاحة','الأسرار','مالية الرعية']]];
+  const check='<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  const lights=n=>`<span class="fp-mark" aria-hidden="true"><svg viewBox="0 0 64 80" fill="none"><path d="M6 78V32a26 26 0 0 1 52 0v46" stroke="currentColor" stroke-width="1.5"/><path d="M1 78.5h62" stroke="currentColor" stroke-width="1.5"/>${Array.from({length:n},(_,i)=>`<circle cx="${32+(i-(n-1)/2)*11}" cy="${n>2&&i%2?50:56}" r="3.6" fill="#F1C77A"/>`).join('')}</svg></span>`;
+  const notes=[[L('Ask through the members portal','اطلب عبر بوّابة المؤمنين'),L('A parish priest or the parish office opens the bundles in the portal and asks for the one that fits.','يفتح كاهن الرعية أو مكتبها الباقات في البوّابة ويطلب ما يناسب.')],
+    [L('The parish or the diocese decides','الرعية أو الأبرشية تقرّر'),L('Parish priests may activate parish-managed bundles; diocese-sponsored changes are requests for diocesan approval.','يستطيع الكاهن تفعيل باقات الرعية؛ وتتطلب الباقات برعاية الأبرشية طلب موافقتها.')],
+    [L('No online payment','لا دفع إلكتروني'),L('Subscriptions are managed manually at present. No online payment or automatic billing is configured.','تُدار الاشتراكات يدوياً حالياً. لا توجد دفعات إلكترونية أو فوترة تلقائية.')],
+    [L('Records stay readable','تبقى السجلات قابلة للقراءة'),L('Existing records remain available to read when a module is removed.','تبقى السجلات قابلة للقراءة عند إزالة وحدة.')]];
+  return `<div class="parish-sub fp" data-plain-page>
+    <section class="sub-hero" data-hero aria-labelledby="sub-title"><div class="sub-art" aria-hidden="true"><img src="assets/images/valley/valley-wide-dusk-far.webp" alt=""><img src="assets/images/valley/valley-wide-dusk-near.webp" alt=""></div>
+      <div class="site-wrap sub-inner"><nav class="ph-crumbs" aria-label="${L('Breadcrumb','مسار التنقّل')}" data-hero-rise><a href="public.html">ParishLife</a><span aria-hidden="true">/</span><span aria-current="page">${L('For parishes','للرعايا')}</span></nav>
+        <h1 class="hero-title" id="sub-title">${L('Choose what your parish needs','اختر ما تحتاجه رعيتك')}</h1>
+        <p data-hero-rise>${L('Start with a public presence or add tools for your parish office and community. Arrangements can cover one parish or several parishes in a diocese.','ابدأ بحضور عام أو أضف أدوات للمكتب والمجتمع الرعوي. يمكن أن يشمل الترتيب رعية واحدة أو عدة رعايا في أبرشية.')}</p></div></section>
+    <section class="fp-bundles"><div class="site-wrap"><ol class="fp-grid">${bundles.map(([key,en,ar,items,itemsAr],i)=>`<li data-reveal-item><article class="fp-card${key==='complete'?' is-complete':''}" data-tilt>
+      ${lights(i+1)}<h2>${L(en,ar)}</h2><p class="fp-other" lang="${document.documentElement.lang==='ar'?'en':'ar'}">${document.documentElement.lang==='ar'?en:ar}</p>
+      <ul>${(document.documentElement.lang==='ar'?itemsAr:items).map(item=>`<li>${check}<span>${item}</span></li>`).join('')}</ul>
+      <a class="btn ${key==='complete'?'btn-gilt':'btn-ink-line'}" href="index.html#/workspace">${L('Manage or request this bundle','إدارة الباقة أو طلبها')}</a></article></li>`).join('')}</ol></div></section>
+    <section class="fp-how"><div class="site-wrap"><header class="sec-head" data-reveal><h2>${L('How a parish joins','كيف تنضمّ الرعية')}</h2><p>${L('Parish priests and offices join through their diocese. Parishioners sign in to the members portal to follow their parish.','ينضمّ كهنة الرعايا ومكاتبها عبر أبرشيتهم. ويدخل أبناء الرعية إلى بوّابة المؤمنين لمتابعة رعيتهم.')}</p></header>
+      <ol class="fp-steps">${notes.map(([b,t])=>`<li data-reveal-item><b>${b}</b><span>${t}</span></li>`).join('')}</ol></div></section>
+    <section class="join fp-join"><div class="join-art" aria-hidden="true">${['sky','far','near'].map(part=>`<img src="assets/images/valley/valley-wide-dusk-${part}.webp" alt="" loading="lazy" decoding="async">`).join('')}</div>
+      <div class="site-wrap join-inner" data-reveal><h2>${L('Light your parish on the map','أضئ رعيتك على الخريطة')}</h2><p>${L('Every parish on ParishLife is a gold light on the map of Lebanon, with its own page, calendar and requests.','كل رعية على ParishLife نورٌ ذهبي على خريطة لبنان، ولها صفحتها ورزنامتها وطلباتها.')}</p>
+      <div class="join-actions"><a class="btn btn-gilt" href="index.html#/workspace">${L('Open the members portal','ادخل إلى بوّابة المؤمنين')}</a><a class="btn btn-line" href="public.html#directory">${L('See the parishes','تصفّح الرعايا')}</a></div></div></section>
+  </div>`;
+}
+
+/* A page that could not be shown: an unlit lamp in an arch, what happened, and the way back. */
+export function errorPage(title,body,actions){
+  return `<div class="parish-sub" data-plain-page><section class="lost site-wrap"><div class="lost-card" data-reveal><span class="lost-arch" aria-hidden="true"><span class="lamp is-unlit"></span></span><h1>${title}</h1><p>${body}</p><div class="lost-actions">${actions}</div></div></section></div>`;
 }

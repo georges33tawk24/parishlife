@@ -92,10 +92,18 @@ export function mountMap(figure, items, { L, onChoose, card }) {
     }
     return out;
   }
-  function paint() {
+  /* Labels, dots and lights keep their size on screen at every zoom, including mid-flight. */
+  let scaled = [];
+  function rescale() {
     const u = unit();
+    if (!scaled.length) scaled = [...svg.querySelectorAll('.px')];
+    scaled.forEach(el => el.setAttribute('transform', `scale(${u})`));
+    world.querySelectorAll(':scope > g').forEach(g => { const t = g.getAttribute('transform'); if (t) g.setAttribute('transform', t.replace(/scale\([^)]*\)/, `scale(${u})`)); });
+    return u;
+  }
+  function paint() {
     svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
-    svg.querySelectorAll('.px').forEach(el => el.setAttribute('transform', `scale(${u})`));
+    const u = rescale();
     figure.classList.toggle('is-zoomed', view.w < W - 1);
     reset.hidden = view.w >= W - 1;
     world.replaceChildren(...clusters().map((c, i) => {
@@ -147,6 +155,7 @@ export function mountMap(figure, items, { L, onChoose, card }) {
       const t = dur ? Math.min(1, (now - start) / dur) : 1, k = ease(t);
       view = { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k, w: from.w + (to.w - from.w) * k, h: from.h + (to.h - from.h) * k };
       svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+      rescale();
       if (t < 1) frame = requestAnimationFrame(step); else paint();
     };
     frame = requestAnimationFrame(step);

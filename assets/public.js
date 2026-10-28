@@ -1,7 +1,7 @@
 import { applySiteTheme } from './theme.js';
-import { bundlePage, bindRequest, trackingPage, photos, parishPhotos, paginateCollections } from './public-features.js';
+import { bundlePage, errorPage, bindRequest, trackingPage, photos, parishPhotos, paginateCollections } from './public-features.js';
 import { homeView, mountHome, unmountHome } from './home.js';
-import { parishView, mountParish, requestView, calendarPageView, mountSubpage, unmountParish } from './parish.js';
+import { parishView, mountParish, requestView, calendarPageView, mountSubpage, mountPlain, unmountParish } from './parish.js';
 
 document.addEventListener('error',event=>{
   const image=event.target;
@@ -81,7 +81,6 @@ const filters = { diocese:'', rite:'', location:null, q: params.get('q') || '', 
 let directory = [], details = new Map(), site = null, selected = params.get('parish'), failed = [], loadFailure = false;
 const app = document.querySelector('#app');
 const content = (d, key) => pair(d?.content?.[key]);
-const empty = (heading, body, action = '') => '<div class="empty"><span class="empty-icon">' + icon('church') + '</span><div><h3>' + safe(heading) + '</h3><p>' + safe(body) + '</p>' + action + '</div></div>';
 
 function updateChrome() {
   document.documentElement.lang = lang;
@@ -114,16 +113,19 @@ function render() {
   const token=location.hash.startsWith('#track=')?location.hash.slice(7):'';
   if(token){trackingPage(app,token);app.setAttribute('aria-busy','false');requestAnimationFrame(() => document.body.classList.add('is-ready'));return;}
   if (loadFailure) {
-    app.innerHTML = '<div class="site-wrap error-page">' + empty(L('We couldn’t load the directory', 'تعذّر تحميل الدليل'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.'), '<button class="button retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>') + '</div>';
+    app.innerHTML = errorPage(L('We couldn’t load the directory', 'تعذّر تحميل الدليل'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.'), '<button class="btn btn-gilt retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>');
+    mountPlain(app);
   } else if (selected && (!p || !d)) {
-    app.innerHTML = '<div class="site-wrap error-page">' + empty(p ? L('This parish page is temporarily unavailable', 'صفحة الرعية غير متاحة حاليًا') : L('Parish not found', 'لم نعثر على الرعية'), L('You can return to the directory and explore another parish.', 'يمكنك العودة إلى الدليل واستكشاف رعية أخرى.'), (p ? '<button class="button retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>' : '') + '<a class="text-link" href="public.html#directory">' + L('Back to the directory', 'العودة إلى الدليل') + icon('arrow') + '</a>') + '</div>';
+    app.innerHTML = errorPage(p ? L('This parish page is temporarily unavailable', 'صفحة الرعية غير متاحة حاليًا') : L('Parish not found', 'لم نعثر على الرعية'), p ? L('Its details could not be loaded just now. Try again, or explore another parish.', 'تعذّر تحميل تفاصيلها الآن. حاول مجدّدًا أو استكشف رعية أخرى.') : L('This link does not lead to a parish on ParishLife. It may have been mistyped, or the parish may have left.', 'هذا الرابط لا يقود إلى رعية على ParishLife. ربما كُتب خطأً، أو لم تعد الرعية مسجّلة.'), (p ? '<button class="btn btn-gilt retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>' : '') + '<a class="btn ' + (p ? 'btn-ink-line' : 'btn-gilt') + '" href="public.html#directory">' + L('Find a parish', 'ابحث عن رعية') + '</a>');
+    mountPlain(app);
   } else {
     const isHome = params.get('view') !== 'bundles' && !selected, c = homeContext();
     const page = params.get('view') === 'bundles' ? 'bundles' : !selected ? 'home' : params.has('request') ? (d.publicRequests === false ? 'closed' : 'request') : params.get('view') === 'calendar' ? 'calendar' : 'parish';
     app.innerHTML = (failed.length ? '<div class="site-wrap load-notice" role="status">' + L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ') + '<button class="text-button retry-load">' + L('Try again', 'حاول مجدّدًا') + '</button></div>' : '') + ({
       bundles: () => bundlePage(),
       home: () => homeView(c),
-      closed: () => `<section class="section site-wrap"><h1>${L('Contact the parish office','تواصل مع مكتب الرعية')}</h1><p>${safe(d.parish.phone||'')}</p><a class="button" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Parish details','معلومات الرعية')}</a></section>`,
+      closed: () => errorPage(L('Contact the parish office', 'تواصل مع مكتب الرعية'), L('This parish takes requests through its office rather than online.', 'تستقبل هذه الرعية الطلبات عبر مكتبها لا عبر الإنترنت.') + (d.parish.phone ? ' <bdi>' + safe(d.parish.phone) + '</bdi>' : ''),
+        (d.parish.phone ? `<a class="btn btn-gilt" href="tel:${safe(String(d.parish.phone).replace(/[^\d+]/g, ''))}">${L('Call the parish office', 'اتصل بمكتب الرعية')}</a>` : '') + `<a class="btn btn-ink-line" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Parish page', 'صفحة الرعية')}</a>`),
       request: () => requestView(c, p, d, params.get('request')),
       calendar: () => calendarPageView(c, p, d),
       parish: () => parishView(c, p, d)
@@ -131,6 +133,7 @@ function render() {
     if (isHome) mountHome(app, c);
     else if (page === 'parish') mountParish(app, c, p, d);
     else if (page === 'request' || page === 'calendar') mountSubpage(app, c, p, d);
+    else mountPlain(app);
   }
   app.setAttribute('aria-busy', 'false');
   document.title = (selected && p ? parishName(p) : L('Find your parish', 'ابحث عن رعيتك')) + ' · ParishLife';
@@ -171,8 +174,8 @@ function toggleLanguage() {
 }
 document.querySelectorAll('#lang, #footer-lang').forEach(button => button.addEventListener('click', toggleLanguage));
 const menu = document.querySelector('#mobile-nav'), menuButton = document.querySelector('#menu-toggle');
-function closeMenu() { menu.hidden = true; menuButton.setAttribute('aria-expanded', 'false'); }
-menuButton.addEventListener('click', () => { const opening = menu.hidden; menu.hidden = !opening; menuButton.setAttribute('aria-expanded', String(opening)); });
+function closeMenu() { menu.hidden = true; menuButton.setAttribute('aria-expanded', 'false'); document.body.classList.remove('menu-open'); }
+menuButton.addEventListener('click', () => { const opening = menu.hidden; menu.hidden = !opening; menuButton.setAttribute('aria-expanded', String(opening)); document.body.classList.toggle('menu-open', opening); });
 menu.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { closeMenu(); menuButton.focus(); } });
 addEventListener('resize', () => { if (innerWidth > 900) closeMenu(); }, {passive:true});
