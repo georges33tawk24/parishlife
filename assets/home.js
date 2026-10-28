@@ -2,13 +2,14 @@
    (Administration → Homepage), each parish's Website content and public profile,
    and the events and announcements parishes publish. Empty sections say what a
    parish office can publish, rather than filling the page with placeholders. */
-import { sanctuaryMarkup, mountSanctuary, roseOutline } from './home-sanctuary.js';
+import { sanctuaryMarkup, mountSanctuary, roseOutline, mosaicTexture } from './home-sanctuary.js';
 import { mapMarkup, locate, mountMap, projection } from './home-map.js';
 import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
 import { icsHref, icsName, kindName, beirutNow, ADD_ICON } from './public-calendar.js';
 import { find } from './search.js';
 import { trackAction } from './beacon.js';
 import { HOME_DEFAULTS } from './site-defaults.js';
+import { season, feastOn } from './liturgy.js';
 
 let teardown = [];
 const other = lang => lang === 'ar' ? 'en' : 'ar';
@@ -111,7 +112,7 @@ function hero(c) {
     <div class="hero-art" data-scene>${sanctuaryMarkup({ inscription: L('Gloria in excelsis Deo', 'المجد لله في العُلى') })}</div><div class="hero-shade" aria-hidden="true"></div>
     <div class="site-wrap hero-inner">
       ${announcement}
-      <p class="hero-mark" data-hero-rise>${CROSS}<span>${L('The parishes of Lebanon', 'رعايا لبنان')}</span></p>
+      <p class="hero-mark" data-hero-rise>${CROSS}<span>${todayFeast(c) ? L(`Today · ${todayFeast(c).en}`, `اليوم · ${todayFeast(c).ar}`) : L('The parishes of Lebanon', 'رعايا لبنان')}</span></p>
       <h1 class="hero-title" id="hero-title">${safe(words(c, site?.hero?.title, HOME_DEFAULTS.hero.title))}</h1>
       <p class="hero-lede" data-hero-rise>${safe(words(c, site?.hero?.subtitle, HOME_DEFAULTS.hero.subtitle))}</p>
       <div class="hero-row"><form class="hero-search" role="search" data-hero-search data-hero-rise>
@@ -129,6 +130,8 @@ function hero(c) {
   </section>`;
 }
 
+const todayFeast = c => feastOn(c.localToday());
+
 /* ---------- this week ---------- */
 /* The seven days as a ribbon (a red lamp marks today, dots mark what is published), and the
    week's celebrations as cards beneath; choosing a day narrows the cards to it. */
@@ -136,7 +139,9 @@ function week(c) {
   const { L, safe } = c, { days, all, inWeek } = weekEvents(c), loc = c.lang === 'ar' ? 'ar-LB' : 'en-GB';
   const kind = e => kindName(L, e.kind);
   const date = d => new Date(d + 'T12:00:00');
-  const head = `<header class="sec-head" data-reveal><h2 id="week-title">${L('This week', 'هذا الأسبوع')}</h2><p>${L('Masses and celebrations the parishes have published for the next seven days.', 'القداديس والاحتفالات التي نشرتها الرعايا للأيام السبعة المقبلة.')}</p></header>`;
+  const now = season(days[0]);
+  const head = `<header class="sec-head" data-reveal><h2 id="week-title">${L('This week', 'هذا الأسبوع')}</h2><p>${L('Masses and celebrations the parishes have published for the next seven days.', 'القداديس والاحتفالات التي نشرتها الرعايا للأيام السبعة المقبلة.')}</p></header>
+    <p class="wk-season" data-reveal>${CROSS}<span>${L('In the Maronite year', 'في السنة الطقسية المارونية')}</span><b>${safe(L(now.en, now.ar))}</b></p>`;
   const card = (e, later = false) => {
     const title = c.pair(e, 'title', 'titleAr') || kind(e), d = date(e.d), place = [c.parishName(e.parish), c.townName(e.parish)].filter(Boolean).join(L(', ', '، '));
     return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-day="${safe(e.d)}" data-parish="${safe(e.parish.id)}" data-reveal-item>
@@ -152,8 +157,8 @@ function week(c) {
   const tag = inWeek.length ? 'button' : 'span';    // with nothing to filter, the ribbon is only a picture of the week
   const ribbon = `<ol class="wk-days" aria-label="${safe(L('The next seven days', 'الأيام السبعة المقبلة'))}">${days.map((d, i) => {
     const n = inWeek.filter(e => e.d === d).length;
-    return `<li><${tag} ${tag === 'button' ? 'type="button" aria-pressed="false" ' : ''}class="wk-day${i === 0 ? ' is-today' : ''}${date(d).getDay() === 0 ? ' is-sunday' : ''}${n ? '' : ' is-quiet'}" data-wk-day="${d}">
-      <span class="wk-dow">${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(date(d)))}</span><b>${safe(digits(c, date(d).getDate()))}</b>
+    return `<li><${tag} ${tag === 'button' ? 'type="button" aria-pressed="false" ' : ''}class="wk-day${i === 0 ? ' is-today' : ''}${date(d).getDay() === 0 ? ' is-sunday' : ''}${feastOn(d) ? ' is-feast' : ''}${n ? '' : ' is-quiet'}" data-wk-day="${d}">
+      <span class="wk-dow">${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(date(d)))}</span><b>${safe(digits(c, date(d).getDate()))}</b>${feastOn(d) ? `<span class="wk-feast">${safe(L(feastOn(d).en, feastOn(d).ar))}</span>` : ''}
       <span class="wk-dots" aria-hidden="true">${i === 0 ? '<span class="lamp"></span>' : ''}${'<i></i>'.repeat(Math.min(n, 3))}</span>
       <span class="sr-only">${safe(i === 0 ? L('Today, ', 'اليوم، ') : '')}${n ? safe(L(`${n} published`, `منشور: ${c.number(n)}`)) : safe(L('nothing published', 'لا شيء منشور'))}</span></${tag}></li>`;
   }).join('')}</ol>`;
@@ -371,6 +376,8 @@ export function mountHome(root, c) {
   pickerMount(home, c);
   home.querySelector('[data-times-all]')?.addEventListener('click', e => { home.querySelectorAll('.times-entry[data-extra]').forEach(el => el.hidden = false); e.currentTarget.remove(); });
   storiesMount(home);
+  const verse = home.querySelector('.verse');   // the gold mosaic of the apse behind the verse
+  if (verse && !document.documentElement.classList.contains('is-lite')) verse.style.setProperty('--mosaic', `url(${mosaicTexture()})`);
   weekMount(home, c);
   headerMount(home);
   home.querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { const t = home.querySelector(a.getAttribute('href')); if (t) { e.preventDefault(); scrollToTarget(t); } }));

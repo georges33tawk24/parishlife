@@ -388,3 +388,27 @@ export function roseOutline() {
     <path d="${spokes.join('')}${petals.join('')}"/>${lobes.join('')}<path d="M0 -44V44M-44 0H44" stroke-width="3"/></svg>`;
 }
 
+/* Gold mosaic, as in the apse of an old church: small tesserae of gold leaf and glass, a little
+   uneven, set in dark grout. Made on the visitor's device as a seamless tile. */
+export function mosaicTexture() {
+  const size = 240, step = 10, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d'), random = rng(41);
+  ctx.fillStyle = '#5A4320'; ctx.fillRect(0, 0, size, size);
+  const golds = ['#C9A14A', '#E2BC62', '#B88D35', '#F0D27E', '#D6AE52', '#A87D2A'];
+  for (let row = 0; row < size / step; row++) {
+    const shift = row % 2 ? step / 2 : 0;
+    for (let col = -1; col < size / step + 1; col++) {
+      const x = col * step + shift + (random() - .5) * 1.6, y = row * step + (random() - .5) * 1.6;
+      const pick = random(), w = step - 1.6 - random() * 1.2, h = step - 1.6 - random() * 1.2;
+      ctx.fillStyle = pick < .012 ? '#2C4FA3' : pick < .02 ? '#9E2A2B' : golds[Math.floor(random() * golds.length)];
+      ctx.globalAlpha = .82 + random() * .18;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillRect(x - size, y, w, h); ctx.fillRect(x + size, y, w, h);   // wrap the edges
+      ctx.fillStyle = 'rgba(255,248,220,.35)'; ctx.fillRect(x, y, w * .5, 1.2);
+    }
+  }
+  ctx.globalAlpha = 1;
+  return canvas.toDataURL('image/png');
+}
+

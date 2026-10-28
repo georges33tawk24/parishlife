@@ -52,7 +52,7 @@ export function mapMarkup(L) {
     </svg>
     <button type="button" class="map-reset" data-map-reset hidden>${L('Show all of Lebanon', 'عرض لبنان كاملاً')}</button>
     <div class="map-card" data-map-card hidden></div>
-    <figcaption>${L('Each gold light is a parish. Relief and rivers are illustrative; borders from Natural Earth.', 'كل نور ذهبي رعية. التضاريس والأنهار توضيحية؛ الحدود من Natural Earth.')}</figcaption>
+    <figcaption>${L('Each flame is a parish, a candle lit on the map. Relief and rivers are illustrative; borders from Natural Earth.', 'كل شعلة رعية، شمعة مضاءة على الخريطة. التضاريس والأنهار توضيحية؛ الحدود من Natural Earth.')}</figcaption>
   </figure>`;
 }
 
@@ -119,7 +119,7 @@ export function mountMap(figure, items, { L, onChoose, card }) {
         const m = c.members[0];
         g.setAttribute('class', 'map-light' + (m.exact ? '' : ' is-approx') + (visible && !visible.has(m.id) ? ' is-dim' : ''));
         g.dataset.id = m.id;
-        g.innerHTML = `<circle class="pulse" r="8"/><circle class="halo" r="20"/><circle class="ring" r="9"/><circle class="core" r="3.6"/><text class="tag" x="13" y="4.5">${escapeXML(m.name)}</text>`;
+        g.innerHTML = `<circle class="pulse" r="8"/><circle class="halo" r="20"/><circle class="ring" r="9"/><path class="core" d="M0-8.4C3.1-4 4.1-1.3 4.1 1.2a4.1 4.1 0 0 1-8.2 0c0-2.5 1-5.2 4.1-9.6Z"/><ellipse class="wick-light" cx="0" cy="1.6" rx="1.5" ry="2.3"/><text class="tag" x="13" y="4.5">${escapeXML(m.name)}</text>`;
         g.addEventListener('click', () => { choose(m.id); onChoose?.(m.id); });
         g.addEventListener('pointerenter', () => mark(m.id, true));
         g.addEventListener('pointerleave', () => mark(null, true));

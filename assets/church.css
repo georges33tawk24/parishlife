@@ -40,10 +40,12 @@
 .join{background-image:radial-gradient(ellipse 70% 60% at 50% 105%,rgb(215 165 72 / .2),transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='%23E6BF6E'%3E%3Cg transform='translate%2863.3 242.8%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2828.8 68.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%28120.0 118.6%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%28106.3 126.4%29' fill-opacity='0.3'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='123.7' cy='230.3' r='0.8' fill-opacity='0.3'/%3E%3Cg transform='translate%28206.7 102.3%29' fill-opacity='0.18'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2890.6 176.7%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2842.7 23.7%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='44.2' cy='217.9' r='1.5' fill-opacity='0.36'/%3E%3Cg transform='translate%2895.0 222.3%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2831.8 176.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Cg transform='translate%2856.2 44.6%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Ccircle cx='217.0' cy='230.8' r='1.0' fill-opacity='0.3'/%3E%3Cg transform='translate%2810.9 91.7%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3C/svg%3E")}
 /* the verse: a rose window drawn in gold behind the words, turning very slowly, and the cross above */
 .verse{position:relative;isolation:isolate}
+.verse::before{content:"";position:absolute;z-index:-2;left:50%;top:0;width:min(980px,130vw);height:62%;translate:-50% 0;background:var(--mosaic,none) 0 0/180px 180px;opacity:.46;
+  -webkit-mask:radial-gradient(ellipse 50% 100% at 50% 0%,#000 0,rgb(0 0 0 / .8) 40%,transparent 76%);mask:radial-gradient(ellipse 50% 100% at 50% 0%,#000 0,rgb(0 0 0 / .8) 40%,transparent 76%);pointer-events:none}
 .verse-rose{position:absolute;z-index:-1;left:50%;top:50%;width:min(92vw,820px);aspect-ratio:1;translate:-50% -50%;color:#B88B33;opacity:.17;pointer-events:none}
 .verse-rose svg{width:100%;height:100%;animation:sn-turn 260s linear infinite}
 @keyframes sn-turn{to{transform:rotate(360deg)}}
-.verse-cross{display:block;width:30px;color:var(--gilt);filter:drop-shadow(0 0 14px rgb(215 165 72 / .6))}
+.verse-cross{display:block;width:32px;color:#8E2424;filter:drop-shadow(0 1px 0 rgb(255 240 200 / .7)) drop-shadow(0 0 16px rgb(255 214 140 / .7))}
 .verse-cross svg{display:block;width:100%;height:auto}
 
 /* Ask your parish: each arch a gilded niche, gold leaf in its lunette and the cross at its crown */
@@ -57,6 +59,20 @@
 /* This week: Sundays carry the cross */
 .wk-day.is-sunday .wk-dow{display:inline-flex;align-items:center;gap:5px;color:var(--gilt-ink)}
 .wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23D7A548'%3E%3Cpath d='M5.1 2h1.8v13H5.1zM1.2 6.1h9.6v1.8H1.2z'/%3E%3Ccircle cx='6' cy='1.6' r='1.3'/%3E%3Ccircle cx='1.1' cy='7' r='1.1'/%3E%3Ccircle cx='10.9' cy='7' r='1.1'/%3E%3C/svg%3E") no-repeat 50%/contain}
+/* This week: where the Church's year stands, and its great feasts on the ribbon */
+.wk-season{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:calc(clamp(32px,4vw,52px) * -.55) 0 clamp(22px,3vw,34px);font-size:15px;color:var(--ink-2)}
+.wk-season svg{width:14px;height:19px;color:var(--gilt)}
+.wk-season b{font-family:var(--display);font-weight:400;font-size:20px;color:var(--gilt-ink)}
+[dir=rtl] .wk-season b{font-family:var(--arabic-display);font-weight:700}
+.wk-day.is-feast{border-color:rgb(199 158 76 / .7);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
+.wk-feast{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;margin-top:2px;padding-inline:6px;font-size:11.5px;line-height:1.25;color:var(--gilt-ink);text-align:center}
+@media(max-width:640px){.wk-feast{display:none}.wk-day.is-feast .wk-dow{color:var(--gilt-ink)}}
+/* the map: each parish a small flame, flickering */
+.map-light .core{transform-box:fill-box;transform-origin:50% 85%;animation:sn-flicker 2.2s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
+.map-light .wick-light{fill:#FFFBEF;pointer-events:none}
+/* the brand's light in its niche breathes like a flame */
+.brand-light{transform-box:fill-box;transform-origin:50% 70%;animation:brand-flame 3.2s ease-in-out infinite alternate}
+@keyframes brand-flame{0%{opacity:.85;transform:scale(.92)}45%{opacity:1;transform:scale(1.06,1.1)}70%{opacity:.92;transform:scale(.98,1.02)}100%{opacity:1;transform:scale(1.04)}}
 /* Mass times: a bell in its belfry, rung as the section arrives */
 .times .sec-head .times-mark{margin-bottom:6px}
 .times-mark .bell{width:30px;height:30px;overflow:visible}
@@ -95,10 +111,10 @@
 .track-steps li.is-current span{box-shadow:none;border:0}
 .track-steps li.is-warn span::after{background:radial-gradient(ellipse 50% 62% at 50% 74%,#FFF 0,#FFC9B8 24%,#E0503A 56%,rgb(200 60 40 / 0) 82%)}
 .track-steps li::before{top:38px}
-@keyframes sn-flicker{0%,100%{transform:scale(1,1) skewX(0)}18%{transform:scale(.93,1.07) skewX(2.5deg)}37%{transform:scale(1.05,.95) skewX(-1.5deg)}58%{transform:scale(.95,1.09) skewX(1deg)}79%{transform:scale(1.03,.96) skewX(-2.5deg)}}
 
 @media(prefers-reduced-motion:reduce){
   .bell-body,.bell-clapper,.chapel-bell{animation:none!important}
   .verse-rose svg{animation:none}
   .track-steps li span::after{animation:none;transition:none}
+  .map-light .core,.brand-light{animation:none}
 }
