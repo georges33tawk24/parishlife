@@ -75,7 +75,7 @@
 @keyframes brand-flame{0%{opacity:.85;transform:scale(.92)}45%{opacity:1;transform:scale(1.06,1.1)}70%{opacity:.92;transform:scale(.98,1.02)}100%{opacity:1;transform:scale(1.04)}}
 /* Mass times: a bell in its belfry, rung as the section arrives */
 .times .sec-head .times-mark{margin-bottom:6px}
-button.times-mark{border:0;padding:0;cursor:pointer;font:inherit}
+button.times-mark{border:0;padding:0;cursor:var(--hand,pointer);font:inherit}
 button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px}
 .times-mark .bell{width:30px;height:30px;overflow:visible}
 .bell-body{transform-box:view-box;transform-origin:50% 12%}
@@ -151,7 +151,7 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 .mobile-nav a{position:relative}
 
 /* a page that could not be shown: an unlit candle in its arch, which the visitor may light */
-button.lost-arch{border:0;padding:0 0 30px;cursor:pointer;font:inherit;transition:box-shadow .8s}
+button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inherit;transition:box-shadow .8s}
 .lost-candle{position:relative;width:8px;height:46px;border-radius:2px 2px 1px 1px;background:linear-gradient(90deg,#9E8256,#F2E2B8 45%,#B8996A)}
 .lost-candle::before{content:"";position:absolute;left:50%;top:-6px;width:1.6px;height:6px;margin-left:-.8px;background:#2A1A10}
 .lost-candle i{position:absolute;left:50%;bottom:calc(100% + 4px);width:11px;height:22px;margin-left:-5.5px;border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
@@ -181,7 +181,53 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:pointer;font:inherit;transitio
 .rq-kind{border-radius:60px 60px 14px 14px / 40px 40px 14px 14px;padding-top:16px;background:linear-gradient(180deg,#F3EBDC,#ECE2D0);border-color:#E3D3B2;box-shadow:inset 0 0 0 4px #F3EBDC,inset 0 0 0 5px rgb(199 158 76 / .4)}
 .rq-kind .arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .5),0 0 0 4px #FBF6EC,0 0 0 5px rgb(199 158 76 / .28)}
 
+/* ---------- the small things: gold leaf, the pointer, the fields, the scrollbar, the selection ---------- */
+/* gilded buttons: gold leaf over its bole (assets/images/gilt.webp, docs/tools/render_gilt.py), burnished
+   along the top and shaded below, with a fine engraved line inside the edge; light runs across on hover */
+.btn-gilt,.hero-field button,.mobile-nav a:last-child,.chip[aria-pressed=true],.sign-in:hover{background:linear-gradient(180deg,rgb(255 247 222 / .5),rgb(255 247 222 / .06) 46%,rgb(96 60 12 / 0) 54%,rgb(96 60 12 / .24)),#D4A24B url("images/gilt.webp") 0 0/240px 240px;border-color:transparent;color:#1A1306;text-shadow:0 1px 0 rgb(255 238 196 / .5);
+  box-shadow:inset 0 1px 0 rgb(255 248 226 / .8),inset 0 -1.5px 0 rgb(96 60 12 / .42),inset 0 0 0 1px rgb(128 88 24 / .36),0 10px 26px -12px rgb(215 165 72 / .7)}
+.btn-gilt:hover,.hero-field button:hover,.mobile-nav a:last-child:hover{background:linear-gradient(180deg,rgb(255 250 232 / .68),rgb(255 247 222 / .18) 46%,rgb(96 60 12 / 0) 56%,rgb(96 60 12 / .16)),#DDAE55 url("images/gilt.webp") 0 0/240px 240px}
+.btn-gilt:active,.hero-field button:active{transform:translateY(0);box-shadow:inset 0 2px 7px rgb(96 60 12 / .38),inset 0 0 0 1px rgb(128 88 24 / .4)}
+.hero-field button{position:relative;overflow:hidden;isolation:isolate}
+.hero-field button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255 / .5) 50%,transparent 70%);transform:translateX(-120%);transition:transform .9s var(--ease-out)}
+.hero-field button:hover::after{transform:translateX(120%)}
+.btn-line:hover{border-color:var(--gilt-hi)}
+.btn-ink-line:hover{border-color:var(--gilt-ink)}
+
+/* the pointer: a fine arrow inlaid with gold, and a candle's flame over anything that can be chosen.
+   Only for a mouse; the flame's tip is the point. */
+:root{--hand:pointer;--arrow:auto}
+@media(pointer:fine){
+  :root{--arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='none' stroke='%231B1410' stroke-width='3.4' stroke-linejoin='round'/%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='%231B1410' stroke='%23F6E7C1' stroke-width='1.3' stroke-linejoin='round'/%3E %3Cpath d='M6.5 7.8v8.6' stroke='%23D7A548' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") 4 3,auto;--hand:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32'%3E %3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23FFCF75' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23FFCF75' stop-opacity='0'/%3E%3C/radialGradient%3E %3CradialGradient id='f' cx='.5' cy='.74' r='.66'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.34' stop-color='%23FFEDB8'/%3E%3Cstop offset='.72' stop-color='%23F5AE45'/%3E%3Cstop offset='1' stop-color='%23D2661C'/%3E%3C/radialGradient%3E%3C/defs%3E %3Ccircle cx='12' cy='12.5' r='11.5' fill='url(%23g)'/%3E %3Cpath d='M12 1.4C13.3 5.4 17.3 8.4 17.3 13.4a5.3 5.3 0 0 1-10.6 0C6.7 9.6 10.1 7.2 12 1.4Z' fill='url(%23f)' stroke='%233A1E06' stroke-width='1' stroke-linejoin='round'/%3E %3Cpath d='M12 10.6c-1 1.6-1.7 2.8-1.7 3.9a1.7 1.7 0 0 0 3.4 0c0-1.1-.7-2.3-1.7-3.9Z' fill='%23FFFDF6'/%3E %3Cpath d='M12 17.4v2.8' stroke='%232A1606' stroke-width='1.2' stroke-linecap='round'/%3E %3Crect x='8.2' y='20' width='7.6' height='11.2' rx='1.4' fill='%23F3E6C6' stroke='%233A2A18' stroke-width='1'/%3E %3Cpath d='M9.6 21.4v8.2' stroke='%23fff' stroke-width='1' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") 12 2,pointer}
+  html{cursor:var(--arrow)}
+  :is(p,li,h1,h2,h3,h4,blockquote,dd,td,th,figcaption,address){cursor:auto}
+  input:not([type=checkbox],[type=radio],[type=range],[type=submit],[type=button],[type=reset]),textarea,[contenteditable=true]{cursor:text}
+  a[href],button:not(:disabled),summary,label[for],select,[role=button],[role=tab],input:is([type=checkbox],[type=radio],[type=submit],[type=button]){cursor:var(--hand)}
+}
+
+/* fields: warm parchment with a faint shadow at the top, and gold when they take the pen */
+:is(.rq-field input,.rq-field textarea,.rq-link input,.verify-form input,.guest-request input,.guest-request textarea,.guest-request select,.collection-toolbar input){
+  background:#FFFDF8 linear-gradient(180deg,rgb(120 88 36 / .05),rgb(120 88 36 / 0) 10px);border-color:#DCCDB2;box-shadow:inset 0 1px 2px rgb(70 48 14 / .06);caret-color:var(--gilt-ink)}
+:is(.rq-field input,.rq-field textarea,.rq-link input,.verify-form input,.guest-request input,.guest-request textarea,.guest-request select,.collection-toolbar input):focus{
+  outline:none;border-color:#A57B2C;background:#FFFEFA;box-shadow:0 0 0 4px rgb(215 165 72 / .22),inset 0 1px 2px rgb(70 48 14 / .05)}
+:is(.rq-field,.verify-form,.guest-request,.collection-toolbar) :is(input,textarea)::placeholder{color:#9A8E78;opacity:1}
+.hero-field input,.dir-search input,.picker-search input,.pcal-search input{caret-color:var(--gilt-hi)}
+.picker-search input,.pcal-search input{caret-color:var(--gilt-ink)}
+.hero-field:focus-within{border-color:rgb(241 199 122 / .8);box-shadow:0 0 0 4px rgb(215 165 72 / .16),0 0 40px -8px rgb(241 199 122 / .35),0 24px 60px -24px rgb(0 0 0 / .55)}
+:root{accent-color:#8A6420}
+
+/* the scrollbar: a gilt rod on parchment */
+html{scrollbar-color:#B48737 #E9E1D1}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:#E9E1D1}
+::-webkit-scrollbar-thumb{border:3px solid #E9E1D1;border-radius:12px;background:linear-gradient(90deg,#A27428,#E4C27C 50%,#A27428)}
+
+/* the selection: gold leaf on the light pages, candlelight on the night ones */
+::selection{background:rgb(215 165 72 / .34);color:inherit}
+:is(.on-night,.hero,.directory,.stories,.join,.site-footer) ::selection{background:rgb(241 199 122 / .4);color:#FFF8E6}
+
 @media(prefers-reduced-motion:reduce){
+  .hero-field button::after{transition:none}
   .bell-body,.bell-clapper,.chapel-bell{animation:none!important}
   .verse-rose svg{animation:none}
   .track-steps li span::after{animation:none;transition:none}

@@ -142,6 +142,15 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   manuscript red, beside a village church with its bell-cote on the ridge. On the map each parish
   is a small flickering flame. The footer opens on a carved frieze of crosses, and the brand's light
   breathes like a flame.
+- **The small things** (`assets/church.css`, and `assets/auth.css` for the sign-in screen): the gilded
+  buttons are gold leaf over its bole (`assets/images/gilt.webp`, rendered by
+  `docs/tools/render_gilt.py`: squares of leaf with their overlapping edges, burnish and wrinkles),
+  burnished along the top with an engraved line inside the edge, and light runs across them on
+  hover. With a mouse the pointer is a fine arrow inlaid with gold, and over anything that can be
+  chosen a small lit candle whose flame's tip is the point (both drawn as SVG; stylesheets use
+  `cursor:var(--hand,pointer)`, so the portal, which does not set it, keeps the usual hand). Fields
+  are warm parchment and turn gold when written in; the scrollbar is a gilt rod on parchment; text
+  is selected in gold leaf, or candlelight on the night sections; checkboxes take the gilt ink.
 - **Loader:** warm dark stone, and a candle is lit in the arch mark until the page is ready.
   It also fades on its own after eight seconds, so a failed script can never leave it in place.
 - **Load:** the camera settles on the valley while the sky, crest and valley layers rise into place,

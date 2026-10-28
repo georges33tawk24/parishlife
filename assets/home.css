@@ -35,7 +35,7 @@
 .valley[data-frame=tall] .vl-mist-b{top:52%;bottom:14%}
 @keyframes mist{to{transform:translateX(-50%)}}
 /* one gold light per parish, on a real village of the render */
-.valley-light{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;cursor:pointer;z-index:2}
+.valley-light{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;cursor:var(--hand,pointer);z-index:2}
 .valley-light::before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgb(255 226 160 / .95) 0,rgb(241 199 122 / .55) 18%,rgb(215 165 72 / .18) 42%,rgb(215 165 72 / 0) 70%);animation:breathe 4.6s ease-in-out infinite alternate;animation-delay:calc(var(--i) * -1.3s)}
 .valley-light i{width:5px;height:5px;border-radius:50%;background:#FFF1CF;box-shadow:0 0 6px 2px rgb(255 214 140 / .9),0 0 18px 6px rgb(215 165 72 / .45)}
 .valley-light:hover::before{animation:none;transform:scale(1.6)}
@@ -62,11 +62,11 @@
 .hero-field input{flex:1;min-width:0;border:0;background:transparent;color:var(--on-night);font-size:18px;padding:12px 0;outline:none}
 .hero-field input::placeholder{color:#9AA6BD;opacity:1}
 .hero-field input::-webkit-search-cancel-button{filter:invert(1)}
-.hero-field button{min-height:50px;padding:0 28px;border:0;border-radius:999px;background:var(--gilt);color:#1A1306;font:600 17px/1 var(--sans);cursor:pointer;transition:background-color .2s}
+.hero-field button{min-height:50px;padding:0 28px;border:0;border-radius:999px;background:var(--gilt);color:#1A1306;font:600 17px/1 var(--sans);cursor:var(--hand,pointer);transition:background-color .2s}
 .hero-field button:hover{background:var(--gilt-hi)}
 .hero-field button:focus-visible{outline-offset:2px}
 .hero-suggest{position:absolute;z-index:5;top:calc(100% + 10px);inset-inline:0;list-style:none;margin:0;padding:6px;background:#0F1B35;border:1px solid rgb(230 222 208 / .18);border-radius:18px;box-shadow:0 30px 80px -20px rgb(0 0 0 / .6)}
-.hero-suggest li{display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:12px;cursor:pointer}
+.hero-suggest li{display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:12px;cursor:var(--hand,pointer)}
 .hero-suggest li[aria-selected=true],.hero-suggest li:hover{background:rgb(255 255 255 / .07)}
 .hero-suggest li .icon{width:18px;height:18px;color:var(--on-night-3)}
 .hero-suggest li .lamp{background:var(--gilt);box-shadow:0 0 0 4px rgb(215 165 72 / .16),0 0 12px rgb(215 165 72 / .7)}
@@ -98,7 +98,7 @@
 .wk-days{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
 .wk-day{width:100%;display:grid;justify-items:center;gap:3px;padding:16px 6px 12px;border-radius:50% 50% 16px 16px / 30px 30px 16px 16px;border:1px solid var(--hair);background:var(--white);color:var(--ink);font:inherit;
   transition:transform .45s var(--ease-out),border-color .25s,background-color .3s,color .3s,box-shadow .45s var(--ease-out)}
-button.wk-day{cursor:pointer}
+button.wk-day{cursor:var(--hand,pointer)}
 .wk-dow{font-size:14px;font-weight:600;color:var(--ink-2)}
 .wk-day b{font-family:var(--display);font-weight:400;font-size:clamp(24px,1rem + .8vw,32px);line-height:1.1}
 .wk-dots{display:flex;align-items:center;gap:4px;min-height:9px}
@@ -171,7 +171,7 @@ button.wk-day:hover{transform:translateY(-3px);border-color:#B8C1CF;box-shadow:0
 .map-label-valley text{font-size:12px;letter-spacing:.1em;fill:#AAB6CB}
 [lang=ar] .map-label text{font-family:var(--arabic-display);letter-spacing:0;font-size:16px}
 [lang=ar] .map-place text{font-family:var(--arabic)}
-.map-light,.map-cluster{cursor:pointer}
+.map-light,.map-cluster{cursor:var(--hand,pointer)}
 .map-light .halo{fill:url(#map-lamp);transform-box:fill-box;transform-origin:center;transition:transform .4s var(--ease-out)}
 .map-light .ring{fill:none;stroke:#F1C77A;stroke-width:1.4;opacity:0;transition:opacity .3s}
 .map-light .core{fill:#FFE6AE}
@@ -188,7 +188,7 @@ button.wk-day:hover{transform:translateY(-3px);border-color:#B8C1CF;box-shadow:0
 .map-cluster.is-hot .disc,.map-cluster:hover .disc{fill:var(--gilt-hi)}
 [data-lights]{transition:opacity 1.2s ease}
 .lebanon-map.lights-off [data-lights]{opacity:0}
-.map-reset{position:absolute;top:14px;inset-inline-start:14px;display:inline-flex;align-items:center;min-height:40px;padding:8px 16px;border-radius:999px;border:1px solid rgb(230 222 208 / .3);background:rgb(8 16 31 / .72);color:var(--on-night);font:600 14.5px var(--sans);cursor:pointer;backdrop-filter:blur(6px)}
+.map-reset{position:absolute;top:14px;inset-inline-start:14px;display:inline-flex;align-items:center;min-height:40px;padding:8px 16px;border-radius:999px;border:1px solid rgb(230 222 208 / .3);background:rgb(8 16 31 / .72);color:var(--on-night);font:600 14.5px var(--sans);cursor:var(--hand,pointer);backdrop-filter:blur(6px)}
 .map-reset:hover{border-color:var(--gilt)}
 .map-card{position:absolute;inset-inline:14px;bottom:62px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;padding:16px;padding-inline-end:52px;
   background:rgb(11 20 40 / .93);border:1px solid rgb(230 222 208 / .18);border-radius:18px;box-shadow:0 30px 60px -20px rgb(0 0 0 / .6);backdrop-filter:blur(8px)}
@@ -205,12 +205,12 @@ button.wk-day:hover{transform:translateY(-3px);border-color:#B8C1CF;box-shadow:0
 .dir-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--on-night);font-size:17px;padding:14px 0;outline:none}
 .dir-search input::placeholder{color:var(--on-night-3);opacity:1}
 .dir-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.dir-select select,.dir-sort select{appearance:none;-webkit-appearance:none;min-height:42px;border:1px solid rgb(230 222 208 / .22);border-radius:999px;color:var(--on-night);font:500 15px var(--sans);cursor:pointer;
+.dir-select select,.dir-sort select{appearance:none;-webkit-appearance:none;min-height:42px;border:1px solid rgb(230 222 208 / .22);border-radius:999px;color:var(--on-night);font:500 15px var(--sans);cursor:var(--hand,pointer);
   padding:8px 38px 8px 16px;background:rgb(255 255 255 / .05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B9C3D6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center/16px}
 [dir=rtl] .dir-select select,[dir=rtl] .dir-sort select{padding:8px 16px 8px 38px;background-position:left 12px center}
 .dir-select select option,.dir-sort select option{color:#15203A;background:#fff}
 .dir-tools{justify-content:space-between}
-.chip{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:8px 16px;border-radius:999px;border:1px solid rgb(230 222 208 / .26);background:transparent;color:var(--on-night);font:600 15px var(--sans);cursor:pointer;transition:background-color .2s,color .2s,border-color .2s}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:8px 16px;border-radius:999px;border:1px solid rgb(230 222 208 / .26);background:transparent;color:var(--on-night);font:600 15px var(--sans);cursor:var(--hand,pointer);transition:background-color .2s,color .2s,border-color .2s}
 .chip .icon{width:18px;height:18px}
 .chip:hover{border-color:var(--gilt)}
 .chip[aria-pressed=true]{background:var(--gilt);border-color:var(--gilt);color:#1A1306}

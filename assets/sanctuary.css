@@ -55,7 +55,7 @@
 /* the candles on the sill: tall and lit for each parish, short and waiting for the rest */
 .sn-candles{position:absolute;left:7%;right:7%;bottom:7.6%;height:36%;pointer-events:none}
 .sn-candle{position:absolute;bottom:1.2cqw;left:var(--x);width:1.3cqw;height:calc(var(--h) * .17cqw);margin-left:-.575cqw;border-radius:.4cqw .4cqw .12cqw .12cqw;
-  background:url("images/sanctuary/taper.webp") 50% 0/100% auto no-repeat;transform:rotate(var(--lean));transform-origin:50% 100%;pointer-events:auto;cursor:pointer}
+  background:url("images/sanctuary/taper.webp") 50% 0/100% auto no-repeat;transform:rotate(var(--lean));transform-origin:50% 100%;pointer-events:auto;cursor:var(--hand,pointer)}
 .sn-candle::before{content:"";position:absolute;left:50%;top:-.8cqw;width:.2cqw;height:.85cqw;margin-left:-.1cqw;border-radius:1px;background:#2A1A10}
 .sn-candle::after{content:"";position:absolute;inset:-1.6cqw -1cqw 0}
 /* the flame (assets/images/sanctuary/flame.webp, docs/tools/render_candle.py): its root sits a tenth up the picture, at the wick */
