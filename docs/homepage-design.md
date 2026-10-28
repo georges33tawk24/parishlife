@@ -8,11 +8,13 @@ and let them ask the parish office for something.
 ## Concept: the sanctuary, and the lights of the valley
 
 The homepage opens inside a church at night, so a visitor knows at once where they are: a wall of
-hewn sandstone, a stained-glass window (a rose with the cross of the Maronites above two lancets,
+dressed limestone, a stained-glass window (a rose with the cross of the Maronites above two lancets,
 one with the cedar of Lebanon and one with the chalice), shafts of coloured light falling across
 the nave, a sanctuary lamp on its chains, and candles on the window sill. **Each parish on
 ParishLife is one lit candle**; the shorter candles beside them wait, and a visitor may light one
-for their intention. Everything in it is drawn by the page (SVG and CSS), not downloaded.
+for their intention. The window, the wall, the candles and their brass tray are rendered pictures
+(see "The sanctuary render" below); the light, the haze, the lamp and the motion are drawn by the
+page (SVG and CSS).
 
 The light through the glass follows the hour in Beirut: rose and gold at dawn, strong golden
 shafts by day, amber in the evening, moonlight at night (`?light=dawn`, `day`, `dusk` or `night`
@@ -269,7 +271,7 @@ form on warm limestone, in the public site's type and colours (`assets/auth.css`
 | --- | --- |
 | Page shell, header, footer | `public.html`, `assets/site.css` (fonts, tokens, chrome; shared by every public page) |
 | Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
-| Sanctuary scene | `assets/home-sanctuary.js` (window, wall, arcade, light, haze, lamp and candles, mosaic, all generated) and `assets/sanctuary.css`; used by the homepage, parish pages, their banners and the sign-in screen |
+| Sanctuary scene | `assets/home-sanctuary.js` (the window picture and a parish's initial over it, arcade, light, haze, lamp and candles, mosaic) and `assets/sanctuary.css`; rendered pictures in `assets/images/sanctuary/` made by `docs/tools/render_sanctuary.py`, `render_wall.py` and `render_candle.py`; used by the homepage, parish pages, their banners and the sign-in screen |
 | Church details | `assets/church.css` (loaded last on public pages: hero words over the scene, niches, stars, bell, initial, chapel, notices, wax seals, frieze, flames on the map), `assets/liturgy.js` (seasons and feasts) |
 | Valley (parish pages) | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
@@ -407,12 +409,50 @@ python docs/tools/render_valley.py /tmp/valley --size 2560x1440 --portrait 1080x
 python docs/tools/render_valley.py /tmp/valley --publish .
 ```
 
+### The sanctuary render
+
+The window is designed as a glazier's cartoon in `docs/tools/sanctuary_window.mjs`: every piece of
+glass with its colour, the lead between them, the stone tracery over them. The rose has the cross
+of the Maronites at its heart, a ring of ruby, a ring of jewels and twelve leaves of ruby and green
+between the spokes; the lancets have jewelled borders, pale quarries and a medallion each (the cedar
+on its hill, the chalice and the host). `docs/tools/sanctuary_layers.mjs` draws it in layers
+(glass, lead, tracery, openings, stone outline) with Playwright, and `docs/tools/render_sanctuary.py`
+gives them their materials:
+
+- **Glass:** each piece its own sheet, its colour taken as transmittance and raised to a thickness
+  that varies with streaks drawn its own way, so deep colours deepen; some pieces are seedy with
+  bubbles, the pale quarries are hammered rolled glass with a quatrefoil in silver stain outlined in
+  grisaille; the painter's matt darkens each piece toward its leads, so it glows from within; dust
+  gathers at the foot. Daylight behind is brighter above and toward the sun.
+- **Lead and solder:** rounded came that catches the candles, with solder where the cames meet.
+- **Stone:** the arch's voussoirs and keystone, coursed ashlar in the plate with voussoirs turned
+  round each opening, chamfers and splays, worn arrises, mortar, pits and soot; lit by the candles
+  from below, by the glass on the splays and the ribs' edges, with ambient occlusion.
+- **Bloom** from the brightest glass, an ACES-like tone curve and a little grain.
+
+The default window has the cedar and the chalice (`window-1080.webp`, `window-1620.webp`); a
+parish's window (`parish-<ground>-1080.webp`) has a blank left medallion on one of four grounds
+(deep blue, wine, moss, violet, chosen from the parish id) where the page sets the parish's initial
+in gold glass, and the cedar on the right. `docs/tools/render_wall.py` renders a seamless tile of
+dressed limestone (1152 by 576 CSS pixels) and `docs/tools/render_candle.py` the flame, the beeswax
+taper with its drips and the brass tray. They need numpy, scipy and Pillow; every random choice is
+seeded, so a render repeats exactly.
+
+```
+node docs/tools/sanctuary_layers.mjs /tmp/sanctuary 2 window:deep:cedar:chalice parish-deep:deep:blank:cedar parish-wine:wine:blank:cedar parish-moss:moss:blank:cedar parish-violet:violet:blank:cedar
+python3 docs/tools/render_sanctuary.py /tmp/sanctuary/window assets/images/sanctuary/window 1080,1620
+python3 docs/tools/render_sanctuary.py /tmp/sanctuary/parish-wine assets/images/sanctuary/parish-wine 1080
+python3 docs/tools/render_wall.py assets/images/sanctuary 1.25
+python3 docs/tools/render_candle.py assets/images/sanctuary
+```
+
 ### Assets and licences
 
 - Marcellus, Amiri and Source Sans 3: SIL Open Font License, notices in `assets/fonts/`.
 - GSAP 3.15.0: GreenSock Standard "No Charge" License, see `assets/vendor/gsap/README.md`.
 - Lenis 1.3.26: MIT License, `assets/vendor/lenis/LICENSE.txt`.
 - The valley images, mist and `crest-dawn.webp` are generated by `docs/tools/render_valley.py`.
+- The sanctuary pictures in `assets/images/sanctuary/` are generated by the tools above.
 - Lebanon outline and governorates: Natural Earth 1:10m, public domain.
 - `church-light.webp` and `church-interior.webp` are resized copies of the Unsplash photographs
   credited in `docs/public-site-design.md`. `og-home.jpg` is the dusk valley layers with the headline.
