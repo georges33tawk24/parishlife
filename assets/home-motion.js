@@ -6,6 +6,16 @@
    a script fails to load, every element simply shows in its final state. */
 let mm = null, introPlayed = false, introPlayedBefore = false, lenis = null;
 const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* A lighter page for phones that would struggle, or when the visitor asked to save data: no
+   smooth-scrolling engine, no canvas of fireflies, no image parallax and no glass blur; the
+   rest of the motion stays. */
+export const lite = (() => {
+  try {
+    const n = navigator;
+    return !!(n.connection?.saveData || (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && matchMedia('(pointer: coarse)').matches));
+  } catch { return false; }
+})();
+if (lite) document.documentElement.classList.add('is-lite');
 
 export function stopHomeMotion() { mm?.revert(); mm = null; }
 
@@ -34,12 +44,12 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
   mm = gsap.matchMedia();
   mm.add({ motion: '(prefers-reduced-motion: no-preference)', calm: '(prefers-reduced-motion: reduce)', fine: '(pointer: fine)' }, context => {
     if (context.conditions.calm) { onMapDrawn?.(); return undefined; }
-    smoothScroll(gsap, ScrollTrigger);
+    if (!lite) smoothScroll(gsap, ScrollTrigger);
     const hero = root.querySelector('[data-hero]');
     const stops = [
       hero && heroMotion(gsap, hero, onDawn),
       hero && context.conditions.fine && pointerDepth(gsap, hero),
-      hero && fireflies(hero),
+      hero && !lite && fireflies(hero),
       context.conditions.fine && magnetic(gsap, root),
       context.conditions.fine && tilt(root),
       context.conditions.fine && candle(root),
@@ -48,7 +58,7 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
       reveals(gsap, root),
       counters(gsap, root),
       litText(gsap, root),
-      parallaxImages(gsap, root),
+      !lite && parallaxImages(gsap, root),
       mapMotion(gsap, root, onMapDrawn)
     ];
     // Web fonts and images change the page height after the triggers are measured.

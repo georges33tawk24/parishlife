@@ -1,7 +1,7 @@
 import { applySiteTheme } from './theme.js';
 import { bundlePage, errorPage, bindRequest, trackingPage, photos, parishPhotos, paginateCollections } from './public-features.js';
 import { homeView, mountHome, unmountHome } from './home.js';
-import { parishView, mountParish, requestView, calendarPageView, mountSubpage, mountPlain, unmountParish } from './parish.js';
+import { parishView, mountParish, requestView, calendarPageView, eventView, mountSubpage, mountPlain, unmountParish } from './parish.js';
 
 document.addEventListener('error',event=>{
   const image=event.target;
@@ -53,6 +53,11 @@ const icons = {
 const icon = name => '<svg class="icon icon-' + name + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (icons[name] || icons.church) + '</svg>';
 let lang = 'en';
 try { if (localStorage.getItem('pl-lang') === 'ar') lang = 'ar'; } catch {}
+/* A shared link can carry its language (?lang=ar), so it opens as the sender saw it. */
+if (['ar', 'en'].includes(new URLSearchParams(location.search).get('lang'))) {
+  lang = new URLSearchParams(location.search).get('lang');
+  try { localStorage.setItem('pl-lang', lang); } catch {}
+}
 const L = (en, ar) => lang === 'ar' ? ar : en;
 const T = key => L(...copy[key]);
 const pair = (obj, en = 'en', ar = 'ar') => obj?.[lang === 'ar' ? ar : en] || obj?.[en] || obj?.[ar] || '';
@@ -100,9 +105,14 @@ function publishedDate(value) {
   return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en', {dateStyle:'medium'}).format(date);
 }
 /* Everything the homepage reads, shared by its view and its behaviour. */
+const eventURL = (id, eventId) => 'public.html?parish=' + encodeURIComponent(id) + '&event=' + encodeURIComponent(eventId);
+/* The calendar feed of a parish, for calendars to subscribe to (webcal opens the calendar app). */
+const feedURL = (id, scheme = location.protocol) => scheme.replace(':', '') + '://' + location.host + '/api/public/parishes/' + encodeURIComponent(id) + '/calendar.ics' + (lang === 'ar' ? '?lang=ar' : '');
+/* A link to share: absolute, and in the language the visitor is reading. */
+const shareURL = path => new URL(path + (lang === 'ar' ? (path.includes('?') ? '&' : '?') + 'lang=ar' : ''), location.href).href;
 const homeContext = () => ({ lang, L, safe, htmlText, icon, directory, details, site, filters, pair, parishName, townName, number, normalize, localToday,
   content: (d, key) => content(d, key), profileURL, requestURL, calendarURL: id => 'public.html?parish=' + encodeURIComponent(id) + '&view=calendar',
-  REQUESTS, OTHER_REQUESTS, parishPhotos, publishedDate });
+  eventURL, feedURL, shareURL, REQUESTS, OTHER_REQUESTS, parishPhotos, publishedDate });
 
 function render() {
   unmountHome();
@@ -120,23 +130,24 @@ function render() {
     mountPlain(app);
   } else {
     const isHome = params.get('view') !== 'bundles' && !selected, c = homeContext();
-    const page = params.get('view') === 'bundles' ? 'bundles' : !selected ? 'home' : params.has('request') ? (d.publicRequests === false ? 'closed' : 'request') : params.get('view') === 'calendar' ? 'calendar' : 'parish';
-    app.innerHTML = (failed.length ? '<div class="site-wrap load-notice" role="status">' + L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ') + '<button class="text-button retry-load">' + L('Try again', 'حاول مجدّدًا') + '</button></div>' : '') + ({
+    const page = params.get('view') === 'bundles' ? 'bundles' : !selected ? 'home' : params.has('request') ? (d.publicRequests === false ? 'closed' : 'request') : params.get('view') === 'calendar' ? 'calendar' : params.has('event') ? 'event' : 'parish';
+    app.innerHTML = (navigator.onLine === false ? '<div class="site-wrap load-notice" role="status">' + L('You are offline. This is what ParishLife showed on this device last time.', 'أنت غير متصل بالإنترنت. هذا ما عرضه ParishLife على هذا الجهاز في المرة الأخيرة.') + '</div>' : '') + (failed.length ? '<div class="site-wrap load-notice" role="status">' + L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ') + '<button class="text-button retry-load">' + L('Try again', 'حاول مجدّدًا') + '</button></div>' : '') + ({
       bundles: () => bundlePage(),
       home: () => homeView(c),
       closed: () => errorPage(L('Contact the parish office', 'تواصل مع مكتب الرعية'), L('This parish takes requests through its office rather than online.', 'تستقبل هذه الرعية الطلبات عبر مكتبها لا عبر الإنترنت.') + (d.parish.phone ? ' <bdi>' + safe(d.parish.phone) + '</bdi>' : ''),
         (d.parish.phone ? `<a class="btn btn-gilt" href="tel:${safe(String(d.parish.phone).replace(/[^\d+]/g, ''))}">${L('Call the parish office', 'اتصل بمكتب الرعية')}</a>` : '') + `<a class="btn btn-ink-line" href="public.html?parish=${encodeURIComponent(p.id)}">${L('Parish page', 'صفحة الرعية')}</a>`),
       request: () => requestView(c, p, d, params.get('request')),
       calendar: () => calendarPageView(c, p, d),
+      event: () => eventView(c, p, d, params.get('event')),
       parish: () => parishView(c, p, d)
     })[page]();
     if (isHome) mountHome(app, c);
     else if (page === 'parish') mountParish(app, c, p, d);
-    else if (page === 'request' || page === 'calendar') mountSubpage(app, c, p, d);
+    else if (page === 'request' || page === 'calendar' || page === 'event') mountSubpage(app, c, p, d);
     else mountPlain(app);
   }
   app.setAttribute('aria-busy', 'false');
-  document.title = (selected && p ? parishName(p) : L('Find your parish', 'ابحث عن رعيتك')) + ' · ParishLife';
+  document.title = app.querySelector('[data-doc-title]')?.dataset.docTitle || (selected && p ? parishName(p) : L('Find your parish', 'ابحث عن رعيتك')) + ' · ParishLife';
   if(p&&d)bindRequest(app,p);
   paginateCollections(app);
   document.querySelectorAll('.retry-load').forEach(button => button.addEventListener('click', load));
@@ -153,13 +164,16 @@ async function load() {
   app.setAttribute('aria-busy', 'true');
   loadFailure = false;
   try {
-    // The homepage content is optional: without it the page uses its built-in wording.
-    const [payload, siteContent] = await Promise.all([getJSON('/api/public/parishes'), getJSON('/api/public/site').catch(() => null)]);
-    directory = payload.parishes || [];
+    // One overview of every parish; the homepage content is optional (without it the page uses its built-in wording).
+    const [overview, siteContent] = await Promise.all([getJSON('/api/public/overview'), getJSON('/api/public/site').catch(() => null)]);
+    directory = overview.parishes || [];
     site = siteContent;
-    const responses = await Promise.allSettled(directory.map(p => getJSON('/api/public/parishes/' + encodeURIComponent(p.id))));
-    details = new Map(); failed = [];
-    responses.forEach((result, i) => result.status === 'fulfilled' ? details.set(directory[i].id, result.value) : failed.push(directory[i].id));
+    details = new Map(Object.entries(overview.details || {})); failed = [];
+    // A parish's own pages need everything its office published, not only the overview's share.
+    if (selected && directory.some(p => p.id === selected)) {
+      try { details.set(selected, await getJSON('/api/public/parishes/' + encodeURIComponent(selected))); }
+      catch { details.delete(selected); failed.push(selected); }
+    }
     if (filters.town && !directory.some(p => p.town === filters.town)) filters.town = '';
   } catch { loadFailure = true; }
   render();
@@ -181,4 +195,8 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && !m
 addEventListener('resize', () => { if (innerWidth > 900) closeMenu(); }, {passive:true});
 updateChrome();
 load();
+/* Installable, and readable offline with what it last showed (see sw.js). */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+addEventListener('online', () => { if (loadFailure || document.querySelector('.load-notice')) load(); });
 

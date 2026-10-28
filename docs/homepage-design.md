@@ -45,10 +45,13 @@ Left-aligned in English and mirrored in Arabic. The map never mirrors: geography
 │    wherever you are in Lebanon.
 │    [ Parish, town or village ……………… ] [Search]
 │
-├─ THIS WEEK: the seven days as a ribbon (a red lamp marks today, dots mark what is published) and the
-│    week's celebrations as cards with a date arch and an add-to-calendar button; a day narrows them
+├─ THIS WEEK: "Still to come today" (what has not started yet by Beirut's clock, across every parish),
+│    the seven days as a ribbon (a red lamp marks today, dots mark what is published) and the
+│    week's celebrations as cards with a date arch and an add-to-calendar button; a day narrows them,
+│    and each card opens the event's own page
 │
 ├─ DIRECTORY: [ map of Lebanon, relief lines, parish lights ] [ parish list, arch photos ]
+│    search forgives spelling: Arabic or Latin letters, French or English forms, Arabizi
 │
 ├─ ASK YOUR PARISH: baptism · first communion · confirmation · marriage · funeral · certificate,
 │    then the three steps (send · the office reviews · follow with your private link)
@@ -127,8 +130,10 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
 - **Hero:** without a photograph, the valley flies in to the parish's own gold light, named, at a
   village of its own (chosen from the parish id, so it stays put). With a photograph, the photograph
   fills the hero. Then the parish's name in both languages, a plain line built from its town, rite
-  and diocese (or its own welcome text), the way to ask the office, and the next published event,
-  counting down.
+  and diocese (or its own welcome text), the next Mass ("Today at 18:00 · in 2 hours", by Beirut's
+  clock, marked "Beirut time" for a visitor abroad), the way to ask the office, the livestream when
+  there is one, sharing (WhatsApp, copy the link, the phone's own sheet), and the next published
+  event, counting down. Within 40 days of the parish feast a gold line counts down to it.
 - **Section bar:** sticks under the header, names the parish once the hero is behind, and slides a
   gold line under the section being read.
 - **Events and calendar** is on every parish page, linked from a hero button: the next four
@@ -136,12 +141,19 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   button that saves all of them to the visitor's calendar, then the calendar itself (a month of
   days with dots, the chosen day or the rest of the month beside it, a coming-up list, and search)
   and a link to the calendar on its own page. A parish with nothing published yet says so and
-  still shows the month.
+  still shows the month. Beneath it, **Never miss a celebration**: subscribe to the parish calendar
+  (a feed the visitor's calendar keeps up to date), Google Calendar, the parish's WhatsApp channel
+  when it has one, and following the parish from a ParishLife account.
 - **Other sections,** each shown only when the parish has published something for it: About
-  (history and facts), Mass times (the published text, the Masses of the next seven days,
-  confession and office hours), Ministries and clergy, Requests (the arcade, straight to this parish), News, Photographs (with a
-  lightbox), and Visit (contact details, directions, and the map of Lebanon zooming in to the
-  parish). Parishes nearby close the page.
+  (history and facts, the feast day among them), Mass times (the published text, the Masses of the
+  next seven days, confession and office hours, the livestream), Ministries and clergy, Requests (the
+  arcade, straight to this parish, with "Before you ask: what to bring" when the office has written
+  it), News, Photographs (with a lightbox), and Visit (contact details, Plan your visit: what to
+  expect, languages and rite, parking and accessibility; directions, and the map of Lebanon zooming
+  in to the parish). Parishes nearby close the page.
+- **Event page** (`&event=…`): one event, with when (and how far away), where and what; saving it to
+  the visitor's calendar or to Google Calendar, directions, sharing, and what else is coming at the
+  parish. Every event card and calendar entry links to it, and a shared link carries its preview.
 - **Request form** (`&request=…`): the request type as a choice of arches, then who is asking and the
   request itself, with what happens next beside it. Sending it draws a gold check and gives the
   private tracking link with a copy button. **Tracking** (`#track=…`) shows where the request stands
@@ -156,16 +168,29 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   takes requests only through its office): an unlit lamp in an arch, what happened, and the way back.
 - **Phone menu:** the whole screen at night, the links rising one by one, the valley's villages at the
   foot and the members portal as the one gold button.
+- **On a phone:** the site installs as an app (`site.webmanifest`, icons in `assets/images/icons/`),
+  and `sw.js` keeps what the public pages last showed readable without a connection (the network
+  always comes first; the portal and private links are never kept). On a phone asking to save data,
+  or one with little memory, the page drops smooth scrolling, the fireflies, image parallax and glass
+  blur (`lite` in `assets/home-motion.js`).
 
 ## Sign in and sign up
 
 The members portal opens on the valley at dusk beside a compact form, in the public site's type
-and colours (`assets/auth.css`, scoped to `.account-auth`). Every field and check of the account
-form is kept; sign-up pairs its fields (names, email and phone, the two passwords) so it fits one
-screen, and passwords can be shown. The way to sign in (username, email or phone) is a choice of
-three, not a dropdown. The portal stops the page itself from scrolling (its panels scroll inside), so the
-sign-in screen is its own scrolling area, with the valley pinned beside the form; on short laptop screens
-the spacing tightens so signing in fits without scrolling.
+and colours (`assets/auth.css`, scoped to `.account-auth`).
+
+- **Sign in:** one field for an email, a phone number (typed as it is dialled in Lebanon) or a
+  username, the password, "Forgot your password?" (the parish office resets it), and **Sign in with a
+  passkey** where the browser supports passkeys.
+- **Sign up:** names, the date of birth as day, month and year, email and/or phone (with +961 in
+  front unless another country code is typed), and the two passwords with their rules shown before
+  typing and ticked off as they are met. Turnstile appears when the platform has a key for it. A new
+  account opens on My account with a note on choosing a parish, already following the parish whose
+  page the visitor came from.
+- **My account → Sign-in and security** adds and removes passkeys, one per device.
+- The portal stops the page itself from scrolling (its panels scroll inside), so the sign-in screen is
+  its own scrolling area, with the valley pinned beside the form; on short laptop screens the spacing
+  tightens so signing in fits without scrolling.
 
 ## Content and the dashboard
 
@@ -174,8 +199,9 @@ the spacing tightens so signing in fits without scrolling.
   (the verse among them), in English and Arabic, with drafts and publishing.
 - **Parish Website content** (each parish): welcome, history, Mass times, contact and
   sacraments text, already edited under Website content.
-- **Public parish profile** (each parish): photos, coordinates, visiting information.
-  Coordinates place the parish on the map.
+- **Public parish profile** (each parish): photos, coordinates, visiting information, the patron
+  feast and its day, languages and rite, parking, what to expect on a first visit, what to bring for
+  a sacrament, the livestream and the WhatsApp channel. Coordinates place the parish on the map.
 - **Calendar and announcements** (each parish): public events and posts.
 
 ## Implementation
@@ -188,10 +214,40 @@ the spacing tightens so signing in fits without scrolling.
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
 | Motion | `assets/home-motion.js` (homepage and parish pages) |
 | Parish pages | `assets/parish.js`, `assets/parish.css`, calendar in `assets/public-calendar.js`; request sending and tracking in `assets/public-features.js` |
-| Sign in and sign up | `assets/auth.js`, `assets/auth.css` |
+| Sign in and sign up | `assets/auth.js`, `assets/auth.css`; passkeys in `assets/passkeys.js`, Turnstile in `assets/turnstile.js` |
+| Search | `assets/search.js` (homepage hero, directory and parish picker) |
+| Public data, previews | `backend/public_site.py` and `cloudflare/src/public-site.js` (kept in parity) |
+| Sign-in protections, passkeys | `backend/sign_in.py` and `cloudflare/src/sign-in.js` (kept in parity), `backend/common-passwords.json` |
+| App and offline | `site.webmanifest`, `sw.js`, `assets/images/icons/` |
 | Built-in wording | `assets/site-defaults.js`, shared by the homepage and the editor |
 | Homepage editor | `assets/views/homepage-editor.js` |
 | Homepage content API | `backend/site_content.py` and `cloudflare/src/site-content.js` (kept in parity), table `pl_site_content` in `backend/workspace-schema.json` |
+
+### Public data and link previews
+
+- `GET /api/public/overview`: every parish with what the homepage shows of it, in one answer (the
+  homepage used to fetch each parish's full page). A parish's own pages also fetch its full
+  `GET /api/public/parishes/<id>`.
+- `GET /api/public/parishes/<id>/calendar.ics` (`?lang=ar` for Arabic titles): the parish's public
+  events as a calendar feed, in Beirut time, refreshed by calendars every few hours.
+- `public.html?parish=…` (and `&event=…`) is answered with that parish's or event's title,
+  description and picture in its preview tags, every address absolute, and schema.org `Church` or
+  `Event` data, so a link shared on WhatsApp shows the parish rather than the homepage. On
+  Cloudflare this needs `run_worker_first` for `/public.html` (`wrangler.jsonc`).
+
+### Sign-in protections
+
+- Ten wrong passwords for one account, or sixty from one address, within fifteen minutes pause
+  signing in for that account or address (table `pl_login_failures`, keys stored as hashes).
+- A new password is refused when it is common, contains the email or phone, or appears in Have I Been
+  Pwned's Pwned Passwords (only the first five characters of its SHA-1 are sent; if the service
+  cannot be reached the password is accepted).
+- Passkeys (WebAuthn, ES256 and RS256) are stored in `pl_passkeys`; the sign-in challenge travels in
+  a five-minute cookie. They work on the site's own address over HTTPS, and on `localhost`.
+- **Settings the platform can add** (Cloudflare: Worker variables and secrets; `server.py`:
+  environment variables): `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` turn on Turnstile for sign-up
+  and requests; `CF_ANALYTICS_TOKEN` adds Cloudflare Web Analytics (no cookies) to the public pages.
+  Without them nothing changes.
 
 ### Homepage content API
 

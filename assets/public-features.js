@@ -1,3 +1,4 @@
+import { mountTurnstile } from './turnstile.js';
 import { paginateCollections } from './collection-ui.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const L=(en,ar)=>document.documentElement.lang==='ar'?ar:en;
@@ -6,11 +7,13 @@ export const parishPhotos=d=>[d?.parishPhoto,...(Array.isArray(d?.gallery)?d.gal
 const REQUEST_STATUS={submitted:['Sent to the parish office','أُرسل إلى مكتب الرعية'],'office-review':['The parish office is reviewing it','قيد المراجعة لدى مكتب الرعية'],'missing-documents':['Documents are missing','مستندات ناقصة'],'ready-for-collection':['Ready to collect from the parish','جاهز للاستلام من الرعية'],'ready-for-download':['Ready to download','جاهز للتنزيل'],closed:['Closed','مُغلق']};
 export function bindRequest(host,p) {
   const form=host.querySelector('[data-guest-request]');if(!form)return;
+  let check=null;
+  mountTurnstile(form.querySelector('[data-turnstile]'),document.documentElement.lang==='ar'?'ar':'en').then(state=>{check=state;});
   form.onsubmit=async e=>{
     e.preventDefault();const b=form.querySelector('button[type=submit]'),error=form.querySelector('[data-request-error]');
     b.disabled=true;error.textContent='';
     try{
-      const q={...Object.fromEntries(new FormData(form)),parish:p.id,responsibleAdult:form.elements.responsibleAdult.checked};
+      const q={...Object.fromEntries(new FormData(form)),parish:p.id,responsibleAdult:form.elements.responsibleAdult.checked,...(check?{turnstile:check.token}:{})};
       const response=await fetch('/api/public/guest-requests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not send request.');
       const link=new URL('public.html',location.href);link.hash='track='+data.trackingToken;
@@ -22,7 +25,7 @@ export function bindRequest(host,p) {
       const copy=result.querySelector('[data-copy]'),field=result.querySelector('input');
       copy.onclick=async()=>{try{await navigator.clipboard.writeText(field.value);copy.textContent=L('Copied','تم النسخ');}catch{field.select();}};
       result.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
-    }catch(err){error.textContent=err.message;b.disabled=false;}
+    }catch(err){error.textContent=err.message;b.disabled=false;check?.reset();}
   };
 }
 /* The private tracking page: where the request stands, as four steps, and any documents. */

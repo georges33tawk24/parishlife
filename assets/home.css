@@ -84,6 +84,17 @@
 .week,.ask,.times,.news,.about{padding-block:var(--section-pad)}
 .week{background:var(--mist)}
 .wk{display:grid;gap:22px}
+.wk-tonight{display:flex;flex-wrap:wrap;align-items:center;gap:12px 26px;margin:0 0 26px;padding:12px clamp(12px,2vw,16px) 12px clamp(18px,2.4vw,26px);border-radius:24px;background:radial-gradient(ellipse 50% 140% at 0% 0%,rgb(215 165 72 / .16),transparent 60%),var(--night);color:var(--on-night)}
+.wk-tonight h3{display:flex;align-items:center;gap:10px;margin:0;font-size:20px;white-space:nowrap}
+.wk-tonight h3 .lamp{background:var(--gilt);box-shadow:0 0 0 4px rgb(215 165 72 / .16),0 0 14px rgb(215 165 72 / .8);animation:lamp-breathe 3s ease-in-out infinite alternate}
+.wk-tonight ul{flex:1 1 320px;min-width:0;display:flex;gap:10px;margin:0;padding:2px 0;list-style:none;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:rgb(238 241 246 / .2) transparent}
+.wk-tonight li{flex:none;scroll-snap-align:start}
+.wk-tonight a{display:flex;align-items:center;gap:14px;padding:10px 18px 10px 14px;border-radius:18px;background:rgb(238 241 246 / .06);border:1px solid var(--hair-dark);color:inherit;text-decoration:none;transition:border-color .25s,transform .4s var(--ease-out)}
+.wk-tonight a:hover{border-color:var(--gilt);transform:translateY(-2px)}
+.wk-tonight time{font-family:var(--display);font-size:24px;line-height:1;color:var(--gilt-hi);font-variant-numeric:tabular-nums}
+.wk-tonight b{display:block;max-width:15em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600;font-size:15.5px}
+.wk-tonight small{display:block;max-width:18em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13.5px;color:var(--on-night-2)}
+@media(prefers-reduced-motion:reduce){.wk-tonight h3 .lamp{animation:none}.wk-tonight a{transition:none}}
 .wk-days{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
 .wk-day{width:100%;display:grid;justify-items:center;gap:3px;padding:16px 6px 12px;border-radius:50% 50% 16px 16px / 30px 30px 16px 16px;border:1px solid var(--hair);background:var(--white);color:var(--ink);font:inherit;
   transition:transform .45s var(--ease-out),border-color .25s,background-color .3s,color .3s,box-shadow .45s var(--ease-out)}
@@ -94,7 +105,7 @@ button.wk-day{cursor:pointer}
 .wk-dots i{width:6px;height:6px;border-radius:50%;background:var(--gilt)}
 .wk-dots .lamp{width:7px;height:7px;box-shadow:0 0 0 3px rgb(178 58 43 / .14),0 0 10px rgb(178 58 43 / .5)}
 .wk-day.is-quiet{background:transparent}
-.wk-day.is-quiet b{color:#8A93A5}
+.wk-day.is-quiet b{color:#5F6980}
 .wk-day.is-today{border-color:rgb(178 58 43 / .35);background:linear-gradient(180deg,rgb(178 58 43 / .06),var(--white) 60%)}
 button.wk-day:hover{transform:translateY(-3px);border-color:#B8C1CF;box-shadow:0 16px 28px -22px rgb(21 32 58 / .5)}
 .wk-day[aria-pressed=true]{background:var(--night);border-color:var(--night);color:var(--on-night)}

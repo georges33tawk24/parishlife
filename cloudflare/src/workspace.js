@@ -9,6 +9,8 @@ import { ministryHandle } from './ministry.js';
 import { siteContent } from './site-content.js';
 import modules from '../../backend/modules.json' with { type: 'json' };
 import schema from '../../backend/workspace-schema.json' with { type: 'json' };
+import { passwordProblem } from './sign-in.js';
+import { VISIT_KEYS, PROFILE_KEYS, checkProfile } from './public-site.js';
 import { need, NOW, tokenHex, tokenUrlsafe, sha256hex, passwordHash } from './py.js';
 import { loginName } from './accounts.js';
 import { ROUNDS } from './member.js';
@@ -82,6 +84,7 @@ export async function workspaceSignup(c,q) {
   need(age>=13&&age<=120,'Accounts are available to people aged 13 and older.');
   need(typeof q.password==='string'&&q.password.length>=8&&q.password.length<=200,'Choose a password of at least 8 characters.');
   need(q.password===q.confirmPassword,'The passwords do not match.');
+  const weak=await passwordProblem(q.password,[email,phone]);need(!weak,weak);
   for(const value of [email,phone].filter(Boolean)){
     need(!await c.first('SELECT 1 FROM users WHERE username=?',value)&&!await c.first('SELECT 1 FROM pl_identities WHERE value=?',value),
       'This contact already has an account. Sign in to connect additional methods.',409);
@@ -209,7 +212,7 @@ export async function publicProfile(c,pid,state) {
     const title=await c.first('SELECT title FROM pl_clergy_titles WHERE user_id=? ORDER BY created_at DESC LIMIT 1',r.id);clergy.push({name:r.name,title:title?.title||'Priest'});
   }
   return {clergy,parishPhoto:state.PHOTOS?.parish||'',gallery:state.PARISH.gallery||[],ministries:(state.GROUPS||[]).filter(g=>(g.vis||'public')==='public'&&g.public!==false).map(g=>({id:g.id,name:g.name||'',nameAr:g.ar||g.nameAr||'',description:g.description||'',responsible:g.leaderName||state.PEOPLE.find(p=>p.id===g.leader)?.lat||'',joining:'Send an inquiry to the parish office.'})),
-    publicRequests:(await parishPlan(c,pid)).publicRequests!==false,visit:Object.fromEntries(['email','officeHours','confessionTimes','accessibility','latitude','longitude','website'].map(k=>[k,state.PARISH[k]||'']))};
+    publicRequests:(await parishPlan(c,pid)).publicRequests!==false,visit:Object.fromEntries(VISIT_KEYS.map(k=>[k,state.PARISH[k]||'']))};
 }
 export async function parishContext(c,user,pid,snapshot=null) {
   snapshot??=await authorizationSnapshot(c,user);
@@ -298,13 +301,14 @@ async function adminHandle(c,u,path,method,q) {
   if(path==='/api/workspace/public-profile'){
     need(manage.includes(manager),'Parish management access required.',403);
     const row=await c.first('SELECT revision,data FROM states WHERE parish_id=?',pid),state=JSON.parse(row.data);
-    const keys=['phone','email','address','officeHours','confessionTimes','accessibility','website','latitude','longitude'];
+    const keys=PROFILE_KEYS;
     if(method==='GET')return {revision:row.revision,profile:{...Object.fromEntries(keys.map(k=>[k,state.PARISH[k]??''])),gallery:state.PARISH.gallery||[],massTimes:state.CONTENT?.massTimes?.en||'',massTimesAr:state.CONTENT?.massTimes?.ar||''}};
     need(method==='PUT','Method not allowed.',405);need(q.revision===row.revision,'Parish details changed. Reopen this form before saving.',409);
     const values=Object.fromEntries([...keys,'massTimes','massTimesAr'].map(k=>[k,String(q[k]??'').trim()]));
     need(Object.values(values).every(v=>v.length<=2000),'Keep each field within 2,000 characters.');
     need(!values.email||EMAIL.test(values.email),'Enter a valid parish email address.');
     need(!values.website||/^https:\/\/[^\s]+$/.test(values.website),'Use an HTTPS website address.');
+    checkProfile(values);
     const gallery=q.gallery||[];need(Array.isArray(gallery)&&gallery.length<=12&&gallery.every(v=>typeof v==='string'&&v.length<=2000&&/^https:\/\/[^\s]+$/.test(v)),'Add up to twelve HTTPS image links.');
     need(!!values.latitude===!!values.longitude,'Enter both coordinates or leave both empty.');
     if(values.latitude)need(Number.isFinite(Number(values.latitude))&&Math.abs(Number(values.latitude))<=90&&Number.isFinite(Number(values.longitude))&&Math.abs(Number(values.longitude))<=180,'Enter valid coordinates.');

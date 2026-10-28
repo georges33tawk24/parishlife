@@ -14,22 +14,49 @@ export const KINDS = { mass: ['Mass', 'قدّاس'], sacr: ['Sacrament', 'سرّ
   wedding: ['Wedding', 'إكليل'], baptism: ['Baptism', 'معمودية'], funeral: ['Funeral', 'جنّاز'] };
 export const kindName = (L, kind) => L(...(KINDS[kind] || KINDS.event));
 
-/* Events as .ics data links that the visitor's calendar opens: one event, or all of them. */
-function vevent(e, name, place) {
-  const start = e.d.replace(/-/g, '') + (e.t ? 'T' + e.t.replace(':', '') + '00' : '');
-  const end = e.t ? new Date(`${e.d}T${e.t}`) : null;
-  if (end) end.setHours(end.getHours() + 1);
-  const text = v => String(v).replace(/[,;\\]/g, m => '\\' + m);
-  return ['BEGIN:VEVENT', `UID:${e.id || start}@parishlife`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-    e.t ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${start}`,
-    end ? `DTEND:${dayKey(end).replace(/-/g, '')}T${pad(end.getHours())}${pad(end.getMinutes())}00` : '', `SUMMARY:${text(name)}`,
-    place ? `LOCATION:${text(place)}` : '', 'END:VEVENT'].filter(Boolean);
+/* Events as .ics data links that the visitor's calendar opens: one event, or all of them. Times
+   are Beirut times, so a visitor abroad sees them at the right hour in their own calendar. */
+const TIMEZONE = ['BEGIN:VTIMEZONE', 'TZID:Asia/Beirut', 'X-LIC-LOCATION:Asia/Beirut',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:+0300', 'TZOFFSETTO:+0200', 'TZNAME:EET', 'DTSTART:19701025T000000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0300', 'TZNAME:EEST', 'DTSTART:19700329T000000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+  'END:VTIMEZONE'];
+/* Start and end as calendar stamps: an hour for a timed event, the whole day otherwise. */
+function span(e) {
+  if (/^\d{2}:\d{2}$/.test(e.t || '')) {
+    const end = new Date(`${e.d}T${e.t}:00Z`);
+    end.setUTCHours(end.getUTCHours() + 1);
+    return { timed: true, start: e.d.replace(/-/g, '') + 'T' + e.t.replace(':', '') + '00', end: end.toISOString().slice(0, 16).replace(/[-:]/g, '') + '00' };
+  }
+  const end = new Date(e.d + 'T00:00:00Z');
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { timed: false, start: e.d.replace(/-/g, ''), end: end.toISOString().slice(0, 10).replace(/-/g, '') };
 }
-const calendarFile = vevents => 'data:text/calendar;charset=utf-8,' + encodeURIComponent(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', ...vevents, 'END:VCALENDAR'].join('\r\n'));
-export const icsHref = (e, name, place = '') => calendarFile(vevent(e, name, place));
-export const icsAllHref = (events, nameOf, place = '') => calendarFile(events.flatMap(e => vevent(e, nameOf(e), place)));
+function vevent(e, name, place, url) {
+  const { timed, start, end } = span(e), text = v => String(v).replace(/[,;\\]/g, m => '\\' + m);
+  return ['BEGIN:VEVENT', `UID:${e.id || start}@parishlife`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
+    timed ? `DTSTART;TZID=Asia/Beirut:${start}` : `DTSTART;VALUE=DATE:${start}`, timed ? `DTEND;TZID=Asia/Beirut:${end}` : `DTEND;VALUE=DATE:${end}`,
+    `SUMMARY:${text(name)}`, place ? `LOCATION:${text(place)}` : '', url ? `URL:${url}` : '', 'END:VEVENT'].filter(Boolean);
+}
+const calendarFile = vevents => 'data:text/calendar;charset=utf-8,' + encodeURIComponent(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', ...TIMEZONE, ...vevents, 'END:VCALENDAR'].join('\r\n'));
+export const icsHref = (e, name, place = '', url = '') => calendarFile(vevent(e, name, place, url));
+export const icsAllHref = (events, nameOf, place = '', urlOf = () => '') => calendarFile(events.flatMap(e => vevent(e, nameOf(e), place, urlOf(e))));
+/* The same event opened in Google Calendar, ready to save. */
+export function googleHref(e, name, place = '', details = '') {
+  const { start, end } = span(e), q = new URLSearchParams({ action: 'TEMPLATE', text: name, dates: `${start}/${end}`, ctz: 'Asia/Beirut' });
+  if (place) q.set('location', place);
+  if (details) q.set('details', details);
+  return 'https://calendar.google.com/calendar/render?' + q;
+}
 export const icsName = name => (String(name || 'event').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'event') + '.ics';
 export const ADD_ICON = ADD;
+/* Now in Beirut, where the parishes keep their times, so a visitor abroad still reads "in 2 hours" right. */
+export function beirutNow() {
+  try {
+    const part = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Beirut', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date()).map(x => [x.type, x.value]));
+    return { d: `${part.year}-${part.month}-${part.day}`, t: `${part.hour}:${part.minute}` };
+  } catch { const d = new Date(); return { d: dayKey(d), t: `${pad(d.getHours())}:${pad(d.getMinutes())}` }; }
+}
 
 export function calendarMarkup(L) {
   return `<div class="pcal" data-pcal>
@@ -49,8 +76,9 @@ export function calendarMarkup(L) {
   </div>`;
 }
 
-/* events: [{id, d, t, title, titleAr, kind}]; place: the parish name and town for saved events. */
-export function mountCalendar(root, events, { L, lang, place = '' }) {
+/* events: [{id, d, t, title, titleAr, kind}]; place: the parish name and town for saved events;
+   link: an event's own page, when it has one. */
+export function mountCalendar(root, events, { L, lang, place = '', link = null }) {
   const box = root.querySelector('[data-pcal]');
   if (!box) return () => {};
   const loc = lang === 'ar' ? 'ar-LB' : 'en-GB', digits = new Intl.NumberFormat(loc);
@@ -65,8 +93,9 @@ export function mountCalendar(root, events, { L, lang, place = '' }) {
   const shown = () => { const q = fold(state.q.trim()); return q ? all.filter(e => fold(`${e.title} ${e.titleAr} ${kindName(L, e.kind)}`).includes(q)) : all; };
   const date = key => new Date(key + 'T12:00:00');
   const time = t => t ? new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit', hour12: false }).format(new Date(`2000-01-01T${t}`)) : L('All day', 'طوال اليوم');
-  const ics = e => icsHref(e, e.name, place);
-  const row = e => `<li class="pcal-ev k-${esc(e.kind || 'event')}"><time>${esc(time(e.t))}</time><div><strong dir="auto">${esc(e.name)}</strong><span>${esc(kindName(L, e.kind))}</span></div>
+  const page = e => link && e.id ? new URL(link(e), location.href).href : '';
+  const ics = e => icsHref(e, e.name, place, page(e));
+  const row = e => `<li class="pcal-ev k-${esc(e.kind || 'event')}"><time>${esc(time(e.t))}</time><div>${page(e) ? `<a class="pcal-ev-link" href="${esc(page(e))}"><strong dir="auto">${esc(e.name)}</strong></a>` : `<strong dir="auto">${esc(e.name)}</strong>`}<span>${esc(kindName(L, e.kind))}</span></div>
     <a class="pcal-add" href="${ics(e)}" download="${esc(icsName(e.name))}" title="${esc(L('Add to my calendar', 'أضف إلى رزنامتي'))}" aria-label="${esc(L(`Add ${e.name} to my calendar`, `أضف «${e.name}» إلى رزنامتي`))}">${ADD}</a></li>`;
   const group = list => {
     const days = [...new Set(list.map(e => e.d))];

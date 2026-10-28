@@ -18,3 +18,14 @@
 @media(max-width:760px){.account-grid{grid-template-columns:1fr}.account-parishes>article{align-items:start;flex-direction:column}.account-actions{justify-content:start}}
 
 .inbox-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px}.inbox-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px}.inbox-card h2{margin:0;font-size:19px}.inbox-card p{margin:0}.inbox-title{border:0;padding:0;background:none;color:var(--text);text-align:start;font:inherit;cursor:pointer}.inbox-title:hover{text-decoration:underline}.inbox-preview{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;color:var(--text-2)}.inbox-unread{border-inline-start:4px solid var(--primary)}.message-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;margin:24px 0}.inbox-grid>.collection-pagination{grid-column:1/-1}
+/* A new account's first look: where to choose the parish. */
+.account-welcome{display:grid;gap:10px;justify-items:start;margin:24px 0 0;padding:22px 24px;border-radius:16px;border:1px solid var(--border);border-inline-start:4px solid #D7A548;background:var(--surface,#fff)}
+.account-welcome h2{margin:0;font-size:22px}
+.account-welcome p{margin:0;max-width:60ch;color:var(--text-2)}
+/* Passkeys in Sign-in and security */
+.account-passkeys{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.account-passkeys h4{margin:0 0 6px;font-size:16px}
+.passkey-list{display:grid;gap:0;margin:10px 0 14px;padding:0;list-style:none}
+.passkey-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
+.passkey-list b{display:block}
+.passkey-list small{color:var(--text-2)}

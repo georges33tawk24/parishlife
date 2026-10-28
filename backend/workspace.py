@@ -7,6 +7,9 @@ import secrets
 import copy
 from pathlib import Path
 
+from .sign_in import password_problem
+from .public_site import VISIT_KEYS, PROFILE_KEYS, check_profile
+
 SCHEMA = json.loads(Path(__file__).with_name('workspace-schema.json').read_text(encoding='utf-8'))
 MODULES = json.loads(Path(__file__).with_name('modules.json').read_text(encoding='utf-8'))
 EXTRA_ROLES = {'super_admin', 'diocesan_admin', 'parish_admin'}
@@ -99,6 +102,8 @@ def signup(c, q, normalize, hash_password, require):
     password = q.get('password')
     require(isinstance(password, str) and 8 <= len(password) <= 200, 'Choose a password of at least 8 characters.')
     require(password == q.get('confirmPassword'), 'The passwords do not match.')
+    weak = password_problem(password, [email, phone])
+    require(not weak, weak)
     for value in [email, phone]:
         if value:
             require(not c.execute('SELECT 1 FROM users WHERE username=?', (value,)).fetchone()
@@ -278,7 +283,7 @@ def public_profile(c, pid, state):
                        joining='Send an inquiry to the parish office.')
                   for g in state.get('GROUPS', []) if g.get('vis','public')=='public' and g.get('public',True)]
     return {'clergy': clergy, 'ministries': ministries, 'parishPhoto':state.get('PHOTOS',{}).get('parish',''), 'gallery':parish.get('gallery',[]),
-            'publicRequests':parish_plan(c,pid).get('publicRequests',True), 'visit': {k: parish.get(k, '') for k in ('email','officeHours','confessionTimes','accessibility','latitude','longitude','website')}}
+            'publicRequests':parish_plan(c,pid).get('publicRequests',True), 'visit': {k: parish.get(k, '') for k in VISIT_KEYS}}
 
 
 def parish_context(c, user, pid, snapshot=None):
@@ -399,7 +404,7 @@ def admin_handle(c,user,path,method,q,require):
         require(manager in manage,'Parish management access required.',403)
         row=c.execute('SELECT revision,data FROM states WHERE parish_id=?',(pid,)).fetchone()
         state=json.loads(row['data'])
-        keys=('phone','email','address','officeHours','confessionTimes','accessibility','website','latitude','longitude')
+        keys=PROFILE_KEYS
         if method=='GET':
             return {'revision':row['revision'],'profile':{**{k:state['PARISH'].get(k,'') for k in keys},'gallery':state['PARISH'].get('gallery',[]),'massTimes':state.get('CONTENT',{}).get('massTimes',{}).get('en',''),'massTimesAr':state.get('CONTENT',{}).get('massTimes',{}).get('ar','')}}
         require(method=='PUT','Method not allowed.',405)
@@ -408,6 +413,7 @@ def admin_handle(c,user,path,method,q,require):
         require(all(len(v)<=2000 for v in values.values()),'Keep each field within 2,000 characters.')
         require(not values['email'] or EMAIL.fullmatch(values['email']),'Enter a valid parish email address.')
         require(not values['website'] or re.fullmatch(r'https://[^\s]+',values['website']),'Use an HTTPS website address.')
+        check_profile(values,require)
         gallery=q.get('gallery',[])
         require(isinstance(gallery,list) and len(gallery)<=12 and all(isinstance(v,str) and len(v)<=2000 and re.fullmatch(r'https://[^\s]+',v) for v in gallery),'Add up to twelve HTTPS image links.')
         require(bool(values['latitude'])==bool(values['longitude']),'Enter both coordinates or leave both empty.')

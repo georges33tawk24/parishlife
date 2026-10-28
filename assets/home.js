@@ -5,7 +5,8 @@
 import { valleyMarkup, mountValley } from './home-valley.js';
 import { mapMarkup, locate, mountMap, projection } from './home-map.js';
 import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
-import { icsHref, icsName, kindName, ADD_ICON } from './public-calendar.js';
+import { icsHref, icsName, kindName, beirutNow, ADD_ICON } from './public-calendar.js';
+import { find } from './search.js';
 import { HOME_DEFAULTS } from './site-defaults.js';
 
 let teardown = [];
@@ -131,14 +132,14 @@ function week(c) {
   const card = (e, later = false) => {
     const title = c.pair(e, 'title', 'titleAr') || kind(e), d = date(e.d), place = [c.parishName(e.parish), c.townName(e.parish)].filter(Boolean).join(L(', ', '، '));
     return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-day="${safe(e.d)}" data-reveal-item>
-      <a class="wk-ev-link" href="${safe(c.calendarURL(e.parish.id))}">
+      <a class="wk-ev-link" href="${safe(e.id ? c.eventURL(e.parish.id, e.id) : c.calendarURL(e.parish.id))}">
         <span class="wk-date" aria-hidden="true"><small>${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(d))}</small><b>${safe(digits(c, d.getDate()))}</b><small>${safe(new Intl.DateTimeFormat(loc, { month: 'short' }).format(d))}</small></span>
         <span class="wk-body">${later ? `<span class="wk-later">${L('Coming later', 'لاحقاً')}</span>` : ''}
           <span class="wk-meta">${e.t ? `<time>${safe(digits(c, e.t))}</time>` : ''}<span class="wk-kind">${safe(kind(e))}</span></span>
           <strong dir="auto">${safe(title)}</strong>
           <span class="wk-where">${PIN}${safe(place)}</span>
           <span class="sr-only">${safe(new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d))}</span></span></a>
-      <a class="wk-add" href="${icsHref(e, title, place)}" download="${safe(icsName(title))}" aria-label="${safe(L(`Add ${title} to my calendar`, `أضف «${title}» إلى رزنامتي`))}" title="${safe(L('Add to my calendar', 'أضف إلى رزنامتي'))}">${ADD_ICON}</a></li>`;
+      <a class="wk-add" href="${icsHref(e, title, place, e.id ? c.shareURL(c.eventURL(e.parish.id, e.id)) : '')}" download="${safe(icsName(title))}" aria-label="${safe(L(`Add ${title} to my calendar`, `أضف «${title}» إلى رزنامتي`))}" title="${safe(L('Add to my calendar', 'أضف إلى رزنامتي'))}">${ADD_ICON}</a></li>`;
   };
   const tag = inWeek.length ? 'button' : 'span';    // with nothing to filter, the ribbon is only a picture of the week
   const ribbon = `<ol class="wk-days" aria-label="${safe(L('The next seven days', 'الأيام السبعة المقبلة'))}">${days.map((d, i) => {
@@ -150,15 +151,26 @@ function week(c) {
   }).join('')}</ol>`;
   if (!inWeek.length) {
     const next = all.find(e => e.d > days[6]);
-    return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}
+    return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}${tonight(c, all)}
       <div class="wk" data-reveal>${ribbon}
         <div class="wk-quiet"><span class="lamp is-unlit" aria-hidden="true"></span><p>${L('No celebrations have been published for the next seven days yet.', 'لم تُنشر احتفالات للأيام السبعة المقبلة بعد.')}${next ? '' : ` ${L('Parish offices add public Masses and events from their parish calendar in ParishLife.', 'تضيف مكاتب الرعايا القداديس والأحداث العامة من رزنامة الرعية في ParishLife.')}`}</p></div>
         ${next ? `<ul class="wk-list">${card(next, true)}</ul>` : ''}</div></div></section>`;
   }
-  return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}
+  return `<section class="week" id="week" aria-labelledby="week-title"><div class="site-wrap">${head}${tonight(c, all)}
     <div class="wk" data-wk>${ribbon}
       <ul class="wk-list" data-wk-list>${inWeek.map(e => card(e)).join('')}</ul>
       <p class="wk-none" data-wk-none hidden></p></div></div></section>`;
+}
+
+/* Still to come today, across every parish: the Masses and celebrations that have not started
+   yet by the clock in Beirut, soonest first. Nothing is shown once the day's last one has begun. */
+function tonight(c, all) {
+  const { L, safe } = c, now = beirutNow();
+  const left = all.filter(e => e.d === now.d && /^\d{2}:\d{2}$/.test(e.t || '') && e.t >= now.t).slice(0, 8);
+  if (!left.length) return '';
+  return `<div class="wk-tonight" data-reveal><h3><span class="lamp" aria-hidden="true"></span>${L('Still to come today', 'لاحقاً اليوم')}</h3>
+    <ul>${left.map(e => `<li><a href="${safe(e.id ? c.eventURL(e.parish.id, e.id) : c.calendarURL(e.parish.id))}"><time>${safe(digits(c, e.t))}</time>
+      <span><b dir="auto">${safe(c.pair(e, 'title', 'titleAr') || kindName(L, e.kind))}</b><small>${safe([c.parishName(e.parish), c.townName(e.parish)].filter(Boolean).join(L(', ', '، ')))}</small></span></a></li>`).join('')}</ul></div>`;
 }
 
 /* ---------- directory ---------- */
@@ -198,10 +210,10 @@ function km(c, item) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 function filtered(c, places) {
-  const { filters } = c, q = c.normalize(filters.q.trim());
-  return c.directory.filter(p => (!filters.town || p.town === filters.town) && (!filters.diocese || p.diocese === filters.diocese)
-      && (!filters.rite || c.details.get(p.id)?.parish?.rite === filters.rite)
-      && (!q || c.normalize([p.name, p.ar, p.town, p.townAr, p.diocese].join(' ')).includes(q)))
+  const { filters } = c;
+  const chosen = c.directory.filter(p => (!filters.town || p.town === filters.town) && (!filters.diocese || p.diocese === filters.diocese)
+      && (!filters.rite || c.details.get(p.id)?.parish?.rite === filters.rite));
+  return find(filters.q, chosen, p => [p.name, p.ar, p.town, p.townAr, p.diocese].join(' '), c.normalize)
     .map(p => ({ p, d: km(c, places.get(p.id)) }))
     .sort((a, b) => filters.location ? (a.d ?? Infinity) - (b.d ?? Infinity) || c.parishName(a.p).localeCompare(c.parishName(b.p), c.lang)
       : (filters.sort === 'town' ? c.townName(a.p).localeCompare(c.townName(b.p), c.lang) : 0) || c.parishName(a.p).localeCompare(c.parishName(b.p), c.lang));
@@ -413,11 +425,10 @@ function searchMount(home, c, dir) {
   const towns = [...new Map(c.directory.filter(p => p.town || p.townAr).map(p => [p.town || p.townAr, p])).values()];
   const close = () => { box.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; };
   const render = () => {
-    const q = c.normalize(input.value.trim());
-    if (!q) return close();
-    const parishes = c.directory.filter(p => c.normalize([p.name, p.ar, p.town, p.townAr].join(' ')).includes(q)).slice(0, 5)
+    if (!c.normalize(input.value.trim())) return close();
+    const parishes = find(input.value, c.directory, p => [p.name, p.ar, p.town, p.townAr].join(' '), c.normalize).slice(0, 5)
       .map(p => ({ kind: 'parish', id: p.id, label: c.parishName(p), sub: c.townName(p) }));
-    const places = towns.filter(p => c.normalize([p.town, p.townAr].join(' ')).includes(q)).slice(0, 3)
+    const places = find(input.value, towns, p => [p.town, p.townAr].join(' '), c.normalize).slice(0, 3)
       .map(p => ({ kind: 'town', town: p.town, label: c.townName(p), sub: L('Town', 'بلدة') }));
     options = [...parishes, ...places];
     box.innerHTML = options.length ? options.map((o, i) => `<li role="option" id="hero-opt-${i}" data-index="${i}" aria-selected="false">${o.kind === 'parish' ? '<span class="lamp" aria-hidden="true"></span>' : PIN}<span><b>${safe(o.label)}</b><small>${safe(o.sub)}</small></span></li>`).join('')
@@ -465,8 +476,7 @@ function pickerMount(home, c) {
   const list = dialog.querySelector('[data-picker-list]'), filter = dialog.querySelector('[data-picker-filter]'), title = dialog.querySelector('#picker-title');
   let kind = '';
   const paint = () => {
-    const q = c.normalize(filter.value.trim());
-    const rows = open.filter(p => !q || c.normalize([p.name, p.ar, p.town, p.townAr].join(' ')).includes(q)).sort((a, b) => c.parishName(a).localeCompare(c.parishName(b), c.lang));
+    const rows = find(filter.value, open, p => [p.name, p.ar, p.town, p.townAr].join(' '), c.normalize).sort((a, b) => c.parishName(a).localeCompare(c.parishName(b), c.lang));
     list.innerHTML = rows.map(p => `<li><a href="${safe(c.requestURL(p.id, kind))}">${thumb(c, p)}<span><b>${safe(c.parishName(p))}</b><small>${safe(c.townName(p))}</small></span></a></li>`).join('') || `<li class="no-match">${L('No parish matches.', 'لا رعية مطابقة.')}</li>`;
   };
   home.querySelectorAll('[data-request]').forEach(link => link.addEventListener('click', e => {

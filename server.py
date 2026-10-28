@@ -31,6 +31,8 @@ ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'var' / 'parishlife.sqlite3'
 GEOGRAPHY = json.loads((ROOT / 'backend' / 'geography.json').read_text(encoding='utf-8'))['governorates']
 from backend import workspace
+from backend import sign_in
+from backend import public_site
 
 ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'} | workspace.EXTRA_ROLES
 # Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
@@ -2656,6 +2658,7 @@ def member_action(c, u, pid, q):
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, '.webmanifest': 'application/manifest+json'}
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
@@ -2672,8 +2675,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
-        if cookie: self.send_header('Set-Cookie', cookie)
+        for value in (cookie if isinstance(cookie, list) else [cookie]):
+            if value: self.send_header('Set-Cookie', value)
         self.end_headers(); self.wfile.write(body)
+
+    def reply_text(self, text, content_type):
+        body = text.encode()
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers(); self.wfile.write(body)
+
+    def origin(self):
+        return ('https://' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else 'http://') + self.headers.get('Host', '')
+
+    def public_page(self):
+        """The public site with the preview tags of the shared link (a parish or one of its events)."""
+        parts = urlsplit(self.path)
+        if parts.path not in {'/', '/public.html'}: return False
+        page = (ROOT / 'public.html').read_text(encoding='utf-8')
+        try:
+            with connect() as c:
+                meta = public_site.share_meta(c, parse_qs(parts.query), self.origin())
+        except sqlite3.Error:
+            meta = None
+        body = public_site.share_page(page, meta, self.origin(), os.environ.get('CF_ANALYTICS_TOKEN', '')).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if self.command == 'GET': self.wfile.write(body)
+        return True
 
     def reply_file(self, row):
         self.send_response(200)
@@ -2687,7 +2719,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         target = Path(self.translate_path(self.path)).resolve()
         if not target.is_relative_to(ROOT) or '/..' in path:
             return False
-        if path in {'/', '/index.html', '/landing.html', '/public.html'}:
+        if path in {'/', '/index.html', '/landing.html', '/public.html', '/sw.js', '/site.webmanifest'}:
             return True
         if not path.startswith('/assets/') or not target.is_relative_to(ROOT / 'assets'):
             return False
@@ -2700,24 +2732,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         parts = urlsplit(self.path)
         if parts.path == '/': self.path = '/public.html' + ('?' + parts.query if parts.query else '')
 
-    def start_session(self, c, user_id):
+    def start_session(self, c, user_id, extra_cookie=None):
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         c.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
         c.execute('INSERT INTO sessions VALUES(?,?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user_id, csrf, time.time()+28800))
         c.commit()
         secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
-        return self.reply(200, {'ok': True}, f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}')
+        return self.reply(200, {'ok': True}, [f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}', extra_cookie])
+
+    def passkey_context(self):
+        challenge = http.cookies.SimpleCookie(self.headers.get('Cookie', '')).get('pl_passkey')
+        return sign_in.passkey_context(self.headers.get('Host', ''), os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1', challenge.value if challenge else '')
 
     def do_GET(self):
         if self.path.startswith('/api/'): return self.api()
         if not self.public_asset_allowed():
             return self.send_error(404)
+        if self.public_page(): return
         self.home_page()
         return super().do_GET()
 
     def do_HEAD(self):
         if not self.public_asset_allowed():
             return self.send_error(404)
+        if self.public_page(): return
         self.home_page()
         return super().do_HEAD()
 
@@ -2758,35 +2796,38 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     pieces=path.strip('/').split('/')
                     require(len(pieces)==5,'Document not found.',404)
                     return self.reply_file(public_file(c,pieces[3],pieces[4],require))
+                if self.command == 'POST' and path in {'/api/signup', '/api/public/guest-requests'}:
+                    sign_in.human_check(q, self.client_address[0], require)
                 if path.startswith('/api/public/'):
                     result = workspace.handle(c, None, path, self.command, q, require)
                     if result is not None:
                         c.commit()
+                        if path == '/api/public/auth-options':
+                            result = {**result, 'turnstile': os.environ.get('TURNSTILE_SITE_KEY', ''), 'passkeys': True}
                         return self.reply(200, result)
                 if path == '/api/public/parishes' and self.command == 'GET':
                     return self.reply(200, {'parishes': [dict(id=row['id'], name=meta.get('name', ''), ar=meta.get('ar', ''),
                                                             town=meta.get('town', ''), townAr=meta.get('townAr', ''), diocese=row['diocese'])
                                            for row in c.execute('SELECT p.id,p.metadata,d.name AS diocese FROM parishes p JOIN dioceses d ON d.id=p.diocese')
                                            for meta in [json.loads(row['metadata'])]]})
+                if path == '/api/public/overview' and self.command == 'GET':
+                    return self.reply(200, public_site.overview(c, workspace.parish_plan(c, '')))
+                if path.startswith('/api/public/parishes/') and path.endswith('/calendar.ics') and self.command == 'GET':
+                    pieces = path.strip('/').split('/')
+                    require(len(pieces) == 5, 'Parish not found.', 404)
+                    lang = parse_qs(urlsplit(self.path).query).get('lang', [''])[0]
+                    return self.reply_text(public_site.calendar_feed(c, pieces[3], self.origin(), lang == 'ar', require), 'text/calendar; charset=utf-8')
                 if path.startswith('/api/public/parishes/') and self.command == 'GET':
                     public_id = path.rsplit('/', 1)[-1]
                     row = c.execute('SELECT data FROM states WHERE parish_id=?', (public_id,)).fetchone()
                     require(row is not None, 'Parish not found.', 404)
                     public_state = json.loads(row['data'])
                     parish = public_state['PARISH']
-                    content = {key: {'en': item.get('en', ''), 'ar': item.get('ar', '')}
-                               for key, item in public_state.get('CONTENT', {}).items()
-                               if isinstance(item, dict) and item.get('published', True)}
-                    events = []
-                    for event in public_state.get('EVENTS', []):
-                        detail = public_state.get('EVENT_DETAIL', {}).get(event.get('id'), {})
-                        if event.get('kind') == 'pending' or (detail.get('visibility') != 'public'
-                            and not (not detail and event.get('kind') in {'mass', 'event'})): continue
-                        events.append({key: event.get(key, '') for key in ('id', 'd', 't', 'title', 'titleAr', 'kind')})
+                    content = public_site.published_content(public_state)
+                    events = public_site.public_events(public_state)
                     posts = [dict(title=item['title'], body=item['body'], at=item['created_at'])
                              for item in c.execute("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", (public_id,))]
-                    posts.extend(dict(title=n.get('title', ''), body=n.get('ar', ''), at=n.get('at', ''))
-                                 for n in public_state.get('NOTICES', []) if n.get('audience') == 'Parish' and not n.get('groupId'))
+                    posts.extend(public_site.notices(public_state))
                     posts.sort(key=lambda item: item['at'], reverse=True)
                     public_parish = {key: parish.get(key, '') for key in
                                      ('name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone')}
@@ -2797,9 +2838,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                              'content': content, 'events': events, 'posts': posts,
                                              **workspace.public_profile(c, public_id, public_state)})
                 if path == '/api/login' and self.command == 'POST':
+                    address = self.client_address[0]
+                    sign_in.login_guard(c, q, address, login_name, require)
                     u = workspace.login_user(c, q, login_name, require)
-                    require(u is not None and u['role'] in SIGN_IN_ROLES and password_matches(u['password'], str(q.get('password', ''))), 'Incorrect username or password.', 401)
+                    if not (u is not None and u['role'] in SIGN_IN_ROLES and password_matches(u['password'], str(q.get('password', '')))):
+                        sign_in.login_failed(c, q, address, login_name)
+                        require(False, 'Incorrect username or password.', 401)
+                    sign_in.login_succeeded(c, q, login_name)
                     return self.start_session(c, u['id'])
+                if path == '/api/passkey/options' and self.command == 'POST':
+                    ctx = self.passkey_context()
+                    options = sign_in.passkey_options(c, None, ctx)
+                    return self.reply(200, options, ctx['cookie'](options['challenge']))
+                if path == '/api/passkey/login' and self.command == 'POST':
+                    ctx = self.passkey_context()
+                    u = c.execute('SELECT * FROM users WHERE id=?', (sign_in.passkey_user(c, q, ctx, require),)).fetchone()
+                    require(u is not None and u['role'] in SIGN_IN_ROLES and not workspace.suspended(c, u['id']), 'This account cannot sign in.', 403)
+                    return self.start_session(c, u['id'], ctx['cookie'](''))
                 if path == '/api/signup' and self.command == 'POST':
                     return self.start_session(c, workspace.signup(c, q, login_name, password_hash, require))
                 cookie = http.cookies.SimpleCookie(self.headers.get('Cookie', ''))
@@ -2824,6 +2879,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     require(len(pieces)==5,'File not found.',404)
                     return self.reply_file(account_file(c,u,pieces[3],pieces[4],require))
                 workspace_query = dict(q)
+                if path == '/api/account/passkeys/options' and self.command == 'POST':
+                    ctx = self.passkey_context()
+                    options = sign_in.passkey_options(c, u, ctx)
+                    return self.reply(200, options, ctx['cookie'](options['challenge']))
+                if path.startswith('/api/account/passkeys'):
+                    ctx = self.passkey_context()
+                    passkey_result = sign_in.account_passkeys(c, u, path, self.command, q, ctx, require)
+                    if passkey_result is not None:
+                        c.commit()
+                        return self.reply(200, passkey_result, ctx['cookie']('') if self.command == 'POST' and path == '/api/account/passkeys' else None)
                 from backend.account_security import handle as account_security
                 security_result=account_security(c,u,path,self.command,q,session['token'],password_hash,password_matches,require)
                 if security_result is not None:

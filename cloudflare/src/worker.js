@@ -20,7 +20,9 @@ import { parish_theme } from './state.js';
 import { member_view, member_action } from './member.js';
 import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
-import { initializeWorkspace, workspaceHandle, workspaceSignup, loginUser, sessionData, suspended, publicProfile, parishContext, isOffice } from './workspace.js';
+import { initializeWorkspace, workspaceHandle, workspaceSignup, loginUser, sessionData, suspended, publicProfile, parishContext, isOffice, parishPlan } from './workspace.js';
+import { overview, calendarFeed, publishedContent, publicEvents, notices, shareMeta, sharePage } from './public-site.js';
+import { loginGuard, loginFailed, loginSucceeded, humanCheck, passkeyContext, passkeyOptions, passkeyUser, accountPasskeys } from './sign-in.js';
 
 // Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
 const SIGN_IN_ROLES = new Set([...ROLES, 'user']);
@@ -41,7 +43,7 @@ class Reply {
 function reply(status, obj, cookie = null) {
   const body = JSON.stringify(obj);
   const headers = new Headers({ 'Content-Type': 'application/json; charset=utf-8' });
-  if (cookie) headers.set('Set-Cookie', cookie);
+  for (const value of [cookie].flat()) if (value) headers.append('Set-Cookie', value);
   for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
   return new Response(body, { status, headers });
 }
@@ -107,10 +109,17 @@ async function handle(c, env, request, url, q, secureCookie) {
     const file=await publicGuestFile(c,parts[3],parts[4]),data=await storedFile(c,file);
     return new Response(data,{headers:{...HEADERS,'Referrer-Policy':'no-referrer','Content-Type':file.mime,'Content-Disposition':"attachment; filename*=UTF-8''"+quote(file.name)}});
   }
+  if (path.startsWith('/api/public/parishes/') && path.endsWith('/calendar.ics') && method === 'GET') {
+    const parts = pathParts(path);
+    need(parts.length === 5, 'Parish not found.', 404);
+    const feed = await calendarFeed(c, parts[3], url.origin, url.searchParams.get('lang') === 'ar');
+    return new Response(feed, { headers: { ...HEADERS, 'Content-Type': 'text/calendar; charset=utf-8' } });
+  }
   if(path.startsWith('/api/public/')){
     const result=await workspaceHandle(c,null,path,method,q);
-    if(result!==null){await c.commit();return reply(200,result);}
+    if(result!==null){await c.commit();return reply(200,path==='/api/public/auth-options'?{...result,turnstile:env.TURNSTILE_SITE_KEY||'',passkeys:true}:result);}
   }
+  if (path === '/api/public/overview' && method === 'GET') return reply(200, await overview(c, await parishPlan(c, '')));
   if (path === '/api/public/parishes' && method === 'GET') {
     const rows = await c.all('SELECT p.id,p.metadata,d.name AS diocese FROM parishes p JOIN dioceses d ON d.id=p.diocese');
     return reply(200, { parishes: rows.map(row => {
@@ -124,24 +133,10 @@ async function handle(c, env, request, url, q, secureCookie) {
     need(row !== null, 'Parish not found.', 404);
     const publicState = JSON.parse(row.data);
     const parish = K(publicState, 'PARISH');
-    const content = {};
-    for (const [key, item] of items(get(publicState, 'CONTENT', {}))) {
-      if (isObject(item) && truthy(get(item, 'published', true))) content[key] = { en: get(item, 'en', ''), ar: get(item, 'ar', '') };
-    }
-    const events = [];
-    for (const event of iter(get(publicState, 'EVENTS', []))) {
-      const detail = get(get(publicState, 'EVENT_DETAIL', {}), get(event, 'id'), {});
-      if (eq(get(event, 'kind'), 'pending') || (!eq(get(detail, 'visibility'), 'public') &&
-        !(!truthy(detail) && has(new Set(['mass', 'event']), get(event, 'kind'))))) continue;
-      const item = {};
-      for (const key of ['id', 'd', 't', 'title', 'titleAr', 'kind']) item[key] = get(event, key, '');
-      events.push(item);
-    }
+    const content = publishedContent(publicState), events = publicEvents(publicState);
     const postRows = await c.all("SELECT title,body,created_at FROM member_content WHERE parish_id=? AND group_id IS NULL AND kind IN ('post','announcement') ORDER BY created_at DESC LIMIT 8", publicId);
     const posts = postRows.map(item => ({ title: item.title, body: item.body, at: item.created_at }));
-    for (const n of iter(get(publicState, 'NOTICES', []))) {
-      if (eq(get(n, 'audience'), 'Parish') && !truthy(get(n, 'groupId'))) posts.push({ title: get(n, 'title', ''), body: get(n, 'ar', ''), at: get(n, 'at', '') });
-    }
+    posts.push(...notices(publicState));
     const orderedPosts = sorted(posts, item => item.at, true);
     const publicParish = {};
     for (const key of ['name', 'nameAr', 'town', 'townAr', 'rite', 'riteAr', 'address', 'addressAr', 'phone']) publicParish[key] = get(parish, key, '');
@@ -149,17 +144,32 @@ async function handle(c, env, request, url, q, secureCookie) {
     if (!truthy(get(content, 'contact'))) Object.assign(publicParish, { address: '', addressAr: '', phone: '' });
     return reply(200, { parish: publicParish, content, events, posts: orderedPosts, ...await publicProfile(c,publicId,publicState) });
   }
-  const startSession = async userId => {
+  const startSession = async (userId, extraCookie = null) => {
     const token = tokenUrlsafe(32), csrf = tokenUrlsafe(32);
     c.run('DELETE FROM sessions WHERE expires<?', time());
     c.run('INSERT INTO sessions VALUES(?,?,?,?)', sha256hex(token), userId, csrf, time() + 28800);
     await c.commit();
-    return reply(200, { ok: true }, `pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`);
+    return reply(200, { ok: true }, [`pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`, extraCookie]);
   };
+  const address = request.headers.get('CF-Connecting-IP') || '', passkey = passkeyContext(request, url, secureCookie);
   if (path === '/api/login' && method === 'POST') {
+    await loginGuard(c, q, address);
     const u = await loginUser(c,q);
-    need(u !== null && SIGN_IN_ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))), 'Incorrect username or password.', 401);
+    if (!(u !== null && SIGN_IN_ROLES.has(u.role) && passwordMatches(u.password, str(get(q, 'password', ''))))) {
+      await loginFailed(c, q, address);
+      throw new Problem(401, 'Incorrect username or password.');
+    }
+    loginSucceeded(c, q);
     return startSession(u.id);
+  }
+  if (path === '/api/passkey/options' && method === 'POST') {
+    const options = await passkeyOptions(c, null, passkey);
+    return reply(200, options, passkey.cookie(options.challenge));
+  }
+  if (path === '/api/passkey/login' && method === 'POST') {
+    const u = await c.first('SELECT * FROM users WHERE id=?', await passkeyUser(c, q, passkey));
+    need(u !== null && SIGN_IN_ROLES.has(u.role) && !await suspended(c, u.id), 'This account cannot sign in.', 403);
+    return startSession(u.id, passkey.cookie(''));
   }
   if (path === '/api/signup' && method === 'POST') return startSession(await workspaceSignup(c, q));
   const token = sessionCookie(request.headers.get('Cookie'));
@@ -194,6 +204,12 @@ async function handle(c, env, request, url, q, secureCookie) {
     need(passwordMatches(u.password, String(q.currentPassword || '')), 'Your current password is not correct.', 403);
     q._recentAuthentication = true;
   }
+  if (path === '/api/account/passkeys/options' && method === 'POST') {
+    const options = await passkeyOptions(c, u, passkey);
+    return reply(200, options, passkey.cookie(options.challenge));
+  }
+  const passkeyResult = await accountPasskeys(c, u, path, method, q, passkey);
+  if (passkeyResult !== null) { await c.commit(); return reply(200, passkeyResult, method === 'POST' && path === '/api/account/passkeys' ? passkey.cookie('') : null); }
   const securityResult=await accountSecurity(c,u,path,method,q,session.token);
   if(securityResult!==null){await c.commit();return reply(200,securityResult);}
   const workspaceResult=await workspaceHandle(c,u,path,method,method==='GET'?Object.fromEntries(url.searchParams):q);
@@ -388,6 +404,10 @@ async function api(request, env, url,requestId) {
     return failure(error);
   }
   const secureCookie = url.protocol === 'https:' || env.PARISHLIFE_SECURE_COOKIE === '1' ? '; Secure' : '';
+  /* Once per request, before any retry: a Turnstile token can be checked only once. */
+  if (method === 'POST' && (url.pathname === '/api/signup' || url.pathname === '/api/public/guest-requests')) {
+    try { await humanCheck(env, parsed, request.headers.get('CF-Connecting-IP') || ''); } catch (error) { return failure(error); }
+  }
   for (let attempt = 1; ; attempt++) {
     const c = new Tx(env.DB);
     try {
@@ -445,13 +465,20 @@ export default {
     if (method === 'GET' && url.pathname.startsWith('/api/')) return tracedApi(request, env, url);
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') return tracedApi(request, env, url);
     if (method === 'GET' || method === 'HEAD') {
-      /* The site's address opens the public homepage; the system itself is index.html. */
-      if (url.pathname === '/') {
-        const asset = await env.ASSETS.fetch(new Request(new URL('/public.html', url), { method }));
+      /* The site's address opens the public homepage; the system itself is index.html. A shared
+         parish or event link carries that parish's or event's preview (see wrangler.jsonc). */
+      if (url.pathname === '/' || url.pathname === '/public.html') {
+        const asset = await env.ASSETS.fetch(new Request(new URL('/public.html', url)));
         if (asset.ok) {
-          const headers = new Headers(asset.headers);
+          let meta = null;
+          if (url.searchParams.get('parish')) {
+            try { await ensureDatabase(env.DB); meta = await shareMeta(new Tx(env.DB), url.searchParams, url.origin); }
+            catch (error) { console.error(error); meta = null; }
+          }
+          const body = sharePage(await asset.text(), meta, url.origin, env.CF_ANALYTICS_TOKEN || '');
+          const headers = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
           for (const [k, v] of Object.entries(HEADERS)) headers.set(k, v);
-          return new Response(method === 'HEAD' ? null : asset.body, { status: 200, headers });
+          return new Response(method === 'HEAD' ? null : body, { status: 200, headers });
         }
       }
       return errorPage(404, 'File not found', 'Nothing matches the given URI', method === 'HEAD');
