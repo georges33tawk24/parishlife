@@ -2,6 +2,7 @@
    beside it the events of the chosen day, or the rest of the month. A list view shows
    everything coming up. Search narrows both. Any event can be saved to the visitor's own
    calendar as an .ics file. */
+import { feastOn } from './liturgy.js';
 const pad = n => String(n).padStart(2, '0');
 const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const svg = d => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
@@ -9,6 +10,7 @@ const PREV = svg('<path d="m15 5-7 7 7 7"/>'), NEXT = svg('<path d="m9 5 7 7-7 7
 const SEARCH = svg('<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>');
 const ADD = svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4m8-4v4M3.5 10h17M12 13v5m-2.5-2.5h5"/>');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 
 export const KINDS = { mass: ['Mass', 'قدّاس'], sacr: ['Sacrament', 'سرّ'], group: ['Group', 'لقاء جماعة'], event: ['Parish event', 'حدث رعوي'],
   wedding: ['Wedding', 'إكليل'], baptism: ['Baptism', 'معمودية'], funeral: ['Funeral', 'جنّاز'] };
@@ -121,14 +123,16 @@ export function mountCalendar(root, events, { L, lang, place = '', link = null }
     list.forEach(e => byDay.set(e.d, [...(byDay.get(e.d) || []), e]));
     month.innerHTML = `<div class="pcal-heads" aria-hidden="true">${heads}</div><div class="pcal-grid">${Array.from({ length: cells }, (_, i) => {
       const d = new Date(y, m - 1, 1 - lead + i), k = dayKey(d), evs = byDay.get(k) || [], out = d.getMonth() !== m - 1;
-      const label = `${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d)}${evs.length ? ', ' + L(`${evs.length} ${evs.length === 1 ? 'event' : 'events'}`, `${digits.format(evs.length)} ${evs.length === 1 ? 'حدث' : evs.length === 2 ? 'حدثان' : evs.length <= 10 ? 'أحداث' : 'حدثاً'}`) : ''}`;
-      return `<button type="button" class="pcal-day${out ? ' is-out' : ''}${k === today ? ' is-today' : ''}${k === state.picked ? ' is-picked' : ''}${evs.length ? ' has-events' : ''}" data-day="${k}" aria-pressed="${k === state.picked}" aria-label="${esc(label)}">
-        <span class="pcal-n">${esc(digits.format(d.getDate()))}</span>${evs.length ? `<span class="pcal-dots" aria-hidden="true">${evs.slice(0, 4).map(e => `<i class="k-${esc(e.kind || 'event')}"></i>`).join('')}</span>` : ''}</button>`;
+      const feast = feastOn(k);
+      const label = `${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d)}${feast ? ', ' + L(feast.en, feast.ar) : ''}${evs.length ? ', ' + L(`${evs.length} ${evs.length === 1 ? 'event' : 'events'}`, `${digits.format(evs.length)} ${evs.length === 1 ? 'حدث' : evs.length === 2 ? 'حدثان' : evs.length <= 10 ? 'أحداث' : 'حدثاً'}`) : ''}`;
+      return `<button type="button" class="pcal-day${out ? ' is-out' : ''}${feast ? ' is-feast' : ''}${d.getDay() === 0 ? ' is-sunday' : ''}${k === today ? ' is-today' : ''}${k === state.picked ? ' is-picked' : ''}${evs.length ? ' has-events' : ''}" data-day="${k}" aria-pressed="${k === state.picked}" aria-label="${esc(label)}">
+        <span class="pcal-n">${esc(digits.format(d.getDate()))}</span>${feast ? `<span class="pcal-feast" aria-hidden="true" title="${esc(L(feast.en, feast.ar))}"></span>` : ''}${evs.length ? `<span class="pcal-dots" aria-hidden="true">${evs.slice(0, 4).map(e => `<i class="k-${esc(e.kind || 'event')}"></i>`).join('')}</span>` : ''}</button>`;
     }).join('')}</div>`;
     const inMonth = list.filter(e => e.d.startsWith(state.month));
     if (state.picked) {
       const day = list.filter(e => e.d === state.picked);
-      agenda.innerHTML = day.length ? group(day) : `<h4 class="pcal-quiet-head">${esc(new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(date(state.picked)))}</h4><p class="pcal-none">${L('Nothing published for this day.', 'لا شيء منشور لهذا اليوم.')}</p>`;
+      const feast = feastOn(state.picked), note = feast ? `<p class="pcal-feast-note">${esc(L(feast.en, feast.ar))}</p>` : '';
+      agenda.innerHTML = note + (day.length ? group(day) : `<h4 class="pcal-quiet-head">${esc(new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(date(state.picked)))}</h4><p class="pcal-none">${L('Nothing published for this day.', 'لا شيء منشور لهذا اليوم.')}</p>`);
     } else {
       const rest = state.month === today.slice(0, 7) ? inMonth.filter(e => e.d >= today) : inMonth;
       agenda.innerHTML = rest.length ? group(rest) : `<p class="pcal-none">${state.q ? L('No event matches this search this month.', 'لا حدث يطابق هذا البحث في هذا الشهر.') : L('Nothing published for the rest of this month.', 'لا شيء منشور لبقية هذا الشهر.')}</p>`;

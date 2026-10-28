@@ -58,7 +58,7 @@
 [dir=rtl] .steps li::before{content:counter(step,arabic-indic)}
 /* This week: Sundays carry the cross */
 .wk-day.is-sunday .wk-dow{display:inline-flex;align-items:center;gap:5px;color:var(--gilt-ink)}
-.wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23D7A548'%3E%3Cpath d='M5.1 2h1.8v13H5.1zM1.2 6.1h9.6v1.8H1.2z'/%3E%3Ccircle cx='6' cy='1.6' r='1.3'/%3E%3Ccircle cx='1.1' cy='7' r='1.1'/%3E%3Ccircle cx='10.9' cy='7' r='1.1'/%3E%3C/svg%3E") no-repeat 50%/contain}
+.wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
 /* This week: where the Church's year stands, and its great feasts on the ribbon */
 .wk-season{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:calc(clamp(32px,4vw,52px) * -.55) 0 clamp(22px,3vw,34px);font-size:15px;color:var(--ink-2)}
 .wk-season svg{width:14px;height:19px;color:var(--gilt)}
@@ -101,7 +101,7 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 .site-footer::before{content:"";display:block;height:28px;margin:-44px 0 44px;opacity:.4;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='28' viewBox='0 0 96 28' fill='none' stroke='%23D7A548' stroke-width='1.1'%3E%3Cpath d='M0 2.5H96M0 25.5H96' stroke-opacity='.5'/%3E%3Ccircle cx='24' cy='14' r='8' stroke-opacity='.8'/%3E%3Cpath d='M24 8.6v10.8M18.6 14h10.8' stroke-width='1.4'/%3E%3Cpath d='M72 7.5l6.5 6.5-6.5 6.5-6.5-6.5z' stroke-opacity='.7'/%3E%3Ccircle cx='72' cy='14' r='1.6' fill='%23D7A548' stroke='none'/%3E%3Cpath d='M44 14h8M92 14h8M-4 14h8' stroke-opacity='.45'/%3E%3C/svg%3E") repeat-x 0 50%/96px 28px}
 
 /* ---------- documents: the tracking page and the check page as parchment, sealed in wax ---------- */
-:root{--wax:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='w' cx='38%25' cy='32%25' r='70%25'%3E%3Cstop offset='0' stop-color='%23D4574B'/%3E%3Cstop offset='.55' stop-color='%23A42A26'/%3E%3Cstop offset='1' stop-color='%236E1616'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpolygon points='62.00,32.00 59.18,36.79 60.19,42.26 55.90,45.80 54.98,51.28 49.74,53.14 47.00,57.98 41.44,57.94 37.21,61.54 32.00,59.60 26.79,61.54 22.56,57.94 17.00,57.98 14.26,53.14 9.02,51.28 8.10,45.80 3.81,42.26 4.82,36.79 2.00,32.00 4.82,27.21 3.81,21.74 8.10,18.20 9.02,12.72 14.26,10.86 17.00,6.02 22.56,6.06 26.79,2.46 32.00,4.40 37.21,2.46 41.44,6.06 47.00,6.02 49.74,10.86 54.98,12.72 55.90,18.20 60.19,21.74 59.18,27.21' fill='url%28%23w%29'/%3E%3Ccircle cx='32' cy='32' r='20.5' fill='none' stroke='%236E1616' stroke-opacity='.55' stroke-width='1.6'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23F2A08F' stroke-opacity='.35' stroke-width='.8'/%3E%3Cg fill='%237A1A18' fill-opacity='.75'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3Ccircle cx='32' cy='19.4' r='2.2'/%3E%3Ccircle cx='32' cy='44.6' r='2.2'/%3E%3Ccircle cx='21.4' cy='30' r='2.2'/%3E%3Ccircle cx='42.6' cy='30' r='2.2'/%3E%3C/g%3E%3Cg fill='%23F6B3A2' fill-opacity='.35' transform='translate%28-.6 -.6%29'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3C/g%3E%3C/svg%3E")}
+:root{--feast-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23D7A548'%3E%3Cpath d='M5.1 2h1.8v13H5.1zM1.2 6.1h9.6v1.8H1.2z'/%3E%3Ccircle cx='6' cy='1.6' r='1.3'/%3E%3Ccircle cx='1.1' cy='7' r='1.1'/%3E%3Ccircle cx='10.9' cy='7' r='1.1'/%3E%3C/svg%3E");--wax:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='w' cx='38%25' cy='32%25' r='70%25'%3E%3Cstop offset='0' stop-color='%23D4574B'/%3E%3Cstop offset='.55' stop-color='%23A42A26'/%3E%3Cstop offset='1' stop-color='%236E1616'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpolygon points='62.00,32.00 59.18,36.79 60.19,42.26 55.90,45.80 54.98,51.28 49.74,53.14 47.00,57.98 41.44,57.94 37.21,61.54 32.00,59.60 26.79,61.54 22.56,57.94 17.00,57.98 14.26,53.14 9.02,51.28 8.10,45.80 3.81,42.26 4.82,36.79 2.00,32.00 4.82,27.21 3.81,21.74 8.10,18.20 9.02,12.72 14.26,10.86 17.00,6.02 22.56,6.06 26.79,2.46 32.00,4.40 37.21,2.46 41.44,6.06 47.00,6.02 49.74,10.86 54.98,12.72 55.90,18.20 60.19,21.74 59.18,27.21' fill='url%28%23w%29'/%3E%3Ccircle cx='32' cy='32' r='20.5' fill='none' stroke='%236E1616' stroke-opacity='.55' stroke-width='1.6'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23F2A08F' stroke-opacity='.35' stroke-width='.8'/%3E%3Cg fill='%237A1A18' fill-opacity='.75'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3Ccircle cx='32' cy='19.4' r='2.2'/%3E%3Ccircle cx='32' cy='44.6' r='2.2'/%3E%3Ccircle cx='21.4' cy='30' r='2.2'/%3E%3Ccircle cx='42.6' cy='30' r='2.2'/%3E%3C/g%3E%3Cg fill='%23F6B3A2' fill-opacity='.35' transform='translate%28-.6 -.6%29'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3C/g%3E%3C/svg%3E")}
 .track-card,.verify-card{background:linear-gradient(180deg,#FFFDF8,#FAF4E8);border-color:#E6D7B8;box-shadow:inset 0 0 0 6px #FFFDF8,inset 0 0 0 7px rgb(199 158 76 / .32),0 40px 80px -46px rgb(60 40 20 / .45)}
 .track-lamp{width:58px;height:58px;border-radius:50%;background:var(--wax) 50%/contain no-repeat;box-shadow:none;filter:drop-shadow(0 6px 8px rgb(90 20 20 / .35));animation:none}
 .verify-seal{width:72px;height:72px;background:var(--wax) 50%/contain no-repeat;color:transparent;filter:drop-shadow(0 6px 10px rgb(90 20 20 / .35))}
@@ -165,6 +165,21 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:pointer;font:inherit;transitio
 .fp-card.is-complete{box-shadow:inset 0 0 0 7px var(--night),inset 0 0 0 8px rgb(215 165 72 / .55),0 30px 60px -30px rgb(14 26 49 / .6)}
 .fp-steps li::before{content:counter(fp,upper-roman);background:radial-gradient(circle at 35% 30%,#22335C,var(--night));box-shadow:0 0 0 3px var(--mist),0 0 0 4px rgb(199 158 76 / .55)}
 [dir=rtl] .fp-steps li::before{content:counter(fp,arabic-indic)}
+
+/* the parish calendar: Sundays in gilt, feasts marked with the cross, named on the day */
+.pcal-day.is-sunday .pcal-n{color:var(--gilt-ink)}
+.pcal-day.is-feast{box-shadow:inset 0 0 0 1px rgb(199 158 76 / .65);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
+.pcal-feast{position:absolute;top:6px;inset-inline-end:6px;width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
+.pcal-day{position:relative}
+.pcal-feast-note{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-family:var(--display);font-size:20px;color:var(--gilt-ink)}
+.pcal-feast-note::before{content:"";width:12px;height:16px;background:var(--feast-cross) no-repeat 50%/contain}
+[dir=rtl] .pcal-feast-note{font-family:var(--arabic-display);font-weight:700}
+
+/* the event page: the day's place in the Church's year */
+.ev-feast{display:block;margin-top:2px;font-size:15px;color:var(--gilt-ink)}
+/* the request form: each kind of request a small gilded niche */
+.rq-kind{border-radius:60px 60px 14px 14px / 40px 40px 14px 14px;padding-top:16px;background:linear-gradient(180deg,#F3EBDC,#ECE2D0);border-color:#E3D3B2;box-shadow:inset 0 0 0 4px #F3EBDC,inset 0 0 0 5px rgb(199 158 76 / .4)}
+.rq-kind .arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .5),0 0 0 4px #FBF6EC,0 0 0 5px rgb(199 158 76 / .28)}
 
 @media(prefers-reduced-motion:reduce){
   .bell-body,.bell-clapper,.chapel-bell{animation:none!important}

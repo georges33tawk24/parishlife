@@ -7,6 +7,7 @@ import { mapMarkup, mountMap, locate, projection } from './home-map.js';
 import { animateHome, scrollToTarget } from './home-motion.js';
 import { monogram, initialOf, dioceseName, digits, noun, paragraphs, watchHero } from './home.js';
 import { sanctuaryMarkup, mountSanctuary } from './home-sanctuary.js';
+import { season, feastOn } from './liturgy.js';
 import { calendarMarkup, mountCalendar, kindName, icsHref, icsAllHref, icsName, googleHref, beirutNow as beirut, ADD_ICON } from './public-calendar.js';
 import { safeRichText } from './rich-text.js';
 
@@ -561,6 +562,9 @@ export function eventView(c, p, d, id) {
   const facts_ = [[I.clock, L('When', 'متى'), `<time datetime="${safe(e.d)}${TIME.test(e.t || '') ? 'T' + safe(e.t) : ''}">${safe(when(c, e))}</time>${soon ? ` <span class="wk-in">${safe(soon)}</span>` : ''}${abroad() && TIME.test(e.t || '') ? `<small class="ev-zone">${L('Beirut time', 'بتوقيت بيروت')}</small>` : ''}`],
     [I.pin, L('Where', 'أين'), `${safe(place)}${f.address ? `<small dir="auto">${safe(f.address)}</small>` : ''}`],
     [I.cross, L('What', 'ماذا'), safe(kindName(L, e.kind))]];
+  // where the day stands in the Church's year, and its feast if it has one
+  const year = season(e.d), feastDay = feastOn(e.d);
+  facts_.push([I.star, L('In the Maronite year', 'في السنة المارونية'), `${safe(L(year.en, year.ar))}${feastDay ? `<small class="ev-feast">${safe(L(feastDay.en, feastDay.ar))}</small>` : ''}`]);
   return `<div class="parish-sub ev-page" data-parish-sub data-doc-title="${safe(t + ' · ' + f.name)}">
     ${subHero(c, p, f, L('Event', 'مناسبة'), safe(t), safe(L(`${when(c, e)}, at ${f.name}`, `${when(c, e)}، في رعية ${f.name}`)))}
     <div class="site-wrap ev-grid">
