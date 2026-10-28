@@ -99,6 +99,9 @@ function updateChrome() {
     el.setAttribute('aria-label', L('Switch to Arabic', 'التبديل إلى الإنكليزية'));
   });
   document.querySelector('#menu-toggle').setAttribute('aria-label', L('Toggle navigation', 'فتح أو إغلاق القائمة'));
+  document.querySelectorAll('.site-header .brand').forEach(el => el.setAttribute('aria-label', L('ParishLife home', 'الصفحة الرئيسية لـ ParishLife')));
+  document.querySelector('.desktop-nav')?.setAttribute('aria-label', L('Main navigation', 'القائمة الرئيسية'));
+  document.querySelector('#mobile-nav')?.setAttribute('aria-label', L('Mobile navigation', 'قائمة الهاتف'));
   document.querySelector('#year').textContent = new Date().getFullYear();
 }
 

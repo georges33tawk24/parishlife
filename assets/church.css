@@ -67,6 +67,14 @@
 .wk-day.is-feast{border-color:rgb(199 158 76 / .7);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
 .wk-feast{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;margin-top:2px;padding-inline:6px;font-size:11.5px;line-height:1.25;color:var(--gilt-ink);text-align:center}
 @media(max-width:640px){.wk-feast{display:none}.wk-day.is-feast .wk-dow{color:var(--gilt-ink)}}
+/* a small phone: Arabic day names have no short forms, so they shrink to fit their cell, and
+   Sunday's cross moves above its name */
+@media(max-width:420px){
+  .wk-dow{max-width:100%;font-size:11.5px;letter-spacing:-.01em;white-space:nowrap}
+  [dir=rtl] .wk-dow{font-size:10.5px}
+  .wk-day.is-sunday{position:relative}
+  .wk-day.is-sunday .wk-dow::before{position:absolute;top:2px;left:50%;width:7px;height:8px;translate:-50% 0}
+}
 /* the map: each parish a small flame, flickering */
 .map-light .core{transform-box:fill-box;transform-origin:50% 85%;animation:sn-flicker 2.2s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
 .map-light .wick-light{fill:#FFFBEF;pointer-events:none}
@@ -129,14 +137,15 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 
 /* A parish without a photograph: its About arch is an icon, gold leaf laid in squares, a haloed
    initial in cinnabar, the raised border of the icon board and a red lamp burning before it */
-.ph-arch.is-night{background:repeating-linear-gradient(0deg,transparent 0 47px,rgb(110 70 18 / .13) 47px 48px),repeating-linear-gradient(90deg,transparent 0 47px,rgb(110 70 18 / .13) 47px 48px),
-  radial-gradient(circle at 50% 36%,#F8E19A,#DDB255 42%,#B0832C 82%,#8E6420);box-shadow:inset 0 0 0 10px #5E1A16,inset 0 0 0 11px rgb(241 199 122 / .75),inset 0 0 0 16px rgb(94 26 22 / .18),0 40px 80px -40px rgb(60 30 10 / .6)}
+.ph-arch.is-night{background:radial-gradient(circle at 50% 36%,rgb(255 246 214 / .5),rgb(255 240 200 / 0) 48%),radial-gradient(ellipse 90% 70% at 50% 45%,rgb(80 44 8 / 0) 55%,rgb(80 44 8 / .38)),#C9973F url("images/gilt.webp") 0 0/240px 240px;box-shadow:inset 0 0 0 10px #5E1A16,inset 0 0 0 11px rgb(241 199 122 / .75),inset 0 0 0 16px rgb(94 26 22 / .18),0 40px 80px -40px rgb(60 30 10 / .6)}
 .ph-arch.is-night::after{inset:24px;border-color:rgb(110 26 22 / .5)}
 .ph-arch.is-night::before{content:"";position:absolute;left:50%;top:44%;width:62%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
   background:radial-gradient(circle,transparent 0 60%,rgb(120 70 15 / .55) 61% 62%,transparent 63% 69%,rgb(120 70 15 / .4) 70% 71%,transparent 72%),repeating-conic-gradient(rgb(255 244 200 / .32) 0 3deg,transparent 3deg 9deg);
   -webkit-mask:radial-gradient(circle,#000 71%,transparent 72%);mask:radial-gradient(circle,#000 71%,transparent 72%)}
 .ph-arch.is-night .monogram b{position:relative;top:-6%;color:#7A1A18;text-shadow:0 1px 0 rgb(255 240 200 / .6),0 0 30px rgb(255 240 200 / .5)}
-.ph-arch.is-night .ph-arch-light{background:#FFB08A;box-shadow:0 0 0 4px rgb(160 30 30 / .55),0 0 16px 6px rgb(255 120 90 / .7),0 0 50px 18px rgb(200 40 40 / .3)}
+/* the lamp before the icon: a votive in ruby glass, its flame showing through */
+.ph-arch.is-night .ph-arch-light{width:20px;height:24px;margin-left:-10px;border-radius:3px 3px 7px 7px;background:radial-gradient(ellipse 30% 26% at 50% 46%,#FFF4D6,#FFC07A 55%,rgb(255 150 90 / 0) 100%),linear-gradient(90deg,#5E0A10,#C0182A 30%,#E0303A 50%,#B01526 72%,#5A0910);
+  box-shadow:inset 0 2px 0 rgb(255 200 190 / .45),inset 0 -3px 4px rgb(60 0 6 / .5),0 0 18px 6px rgb(255 110 80 / .55),0 0 60px 20px rgb(200 40 40 / .28)}
 /* the ministries stand in gilded niches on the night blue */
 .ph-card::before{content:"";position:absolute;inset:7px;border-radius:193px 193px 15px 15px / 123px 123px 15px 15px;border:1px solid rgb(215 165 72 / .26);pointer-events:none}
 .ph-card-arch{box-shadow:0 0 0 1px rgb(215 165 72 / .6),0 0 0 4px rgb(14 26 49),0 0 0 5px rgb(215 165 72 / .3)}
@@ -178,6 +187,24 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
 .rq-kind{border-radius:60px 60px 14px 14px / 40px 40px 14px 14px;padding-top:16px;background:linear-gradient(180deg,#F3EBDC,#ECE2D0);border-color:#E3D3B2;box-shadow:inset 0 0 0 4px #F3EBDC,inset 0 0 0 5px rgb(199 158 76 / .4)}
 .rq-kind .arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .5),0 0 0 4px #FBF6EC,0 0 0 5px rgb(199 158 76 / .28)}
 
+/* the light that sweeps a gilded button is clipped without making the button scrollable (in Arabic
+   the sweep waits on the start side, which overflow:hidden would let scroll) */
+.btn-gilt,.hero-field button{overflow:clip}
+/* fingers need room: the footer's links, its credits and small text buttons get a full touch height */
+@media(pointer:coarse){
+  .footer-links a,.footer-links button{display:inline-flex;align-items:center;min-height:40px}
+  .footer-links{gap:2px}
+  .footer-bottom a{display:inline-flex;align-items:center;min-height:36px}
+  .dir-tools .text-button,.text-button{min-height:44px;min-width:44px;justify-content:center}
+  .ph-crumbs a,.brand,.pcal-ev-link{display:inline-flex;align-items:center;min-height:40px}
+}
+/* on a tablet the map stays within most of a screen, so the parishes show below it straight away */
+@media(min-width:600px) and (max-width:960px){.lebanon-map>svg{max-height:62svh}}
+/* on a phone the page's sections scroll sideways; their ends fade so the row reads as one that moves */
+@media(max-width:899px){.ph-nav ul{-webkit-mask:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 30px),transparent);mask:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 30px),transparent)}
+  [dir=rtl] .ph-nav ul{-webkit-mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent);mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent)}}
+/* Arabic pages: a parish's announcement or story written in English still lines up with the page */
+[dir=rtl] :is(.news-item h3,.news-item p,.story h3,.story p){text-align:right}
 /* ---------- the small things: gold leaf, the pointer, the fields, the scrollbar, the selection ---------- */
 /* gilded buttons: gold leaf over its bole (assets/images/gilt.webp, docs/tools/render_gilt.py), burnished
    along the top and shaded below, with a fine engraved line inside the edge; light runs across on hover */

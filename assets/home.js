@@ -218,9 +218,9 @@ function directory(c) {
       <form class="dir-filters" role="search" data-dir-form data-reveal>
         <label class="dir-search">${SEARCH}<span class="sr-only">${L('Search parish or town', 'ابحث عن رعية أو بلدة')}</span><input id="directory-filter" type="search" value="${safe(filters.q)}" placeholder="${safe(L('Parish, town or village', 'رعية أو بلدة أو قرية'))}"></label>
         <div class="dir-row">
-          ${choices(c, 'town', L('All towns', 'كل البلدات'), uniq(c.directory.map(p => p.town)), filters.town)}
+          ${choices(c, 'town', L('All towns', 'كل البلدات'), uniq(c.directory.map(p => p.town)), filters.town, v => c.townName(c.directory.find(p => p.town === v)) || v)}
           ${choices(c, 'diocese', L('All dioceses', 'كل الأبرشيات'), uniq(c.directory.map(p => p.diocese)), filters.diocese, v => dioceseName(c, v))}
-          ${choices(c, 'rite', L('All rites', 'كل الطقوس'), uniq(c.directory.map(p => c.details.get(p.id)?.parish?.rite)), filters.rite)}
+          ${choices(c, 'rite', L('All rites', 'كل الطقوس'), uniq(c.directory.map(p => c.details.get(p.id)?.parish?.rite)), filters.rite, v => c.pair(c.directory.map(p => c.details.get(p.id)?.parish).find(r => r?.rite === v), 'rite', 'riteAr') || v)}
         </div>
         <div class="dir-row dir-tools">
           <button type="button" class="chip" data-near aria-pressed="${filters.location ? 'true' : 'false'}">${NEAR}${L('Near me', 'بالقرب مني')}</button>

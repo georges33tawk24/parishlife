@@ -106,7 +106,7 @@
 /* Narrow and tall screens: the words take the top, so the window rises behind them, dimmer. */
 @media(max-width:1099px),(max-aspect-ratio:4/5){
   .sanctuary{--stage-h:min(70svh,118vw * 1300 / 1080)}
-  .sn-stage{top:auto;bottom:calc(var(--arch) * .5);inset-inline-end:50%;translate:50% 0;opacity:.5}
+  .sn-stage{top:auto;bottom:calc(var(--arch) * .5);inset-inline-end:50%;translate:50% 0;opacity:.4}
   [dir=rtl] .sn-stage{translate:-50% 0}
   .sn-lamp{display:none}
   .sn-candles,.sn-inscription{display:none}

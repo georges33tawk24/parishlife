@@ -448,7 +448,7 @@ button.wk-day:hover{transform:translateY(-3px);border-color:#B8C1CF;box-shadow:0
 .scroll-cue span{position:absolute;left:50%;top:8px;width:4px;height:8px;margin-left:-2px;border-radius:2px;background:var(--gilt-hi);animation:cue 2.2s ease-in-out infinite}
 @keyframes cue{0%{opacity:0;transform:translateY(0)}30%{opacity:1}80%{opacity:0;transform:translateY(14px)}100%{opacity:0}}
 .scroll-cue:hover{opacity:1;border-color:var(--gilt-hi)}
-@media(max-height:720px),(max-width:960px){.scroll-cue{display:none}}
+@media(max-height:720px),(max-width:1099px){.scroll-cue{display:none}}
 @media(pointer:fine){.story-track{cursor:grab}}
 .story-track.is-dragging{cursor:grabbing;scroll-snap-type:none;user-select:none}
 .story-track.is-dragging img{pointer-events:none}

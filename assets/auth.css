@@ -99,7 +99,7 @@
 .auth-passkey:disabled{opacity:.6;cursor:progress;transform:none}
 .auth-error{margin:0;padding:10px 14px;border-radius:12px;background:rgb(178 58 43 / .08);color:var(--danger);font-weight:600;font-size:15px}
 .auth-error[hidden]{display:none}
-.auth-submit{position:relative;overflow:hidden;min-height:52px;margin-top:6px;border:0;border-radius:999px;background:var(--gilt);color:#1A1306;font:700 16.5px var(--a-sans);cursor:var(--hand,pointer);box-shadow:0 14px 30px -14px rgb(215 165 72 / .9);transition:background-color .25s,transform .35s var(--a-ease)}
+.auth-submit{position:relative;overflow:hidden;overflow:clip;min-height:52px;margin-top:6px;border:0;border-radius:999px;background:var(--gilt);color:#1A1306;font:700 16.5px var(--a-sans);cursor:var(--hand,pointer);box-shadow:0 14px 30px -14px rgb(215 165 72 / .9);transition:background-color .25s,transform .35s var(--a-ease)}
 .auth-submit::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255 / .45) 50%,transparent 70%);transform:translateX(-120%);transition:transform .9s var(--a-ease)}
 .auth-submit:hover{background:var(--gilt-hi);transform:translateY(-2px)}
 .auth-submit:hover::after{transform:translateX(120%)}
@@ -116,9 +116,13 @@
   .auth-shell{grid-template-columns:minmax(0,1fr)}
   .auth-art{position:relative;height:190px}
   .auth-art .sanctuary{--stage-h:240%}
-  .auth-art .sn-stage{top:-6%;opacity:.75}
-  .auth-quote{bottom:20px}
-  .auth-quote p{font-size:24px;max-width:none}
+  .auth-art .sn-stage{top:-6%;inset-inline-end:-34%;translate:0;opacity:.8}
+  [dir=rtl] .auth-art .sn-stage{translate:0}
+  /* the words sit on the dark side of the strip, the window glows beside them */
+  .auth-art::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(90deg,rgb(9 7 6 / .82) 0,rgb(9 7 6 / .5) 48%,rgb(9 7 6 / 0) 78%),linear-gradient(0deg,rgb(9 7 6 / .6),rgb(9 7 6 / 0) 60%)}
+  [dir=rtl] .auth-art::after{background:linear-gradient(270deg,rgb(9 7 6 / .82) 0,rgb(9 7 6 / .5) 48%,rgb(9 7 6 / 0) 78%),linear-gradient(0deg,rgb(9 7 6 / .6),rgb(9 7 6 / 0) 60%)}
+  .auth-quote{bottom:20px;z-index:1;text-shadow:0 1px 14px rgb(0 0 0 / .7)}
+  .auth-quote p{font-size:24px;max-width:70%}
   .auth-quote cite{margin-top:6px;font-size:13.5px}
   .auth-main{place-items:start center}
 }
@@ -148,6 +152,7 @@
 .af input:focus,.af select:focus{border-color:#A57B2C;background-color:#FFFEFA;box-shadow:0 0 0 4px rgb(215 165 72 / .22)}
 .account-auth ::selection{background:rgb(215 165 72 / .34)}
 .account-auth{accent-color:#8A6420}
+@media(pointer:coarse){.account-auth :is(.auth-back,.auth-brand,.af-link){display:inline-flex;align-items:center;min-height:40px}}
 @media(pointer:fine){
   .account-auth{--arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='none' stroke='%231B1410' stroke-width='3.4' stroke-linejoin='round'/%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='%231B1410' stroke='%23F6E7C1' stroke-width='1.3' stroke-linejoin='round'/%3E %3Cpath d='M6.5 7.8v8.6' stroke='%23D7A548' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") 4 3,auto;--hand:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32'%3E %3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23FFCF75' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23FFCF75' stop-opacity='0'/%3E%3C/radialGradient%3E %3CradialGradient id='f' cx='.5' cy='.74' r='.66'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.34' stop-color='%23FFEDB8'/%3E%3Cstop offset='.72' stop-color='%23F5AE45'/%3E%3Cstop offset='1' stop-color='%23D2661C'/%3E%3C/radialGradient%3E%3C/defs%3E %3Ccircle cx='12' cy='12.5' r='11.5' fill='url(%23g)'/%3E %3Cpath d='M12 1.4C13.3 5.4 17.3 8.4 17.3 13.4a5.3 5.3 0 0 1-10.6 0C6.7 9.6 10.1 7.2 12 1.4Z' fill='url(%23f)' stroke='%233A1E06' stroke-width='1' stroke-linejoin='round'/%3E %3Cpath d='M12 10.6c-1 1.6-1.7 2.8-1.7 3.9a1.7 1.7 0 0 0 3.4 0c0-1.1-.7-2.3-1.7-3.9Z' fill='%23FFFDF6'/%3E %3Cpath d='M12 17.4v2.8' stroke='%232A1606' stroke-width='1.2' stroke-linecap='round'/%3E %3Crect x='8.2' y='20' width='7.6' height='11.2' rx='1.4' fill='%23F3E6C6' stroke='%233A2A18' stroke-width='1'/%3E %3Cpath d='M9.6 21.4v8.2' stroke='%23fff' stroke-width='1' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") 12 2,pointer;cursor:var(--arrow)}
   .account-auth :is(p,h1,h2,blockquote,figcaption){cursor:auto}

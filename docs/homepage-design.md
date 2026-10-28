@@ -154,6 +154,11 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   `cursor:var(--hand,pointer)`, so the portal, which does not set it, keeps the usual hand). Fields
   are warm parchment and turn gold when written in; the scrollbar is a gilt rod on parchment; text
   is selected in gold leaf, or candlelight on the night sections; checkboxes take the gilt ink.
+- **Touch and small screens:** on touch screens the footer's links, breadcrumbs, the brand and the
+  small text buttons get a full finger's height; the page's section tabs fade at their ends where
+  they scroll; on a 360px phone the Arabic day names (which have no short forms) shrink to fit the
+  week ribbon and Sunday's cross sits above the name; on a portrait tablet the map keeps within a
+  screen so the parishes show below it; the hero's scroll cue only shows on wide screens.
 - **Loader:** warm dark stone, and a candle is lit in the arch mark until the page is ready.
   It also fades on its own after eight seconds, so a failed script can never leave it in place.
 - **Load:** the camera settles on the valley while the sky, crest and valley layers rise into place,

@@ -421,9 +421,10 @@ function litText(gsap, root) {
   if (!window.SplitText) return null;
   const blocks = [...root.querySelectorAll('[data-lit]')];
   const splits = blocks.map(b => window.SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
-  splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.22 }, {
+  // the words start legible, only dimmed, and are all lit before they reach the middle of the screen
+  splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.4 }, {
     opacity: 1, ease: 'none', stagger: 0.04,
-    scrollTrigger: { trigger: blocks[i], start: 'top 78%', end: 'bottom 52%', scrub: 0.6 }
+    scrollTrigger: { trigger: blocks[i], start: 'top 82%', end: 'bottom 64%', scrub: 0.6 }
   }));
   return () => splits.forEach(s => s.revert());
 }
