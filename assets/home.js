@@ -2,7 +2,7 @@
    (Administration → Homepage), each parish's Website content and public profile,
    and the events and announcements parishes publish. Empty sections say what a
    parish office can publish, rather than filling the page with placeholders. */
-import { valleyMarkup, mountValley } from './home-valley.js';
+import { sanctuaryMarkup, mountSanctuary, roseOutline } from './home-sanctuary.js';
 import { mapMarkup, locate, mountMap, projection } from './home-map.js';
 import { animateHome, stopHomeMotion, scrollToTarget } from './home-motion.js';
 import { icsHref, icsName, kindName, beirutNow, ADD_ICON } from './public-calendar.js';
@@ -19,6 +19,8 @@ const PIN = svgIcon('<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><
 const NEAR = svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="7.5"/>');
 const PREV = svgIcon('<path d="m15 5-7 7 7 7"/>'), NEXT = svgIcon('<path d="m9 5 7 7-7 7"/>');
 const CLOSE = svgIcon('<path d="M6 6l12 12M18 6 6 18"/>');
+/* The cross of the Maronites, each arm ending in three small circles. */
+const CROSS = `<svg viewBox="0 0 22 30" fill="currentColor" aria-hidden="true" focusable="false"><path d="M9.6 4h2.8v24H9.6zM2.5 11.6h17v2.8h-17z"/>${[[11, 3], [11, 27.6], [2.4, 13], [19.6, 13]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1"/>`).join('')}${[[8.4, 4.4], [13.6, 4.4], [3.8, 10.4], [3.8, 15.6], [18.2, 10.4], [18.2, 15.6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.5"/>`).join('')}</svg>`;
 
 /* Bilingual CMS text: the visitor's language, else the built-in wording in that language. */
 /* Arabic counts agree with the number: one, two, three to ten, eleven and more. */
@@ -101,10 +103,11 @@ function hero(c) {
   const note = site?.announcement, text = note && either(c, note.text), label = note && either(c, note.linkLabel);
   const announcement = text ? `<p class="hero-note" data-hero-rise><span class="note-mark" aria-hidden="true"></span><span${text.attrs}>${safe(text.text)}</span>${note.link ? ` <a href="${safe(note.link)}"${label?.attrs || ''}>${safe(label?.text || L('Read more', 'اقرأ المزيد'))}</a>` : ''}</p>` : '';
   const stat = (n, key) => `<li><b data-count="${n}">${c.number(n)}</b><span>${noun(c, n, key)}</span></li>`;
-  return `<section class="hero" id="top" data-hero aria-labelledby="hero-title">
-    <div class="hero-art" data-scene>${valleyMarkup()}</div><div class="hero-shade" aria-hidden="true"></div>
+  return `<section class="hero hero-sanctuary" id="top" data-hero aria-labelledby="hero-title">
+    <div class="hero-art" data-scene>${sanctuaryMarkup()}</div><div class="hero-shade" aria-hidden="true"></div>
     <div class="site-wrap hero-inner">
       ${announcement}
+      <p class="hero-mark" data-hero-rise>${CROSS}<span>${L('The parishes of Lebanon', 'رعايا لبنان')}</span></p>
       <h1 class="hero-title" id="hero-title">${safe(words(c, site?.hero?.title, HOME_DEFAULTS.hero.title))}</h1>
       <p class="hero-lede" data-hero-rise>${safe(words(c, site?.hero?.subtitle, HOME_DEFAULTS.hero.subtitle))}</p>
       <div class="hero-row"><form class="hero-search" role="search" data-hero-search data-hero-rise>
@@ -301,7 +304,8 @@ function stories(c) {
 function verse(c) {
   const { L } = c;
   return `<section class="verse" id="verse" aria-labelledby="verse-text"><div class="site-wrap verse-inner">
-    <span class="verse-lamp" aria-hidden="true"></span>
+    <div class="verse-rose" aria-hidden="true">${roseOutline()}</div>
+    <span class="verse-cross" aria-hidden="true">${CROSS}</span>
     <blockquote class="verse-quote" data-lit><p id="verse-text">${L('Let your <em>light</em> shine before others, so that they may see your good works and give glory to your Father in heaven.', 'فَلْيُضِئْ <em>نُورُكُمْ</em> هكَذَا قُدَّامَ النَّاسِ، لِكَيْ يَرَوْا أَعْمَالَكُمُ الْحَسَنَةَ، وَيُمَجِّدُوا أَبَاكُمُ الَّذِي فِي السَّمَاوَاتِ.')}</p>
       <footer><cite>${L('Matthew 5:16', 'متّى ٥: ١٦')}</cite></footer></blockquote>
     <p class="verse-note" data-reveal>${L('Every parish on ParishLife is one of those lights.', 'وكلّ رعية على ParishLife نورٌ من هذه الأنوار.')}</p>
@@ -345,7 +349,7 @@ export function mountHome(root, c) {
   home.querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { const t = home.querySelector(a.getAttribute('href')); if (t) { e.preventDefault(); scrollToTarget(t); } }));
   const cue = home.querySelector('[data-scroll-cue]');
   cue?.addEventListener('click', e => { e.preventDefault(); scrollToTarget(cue.closest('section').nextElementSibling); });
-  animateHome(home, { onDawn: () => home._valley?.loadDawn() });
+  animateHome(home);
 }
 export function unmountHome() { stopHomeMotion(); teardown.forEach(fn => fn()); teardown = []; }
 
@@ -353,9 +357,9 @@ function sceneMount(home, c) {
   const host = home.querySelector('[data-scene]'), tip = home.querySelector('[data-hero-tip]');
   if (!host) return;
   const places = c.directory.map(p => ({ id: p.id, name: c.parishName(p), town: c.townName(p) }));
-  const valley = mountValley(host, places, { tip, onPick: id => { location.href = c.profileURL(id); } });
-  home._valley = valley;
-  teardown.push(() => valley.destroy());
+  const words = { light: c.L('Light a candle', 'أضئ شمعة'), lit: c.L('A candle lit for your intention', 'شمعة مضاءة على نيّتك') };
+  const scene = mountSanctuary(host, places, { tip, words, onPick: id => { location.href = c.profileURL(id); } });
+  teardown.push(() => scene.destroy());
 }
 
 function directoryMount(home, c, places) {

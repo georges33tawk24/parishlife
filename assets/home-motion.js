@@ -50,6 +50,7 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
       hero && heroMotion(gsap, hero, onDawn),
       hero && context.conditions.fine && pointerDepth(gsap, hero),
       hero && !lite && fireflies(hero),
+      hero && !lite && motes(hero),
       context.conditions.fine && magnetic(gsap, root),
       context.conditions.fine && tilt(root),
       context.conditions.fine && candle(root),
@@ -99,6 +100,16 @@ function heroMotion(gsap, hero, onDawn) {
   add(intro, 'from', '.valley-light', { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, push ? 3.4 : 1.9);
   add(intro, 'from', '.valley-light b', { opacity: 0, x: -10, duration: 1.2 }, push ? 4.1 : 2.6);
   add(intro, 'from', '.ph-next', { y: 40, opacity: 0, duration: 1.4 }, 1.6);
+  /* The homepage sanctuary: the wall comes out of the dark, the glass takes the light from the
+     cross outward, the shafts reach into the nave, then the parishes' candles are lit one by one. */
+  add(intro, 'fromTo', '.sn-wall', { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 2.6, ease: 'power2.out' }, 0);
+  add(intro, 'from', '.sn-stage', { yPercent: 4, duration: 3, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.sn-dark', { opacity: 0.88 }, { opacity: 0, duration: 2, stagger: 0.35, ease: 'sine.inOut' }, 0.35);
+  add(intro, 'fromTo', '.sn-bloom, .sn-spill', { opacity: 0 }, { opacity: 1, duration: 2.4, ease: 'sine.inOut' }, 0.8);
+  add(intro, 'fromTo', '.sn-beams', { opacity: 0 }, { opacity: 1, duration: 2.8, ease: 'sine.inOut' }, 1.2);
+  add(intro, 'from', '.sn-lamp', { yPercent: -30, opacity: 0, duration: 2.2, ease: 'power3.out' }, 0.5);
+  const candles = [...hero.querySelectorAll('.sn-candle.is-parish')];
+  if (!introPlayed) candles.forEach((el, i) => { el.classList.remove('is-lit'); intro.call(() => el.classList.add('is-lit'), null, 1.9 + i * 0.22); });
   introPlayedBefore = introPlayed;
   if (introPlayed) intro.progress(1);
   introPlayed = true;
@@ -119,7 +130,13 @@ function heroMotion(gsap, hero, onDawn) {
   add(day, 'to', '.sub-art', { yPercent: 18 }, 0);
   add(day, 'to', '.ph-next', { yPercent: -40, opacity: 0, ease: 'power1.in' }, 0);
   add(day, 'to', '.hero-inner, .sub-inner', { yPercent: -18, opacity: 0, ease: 'power1.in' }, 0);
-  return () => intro.kill();
+  // the sanctuary: the window rises past, its glass warms as the morning comes
+  add(day, 'to', '.sn-stage', { yPercent: -10 }, 0);
+  add(day, 'to', '.sn-wall', { yPercent: 6 }, 0);
+  add(day, 'to', '.sn-lamp', { yPercent: -14 }, 0);
+  add(day, 'to', '.sn-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
+  add(day, 'to', '.sn-motes', { opacity: 0.3 }, 0.2);
+  return () => { intro.kill(); hero.querySelectorAll('.sn-candle.is-parish').forEach(el => el.classList.add('is-lit')); };
 }
 
 /* Warm sparks rise slowly from the villages, flicker and fade: the valley breathing at night.
@@ -175,9 +192,69 @@ function fireflies(hero) {
   return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
 }
 
+/* Dust in the light from the window: specks drift slowly through the shafts, catching the light
+   as they cross it. A canvas over the sanctuary; it sleeps while the hero is out of view. */
+function motes(hero) {
+  const art = hero.querySelector('.hero-art'), stage = hero.querySelector('[data-sn-stage]');
+  if (!art || !stage) return null;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'sn-motes';
+  canvas.setAttribute('aria-hidden', 'true');
+  art.appendChild(canvas);
+  const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1), rtl = document.documentElement.dir === 'rtl';
+  let w = 0, h = 0, frame = 0, last = 0, running = false, beams = [];
+  const motesList = [];
+  // the shafts in canvas pixels: the same outlines the window draws (home-sanctuary.js)
+  const size = () => {
+    w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    const a = art.getBoundingClientRect(), r = stage.getBoundingClientRect();
+    const map = ([u, v]) => [rtl ? r.right - a.left - (u + 40) / 1080 * r.width : r.left - a.left + (u + 40) / 1080 * r.width, r.top - a.top + v / 1300 * r.height];
+    beams = (art._beams || []).map(b => ({ outline: b.outline.map(map), from: map(b.from), to: map(b.to) }));
+  };
+  const inside = (poly, x, y) => { let hit = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit; } return hit; };
+  const along = (b, x, y) => { const dx = b.to[0] - b.from[0], dy = b.to[1] - b.from[1]; return ((x - b.from[0]) * dx + (y - b.from[1]) * dy) / (dx * dx + dy * dy); };
+  const spawn = () => {
+    const b = beams[Math.floor(Math.random() * beams.length)];
+    if (!b) return { x: -9, y: -9, life: 0, span: 1, age: 0, r: 1, vx: 0, vy: 0, phase: 0, t: 1 };
+    const xs = b.outline.map(p => p[0]), ys = b.outline.map(p => p[1]);
+    for (let k = 0; k < 24; k++) {
+      const x = Math.min(...xs) + Math.random() * (Math.max(...xs) - Math.min(...xs)), y = Math.min(...ys) + Math.random() * (Math.max(...ys) - Math.min(...ys));
+      const t = along(b, x, y);
+      if (t > 0.08 && t < 0.8 && inside(b.outline, x, y) && y < h) return { x, y, t, r: 0.5 + Math.random() * 1.5, vx: (Math.random() - 0.5) * 7, vy: -2 + Math.random() * 7, phase: Math.random() * 6.28, age: 0, span: 6 + Math.random() * 8 };
+    }
+    return { x: -9, y: -9, t: 1, r: 1, vx: 0, vy: 0, phase: 0, age: 0, span: 1 };
+  };
+  const tick = now => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = '#FFF4DC';
+    for (const m of motesList) {
+      m.age += dt;
+      if (m.age >= m.span) { Object.assign(m, spawn()); continue; }
+      m.x += (m.vx + Math.sin(m.phase + m.age * 0.7) * 3) * dt; m.y += m.vy * dt;
+      const glint = 0.55 + 0.45 * Math.sin(m.phase * 2 + m.age * 2.4);
+      ctx.globalAlpha = Math.sin(Math.PI * m.age / m.span) * glint * (1 - m.t) * 0.75;
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 6.283); ctx.fill();
+    }
+    if (running) frame = requestAnimationFrame(tick);
+  };
+  const start = () => { if (running || document.hidden) return; running = true; last = 0; frame = requestAnimationFrame(tick); };
+  const stop = () => { running = false; cancelAnimationFrame(frame); };
+  size();
+  for (let i = 0; i < 90; i++) { const m = spawn(); m.age = Math.random() * m.span; motesList.push(m); }
+  const ro = new ResizeObserver(size); ro.observe(art);
+  const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
+  io.observe(hero);
+  const vis = () => (document.hidden ? stop() : start());
+  document.addEventListener('visibilitychange', vis);
+  return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
+}
+
 /* The layers drift with the pointer at different depths. */
 function pointerDepth(gsap, hero) {
-  const layers = [['.vl-sky', 6], ['.vl-far', 13], ['.vl-mist-a', 20], ['.vl-near', 26], ['.vl-mist-b', 34]]
+  const layers = [['.vl-sky', 6], ['.vl-far', 13], ['.vl-mist-a', 20], ['.vl-near', 26], ['.vl-mist-b', 34], ['.sn-wall', 5], ['.sn-stage', 12], ['.sn-lamp', 24]]
     .map(([s, k]) => [hero.querySelector(s), k]).filter(([el]) => el)
     .map(([el, k]) => ({ k, x: gsap.quickTo(el, 'x', { duration: 1.4, ease: 'power3.out' }), y: gsap.quickTo(el, 'y', { duration: 1.4, ease: 'power3.out' }) }));
   const move = e => {

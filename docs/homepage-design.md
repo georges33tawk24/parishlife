@@ -5,12 +5,18 @@ a family planning a baptism, or someone abroad looking for their village church
 sees. Its job, in order: help them find their parish, show what is happening there,
 and let them ask the parish office for something.
 
-## Concept: lights of the valley
+## Concept: the sanctuary, and the lights of the valley
 
-At dusk in the Lebanese mountains, the village churches light up across the slopes
-of the Qadisha valley. ParishLife connects those parishes, so the page is built
-around that image: a dawn landscape where each light is a parish, and a hand-drawn
-map of Lebanon where the same lights mark the parishes in the directory.
+The homepage opens inside a church at night, so a visitor knows at once where they are: a wall of
+hewn sandstone, a stained-glass window (a rose with the cross of the Maronites above two lancets,
+one with the cedar of Lebanon and one with the chalice), shafts of coloured light falling across
+the nave, a sanctuary lamp on its chains, and candles on the window sill. **Each parish on
+ParishLife is one lit candle**; the shorter candles beside them wait, and a visitor may light one
+for their intention. Everything in it is drawn by the page (SVG and CSS), not downloaded.
+
+Further down, the same idea runs through the page: at dusk in the Lebanese mountains the village
+churches light up across the valley, and on the hand-drawn map of Lebanon each gold light is a
+parish. The valley render stays on parish pages, the sign-in screen and the closing section.
 
 ## Tokens
 
@@ -20,7 +26,7 @@ map of Lebanon where the same lights mark the parishes in the directory.
 | Lapis | `#2A4A96` | Links, focus, interactive accents (the blue of icon mantles) |
 | Gilt | `#D7A548` | Parish lights, the selected state, primary buttons on dark |
 | Limestone | `#E6DED0` | Stone planes behind images and quotes |
-| Mist | `#F3F5F7` | Page background, a cool morning white |
+| Mist | `#F3F5F7` | Page background, a cool morning white (warm limestone `#F5F1E8` on the homepage) |
 | Cedar | `#1F3A2E` | Brand mark and the land on the map |
 | Sanctuary red | `#B23A2B` | Only "today": an event happening today, like the lamp that is always lit |
 
@@ -94,6 +100,20 @@ Checked against the common generated-page defaults, and changed:
 GSAP 3.15 (ScrollTrigger and SplitText, vendored in `assets/vendor/gsap/`) and Lenis 1.3 smooth
 scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/home-motion.js`:
 
+- **Homepage sanctuary** (`assets/home-sanctuary.js`, `assets/sanctuary.css`): the wall comes out
+  of the dark, the panes of glass take the light one group after another (the rose first), the shafts
+  reach into the nave, the lamp settles on its chains, then the parishes' candles are lit one by one.
+  Afterwards clouds pass behind the glass, the light behind it shifts, the shafts brighten and dim,
+  flames flicker, the lamp sways, and dust drifts through the shafts (a canvas that sleeps out of
+  view). The pointer moves the wall, window and lamp at different depths; scrolling out lifts the
+  window and warms the glass into morning. Hovering a lit candle names its parish and choosing it
+  opens the parish; an unlit one can be lit. The moving light is a separate layer from the window
+  so the glass and stone textures are painted once, and no layer uses a blend mode (they cost the
+  most frames). On narrow or tall screens the window stands behind the words, dimmer, without the
+  candles and the lamp.
+- **Further down:** a gold rule with the cross draws under each section heading; the night sections
+  carry small gold stars, like a chapel ceiling; behind the verse a rose window drawn in gold turns
+  very slowly.
 - **Loader:** a night screen with the arch mark, its gold light breathing, until the page is ready.
   It also fades on its own after eight seconds, so a failed script can never leave it in place.
 - **Load:** the camera settles on the valley while the sky, crest and valley layers rise into place,
@@ -210,7 +230,8 @@ and colours (`assets/auth.css`, scoped to `.account-auth`).
 | --- | --- |
 | Page shell, header, footer | `public.html`, `assets/site.css` (fonts, tokens, chrome; shared by every public page) |
 | Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
-| Hero valley | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
+| Homepage sanctuary | `assets/home-sanctuary.js` (window, wall, light, lamp and candles, all generated), `assets/sanctuary.css` (also the homepage's warm sections, stars and ornaments) |
+| Valley (parish pages) | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
 | Motion | `assets/home-motion.js` (homepage and parish pages) |
 | Parish pages | `assets/parish.js`, `assets/parish.css`, calendar in `assets/public-calendar.js`; request sending and tracking in `assets/public-features.js` |
@@ -222,6 +243,47 @@ and colours (`assets/auth.css`, scoped to `.account-auth`).
 | Built-in wording | `assets/site-defaults.js`, shared by the homepage and the editor |
 | Homepage editor | `assets/views/homepage-editor.js` |
 | Homepage content API | `backend/site_content.py` and `cloudflare/src/site-content.js` (kept in parity), table `pl_site_content` in `backend/workspace-schema.json` |
+
+### Insights and the parish CRM (Super Admin)
+
+Dashboard → **Insights** (`assets/views/insights.js`, charts in `assets/views/insight-charts.js`,
+styles in `assets/insights.css`; data from `backend/analytics.py` and `cloudflare/src/analytics.js`,
+kept in parity).
+
+- **Overview:** visits, page views, requests sent, new accounts, parishes followed, links shared and
+  directions or calls, each against the period before; daily visits and page views; the most viewed
+  pages; the forms filled most (guest requests by kind, member requests, sign-ups, ministry joins);
+  where visitors come from, their devices and languages; the path from a visit to a sent request;
+  what visitors did; what they searched for; and the parishes with the most visits.
+- **Parishes (CRM):** every parish with its stage (onboarding, active, needs attention, paused), a
+  health score (profile completeness, activity, published content, how quickly requests are
+  answered), requests overdue past three days, the median answer time, the follow-up date and who
+  follows it; sorting, search and a CSV export. A parish opens in a drawer with its own numbers and
+  trend, the checklist behind its score, recent requests, its team, and notes.
+- **How visits are counted:** no cookies and nothing stored on the visitor's device. A visit is one
+  visitor on one day, recognised by a hash of the address and browser with a salt that changes
+  daily and is deleted the next day; the hashes are kept 95 days. Browsers that send Do Not Track or
+  Global Privacy Control are not counted, nor are known robots. Only daily totals are kept
+  (`pl_stats`), by page, parish and kind.
+
+### Personal signatures and signed documents
+
+- **Setting up** (My account → My signature; priests and parish office staff): the person draws
+  their signature and saves it with one of their passkeys, unlocking it with their face,
+  fingerprint or PIN. Removing that passkey removes the signature with it.
+- **Signing:** Sign and issue a certificate, or Write a signed letter on a guest request, asks for
+  that same passkey with user verification, over a challenge made from a fingerprint (SHA-256) of
+  the exact content and a nonce kept in a five-minute cookie. The server checks the passkey's
+  signature, stores the proof with a 12-character code (`XXXX-XXXX-XXXX`), and keeps the drawing as
+  it was when signing. The proof never goes into the audit trail.
+- **What the reader sees:** the certificate carries the drawing, the printed name, the title and a
+  line with the code; a letter appears on the applicant's tracking page with the parish letterhead
+  and can be printed.
+- **Checking** (`public.html?verify=CODE`, "Check a signed document" in the footer): who signed,
+  for which parish, when, and whether the signature is valid and the document unchanged (the
+  fingerprint is computed again from the record). A withdrawn signature says so.
+- Files: `backend/signatures.py` and `cloudflare/src/signatures.js` (kept in parity),
+  `assets/signing.js`, tables `pl_signers`, `pl_signatures` and `pl_letters`.
 
 ### Public data and link previews
 
