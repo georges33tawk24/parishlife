@@ -7,7 +7,7 @@ import { valleyMarkup, mountValley } from './home-valley.js';
 import { mapMarkup, mountMap, locate, projection } from './home-map.js';
 import { animateHome, scrollToTarget } from './home-motion.js';
 import { monogram, dioceseName, digits, noun, paragraphs, watchHero } from './home.js';
-import { calendarMarkup, mountCalendar, kindName } from './public-calendar.js';
+import { calendarMarkup, mountCalendar, kindName, icsHref, icsAllHref, icsName, ADD_ICON } from './public-calendar.js';
 import { safeRichText } from './rich-text.js';
 
 const svg = d => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
@@ -82,7 +82,7 @@ export function parishView(c, p, d) {
   const sections = [
     ['about', L('About', 'عن الرعية'), about(c, p, d, f)],
     ['times', L('Mass times', 'القداديس'), times(c, f)],
-    ['calendar', L('Calendar', 'الرزنامة'), calendar(c, f)],
+    ['calendar', L('Events', 'المناسبات'), calendar(c, p, f)],
     ['ministries', L('Ministries', 'الخدمات'), ministries(c, p, d)],
     ['sacraments', L('Requests', 'الطلبات'), requests(c, p, f)],
     ['updates', L('News', 'الأخبار'), news(c, d)],
@@ -119,7 +119,7 @@ function hero(c, p, d, f) {
       <p class="hero-lede" data-hero-rise dir="auto">${f.welcome ? c.htmlText(f.welcome) : safe(plainLede(c, f))}</p>
       <div class="ph-actions" data-hero-rise>
         ${f.open ? `<a class="btn btn-gilt" href="#sacraments" data-ph-jump>${L('Ask the parish office', 'اطلب من مكتب الرعية')}</a>` : ''}
-        ${f.events.length ? `<a class="btn btn-line" href="#calendar" data-ph-jump>${I.cal}${L('Calendar', 'الرزنامة')}</a>` : `<a class="btn btn-line" href="#contact" data-ph-jump>${I.route}${L('Visit', 'الزيارة')}</a>`}
+        <a class="btn btn-line" href="#calendar" data-ph-jump>${I.cal}${L('Events and calendar', 'المناسبات والرزنامة')}</a>
         ${f.phone ? `<a class="btn btn-line" href="tel:${safe(f.phone)}">${I.phone}<bdi>${safe(d.parish.phone)}</bdi></a>` : ''}
       </div>
       ${stats ? `<ul class="hero-facts ph-facts" data-hero-rise>${stats}</ul>` : ''}
@@ -160,12 +160,28 @@ function times(c, f) {
 }
 
 /* ---------- calendar ---------- */
-function calendar(c, f) {
-  if (!f.events.length) return '';
-  const { L } = c;
+/* Every parish has its events and calendar: the next celebrations as cards, all of them in one
+   calendar file, and the month. Before anything is published, the calendar is there and says so. */
+function calendar(c, p, f) {
+  const { L, safe } = c, next = f.upcoming.slice(0, 4), loc = c.lang === 'ar' ? 'ar-LB' : 'en-GB';
+  const place = [f.name, f.town].filter(Boolean).join(L(', ', '، '));
+  const card = e => {
+    const t = title(c, e), d = new Date(e.d + 'T12:00:00');
+    return `<li class="wk-ev k-${safe(e.kind || 'event')}" data-reveal-item>
+      <a class="wk-ev-link" href="${safe(c.calendarURL(p.id))}">
+        <span class="wk-date" aria-hidden="true"><small>${safe(new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(d))}</small><b>${safe(digits(c, d.getDate()))}</b><small>${safe(new Intl.DateTimeFormat(loc, { month: 'short' }).format(d))}</small></span>
+        <span class="wk-body"><span class="wk-meta">${e.t ? `<time>${safe(digits(c, e.t))}</time>` : ''}<span class="wk-kind">${safe(kindName(L, e.kind))}</span>${relative(c, e) ? `<span class="wk-in">${safe(relative(c, e))}</span>` : ''}</span>
+          <strong dir="auto">${safe(t)}</strong><span class="sr-only">${safe(when(c, e))}</span></span></a>
+      <a class="wk-add" href="${icsHref(e, t, place)}" download="${safe(icsName(t))}" aria-label="${safe(L(`Add ${t} to my calendar`, `أضف «${t}» إلى رزنامتي`))}" title="${safe(L('Add to my calendar', 'أضف إلى رزنامتي'))}">${ADD_ICON}</a></li>`;
+  };
   return `<section class="ph-cal" id="calendar" aria-labelledby="cal-title"><div class="site-wrap">
-    <header class="sec-head" data-reveal><h2 id="cal-title">${L('Parish calendar', 'رزنامة الرعية')}</h2><p>${L('Masses, celebrations and gatherings the parish has published. Choose a day, or save any event to your own calendar.', 'القداديس والاحتفالات واللقاءات التي نشرتها الرعية. اختر يوماً، أو احفظ أي حدث في رزنامتك.')}</p></header>
-    <div data-reveal>${calendarMarkup(L)}</div></div></section>`;
+    <header class="sec-head" data-reveal><h2 id="cal-title">${L('Events and calendar', 'المناسبات والرزنامة')}</h2><p>${L('Masses, celebrations and gatherings the parish has published. Save any of them to your own calendar.', 'القداديس والاحتفالات واللقاءات التي نشرتها الرعية. احفظ أيّاً منها في رزنامتك.')}</p></header>
+    ${next.length ? `<div class="ph-up" data-reveal><div class="ph-up-head"><h3>${L('Coming up', 'القادم')}</h3>
+        <a class="btn btn-ink-line btn-small" href="${icsAllHref(f.upcoming, e => title(c, e), place)}" download="${safe(icsName(f.name))}">${ADD_ICON}${L('Add all to my calendar', 'أضف الكل إلى رزنامتي')}</a></div>
+        <ul class="wk-list">${next.map(card).join('')}</ul></div>`
+      : `<div class="ph-cal-empty" data-reveal><span class="lamp is-unlit" aria-hidden="true"></span><p>${f.events.length ? L('Nothing is coming up in the parish calendar yet. Past events are still in the calendar below.', 'لا شيء قادم في رزنامة الرعية بعد. ما زالت الأحداث السابقة في الرزنامة أدناه.') : L('The parish has not published any events yet. Masses, feasts and gatherings appear here as soon as the parish office adds them to its calendar.', 'لم تنشر الرعية أي مناسبات بعد. تظهر القداديس والأعياد واللقاءات هنا فور إضافتها إلى رزنامة مكتب الرعية.')}</p></div>`}
+    <div class="ph-cal-month" data-reveal>${calendarMarkup(L)}</div>
+    <p class="ph-cal-more"><a class="text-button" href="${safe(c.calendarURL(p.id))}">${L('Open the calendar on its own page', 'افتح الرزنامة في صفحة مستقلّة')}</a></p></div></section>`;
 }
 
 /* ---------- ministries and clergy ---------- */
@@ -432,7 +448,7 @@ export function calendarPageView(c, p, d) {
   const f = facts(c, p, d), { L, safe } = c;
   return `<div class="parish-sub" data-parish-sub>
     ${subHero(c, p, f, L('Calendar', 'الرزنامة'), L(`${safe(f.name)} calendar`, `رزنامة رعية ${safe(f.name)}`), L('Masses, celebrations and gatherings, as the parish office publishes them.', 'القداديس والاحتفالات واللقاءات، كما ينشرها مكتب الرعية.'))}
-    <section class="site-wrap ph-calpage" data-reveal>${f.events.length ? calendarMarkup(L) : `<p class="ph-quiet">${L('The parish has not published any events yet.', 'لم تنشر الرعية أي أحداث بعد.')}</p>`}</section></div>`;
+    <section class="site-wrap ph-calpage" data-reveal>${f.events.length ? '' : `<div class="ph-cal-empty"><span class="lamp is-unlit" aria-hidden="true"></span><p>${L('The parish has not published any events yet. They appear here as soon as the parish office adds them to its calendar.', 'لم تنشر الرعية أي مناسبات بعد. تظهر هنا فور إضافتها إلى رزنامة مكتب الرعية.')}</p></div>`}${calendarMarkup(L)}</section></div>`;
 }
 
 export function mountSubpage(root, c, p, d) {

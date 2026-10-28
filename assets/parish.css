@@ -100,6 +100,16 @@ html[dir=rtl] .ph-other{text-align:right}
 
 /* ---------- calendar ---------- */
 .ph-cal{background:linear-gradient(180deg,var(--mist),#ECEFF3)}
+.ph-up{margin-bottom:clamp(30px,4vw,44px)}
+.ph-up-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;margin-bottom:16px}
+.ph-up-head h3{font-size:clamp(22px,1rem + .6vw,28px)}
+.ph-up-head .btn .icon{width:18px;height:18px}
+.wk-in{padding:1px 9px;border-radius:999px;background:rgb(215 165 72 / .15);color:var(--gilt-ink);font-size:12.5px;font-weight:700}
+.ph-cal-empty{display:flex;gap:16px;align-items:flex-start;max-width:48em;margin-bottom:28px;padding:20px 22px;border-radius:20px;background:var(--white);border:1px solid var(--hair)}
+.ph-cal-empty .lamp{margin-top:9px}
+.ph-cal-empty p{margin:0;font-size:17px;line-height:1.6;color:var(--ink-2)}
+.ph-cal-more{margin:24px 0 0}
+.ph-cal-more .text-button{color:var(--lapis)}
 .pcal-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px;margin-bottom:24px}
 .pcal-period{display:flex;align-items:center;gap:10px}
 .pcal-title{min-width:9.5em;margin:0;text-align:center;font-size:clamp(24px,1rem + .8vw,30px);line-height:1.2}

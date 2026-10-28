@@ -14,18 +14,20 @@ export const KINDS = { mass: ['Mass', 'قدّاس'], sacr: ['Sacrament', 'سرّ
   wedding: ['Wedding', 'إكليل'], baptism: ['Baptism', 'معمودية'], funeral: ['Funeral', 'جنّاز'] };
 export const kindName = (L, kind) => L(...(KINDS[kind] || KINDS.event));
 
-/* An .ics file for one event, as a data link the visitor's calendar opens. */
-export function icsHref(e, name, place = '') {
+/* Events as .ics data links that the visitor's calendar opens: one event, or all of them. */
+function vevent(e, name, place) {
   const start = e.d.replace(/-/g, '') + (e.t ? 'T' + e.t.replace(':', '') + '00' : '');
   const end = e.t ? new Date(`${e.d}T${e.t}`) : null;
   if (end) end.setHours(end.getHours() + 1);
   const text = v => String(v).replace(/[,;\\]/g, m => '\\' + m);
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', 'BEGIN:VEVENT', `UID:${e.id || start}@parishlife`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`, e.t ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${start}`,
+  return ['BEGIN:VEVENT', `UID:${e.id || start}@parishlife`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
+    e.t ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${start}`,
     end ? `DTEND:${dayKey(end).replace(/-/g, '')}T${pad(end.getHours())}${pad(end.getMinutes())}00` : '', `SUMMARY:${text(name)}`,
-    place ? `LOCATION:${text(place)}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean);
-  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n'));
+    place ? `LOCATION:${text(place)}` : '', 'END:VEVENT'].filter(Boolean);
 }
+const calendarFile = vevents => 'data:text/calendar;charset=utf-8,' + encodeURIComponent(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ParishLife//Public calendar//EN', ...vevents, 'END:VCALENDAR'].join('\r\n'));
+export const icsHref = (e, name, place = '') => calendarFile(vevent(e, name, place));
+export const icsAllHref = (events, nameOf, place = '') => calendarFile(events.flatMap(e => vevent(e, nameOf(e), place)));
 export const icsName = name => (String(name || 'event').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'event') + '.ics';
 export const ADD_ICON = ADD;
 

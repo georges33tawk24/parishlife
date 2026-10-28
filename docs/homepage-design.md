@@ -131,11 +131,15 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   counting down.
 - **Section bar:** sticks under the header, names the parish once the hero is behind, and slides a
   gold line under the section being read.
-- **Sections,** each shown only when the parish has published something for it: About (history and
-  facts), Mass times (the published text, the Masses of the next seven days, confession and office
-  hours), Calendar (a month of days with dots, the chosen day or the rest of the month beside it, a
-  coming-up list, search, and any event saved to the visitor's calendar as an `.ics` file),
-  Ministries and clergy, Requests (the arcade, straight to this parish), News, Photographs (with a
+- **Events and calendar** is on every parish page, linked from a hero button: the next four
+  events as cards (date arch, time, kind, how many days away, and an `.ics` button each), one
+  button that saves all of them to the visitor's calendar, then the calendar itself (a month of
+  days with dots, the chosen day or the rest of the month beside it, a coming-up list, and search)
+  and a link to the calendar on its own page. A parish with nothing published yet says so and
+  still shows the month.
+- **Other sections,** each shown only when the parish has published something for it: About
+  (history and facts), Mass times (the published text, the Masses of the next seven days,
+  confession and office hours), Ministries and clergy, Requests (the arcade, straight to this parish), News, Photographs (with a
   lightbox), and Visit (contact details, directions, and the map of Lebanon zooming in to the
   parish). Parishes nearby close the page.
 - **Request form** (`&request=…`): the request type as a choice of arches, then who is asking and the
