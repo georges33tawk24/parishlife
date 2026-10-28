@@ -147,18 +147,20 @@ body.menu-open{overflow:hidden}
 @media print{.site-header,.site-footer{display:none}}
 
 /* ---------- loader: the night before the valley appears ---------- */
-.page-loader{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:radial-gradient(ellipse 60% 50% at 50% 60%,#14244A,#08101F 70%);
+.page-loader{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:radial-gradient(ellipse 60% 50% at 50% 56%,#2B1D13,#0B0806 70%);
   transition:opacity .9s var(--ease-out),visibility .9s;animation:loader-out .9s 8s forwards}
 body.is-ready .page-loader{opacity:0;visibility:hidden}
 .loader-mark{display:grid;justify-items:center;gap:16px;color:var(--on-night)}
 .loader-mark svg{width:56px;height:68px;overflow:visible}
-.loader-light{filter:drop-shadow(0 0 6px #F1C77A) drop-shadow(0 0 16px #D7A548);animation:loader-glow 1.6s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+/* a candle is lit in the arch while the page gets ready */
+.loader-flame{filter:drop-shadow(0 0 5px #FFD98C) drop-shadow(0 0 16px #D7A548);transform-box:fill-box;transform-origin:50% 90%;animation:loader-ignite .7s cubic-bezier(.2,1.5,.4,1) .25s both,loader-flicker 1.3s ease-in-out .95s infinite}
+@keyframes loader-ignite{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes loader-flicker{0%,100%{transform:scale(1,1) skewX(0)}30%{transform:scale(.92,1.08) skewX(3deg)}60%{transform:scale(1.04,.95) skewX(-2deg)}}
 .loader-mark span{font-family:var(--display);font-size:26px;letter-spacing:.04em;opacity:.92}
 .loader-mark i{display:block;width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gilt),transparent);transform-origin:center;animation:loader-line 1.8s ease-in-out infinite}
-@keyframes loader-glow{from{opacity:.55;transform:scale(.85)}to{opacity:1;transform:scale(1.15)}}
 @keyframes loader-line{0%{transform:scaleX(.1);opacity:.3}50%{transform:scaleX(1);opacity:1}100%{transform:scaleX(.1);opacity:.3}}
 @keyframes loader-out{to{opacity:0;visibility:hidden}}
-@media(prefers-reduced-motion:reduce){.loader-light,.loader-mark i{animation:none}.page-loader{transition:none}}
+@media(prefers-reduced-motion:reduce){.loader-flame,.loader-mark i{animation:none}.page-loader{transition:none}}
 /* Lenis drives smooth scrolling; native smooth scrolling would fight it */
 html.lenis,html.lenis body{height:auto}
 html.lenis{scroll-behavior:auto}

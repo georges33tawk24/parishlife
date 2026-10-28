@@ -103,6 +103,9 @@ function heroMotion(gsap, hero, onDawn) {
   /* The homepage sanctuary: the wall comes out of the dark, the glass takes the light from the
      cross outward, the shafts reach into the nave, then the parishes' candles are lit one by one. */
   add(intro, 'fromTo', '.sn-wall', { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 2.6, ease: 'power2.out' }, 0);
+  add(intro, 'fromTo', '.sn-arcade', { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6);
+  add(intro, 'fromTo', '.sn-haze', { opacity: 0 }, { opacity: 0.5, duration: 4, ease: 'sine.inOut' }, 1.6);
+  add(intro, 'from', '.sn-inscription', { opacity: 0, duration: 2 }, 1.4);
   add(intro, 'from', '.sn-stage', { yPercent: 4, duration: 3, ease: 'power3.out' }, 0);
   add(intro, 'fromTo', '.sn-dark', { opacity: 0.88 }, { opacity: 0, duration: 2, stagger: 0.35, ease: 'sine.inOut' }, 0.35);
   add(intro, 'fromTo', '.sn-bloom, .sn-spill', { opacity: 0 }, { opacity: 1, duration: 2.4, ease: 'sine.inOut' }, 0.8);
@@ -133,6 +136,7 @@ function heroMotion(gsap, hero, onDawn) {
   // the sanctuary: the window rises past, its glass warms as the morning comes
   add(day, 'to', '.sn-stage', { yPercent: -10 }, 0);
   add(day, 'to', '.sn-wall', { yPercent: 6 }, 0);
+  add(day, 'to', '.sn-arcade', { yPercent: 3 }, 0);
   add(day, 'to', '.sn-lamp', { yPercent: -14 }, 0);
   add(day, 'to', '.sn-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
   add(day, 'to', '.sn-motes', { opacity: 0.3 }, 0.2);
@@ -202,8 +206,16 @@ function motes(hero) {
   canvas.setAttribute('aria-hidden', 'true');
   art.appendChild(canvas);
   const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1), rtl = document.documentElement.dir === 'rtl';
-  let w = 0, h = 0, frame = 0, last = 0, running = false, beams = [];
-  const motesList = [];
+  let w = 0, h = 0, frame = 0, last = 0, running = false, beams = [], wicks = [], sinceWicks = 0;
+  const motesList = [], smoke = [];
+  // a thin thread of smoke from each lit candle, and a breath of it when a visitor lights one
+  const findWicks = () => {
+    const a = art.getBoundingClientRect();
+    wicks = [...stage.querySelectorAll('.sn-candle.is-lit .sn-flame')].map(f => { const r = f.getBoundingClientRect(); return [r.left + r.width / 2 - a.left, r.top - a.top]; }).filter(([x, y]) => y > 0);
+  };
+  const puff = (x, y, n = 1, strong = false) => { for (let i = 0; i < n; i++) smoke.push({ x: x + (Math.random() - .5) * 2, y, vy: -(14 + Math.random() * 16), age: 0, span: 2.6 + Math.random() * 2.2, phase: Math.random() * 6.28, r: 1.2 + Math.random(), a: strong ? .2 : .07 + Math.random() * .05 }); };
+  const lit = e => { findWicks(); const a = art.getBoundingClientRect(), r = e.detail.getBoundingClientRect(); puff(r.left + r.width / 2 - a.left, r.top - a.top - 4, 7, true); };
+  art.addEventListener('sn-lit', lit);
   // the shafts in canvas pixels: the same outlines the window draws (home-sanctuary.js)
   const size = () => {
     w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
@@ -238,6 +250,23 @@ function motes(hero) {
       ctx.globalAlpha = Math.sin(Math.PI * m.age / m.span) * glint * (1 - m.t) * 0.75;
       ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 6.283); ctx.fill();
     }
+    sinceWicks += dt;
+    if (sinceWicks > 1.2) { sinceWicks = 0; findWicks(); }
+    for (const [x, y] of wicks) if (Math.random() < dt * 2.2) puff(x, y - 4);
+    ctx.globalCompositeOperation = 'source-over';
+    for (let i = smoke.length - 1; i >= 0; i--) {
+      const p = smoke[i];
+      p.age += dt;
+      if (p.age >= p.span) { smoke.splice(i, 1); continue; }
+      const t = p.age / p.span;
+      p.y += p.vy * dt; p.vy *= 1 - dt * .25;
+      const x = p.x + Math.sin(p.phase + p.age * 1.7) * (2 + t * 14), r = p.r + t * 13;
+      const g = ctx.createRadialGradient(x, p.y, 0, x, p.y, r);
+      g.addColorStop(0, `rgba(226,214,200,${(p.a * Math.sin(Math.PI * t)).toFixed(3)})`); g.addColorStop(1, 'rgba(226,214,200,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, p.y, r, 0, 6.283); ctx.fill();
+    }
+    ctx.fillStyle = '#FFF4DC';
     if (running) frame = requestAnimationFrame(tick);
   };
   const start = () => { if (running || document.hidden) return; running = true; last = 0; frame = requestAnimationFrame(tick); };
@@ -249,12 +278,12 @@ function motes(hero) {
   io.observe(hero);
   const vis = () => (document.hidden ? stop() : start());
   document.addEventListener('visibilitychange', vis);
-  return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
+  return () => { stop(); ro.disconnect(); io.disconnect(); art.removeEventListener('sn-lit', lit); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
 }
 
 /* The layers drift with the pointer at different depths. */
 function pointerDepth(gsap, hero) {
-  const layers = [['.vl-sky', 6], ['.vl-far', 13], ['.vl-mist-a', 20], ['.vl-near', 26], ['.vl-mist-b', 34], ['.sn-wall', 5], ['.sn-stage', 12], ['.sn-lamp', 24]]
+  const layers = [['.vl-sky', 6], ['.vl-far', 13], ['.vl-mist-a', 20], ['.vl-near', 26], ['.vl-mist-b', 34], ['.sn-wall', 5], ['.sn-arcade', 9], ['.sn-stage', 12], ['.sn-lamp', 24]]
     .map(([s, k]) => [hero.querySelector(s), k]).filter(([el]) => el)
     .map(([el, k]) => ({ k, x: gsap.quickTo(el, 'x', { duration: 1.4, ease: 'power3.out' }), y: gsap.quickTo(el, 'y', { duration: 1.4, ease: 'power3.out' }) }));
   const move = e => {

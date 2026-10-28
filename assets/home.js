@@ -104,7 +104,7 @@ function hero(c) {
   const announcement = text ? `<p class="hero-note" data-hero-rise><span class="note-mark" aria-hidden="true"></span><span${text.attrs}>${safe(text.text)}</span>${note.link ? ` <a href="${safe(note.link)}"${label?.attrs || ''}>${safe(label?.text || L('Read more', 'اقرأ المزيد'))}</a>` : ''}</p>` : '';
   const stat = (n, key) => `<li><b data-count="${n}">${c.number(n)}</b><span>${noun(c, n, key)}</span></li>`;
   return `<section class="hero hero-sanctuary" id="top" data-hero aria-labelledby="hero-title">
-    <div class="hero-art" data-scene>${sanctuaryMarkup()}</div><div class="hero-shade" aria-hidden="true"></div>
+    <div class="hero-art" data-scene>${sanctuaryMarkup({ inscription: L('Gloria in excelsis Deo', 'المجد لله في العُلى') })}</div><div class="hero-shade" aria-hidden="true"></div>
     <div class="site-wrap hero-inner">
       ${announcement}
       <p class="hero-mark" data-hero-rise>${CROSS}<span>${L('The parishes of Lebanon', 'رعايا لبنان')}</span></p>

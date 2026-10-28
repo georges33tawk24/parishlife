@@ -236,14 +236,67 @@ function lampMarkup() {
   </svg><i class="sn-lamp-glow"></i></div>`;
 }
 
-export function sanctuaryMarkup() {
+/* The nave in shadow: a blind arcade of round arches on pilasters, carved into the same wall.
+   It only adds light and shade over the stones, so the wall's texture shows through it. */
+function arcadeSVG() {
+  const bays = [[-330, 70], [70, 470], [470, 870]], spring = 430, out = [];
+  out.push(`<defs><linearGradient id="sn-niche" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".55" stop-color="#000" stop-opacity=".34"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>
+    <linearGradient id="sn-pier" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFE6C0" stop-opacity=".11"/><stop offset=".7" stop-color="#FFE6C0" stop-opacity=".04"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></linearGradient></defs>`);
+  for (const [x0, x1] of bays) {
+    const r = (x1 - x0) / 2 - 34, cx = (x0 + x1) / 2, l = cx - r, rr = cx + r;
+    out.push(`<path d="M${l} 1000V${spring}A${r} ${r} 0 0 1 ${rr} ${spring}V1000Z" fill="url(#sn-niche)"/>`,
+      `<path d="M${l - 16} ${spring}A${r + 16} ${r + 16} 0 0 1 ${rr + 16} ${spring}" fill="none" stroke="#FFE6C0" stroke-opacity=".09" stroke-width="10"/>`,
+      `<path d="M${l} ${spring}A${r} ${r} 0 0 1 ${rr} ${spring}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="5"/>`);
+  }
+  for (const x of [70, 470, 870]) {
+    out.push(`<rect x="${x - 34}" y="${spring + 26}" width="68" height="${1000 - spring - 26}" fill="url(#sn-pier)"/>`,
+      `<path d="M${x - 46} ${spring}h92l-8 26h-76Z" fill="#FFE6C0" fill-opacity=".1" stroke="#000" stroke-opacity=".4" stroke-width="2"/>`,
+      `<path d="M${x - 44} 962h88v38h-88Z" fill="#FFE6C0" fill-opacity=".06"/>`);
+  }
+  return `<svg class="sn-arcade-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMinYMax slice" aria-hidden="true" focusable="false">${out.join('')}</svg>`;
+}
+
+/* Incense in the light: the shafts as a soft mask over a drifting haze (the haze itself is a
+   texture made on the visitor's device, see mountSanctuary). */
+function hazeMask() {
+  const shapes = BEAMS.map((beam, i) => {
+    const { outline, from, to } = beamOutline(beam);
+    return `<linearGradient id="h${i}" gradientUnits="userSpaceOnUse" x1="${r1(from[0])}" y1="${r1(from[1])}" x2="${r1(to[0])}" y2="${r1(to[1])}"><stop offset=".24" stop-color="#fff" stop-opacity="0"/><stop offset=".42" stop-color="#fff" stop-opacity=".8"/><stop offset=".74" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><polygon points="${pts(outline)}" fill="url(#h${i})"/>`;
+  }).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1600 0 2640 2100"><filter id="b"><feGaussianBlur stdDeviation="26"/></filter><g filter="url(#b)">${shapes}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+/* A soft, seamless haze: smoothed value noise on a wrapped lattice, white with varying alpha. */
+function hazeTexture() {
+  const size = 256, cells = 6, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d'), img = ctx.createImageData(size, size), random = rng(23);
+  const octave = n => { const g = Array.from({ length: n * n }, () => random()); return (x, y) => {
+    const fx = x * n, fy = y * n, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const at = (i, j) => g[((j % n + n) % n) * n + ((i % n + n) % n)];
+    return (at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx) * (1 - sy) + (at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx) * sy;
+  }; };
+  const layers = [octave(cells), octave(cells * 2), octave(cells * 4)];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const v = layers[0](x / size, y / size) * .58 + layers[1](x / size, y / size) * .28 + layers[2](x / size, y / size) * .14;
+    const k = (y * size + x) * 4, a = Math.max(0, v - .42) * 1.5;
+    img.data[k] = 255; img.data[k + 1] = 244; img.data[k + 2] = 226; img.data[k + 3] = Math.round(Math.min(1, a) * 255);
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+export function sanctuaryMarkup({ inscription = '' } = {}) {
   return `<div class="sanctuary" data-sanctuary aria-hidden="true">
     <div class="sn-wall">${wallSVG()}</div>
+    <div class="sn-arcade">${arcadeSVG()}</div>
     <div class="sn-spill"></div>
     <div class="sn-stage" data-sn-stage>
       <div class="sn-bloom"></div>
       <div class="sn-window">${windowSVG()}${lightSVG()}</div>
-      <div class="sn-beams">${beamsMarkup()}</div>
+      ${inscription ? `<p class="sn-inscription">${inscription.replace(/[&<>"']/g, '')}</p>` : ''}
+      <div class="sn-beams">${beamsMarkup()}<div class="sn-haze" style='--mask:${hazeMask()}'><i data-sn-haze></i></div></div>
       <div class="sn-candles" data-sn-candles></div>
       ${lampMarkup()}
     </div>
@@ -264,7 +317,15 @@ export function mountSanctuary(host, places, { tip, onPick, words }) {
     const p = parishAt.get(i), h = p ? 70 + random() * 34 : 34 + random() * 36;
     const lean = (random() * 2 - 1) * (p ? 2.6 : 4), x = 6 + (i + .5) * 88 / total + (random() - .5) * 1.2;
     return `<span class="sn-candle${p ? ' is-lit is-parish' : ''}" style="--x:${r1(x)}%;--h:${r1(h)};--lean:${r1(lean)}deg;--d:${r1(1.7 + random() * 1.6)}s;--o:${r1(-random() * 3)}s"${p ? ` data-candle="${i}"` : ''}><i class="sn-flame"></i><b class="sn-halo"></b></span>`;
-  }).join('') + '<span class="sn-tray"></span>';
+  }).join('') + '<span class="sn-tray" data-sn-tray></span>';
+  const haze = host.querySelector('[data-sn-haze]');
+  if (haze && !document.documentElement.classList.contains('is-lite')) haze.style.backgroundImage = `url(${hazeTexture()})`;
+  // each lit candle throws a little light on the brass beneath it
+  const tray = box.querySelector('[data-sn-tray]');
+  const glints = () => { tray.style.setProperty('--glints', [...box.querySelectorAll('.sn-candle.is-lit')].map(el => `radial-gradient(ellipse 6% 90% at ${el.style.getPropertyValue('--x')} 10%,rgb(255 214 150 / .62),rgb(255 214 150 / 0) 72%)`).join(',') || 'none'); };
+  glints();
+  const watch = new MutationObserver(glints);
+  watch.observe(box, { subtree: true, attributes: true, attributeFilter: ['class'] });
   const show = (el, text) => {
     const r = el.getBoundingClientRect(), b = host.closest('[data-hero]').getBoundingClientRect();
     tip.textContent = text; tip.hidden = false;
@@ -281,11 +342,12 @@ export function mountSanctuary(host, places, { tip, onPick, words }) {
       if (el.classList.contains('is-lit')) return;
       el.classList.add('is-lit', 'is-lighting');
       show(el, words.lit);
+      host.dispatchEvent(new CustomEvent('sn-lit', { detail: el }));
     };
     el.addEventListener('pointerenter', enter); el.addEventListener('pointerleave', hide); el.addEventListener('click', click);
     off.push(() => { el.removeEventListener('pointerenter', enter); el.removeEventListener('pointerleave', hide); el.removeEventListener('click', click); });
   });
-  return { destroy() { off.forEach(fn => fn()); } };
+  return { destroy() { watch.disconnect(); off.forEach(fn => fn()); } };
 }
 
 /* The rose window again, drawn in gold lines, for the verse further down the page. */
