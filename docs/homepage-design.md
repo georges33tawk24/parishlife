@@ -115,10 +115,24 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   so the glass and stone textures are painted once, and no layer uses a blend mode (they cost the
   most frames). On narrow or tall screens the window stands behind the words, dimmer, without the
   candles and the lamp.
-- **Further down:** a gold rule with the cross draws under each section heading; the night sections
-  carry small gold stars, like a chapel ceiling; behind the verse a rose window drawn in gold turns
-  very slowly.
-- **Loader:** a night screen with the arch mark, its gold light breathing, until the page is ready.
+- **In the sanctuary as well:** a blind arcade of round arches stands in the shadow of the nave behind
+  the words; *Gloria in excelsis Deo* (المجد لله في العُلى) is gilded on the front of the sill; incense
+  drifts through the shafts (a seamless haze made on the visitor's device, masked to the shafts);
+  each lit candle sends up a thread of smoke and lights the brass beneath it.
+- **Further down:** a gold rule with the cross draws under each section heading, and This week says
+  where the Maronite year stands (`assets/liturgy.js`: the seasons from the Sunday of the Consecration
+  of the Church through Great Lent, the Resurrection, Pentecost and the Holy Cross, reckoned from
+  Gregorian Easter) and marks the great feasts on the ribbon; on a feast day the hero's kicker names
+  it. Sundays carry the cross. The night sections are a chapel ceiling of small gold stars and rise
+  with a gilded arch edge. The request arches are gilded niches with gold leaf in the lunette and a
+  cross at the crown; the steps are numbered I, II, III. Mass times has a bell in its belfry that
+  rings as the section arrives. The announcements are parchment notices sealed in red wax. Behind the
+  verse, a half-dome of gold mosaic (tesserae made on the visitor's device) with a red cross, and a
+  rose window drawn in gold turning very slowly. About opens with an illuminated initial, gold on
+  manuscript red, beside a village church with its bell-cote on the ridge. On the map each parish
+  is a small flickering flame. The footer opens on a carved frieze of crosses, and the brand's light
+  breathes like a flame.
+- **Loader:** warm dark stone, and a candle is lit in the arch mark until the page is ready.
   It also fades on its own after eight seconds, so a failed script can never leave it in place.
 - **Load:** the camera settles on the valley while the sky, crest and valley layers rise into place,
   the mist drifts in, the villages light up, the headline rises word by word, and then each parish
@@ -187,6 +201,10 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
 
 ## Other public pages
 
+- **Request tracking and the signature check** are parchment with a gilded inner rule, sealed with red
+  wax bearing the Maronite cross; each finished step of a request lights a candle, the current one
+  burning brightest (red when documents are missing).
+
 - **For parishes** (`public.html?view=bundles`, "ParishLife bundles" in the footer): the four bundles as
   arches, one gold light for each step up, with what each includes; how a parish joins; the practical
   notes on subscriptions; and a call to the members portal.
@@ -202,8 +220,10 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
 
 ## Sign in and sign up
 
-The members portal opens on the valley at dusk beside a compact form, in the public site's type
-and colours (`assets/auth.css`, scoped to `.account-auth`).
+The members portal opens beside the same church window as the public site (its light by the hour, the
+lamp, the incense, a few candles already lit and the rest for the visitor to light), next to a compact
+form on warm limestone, in the public site's type and colours (`assets/auth.css`, scoped to
+`.account-auth`; the scene comes from `assets/sanctuary.css`).
 
 - **Sign in:** one field for an email, a phone number (typed as it is dialled in Lebanon) or a
   username, the password, "Forgot your password?" (the parish office resets it), and **Sign in with a
@@ -236,7 +256,8 @@ and colours (`assets/auth.css`, scoped to `.account-auth`).
 | --- | --- |
 | Page shell, header, footer | `public.html`, `assets/site.css` (fonts, tokens, chrome; shared by every public page) |
 | Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
-| Homepage sanctuary | `assets/home-sanctuary.js` (window, wall, light, lamp and candles, all generated), `assets/sanctuary.css` (also the homepage's warm sections, stars and ornaments) |
+| Sanctuary scene | `assets/home-sanctuary.js` (window, wall, arcade, light, haze, lamp and candles, mosaic, all generated) and `assets/sanctuary.css`; used by the homepage, parish pages, their banners and the sign-in screen |
+| Church details | `assets/church.css` (loaded last on public pages: hero words over the scene, niches, stars, bell, initial, chapel, notices, wax seals, frieze, flames on the map), `assets/liturgy.js` (seasons and feasts) |
 | Valley (parish pages) | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
 | Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
 | Motion | `assets/home-motion.js` (homepage and parish pages) |
