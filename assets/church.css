@@ -94,9 +94,6 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 .about-copy .has-initial::first-letter,.about-copy .has-initial>:first-child::first-letter{font-size:0}
 /* About: a village church with its bell-cote on the ridge of the valley picture */
 .about-mark{position:relative}
-.about-chapel{position:absolute;left:0;right:0;bottom:0;width:100%;height:auto;filter:drop-shadow(0 -2px 10px rgb(255 200 120 / .18))}
-.chapel-bell{transform-box:fill-box;transform-origin:50% 0;animation:chapel-bell 3.4s ease-in-out infinite alternate}
-@keyframes chapel-bell{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}
 /* the footer opens on a carved frieze of crosses */
 .site-footer::before{content:"";display:block;height:28px;margin:-44px 0 44px;opacity:.4;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='28' viewBox='0 0 96 28' fill='none' stroke='%23D7A548' stroke-width='1.1'%3E%3Cpath d='M0 2.5H96M0 25.5H96' stroke-opacity='.5'/%3E%3Ccircle cx='24' cy='14' r='8' stroke-opacity='.8'/%3E%3Cpath d='M24 8.6v10.8M18.6 14h10.8' stroke-width='1.4'/%3E%3Cpath d='M72 7.5l6.5 6.5-6.5 6.5-6.5-6.5z' stroke-opacity='.7'/%3E%3Ccircle cx='72' cy='14' r='1.6' fill='%23D7A548' stroke='none'/%3E%3Cpath d='M44 14h8M92 14h8M-4 14h8' stroke-opacity='.45'/%3E%3C/svg%3E") repeat-x 0 50%/96px 28px}
 
@@ -228,7 +225,7 @@ html{scrollbar-color:#B48737 #E9E1D1}
 
 @media(prefers-reduced-motion:reduce){
   .hero-field button::after{transition:none}
-  .bell-body,.bell-clapper,.chapel-bell{animation:none!important}
+  .bell-body,.bell-clapper{animation:none!important}
   .verse-rose svg{animation:none}
   .track-steps li span::after{animation:none;transition:none}
   .map-light .core,.brand-light,.mobile-nav::before,.lost-arch.is-lit .lost-candle i{animation:none}

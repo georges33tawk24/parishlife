@@ -341,22 +341,8 @@ function verse(c) {
 }
 
 /* ---------- about and join ---------- */
-/* A village church of the mountain, as the valley wakes: a stone front with its bell-cote, the
-   bell, the cross, and the lamps lit inside. */
-const CHAPEL = `<svg class="about-chapel" viewBox="0 0 240 150" aria-hidden="true" focusable="false">
-  <defs><radialGradient id="chapel-glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFD98C" stop-opacity=".34"/><stop offset=".6" stop-color="#FFD98C" stop-opacity=".08"/><stop offset="1" stop-color="#FFD98C" stop-opacity="0"/></radialGradient>
-    <linearGradient id="chapel-stone" x1="0" x2="1"><stop offset="0" stop-color="#1B2135"/><stop offset=".7" stop-color="#232A40"/><stop offset="1" stop-color="#3A3542"/></linearGradient>
-    <clipPath id="chapel-front"><path d="M92 121V84l32-22 32 22v37Z"/></clipPath></defs>
-  <circle cx="124" cy="100" r="46" fill="url(#chapel-glow)"/>
-  <path d="M0 150V126c40-9 78-12 112-10s66 6 92 2c16-2 28-5 36-7v39Z" fill="#141A2C"/>
-  <g fill="url(#chapel-stone)"><path d="M92 121V84l32-22 32 22v37Z"/><path d="M116 63V47h16v16Z"/><path d="M114.5 48c0-8 4.5-12 9.5-12s9.5 4 9.5 12Z"/></g>
-  <g clip-path="url(#chapel-front)" stroke="#5B5566" stroke-width=".5" opacity=".55"><path d="M90 92H158M90 100H158M90 108H158M90 116H158M90 84H158M90 76H158"/><path d="M104 84v8M118 92v8M132 84v8M146 92v8M110 100v8M138 100v8M100 108v8M124 108v8M148 108v8"/></g>
-  <path d="M92 84l32-22 32 22" fill="none" stroke="#6E6372" stroke-width="1.2" opacity=".8"/>
-  <path d="M124 36V25M120 28.5h8" stroke="#232A40" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M119.5 47v-4.5a4.5 4.5 0 0 1 9 0V47Z" fill="#2E2A3A"/><g class="chapel-bell"><path d="M121.6 41.5c0-1.6.9-2.6 2.4-2.6s2.4 1 2.4 2.6v3h-4.8Z" fill="#D9B060"/><circle cx="124" cy="45.4" r=".8" fill="#D9B060"/></g>
-  <path d="M118.5 121v-13a5.5 5.5 0 0 1 11 0v13Z" fill="#F4C978"/><circle cx="124" cy="82" r="5" fill="#F4C978"/><path d="M124 77.6v8.8M119.6 82h8.8" stroke="#9A6A22" stroke-width=".9"/>
-  <path d="M102 104v-5.5a3 3 0 0 1 6 0v5.5ZM140 104v-5.5a3 3 0 0 1 6 0v5.5Z" fill="#E9B85E"/>
-</svg>`;
+/* Beside the About words, a votive stand in the dark church: each parish one light among many
+   (assets/images/votives.webp, docs/tools/render_votives.py). */
 /* The first letter of the About text as an illuminated initial, as in a liturgical book. The
    letter stays in the paragraph for reading aloud; the painted one beside it is decoration. */
 function illuminated(c, html) {
@@ -368,7 +354,7 @@ function about(c) {
   if (c.site && !c.site.about) return '';
   const { L, safe } = c, a = c.site?.about, f = facts(c);
   return `<section class="about" id="about" aria-labelledby="about-title"><div class="site-wrap about-grid">
-    <figure class="about-mark" data-reveal><img src="assets/images/valley/crest-dawn.webp" alt="" loading="lazy" decoding="async" data-parallax="-8">${CHAPEL}</figure>
+    <figure class="about-mark" data-reveal><img src="assets/images/votives.webp" alt="" loading="lazy" decoding="async" data-parallax="-8"></figure>
     <div class="about-copy" data-reveal data-lit><h2 id="about-title">${safe(words(c, a?.title, HOME_DEFAULTS.about.title))}</h2>${illuminated(c, paragraphs(c, words(c, a?.body, HOME_DEFAULTS.about.body)))}
       <dl class="about-facts">${[[f.parishes, 'parish'], [f.dioceses, 'diocese'], [f.towns, 'town']]
         .map(([n, key]) => `<div><dt>${noun(c, n, key).replace(/^./, ch => ch.toUpperCase())}</dt><dd data-count="${n}">${c.number(n)}</dd></div>`).join('')}</dl></div>
