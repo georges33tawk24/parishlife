@@ -34,6 +34,7 @@ from backend import workspace
 from backend import sign_in
 from backend import public_site
 from backend import analytics
+from backend import signatures
 
 ROLES = {'bishop', 'priest', 'secretary', 'treasurer', 'leader', 'member'} | workspace.EXTRA_ROLES
 # Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
@@ -1544,6 +1545,8 @@ def workflow(c, u, pid, q):
                 else:
                     require(s.get('kind') == 'certificate' and s['status'] == 'approved', 'Approve a certificate request before issuing it.')
                     s.update(status='issued', issuedBy=u['name'], issuedAt=at, signedByUserId=u['id'], bishopReview='pending')
+                    if q.get('signature'):
+                        signatures.sign_certificate(c, u, pid, d, s, q, require)
                     for bishop in c.execute("SELECT id FROM users WHERE role='bishop' AND diocese=?",(u['diocese'],)):
                         notify_member(c,pid,bishop['id'],'certificate','Signed certificate awaiting acceptance',s['reg'],'workspace')
             h = dict(action=action, by=u['name'], at=at)
@@ -1723,7 +1726,8 @@ def workflow(c, u, pid, q):
     validate(d)
     sync_relationships(c, pid, d)
     c.execute('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', (json.dumps(d), pid))
-    audit(c, u, pid, action, q)
+    # The passkey's answer is kept with the signature itself, not in the audit trail.
+    audit(c, u, pid, action, {k: v for k, v in q.items() if k not in {'signature', '_signContext'}})
 
 
 CONCERN_CATEGORIES = {'Ministry activities', 'Leadership', 'Meetings', 'Events', 'Facilities',
@@ -2741,6 +2745,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
         return self.reply(200, {'ok': True}, [f'pl_session={token}; HttpOnly; SameSite=Strict; Path=/{secure}', extra_cookie])
 
+    def sign_context(self):
+        """The passkey context of a signature: the nonce of its challenge travels in its own cookie."""
+        nonce = http.cookies.SimpleCookie(self.headers.get('Cookie', '')).get('pl_sign')
+        return {**sign_in.passkey_context(self.headers.get('Host', ''), os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1', ''), 'nonce': nonce.value if nonce else ''}
+
+    def sign_cookie(self, value):
+        secure = '; Secure' if os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1' else ''
+        return f"pl_sign={value}; HttpOnly; SameSite=Strict; Path=/api/; Max-Age={300 if value else 0}{secure}"
+
     def passkey_context(self):
         challenge = http.cookies.SimpleCookie(self.headers.get('Cookie', '')).get('pl_passkey')
         return sign_in.passkey_context(self.headers.get('Host', ''), os.environ.get('PARISHLIFE_SECURE_COOKIE') == '1', challenge.value if challenge else '')
@@ -2791,6 +2804,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     require(0 < length <= limit, 'Request too large or empty.', 413)
                     q = json.loads(self.rfile.read(length))
                     require(isinstance(q, dict), 'Expected an object.')
+                    q.pop('_signContext', None)
                 path = urlsplit(self.path).path
                 if path == '/api/public/hit' and self.command == 'POST':
                     analytics.record(c, q, self.client_address[0], self.headers.get('User-Agent', ''), self.headers.get('Host', ''))
@@ -2804,9 +2818,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.reply_file(public_file(c,pieces[3],pieces[4],require))
                 if self.command == 'POST' and path in {'/api/signup', '/api/public/guest-requests'}:
                     sign_in.human_check(q, self.client_address[0], require)
+                if path.startswith('/api/public/verify/') and self.command == 'GET':
+                    return self.reply(200, signatures.verify(c, path.rsplit('/', 1)[-1]))
                 if path.startswith('/api/public/'):
                     result = workspace.handle(c, None, path, self.command, q, require)
                     if result is not None:
+                        if path.startswith('/api/public/track/') and result.get('id'):
+                            result = {**result, 'letters': signatures.letters(c, result['id'])}
                         c.commit()
                         if path == '/api/public/auth-options':
                             result = {**result, 'turnstile': os.environ.get('TURNSTILE_SITE_KEY', ''), 'passkeys': True}
@@ -2886,6 +2904,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     require(len(pieces)==5,'File not found.',404)
                     return self.reply_file(account_file(c,u,pieces[3],pieces[4],require))
                 workspace_query = dict(q)
+                if path == '/api/sign/options' and self.command == 'POST':
+                    body, nonce = signatures.options(c, u, q, self.sign_context(), require)
+                    return self.reply(200, body, self.sign_cookie(nonce))
+                if path.startswith('/api/account/signature') or path.startswith('/api/sign/'):
+                    signed = signatures.handle(c, u, path, self.command, q, self.sign_context(), require)
+                    if signed is not None:
+                        c.commit()
+                        return self.reply(200, signed, self.sign_cookie('') if self.command == 'POST' else None)
                 if path == '/api/account/passkeys/options' and self.command == 'POST':
                     ctx = self.passkey_context()
                     options = sign_in.passkey_options(c, u, ctx)
@@ -3014,7 +3040,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     row = c.execute('SELECT data FROM states WHERE parish_id=?', (pid,)).fetchone()
                     return self.reply(200, {'revision': revision, 'd': visible(c, u, pid, json.loads(row['data']))})
                 if endpoint == 'workflow' and self.command == 'POST':
-                    workflow(c, u, pid, q); c.commit(); return self.reply(200, {'ok': True})
+                    if q.get('signature'): q['_signContext'] = self.sign_context()
+                    workflow(c, u, pid, q); c.commit(); return self.reply(200, {'ok': True}, self.sign_cookie('') if q.get('signature') else None)
                 raise Problem(405, 'Method not allowed.')
         except Problem as e:
             self.audit_administration_failure(actor,q,e.status)

@@ -22,8 +22,9 @@ import { loginName, signup } from './accounts.js';
 import { xlsx_preview } from './xlsx.js';
 import { initializeWorkspace, workspaceHandle, workspaceSignup, loginUser, sessionData, suspended, publicProfile, parishContext, isOffice, parishPlan } from './workspace.js';
 import { overview, calendarFeed, publishedContent, publicEvents, notices, shareMeta, sharePage } from './public-site.js';
-import { loginGuard, loginFailed, loginSucceeded, humanCheck, passkeyContext, passkeyOptions, passkeyUser, accountPasskeys } from './sign-in.js';
+import { loginGuard, loginFailed, loginSucceeded, humanCheck, passkeyContext, passkeyOptions, passkeyUser, accountPasskeys, cookieValue } from './sign-in.js';
 import { record as recordVisit, stat, analyticsHandle } from './analytics.js';
+import { signOptions, signatureHandle, verify as verifySignature, letters as signedLetters } from './signatures.js';
 
 // Accounts created by the parishlife-v2 line carry the role "user"; they sign in as members.
 const SIGN_IN_ROLES = new Set([...ROLES, 'user']);
@@ -103,6 +104,7 @@ async function storedFile(c, row) {
 async function handle(c, env, request, url, q, secureCookie) {
   q={...q};
   delete q._recentAuthentication;
+  delete q._signContext;
   const method = request.method;
   const path = url.pathname;
   if(path.startsWith('/api/public/guest-files/')&&method==='GET'){
@@ -116,8 +118,10 @@ async function handle(c, env, request, url, q, secureCookie) {
     const feed = await calendarFeed(c, parts[3], url.origin, url.searchParams.get('lang') === 'ar');
     return new Response(feed, { headers: { ...HEADERS, 'Content-Type': 'text/calendar; charset=utf-8' } });
   }
+  if (path.startsWith('/api/public/verify/') && method === 'GET') return reply(200, await verifySignature(c, path.slice(path.lastIndexOf('/') + 1)));
   if(path.startsWith('/api/public/')){
-    const result=await workspaceHandle(c,null,path,method,q);
+    let result=await workspaceHandle(c,null,path,method,q);
+    if(result!==null&&path.startsWith('/api/public/track/')&&result.id)result={...result,letters:await signedLetters(c,result.id)};
     if(result!==null){await c.commit();return reply(200,path==='/api/public/auth-options'?{...result,turnstile:env.TURNSTILE_SITE_KEY||'',passkeys:true}:result);}
   }
   if (path === '/api/public/overview' && method === 'GET') return reply(200, await overview(c, await parishPlan(c, '')));
@@ -153,6 +157,9 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { ok: true }, [`pl_session=${token}; HttpOnly; SameSite=Strict; Path=/${secureCookie}`, extraCookie]);
   };
   const address = request.headers.get('CF-Connecting-IP') || '', passkey = passkeyContext(request, url, secureCookie);
+  /* A signature's challenge nonce travels in its own short-lived cookie (see signatures.js). */
+  const signing = { rpId: passkey.rpId, origin: passkey.origin, nonce: cookieValue(request.headers.get('Cookie'), 'pl_sign') };
+  const signCookie = value => `pl_sign=${value}; HttpOnly; SameSite=Strict; Path=/api/; Max-Age=${value ? 300 : 0}${secureCookie}`;
   if (path === '/api/login' && method === 'POST') {
     await loginGuard(c, q, address);
     const u = await loginUser(c,q);
@@ -205,6 +212,14 @@ async function handle(c, env, request, url, q, secureCookie) {
   if (method === 'POST' && (path === '/api/workspace/grants' && q.role === 'super_admin' || path === '/api/workspace/suspension' && q.scope === 'global')) {
     need(passwordMatches(u.password, String(q.currentPassword || '')), 'Your current password is not correct.', 403);
     q._recentAuthentication = true;
+  }
+  if (path === '/api/sign/options' && method === 'POST') {
+    const [options, nonce] = await signOptions(c, u, q, signing);
+    return reply(200, options, signCookie(nonce));
+  }
+  if (path.startsWith('/api/account/signature') || path.startsWith('/api/sign/')) {
+    const signed = await signatureHandle(c, u, path, method, q, signing);
+    if (signed !== null) { await c.commit(); return reply(200, signed, method === 'POST' ? signCookie('') : null); }
   }
   if (path === '/api/account/passkeys/options' && method === 'POST') {
     const options = await passkeyOptions(c, u, passkey);
@@ -344,9 +359,10 @@ async function handle(c, env, request, url, q, secureCookie) {
     return reply(200, { revision, d: await visible(c, u, pid, JSON.parse(row.data), { fresh: true, stored: true }) });
   }
   if (endpoint === 'workflow' && method === 'POST') {
+    if (q.signature) q._signContext = signing;
     await workflow(c, u, pid, q);
     await c.commit();
-    return reply(200, { ok: true });
+    return reply(200, { ok: true }, q.signature ? signCookie('') : null);
   }
   throw new Problem(405, 'Method not allowed.');
 }

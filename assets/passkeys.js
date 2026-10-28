@@ -2,8 +2,8 @@ import { api } from './api.js';
 
 /* Passkeys: signing in with the phone's or computer's own lock (face, fingerprint or PIN)
    instead of a password. The server checks every signature (backend/sign_in.py). */
-const bytes = text => Uint8Array.from(atob(String(text).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(text).length + 3) % 4)), ch => ch.charCodeAt(0));
-const text = buffer => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const bytes = text => Uint8Array.from(atob(String(text).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(text).length + 3) % 4)), ch => ch.charCodeAt(0));
+export const text = buffer => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 export const passkeysSupported = () => !!(window.PublicKeyCredential && navigator.credentials?.create);
 

@@ -526,3 +526,51 @@ html[dir=rtl] .ph-other{text-align:right}
 }
 @media(prefers-reduced-motion:reduce){.ph-mass .lamp{animation:none}.ph-mass,.share-btn{transition:none}}
 @media print{.ph-nav,.hero-art,.ph-map,.ph-near,.share-row,.ph-follow-actions{display:none}}
+
+/* ---------- a signed letter on the tracking page ---------- */
+.letter{position:relative;max-width:760px;margin:28px auto 0;padding:clamp(28px,5vw,56px);border-radius:6px;background:linear-gradient(180deg,#FFFDF8,#FBF7EE);color:#1E1E1E;
+  box-shadow:0 30px 60px -36px rgb(14 26 49 / .45),inset 0 0 0 10px #FFFDF8,inset 0 0 0 11px #E8DEC8}
+.letter header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid #E1D6C0}
+.letter-mark{flex:none;width:34px;height:42px;color:#1F2E5C}
+.letter-from{display:grid;margin-inline-end:auto;color:#1A2340}.letter-from b{font-family:var(--display);font-weight:400;font-size:21px;line-height:1.2}.letter-from small{font-size:13.5px;color:#6B6455}
+.letter-mark svg{width:100%;height:100%}
+.letter header time{font-size:15px;color:#6B6455}
+.letter h2{margin:0 0 16px;font-size:clamp(24px,1rem + 1vw,32px);color:#1A2340}
+.letter-body{font-size:17.5px;line-height:1.8}
+.letter footer{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px 32px;margin-top:34px}
+.letter-signed{display:grid;justify-items:start;min-width:220px;color:#1F2E5C}
+.letter-sign{width:230px;height:auto;margin-bottom:-6px}
+.letter-signed b{padding-top:6px;border-top:1px solid #B9AE97;color:#1E1E1E;font-weight:600}
+.letter-signed span{font-size:14px;color:#6B6455}
+.letter-check{display:grid;justify-items:end;gap:2px;text-align:end;font-size:13.5px;color:#6B6455}
+.letter-check a{font:600 16px/1.3 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.06em;color:#1F2E5C}
+.letter-check small{max-width:22ch}
+.letter-print{display:flex;margin-block-start:28px;margin-inline-start:auto}
+@media print{
+  body.is-printing-letter > :not(main),body.is-printing-letter .track-card,body.is-printing-letter .letter:not(.is-printing),body.is-printing-letter .letter-print{display:none!important}
+  body.is-printing-letter .letter{box-shadow:none;margin:0;max-width:none}
+}
+
+/* ---------- checking a signature ---------- */
+.verify{padding-block:calc(var(--header) + clamp(40px,7vw,90px)) clamp(70px,10vw,120px)}
+.verify-card{max-width:720px;margin:0 auto;padding:clamp(26px,4vw,44px);border-radius:28px;background:var(--white);border:1px solid var(--hair);box-shadow:0 30px 70px -44px rgb(14 26 49 / .5)}
+.verify-seal{display:grid;place-items:center;width:64px;height:64px;margin-bottom:16px;border-radius:50%;background:var(--night);color:var(--gilt-hi)}
+.verify-seal svg{width:44px;height:44px}
+.verify-card h1{margin:0 0 8px;font-size:clamp(28px,1rem + 1.6vw,40px)}
+.verify-card>p{margin:0 0 22px;color:var(--ink-2);line-height:1.6}
+.verify-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.verify-form label{display:grid;gap:6px;flex:1 1 260px;font-weight:600;font-size:14.5px}
+.verify-form input{min-height:50px;padding:10px 16px;border-radius:14px;border:1px solid var(--hair);font:600 18px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.verify-form input:focus{outline:none;border-color:var(--lapis);box-shadow:0 0 0 4px rgb(42 74 150 / .12)}
+.verify-result{margin-top:24px}
+.verify-state{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;font-weight:700;font-size:17px}
+.verify-state svg{width:22px;height:22px;flex:none}
+.verify-state.is-good{background:rgb(12 163 12 / .08);color:#0A6B0A;border:1px solid rgb(12 163 12 / .3)}
+.verify-state.is-critical{background:rgb(208 59 59 / .07);color:#A32727;border:1px solid rgb(208 59 59 / .3)}
+.verify-facts{display:grid;margin:18px 0 0}
+.verify-facts div{display:grid;grid-template-columns:minmax(110px,.35fr) minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--hair)}
+.verify-facts dt{font-weight:600;color:var(--ink-2)}
+.verify-facts dd{margin:0}
+.verify-mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.05em}
+.verify-how{margin:16px 0 0;font-size:14px;color:var(--ink-2);line-height:1.6}
+@media(max-width:640px){.verify-facts div{grid-template-columns:minmax(0,1fr);gap:2px}.letter footer{display:grid}.letter-check{justify-items:start;text-align:start}.letter-print{margin-inline-start:0}}

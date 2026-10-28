@@ -17,6 +17,7 @@ import { REQUEST_LABELS, ACTIVE_ENTRY, OFFICIAL_ENTRY, CLOCK, sacrament_conflict
 export { Problem, ROLES };
 
 import { CONCERN_CATEGORIES, CONCERN_STATUSES } from './concern-policy.js';
+import { signCertificate } from './signatures.js';
 export { CONCERN_CATEGORIES, CONCERN_STATUSES };
 const SENSITIVE_CONCERNS = new Set(['Leadership', 'Behaviour or conduct', 'Safety', 'Financial concerns',
   'Harassment or inappropriate behaviour']);
@@ -1113,6 +1114,7 @@ export async function workflow(c, u, pid, q) {
         } else {
           need(eq(get(s, 'kind'), 'certificate') && eq(K(s, 'status'), 'approved'), 'Approve a certificate request before issuing it.');
           Object.assign(s, { status: 'issued', issuedBy: by, issuedAt: at, signedByUserId:u.id, bishopReview:'pending' });
+          if (q.signature) await signCertificate(c, u, pid, d, s, q);
           for(const bishop of await c.all("SELECT id FROM users WHERE role='bishop' AND diocese=?",u.diocese))notify_member(c,pid,bishop.id,'certificate','Signed certificate awaiting acceptance',s.reg,'workspace');
         }
       }
@@ -1303,5 +1305,6 @@ export async function workflow(c, u, pid, q) {
   validate(d);
   await sync_relationships(c, pid, d);
   c.run('UPDATE states SET revision=revision+1,data=? WHERE parish_id=?', dumps(d), pid);
-  audit(c, u, pid, action, q);
+  // The passkey's answer is kept with the signature itself, not in the audit trail.
+  audit(c, u, pid, action, Object.fromEntries(Object.entries(q).filter(([k]) => k !== 'signature' && k !== '_signContext')));
 }

@@ -29,3 +29,25 @@
 .passkey-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
 .passkey-list b{display:block}
 .passkey-list small{color:var(--text-2)}
+/* My signature: the drawing on paper, in the dark blue of a fountain pen */
+.sig-panel{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px 28px;align-items:start}
+.sig-panel>.sig-facts:only-child{grid-column:1 / -1}
+.sig-card{margin:0;padding:14px 18px 12px;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg,#FFFDF8,#FBF7EE);color:#1F2E5C;box-shadow:inset 0 0 0 4px #FFFDF8,inset 0 0 0 5px #EFE6D3}
+.sig-card .sig-drawing{display:block;width:100%;height:auto;max-height:110px}
+.sig-card figcaption{display:grid;margin-top:2px;padding-top:6px;border-top:1px solid #D8CDB6;color:#2A2A2A}
+.sig-card figcaption b{font-weight:600}
+.sig-card figcaption span{font-size:13px;color:#6B6455}
+.sig-card.is-small{max-width:300px;margin-bottom:10px}
+.sig-facts{display:grid;gap:10px}
+.sig-facts p{display:block;margin:0;font-size:15px;line-height:1.55}
+.sig-facts p.help{font-size:13px}
+.sig-facts .btn,.sig-facts .account-actions{justify-self:start}
+.sig-facts p svg,.sig-form .help svg,.sig-issue .help svg{display:inline-block;vertical-align:-3px;margin-inline-end:6px}
+.sig-form{display:grid;gap:14px}
+.sig-pad-wrap{position:relative}
+.sig-pad{display:block;width:100%;height:auto;aspect-ratio:400/140;border-radius:12px;border:1.5px dashed var(--border-strong);background:#FFFDF8;color:#1F2E5C;touch-action:none;cursor:crosshair}
+.sig-pad line{stroke:#D8CDB6;stroke-width:1.2}
+.sig-pad-wrap [data-sig-clear]{position:absolute;top:8px;inset-inline-end:8px}
+.sig-issue{margin-bottom:12px}
+html[data-mode=dark] .sig-card,html[data-mode=dark] .sig-pad{filter:none}
+@media(max-width:760px){.sig-panel{grid-template-columns:minmax(0,1fr)}}

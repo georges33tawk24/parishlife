@@ -154,7 +154,7 @@ function derToRaw(der) {
   const raw = new Uint8Array(64); raw.set(part()); raw.set(part(), 32);
   return raw;
 }
-async function signatureValid(key, signature, data) {
+export async function signatureValid(key, signature, data) {
   try {
     if (key.kty === 'EC') {
       const k = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: key.x, y: key.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
@@ -194,20 +194,28 @@ export async function passkeyAdd(c, u, q, ctx) {
   return { ok: true };
 }
 
-/* The account a passkey signs in to, or an error. */
-export async function passkeyUser(c, q, ctx) {
+/* A passkey's signature over the challenge in `ctx`, checked: its pl_passkeys row. `verified`
+   also requires that the person unlocked the passkey themselves (face, fingerprint or PIN). */
+export async function assertion(c, q, ctx, { userId = null, credential = null, verified = false } = {}) {
   clientData(q.clientDataJSON, 'webauthn.get', ctx);
   const row = await c.first('SELECT * FROM pl_passkeys WHERE id=?', String(q.id || ''));
   need(row, 'This passkey is not on a ParishLife account. Sign in with your password, then add it in My account.', 401);
+  need((userId === null || row.user_id === userId) && (credential === null || row.id === credential), 'Use the passkey your signature is kept with.', 403);
   const data = unb64u(q.authenticatorData), parsed = authenticatorData(data);
   need(same(parsed.rpIdHash, sha256(ctx.rpId)) && parsed.flags & 1, FAILED, 401);
+  need(!verified || parsed.flags & 4, 'Unlock the passkey with your face, fingerprint or PIN to sign.', 403);
   if (q.userHandle) need(new TextDecoder().decode(unb64u(q.userHandle)) === row.user_id, FAILED, 401);
   const signed = new Uint8Array([...data, ...sha256(unb64u(q.clientDataJSON))]);
   need(await signatureValid(JSON.parse(row.public_key), unb64u(q.signature), signed), FAILED, 401);
   // A counter that goes backwards means a copied authenticator.
   need(!(parsed.count && row.sign_count && parsed.count <= row.sign_count), FAILED, 401);
   c.run('UPDATE pl_passkeys SET sign_count=?,last_used_at=? WHERE id=?', parsed.count, NOW(), row.id);
-  return row.user_id;
+  return row;
+}
+
+/* The account a passkey signs in to, or an error. */
+export async function passkeyUser(c, q, ctx) {
+  return (await assertion(c, q, ctx)).user_id;
 }
 
 export async function accountPasskeys(c, u, path, method, q, ctx) {

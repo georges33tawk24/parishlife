@@ -1,5 +1,5 @@
 import { applySiteTheme } from './theme.js';
-import { bundlePage, errorPage, bindRequest, trackingPage, photos, parishPhotos, paginateCollections } from './public-features.js';
+import { bundlePage, errorPage, bindRequest, trackingPage, verifyPage, photos, parishPhotos, paginateCollections } from './public-features.js';
 import { homeView, mountHome, unmountHome } from './home.js';
 import { trackView, watchActions } from './beacon.js';
 import { parishView, mountParish, requestView, calendarPageView, eventView, mountSubpage, mountPlain, unmountParish } from './parish.js';
@@ -24,6 +24,7 @@ const copy = {
   explore: ['Explore', 'استكشف'],
   forParishes: ['For parishes', 'للرعايا'],
   bundles: ['ParishLife bundles', 'باقات ParishLife'],
+  verify: ['Check a signed document', 'التحقّق من وثيقة موقّعة'],
   footerIntro: ['The parishes of Lebanon, each with its light on.', 'رعايا لبنان، ولكلّ منها نورها.'],
   footer: ['Information published by participating parishes.', 'معلومات تنشرها الرعايا المشاركة.'],
   mapCredit: ['Map outline from Natural Earth', 'حدود الخريطة من Natural Earth'],
@@ -122,6 +123,8 @@ function render() {
   const p = directory.find(p => p.id === selected), d = details.get(selected);
   applySiteTheme(null);
   const token=location.hash.startsWith('#track=')?location.hash.slice(7):'';
+  const verify = params.get('verify') ?? (params.get('view') === 'verify' ? '' : null);
+  if (verify !== null) { verifyPage(app, verify); trackView('verify'); document.title = L('Check a signed document', 'التحقّق من وثيقة موقّعة') + ' · ParishLife'; app.setAttribute('aria-busy', 'false'); requestAnimationFrame(() => document.body.classList.add('is-ready')); return; }
   if(token){trackingPage(app,token);trackView('track');app.setAttribute('aria-busy','false');requestAnimationFrame(() => document.body.classList.add('is-ready'));return;}
   if (loadFailure) {
     app.innerHTML = errorPage(L('We couldn’t load the directory', 'تعذّر تحميل الدليل'), L('Please check your connection and try again.', 'يرجى التحقّق من الاتصال والمحاولة مجدّدًا.'), '<button class="btn btn-gilt retry-load" type="button">' + L('Try again', 'حاول مجدّدًا') + '</button>');

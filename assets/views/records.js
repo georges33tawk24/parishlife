@@ -10,6 +10,8 @@ import * as CR from '../crud.js';
 import { download } from '../actions.js';
 import { need } from '../flows.js';
 import { workflow as serverWorkflow,hydrate } from '../persist.js';
+import { sign, drawingSVG } from '../signing.js';
+import { passkeyMessage } from '../passkeys.js';
 import { printSheet, saveBlob, svgToPng, fileName } from '../print.js';
 import { SACRAMENTS, anniversaryItems, PARISH, PREP_REQUIREMENTS, PEOPLE, person, RESERVATIONS, SERVICE_REQUESTS, PORTAL_REQUESTS, REQUEST_HISTORY, REGISTRATIONS, venue } from '../data.js';
 import { onlineItems, openOnlineRequest, onlineMark, sharedNote } from './online-requests.js';
@@ -374,11 +376,18 @@ function certificateSVG(s, lang = 'bilingual') {
   const sigY = 260;
   out.push(`<path d="M26 ${sigY} H86" stroke="${INK}" stroke-width=".3"/>
     <circle cx="160" cy="${sigY - 5}" r="11.5" fill="none" stroke="${SECONDARY}" stroke-width=".35" stroke-dasharray="1.2 1.2" opacity=".8"/>`);
-  if (docIssued(s) && s.issuedBy) out.push(tx(56, sigY - 3, s.issuedBy, { size: 4, font: ANY_FONT }));
-  if (en) out.push(tx(56, sigY + 5, 'Parish priest', { size: 3.4, fill: SECONDARY }));
-  if (ar) out.push(arT(56, sigY + (en ? 10 : 5), 'كاهن الرعية', { size: 3.8, fill: SECONDARY }));
+  /* A signed certificate carries the priest's own handwritten signature above the line, the
+     printed name under it, and the code that checks it (backend/signatures.py). */
+  const signed = docIssued(s) && s.signature?.drawing ? s.signature : null;
+  if (signed) out.push(`<g transform="translate(26 ${sigY - 22}) scale(.15)"><path d="${esc(String(signed.drawing).replace(/[^MLQCZmlqcz0-9 .,-]/g, ''))}" fill="none" stroke="${INK}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>`);
+  else if (docIssued(s) && s.issuedBy) out.push(tx(56, sigY - 3, s.issuedBy, { size: 4, font: ANY_FONT }));
+  const roleY = signed ? sigY + 9.5 : sigY + 5;
+  if (signed) out.push(tx(56, sigY + 4.5, s.issuedBy || signed.name, { size: 3.6, font: ANY_FONT }));
+  if (en) out.push(tx(56, roleY, 'Parish priest', { size: 3.4, fill: SECONDARY }));
+  if (ar) out.push(arT(56, roleY + (en ? 5 : 0), 'كاهن الرعية', { size: 3.8, fill: SECONDARY }));
+  if (signed?.code) out.push(tx(105, 283.4, `${en ? 'Digitally signed · check code' : 'موقّعة رقمياً · رمز التحقّق'} ${signed.code} · ${location.host}/public.html?verify=${signed.code}`, { size: 2.7, fill: SECONDARY, font: ANY_FONT, rtl: !en }));
   out.push(tx(160, sigY - 4, ar && !en ? 'الختم' : 'SEAL', { size: ar && !en ? 3.6 : 2.8, spacing: ar && !en ? 0 : .4, fill: SECONDARY, font: ANY_FONT, opacity: .85, rtl: ar && !en }));
-  if (docIssued(s)) out.push(tx(105, 283, `${en ? 'Issued' : 'صدرت في'} ${fmtDateIn(zoned(s.issuedAt) || String(s.issuedAt || '').slice(0, 10), dl)}`, { size: 3, fill: SECONDARY, font: ANY_FONT, rtl: !en }));
+  if (docIssued(s)) out.push(tx(105, signed?.code ? 278.6 : 283, `${en ? 'Issued' : 'صدرت في'} ${fmtDateIn(zoned(s.issuedAt) || String(s.issuedAt || '').slice(0, 10), dl)}`, { size: 3, fill: SECONDARY, font: ANY_FONT, rtl: !en }));
   else out.push(`<g transform="rotate(-28 105 150)" opacity=".1">${en ? tx(105, ar ? 146 : 154, 'UNISSUED PREVIEW', { size: 13, weight: 700, spacing: 2, fill: SECONDARY }) : ''}${ar ? arT(105, en ? 162 : 154, 'معاينة غير صادرة', { size: 12, weight: 700, fill: SECONDARY }) : ''}</g>`);
   const label = `${KIND[record.kind]?.[0] || ''} — ${p.lat}`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" width="210mm" height="297mm" role="img" aria-label="${esc(label)}">${out.join('')}</svg>`;
@@ -661,20 +670,34 @@ certificate.mount = (host, id, lang = '') => {
   const confirm = (button, action) => button?.addEventListener('click', () => openModal({
     title: action === 'approve' ? (SACRAMENTS.find(s=>s.id===id)?.kind==='certificate' ? L('Approve this certificate request?','اعتماد طلب الشهادة؟') : L('Approve this register entry?', 'اعتماد هذا القيد؟')) : L('Sign and issue this certificate?', 'توقيع هذه الشهادة وإصدارها؟'),
     sub: L('This action is recorded with your account and the time. Check the original register before confirming.', 'يُسجّل هذا الإجراء باسم حسابك ووقته. راجع السجل الأصلي قبل التأكيد.'),
-    body: `<label class="check"><input type="checkbox" id="ack">
+    body: `${action === 'issue' ? '<div class="sig-issue" data-sig-issue><p class="help">' + L('Loading your signature…', 'جارٍ تحميل توقيعك…') + '</p></div>' : ''}<label class="check"><input type="checkbox" id="ack">
       <span>${L('I have checked the register entry against the bound book.', 'راجعتُ القيد مقابل الدفتر الأصلي.')}</span></label>`,
     foot: `<button class="btn btn-secondary" data-close>${L('Cancel', 'إلغاء')}</button>
       <button class="btn btn-primary" id="confirm" disabled>${action === 'approve' ? (SACRAMENTS.find(s=>s.id===id)?.kind==='certificate' ? L('Approve request', 'اعتماد الطلب') : L('Approve entry', 'اعتماد القيد')) : L('Sign and issue', 'التوقيع والإصدار')}</button>`,
     onMount(el) {
       const ack = el.querySelector('#ack'), ok = el.querySelector('#confirm');
-      ack.addEventListener('change', () => { ok.disabled = !ack.checked; });
+      let ready = action !== 'issue';
+      ack.addEventListener('change', () => { ok.disabled = !ack.checked || !ready; });
+      /* Issuing is signing: the priest's own signature, unlocked with their passkey over this certificate. */
+      if (action === 'issue') api('account/signature').then(data => {
+        const box = el.querySelector('[data-sig-issue]');
+        if (!box) return;
+        ready = !!data.signer;
+        box.innerHTML = data.signer
+          ? `<figure class="sig-card is-small">${drawingSVG(data.signer.drawing)}<figcaption><b>${esc(session.user.name)}</b>${data.signer.title ? `<span>${esc(data.signer.title)}</span>` : ''}</figcaption></figure>
+            <p class="help">${icon('lock', 15)}${L('You will be asked for your face, fingerprint or PIN. The certificate then carries your signature and a code anyone can check.', 'سيُطلب وجهك أو بصمتك أو رمزك. ثم تحمل الشهادة توقيعك ورمزاً يمكن لأي شخص التحقّق منه.')}</p>`
+          : C.inlineAlert('warning', L('Set up your signature first', 'أعدّ توقيعك أولاً'), L('Certificates are signed with your own signature, kept with your passkey. Set it up under My account, then come back.', 'تُوقَّع الشهادات بتوقيعك الخاص المحفوظ مع مفتاح المرور. أعدّه في «حسابي» ثم عُد.') + ` <a href="#/account">${L('Open My account', 'فتح حسابي')}</a>`);
+        ok.disabled = !ack.checked || !ready;
+      }).catch(() => {});
       ok.addEventListener('click', async () => {
-        try { await serverWorkflow(action, id, { verified: true }); closeOverlays(); bus.refresh();
+        try {
+          const signature = action === 'issue' ? await sign({ type: 'certificate', parish: session.parishId, id }) : null;
+          await serverWorkflow(action, id, { verified: true, ...(signature ? { signature } : {}) }); closeOverlays(); bus.refresh();
           const cert = SACRAMENTS.find(s=>s.id===id)?.kind === 'certificate';
           toast(action === 'issue' ? L('Certificate issued', 'صدرت الشهادة') : cert ? L('Request approved', 'اعتُمد الطلب') : L('Entry approved', 'اعتُمد القيد'),
             action === 'issue' ? L('It is signed and has been sent for bishop acceptance before release.', 'تم توقيعها وإرسالها لقبول المطران قبل تسليمها.')
               : cert ? L('Next: sign and issue the certificate.', 'التالي: توقيع الشهادة وإصدارها.') : L('It now has its official register number.', 'صار له رقم القيد الرسمي.'), 'success'); }
-        catch (e) { toast(L('Action could not be completed', 'تعذّر إتمام الإجراء'), e.message, 'danger'); }
+        catch (e) { toast(L('Action could not be completed', 'تعذّر إتمام الإجراء'), action === 'issue' ? passkeyMessage(e, L) : e.message, 'danger'); }
       });
     }
   }));

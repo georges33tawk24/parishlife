@@ -44,7 +44,52 @@ export async function trackingPage(host,token) {
       ${Number.isNaN(updated.valueOf())?'':`<small>${esc(L('Updated ','آخر تحديث: ')+new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-GB',{dateStyle:'long',timeStyle:'short'}).format(updated))}</small>`}
       ${(d.files||[]).length?`<div class="track-files">${d.files.map(f=>`<a class="btn btn-gilt" referrerpolicy="no-referrer" href="/api/public/guest-files/${encodeURIComponent(token)}/${encodeURIComponent(f.id)}" download>${L('Download','تنزيل')}: ${esc(f.name)}</a>`).join('')}</div>`:''}
       <p class="track-note">${L('Keep this page’s link private: anyone who has it can see this request.','احتفظ برابط هذه الصفحة لنفسك: يستطيع كل من يملكه رؤية هذا الطلب.')}</p>`;
+    if((d.letters||[]).length)host.querySelector('.track').insertAdjacentHTML('beforeend',d.letters.map(letterSheet).join(''));
+    host.querySelectorAll('[data-print-letter]').forEach(b=>b.onclick=()=>{document.body.classList.add('is-printing-letter');b.closest('.letter').classList.add('is-printing');print();setTimeout(()=>{document.body.classList.remove('is-printing-letter');b.closest('.letter').classList.remove('is-printing');},500);});
   }catch(e){host.querySelector('.track-card [role=status]').textContent=e.message;}
+}
+
+/* A letter from the parish office, with the writer's own signature and the code that checks it. */
+const longDate=v=>{const d=new Date(v);return Number.isNaN(d.valueOf())?'':new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-GB',{dateStyle:'long'}).format(d);};
+const drawing=path=>`<svg class="letter-sign" viewBox="0 0 400 140" aria-hidden="true" focusable="false"><path d="${String(path||'').replace(/[^MLQCZmlqcz0-9 .,-]/g,'')}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function letterSheet(l){
+  return `<article class="letter" aria-labelledby="letter-${esc(l.code)}"><header><span class="letter-mark" aria-hidden="true"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="currentColor" stroke-width="1.6"/><path d="M1 32.5h26" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="20" r="3.2" fill="#D7A548"/></svg></span>
+      ${l.parish?.name?`<span class="letter-from"><b>${esc(document.documentElement.lang==='ar'&&l.parish.ar?l.parish.ar:l.parish.name)}</b>${l.parish.town?`<small>${esc(l.parish.town)}</small>`:''}</span>`:''}<time>${esc(longDate(l.createdAt))}</time></header>
+    <h2 id="letter-${esc(l.code)}" dir="auto">${esc(l.title)}</h2><div class="letter-body" dir="auto">${esc(l.body).replace(/\n/g,'<br>')}</div>
+    <footer><div class="letter-signed">${l.drawing?drawing(l.drawing):''}<b>${esc(l.name)}</b>${l.role?`<span>${esc(l.role)}</span>`:''}</div>
+      <div class="letter-check"><span>${L('Digitally signed','موقّعة رقمياً')}</span><a href="public.html?verify=${encodeURIComponent(l.code)}"><bdi>${esc(l.code)}</bdi></a><small>${L('Anyone can check this code on ParishLife.','يمكن لأي شخص التحقّق من هذا الرمز على ParishLife.')}</small></div></footer>
+    <button type="button" class="btn btn-ink-line btn-small letter-print" data-print-letter>${L('Print or save as PDF','طباعة أو حفظ كـPDF')}</button></article>`;
+}
+
+/* Checking a signature: who signed which document, when, and whether it still matches. */
+export async function verifyPage(host,code=''){
+  const form=`<form class="verify-form" data-verify-form><label><span>${L('Signature code','رمز التوقيع')}</span><input name="code" value="${esc(code)}" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" dir="ltr" required></label><button class="btn btn-gilt">${L('Check','تحقّق')}</button></form>`;
+  host.innerHTML=`<section class="verify site-wrap" data-plain-page><div class="verify-card"><span class="verify-seal" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" focusable="false"><circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2.4"/><circle cx="24" cy="24" r="14.5" stroke="currentColor" stroke-width="1.4"/><path d="M24 15v18M18 21h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+    <h1>${L('Check a signed document','التحقّق من وثيقة موقّعة')}</h1><p>${L('Certificates and letters signed on ParishLife carry a code. Enter it to see who signed, when, and whether the document is unchanged.','تحمل الشهادات والرسائل الموقّعة على ParishLife رمزاً. أدخله لترى من وقّع، ومتى، وهل بقيت الوثيقة كما هي.')}</p>
+    ${form}<div class="verify-result" data-verify-result aria-live="polite"></div></div></section>`;
+  const box=host.querySelector('[data-verify-result]');
+  const check=async value=>{
+    if(!value.trim())return;
+    box.innerHTML=`<p role="status">${L('Checking…','جارٍ التحقّق…')}</p>`;
+    try{
+      const r=await fetch('/api/public/verify/'+encodeURIComponent(value.trim())),d=await r.json();if(!r.ok)throw new Error(d.error);
+      if(!d.found){box.innerHTML=`<div class="verify-state is-critical">${L('No signature has this code. Check the code on the document.','لا توقيع بهذا الرمز. تحقّق من الرمز على الوثيقة.')}</div>`;return;}
+      const ok=d.signatureValid&&!d.revokedAt&&d.contentMatches!==false;
+      const state=d.revokedAt?['critical',L('This signature was withdrawn','سُحب هذا التوقيع')]:!d.signatureValid?['critical',L('This signature does not check out','هذا التوقيع غير صالح')]:d.contentMatches===false?['critical',L('The document was changed after it was signed','عُدّلت الوثيقة بعد توقيعها')]:['good',L('Valid signature','توقيع صالح')];
+      const parish=document.documentElement.lang==='ar'?d.parish.ar||d.parish.name:d.parish.name||d.parish.ar;
+      const kind=d.type==='certificate'?L('Certificate','شهادة'):L('Letter from the parish office','رسالة من مكتب الرعية');
+      const when=new Intl.DateTimeFormat(document.documentElement.lang==='ar'?'ar-LB':'en-GB',{dateStyle:'long',timeStyle:'short'}).format(new Date(d.signedAt));
+      box.innerHTML=`<div class="verify-state is-${state[0]}"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="${ok?'M4.2 10.4 8 14.2l7.8-8':'M10 3.2 17.4 16H2.6zM10 8.2v3.4M10 13.6v.9'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>${esc(state[1])}</div>
+        <dl class="verify-facts"><div><dt>${L('Document','الوثيقة')}</dt><dd>${esc(kind)}${d.reference?` · <bdi>${esc(d.reference)}</bdi>`:''}${d.subject?` · ${esc(d.subject)}`:''}${d.type==='letter'?` · <span dir="auto">${esc(d.title)}</span>`:''}</dd></div>
+          <div><dt>${L('Parish','الرعية')}</dt><dd>${esc(parish)}${d.parish.town?`, ${esc(d.parish.town)}`:''}</dd></div>
+          <div><dt>${L('Signed by','وقّعها')}</dt><dd>${esc(d.signer)}${d.role?` · ${esc(d.role)}`:''}</dd></div>
+          <div><dt>${L('Signed on','وُقّعت في')}</dt><dd>${esc(when)}</dd></div>
+          <div><dt>${L('Fingerprint','البصمة')}</dt><dd><bdi class="verify-mono">${esc(d.fingerprint)}</bdi></dd></div></dl>
+        <p class="verify-how">${L('The signature was made with the signer’s own passkey, unlocked with their face, fingerprint or PIN, over a fingerprint of this exact document.','صُنع التوقيع بمفتاح مرور الموقِّع، بعد فتحه بوجهه أو بصمته أو رمزه، على بصمة هذه الوثيقة بعينها.')}</p>`;
+    }catch(e){box.innerHTML=`<div class="verify-state is-critical">${esc(e.message)}</div>`;}
+  };
+  host.querySelector('[data-verify-form]').addEventListener('submit',e=>{e.preventDefault();const v=e.target.elements.code.value;history.replaceState(null,'','public.html?verify='+encodeURIComponent(v.trim()));check(v);});
+  if(code)check(code);
 }
 export { paginateCollections };
 

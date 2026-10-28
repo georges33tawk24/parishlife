@@ -314,14 +314,18 @@ def passkey_add(c, user, q, ctx, require):
     return {'ok': True}
 
 
-def passkey_user(c, q, ctx, require):
-    """The account a passkey signs in to, or an error."""
+def assertion(c, q, ctx, require, user_id=None, credential=None, verified=False):
+    """A passkey's signature over the challenge in `ctx`, checked: its pl_passkeys row. `verified`
+    also requires that the person unlocked the passkey themselves (face, fingerprint or PIN)."""
     _client_data(q.get('clientDataJSON'), 'webauthn.get', ctx, require)
     row = c.execute('SELECT * FROM pl_passkeys WHERE id=?', (str(q.get('id') or ''),)).fetchone()
     require(row is not None, 'This passkey is not on a ParishLife account. Sign in with your password, then add it in My account.', 401)
+    require((user_id is None or row['user_id'] == user_id) and (credential is None or row['id'] == credential),
+            'Use the passkey your signature is kept with.', 403)
     data = unb64u(q.get('authenticatorData'))
     parsed = _authenticator_data(data, require)
     require(parsed['rpIdHash'] == hashlib.sha256(ctx['rpId'].encode()).digest() and parsed['flags'] & 1, FAILED, 401)
+    require(not verified or parsed['flags'] & 4, 'Unlock the passkey with your face, fingerprint or PIN to sign.', 403)
     if q.get('userHandle'):
         require(unb64u(q['userHandle']).decode(errors='replace') == row['user_id'], FAILED, 401)
     signed = data + hashlib.sha256(unb64u(q.get('clientDataJSON'))).digest()
@@ -329,7 +333,12 @@ def passkey_user(c, q, ctx, require):
     # A counter that goes backwards means a copied authenticator.
     require(not (parsed['count'] and row['sign_count'] and parsed['count'] <= row['sign_count']), FAILED, 401)
     c.execute('UPDATE pl_passkeys SET sign_count=?,last_used_at=? WHERE id=?', (parsed['count'], _stamp(), row['id']))
-    return row['user_id']
+    return row
+
+
+def passkey_user(c, q, ctx, require):
+    """The account a passkey signs in to, or an error."""
+    return assertion(c, q, ctx, require)['user_id']
 
 
 def account_passkeys(c, user, path, method, q, ctx, require):
