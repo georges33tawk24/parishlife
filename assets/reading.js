@@ -40,6 +40,16 @@
     slot.innerHTML = markup(`ease-${++count}`);
   });
   const panelOf = toggle => document.getElementById(toggle.getAttribute('aria-controls'));
+  // an open panel stays on the screen: on a phone the button sits near one edge, and the panel,
+  // hung from the button's side, would otherwise reach past the other
+  const place = () => document.querySelectorAll('[data-ease-toggle][aria-expanded="true"]').forEach(toggle => {
+    const panel = panelOf(toggle), gap = 12, width = root.clientWidth;
+    panel.style.transform = '';
+    const box = panel.getBoundingClientRect();
+    const shift = box.left < gap ? gap - box.left : box.right > width - gap ? width - gap - box.right : 0;
+    if (shift) panel.style.transform = `translateX(${Math.round(shift)}px)`;
+  });
+  addEventListener('resize', place);
   const close = (keep, refocus) => document.querySelectorAll('[data-ease-toggle][aria-expanded="true"]').forEach(toggle => {
     if (toggle === keep) return;
     toggle.setAttribute('aria-expanded', 'false');
@@ -66,7 +76,7 @@
       close(toggle);
       toggle.setAttribute('aria-expanded', String(open));
       panelOf(toggle).hidden = !open;
-      if (open) { sync(); panelOf(toggle).querySelector('[aria-pressed="true"]')?.focus(); }
+      if (open) { sync(); place(); panelOf(toggle).querySelector('[aria-pressed="true"]')?.focus(); }
       return;
     }
     if (!e.target.closest('[data-ease-slot]')) close();

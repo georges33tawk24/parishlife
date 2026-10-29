@@ -25,6 +25,10 @@ html[data-simple]{scroll-behavior:auto}
 .ease-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:4px 14px;border:1px solid rgb(21 32 58 / .28);border-radius:999px;background:transparent;color:inherit;
   font:600 calc(17px * var(--fs,1))/1 var(--sans,"Source Sans 3",system-ui,sans-serif);cursor:var(--hand,pointer);transition:background-color .2s,border-color .2s,color .2s}
 body.over-hero .ease-toggle,body.menu-open .ease-toggle{border-color:rgb(238 241 246 / .38)}
+/* over the sanctuary the header's two pill buttons are lightly frosted, so the lamp's chain and
+   the glass behind them don't run through their words */
+body.over-hero:not(.is-scrolled) :is(.ease-toggle,.sign-in){-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+body.over-hero:not(.is-scrolled):not(.menu-open) :is(.ease-toggle,.sign-in):not(:hover):not([aria-expanded=true]){background:rgb(8 16 31 / .34)}
 .ease-toggle:hover,.ease-toggle[aria-expanded=true]{border-color:#C79E4C;color:inherit;background:rgb(215 165 72 / .12)}
 .ease-glyph{display:inline-flex;align-items:baseline;font-family:"Marcellus",Georgia,serif;font-size:22px;line-height:1;letter-spacing:-.02em}
 .ease-glyph small{font-size:15px;margin-inline-start:1px}
@@ -32,7 +36,7 @@ body.over-hero .ease-toggle,body.menu-open .ease-toggle{border-color:rgb(238 241
 [dir=rtl] .ease-toggle{font-family:"Noto Sans Arabic","Source Sans 3",system-ui,sans-serif}
 .ease-word{white-space:nowrap}
 @media(max-width:1279px){.site-header .ease-word{display:none}.site-header .ease-toggle{padding-inline:10px}}
-.ease-panel{position:absolute;z-index:80;top:calc(100% + 10px);inset-inline-end:0;width:min(340px,calc(100vw - 24px));padding:18px;border:1px solid #DCCDB2;border-radius:18px;
+.ease-panel{position:absolute;z-index:80;top:calc(100% + 10px);inset-inline-end:0;width:min(340px,calc(100vw - 32px));padding:18px;border:1px solid #DCCDB2;border-radius:18px;
   background:#FFFDF8;color:#15203A;text-align:start;box-shadow:0 1px 0 #fff inset,0 30px 60px -24px rgb(14 26 49 / .45),0 6px 16px -8px rgb(14 26 49 / .2)}
 .ease-panel[hidden]{display:none}
 .ease-title{margin:0 0 14px;font:400 calc(23px * var(--fs-d,1))/1.2 "Marcellus",Georgia,serif;color:#15203A}
