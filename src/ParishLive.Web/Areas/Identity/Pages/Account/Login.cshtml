@@ -1,0 +1,11 @@
+@page
+@model ParishLive.Web.Areas.Identity.Pages.Account.LoginModel
+@{ ViewData["Title"] = L["Account.SignIn"].Value; }
+<main class="content" id="main-content"><h1>@L["Account.SignIn"]</h1>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="post" class="ops-form"><input type="hidden" asp-for="ReturnUrl" />
+<div><label asp-for="Identifier">@L["Auth.Identifier"]</label><input asp-for="Identifier" required autocomplete="username" maxlength="256" dir="auto" /></div>
+<div><label asp-for="Password">@L["Auth.Password"]</label><input asp-for="Password" type="password" required autocomplete="current-password" maxlength="200" /></div>
+<label><input asp-for="RememberMe" /> @L["Auth.Remember"]</label><button class="btn btn-p">@L["Account.SignIn"]</button></form>
+<p><a asp-page="./Register" asp-route-returnUrl="@Model.ReturnUrl">@L["Auth.Register"]</a></p><p><a asp-page="./ForgotPassword">@L["Auth.Recover"]</a></p>
+<p class="ops-hint">@L["Auth.ProviderHelp"]</p></main>

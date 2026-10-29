@@ -1,0 +1,13 @@
+@page
+@model ParishLive.Web.Pages.Public.RequestModel
+@{ ViewData["Title"] = L["Guest.Request"]; }
+<main class="content" id="main-content"><h1>@L["Guest.Request"] · @Model.ParishName</h1>
+<p>@L["Guest.Scope"]</p><p>@L["Guest.ContactNotice"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert" tabindex="-1">@L[Model.Error]</div> }
+<form method="post" class="ops-form ops-card" data-track-changes>
+<input type="hidden" asp-for="ParishId" /><input type="hidden" asp-for="SubmissionSecret" /><input type="hidden" asp-for="OperationId" />
+<label asp-for="Kind">@L["Case.Kind"]</label><select asp-for="Kind">@foreach (var kind in Model.Kinds) { <option value="@kind">@L["Kind." + kind]</option> }</select>
+<label asp-for="SubjectName">@L["Case.Subject"]</label><input asp-for="SubjectName" required maxlength="200" dir="auto" autocomplete="name" />
+<label asp-for="Contact">@L["Guest.Contact"]</label><input asp-for="Contact" required maxlength="500" dir="auto" />
+<label asp-for="Details">@L["Case.Details"]</label><textarea asp-for="Details" maxlength="9000" dir="auto"></textarea>
+<button class="btn btn-p">@L["Case.Submit"]</button></form></main>

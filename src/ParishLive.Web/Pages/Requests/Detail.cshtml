@@ -1,0 +1,69 @@
+@page
+@model ParishLive.Web.Pages.Requests.DetailModel
+@using ParishLive.Domain.Entities
+@{ var item = Model.Record; ViewData["Title"] = item.Reference; }
+<main class="content" id="main-content">
+<a href="/Requests">@L["Common.Back"]</a>
+<h1>@item.SubjectName</h1><p><bdi>@item.Reference</bdi> · @L["Kind." + item.Kind]</p>
+<div class="ops-status">@L["Stage." + item.Stage] · @L["Common.Revision"] @item.Revision</div>
+@if (Model.GuestOrigin) { <section class="ops-card"><h2>@L["Guest.Associate"]</h2><p>@L["Guest.AssociateHelp"]</p><form method="post" asp-page-handler="Associate" class="ops-form"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="OperationId" value="@Guid.NewGuid()" /><label>@L["Admin.Username"]<input name="username" required maxlength="256" /></label><label>@L["Case.ReviewBasis"]<input name="evidenceReference" required maxlength="500" /></label><button class="btn btn-g" data-confirm="@L["Guest.AssociateConfirm"]">@L["Guest.Associate"]</button></form></section> }
+@if (item.Stage == CaseStage.Draft) { <a class="btn btn-p" href="/Requests/Edit?id=@item.Id">@L["Common.Edit"]</a> }
+@if (item.Disputed) { <div class="ops-error">@L["Error.Disputed"]</div> }
+@if (Model.Error is not null) { <div class="ops-error" role="alert" tabindex="-1">@L[Model.Error]</div> }
+<div class="ops-grid">
+<section class="ops-card"><h2>@L["Case.Details"]</h2><div class="ops-draft" dir="auto">@(System.Text.Json.JsonDocument.Parse(item.FactsJson).RootElement.TryGetProperty("details", out var details) ? details.GetString() : "")</div>
+@if (item.PriestName is not null) { <p>@L["Case.Priest"]: @item.PriestName</p> }
+@if (item.RegisterReference is not null) { <p>@L["Case.Register"]: <bdi>@item.RegisterReference</bdi></p> }
+</section>
+<section class="ops-card"><h2>@L["Case.Timeline"]</h2><ol class="ops-history">
+@foreach (var entry in item.History)
+{ <li><strong>@L["Action." + entry.Action]</strong> · @entry.At.ToString("yyyy-MM-dd HH:mm 'UTC'")
+  @if (!string.IsNullOrEmpty(entry.Authority)) { <p>@L["Case.Authority"]: <bdi>@entry.Authority</bdi></p> }
+  @if (!string.IsNullOrEmpty(entry.Actor)) { <p>@L["Case.Recorder"]: <bdi>@entry.Actor</bdi></p> }
+  @if (entry.Message is not null) { <p dir="auto">@entry.Message</p> }
+  @if (entry.InternalNote is not null) { <p class="ops-hint" dir="auto">@L["Case.InternalNote"]: @entry.InternalNote</p> }
+</li> }
+</ol></section>
+</div>
+<section class="ops-card"><h2>@L["Case.NextAction"]</h2>
+<form data-case-id="@item.Id" method="post" class="ops-form" data-track-changes><input type="hidden" name="id" value="@item.Id" />
+<input type="hidden" asp-for="Revision" /><input type="hidden" asp-for="OperationId" />
+@if (Model.IsOffice)
+{
+ <div><label asp-for="ApplicantMessage">@L["Case.ApplicantMessage"]</label><textarea asp-for="ApplicantMessage" maxlength="2000" dir="auto"></textarea></div>
+ <div><label asp-for="InternalNote">@L["Case.InternalNote"]</label><textarea asp-for="InternalNote" maxlength="2000" dir="auto"></textarea></div>
+ <fieldset><legend>@L["Case.PriorInstruction"]</legend><p>@L["Case.ProxyHelp"]</p>
+ <label asp-for="PriestUserId">@L["Case.Priest"]</label><select asp-for="PriestUserId"><option value="">—</option>@foreach (var priest in Model.Priests) { <option value="@priest.Id">@priest.Name</option> }</select>
+ <label asp-for="InstructionChannel">@L["Case.Channel"]</label><select asp-for="InstructionChannel"><option value="">—</option>@foreach (var channel in new[] { "InPerson", "Telephone", "Written", "Other" }) { <option value="@channel">@L["Channel." + channel]</option> }</select>
+ <label><input asp-for="PriorInstructionConfirmed" /> @L["Case.Attestation"]</label>
+ </fieldset>
+ <div><label asp-for="ActualAtUtc">@L["Case.ActualTime"] (UTC)</label><input asp-for="ActualAtUtc" type="datetime-local" /></div>
+ <div><label asp-for="CelebrantName">@L["Case.Celebrant"]</label><input asp-for="CelebrantName" maxlength="200" dir="auto" /></div>
+ @if (item.Stage == CaseStage.Celebrated) { <div><label asp-for="CorrectedSubjectName">@L["Case.CorrectedName"]</label><input asp-for="CorrectedSubjectName" maxlength="200" dir="auto" /></div> }
+}
+<div class="actions">
+@if (item.Stage == CaseStage.Draft) { <button class="btn btn-p" name="action" value="Submit">@L["Case.Submit"]</button> }
+@if (item.Stage is CaseStage.Draft or CaseStage.Received) { <button class="btn btn-g" name="action" value="Withdraw">@L["Action.Withdraw"]</button> }
+@if (Model.IsOffice)
+{
+ @if (item.Stage is CaseStage.Received or CaseStage.NeedsInformation) { <button class="btn btn-p" name="action" value="Accept" data-confirm="@L["Case.ConfirmDecision"]">@L["Action.Accept"]</button> }
+ @if (item.Stage is CaseStage.Received or CaseStage.Preparation or CaseStage.EntryReview) { <button class="btn btn-g" name="action" value="NeedsInformation">@L["Action.NeedsInformation"]</button> }
+ @if (item.Stage == CaseStage.NeedsInformation) { <button class="btn btn-g" name="action" value="Resume">@L["Action.Resume"]</button> }
+ @if (item.Stage == CaseStage.Preparation) { <button class="btn btn-p" name="action" value="Schedule">@L["Action.Schedule"]</button> }
+ @if (item.Stage == CaseStage.Scheduled) { <button class="btn btn-p" name="action" value="Celebrate" data-confirm="@L["Case.ConfirmActual"]">@L["Action.Celebrate"]</button><button class="btn btn-g" name="action" value="Postpone">@L["Action.Postpone"]</button> }
+ @if (item.Stage == CaseStage.Celebrated) { <button class="btn btn-p" name="action" value="SubmitEntry">@L["Action.SubmitEntry"]</button><button class="btn btn-g" name="action" value="CorrectEntry">@L["Action.CorrectEntry"]</button> }
+ @if (item.Stage == CaseStage.EntryReview) { <button class="btn btn-p" name="action" value="Register" data-confirm="@L["Case.ConfirmDecision"]">@L["Action.Register"]</button><button class="btn btn-g" name="action" value="ReturnEntry">@L["Action.ReturnEntry"]</button> }
+ @if (item.Stage is CaseStage.Received or CaseStage.Preparation or CaseStage.Scheduled) { <button class="btn btn-g" name="action" value="Cancel">@L["Action.Cancel"]</button><button class="btn btn-g" name="action" value="Decline">@L["Action.Decline"]</button> }
+}
+</div></form></section>
+<section class="ops-card"><h2>@L["Case.Evidence"]</h2><p>@L["Case.UploadHelp"]</p>
+<ul>@foreach (var file in Model.Evidence) { <li>@file.Requirement · <a asp-page-handler="Evidence" asp-route-id="@item.Id" asp-route-evidenceId="@file.Id">@file.OriginalFileName</a> · @L["Evidence." + file.Status]
+@if (Model.IsOffice) { <form data-case-id="@item.Id" method="post" asp-page-handler="Verify" class="ops-form"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="evidenceId" value="@file.Id" /><input type="hidden" name="evidenceRevision" value="@file.Revision" /><input type="hidden" name="OperationId" value="@Guid.NewGuid()" /><label>@L["Case.ReviewBasis"]<input name="basis" required maxlength="2000" /></label><div class="actions"><button class="btn btn-g" name="status" value="Verified">@L["Action.Verify"]</button><button class="btn btn-g" name="status" value="Rejected">@L["Action.RejectFile"]</button></div></form> }
+</li> }</ul>
+@if (item.Stage is not (CaseStage.Registered or CaseStage.Cancelled or CaseStage.Declined))
+{ <form data-case-id="@item.Id" method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="ops-form"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="Revision" value="@item.Revision" /><input type="hidden" name="OperationId" value="@Guid.NewGuid()" /><label>@L["Case.Requirement"]<input name="requirement" required maxlength="200" /></label><label>@L["Case.ReplaceRejected"]<select name="replacesId"><option value="">—</option>@foreach (var rejected in Model.Evidence.Where(e => e.Status == EvidenceStatus.Rejected)) { <option value="@rejected.Id">@rejected.Requirement · @rejected.OriginalFileName</option> }</select></label><label>@L["Case.File"]<input name="file" type="file" accept=".pdf,.jpg,.jpeg,.png" required /></label><button class="btn btn-g">@L["Case.Upload"]</button></form> }
+</section>
+@if (Model.IsOffice && item.Stage == CaseStage.Registered)
+{ <section class="ops-card"><h2>@L["Case.Certificates"]</h2><form data-case-id="@item.Id" method="post" asp-page-handler="Certificate"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="OperationId" value="@Guid.NewGuid()" /><button class="btn btn-g">@L["Case.PrepareCertificate"]</button></form>
+<ul>@foreach (var certificate in Model.Certificates) { <li><a href="/Documents/Preview?id=@certificate.Id">@L["Certificate." + certificate.Stage] · @certificate.DocumentVersion</a></li> }</ul></section> }
+</main>

@@ -12,7 +12,7 @@ public sealed class Reservation : TenantEntity
 {
     private Reservation() { }
 
-    public Guid GroupId { get; private set; }
+    public Guid? GroupId { get; private set; }
     public Guid VenueId { get; private set; }
     public string RequestedByUserId { get; private set; } = string.Empty;
     public string Title { get; private set; } = string.Empty;
@@ -22,9 +22,13 @@ public sealed class Reservation : TenantEntity
     public int ExpectedAttendees { get; private set; }
     public Guid WorkflowDefinitionId { get; private set; }
     public Guid CurrentStateId { get; private set; }
+    public long Revision { get; set; } = 1;
+    public int SetupMinutes { get; set; }
+    public int CleanupMinutes { get; set; }
+    public DateTimeOffset? HoldExpiresAtUtc { get; set; }
 
     public static Reservation Create(
-        Guid orgId, Guid parishId, Guid groupId, Guid venueId, string requestedByUserId,
+        Guid orgId, Guid parishId, Guid? groupId, Guid venueId, string requestedByUserId,
         string title, string? description, DateTimeOffset startUtc, DateTimeOffset endUtc,
         int expectedAttendees, Guid workflowDefinitionId, Guid initialStateId)
     {
@@ -35,7 +39,7 @@ public sealed class Reservation : TenantEntity
         {
             OrgId = orgId,
             ParishId = parishId,
-            GroupId = Guard.NotEmpty(groupId, "GroupId"),
+            GroupId = groupId,
             VenueId = Guard.NotEmpty(venueId, "VenueId"),
             RequestedByUserId = Guard.Required(requestedByUserId, "RequestedByUserId", 450),
             Title = Guard.Required(title, "Title", 300),

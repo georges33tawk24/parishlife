@@ -1,0 +1,307 @@
+{
+  "Auth.Identifier": [
+    "Email, phone or username",
+    "E-mail, téléphone ou identifiant",
+    "البريد الإلكتروني أو الهاتف أو اسم المستخدم"
+  ],
+  "Auth.Password": [
+    "Password",
+    "Mot de passe",
+    "كلمة المرور"
+  ],
+  "Auth.Remember": [
+    "Keep me signed in on this personal device",
+    "Rester connecté sur cet appareil personnel",
+    "إبقائي متصلاً على هذا الجهاز الشخصي"
+  ],
+  "Auth.Register": [
+    "Create individual account",
+    "Créer un compte personnel",
+    "إنشاء حساب شخصي"
+  ],
+  "Auth.Recover": [
+    "Recover account access",
+    "Récupérer l’accès au compte",
+    "استعادة الوصول إلى الحساب"
+  ],
+  "Auth.ProviderHelp": [
+    "External sign-in and contact delivery are not configured. Existing credentials remain usable; use identity-reviewed support if recovery is unavailable.",
+    "Connexion externe et envoi non configurés. Les identifiants existants restent utilisables ; assistance après contrôle d’identité si nécessaire.",
+    "تسجيل الدخول الخارجي وإرسال التحقق غير مُعدّين. تبقى بيانات الدخول الحالية صالحة؛ استخدم الدعم بعد التحقق من الهوية عند تعذّر الاستعادة."
+  ],
+  "Auth.Failed": [
+    "Sign-in failed or temporarily limited. Check your credentials or use recovery.",
+    "Connexion échouée ou temporairement limitée. Vérifiez vos identifiants ou utilisez la récupération.",
+    "تعذّر الدخول أو قُيّد مؤقتاً. تحقّق من بيانات الدخول أو استخدم الاستعادة."
+  ],
+  "Auth.AgePolicy": [
+    "Account age and assisted-access policy must be approved before public registration. Contact the office for the reviewed assisted route.",
+    "La politique d’âge et d’assistance doit être approuvée avant inscription publique. Contactez le bureau pour la procédure assistée.",
+    "يجب اعتماد سياسة عمر الحساب والمساعدة قبل التسجيل العام. تواصل مع المكتب للمسار المساعد المُراجع."
+  ],
+  "Auth.PasswordHelp": [
+    "Use a private passphrase of 16–200 characters. Confirmation must match; spaces, paste and password managers are supported.",
+    "Utilisez une phrase secrète de 16 à 200 caractères. Confirmation identique ; espaces, collage et gestionnaires autorisés.",
+    "استخدم عبارة مرور خاصة من 16 إلى 200 حرف. يجب تطابق التأكيد؛ المسافات واللصق ومديرو كلمات المرور مدعومون."
+  ],
+  "Auth.ContactUnavailable": [
+    "This contact cannot currently be used. Try sign-in, recovery or another contact; contact ownership remains unverified.",
+    "Ce contact ne peut pas être utilisé. Essayez connexion, récupération ou un autre contact ; propriété non vérifiée.",
+    "لا يمكن استخدام جهة الاتصال حالياً. جرّب الدخول أو الاستعادة أو جهة اتصال أخرى؛ تبقى ملكيتها غير متحققة."
+  ],
+  "Auth.AccountOnly": [
+    "Create your own account. Parish selection and translated profile names are optional later steps. No parish person or staff role is created by signup.",
+    "Créez votre compte. Paroisse et noms traduits sont des étapes ultérieures facultatives. Aucun dossier paroissial ni rôle n’est créé.",
+    "أنشئ حسابك الشخصي. اختيار الرعية والأسماء المترجمة خطوات لاحقة اختيارية. لا ينشئ التسجيل سجلاً رعوياً أو دور موظف."
+  ],
+  "Auth.GivenName": [
+    "Given name as supplied",
+    "Prénom fourni",
+    "الاسم كما قُدّم"
+  ],
+  "Auth.FamilyName": [
+    "Family name as supplied",
+    "Nom de famille fourni",
+    "اسم العائلة كما قُدّم"
+  ],
+  "Auth.BirthDate": [
+    "Exact birth date for eligibility",
+    "Date de naissance exacte pour l’éligibilité",
+    "تاريخ الميلاد الدقيق للأهلية"
+  ],
+  "Auth.Contact": [
+    "Email or international phone (+ country code)",
+    "E-mail ou téléphone international (+ indicatif)",
+    "البريد الإلكتروني أو هاتف دولي مع رمز البلد (+)"
+  ],
+  "Auth.ConfirmPassword": [
+    "Confirm password",
+    "Confirmer le mot de passe",
+    "تأكيد كلمة المرور"
+  ],
+  "Auth.Notice": [
+    "I have reviewed the account notices and the stated purpose of these fields.",
+    "J’ai lu les informations du compte et la finalité des champs.",
+    "راجعت إشعارات الحساب والغرض المعلن لهذه الحقول."
+  ],
+  "Auth.RecoveryHelp": [
+    "If an eligible recovery route exists, follow its actual instructions. No email/SMS recovery service is configured here. Use the office’s identity-reviewed process; privileged recovery requires authorized platform support.",
+    "Si une procédure admissible existe, suivez ses instructions réelles. Aucun service de récupération par e-mail/SMS n’est configuré. Utilisez le contrôle d’identité du bureau ; comptes privilégiés par assistance autorisée.",
+    "إن توفر مسار استعادة مخوّل فاتبع تعليماته الفعلية. لا توجد خدمة استعادة بريد أو رسائل مُعدّة هنا. استخدم إجراء المكتب للتحقق من الهوية؛ الحسابات ذات الامتيازات تتطلب دعم المنصة المخوّل."
+  ],
+  "Document.Copy": [
+    "DRAFT / REVIEW COPY — not an issued original",
+    "BROUILLON / COPIE DE CONTRÔLE — pas un original émis",
+    "مسودة / نسخة للمراجعة — ليست أصلاً رسمياً صادراً"
+  ],
+  "Document.NoSignature": [
+    "This preview applies no signature or seal. Use the competent authority’s approved signed-paper process.",
+    "Cet aperçu n’appose ni signature ni sceau. Utilisez la procédure papier signée approuvée.",
+    "هذه المعاينة لا تطبّق توقيعاً أو ختماً. استخدم الإجراء الورقي الموقّع المعتمد من السلطة المختصة."
+  ],
+  "Document.Print": [
+    "Print this review copy",
+    "Imprimer cette copie de contrôle",
+    "طباعة نسخة المراجعة"
+  ],
+  "Events.Places": [
+    "Place status and event check-in",
+    "État des places et accueil",
+    "حالة الأماكن وتسجيل الوصول"
+  ],
+  "Events.ReservedHelp": [
+    "A requested or reserved place is not confirmed attendance. Consent, payment and transport remain separate.",
+    "Une place demandée ou réservée n’est pas une présence confirmée. Consentement, paiement et transport restent distincts.",
+    "المكان المطلوب أو المحجوز ليس حضوراً مؤكداً. الموافقة والدفع والنقل تبقى منفصلة."
+  ],
+  "Events.IdentityEvidence": [
+    "Actual identity / consent evidence reference",
+    "Référence réelle de preuve d’identité / consentement",
+    "مرجع دليل الهوية / الموافقة الفعلي"
+  ],
+  "Events.Collectors": [
+    "Approved collector identities, one per line",
+    "Identités des personnes autorisées, une par ligne",
+    "هويات المستلمين المخوّلين، واحدة بكل سطر"
+  ],
+  "Events.IndependentExit": [
+    "Independent departure expressly authorized under approved policy",
+    "Départ autonome expressément autorisé selon la politique approuvée",
+    "الخروج المستقل مخوّل صراحة وفق السياسة المعتمدة"
+  ],
+  "Events.VerifyConsent": [
+    "Record reviewed event consent",
+    "Enregistrer le consentement examiné",
+    "تسجيل موافقة الفعالية المُراجعة"
+  ],
+  "Events.ConfirmPlace": [
+    "Confirm eligible place",
+    "Confirmer la place admissible",
+    "تأكيد المكان بعد استيفاء الأهلية"
+  ],
+  "Events.Arrival": [
+    "Record actual arrival",
+    "Enregistrer l’arrivée réelle",
+    "تسجيل الوصول الفعلي"
+  ],
+  "Events.Collector": [
+    "Actual verified collector identity",
+    "Identité vérifiée du destinataire réel",
+    "هوية المستلم الفعلي المتحقق منه"
+  ],
+  "Events.Pickup": [
+    "Record authorized pickup / exit",
+    "Enregistrer la remise / sortie autorisée",
+    "تسجيل التسليم / الخروج المخوّل"
+  ],
+  "Events.RosterWarning": [
+    "Checked-in participants for this event only — not everyone in the building. Verify the refresh time and reconcile any paper log.",
+    "Personnes présentes pour cet événement uniquement — pas tout le bâtiment. Vérifiez l’actualisation et rapprochez les feuilles papier.",
+    "المشاركون المسجّل وصولهم لهذه الفعالية فقط — ليس جميع الموجودين في المبنى. تحقّق من وقت التحديث وطابق السجل الورقي."
+  ],
+  "Place.Reserved": [
+    "Reserved — requirements pending",
+    "Réservé — conditions en attente",
+    "محجوز — المتطلبات معلّقة"
+  ],
+  "Place.Waitlisted": [
+    "Waitlisted",
+    "Liste d’attente",
+    "قائمة انتظار"
+  ],
+  "Place.Confirmed": [
+    "Confirmed",
+    "Confirmé",
+    "مؤكد"
+  ],
+  "Place.Cancelled": [
+    "Cancelled",
+    "Annulé",
+    "ملغى"
+  ],
+  "Place.NeedsReconfirmation": [
+    "Reconfirmation required",
+    "Reconfirmation requise",
+    "يلزم إعادة التأكيد"
+  ],
+  "Error.DocumentMismatch": [
+    "Document subject, source and reviewed version must match this case. Release is blocked.",
+    "Personne, source et version doivent correspondre au dossier. Remise bloquée.",
+    "يجب أن يتطابق صاحب المستند ومصدره وإصداره مع هذا الطلب. التسليم محظور."
+  ],
+  "Document.DownloadReviewed": [
+    "Download the reviewed attached file",
+    "Télécharger la pièce finale examinée",
+    "تنزيل الملف النهائي المُراجع"
+  ],
+  "Document.Recipient": [
+    "Verified recipient account reference",
+    "Référence du compte destinataire vérifié",
+    "مرجع حساب المستلم المتحقق منه"
+  ],
+  "Document.RecipientAuthority": [
+    "Actual identity and representation evidence",
+    "Preuve réelle d’identité et de représentation",
+    "دليل الهوية والتمثيل الفعلي"
+  ],
+  "Document.FinalReview": [
+    "I reviewed this exact signed final file and its subject, source, language and version.",
+    "J’ai examiné ce fichier final signé, sa personne, sa source, sa langue et sa version.",
+    "راجعت هذا الملف النهائي الموقّع وصاحبه ومصدره ولغته وإصداره."
+  ],
+  "Document.Action.Approve": [
+    "Priest preparation approval",
+    "Approbation préparatoire du prêtre",
+    "اعتماد الكاهن للتحضير"
+  ],
+  "Document.Action.RecordPaperSignature": [
+    "Record my actual paper signature",
+    "Enregistrer ma signature papier réelle",
+    "تسجيل توقيعي الورقي الفعلي"
+  ],
+  "Document.Action.Issue": [
+    "Record authorized issuance",
+    "Enregistrer l’émission autorisée",
+    "تسجيل الإصدار المخوّل"
+  ],
+  "Document.Action.Release": [
+    "Release reviewed final file",
+    "Mettre à disposition le fichier final examiné",
+    "إتاحة الملف النهائي المُراجع"
+  ],
+  "Document.Action.Collect": [
+    "Record actual collection",
+    "Enregistrer le retrait réel",
+    "تسجيل الاستلام الفعلي"
+  ],
+  "Document.Action.WithdrawRelease": [
+    "Withdraw future file access",
+    "Retirer l’accès futur au fichier",
+    "سحب الوصول المستقبلي للملف"
+  ],
+  "Reservation.IntakeHelp": [
+    "Submitting requests review; it does not hold or confirm the resource. Times use the parish time zone.",
+    "Soumettre demande un examen, sans réserver ni confirmer la ressource. Heures de la paroisse.",
+    "الإرسال يطلب المراجعة ولا يحجز المورد أو يؤكده. الأوقات وفق المنطقة الزمنية للرعية."
+  ],
+  "Reservation.Start": [
+    "Start in parish local time",
+    "Début en heure locale paroissiale",
+    "البداية بتوقيت الرعية المحلي"
+  ],
+  "Reservation.End": [
+    "End in parish local time",
+    "Fin en heure locale paroissiale",
+    "النهاية بتوقيت الرعية المحلي"
+  ],
+  "Error.TimeZone": [
+    "This local time is ambiguous or invalid at a daylight-saving change. Choose an unambiguous time with the office.",
+    "Heure locale ambiguë ou invalide au changement d’heure. Choisissez avec le bureau.",
+    "الوقت المحلي ملتبس أو غير صالح عند تغيير التوقيت. اختر وقتاً واضحاً مع المكتب."
+  ],
+  "Events.Register": [
+    "Request a place",
+    "Demander une place",
+    "طلب مكان"
+  ],
+  "Events.Registered": [
+    "Application recorded — review place status",
+    "Demande enregistrée — consulter l’état",
+    "سُجّل الطلب — راجع حالة المكان"
+  ],
+  "Draft.Unsaved": [
+    "Unsaved changes",
+    "Modifications non enregistrées",
+    "تغييرات غير محفوظة"
+  ],
+  "Draft.SwitchHelp": [
+    "Save this permitted draft before changing language, discard the unsaved edits, or stay here.",
+    "Enregistrez ce brouillon autorisé avant de changer de langue, abandonnez les modifications ou restez ici.",
+    "احفظ هذه المسودة المسموح بها قبل تغيير اللغة، أو تجاهل التعديلات غير المحفوظة، أو ابقَ هنا."
+  ],
+  "Draft.Discard": [
+    "Discard unsaved edits",
+    "Abandonner les modifications",
+    "تجاهل التعديلات غير المحفوظة"
+  ],
+  "Draft.Stay": [
+    "Stay here",
+    "Rester ici",
+    "البقاء هنا"
+  ],
+  "Draft.SaveFailed": [
+    "Save is not confirmed. Keep this form and retry with the same operation reference after checking your connection and sign-in.",
+    "Enregistrement non confirmé. Gardez le formulaire et réessayez avec la même référence après vérification de la connexion.",
+    "الحفظ غير مؤكد. احتفظ بالنموذج وأعد المحاولة بنفس مرجع الإجراء بعد التحقق من الاتصال وتسجيل الدخول."
+  ],
+  "Action.SaveDraft": [
+    "Draft saved",
+    "Brouillon enregistré",
+    "حُفظت المسودة"
+  ],
+  "Error.DuplicateIdentity": [
+    "A similar active or archived identity exists. Review it or record actual evidence that this is a different person.",
+    "Une identité similaire active ou archivée existe. Examinez-la ou documentez une personne distincte.",
+    "توجد هوية مشابهة نشطة أو مؤرشفة. راجعها أو وثّق دليلاً فعلياً على أنها لشخص مختلف."
+  ]
+}

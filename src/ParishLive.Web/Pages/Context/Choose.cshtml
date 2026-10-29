@@ -1,0 +1,14 @@
+@page
+@model ParishLive.Web.Pages.Context.ChooseModel
+@{ ViewData["Title"] = L["Context.Choose"].Value; }
+<main class="content" id="main-content">
+  <h1>@L["Context.Choose"]</h1>
+  <p>@L["Context.ChooseHelp"]</p>
+  <div class="stack">
+  @foreach (var choice in Model.Choices)
+  {
+    <a class="panel cbody" href="/?actingAs=@choice.Id">@L["SysRole." + choice.Role] · @choice.Parish</a>
+  }
+  </div>
+  @if (Model.Choices.Count == 0) { <p>@L["Context.NoAssignment"]</p><a href="/Public/Directory">@L["Public.Discover"]</a> }
+</main>

@@ -1,0 +1,12 @@
+@page
+@model ParishLive.Web.Pages.Public.DirectoryModel
+@{ ViewData["Title"] = L["Public.Discover"].Value; }
+<main class="content" id="main-content"><h1>@L["Public.Discover"]</h1>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="get" class="ops-form"><label asp-for="Search">@L["Public.Search"]</label><input asp-for="Search" dir="auto" maxlength="200" /><button class="btn btn-p">@L["Public.Find"]</button></form>
+@if (Model.Items.Count == 0) { <p class="ops-status">@L["Public.NonePublished"]</p> }
+<div class="ops-grid">@foreach (var parish in Model.Items) { <article class="ops-card"><h2><a href="/Public/Parish?id=@parish.Id">@parish.Name</a></h2><p>@parish.Locality</p><p dir="auto">@parish.Contact</p>
+@if (User.Identity?.IsAuthenticated == true) { <p>@L[Model.Following.ContainsKey(parish.Id) ? Model.Following[parish.Id] ? "Following.Primary" : "Following.Following" : "Following.NotFollowing"]</p><form method="post"><input type="hidden" name="parishId" value="@parish.Id" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><input type="hidden" name="following" value="@(!Model.Following.ContainsKey(parish.Id) ? "true" : "false")" /><button class="btn btn-g">@L[Model.Following.ContainsKey(parish.Id) ? "Following.Unfollow" : "Following.Follow"]</button></form>
+@if (Model.Following.ContainsKey(parish.Id) && !Model.Following[parish.Id]) { <form method="post"><input type="hidden" name="parishId" value="@parish.Id" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><input type="hidden" name="following" value="true" /><input type="hidden" name="primary" value="true" /><button class="btn btn-g">@L["Following.MakePrimary"]</button></form> } }
+</article> }</div><p>@L["Following.Separate"]</p>
+</main>

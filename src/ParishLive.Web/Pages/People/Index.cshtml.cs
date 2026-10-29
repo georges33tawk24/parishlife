@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using ParishLive.Domain.Enums;
 using ParishLive.Infrastructure.Data;
+using ParishLive.Application.Authorization;
+using ParishLive.Application.Abstractions;
+using ParishLive.Domain.Constants;
 
 namespace ParishLive.Web.Pages.People;
 
@@ -17,6 +20,10 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
+        var tenant = HttpContext.RequestServices.GetRequiredService<ITenantContext>();
+        var permissions = HttpContext.RequestServices.GetRequiredService<IPermissionService>();
+        if (tenant.UserId is null || !await permissions.HasAsync(tenant.UserId, tenant.ParishIds.SingleOrDefault(), PermissionCodes.Members.View))
+        { Response.StatusCode = 403; return; }
         // Memberships are tenant-filtered, so this only lists members of the viewer's parish.
         Members = await (from m in _db.Memberships
                          join u in _db.Users on m.UserId equals u.Id

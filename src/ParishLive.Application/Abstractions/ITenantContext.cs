@@ -11,4 +11,6 @@ public interface ITenantContext
     Guid OrgId { get; }
     IReadOnlyCollection<Guid> ParishIds { get; }
     bool IsArchdioceseAdmin { get; }
+    Guid? ActingAssignmentId => null;
+    string? ActingRole => null;
 }

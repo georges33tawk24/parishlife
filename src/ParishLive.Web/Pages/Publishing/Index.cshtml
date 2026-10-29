@@ -1,0 +1,15 @@
+@page
+@model ParishLive.Web.Pages.Publishing.IndexModel
+@{ ViewData["Title"] = L["Nav.Website"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Website"]</h1><p>@L["Publishing.Help"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="post" class="ops-form" data-track-changes><input type="hidden" asp-for="Id" /><input type="hidden" asp-for="Revision" /><input type="hidden" asp-for="OperationId" />
+<div><label asp-for="Slug">@L["Publishing.Slug"]</label><input asp-for="Slug" required maxlength="100" /></div>
+<div><label asp-for="English">English</label><textarea asp-for="English" lang="en" dir="ltr" maxlength="10000"></textarea></div>
+<div><label asp-for="French">Français</label><textarea asp-for="French" lang="fr" dir="ltr" maxlength="10000"></textarea></div>
+<div><label asp-for="Arabic">العربية</label><textarea asp-for="Arabic" lang="ar" dir="rtl" maxlength="10000"></textarea></div>
+<button class="btn btn-p" name="action" value="Save">@L["Common.SaveDraft"]</button></form>
+@foreach (var item in Model.Items) { <article class="ops-card"><h2>@item.Slug</h2><p>@L["Common.Revision"] @item.Revision · @L["Publishing.PublishedRevision"] @(item.PublishedRevision?.ToString() ?? "—")</p><a href="/Publishing?edit=@item.Id">@L["Common.Edit"]</a>
+@if (Model.CanPublish) { <form method="post"><input type="hidden" name="Id" value="@item.Id" /><input type="hidden" name="Revision" value="@item.Revision" /><input type="hidden" name="OperationId" value="@Guid.NewGuid()" /><button class="btn btn-g" name="action" value="Publish" data-confirm="@L["Publishing.Confirm"]">@L["Publishing.Publish"]</button></form> }
+</article> }
+</main>

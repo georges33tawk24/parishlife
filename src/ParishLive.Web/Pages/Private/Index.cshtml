@@ -1,0 +1,8 @@
+@page
+@model ParishLive.Web.Pages.Private.IndexModel
+@{ ViewData["Title"] = L["Nav.Notes"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Notes"]</h1><p>@L["Notes.AuthorOnly"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="post" class="ops-form" data-track-changes><input type="hidden" asp-for="OperationId" /><div><label asp-for="Title">@L["Notice.NewTitle"]</label><input asp-for="Title" required maxlength="200" dir="auto" /></div><div><label asp-for="Body">@L["Notes.Body"]</label><textarea asp-for="Body" required maxlength="10000" dir="auto"></textarea></div><button class="btn btn-p">@L["Common.Save"]</button></form>
+@foreach (var note in Model.Notes) { <article class="ops-card"><h2>@note.Title</h2><p class="ops-draft" dir="auto">@note.Body</p><p>@L["Notes." + note.Audience]</p></article> }
+</main>

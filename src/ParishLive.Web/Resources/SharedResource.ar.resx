@@ -8,7 +8,7 @@
   <data name="Ctx.Parish" xml:space="preserve"><value>رعية مار جرجس</value></data>
   <data name="Ctx.Org" xml:space="preserve"><value>أبرشية بيروت</value></data>
   <data name="Nav.Parish" xml:space="preserve"><value>الرعية</value></data>
-  <data name="Nav.Dashboard" xml:space="preserve"><value>لوحة القيادة</value></data>
+  <data name="Nav.Dashboard" xml:space="preserve"><value>الرئيسية</value></data>
   <data name="Nav.Reservations" xml:space="preserve"><value>الحجوزات</value></data>
   <data name="Nav.Events" xml:space="preserve"><value>الفعاليات</value></data>
   <data name="Nav.Groups" xml:space="preserve"><value>المجموعات واللجان</value></data>
@@ -104,8 +104,8 @@
   <data name="Dash.Hello" xml:space="preserve"><value>أهلاً بعودتك، {0}.</value></data>
   <data name="Dash.Awaiting" xml:space="preserve"><value>بانتظارك</value></data>
   <data name="Dash.NoDecisions" xml:space="preserve"><value>لا شيء بانتظار قرارك — كل شيء منجز.</value></data>
-  <data name="Events.Register" xml:space="preserve"><value>سجّل</value></data>
-  <data name="Events.Registered" xml:space="preserve"><value>مُسجّل</value></data>
+  <data name="Events.Register" xml:space="preserve"><value>طلب مكان</value></data>
+  <data name="Events.Registered" xml:space="preserve"><value>سُجّل الطلب — راجع حالة المكان</value></data>
   <data name="Events.Calendar" xml:space="preserve"><value>التقويم</value></data>
   <data name="Events.List" xml:space="preserve"><value>قائمة</value></data>
   <data name="Events.Empty" xml:space="preserve"><value>لا فعاليات قادمة.</value></data>
@@ -128,4 +128,447 @@
   <data name="Audit.When" xml:space="preserve"><value>الوقت</value></data>
   <data name="Audit.Who" xml:space="preserve"><value>المُنفِّذ</value></data>
   <data name="Audit.What" xml:space="preserve"><value>الإجراء</value></data>
+<data name="Nav.Requests" xml:space="preserve"><value>الطلبات / عملي</value></data>
+<data name="Nav.Website" xml:space="preserve"><value>الموقع العام</value></data>
+<data name="Nav.OfficeExpenses" xml:space="preserve"><value>مصاريف المكتب</value></data>
+<data name="Nav.Finance" xml:space="preserve"><value>المالية</value></data>
+<data name="Nav.Notes" xml:space="preserve"><value>ملاحظاتي</value></data>
+<data name="Nav.Readiness" xml:space="preserve"><value>الجاهزية والمتطلبات</value></data>
+<data name="Common.Skip" xml:space="preserve"><value>انتقل إلى المحتوى</value></data>
+<data name="Common.Navigation" xml:space="preserve"><value>التنقل</value></data>
+<data name="Common.Demo" xml:space="preserve"><value>بيئة تجريبية — الهويات والسجلات نموذجية وليست بيانات فعلية.</value></data>
+<data name="Common.Empty" xml:space="preserve"><value>لا توجد سجلات متاحة بعد.</value></data>
+<data name="Common.Revision" xml:space="preserve"><value>الإصدار</value></data>
+<data name="Common.Language" xml:space="preserve"><value>اللغة</value></data>
+<data name="Common.SaveDraft" xml:space="preserve"><value>حفظ المسودة</value></data>
+<data name="Common.Save" xml:space="preserve"><value>حفظ</value></data>
+<data name="Common.Edit" xml:space="preserve"><value>تعديل المسودة</value></data>
+<data name="Common.Cancel" xml:space="preserve"><value>إلغاء</value></data>
+<data name="Common.Back" xml:space="preserve"><value>العودة إلى القائمة</value></data>
+<data name="Common.AsOf" xml:space="preserve"><value>آخر تحديث</value></data>
+<data name="Context.Choose" xml:space="preserve"><value>اختر الدور الذي تعمل به</value></data>
+<data name="Context.ChooseHelp" xml:space="preserve"><value>اختر تكليفاً سارياً. تبقى الإجراءات ضمن الرعية والدور المحددين.</value></data>
+<data name="Context.NoAssignment" xml:space="preserve"><value>بانتظار التكليف / حسابي</value></data>
+<data name="Case.New" xml:space="preserve"><value>طلب جديد</value></data>
+<data name="Case.Type" xml:space="preserve"><value>نوع الطلب</value></data>
+<data name="Case.Subject" xml:space="preserve"><value>اسم صاحب المعاملة كما قُدّم</value></data>
+<data name="Case.Details" xml:space="preserve"><value>التفاصيل المقدّمة</value></data>
+<data name="Case.ReceiptHelp" xml:space="preserve"><value>الاستلام يعني حفظ الطلب للمراجعة، ولا يعني تأكيد موعد أو سرّ أو دفع أو مستند رسمي.</value></data>
+<data name="Case.ReviewHelp" xml:space="preserve"><value>راجع الرعية والشخص والتفاصيل. قد تبقى الأصول والتحقق من الهوية وقرار الكاهن مطلوبة.</value></data>
+<data name="Case.Submit" xml:space="preserve"><value>إرسال الطلب</value></data>
+<data name="Case.Priest" xml:space="preserve"><value>الكاهن المسؤول</value></data>
+<data name="Case.Register" xml:space="preserve"><value>مرجع السجل الرسمي</value></data>
+<data name="Case.Timeline" xml:space="preserve"><value>التسلسل الزمني</value></data>
+<data name="Case.Authority" xml:space="preserve"><value>صاحب سلطة القرار</value></data>
+<data name="Case.Recorder" xml:space="preserve"><value>أُدخل بواسطة</value></data>
+<data name="Case.InternalNote" xml:space="preserve"><value>ملاحظة داخلية — للمكتب فقط</value></data>
+<data name="Case.ApplicantMessage" xml:space="preserve"><value>رسالة لمقدّم الطلب</value></data>
+<data name="Case.NextAction" xml:space="preserve"><value>الإجراء التالي</value></data>
+<data name="Case.PriorInstruction" xml:space="preserve"><value>تسجيل تعليمات سابقة من الكاهن</value></data>
+<data name="Case.ProxyHelp" xml:space="preserve"><value>سجّل تعليمات سابقة فعلية لهذا الطلب. تصبح نافذة مرة واحدة بلا اعتماد إلكتروني مكرر، ولا تطبّق توقيعاً.</value></data>
+<data name="Case.Channel" xml:space="preserve"><value>طريقة تلقّي التعليمات</value></data>
+<data name="Case.Attestation" xml:space="preserve"><value>سبق أن طلب مني الكاهن المحدد تسجيل هذا القرار لهذا الطلب.</value></data>
+<data name="Case.ActualTime" xml:space="preserve"><value>التاريخ والوقت الفعليان / المقترحان</value></data>
+<data name="Case.Celebrant" xml:space="preserve"><value>اسم المحتفل الفعلي كما قُدّم</value></data>
+<data name="Case.ConfirmDecision" xml:space="preserve"><value>أكّد الرعية والسجل وصاحب سلطة القرار الفعلي.</value></data>
+<data name="Case.ConfirmActual" xml:space="preserve"><value>أكّد أن الاحتفال جرى فعلياً بهذه الوقائع.</value></data>
+<data name="Case.Evidence" xml:space="preserve"><value>الأدلة والأصول</value></data>
+<data name="Case.UploadHelp" xml:space="preserve"><value>PDF أو JPEG أو PNG، حتى 10 ميغابايت للملف و20 ملفاً للطلب. الرفع ليس تحققاً. راجع المكتب للأصول أو الاستثناءات.</value></data>
+<data name="Case.Requirement" xml:space="preserve"><value>المتطلب / غرض المستند</value></data>
+<data name="Case.File" xml:space="preserve"><value>اختر الملف</value></data>
+<data name="Case.Upload" xml:space="preserve"><value>رفع المستند</value></data>
+<data name="Case.ReviewBasis" xml:space="preserve"><value>أساس التحقق أو الرفض الفعلي</value></data>
+<data name="Case.Certificates" xml:space="preserve"><value>الشهادات والنسخ</value></data>
+<data name="Case.PrepareCertificate" xml:space="preserve"><value>إعداد مسودة من المصدر الرسمي</value></data>
+<data name="Channel.InPerson" xml:space="preserve"><value>حضورياً</value></data>
+<data name="Channel.Telephone" xml:space="preserve"><value>هاتفياً</value></data>
+<data name="Channel.Written" xml:space="preserve"><value>تعليمات مكتوبة</value></data>
+<data name="Channel.Other" xml:space="preserve"><value>وسيلة فعلية أخرى</value></data>
+<data name="Finance.ScopeHelp" xml:space="preserve"><value>تبقى العملات الأصلية منفصلة. الاعتماد والدفع الفعلي والتحويل الداخلي وقائع منفصلة.</value></data>
+<data name="Finance.NoBalances" xml:space="preserve"><value>لا يوجد رصيد مسجّل. يلزم مصدر افتتاحي مُراجع، ولا يُفترض أي مبلغ.</value></data>
+<data name="Finance.Requests" xml:space="preserve"><value>الطلبات المالية</value></data>
+<data name="Finance.NewRequest" xml:space="preserve"><value>تقديم طلب مالي</value></data>
+<data name="Finance.Kind" xml:space="preserve"><value>نوع الحركة</value></data>
+<data name="Finance.Amount" xml:space="preserve"><value>المبلغ الفعلي</value></data>
+<data name="Finance.Currency" xml:space="preserve"><value>العملة الأصلية</value></data>
+<data name="Finance.Account" xml:space="preserve"><value>الحساب المصدر</value></data>
+<data name="Finance.Destination" xml:space="preserve"><value>وجهة التحويل الداخلي</value></data>
+<data name="Finance.Fund" xml:space="preserve"><value>الصندوق المعتمد / الغرض</value></data>
+<data name="Finance.Source" xml:space="preserve"><value>مرجع المصدر الفريد</value></data>
+<data name="Finance.Submit" xml:space="preserve"><value>إرسال لاعتماد مستقل</value></data>
+<data name="Finance.Submitted" xml:space="preserve"><value>بانتظار اعتماد مستقل</value></data>
+<data name="Finance.Approved" xml:space="preserve"><value>مُعتمد — بانتظار الدفع الفعلي</value></data>
+<data name="Finance.Paid" xml:space="preserve"><value>سُجّلت الحركة الفعلية</value></data>
+<data name="Finance.RecordPayment" xml:space="preserve"><value>تسجيل الحركة الفعلية</value></data>
+<data name="Finance.ActualEvidence" xml:space="preserve"><value>دليل الاستلام / الدفع الفعلي</value></data>
+<data name="Finance.ConfirmApproval" xml:space="preserve"><value>اعتمد بصورة مستقلة. تغيير الدور لا يُنشئ شخصاً آخر.</value></data>
+<data name="Finance.ConfirmActual" xml:space="preserve"><value>سجّل حركة فعلية فقط. هذا لا يرسل المال عبر مزوّد.</value></data>
+<data name="Ministry.Help" xml:space="preserve"><value>مراجعة المسؤول توصية، واعتماد الكاهن يفعّل العضوية. أسباب المغادرة خاصة.</value></data>
+<data name="Ministry.Apply" xml:space="preserve"><value>طلب الانضمام</value></data>
+<data name="Ministry.Leave" xml:space="preserve"><value>طلب مغادرة سرّي</value></data>
+<data name="Ministry.DepartureReason" xml:space="preserve"><value>سبب المغادرة الخاص</value></data>
+<data name="Ministry.Applications" xml:space="preserve"><value>الطلبات المتاحة</value></data>
+<data name="Ministry.Application" xml:space="preserve"><value>طلب عضوية</value></data>
+<data name="Ministry.Departure" xml:space="preserve"><value>مغادرة خاصة</value></data>
+<data name="Ministry.Submitted" xml:space="preserve"><value>مُرسل</value></data>
+<data name="Ministry.LeaderApproved" xml:space="preserve"><value>راجعه المسؤول — بانتظار الكاهن</value></data>
+<data name="Ministry.WithdrawalRequested" xml:space="preserve"><value>طُلب السحب</value></data>
+<data name="Ministry.Withdrawn" xml:space="preserve"><value>مسحوب</value></data>
+<data name="Ministry.Approved" xml:space="preserve"><value>مُعتمد</value></data>
+<data name="Ministry.Recommend" xml:space="preserve"><value>التوصية للكاهن</value></data>
+<data name="Publishing.Help" xml:space="preserve"><value>حفظ المسودة يحافظ على النسخة المنشورة. النشر يتطلب اللغات الثلاث كاملة ومُراجعة.</value></data>
+<data name="Publishing.Slug" xml:space="preserve"><value>تسمية ثابتة للمحتوى</value></data>
+<data name="Publishing.PublishedRevision" xml:space="preserve"><value>الإصدار المنشور</value></data>
+<data name="Publishing.Publish" xml:space="preserve"><value>نشر النسخة المُراجعة</value></data>
+<data name="Publishing.Confirm" xml:space="preserve"><value>أكّد اللغات الثلاث والجمهور العام.</value></data>
+<data name="Notes.AuthorOnly" xml:space="preserve"><value>الجمهور: الكاتب وحده. لا يرثها الخلف أو المسؤول.</value></data>
+<data name="Notes.Body" xml:space="preserve"><value>ملاحظة خاصة</value></data>
+<data name="Notes.Author" xml:space="preserve"><value>الكاتب وحده</value></data>
+<data name="Notes.NamedPriest" xml:space="preserve"><value>الكاهن المخوّل المحدد لهذه المهمة</value></data>
+<data name="Notes.CurrentPriests" xml:space="preserve"><value>الكهنة الحاليون والمخوّلون المعيّنون لاحقاً ما دام الاشتراك سارياً</value></data>
+<data name="Notifications.Help" xml:space="preserve"><value>الحفظ داخل التطبيق منفصل عن الإرسال والقراءة. فتح سجل لا يمحو الإشعارات.</value></data>
+<data name="Notifications.Read" xml:space="preserve"><value>مقروء</value></data>
+<data name="Notifications.Unread" xml:space="preserve"><value>غير مقروء</value></data>
+<data name="Notifications.MarkRead" xml:space="preserve"><value>تحديد هذا الإشعار كمقروء</value></data>
+<data name="Readiness.Help" xml:space="preserve"><value>الإعدادات المسجّلة ليست اعتماداً للإطلاق. يجب أن يقدّم المسؤولون أدلة السياسات واللغات والخدمات والاستعادة الفعلية.</value></data>
+<data name="Readiness.Religious" xml:space="preserve"><value>المتطلبات الدينية وسياسة السجل</value></data>
+<data name="Readiness.Templates" xml:space="preserve"><value>القوالب الرسمية المعتمدة</value></data>
+<data name="Readiness.Finance" xml:space="preserve"><value>الضوابط المالية والبيانات الافتتاحية</value></data>
+<data name="Readiness.Safeguarding" xml:space="preserve"><value>الحماية ومسؤول الفعالية المحدد</value></data>
+<data name="Readiness.Delivery" xml:space="preserve"><value>الإرسال الخارجي / التحقق</value></data>
+<data name="Readiness.Maps" xml:space="preserve"><value>تكامل الخرائط</value></data>
+<data name="Readiness.Backup" xml:space="preserve"><value>أدلة النسخ الاحتياطي والاستعادة</value></data>
+<data name="Readiness.LanguageReview" xml:space="preserve"><value>مراجعة لغوية وإتاحة مؤهّلة</value></data>
+<data name="Readiness.Recorded" xml:space="preserve"><value>سُجّلت الإعدادات؛ راجع الأدلة قبل الاستخدام الحي.</value></data>
+<data name="Readiness.Required" xml:space="preserve"><value>المتطلب أو الخدمة غير مُعدّة. استخدم الإجراء اليدوي المعتمد.</value></data>
+<data name="Public.Discover" xml:space="preserve"><value>البحث عن رعية</value></data>
+<data name="Public.Search" xml:space="preserve"><value>اسم الرعية أو البلدة</value></data>
+<data name="Public.Find" xml:space="preserve"><value>البحث في الرعايا المنشورة</value></data>
+<data name="Public.NonePublished" xml:space="preserve"><value>لا توجد رعية معتمدة تطابق البحث. لا تُنشر الهويات التجريبية كرعايا حقيقية.</value></data>
+<data name="Public.NoSchedule" xml:space="preserve"><value>لم تُنشر مواعيد الخدمات. تواصل مع مكتب الرعية للتأكيد.</value></data>
+<data name="Public.RequestContact" xml:space="preserve"><value>استخدم جهة اتصال المكتب المنشورة للطلبات أو الحاجة الرعوية العاجلة. الاستلام الإلكتروني لا يضمن مراجعة فورية.</value></data>
+<data name="Error.Unavailable" xml:space="preserve"><value>هذا العنصر غير متاح أو ليست لديك صلاحية الوصول إليه.</value></data>
+<data name="Error.Invalid" xml:space="preserve"><value>راجع القيم المقدّمة وأعد المحاولة.</value></data>
+<data name="Error.State" xml:space="preserve"><value>الإجراء غير متاح في هذه المرحلة. حدّث الصفحة وراجع النتيجة الفعلية.</value></data>
+<data name="Error.Conflict" xml:space="preserve"><value>تغيّر السجل. لم يُطبّق الإجراء. قارن أحدث نسخة قبل إعادة المحاولة.</value></data>
+<data name="Error.OperationRequired" xml:space="preserve"><value>يلزم مرجع إجراء صالح. أعد تحميل النموذج.</value></data>
+<data name="Error.OperationMismatch" xml:space="preserve"><value>استُخدم مرجع الإجراء لتفاصيل مختلفة. تحقّق من النتيجة الأصلية.</value></data>
+<data name="Error.Disputed" xml:space="preserve"><value>القرار معترض عليه. تتوقف الإجراءات التابعة غير المكتملة بانتظار مراجعة مخوّلة.</value></data>
+<data name="Error.PolicyRequired" xml:space="preserve"><value>تلزم متطلبات دينية وسياسة سجل معتمدة لهذه المرحلة.</value></data>
+<data name="Error.FinancePolicy" xml:space="preserve"><value>تلزم ضوابط مالية معتمدة وبيانات افتتاحية فعلية قبل العمليات المالية الحية.</value></data>
+<data name="Error.TemplateRequired" xml:space="preserve"><value>يلزم اعتماد النص واللغات وترتيبات التوقيع. تبقى هذه مسودة.</value></data>
+<data name="Error.OfficialSource" xml:space="preserve"><value>يلزم مصدر رسمي مسجّل وغير معترض عليه؛ الاحتفال المخطط لا يكفي.</value></data>
+<data name="Error.EvidenceRequired" xml:space="preserve"><value>أدلة مطلوبة مفقودة أو مرفوضة أو غير متحققة.</value></data>
+<data name="Error.Immutable" xml:space="preserve"><value>السجل المكتمل مقفل. استخدم إجراء التصحيح أو العكس المعتمد.</value></data>
+<data name="Error.ProxyStage" xml:space="preserve"><value>تسجيل أمين السر غير معتمد لهذه المرحلة. يمكن للكاهن المخوّل اتخاذ القرار مباشرة.</value></data>
+<data name="Error.PriorInstruction" xml:space="preserve"><value>اختر الكاهن المخوّل وأساس التعليمات الفعلي ووسيلتها، وأكّد تعليماته السابقة للطلب.</value></data>
+<data name="Error.PriestAssignment" xml:space="preserve"><value>لا يملك الكاهن المحدد تكليفاً سارياً مخوّلاً في الرعية.</value></data>
+<data name="Error.FileLimit" xml:space="preserve"><value>استخدم ملفاً غير فارغ حتى 10 ميغابايت وبحد أقصى 20 للطلب. راجع المكتب للاستثناء.</value></data>
+<data name="Error.FileType" xml:space="preserve"><value>يجب أن يتطابق اسم الملف ونوعه ومحتواه مع PDF أو JPEG أو PNG.</value></data>
+<data name="Error.Currency" xml:space="preserve"><value>استخدم العملة الأصلية المعتمدة: الدولار أو الليرة اللبنانية.</value></data>
+<data name="Error.Money" xml:space="preserve"><value>أدخل مبلغاً فعلياً موجباً بدقة عملة ومصدر صحيحين.</value></data>
+<data name="Error.IndependentReviewer" xml:space="preserve"><value>يجب أن يراجع شخص مخوّل آخر. تغيير الدور ليس مراجعة مستقلة.</value></data>
+<data name="Error.OpeningExists" xml:space="preserve"><value>يوجد رصيد افتتاحي لهذا الحساب والعملة. استخدم تسوية مُراجعة.</value></data>
+<data name="Error.ReversalReview" xml:space="preserve"><value>استخدم تصحيحاً مُراجعاً مرتبطاً بالحركة الأصلية.</value></data>
+<data name="Error.ActualReceipt" xml:space="preserve"><value>يُسجّل الاستلام للنقد الفعلي أو التحويل البنكي أو OMT المتحقق منه فعلياً فقط.</value></data>
+<data name="Error.Allocations" xml:space="preserve"><value>لا يمكن أن تتجاوز التخصيصات المبلغ الأصلي المستلم.</value></data>
+<data name="Error.Capacity" xml:space="preserve"><value>المورد غير متاح أو ستُتجاوز سعته الفعلية.</value></data>
+<data name="Error.ResourceConflict" xml:space="preserve"><value>تتعارض الفترة، بما فيها التجهيز والتنظيف، مع حجز مؤكد أو مؤقت سارٍ.</value></data>
+<data name="Error.Representation" xml:space="preserve"><value>يلزم تفويض تمثيل مُراجع وسارٍ لهذا الشخص والغرض.</value></data>
+<data name="Error.SafeguardingPolicy" xml:space="preserve"><value>تلزم قواعد حماية معتمدة ومسؤول فعلي محدد للفعالية.</value></data>
+<data name="Error.AgeReview" xml:space="preserve"><value>تلزم مراجعة الميلاد وأهلية العمر. العمر المجهول لا يعني بلوغاً.</value></data>
+<data name="Error.Consent" xml:space="preserve"><value>تلزم موافقة متحققة تخص الفعالية الحالية. الدفع لا يحل محل الموافقة.</value></data>
+<data name="Error.AlreadyPresent" xml:space="preserve"><value>سُجّل الوصول مسبقاً. راجع الوصول المسجّل.</value></data>
+<data name="Error.UnauthorizedCollector" xml:space="preserve"><value>التسليم محظور. المستلم أو الخروج المستقل غير مخوّل. اتبع إجراء مسؤول الحماية الفعلي.</value></data>
+<data name="Error.PersonLink" xml:space="preserve"><value>يلزم ربط الشخص بعد مراجعة المكتب قبل طلب عضوية الخدمة الرسمي.</value></data>
+<data name="Error.DuplicatePending" xml:space="preserve"><value>يوجد طلب معلّق. تابع الطلب الحالي.</value></data>
+<data name="Error.PersonAlreadyLinked" xml:space="preserve"><value>الشخص مرتبط مسبقاً. تلزم مراجعة مستقلة لاعتراض الهوية.</value></data>
+<data name="Error.IdentityReview" xml:space="preserve"><value>تلزم مراجعة منفصلة للهوية المؤرشفة أو المتوفاة قبل الربط.</value></data>
+<data name="Error.Translations" xml:space="preserve"><value>تلزم اللغات الثلاث كاملة ومُراجعة. تبقى النسخة المنشورة الحالية متاحة.</value></data>
+<data name="Error.ShareConfirmation" xml:space="preserve"><value>أكّد الجمهور. المشاركة مع الكهنة الحاليين تشمل المعيّنين المخوّلين لاحقاً.</value></data>
+<data name="Error.IndependentRoute" xml:space="preserve"><value>يجب إعداد مسار مستقل فعلي ومخوّل وخالٍ من التعارض.</value></data>
+<data name="Stage.Draft" xml:space="preserve"><value>مسودة</value></data>
+<data name="Stage.Received" xml:space="preserve"><value>مستلم</value></data>
+<data name="Stage.NeedsInformation" xml:space="preserve"><value>يحتاج معلومات</value></data>
+<data name="Stage.Preparation" xml:space="preserve"><value>تحضير</value></data>
+<data name="Stage.Scheduled" xml:space="preserve"><value>موعد مؤكد</value></data>
+<data name="Stage.Celebrated" xml:space="preserve"><value>سُجّل الاحتفال الفعلي</value></data>
+<data name="Stage.EntryReview" xml:space="preserve"><value>مراجعة القيد الرسمي</value></data>
+<data name="Stage.Registered" xml:space="preserve"><value>مسجّل رسمياً</value></data>
+<data name="Stage.Declined" xml:space="preserve"><value>مرفوض</value></data>
+<data name="Stage.Cancelled" xml:space="preserve"><value>ملغى</value></data>
+<data name="Kind.General" xml:space="preserve"><value>طلب عام للرعية</value></data>
+<data name="Kind.Baptism" xml:space="preserve"><value>معمودية</value></data>
+<data name="Kind.Communion" xml:space="preserve"><value>المناولة الأولى</value></data>
+<data name="Kind.Confirmation" xml:space="preserve"><value>تثبيت / ميرون</value></data>
+<data name="Kind.Marriage" xml:space="preserve"><value>زواج</value></data>
+<data name="Kind.Funeral" xml:space="preserve"><value>خدمة جنازة</value></data>
+<data name="Kind.Certificate" xml:space="preserve"><value>طلب شهادة</value></data>
+<data name="Kind.MassIntention" xml:space="preserve"><value>نية قداس</value></data>
+<data name="Kind.Blessing" xml:space="preserve"><value>مباركة منزل</value></data>
+<data name="Kind.SickVisit" xml:space="preserve"><value>زيارة مريض / منزل</value></data>
+<data name="Kind.PriestAppointment" xml:space="preserve"><value>طلب موعد مع الكاهن</value></data>
+<data name="Action.Create" xml:space="preserve"><value>حُفظ الطلب</value></data>
+<data name="Action.Submit" xml:space="preserve"><value>إرسال الطلب</value></data>
+<data name="Action.Withdraw" xml:space="preserve"><value>سحب الطلب غير المعالج</value></data>
+<data name="Action.Accept" xml:space="preserve"><value>قبول / تسجيل تعليمات الكاهن</value></data>
+<data name="Action.NeedsInformation" xml:space="preserve"><value>طلب معلومات</value></data>
+<data name="Action.Resume" xml:space="preserve"><value>استئناف المراجعة السابقة</value></data>
+<data name="Action.Schedule" xml:space="preserve"><value>تأكيد الموعد المقترح</value></data>
+<data name="Action.Celebrate" xml:space="preserve"><value>تسجيل الاحتفال الفعلي</value></data>
+<data name="Action.SubmitEntry" xml:space="preserve"><value>إرسال القيد الرسمي للمراجعة</value></data>
+<data name="Action.Register" xml:space="preserve"><value>اعتماد القيد الرسمي</value></data>
+<data name="Action.ReturnEntry" xml:space="preserve"><value>إعادة القيد للتصحيح</value></data>
+<data name="Action.Cancel" xml:space="preserve"><value>إلغاء قبل الاحتفال</value></data>
+<data name="Action.Decline" xml:space="preserve"><value>رفض مع السبب</value></data>
+<data name="Action.Verify" xml:space="preserve"><value>تسجيل التحقق الفعلي</value></data>
+<data name="Action.RejectFile" xml:space="preserve"><value>طلب بديل واضح</value></data>
+<data name="Evidence.Uploaded" xml:space="preserve"><value>مرفوع — غير متحقق</value></data>
+<data name="Evidence.PaperReceived" xml:space="preserve"><value>ورق مستلم — غير متحقق</value></data>
+<data name="Evidence.UnderReview" xml:space="preserve"><value>قيد المراجعة</value></data>
+<data name="Evidence.Verified" xml:space="preserve"><value>متحقق</value></data>
+<data name="Evidence.Rejected" xml:space="preserve"><value>مرفوض / غير مقروء</value></data>
+<data name="Evidence.Expired" xml:space="preserve"><value>منتهي</value></data>
+<data name="Evidence.Waived" xml:space="preserve"><value>أعفته السلطة المختصة</value></data>
+<data name="Movement.Opening" xml:space="preserve"><value>رصيد افتتاحي</value></data>
+<data name="Movement.Receipt" xml:space="preserve"><value>استلام فعلي</value></data>
+<data name="Movement.Expense" xml:space="preserve"><value>مصروف فعلي</value></data>
+<data name="Movement.Transfer" xml:space="preserve"><value>تحويل داخلي</value></data>
+<data name="Movement.Refund" xml:space="preserve"><value>استرداد فعلي</value></data>
+<data name="Movement.Reversal" xml:space="preserve"><value>عكس مُراجع</value></data>
+<data name="Certificate.Prepared" xml:space="preserve"><value>أُعدّت المسودة</value></data>
+<data name="Certificate.PriestApproved" xml:space="preserve"><value>مُعتمد — بانتظار التوقيع الفعلي</value></data>
+<data name="Certificate.Signed" xml:space="preserve"><value>موقّع</value></data>
+<data name="Certificate.AwaitingBishop" xml:space="preserve"><value>بانتظار قبول الأسقف</value></data>
+<data name="Certificate.Returned" xml:space="preserve"><value>مُعاد</value></data>
+<data name="Certificate.Authorized" xml:space="preserve"><value>مخوّل للإصدار</value></data>
+<data name="Certificate.Issued" xml:space="preserve"><value>صادر</value></data>
+<data name="Certificate.Released" xml:space="preserve"><value>متاح للمستلم المتحقق</value></data>
+<data name="Certificate.Collected" xml:space="preserve"><value>مستلم فعلياً</value></data>
+<data name="Certificate.Revoked" xml:space="preserve"><value>مسحوب</value></data>
+<data name="SysRole.SuperAdmin" xml:space="preserve"><value>مسؤول النظام الأعلى</value></data>
+<data name="SysRole.ParishAdmin" xml:space="preserve"><value>مسؤول الرعية</value></data>
+<data name="SysRole.Treasurer" xml:space="preserve"><value>أمين الصندوق</value></data>
+<data name="SysRole.FinanceViewer" xml:space="preserve"><value>قارئ المالية</value></data>
+<data name="SysRole.MinistryLeader" xml:space="preserve"><value>مسؤول الخدمة</value></data>
+<data name="SysRole.ConcernReviewer" xml:space="preserve"><value>مراجع شكاوى مستقل</value></data>
+<data name="SysRole.PublicVisitor" xml:space="preserve"><value>زائر</value></data>
+<data name="Notice.M01" xml:space="preserve"><value>تحديث السجل — يتوفر تحديث للمرجع {0}. افتح السجل الآمن للاطلاع على التفاصيل والخطوة التالية.</value></data>
+<data name="Notice.M02" xml:space="preserve"><value>معلومات مطلوبة — افتح المرجع {0} للاطلاع على المعلومات المطلوبة والرد بأمان.</value></data>
+<data name="Notice.M03" xml:space="preserve"><value>تسجيل إجراء بناءً على تعليماتك — سُجّل إجراء بناءً على تعليماتك في المرجع {0}. راجع التفاصيل؛ لا يُطلب منك اعتماد القرار مرة أخرى.</value></data>
+<data name="Notice.M04" xml:space="preserve"><value>متابعة الطلب — طلبك ذو المرجع {0} قيد المعالجة. افتحه لمعرفة ما إذا كان يلزمك اتخاذ إجراء.</value></data>
+<data name="Notice.M05" xml:space="preserve"><value>تحديث سري — يتوفر تحديث لملفك السري. سجّل الدخول للاطلاع عليه بصورة خاصة.</value></data>
+<data name="Notice.M06" xml:space="preserve"><value>راجع صلاحيات حسابك — تغيّرت صلاحيات حسابك. سجّل الدخول لمراجعة تكليفاتك الحالية والإجراءات المتاحة.</value></data>
+<data name="Notice.M07" xml:space="preserve"><value>تغيير في نشاط مقرر — تغيّر نشاط مرتبط بالمرجع {0}. راجع التفاصيل الجديدة وخيارات التأكيد أو استرداد المبلغ، إن وُجدت.</value></data>
+<data name="Notice.M08" xml:space="preserve"><value>خطوة تتطلب المتابعة — حُفظ السجل ذو المرجع {0}، لكن تعذرت خطوة إرسال أو إرفاق. افتحه لإعادة محاولة الخطوة المتعذرة فقط.</value></data>
+<data name="Notice.M09" xml:space="preserve"><value>دعوة متاحة — تتوفر دعوة. راجع الجهة والغرض وتاريخ الانتهاء قبل قبولها عبر الرابط الخاص الذي يقدمه المكتب المخوّل.</value></data>
+<data name="Notice.M10" xml:space="preserve"><value>اقتراب الموعد النهائي — يقترب موعد نهائي للمرجع {0}. افتح السجل لمعرفة التاريخ الفعلي والإجراء المسموح به.</value></data>
+<data name="Auth.Identifier" xml:space="preserve"><value>البريد الإلكتروني أو الهاتف أو اسم المستخدم</value></data>
+<data name="Auth.Password" xml:space="preserve"><value>كلمة المرور</value></data>
+<data name="Auth.Remember" xml:space="preserve"><value>إبقائي متصلاً على هذا الجهاز الشخصي</value></data>
+<data name="Auth.Register" xml:space="preserve"><value>إنشاء حساب شخصي</value></data>
+<data name="Auth.Recover" xml:space="preserve"><value>استعادة الوصول إلى الحساب</value></data>
+<data name="Auth.ProviderHelp" xml:space="preserve"><value>تسجيل الدخول الخارجي وإرسال التحقق غير مُعدّين. تبقى بيانات الدخول الحالية صالحة؛ استخدم الدعم بعد التحقق من الهوية عند تعذّر الاستعادة.</value></data>
+<data name="Auth.Failed" xml:space="preserve"><value>تعذّر الدخول أو قُيّد مؤقتاً. تحقّق من بيانات الدخول أو استخدم الاستعادة.</value></data>
+<data name="Auth.AgePolicy" xml:space="preserve"><value>يجب اعتماد سياسة عمر الحساب والمساعدة قبل التسجيل العام. تواصل مع المكتب للمسار المساعد المُراجع.</value></data>
+<data name="Auth.PasswordHelp" xml:space="preserve"><value>استخدم عبارة مرور خاصة من 16 إلى 200 حرف. يجب تطابق التأكيد؛ المسافات واللصق ومديرو كلمات المرور مدعومون.</value></data>
+<data name="Auth.ContactUnavailable" xml:space="preserve"><value>لا يمكن استخدام جهة الاتصال حالياً. جرّب الدخول أو الاستعادة أو جهة اتصال أخرى؛ تبقى ملكيتها غير متحققة.</value></data>
+<data name="Auth.AccountOnly" xml:space="preserve"><value>أنشئ حسابك الشخصي. اختيار الرعية والأسماء المترجمة خطوات لاحقة اختيارية. لا ينشئ التسجيل سجلاً رعوياً أو دور موظف.</value></data>
+<data name="Auth.GivenName" xml:space="preserve"><value>الاسم كما قُدّم</value></data>
+<data name="Auth.FamilyName" xml:space="preserve"><value>اسم العائلة كما قُدّم</value></data>
+<data name="Auth.BirthDate" xml:space="preserve"><value>تاريخ الميلاد الدقيق للأهلية</value></data>
+<data name="Auth.Contact" xml:space="preserve"><value>البريد الإلكتروني أو هاتف دولي مع رمز البلد (+)</value></data>
+<data name="Auth.ConfirmPassword" xml:space="preserve"><value>تأكيد كلمة المرور</value></data>
+<data name="Auth.Notice" xml:space="preserve"><value>راجعت إشعارات الحساب والغرض المعلن لهذه الحقول.</value></data>
+<data name="Auth.RecoveryHelp" xml:space="preserve"><value>إن توفر مسار استعادة مخوّل فاتبع تعليماته الفعلية. لا توجد خدمة استعادة بريد أو رسائل مُعدّة هنا. استخدم إجراء المكتب للتحقق من الهوية؛ الحسابات ذات الامتيازات تتطلب دعم المنصة المخوّل.</value></data>
+<data name="Document.Copy" xml:space="preserve"><value>مسودة / نسخة للمراجعة — ليست أصلاً رسمياً صادراً</value></data>
+<data name="Document.NoSignature" xml:space="preserve"><value>هذه المعاينة لا تطبّق توقيعاً أو ختماً. استخدم الإجراء الورقي الموقّع المعتمد من السلطة المختصة.</value></data>
+<data name="Document.Print" xml:space="preserve"><value>طباعة نسخة المراجعة</value></data>
+<data name="Events.Places" xml:space="preserve"><value>حالة الأماكن وتسجيل الوصول</value></data>
+<data name="Events.ReservedHelp" xml:space="preserve"><value>المكان المطلوب أو المحجوز ليس حضوراً مؤكداً. الموافقة والدفع والنقل تبقى منفصلة.</value></data>
+<data name="Events.IdentityEvidence" xml:space="preserve"><value>مرجع دليل الهوية / الموافقة الفعلي</value></data>
+<data name="Events.Collectors" xml:space="preserve"><value>هويات المستلمين المخوّلين، واحدة بكل سطر</value></data>
+<data name="Events.IndependentExit" xml:space="preserve"><value>الخروج المستقل مخوّل صراحة وفق السياسة المعتمدة</value></data>
+<data name="Events.VerifyConsent" xml:space="preserve"><value>تسجيل موافقة الفعالية المُراجعة</value></data>
+<data name="Events.ConfirmPlace" xml:space="preserve"><value>تأكيد المكان بعد استيفاء الأهلية</value></data>
+<data name="Events.Arrival" xml:space="preserve"><value>تسجيل الوصول الفعلي</value></data>
+<data name="Events.Collector" xml:space="preserve"><value>هوية المستلم الفعلي المتحقق منه</value></data>
+<data name="Events.Pickup" xml:space="preserve"><value>تسجيل التسليم / الخروج المخوّل</value></data>
+<data name="Events.RosterWarning" xml:space="preserve"><value>المشاركون المسجّل وصولهم لهذه الفعالية فقط — ليس جميع الموجودين في المبنى. تحقّق من وقت التحديث وطابق السجل الورقي.</value></data>
+<data name="Place.Reserved" xml:space="preserve"><value>محجوز — المتطلبات معلّقة</value></data>
+<data name="Place.Waitlisted" xml:space="preserve"><value>قائمة انتظار</value></data>
+<data name="Place.Confirmed" xml:space="preserve"><value>مؤكد</value></data>
+<data name="Place.Cancelled" xml:space="preserve"><value>ملغى</value></data>
+<data name="Place.NeedsReconfirmation" xml:space="preserve"><value>يلزم إعادة التأكيد</value></data>
+<data name="Error.DocumentMismatch" xml:space="preserve"><value>يجب أن يتطابق صاحب المستند ومصدره وإصداره مع هذا الطلب. التسليم محظور.</value></data>
+<data name="Document.DownloadReviewed" xml:space="preserve"><value>تنزيل الملف النهائي المُراجع</value></data>
+<data name="Document.Recipient" xml:space="preserve"><value>مرجع حساب المستلم المتحقق منه</value></data>
+<data name="Document.RecipientAuthority" xml:space="preserve"><value>دليل الهوية والتمثيل الفعلي</value></data>
+<data name="Document.FinalReview" xml:space="preserve"><value>راجعت هذا الملف النهائي الموقّع وصاحبه ومصدره ولغته وإصداره.</value></data>
+<data name="Document.Action.Approve" xml:space="preserve"><value>اعتماد الكاهن للتحضير</value></data>
+<data name="Document.Action.RecordPaperSignature" xml:space="preserve"><value>تسجيل توقيعي الورقي الفعلي</value></data>
+<data name="Document.Action.Issue" xml:space="preserve"><value>تسجيل الإصدار المخوّل</value></data>
+<data name="Document.Action.Release" xml:space="preserve"><value>إتاحة الملف النهائي المُراجع</value></data>
+<data name="Document.Action.Collect" xml:space="preserve"><value>تسجيل الاستلام الفعلي</value></data>
+<data name="Document.Action.WithdrawRelease" xml:space="preserve"><value>سحب الوصول المستقبلي للملف</value></data>
+<data name="Reservation.IntakeHelp" xml:space="preserve"><value>الإرسال يطلب المراجعة ولا يحجز المورد أو يؤكده. الأوقات وفق المنطقة الزمنية للرعية.</value></data>
+<data name="Reservation.Start" xml:space="preserve"><value>البداية بتوقيت الرعية المحلي</value></data>
+<data name="Reservation.End" xml:space="preserve"><value>النهاية بتوقيت الرعية المحلي</value></data>
+<data name="Error.TimeZone" xml:space="preserve"><value>الوقت المحلي ملتبس أو غير صالح عند تغيير التوقيت. اختر وقتاً واضحاً مع المكتب.</value></data>
+<data name="Draft.Unsaved" xml:space="preserve"><value>تغييرات غير محفوظة</value></data>
+<data name="Draft.SwitchHelp" xml:space="preserve"><value>احفظ هذه المسودة المسموح بها قبل تغيير اللغة، أو تجاهل التعديلات غير المحفوظة، أو ابقَ هنا.</value></data>
+<data name="Draft.Discard" xml:space="preserve"><value>تجاهل التعديلات غير المحفوظة</value></data>
+<data name="Draft.Stay" xml:space="preserve"><value>البقاء هنا</value></data>
+<data name="Draft.SaveFailed" xml:space="preserve"><value>الحفظ غير مؤكد. احتفظ بالنموذج وأعد المحاولة بنفس مرجع الإجراء بعد التحقق من الاتصال وتسجيل الدخول.</value></data>
+<data name="Action.SaveDraft" xml:space="preserve"><value>حُفظت المسودة</value></data>
+<data name="Error.DuplicateIdentity" xml:space="preserve"><value>توجد هوية مشابهة نشطة أو مؤرشفة. راجعها أو وثّق دليلاً فعلياً على أنها لشخص مختلف.</value></data>
+<data name="Action.CorrectEntry" xml:space="preserve"><value>حفظ تصحيح الاسم المقترح</value></data>
+<data name="Action.Postpone" xml:space="preserve"><value>تأجيل وإعادة فتح التحضير</value></data>
+<data name="Action.GuestAssociated" xml:space="preserve"><value>تمت مراجعة ربط مقدم الطلب</value></data>
+<data name="Admin.Accept" xml:space="preserve"><value>قبول التعيين</value></data>
+<data name="Admin.AccountReference" xml:space="preserve"><value>الحساب الفردي</value></data>
+<data name="Admin.Adoption" xml:space="preserve"><value>مرجع اعتماد الانضمام الفعلي</value></data>
+<data name="Admin.Appointments" xml:space="preserve"><value>التعيينات المحددة النطاق</value></data>
+<data name="Admin.Authenticator" xml:space="preserve"><value>رمز تطبيق المصادقة</value></data>
+<data name="Admin.Authority" xml:space="preserve"><value>إثبات السلطة أو القرار الفعلي</value></data>
+<data name="Admin.CreateParish" xml:space="preserve"><value>إنشاء وتفعيل الرعية المستوفية للشروط</value></data>
+<data name="Admin.Ends" xml:space="preserve"><value>وقت الانتهاء (اختياري)</value></data>
+<data name="Admin.GroupReference" xml:space="preserve"><value>معرّف الخدمة (لمسؤولي الخدمات فقط)</value></data>
+<data name="Admin.HeadPriest" xml:space="preserve"><value>اسم المستخدم الدقيق لكاهن الرعية المعيّن</value></data>
+<data name="Admin.IndependentReview" xml:space="preserve"><value>مراجعة مستقلة لتعيين محمي</value></data>
+<data name="Admin.Invitation" xml:space="preserve"><value>تعيين بانتظار قرارك</value></data>
+<data name="Admin.Jurisdiction" xml:space="preserve"><value>الاختصاص المعتمد</value></data>
+<data name="Admin.Locality" xml:space="preserve"><value>المنطقة المتحقق منها</value></data>
+<data name="Admin.NewOrganization" xml:space="preserve"><value>إنشاء الأبرشية المعتمدة</value></data>
+<data name="Admin.Offer" xml:space="preserve"><value>عرض تعيين محدد النطاق</value></data>
+<data name="Admin.OfficeContact" xml:space="preserve"><value>بيانات اتصال المكتب العامة الفعلية</value></data>
+<data name="Admin.Organization" xml:space="preserve"><value>الأبرشية</value></data>
+<data name="Admin.PriestEvidence" xml:space="preserve"><value>إثبات التعيين القائم وموافقة الكاهن</value></data>
+<data name="Admin.ProtectedHelp" xml:space="preserve"><value>يجب أن يراجع مسؤول نظام أعلى آخر التعيين ويستخدم كلمة مروره وتطبيق المصادقة المُعدّ لديه. لا تُفترض الموافقة أو وصول الإشعار.</value></data>
+<data name="Admin.Revoke" xml:space="preserve"><value>إلغاء هذا التعيين</value></data>
+<data name="Admin.Role" xml:space="preserve"><value>الدور الممارَس</value></data>
+<data name="Admin.Scope" xml:space="preserve"><value>نطاق الصلاحية</value></data>
+<data name="Admin.ScopeHelp" xml:space="preserve"><value>يستخدم كل شخص حساباً فردياً. يتطلب التعيين القبول والتواريخ الفعلية. لا يمنح الدور الإداري توقيع الكاهن أو الاطلاع على الملاحظات الرعوية الخاصة أو القضايا السرية.</value></data>
+<data name="Admin.Starts" xml:space="preserve"><value>وقت البدء</value></data>
+<data name="Admin.System" xml:space="preserve"><value>نطاق النظام</value></data>
+<data name="Admin.TargetUsername" xml:space="preserve"><value>اسم المستخدم الدقيق للحساب المقصود</value></data>
+<data name="Admin.Username" xml:space="preserve"><value>اسم المستخدم الدقيق للحساب</value></data>
+<data name="Admin.Title" xml:space="preserve"><value>الإدارة والتعيينات</value></data>
+<data name="Admin.Active" xml:space="preserve"><value>نافذ</value></data>
+<data name="Admin.NotEffective" xml:space="preserve"><value>غير نافذ حالياً</value></data>
+<data name="Admin.SpecificGrants" xml:space="preserve"><value>مهام إضافية صريحة — للدور المطابق فقط</value></data>
+<data name="Admin.CreateParishesGrant" xml:space="preserve"><value>يجوز لمسؤول الأبرشية إنشاء رعايا</value></data>
+<data name="Admin.SensitiveGrant" xml:space="preserve"><value>يجوز للمراجع المعين مراجعة الشكاوى الحساسة</value></data>
+<data name="Admin.IdentityGrant" xml:space="preserve"><value>يجوز للمراجع المعين رؤية الهوية المسموح بها بشكل منفصل</value></data>
+<data name="Case.CorrectedName" xml:space="preserve"><value>اسم الشخص المصحح كما ورد</value></data>
+<data name="Case.Kind" xml:space="preserve"><value>نوع الطلب</value></data>
+<data name="Error.AccountLookup" xml:space="preserve"><value>الحساب المقصود غير متاح. تحقّق من اسم المستخدم الدقيق بشكل خاص.</value></data>
+<data name="Error.AdminDualReview" xml:space="preserve"><value>يتطلب هذا الإجراء عملية إدارية مستقلة ومحمية.</value></data>
+<data name="Error.MfaRequired" xml:space="preserve"><value>يلزم تطبيق مصادقة مُعدّ فعلياً ورمز صالح.</value></data>
+<data name="Error.Reauthentication" xml:space="preserve"><value>تعذّر التحقق من إعادة المصادقة.</value></data>
+<data name="Following.MakePrimary" xml:space="preserve"><value>اختيارها رعية أساسية</value></data>
+<data name="Following.Follow" xml:space="preserve"><value>متابعة الرعية</value></data>
+<data name="Following.Unfollow" xml:space="preserve"><value>إلغاء المتابعة</value></data>
+<data name="Following.Following" xml:space="preserve"><value>تتم المتابعة</value></data>
+<data name="Following.Primary" xml:space="preserve"><value>تتم المتابعة · الاختيار الأساسي</value></data>
+<data name="Following.NotFollowing" xml:space="preserve"><value>معلومات عامة</value></data>
+<data name="Following.Separate" xml:space="preserve"><value>لا تنشئ المتابعة أو الرعية الأساسية عضوية رعوية أو سجل شخص أو صلاحيات موظف.</value></data>
+<data name="Guest.AllowedKinds" xml:space="preserve"><value>أنواع طلبات الضيوف المعتمدة فعلياً</value></data>
+<data name="Guest.Associate" xml:space="preserve"><value>ربط الطلب المراجع بحساب</value></data>
+<data name="Guest.AssociateConfirm" xml:space="preserve"><value>أكّد التحقق الفعلي من هوية مقدم الطلب. سيتوقف رابط التتبع القديم وسيحصل الحساب المحدد على حق متابعة هذا الطلب.</value></data>
+<data name="Guest.AssociateHelp" xml:space="preserve"><value>تحقق من مقدم الطلب الأصلي والحساب المقصود عبر إجراء المكتب المعتمد. يحفظ الربط القضية الأصلية ولا يمنح عضوية أو إتاحة مستند.</value></data>
+<data name="Guest.Code" xml:space="preserve"><value>رمز التتبع الخاص</value></data>
+<data name="Guest.Configuration" xml:space="preserve"><value>إعداد استقبال طلبات الضيوف</value></data>
+<data name="Guest.Contact" xml:space="preserve"><value>بيانات اتصالك الفعلية لمتابعة المكتب</value></data>
+<data name="Guest.ContactNotice" xml:space="preserve"><value>قدّم المعلومات اللازمة لهذا الطلب فقط. بيانات الاتصال مقدمة منك وليست متحققاً منها رقمياً. للحالات العاجلة استخدم بيانات الاتصال الفعلية المنشورة للرعية.</value></data>
+<data name="Guest.Enabled" xml:space="preserve"><value>تفعيل استقبال طلبات الضيوف المعتمدة</value></data>
+<data name="Guest.LinkHelp" xml:space="preserve"><value>احتفظ بهذا الرابط أو الرمز الخاص للمتابعة المحدودة. يستطيع من يحمله رؤية الحالة والردود الموجهة لمقدم الطلب. لا يجيز تنزيل الملفات الحساسة.</value></data>
+<data name="Guest.LostLink" xml:space="preserve"><value>عند فقدان الرابط أو انتهاء صلاحيته، تواصل مع الرعية الصحيحة لاستعادة الوصول بعد التحقق من الهوية.</value></data>
+<data name="Guest.Request" xml:space="preserve"><value>تقديم طلب كضيف</value></data>
+<data name="Guest.Scope" xml:space="preserve"><value>يسجل الإرسال طلباً لهذه الرعية. لا يعتمد خدمة أو يؤكد موعداً أو ينشئ سجل شخص أو يمنح عضوية رعوية.</value></data>
+<data name="Guest.Sensitive" xml:space="preserve"><value>لا يتيح رمز التتبع الملفات أو ملاحظات المكتب الخاصة. تتطلب المستندات الحساسة حساب مستلم مُراجعاً صراحةً أو استلاماً فعلياً من المكتب.</value></data>
+<data name="Guest.Track" xml:space="preserve"><value>متابعة طلب الضيف</value></data>
+<data name="People.DatePrecision" xml:space="preserve"><value>دقة تاريخ الميلاد</value></data>
+<data name="People.DuplicateEvidence" xml:space="preserve"><value>إثبات فعلي لشخص مختلف عند وجود سجلات متشابهة</value></data>
+<data name="People.Help" xml:space="preserve"><value>سجّل الأسماء والمصادر المقدمة فعلياً. تبقى التواريخ أو صيغ الأسماء غير المعروفة مجهولة. سجل الشخص المؤقت مستقل عن الحساب والعضوية والسجل الرسمي.</value></data>
+<data name="People.New" xml:space="preserve"><value>إنشاء سجل شخص مؤقت</value></data>
+<data name="Precision.Unknown" xml:space="preserve"><value>غير معروف</value></data>
+<data name="Precision.Exact" xml:space="preserve"><value>تاريخ دقيق</value></data>
+<data name="Precision.Year" xml:space="preserve"><value>السنة فقط</value></data>
+<data name="Precision.Approximate" xml:space="preserve"><value>تقريبي كما ورد</value></data>
+<data name="PersonStatus.Provisional" xml:space="preserve"><value>مؤقت</value></data>
+<data name="PersonStatus.Active" xml:space="preserve"><value>نشط</value></data>
+<data name="PersonStatus.Archived" xml:space="preserve"><value>مؤرشف</value></data>
+<data name="PersonStatus.VerifiedDeceased" xml:space="preserve"><value>الوفاة متحقق منها</value></data>
+<data name="Policy.Area" xml:space="preserve"><value>مجال الاعتماد</value></data>
+<data name="Policy.CertificateProxy" xml:space="preserve"><value>تسجيل الاعتماد الفعلي لتوسيع إعداد الشهادات للسكرتارية (يبقى التوقيع الشخصي مستقلاً)</value></data>
+<data name="Policy.Confirmed" xml:space="preserve"><value>أسجّل اعتماداً فعلياً من الجهة المختصة مع مرجع إثباته الحقيقي.</value></data>
+<data name="Policy.EntryProxy" xml:space="preserve"><value>السماح للسكرتارية بتسجيل تعليمات سابقة فعلية من الكاهن لاعتماد القيد الرسمي</value></data>
+<data name="Policy.EventLead" xml:space="preserve"><value>اسم المستخدم الدقيق لمسؤول الحماية المعين فعلياً</value></data>
+<data name="Policy.Help" xml:space="preserve"><value>تتطلب هذه الشروط قرارات فعلية من الجهات المختصة. لا ينشئ تسجيل المرجع موافقة أو سياسة دينية أو مستنداً موقعاً أو شروطاً مالية أو تكاملاً خارجياً.</value></data>
+<data name="Policy.Record" xml:space="preserve"><value>تسجيل الإعداد المعتمد فعلياً</value></data>
+<data name="Policy.Reference" xml:space="preserve"><value>مرجع الاعتماد الفعلي من الجهة المختصة</value></data>
+<data name="Policy.Requirements" xml:space="preserve"><value>معرّفات الإثباتات المطلوبة المعتمدة، واحد في كل سطر</value></data>
+<data name="Public.Directory" xml:space="preserve"><value>دليل الرعايا</value></data>
+<data name="Concern.Title" xml:space="preserve"><value>الملاحظات والشكاوى السرية</value></data>
+<data name="Concern.Privacy" xml:space="preserve"><value>يمكنك أنت والمراجعون المستقلون المؤهلون الذين تختارهم فقط الوصول إلى القضية. إخفاء هويتك عن المراجعين لا يعني أن النظام لا يحتفظ بهوية حسابك. الرتبة الإدارية لا تمنح الوصول.</value></data>
+<data name="Concern.Urgent" xml:space="preserve"><value>لا يتصل هذا النموذج بخدمات الطوارئ ولا يَعِد برد فوري. استخدم جهة مستقلة مختصة أو مسار طوارئ فعلياً عند الحاجة.</value></data>
+<data name="Concern.Narrative" xml:space="preserve"><value>وصف الشكوى الخاص</value></data>
+<data name="Concern.Anonymous" xml:space="preserve"><value>إخفاء هويتي عن المراجعين</value></data>
+<data name="Concern.Sensitive" xml:space="preserve"><value>يتطلب صلاحية مخصصة للقضايا الحساسة</value></data>
+<data name="Concern.ChooseReviewers" xml:space="preserve"><value>اختر مراجعين مستقلين مؤهلين دون تعارض مصالح</value></data>
+<data name="Concern.SensitiveEligible" xml:space="preserve"><value>مراجع معيّن للقضايا الحساسة</value></data>
+<data name="Concern.OrdinaryEligible" xml:space="preserve"><value>للشكاوى العادية فقط</value></data>
+<data name="Concern.NoRoute" xml:space="preserve"><value>لا يوجد مراجع مستقل مؤهل مُعدّ في هذا السياق. لا ترسل الادعاء عبر مكتب معني بالشكوى. احصل على مسار مستقل مؤهل فعلياً؛ لا يُختلق مسار هنا.</value></data>
+<data name="Concern.IdentityHidden" xml:space="preserve"><value>الهوية مخفية في هذا العرض</value></data>
+<data name="Concern.IdentityPermitted" xml:space="preserve"><value>يخضع الوصول إلى الهوية لصلاحيتك المنفصلة</value></data>
+<data name="Concern.ReviewerNote" xml:space="preserve"><value>ملاحظة خاصة للمراجعين المحددين فقط</value></data>
+<data name="Concern.ApplicantReply" xml:space="preserve"><value>رد مرئي لمقدم الشكوى</value></data>
+<data name="Concern.Start" xml:space="preserve"><value>بدء المراجعة</value></data>
+<data name="Concern.Reply" xml:space="preserve"><value>حفظ الرد</value></data>
+<data name="Concern.Recuse" xml:space="preserve"><value>إعلان التعارض والتنحي</value></data>
+<data name="Concern.Close" xml:space="preserve"><value>إغلاق مع توضيح</value></data>
+<data name="Concern.Reopen" xml:space="preserve"><value>إعادة فتح مع السبب</value></data>
+<data name="Concern.RecuseHelp" xml:space="preserve"><value>سيؤدي ذلك إلى إزالة وصولك المستقبلي. لا يعيّن بديلاً ولا يبلغ جهة خارجية. سجّل سبب التعارض في الملاحظة الخاصة.</value></data>
+<data name="Concern.Status.Submitted" xml:space="preserve"><value>مقدّم</value></data>
+<data name="Concern.Status.InReview" xml:space="preserve"><value>قيد المراجعة المستقلة</value></data>
+<data name="Concern.Status.Closed" xml:space="preserve"><value>مغلق</value></data>
+<data name="Case.ReplaceRejected" xml:space="preserve"><value>استبدال ملف مرفوض (اختياري)</value></data>
+<data name="Recovery.Title" xml:space="preserve"><value>التحقق من حفظ غير مؤكد</value></data>
+<data name="Recovery.Help" xml:space="preserve"><value>عند فقدان الرد، تحقق من العملية الأصلية قبل المحاولة مجدداً. تُعرض إيصالات عملياتك فقط. يؤكد الإيصال الحفظ في قاعدة البيانات، ويُتحقق من الوصول الحالي إلى السجل بشكل منفصل.</value></data>
+<data name="Recovery.Operation" xml:space="preserve"><value>معرّف العملية الأصلية</value></data>
+<data name="Recovery.Check" xml:space="preserve"><value>التحقق من النتيجة المحفوظة</value></data>
+<data name="Recovery.Unconfirmed" xml:space="preserve"><value>لم يُعثر على إيصال محفوظ لهذا الحساب وهذه العملية. لا يثبت ذلك فشلها؛ تحقق من السجل الحالي أو تواصل مع المكتب قبل إرسال جديد.</value></data>
+<data name="Recovery.Committed" xml:space="preserve"><value>حُفظت هذه العملية بنجاح. استخدم النتيجة القائمة بدلاً من إنشاء نسخة مكررة.</value></data>
+<data name="Recovery.Record" xml:space="preserve"><value>مرجع النتيجة المحفوظة</value></data>
+<data name="Finance.ActualAt" xml:space="preserve"><value>تاريخ ووقت الحركة الفعليان</value></data>
+<data name="Finance.ExportAll" xml:space="preserve"><value>تصدير جميع الحركات المسموح بها حالياً (CSV)</value></data>
+<data name="Finance.ActualReceipt" xml:space="preserve"><value>تسجيل قبض فعلي متحقق منه</value></data>
+<data name="Finance.ReceiptHelp" xml:space="preserve"><value>سجّل النقد المقبوض فعلياً أو قبض البنك/OMT المتحقق منه مع مرجع المصدر الأصلي. الدفع المتوقع أو المدعى ليس قبضاً. أعد استخدام العملية نفسها بعد رد غير مؤكد.</value></data>
+<data name="Finance.Method" xml:space="preserve"><value>طريقة القبض الفعلية</value></data>
+<data name="Finance.Method.Cash" xml:space="preserve"><value>نقد مقبوض فعلياً</value></data>
+<data name="Finance.Method.VerifiedBank" xml:space="preserve"><value>قبض بنكي فعلي متحقق منه</value></data>
+<data name="Finance.Method.VerifiedOMT" xml:space="preserve"><value>قبض OMT فعلي متحقق منه</value></data>
+<data name="Finance.Posted" xml:space="preserve"><value>الحركات الأصلية المثبتة</value></data>
+<data name="Giving.Title" xml:space="preserve"><value>عدّ التبرعات</value></data>
+<data name="Giving.Help" xml:space="preserve"><value>سجّل عدّ النقد الفعلي منفصلاً حسب العملة الأصلية. يسجّل شخص فعلي آخر المجاميع التي عاينها لهذه النسخة بالتحديد. يبقى الفرق مفتوحاً؛ ويثبت الإغلاق كل سطر مرة واحدة. يستخدم قبض البنك مسار القبض المتحقق المنفصل.</value></data>
+<data name="Giving.CollectedAt" xml:space="preserve"><value>تاريخ ووقت الجمع الفعليان</value></data>
+<data name="Giving.Open" xml:space="preserve"><value>فتح عدّ</value></data>
+<data name="Giving.AddLine" xml:space="preserve"><value>إضافة سطر عُدّ فعلياً</value></data>
+<data name="Giving.Independent" xml:space="preserve"><value>يُدخل عدّاد آخر ما عاينه فعلياً، ولا يكتفي بتأكيد مجموع منسوخ. اترك العملة فارغة فقط إن لم تُعدّ.</value></data>
+<data name="Giving.UsdCents" xml:space="preserve"><value>مجموع USD المعاين بالسنت (1250 يعني 12.50 USD)</value></data>
+<data name="Giving.LbpUnits" xml:space="preserve"><value>مجموع LBP المعاين بالليرة الكاملة</value></data>
+<data name="Giving.Verify" xml:space="preserve"><value>تسجيل العدّ المعاين المستقل</value></data>
+<data name="Giving.Close" xml:space="preserve"><value>إغلاق وتثبيت مرة واحدة</value></data>
+<data name="Giving.CloseConfirm" xml:space="preserve"><value>هل تريد إغلاق هذه النسخة المتحقق منها استقلالياً وتثبيت القبض الفعلي مرة واحدة؟ تتطلب الوقائع المغلقة تصحيحاً رسمياً.</value></data>
+<data name="Giving.Status.Open" xml:space="preserve"><value>مفتوح</value></data>
+<data name="Giving.Status.Variance" xml:space="preserve"><value>فرق — يلزم إعادة العدّ</value></data>
+<data name="Giving.Status.Verified" xml:space="preserve"><value>نسخة متحقق منها استقلالياً</value></data>
+<data name="Giving.Status.Closed" xml:space="preserve"><value>مغلق ومثبت</value></data>
+<data name="Events.PaperRecovery" xml:space="preserve"><value>استعادة بعد مراجعة السجل الورقي</value></data>
+<data name="Events.ReconcilePaper" xml:space="preserve"><value>مطابقة حركة فعلية سُجلت سابقاً على الورق</value></data>
+<data name="Events.PaperReference" xml:space="preserve"><value>مرجع السجل الورقي الفعلي المُراجع</value></data>
+<data name="Failure.Title" xml:space="preserve"><value>تعذّر تأكيد النتيجة</value></data>
+<data name="Failure.Help" xml:space="preserve"><value>احتفظ بمرجع العملية الأصلية. تحقق من النتيجة المحفوظة قبل تكرار إجراء مهم. إذا بقي الوصول أو الخدمة غير متاحين، تواصل مع المكتب الصحيح بمرجع الدعم هذا دون إرسال مستندات خاصة أو بيانات دخول.</value></data>
+<data name="Failure.Reference" xml:space="preserve"><value>مرجع دعم غير سري</value></data>
 </root>

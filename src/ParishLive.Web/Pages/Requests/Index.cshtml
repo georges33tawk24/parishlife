@@ -1,0 +1,16 @@
+@page
+@model ParishLive.Web.Pages.Requests.IndexModel
+@{ ViewData["Title"] = L["Nav.Requests"].Value; }
+<main class="content" id="main-content">
+<div class="ops-row"><h1>@L["Nav.Requests"]</h1><a class="btn btn-p" href="/Requests/Edit">@L["Case.New"]</a></div>
+<p>@L["Case.ReceiptHelp"]</p>
+@if (Model.Items.Count == 0) { <p>@L["Common.Empty"]</p> }
+<div class="ops-grid">
+@foreach (var item in Model.Items)
+{
+  <article class="ops-card"><h2><a href="/Requests/Detail?id=@item.Id">@item.SubjectName</a></h2>
+  <p><bdi>@item.Reference</bdi></p><p>@L["Kind." + item.Kind] · @L["Stage." + item.Stage]</p>
+  <p>@L["Common.Revision"] @item.Revision</p></article>
+}
+</div>
+</main>

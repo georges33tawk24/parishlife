@@ -1,0 +1,562 @@
+{
+  "Action.CorrectEntry": [
+    "Save proposed name correction",
+    "Enregistrer la correction proposée du nom",
+    "حفظ تصحيح الاسم المقترح"
+  ],
+  "Action.Postpone": [
+    "Postpone and reopen preparation",
+    "Reporter et reprendre la préparation",
+    "تأجيل وإعادة فتح التحضير"
+  ],
+  "Action.GuestAssociated": [
+    "Requester association reviewed",
+    "Association du demandeur vérifiée",
+    "تمت مراجعة ربط مقدم الطلب"
+  ],
+  "Action.SaveDraft": [
+    "Draft saved",
+    "Brouillon enregistré",
+    "حُفظت المسودة"
+  ],
+  "Admin.Accept": [
+    "Accept appointment",
+    "Accepter la nomination",
+    "قبول التعيين"
+  ],
+  "Admin.AccountReference": [
+    "Individual account",
+    "Compte individuel",
+    "الحساب الفردي"
+  ],
+  "Admin.Adoption": [
+    "Actual adoption approval reference",
+    "Référence de l’adoption approuvée",
+    "مرجع اعتماد الانضمام الفعلي"
+  ],
+  "Admin.Appointments": [
+    "Scoped appointments",
+    "Nominations et périmètres",
+    "التعيينات المحددة النطاق"
+  ],
+  "Admin.Authenticator": [
+    "Authenticator code",
+    "Code d’authentification",
+    "رمز تطبيق المصادقة"
+  ],
+  "Admin.Authority": [
+    "Actual authority or decision evidence",
+    "Justificatif réel de l’autorité ou de la décision",
+    "إثبات السلطة أو القرار الفعلي"
+  ],
+  "Admin.CreateParish": [
+    "Create and activate valid parish",
+    "Créer et activer la paroisse valide",
+    "إنشاء وتفعيل الرعية المستوفية للشروط"
+  ],
+  "Admin.Ends": [
+    "Ends at (optional)",
+    "Fin (facultative)",
+    "وقت الانتهاء (اختياري)"
+  ],
+  "Admin.GroupReference": [
+    "Ministry identifier (ministry leaders only)",
+    "Identifiant du ministère (responsable uniquement)",
+    "معرّف الخدمة (لمسؤولي الخدمات فقط)"
+  ],
+  "Admin.HeadPriest": [
+    "Existing head priest’s exact username",
+    "Identifiant exact du curé déjà nommé",
+    "اسم المستخدم الدقيق لكاهن الرعية المعيّن"
+  ],
+  "Admin.IndependentReview": [
+    "Independent protected appointment review",
+    "Examen indépendant d’une nomination protégée",
+    "مراجعة مستقلة لتعيين محمي"
+  ],
+  "Admin.Invitation": [
+    "Appointment awaiting your decision",
+    "Nomination en attente de votre décision",
+    "تعيين بانتظار قرارك"
+  ],
+  "Admin.Jurisdiction": [
+    "Approved jurisdiction",
+    "Juridiction approuvée",
+    "الاختصاص المعتمد"
+  ],
+  "Admin.Locality": [
+    "Verified locality",
+    "Localité vérifiée",
+    "المنطقة المتحقق منها"
+  ],
+  "Admin.NewOrganization": [
+    "Create approved diocese",
+    "Créer le diocèse approuvé",
+    "إنشاء الأبرشية المعتمدة"
+  ],
+  "Admin.Offer": [
+    "Offer scoped appointment",
+    "Proposer une nomination délimitée",
+    "عرض تعيين محدد النطاق"
+  ],
+  "Admin.OfficeContact": [
+    "Actual public office contact",
+    "Contact public réel du bureau",
+    "بيانات اتصال المكتب العامة الفعلية"
+  ],
+  "Admin.Organization": [
+    "Diocese",
+    "Diocèse",
+    "الأبرشية"
+  ],
+  "Admin.PriestEvidence": [
+    "Existing appointment and priest’s acceptance evidence",
+    "Justificatif de nomination existante et d’acceptation du prêtre",
+    "إثبات التعيين القائم وموافقة الكاهن"
+  ],
+  "Admin.ProtectedHelp": [
+    "A different Super Admin must review the requested appointment and authenticate with their own password and configured authenticator. No approval or delivery is inferred.",
+    "Un autre super administrateur doit examiner la nomination et utiliser son propre mot de passe et son authentificateur configuré. Aucune approbation ni livraison n’est présumée.",
+    "يجب أن يراجع مسؤول نظام أعلى آخر التعيين ويستخدم كلمة مروره وتطبيق المصادقة المُعدّ لديه. لا تُفترض الموافقة أو وصول الإشعار."
+  ],
+  "Admin.Revoke": [
+    "Revoke this appointment",
+    "Révoquer cette nomination",
+    "إلغاء هذا التعيين"
+  ],
+  "Admin.Role": [
+    "Acting role",
+    "Rôle exercé",
+    "الدور الممارَس"
+  ],
+  "Admin.Scope": [
+    "Authority scope",
+    "Périmètre d’autorité",
+    "نطاق الصلاحية"
+  ],
+  "Admin.ScopeHelp": [
+    "Each person uses an individual account. Invitations require acceptance and effective dates. A staff role does not grant priest signature, private pastoral access or confidential case access.",
+    "Chaque personne utilise un compte individuel. Une invitation exige acceptation et dates effectives. Un rôle administratif ne donne ni signature sacerdotale ni accès pastoral privé ou confidentiel.",
+    "يستخدم كل شخص حساباً فردياً. يتطلب التعيين القبول والتواريخ الفعلية. لا يمنح الدور الإداري توقيع الكاهن أو الاطلاع على الملاحظات الرعوية الخاصة أو القضايا السرية."
+  ],
+  "Admin.Starts": [
+    "Starts at",
+    "Début",
+    "وقت البدء"
+  ],
+  "Admin.System": [
+    "System scope",
+    "Périmètre du système",
+    "نطاق النظام"
+  ],
+  "Admin.TargetUsername": [
+    "Exact intended account username",
+    "Identifiant exact du compte visé",
+    "اسم المستخدم الدقيق للحساب المقصود"
+  ],
+  "Admin.Username": [
+    "Exact account username",
+    "Identifiant exact du compte",
+    "اسم المستخدم الدقيق للحساب"
+  ],
+  "Admin.Title": [
+    "Administration and appointments",
+    "Administration et nominations",
+    "الإدارة والتعيينات"
+  ],
+  "Admin.Active": [
+    "Effective",
+    "Effectif",
+    "نافذ"
+  ],
+  "Admin.NotEffective": [
+    "Not currently effective",
+    "Non effectif actuellement",
+    "غير نافذ حالياً"
+  ],
+  "Admin.SpecificGrants": [
+    "Explicit additional duties — select only for the matching role",
+    "Missions supplémentaires explicites — pour le rôle correspondant uniquement",
+    "مهام إضافية صريحة — للدور المطابق فقط"
+  ],
+  "Admin.CreateParishesGrant": [
+    "Diocesan administrator may create parishes",
+    "L’administrateur diocésain peut créer des paroisses",
+    "يجوز لمسؤول الأبرشية إنشاء رعايا"
+  ],
+  "Admin.SensitiveGrant": [
+    "Designated reviewer may review sensitive concerns",
+    "L’examinateur désigné peut examiner les signalements sensibles",
+    "يجوز للمراجع المعين مراجعة الشكاوى الحساسة"
+  ],
+  "Admin.IdentityGrant": [
+    "Designated reviewer may view separately permitted identity",
+    "L’examinateur désigné peut voir l’identité autorisée séparément",
+    "يجوز للمراجع المعين رؤية الهوية المسموح بها بشكل منفصل"
+  ],
+  "Case.CorrectedName": [
+    "Corrected supplied subject name",
+    "Nom corrigé de la personne concernée",
+    "اسم الشخص المصحح كما ورد"
+  ],
+  "Case.Kind": [
+    "Request type",
+    "Type de demande",
+    "نوع الطلب"
+  ],
+  "Error.AccountLookup": [
+    "The intended account is unavailable. Verify its exact username privately.",
+    "Le compte visé est indisponible. Vérifiez son identifiant exact en privé.",
+    "الحساب المقصود غير متاح. تحقّق من اسم المستخدم الدقيق بشكل خاص."
+  ],
+  "Error.AdminDualReview": [
+    "This action requires the independent protected administrative process.",
+    "Cette action exige la procédure administrative protégée et indépendante.",
+    "يتطلب هذا الإجراء عملية إدارية مستقلة ومحمية."
+  ],
+  "Error.MfaRequired": [
+    "A real configured authenticator and a valid code are required.",
+    "Un authentificateur réellement configuré et un code valide sont requis.",
+    "يلزم تطبيق مصادقة مُعدّ فعلياً ورمز صالح."
+  ],
+  "Error.Reauthentication": [
+    "Reauthentication could not be verified.",
+    "La réauthentification n’a pas pu être vérifiée.",
+    "تعذّر التحقق من إعادة المصادقة."
+  ],
+  "Following.MakePrimary": [
+    "Use as primary parish",
+    "Choisir comme paroisse principale",
+    "اختيارها رعية أساسية"
+  ],
+  "Following.Follow": [
+    "Follow parish",
+    "Suivre la paroisse",
+    "متابعة الرعية"
+  ],
+  "Following.Unfollow": [
+    "Stop following",
+    "Ne plus suivre",
+    "إلغاء المتابعة"
+  ],
+  "Following.Following": [
+    "Following",
+    "Suivie",
+    "تتم المتابعة"
+  ],
+  "Following.Primary": [
+    "Following · primary preference",
+    "Suivie · préférence principale",
+    "تتم المتابعة · الاختيار الأساسي"
+  ],
+  "Following.NotFollowing": [
+    "Public information",
+    "Informations publiques",
+    "معلومات عامة"
+  ],
+  "Following.Separate": [
+    "Following and primary preferences do not create parish membership, a person record or staff access.",
+    "Le suivi et la préférence principale ne créent ni adhésion paroissiale, ni fiche de personne, ni accès administratif.",
+    "لا تنشئ المتابعة أو الرعية الأساسية عضوية رعوية أو سجل شخص أو صلاحيات موظف."
+  ],
+  "Guest.AllowedKinds": [
+    "Actually approved guest request types",
+    "Types de demandes invités effectivement approuvés",
+    "أنواع طلبات الضيوف المعتمدة فعلياً"
+  ],
+  "Guest.Associate": [
+    "Associate reviewed request with account",
+    "Associer la demande vérifiée à un compte",
+    "ربط الطلب المراجع بحساب"
+  ],
+  "Guest.AssociateConfirm": [
+    "Confirm the actual requester identity review. This will stop the old tracking link and give the named account this request’s tracking access.",
+    "Confirmez la vérification réelle du demandeur. L’ancien lien cessera de fonctionner et le compte nommé pourra suivre cette demande.",
+    "أكّد التحقق الفعلي من هوية مقدم الطلب. سيتوقف رابط التتبع القديم وسيحصل الحساب المحدد على حق متابعة هذا الطلب."
+  ],
+  "Guest.AssociateHelp": [
+    "Verify the actual original requester and exact intended account through the approved office procedure. Association preserves the original case and does not grant membership or document release.",
+    "Vérifiez le demandeur d’origine et le compte exact selon la procédure approuvée du bureau. L’association conserve le dossier et n’accorde ni adhésion ni remise de document.",
+    "تحقق من مقدم الطلب الأصلي والحساب المقصود عبر إجراء المكتب المعتمد. يحفظ الربط القضية الأصلية ولا يمنح عضوية أو إتاحة مستند."
+  ],
+  "Guest.Code": [
+    "Private tracking code",
+    "Code de suivi privé",
+    "رمز التتبع الخاص"
+  ],
+  "Guest.Configuration": [
+    "Guest intake configuration",
+    "Configuration des demandes invités",
+    "إعداد استقبال طلبات الضيوف"
+  ],
+  "Guest.Contact": [
+    "Your actual contact for office follow-up",
+    "Votre contact réel pour le suivi du bureau",
+    "بيانات اتصالك الفعلية لمتابعة المكتب"
+  ],
+  "Guest.ContactNotice": [
+    "Provide only information needed for this request. Contact details are supplied, not digitally verified. For urgent help use the parish’s actual published contact.",
+    "Fournissez uniquement les renseignements nécessaires. Le contact est déclaré, non vérifié numériquement. En cas d’urgence, utilisez le contact réellement publié par la paroisse.",
+    "قدّم المعلومات اللازمة لهذا الطلب فقط. بيانات الاتصال مقدمة منك وليست متحققاً منها رقمياً. للحالات العاجلة استخدم بيانات الاتصال الفعلية المنشورة للرعية."
+  ],
+  "Guest.Enabled": [
+    "Enable approved guest intake",
+    "Activer les demandes invités approuvées",
+    "تفعيل استقبال طلبات الضيوف المعتمدة"
+  ],
+  "Guest.LinkHelp": [
+    "Keep this private link or code for limited status access. Anyone holding it can see the status and applicant replies. It does not authorize sensitive downloads.",
+    "Conservez ce lien ou code privé pour le suivi limité. Son détenteur peut voir le statut et les réponses au demandeur. Il n’autorise pas les téléchargements sensibles.",
+    "احتفظ بهذا الرابط أو الرمز الخاص للمتابعة المحدودة. يستطيع من يحمله رؤية الحالة والردود الموجهة لمقدم الطلب. لا يجيز تنزيل الملفات الحساسة."
+  ],
+  "Guest.LostLink": [
+    "Lost or expired link: contact the correct parish for identity-reviewed recovery.",
+    "Lien perdu ou expiré : contactez la bonne paroisse pour une récupération après vérification d’identité.",
+    "عند فقدان الرابط أو انتهاء صلاحيته، تواصل مع الرعية الصحيحة لاستعادة الوصول بعد التحقق من الهوية."
+  ],
+  "Guest.Request": [
+    "Submit a guest request",
+    "Déposer une demande comme invité",
+    "تقديم طلب كضيف"
+  ],
+  "Guest.Scope": [
+    "Submission records one request for this parish. It does not approve a service, confirm a date, create a person or grant parish membership.",
+    "Le dépôt enregistre une demande pour cette paroisse. Il n’approuve aucun service, ne confirme aucune date et ne crée ni fiche de personne ni adhésion.",
+    "يسجل الإرسال طلباً لهذه الرعية. لا يعتمد خدمة أو يؤكد موعداً أو ينشئ سجل شخص أو يمنح عضوية رعوية."
+  ],
+  "Guest.Sensitive": [
+    "Files and private office notes are unavailable through this tracking code. Sensitive documents require an explicitly reviewed recipient account or actual office collection.",
+    "Les fichiers et notes privées du bureau ne sont pas accessibles avec ce code. Les documents sensibles exigent un compte destinataire expressément vérifié ou un retrait réel au bureau.",
+    "لا يتيح رمز التتبع الملفات أو ملاحظات المكتب الخاصة. تتطلب المستندات الحساسة حساب مستلم مُراجعاً صراحةً أو استلاماً فعلياً من المكتب."
+  ],
+  "Guest.Track": [
+    "Track guest request",
+    "Suivre une demande invité",
+    "متابعة طلب الضيف"
+  ],
+  "People.DatePrecision": [
+    "Birth date precision",
+    "Précision de la date de naissance",
+    "دقة تاريخ الميلاد"
+  ],
+  "People.DuplicateEvidence": [
+    "Actual evidence of a different person when similar records exist",
+    "Justificatif réel de personne distincte en présence de fiches similaires",
+    "إثبات فعلي لشخص مختلف عند وجود سجلات متشابهة"
+  ],
+  "People.Help": [
+    "Record actual supplied names and sources. Unknown dates or scripts stay unknown. A provisional person is separate from an account, membership and official register.",
+    "Enregistrez les noms et sources réellement fournis. Les dates ou écritures inconnues restent inconnues. Une fiche provisoire est distincte du compte, de l’adhésion et du registre officiel.",
+    "سجّل الأسماء والمصادر المقدمة فعلياً. تبقى التواريخ أو صيغ الأسماء غير المعروفة مجهولة. سجل الشخص المؤقت مستقل عن الحساب والعضوية والسجل الرسمي."
+  ],
+  "People.New": [
+    "Create provisional person",
+    "Créer une fiche provisoire",
+    "إنشاء سجل شخص مؤقت"
+  ],
+  "Precision.Unknown": [
+    "Unknown",
+    "Inconnue",
+    "غير معروف"
+  ],
+  "Precision.Exact": [
+    "Exact date",
+    "Date exacte",
+    "تاريخ دقيق"
+  ],
+  "Precision.Year": [
+    "Year only",
+    "Année seulement",
+    "السنة فقط"
+  ],
+  "Precision.Approximate": [
+    "Approximate, as supplied",
+    "Approximative, telle que fournie",
+    "تقريبي كما ورد"
+  ],
+  "PersonStatus.Provisional": [
+    "Provisional",
+    "Provisoire",
+    "مؤقت"
+  ],
+  "PersonStatus.Active": [
+    "Active",
+    "Active",
+    "نشط"
+  ],
+  "PersonStatus.Archived": [
+    "Archived",
+    "Archivée",
+    "مؤرشف"
+  ],
+  "PersonStatus.VerifiedDeceased": [
+    "Death verified",
+    "Décès vérifié",
+    "الوفاة متحقق منها"
+  ],
+  "Policy.Area": [
+    "Approval area",
+    "Domaine d’approbation",
+    "مجال الاعتماد"
+  ],
+  "Policy.CertificateProxy": [
+    "Record actual approval of secretary certificate-preparation extension (personal signature stays separate)",
+    "Enregistrer l’approbation réelle de l’extension de préparation des certificats au secrétariat (signature personnelle distincte)",
+    "تسجيل الاعتماد الفعلي لتوسيع إعداد الشهادات للسكرتارية (يبقى التوقيع الشخصي مستقلاً)"
+  ],
+  "Policy.Confirmed": [
+    "I am recording an actual competent approval with its real evidence reference.",
+    "J’enregistre une approbation réelle de l’autorité compétente avec son justificatif.",
+    "أسجّل اعتماداً فعلياً من الجهة المختصة مع مرجع إثباته الحقيقي."
+  ],
+  "Policy.EntryProxy": [
+    "Permit secretary to record genuine prior priest instruction for official-entry approval",
+    "Permettre au secrétariat de saisir une instruction sacerdotale préalable réelle pour l’inscription officielle",
+    "السماح للسكرتارية بتسجيل تعليمات سابقة فعلية من الكاهن لاعتماد القيد الرسمي"
+  ],
+  "Policy.EventLead": [
+    "Exact username of the actual appointed safeguarding lead",
+    "Identifiant exact du responsable de protection réellement désigné",
+    "اسم المستخدم الدقيق لمسؤول الحماية المعين فعلياً"
+  ],
+  "Policy.Help": [
+    "These gates require actual domain decisions. Recording a reference does not manufacture approval, religious policy, signed documents, financial terms or an external integration.",
+    "Ces conditions exigent des décisions réelles du domaine. Une référence ne fabrique ni approbation, règle religieuse, document signé, conditions financières ni intégration externe.",
+    "تتطلب هذه الشروط قرارات فعلية من الجهات المختصة. لا ينشئ تسجيل المرجع موافقة أو سياسة دينية أو مستنداً موقعاً أو شروطاً مالية أو تكاملاً خارجياً."
+  ],
+  "Policy.Record": [
+    "Record actual approved configuration",
+    "Enregistrer la configuration réellement approuvée",
+    "تسجيل الإعداد المعتمد فعلياً"
+  ],
+  "Policy.Reference": [
+    "Actual competent approval reference",
+    "Référence de l’approbation compétente réelle",
+    "مرجع الاعتماد الفعلي من الجهة المختصة"
+  ],
+  "Policy.Requirements": [
+    "Approved required evidence identifiers, one per line",
+    "Identifiants des justificatifs exigés approuvés, un par ligne",
+    "معرّفات الإثباتات المطلوبة المعتمدة، واحد في كل سطر"
+  ],
+  "Public.Directory": [
+    "Parish directory",
+    "Annuaire des paroisses",
+    "دليل الرعايا"
+  ],
+  "Concern.Title": [
+    "Concerns and complaints",
+    "Signalements et réclamations",
+    "الملاحظات والشكاوى السرية"
+  ],
+  "Concern.Privacy": [
+    "Only you and the selected eligible independent reviewers can access this case. Anonymous to reviewers still means the system holds your account identity. Administrative rank does not grant access.",
+    "Seuls vous et les examinateurs indépendants éligibles choisis accédez au dossier. L’anonymat envers eux n’efface pas votre identité de compte dans le système. Le rang administratif n’accorde aucun accès.",
+    "يمكنك أنت والمراجعون المستقلون المؤهلون الذين تختارهم فقط الوصول إلى القضية. إخفاء هويتك عن المراجعين لا يعني أن النظام لا يحتفظ بهوية حسابك. الرتبة الإدارية لا تمنح الوصول."
+  ],
+  "Concern.Urgent": [
+    "This form does not contact emergency help or promise immediate response. Use an actual appropriate independent authority or emergency route when needed.",
+    "Ce formulaire ne contacte pas les secours et ne promet pas de réponse immédiate. Utilisez une autorité indépendante compétente ou une voie d’urgence réelle si nécessaire.",
+    "لا يتصل هذا النموذج بخدمات الطوارئ ولا يَعِد برد فوري. استخدم جهة مستقلة مختصة أو مسار طوارئ فعلياً عند الحاجة."
+  ],
+  "Concern.Narrative": [
+    "Private account of the concern",
+    "Description privée du signalement",
+    "وصف الشكوى الخاص"
+  ],
+  "Concern.Anonymous": [
+    "Hide my identity from reviewers",
+    "Masquer mon identité aux examinateurs",
+    "إخفاء هويتي عن المراجعين"
+  ],
+  "Concern.Sensitive": [
+    "Requires designated sensitive-case access",
+    "Nécessite un accès désigné aux dossiers sensibles",
+    "يتطلب صلاحية مخصصة للقضايا الحساسة"
+  ],
+  "Concern.ChooseReviewers": [
+    "Choose only eligible independent reviewers without a conflict",
+    "Choisir uniquement des examinateurs indépendants éligibles sans conflit",
+    "اختر مراجعين مستقلين مؤهلين دون تعارض مصالح"
+  ],
+  "Concern.SensitiveEligible": [
+    "Designated sensitive reviewer",
+    "Examinateur sensible désigné",
+    "مراجع معيّن للقضايا الحساسة"
+  ],
+  "Concern.OrdinaryEligible": [
+    "Ordinary concerns only",
+    "Signalements ordinaires uniquement",
+    "للشكاوى العادية فقط"
+  ],
+  "Concern.NoRoute": [
+    "No eligible independent reviewer is configured in this context. Do not send an allegation through an implicated office. Obtain an actual qualified independent route; none is invented here.",
+    "Aucun examinateur indépendant éligible n’est configuré ici. N’adressez pas une allégation à un bureau impliqué. Recherchez une voie indépendante réellement compétente ; aucune n’est inventée ici.",
+    "لا يوجد مراجع مستقل مؤهل مُعدّ في هذا السياق. لا ترسل الادعاء عبر مكتب معني بالشكوى. احصل على مسار مستقل مؤهل فعلياً؛ لا يُختلق مسار هنا."
+  ],
+  "Concern.IdentityHidden": [
+    "Identity hidden from this view",
+    "Identité masquée dans cette vue",
+    "الهوية مخفية في هذا العرض"
+  ],
+  "Concern.IdentityPermitted": [
+    "Identity access follows your separate permission",
+    "L’accès à l’identité suit votre autorisation distincte",
+    "يخضع الوصول إلى الهوية لصلاحيتك المنفصلة"
+  ],
+  "Concern.ReviewerNote": [
+    "Selected reviewers only — private note",
+    "Examinateurs choisis uniquement — note privée",
+    "ملاحظة خاصة للمراجعين المحددين فقط"
+  ],
+  "Concern.ApplicantReply": [
+    "Reply visible to the submitter",
+    "Réponse visible par l’auteur",
+    "رد مرئي لمقدم الشكوى"
+  ],
+  "Concern.Start": [
+    "Start review",
+    "Commencer l’examen",
+    "بدء المراجعة"
+  ],
+  "Concern.Reply": [
+    "Save reply",
+    "Enregistrer la réponse",
+    "حفظ الرد"
+  ],
+  "Concern.Recuse": [
+    "Declare conflict and recuse",
+    "Déclarer un conflit et se récuser",
+    "إعلان التعارض والتنحي"
+  ],
+  "Concern.Close": [
+    "Close with explanation",
+    "Clore avec explication",
+    "إغلاق مع توضيح"
+  ],
+  "Concern.Reopen": [
+    "Reopen with reason",
+    "Rouvrir avec motif",
+    "إعادة فتح مع السبب"
+  ],
+  "Concern.RecuseHelp": [
+    "This removes your future access. It does not appoint a replacement or notify an external authority. Record the conflict basis in the reviewer note.",
+    "Votre accès futur sera retiré. Cela ne nomme pas de remplaçant et ne contacte pas d’autorité externe. Notez le motif du conflit dans la note privée.",
+    "سيؤدي ذلك إلى إزالة وصولك المستقبلي. لا يعيّن بديلاً ولا يبلغ جهة خارجية. سجّل سبب التعارض في الملاحظة الخاصة."
+  ],
+  "Concern.Status.Submitted": [
+    "Submitted",
+    "Déposé",
+    "مقدّم"
+  ],
+  "Concern.Status.InReview": [
+    "Under independent review",
+    "Examen indépendant en cours",
+    "قيد المراجعة المستقلة"
+  ],
+  "Concern.Status.Closed": [
+    "Closed",
+    "Clos",
+    "مغلق"
+  ]
+}

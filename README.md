@@ -1,164 +1,69 @@
-# ParishLive
+# ParishLife
 
-A multi-tenant management platform for a Catholic **archdiocese and its parishes** — members, groups and committees, facility reservations with an approval workflow, events, notices, and an audit trail. Built for a Levantine/Maronite context (e.g. the Archdiocese of Beirut) and **fully bilingual in English and Arabic, with right-to-left (RTL) support**.
+ParishLife is an ASP.NET Core .NET 10 Razor Pages application with EF Core, SQLite and ASP.NET Core Identity. Project/namespace names retain `ParishLive` for compatibility.
 
-Final-year project. ASP.NET Core (Razor Pages) on .NET 10, clean architecture, and a bespoke design system.
+This branch implements core reviewed workflows on GitHub main. **The complete requirements pack is not yet implemented and this is not a release-ready application.** Missing software is tracked separately from missing parish facts, credentials, domain approvals and human validation.
 
----
+- [Implementation checklist: all 436 question IDs](docs/implementation/checklist.md)
+- [All 30 scenario reviews](docs/implementation/scenario-review.md)
+- [Executed checks and limitations](docs/implementation/verification.md)
+- [Reviewed document index](docs/ux-discovery/reviewed-answers/README.md)
+- [Open factual inputs and competent approvals](docs/ux-discovery/reviewed-answers/open-inputs-and-conflicts.md)
 
-## Table of contents
+The reviewed README is the source-document index. Its coverage report describes historical documentation checks, not runtime implementation. Earlier source drafts are retained as provenance; embedded authoring prompts and unrelated material are not implementation instructions.
 
-- [Highlights](#highlights)
-- [Tech stack](#tech-stack)
-- [Architecture](#architecture)
-- [Multi-tenancy & security](#multi-tenancy--security)
-- [Feature modules](#feature-modules)
-- [Design system — "Sacristy Ledger"](#design-system--sacristy-ledger)
-- [Internationalisation (EN / AR / RTL)](#internationalisation-en--ar--rtl)
-- [Project structure](#project-structure)
-- [Getting started](#getting-started)
-- [Demo accounts](#demo-accounts)
-- [Testing](#testing)
-- [Database](#database)
-- [Roadmap](#roadmap)
+## Implemented core
 
----
+The app has a combined Home, explicit acting assignment and tab-specific scope, live role refresh/revocation, individual dated staff appointments, optional secretaries, parish setup, authenticated/guest request intake, server drafts, evidence review, basic sacramental state transitions, official-source certificate review/release, ministry applications, confidential concerns, private notes, finance/counting and trilingual public content drafts.
 
-## Highlights
+A secretary's genuine prior case-specific priest instruction takes effect immediately at allowed stages. Restricted history stores the actual recorder and priest authority separately. Personal priest signing, bishop review, financial review and verified recipient release remain distinct. A household, follow, roster membership or administrative rank does not imply these permissions.
 
-- **Multi-tenant by design** — one archdiocese, many parishes. A parish user sees only their parish; an archdiocese admin sees across the organisation. Isolation is enforced at the data layer, not just the UI.
-- **Configurable approval workflow** — reservations move through a database-driven state machine (submit → secretary review → forward to priest → approve/reject). Approval steps are *data*, so a parish can add levels without code changes.
-- **Configurable role-based access control (RBAC)** — permissions map to roles in the database. A secretary can *review* a reservation but not *approve* it — enforced by data, not hard-coded rules.
-- **Audit trail** — important actions (reservation decisions, notice publications) are recorded with who/what/when, viewable only by authorised roles.
-- **Bilingual & RTL** — every user-facing string is localised; the whole interface mirrors correctly for Arabic.
-- **Tested** — an integration test suite covers tenant isolation, the workflow engine, RBAC enforcement, and each feature module.
+Transactions bind the operation ID, actor, payload and saved result. Retry the same operation after an uncertain response; use Recovery to check the committed result. Approved official facts and posted ledger/history records cannot be silently overwritten. USD cents and whole LBP remain separate original currencies. No online payment, email/SMS delivery, map, official signature, bank integration or backup success is simulated.
 
-## Tech stack
+## Run locally
 
-| Layer | Technology |
-|---|---|
-| Runtime | .NET 10 |
-| Web | ASP.NET Core **Razor Pages** |
-| Data access | Entity Framework Core |
-| Database | **SQLite** (development & tests); portable to PostgreSQL for production |
-| Identity | ASP.NET Core Identity |
-| Localisation | `.resx` resources + `IStringLocalizer` |
-| Testing | xUnit + `WebApplicationFactory` |
-| Styling | Hand-authored CSS design system (no UI framework) |
+Install the .NET 10 SDK, then run from the repository root:
 
-## Architecture
-
-The solution follows a **clean, layered architecture** with dependencies pointing inward:
-
-```
-ParishLive.Web            ← Razor Pages, layout, CSS, i18n, DI, auth pipeline
-   └── ParishLive.Infrastructure   ← EF Core DbContext, services, migrations, Identity, seeding
-          └── ParishLive.Application   ← use-case interfaces + DTOs (no framework dependencies)
-                 └── ParishLive.Domain    ← entities, enums, value rules (the core, dependency-free)
+```powershell
+dotnet restore ParishLive.slnx
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+dotnet run --project src/ParishLive.Web --no-launch-profile --urls http://127.0.0.1:5209
 ```
 
-- **Domain** — encapsulated DDD-style entities: private setters, private constructors, static `Create()` factories, `Guard` validation, and behaviour methods (e.g. `Reservation.ApplyTransition`). No entity can be constructed into an invalid state.
-- **Application** — the use-case contracts (`IReservationService`, `IEventService`, `INoticeService`, `IAuditService`, `IPermissionService`) and the DTOs they exchange. Framework-agnostic.
-- **Infrastructure** — EF Core `AppDbContext` (where tenant isolation lives), the concrete service implementations, database migrations, the demo data seeder, and ASP.NET Core Identity storage.
-- **Web** — Razor Pages, the app shell and design system, the localisation setup, dependency injection, and the claims/tenant authentication pipeline.
+Development and integration tests apply migrations and seed fictional demonstration data. New demo accounts use the passphrase `Demonstration only passphrase!`. Existing development databases keep their existing credentials. Demo usernames are `priest.a@parishlive.test`, `priest.b@parishlive.test`, `secretary.a@parishlive.test` and `rita.khoury@parishlive.test`. Demo clergy/parish names are examples, not verified launch facts. Production does not seed demo accounts.
 
-## Multi-tenancy & security
+The SQLite connection defaults to `Data Source=parishlive.db` relative to the web content root. Override `ConnectionStrings__Default` for another database. Keep database files and credentials outside Git. Migrations preserve main's existing appointments and resource availability; existing parishes stay private until actual public setup is approved. Existing event consent is labeled unreviewed.
 
-Tenant isolation is enforced at the data layer as a **security backstop**, so a bug in a page can't leak another parish's data:
+In other environments, pending migrations stop startup unless `Database__ApplyMigrations=true` is explicitly configured. Review the migration and take an operator-controlled backup/restore-tested recovery point before any approved deployment. No production migration or deployment has been performed by this work.
 
-1. **EF Core global query filters** — every tenant-scoped entity is automatically filtered to the signed-in user's parish(es) (or the whole organisation for an archdiocese admin) on *reads*.
-2. **A `SaveChanges` guard** (the "WITH CHECK" equivalent) — on *writes*, it stamps the correct `OrgId`/`ParishId` on new rows and **refuses any insert or update into a parish the user does not belong to**. A client-supplied parish id is never trusted.
+## Actual configuration and first administrator
 
-The tenant context is resolved per request from the signed-in user's claims. A claims-transformation step enriches the principal with organisation, parish, role, and display-name claims derived from the user's memberships; a `ClaimsTenantContext` reads those claims to drive the filters and guard above.
+Public signup remains unavailable until `Signup__MinimumAge` and `Signup__AgePolicyApprovalReference` contain the competent owner's actual approved rule. There is no inferred legal or guardian policy. New passwords are 16–200 characters, with a small local common-password denylist; this is not a complete compromised-credential service. Legacy sign-in remains possible with the existing password.
 
-## Feature modules
+For a new empty installation, the one-time `Bootstrap__Run=true` path requires `Bootstrap__Email`, `Bootstrap__DisplayName`, `Bootstrap__AuthorityReference` and a private `PARISHLIFE_BOOTSTRAP_PASSWORD` environment value. It creates one individually controlled Super Admin and exits. Apply reviewed migrations explicitly in non-development environments. Clear the bootstrap values before starting normally. The process refuses a second initial bootstrap. No fixed production identity or credential is supplied.
 
-- **Identity & memberships** — sign in, and a user's memberships determine their organisation, parish(es), and system role (priest, secretary, member, archdiocese admin).
-- **People** — a parish member directory and a contextual profile showing a person's current *and* past group/committee roles (with term dates).
-- **Groups & committees** — parish groups (youth, choir, fundraising, …) with bilingual committee roles and membership terms.
-- **Reservations** — facility booking requests that flow through the configurable approval workflow; a live approval screen surfaces exactly the actions the current user is permitted to take, enforces required notes, and shows the full decision history.
-- **Events & calendar** — an events list with registration (capacity-aware and idempotent) and a server-rendered month calendar.
-- **Notices** — parish announcements with priority and audience; publishing requires the `notices.publish` permission.
-- **Audit log** — a tenant-scoped ledger of important actions, readable only with the `audit.view` permission.
+Administration offers appointments that the individual must accept; they expire after the reviewed proposed seven-day invitation window and become effective only within their appointment dates. The first administrator can establish a second individual Super Admin; later protected appointments require a distinct Super Admin's review, password reauthentication and an actually configured Identity authenticator. Full privileged MFA and recovery coverage remain open release work.
 
-## Design system — "Sacristy Ledger"
+Readiness records actual religious requirements/register series, official-template approval, finance approval, safeguarding lead and guest-intake permissions through their eligible role paths. A stored approval reference must correspond to a real competent decision; it is not itself manufactured approval. Unknown official wording, fees, identities, contacts, safety routes and retention rules remain unavailable/manual dependencies.
 
-A bespoke visual identity, deliberately warm and church-grounded rather than generic corporate SaaS:
+## Verification
 
-- A deep **sacristy-green "ledger spine"** navigation sidebar (dark in both themes).
-- Warm limestone "stone page" surfaces with register-style hairline rules.
-- A single brass accent — the **octagonal baptismal star** — used with restraint.
-- Full **light and dark themes**, switched via a token system (`data-theme` + `prefers-color-scheme`).
-- Built with CSS custom properties and logical properties (so it mirrors cleanly for RTL). No UI framework — the whole system lives in one stylesheet.
-
-## Internationalisation (EN / AR / RTL)
-
-- Every visible string flows through `IStringLocalizer` backed by `.resx` resource files (English + Arabic).
-- The document `dir` and `lang` follow the active culture; layout uses CSS logical properties so the entire interface — including the navigation spine and data tables — mirrors correctly in Arabic.
-- A language toggle switches culture via a cookie and returns the user to the same page.
-
-## Project structure
-
-```
-ParishLive.slnx
-├── src/
-│   ├── ParishLive.Domain/          # entities, enums, constants, base types (Guard, TenantEntity, …)
-│   ├── ParishLive.Application/     # use-case interfaces + DTOs, authorization contracts
-│   ├── ParishLive.Infrastructure/  # AppDbContext (tenancy), services, migrations, seeder, Identity
-│   └── ParishLive.Web/             # Razor Pages, _Layout, wwwroot/css design system, Resources (i18n)
-└── tests/
-    └── ParishLive.IntegrationTests/ # xUnit + WebApplicationFactory integration tests
+```powershell
+dotnet test ParishLive.slnx --configuration Release
+node tools/update-resources.mjs
+node tools/check-localization.mjs
+node tools/build-implementation-checklist.mjs
+node tools/check-implementation.mjs
 ```
 
-## Getting started
+The integration suite covers tenant/role boundaries, state changes, actual financial movements, independent counting, operation retries, two independent SQLite connections competing for one place, main-data migration, guest association, document return/recipient access, confidential access and EN/FR/AR document direction. These checks do not certify complete A01–A30 acceptance.
 
-**Prerequisites:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+Resources include English, French and Arabic with RTL. Literal UI/error-key coverage and selected browser flows were checked; full Identity Manage localization, language/domain review, keyboard/screen-reader/device/physical-print validation remain open. Screenshots and exact evidence are in the verification report.
 
-```bash
-# from the repository root
-dotnet run --project src/ParishLive.Web
-```
+## Architecture and remaining scope
 
-On first run the app **applies migrations and seeds demo data automatically**, then prints the local URL to the console. Open it in a browser and sign in with one of the [demo accounts](#demo-accounts).
+Domain entities are in `src/ParishLive.Domain`; use-case contracts in `src/ParishLive.Application`; EF/Identity/operation services in `src/ParishLive.Infrastructure`; Razor Pages, localized resources and UI behavior in `src/ParishLive.Web`. Existing main functionality is adapted in place. No colin application code is imported.
 
-To re-seed from scratch, stop the app and delete the SQLite database file it created (`parishlive.db`) in the run directory; it will be recreated on the next start.
+Significant remaining software includes full people/household/import/merge workflows, official amendments and complete sacrament forms, shared clergy/resource scheduling, plans/music, meeting attendance and loans, volunteer rotas, transport/fees/material event changes, equipment/maintenance, giving reclassification/statements, reconciliation/period close, Inbox/prayers, complete independent concern escalation, workflow builder, bundle/sponsorship changes and retention/data-request workflows. The checklist retains these requirements; an unavailable-state message is not counted as their implementation.
 
-## Demo accounts
-
-All seeded users share the password **`Passw0rd!`**.
-
-| Email | Role | Notes |
-|---|---|---|
-| `priest.a@parishlive.test` | Priest (St. George Parish) | Full parish control; can approve reservations, view the audit log |
-| `secretary.a@parishlive.test` | Secretary (St. George Parish) | Can review & forward reservations and publish notices, but **cannot approve** |
-| `rita.khoury@parishlive.test` | Member (St. George Parish) | Holds several current group roles plus one past committee term |
-| `priest.b@parishlive.test` | Priest (St. Elias Parish) | A second parish — demonstrates tenant isolation |
-
-## Testing
-
-```bash
-dotnet test
-```
-
-The integration suite runs the real application against an in-memory SQLite database (via `WebApplicationFactory`) and covers, among other things:
-
-- **Tenant isolation** — Parish A cannot see Parish B's data (verified at both the data and HTTP levels).
-- **The workflow engine** — reservations transition only along defined, permitted paths; required notes are enforced.
-- **RBAC** — a secretary is blocked from approving; a member is blocked from publishing notices or viewing the audit log.
-- **Each feature module** — groups/profiles, events, notices, reservations, and the audit trail.
-
-## Database
-
-- **Development & tests** use **SQLite** (`Data Source=parishlive.db`), created and migrated automatically on startup.
-- The code is written to be portable to **PostgreSQL** for production (e.g. ordering is performed in a database-agnostic way to avoid SQLite-specific limitations).
-
-## Roadmap
-
-Planned / in-progress work:
-
-- Complete create/edit (CRUD) flows for members, groups, venues, and events.
-- Documents & file storage.
-- Reports and exports.
-- Messaging / bulk email.
-- A public-facing visitor site.
-- Production hardening: wire up PostgreSQL per environment, structured logging, health checks, and notifications.
+Changes are prepared on `codex/reviewed-requirements` for a draft pull request targeting `main`. Merge and deployment require explicit user approval.

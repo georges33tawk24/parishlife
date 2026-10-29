@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using ParishLive.Domain.Enums;
 using ParishLive.Infrastructure.Data;
+using ParishLive.Application.Abstractions;
+using ParishLive.Application.Authorization;
+using ParishLive.Domain.Constants;
 
 namespace ParishLive.Web.Pages.People;
 
@@ -23,6 +26,10 @@ public class ProfileModel : PageModel
 
     public async Task OnGetAsync([FromQuery] string id)
     {
+        var tenant = HttpContext.RequestServices.GetRequiredService<ITenantContext>();
+        var permissions = HttpContext.RequestServices.GetRequiredService<IPermissionService>();
+        if (id != tenant.UserId && (tenant.UserId is null ||
+            !await permissions.HasAsync(tenant.UserId, tenant.ParishIds.SingleOrDefault(), PermissionCodes.Members.View))) return;
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id);
 
         // The membership lookup is tenant-filtered — a person outside the viewer's parish resolves to

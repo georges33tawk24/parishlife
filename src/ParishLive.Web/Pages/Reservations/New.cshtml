@@ -1,0 +1,6 @@
+@page
+@model ParishLive.Web.Pages.Reservations.NewModel
+@{ ViewData["Title"] = L["Nav.Reservations"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Reservations"]</h1><p>@L["Reservation.IntakeHelp"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="post" class="ops-form" data-track-changes><input type="hidden" asp-for="OperationId" /><label asp-for="Title">@L["Notice.NewTitle"]</label><input asp-for="Title" required maxlength="300" dir="auto" /><label asp-for="VenueId">@L["Res.Venue"]</label><select asp-for="VenueId" required><option value="">—</option>@foreach (var venue in Model.Venues) { <option value="@venue.Id">@venue.Name · @venue.Capacity</option> }</select><label asp-for="StartLocal">@L["Reservation.Start"]</label><input asp-for="StartLocal" type="datetime-local" required /><label asp-for="EndLocal">@L["Reservation.End"]</label><input asp-for="EndLocal" type="datetime-local" required /><label asp-for="ExpectedAttendees">@L["Res.Attendees"]</label><input asp-for="ExpectedAttendees" type="number" min="1" required /><label asp-for="Description">@L["Case.Details"]</label><textarea asp-for="Description" maxlength="4000" dir="auto"></textarea><button class="btn btn-p">@L["Case.Submit"]</button></form></main>

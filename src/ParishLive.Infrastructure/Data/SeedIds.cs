@@ -16,5 +16,5 @@ public static class SeedIds
     public const string PriestBEmail = "priest.b@parishlive.test";
     public const string SecretaryAEmail = "secretary.a@parishlive.test";
     public const string RitaEmail = "rita.khoury@parishlive.test";  // the multi-role member
-    public const string DemoPassword = "Passw0rd!";
+    public const string DemoPassword = "Demonstration only passphrase!";
 }

@@ -1,0 +1,19 @@
+@page
+@model ParishLive.Web.Pages.Requests.EditModel
+@using ParishLive.Domain.Entities
+@{ ViewData["Title"] = L["Case.New"].Value; }
+<main class="content" id="main-content">
+<h1>@L["Case.New"]</h1><p>@L["Case.ReceiptHelp"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert" tabindex="-1">@L[Model.Error]</div> }
+<form method="post" class="ops-form" data-track-changes data-save-draft>
+<input type="hidden" asp-for="Id" /><input type="hidden" asp-for="Revision" />
+<input type="hidden" asp-for="OperationId" />
+<div><label asp-for="ParishId">@L["Nav.Parish"] *</label><select asp-for="ParishId" required><option value="">—</option>@foreach (var parish in Model.Parishes) { <option value="@parish.Id">@parish.Name</option> }</select></div>
+<div><label asp-for="Kind">@L["Case.Type"]</label><select asp-for="Kind">@foreach (var kind in Enum.GetValues<ServiceKind>()) { <option value="@kind">@L["Kind." + kind]</option> }</select></div>
+<div><label asp-for="SubjectName">@L["Case.Subject"] *</label><input asp-for="SubjectName" required maxlength="200" autocomplete="name" dir="auto" /></div>
+<div><label asp-for="Details">@L["Case.Details"]</label><textarea asp-for="Details" maxlength="9000" dir="auto"></textarea></div>
+<div><label asp-for="Language">@L["Common.Language"]</label><select asp-for="Language"><option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option></select></div>
+<div class="ops-status">@L["Case.ReviewHelp"]</div>
+<div class="actions"><button class="btn btn-p" name="submit" value="true">@L["Case.Submit"]</button><button class="btn btn-g" name="submit" value="false">@L["Common.SaveDraft"]</button><a class="btn btn-g" href="/Requests">@L["Common.Cancel"]</a></div>
+</form>
+</main>

@@ -1,0 +1,21 @@
+@page
+@model ParishLive.Web.Pages.Readiness.IndexModel
+@using ParishLive.Domain.Entities
+@{ ViewData["Title"] = L["Nav.Readiness"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Readiness"]</h1><p>@L["Readiness.Help"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="get" class="ops-form"><label asp-for="ParishId">@L["Nav.Parish"]</label><select asp-for="ParishId"><option value="">—</option>@foreach (var parish in Model.Parishes) { <option value="@parish.Id">@parish.Name</option> }</select><button class="btn btn-g">@L["Public.Find"]</button></form>
+<div class="ops-grid">
+@foreach (var check in Model.Checks) { <article class="ops-card"><h2>@L["Readiness." + check.Key]</h2><p>@L[check.Value ? "Readiness.Recorded" : "Readiness.Required"]</p></article> }
+</div>
+@if (Model.ParishId != Guid.Empty && Model.Parishes.Any(p => p.Id == Model.ParishId) && Model.Role is "Archbishop" or "Priest" or "Treasurer")
+{ <section class="ops-card"><h2>@L["Policy.Record"]</h2><p>@L["Policy.Help"]</p><form method="post" class="ops-form">
+<input type="hidden" asp-for="ParishId" /><input type="hidden" name="revision" value="@(Model.Policy?.Revision ?? 0)" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+<label>@L["Policy.Area"]<select name="area">@foreach (var area in Model.Role == "Archbishop" ? new[] { "Religious", "Templates" } : Model.Role == "Treasurer" ? new[] { "Finance" } : new[] { "Safeguarding" }) { <option value="@area">@L["Readiness." + area]</option> }</select></label>
+<label>@L["Policy.Reference"]<input name="reference" required maxlength="500" /></label><label><input type="checkbox" name="confirmed" value="true" required /> @L["Policy.Confirmed"]</label>
+@if (Model.Role == "Archbishop") { <label>@L["Policy.Requirements"]<textarea name="requirements" dir="auto">@(Model.Policy?.RequiredEvidenceJson is string json ? string.Join("\n", System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? []) : "")</textarea></label><label>@L["Case.Register"]<input name="registerSeries" value="@Model.Policy?.RegisterSeries" maxlength="100" /></label><label><input name="allowEntryProxy" type="checkbox" value="true" checked="@(Model.Policy?.AllowProxyEntryApproval == true)" />@L["Policy.EntryProxy"]</label><label><input name="allowCertificateProxy" type="checkbox" value="true" checked="@(Model.Policy?.AllowProxyCertificateApproval == true)" />@L["Policy.CertificateProxy"]</label> }
+@if (Model.Role == "Priest") { <label>@L["Policy.EventLead"]<input name="eventLeadUserId" maxlength="450" required /></label> }
+<button class="btn btn-p" data-confirm="@L["Case.ConfirmDecision"]">@L["Policy.Record"]</button></form></section> }
+@if (Model.Role == "Priest" && Model.Parishes.Any(p => p.Id == Model.ParishId))
+{ <section class="ops-card"><h2>@L["Guest.Configuration"]</h2><form method="post" asp-page-handler="Intake" class="ops-form"><input type="hidden" asp-for="ParishId" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label><input type="checkbox" name="enabled" value="true" checked="@Model.Parishes.Single(p => p.Id == Model.ParishId).GuestIntakeEnabled" />@L["Guest.Enabled"]</label><fieldset><legend>@L["Guest.AllowedKinds"]</legend>@foreach (var kind in Enum.GetValues<ServiceKind>()) { <label><input type="checkbox" name="kinds" value="@kind" />@L["Kind." + kind]</label> }</fieldset><label>@L["Policy.Reference"]<input name="reference" required maxlength="500" /></label><label><input type="checkbox" name="confirmed" value="true" required />@L["Policy.Confirmed"]</label><button class="btn btn-p">@L["Common.Save"]</button></form></section> }
+</main>

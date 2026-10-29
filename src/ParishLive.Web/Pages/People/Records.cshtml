@@ -1,0 +1,8 @@
+@page
+@model ParishLive.Web.Pages.People.RecordsModel
+@{ ViewData["Title"] = L["Nav.Members"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Members"]</h1><p>@L["People.Help"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<div class="ops-grid">@foreach (var item in Model.Items) { <article class="ops-card"><h2>@item.SuppliedName</h2><p dir="rtl">@item.ArabicName</p><p>@item.FrenchName</p><p>@L["Precision." + item.DatePrecision] · @item.BirthDate</p><p>@L["PersonStatus." + item.Status]</p></article> }</div>
+<h2>@L["People.New"]</h2><form method="post" class="ops-form" data-track-changes><input type="hidden" asp-for="OperationId" /><label asp-for="SuppliedName">@L["Case.Subject"] *</label><input asp-for="SuppliedName" required maxlength="200" dir="auto" /><label asp-for="ArabicName">العربية</label><input asp-for="ArabicName" maxlength="200" dir="rtl" /><label asp-for="FrenchName">Français</label><input asp-for="FrenchName" maxlength="200" dir="auto" /><label asp-for="DatePrecision">@L["People.DatePrecision"]</label><select asp-for="DatePrecision">@foreach (var precision in new[] { "Unknown", "Exact", "Year", "Approximate" }) { <option value="@precision">@L["Precision." + precision]</option> }</select><label asp-for="BirthDate">@L["Auth.BirthDate"]</label><input asp-for="BirthDate" maxlength="100" /><label asp-for="Source">@L["Admin.Authority"] *</label><input asp-for="Source" required maxlength="500" /><label asp-for="DifferentPersonEvidence">@L["People.DuplicateEvidence"]</label><input asp-for="DifferentPersonEvidence" maxlength="500" /><button class="btn btn-p">@L["Common.Save"]</button></form>
+</main>

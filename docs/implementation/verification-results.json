@@ -1,0 +1,9 @@
+{
+  "command": "dotnet test ParishLive.slnx --configuration Release --no-restore --logger trx;LogFileName=reviewed-release.trx",
+  "finished": "2026-10-29T21:43:54.8722463+02:00",
+  "total": 64,
+  "passed": 64,
+  "failed": 0,
+  "skipped": 0,
+  "scope": "Automated integration paths only; full requirements and A01-A30 acceptance incomplete."
+}

@@ -1,0 +1,14 @@
+@page
+@model ParishLive.Web.Pages.Community.IndexModel
+@{ ViewData["Title"] = L["Nav.Groups"].Value; }
+<main class="content" id="main-content"><h1>@L["Nav.Groups"]</h1><p>@L["Ministry.Help"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<div class="ops-grid">@foreach (var group in Model.Groups) { <section class="ops-card"><h2>@group.Name</h2><form method="post" class="ops-form"><input type="hidden" name="id" value="@group.Id" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label>@L["Ministry.DepartureReason"]<textarea name="reason" maxlength="2000" dir="auto"></textarea></label><div class="actions"><button class="btn btn-p" name="action" value="Apply">@L["Ministry.Apply"]</button><button class="btn btn-g" name="action" value="Leave">@L["Ministry.Leave"]</button></div></form></section> }</div>
+<h2>@L["Ministry.Applications"]</h2>@foreach (var application in Model.Applications) { <article class="ops-card"><p>@L[application.IsDeparture ? "Ministry.Departure" : "Ministry.Application"] · @L["Ministry." + application.Status]</p>
+@if (application.IsDeparture && application.PrivateReason is not null) { <p dir="auto">@application.PrivateReason</p> }
+<form method="post"><input type="hidden" name="id" value="@application.Id" /><input type="hidden" name="revision" value="@application.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+@if (Model.Role == "Priest") { <button class="btn btn-g" name="action" value="@(application.Status == "WithdrawalRequested" ? "ApproveWithdrawal" : "Approve")">@L["Btn.Approve"]</button> }
+@if (Model.Role == "MinistryLeader" && !application.IsDeparture && application.Status == "Submitted") { <button class="btn btn-g" name="action" value="Recommend">@L["Ministry.Recommend"]</button> }
+@if (!application.IsDeparture && application.Status is "Submitted" or "LeaderApproved") { <button class="btn btn-g" name="action" value="Withdraw">@L["Action.Withdraw"]</button> }
+</form></article> }
+</main>

@@ -1,0 +1,607 @@
+{
+  "Nav.Dashboard": [
+    "Home",
+    "Accueil",
+    "الرئيسية"
+  ],
+  "Nav.Requests": [
+    "Requests / My work",
+    "Demandes / Mon travail",
+    "الطلبات / عملي"
+  ],
+  "Nav.Website": [
+    "Public website",
+    "Site public",
+    "الموقع العام"
+  ],
+  "Nav.OfficeExpenses": [
+    "Office Expenses",
+    "Dépenses du bureau",
+    "مصاريف المكتب"
+  ],
+  "Nav.Finance": [
+    "Finance",
+    "Finances",
+    "المالية"
+  ],
+  "Nav.Notes": [
+    "My notes",
+    "Mes notes",
+    "ملاحظاتي"
+  ],
+  "Nav.Readiness": [
+    "Readiness and dependencies",
+    "Préparation et dépendances",
+    "الجاهزية والمتطلبات"
+  ],
+  "Common.Skip": [
+    "Skip to content",
+    "Aller au contenu",
+    "انتقل إلى المحتوى"
+  ],
+  "Common.Navigation": [
+    "Navigation",
+    "Navigation",
+    "التنقل"
+  ],
+  "Common.Demo": [
+    "Demonstration environment — fictional sample identities and records.",
+    "Démonstration — identités et dossiers fictifs.",
+    "بيئة تجريبية — الهويات والسجلات نموذجية وليست بيانات فعلية."
+  ],
+  "Common.Empty": [
+    "No permitted records yet.",
+    "Aucun dossier autorisé.",
+    "لا توجد سجلات متاحة بعد."
+  ],
+  "Common.Revision": [
+    "Revision",
+    "Révision",
+    "الإصدار"
+  ],
+  "Common.Language": [
+    "Language",
+    "Langue",
+    "اللغة"
+  ],
+  "Common.SaveDraft": [
+    "Save draft",
+    "Enregistrer le brouillon",
+    "حفظ المسودة"
+  ],
+  "Common.Save": [
+    "Save",
+    "Enregistrer",
+    "حفظ"
+  ],
+  "Common.Edit": [
+    "Edit draft",
+    "Modifier le brouillon",
+    "تعديل المسودة"
+  ],
+  "Common.Cancel": [
+    "Cancel",
+    "Annuler",
+    "إلغاء"
+  ],
+  "Common.Back": [
+    "Back to list",
+    "Retour à la liste",
+    "العودة إلى القائمة"
+  ],
+  "Common.AsOf": [
+    "Last updated",
+    "Dernière mise à jour",
+    "آخر تحديث"
+  ],
+  "Context.Choose": [
+    "Choose your acting role",
+    "Choisir votre rôle actif",
+    "اختر الدور الذي تعمل به"
+  ],
+  "Context.ChooseHelp": [
+    "Choose one current appointment. Actions keep their exact parish and role.",
+    "Choisissez une affectation active. Les actions gardent leur paroisse et leur rôle.",
+    "اختر تكليفاً سارياً. تبقى الإجراءات ضمن الرعية والدور المحددين."
+  ],
+  "Context.NoAssignment": [
+    "Awaiting assignment / My account",
+    "En attente d’affectation / Mon compte",
+    "بانتظار التكليف / حسابي"
+  ],
+  "Case.New": [
+    "New request",
+    "Nouvelle demande",
+    "طلب جديد"
+  ],
+  "Case.Type": [
+    "Request type",
+    "Type de demande",
+    "نوع الطلب"
+  ],
+  "Case.Subject": [
+    "Subject’s supplied name",
+    "Nom fourni de la personne concernée",
+    "اسم صاحب المعاملة كما قُدّم"
+  ],
+  "Case.Details": [
+    "Supplied details",
+    "Informations fournies",
+    "التفاصيل المقدّمة"
+  ],
+  "Case.ReceiptHelp": [
+    "Received means saved for review. It does not confirm a date, sacrament, payment or official document.",
+    "Reçu signifie enregistré pour examen, sans confirmer date, sacrement, paiement ou document officiel.",
+    "الاستلام يعني حفظ الطلب للمراجعة، ولا يعني تأكيد موعد أو سرّ أو دفع أو مستند رسمي."
+  ],
+  "Case.ReviewHelp": [
+    "Review the parish, subject and details. Originals, identity review and clergy decisions may still be required.",
+    "Vérifiez paroisse, personne et détails. Originaux, identité et décision du prêtre peuvent rester nécessaires.",
+    "راجع الرعية والشخص والتفاصيل. قد تبقى الأصول والتحقق من الهوية وقرار الكاهن مطلوبة."
+  ],
+  "Case.Submit": [
+    "Submit request",
+    "Envoyer la demande",
+    "إرسال الطلب"
+  ],
+  "Case.Priest": [
+    "Responsible priest",
+    "Prêtre responsable",
+    "الكاهن المسؤول"
+  ],
+  "Case.Register": [
+    "Official register reference",
+    "Référence du registre officiel",
+    "مرجع السجل الرسمي"
+  ],
+  "Case.Timeline": [
+    "Timeline",
+    "Historique",
+    "التسلسل الزمني"
+  ],
+  "Case.Authority": [
+    "Decision authority",
+    "Autorité de décision",
+    "صاحب سلطة القرار"
+  ],
+  "Case.Recorder": [
+    "Recorded by",
+    "Saisi par",
+    "أُدخل بواسطة"
+  ],
+  "Case.InternalNote": [
+    "Internal staff note — office only",
+    "Note interne — bureau uniquement",
+    "ملاحظة داخلية — للمكتب فقط"
+  ],
+  "Case.ApplicantMessage": [
+    "Message to applicant",
+    "Message au demandeur",
+    "رسالة لمقدّم الطلب"
+  ],
+  "Case.NextAction": [
+    "Next action",
+    "Prochaine action",
+    "الإجراء التالي"
+  ],
+  "Case.PriorInstruction": [
+    "Record prior priest instruction",
+    "Enregistrer l’instruction préalable du prêtre",
+    "تسجيل تعليمات سابقة من الكاهن"
+  ],
+  "Case.ProxyHelp": [
+    "Record only an actual prior case instruction. Effective once; no repeat online approval. This never applies a signature.",
+    "Saisissez une instruction réelle propre au dossier. Effet immédiat, sans réapprobation ni signature.",
+    "سجّل تعليمات سابقة فعلية لهذا الطلب. تصبح نافذة مرة واحدة بلا اعتماد إلكتروني مكرر، ولا تطبّق توقيعاً."
+  ],
+  "Case.Channel": [
+    "How the instruction was received",
+    "Mode de réception de l’instruction",
+    "طريقة تلقّي التعليمات"
+  ],
+  "Case.Attestation": [
+    "The named priest already instructed me to record this decision for this request.",
+    "Le prêtre nommé m’a déjà demandé d’enregistrer cette décision pour cette demande.",
+    "سبق أن طلب مني الكاهن المحدد تسجيل هذا القرار لهذا الطلب."
+  ],
+  "Case.ActualTime": [
+    "Actual / proposed date and time",
+    "Date et heure réelles / proposées",
+    "التاريخ والوقت الفعليان / المقترحان"
+  ],
+  "Case.Celebrant": [
+    "Actual celebrant’s supplied name",
+    "Nom fourni du célébrant effectif",
+    "اسم المحتفل الفعلي كما قُدّم"
+  ],
+  "Case.ConfirmDecision": [
+    "Confirm the exact parish, record and actual decision authority.",
+    "Confirmez la paroisse, le dossier et l’autorité réelle.",
+    "أكّد الرعية والسجل وصاحب سلطة القرار الفعلي."
+  ],
+  "Case.ConfirmActual": [
+    "Confirm the celebration actually occurred with these actual facts.",
+    "Confirmez la célébration réelle et ses faits.",
+    "أكّد أن الاحتفال جرى فعلياً بهذه الوقائع."
+  ],
+  "Case.Evidence": [
+    "Evidence and originals",
+    "Pièces et originaux",
+    "الأدلة والأصول"
+  ],
+  "Case.UploadHelp": [
+    "PDF/JPEG/PNG, 10 MB per file, 20 files per case. Uploaded is not verified. Contact the office for originals or exceptions.",
+    "PDF/JPEG/PNG, 10 Mo par fichier, 20 par dossier. Déposé n’est pas vérifié. Bureau pour originaux ou exceptions.",
+    "PDF أو JPEG أو PNG، حتى 10 ميغابايت للملف و20 ملفاً للطلب. الرفع ليس تحققاً. راجع المكتب للأصول أو الاستثناءات."
+  ],
+  "Case.Requirement": [
+    "Required item / document purpose",
+    "Pièce demandée / objet",
+    "المتطلب / غرض المستند"
+  ],
+  "Case.File": [
+    "Select file",
+    "Choisir le fichier",
+    "اختر الملف"
+  ],
+  "Case.Upload": [
+    "Upload evidence",
+    "Déposer la pièce",
+    "رفع المستند"
+  ],
+  "Case.ReviewBasis": [
+    "Actual verification / rejection basis",
+    "Justificatif réel de vérification / refus",
+    "أساس التحقق أو الرفض الفعلي"
+  ],
+  "Case.Certificates": [
+    "Certificates and copies",
+    "Certificats et copies",
+    "الشهادات والنسخ"
+  ],
+  "Case.PrepareCertificate": [
+    "Prepare draft from official source",
+    "Préparer depuis la source officielle",
+    "إعداد مسودة من المصدر الرسمي"
+  ],
+  "Channel.InPerson": [
+    "In person",
+    "En personne",
+    "حضورياً"
+  ],
+  "Channel.Telephone": [
+    "Telephone",
+    "Téléphone",
+    "هاتفياً"
+  ],
+  "Channel.Written": [
+    "Written instruction",
+    "Instruction écrite",
+    "تعليمات مكتوبة"
+  ],
+  "Channel.Other": [
+    "Other actual channel",
+    "Autre moyen réel",
+    "وسيلة فعلية أخرى"
+  ],
+  "Finance.ScopeHelp": [
+    "Original currencies stay separate. Approval, actual payment and internal transfer are distinct.",
+    "Devises d’origine séparées. Approbation, paiement réel et transfert interne sont distincts.",
+    "تبقى العملات الأصلية منفصلة. الاعتماد والدفع الفعلي والتحويل الداخلي وقائع منفصلة."
+  ],
+  "Finance.NoBalances": [
+    "No recorded balance. A reviewed opening source is required; no amount is assumed.",
+    "Aucun solde enregistré. Une source initiale examinée est requise.",
+    "لا يوجد رصيد مسجّل. يلزم مصدر افتتاحي مُراجع، ولا يُفترض أي مبلغ."
+  ],
+  "Finance.Requests": [
+    "Financial requests",
+    "Demandes financières",
+    "الطلبات المالية"
+  ],
+  "Finance.NewRequest": [
+    "Submit financial request",
+    "Soumettre une demande financière",
+    "تقديم طلب مالي"
+  ],
+  "Finance.Kind": [
+    "Movement type",
+    "Type de mouvement",
+    "نوع الحركة"
+  ],
+  "Finance.Amount": [
+    "Actual amount",
+    "Montant réel",
+    "المبلغ الفعلي"
+  ],
+  "Finance.Currency": [
+    "Original currency",
+    "Devise d’origine",
+    "العملة الأصلية"
+  ],
+  "Finance.Account": [
+    "Source account",
+    "Compte source",
+    "الحساب المصدر"
+  ],
+  "Finance.Destination": [
+    "Internal transfer destination",
+    "Destination du transfert interne",
+    "وجهة التحويل الداخلي"
+  ],
+  "Finance.Fund": [
+    "Approved fund / purpose",
+    "Fonds approuvé / objet",
+    "الصندوق المعتمد / الغرض"
+  ],
+  "Finance.Source": [
+    "Unique source reference",
+    "Référence source unique",
+    "مرجع المصدر الفريد"
+  ],
+  "Finance.Submit": [
+    "Submit for independent approval",
+    "Soumettre à approbation indépendante",
+    "إرسال لاعتماد مستقل"
+  ],
+  "Finance.Submitted": [
+    "Awaiting independent approval",
+    "Approbation indépendante attendue",
+    "بانتظار اعتماد مستقل"
+  ],
+  "Finance.Approved": [
+    "Approved — actual payment pending",
+    "Approuvé — paiement réel attendu",
+    "مُعتمد — بانتظار الدفع الفعلي"
+  ],
+  "Finance.Paid": [
+    "Actual movement recorded",
+    "Mouvement réel enregistré",
+    "سُجّلت الحركة الفعلية"
+  ],
+  "Finance.RecordPayment": [
+    "Record actual movement",
+    "Enregistrer le mouvement réel",
+    "تسجيل الحركة الفعلية"
+  ],
+  "Finance.ActualEvidence": [
+    "Actual receipt / payment evidence",
+    "Preuve du paiement / reçu réel",
+    "دليل الاستلام / الدفع الفعلي"
+  ],
+  "Finance.ConfirmApproval": [
+    "Approve independently. Changing roles is not a second person.",
+    "Approuvez indépendamment. Changer de rôle ne crée pas une autre personne.",
+    "اعتمد بصورة مستقلة. تغيير الدور لا يُنشئ شخصاً آخر."
+  ],
+  "Finance.ConfirmActual": [
+    "Record only an actual movement. This does not send money through a provider.",
+    "Enregistrez un mouvement réel. Ceci n’envoie pas d’argent via un prestataire.",
+    "سجّل حركة فعلية فقط. هذا لا يرسل المال عبر مزوّد."
+  ],
+  "Ministry.Help": [
+    "Leader review recommends; priest approval activates membership. Departure reasons stay private.",
+    "Le responsable recommande ; le prêtre active l’adhésion. Motifs de départ privés.",
+    "مراجعة المسؤول توصية، واعتماد الكاهن يفعّل العضوية. أسباب المغادرة خاصة."
+  ],
+  "Ministry.Apply": [
+    "Apply to join",
+    "Demander à rejoindre",
+    "طلب الانضمام"
+  ],
+  "Ministry.Leave": [
+    "Request private departure",
+    "Demander un départ confidentiel",
+    "طلب مغادرة سرّي"
+  ],
+  "Ministry.DepartureReason": [
+    "Private departure reason",
+    "Motif confidentiel de départ",
+    "سبب المغادرة الخاص"
+  ],
+  "Ministry.Applications": [
+    "Permitted applications",
+    "Demandes autorisées",
+    "الطلبات المتاحة"
+  ],
+  "Ministry.Application": [
+    "Membership application",
+    "Demande d’adhésion",
+    "طلب عضوية"
+  ],
+  "Ministry.Departure": [
+    "Private departure",
+    "Départ confidentiel",
+    "مغادرة خاصة"
+  ],
+  "Ministry.Submitted": [
+    "Submitted",
+    "Soumis",
+    "مُرسل"
+  ],
+  "Ministry.LeaderApproved": [
+    "Leader reviewed — awaiting priest",
+    "Examiné — prêtre attendu",
+    "راجعه المسؤول — بانتظار الكاهن"
+  ],
+  "Ministry.WithdrawalRequested": [
+    "Withdrawal requested",
+    "Retrait demandé",
+    "طُلب السحب"
+  ],
+  "Ministry.Withdrawn": [
+    "Withdrawn",
+    "Retiré",
+    "مسحوب"
+  ],
+  "Ministry.Approved": [
+    "Approved",
+    "Approuvé",
+    "مُعتمد"
+  ],
+  "Ministry.Recommend": [
+    "Recommend to priest",
+    "Recommander au prêtre",
+    "التوصية للكاهن"
+  ],
+  "Publishing.Help": [
+    "Draft saving preserves the live revision. Publication requires complete reviewed English, French and Arabic.",
+    "Le brouillon préserve la version publiée. Les trois langues complètes et examinées sont requises.",
+    "حفظ المسودة يحافظ على النسخة المنشورة. النشر يتطلب اللغات الثلاث كاملة ومُراجعة."
+  ],
+  "Publishing.Slug": [
+    "Stable content label",
+    "Libellé stable",
+    "تسمية ثابتة للمحتوى"
+  ],
+  "Publishing.PublishedRevision": [
+    "Published revision",
+    "Révision publiée",
+    "الإصدار المنشور"
+  ],
+  "Publishing.Publish": [
+    "Publish reviewed version",
+    "Publier la version examinée",
+    "نشر النسخة المُراجعة"
+  ],
+  "Publishing.Confirm": [
+    "Confirm all three languages and the public audience.",
+    "Confirmez les trois langues et l’audience publique.",
+    "أكّد اللغات الثلاث والجمهور العام."
+  ],
+  "Notes.AuthorOnly": [
+    "Audience: author only. No successor or administrator inheritance.",
+    "Audience : auteur uniquement. Aucun héritage administratif.",
+    "الجمهور: الكاتب وحده. لا يرثها الخلف أو المسؤول."
+  ],
+  "Notes.Body": [
+    "Private note",
+    "Note privée",
+    "ملاحظة خاصة"
+  ],
+  "Notes.Author": [
+    "Author only",
+    "Auteur uniquement",
+    "الكاتب وحده"
+  ],
+  "Notes.NamedPriest": [
+    "Named eligible priest for this task",
+    "Prêtre nommé pour cette tâche",
+    "الكاهن المخوّل المحدد لهذه المهمة"
+  ],
+  "Notes.CurrentPriests": [
+    "Current priests, including future eligible appointees while shared",
+    "Prêtres actuels et futurs titulaires autorisés tant que partagé",
+    "الكهنة الحاليون والمخوّلون المعيّنون لاحقاً ما دام الاشتراك سارياً"
+  ],
+  "Notifications.Help": [
+    "In-app storage is separate from delivery and read status. Opening a record does not clear notices.",
+    "Enregistrement, envoi et lecture sont distincts. Ouvrir un dossier ne marque pas les notices lues.",
+    "الحفظ داخل التطبيق منفصل عن الإرسال والقراءة. فتح سجل لا يمحو الإشعارات."
+  ],
+  "Notifications.Read": [
+    "Read",
+    "Lu",
+    "مقروء"
+  ],
+  "Notifications.Unread": [
+    "Unread",
+    "Non lu",
+    "غير مقروء"
+  ],
+  "Notifications.MarkRead": [
+    "Mark this notice read",
+    "Marquer cette notification lue",
+    "تحديد هذا الإشعار كمقروء"
+  ],
+  "Readiness.Help": [
+    "Recorded configuration is not launch approval. Responsible owners must supply real policy, language, service and recovery evidence.",
+    "La configuration n’approuve pas le lancement. Les responsables fournissent les preuves réelles.",
+    "الإعدادات المسجّلة ليست اعتماداً للإطلاق. يجب أن يقدّم المسؤولون أدلة السياسات واللغات والخدمات والاستعادة الفعلية."
+  ],
+  "Readiness.Religious": [
+    "Religious requirements and register policy",
+    "Exigences religieuses et registre",
+    "المتطلبات الدينية وسياسة السجل"
+  ],
+  "Readiness.Templates": [
+    "Approved official templates",
+    "Modèles officiels approuvés",
+    "القوالب الرسمية المعتمدة"
+  ],
+  "Readiness.Finance": [
+    "Financial controls and opening data",
+    "Contrôles financiers et données initiales",
+    "الضوابط المالية والبيانات الافتتاحية"
+  ],
+  "Readiness.Safeguarding": [
+    "Safeguarding and named event lead",
+    "Protection et responsable nommé",
+    "الحماية ومسؤول الفعالية المحدد"
+  ],
+  "Readiness.Delivery": [
+    "External delivery / verification",
+    "Envoi externe / vérification",
+    "الإرسال الخارجي / التحقق"
+  ],
+  "Readiness.Maps": [
+    "Map integration",
+    "Intégration cartographique",
+    "تكامل الخرائط"
+  ],
+  "Readiness.Backup": [
+    "Backup and restore evidence",
+    "Preuves de sauvegarde et restauration",
+    "أدلة النسخ الاحتياطي والاستعادة"
+  ],
+  "Readiness.LanguageReview": [
+    "Qualified language and accessibility review",
+    "Validation linguistique et accessibilité",
+    "مراجعة لغوية وإتاحة مؤهّلة"
+  ],
+  "Readiness.Recorded": [
+    "Configuration recorded; validate evidence before live use.",
+    "Configuration enregistrée ; valider avant usage réel.",
+    "سُجّلت الإعدادات؛ راجع الأدلة قبل الاستخدام الحي."
+  ],
+  "Readiness.Required": [
+    "Required input or service not configured. Use the approved manual process.",
+    "Élément requis non configuré. Utilisez la procédure manuelle approuvée.",
+    "المتطلب أو الخدمة غير مُعدّة. استخدم الإجراء اليدوي المعتمد."
+  ],
+  "Public.Discover": [
+    "Find a parish",
+    "Trouver une paroisse",
+    "البحث عن رعية"
+  ],
+  "Public.Search": [
+    "Parish name or locality",
+    "Nom de paroisse ou localité",
+    "اسم الرعية أو البلدة"
+  ],
+  "Public.Find": [
+    "Search published parishes",
+    "Rechercher les paroisses publiées",
+    "البحث في الرعايا المنشورة"
+  ],
+  "Public.NonePublished": [
+    "No approved parish matches. Unverified sample identities are not published as real parishes.",
+    "Aucune paroisse approuvée ne correspond. Les identités fictives ne sont pas publiées.",
+    "لا توجد رعية معتمدة تطابق البحث. لا تُنشر الهويات التجريبية كرعايا حقيقية."
+  ],
+  "Public.NoSchedule": [
+    "Service times have not been published. Contact the parish office to confirm.",
+    "Horaires non publiés. Contactez le bureau pour confirmer.",
+    "لم تُنشر مواعيد الخدمات. تواصل مع مكتب الرعية للتأكيد."
+  ],
+  "Public.RequestContact": [
+    "Use the actual published office contact for requests or urgent pastoral needs. Online receipt does not promise immediate review.",
+    "Utilisez le contact publié pour les demandes ou urgences pastorales. Réception ne garantit pas examen immédiat.",
+    "استخدم جهة اتصال المكتب المنشورة للطلبات أو الحاجة الرعوية العاجلة. الاستلام الإلكتروني لا يضمن مراجعة فورية."
+  ],
+  "Document.Recipient": [
+    "Exact verified recipient account username",
+    "Identifiant exact du compte destinataire vérifié",
+    "اسم المستخدم الدقيق لحساب المستلم المتحقق منه"
+  ]
+}

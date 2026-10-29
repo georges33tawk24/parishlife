@@ -1,0 +1,9 @@
+{
+  "scope": "Primary reviewed source snapshots; contents verified against the supplied Desktop files before implementation.",
+  "files": {
+    "docs/ux-discovery/reviewed-answers/answers.md": "b7de04b9e5d43728e583b90aa5b2df3009f1c3de0bc1f45b5cc075121fc2707d",
+    "docs/ux-discovery/reviewed-answers/README.md": "ea7ebe8858a2f92f32c460b94e5ed278c745c96a7ccbc68550292ae708c09420",
+    "docs/ux-discovery/reviewed-answers/scenario-walkthroughs.md": "9e48b9553bc9951fd18339d2f3c7b4112bb6f955f07dbe8916698401328b9530",
+    "docs/ux-discovery/reviewed-answers/coverage-and-quality-report.md": "8d5470028643e6dd960d3a40a88f4752ef0065dcc48de53ea26ac4e0eb45ddee"
+  }
+}

@@ -10,6 +10,8 @@ public interface IReservationService
 
     /// <summary>Performs a workflow action (e.g. "Forward", "Approve", "Reject") on a reservation.</summary>
     Task PerformActionAsync(Guid reservationId, string actionCode, string? note, string actorUserId, CancellationToken cancellationToken = default);
+    Task PerformCheckedActionAsync(Guid reservationId, long revision, Guid operationId, string actionCode,
+        string? note, string actorUserId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ReservationListItem>> ListAsync(CancellationToken cancellationToken = default);
 
@@ -20,8 +22,8 @@ public interface IReservationService
 }
 
 public sealed record CreateReservationRequest(
-    Guid GroupId, Guid VenueId, string RequestedByUserId, string Title, string? Description,
-    DateTimeOffset StartUtc, DateTimeOffset EndUtc, int ExpectedAttendees);
+    Guid? GroupId, Guid VenueId, string RequestedByUserId, string Title, string? Description,
+    DateTimeOffset StartUtc, DateTimeOffset EndUtc, int ExpectedAttendees, Guid? OperationId = null);
 
 public sealed record ReservationListItem(
     Guid Id, string Title, string GroupName, string VenueName,
@@ -31,7 +33,7 @@ public sealed record ReservationDetail(
     Guid Id, string Title, string? Description, string GroupName, string VenueName,
     DateTimeOffset StartUtc, DateTimeOffset EndUtc, int ExpectedAttendees, string RequestedByName,
     string StateCode, string StateName,
-    IReadOnlyList<AvailableAction> Actions, IReadOnlyList<HistoryEntry> History);
+    IReadOnlyList<AvailableAction> Actions, IReadOnlyList<HistoryEntry> History, long Revision = 1);
 
 public sealed record AvailableAction(string ActionCode, string ActionName, bool RequiresNote);
 

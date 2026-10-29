@@ -18,6 +18,8 @@ public sealed class StaticTenantContext : ITenantContext
     public Guid OrgId { get; }
     public IReadOnlyCollection<Guid> ParishIds { get; }
     public bool IsArchdioceseAdmin { get; }
+    public Guid? ActingAssignmentId { get; init; }
+    public string? ActingRole { get; init; }
 
     /// <summary>No tenant — sees nothing. Safe default for design-time / unauthenticated contexts.</summary>
     public static readonly ITenantContext None = new StaticTenantContext(Guid.Empty, Array.Empty<Guid>(), false);

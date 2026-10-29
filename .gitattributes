@@ -1,0 +1,2 @@
+# Reviewed source snapshots retain their original bytes for provenance checks.
+/docs/ux-discovery/** -text -whitespace

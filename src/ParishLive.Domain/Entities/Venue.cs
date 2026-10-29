@@ -5,6 +5,10 @@ namespace ParishLive.Domain.Entities;
 /// <summary>A reservable parish location (hall, theatre, room…). Tenant-scoped.</summary>
 public sealed class Venue : TenantEntity
 {
+    public long Revision { get; set; } = 1;
+    public int SetupMinutes { get; set; }
+    public int CleanupMinutes { get; set; }
+    public bool IsServiceable { get; set; } = true;
     private Venue() { }
 
     public string Name { get; private set; } = string.Empty;

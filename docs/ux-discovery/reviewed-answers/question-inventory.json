@@ -1,0 +1,2836 @@
+{
+  "questions": [
+    {
+      "id": "S01.01",
+      "question": "What is the first operating scope: one parish, one archdiocese with several parishes, or several independent dioceses? Name the intended first setting.",
+      "section": "S01",
+      "line": 44
+    },
+    {
+      "id": "S01.02",
+      "question": "Which three problems must the first release solve well enough that parishes will use it regularly?",
+      "section": "S01",
+      "line": 45
+    },
+    {
+      "id": "S01.03",
+      "question": "Who is the primary daily user, and what are that person's five most frequent tasks today?",
+      "section": "S01",
+      "line": 46
+    },
+    {
+      "id": "S01.04",
+      "question": "Which other users must be served at launch, and how often will each use the system?",
+      "section": "S01",
+      "line": 47
+    },
+    {
+      "id": "S01.05",
+      "question": "For every module in the project-review inventory, choose first release, later, or remove. Which existing modules are essential to keep exactly as they operate now?",
+      "section": "S01",
+      "line": 48
+    },
+    {
+      "id": "S01.06",
+      "question": "Which real procedures must remain on paper or happen in person, even when the system records their progress?",
+      "section": "S01",
+      "line": 49
+    },
+    {
+      "id": "S01.07",
+      "question": "Which church rites, ecclesiastical structures and sacramental practices must launch support? Which visible options should be excluded?",
+      "section": "S01",
+      "line": 50
+    },
+    {
+      "id": "S01.08",
+      "question": "Where and on what devices will people work: parish-office computers, shared desktops, personal phones, tablets at events, or elsewhere?",
+      "section": "S01",
+      "line": 51
+    },
+    {
+      "id": "S01.09",
+      "question": "What languages must be complete at launch for the interface, user content and official documents separately?",
+      "section": "S01",
+      "line": 52
+    },
+    {
+      "id": "S01.10",
+      "question": "Who has final authority to approve product design, parish-office workflow, clergy rules, financial controls and sensitive-data access? Assign each area an owner.",
+      "section": "S01",
+      "line": 53
+    },
+    {
+      "id": "S01.11",
+      "question": "What operating scale must the design accommodate: parishes, people per parish, staff, active requests, simultaneous event check-ins and historic records?",
+      "section": "S01",
+      "line": 54
+    },
+    {
+      "id": "S01.12",
+      "question": "What concrete outcomes will establish that the UI/UX is ready for implementation, and which representative users will validate them?",
+      "section": "S01",
+      "line": 55
+    },
+    {
+      "id": "S02.01",
+      "question": "Are those role names and their English/Arabic labels correct for your actual organization? Define any missing role by its duties rather than its title alone.",
+      "section": "S02",
+      "line": 61
+    },
+    {
+      "id": "S02.02",
+      "question": "Who establishes a diocese and appoints its first bishop in the intended onboarding process? The current appointment policy does not expose bishop appointment as an ordinary assign-access option.",
+      "section": "S02",
+      "line": 62
+    },
+    {
+      "id": "S02.03",
+      "question": "What information and approvals are required to create a parish, and when should it become publicly visible and operational?",
+      "section": "S02",
+      "line": 63
+    },
+    {
+      "id": "S02.04",
+      "question": "Can a parish have multiple priests, secretaries, treasurers and administrators, and does each group need a designated lead?",
+      "section": "S02",
+      "line": 64
+    },
+    {
+      "id": "S02.05",
+      "question": "When one account has several roles in one parish, should permissions combine automatically, or should the user explicitly enter a role/workspace?",
+      "section": "S02",
+      "line": 65
+    },
+    {
+      "id": "S02.06",
+      "question": "When roles differ between parishes, what must the header and action confirmations show to make the active authority unmistakable?",
+      "section": "S02",
+      "line": 66
+    },
+    {
+      "id": "S02.07",
+      "question": "Approve a matrix for viewing, creating, editing, approving, signing, releasing, exporting and archiving each record type. Where must administrative authority stop short of clergy authority?",
+      "section": "S02",
+      "line": 67
+    },
+    {
+      "id": "S02.08",
+      "question": "Which exact office duties may Parish Admins and higher administrators perform when there is no secretary? Guest document controls need to agree with this policy.",
+      "section": "S02",
+      "line": 68
+    },
+    {
+      "id": "S02.09",
+      "question": "Which duties may a priest delegate, to whom, for what period and with what visible notice? Which actions must remain personal to that priest?",
+      "section": "S02",
+      "line": 69
+    },
+    {
+      "id": "S02.10",
+      "question": "When someone is absent, transferred, retired, suspended or deceased, who handles their pending approvals and assigned work?",
+      "section": "S02",
+      "line": 70
+    },
+    {
+      "id": "S02.11",
+      "question": "What should happen to open forms and pending actions when access is revoked during a session? What explanation and safe destination should the user receive?",
+      "section": "S02",
+      "line": 71
+    },
+    {
+      "id": "S02.12",
+      "question": "Should appointments have start/end dates, invitation acceptance or periodic review? What should upcoming expiry look like to the appointee and administrator?",
+      "section": "S02",
+      "line": 72
+    },
+    {
+      "id": "S02.13",
+      "question": "Which administrative changes need a reason, a second approver or current-password confirmation, and how should the confirmation describe its exact effect?",
+      "section": "S02",
+      "line": 73
+    },
+    {
+      "id": "S02.14",
+      "question": "How should a user request missing access or challenge an incorrect appointment without seeing unauthorized records or other people's account details?",
+      "section": "S02",
+      "line": 74
+    },
+    {
+      "id": "S03.01",
+      "question": "What should be the first screen after login for each role, including an account with no parish, a follower without membership and an unassigned priest?",
+      "section": "S03",
+      "line": 80
+    },
+    {
+      "id": "S03.02",
+      "question": "Should staff enter their work tools and personal parish life through one switch, separate destinations, or one combined home? Confirm the current exclusion of secretary personal member routes.",
+      "section": "S03",
+      "line": 81
+    },
+    {
+      "id": "S03.03",
+      "question": "Which sections should appear in each role's main navigation, and which should be reachable only from a related record or a More menu?",
+      "section": "S03",
+      "line": 82
+    },
+    {
+      "id": "S03.04",
+      "question": "Which labels need changing to match users' language: People/Parishioners, Groups/Ministries, Member portal/Website content, Eparchy/Archdiocese, Services & Activities, or others?",
+      "section": "S03",
+      "line": 83
+    },
+    {
+      "id": "S03.05",
+      "question": "What should the parish selector show: assigned parishes, followed parishes, all accessible parishes, primary parish and/or a combined view?",
+      "section": "S03",
+      "line": 84
+    },
+    {
+      "id": "S03.06",
+      "question": "What should persist after switching parish or workspace: current page, filters, selected date, open draft and last-used view? What must reset?",
+      "section": "S03",
+      "line": 85
+    },
+    {
+      "id": "S03.07",
+      "question": "For each dashboard, choose the information and actions that deserve the first visible screen. Which numbers need definitions, date periods and drill-down destinations?",
+      "section": "S03",
+      "line": 86
+    },
+    {
+      "id": "S03.08",
+      "question": "Should actionable work appear in one personal queue across request types, or in separate role/module queues? Distinguish “needs me,” “needs office,” and “waiting on applicant.”",
+      "section": "S03",
+      "line": 87
+    },
+    {
+      "id": "S03.09",
+      "question": "What exactly should each navigation badge count? Resolve whether it includes guest requests, membership, corrections, waitlists, bishop review and work someone else must perform.",
+      "section": "S03",
+      "line": 88
+    },
+    {
+      "id": "S03.10",
+      "question": "What should global search find for each role, and which fields may results expose? Include names in either script, phone, household, request reference, register number and pages/actions.",
+      "section": "S03",
+      "line": 89
+    },
+    {
+      "id": "S03.11",
+      "question": "What should selecting a search result open: a page, drawer or relevant tab? How should users return to the same result position and filters?",
+      "section": "S03",
+      "line": 90
+    },
+    {
+      "id": "S03.12",
+      "question": "Which tables need saved filters, sort, column choices, page-size choices, bulk actions and selected-versus-all-matching selection?",
+      "section": "S03",
+      "line": 91
+    },
+    {
+      "id": "S03.13",
+      "question": "On a phone, which actions and fields must remain immediately visible when desktop tables become cards or hide columns? Which tasks need a dedicated full-screen flow?",
+      "section": "S03",
+      "line": 92
+    },
+    {
+      "id": "S03.14",
+      "question": "When a direct link points to a moved, archived, removed or unauthorized record, what should the user see and where should they be able to go next?",
+      "section": "S03",
+      "line": 93
+    },
+    {
+      "id": "S04.01",
+      "question": "What is the public homepage's main job: finding a parish, finding Mass times, making a request, or explaining ParishLife? Rank the primary actions.",
+      "section": "S04",
+      "line": 99
+    },
+    {
+      "id": "S04.02",
+      "question": "Which directory filters and sort choices are essential, and should visitors find Masses by day, time and language across parishes rather than only opening parish profiles?",
+      "section": "S04",
+      "line": 100
+    },
+    {
+      "id": "S04.03",
+      "question": "Which details must a parish card show before a visitor opens it, including office availability or whether online requests are accepted?",
+      "section": "S04",
+      "line": 101
+    },
+    {
+      "id": "S04.04",
+      "question": "Is the map preview useful at launch, or should it be hidden until a live map is available? What must happen when location access is refused or coordinates are missing?",
+      "section": "S04",
+      "line": 102
+    },
+    {
+      "id": "S04.05",
+      "question": "What must every parish profile contain, and in what order should story, visiting information, times, clergy, ministries, events, requests, updates and contacts appear?",
+      "section": "S04",
+      "line": 103
+    },
+    {
+      "id": "S04.06",
+      "question": "Should missing parish information be hidden, shown as awaiting publication, or replaced with a specific contact action? Which missing fields should prevent publication?",
+      "section": "S04",
+      "line": 104
+    },
+    {
+      "id": "S04.07",
+      "question": "Should illustrative photographs remain on named parish pages until verified parish images exist? Approve the wording and placement of the illustration label.",
+      "section": "S04",
+      "line": 105
+    },
+    {
+      "id": "S04.08",
+      "question": "Which clergy/leader names and contact details may be public, and who confirms their publication? Should contact always route through the parish office?",
+      "section": "S04",
+      "line": 106
+    },
+    {
+      "id": "S04.09",
+      "question": "Should public calendar titles include family names for baptisms, weddings and funerals? Define default visibility and who authorizes exceptions.",
+      "section": "S04",
+      "line": 107
+    },
+    {
+      "id": "S04.10",
+      "question": "Which guest request types should be discoverable from parish pages? The public form also contains appointment and ministry options beyond the main request cards.",
+      "section": "S04",
+      "line": 108
+    },
+    {
+      "id": "S04.11",
+      "question": "Should urgent needs such as a funeral or sick visit offer a clearly visible office/emergency contact route alongside online submission? Who maintains that contact and its availability?",
+      "section": "S04",
+      "line": 109
+    },
+    {
+      "id": "S04.12",
+      "question": "What should shareable parish/event URLs, visitor language choice and return-to-results behavior preserve? Should the separate landing/marketing page remain part of the product?",
+      "section": "S04",
+      "line": 110
+    },
+    {
+      "id": "S05.01",
+      "question": "Who may edit public content, who may publish it, and should clergy or another reviewer approve particular types before publication?",
+      "section": "S05",
+      "line": 116
+    },
+    {
+      "id": "S05.02",
+      "question": "Should public profile details and website sections be managed together, or should their different ownership remain visible as separate editors?",
+      "section": "S05",
+      "line": 117
+    },
+    {
+      "id": "S05.03",
+      "question": "When editing published content, should Save draft retain the currently published version? Confirm or replace the current behavior that unpublishes a section.",
+      "section": "S05",
+      "line": 118
+    },
+    {
+      "id": "S05.04",
+      "question": "Which publishing states are needed: draft, awaiting approval, scheduled, published, expired, returned and archived? Who moves between them?",
+      "section": "S05",
+      "line": 119
+    },
+    {
+      "id": "S05.05",
+      "question": "Is publishing allowed with only one language complete? If so, what should visitors and editors see when the other translation is missing?",
+      "section": "S05",
+      "line": 120
+    },
+    {
+      "id": "S05.06",
+      "question": "Must editors preview the exact public page on phone and desktop before publishing, including language fallback and private/public visibility?",
+      "section": "S05",
+      "line": 121
+    },
+    {
+      "id": "S05.07",
+      "question": "Which content should support rich text, links, files, galleries and captions? Who provides image descriptions and confirms permission to use photographs of people?",
+      "section": "S05",
+      "line": 122
+    },
+    {
+      "id": "S05.08",
+      "question": "Should Mass/confession/office times be structured schedules with exceptions or free text? Who keeps holiday changes consistent with the calendar?",
+      "section": "S05",
+      "line": 123
+    },
+    {
+      "id": "S05.09",
+      "question": "Do announcements need pinning, expiry, categories, audiences, attachments and scheduled publication? Which should appear on both public and member pages?",
+      "section": "S05",
+      "line": 124
+    },
+    {
+      "id": "S05.10",
+      "question": "Should each parish be allowed to change public branding/layout, or should the current shared public theme remain uniform while dashboard colors stay personal?",
+      "section": "S05",
+      "line": 125
+    },
+    {
+      "id": "S05.11",
+      "question": "What should happen when two editors change the same section: compare versions, keep a recoverable draft, request refresh, or assign an editor lock?",
+      "section": "S05",
+      "line": 126
+    },
+    {
+      "id": "S05.12",
+      "question": "Who can see publication history, revert a mistake and remove an accidentally published private item? What should be retained in the audit record?",
+      "section": "S05",
+      "line": 127
+    },
+    {
+      "id": "S06.01",
+      "question": "Confirm who may create their own account and the minimum age. What is the intended account model for younger children and adults who cannot manage their own login?",
+      "section": "S06",
+      "line": 133
+    },
+    {
+      "id": "S06.02",
+      "question": "Which signup fields are essential immediately, and should Arabic name, address, parish and other profile details remain for later?",
+      "section": "S06",
+      "line": 134
+    },
+    {
+      "id": "S06.03",
+      "question": "Should new users sign in primarily with email, phone or username? Is selecting the identifier type desirable, or should one field recognize it with clear errors?",
+      "section": "S06",
+      "line": 135
+    },
+    {
+      "id": "S06.04",
+      "question": "How should signup explain a phone/email already in use, shared family contacts and possible existing office records without exposing another person's account?",
+      "section": "S06",
+      "line": 136
+    },
+    {
+      "id": "S06.05",
+      "question": "Must a contact be verified before login, submitting a request, linking a parish record or holding a staff role? What happens when verification is unavailable or a code does not arrive?",
+      "section": "S06",
+      "line": 137
+    },
+    {
+      "id": "S06.06",
+      "question": "Which external sign-in providers and MFA, if any, belong in launch? Until then should unavailable provider buttons be hidden or visibly disabled with an explanation?",
+      "section": "S06",
+      "line": 138
+    },
+    {
+      "id": "S06.07",
+      "question": "What password guidance, visibility toggle, password-manager behavior and validation feedback should members and staff receive? Should the experience differ by privilege?",
+      "section": "S06",
+      "line": 139
+    },
+    {
+      "id": "S06.08",
+      "question": "What should Forgot password do for a member, a privileged staff account and an account with no usable verified contact? Define identity review and who may help.",
+      "section": "S06",
+      "line": 140
+    },
+    {
+      "id": "S06.09",
+      "question": "Should office-created people receive invitations, through which real channel, and what should the recipient see before accepting the person link?",
+      "section": "S06",
+      "line": 141
+    },
+    {
+      "id": "S06.10",
+      "question": "Confirm the invitation expiry and one-use rule. What should expired, already-used, revoked and wrong-person invitations offer as a recovery action?",
+      "section": "S06",
+      "line": 142
+    },
+    {
+      "id": "S06.11",
+      "question": "How may a user change or remove a login email/phone, recover a lost device, sign out other devices and detect an unfamiliar session?",
+      "section": "S06",
+      "line": 143
+    },
+    {
+      "id": "S06.12",
+      "question": "What should login rate limiting, disabled accounts, session expiry and shared-computer sign-out communicate? What draft work should survive reauthentication?",
+      "section": "S06",
+      "line": 144
+    },
+    {
+      "id": "S07.01",
+      "question": "What can a follower see/do before parish membership is approved, and what should explain the benefit and meaning of formal membership?",
+      "section": "S07",
+      "line": 150
+    },
+    {
+      "id": "S07.02",
+      "question": "Can someone be a full member of several parishes simultaneously, and does primary parish affect eligibility, notifications, records or only defaults?",
+      "section": "S07",
+      "line": 151
+    },
+    {
+      "id": "S07.03",
+      "question": "What evidence must the office check to approve a membership link, and how should it document verification without keeping unnecessary private evidence?",
+      "section": "S07",
+      "line": 152
+    },
+    {
+      "id": "S07.04",
+      "question": "When no matching person exists, should membership review allow creating one inside the review flow rather than leaving the queue and returning later?",
+      "section": "S07",
+      "line": 153
+    },
+    {
+      "id": "S07.05",
+      "question": "How should the office compare several possible person matches, detect an existing account link and correct a link made to the wrong person?",
+      "section": "S07",
+      "line": 154
+    },
+    {
+      "id": "S07.06",
+      "question": "When membership is declined, should a reason be required and visible to the applicant? Can they correct information and reapply?",
+      "section": "S07",
+      "line": 155
+    },
+    {
+      "id": "S07.07",
+      "question": "How can a member leave a parish, unfollow it or change primary parish, and what happens to active requests, group roles and historic records?",
+      "section": "S07",
+      "line": 156
+    },
+    {
+      "id": "S07.08",
+      "question": "Should existing person invitations bypass any membership steps, or must the office approve every claim? What does an already signed-in recipient experience?",
+      "section": "S07",
+      "line": 157
+    },
+    {
+      "id": "S07.09",
+      "question": "Which official fields may a person propose correcting, and which require office-only handling or documentary proof?",
+      "section": "S07",
+      "line": 158
+    },
+    {
+      "id": "S07.10",
+      "question": "Should a correction be approved as one proposal or field by field? Can the office modify the proposed value, and must the applicant accept that change?",
+      "section": "S07",
+      "line": 159
+    },
+    {
+      "id": "S07.11",
+      "question": "While a correction waits, may the applicant withdraw or replace it? How should a staff edit to the same field be compared and resolved?",
+      "section": "S07",
+      "line": 160
+    },
+    {
+      "id": "S07.12",
+      "question": "How should My account, My profile and My parish records explain which information controls login, personal display, office contact and official certificates?",
+      "section": "S07",
+      "line": 161
+    },
+    {
+      "id": "S08.01",
+      "question": "Which categories of person belong in People: parishioners, visitors, children, nonmembers, non-Catholic spouses, clergy, deceased people and outside witnesses? Define their statuses.",
+      "section": "S08",
+      "line": 167
+    },
+    {
+      "id": "S08.02",
+      "question": "What is the minimum information needed to save a person? Should a record be allowed when the Arabic/English name, birth date, phone or address is unknown?",
+      "section": "S08",
+      "line": 168
+    },
+    {
+      "id": "S08.03",
+      "question": "What name structure is needed for daily work and official documents: given/family names, parents' names, birth surname and title? Confirm that automatic transliteration and Preferred Name remain excluded.",
+      "section": "S08",
+      "line": 169
+    },
+    {
+      "id": "S08.04",
+      "question": "How should approximate/unknown dates, people without phones and international contacts be entered? Should Lebanese phone formatting ever reject an overseas person?",
+      "section": "S08",
+      "line": 170
+    },
+    {
+      "id": "S08.05",
+      "question": "Which address choices must be selectable, and what is the path for a town, sector or foreign address absent from the verified list?",
+      "section": "S08",
+      "line": 171
+    },
+    {
+      "id": "S08.06",
+      "question": "Is collecting blood type, medical/allergy information, skills and occupation necessary? For each, specify the purpose, permitted viewers and visibility in ordinary profiles.",
+      "section": "S08",
+      "line": 172
+    },
+    {
+      "id": "S08.07",
+      "question": "What must appear in the profile header and default tab, and which of Family, Groups, Sacraments, Attendance, Giving, Activity, Notes, Files and Consent should each role receive?",
+      "section": "S08",
+      "line": 173
+    },
+    {
+      "id": "S08.08",
+      "question": "When staff add someone to a group from a person form/profile, should this take immediate effect or go through leader/priest approval? Reconcile this with member-initiated applications.",
+      "section": "S08",
+      "line": 174
+    },
+    {
+      "id": "S08.09",
+      "question": "Which edits need a reason, supporting document or approval, and which fields become locked after use in an official entry?",
+      "section": "S08",
+      "line": 175
+    },
+    {
+      "id": "S08.10",
+      "question": "What photo capture/crop/replace/remove experience is required, including consent, missing images and a recognizable fallback?",
+      "section": "S08",
+      "line": 176
+    },
+    {
+      "id": "S08.11",
+      "question": "Which contact and directory consent choices are needed, what exact information do they cover, and who may record or withdraw consent on another person's behalf?",
+      "section": "S08",
+      "line": 177
+    },
+    {
+      "id": "S08.12",
+      "question": "When opening a profile, which related actions should be available directly: message, invitation, new request, certificate, registration, household edit or private note? Specify role restrictions.",
+      "section": "S08",
+      "line": 178
+    },
+    {
+      "id": "S09.01",
+      "question": "What defines a household for your parish: shared residence, family relationship, shared finances or another rule? How should extended families at different addresses be represented?",
+      "section": "S09",
+      "line": 184
+    },
+    {
+      "id": "S09.02",
+      "question": "Is one current household per person sufficient for separated parents, shared custody, students away from home and members living abroad?",
+      "section": "S09",
+      "line": 185
+    },
+    {
+      "id": "S09.03",
+      "question": "Is “household head” the right label, or should the interface use household contact? What authority, if any, does that designation confer?",
+      "section": "S09",
+      "line": 186
+    },
+    {
+      "id": "S09.04",
+      "question": "Which relationships must be represented, including step/adoptive parents, guardians, deceased relatives, siblings and unrelated residents? Which should remain private?",
+      "section": "S09",
+      "line": 187
+    },
+    {
+      "id": "S09.05",
+      "question": "How should users enter a relationship to a specific person and resolve missing, conflicting or circular relationships in the family diagram?",
+      "section": "S09",
+      "line": 188
+    },
+    {
+      "id": "S09.06",
+      "question": "When changing the household head/contact, should all relationships remain as currently documented, and what comparison should be shown before saving?",
+      "section": "S09",
+      "line": 189
+    },
+    {
+      "id": "S09.07",
+      "question": "Which address/contact fields are shared, and how should individual overrides and a household move affect each member's record?",
+      "section": "S09",
+      "line": 190
+    },
+    {
+      "id": "S09.08",
+      "question": "Can any household adult request a sacrament or certificate for another adult, or is explicit authorization needed? Household membership alone may not establish permission.",
+      "section": "S09",
+      "line": 191
+    },
+    {
+      "id": "S09.09",
+      "question": "What must a guardian see/manage for a child, and when should the child's own account take over those responsibilities?",
+      "section": "S09",
+      "line": 192
+    },
+    {
+      "id": "S09.10",
+      "question": "How should joining, splitting, merging or leaving households preserve previous relationships, consent, giving and open requests?",
+      "section": "S09",
+      "line": 193
+    },
+    {
+      "id": "S09.11",
+      "question": "Confirm the optional household envelope identifier: who assigns it, how uniqueness is checked, and what happens when the household splits or the identifier changes?",
+      "section": "S09",
+      "line": 194
+    },
+    {
+      "id": "S09.12",
+      "question": "What should household cards, the diagram, printed directory and selected/filtered exports include? Should restricted relationships or nonconsenting members be omitted from each?",
+      "section": "S09",
+      "line": 195
+    },
+    {
+      "id": "S10.01",
+      "question": "Which records must be brought in before launch, from which real formats and with what approximate volume? Include paper registers and previous spreadsheets if applicable.",
+      "section": "S10",
+      "line": 201
+    },
+    {
+      "id": "S10.02",
+      "question": "Who maps source columns, previews data, confirms import and resolves invalid rows? Should a partially valid file be imported in parts or rejected as a whole?",
+      "section": "S10",
+      "line": 202
+    },
+    {
+      "id": "S10.03",
+      "question": "How should import handle missing translations, unsupported localities, inconsistent dates, phone formats and consent that is absent or undocumented?",
+      "section": "S10",
+      "line": 203
+    },
+    {
+      "id": "S10.04",
+      "question": "What identifies a likely duplicate, and which facts should reviewers compare before concluding two records represent the same person?",
+      "section": "S10",
+      "line": 204
+    },
+    {
+      "id": "S10.05",
+      "question": "Who may merge records, and how should the UI resolve conflicting fields, household/group links, account links, sacramental entries and financial history?",
+      "section": "S10",
+      "line": 205
+    },
+    {
+      "id": "S10.06",
+      "question": "Must an incorrect merge be reversible? What should the pre-merge impact summary and subsequent history contain?",
+      "section": "S10",
+      "line": 206
+    },
+    {
+      "id": "S10.07",
+      "question": "Which person statuses require archiving rather than ordinary editing, and what should happen to accounts, rosters, pending requests and scheduled reminders?",
+      "section": "S10",
+      "line": 207
+    },
+    {
+      "id": "S10.08",
+      "question": "How can a permitted user find and restore archived people while avoiding duplicate recreation during signup, membership or child-request review?",
+      "section": "S10",
+      "line": 208
+    },
+    {
+      "id": "S10.09",
+      "question": "What should happen when someone relocates to another parish, given that the transfer workflow was removed? Confirm the intended office procedure and record visibility.",
+      "section": "S10",
+      "line": 209
+    },
+    {
+      "id": "S10.10",
+      "question": "How should historical sacraments entered after the fact differ from newly celebrated ones, including source evidence, original dates, celebrants and register numbering?",
+      "section": "S10",
+      "line": 210
+    },
+    {
+      "id": "S10.11",
+      "question": "Which legacy items need a visible “requires review/linking” state before use, such as unlinked event forms or older certificates? Who completes that work?",
+      "section": "S10",
+      "line": 211
+    },
+    {
+      "id": "S10.12",
+      "question": "What migration preview, reconciliation totals and approval are required before staff trust imported/historical data as official?",
+      "section": "S10",
+      "line": 212
+    },
+    {
+      "id": "S11.01",
+      "question": "Which request types should exist at launch, and which should be structured forms versus a general “Ask the parish” request? Include appointments, ministry inquiries, Mass intentions and visits.",
+      "section": "S11",
+      "line": 218
+    },
+    {
+      "id": "S11.02",
+      "question": "Should guests and linked members provide the same core information for the same service? If guest intake stays simpler, who obtains the missing details and where are they entered?",
+      "section": "S11",
+      "line": 219
+    },
+    {
+      "id": "S11.03",
+      "question": "Can an unlinked account submit through its account rather than returning to the public guest form? What advantages or restrictions should that account receive?",
+      "section": "S11",
+      "line": 220
+    },
+    {
+      "id": "S11.04",
+      "question": "Who may submit for someone else, and how should relationship/authorization be confirmed? Include children outside the household, another adult, a deceased relative and an overseas requester.",
+      "section": "S11",
+      "line": 221
+    },
+    {
+      "id": "S11.05",
+      "question": "Should office staff enter telephone/in-person requests into the same intake flow, identifying their origin and requester, or create the office record directly?",
+      "section": "S11",
+      "line": 222
+    },
+    {
+      "id": "S11.06",
+      "question": "What should submission show before the final action: parish, subject, required documents, expected review time, fees, privacy and a reviewable summary?",
+      "section": "S11",
+      "line": 223
+    },
+    {
+      "id": "S11.07",
+      "question": "Should all request types share one reference, timeline and conversation from intake to completion, including guest-to-office conversion, or should linked references remain visible?",
+      "section": "S11",
+      "line": 224
+    },
+    {
+      "id": "S11.08",
+      "question": "What office triage information is needed: urgency, deadline, assigned person, missing information, last contact and current next action? Who may change each?",
+      "section": "S11",
+      "line": 225
+    },
+    {
+      "id": "S11.09",
+      "question": "How should the office request more information without declining the request? Can applicants edit fields, add documents or reply while it waits?",
+      "section": "S11",
+      "line": 226
+    },
+    {
+      "id": "S11.10",
+      "question": "What distinguishes received, accepted for processing, clergy-approved, scheduled, completed and ready for collection in the applicant's language?",
+      "section": "S11",
+      "line": 227
+    },
+    {
+      "id": "S11.11",
+      "question": "Until which stage can applicants edit or withdraw a request? After acceptance, should they request cancellation/rescheduling, contact the office, or perform a direct action?",
+      "section": "S11",
+      "line": 228
+    },
+    {
+      "id": "S11.12",
+      "question": "Which decisions require applicant-visible reasons, and how should internal staff notes be visually separated so they cannot be accidentally sent?",
+      "section": "S11",
+      "line": 229
+    },
+    {
+      "id": "S11.13",
+      "question": "How should duplicate submissions, wrong-parish requests and an office acceptance made in error be handled without losing the request history?",
+      "section": "S11",
+      "line": 230
+    },
+    {
+      "id": "S11.14",
+      "question": "What should the guest success/tracking page show, and how can a guest recover a lost link, revoke a leaked link, receive updates and later link the request to an account?",
+      "section": "S11",
+      "line": 231
+    },
+    {
+      "id": "S11.15",
+      "question": "Who owns overdue or unattended requests, what review times can the interface honestly promise, and how should applicants and staff escalate a delay?",
+      "section": "S11",
+      "line": 232
+    },
+    {
+      "id": "S12.01",
+      "question": "Confirm the exact lifecycle for each sacrament, including whether office review is optional and whether a priest can bypass it without a separate explanation.",
+      "section": "S12",
+      "line": 238
+    },
+    {
+      "id": "S12.02",
+      "question": "What should priest acceptance mean operationally: permission to start preparation, eligibility confirmed, date reserved, or a different commitment?",
+      "section": "S12",
+      "line": 239
+    },
+    {
+      "id": "S12.03",
+      "question": "Which preparation requirements are mandatory, which are optional, and who may configure or waive them? What should a waiver record and display?",
+      "section": "S12",
+      "line": 240
+    },
+    {
+      "id": "S12.04",
+      "question": "Must all required preparation be complete before selecting a date, before marking Scheduled, or only before celebration? Distinguish a tentative date from a confirmed date.",
+      "section": "S12",
+      "line": 241
+    },
+    {
+      "id": "S12.05",
+      "question": "Should date, time, church/room, celebrant and relevant family availability be checked together against calendar and clergy conflicts? Who can authorize an exception?",
+      "section": "S12",
+      "line": 242
+    },
+    {
+      "id": "S12.06",
+      "question": "How should a group celebration containing several people be entered, prepared and approved while preserving separate individual official entries?",
+      "section": "S12",
+      "line": 243
+    },
+    {
+      "id": "S12.07",
+      "question": "Who confirms that a celebration occurred, what facts must be checked, and what should happen for a no-show, changed celebrant or changed celebration time?",
+      "section": "S12",
+      "line": 244
+    },
+    {
+      "id": "S12.08",
+      "question": "What must a priest compare before approving an official entry, and can they return it for correction instead of rejecting the underlying request?",
+      "section": "S12",
+      "line": 245
+    },
+    {
+      "id": "S12.09",
+      "question": "Define official numbering: scope by parish/sacrament/year/book, when allocated, treatment of gaps, historical numbering and whether it may ever be changed.",
+      "section": "S12",
+      "line": 246
+    },
+    {
+      "id": "S12.10",
+      "question": "If an approved official entry contains an error, what is the authorized correction process? Confirm whether an in-app correction flow should return or remain an office procedure outside the current UI.",
+      "section": "S12",
+      "line": 247
+    },
+    {
+      "id": "S12.11",
+      "question": "How should cancellation, rejection and reopening work at each stage, especially after celebration or official registration? Which actions must be impossible?",
+      "section": "S12",
+      "line": 248
+    },
+    {
+      "id": "S12.12",
+      "question": "Approve the numbered progress timeline: finished/current/future steps, timestamps, waiting duration, planned date, responsible person/role and what each audience may see.",
+      "section": "S12",
+      "line": 249
+    },
+    {
+      "id": "S12.13",
+      "question": "Should Requests remain the main way to find official entries, or is a dedicated searchable register needed? Decide how book/page/year searches and complete register exports should work.",
+      "section": "S12",
+      "line": 250
+    },
+    {
+      "id": "S13.01",
+      "question": "For baptism, which child/adult, birth, parent, guardian, godparent, address and eligibility details are required at intake, preparation and official entry respectively?",
+      "section": "S13",
+      "line": 256
+    },
+    {
+      "id": "S13.02",
+      "question": "When a baptism concerns an unregistered child, who may create/match their person record and choose the household? What should happen if an archived or ambiguous match exists?",
+      "section": "S13",
+      "line": 257
+    },
+    {
+      "id": "S13.03",
+      "question": "For adult baptism or a person with incomplete parental information, which fields and preparation differ, and how should the form avoid impossible required fields?",
+      "section": "S13",
+      "line": 258
+    },
+    {
+      "id": "S13.04",
+      "question": "For First Communion, what prior records, age/formation evidence and group preparation must be checked? Can applicants provide evidence from another parish?",
+      "section": "S13",
+      "line": 259
+    },
+    {
+      "id": "S13.05",
+      "question": "How should confirmation/chrismation vary by rite and its relationship to baptism? Which terminology, separate records and request options should be shown?",
+      "section": "S13",
+      "line": 260
+    },
+    {
+      "id": "S13.06",
+      "question": "For marriage, what information is required for both partners, their parishes, witnesses, prior records and preparation? Can one partner be outside the local people database?",
+      "section": "S13",
+      "line": 261
+    },
+    {
+      "id": "S13.07",
+      "question": "Which marriage cases need a different approval route or outside authorization, and how should the UI identify that need without making the decision itself?",
+      "section": "S13",
+      "line": 262
+    },
+    {
+      "id": "S13.08",
+      "question": "For funerals, what deceased-person, family-contact, celebrant, location and timing information is essential, and which steps must support urgent handling?",
+      "section": "S13",
+      "line": 263
+    },
+    {
+      "id": "S13.09",
+      "question": "Should completing a funeral automatically mark a person deceased, or require a separate reviewed update? What should stop future invitations, commitments and inappropriate reminders?",
+      "section": "S13",
+      "line": 264
+    },
+    {
+      "id": "S13.10",
+      "question": "For Mass intentions, blessings, sick visits and appointments, which details should be structured, who receives them and what event/task should acceptance create?",
+      "section": "S13",
+      "line": 265
+    },
+    {
+      "id": "S13.11",
+      "question": "How should sacramental records from another parish or country be referenced and verified without treating an uploaded document as a new local celebration?",
+      "section": "S13",
+      "line": 266
+    },
+    {
+      "id": "S13.12",
+      "question": "Which requirements and official labels may vary by parish/diocese/rite, and who approves those variations before they affect forms or documents?",
+      "section": "S13",
+      "line": 267
+    },
+    {
+      "id": "S13.13",
+      "question": "Which fees, suggested offerings, exemptions or collection instructions apply to these requests, if any? Where should users see them without implying that payment establishes approval?",
+      "section": "S13",
+      "line": 268
+    },
+    {
+      "id": "S14.01",
+      "question": "Which certificate types are required, and who will provide approved examples of their exact wording, layout, seal, signatures and required fields?",
+      "section": "S14",
+      "line": 274
+    },
+    {
+      "id": "S14.02",
+      "question": "Who may request each certificate and for what purposes? What authorization is needed when requester and subject differ?",
+      "section": "S14",
+      "line": 275
+    },
+    {
+      "id": "S14.03",
+      "question": "Confirm whether every newly signed certificate needs bishop acceptance, or only specified types/parishes/cases. Who has authority to approve that policy?",
+      "section": "S14",
+      "line": 276
+    },
+    {
+      "id": "S14.04",
+      "question": "Approve the visible statuses before and after priest signature, bishop review, return, resubmission, acceptance, release and collection. At what point may the UI say “issued” or “ready”?",
+      "section": "S14",
+      "line": 277
+    },
+    {
+      "id": "S14.05",
+      "question": "Where should a bishop find the review queue, what information/document preview must it contain, and are individual or bulk decisions permitted?",
+      "section": "S14",
+      "line": 278
+    },
+    {
+      "id": "S14.06",
+      "question": "When the bishop returns a certificate, who sees the reason, what can the priest edit, and what must a resubmission explain? Should the applicant see this loop or only a neutral progress message?",
+      "section": "S14",
+      "line": 279
+    },
+    {
+      "id": "S14.07",
+      "question": "How should the process continue during bishop/priest absence or reassignment? Are delegated signatures or acceptance ever allowed?",
+      "section": "S14",
+      "line": 280
+    },
+    {
+      "id": "S14.08",
+      "question": "Can a certificate request wait on a planned sacrament, and how should automatic source linking, cancellation of the sacrament and several possible source entries be explained?",
+      "section": "S14",
+      "line": 281
+    },
+    {
+      "id": "S14.09",
+      "question": "Which languages and name spellings may the requester choose, and who verifies translations? Resolve the current trilingual option against actual supported document templates.",
+      "section": "S14",
+      "line": 282
+    },
+    {
+      "id": "S14.10",
+      "question": "What makes a downloaded or printed certificate official: wet signature, electronic signature, seal, serial, verification URL/QR, or an explicitly nonofficial copy? Which launch formats should be available?",
+      "section": "S14",
+      "line": 283
+    },
+    {
+      "id": "S14.11",
+      "question": "Are certificates valid indefinitely or time-limited, and can copies be reprinted, replaced, revoked or corrected? What should distinguish a replacement from a new issuance?",
+      "section": "S14",
+      "line": 284
+    },
+    {
+      "id": "S14.12",
+      "question": "How should preexisting issued certificates be labeled and used when they lack the new bishop-review metadata? Is any retrospective review required?",
+      "section": "S14",
+      "line": 285
+    },
+    {
+      "id": "S14.13",
+      "question": "What must be verified at physical collection or secure download, including a representative collecting on someone's behalf? Who records receipt and when is the request complete?",
+      "section": "S14",
+      "line": 286
+    },
+    {
+      "id": "S14.14",
+      "question": "Should certificate requests support copy quantities, fees, payment status and delivery choice? What happens when payment or pickup remains outstanding after acceptance?",
+      "section": "S14",
+      "line": 287
+    },
+    {
+      "id": "S15.01",
+      "question": "For every request/preparation type, list required documents, optional evidence, who supplies each and the stage at which it becomes mandatory.",
+      "section": "S15",
+      "line": 293
+    },
+    {
+      "id": "S15.02",
+      "question": "Should applicants upload documents during submission, later from tracking, or only through the office? What should a guest who cannot upload be told to bring?",
+      "section": "S15",
+      "line": 294
+    },
+    {
+      "id": "S15.03",
+      "question": "What should distinguish file attached, paper received, verified, rejected/illegible, expired and waived? Is a receipt checkbox sufficient, or is verification a separate action?",
+      "section": "S15",
+      "line": 295
+    },
+    {
+      "id": "S15.04",
+      "question": "Which file types, size limits, number of files and page counts are appropriate for each surface? Confirm or change the current 1 MB member versus 10 MB office difference.",
+      "section": "S15",
+      "line": 296
+    },
+    {
+      "id": "S15.05",
+      "question": "Should phone users be able to photograph, rotate, crop, combine or compress documents? What preview must they see before sending?",
+      "section": "S15",
+      "line": 297
+    },
+    {
+      "id": "S15.06",
+      "question": "How should uploads show progress, cancellation, retry, unsupported type, oversized file and an interrupted connection without losing the rest of the form?",
+      "section": "S15",
+      "line": 298
+    },
+    {
+      "id": "S15.07",
+      "question": "Who may view, replace, download or remove a file, and must replacement retain the old version and a reason? What happens once a record is approved or closed?",
+      "section": "S15",
+      "line": 299
+    },
+    {
+      "id": "S15.08",
+      "question": "Should a document be reusable across related requests, or copied/linked only after review? How should staff tell whether a reused document is still valid?",
+      "section": "S15",
+      "line": 300
+    },
+    {
+      "id": "S15.09",
+      "question": "What must the release confirmation show to prevent sending the wrong person's document? Must it compare applicant, subject, certificate, file preview and intended access method?",
+      "section": "S15",
+      "line": 301
+    },
+    {
+      "id": "S15.10",
+      "question": "Can a released file be withdrawn, replaced or given an expiry? What should existing guest links and previously downloaded copies mean after withdrawal?",
+      "section": "S15",
+      "line": 302
+    },
+    {
+      "id": "S15.11",
+      "question": "What should the private tracking link itself reveal, should download require an additional verification step, and how should a leaked link be replaced?",
+      "section": "S15",
+      "line": 303
+    },
+    {
+      "id": "S15.12",
+      "question": "What file-view/release/download activity should be visible to staff and applicants, and what retention/deletion behavior applies when the parent request is cancelled or archived?",
+      "section": "S15",
+      "line": 304
+    },
+    {
+      "id": "S16.01",
+      "question": "Which calendar event types exist, and which fields, icons, colors and default audiences distinguish Mass, sacrament, group meeting, parish activity and facility block?",
+      "section": "S16",
+      "line": 310
+    },
+    {
+      "id": "S16.02",
+      "question": "Which role may create/edit each event type, and who may publish an event publicly or invite a group?",
+      "section": "S16",
+      "line": 311
+    },
+    {
+      "id": "S16.03",
+      "question": "What should each audience see about a private event occupying a shared room/time: hidden entirely, busy interval, or limited title/location?",
+      "section": "S16",
+      "line": 312
+    },
+    {
+      "id": "S16.04",
+      "question": "Should recurring events support exceptions, cancellations and edits to one occurrence versus the series? How should changes affect bookings, registrations and volunteer assignments?",
+      "section": "S16",
+      "line": 313
+    },
+    {
+      "id": "S16.05",
+      "question": "What should happen when a room, priest, leader or required equipment is double-booked? Which conflicts block saving and which require a reason to override?",
+      "section": "S16",
+      "line": 314
+    },
+    {
+      "id": "S16.06",
+      "question": "When a sacrament, group meeting or service plan is dated elsewhere, should its calendar entry be created automatically? Which screen becomes the authoritative editor?",
+      "section": "S16",
+      "line": 315
+    },
+    {
+      "id": "S16.07",
+      "question": "Which calendar views and filters are needed for each audience, and what should the default view, week start and displayed hours be on phone versus desktop?",
+      "section": "S16",
+      "line": 316
+    },
+    {
+      "id": "S16.08",
+      "question": "Should parish times always display in the parish's time zone for overseas users, with an optional local equivalent? How should daylight-saving changes and cross-midnight events be labeled?",
+      "section": "S16",
+      "line": 317
+    },
+    {
+      "id": "S16.09",
+      "question": "Are 30-minute increments and the current facility hours sufficient, or do offices need precise, early, late or all-day scheduling?",
+      "section": "S16",
+      "line": 318
+    },
+    {
+      "id": "S16.10",
+      "question": "What must Print my schedule and Priest schedule include, omit and distinguish? May users export calendars or subscribe from their calendar app?",
+      "section": "S16",
+      "line": 319
+    },
+    {
+      "id": "S16.11",
+      "question": "Which feasts/liturgical calendars are supported, who approves their source and corrections, and should parish exceptions be possible?",
+      "section": "S16",
+      "line": 320
+    },
+    {
+      "id": "S16.12",
+      "question": "Which anniversaries should be shown to whom, how far ahead, and with what outreach action? What should happen for deceased people, private records and incomplete historic dates?",
+      "section": "S16",
+      "line": 321
+    },
+    {
+      "id": "S16.13",
+      "question": "When an event is changed or cancelled, which connected workflows must be updated and which participants need to explicitly acknowledge the change?",
+      "section": "S16",
+      "line": 322
+    },
+    {
+      "id": "S17.01",
+      "question": "What is a “service” versus a calendar event, sacrament request and ministry meeting in your users' vocabulary? Which should share one detail page?",
+      "section": "S17",
+      "line": 328
+    },
+    {
+      "id": "S17.02",
+      "question": "Who creates a plan, who edits it, who approves it and who may see it during the activity? Can different teams collaborate on one plan?",
+      "section": "S17",
+      "line": 329
+    },
+    {
+      "id": "S17.03",
+      "question": "Which plan information is mandatory: linked event, start/end, celebrant, room, team, participants, notes, readings and music?",
+      "section": "S17",
+      "line": 330
+    },
+    {
+      "id": "S17.04",
+      "question": "How should an order-of-service item specify start time, duration, person responsible and instructions? Should later times recalculate when an item changes?",
+      "section": "S17",
+      "line": 331
+    },
+    {
+      "id": "S17.05",
+      "question": "What should users see when the plan exceeds available time, has an unassigned role or conflicts with a related event?",
+      "section": "S17",
+      "line": 332
+    },
+    {
+      "id": "S17.06",
+      "question": "Which draft, saved, approved and completed states are needed, and what should happen when someone navigates away with an unsaved plan?",
+      "section": "S17",
+      "line": 333
+    },
+    {
+      "id": "S17.07",
+      "question": "Which parts of a template are copied, and which dates/people/rooms must be reviewed before reuse? Who can change a template already used by saved plans?",
+      "section": "S17",
+      "line": 334
+    },
+    {
+      "id": "S17.08",
+      "question": "Which outputs are required: clergy running sheet, volunteer assignments, printable program, musician setlist and participant version? Define private instructions excluded from each.",
+      "section": "S17",
+      "line": 335
+    },
+    {
+      "id": "S17.09",
+      "question": "Who owns the music library, and which metadata and search filters are needed for language, rite, season, key, instrumentation and usage rights?",
+      "section": "S17",
+      "line": 336
+    },
+    {
+      "id": "S17.10",
+      "question": "How should lyrics, chords, instrument notes, audio/video links and versions be reviewed, corrected and linked to a plan without altering past plans unexpectedly?",
+      "section": "S17",
+      "line": 337
+    },
+    {
+      "id": "S17.11",
+      "question": "Which music files or text may be downloaded, printed or projected, and who records the necessary permissions and attribution?",
+      "section": "S17",
+      "line": 338
+    },
+    {
+      "id": "S17.12",
+      "question": "If music/planning is deferred, which existing plans and resources must remain readable and what should replace their navigation/actions at launch?",
+      "section": "S17",
+      "line": 339
+    },
+    {
+      "id": "S18.01",
+      "question": "Are Groups and Ministries interchangeable in your parish, or do you need types such as committee, catechism class, choir and temporary event team?",
+      "section": "S18",
+      "line": 345
+    },
+    {
+      "id": "S18.02",
+      "question": "Who creates a group, assigns its leader/co-leaders, configures eligibility and approves its public listing?",
+      "section": "S18",
+      "line": 346
+    },
+    {
+      "id": "S18.03",
+      "question": "What must a prospective member see before applying: purpose, age range, schedule, location, leader contact, capacity, prerequisites and commitment expectations?",
+      "section": "S18",
+      "line": 347
+    },
+    {
+      "id": "S18.04",
+      "question": "Can followers apply before formal parish membership, or must they first be linked to a person? What should the blocked application offer as a next step?",
+      "section": "S18",
+      "line": 348
+    },
+    {
+      "id": "S18.05",
+      "question": "Confirm leader review followed by priest approval and the priest's direct-approval option. Are interviews, trial membership, guardian approval or group capacity decisions required?",
+      "section": "S18",
+      "line": 349
+    },
+    {
+      "id": "S18.06",
+      "question": "Can staff add a person directly to a roster, and under which authority? Must that person consent or receive an invitation before being treated as active?",
+      "section": "S18",
+      "line": 350
+    },
+    {
+      "id": "S18.07",
+      "question": "What should happen when a leader declines, is unavailable or has a conflict of interest? Who sees the reason, and can the applicant appeal or reapply?",
+      "section": "S18",
+      "line": 351
+    },
+    {
+      "id": "S18.08",
+      "question": "Confirm the private leave process. Does membership remain active while departure waits, and can the member stop attendance/notifications immediately?",
+      "section": "S18",
+      "line": 352
+    },
+    {
+      "id": "S18.09",
+      "question": "After a departure is approved, what neutral information may leaders see, and how are future meetings, assignments, resources and attendance access affected?",
+      "section": "S18",
+      "line": 353
+    },
+    {
+      "id": "S18.10",
+      "question": "What is the withdrawal rule before versus after leader approval, and what should the applicant see while withdrawal itself awaits approval?",
+      "section": "S18",
+      "line": 354
+    },
+    {
+      "id": "S18.11",
+      "question": "How should leadership handover, group merge/split and group closure preserve members, pending applications, files, tasks and history?",
+      "section": "S18",
+      "line": 355
+    },
+    {
+      "id": "S18.12",
+      "question": "What should each role see on a group page? Confirm the secretary's smaller Members & contacts / Meetings / Resources workspace and any needed additions.",
+      "section": "S18",
+      "line": 356
+    },
+    {
+      "id": "S19.01",
+      "question": "Does creating/editing a group meeting also create/update the calendar event, or should meetings and calendar events remain separate with an explicit link?",
+      "section": "S19",
+      "line": 362
+    },
+    {
+      "id": "S19.02",
+      "question": "Which meeting information and materials should members receive, and when should it become visible to new or trial members?",
+      "section": "S19",
+      "line": 363
+    },
+    {
+      "id": "S19.03",
+      "question": "Are RSVPs required, optional or inappropriate for some groups? Who can see absence reasons, and what is the deadline for changing a reply?",
+      "section": "S19",
+      "line": 364
+    },
+    {
+      "id": "S19.04",
+      "question": "Which attendance states are needed: present, late, absent, excused, unknown and not expected? Should unrecorded attendance ever count as absence?",
+      "section": "S19",
+      "line": 365
+    },
+    {
+      "id": "S19.05",
+      "question": "Who records/corrects attendance, for how long after a meeting, and what evidence/reason/history is needed for changes?",
+      "section": "S19",
+      "line": 366
+    },
+    {
+      "id": "S19.06",
+      "question": "How should guests, newcomers, a participant joining midterm and former members appear in attendance sheets and summary calculations?",
+      "section": "S19",
+      "line": 367
+    },
+    {
+      "id": "S19.07",
+      "question": "What is the required attendance-import flow, including template, matching, date mapping, preview, invalid rows, duplicates and reversal of a wrong import?",
+      "section": "S19",
+      "line": 368
+    },
+    {
+      "id": "S19.08",
+      "question": "Which attendance figures should members, leaders, priests and bishops see, and what date range/denominator must each percentage explain?",
+      "section": "S19",
+      "line": 369
+    },
+    {
+      "id": "S19.09",
+      "question": "What does Formation mean for each group: courses, milestones, eligibility, completion or certificates? Who records evidence and signs off completion?",
+      "section": "S19",
+      "line": 370
+    },
+    {
+      "id": "S19.10",
+      "question": "Which resources are digital learning materials versus physical group belongings, and should the two use different labels and screens?",
+      "section": "S19",
+      "line": 371
+    },
+    {
+      "id": "S19.11",
+      "question": "How should resource access, loans, returns, missing items and ownership transfer behave when a member leaves or a leader changes?",
+      "section": "S19",
+      "line": 372
+    },
+    {
+      "id": "S19.12",
+      "question": "Which group tasks/notes are collaborative, which are private, and how should they remain distinct from personal member notes and confidential pastoral notes?",
+      "section": "S19",
+      "line": 373
+    },
+    {
+      "id": "S20.01",
+      "question": "What makes someone a volunteer in this system: a roster flag, approved commitment, event assignment or separate reviewed volunteer record?",
+      "section": "S20",
+      "line": 379
+    },
+    {
+      "id": "S20.02",
+      "question": "Can nonmembers, visitors or minors volunteer, and what consent, training or screening must be recorded before assignment?",
+      "section": "S20",
+      "line": 380
+    },
+    {
+      "id": "S20.03",
+      "question": "Who defines teams, required positions, skills, dates, recurring slots and capacity for an opportunity?",
+      "section": "S20",
+      "line": 381
+    },
+    {
+      "id": "S20.04",
+      "question": "Should volunteers offer availability themselves, receive assignments, sign up for open places, or use all three? Which responses need leader confirmation?",
+      "section": "S20",
+      "line": 382
+    },
+    {
+      "id": "S20.05",
+      "question": "What should distinguish invited, offered, awaiting confirmation, confirmed, declined, cancelled and completed commitments in member and leader views?",
+      "section": "S20",
+      "line": 383
+    },
+    {
+      "id": "S20.06",
+      "question": "Which conflicts should block assignment: overlapping duties, unavailable times, missing prerequisites, excessive workload or duties in another parish?",
+      "section": "S20",
+      "line": 384
+    },
+    {
+      "id": "S20.07",
+      "question": "How should a volunteer decline, cancel late, request a swap or find a replacement? Who approves a replacement and receives notice?",
+      "section": "S20",
+      "line": 385
+    },
+    {
+      "id": "S20.08",
+      "question": "How should drag-and-drop assignments be performed on touch screens and by keyboard, with a clear non-drag alternative?",
+      "section": "S20",
+      "line": 386
+    },
+    {
+      "id": "S20.09",
+      "question": "Who records and approves actual hours, corrections and no-shows, and what purpose do the reports serve?",
+      "section": "S20",
+      "line": 387
+    },
+    {
+      "id": "S20.10",
+      "question": "How should sign-up sheets be shared publicly or privately, how much volunteer identity/contact information may they reveal, and what should remain available after an opportunity ends?",
+      "section": "S20",
+      "line": 388
+    },
+    {
+      "id": "S21.01",
+      "question": "Which activities use registration, and is one form per event sufficient? Do programs spanning several dates need session-by-session registration or one enrollment?",
+      "section": "S21",
+      "line": 394
+    },
+    {
+      "id": "S21.02",
+      "question": "Who may build/open/close a form, and can creating the form also create its calendar event and reserve the room?",
+      "section": "S21",
+      "line": 395
+    },
+    {
+      "id": "S21.03",
+      "question": "Should guests and members register themselves or family members online, or is registration initially office-managed? How is an unrecorded participant added safely?",
+      "section": "S21",
+      "line": 396
+    },
+    {
+      "id": "S21.04",
+      "question": "What fields may the form builder offer, including conditional fields and attachments, and what should its applicant preview and validation show?",
+      "section": "S21",
+      "line": 397
+    },
+    {
+      "id": "S21.05",
+      "question": "What should count toward capacity: reserved places, confirmed participants, pending approvals or a temporarily held checkout? Can staff override capacity with a reason?",
+      "section": "S21",
+      "line": 398
+    },
+    {
+      "id": "S21.06",
+      "question": "What should a waitlist do when a place opens: automatic promotion, timed invitation or staff review? Who decides priority and how is expiry explained?",
+      "section": "S21",
+      "line": 399
+    },
+    {
+      "id": "S21.07",
+      "question": "Confirm that reserved places may wait for consent, while final confirmation/check-in require applicable consent. Does payment ever become a separate prerequisite for confirmation?",
+      "section": "S21",
+      "line": 400
+    },
+    {
+      "id": "S21.08",
+      "question": "Which consent is event-specific versus reusable, whose signature/confirmation is required, and how are missing birth date, changing age and withdrawn consent handled?",
+      "section": "S21",
+      "line": 401
+    },
+    {
+      "id": "S21.09",
+      "question": "What transport options, seats, routes, pickup points, fees and deadlines are needed? What should happen when transport changes after money has been recorded?",
+      "section": "S21",
+      "line": 402
+    },
+    {
+      "id": "S21.10",
+      "question": "Are fees per person, household, event or selection? Define discounts, scholarships, waived fees, installment payments and who may approve adjustments.",
+      "section": "S21",
+      "line": 403
+    },
+    {
+      "id": "S21.11",
+      "question": "Which real payment methods are accepted at launch, who records receipt, and what proof/receipt should the payer receive? Keep recorded bank/OMT/cash separate from a future payment gateway.",
+      "section": "S21",
+      "line": 404
+    },
+    {
+      "id": "S21.12",
+      "question": "Can payment be received in a different currency, exceed the balance, cover several participants or be recorded by someone other than the participant? Define the allocation and review experience.",
+      "section": "S21",
+      "line": 405
+    },
+    {
+      "id": "S21.13",
+      "question": "How should payments be corrected or reversed while preserving history, and what links should exist to Finance without recording the same money twice?",
+      "section": "S21",
+      "line": 406
+    },
+    {
+      "id": "S21.14",
+      "question": "What happens when a participant/event is cancelled: place release, waitlist action, transport adjustment, fee policy, refund approval and applicant-visible explanation?",
+      "section": "S21",
+      "line": 407
+    },
+    {
+      "id": "S21.15",
+      "question": "Which form details may change after registrations begin, and how should event moves, currency changes or revised consent wording be handled when the current form is locked?",
+      "section": "S21",
+      "line": 408
+    },
+    {
+      "id": "S21.16",
+      "question": "What should staff and applicants see for legacy unlinked forms, duplicate participants, closed registration, unpaid balances and registration confirmation that has not actually been delivered?",
+      "section": "S21",
+      "line": 409
+    },
+    {
+      "id": "S22.01",
+      "question": "Which events and participants require check-in, and who will operate it on which devices at the door?",
+      "section": "S22",
+      "line": 415
+    },
+    {
+      "id": "S22.02",
+      "question": "What identifies a participant: name search, registration reference, QR/code, household lookup or printed list? Which fallback is required?",
+      "section": "S22",
+      "line": 416
+    },
+    {
+      "id": "S22.03",
+      "question": "Can a walk-in register and check in immediately, and how should staff resolve full capacity, missing consent, unknown age and unpaid fees?",
+      "section": "S22",
+      "line": 417
+    },
+    {
+      "id": "S22.04",
+      "question": "Which alerts must appear before check-in, and who may see medical, allergy, guardian or pickup restrictions without exposing them to bystanders?",
+      "section": "S22",
+      "line": 418
+    },
+    {
+      "id": "S22.05",
+      "question": "How should duplicate arrival, wrong-event selection, checkout/reentry and corrections to an arrival time be handled?",
+      "section": "S22",
+      "line": 419
+    },
+    {
+      "id": "S22.06",
+      "question": "Who defines authorized collectors, verifies their identity and records pickup restrictions? Is the authorization global, event-specific or both?",
+      "section": "S22",
+      "line": 420
+    },
+    {
+      "id": "S22.07",
+      "question": "How is a pickup code issued, delivered, replaced if lost and checked? Is a matching code alone sufficient, or must staff also verify the collector?",
+      "section": "S22",
+      "line": 421
+    },
+    {
+      "id": "S22.08",
+      "question": "What must happen when an unauthorized or restricted person arrives, a guardian cannot be reached, or staff need to record an exception? Name the real decision owner and escalation route.",
+      "section": "S22",
+      "line": 422
+    },
+    {
+      "id": "S22.09",
+      "question": "When a participant can leave independently, who records that permission and what checkout evidence is needed?",
+      "section": "S22",
+      "line": 423
+    },
+    {
+      "id": "S22.10",
+      "question": "Should incident reports link to event, person and location while remaining accessible only to authorized staff? Which information should guardians or other participants receive?",
+      "section": "S22",
+      "line": 424
+    },
+    {
+      "id": "S22.11",
+      "question": "What incident lifecycle is required: initial record, immediate response, assigned reviewer, follow-up, notifications, resolution and restricted amendments?",
+      "section": "S22",
+      "line": 425
+    },
+    {
+      "id": "S22.12",
+      "question": "What should an emergency roster include and explicitly exclude? If you need everyone in a building, what additional attendance process would provide that information?",
+      "section": "S22",
+      "line": 426
+    },
+    {
+      "id": "S22.13",
+      "question": "During a connection failure, what exact check-in/pickup fallback should staff follow, and how should paper/offline records be reconciled later?",
+      "section": "S22",
+      "line": 427
+    },
+    {
+      "id": "S22.14",
+      "question": "What wording and training must make clear which emergency functions actually work at launch, especially since emergency broadcast delivery is not connected?",
+      "section": "S22",
+      "line": 428
+    },
+    {
+      "id": "S23.01",
+      "question": "Which bookable resources exist: rooms, halls, outdoor areas, entire buildings, equipment or combinations? Which properties affect availability and eligibility?",
+      "section": "S23",
+      "line": 434
+    },
+    {
+      "id": "S23.02",
+      "question": "Who can see availability and request each resource: public guests, members, group leaders, staff and external organizations?",
+      "section": "S23",
+      "line": 435
+    },
+    {
+      "id": "S23.03",
+      "question": "What should a free/busy view reveal about other reservations, and should public users see different detail from staff?",
+      "section": "S23",
+      "line": 436
+    },
+    {
+      "id": "S23.04",
+      "question": "When does a request hold a slot: submission, office acceptance, priest confirmation or deposit? Define hold duration and what actually ends an expired hold.",
+      "section": "S23",
+      "line": 437
+    },
+    {
+      "id": "S23.05",
+      "question": "If two requests compete, should accepting one automatically refuse the other, move it to a waitlist, or ask staff to propose alternatives? Confirm the message and consent before this side effect.",
+      "section": "S23",
+      "line": 438
+    },
+    {
+      "id": "S23.06",
+      "question": "What are the approval stages by resource/requester/purpose, and can office administrators confirm routine bookings without a priest?",
+      "section": "S23",
+      "line": 439
+    },
+    {
+      "id": "S23.07",
+      "question": "How should setup, cleanup, opening hours, multi-day bookings, recurring use and partial-room combinations affect conflicts?",
+      "section": "S23",
+      "line": 440
+    },
+    {
+      "id": "S23.08",
+      "question": "Should creating a reservation also create a calendar event, service plan or registration form? Which record owns date/time changes?",
+      "section": "S23",
+      "line": 441
+    },
+    {
+      "id": "S23.09",
+      "question": "What booking details and documents are required, including purpose, guests, responsible adult, equipment, access arrangements, insurance/agreements if your parish requires them?",
+      "section": "S23",
+      "line": 442
+    },
+    {
+      "id": "S23.10",
+      "question": "How should pricing, deposits, waivers, balance due and refunds work, and where should these payments appear without duplication in Finance?",
+      "section": "S23",
+      "line": 443
+    },
+    {
+      "id": "S23.11",
+      "question": "Can applicants reschedule or cancel confirmed bookings, and how should fees, competing holds, room staff and linked events be updated?",
+      "section": "S23",
+      "line": 444
+    },
+    {
+      "id": "S23.12",
+      "question": "When maintenance blocks a room with existing bookings, must the system prevent it, require a relocation plan, or notify affected applicants after a reviewed decision?",
+      "section": "S23",
+      "line": 445
+    },
+    {
+      "id": "S23.13",
+      "question": "How should equipment quantity, condition, storage, reservations, check-out, due date, return and damage/loss be recorded? Can a room booking reserve equipment atomically?",
+      "section": "S23",
+      "line": 446
+    },
+    {
+      "id": "S23.14",
+      "question": "Who can report/triage an issue, assign repair, mark a resource unusable and restore it? What evidence, costs and notification close the issue?",
+      "section": "S23",
+      "line": 447
+    },
+    {
+      "id": "S23.15",
+      "question": "What information should external renter records contain, who may view it, and how do a guest requester and an external renter become the same recognized customer if appropriate?",
+      "section": "S23",
+      "line": 448
+    },
+    {
+      "id": "S23.16",
+      "question": "Which availability/reservation metrics are actually useful, how are they calculated and what should display when there is not enough recorded data for a reliable figure?",
+      "section": "S23",
+      "line": 449
+    },
+    {
+      "id": "S24.01",
+      "question": "Which kinds of giving must be recorded, and which are anonymous, household-attributed, person-attributed, restricted or linked to an appeal?",
+      "section": "S24",
+      "line": 455
+    },
+    {
+      "id": "S24.02",
+      "question": "Who may see donor identity and amounts in lists, profiles, reports and exports? Should priests, administrators, leaders and financial viewers see different detail?",
+      "section": "S24",
+      "line": 456
+    },
+    {
+      "id": "S24.03",
+      "question": "How should an envelope number find a household, and what should happen for unknown, changed, duplicated or blank envelope identifiers?",
+      "section": "S24",
+      "line": 457
+    },
+    {
+      "id": "S24.04",
+      "question": "What information must a contribution capture: actual currency/amount, received date, fund, campaign, donor/household, method, reference and anonymity choice?",
+      "section": "S24",
+      "line": 458
+    },
+    {
+      "id": "S24.05",
+      "question": "Confirm that a gift received in LBP is entered and retained as its actual LBP amount. How should a user distinguish that from a displayed USD equivalent?",
+      "section": "S24",
+      "line": 459
+    },
+    {
+      "id": "S24.06",
+      "question": "Who opens a counting session, what identifies its source/date and how are cash, bank and other payment totals kept separate?",
+      "section": "S24",
+      "line": 460
+    },
+    {
+      "id": "S24.07",
+      "question": "What does a genuine second count involve: independent totals, line-by-line review, a second person's authenticated approval, or another procedure?",
+      "section": "S24",
+      "line": 461
+    },
+    {
+      "id": "S24.08",
+      "question": "What should happen when counts disagree or a second counter is unavailable? Which exceptional actions are allowed, by whom, with what evidence?",
+      "section": "S24",
+      "line": 462
+    },
+    {
+      "id": "S24.09",
+      "question": "When closing a session, which balances/records are posted, what becomes locked, and what confirmation proves completion rather than showing fixed sample success text?",
+      "section": "S24",
+      "line": 463
+    },
+    {
+      "id": "S24.10",
+      "question": "How should errors after closure be reversed/corrected, including wrong donor, wrong fund, incorrect currency and cancelled bank payment?",
+      "section": "S24",
+      "line": 464
+    },
+    {
+      "id": "S24.11",
+      "question": "What do pledges and standing gifts promise operationally: expected payments, reminders, allocations or actual automatic collection? Confirm launch behavior where no payment processor exists.",
+      "section": "S24",
+      "line": 465
+    },
+    {
+      "id": "S24.12",
+      "question": "Who creates/ends campaigns, what should be public about progress and donors, and how should restricted or excess funds be handled in the interface?",
+      "section": "S24",
+      "line": 466
+    },
+    {
+      "id": "S24.13",
+      "question": "Which contribution receipts and annual household statements are required, who reviews them and how are corrections/reissues recorded? What wording confirms their actual status and purpose?",
+      "section": "S24",
+      "line": 467
+    },
+    {
+      "id": "S24.14",
+      "question": "Should members see their giving history or download statements, and how does household attribution affect what one household member may see?",
+      "section": "S24",
+      "line": 468
+    },
+    {
+      "id": "S25.01",
+      "question": "Is ParishLife intended as the authoritative parish accounting system or an administrative ledger alongside another accounting process? What information must be exchanged with that process?",
+      "section": "S25",
+      "line": 474
+    },
+    {
+      "id": "S25.02",
+      "question": "Which roles may view, enter, approve, pay, reverse, reconcile and export each financial record? Can the person submitting a payment/expense approve it?",
+      "section": "S25",
+      "line": 475
+    },
+    {
+      "id": "S25.03",
+      "question": "What funds, restrictions, budgets and reporting periods are required, and who can create/change them or move money between them?",
+      "section": "S25",
+      "line": 476
+    },
+    {
+      "id": "S25.04",
+      "question": "What makes an expense draft, submitted, approved, paid, rejected or reimbursed? Confirm whether amount thresholds such as those shown in current UI should actually determine approval authority.",
+      "section": "S25",
+      "line": 477
+    },
+    {
+      "id": "S25.05",
+      "question": "What expense evidence is mandatory, how are missing receipts handled, and what should distinguish a supplier invoice, actual payment and a reimbursement claim?",
+      "section": "S25",
+      "line": 478
+    },
+    {
+      "id": "S25.06",
+      "question": "For each transaction, which original currency, rate/date/source and converted amount must be stored and displayed? Who may override a rate and what reason must appear?",
+      "section": "S25",
+      "line": 479
+    },
+    {
+      "id": "S25.07",
+      "question": "Which screens need separate currency balances versus a reporting equivalent? Define rounding and the presentation of mixed-currency totals so users cannot mistake them for actual cash.",
+      "section": "S25",
+      "line": 480
+    },
+    {
+      "id": "S25.08",
+      "question": "How should bank lines enter the system, and what matching choices are needed for split/combined payments, fees, duplicates and unmatched differences?",
+      "section": "S25",
+      "line": 481
+    },
+    {
+      "id": "S25.09",
+      "question": "What review confirms reconciliation, who may undo a match and what should be locked when a month/year is closed?",
+      "section": "S25",
+      "line": 482
+    },
+    {
+      "id": "S25.10",
+      "question": "Should event fees, room rentals, refunds and contributions share Finance transaction references? Define the source of truth so money is counted once.",
+      "section": "S25",
+      "line": 483
+    },
+    {
+      "id": "S25.11",
+      "question": "Confirm the intended separation of Office Expenses from Finance. How is an allowance transferred into the office ledger represented in overall reporting without double-counting it?",
+      "section": "S25",
+      "line": 484
+    },
+    {
+      "id": "S25.12",
+      "question": "Who may enter an office opening balance, and how should duplicate/incorrect opening balances, negative balances and corrections to previous months be handled?",
+      "section": "S25",
+      "line": 485
+    },
+    {
+      "id": "S25.13",
+      "question": "Should office transactions allow edit/delete as now, require reversals, or use different rules before and after monthly review? What should happen to their receipts?",
+      "section": "S25",
+      "line": 486
+    },
+    {
+      "id": "S25.14",
+      "question": "Which printed vouchers, receipts, monthly summaries and exports are required, in which language/currency, and which need signatures or named approval?",
+      "section": "S25",
+      "line": 487
+    },
+    {
+      "id": "S25.15",
+      "question": "Which financial reports and donor details should bishops/diocesan administrators receive: aggregates, itemized transactions, individual identities or explicitly granted subsets?",
+      "section": "S25",
+      "line": 488
+    },
+    {
+      "id": "S25.16",
+      "question": "What should a finance viewer encounter when an action requires editing authority, and how should all sample/static financial claims be replaced with meaningful empty or incomplete-data states?",
+      "section": "S25",
+      "line": 489
+    },
+    {
+      "id": "S26.01",
+      "question": "Which communications should be private conversations, audience announcements, public notices or group posts? Should users compose them from one entry point or different clearly named tools?",
+      "section": "S26",
+      "line": 495
+    },
+    {
+      "id": "S26.02",
+      "question": "Who can message whom, including strangers in the same parish, guests, minors, leaders and people in other parishes? Which recipient details should be searchable?",
+      "section": "S26",
+      "line": 496
+    },
+    {
+      "id": "S26.03",
+      "question": "What identity should a recipient see: individual sender, parish office, ministry or priest? Can staff reply on behalf of a shared office without sharing a login?",
+      "section": "S26",
+      "line": 497
+    },
+    {
+      "id": "S26.04",
+      "question": "Are conversations one-to-one or may they include households, staff teams and groups? Who may join later and read earlier messages?",
+      "section": "S26",
+      "line": 498
+    },
+    {
+      "id": "S26.05",
+      "question": "What are the rules for attachments, reply threads, unread state, archive, retention and recipient notification? Confirm whether sent messages remain uneditable/undeletable.",
+      "section": "S26",
+      "line": 499
+    },
+    {
+      "id": "S26.06",
+      "question": "Should request discussions happen on the request timeline or in Inbox, and how should both point to the same conversation without duplicate work?",
+      "section": "S26",
+      "line": 500
+    },
+    {
+      "id": "S26.07",
+      "question": "Which notices/posts need approval, pinning, expiry, translation and public/member/group audiences? How does changing a person's membership affect access to earlier content?",
+      "section": "S26",
+      "line": 501
+    },
+    {
+      "id": "S26.08",
+      "question": "Who may submit prayer intentions, what should be anonymous/private/public, who approves publication and how can a person withdraw a sensitive intention?",
+      "section": "S26",
+      "line": 502
+    },
+    {
+      "id": "S26.09",
+      "question": "Which real external channels are essential at launch? For each unavailable channel, should controls be hidden, disabled, or offer a clearly labeled manual handoff?",
+      "section": "S26",
+      "line": 503
+    },
+    {
+      "id": "S26.10",
+      "question": "What should draft, scheduled, sent to in-app recipient, delivered externally, read, failed and cancelled mean? Which of those states can launch actually verify?",
+      "section": "S26",
+      "line": 504
+    },
+    {
+      "id": "S26.11",
+      "question": "Which automated reminders or message rules are required, what triggers them and who owns the content? Should nonrunning automation records be visible as planning-only configurations?",
+      "section": "S26",
+      "line": 505
+    },
+    {
+      "id": "S26.12",
+      "question": "Complete a notification row for every important transition across membership, requests, certificates, events, volunteers, payments, concerns and appointments. Which roles receive each update?",
+      "section": "S26",
+      "line": 506
+    },
+    {
+      "id": "S26.13",
+      "question": "Which notifications are optional versus required operational notices, and how should channel choices, quiet hours, digests and language preferences work?",
+      "section": "S26",
+      "line": 507
+    },
+    {
+      "id": "S26.14",
+      "question": "Where should notifications be read across multiple parishes, and should opening their linked record mark them read? Define badge counts, stale links and dismissed/archived updates.",
+      "section": "S26",
+      "line": 508
+    },
+    {
+      "id": "S26.15",
+      "question": "How should failed delivery, duplicate recipients, changed contact details and reopened requests affect retries and status messages? Who needs to follow up manually?",
+      "section": "S26",
+      "line": 509
+    },
+    {
+      "id": "S26.16",
+      "question": "How should a user report unwanted contact or an inappropriate message, and when should the existing exceptional exact-message administrative review be available and audited?",
+      "section": "S26",
+      "line": 510
+    },
+    {
+      "id": "S27.01",
+      "question": "What should the feature be called so users understand its purpose, and which matters belong here versus ordinary requests, feedback or incident reporting?",
+      "section": "S27",
+      "line": 516
+    },
+    {
+      "id": "S27.02",
+      "question": "Who may submit: linked members, unlinked accounts, minors and/or guests? What support route is available to someone who cannot use the portal?",
+      "section": "S27",
+      "line": 517
+    },
+    {
+      "id": "S27.03",
+      "question": "Which categories and urgency choices are needed, who maintains them and which require specially authorized reviewers?",
+      "section": "S27",
+      "line": 518
+    },
+    {
+      "id": "S27.04",
+      "question": "What must the submission screen say about confidentiality, anonymity to reviewers, technical limits and appropriate immediate-help routes before a person submits?",
+      "section": "S27",
+      "line": 519
+    },
+    {
+      "id": "S27.05",
+      "question": "Should the submitter select reviewers as now, choose an independent office, or use automatic routing? What understandable information helps them choose safely?",
+      "section": "S27",
+      "line": 520
+    },
+    {
+      "id": "S27.06",
+      "question": "What happens when every available reviewer has a conflict, the complaint involves the priest/bishop, or the selected reviewer becomes conflicted later?",
+      "section": "S27",
+      "line": 521
+    },
+    {
+      "id": "S27.07",
+      "question": "Who may see case contents, counts, status, evidence and identified submitter details? Confirm that unrelated administrators receive none of these simply because of their role.",
+      "section": "S27",
+      "line": 522
+    },
+    {
+      "id": "S27.08",
+      "question": "What does accepting a case assignment entail, and who may reassign/escalate it without exposing it to a broader staff queue?",
+      "section": "S27",
+      "line": 523
+    },
+    {
+      "id": "S27.09",
+      "question": "Define case statuses, response deadlines, review ownership, escalation and closure/reopening rules. Which steps should the submitter see?",
+      "section": "S27",
+      "line": 524
+    },
+    {
+      "id": "S27.10",
+      "question": "How should reviewer-only notes, applicant-visible replies and requests for more information be visually separated and confirmed before sending?",
+      "section": "S27",
+      "line": 525
+    },
+    {
+      "id": "S27.11",
+      "question": "May an anonymous submitter later identify themselves, or an identified submitter later hide identity? What should previously authorized readers and historic evidence retain?",
+      "section": "S27",
+      "line": 526
+    },
+    {
+      "id": "S27.12",
+      "question": "What evidence uploads, downloads, redactions, exports and case-history access are permitted, and which actions require an extra reason or review?",
+      "section": "S27",
+      "line": 527
+    },
+    {
+      "id": "S27.13",
+      "question": "How should follow-up and outcome notifications avoid sensitive case details on shared devices, email subjects or ordinary staff dashboards?",
+      "section": "S27",
+      "line": 528
+    },
+    {
+      "id": "S27.14",
+      "question": "What should happen when the submitter leaves the parish, a reviewer loses their appointment, the account closes, or a case predates automatic account tracking?",
+      "section": "S27",
+      "line": 529
+    },
+    {
+      "id": "S28.01",
+      "question": "What belongs in personal member notes, confidential pastoral notes, group notes/tasks and office workflow tasks? Approve labels and boundaries that prevent accidental sharing.",
+      "section": "S28",
+      "line": 535
+    },
+    {
+      "id": "S28.02",
+      "question": "Confirm whether private pastoral notes remain inaccessible to successor priests, bishops and administrators, including after the author leaves. What access should the author retain then?",
+      "section": "S28",
+      "line": 536
+    },
+    {
+      "id": "S28.03",
+      "question": "When an author shares with parish priests, does that include priests appointed later? Can sharing be withdrawn, and what should prior readers and copies mean?",
+      "section": "S28",
+      "line": 537
+    },
+    {
+      "id": "S28.04",
+      "question": "Can a pastoral task be assigned while its content is still author-private? What should the UI explain before assignment, and who may actually complete or edit it?",
+      "section": "S28",
+      "line": 538
+    },
+    {
+      "id": "S28.05",
+      "question": "Which notes/tasks need linked people, meetings, categories, priority, due dates, recurrence, reminders and attachments? Avoid implying a reminder runs if no scheduler exists.",
+      "section": "S28",
+      "line": 539
+    },
+    {
+      "id": "S28.06",
+      "question": "How should completion, reopening, deletion and archiving work for each note/task type, including what is retained in a privacy-appropriate history?",
+      "section": "S28",
+      "line": 540
+    },
+    {
+      "id": "S28.07",
+      "question": "Which real office processes need the separate workflow builder beyond the hard-coded sacrament/request processes? Give a completed example for each.",
+      "section": "S28",
+      "line": 541
+    },
+    {
+      "id": "S28.08",
+      "question": "Who may define a workflow, publish a form, start a run, assign a step and view its submitted answers? Should templates vary by parish or diocese?",
+      "section": "S28",
+      "line": 542
+    },
+    {
+      "id": "S28.09",
+      "question": "Which workflow features are essential: sequential steps, conditional branches, parallel approvals, attachments, deadlines, return/rejection and escalation?",
+      "section": "S28",
+      "line": 543
+    },
+    {
+      "id": "S28.10",
+      "question": "When a workflow definition changes, should running tasks keep the old version? What does pausing a workflow do to new submissions and existing tasks?",
+      "section": "S28",
+      "line": 544
+    },
+    {
+      "id": "S28.11",
+      "question": "What should a task detail show about completed steps, timestamps, next owner and final result? When should the last step automatically close it?",
+      "section": "S28",
+      "line": 545
+    },
+    {
+      "id": "S28.12",
+      "question": "How should cancelling, undoing, reopening and transferring workflow runs behave, and which notification/audit evidence must accompany those actions?",
+      "section": "S28",
+      "line": 546
+    },
+    {
+      "id": "S29.01",
+      "question": "What should the administrator's main screen prioritize at system, diocese and parish scope, and how should changing management scope differ visually from changing working parish?",
+      "section": "S29",
+      "line": 552
+    },
+    {
+      "id": "S29.02",
+      "question": "Should staff accounts be created by administrators with a temporary password, or invited to establish their own credentials? How should an existing ordinary account receive an appointment?",
+      "section": "S29",
+      "line": 553
+    },
+    {
+      "id": "S29.03",
+      "question": "Is the current exact-username lookup suitable for appointing someone outside the visible account list? What should an administrator do when they know only the person's name or email?",
+      "section": "S29",
+      "line": 554
+    },
+    {
+      "id": "S29.04",
+      "question": "How should account identity, linked parish person, clergy title and active appointments be presented separately so changing one does not imply changing the others?",
+      "section": "S29",
+      "line": 555
+    },
+    {
+      "id": "S29.05",
+      "question": "Confirm the process for appointing/revoking secretaries, including several secretaries and none. What pending responsibilities should be shown before removing the last one?",
+      "section": "S29",
+      "line": 556
+    },
+    {
+      "id": "S29.06",
+      "question": "How should administrators review the consequences of deactivating a parish, a parish-specific account access or a global account? Which connected users/workflows need notices and recovery routes?",
+      "section": "S29",
+      "line": 557
+    },
+    {
+      "id": "S29.07",
+      "question": "What should clergy title changes and cross-parish appointments require, including the current restriction on demoting a priest to Deacon while priest assignments remain?",
+      "section": "S29",
+      "line": 558
+    },
+    {
+      "id": "S29.08",
+      "question": "Which actions belong only in Administration and which in Parish settings? Should the older Roles & permissions, module toggles and security/integration screens be removed, read-only or reconciled with the actual policy?",
+      "section": "S29",
+      "line": 559
+    },
+    {
+      "id": "S29.09",
+      "question": "For Presence, Office, Community and Complete, specify the actual feature matrix, record limits if any, public/member access and launch availability. Are the bundle names understandable to parish decision-makers?",
+      "section": "S29",
+      "line": 560
+    },
+    {
+      "id": "S29.10",
+      "question": "Who can activate/change a parish-managed bundle, and what approval process applies when the diocese sponsors it? What should a pending plan-change request show?",
+      "section": "S29",
+      "line": 561
+    },
+    {
+      "id": "S29.11",
+      "question": "Are prices, invoices, renewal dates, trials and subscriptions part of launch, or is bundle administration entirely manual? What should the public bundles page promise?",
+      "section": "S29",
+      "line": 562
+    },
+    {
+      "id": "S29.12",
+      "question": "When a module is disabled or a bundle downgraded, exactly which historical records remain readable/exportable, which pending approvals can finish and which new submissions are blocked?",
+      "section": "S29",
+      "line": 563
+    },
+    {
+      "id": "S29.13",
+      "question": "What should members/guests see when their parish stops accepting online requests or a feature is unavailable under its bundle? Which office fallback and tracking access remain?",
+      "section": "S29",
+      "line": 564
+    },
+    {
+      "id": "S29.14",
+      "question": "What should a bishop's overview show across parishes, with what date filters, drill-down permissions and explanations of incomplete data? Is comparison/ranking between parishes appropriate?",
+      "section": "S29",
+      "line": 565
+    },
+    {
+      "id": "S29.15",
+      "question": "For each existing report—attendance, membership, group participation, volunteer workload, facilities, giving, budget and registration versus attendance—what real decision does it support and how must each measure be calculated?",
+      "section": "S29",
+      "line": 566
+    },
+    {
+      "id": "S29.16",
+      "question": "Which report filters, languages, date ranges, print layouts and export formats are needed, and should exports contain all matching records or only the visible page?",
+      "section": "S29",
+      "line": 567
+    },
+    {
+      "id": "S29.17",
+      "question": "Who may see general versus administrative audit history, which events/fields must be included or excluded, and how should users find the reason/actor for a disputed change?",
+      "section": "S29",
+      "line": 568
+    },
+    {
+      "id": "S29.18",
+      "question": "Are API credentials, webhooks, external reporting and AI assistance actual launch features? For each retained integration, who configures it and what honest configured/unavailable/error experience is required?",
+      "section": "S29",
+      "line": 569
+    },
+    {
+      "id": "S30.01",
+      "question": "Which parts of the current visual design should be retained, and which concrete screens feel crowded, confusing, too formal, too plain or inconsistent? Give examples by screen name.",
+      "section": "S30",
+      "line": 575
+    },
+    {
+      "id": "S30.02",
+      "question": "What visual character should the public site and staff workspace convey, and are their different current styles intentional?",
+      "section": "S30",
+      "line": 576
+    },
+    {
+      "id": "S30.03",
+      "question": "Which logo, parish seal, colors, typography and icon conventions are final assets? Who approves them and can local parishes vary any of them?",
+      "section": "S30",
+      "line": 577
+    },
+    {
+      "id": "S30.04",
+      "question": "Should staff screens optimize for dense office work or larger, guided interactions, and should users be able to choose a compact/comfortable density or larger text?",
+      "section": "S30",
+      "line": 578
+    },
+    {
+      "id": "S30.05",
+      "question": "Which personal palette/dark-mode choices should remain, and how should custom colors be constrained so status, focus, text and errors remain readable?",
+      "section": "S30",
+      "line": 579
+    },
+    {
+      "id": "S30.06",
+      "question": "When should a record open in a page, side drawer or dialog? Which complex flows need a dedicated full page, especially on phones?",
+      "section": "S30",
+      "line": 580
+    },
+    {
+      "id": "S30.07",
+      "question": "Which actions deserve a primary button, which should be secondary, and which belong in a More menu? Approve a consistent placement for Save, Cancel, Back and destructive actions.",
+      "section": "S30",
+      "line": 581
+    },
+    {
+      "id": "S30.08",
+      "question": "What confirmation is appropriate for approval, public publication, document release, merge, removal and cancellation? Which reversible actions should use Undo instead of interrupting dialogs?",
+      "section": "S30",
+      "line": 582
+    },
+    {
+      "id": "S30.09",
+      "question": "How should forms indicate required/optional/conditional fields, explain unfamiliar terms, show progress and preserve values after validation errors?",
+      "section": "S30",
+      "line": 583
+    },
+    {
+      "id": "S30.10",
+      "question": "Should errors appear beside fields, in a summary, or both, and what should receive focus? Which success messages need a persistent record/timeline rather than a temporary toast?",
+      "section": "S30",
+      "line": 584
+    },
+    {
+      "id": "S30.11",
+      "question": "What should English/Arabic switching preserve: route, form draft, selected filters and scroll? Which values should display both scripts regardless of interface language?",
+      "section": "S30",
+      "line": 585
+    },
+    {
+      "id": "S30.12",
+      "question": "Choose conventions for Arabic/Western digits, names, date order, month names, time format and USD/LBP formatting in screens, documents and exports separately.",
+      "section": "S30",
+      "line": 586
+    },
+    {
+      "id": "S30.13",
+      "question": "Which mixed-direction fields must remain left-to-right inside Arabic screens, including phone, email, URLs, identifiers and currency? Which navigation/icons need mirroring?",
+      "section": "S30",
+      "line": 587
+    },
+    {
+      "id": "S30.14",
+      "question": "Who approves bilingual terminology and error/help text? What should the interface do when a field or published content has only one translation?",
+      "section": "S30",
+      "line": 588
+    },
+    {
+      "id": "S30.15",
+      "question": "Is French required at launch, later or excluded? Which currently visible unsupported language options and trilingual claims should be removed or disabled accordingly?",
+      "section": "S30",
+      "line": 589
+    },
+    {
+      "id": "S30.16",
+      "question": "Which tasks must work fully by keyboard and screen reader, including calendars, family diagrams, tables, selection, drawers, uploads and volunteer scheduling? What nonvisual alternatives are needed?",
+      "section": "S30",
+      "line": 590
+    },
+    {
+      "id": "S30.17",
+      "question": "What text-size/zoom, touch-target, color/contrast, reduced-motion and focus behavior must be validated with the actual intended users, especially older staff and parishioners?",
+      "section": "S30",
+      "line": 591
+    },
+    {
+      "id": "S30.18",
+      "question": "For long tables and calendars on phones, which information becomes cards, expandable details or horizontally scrollable content, and what must never disappear?",
+      "section": "S30",
+      "line": 592
+    },
+    {
+      "id": "S30.19",
+      "question": "Which print/download designs must work in Arabic, English and bilingual form with long names, multiple pages, missing optional data and office printers?",
+      "section": "S30",
+      "line": 593
+    },
+    {
+      "id": "S30.20",
+      "question": "What should loading, first use, no records, no search results, denied access, unavailable feature and service failure look like on each main surface? Approve the next action in every state.",
+      "section": "S30",
+      "line": 594
+    },
+    {
+      "id": "S31.01",
+      "question": "Which interactions should save immediately, autosave a draft or require explicit Save? Define consistent rules for records, preferences, attendance grids, plans and long request forms.",
+      "section": "S31",
+      "line": 600
+    },
+    {
+      "id": "S31.02",
+      "question": "What should indicate unsaved, saving, saved, save failed and changed elsewhere, and which message must remain visible until the issue is resolved?",
+      "section": "S31",
+      "line": 601
+    },
+    {
+      "id": "S31.03",
+      "question": "Should users resume drafts across refresh, logout, device change or language switch? How long may sensitive drafts persist, especially on shared computers?",
+      "section": "S31",
+      "line": 602
+    },
+    {
+      "id": "S31.04",
+      "question": "When Back, Close, parish switch or sign-out would discard changes, what choices should be offered and which safe destination should follow each choice?",
+      "section": "S31",
+      "line": 603
+    },
+    {
+      "id": "S31.05",
+      "question": "Which exact tasks must work without a connection: viewing already loaded pages, drafting, attendance/check-in, payment entry or none? Define each permitted offline action explicitly.",
+      "section": "S31",
+      "line": 604
+    },
+    {
+      "id": "S31.06",
+      "question": "What should the user be told when an action requires a connection, and what manual fallback or recovery should be available?",
+      "section": "S31",
+      "line": 605
+    },
+    {
+      "id": "S31.07",
+      "question": "If offline writes are required, how should pending changes, changed permissions, duplicates, approvals and stale availability be reviewed before synchronization?",
+      "section": "S31",
+      "line": 606
+    },
+    {
+      "id": "S31.08",
+      "question": "When two users edit the same data, should the second compare field changes, refresh and reapply, or preserve a recoverable draft? Which conflicts require office review?",
+      "section": "S31",
+      "line": 607
+    },
+    {
+      "id": "S31.09",
+      "question": "If a save succeeds but its response is lost, how should retry avoid creating a duplicate request, payment, check-in or approval?",
+      "section": "S31",
+      "line": 608
+    },
+    {
+      "id": "S31.10",
+      "question": "If a record saves but its attachment or notification fails, what should the user see and how should they retry only the failed part?",
+      "section": "S31",
+      "line": 609
+    },
+    {
+      "id": "S31.11",
+      "question": "What should happen when the active role/parish is revoked, a module changes or a linked person is archived while the user is editing?",
+      "section": "S31",
+      "line": 610
+    },
+    {
+      "id": "S31.12",
+      "question": "What should timeout, unexpected server error and service maintenance messages show, including a useful reference for support without exposing internal or private data?",
+      "section": "S31",
+      "line": 611
+    },
+    {
+      "id": "S31.13",
+      "question": "How should stale pages refresh when another person changes request status, room availability, check-in or a financial balance? Which actions need a fresh confirmation?",
+      "section": "S31",
+      "line": 612
+    },
+    {
+      "id": "S31.14",
+      "question": "Which bulk operations need progress, preview, partial-failure results, cancellation and a downloadable outcome report? How should completed items be distinguished from retriable ones?",
+      "section": "S31",
+      "line": 613
+    },
+    {
+      "id": "S31.15",
+      "question": "What should users be able to recover after accidental removal, cancellation or incorrect approval, and how long should Undo/restore be available for each record type?",
+      "section": "S31",
+      "line": 614
+    },
+    {
+      "id": "S31.16",
+      "question": "What should the interface call a data snapshot versus an actual restorable backup, and who should receive the recovery/export controls for each?",
+      "section": "S31",
+      "line": 615
+    },
+    {
+      "id": "S32.01",
+      "question": "For people, accounts, official registers, certificates, requests, financial evidence, incidents, concerns, notes and messages, who approves retention rules and the actions available at expiry?",
+      "section": "S32",
+      "line": 621
+    },
+    {
+      "id": "S32.02",
+      "question": "How should a person request access to their information, a correction, account closure or deletion, and who reviews it when official/historical records must remain?",
+      "section": "S32",
+      "line": 622
+    },
+    {
+      "id": "S32.03",
+      "question": "What should a deactivation/deletion review show about linked households, minors, active requests, giving, messages and shared records before a decision is made?",
+      "section": "S32",
+      "line": 623
+    },
+    {
+      "id": "S32.04",
+      "question": "Who may export which data, how should scope/private fields be reviewed before export, and what explanation should accompany a download containing personal information?",
+      "section": "S32",
+      "line": 624
+    },
+    {
+      "id": "S32.05",
+      "question": "Who handles support for members, guests, office users and administrators? Where should Help appear and what fictional/sanitized information should a support request contain?",
+      "section": "S32",
+      "line": 625
+    },
+    {
+      "id": "S32.06",
+      "question": "What first-use setup should guide a new parish through identity, staff, approved requirements, public content, opening balances and legacy-data review before opening to applicants?",
+      "section": "S32",
+      "line": 626
+    },
+    {
+      "id": "S32.07",
+      "question": "Which role-specific guidance, checklists, examples and training materials are needed, and which screens should link to a plain-language explanation of the procedure?",
+      "section": "S32",
+      "line": 627
+    },
+    {
+      "id": "S32.08",
+      "question": "What should an administrator see before launch about unavailable integrations, incomplete translations, missing setup and legacy records that still require attention?",
+      "section": "S32",
+      "line": 628
+    },
+    {
+      "id": "S32.09",
+      "question": "Which people will test the prototype as guest, member, guardian, secretary, priest, leader, treasurer, bishop and administrator? Name a responsible reviewer for each retained role.",
+      "section": "S32",
+      "line": 629
+    },
+    {
+      "id": "S32.10",
+      "question": "Which real tasks will those reviewers perform without coaching, and what observable result, acceptable completion time and error tolerance determine success?",
+      "section": "S32",
+      "line": 630
+    },
+    {
+      "id": "S32.11",
+      "question": "Which layouts/languages/devices must be approved, including a small phone, office desktop, Arabic right-to-left and a printed official document?",
+      "section": "S32",
+      "line": 631
+    },
+    {
+      "id": "S32.12",
+      "question": "What findings block design approval, who resolves disagreements and who signs off the final prototype, permission matrix and workflow specifications?",
+      "section": "S32",
+      "line": 632
+    },
+    {
+      "id": "S32.13",
+      "question": "Which unanswered decisions may be deferred, with what launch fallback? Who owns each remaining decision and what is its resolution date?",
+      "section": "S32",
+      "line": 633
+    },
+    {
+      "id": "S32.14",
+      "question": "After approval, how should a changed workflow be documented, re-prototyped and reapproved before coding so screens, permissions, notifications and printed documents remain consistent?",
+      "section": "S32",
+      "line": 634
+    }
+  ],
+  "sections": {
+    "S01": "Purpose, release scope and decision owners",
+    "S02": "Organizational structure, roles and authority",
+    "S03": "Navigation, dashboard, search and work queues",
+    "S04": "Public directory, parish pages and visitor discovery",
+    "S05": "Website content, announcements and publishing",
+    "S06": "Sign-up, sign-in, invitations and recovery",
+    "S07": "Following, parish membership and profile corrections",
+    "S08": "People records and individual profiles",
+    "S09": "Households, family relationships and representation",
+    "S10": "Import, duplicate review, archive and historical records",
+    "S11": "Request intake, office queues and guest tracking",
+    "S12": "Sacramental lifecycle and official register approval",
+    "S13": "Details and exceptions for each sacrament and service",
+    "S14": "Certificates, bishop review and collection",
+    "S15": "Documents, evidence, attachments and file release",
+    "S16": "Calendar, Mass times, clergy schedules and anniversaries",
+    "S17": "Service/activity planning and music library",
+    "S18": "Ministries, leadership and membership applications",
+    "S19": "Meetings, attendance, formation and group resources",
+    "S20": "Volunteers, commitments, rota and hours",
+    "S21": "Event registrations, consent, transport, fees and refunds",
+    "S22": "Check-in, child pickup, incidents and emergency rosters",
+    "S23": "Facilities, reservations, equipment, maintenance and renters",
+    "S24": "Giving, envelopes, counting, pledges and receipts",
+    "S25": "Finance, approvals, reconciliation and Office Expenses",
+    "S26": "Inbox, staff messaging, notices, prayers and notifications",
+    "S27": "Concerns, complaints, reviewer independence and privacy",
+    "S28": "Private notes, pastoral tasks and forms/workflows",
+    "S29": "Administration, bundles, oversight, reports and settings",
+    "S30": "Visual design, English/Arabic, accessibility and mobile use",
+    "S31": "Saving, drafts, connection loss, concurrency and recovery",
+    "S32": "Retention, support, onboarding and design acceptance"
+  },
+  "scenarios": [
+    {
+      "id": "A01",
+      "question": "A new adult signs up, follows two parishes, chooses a primary parish, skips profile completion and returns later.",
+      "mapping": "S03, S06, S07",
+      "line": 642
+    },
+    {
+      "id": "A02",
+      "question": "The office cannot confidently match a membership applicant to two similar person records; one is already linked to another account.",
+      "mapping": "S07, S08, S10",
+      "line": 643
+    },
+    {
+      "id": "A03",
+      "question": "A parent requests baptism for an unregistered child; a similar archived record exists and the Arabic name is not yet known.",
+      "mapping": "S08–S13",
+      "line": 644
+    },
+    {
+      "id": "A04",
+      "question": "A guest submits the same baptism need, loses the tracking link, then creates an account and asks to associate the request.",
+      "mapping": "S06, S07, S11, S15",
+      "line": 645
+    },
+    {
+      "id": "A05",
+      "question": "A secretary reviews a request with missing documents; a priest accepts directly; the applicant supplies an illegible file that must be replaced.",
+      "mapping": "S11–S15",
+      "line": 646
+    },
+    {
+      "id": "A06",
+      "question": "A marriage involves a partner from another parish and an external celebrant; the planned room/priest is already busy.",
+      "mapping": "S12, S13, S16, S23",
+      "line": 647
+    },
+    {
+      "id": "A07",
+      "question": "A scheduled celebration is postponed, cancelled or never takes place; a certificate request was waiting on it.",
+      "mapping": "S11–S16",
+      "line": 648
+    },
+    {
+      "id": "A08",
+      "question": "The office submits a celebrated sacrament with a name error; the priest returns it; after approval another official correction is needed.",
+      "mapping": "S08, S12, S14",
+      "line": 649
+    },
+    {
+      "id": "A09",
+      "question": "A priest signs a certificate; the bishop returns it; it is corrected, accepted and released to a verified representative.",
+      "mapping": "S02, S14, S15",
+      "line": 650
+    },
+    {
+      "id": "A10",
+      "question": "A guest's certificate file is prepared but not released; a wrong-file release is caught or must be withdrawn after release.",
+      "mapping": "S14, S15, S31",
+      "line": 651
+    },
+    {
+      "id": "A11",
+      "question": "A person joins a ministry, withdraws after leader review, reapplies, then later requests a private departure.",
+      "mapping": "S18, S19, S26",
+      "line": 652
+    },
+    {
+      "id": "A12",
+      "question": "A leader changes; the former leader has open tasks, group files, attendance corrections and a pending application.",
+      "mapping": "S02, S18, S19, S28",
+      "line": 653
+    },
+    {
+      "id": "A13",
+      "question": "A volunteer is already assigned in another parish, accepts a new duty, then cancels shortly before the event.",
+      "mapping": "S16, S20, S26",
+      "line": 654
+    },
+    {
+      "id": "A14",
+      "question": "An event fills while two families register; one child lacks a birth date/consent and another has a partial fee plus paid transport.",
+      "mapping": "S21, S22, S31",
+      "line": 655
+    },
+    {
+      "id": "A15",
+      "question": "An event moves date/room after participants pay; consent/transport changes and some participants request refunds.",
+      "mapping": "S16, S21, S23, S25",
+      "line": 656
+    },
+    {
+      "id": "A16",
+      "question": "A child arrives, the connection fails and an unauthorized collector later asks for pickup; paper fallback is used and reconciled.",
+      "mapping": "S22, S31",
+      "line": 657
+    },
+    {
+      "id": "A17",
+      "question": "An incident occurs during one event; a restricted report is created and an emergency roster is printed without implying whole-building coverage.",
+      "mapping": "S22, S27",
+      "line": 658
+    },
+    {
+      "id": "A18",
+      "question": "Two room requests compete, one has setup time, a deposit is involved and maintenance later blocks the confirmed booking.",
+      "mapping": "S23, S25, S26",
+      "line": 659
+    },
+    {
+      "id": "A19",
+      "question": "Equipment reserved for a paid external renter is returned damaged and becomes unavailable for another booking.",
+      "mapping": "S23, S25",
+      "line": 660
+    },
+    {
+      "id": "A20",
+      "question": "Counters record actual USD and LBP gifts, disagree, resolve the count, close it and later correct the wrong fund/household attribution.",
+      "mapping": "S09, S24, S25",
+      "line": 661
+    },
+    {
+      "id": "A21",
+      "question": "A registration/rental payment reaches Finance while an office allowance is recorded; reporting must count each movement correctly once.",
+      "mapping": "S21, S23–S25",
+      "line": 662
+    },
+    {
+      "id": "A22",
+      "question": "An anonymous concern names a senior cleric, selected reviewers become conflicted, and ordinary administrators must see neither the case nor its count.",
+      "mapping": "S02, S27",
+      "line": 663
+    },
+    {
+      "id": "A23",
+      "question": "A priest shares one pastoral task but keeps another note private, then leaves the parish and loses the parish appointment.",
+      "mapping": "S02, S28",
+      "line": 664
+    },
+    {
+      "id": "A24",
+      "question": "An editor changes a published bilingual page in draft, another editor publishes a concurrent change and one translation is missing.",
+      "mapping": "S05, S30, S31",
+      "line": 665
+    },
+    {
+      "id": "A25",
+      "question": "An Archdiocese Admin creates its first parish without a secretary and delegates routine office work without granting priest signature authority.",
+      "mapping": "S02, S29",
+      "line": 666
+    },
+    {
+      "id": "A26",
+      "question": "A diocese-sponsored parish downgrades its bundle with open sacrament requests, unpaid registrations and documents awaiting release.",
+      "mapping": "S11–S15, S21, S29",
+      "line": 667
+    },
+    {
+      "id": "A27",
+      "question": "A user has different roles in two parishes, switches parish mid-task and receives a revocation while another tab remains open.",
+      "mapping": "S02, S03, S31",
+      "line": 668
+    },
+    {
+      "id": "A28",
+      "question": "A financial viewer searches, prints and exports permitted records while trying an editing link from an old bookmark.",
+      "mapping": "S02, S03, S24, S25",
+      "line": 669
+    },
+    {
+      "id": "A29",
+      "question": "A user completes a long Arabic form using a phone or keyboard/screen reader, changes language, loses their session and resumes safely.",
+      "mapping": "S06, S30, S31",
+      "line": 670
+    },
+    {
+      "id": "A30",
+      "question": "A deceased/archived person has a household envelope, future commitments, an account, certificates and notification preferences.",
+      "mapping": "S08–S10, S13, S20, S24, S32",
+      "line": 671
+    }
+  ]
+}

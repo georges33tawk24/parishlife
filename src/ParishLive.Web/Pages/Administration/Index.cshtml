@@ -1,0 +1,34 @@
+@page
+@model ParishLive.Web.Pages.Administration.IndexModel
+@using ParishLive.Domain.Enums
+@{ ViewData["Title"] = L["Admin.Title"].Value; }
+<main class="content" id="main-content"><h1>@L["Admin.Title"]</h1><p>@L["Admin.ScopeHelp"]</p>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+@foreach (var invitation in Model.Invitations) { <section class="ops-card"><h2>@L["Admin.Invitation"] · @L["SysRole." + invitation.Role]</h2><p>@L["Admin.Scope"]: <bdi>@invitation.OrgId / @invitation.ParishId</bdi></p><p>@L["Admin.Starts"]: @invitation.StartsAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'")</p><p>@L["Admin.Ends"]: @(invitation.EndsAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "—")</p><form method="post"><input type="hidden" name="id" value="@invitation.Id" /><button name="action" value="Accept" class="btn btn-p">@L["Admin.Accept"]</button><button name="action" value="Decline" class="btn btn-g">@L["Action.Decline"]</button></form></section> }
+@if (Model.Role is "SuperAdmin" or "Archbishop" or "Priest")
+{
+<h2>@L["Admin.Offer"]</h2><form method="post" class="ops-form"><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+<label>@L["Admin.TargetUsername"]<input name="targetUsername" required maxlength="256" dir="ltr" /></label>
+<label>@L["Admin.Role"]<select name="role">@foreach (var role in Model.Role == "SuperAdmin" ? new[] { SystemRole.SuperAdmin, SystemRole.Archbishop } : Model.Role == "Archbishop" ? new[] { SystemRole.Priest, SystemRole.ArchdioceseAdmin, SystemRole.ConcernReviewer } : new[] { SystemRole.Secretary, SystemRole.ParishAdmin, SystemRole.Treasurer, SystemRole.FinanceViewer, SystemRole.MinistryLeader }) { <option value="@role">@L["SysRole." + role]</option> }</select></label>
+<label>@L["Admin.Organization"]<select name="orgId"><option value="@Guid.Empty">@L["Admin.System"]</option>@foreach (var org in Model.Organizations) { <option value="@org.Id">@org.Name</option> }</select></label>
+<label>@L["Nav.Parish"]<select name="parishId"><option value="@Guid.Empty">—</option>@foreach (var parish in Model.Parishes) { <option value="@parish.Id">@parish.Name</option> }</select></label>
+<label>@L["Admin.GroupReference"]<input name="groupId" /></label><label>@L["Admin.Starts"] (UTC)<input type="datetime-local" name="starts" required /></label><label>@L["Admin.Ends"] (UTC)<input type="datetime-local" name="ends" /></label>
+@if (Model.Role == "Archbishop") { <fieldset><legend>@L["Admin.SpecificGrants"]</legend><label><input type="checkbox" name="mayCreateParishes" value="true" />@L["Admin.CreateParishesGrant"]</label><label><input type="checkbox" name="canReviewSensitiveConcerns" value="true" />@L["Admin.SensitiveGrant"]</label><label><input type="checkbox" name="canViewConcernIdentity" value="true" />@L["Admin.IdentityGrant"]</label></fieldset> }
+<label>@L["Admin.Authority"]<input name="reason" maxlength="500" required /></label><button name="action" value="Offer" class="btn btn-p" data-confirm="@L["Case.ConfirmDecision"]">@L["Admin.Offer"]</button></form>
+}
+@if (Model.Role == "SuperAdmin")
+{
+<h2>@L["Admin.NewOrganization"]</h2><form method="post" class="ops-form"><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label>English<input name="english" required maxlength="200" /></label><label>Français<input name="french" required maxlength="200" /></label><label>العربية<input name="arabic" required maxlength="200" dir="rtl" /></label><label>@L["Admin.Authority"]<input name="reason" required maxlength="500" /></label><button class="btn btn-p" name="action" value="Organization">@L["Admin.NewOrganization"]</button></form>
+@foreach (var change in Model.ProtectedChanges) { <section class="ops-card"><h3>@L["Admin.IndependentReview"]</h3><p><bdi>@change.Id</bdi></p><p>@L["Admin.ProtectedHelp"]</p><form method="post" class="ops-form"><input type="hidden" name="id" value="@change.Id" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label>@L["Auth.Password"]<input type="password" name="currentPassword" autocomplete="current-password" required /></label><label>@L["Admin.Authenticator"]<input name="authenticatorCode" inputmode="numeric" required autocomplete="one-time-code" /></label><button class="btn btn-p" name="action" value="ProtectedApprove">@L["Btn.Approve"]</button></form></section> }
+}
+@if (Model.Role is "Archbishop" or "ArchdioceseAdmin")
+{
+<h2>@L["Admin.CreateParish"]</h2><form method="post" class="ops-form"><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+<label>@L["Admin.Organization"]<select name="orgId">@foreach (var org in Model.Organizations) { <option value="@org.Id">@org.Name</option> }</select></label>
+<label>English<input name="english" required maxlength="200" /></label><label>Français<input name="french" required maxlength="200" /></label><label>العربية<input name="arabic" required maxlength="200" dir="rtl" /></label>
+<label>@L["Admin.Locality"]<input name="locality" required maxlength="200" /></label><label>@L["Admin.OfficeContact"]<input name="contact" required maxlength="500" /></label><label>@L["Admin.Jurisdiction"]<input name="jurisdiction" required maxlength="200" /></label><label>@L["Admin.Adoption"]<input name="adoption" required maxlength="500" /></label><label>@L["Admin.HeadPriest"]<input name="headPriest" required maxlength="256" /></label><label>@L["Admin.PriestEvidence"]<input name="reason" required maxlength="500" /></label><button class="btn btn-p" name="action" value="Parish" data-confirm="@L["Case.ConfirmDecision"]">@L["Admin.CreateParish"]</button></form>
+}
+<h2>@L["Admin.Appointments"]</h2><div class="table-scroll"><table class="ops-table"><thead><tr><th>@L["Admin.AccountReference"]</th><th>@L["Admin.Role"]</th><th>@L["Admin.Scope"]</th><th>@L["Res.Status"]</th><th>@L["Case.NextAction"]</th></tr></thead><tbody>
+@foreach (var appointment in Model.Appointments) { <tr><td>@Model.AccountLabels.GetValueOrDefault(appointment.UserId, "")</td><td>@L["SysRole." + appointment.Role]</td><td>@(Model.Parishes.SingleOrDefault(p => p.Id == appointment.ParishId)?.Name ?? Model.Organizations.SingleOrDefault(o => o.Id == appointment.OrgId)?.Name ?? L["Admin.System"].Value)</td><td>@L[appointment.IsEffective(DateTimeOffset.UtcNow) ? "Admin.Active" : "Admin.NotEffective"]</td><td><form method="post"><input type="hidden" name="id" value="@appointment.Id" /><input type="hidden" name="revision" value="@appointment.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label>@L["Admin.Authority"]<input name="reason" required maxlength="500" /></label><button class="btn btn-g" name="action" value="Revoke">@L["Admin.Revoke"]</button></form></td></tr> }
+</tbody></table></div>
+</main>

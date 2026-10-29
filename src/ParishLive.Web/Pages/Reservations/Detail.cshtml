@@ -77,6 +77,8 @@
           else
           {
             <form method="post">
+              <input type="hidden" name="id" value="@r.Id" />
+              <input type="hidden" asp-for="Revision" /><input type="hidden" asp-for="OperationId" />
               <div class="note-field">
                 <label for="note">@L["Res.Note"]</label>
                 <textarea id="note" name="Note" placeholder="@L["Res.Note"]">@Model.Note</textarea>

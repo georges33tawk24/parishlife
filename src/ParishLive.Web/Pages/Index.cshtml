@@ -6,12 +6,17 @@
     var today = DateTimeOffset.Now.ToString("dddd, d MMMM yyyy", CultureInfo.CurrentCulture);
 }
 
-<div class="content">
+<main class="content" id="main-content">
   <div class="mast">
     <div class="rubric rub">@today</div>
     <h1>@L["Dash.Hello", Model.GreetingName]</h1>
     <div class="rule" aria-hidden="true"><svg class="rstar" viewBox="0 0 24 24"><use href="#star"/></svg><span class="rline"></span></div>
   </div>
+
+  <section class="panel"><div class="ph"><h2>@L["Following.Following"]</h2><a href="/Public/Directory">@L["Public.Discover"]</a></div><ul>@foreach (var followed in Model.Following) { <li><a href="/Public/Parish?id=@followed.Id">@followed.Name</a> · @L[followed.Primary ? "Following.Primary" : "Following.Following"]</li> }</ul></section>
+
+  <section class="panel"><div class="ph"><h2>@L["Nav.Requests"]</h2><a href="/Requests/Edit" class="btn btn-p">@L["Case.New"]</a></div>
+  <div class="ops-grid">@foreach (var item in Model.CombinedWork) { <article class="ops-card"><h3><a href="/Requests/Detail?id=@item.Id&actingAs=@item.AssignmentId">@item.Subject</a></h3><p>@item.Parish · <bdi>@item.Reference</bdi></p><p>@L["Stage." + item.Stage]</p></article> }</div></section>
 
   <section class="focal" aria-labelledby="focal-h">
     <div class="fh">
@@ -75,4 +80,4 @@
       }
     </div>
   </div>
-</div>
+</main>

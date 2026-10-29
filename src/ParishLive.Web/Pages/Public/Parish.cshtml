@@ -1,0 +1,8 @@
+@page
+@model ParishLive.Web.Pages.Public.ParishModel
+@{ ViewData["Title"] = Model.Name; }
+<main class="content" id="main-content"><a href="/Public/Directory">@L["Common.Back"]</a><h1>@Model.Name</h1><p>@Model.Locality</p><p dir="auto">@Model.Contact</p><p class="ops-status">@L["Public.NoSchedule"]</p>
+@foreach (var text in Model.Sections) { <section class="ops-card ops-draft" dir="auto">@text</section> }
+<p>@L["Public.RequestContact"]</p>
+@if (Model.GuestIntakeEnabled) { <a class="btn btn-p" href="/Public/Request?ParishId=@Model.ParishId">@L["Guest.Request"]</a> }
+</main>
