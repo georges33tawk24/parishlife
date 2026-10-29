@@ -17,10 +17,13 @@ public class DetailModel(IReservationService reservations) : PageModel
     public string? Note { get; set; }
 
     public string? Error { get; private set; }
+    [BindProperty] public long Revision { get; set; }
+    [BindProperty] public Guid OperationId { get; set; } = Guid.NewGuid();
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
         R = await reservations.GetAsync(id);
+        Revision = R?.Revision ?? 0;
         return R is null ? NotFound() : Page();
     }
 
@@ -29,8 +32,8 @@ public class DetailModel(IReservationService reservations) : PageModel
         var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         try
         {
-            await reservations.PerformActionAsync(id, action, Note, actor);
-            return RedirectToPage(new { id });
+            await reservations.PerformCheckedActionAsync(id, Revision, OperationId, action, Note, actor);
+            return RedirectToPage(new { id, actingAs = Request.Query["actingAs"].ToString() });
         }
         catch (Exception ex) when (ex is DomainException or ForbiddenException)
         {

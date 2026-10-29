@@ -17,3 +17,7 @@ obj/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local verification artifacts
+TestResults/
+__pycache__/

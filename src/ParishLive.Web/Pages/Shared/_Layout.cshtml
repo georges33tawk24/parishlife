@@ -1,106 +1,80 @@
 @using System.Globalization
+@using ParishLive.Application.Abstractions
+@using ParishLive.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@inject ITenantContext Tenant
+@inject AppDbContext Db
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
 @{
-    var uiCulture = CultureInfo.CurrentUICulture;
-    var isRtl = uiCulture.TextInfo.IsRightToLeft;
-    var dir = isRtl ? "rtl" : "ltr";
-    var lang = uiCulture.TwoLetterISOLanguageName;              // "en" | "ar"
-    var otherCulture = lang == "ar" ? "en" : "ar";
-    var otherLabel = otherCulture == "ar" ? "العربية" : "English";
+    var culture = CultureInfo.CurrentUICulture;
+    var lang = culture.TwoLetterISOLanguageName;
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
-
-    var displayName = User.FindFirst(PlClaims.Name)?.Value ?? User.Identity?.Name ?? string.Empty;
-    var roleClaim = User.FindFirst(PlClaims.Role)?.Value;
-    var roleLabel = roleClaim is not null ? L["SysRole." + roleClaim].Value : string.Empty;
-    var nameParts = displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-    var initials = nameParts.Length >= 2
-        ? $"{nameParts[^2][0]}{nameParts[^1][0]}".ToUpperInvariant()
-        : nameParts.Length == 1 ? nameParts[0][..Math.Min(2, nameParts[0].Length)].ToUpperInvariant() : "·";
+    var name = User.FindFirst(PlClaims.Name)?.Value ?? User.Identity?.Name ?? "";
+    var role = Tenant.ActingRole;
+    var parish = Tenant.ParishIds.Count == 1 ? await Db.Parishes.Where(p => p.Id == Tenant.ParishIds.Single()).Select(p => p.Name).FirstOrDefaultAsync() : null;
+    var organization = Tenant.OrgId != Guid.Empty ? await Db.Organizations.Where(o => o.Id == Tenant.OrgId).Select(o => o.Name).FirstOrDefaultAsync() : null;
+    var office = role is "Priest" or "Secretary" or "ParishAdmin" or "ArchdioceseAdmin";
+    var finance = role is "Treasurer" or "FinanceViewer";
 }
 <!DOCTYPE html>
-<html lang="@lang" dir="@dir">
+<html lang="@lang" dir="@(culture.TextInfo.IsRightToLeft ? "rtl" : "ltr")">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] · ParishLive</title>
-    <link rel="stylesheet" href="~/css/parishlive.css" asp-append-version="true" />
-    <script>(function(){try{var t=localStorage.getItem('pl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@ViewData["Title"] · ParishLife</title>
+<link rel="stylesheet" href="~/css/parishlive.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/operations.css" asp-append-version="true" />
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <symbol id="star" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/><rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)"/></symbol>
-  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></symbol>
-  <symbol id="i-res" viewBox="0 0 24 24"><path d="M6 4.5h12v16H6z"/><path d="M9 4.5V3.5a1 1 0 011-1h4a1 1 0 011 1v1"/><path d="M8.5 12.5l2.2 2.2 4.3-4.4"/></symbol>
-  <symbol id="i-ev" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="15" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
-  <symbol id="i-gr" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><path d="M3.5 19c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/><path d="M16 6.2a3 3 0 010 5.6M17 14.6c2.2.5 3.5 1.9 3.5 4.4"/></symbol>
-  <symbol id="i-mem" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/></symbol>
-  <symbol id="i-loc" viewBox="0 0 24 24"><path d="M12 21c4.5-4 7-7 7-10.5A7 7 0 105 10.5C5 14 7.5 17 12 21z"/><circle cx="12" cy="10" r="2.5"/></symbol>
-  <symbol id="i-not" viewBox="0 0 24 24"><path d="M4 9.5v5l5 .5 6 3.5V5.5L9 9z"/><path d="M17 9a4 4 0 010 6"/></symbol>
-  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10h-9l-6 4z"/></symbol>
-  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4"/></symbol>
-  <symbol id="i-rep" viewBox="0 0 24 24"><path d="M4.5 20h15"/><path d="M7 20v-6M12 20V5.5M17 20v-9"/></symbol>
-  <symbol id="i-aud" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></symbol>
-  <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/></symbol>
-  <symbol id="i-find" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1112 0c0 4 1.8 5.5 1.8 5.5H4.2S6 13.5 6 9.5z"/><path d="M10 19a2 2 0 004 0"/></symbol>
-</defs></svg>
-
+<a class="skip-link" href="#main-content">@L["Common.Skip"]</a>
 <div class="app">
-  <aside class="spine">
-    <div class="brand"><svg class="star" viewBox="0 0 24 24" aria-hidden="true"><use href="#star"/></svg><span class="wm">Parish<b>Live</b></span></div>
-    <button class="ctx" aria-label="@L["Ctx.Switch"]">
-      <svg class="seal" viewBox="0 0 24 24" aria-hidden="true"><use href="#star"/></svg>
-      <span class="ct"><span class="cp">@L["Ctx.Parish"]</span><span class="cr">@L["Ctx.Org"]</span></span>
-      <svg class="ico chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
-    </button>
-    <nav>
-      <div class="nh">@L["Nav.Parish"]</div>
-      <a class="ni on" asp-page="/Index"><svg class="ico"><use href="#i-dash"/></svg><span class="nl">@L["Nav.Dashboard"]</span></a>
-      <a class="ni" asp-page="/Reservations/Index"><svg class="ico"><use href="#i-res"/></svg><span class="nl">@L["Nav.Reservations"]</span></a>
-      <a class="ni" asp-page="/Events/Index"><svg class="ico"><use href="#i-ev"/></svg><span class="nl">@L["Nav.Events"]</span></a>
-      <a class="ni"><svg class="ico"><use href="#i-gr"/></svg><span class="nl">@L["Nav.Groups"]</span></a>
-      <a class="ni" asp-page="/People/Index"><svg class="ico"><use href="#i-mem"/></svg><span class="nl">@L["Nav.Members"]</span></a>
-      <a class="ni"><svg class="ico"><use href="#i-loc"/></svg><span class="nl">@L["Nav.Locations"]</span></a>
-      <div class="nh">@L["Nav.Communicate"]</div>
-      <a class="ni" asp-page="/Notices/Index"><svg class="ico"><use href="#i-not"/></svg><span class="nl">@L["Nav.Notices"]</span></a>
-      <a class="ni"><svg class="ico"><use href="#i-msg"/></svg><span class="nl">@L["Nav.Messages"]</span></a>
-      <a class="ni"><svg class="ico"><use href="#i-doc"/></svg><span class="nl">@L["Nav.Documents"]</span></a>
-      <div class="nh">@L["Nav.Oversight"]</div>
-      <a class="ni"><svg class="ico"><use href="#i-rep"/></svg><span class="nl">@L["Nav.Reports"]</span></a>
-      <a class="ni" asp-page="/Audit/Index"><svg class="ico"><use href="#i-aud"/></svg><span class="nl">@L["Nav.Audit"]</span></a>
-    </nav>
-    <div class="who">
-      <span class="av">@initials</span>
-      <span class="wt"><span class="wn">@displayName</span><span class="wr">@roleLabel</span></span>
-      <button class="gear" aria-label="@L["Nav.Settings"]"><svg class="ico"><use href="#i-set"/></svg></button>
+<aside class="spine">
+  <div class="brand"><span class="wm">Parish<b>Life</b></span></div>
+  <a class="ctx" href="/Context/Choose"><span class="ct"><span class="cp">@(parish ?? organization ?? L["Context.NoAssignment"].Value)</span><span class="cr">@(role is null ? L["Context.Choose"] : L["SysRole." + role])</span></span></a>
+  <nav aria-label="@L["Common.Navigation"]">
+    <a class="ni" href="/"><span class="nl">@L["Nav.Dashboard"]</span></a>
+    <a class="ni" href="/Requests"><span class="nl">@L["Nav.Requests"]</span></a>
+    @if (role is not null)
+    {
+      <a class="ni" href="/Events/Calendar"><span class="nl">@L["Events.Calendar"]</span></a>
+      <a class="ni" href="/Reservations"><span class="nl">@L["Nav.Reservations"]</span></a>
+      <a class="ni" href="/Community"><span class="nl">@L["Nav.Groups"]</span></a>
+      <a class="ni" href="/Events"><span class="nl">@L["Nav.Events"]</span></a>
+    }
+    @if (office)
+    {
+      <a class="ni" href="/People/Records"><span class="nl">@L["Nav.Members"]</span></a>
+      <a class="ni" href="/Publishing"><span class="nl">@L["Nav.Website"]</span></a>
+      <a class="ni" href="/Finance?officeOnly=true"><span class="nl">@L["Nav.OfficeExpenses"]</span></a>
+      <a class="ni" href="/Audit"><span class="nl">@L["Nav.Audit"]</span></a>
+    }
+    @if (finance) { <a class="ni" href="/Finance"><span class="nl">@L["Nav.Finance"]</span></a> }
+    <a class="ni" href="/Private"><span class="nl">@L["Nav.Notes"]</span></a>
+    <a class="ni" href="/Concerns"><span class="nl">@L["Concern.Title"]</span></a>
+    <a class="ni" href="/Notifications"><span class="nl">@L["Bar.Notifications"]</span></a>
+    <a class="ni" href="/Public/Directory"><span class="nl">@L["Public.Discover"]</span></a>
+    <a class="ni" href="/Readiness"><span class="nl">@L["Nav.Readiness"]</span></a>
+    <a class="ni" href="/Recovery"><span class="nl">@L["Recovery.Title"]</span></a>
+    <a class="ni" href="/Administration"><span class="nl">@L["Admin.Title"]</span></a>
+  </nav>
+  <div class="who"><span class="wt"><span class="wn">@name</span><span class="wr">@(role is null ? "" : L["SysRole." + role])</span></span></div>
+</aside>
+<div class="main">
+  <header class="bar">
+    <div class="crumbs"><b>@ViewData["Title"]</b></div>
+    <div class="acts">
+      @foreach (var language in new[] { ("en", "English"), ("fr", "Français"), ("ar", "العربية") })
+      { <a class="lang" data-language-link lang="@language.Item1" aria-current="@(lang == language.Item1 ? "true" : null)" href="/set-culture?culture=@language.Item1&returnUrl=@Uri.EscapeDataString(returnUrl)">@language.Item2</a> }
+      <partial name="_LoginPartial" />
+      <button type="button" id="themeBtn" class="btn btn-g">@L["Bar.Theme"]</button>
     </div>
-  </aside>
-
-  <div class="main">
-    <div class="bar">
-      <div class="crumbs"><span class="home">@L["Ctx.Parish"]</span><span class="sp home">/</span><b>@L["Nav.Dashboard"]</b></div>
-      <label class="find"><svg class="ico" style="width:17px;height:17px" aria-hidden="true"><use href="#i-find"/></svg><input placeholder="@L["Bar.Search"]" aria-label="@L["Bar.Search"]" /></label>
-      <div class="acts">
-        <a class="lang" href="/set-culture?culture=@otherCulture&returnUrl=@Uri.EscapeDataString(returnUrl)">@otherLabel</a>
-        <button class="ib" aria-label="@L["Bar.Notifications"]"><svg class="ico"><use href="#i-bell"/></svg><span class="dot"></span></button>
-        <button class="ib" id="themeBtn" aria-label="@L["Bar.Theme"]"><svg class="ico" id="themeIc" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 7 7 0 1020 14.5z"/></svg></button>
-      </div>
-    </div>
-    @RenderBody()
-  </div>
+  </header>
+  @if (HostEnvironment.IsDevelopment() || HostEnvironment.IsEnvironment("Testing")) { <p class="demo-banner" role="note">@L["Common.Demo"]</p> }
+  @RenderBody()
 </div>
-
-<script>
-  (function(){
-    var root=document.documentElement, btn=document.getElementById('themeBtn'), ic=document.getElementById('themeIc');
-    function isDark(){var a=root.getAttribute('data-theme');return a?a==='dark':matchMedia('(prefers-color-scheme:dark)').matches;}
-    function paint(){ic.innerHTML=isDark()
-      ?'<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>'
-      :'<path d="M20 14.5A8 8 0 019.5 4 7 7 0 1020 14.5z"/>';}
-    btn.addEventListener('click',function(){var next=isDark()?'light':'dark';root.setAttribute('data-theme',next);try{localStorage.setItem('pl-theme',next);}catch(e){}paint();});
-    matchMedia('(prefers-color-scheme:dark)').addEventListener('change',paint);
-    paint();
-  })();
-</script>
+</div>
+<dialog id="draft-dialog" data-failure="@L["Draft.SaveFailed"]" aria-labelledby="draft-dialog-title"><h2 id="draft-dialog-title">@L["Draft.Unsaved"]</h2><p>@L["Draft.SwitchHelp"]</p><p id="draft-failure" role="alert"></p><div class="ops-row"><button type="button" data-draft-choice="save" class="btn btn-p">@L["Common.SaveDraft"]</button><button type="button" data-draft-choice="discard" class="btn btn-g">@L["Draft.Discard"]</button><button type="button" data-draft-choice="stay" class="btn btn-g">@L["Draft.Stay"]</button></div></dialog>
+<script src="~/js/operations.js" asp-append-version="true"></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

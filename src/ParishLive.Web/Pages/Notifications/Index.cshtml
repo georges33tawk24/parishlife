@@ -1,0 +1,10 @@
+@page
+@model ParishLive.Web.Pages.Notifications.IndexModel
+@{ ViewData["Title"] = L["Bar.Notifications"].Value; }
+<main class="content" id="main-content"><h1>@L["Bar.Notifications"]</h1><p>@L["Notifications.Help"]</p>
+@if (Model.Items.Count == 0) { <p>@L["Common.Empty"]</p> }
+@foreach (var item in Model.Items) { <article class="ops-card"><p>@L["Notice." + item.Code, item.Reference]</p><p>@item.At.ToString("yyyy-MM-dd HH:mm 'UTC'") · @L[item.Read ? "Notifications.Read" : "Notifications.Unread"]</p>
+@if (item.Code != "M05") { <a href="/Requests/Detail?id=@item.RecordId">@L["Btn.Review"]</a> }
+@if (!item.Read) { <form method="post" asp-page-handler="Read"><input type="hidden" name="id" value="@item.Id" /><button class="btn btn-g">@L["Notifications.MarkRead"]</button></form> }
+</article> }
+</main>

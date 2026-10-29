@@ -36,7 +36,7 @@ public class SmokeTests : IClassFixture<TestAppFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("dir=\"ltr\"", html);
         Assert.Contains("lang=\"en\"", html);
-        Assert.Contains("ParishLive", html);
+        Assert.Contains("ParishLife", html);
         Assert.Contains("Needs your decision", html);   // localized dashboard string
     }
 

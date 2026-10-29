@@ -1,0 +1,14 @@
+@page
+@model ParishLive.Web.Pages.Events.AdmissionsModel
+@{ ViewData["Title"] = L["Events.Places"].Value; }
+<main class="content" id="main-content"><h1>@Model.Event.Title</h1><p>@L["Events.ReservedHelp"]</p>
+@if (Model.RosterOnly) { <div class="ops-status">@L["Events.RosterWarning"] · @L["Common.AsOf"] @Model.RefreshedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</div> }
+else if (Model.IsOperator) { <a class="btn btn-g" asp-page-handler="Roster" asp-route-id="@Model.Event.Id">@L["Events.RosterWarning"]</a> }
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+@foreach (var item in Model.Items) { <article class="ops-card"><h2>@item.ParticipantName</h2><p>@L["Place." + item.Place]</p><p>@L["Events.Arrival"]: @(item.ArrivedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "—")</p>
+@if (Model.IsOperator && !Model.RosterOnly) { <form method="post" class="ops-form no-print"><input type="hidden" name="id" value="@Model.Event.Id" /><input type="hidden" name="admissionId" value="@item.Id" /><input type="hidden" name="revision" value="@item.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+<label>@L["Auth.BirthDate"]<input name="verifiedBirthDate" type="date" value="@item.BirthDate?.ToString("yyyy-MM-dd")" /></label>
+<fieldset><legend>@L["Events.PaperRecovery"]</legend><label><input name="reconcilePaper" type="checkbox" value="true" />@L["Events.ReconcilePaper"]</label><label>@L["Finance.ActualAt"] (UTC)<input name="actualAt" type="datetime-local" /></label><label>@L["Events.PaperReference"]<input name="paperReference" maxlength="500" /></label></fieldset>
+<label>@L["Events.IdentityEvidence"]<input name="evidence" maxlength="500" /></label><label>@L["Events.Collectors"]<textarea name="collectors" maxlength="2000"></textarea></label><label>@L["Events.Collector"]<input name="collectorIdentity" maxlength="200" /></label><label><input type="checkbox" name="independentExit" value="true" /> @L["Events.IndependentExit"]</label><div class="actions"><button name="action" value="Consent" class="btn btn-g">@L["Events.VerifyConsent"]</button><button name="action" value="Confirm" class="btn btn-g">@L["Events.ConfirmPlace"]</button><button name="action" value="Arrival" class="btn btn-p">@L["Events.Arrival"]</button><button name="action" value="Pickup" class="btn btn-g" data-confirm="@L["Case.ConfirmActual"]">@L["Events.Pickup"]</button></div></form> }
+</article> }
+</main>

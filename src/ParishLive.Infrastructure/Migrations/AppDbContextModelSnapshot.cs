@@ -145,6 +145,174 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("ParishLive.Domain.Entities.AccountNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MessageCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReadAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecipientUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientUserId", "OperationId", "MessageCode")
+                        .IsUnique();
+
+                    b.ToTable("AccountNotifications");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.AdministrativeChangeRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AppointmentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdministrativeChanges");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.AdministrativeRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorityReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId", "OperationId")
+                        .IsUnique();
+
+                    b.ToTable("AdministrativeRecords");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.AttendanceMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ActualAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AdmissionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PaperReconciled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("AttendanceMovements");
+                });
+
             modelBuilder.Entity("ParishLive.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -186,6 +354,397 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("ParishLive.Domain.Entities.CaseEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Content")
+                        .HasColumnType("BLOB");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReplacesId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Requirement")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SuppliedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("CaseEvidence");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.CaseHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicantMessage")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorityUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromState")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("InstructionAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstructionChannel")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InternalNote")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToState")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("CaseHistories");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.CertificateRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BishopUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CollectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CollectionReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DocumentVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("FinalContent")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("FinalFileName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinalMediaType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PriestName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PriestUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecipientAuthority")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecipientUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReleaseExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequesterUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SignedEvidenceReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SourceCaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("Certificates");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ConcernAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CanViewIdentity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CanViewSensitive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ConcernId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Conflicted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewerUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("ConcernAccess");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ConcernLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicantReply")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConcernId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewerNote")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("ConcernLogs");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ConcernRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AnonymousToReviewers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Narrative")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Sensitive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmitterUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("Concerns");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ContentPage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DraftJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EditorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublishedJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PublishedRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PublisherUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("ContentPages");
+                });
+
             modelBuilder.Entity("ParishLive.Domain.Entities.Event", b =>
                 {
                     b.Property<Guid>("Id")
@@ -194,6 +753,10 @@ namespace ParishLive.Infrastructure.Migrations
 
                     b.Property<int?>("Capacity")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ConsentVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -207,6 +770,9 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsMass")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("TEXT");
 
@@ -214,6 +780,10 @@ namespace ParishLive.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("RegistrationOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("StartUtc")
@@ -234,6 +804,80 @@ namespace ParishLive.Infrastructure.Migrations
                     b.HasIndex("ParishId");
 
                     b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.EventAdmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedCollectorsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ArrivedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConsentEvidenceReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ConsentVerified")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ConsentVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ExitedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IndependentExitApproved")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParticipantName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParticipantUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Place")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequesterUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "ParticipantUserId")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("EventAdmissions");
                 });
 
             modelBuilder.Entity("ParishLive.Domain.Entities.EventRegistration", b =>
@@ -264,6 +908,176 @@ namespace ParishLive.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("EventRegistrations");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.FinancialRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationAccount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fund")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("MovementId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversesId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Units")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("FinancialRequests");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.GivingBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CollectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ObservationJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OpenedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerifiedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("VerifiedRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("GivingBatches");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.GivingLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fund")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HouseholdReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MovementId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Units")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("GivingLines");
                 });
 
             modelBuilder.Entity("ParishLive.Domain.Entities.Group", b =>
@@ -338,10 +1152,28 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("GroupMembers");
                 });
 
-            modelBuilder.Entity("ParishLive.Domain.Entities.Membership", b =>
+            modelBuilder.Entity("ParishLive.Domain.Entities.GuestAccess", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssociatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssociatedUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssociationEvidenceReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("OrgId")
@@ -350,8 +1182,234 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<Guid>("ParishId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("GuestAccess");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.HouseholdRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ContactPersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("Households");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.LedgerMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ActualAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationAccount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fund")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversesId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Units")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.HasIndex("ParishId", "SourceReference")
+                        .IsUnique();
+
+                    b.ToTable("LedgerMovements");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.MeetingAttendance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParticipantUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PeriodClosed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PrivateReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "ParticipantUserId")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("MeetingAttendance");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.Membership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Accepted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("AcceptedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppointedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorityReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CanReviewSensitiveConcerns")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CanViewConcernIdentity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("EndsAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("InvitationExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsHeadPriest")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MayCreateParishes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Role")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("StartsAtUtc")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")
                         .IsRequired()
@@ -364,6 +1422,145 @@ namespace ParishLive.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Memberships");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.MembershipReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicantMessage")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicantUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SuppliedName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerificationReference")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("MembershipReviews");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.MinistryApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicantUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeparture")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrivateReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.HasIndex("GroupId", "ApplicantUserId", "IsDeparture")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('Submitted', 'LeaderApproved', 'WithdrawalRequested')");
+
+                    b.ToTable("MinistryApplications");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.MovementAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fund")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MovementId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PurposeReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Units")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("MovementAllocations");
                 });
 
             modelBuilder.Entity("ParishLive.Domain.Entities.Notice", b =>
@@ -412,6 +1609,52 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("Notices");
                 });
 
+            modelBuilder.Entity("ParishLive.Domain.Entities.OperationReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ResultRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId", "OperationId")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("Operations");
+                });
+
             modelBuilder.Entity("ParishLive.Domain.Entities.Organization", b =>
                 {
                     b.Property<Guid>("Id")
@@ -420,6 +1663,12 @@ namespace ParishLive.Infrastructure.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameArabic")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameFrench")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -433,8 +1682,41 @@ namespace ParishLive.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AdoptionReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Bundle")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("GuestIntakeEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GuestRequestKindsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Jurisdiction")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lifecycle")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Locality")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameArabic")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameFrench")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OfficeContact")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("OrgId")
@@ -443,11 +1725,119 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<Guid?>("OrganizationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("PubliclyListed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SuspendedByRole")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OrganizationId");
 
                     b.ToTable("Parishes");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ParishFollow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ParishId")
+                        .IsUnique();
+
+                    b.ToTable("ParishFollows");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.ParishPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowProxyCertificateApproval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AllowProxyEntryApproval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ApprovalReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("BishopReviewRequired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FinancePolicyApproved")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("NextRegisterNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("OfficialTemplatesApproved")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegisterSeries")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ReligiousRequirementsApproved")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequiredEvidenceJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SafeguardingLeadUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SafeguardingPolicyApproved")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("ParishPolicies");
                 });
 
             modelBuilder.Entity("ParishLive.Domain.Entities.Permission", b =>
@@ -475,11 +1865,187 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("Permissions");
                 });
 
+            modelBuilder.Entity("ParishLive.Domain.Entities.PersonRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ArabicName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BirthDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DatePrecision")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DirectoryOptIn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FrenchName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LinkedUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SuppliedName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.HasIndex("ParishId", "LinkedUserId")
+                        .IsUnique()
+                        .HasFilter("\"LinkedUserId\" IS NOT NULL");
+
+                    b.ToTable("People");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.PrivateNotebook", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssigneeUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("PrivateNotebooks");
+                });
+
+            modelBuilder.Entity("ParishLive.Domain.Entities.RepresentationGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepresentativeUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SubjectPersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerificationReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerifiedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("RepresentationGrants");
+                });
+
             modelBuilder.Entity("ParishLive.Domain.Entities.Reservation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("CleanupMinutes")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -496,7 +2062,10 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<int>("ExpectedAttendees")
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("GroupId")
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("HoldExpiresAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("OrgId")
@@ -508,6 +2077,13 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<string>("RequestedByUserId")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SetupMinutes")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("StartUtc")
                         .HasColumnType("TEXT");
@@ -624,6 +2200,104 @@ namespace ParishLive.Infrastructure.Migrations
                     b.ToTable("RolePermissions");
                 });
 
+            modelBuilder.Entity("ParishLive.Domain.Entities.ServiceCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CelebrantName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CelebratedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Disputed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OfficialSnapshotJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParishId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegisterReference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequesterUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequiredEvidenceSnapshotJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RequirementsPolicyRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResponsiblePriestName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponsiblePriestUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ResumeStage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ScheduledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SubjectName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SuppliedFactsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("ParishId", "Id");
+
+                    b.ToTable("ServiceCases");
+                });
+
             modelBuilder.Entity("ParishLive.Domain.Entities.Venue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -633,10 +2307,16 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<int>("Capacity")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("CleanupMinutes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsServiceable")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
@@ -648,6 +2328,13 @@ namespace ParishLive.Infrastructure.Migrations
 
                     b.Property<Guid>("ParishId")
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SetupMinutes")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -781,6 +2468,9 @@ namespace ParishLive.Infrastructure.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
@@ -794,6 +2484,10 @@ namespace ParishLive.Infrastructure.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("InterfaceLanguage")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("INTEGER");

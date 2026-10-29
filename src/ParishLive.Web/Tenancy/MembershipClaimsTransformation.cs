@@ -7,50 +7,36 @@ using ParishLive.Infrastructure.Data;
 
 namespace ParishLive.Web.Tenancy;
 
-/// <summary>
-/// After authentication, enriches the principal with tenant + role claims derived from the user's
-/// memberships. Loads with IgnoreQueryFilters (the tenant filter isn't established yet), which also
-/// avoids a chicken-and-egg cycle with <see cref="ClaimsTenantContext"/>.
-/// </summary>
-public sealed class MembershipClaimsTransformation : IClaimsTransformation
+/// <summary>Live appointments, rebuilt per request. Context belongs to the tab URL, never a shared cookie.</summary>
+public sealed class MembershipClaimsTransformation(AppDbContext db, IHttpContextAccessor accessor) : IClaimsTransformation
 {
-    private readonly AppDbContext _db;
-    public MembershipClaimsTransformation(AppDbContext db) => _db = db;
-
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        if (principal.Identity is not ClaimsIdentity identity || !identity.IsAuthenticated)
-            return principal;
-
-        if (identity.HasClaim(c => c.Type == PlClaims.Org))
-            return principal; // already enriched this request
-
-        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId))
-            return principal;
-
-        var memberships = await _db.Memberships.IgnoreQueryFilters()
-            .Where(m => m.UserId == userId)
-            .ToListAsync();
-
-        if (memberships.Count == 0)
-            return principal;
-
-        identity.AddClaim(new Claim(PlClaims.Org, memberships[0].OrgId.ToString()));
-
-        foreach (var parishId in memberships.Select(m => m.ParishId).Distinct())
-            identity.AddClaim(new Claim(PlClaims.Parish, parishId.ToString()));
-
-        var isArchAdmin = memberships.Any(m => m.Role is SystemRole.Archbishop or SystemRole.ArchdioceseAdmin);
-        identity.AddClaim(new Claim(PlClaims.ArchAdmin, isArchAdmin ? "true" : "false"));
-
-        foreach (var role in memberships.Select(m => m.Role.ToString()).Distinct())
-            identity.AddClaim(new Claim(PlClaims.Role, role));
-
-        var displayName = await _db.Users.Where(u => u.Id == userId).Select(u => u.DisplayName).FirstOrDefaultAsync();
-        if (!string.IsNullOrWhiteSpace(displayName))
-            identity.AddClaim(new Claim(PlClaims.Name, displayName));
-
-        return principal;
+        if (principal.Identity?.IsAuthenticated != true) return principal;
+        var copy = principal.Clone();
+        foreach (var identity in copy.Identities)
+            foreach (var claim in identity.Claims.Where(c => c.Type.StartsWith("pl:", StringComparison.Ordinal)).ToList())
+                identity.RemoveClaim(claim);
+        var target = (ClaimsIdentity)copy.Identity!;
+        var userId = copy.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId);
+        if (user is null || user.LockoutEnd > DateTimeOffset.UtcNow) return new ClaimsPrincipal(new ClaimsIdentity());
+        target.AddClaim(new Claim(PlClaims.Name, user.DisplayName ?? user.UserName ?? ""));
+        var all = (await db.Memberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(m => m.UserId == userId).ToListAsync()).Where(m => m.IsEffective(DateTimeOffset.UtcNow)).ToList();
+        var work = all.Where(m => m.Role is not (SystemRole.Member or SystemRole.PublicVisitor)).ToList();
+        var choices = work.Count > 0 ? work : all;
+        var raw = accessor.HttpContext?.Request.Query["actingAs"].ToString();
+        var selected = Guid.TryParse(raw, out var requested)
+            ? choices.SingleOrDefault(m => m.Id == requested)
+            : choices.Count == 1 ? choices[0] : null;
+        if (selected is null) return copy;
+        target.AddClaim(new Claim(PlClaims.Assignment, selected.Id.ToString()));
+        target.AddClaim(new Claim(PlClaims.Org, selected.OrgId.ToString()));
+        if (selected.ParishId != Guid.Empty) target.AddClaim(new Claim(PlClaims.Parish, selected.ParishId.ToString()));
+        target.AddClaim(new Claim(PlClaims.ArchAdmin,
+            selected.Role is SystemRole.Archbishop or SystemRole.ArchdioceseAdmin ? "true" : "false"));
+        target.AddClaim(new Claim(PlClaims.Role, selected.Role.ToString()));
+        return copy;
     }
 }

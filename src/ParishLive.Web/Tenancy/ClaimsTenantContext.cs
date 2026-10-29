@@ -28,4 +28,6 @@ public sealed class ClaimsTenantContext : ITenantContext
         ?? Array.Empty<Guid>();
 
     public bool IsArchdioceseAdmin => User?.HasClaim(PlClaims.ArchAdmin, "true") ?? false;
+    public Guid? ActingAssignmentId => Guid.TryParse(User?.FindFirst(PlClaims.Assignment)?.Value, out var id) ? id : null;
+    public string? ActingRole => User?.FindFirst(PlClaims.Role)?.Value;
 }

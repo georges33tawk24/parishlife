@@ -1,0 +1,16 @@
+@page
+@model ParishLive.Web.Areas.Identity.Pages.Account.RegisterModel
+@{ ViewData["Title"] = L["Auth.Register"].Value; }
+<main class="content" id="main-content"><h1>@L["Auth.Register"]</h1><p>@L["Auth.AccountOnly"]</p>
+@if (!Model.PolicyConfigured) { <div class="ops-status">@L["Auth.AgePolicy"]</div> }
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+<form method="post" class="ops-form"><input type="hidden" asp-for="ReturnUrl" />
+<div><label asp-for="GivenName">@L["Auth.GivenName"]</label><input asp-for="GivenName" required maxlength="200" autocomplete="given-name" dir="auto" /></div>
+<div><label asp-for="FamilyName">@L["Auth.FamilyName"]</label><input asp-for="FamilyName" required maxlength="200" autocomplete="family-name" dir="auto" /></div>
+<div><label asp-for="BirthDate">@L["Auth.BirthDate"]</label><input asp-for="BirthDate" type="date" required autocomplete="bday" /></div>
+<div><label asp-for="Contact">@L["Auth.Contact"]</label><input asp-for="Contact" required maxlength="256" dir="auto" /></div>
+<div><label asp-for="Language">@L["Common.Language"]</label><select asp-for="Language"><option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option></select></div>
+<div><label asp-for="Password">@L["Auth.Password"]</label><input asp-for="Password" type="password" required minlength="16" maxlength="200" autocomplete="new-password" /><p>@L["Auth.PasswordHelp"]</p></div>
+<div><label asp-for="ConfirmPassword">@L["Auth.ConfirmPassword"]</label><input asp-for="ConfirmPassword" type="password" required minlength="16" maxlength="200" autocomplete="new-password" /></div>
+<label><input asp-for="NoticeAccepted" required /> @L["Auth.Notice"]</label>
+<button class="btn btn-p" disabled="@(!Model.PolicyConfigured)">@L["Auth.Register"]</button></form></main>

@@ -28,7 +28,9 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
     {
         _ = _factory.Services; // ensure host started + seeded
         var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_factory.Connection).Options;
-        var tenant = new StaticTenantContext(SeedIds.Org, parishes, false, userId);
+        using var lookup = new AppDbContext(options, StaticTenantContext.None);
+        var role = lookup.Memberships.IgnoreQueryFilters().Where(m => m.UserId == userId && parishes.Contains(m.ParishId)).Select(m => m.Role).Single();
+        var tenant = new StaticTenantContext(SeedIds.Org, parishes, false, userId) { ActingRole = role.ToString() };
         var db = new AppDbContext(options, tenant);
         var perms = new PermissionService(db);
         return (db, new ReservationService(db, tenant, perms, new AuditService(db, tenant, perms)));
@@ -44,12 +46,16 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
     private async Task<Guid> NewForwardedReservationAsync(AppDbContext db, ReservationService svc, string requester, string secretary, string title)
     {
         var venueId = await db.Venues.Select(v => v.Id).FirstAsync();
-        var id = await svc.CreateAsync(new CreateReservationRequest(
+        var (requestDb, requestService) = Make(requester, SeedIds.ParishA);
+        await using var requestContext = requestDb;
+        var id = await requestService.CreateAsync(new CreateReservationRequest(
             SeedIds.YouthGroup, venueId, requester, title, null,
-            new DateTimeOffset(2026, 8, 1, 18, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 8, 1, 20, 0, 0, TimeSpan.Zero), 30));
-        await svc.PerformActionAsync(id, "SubmitForReview", null, requester);  // member has reservations.create
-        await svc.PerformActionAsync(id, "Forward", null, secretary);          // secretary has reservations.review
+            DateTimeOffset.UtcNow.AddDays(10),
+            DateTimeOffset.UtcNow.AddDays(10).AddHours(2), 30));
+        await requestService.PerformActionAsync(id, "SubmitForReview", null, requester);
+        var (secretaryDb, secretaryService) = Make(secretary, SeedIds.ParishA);
+        await using var secretaryContext = secretaryDb;
+        await secretaryService.PerformActionAsync(id, "Forward", null, secretary);
         return id;
     }
 
@@ -108,7 +114,7 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
     }
 
     [Fact]
-    public async Task An_action_not_valid_from_the_current_state_is_rejected()
+    public async Task An_undefined_action_is_rejected()
     {
         var priest = await IdOf(SeedIds.PriestAEmail);
         var (db, svc) = Make(priest, SeedIds.ParishA);
@@ -116,11 +122,11 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
 
         var venueId = await db.Venues.Select(v => v.Id).FirstAsync();
         var id = await svc.CreateAsync(new CreateReservationRequest(
-            SeedIds.YouthGroup, venueId, await IdOf(SeedIds.RitaEmail), "Skip review", null,
-            new DateTimeOffset(2026, 9, 2, 18, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 9, 2, 20, 0, 0, TimeSpan.Zero), 25));
+            SeedIds.YouthGroup, venueId, priest, "Invalid action", null,
+            DateTimeOffset.UtcNow.AddDays(20),
+            DateTimeOffset.UtcNow.AddDays(20).AddHours(2), 25));
 
-        await Assert.ThrowsAsync<DomainException>(() => svc.PerformActionAsync(id, "Approve", null, priest));
+        await Assert.ThrowsAsync<DomainException>(() => svc.PerformActionAsync(id, "Undefined", null, priest));
     }
 
     [Fact]
@@ -147,8 +153,8 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
         var venueId = await db.Venues.Select(v => v.Id).FirstAsync();
         var id = await svc.CreateAsync(new CreateReservationRequest(
             SeedIds.YouthGroup, venueId, rita, "Choir practice", null,
-            new DateTimeOffset(2026, 9, 1, 18, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 9, 1, 20, 0, 0, TimeSpan.Zero), 25));
+            DateTimeOffset.UtcNow.AddDays(30),
+            DateTimeOffset.UtcNow.AddDays(30).AddHours(2), 25));
 
         Assert.Equal("Submitted", (await svc.GetAsync(id))!.StateCode);
     }
@@ -159,5 +165,23 @@ public class ReservationWorkflowTests : IClassFixture<TestAppFactory>
         var (dbB, svcB) = Make(await IdOf(SeedIds.PriestBEmail), SeedIds.ParishB);
         await using var __ = dbB;
         Assert.Empty(await svcB.ListAsync());
+    }
+
+    [Fact]
+    public async Task Priest_direct_confirmation_needs_no_secretary_step_and_setup_cleanup_block_competing_request()
+    {
+        var priest = await IdOf(SeedIds.PriestAEmail); var requester = await IdOf(SeedIds.RitaEmail);
+        var (db, svc) = Make(priest, SeedIds.ParishA); await using var context = db;
+        var venue = ParishLive.Domain.Entities.Venue.Create(SeedIds.Org, SeedIds.ParishA, "Fictional setup-conflict room", 50);
+        venue.SetupMinutes = 30; venue.CleanupMinutes = 20; db.Venues.Add(venue); await db.SaveChangesAsync();
+        var start = DateTimeOffset.UtcNow.AddDays(50);
+        var (requestDb, requests) = Make(requester, SeedIds.ParishA); await using var requestContext = requestDb;
+        var first = await requests.CreateAsync(new(null, venue.Id, requester, "First fictional request", null, start, start.AddHours(1), 20));
+        var competing = await requests.CreateAsync(new(null, venue.Id, requester, "Second fictional request", null, start.AddHours(1).AddMinutes(5), start.AddHours(2), 20));
+        Assert.Contains(await svc.ListAwaitingActionAsync(), r => r.Id == first);
+        await svc.PerformActionAsync(first, "Approve", null, priest);
+        Assert.Equal("Approved", (await svc.GetAsync(first))!.StateCode);
+        await Assert.ThrowsAsync<DomainException>(() => svc.PerformActionAsync(competing, "Approve", null, priest));
+        Assert.Equal("Submitted", (await svc.GetAsync(competing))!.StateCode);
     }
 }

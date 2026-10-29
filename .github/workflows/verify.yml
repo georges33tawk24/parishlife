@@ -1,0 +1,24 @@
+name: Verify ParishLife
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [codex/reviewed-requirements]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet restore ParishLive.slnx
+      - run: dotnet test ParishLive.slnx --configuration Release --no-restore
+      - run: node tools/check-localization.mjs
+      - run: node tools/check-implementation.mjs

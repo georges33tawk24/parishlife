@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ParishLive.Application.Authorization;
+using ParishLive.Application.Abstractions;
 using ParishLive.Application.Common;
 using ParishLive.Domain.Constants;
 using ParishLive.Domain.Enums;
@@ -12,24 +13,35 @@ namespace ParishLive.Infrastructure.Authorization;
 /// configurable Role → its granted permissions. Because the grants are data (RolePermission), a priest
 /// can reconfigure a secretary's abilities without a code change.
 /// </summary>
-public sealed class PermissionService(AppDbContext db) : IPermissionService
+public sealed class PermissionService(AppDbContext db, ITenantContext? tenant = null) : IPermissionService
 {
     public async Task<IReadOnlySet<string>> GetPermissionsAsync(string userId, Guid parishId, CancellationToken cancellationToken = default)
     {
         // Keyed by explicit user + parish, so bypass the tenant filter (this runs during claims building too).
-        var membership = await db.Memberships.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(m => m.UserId == userId && m.ParishId == parishId, cancellationToken);
+        var candidates = await db.Memberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(m => m.UserId == userId && m.ParishId == parishId).ToListAsync(cancellationToken);
+        var effective = candidates.Where(m => m.IsEffective(DateTimeOffset.UtcNow));
+        if (tenant?.ActingAssignmentId is Guid assignment)
+            effective = effective.Where(m => m.Id == assignment);
+        else if (tenant?.UserId is not null && tenant.ActingRole is null)
+            return new HashSet<string>();
+        var eligible = effective.ToList();
+        var membership = eligible.Count == 1 ? eligible[0] : null;
 
         if (membership is null)
             return new HashSet<string>();
 
         var roleCode = ToRoleCode(membership.Role);
 
+        var roles = await db.ParishRoles.Where(r => r.Code == roleCode &&
+            (r.ParishId == null || r.ParishId == parishId)).ToListAsync(cancellationToken);
+        var roleIds = roles.Where(r => r.ParishId == parishId).Select(r => r.Id).ToList();
+        if (roleIds.Count == 0) roleIds = roles.Select(r => r.Id).ToList();
         var permissions = await (
             from rp in db.RolePermissions
             join role in db.ParishRoles on rp.RoleId equals role.Id
             join permission in db.Permissions on rp.PermissionId equals permission.Id
-            where role.Code == roleCode && (role.ParishId == null || role.ParishId == parishId)
+            where roleIds.Contains(role.Id)
             select permission.Code)
             .Distinct()
             .ToListAsync(cancellationToken);

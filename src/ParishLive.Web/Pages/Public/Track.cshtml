@@ -1,0 +1,9 @@
+@page
+@model ParishLive.Web.Pages.Public.TrackModel
+@{ ViewData["Title"] = L["Guest.Track"]; }
+<main class="content" id="main-content"><h1>@L["Guest.Track"]</h1><p>@L["Guest.LinkHelp"]</p>
+<form id="guest-tracking" data-lookup="@(!Model.LookedUp ? "true" : "false")" method="post" class="ops-form ops-card"><label asp-for="Secret">@L["Guest.Code"]</label><input asp-for="Secret" required minlength="64" maxlength="64" autocomplete="off" spellcheck="false" dir="ltr" /><button class="btn btn-p">@L["Guest.Track"]</button></form>
+@if (Model.Record is not null) { <section class="ops-card"><h2><bdi>@Model.Record.Reference</bdi></h2><p>@L["Stage." + Model.Record.Stage]</p><ol>@foreach (var reply in Model.Record.Replies) { <li dir="auto">@reply</li> }</ol><p>@L["Guest.Sensitive"]</p></section> }
+else if (Model.LookedUp) { <p class="ops-error" role="alert">@L["Error.Unavailable"]</p> }
+<p>@L["Guest.LostLink"] <a href="/Public/Directory">@L["Public.Directory"]</a></p>
+</main><script src="~/js/guest-tracking.js" asp-append-version="true"></script>

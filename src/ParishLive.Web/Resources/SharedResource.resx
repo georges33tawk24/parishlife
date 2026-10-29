@@ -8,7 +8,7 @@
   <data name="Ctx.Parish" xml:space="preserve"><value>St. George Parish</value></data>
   <data name="Ctx.Org" xml:space="preserve"><value>Archdiocese of Beirut</value></data>
   <data name="Nav.Parish" xml:space="preserve"><value>Parish</value></data>
-  <data name="Nav.Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Nav.Dashboard" xml:space="preserve"><value>Home</value></data>
   <data name="Nav.Reservations" xml:space="preserve"><value>Reservations</value></data>
   <data name="Nav.Events" xml:space="preserve"><value>Events</value></data>
   <data name="Nav.Groups" xml:space="preserve"><value>Groups &amp; Committees</value></data>
@@ -104,8 +104,8 @@
   <data name="Dash.Hello" xml:space="preserve"><value>Welcome back, {0}.</value></data>
   <data name="Dash.Awaiting" xml:space="preserve"><value>Awaiting you</value></data>
   <data name="Dash.NoDecisions" xml:space="preserve"><value>Nothing awaiting your decision — you're all caught up.</value></data>
-  <data name="Events.Register" xml:space="preserve"><value>Register</value></data>
-  <data name="Events.Registered" xml:space="preserve"><value>Registered</value></data>
+  <data name="Events.Register" xml:space="preserve"><value>Request a place</value></data>
+  <data name="Events.Registered" xml:space="preserve"><value>Application recorded — review place status</value></data>
   <data name="Events.Calendar" xml:space="preserve"><value>Calendar</value></data>
   <data name="Events.List" xml:space="preserve"><value>List</value></data>
   <data name="Events.Empty" xml:space="preserve"><value>No upcoming events.</value></data>
@@ -128,4 +128,447 @@
   <data name="Audit.When" xml:space="preserve"><value>When</value></data>
   <data name="Audit.Who" xml:space="preserve"><value>Who</value></data>
   <data name="Audit.What" xml:space="preserve"><value>Action</value></data>
+<data name="Nav.Requests" xml:space="preserve"><value>Requests / My work</value></data>
+<data name="Nav.Website" xml:space="preserve"><value>Public website</value></data>
+<data name="Nav.OfficeExpenses" xml:space="preserve"><value>Office Expenses</value></data>
+<data name="Nav.Finance" xml:space="preserve"><value>Finance</value></data>
+<data name="Nav.Notes" xml:space="preserve"><value>My notes</value></data>
+<data name="Nav.Readiness" xml:space="preserve"><value>Readiness and dependencies</value></data>
+<data name="Common.Skip" xml:space="preserve"><value>Skip to content</value></data>
+<data name="Common.Navigation" xml:space="preserve"><value>Navigation</value></data>
+<data name="Common.Demo" xml:space="preserve"><value>Demonstration environment — fictional sample identities and records.</value></data>
+<data name="Common.Empty" xml:space="preserve"><value>No permitted records yet.</value></data>
+<data name="Common.Revision" xml:space="preserve"><value>Revision</value></data>
+<data name="Common.Language" xml:space="preserve"><value>Language</value></data>
+<data name="Common.SaveDraft" xml:space="preserve"><value>Save draft</value></data>
+<data name="Common.Save" xml:space="preserve"><value>Save</value></data>
+<data name="Common.Edit" xml:space="preserve"><value>Edit draft</value></data>
+<data name="Common.Cancel" xml:space="preserve"><value>Cancel</value></data>
+<data name="Common.Back" xml:space="preserve"><value>Back to list</value></data>
+<data name="Common.AsOf" xml:space="preserve"><value>Last updated</value></data>
+<data name="Context.Choose" xml:space="preserve"><value>Choose your acting role</value></data>
+<data name="Context.ChooseHelp" xml:space="preserve"><value>Choose one current appointment. Actions keep their exact parish and role.</value></data>
+<data name="Context.NoAssignment" xml:space="preserve"><value>Awaiting assignment / My account</value></data>
+<data name="Case.New" xml:space="preserve"><value>New request</value></data>
+<data name="Case.Type" xml:space="preserve"><value>Request type</value></data>
+<data name="Case.Subject" xml:space="preserve"><value>Subject’s supplied name</value></data>
+<data name="Case.Details" xml:space="preserve"><value>Supplied details</value></data>
+<data name="Case.ReceiptHelp" xml:space="preserve"><value>Received means saved for review. It does not confirm a date, sacrament, payment or official document.</value></data>
+<data name="Case.ReviewHelp" xml:space="preserve"><value>Review the parish, subject and details. Originals, identity review and clergy decisions may still be required.</value></data>
+<data name="Case.Submit" xml:space="preserve"><value>Submit request</value></data>
+<data name="Case.Priest" xml:space="preserve"><value>Responsible priest</value></data>
+<data name="Case.Register" xml:space="preserve"><value>Official register reference</value></data>
+<data name="Case.Timeline" xml:space="preserve"><value>Timeline</value></data>
+<data name="Case.Authority" xml:space="preserve"><value>Decision authority</value></data>
+<data name="Case.Recorder" xml:space="preserve"><value>Recorded by</value></data>
+<data name="Case.InternalNote" xml:space="preserve"><value>Internal staff note — office only</value></data>
+<data name="Case.ApplicantMessage" xml:space="preserve"><value>Message to applicant</value></data>
+<data name="Case.NextAction" xml:space="preserve"><value>Next action</value></data>
+<data name="Case.PriorInstruction" xml:space="preserve"><value>Record prior priest instruction</value></data>
+<data name="Case.ProxyHelp" xml:space="preserve"><value>Record only an actual prior case instruction. Effective once; no repeat online approval. This never applies a signature.</value></data>
+<data name="Case.Channel" xml:space="preserve"><value>How the instruction was received</value></data>
+<data name="Case.Attestation" xml:space="preserve"><value>The named priest already instructed me to record this decision for this request.</value></data>
+<data name="Case.ActualTime" xml:space="preserve"><value>Actual / proposed date and time</value></data>
+<data name="Case.Celebrant" xml:space="preserve"><value>Actual celebrant’s supplied name</value></data>
+<data name="Case.ConfirmDecision" xml:space="preserve"><value>Confirm the exact parish, record and actual decision authority.</value></data>
+<data name="Case.ConfirmActual" xml:space="preserve"><value>Confirm the celebration actually occurred with these actual facts.</value></data>
+<data name="Case.Evidence" xml:space="preserve"><value>Evidence and originals</value></data>
+<data name="Case.UploadHelp" xml:space="preserve"><value>PDF/JPEG/PNG, 10 MB per file, 20 files per case. Uploaded is not verified. Contact the office for originals or exceptions.</value></data>
+<data name="Case.Requirement" xml:space="preserve"><value>Required item / document purpose</value></data>
+<data name="Case.File" xml:space="preserve"><value>Select file</value></data>
+<data name="Case.Upload" xml:space="preserve"><value>Upload evidence</value></data>
+<data name="Case.ReviewBasis" xml:space="preserve"><value>Actual verification / rejection basis</value></data>
+<data name="Case.Certificates" xml:space="preserve"><value>Certificates and copies</value></data>
+<data name="Case.PrepareCertificate" xml:space="preserve"><value>Prepare draft from official source</value></data>
+<data name="Channel.InPerson" xml:space="preserve"><value>In person</value></data>
+<data name="Channel.Telephone" xml:space="preserve"><value>Telephone</value></data>
+<data name="Channel.Written" xml:space="preserve"><value>Written instruction</value></data>
+<data name="Channel.Other" xml:space="preserve"><value>Other actual channel</value></data>
+<data name="Finance.ScopeHelp" xml:space="preserve"><value>Original currencies stay separate. Approval, actual payment and internal transfer are distinct.</value></data>
+<data name="Finance.NoBalances" xml:space="preserve"><value>No recorded balance. A reviewed opening source is required; no amount is assumed.</value></data>
+<data name="Finance.Requests" xml:space="preserve"><value>Financial requests</value></data>
+<data name="Finance.NewRequest" xml:space="preserve"><value>Submit financial request</value></data>
+<data name="Finance.Kind" xml:space="preserve"><value>Movement type</value></data>
+<data name="Finance.Amount" xml:space="preserve"><value>Actual amount</value></data>
+<data name="Finance.Currency" xml:space="preserve"><value>Original currency</value></data>
+<data name="Finance.Account" xml:space="preserve"><value>Source account</value></data>
+<data name="Finance.Destination" xml:space="preserve"><value>Internal transfer destination</value></data>
+<data name="Finance.Fund" xml:space="preserve"><value>Approved fund / purpose</value></data>
+<data name="Finance.Source" xml:space="preserve"><value>Unique source reference</value></data>
+<data name="Finance.Submit" xml:space="preserve"><value>Submit for independent approval</value></data>
+<data name="Finance.Submitted" xml:space="preserve"><value>Awaiting independent approval</value></data>
+<data name="Finance.Approved" xml:space="preserve"><value>Approved — actual payment pending</value></data>
+<data name="Finance.Paid" xml:space="preserve"><value>Actual movement recorded</value></data>
+<data name="Finance.RecordPayment" xml:space="preserve"><value>Record actual movement</value></data>
+<data name="Finance.ActualEvidence" xml:space="preserve"><value>Actual receipt / payment evidence</value></data>
+<data name="Finance.ConfirmApproval" xml:space="preserve"><value>Approve independently. Changing roles is not a second person.</value></data>
+<data name="Finance.ConfirmActual" xml:space="preserve"><value>Record only an actual movement. This does not send money through a provider.</value></data>
+<data name="Ministry.Help" xml:space="preserve"><value>Leader review recommends; priest approval activates membership. Departure reasons stay private.</value></data>
+<data name="Ministry.Apply" xml:space="preserve"><value>Apply to join</value></data>
+<data name="Ministry.Leave" xml:space="preserve"><value>Request private departure</value></data>
+<data name="Ministry.DepartureReason" xml:space="preserve"><value>Private departure reason</value></data>
+<data name="Ministry.Applications" xml:space="preserve"><value>Permitted applications</value></data>
+<data name="Ministry.Application" xml:space="preserve"><value>Membership application</value></data>
+<data name="Ministry.Departure" xml:space="preserve"><value>Private departure</value></data>
+<data name="Ministry.Submitted" xml:space="preserve"><value>Submitted</value></data>
+<data name="Ministry.LeaderApproved" xml:space="preserve"><value>Leader reviewed — awaiting priest</value></data>
+<data name="Ministry.WithdrawalRequested" xml:space="preserve"><value>Withdrawal requested</value></data>
+<data name="Ministry.Withdrawn" xml:space="preserve"><value>Withdrawn</value></data>
+<data name="Ministry.Approved" xml:space="preserve"><value>Approved</value></data>
+<data name="Ministry.Recommend" xml:space="preserve"><value>Recommend to priest</value></data>
+<data name="Publishing.Help" xml:space="preserve"><value>Draft saving preserves the live revision. Publication requires complete reviewed English, French and Arabic.</value></data>
+<data name="Publishing.Slug" xml:space="preserve"><value>Stable content label</value></data>
+<data name="Publishing.PublishedRevision" xml:space="preserve"><value>Published revision</value></data>
+<data name="Publishing.Publish" xml:space="preserve"><value>Publish reviewed version</value></data>
+<data name="Publishing.Confirm" xml:space="preserve"><value>Confirm all three languages and the public audience.</value></data>
+<data name="Notes.AuthorOnly" xml:space="preserve"><value>Audience: author only. No successor or administrator inheritance.</value></data>
+<data name="Notes.Body" xml:space="preserve"><value>Private note</value></data>
+<data name="Notes.Author" xml:space="preserve"><value>Author only</value></data>
+<data name="Notes.NamedPriest" xml:space="preserve"><value>Named eligible priest for this task</value></data>
+<data name="Notes.CurrentPriests" xml:space="preserve"><value>Current priests, including future eligible appointees while shared</value></data>
+<data name="Notifications.Help" xml:space="preserve"><value>In-app storage is separate from delivery and read status. Opening a record does not clear notices.</value></data>
+<data name="Notifications.Read" xml:space="preserve"><value>Read</value></data>
+<data name="Notifications.Unread" xml:space="preserve"><value>Unread</value></data>
+<data name="Notifications.MarkRead" xml:space="preserve"><value>Mark this notice read</value></data>
+<data name="Readiness.Help" xml:space="preserve"><value>Recorded configuration is not launch approval. Responsible owners must supply real policy, language, service and recovery evidence.</value></data>
+<data name="Readiness.Religious" xml:space="preserve"><value>Religious requirements and register policy</value></data>
+<data name="Readiness.Templates" xml:space="preserve"><value>Approved official templates</value></data>
+<data name="Readiness.Finance" xml:space="preserve"><value>Financial controls and opening data</value></data>
+<data name="Readiness.Safeguarding" xml:space="preserve"><value>Safeguarding and named event lead</value></data>
+<data name="Readiness.Delivery" xml:space="preserve"><value>External delivery / verification</value></data>
+<data name="Readiness.Maps" xml:space="preserve"><value>Map integration</value></data>
+<data name="Readiness.Backup" xml:space="preserve"><value>Backup and restore evidence</value></data>
+<data name="Readiness.LanguageReview" xml:space="preserve"><value>Qualified language and accessibility review</value></data>
+<data name="Readiness.Recorded" xml:space="preserve"><value>Configuration recorded; validate evidence before live use.</value></data>
+<data name="Readiness.Required" xml:space="preserve"><value>Required input or service not configured. Use the approved manual process.</value></data>
+<data name="Public.Discover" xml:space="preserve"><value>Find a parish</value></data>
+<data name="Public.Search" xml:space="preserve"><value>Parish name or locality</value></data>
+<data name="Public.Find" xml:space="preserve"><value>Search published parishes</value></data>
+<data name="Public.NonePublished" xml:space="preserve"><value>No approved parish matches. Unverified sample identities are not published as real parishes.</value></data>
+<data name="Public.NoSchedule" xml:space="preserve"><value>Service times have not been published. Contact the parish office to confirm.</value></data>
+<data name="Public.RequestContact" xml:space="preserve"><value>Use the actual published office contact for requests or urgent pastoral needs. Online receipt does not promise immediate review.</value></data>
+<data name="Error.Unavailable" xml:space="preserve"><value>This item is unavailable or you do not have access.</value></data>
+<data name="Error.Invalid" xml:space="preserve"><value>Check the supplied values and try again.</value></data>
+<data name="Error.State" xml:space="preserve"><value>Action unavailable at this stage. Reload and check the actual result.</value></data>
+<data name="Error.Conflict" xml:space="preserve"><value>This record changed. Your action was not applied. Compare the latest version before retrying.</value></data>
+<data name="Error.OperationRequired" xml:space="preserve"><value>A valid operation reference is required. Reload the form.</value></data>
+<data name="Error.OperationMismatch" xml:space="preserve"><value>This operation reference already has different details. Check the original result.</value></data>
+<data name="Error.Disputed" xml:space="preserve"><value>Decision disputed. Uncompleted dependent work is paused for competent review.</value></data>
+<data name="Error.PolicyRequired" xml:space="preserve"><value>Approved religious requirements and register policy are required for this stage.</value></data>
+<data name="Error.FinancePolicy" xml:space="preserve"><value>Approved financial controls and real opening data are required before live money operations.</value></data>
+<data name="Error.TemplateRequired" xml:space="preserve"><value>Approved wording, languages and signature arrangements are required. This remains a draft.</value></data>
+<data name="Error.OfficialSource" xml:space="preserve"><value>An undisputed registered official source is required; a planned celebration is insufficient.</value></data>
+<data name="Error.EvidenceRequired" xml:space="preserve"><value>Required evidence is missing, rejected or unverified.</value></data>
+<data name="Error.Immutable" xml:space="preserve"><value>Completed record locked. Use the approved correction or reversal process.</value></data>
+<data name="Error.ProxyStage" xml:space="preserve"><value>Secretary recording is not approved for this stage. An eligible priest can decide directly.</value></data>
+<data name="Error.PriorInstruction" xml:space="preserve"><value>Select the eligible priest, actual instruction basis and channel, and confirm the prior case instruction.</value></data>
+<data name="Error.PriestAssignment" xml:space="preserve"><value>The named priest has no eligible current parish appointment.</value></data>
+<data name="Error.FileLimit" xml:space="preserve"><value>Use a nonempty file up to 10 MB, at most 20 per case. Contact the office for an exception.</value></data>
+<data name="Error.FileType" xml:space="preserve"><value>File name, declared type and content must match PDF, JPEG or PNG.</value></data>
+<data name="Error.Currency" xml:space="preserve"><value>Use an approved original currency: USD or LBP.</value></data>
+<data name="Error.Money" xml:space="preserve"><value>Enter a positive actual amount with valid currency precision and matching source.</value></data>
+<data name="Error.IndependentReviewer" xml:space="preserve"><value>A different eligible person must review. Switching roles is not independent review.</value></data>
+<data name="Error.OpeningExists" xml:space="preserve"><value>An opening already exists for this account and currency. Use a reviewed adjustment.</value></data>
+<data name="Error.ReversalReview" xml:space="preserve"><value>Use a reviewed correction linked to the original movement.</value></data>
+<data name="Error.ActualReceipt" xml:space="preserve"><value>Only actual cash or genuinely verified bank/OMT receipts can be recorded as received.</value></data>
+<data name="Error.Allocations" xml:space="preserve"><value>Allocations cannot exceed the received original amount.</value></data>
+<data name="Error.Capacity" xml:space="preserve"><value>Resource unavailable or actual capacity exceeded.</value></data>
+<data name="Error.ResourceConflict" xml:space="preserve"><value>The interval, including setup and cleanup, conflicts with a confirmed booking or current hold.</value></data>
+<data name="Error.Representation" xml:space="preserve"><value>A current reviewed representation grant is required for this person and purpose.</value></data>
+<data name="Error.SafeguardingPolicy" xml:space="preserve"><value>Approved safeguarding rules and a real named event lead are required.</value></data>
+<data name="Error.AgeReview" xml:space="preserve"><value>Exact birth and age eligibility need review. Unknown age is not presumed adult.</value></data>
+<data name="Error.Consent" xml:space="preserve"><value>Current verified event consent is required. Payment does not replace consent.</value></data>
+<data name="Error.AlreadyPresent" xml:space="preserve"><value>Already checked in. Review the existing arrival.</value></data>
+<data name="Error.UnauthorizedCollector" xml:space="preserve"><value>Pickup blocked. Collector or independent exit is not authorized. Follow the safeguarding lead’s real procedure.</value></data>
+<data name="Error.PersonLink" xml:space="preserve"><value>Office-reviewed person linking is required before formal ministry application.</value></data>
+<data name="Error.DuplicatePending" xml:space="preserve"><value>An application is pending. Continue the existing one.</value></data>
+<data name="Error.PersonAlreadyLinked" xml:space="preserve"><value>Person already linked. Independent identity-dispute review required.</value></data>
+<data name="Error.IdentityReview" xml:space="preserve"><value>Archived or deceased identity needs separate review before linking.</value></data>
+<data name="Error.Translations" xml:space="preserve"><value>Complete reviewed English, French and Arabic are required. The current published revision stays live.</value></data>
+<data name="Error.ShareConfirmation" xml:space="preserve"><value>Confirm the audience. Current-priest sharing includes future eligible appointees.</value></data>
+<data name="Error.IndependentRoute" xml:space="preserve"><value>A real eligible conflict-free independent route must be configured.</value></data>
+<data name="Stage.Draft" xml:space="preserve"><value>Draft</value></data>
+<data name="Stage.Received" xml:space="preserve"><value>Received</value></data>
+<data name="Stage.NeedsInformation" xml:space="preserve"><value>Needs information</value></data>
+<data name="Stage.Preparation" xml:space="preserve"><value>Preparation</value></data>
+<data name="Stage.Scheduled" xml:space="preserve"><value>Date confirmed</value></data>
+<data name="Stage.Celebrated" xml:space="preserve"><value>Actual celebration recorded</value></data>
+<data name="Stage.EntryReview" xml:space="preserve"><value>Official entry review</value></data>
+<data name="Stage.Registered" xml:space="preserve"><value>Registered</value></data>
+<data name="Stage.Declined" xml:space="preserve"><value>Declined</value></data>
+<data name="Stage.Cancelled" xml:space="preserve"><value>Cancelled</value></data>
+<data name="Kind.General" xml:space="preserve"><value>General parish request</value></data>
+<data name="Kind.Baptism" xml:space="preserve"><value>Baptism</value></data>
+<data name="Kind.Communion" xml:space="preserve"><value>First Communion</value></data>
+<data name="Kind.Confirmation" xml:space="preserve"><value>Confirmation / chrismation</value></data>
+<data name="Kind.Marriage" xml:space="preserve"><value>Marriage</value></data>
+<data name="Kind.Funeral" xml:space="preserve"><value>Funeral service</value></data>
+<data name="Kind.Certificate" xml:space="preserve"><value>Certificate request</value></data>
+<data name="Kind.MassIntention" xml:space="preserve"><value>Mass intention</value></data>
+<data name="Kind.Blessing" xml:space="preserve"><value>House blessing</value></data>
+<data name="Kind.SickVisit" xml:space="preserve"><value>Sick / home visit</value></data>
+<data name="Kind.PriestAppointment" xml:space="preserve"><value>Priest appointment request</value></data>
+<data name="Action.Create" xml:space="preserve"><value>Request saved</value></data>
+<data name="Action.Submit" xml:space="preserve"><value>Submit request</value></data>
+<data name="Action.Withdraw" xml:space="preserve"><value>Withdraw unhandled request</value></data>
+<data name="Action.Accept" xml:space="preserve"><value>Accept / record priest instruction</value></data>
+<data name="Action.NeedsInformation" xml:space="preserve"><value>Request information</value></data>
+<data name="Action.Resume" xml:space="preserve"><value>Resume prior review</value></data>
+<data name="Action.Schedule" xml:space="preserve"><value>Confirm proposed schedule</value></data>
+<data name="Action.Celebrate" xml:space="preserve"><value>Record actual celebration</value></data>
+<data name="Action.SubmitEntry" xml:space="preserve"><value>Submit official entry for review</value></data>
+<data name="Action.Register" xml:space="preserve"><value>Approve official entry</value></data>
+<data name="Action.ReturnEntry" xml:space="preserve"><value>Return entry for correction</value></data>
+<data name="Action.Cancel" xml:space="preserve"><value>Cancel before celebration</value></data>
+<data name="Action.Decline" xml:space="preserve"><value>Decline with reason</value></data>
+<data name="Action.Verify" xml:space="preserve"><value>Record actual verification</value></data>
+<data name="Action.RejectFile" xml:space="preserve"><value>Request readable replacement</value></data>
+<data name="Evidence.Uploaded" xml:space="preserve"><value>Uploaded — not verified</value></data>
+<data name="Evidence.PaperReceived" xml:space="preserve"><value>Paper received — not verified</value></data>
+<data name="Evidence.UnderReview" xml:space="preserve"><value>Under review</value></data>
+<data name="Evidence.Verified" xml:space="preserve"><value>Verified</value></data>
+<data name="Evidence.Rejected" xml:space="preserve"><value>Rejected / illegible</value></data>
+<data name="Evidence.Expired" xml:space="preserve"><value>Expired</value></data>
+<data name="Evidence.Waived" xml:space="preserve"><value>Waived by competent authority</value></data>
+<data name="Movement.Opening" xml:space="preserve"><value>Opening balance</value></data>
+<data name="Movement.Receipt" xml:space="preserve"><value>Actual receipt</value></data>
+<data name="Movement.Expense" xml:space="preserve"><value>Actual expense</value></data>
+<data name="Movement.Transfer" xml:space="preserve"><value>Internal transfer</value></data>
+<data name="Movement.Refund" xml:space="preserve"><value>Actual refund</value></data>
+<data name="Movement.Reversal" xml:space="preserve"><value>Reviewed reversal</value></data>
+<data name="Certificate.Prepared" xml:space="preserve"><value>Draft prepared</value></data>
+<data name="Certificate.PriestApproved" xml:space="preserve"><value>Approved — awaiting actual signature</value></data>
+<data name="Certificate.Signed" xml:space="preserve"><value>Signed</value></data>
+<data name="Certificate.AwaitingBishop" xml:space="preserve"><value>Awaiting bishop acceptance</value></data>
+<data name="Certificate.Returned" xml:space="preserve"><value>Returned</value></data>
+<data name="Certificate.Authorized" xml:space="preserve"><value>Authorized for issuance</value></data>
+<data name="Certificate.Issued" xml:space="preserve"><value>Issued</value></data>
+<data name="Certificate.Released" xml:space="preserve"><value>Released to verified recipient</value></data>
+<data name="Certificate.Collected" xml:space="preserve"><value>Actually collected</value></data>
+<data name="Certificate.Revoked" xml:space="preserve"><value>Revoked</value></data>
+<data name="SysRole.SuperAdmin" xml:space="preserve"><value>Super Admin</value></data>
+<data name="SysRole.ParishAdmin" xml:space="preserve"><value>Parish Admin</value></data>
+<data name="SysRole.Treasurer" xml:space="preserve"><value>Treasurer</value></data>
+<data name="SysRole.FinanceViewer" xml:space="preserve"><value>Finance viewer</value></data>
+<data name="SysRole.MinistryLeader" xml:space="preserve"><value>Ministry leader</value></data>
+<data name="SysRole.ConcernReviewer" xml:space="preserve"><value>Independent concern reviewer</value></data>
+<data name="SysRole.PublicVisitor" xml:space="preserve"><value>Visitor</value></data>
+<data name="Notice.M01" xml:space="preserve"><value>Record update — There is an update to {0}. Open the secure record for details and your next step.</value></data>
+<data name="Notice.M02" xml:space="preserve"><value>Information needed — Please open {0} to review the requested information and reply securely.</value></data>
+<data name="Notice.M03" xml:space="preserve"><value>Action recorded for your review — An action attributed to your instruction was recorded on {0}. Review its details; no repeat approval is requested.</value></data>
+<data name="Notice.M04" xml:space="preserve"><value>Processing update — Your request {0} is being processed. Open it to see whether any action is required from you.</value></data>
+<data name="Notice.M05" xml:space="preserve"><value>Confidential case update — There is an update to your confidential case. Sign in to view it privately.</value></data>
+<data name="Notice.M06" xml:space="preserve"><value>Review your account access — Your account access has changed. Sign in to review your own current assignments and available actions.</value></data>
+<data name="Notice.M07" xml:space="preserve"><value>Change to a planned activity — A planned activity linked to {0} has changed. Review the new details and any confirmation or refund options.</value></data>
+<data name="Notice.M08" xml:space="preserve"><value>Delivery needs attention — The record {0} was saved, but a secondary delivery or attachment step failed. Open it to retry only the failed step.</value></data>
+<data name="Notice.M09" xml:space="preserve"><value>Invitation available — An invitation is available. Review the named organization, purpose and expiry before accepting through the private link provided by the authorized office.</value></data>
+<data name="Notice.M10" xml:space="preserve"><value>Deadline approaching — A deadline for {0} is approaching. Open the record to see the actual date and the permitted next action.</value></data>
+<data name="Auth.Identifier" xml:space="preserve"><value>Email, phone or username</value></data>
+<data name="Auth.Password" xml:space="preserve"><value>Password</value></data>
+<data name="Auth.Remember" xml:space="preserve"><value>Keep me signed in on this personal device</value></data>
+<data name="Auth.Register" xml:space="preserve"><value>Create individual account</value></data>
+<data name="Auth.Recover" xml:space="preserve"><value>Recover account access</value></data>
+<data name="Auth.ProviderHelp" xml:space="preserve"><value>External sign-in and contact delivery are not configured. Existing credentials remain usable; use identity-reviewed support if recovery is unavailable.</value></data>
+<data name="Auth.Failed" xml:space="preserve"><value>Sign-in failed or temporarily limited. Check your credentials or use recovery.</value></data>
+<data name="Auth.AgePolicy" xml:space="preserve"><value>Account age and assisted-access policy must be approved before public registration. Contact the office for the reviewed assisted route.</value></data>
+<data name="Auth.PasswordHelp" xml:space="preserve"><value>Use a private passphrase of 16–200 characters. Confirmation must match; spaces, paste and password managers are supported.</value></data>
+<data name="Auth.ContactUnavailable" xml:space="preserve"><value>This contact cannot currently be used. Try sign-in, recovery or another contact; contact ownership remains unverified.</value></data>
+<data name="Auth.AccountOnly" xml:space="preserve"><value>Create your own account. Parish selection and translated profile names are optional later steps. No parish person or staff role is created by signup.</value></data>
+<data name="Auth.GivenName" xml:space="preserve"><value>Given name as supplied</value></data>
+<data name="Auth.FamilyName" xml:space="preserve"><value>Family name as supplied</value></data>
+<data name="Auth.BirthDate" xml:space="preserve"><value>Exact birth date for eligibility</value></data>
+<data name="Auth.Contact" xml:space="preserve"><value>Email or international phone (+ country code)</value></data>
+<data name="Auth.ConfirmPassword" xml:space="preserve"><value>Confirm password</value></data>
+<data name="Auth.Notice" xml:space="preserve"><value>I have reviewed the account notices and the stated purpose of these fields.</value></data>
+<data name="Auth.RecoveryHelp" xml:space="preserve"><value>If an eligible recovery route exists, follow its actual instructions. No email/SMS recovery service is configured here. Use the office’s identity-reviewed process; privileged recovery requires authorized platform support.</value></data>
+<data name="Document.Copy" xml:space="preserve"><value>DRAFT / REVIEW COPY — not an issued original</value></data>
+<data name="Document.NoSignature" xml:space="preserve"><value>This preview applies no signature or seal. Use the competent authority’s approved signed-paper process.</value></data>
+<data name="Document.Print" xml:space="preserve"><value>Print this review copy</value></data>
+<data name="Events.Places" xml:space="preserve"><value>Place status and event check-in</value></data>
+<data name="Events.ReservedHelp" xml:space="preserve"><value>A requested or reserved place is not confirmed attendance. Consent, payment and transport remain separate.</value></data>
+<data name="Events.IdentityEvidence" xml:space="preserve"><value>Actual identity / consent evidence reference</value></data>
+<data name="Events.Collectors" xml:space="preserve"><value>Approved collector identities, one per line</value></data>
+<data name="Events.IndependentExit" xml:space="preserve"><value>Independent departure expressly authorized under approved policy</value></data>
+<data name="Events.VerifyConsent" xml:space="preserve"><value>Record reviewed event consent</value></data>
+<data name="Events.ConfirmPlace" xml:space="preserve"><value>Confirm eligible place</value></data>
+<data name="Events.Arrival" xml:space="preserve"><value>Record actual arrival</value></data>
+<data name="Events.Collector" xml:space="preserve"><value>Actual verified collector identity</value></data>
+<data name="Events.Pickup" xml:space="preserve"><value>Record authorized pickup / exit</value></data>
+<data name="Events.RosterWarning" xml:space="preserve"><value>Checked-in participants for this event only — not everyone in the building. Verify the refresh time and reconcile any paper log.</value></data>
+<data name="Place.Reserved" xml:space="preserve"><value>Reserved — requirements pending</value></data>
+<data name="Place.Waitlisted" xml:space="preserve"><value>Waitlisted</value></data>
+<data name="Place.Confirmed" xml:space="preserve"><value>Confirmed</value></data>
+<data name="Place.Cancelled" xml:space="preserve"><value>Cancelled</value></data>
+<data name="Place.NeedsReconfirmation" xml:space="preserve"><value>Reconfirmation required</value></data>
+<data name="Error.DocumentMismatch" xml:space="preserve"><value>Document subject, source and reviewed version must match this case. Release is blocked.</value></data>
+<data name="Document.DownloadReviewed" xml:space="preserve"><value>Download the reviewed attached file</value></data>
+<data name="Document.Recipient" xml:space="preserve"><value>Verified recipient account reference</value></data>
+<data name="Document.RecipientAuthority" xml:space="preserve"><value>Actual identity and representation evidence</value></data>
+<data name="Document.FinalReview" xml:space="preserve"><value>I reviewed this exact signed final file and its subject, source, language and version.</value></data>
+<data name="Document.Action.Approve" xml:space="preserve"><value>Priest preparation approval</value></data>
+<data name="Document.Action.RecordPaperSignature" xml:space="preserve"><value>Record my actual paper signature</value></data>
+<data name="Document.Action.Issue" xml:space="preserve"><value>Record authorized issuance</value></data>
+<data name="Document.Action.Release" xml:space="preserve"><value>Release reviewed final file</value></data>
+<data name="Document.Action.Collect" xml:space="preserve"><value>Record actual collection</value></data>
+<data name="Document.Action.WithdrawRelease" xml:space="preserve"><value>Withdraw future file access</value></data>
+<data name="Reservation.IntakeHelp" xml:space="preserve"><value>Submitting requests review; it does not hold or confirm the resource. Times use the parish time zone.</value></data>
+<data name="Reservation.Start" xml:space="preserve"><value>Start in parish local time</value></data>
+<data name="Reservation.End" xml:space="preserve"><value>End in parish local time</value></data>
+<data name="Error.TimeZone" xml:space="preserve"><value>This local time is ambiguous or invalid at a daylight-saving change. Choose an unambiguous time with the office.</value></data>
+<data name="Draft.Unsaved" xml:space="preserve"><value>Unsaved changes</value></data>
+<data name="Draft.SwitchHelp" xml:space="preserve"><value>Save this permitted draft before changing language, discard the unsaved edits, or stay here.</value></data>
+<data name="Draft.Discard" xml:space="preserve"><value>Discard unsaved edits</value></data>
+<data name="Draft.Stay" xml:space="preserve"><value>Stay here</value></data>
+<data name="Draft.SaveFailed" xml:space="preserve"><value>Save is not confirmed. Keep this form and retry with the same operation reference after checking your connection and sign-in.</value></data>
+<data name="Action.SaveDraft" xml:space="preserve"><value>Draft saved</value></data>
+<data name="Error.DuplicateIdentity" xml:space="preserve"><value>A similar active or archived identity exists. Review it or record actual evidence that this is a different person.</value></data>
+<data name="Action.CorrectEntry" xml:space="preserve"><value>Save proposed name correction</value></data>
+<data name="Action.Postpone" xml:space="preserve"><value>Postpone and reopen preparation</value></data>
+<data name="Action.GuestAssociated" xml:space="preserve"><value>Requester association reviewed</value></data>
+<data name="Admin.Accept" xml:space="preserve"><value>Accept appointment</value></data>
+<data name="Admin.AccountReference" xml:space="preserve"><value>Individual account</value></data>
+<data name="Admin.Adoption" xml:space="preserve"><value>Actual adoption approval reference</value></data>
+<data name="Admin.Appointments" xml:space="preserve"><value>Scoped appointments</value></data>
+<data name="Admin.Authenticator" xml:space="preserve"><value>Authenticator code</value></data>
+<data name="Admin.Authority" xml:space="preserve"><value>Actual authority or decision evidence</value></data>
+<data name="Admin.CreateParish" xml:space="preserve"><value>Create and activate valid parish</value></data>
+<data name="Admin.Ends" xml:space="preserve"><value>Ends at (optional)</value></data>
+<data name="Admin.GroupReference" xml:space="preserve"><value>Ministry identifier (ministry leaders only)</value></data>
+<data name="Admin.HeadPriest" xml:space="preserve"><value>Existing head priest’s exact username</value></data>
+<data name="Admin.IndependentReview" xml:space="preserve"><value>Independent protected appointment review</value></data>
+<data name="Admin.Invitation" xml:space="preserve"><value>Appointment awaiting your decision</value></data>
+<data name="Admin.Jurisdiction" xml:space="preserve"><value>Approved jurisdiction</value></data>
+<data name="Admin.Locality" xml:space="preserve"><value>Verified locality</value></data>
+<data name="Admin.NewOrganization" xml:space="preserve"><value>Create approved diocese</value></data>
+<data name="Admin.Offer" xml:space="preserve"><value>Offer scoped appointment</value></data>
+<data name="Admin.OfficeContact" xml:space="preserve"><value>Actual public office contact</value></data>
+<data name="Admin.Organization" xml:space="preserve"><value>Diocese</value></data>
+<data name="Admin.PriestEvidence" xml:space="preserve"><value>Existing appointment and priest’s acceptance evidence</value></data>
+<data name="Admin.ProtectedHelp" xml:space="preserve"><value>A different Super Admin must review the requested appointment and authenticate with their own password and configured authenticator. No approval or delivery is inferred.</value></data>
+<data name="Admin.Revoke" xml:space="preserve"><value>Revoke this appointment</value></data>
+<data name="Admin.Role" xml:space="preserve"><value>Acting role</value></data>
+<data name="Admin.Scope" xml:space="preserve"><value>Authority scope</value></data>
+<data name="Admin.ScopeHelp" xml:space="preserve"><value>Each person uses an individual account. Invitations require acceptance and effective dates. A staff role does not grant priest signature, private pastoral access or confidential case access.</value></data>
+<data name="Admin.Starts" xml:space="preserve"><value>Starts at</value></data>
+<data name="Admin.System" xml:space="preserve"><value>System scope</value></data>
+<data name="Admin.TargetUsername" xml:space="preserve"><value>Exact intended account username</value></data>
+<data name="Admin.Username" xml:space="preserve"><value>Exact account username</value></data>
+<data name="Admin.Title" xml:space="preserve"><value>Administration and appointments</value></data>
+<data name="Admin.Active" xml:space="preserve"><value>Effective</value></data>
+<data name="Admin.NotEffective" xml:space="preserve"><value>Not currently effective</value></data>
+<data name="Admin.SpecificGrants" xml:space="preserve"><value>Explicit additional duties — select only for the matching role</value></data>
+<data name="Admin.CreateParishesGrant" xml:space="preserve"><value>Diocesan administrator may create parishes</value></data>
+<data name="Admin.SensitiveGrant" xml:space="preserve"><value>Designated reviewer may review sensitive concerns</value></data>
+<data name="Admin.IdentityGrant" xml:space="preserve"><value>Designated reviewer may view separately permitted identity</value></data>
+<data name="Case.CorrectedName" xml:space="preserve"><value>Corrected supplied subject name</value></data>
+<data name="Case.Kind" xml:space="preserve"><value>Request type</value></data>
+<data name="Error.AccountLookup" xml:space="preserve"><value>The intended account is unavailable. Verify its exact username privately.</value></data>
+<data name="Error.AdminDualReview" xml:space="preserve"><value>This action requires the independent protected administrative process.</value></data>
+<data name="Error.MfaRequired" xml:space="preserve"><value>A real configured authenticator and a valid code are required.</value></data>
+<data name="Error.Reauthentication" xml:space="preserve"><value>Reauthentication could not be verified.</value></data>
+<data name="Following.MakePrimary" xml:space="preserve"><value>Use as primary parish</value></data>
+<data name="Following.Follow" xml:space="preserve"><value>Follow parish</value></data>
+<data name="Following.Unfollow" xml:space="preserve"><value>Stop following</value></data>
+<data name="Following.Following" xml:space="preserve"><value>Following</value></data>
+<data name="Following.Primary" xml:space="preserve"><value>Following · primary preference</value></data>
+<data name="Following.NotFollowing" xml:space="preserve"><value>Public information</value></data>
+<data name="Following.Separate" xml:space="preserve"><value>Following and primary preferences do not create parish membership, a person record or staff access.</value></data>
+<data name="Guest.AllowedKinds" xml:space="preserve"><value>Actually approved guest request types</value></data>
+<data name="Guest.Associate" xml:space="preserve"><value>Associate reviewed request with account</value></data>
+<data name="Guest.AssociateConfirm" xml:space="preserve"><value>Confirm the actual requester identity review. This will stop the old tracking link and give the named account this request’s tracking access.</value></data>
+<data name="Guest.AssociateHelp" xml:space="preserve"><value>Verify the actual original requester and exact intended account through the approved office procedure. Association preserves the original case and does not grant membership or document release.</value></data>
+<data name="Guest.Code" xml:space="preserve"><value>Private tracking code</value></data>
+<data name="Guest.Configuration" xml:space="preserve"><value>Guest intake configuration</value></data>
+<data name="Guest.Contact" xml:space="preserve"><value>Your actual contact for office follow-up</value></data>
+<data name="Guest.ContactNotice" xml:space="preserve"><value>Provide only information needed for this request. Contact details are supplied, not digitally verified. For urgent help use the parish’s actual published contact.</value></data>
+<data name="Guest.Enabled" xml:space="preserve"><value>Enable approved guest intake</value></data>
+<data name="Guest.LinkHelp" xml:space="preserve"><value>Keep this private link or code for limited status access. Anyone holding it can see the status and applicant replies. It does not authorize sensitive downloads.</value></data>
+<data name="Guest.LostLink" xml:space="preserve"><value>Lost or expired link: contact the correct parish for identity-reviewed recovery.</value></data>
+<data name="Guest.Request" xml:space="preserve"><value>Submit a guest request</value></data>
+<data name="Guest.Scope" xml:space="preserve"><value>Submission records one request for this parish. It does not approve a service, confirm a date, create a person or grant parish membership.</value></data>
+<data name="Guest.Sensitive" xml:space="preserve"><value>Files and private office notes are unavailable through this tracking code. Sensitive documents require an explicitly reviewed recipient account or actual office collection.</value></data>
+<data name="Guest.Track" xml:space="preserve"><value>Track guest request</value></data>
+<data name="People.DatePrecision" xml:space="preserve"><value>Birth date precision</value></data>
+<data name="People.DuplicateEvidence" xml:space="preserve"><value>Actual evidence of a different person when similar records exist</value></data>
+<data name="People.Help" xml:space="preserve"><value>Record actual supplied names and sources. Unknown dates or scripts stay unknown. A provisional person is separate from an account, membership and official register.</value></data>
+<data name="People.New" xml:space="preserve"><value>Create provisional person</value></data>
+<data name="Precision.Unknown" xml:space="preserve"><value>Unknown</value></data>
+<data name="Precision.Exact" xml:space="preserve"><value>Exact date</value></data>
+<data name="Precision.Year" xml:space="preserve"><value>Year only</value></data>
+<data name="Precision.Approximate" xml:space="preserve"><value>Approximate, as supplied</value></data>
+<data name="PersonStatus.Provisional" xml:space="preserve"><value>Provisional</value></data>
+<data name="PersonStatus.Active" xml:space="preserve"><value>Active</value></data>
+<data name="PersonStatus.Archived" xml:space="preserve"><value>Archived</value></data>
+<data name="PersonStatus.VerifiedDeceased" xml:space="preserve"><value>Death verified</value></data>
+<data name="Policy.Area" xml:space="preserve"><value>Approval area</value></data>
+<data name="Policy.CertificateProxy" xml:space="preserve"><value>Record actual approval of secretary certificate-preparation extension (personal signature stays separate)</value></data>
+<data name="Policy.Confirmed" xml:space="preserve"><value>I am recording an actual competent approval with its real evidence reference.</value></data>
+<data name="Policy.EntryProxy" xml:space="preserve"><value>Permit secretary to record genuine prior priest instruction for official-entry approval</value></data>
+<data name="Policy.EventLead" xml:space="preserve"><value>Exact username of the actual appointed safeguarding lead</value></data>
+<data name="Policy.Help" xml:space="preserve"><value>These gates require actual domain decisions. Recording a reference does not manufacture approval, religious policy, signed documents, financial terms or an external integration.</value></data>
+<data name="Policy.Record" xml:space="preserve"><value>Record actual approved configuration</value></data>
+<data name="Policy.Reference" xml:space="preserve"><value>Actual competent approval reference</value></data>
+<data name="Policy.Requirements" xml:space="preserve"><value>Approved required evidence identifiers, one per line</value></data>
+<data name="Public.Directory" xml:space="preserve"><value>Parish directory</value></data>
+<data name="Concern.Title" xml:space="preserve"><value>Concerns and complaints</value></data>
+<data name="Concern.Privacy" xml:space="preserve"><value>Only you and the selected eligible independent reviewers can access this case. Anonymous to reviewers still means the system holds your account identity. Administrative rank does not grant access.</value></data>
+<data name="Concern.Urgent" xml:space="preserve"><value>This form does not contact emergency help or promise immediate response. Use an actual appropriate independent authority or emergency route when needed.</value></data>
+<data name="Concern.Narrative" xml:space="preserve"><value>Private account of the concern</value></data>
+<data name="Concern.Anonymous" xml:space="preserve"><value>Hide my identity from reviewers</value></data>
+<data name="Concern.Sensitive" xml:space="preserve"><value>Requires designated sensitive-case access</value></data>
+<data name="Concern.ChooseReviewers" xml:space="preserve"><value>Choose only eligible independent reviewers without a conflict</value></data>
+<data name="Concern.SensitiveEligible" xml:space="preserve"><value>Designated sensitive reviewer</value></data>
+<data name="Concern.OrdinaryEligible" xml:space="preserve"><value>Ordinary concerns only</value></data>
+<data name="Concern.NoRoute" xml:space="preserve"><value>No eligible independent reviewer is configured in this context. Do not send an allegation through an implicated office. Obtain an actual qualified independent route; none is invented here.</value></data>
+<data name="Concern.IdentityHidden" xml:space="preserve"><value>Identity hidden from this view</value></data>
+<data name="Concern.IdentityPermitted" xml:space="preserve"><value>Identity access follows your separate permission</value></data>
+<data name="Concern.ReviewerNote" xml:space="preserve"><value>Selected reviewers only — private note</value></data>
+<data name="Concern.ApplicantReply" xml:space="preserve"><value>Reply visible to the submitter</value></data>
+<data name="Concern.Start" xml:space="preserve"><value>Start review</value></data>
+<data name="Concern.Reply" xml:space="preserve"><value>Save reply</value></data>
+<data name="Concern.Recuse" xml:space="preserve"><value>Declare conflict and recuse</value></data>
+<data name="Concern.Close" xml:space="preserve"><value>Close with explanation</value></data>
+<data name="Concern.Reopen" xml:space="preserve"><value>Reopen with reason</value></data>
+<data name="Concern.RecuseHelp" xml:space="preserve"><value>This removes your future access. It does not appoint a replacement or notify an external authority. Record the conflict basis in the reviewer note.</value></data>
+<data name="Concern.Status.Submitted" xml:space="preserve"><value>Submitted</value></data>
+<data name="Concern.Status.InReview" xml:space="preserve"><value>Under independent review</value></data>
+<data name="Concern.Status.Closed" xml:space="preserve"><value>Closed</value></data>
+<data name="Case.ReplaceRejected" xml:space="preserve"><value>Replace a rejected file (optional)</value></data>
+<data name="Recovery.Title" xml:space="preserve"><value>Check an uncertain save</value></data>
+<data name="Recovery.Help" xml:space="preserve"><value>After a lost response, check the original operation before retrying. Only your own operation receipts are shown. A receipt confirms a database commit; current access to its record is checked separately.</value></data>
+<data name="Recovery.Operation" xml:space="preserve"><value>Original operation identifier</value></data>
+<data name="Recovery.Check" xml:space="preserve"><value>Check saved result</value></data>
+<data name="Recovery.Unconfirmed" xml:space="preserve"><value>No committed receipt was found for this account and operation. This does not prove failure; verify the current record or contact the office before a new submission.</value></data>
+<data name="Recovery.Committed" xml:space="preserve"><value>This operation committed successfully. Use the existing result instead of creating a duplicate.</value></data>
+<data name="Recovery.Record" xml:space="preserve"><value>Saved result reference</value></data>
+<data name="Finance.ActualAt" xml:space="preserve"><value>Actual movement date and time</value></data>
+<data name="Finance.ExportAll" xml:space="preserve"><value>Export all currently permitted movements (CSV)</value></data>
+<data name="Finance.ActualReceipt" xml:space="preserve"><value>Record actual verified receipt</value></data>
+<data name="Finance.ReceiptHelp" xml:space="preserve"><value>Record actual cash or an independently verified bank/OMT receipt using its original source reference. An expected or claimed payment is not cash. Use the same operation to retry after an uncertain response.</value></data>
+<data name="Finance.Method" xml:space="preserve"><value>Actual receipt method</value></data>
+<data name="Finance.Method.Cash" xml:space="preserve"><value>Actual cash received</value></data>
+<data name="Finance.Method.VerifiedBank" xml:space="preserve"><value>Verified actual bank receipt</value></data>
+<data name="Finance.Method.VerifiedOMT" xml:space="preserve"><value>Verified actual OMT receipt</value></data>
+<data name="Finance.Posted" xml:space="preserve"><value>Canonical posted movements</value></data>
+<data name="Giving.Title" xml:space="preserve"><value>Giving counts</value></data>
+<data name="Giving.Help" xml:space="preserve"><value>Record actual cash counts separately by original currency. A different real person records their observed totals for this exact revision. Variance stays open; closing posts each line once. Bank receipts use the separate verified-receipt route.</value></data>
+<data name="Giving.CollectedAt" xml:space="preserve"><value>Actual collection date and time</value></data>
+<data name="Giving.Open" xml:space="preserve"><value>Open count</value></data>
+<data name="Giving.AddLine" xml:space="preserve"><value>Add actual counted line</value></data>
+<data name="Giving.Independent" xml:space="preserve"><value>A different counter enters actual observations, not a copied success button. Leave a currency blank only when none was counted.</value></data>
+<data name="Giving.UsdCents" xml:space="preserve"><value>Observed USD total in cents (e.g. 1250 means USD 12.50)</value></data>
+<data name="Giving.LbpUnits" xml:space="preserve"><value>Observed LBP total in whole pounds</value></data>
+<data name="Giving.Verify" xml:space="preserve"><value>Record independent observed count</value></data>
+<data name="Giving.Close" xml:space="preserve"><value>Close and post once</value></data>
+<data name="Giving.CloseConfirm" xml:space="preserve"><value>Close this exact independently verified revision and post actual receipts once? Closed facts require a formal correction.</value></data>
+<data name="Giving.Status.Open" xml:space="preserve"><value>Open</value></data>
+<data name="Giving.Status.Variance" xml:space="preserve"><value>Variance — recount required</value></data>
+<data name="Giving.Status.Verified" xml:space="preserve"><value>Independently verified revision</value></data>
+<data name="Giving.Status.Closed" xml:space="preserve"><value>Closed and posted</value></data>
+<data name="Events.PaperRecovery" xml:space="preserve"><value>Reviewed paper recovery</value></data>
+<data name="Events.ReconcilePaper" xml:space="preserve"><value>Reconcile an actual previously recorded paper movement</value></data>
+<data name="Events.PaperReference" xml:space="preserve"><value>Actual reviewed paper log reference</value></data>
+<data name="Failure.Title" xml:space="preserve"><value>The result could not be confirmed</value></data>
+<data name="Failure.Help" xml:space="preserve"><value>Keep your original operation reference. Check the saved result before repeating a consequential action. If access or service remains unavailable, contact the correct office with this support reference and no private documents or credentials.</value></data>
+<data name="Failure.Reference" xml:space="preserve"><value>Nonsecret support reference</value></data>
 </root>

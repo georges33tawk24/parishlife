@@ -1,0 +1,8 @@
+@page
+@model ParishLive.Web.Pages.Recovery.IndexModel
+@{ ViewData["Title"] = L["Recovery.Title"].Value; }
+<main class="content" id="main-content"><h1>@L["Recovery.Title"]</h1><p>@L["Recovery.Help"]</p>
+<form method="get" class="ops-form"><label asp-for="OperationId">@L["Recovery.Operation"]</label><input asp-for="OperationId" required dir="ltr" /><button class="btn btn-p">@L["Recovery.Check"]</button></form>
+@if (Model.OperationId is not null) { <p class="ops-status">@L[Model.Result is null ? "Recovery.Unconfirmed" : "Recovery.Committed"]</p> }
+@if (Model.Result is not null) { <p>@L["Recovery.Record"]: <bdi>@Model.Result.Id</bdi> · @L["Common.Revision"] @Model.Result.Revision</p><a href="/Requests">@L["Nav.Requests"]</a> }
+</main>

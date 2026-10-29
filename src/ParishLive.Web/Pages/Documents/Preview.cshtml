@@ -1,0 +1,22 @@
+@page
+@model ParishLive.Web.Pages.Documents.PreviewModel
+@{ ViewData["Title"] = L["Case.Certificates"].Value; var document = Model.Certificate; }
+<main class="content" id="main-content"><h1>@L["Document.Copy"]</h1><p>@L["Document.NoSignature"]</p>
+<section class="ops-card"><h2>@Model.SubjectName</h2><p>@L["Case.Register"]: <bdi>@Model.RegisterReference</bdi></p><p>@L["Case.Celebrant"]: @Model.CelebrantName</p><p>@L["Case.Priest"]: @document.PriestName</p><p>@L["Certificate." + document.Stage] · @L["Common.Revision"] @document.DocumentVersion</p></section>
+@if (Model.Error is not null) { <div class="ops-error" role="alert">@L[Model.Error]</div> }
+@if (document.FinalContent is not null) { <a class="btn btn-g no-print" asp-page-handler="Download" asp-route-id="@document.Id">@L["Document.DownloadReviewed"]</a> }
+@if (Model.Bishop)
+{ <form method="post" asp-page-handler="Bishop" class="ops-form"><input type="hidden" name="id" value="@document.Id" /><input type="hidden" name="revision" value="@document.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><label>@L["Case.InternalNote"]<textarea name="reason" maxlength="2000"></textarea></label><div class="actions"><button class="btn btn-p" name="accept" value="true">@L["Btn.Approve"]</button><button class="btn btn-g" name="accept" value="false">@L["Action.ReturnEntry"]</button></div></form> }
+@if (Model.Office)
+{
+<form method="post" class="ops-form no-print"><input type="hidden" name="id" value="@document.Id" /><input type="hidden" name="revision" value="@document.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" />
+<label>@L["Finance.ActualEvidence"]<input name="evidenceReference" maxlength="500" /></label><label>@L["Document.Recipient"]<input name="recipientUserId" maxlength="450" /></label><label>@L["Document.RecipientAuthority"]<input name="recipientAuthority" maxlength="500" /></label>
+@if (Model.Role == "Secretary") { <fieldset><legend>@L["Case.PriorInstruction"]</legend><p>@L["Case.ProxyHelp"]</p><label>@L["Case.Priest"]<select name="instructingPriestUserId"><option value="">—</option>@foreach (var priest in Model.Priests) { <option value="@priest.Key">@priest.Value</option> }</select></label><label>@L["Case.Channel"]<input name="instructionChannel" maxlength="100" /></label><label><input type="checkbox" name="priorInstructionConfirmed" value="true" />@L["Case.Attestation"]</label></fieldset> }
+<div class="actions">
+@foreach (var action in new[] { "Approve", "RecordPaperSignature", "Issue", "Release", "Collect", "WithdrawRelease" }) { <button class="btn btn-g" name="action" value="@action" data-confirm="@L["Case.ConfirmDecision"]">@L["Document.Action." + action]</button> }
+</div></form>
+@if (document.FinalContent is null)
+{ <form method="post" asp-page-handler="Final" enctype="multipart/form-data" class="ops-form"><input type="hidden" name="id" value="@document.Id" /><input type="hidden" name="revision" value="@document.Revision" /><input type="hidden" name="operationId" value="@Guid.NewGuid()" /><input type="hidden" name="sourceCaseId" value="@document.SourceCaseId" />
+<label>@L["Case.Subject"]<input name="verifiedSubjectName" required maxlength="200" dir="auto" /></label><label>@L["Case.File"]<input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png" /></label><label><input type="checkbox" name="reviewedFinalConfirmed" value="true" required /> @L["Document.FinalReview"]</label><button class="btn btn-p">@L["Case.Upload"]</button></form> }
+}
+</main>

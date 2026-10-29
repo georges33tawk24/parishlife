@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Ctx.Switch" xml:space="preserve"><value>Changer de paroisse ou de rôle</value></data>
+  <data name="Ctx.Parish" xml:space="preserve"><value>Paroisse</value></data>
+  <data name="Ctx.Org" xml:space="preserve"><value>Diocèse</value></data>
+  <data name="Nav.Parish" xml:space="preserve"><value>Paroisse</value></data>
+  <data name="Nav.Dashboard" xml:space="preserve"><value>Accueil</value></data>
+  <data name="Nav.Reservations" xml:space="preserve"><value>Réservations</value></data>
+  <data name="Nav.Events" xml:space="preserve"><value>Événements</value></data>
+  <data name="Nav.Groups" xml:space="preserve"><value>Ministères et groupes</value></data>
+  <data name="Nav.Members" xml:space="preserve"><value>Personnes</value></data>
+  <data name="Nav.Locations" xml:space="preserve"><value>Lieux</value></data>
+  <data name="Nav.Communicate" xml:space="preserve"><value>Communications</value></data>
+  <data name="Nav.Notices" xml:space="preserve"><value>Annonces</value></data>
+  <data name="Nav.Messages" xml:space="preserve"><value>Messages</value></data>
+  <data name="Nav.Documents" xml:space="preserve"><value>Documents</value></data>
+  <data name="Nav.Oversight" xml:space="preserve"><value>Supervision</value></data>
+  <data name="Nav.Reports" xml:space="preserve"><value>Rapports</value></data>
+  <data name="Nav.Audit" xml:space="preserve"><value>Journal d’audit</value></data>
+  <data name="Nav.Settings" xml:space="preserve"><value>Paramètres</value></data>
+  <data name="Account.Name" xml:space="preserve"><value>Fr. Elias Khoury</value></data>
+  <data name="Account.Role" xml:space="preserve"><value>Parish Priest</value></data>
+  <data name="Account.SignIn" xml:space="preserve"><value>Se connecter</value></data>
+  <data name="Account.SignOut" xml:space="preserve"><value>Se déconnecter</value></data>
+  <data name="Bar.Search" xml:space="preserve"><value>Rechercher les dossiers autorisés…</value></data>
+  <data name="Bar.Notifications" xml:space="preserve"><value>Notifications</value></data>
+  <data name="Bar.Theme" xml:space="preserve"><value>Changer le thème clair ou sombre</value></data>
+  <data name="Mast.Today" xml:space="preserve"><value>Thursday, 23 July 2026 · Ordinary Time</value></data>
+  <data name="Mast.Greeting" xml:space="preserve"><value>Good morning, Fr. Elias.</value></data>
+  <data name="Dec.Title" xml:space="preserve"><value>Votre décision requise</value></data>
+  <data name="Dec.Sub" xml:space="preserve"><value>{0} en attente de votre action</value></data>
+  <data name="Btn.AllReservations" xml:space="preserve"><value>Toutes les réservations</value></data>
+  <data name="Entry.YouthName" xml:space="preserve"><value>Youth Group</value></data>
+  <data name="Entry.YouthSub" xml:space="preserve"><value>Fundraising dinner · Parish Hall · 80 guests</value></data>
+  <data name="Entry.YouthWhen" xml:space="preserve"><value>Fri 25 Jul · 18:00</value></data>
+  <data name="Entry.ChoirName" xml:space="preserve"><value>Choir</value></data>
+  <data name="Entry.ChoirSub" xml:space="preserve"><value>Assumption rehearsal · Theatre · 40 singers</value></data>
+  <data name="Entry.ChoirWhen" xml:space="preserve"><value>Sat 26 Jul · 19:30</value></data>
+  <data name="Entry.FundName" xml:space="preserve"><value>Fundraising Committee</value></data>
+  <data name="Entry.FundSub" xml:space="preserve"><value>Planning session · Meeting Room · 12 people</value></data>
+  <data name="Entry.FundWhen" xml:space="preserve"><value>Mon 28 Jul · 20:00</value></data>
+  <data name="Btn.Review" xml:space="preserve"><value>Examiner</value></data>
+  <data name="Btn.Approve" xml:space="preserve"><value>Approuver</value></data>
+  <data name="Stat.Members" xml:space="preserve"><value>Membres</value></data>
+  <data name="Stat.MembersSub" xml:space="preserve"><value>12 joined this month</value></data>
+  <data name="Stat.Groups" xml:space="preserve"><value>Groupes actifs</value></data>
+  <data name="Stat.GroupsSub" xml:space="preserve"><value>across 9 committees</value></data>
+  <data name="Stat.Events" xml:space="preserve"><value>Événements à venir</value></data>
+  <data name="Stat.EventsSub" xml:space="preserve"><value>next 30 days</value></data>
+  <data name="Stat.Reservations" xml:space="preserve"><value>Réservations</value></data>
+  <data name="Stat.ReservationsSub" xml:space="preserve"><value>booked this week</value></data>
+  <data name="Notices.Title" xml:space="preserve"><value>Annonces récentes</value></data>
+  <data name="Notices.Publish" xml:space="preserve"><value>Publier</value></data>
+  <data name="Notice1" xml:space="preserve"><value>Assumption Mass schedule published</value></data>
+  <data name="Notice1Meta" xml:space="preserve"><value>High priority · 2 hours ago</value></data>
+  <data name="Notice2" xml:space="preserve"><value>Parish council meeting — Thursday 20:00</value></data>
+  <data name="Notice2Meta" xml:space="preserve"><value>To committees · Yesterday</value></data>
+  <data name="Notice3" xml:space="preserve"><value>Catechism registration now open</value></data>
+  <data name="Notice3Meta" xml:space="preserve"><value>All members · 2 days ago</value></data>
+  <data name="Activity.Title" xml:space="preserve"><value>Activité récente</value></data>
+  <data name="Act1" xml:space="preserve"><value>Approved Choir · Theatre booking</value></data>
+  <data name="Act1Sub" xml:space="preserve"><value>You · added to parish calendar</value></data>
+  <data name="Act2" xml:space="preserve"><value>Appointed M. Haddad as Secretary</value></data>
+  <data name="Act2Time" xml:space="preserve"><value>Wed 16:40</value></data>
+  <data name="Act2Sub" xml:space="preserve"><value>You · role change logged</value></data>
+  <data name="Act3" xml:space="preserve"><value>Returned Scouts request — needs date</value></data>
+  <data name="Act3Time" xml:space="preserve"><value>Wed 16:02</value></data>
+  <data name="Act3Sub" xml:space="preserve"><value>M. Haddad · Secretary</value></data>
+  <data name="Profile.ParishRole" xml:space="preserve"><value>Rôle paroissial</value></data>
+  <data name="Profile.Current" xml:space="preserve"><value>Rôles actuels dans les groupes</value></data>
+  <data name="Profile.Past" xml:space="preserve"><value>Anciens rôles — historique</value></data>
+  <data name="Profile.Since" xml:space="preserve"><value>depuis</value></data>
+  <data name="Profile.NotFound" xml:space="preserve"><value>Personne indisponible dans cette paroisse.</value></data>
+  <data name="SysRole.Priest" xml:space="preserve"><value>Prêtre paroissial</value></data>
+  <data name="SysRole.Secretary" xml:space="preserve"><value>Secrétaire</value></data>
+  <data name="SysRole.Member" xml:space="preserve"><value>Membre</value></data>
+  <data name="SysRole.Archbishop" xml:space="preserve"><value>Évêque</value></data>
+  <data name="SysRole.ArchdioceseAdmin" xml:space="preserve"><value>Administrateur diocésain</value></data>
+  <data name="Role.President" xml:space="preserve"><value>Président</value></data>
+  <data name="Role.VicePresident" xml:space="preserve"><value>Vice-président</value></data>
+  <data name="Role.Secretary" xml:space="preserve"><value>Secrétaire</value></data>
+  <data name="Role.Historian" xml:space="preserve"><value>Historien</value></data>
+  <data name="Role.Treasurer" xml:space="preserve"><value>Trésorier</value></data>
+  <data name="Role.SpiritualLeader" xml:space="preserve"><value>Responsable spirituel</value></data>
+  <data name="Role.FormationRep" xml:space="preserve"><value>Responsable formation</value></data>
+  <data name="Role.CommitteeMember" xml:space="preserve"><value>Membre du comité</value></data>
+  <data name="Role.RegularMember" xml:space="preserve"><value>Membre</value></data>
+  <data name="Res.Details" xml:space="preserve"><value>Détails de la demande</value></data>
+  <data name="Res.Decision" xml:space="preserve"><value>Votre décision</value></data>
+  <data name="Res.History" xml:space="preserve"><value>Historique des décisions</value></data>
+  <data name="Res.Note" xml:space="preserve"><value>Message ou motif destiné au demandeur</value></data>
+  <data name="Res.NoteHint" xml:space="preserve"><value>Ce texte figure dans l’historique et peut être lu par le demandeur.</value></data>
+  <data name="Res.Venue" xml:space="preserve"><value>Lieu</value></data>
+  <data name="Res.When" xml:space="preserve"><value>Date et heure</value></data>
+  <data name="Res.Group" xml:space="preserve"><value>Groupe</value></data>
+  <data name="Res.Attendees" xml:space="preserve"><value>Participants</value></data>
+  <data name="Res.RequestedBy" xml:space="preserve"><value>Demandé par</value></data>
+  <data name="Res.Status" xml:space="preserve"><value>État</value></data>
+  <data name="Res.Empty" xml:space="preserve"><value>Aucune réservation.</value></data>
+  <data name="Dash.Hello" xml:space="preserve"><value>Bienvenue, {0}.</value></data>
+  <data name="Dash.Awaiting" xml:space="preserve"><value>Votre action requise</value></data>
+  <data name="Dash.NoDecisions" xml:space="preserve"><value>Aucune décision en attente.</value></data>
+  <data name="Events.Register" xml:space="preserve"><value>Demander une place</value></data>
+  <data name="Events.Registered" xml:space="preserve"><value>Demande enregistrée — consulter l’état</value></data>
+  <data name="Events.Calendar" xml:space="preserve"><value>Calendrier</value></data>
+  <data name="Events.List" xml:space="preserve"><value>Liste</value></data>
+  <data name="Events.Empty" xml:space="preserve"><value>Aucun événement à venir.</value></data>
+  <data name="Events.Registrations" xml:space="preserve"><value>{0} inscrits</value></data>
+  <data name="Events.RegistrationsCap" xml:space="preserve"><value>{0} sur {1} inscrits</value></data>
+  <data name="Events.Today" xml:space="preserve"><value>Aujourd’hui</value></data>
+  <data name="Notices.Empty" xml:space="preserve"><value>Aucune annonce.</value></data>
+  <data name="Notice.NewTitle" xml:space="preserve"><value>Titre</value></data>
+  <data name="Notice.NewBody" xml:space="preserve"><value>Message</value></data>
+  <data name="Notice.FieldPriority" xml:space="preserve"><value>Priorité</value></data>
+  <data name="Notice.FieldAudience" xml:space="preserve"><value>Audience</value></data>
+  <data name="Notice.PublishBtn" xml:space="preserve"><value>Publier l’annonce</value></data>
+  <data name="Notice.NewHeading" xml:space="preserve"><value>Nouvelle annonce</value></data>
+  <data name="Priority.Normal" xml:space="preserve"><value>Normale</value></data>
+  <data name="Priority.High" xml:space="preserve"><value>Élevée</value></data>
+  <data name="Priority.Urgent" xml:space="preserve"><value>Urgente</value></data>
+  <data name="Audit.Sub" xml:space="preserve"><value>Actions importantes autorisées dans cette paroisse : acteur, action et date.</value></data>
+  <data name="Audit.Empty" xml:space="preserve"><value>Aucune action enregistrée.</value></data>
+  <data name="Audit.Forbidden" xml:space="preserve"><value>Vous n’avez pas accès au journal.</value></data>
+  <data name="Audit.When" xml:space="preserve"><value>Date et heure</value></data>
+  <data name="Audit.Who" xml:space="preserve"><value>Acteur</value></data>
+  <data name="Audit.What" xml:space="preserve"><value>Action</value></data>
+<data name="Nav.Requests" xml:space="preserve"><value>Demandes / Mon travail</value></data>
+<data name="Nav.Website" xml:space="preserve"><value>Site public</value></data>
+<data name="Nav.OfficeExpenses" xml:space="preserve"><value>Dépenses du bureau</value></data>
+<data name="Nav.Finance" xml:space="preserve"><value>Finances</value></data>
+<data name="Nav.Notes" xml:space="preserve"><value>Mes notes</value></data>
+<data name="Nav.Readiness" xml:space="preserve"><value>Préparation et dépendances</value></data>
+<data name="Common.Skip" xml:space="preserve"><value>Aller au contenu</value></data>
+<data name="Common.Navigation" xml:space="preserve"><value>Navigation</value></data>
+<data name="Common.Demo" xml:space="preserve"><value>Démonstration — identités et dossiers fictifs.</value></data>
+<data name="Common.Empty" xml:space="preserve"><value>Aucun dossier autorisé.</value></data>
+<data name="Common.Revision" xml:space="preserve"><value>Révision</value></data>
+<data name="Common.Language" xml:space="preserve"><value>Langue</value></data>
+<data name="Common.SaveDraft" xml:space="preserve"><value>Enregistrer le brouillon</value></data>
+<data name="Common.Save" xml:space="preserve"><value>Enregistrer</value></data>
+<data name="Common.Edit" xml:space="preserve"><value>Modifier le brouillon</value></data>
+<data name="Common.Cancel" xml:space="preserve"><value>Annuler</value></data>
+<data name="Common.Back" xml:space="preserve"><value>Retour à la liste</value></data>
+<data name="Common.AsOf" xml:space="preserve"><value>Dernière mise à jour</value></data>
+<data name="Context.Choose" xml:space="preserve"><value>Choisir votre rôle actif</value></data>
+<data name="Context.ChooseHelp" xml:space="preserve"><value>Choisissez une affectation active. Les actions gardent leur paroisse et leur rôle.</value></data>
+<data name="Context.NoAssignment" xml:space="preserve"><value>En attente d’affectation / Mon compte</value></data>
+<data name="Case.New" xml:space="preserve"><value>Nouvelle demande</value></data>
+<data name="Case.Type" xml:space="preserve"><value>Type de demande</value></data>
+<data name="Case.Subject" xml:space="preserve"><value>Nom fourni de la personne concernée</value></data>
+<data name="Case.Details" xml:space="preserve"><value>Informations fournies</value></data>
+<data name="Case.ReceiptHelp" xml:space="preserve"><value>Reçu signifie enregistré pour examen, sans confirmer date, sacrement, paiement ou document officiel.</value></data>
+<data name="Case.ReviewHelp" xml:space="preserve"><value>Vérifiez paroisse, personne et détails. Originaux, identité et décision du prêtre peuvent rester nécessaires.</value></data>
+<data name="Case.Submit" xml:space="preserve"><value>Envoyer la demande</value></data>
+<data name="Case.Priest" xml:space="preserve"><value>Prêtre responsable</value></data>
+<data name="Case.Register" xml:space="preserve"><value>Référence du registre officiel</value></data>
+<data name="Case.Timeline" xml:space="preserve"><value>Historique</value></data>
+<data name="Case.Authority" xml:space="preserve"><value>Autorité de décision</value></data>
+<data name="Case.Recorder" xml:space="preserve"><value>Saisi par</value></data>
+<data name="Case.InternalNote" xml:space="preserve"><value>Note interne — bureau uniquement</value></data>
+<data name="Case.ApplicantMessage" xml:space="preserve"><value>Message au demandeur</value></data>
+<data name="Case.NextAction" xml:space="preserve"><value>Prochaine action</value></data>
+<data name="Case.PriorInstruction" xml:space="preserve"><value>Enregistrer l’instruction préalable du prêtre</value></data>
+<data name="Case.ProxyHelp" xml:space="preserve"><value>Saisissez une instruction réelle propre au dossier. Effet immédiat, sans réapprobation ni signature.</value></data>
+<data name="Case.Channel" xml:space="preserve"><value>Mode de réception de l’instruction</value></data>
+<data name="Case.Attestation" xml:space="preserve"><value>Le prêtre nommé m’a déjà demandé d’enregistrer cette décision pour cette demande.</value></data>
+<data name="Case.ActualTime" xml:space="preserve"><value>Date et heure réelles / proposées</value></data>
+<data name="Case.Celebrant" xml:space="preserve"><value>Nom fourni du célébrant effectif</value></data>
+<data name="Case.ConfirmDecision" xml:space="preserve"><value>Confirmez la paroisse, le dossier et l’autorité réelle.</value></data>
+<data name="Case.ConfirmActual" xml:space="preserve"><value>Confirmez la célébration réelle et ses faits.</value></data>
+<data name="Case.Evidence" xml:space="preserve"><value>Pièces et originaux</value></data>
+<data name="Case.UploadHelp" xml:space="preserve"><value>PDF/JPEG/PNG, 10 Mo par fichier, 20 par dossier. Déposé n’est pas vérifié. Bureau pour originaux ou exceptions.</value></data>
+<data name="Case.Requirement" xml:space="preserve"><value>Pièce demandée / objet</value></data>
+<data name="Case.File" xml:space="preserve"><value>Choisir le fichier</value></data>
+<data name="Case.Upload" xml:space="preserve"><value>Déposer la pièce</value></data>
+<data name="Case.ReviewBasis" xml:space="preserve"><value>Justificatif réel de vérification / refus</value></data>
+<data name="Case.Certificates" xml:space="preserve"><value>Certificats et copies</value></data>
+<data name="Case.PrepareCertificate" xml:space="preserve"><value>Préparer depuis la source officielle</value></data>
+<data name="Channel.InPerson" xml:space="preserve"><value>En personne</value></data>
+<data name="Channel.Telephone" xml:space="preserve"><value>Téléphone</value></data>
+<data name="Channel.Written" xml:space="preserve"><value>Instruction écrite</value></data>
+<data name="Channel.Other" xml:space="preserve"><value>Autre moyen réel</value></data>
+<data name="Finance.ScopeHelp" xml:space="preserve"><value>Devises d’origine séparées. Approbation, paiement réel et transfert interne sont distincts.</value></data>
+<data name="Finance.NoBalances" xml:space="preserve"><value>Aucun solde enregistré. Une source initiale examinée est requise.</value></data>
+<data name="Finance.Requests" xml:space="preserve"><value>Demandes financières</value></data>
+<data name="Finance.NewRequest" xml:space="preserve"><value>Soumettre une demande financière</value></data>
+<data name="Finance.Kind" xml:space="preserve"><value>Type de mouvement</value></data>
+<data name="Finance.Amount" xml:space="preserve"><value>Montant réel</value></data>
+<data name="Finance.Currency" xml:space="preserve"><value>Devise d’origine</value></data>
+<data name="Finance.Account" xml:space="preserve"><value>Compte source</value></data>
+<data name="Finance.Destination" xml:space="preserve"><value>Destination du transfert interne</value></data>
+<data name="Finance.Fund" xml:space="preserve"><value>Fonds approuvé / objet</value></data>
+<data name="Finance.Source" xml:space="preserve"><value>Référence source unique</value></data>
+<data name="Finance.Submit" xml:space="preserve"><value>Soumettre à approbation indépendante</value></data>
+<data name="Finance.Submitted" xml:space="preserve"><value>Approbation indépendante attendue</value></data>
+<data name="Finance.Approved" xml:space="preserve"><value>Approuvé — paiement réel attendu</value></data>
+<data name="Finance.Paid" xml:space="preserve"><value>Mouvement réel enregistré</value></data>
+<data name="Finance.RecordPayment" xml:space="preserve"><value>Enregistrer le mouvement réel</value></data>
+<data name="Finance.ActualEvidence" xml:space="preserve"><value>Preuve du paiement / reçu réel</value></data>
+<data name="Finance.ConfirmApproval" xml:space="preserve"><value>Approuvez indépendamment. Changer de rôle ne crée pas une autre personne.</value></data>
+<data name="Finance.ConfirmActual" xml:space="preserve"><value>Enregistrez un mouvement réel. Ceci n’envoie pas d’argent via un prestataire.</value></data>
+<data name="Ministry.Help" xml:space="preserve"><value>Le responsable recommande ; le prêtre active l’adhésion. Motifs de départ privés.</value></data>
+<data name="Ministry.Apply" xml:space="preserve"><value>Demander à rejoindre</value></data>
+<data name="Ministry.Leave" xml:space="preserve"><value>Demander un départ confidentiel</value></data>
+<data name="Ministry.DepartureReason" xml:space="preserve"><value>Motif confidentiel de départ</value></data>
+<data name="Ministry.Applications" xml:space="preserve"><value>Demandes autorisées</value></data>
+<data name="Ministry.Application" xml:space="preserve"><value>Demande d’adhésion</value></data>
+<data name="Ministry.Departure" xml:space="preserve"><value>Départ confidentiel</value></data>
+<data name="Ministry.Submitted" xml:space="preserve"><value>Soumis</value></data>
+<data name="Ministry.LeaderApproved" xml:space="preserve"><value>Examiné — prêtre attendu</value></data>
+<data name="Ministry.WithdrawalRequested" xml:space="preserve"><value>Retrait demandé</value></data>
+<data name="Ministry.Withdrawn" xml:space="preserve"><value>Retiré</value></data>
+<data name="Ministry.Approved" xml:space="preserve"><value>Approuvé</value></data>
+<data name="Ministry.Recommend" xml:space="preserve"><value>Recommander au prêtre</value></data>
+<data name="Publishing.Help" xml:space="preserve"><value>Le brouillon préserve la version publiée. Les trois langues complètes et examinées sont requises.</value></data>
+<data name="Publishing.Slug" xml:space="preserve"><value>Libellé stable</value></data>
+<data name="Publishing.PublishedRevision" xml:space="preserve"><value>Révision publiée</value></data>
+<data name="Publishing.Publish" xml:space="preserve"><value>Publier la version examinée</value></data>
+<data name="Publishing.Confirm" xml:space="preserve"><value>Confirmez les trois langues et l’audience publique.</value></data>
+<data name="Notes.AuthorOnly" xml:space="preserve"><value>Audience : auteur uniquement. Aucun héritage administratif.</value></data>
+<data name="Notes.Body" xml:space="preserve"><value>Note privée</value></data>
+<data name="Notes.Author" xml:space="preserve"><value>Auteur uniquement</value></data>
+<data name="Notes.NamedPriest" xml:space="preserve"><value>Prêtre nommé pour cette tâche</value></data>
+<data name="Notes.CurrentPriests" xml:space="preserve"><value>Prêtres actuels et futurs titulaires autorisés tant que partagé</value></data>
+<data name="Notifications.Help" xml:space="preserve"><value>Enregistrement, envoi et lecture sont distincts. Ouvrir un dossier ne marque pas les notices lues.</value></data>
+<data name="Notifications.Read" xml:space="preserve"><value>Lu</value></data>
+<data name="Notifications.Unread" xml:space="preserve"><value>Non lu</value></data>
+<data name="Notifications.MarkRead" xml:space="preserve"><value>Marquer cette notification lue</value></data>
+<data name="Readiness.Help" xml:space="preserve"><value>La configuration n’approuve pas le lancement. Les responsables fournissent les preuves réelles.</value></data>
+<data name="Readiness.Religious" xml:space="preserve"><value>Exigences religieuses et registre</value></data>
+<data name="Readiness.Templates" xml:space="preserve"><value>Modèles officiels approuvés</value></data>
+<data name="Readiness.Finance" xml:space="preserve"><value>Contrôles financiers et données initiales</value></data>
+<data name="Readiness.Safeguarding" xml:space="preserve"><value>Protection et responsable nommé</value></data>
+<data name="Readiness.Delivery" xml:space="preserve"><value>Envoi externe / vérification</value></data>
+<data name="Readiness.Maps" xml:space="preserve"><value>Intégration cartographique</value></data>
+<data name="Readiness.Backup" xml:space="preserve"><value>Preuves de sauvegarde et restauration</value></data>
+<data name="Readiness.LanguageReview" xml:space="preserve"><value>Validation linguistique et accessibilité</value></data>
+<data name="Readiness.Recorded" xml:space="preserve"><value>Configuration enregistrée ; valider avant usage réel.</value></data>
+<data name="Readiness.Required" xml:space="preserve"><value>Élément requis non configuré. Utilisez la procédure manuelle approuvée.</value></data>
+<data name="Public.Discover" xml:space="preserve"><value>Trouver une paroisse</value></data>
+<data name="Public.Search" xml:space="preserve"><value>Nom de paroisse ou localité</value></data>
+<data name="Public.Find" xml:space="preserve"><value>Rechercher les paroisses publiées</value></data>
+<data name="Public.NonePublished" xml:space="preserve"><value>Aucune paroisse approuvée ne correspond. Les identités fictives ne sont pas publiées.</value></data>
+<data name="Public.NoSchedule" xml:space="preserve"><value>Horaires non publiés. Contactez le bureau pour confirmer.</value></data>
+<data name="Public.RequestContact" xml:space="preserve"><value>Utilisez le contact publié pour les demandes ou urgences pastorales. Réception ne garantit pas examen immédiat.</value></data>
+<data name="Error.Unavailable" xml:space="preserve"><value>Cet élément est indisponible ou inaccessible.</value></data>
+<data name="Error.Invalid" xml:space="preserve"><value>Vérifiez les valeurs et réessayez.</value></data>
+<data name="Error.State" xml:space="preserve"><value>Action indisponible à cette étape. Rechargez et vérifiez le résultat.</value></data>
+<data name="Error.Conflict" xml:space="preserve"><value>Le dossier a changé. Action non appliquée. Comparez la dernière version avant de réessayer.</value></data>
+<data name="Error.OperationRequired" xml:space="preserve"><value>Référence d’opération requise. Rechargez le formulaire.</value></data>
+<data name="Error.OperationMismatch" xml:space="preserve"><value>Cette référence a d’autres données. Vérifiez le résultat initial.</value></data>
+<data name="Error.Disputed" xml:space="preserve"><value>Décision contestée. Travail dépendant inachevé suspendu pour examen compétent.</value></data>
+<data name="Error.PolicyRequired" xml:space="preserve"><value>Exigences religieuses et politique du registre approuvées requises.</value></data>
+<data name="Error.FinancePolicy" xml:space="preserve"><value>Contrôles approuvés et données initiales réelles requis avant usage financier.</value></data>
+<data name="Error.TemplateRequired" xml:space="preserve"><value>Texte, langues et signatures approuvés requis. Ceci reste un brouillon.</value></data>
+<data name="Error.OfficialSource" xml:space="preserve"><value>Source officielle inscrite non contestée requise ; une célébration prévue ne suffit pas.</value></data>
+<data name="Error.EvidenceRequired" xml:space="preserve"><value>Pièces requises manquantes, refusées ou non vérifiées.</value></data>
+<data name="Error.Immutable" xml:space="preserve"><value>Dossier terminé verrouillé. Utilisez la correction ou contrepassation approuvée.</value></data>
+<data name="Error.ProxyStage" xml:space="preserve"><value>Saisie par le secrétaire non approuvée à cette étape. Le prêtre peut décider directement.</value></data>
+<data name="Error.PriorInstruction" xml:space="preserve"><value>Choisissez le prêtre, la base et le moyen réels, puis confirmez l’instruction préalable.</value></data>
+<data name="Error.PriestAssignment" xml:space="preserve"><value>Le prêtre nommé n’a pas d’affectation paroissiale active autorisée.</value></data>
+<data name="Error.FileLimit" xml:space="preserve"><value>Fichier non vide de 10 Mo maximum, 20 par dossier. Bureau pour exception.</value></data>
+<data name="Error.FileType" xml:space="preserve"><value>Nom, type et contenu doivent correspondre à PDF, JPEG ou PNG.</value></data>
+<data name="Error.Currency" xml:space="preserve"><value>Devise d’origine approuvée : USD ou LBP.</value></data>
+<data name="Error.Money" xml:space="preserve"><value>Montant réel positif, précision et source correctes requis.</value></data>
+<data name="Error.IndependentReviewer" xml:space="preserve"><value>Une autre personne autorisée doit examiner. Changer de rôle n’est pas indépendant.</value></data>
+<data name="Error.OpeningExists" xml:space="preserve"><value>Solde initial déjà présent pour ce compte et cette devise. Ajustement examiné requis.</value></data>
+<data name="Error.ReversalReview" xml:space="preserve"><value>Utilisez une correction examinée liée au mouvement initial.</value></data>
+<data name="Error.ActualReceipt" xml:space="preserve"><value>Seuls espèces réelles et virements bancaires/OMT vérifiés sont reçus.</value></data>
+<data name="Error.Allocations" xml:space="preserve"><value>Les affectations ne peuvent dépasser le montant reçu.</value></data>
+<data name="Error.Capacity" xml:space="preserve"><value>Ressource indisponible ou capacité réelle dépassée.</value></data>
+<data name="Error.ResourceConflict" xml:space="preserve"><value>L’intervalle, préparation et nettoyage compris, chevauche une réservation ou option active.</value></data>
+<data name="Error.Representation" xml:space="preserve"><value>Représentation examinée et active requise pour cette personne et cet objet.</value></data>
+<data name="Error.SafeguardingPolicy" xml:space="preserve"><value>Règles de protection approuvées et responsable réel nommé requis.</value></data>
+<data name="Error.AgeReview" xml:space="preserve"><value>Naissance et éligibilité à examiner. L’âge inconnu n’est pas présumé adulte.</value></data>
+<data name="Error.Consent" xml:space="preserve"><value>Consentement vérifié propre à l’événement requis. Le paiement ne le remplace pas.</value></data>
+<data name="Error.AlreadyPresent" xml:space="preserve"><value>Arrivée déjà enregistrée. Examinez-la.</value></data>
+<data name="Error.UnauthorizedCollector" xml:space="preserve"><value>Remise bloquée. Personne ou sortie autonome non autorisée. Suivez la procédure réelle de protection.</value></data>
+<data name="Error.PersonLink" xml:space="preserve"><value>Lien de personne vérifié par le bureau requis avant adhésion formelle.</value></data>
+<data name="Error.DuplicatePending" xml:space="preserve"><value>Une demande est en cours. Continuez celle-ci.</value></data>
+<data name="Error.PersonAlreadyLinked" xml:space="preserve"><value>Personne déjà liée. Examen indépendant du conflit requis.</value></data>
+<data name="Error.IdentityReview" xml:space="preserve"><value>Identité archivée ou décédée : examen séparé avant liaison.</value></data>
+<data name="Error.Translations" xml:space="preserve"><value>Les trois langues complètes et examinées sont requises. La version publiée reste en ligne.</value></data>
+<data name="Error.ShareConfirmation" xml:space="preserve"><value>Confirmez l’audience. Le partage aux prêtres inclut les futurs titulaires autorisés.</value></data>
+<data name="Error.IndependentRoute" xml:space="preserve"><value>Un circuit indépendant réel, autorisé et sans conflit doit être configuré.</value></data>
+<data name="Stage.Draft" xml:space="preserve"><value>Brouillon</value></data>
+<data name="Stage.Received" xml:space="preserve"><value>Reçu</value></data>
+<data name="Stage.NeedsInformation" xml:space="preserve"><value>Informations nécessaires</value></data>
+<data name="Stage.Preparation" xml:space="preserve"><value>Préparation</value></data>
+<data name="Stage.Scheduled" xml:space="preserve"><value>Date confirmée</value></data>
+<data name="Stage.Celebrated" xml:space="preserve"><value>Célébration réelle enregistrée</value></data>
+<data name="Stage.EntryReview" xml:space="preserve"><value>Examen de l’inscription officielle</value></data>
+<data name="Stage.Registered" xml:space="preserve"><value>Inscrit au registre</value></data>
+<data name="Stage.Declined" xml:space="preserve"><value>Refusé</value></data>
+<data name="Stage.Cancelled" xml:space="preserve"><value>Annulé</value></data>
+<data name="Kind.General" xml:space="preserve"><value>Demande générale</value></data>
+<data name="Kind.Baptism" xml:space="preserve"><value>Baptême</value></data>
+<data name="Kind.Communion" xml:space="preserve"><value>Première communion</value></data>
+<data name="Kind.Confirmation" xml:space="preserve"><value>Confirmation / chrismation</value></data>
+<data name="Kind.Marriage" xml:space="preserve"><value>Mariage</value></data>
+<data name="Kind.Funeral" xml:space="preserve"><value>Service funéraire</value></data>
+<data name="Kind.Certificate" xml:space="preserve"><value>Demande de certificat</value></data>
+<data name="Kind.MassIntention" xml:space="preserve"><value>Intention de messe</value></data>
+<data name="Kind.Blessing" xml:space="preserve"><value>Bénédiction de maison</value></data>
+<data name="Kind.SickVisit" xml:space="preserve"><value>Visite à domicile / malade</value></data>
+<data name="Kind.PriestAppointment" xml:space="preserve"><value>Rendez-vous avec le prêtre</value></data>
+<data name="Action.Create" xml:space="preserve"><value>Demande enregistrée</value></data>
+<data name="Action.Submit" xml:space="preserve"><value>Envoyer la demande</value></data>
+<data name="Action.Withdraw" xml:space="preserve"><value>Retirer la demande non traitée</value></data>
+<data name="Action.Accept" xml:space="preserve"><value>Accepter / saisir l’instruction du prêtre</value></data>
+<data name="Action.NeedsInformation" xml:space="preserve"><value>Demander des informations</value></data>
+<data name="Action.Resume" xml:space="preserve"><value>Reprendre l’examen précédent</value></data>
+<data name="Action.Schedule" xml:space="preserve"><value>Confirmer la date proposée</value></data>
+<data name="Action.Celebrate" xml:space="preserve"><value>Enregistrer la célébration réelle</value></data>
+<data name="Action.SubmitEntry" xml:space="preserve"><value>Soumettre l’inscription officielle</value></data>
+<data name="Action.Register" xml:space="preserve"><value>Approuver l’inscription officielle</value></data>
+<data name="Action.ReturnEntry" xml:space="preserve"><value>Retourner pour correction</value></data>
+<data name="Action.Cancel" xml:space="preserve"><value>Annuler avant célébration</value></data>
+<data name="Action.Decline" xml:space="preserve"><value>Refuser avec motif</value></data>
+<data name="Action.Verify" xml:space="preserve"><value>Enregistrer la vérification réelle</value></data>
+<data name="Action.RejectFile" xml:space="preserve"><value>Demander un remplacement lisible</value></data>
+<data name="Evidence.Uploaded" xml:space="preserve"><value>Déposé — non vérifié</value></data>
+<data name="Evidence.PaperReceived" xml:space="preserve"><value>Papier reçu — non vérifié</value></data>
+<data name="Evidence.UnderReview" xml:space="preserve"><value>En cours d’examen</value></data>
+<data name="Evidence.Verified" xml:space="preserve"><value>Vérifié</value></data>
+<data name="Evidence.Rejected" xml:space="preserve"><value>Refusé / illisible</value></data>
+<data name="Evidence.Expired" xml:space="preserve"><value>Expiré</value></data>
+<data name="Evidence.Waived" xml:space="preserve"><value>Dispensé par l’autorité compétente</value></data>
+<data name="Movement.Opening" xml:space="preserve"><value>Solde initial</value></data>
+<data name="Movement.Receipt" xml:space="preserve"><value>Encaissement réel</value></data>
+<data name="Movement.Expense" xml:space="preserve"><value>Dépense réelle</value></data>
+<data name="Movement.Transfer" xml:space="preserve"><value>Transfert interne</value></data>
+<data name="Movement.Refund" xml:space="preserve"><value>Remboursement réel</value></data>
+<data name="Movement.Reversal" xml:space="preserve"><value>Contrepassation examinée</value></data>
+<data name="Certificate.Prepared" xml:space="preserve"><value>Brouillon préparé</value></data>
+<data name="Certificate.PriestApproved" xml:space="preserve"><value>Approuvé — signature réelle attendue</value></data>
+<data name="Certificate.Signed" xml:space="preserve"><value>Signé</value></data>
+<data name="Certificate.AwaitingBishop" xml:space="preserve"><value>Acceptation de l’évêque attendue</value></data>
+<data name="Certificate.Returned" xml:space="preserve"><value>Retourné</value></data>
+<data name="Certificate.Authorized" xml:space="preserve"><value>Autorisé à l’émission</value></data>
+<data name="Certificate.Issued" xml:space="preserve"><value>Émis</value></data>
+<data name="Certificate.Released" xml:space="preserve"><value>Disponible au destinataire vérifié</value></data>
+<data name="Certificate.Collected" xml:space="preserve"><value>Retiré effectivement</value></data>
+<data name="Certificate.Revoked" xml:space="preserve"><value>Révoqué</value></data>
+<data name="SysRole.SuperAdmin" xml:space="preserve"><value>Super administrateur</value></data>
+<data name="SysRole.ParishAdmin" xml:space="preserve"><value>Administrateur paroissial</value></data>
+<data name="SysRole.Treasurer" xml:space="preserve"><value>Trésorier</value></data>
+<data name="SysRole.FinanceViewer" xml:space="preserve"><value>Lecteur financier</value></data>
+<data name="SysRole.MinistryLeader" xml:space="preserve"><value>Responsable de ministère</value></data>
+<data name="SysRole.ConcernReviewer" xml:space="preserve"><value>Examinateur indépendant</value></data>
+<data name="SysRole.PublicVisitor" xml:space="preserve"><value>Visiteur</value></data>
+<data name="Notice.M01" xml:space="preserve"><value>Mise à jour du dossier — Une mise à jour est disponible pour {0}. Ouvrez le dossier sécurisé pour consulter les détails et la prochaine étape.</value></data>
+<data name="Notice.M02" xml:space="preserve"><value>Informations nécessaires — Ouvrez {0} pour consulter les informations demandées et répondre de manière sécurisée.</value></data>
+<data name="Notice.M03" xml:space="preserve"><value>Action enregistrée selon votre instruction — Une action fondée sur votre instruction a été enregistrée dans {0}. Consultez les détails ; aucune nouvelle approbation ne vous est demandée.</value></data>
+<data name="Notice.M04" xml:space="preserve"><value>Suivi du traitement — Votre demande {0} est en cours de traitement. Ouvrez-la pour savoir si une action est attendue de votre part.</value></data>
+<data name="Notice.M05" xml:space="preserve"><value>Mise à jour confidentielle — Une mise à jour de votre dossier confidentiel est disponible. Connectez-vous pour la consulter en privé.</value></data>
+<data name="Notice.M06" xml:space="preserve"><value>Vérifiez vos accès — Vos accès ont changé. Connectez-vous pour consulter vos affectations actuelles et les actions disponibles.</value></data>
+<data name="Notice.M07" xml:space="preserve"><value>Modification d’une activité prévue — Une activité liée à {0} a changé. Consultez les nouvelles informations et les éventuelles options de confirmation ou de remboursement.</value></data>
+<data name="Notice.M08" xml:space="preserve"><value>Une étape nécessite votre attention — Le dossier {0} a été enregistré, mais une étape d’envoi ou de pièce jointe a échoué. Ouvrez-le pour réessayer uniquement cette étape.</value></data>
+<data name="Notice.M09" xml:space="preserve"><value>Invitation disponible — Une invitation est disponible. Vérifiez l’organisation, l’objet et la date d’expiration avant de l’accepter au moyen du lien privé remis par le bureau autorisé.</value></data>
+<data name="Notice.M10" xml:space="preserve"><value>Échéance proche — Une échéance pour {0} approche. Ouvrez le dossier pour consulter la date exacte et l’action autorisée.</value></data>
+<data name="Auth.Identifier" xml:space="preserve"><value>E-mail, téléphone ou identifiant</value></data>
+<data name="Auth.Password" xml:space="preserve"><value>Mot de passe</value></data>
+<data name="Auth.Remember" xml:space="preserve"><value>Rester connecté sur cet appareil personnel</value></data>
+<data name="Auth.Register" xml:space="preserve"><value>Créer un compte personnel</value></data>
+<data name="Auth.Recover" xml:space="preserve"><value>Récupérer l’accès au compte</value></data>
+<data name="Auth.ProviderHelp" xml:space="preserve"><value>Connexion externe et envoi non configurés. Les identifiants existants restent utilisables ; assistance après contrôle d’identité si nécessaire.</value></data>
+<data name="Auth.Failed" xml:space="preserve"><value>Connexion échouée ou temporairement limitée. Vérifiez vos identifiants ou utilisez la récupération.</value></data>
+<data name="Auth.AgePolicy" xml:space="preserve"><value>La politique d’âge et d’assistance doit être approuvée avant inscription publique. Contactez le bureau pour la procédure assistée.</value></data>
+<data name="Auth.PasswordHelp" xml:space="preserve"><value>Utilisez une phrase secrète de 16 à 200 caractères. Confirmation identique ; espaces, collage et gestionnaires autorisés.</value></data>
+<data name="Auth.ContactUnavailable" xml:space="preserve"><value>Ce contact ne peut pas être utilisé. Essayez connexion, récupération ou un autre contact ; propriété non vérifiée.</value></data>
+<data name="Auth.AccountOnly" xml:space="preserve"><value>Créez votre compte. Paroisse et noms traduits sont des étapes ultérieures facultatives. Aucun dossier paroissial ni rôle n’est créé.</value></data>
+<data name="Auth.GivenName" xml:space="preserve"><value>Prénom fourni</value></data>
+<data name="Auth.FamilyName" xml:space="preserve"><value>Nom de famille fourni</value></data>
+<data name="Auth.BirthDate" xml:space="preserve"><value>Date de naissance exacte pour l’éligibilité</value></data>
+<data name="Auth.Contact" xml:space="preserve"><value>E-mail ou téléphone international (+ indicatif)</value></data>
+<data name="Auth.ConfirmPassword" xml:space="preserve"><value>Confirmer le mot de passe</value></data>
+<data name="Auth.Notice" xml:space="preserve"><value>J’ai lu les informations du compte et la finalité des champs.</value></data>
+<data name="Auth.RecoveryHelp" xml:space="preserve"><value>Si une procédure admissible existe, suivez ses instructions réelles. Aucun service de récupération par e-mail/SMS n’est configuré. Utilisez le contrôle d’identité du bureau ; comptes privilégiés par assistance autorisée.</value></data>
+<data name="Document.Copy" xml:space="preserve"><value>BROUILLON / COPIE DE CONTRÔLE — pas un original émis</value></data>
+<data name="Document.NoSignature" xml:space="preserve"><value>Cet aperçu n’appose ni signature ni sceau. Utilisez la procédure papier signée approuvée.</value></data>
+<data name="Document.Print" xml:space="preserve"><value>Imprimer cette copie de contrôle</value></data>
+<data name="Events.Places" xml:space="preserve"><value>État des places et accueil</value></data>
+<data name="Events.ReservedHelp" xml:space="preserve"><value>Une place demandée ou réservée n’est pas une présence confirmée. Consentement, paiement et transport restent distincts.</value></data>
+<data name="Events.IdentityEvidence" xml:space="preserve"><value>Référence réelle de preuve d’identité / consentement</value></data>
+<data name="Events.Collectors" xml:space="preserve"><value>Identités des personnes autorisées, une par ligne</value></data>
+<data name="Events.IndependentExit" xml:space="preserve"><value>Départ autonome expressément autorisé selon la politique approuvée</value></data>
+<data name="Events.VerifyConsent" xml:space="preserve"><value>Enregistrer le consentement examiné</value></data>
+<data name="Events.ConfirmPlace" xml:space="preserve"><value>Confirmer la place admissible</value></data>
+<data name="Events.Arrival" xml:space="preserve"><value>Enregistrer l’arrivée réelle</value></data>
+<data name="Events.Collector" xml:space="preserve"><value>Identité vérifiée du destinataire réel</value></data>
+<data name="Events.Pickup" xml:space="preserve"><value>Enregistrer la remise / sortie autorisée</value></data>
+<data name="Events.RosterWarning" xml:space="preserve"><value>Personnes présentes pour cet événement uniquement — pas tout le bâtiment. Vérifiez l’actualisation et rapprochez les feuilles papier.</value></data>
+<data name="Place.Reserved" xml:space="preserve"><value>Réservé — conditions en attente</value></data>
+<data name="Place.Waitlisted" xml:space="preserve"><value>Liste d’attente</value></data>
+<data name="Place.Confirmed" xml:space="preserve"><value>Confirmé</value></data>
+<data name="Place.Cancelled" xml:space="preserve"><value>Annulé</value></data>
+<data name="Place.NeedsReconfirmation" xml:space="preserve"><value>Reconfirmation requise</value></data>
+<data name="Error.DocumentMismatch" xml:space="preserve"><value>Personne, source et version doivent correspondre au dossier. Remise bloquée.</value></data>
+<data name="Document.DownloadReviewed" xml:space="preserve"><value>Télécharger la pièce finale examinée</value></data>
+<data name="Document.Recipient" xml:space="preserve"><value>Référence du compte destinataire vérifié</value></data>
+<data name="Document.RecipientAuthority" xml:space="preserve"><value>Preuve réelle d’identité et de représentation</value></data>
+<data name="Document.FinalReview" xml:space="preserve"><value>J’ai examiné ce fichier final signé, sa personne, sa source, sa langue et sa version.</value></data>
+<data name="Document.Action.Approve" xml:space="preserve"><value>Approbation préparatoire du prêtre</value></data>
+<data name="Document.Action.RecordPaperSignature" xml:space="preserve"><value>Enregistrer ma signature papier réelle</value></data>
+<data name="Document.Action.Issue" xml:space="preserve"><value>Enregistrer l’émission autorisée</value></data>
+<data name="Document.Action.Release" xml:space="preserve"><value>Mettre à disposition le fichier final examiné</value></data>
+<data name="Document.Action.Collect" xml:space="preserve"><value>Enregistrer le retrait réel</value></data>
+<data name="Document.Action.WithdrawRelease" xml:space="preserve"><value>Retirer l’accès futur au fichier</value></data>
+<data name="Reservation.IntakeHelp" xml:space="preserve"><value>Soumettre demande un examen, sans réserver ni confirmer la ressource. Heures de la paroisse.</value></data>
+<data name="Reservation.Start" xml:space="preserve"><value>Début en heure locale paroissiale</value></data>
+<data name="Reservation.End" xml:space="preserve"><value>Fin en heure locale paroissiale</value></data>
+<data name="Error.TimeZone" xml:space="preserve"><value>Heure locale ambiguë ou invalide au changement d’heure. Choisissez avec le bureau.</value></data>
+<data name="Draft.Unsaved" xml:space="preserve"><value>Modifications non enregistrées</value></data>
+<data name="Draft.SwitchHelp" xml:space="preserve"><value>Enregistrez ce brouillon autorisé avant de changer de langue, abandonnez les modifications ou restez ici.</value></data>
+<data name="Draft.Discard" xml:space="preserve"><value>Abandonner les modifications</value></data>
+<data name="Draft.Stay" xml:space="preserve"><value>Rester ici</value></data>
+<data name="Draft.SaveFailed" xml:space="preserve"><value>Enregistrement non confirmé. Gardez le formulaire et réessayez avec la même référence après vérification de la connexion.</value></data>
+<data name="Action.SaveDraft" xml:space="preserve"><value>Brouillon enregistré</value></data>
+<data name="Error.DuplicateIdentity" xml:space="preserve"><value>Une identité similaire active ou archivée existe. Examinez-la ou documentez une personne distincte.</value></data>
+<data name="Action.CorrectEntry" xml:space="preserve"><value>Enregistrer la correction proposée du nom</value></data>
+<data name="Action.Postpone" xml:space="preserve"><value>Reporter et reprendre la préparation</value></data>
+<data name="Action.GuestAssociated" xml:space="preserve"><value>Association du demandeur vérifiée</value></data>
+<data name="Admin.Accept" xml:space="preserve"><value>Accepter la nomination</value></data>
+<data name="Admin.AccountReference" xml:space="preserve"><value>Compte individuel</value></data>
+<data name="Admin.Adoption" xml:space="preserve"><value>Référence de l’adoption approuvée</value></data>
+<data name="Admin.Appointments" xml:space="preserve"><value>Nominations et périmètres</value></data>
+<data name="Admin.Authenticator" xml:space="preserve"><value>Code d’authentification</value></data>
+<data name="Admin.Authority" xml:space="preserve"><value>Justificatif réel de l’autorité ou de la décision</value></data>
+<data name="Admin.CreateParish" xml:space="preserve"><value>Créer et activer la paroisse valide</value></data>
+<data name="Admin.Ends" xml:space="preserve"><value>Fin (facultative)</value></data>
+<data name="Admin.GroupReference" xml:space="preserve"><value>Identifiant du ministère (responsable uniquement)</value></data>
+<data name="Admin.HeadPriest" xml:space="preserve"><value>Identifiant exact du curé déjà nommé</value></data>
+<data name="Admin.IndependentReview" xml:space="preserve"><value>Examen indépendant d’une nomination protégée</value></data>
+<data name="Admin.Invitation" xml:space="preserve"><value>Nomination en attente de votre décision</value></data>
+<data name="Admin.Jurisdiction" xml:space="preserve"><value>Juridiction approuvée</value></data>
+<data name="Admin.Locality" xml:space="preserve"><value>Localité vérifiée</value></data>
+<data name="Admin.NewOrganization" xml:space="preserve"><value>Créer le diocèse approuvé</value></data>
+<data name="Admin.Offer" xml:space="preserve"><value>Proposer une nomination délimitée</value></data>
+<data name="Admin.OfficeContact" xml:space="preserve"><value>Contact public réel du bureau</value></data>
+<data name="Admin.Organization" xml:space="preserve"><value>Diocèse</value></data>
+<data name="Admin.PriestEvidence" xml:space="preserve"><value>Justificatif de nomination existante et d’acceptation du prêtre</value></data>
+<data name="Admin.ProtectedHelp" xml:space="preserve"><value>Un autre super administrateur doit examiner la nomination et utiliser son propre mot de passe et son authentificateur configuré. Aucune approbation ni livraison n’est présumée.</value></data>
+<data name="Admin.Revoke" xml:space="preserve"><value>Révoquer cette nomination</value></data>
+<data name="Admin.Role" xml:space="preserve"><value>Rôle exercé</value></data>
+<data name="Admin.Scope" xml:space="preserve"><value>Périmètre d’autorité</value></data>
+<data name="Admin.ScopeHelp" xml:space="preserve"><value>Chaque personne utilise un compte individuel. Une invitation exige acceptation et dates effectives. Un rôle administratif ne donne ni signature sacerdotale ni accès pastoral privé ou confidentiel.</value></data>
+<data name="Admin.Starts" xml:space="preserve"><value>Début</value></data>
+<data name="Admin.System" xml:space="preserve"><value>Périmètre du système</value></data>
+<data name="Admin.TargetUsername" xml:space="preserve"><value>Identifiant exact du compte visé</value></data>
+<data name="Admin.Username" xml:space="preserve"><value>Identifiant exact du compte</value></data>
+<data name="Admin.Title" xml:space="preserve"><value>Administration et nominations</value></data>
+<data name="Admin.Active" xml:space="preserve"><value>Effectif</value></data>
+<data name="Admin.NotEffective" xml:space="preserve"><value>Non effectif actuellement</value></data>
+<data name="Admin.SpecificGrants" xml:space="preserve"><value>Missions supplémentaires explicites — pour le rôle correspondant uniquement</value></data>
+<data name="Admin.CreateParishesGrant" xml:space="preserve"><value>L’administrateur diocésain peut créer des paroisses</value></data>
+<data name="Admin.SensitiveGrant" xml:space="preserve"><value>L’examinateur désigné peut examiner les signalements sensibles</value></data>
+<data name="Admin.IdentityGrant" xml:space="preserve"><value>L’examinateur désigné peut voir l’identité autorisée séparément</value></data>
+<data name="Case.CorrectedName" xml:space="preserve"><value>Nom corrigé de la personne concernée</value></data>
+<data name="Case.Kind" xml:space="preserve"><value>Type de demande</value></data>
+<data name="Error.AccountLookup" xml:space="preserve"><value>Le compte visé est indisponible. Vérifiez son identifiant exact en privé.</value></data>
+<data name="Error.AdminDualReview" xml:space="preserve"><value>Cette action exige la procédure administrative protégée et indépendante.</value></data>
+<data name="Error.MfaRequired" xml:space="preserve"><value>Un authentificateur réellement configuré et un code valide sont requis.</value></data>
+<data name="Error.Reauthentication" xml:space="preserve"><value>La réauthentification n’a pas pu être vérifiée.</value></data>
+<data name="Following.MakePrimary" xml:space="preserve"><value>Choisir comme paroisse principale</value></data>
+<data name="Following.Follow" xml:space="preserve"><value>Suivre la paroisse</value></data>
+<data name="Following.Unfollow" xml:space="preserve"><value>Ne plus suivre</value></data>
+<data name="Following.Following" xml:space="preserve"><value>Suivie</value></data>
+<data name="Following.Primary" xml:space="preserve"><value>Suivie · préférence principale</value></data>
+<data name="Following.NotFollowing" xml:space="preserve"><value>Informations publiques</value></data>
+<data name="Following.Separate" xml:space="preserve"><value>Le suivi et la préférence principale ne créent ni adhésion paroissiale, ni fiche de personne, ni accès administratif.</value></data>
+<data name="Guest.AllowedKinds" xml:space="preserve"><value>Types de demandes invités effectivement approuvés</value></data>
+<data name="Guest.Associate" xml:space="preserve"><value>Associer la demande vérifiée à un compte</value></data>
+<data name="Guest.AssociateConfirm" xml:space="preserve"><value>Confirmez la vérification réelle du demandeur. L’ancien lien cessera de fonctionner et le compte nommé pourra suivre cette demande.</value></data>
+<data name="Guest.AssociateHelp" xml:space="preserve"><value>Vérifiez le demandeur d’origine et le compte exact selon la procédure approuvée du bureau. L’association conserve le dossier et n’accorde ni adhésion ni remise de document.</value></data>
+<data name="Guest.Code" xml:space="preserve"><value>Code de suivi privé</value></data>
+<data name="Guest.Configuration" xml:space="preserve"><value>Configuration des demandes invités</value></data>
+<data name="Guest.Contact" xml:space="preserve"><value>Votre contact réel pour le suivi du bureau</value></data>
+<data name="Guest.ContactNotice" xml:space="preserve"><value>Fournissez uniquement les renseignements nécessaires. Le contact est déclaré, non vérifié numériquement. En cas d’urgence, utilisez le contact réellement publié par la paroisse.</value></data>
+<data name="Guest.Enabled" xml:space="preserve"><value>Activer les demandes invités approuvées</value></data>
+<data name="Guest.LinkHelp" xml:space="preserve"><value>Conservez ce lien ou code privé pour le suivi limité. Son détenteur peut voir le statut et les réponses au demandeur. Il n’autorise pas les téléchargements sensibles.</value></data>
+<data name="Guest.LostLink" xml:space="preserve"><value>Lien perdu ou expiré : contactez la bonne paroisse pour une récupération après vérification d’identité.</value></data>
+<data name="Guest.Request" xml:space="preserve"><value>Déposer une demande comme invité</value></data>
+<data name="Guest.Scope" xml:space="preserve"><value>Le dépôt enregistre une demande pour cette paroisse. Il n’approuve aucun service, ne confirme aucune date et ne crée ni fiche de personne ni adhésion.</value></data>
+<data name="Guest.Sensitive" xml:space="preserve"><value>Les fichiers et notes privées du bureau ne sont pas accessibles avec ce code. Les documents sensibles exigent un compte destinataire expressément vérifié ou un retrait réel au bureau.</value></data>
+<data name="Guest.Track" xml:space="preserve"><value>Suivre une demande invité</value></data>
+<data name="People.DatePrecision" xml:space="preserve"><value>Précision de la date de naissance</value></data>
+<data name="People.DuplicateEvidence" xml:space="preserve"><value>Justificatif réel de personne distincte en présence de fiches similaires</value></data>
+<data name="People.Help" xml:space="preserve"><value>Enregistrez les noms et sources réellement fournis. Les dates ou écritures inconnues restent inconnues. Une fiche provisoire est distincte du compte, de l’adhésion et du registre officiel.</value></data>
+<data name="People.New" xml:space="preserve"><value>Créer une fiche provisoire</value></data>
+<data name="Precision.Unknown" xml:space="preserve"><value>Inconnue</value></data>
+<data name="Precision.Exact" xml:space="preserve"><value>Date exacte</value></data>
+<data name="Precision.Year" xml:space="preserve"><value>Année seulement</value></data>
+<data name="Precision.Approximate" xml:space="preserve"><value>Approximative, telle que fournie</value></data>
+<data name="PersonStatus.Provisional" xml:space="preserve"><value>Provisoire</value></data>
+<data name="PersonStatus.Active" xml:space="preserve"><value>Active</value></data>
+<data name="PersonStatus.Archived" xml:space="preserve"><value>Archivée</value></data>
+<data name="PersonStatus.VerifiedDeceased" xml:space="preserve"><value>Décès vérifié</value></data>
+<data name="Policy.Area" xml:space="preserve"><value>Domaine d’approbation</value></data>
+<data name="Policy.CertificateProxy" xml:space="preserve"><value>Enregistrer l’approbation réelle de l’extension de préparation des certificats au secrétariat (signature personnelle distincte)</value></data>
+<data name="Policy.Confirmed" xml:space="preserve"><value>J’enregistre une approbation réelle de l’autorité compétente avec son justificatif.</value></data>
+<data name="Policy.EntryProxy" xml:space="preserve"><value>Permettre au secrétariat de saisir une instruction sacerdotale préalable réelle pour l’inscription officielle</value></data>
+<data name="Policy.EventLead" xml:space="preserve"><value>Identifiant exact du responsable de protection réellement désigné</value></data>
+<data name="Policy.Help" xml:space="preserve"><value>Ces conditions exigent des décisions réelles du domaine. Une référence ne fabrique ni approbation, règle religieuse, document signé, conditions financières ni intégration externe.</value></data>
+<data name="Policy.Record" xml:space="preserve"><value>Enregistrer la configuration réellement approuvée</value></data>
+<data name="Policy.Reference" xml:space="preserve"><value>Référence de l’approbation compétente réelle</value></data>
+<data name="Policy.Requirements" xml:space="preserve"><value>Identifiants des justificatifs exigés approuvés, un par ligne</value></data>
+<data name="Public.Directory" xml:space="preserve"><value>Annuaire des paroisses</value></data>
+<data name="Concern.Title" xml:space="preserve"><value>Signalements et réclamations</value></data>
+<data name="Concern.Privacy" xml:space="preserve"><value>Seuls vous et les examinateurs indépendants éligibles choisis accédez au dossier. L’anonymat envers eux n’efface pas votre identité de compte dans le système. Le rang administratif n’accorde aucun accès.</value></data>
+<data name="Concern.Urgent" xml:space="preserve"><value>Ce formulaire ne contacte pas les secours et ne promet pas de réponse immédiate. Utilisez une autorité indépendante compétente ou une voie d’urgence réelle si nécessaire.</value></data>
+<data name="Concern.Narrative" xml:space="preserve"><value>Description privée du signalement</value></data>
+<data name="Concern.Anonymous" xml:space="preserve"><value>Masquer mon identité aux examinateurs</value></data>
+<data name="Concern.Sensitive" xml:space="preserve"><value>Nécessite un accès désigné aux dossiers sensibles</value></data>
+<data name="Concern.ChooseReviewers" xml:space="preserve"><value>Choisir uniquement des examinateurs indépendants éligibles sans conflit</value></data>
+<data name="Concern.SensitiveEligible" xml:space="preserve"><value>Examinateur sensible désigné</value></data>
+<data name="Concern.OrdinaryEligible" xml:space="preserve"><value>Signalements ordinaires uniquement</value></data>
+<data name="Concern.NoRoute" xml:space="preserve"><value>Aucun examinateur indépendant éligible n’est configuré ici. N’adressez pas une allégation à un bureau impliqué. Recherchez une voie indépendante réellement compétente ; aucune n’est inventée ici.</value></data>
+<data name="Concern.IdentityHidden" xml:space="preserve"><value>Identité masquée dans cette vue</value></data>
+<data name="Concern.IdentityPermitted" xml:space="preserve"><value>L’accès à l’identité suit votre autorisation distincte</value></data>
+<data name="Concern.ReviewerNote" xml:space="preserve"><value>Examinateurs choisis uniquement — note privée</value></data>
+<data name="Concern.ApplicantReply" xml:space="preserve"><value>Réponse visible par l’auteur</value></data>
+<data name="Concern.Start" xml:space="preserve"><value>Commencer l’examen</value></data>
+<data name="Concern.Reply" xml:space="preserve"><value>Enregistrer la réponse</value></data>
+<data name="Concern.Recuse" xml:space="preserve"><value>Déclarer un conflit et se récuser</value></data>
+<data name="Concern.Close" xml:space="preserve"><value>Clore avec explication</value></data>
+<data name="Concern.Reopen" xml:space="preserve"><value>Rouvrir avec motif</value></data>
+<data name="Concern.RecuseHelp" xml:space="preserve"><value>Votre accès futur sera retiré. Cela ne nomme pas de remplaçant et ne contacte pas d’autorité externe. Notez le motif du conflit dans la note privée.</value></data>
+<data name="Concern.Status.Submitted" xml:space="preserve"><value>Déposé</value></data>
+<data name="Concern.Status.InReview" xml:space="preserve"><value>Examen indépendant en cours</value></data>
+<data name="Concern.Status.Closed" xml:space="preserve"><value>Clos</value></data>
+<data name="Case.ReplaceRejected" xml:space="preserve"><value>Remplacer un fichier rejeté (facultatif)</value></data>
+<data name="Recovery.Title" xml:space="preserve"><value>Vérifier un enregistrement incertain</value></data>
+<data name="Recovery.Help" xml:space="preserve"><value>Après une réponse perdue, vérifiez l’opération d’origine avant de réessayer. Seuls vos propres reçus d’opération sont affichés. Un reçu confirme l’enregistrement ; l’accès actuel au dossier est contrôlé séparément.</value></data>
+<data name="Recovery.Operation" xml:space="preserve"><value>Identifiant de l’opération d’origine</value></data>
+<data name="Recovery.Check" xml:space="preserve"><value>Vérifier le résultat enregistré</value></data>
+<data name="Recovery.Unconfirmed" xml:space="preserve"><value>Aucun reçu enregistré n’a été trouvé pour ce compte et cette opération. Cela ne prouve pas un échec ; vérifiez le dossier actuel ou contactez le bureau avant un nouvel envoi.</value></data>
+<data name="Recovery.Committed" xml:space="preserve"><value>Cette opération a été enregistrée. Utilisez le résultat existant sans créer de doublon.</value></data>
+<data name="Recovery.Record" xml:space="preserve"><value>Référence du résultat enregistré</value></data>
+<data name="Finance.ActualAt" xml:space="preserve"><value>Date et heure réelles du mouvement</value></data>
+<data name="Finance.ExportAll" xml:space="preserve"><value>Exporter tous les mouvements actuellement autorisés (CSV)</value></data>
+<data name="Finance.ActualReceipt" xml:space="preserve"><value>Enregistrer un encaissement réel vérifié</value></data>
+<data name="Finance.ReceiptHelp" xml:space="preserve"><value>Enregistrez l’argent réellement reçu ou un encaissement bancaire/OMT vérifié, avec la référence d’origine. Un paiement attendu ou déclaré n’est pas de l’argent reçu. Réutilisez la même opération après une réponse incertaine.</value></data>
+<data name="Finance.Method" xml:space="preserve"><value>Mode réel d’encaissement</value></data>
+<data name="Finance.Method.Cash" xml:space="preserve"><value>Espèces réellement reçues</value></data>
+<data name="Finance.Method.VerifiedBank" xml:space="preserve"><value>Encaissement bancaire réel vérifié</value></data>
+<data name="Finance.Method.VerifiedOMT" xml:space="preserve"><value>Encaissement OMT réel vérifié</value></data>
+<data name="Finance.Posted" xml:space="preserve"><value>Mouvements comptabilisés canoniques</value></data>
+<data name="Giving.Title" xml:space="preserve"><value>Comptages des dons</value></data>
+<data name="Giving.Help" xml:space="preserve"><value>Saisissez les comptages réels d’espèces par devise d’origine. Une autre personne réelle enregistre ses totaux observés pour cette révision précise. L’écart reste ouvert ; la clôture comptabilise chaque ligne une seule fois. Les encaissements bancaires suivent la voie vérifiée distincte.</value></data>
+<data name="Giving.CollectedAt" xml:space="preserve"><value>Date et heure réelles de collecte</value></data>
+<data name="Giving.Open" xml:space="preserve"><value>Ouvrir un comptage</value></data>
+<data name="Giving.AddLine" xml:space="preserve"><value>Ajouter une ligne réellement comptée</value></data>
+<data name="Giving.Independent" xml:space="preserve"><value>Un autre compteur saisit ses observations réelles. Il ne suffit pas de confirmer un total copié. Laissez une devise vide uniquement si elle n’a pas été comptée.</value></data>
+<data name="Giving.UsdCents" xml:space="preserve"><value>Total USD observé en cents (1250 = 12,50 USD)</value></data>
+<data name="Giving.LbpUnits" xml:space="preserve"><value>Total LBP observé en livres entières</value></data>
+<data name="Giving.Verify" xml:space="preserve"><value>Enregistrer le comptage observé indépendant</value></data>
+<data name="Giving.Close" xml:space="preserve"><value>Clore et comptabiliser une fois</value></data>
+<data name="Giving.CloseConfirm" xml:space="preserve"><value>Clore cette révision précise vérifiée indépendamment et comptabiliser les encaissements une seule fois ? Toute correction ultérieure doit être formelle.</value></data>
+<data name="Giving.Status.Open" xml:space="preserve"><value>Ouvert</value></data>
+<data name="Giving.Status.Variance" xml:space="preserve"><value>Écart — nouveau comptage requis</value></data>
+<data name="Giving.Status.Verified" xml:space="preserve"><value>Révision vérifiée indépendamment</value></data>
+<data name="Giving.Status.Closed" xml:space="preserve"><value>Clos et comptabilisé</value></data>
+<data name="Events.PaperRecovery" xml:space="preserve"><value>Reprise après vérification du registre papier</value></data>
+<data name="Events.ReconcilePaper" xml:space="preserve"><value>Rapprocher un mouvement réellement enregistré sur papier</value></data>
+<data name="Events.PaperReference" xml:space="preserve"><value>Référence réelle du registre papier vérifié</value></data>
+<data name="Failure.Title" xml:space="preserve"><value>Le résultat n’a pas pu être confirmé</value></data>
+<data name="Failure.Help" xml:space="preserve"><value>Conservez la référence de l’opération d’origine. Vérifiez le résultat enregistré avant de répéter une action importante. Si l’accès ou le service reste indisponible, contactez le bon bureau avec cette référence d’assistance, sans document privé ni identifiants.</value></data>
+<data name="Failure.Reference" xml:space="preserve"><value>Référence d’assistance non secrète</value></data>
+</root>

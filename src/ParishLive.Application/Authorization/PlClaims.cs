@@ -8,4 +8,5 @@ public static class PlClaims
     public const string ArchAdmin = "pl:arch_admin";   // "true" / "false"
     public const string Role = "pl:role";              // one per distinct SystemRole
     public const string Name = "pl:name";              // the user's display name
+    public const string Assignment = "pl:assignment";
 }

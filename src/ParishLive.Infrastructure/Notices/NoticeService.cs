@@ -6,6 +6,8 @@ using ParishLive.Application.Notices;
 using ParishLive.Domain.Common;
 using ParishLive.Domain.Constants;
 using ParishLive.Domain.Entities;
+using ParishLive.Domain.Enums;
+using ParishLive.Application.Common;
 using ParishLive.Infrastructure.Data;
 
 namespace ParishLive.Infrastructure.Notices;
@@ -14,7 +16,18 @@ public sealed class NoticeService(AppDbContext db, ITenantContext tenant, IPermi
 {
     public async Task<IReadOnlyList<NoticeListItem>> ListRecentAsync(int take = 20, CancellationToken cancellationToken = default)
     {
-        var notices = await db.Notices
+        var appointments = (await db.Memberships.AsNoTracking().Where(m => m.UserId == tenant.UserId).ToListAsync(cancellationToken))
+            .Where(m => m.IsEffective(DateTimeOffset.UtcNow)).ToList();
+        var staffParishes = appointments.Where(m => m.Role.ToString() == tenant.ActingRole &&
+            (tenant.ActingAssignmentId is null || m.Id == tenant.ActingAssignmentId) && m.Role is SystemRole.Priest or SystemRole.Secretary or SystemRole.ParishAdmin)
+            .Select(m => m.ParishId).ToArray();
+        var memberParishes = appointments.Select(m => m.ParishId).ToArray();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var committeeParishes = await db.GroupMembers.Where(m => m.UserId == tenant.UserId && m.EndDate == null &&
+            m.StartDate <= today && m.Role != CommitteeRole.RegularMember).Select(m => m.ParishId).ToListAsync(cancellationToken);
+        var notices = await db.Notices.Where(n => n.Audience == NoticeAudience.Everyone || staffParishes.Contains(n.ParishId) ||
+                n.Audience == NoticeAudience.Members && memberParishes.Contains(n.ParishId) ||
+                n.Audience == NoticeAudience.Committees && committeeParishes.Contains(n.ParishId))
             .Select(n => new { n.Id, n.Title, n.Body, n.Priority, n.PublishedByUserId, n.PublishedAtUtc, n.ExpiresAtUtc })
             .ToListAsync(cancellationToken);
 
@@ -33,6 +46,7 @@ public sealed class NoticeService(AppDbContext db, ITenantContext tenant, IPermi
 
     public async Task<Guid> PublishAsync(PublishNoticeRequest request, string publisherUserId, CancellationToken cancellationToken = default)
     {
+        if (publisherUserId != tenant.UserId) throw new ForbiddenException("Error.Unavailable");
         var parishId = tenant.ParishIds.FirstOrDefault();
         if (parishId == Guid.Empty)
             throw new DomainException("No parish context for the notice.");
@@ -42,11 +56,13 @@ public sealed class NoticeService(AppDbContext db, ITenantContext tenant, IPermi
         var notice = Notice.Create(tenant.OrgId, parishId, request.Title, request.Body,
             request.Priority, request.Audience, publisherUserId, request.ExpiresAtUtc);
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         db.Notices.Add(notice);
         await db.SaveChangesAsync(cancellationToken);
 
         await audit.LogAsync("notice.publish", "Notice", notice.Id,
             $"Published notice: {notice.Title}", publisherUserId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return notice.Id;
     }
 

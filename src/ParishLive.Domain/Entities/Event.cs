@@ -9,6 +9,9 @@ namespace ParishLive.Domain.Entities;
 /// </summary>
 public sealed class Event : TenantEntity
 {
+    public long Revision { get; set; } = 1;
+    public string ConsentVersion { get; set; } = "1";
+    public bool IsMass { get; set; }
     private Event() { }
 
     public string Title { get; private set; } = string.Empty;

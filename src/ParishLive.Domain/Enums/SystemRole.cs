@@ -11,5 +11,11 @@ public enum SystemRole
     Priest,
     Secretary,
     Member,
-    PublicVisitor
+    PublicVisitor,
+    SuperAdmin,
+    ParishAdmin,
+    Treasurer,
+    FinanceViewer,
+    MinistryLeader,
+    ConcernReviewer
 }
