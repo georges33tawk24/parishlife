@@ -1,0 +1,53 @@
+/* Easier reading (assets/reading.js), on the public site and the sign-in screen: the text size,
+   Simple view, and the control in the header that sets them. */
+
+/* the text size: every font size on these pages is multiplied by --fs; headlines by the gentler
+   --fs-d, so they still fit a phone */
+html[data-text="2"]{--fs:1.15;--fs-d:1.07}
+html[data-text="3"]{--fs:1.3;--fs-d:1.14}
+
+/* the header keeps its links on one line: with larger text it turns to the menu sooner */
+@media(max-width:1180px){.desktop-nav{display:none}.menu-toggle{display:block;color:inherit}.header-actions{margin-inline-start:auto}}
+@media(max-width:1400px){html[data-text="2"] .desktop-nav{display:none}html[data-text="2"] .menu-toggle{display:block;color:inherit}html[data-text="2"] .header-actions{margin-inline-start:auto}}
+@media(max-width:1640px){html[data-text="3"] .desktop-nav{display:none}html[data-text="3"] .menu-toggle{display:block;color:inherit}html[data-text="3"] .header-actions{margin-inline-start:auto}}
+
+/* Simple view: nothing moves on its own (the page's scripted motion stops in home-motion.js) */
+html[data-simple] *,html[data-simple] *::before,html[data-simple] *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.01ms!important;transition-delay:0s!important}
+html[data-simple]{scroll-behavior:auto}
+/* and, in Simple view or with larger text, the usual mouse pointer instead of the gold arrow and the candle */
+@media(pointer:fine){
+  html[data-simple],html[data-text]{--arrow:auto;--hand:pointer}
+  html[data-simple] .account-auth,html[data-text] .account-auth{--arrow:auto;--hand:pointer}
+}
+
+/* the control: a button with the two A's, and a parchment panel below it */
+.ease{position:relative;display:flex}
+.ease-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:4px 14px;border:1px solid rgb(21 32 58 / .28);border-radius:999px;background:transparent;color:inherit;
+  font:600 calc(17px * var(--fs,1))/1 var(--sans,"Source Sans 3",system-ui,sans-serif);cursor:var(--hand,pointer);transition:background-color .2s,border-color .2s,color .2s}
+body.over-hero .ease-toggle,body.menu-open .ease-toggle{border-color:rgb(238 241 246 / .38)}
+.ease-toggle:hover,.ease-toggle[aria-expanded=true]{border-color:#C79E4C;color:inherit;background:rgb(215 165 72 / .12)}
+.ease-glyph{display:inline-flex;align-items:baseline;font-family:"Marcellus",Georgia,serif;font-size:22px;line-height:1;letter-spacing:-.02em}
+.ease-glyph small{font-size:15px;margin-inline-start:1px}
+[dir=rtl] .ease-glyph{direction:ltr}
+[dir=rtl] .ease-toggle{font-family:"Noto Sans Arabic","Source Sans 3",system-ui,sans-serif}
+.ease-word{white-space:nowrap}
+@media(max-width:1279px){.site-header .ease-word{display:none}.site-header .ease-toggle{padding-inline:10px}}
+.ease-panel{position:absolute;z-index:80;top:calc(100% + 10px);inset-inline-end:0;width:min(340px,calc(100vw - 24px));padding:18px;border:1px solid #DCCDB2;border-radius:18px;
+  background:#FFFDF8;color:#15203A;text-align:start;box-shadow:0 1px 0 #fff inset,0 30px 60px -24px rgb(14 26 49 / .45),0 6px 16px -8px rgb(14 26 49 / .2)}
+.ease-panel[hidden]{display:none}
+.ease-title{margin:0 0 14px;font:400 calc(23px * var(--fs-d,1))/1.2 "Marcellus",Georgia,serif;color:#15203A}
+[dir=rtl] .ease-title{font-family:"Amiri","Marcellus",serif;font-weight:700}
+.ease-label{margin:0 0 8px;font:600 calc(17px * var(--fs,1))/1.3 var(--sans,system-ui);color:#4A5468}
+.ease-sizes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ease-sizes button{display:grid;place-items:center;min-height:68px;border:1px solid #DCCDB2;border-radius:14px;background:#fff;color:#15203A;cursor:var(--hand,pointer);transition:background-color .2s,border-color .2s}
+.ease-sizes button:hover{border-color:#A57B2C}
+.ease-sizes button[aria-pressed=true]{border-color:#0E1A31;background:#0E1A31;color:#F1C77A;box-shadow:inset 0 0 0 1px rgb(241 199 122 / .4)}
+.ease-a{font-family:"Marcellus",Georgia,serif;line-height:1;direction:ltr}
+.ease-a1{font-size:19px}.ease-a2{font-size:25px}.ease-a3{font-size:31px}
+.ease-simple{display:flex;align-items:flex-start;gap:12px;margin-top:14px;padding:14px;border:1px solid #DCCDB2;border-radius:14px;background:#fff;cursor:var(--hand,pointer)}
+.ease-simple input{flex:none;width:24px;height:24px;margin:1px 0 0;accent-color:#8A6420;cursor:var(--hand,pointer)}
+.ease-simple b{display:block;font:600 calc(17px * var(--fs,1))/1.3 var(--sans,system-ui);color:#15203A}
+.ease-simple small{display:block;margin-top:3px;font-size:calc(17px * var(--fs,1));line-height:1.4;color:#4A5468}
+.ease-toggle:focus-visible,.ease-sizes button:focus-visible,.ease-simple:focus-within{outline:2px solid #2A4A96;outline-offset:3px}
+body.over-hero .ease-toggle:focus-visible{outline-color:#F1C77A}
+@media print{.ease{display:none}}

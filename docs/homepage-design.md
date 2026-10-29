@@ -154,6 +154,20 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   `cursor:var(--hand,pointer)`, so the portal, which does not set it, keeps the usual hand). Fields
   are warm parchment and turn gold when written in; the scrollbar is a gilt rod on parchment; text
   is selected in gold leaf, or candlelight on the night sections; checkboxes take the gilt ink.
+- **Easier reading** (`assets/reading.js`, `assets/reading.css`, on the public site and the sign-in
+  screen): a header button with two A's ("Text size") opens a panel with three sizes, A, A+ and
+  A++, and a Simple view switch; both are remembered on the device and applied in the page's head,
+  so a page is drawn at the chosen size from its first frame. Every font size on these pages is
+  multiplied by `--fs` (1, 1.15, 1.3; headlines by the gentler `--fs-d`), and with larger text the
+  header turns to the menu sooner. Simple view stops everything that moves on its own (parallax,
+  smooth scrolling, the incense, the flickering flames, the season animations), as the system's
+  reduced-motion setting does; Simple view and the larger sizes also give back the usual mouse
+  pointer. Readable text is never smaller than 17px; only ornaments (the hero's kicker, monogram
+  letters, step numerals, map labels and the sill's inscription, which belong to the pictures) are
+  smaller. Paragraphs are never dimmed: only the verse, set large like a heading, lights as it is
+  read. Every search field has a written label above it, with an example as its placeholder, and
+  under the hero's search a plain "Find your parish" button leads to the map and the list without
+  typing.
 - **Touch and small screens:** on touch screens the footer's links, breadcrumbs, the brand and the
   small text buttons get a full finger's height; the page's section tabs fade at their ends where
   they scroll; on a 360px phone the Arabic day names (which have no short forms) shrink to fit the
@@ -171,7 +185,7 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   the parish lights breathe; on the map, lights pulse and relief lines draw once.
 - **Sections:** headings rise word by word, blocks settle once (IntersectionObserver, so late-loading
   fonts and images above can never leave a section hidden), the arcade of arches is built arch by
-  arch, numbers count up, the About text lights up word by word as it is read, and photographs in
+  arch, numbers count up, the verse lights up word by word as it is read (paragraphs are never dimmed), and photographs in
   arches drift slightly against the scroll.
 - **Under the pointer** (mouse or trackpad only): gold buttons lean toward it, arches and ministry
   cards tilt a few degrees with a sheen that follows it, and on the night sections a candle's glow

@@ -27,7 +27,7 @@ export function bindRequest(host,p) {
         <a class="btn btn-gilt" href="${esc(link.href)}">${L('Track my request','متابعة طلبي')}</a></div>`;
       const copy=result.querySelector('[data-copy]'),field=result.querySelector('input');
       copy.onclick=async()=>{try{await navigator.clipboard.writeText(field.value);copy.textContent=L('Copied','تم النسخ');}catch{field.select();}};
-      result.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+      result.scrollIntoView({block:'center',behavior:(matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-simple'))?'auto':'smooth'});
     }catch(err){error.textContent=err.message;b.disabled=false;check?.reset();}
   };
 }

@@ -18,6 +18,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/marcellus-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/source-sans-3-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="assets/reading.js"></script>
   <link rel="stylesheet" href="assets/public.css">
   <link rel="stylesheet" href="assets/collection-ui.css">
   <link rel="stylesheet" href="assets/public-features.css">
@@ -26,6 +27,7 @@
   <link rel="stylesheet" href="assets/sanctuary.css">
   <link rel="stylesheet" href="assets/parish.css">
   <link rel="stylesheet" href="assets/church.css">
+  <link rel="stylesheet" href="assets/reading.css">
   <script defer src="assets/vendor/gsap/gsap.min.js"></script>
   <script defer src="assets/vendor/gsap/ScrollTrigger.min.js"></script>
   <script defer src="assets/vendor/gsap/SplitText.min.js"></script>
@@ -38,7 +40,7 @@
     <div class="site-wrap header-inner">
       <a class="brand" href="public.html" aria-label="ParishLife home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="currentColor" stroke-width="1.8"/><path d="M1 32.5h26" stroke="currentColor" stroke-width="1.8"/><circle class="brand-light" cx="14" cy="20" r="3.2"/></svg></span><span class="brand-word">ParishLife</span></a>
       <nav class="desktop-nav" aria-label="Main navigation"><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#week" data-i18n="week">This week</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#requests" data-i18n="requests">Ask your parish</a></nav>
-      <div class="header-actions"><button id="lang" class="language-button" type="button" aria-label="Switch to Arabic" lang="ar">العربية</button><a class="sign-in" href="index.html" data-i18n="signIn">Members portal</a><button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open navigation"><span></span><span></span></button></div>
+      <div class="header-actions"><div data-ease-slot></div><button id="lang" class="language-button" type="button" aria-label="Switch to Arabic" lang="ar">العربية</button><a class="sign-in" href="index.html" data-i18n="signIn">Members portal</a><button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open navigation"><span></span><span></span></button></div>
     </div>
     <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="public.html#directory" data-i18n="directory" style="--i:0">Find a parish</a><a href="public.html#week" data-i18n="week" style="--i:1">This week</a><a href="public.html#times" data-i18n="times" style="--i:2">Mass times</a><a href="public.html#requests" data-i18n="requests" style="--i:3">Ask your parish</a><a href="index.html" data-i18n="signIn" style="--i:4">Members portal</a></nav>
   </header>

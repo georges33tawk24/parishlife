@@ -70,7 +70,8 @@ export function calendarMarkup(L) {
         <button type="button" class="text-button" data-pcal-today>${L('Today', 'اليوم')}</button>
       </div>
       <div class="pcal-tools">
-        <label class="pcal-search">${SEARCH}<span class="sr-only">${L('Search events', 'ابحث في الأحداث')}</span><input type="search" data-pcal-q autocomplete="off" placeholder="${esc(L('Search events', 'ابحث في الأحداث'))}"></label>
+        <div class="pcal-find"><label class="field-cap" for="pcal-q">${L('Search events', 'ابحث في الأحداث')}</label>
+        <label class="pcal-search">${SEARCH}<input id="pcal-q" type="search" data-pcal-q autocomplete="off" placeholder="${esc(L('For example: Mass', 'مثلاً: قداس'))}"></label></div>
         <div class="pcal-mode" role="group" aria-label="${esc(L('Calendar view', 'عرض الرزنامة'))}"><button type="button" data-pcal-mode="month" aria-pressed="true">${L('Month', 'الشهر')}</button><button type="button" data-pcal-mode="list" aria-pressed="false">${L('Coming up', 'القادم')}</button></div>
       </div>
     </div>

@@ -104,7 +104,8 @@ export function homeView(c) {
   return `<div class="home" data-home>
     ${sections.join('')}
     <dialog class="parish-picker" data-picker aria-labelledby="picker-title"><form method="dialog" class="picker-head"><h2 id="picker-title"></h2><button class="icon-button" aria-label="${L('Close', 'إغلاق')}">${CLOSE}</button></form>
-      <label class="picker-search">${SEARCH}<span class="sr-only">${L('Search parishes', 'ابحث عن رعية')}</span><input type="search" data-picker-filter placeholder="${safe(L('Search parishes', 'ابحث عن رعية'))}"></label>
+      <label class="field-cap" for="picker-q">${L('Search parishes', 'ابحث عن رعية')}</label>
+      <label class="picker-search">${SEARCH}<input id="picker-q" type="search" data-picker-filter placeholder="${safe(L('Name or town', 'الاسم أو البلدة'))}"></label>
       <ul class="picker-list" data-picker-list></ul></dialog>
   </div>`;
 }
@@ -135,10 +136,11 @@ function hero(c) {
       <h1 class="hero-title" id="hero-title">${safe(words(c, site?.hero?.title, HOME_DEFAULTS.hero.title))}</h1>
       <p class="hero-lede" data-hero-rise>${safe(words(c, site?.hero?.subtitle, HOME_DEFAULTS.hero.subtitle))}</p>
       <div class="hero-row"><form class="hero-search" role="search" data-hero-search data-hero-rise>
-        <label class="sr-only" for="hero-q">${L('Parish, town or village', 'رعية أو بلدة أو قرية')}</label>
-        <div class="hero-field">${SEARCH}<input id="hero-q" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="hero-suggest" placeholder="${safe(L('Parish, town or village', 'رعية أو بلدة أو قرية'))}">
+        <label class="field-cap" for="hero-q">${L('Find a parish by its name, town or village', 'ابحث عن رعية باسمها أو بلدتها أو قريتها')}</label>
+        <div class="hero-field">${SEARCH}<input id="hero-q" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="hero-suggest" placeholder="${safe(L('For example: Hadath', 'مثلاً: الحدث'))}">
           <button type="submit">${L('Search', 'ابحث')}</button></div>
         <ul class="hero-suggest" id="hero-suggest" role="listbox" aria-label="${safe(L('Suggestions', 'اقتراحات'))}" hidden></ul>
+        <a class="hero-browse" href="#directory"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v15m-6-6 6 6 6-6"/></svg>${L('Find your parish', 'ابحث عن رعيتك')}</a>
       </form>
       <ul class="hero-facts" data-hero-rise aria-label="${safe(L('ParishLife in numbers', 'ParishLife بالأرقام'))}">
         ${stat(f.parishes, 'parish')}${stat(f.dioceses, 'diocese')}${f.week ? stat(f.week, 'celebration') : stat(f.towns, 'town')}
@@ -216,7 +218,8 @@ function directory(c) {
     <div class="dir-map" data-reveal>${mapMarkup(L)}</div>
     <div class="dir-list">
       <form class="dir-filters" role="search" data-dir-form data-reveal>
-        <label class="dir-search">${SEARCH}<span class="sr-only">${L('Search parish or town', 'ابحث عن رعية أو بلدة')}</span><input id="directory-filter" type="search" value="${safe(filters.q)}" placeholder="${safe(L('Parish, town or village', 'رعية أو بلدة أو قرية'))}"></label>
+        <label class="field-cap" for="directory-filter">${L('Search by parish or town', 'ابحث باسم الرعية أو البلدة')}</label>
+        <label class="dir-search">${SEARCH}<input id="directory-filter" type="search" value="${safe(filters.q)}" placeholder="${safe(L('For example: Hadath', 'مثلاً: الحدث'))}"></label>
         <div class="dir-row">
           ${choices(c, 'town', L('All towns', 'كل البلدات'), uniq(c.directory.map(p => p.town)), filters.town, v => c.townName(c.directory.find(p => p.town === v)) || v)}
           ${choices(c, 'diocese', L('All dioceses', 'كل الأبرشيات'), uniq(c.directory.map(p => p.diocese)), filters.diocese, v => dioceseName(c, v))}
@@ -355,7 +358,7 @@ function about(c) {
   const { L, safe } = c, a = c.site?.about, f = facts(c);
   return `<section class="about" id="about" aria-labelledby="about-title"><div class="site-wrap about-grid">
     <figure class="about-mark" data-reveal><img src="assets/images/votives.webp" alt="" loading="lazy" decoding="async" data-parallax="-8"></figure>
-    <div class="about-copy" data-reveal data-lit><h2 id="about-title">${safe(words(c, a?.title, HOME_DEFAULTS.about.title))}</h2>${illuminated(c, paragraphs(c, words(c, a?.body, HOME_DEFAULTS.about.body)))}
+    <div class="about-copy" data-reveal><h2 id="about-title">${safe(words(c, a?.title, HOME_DEFAULTS.about.title))}</h2>${illuminated(c, paragraphs(c, words(c, a?.body, HOME_DEFAULTS.about.body)))}
       <dl class="about-facts">${[[f.parishes, 'parish'], [f.dioceses, 'diocese'], [f.towns, 'town']]
         .map(([n, key]) => `<div><dt>${noun(c, n, key).replace(/^./, ch => ch.toUpperCase())}</dt><dd data-count="${n}">${c.number(n)}</dd></div>`).join('')}</dl></div>
   </div></section>`;
@@ -420,7 +423,7 @@ function directoryMount(home, c, places) {
     const row = list.querySelector(`[data-parish="${CSS.escape(id)}"]`);
     list.querySelectorAll('.is-chosen').forEach(el => el.classList.remove('is-chosen'));
     row?.classList.add('is-chosen');
-    row?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    row?.scrollIntoView({ block: 'nearest', behavior: (matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-simple')) ? 'auto' : 'smooth' });
   } });
   teardown.push(() => map.destroy());
   const paint = (updateURL = false) => {
@@ -564,7 +567,7 @@ function storiesMount(home) {
   home.querySelectorAll('[data-story-step]').forEach(button => button.addEventListener('click', () => {
     const story = track.querySelector('.story'), step = (story?.getBoundingClientRect().width || 300) + 32;
     const dir = getComputedStyle(track).direction === 'rtl' ? -1 : 1;
-    track.scrollBy({ left: Number(button.dataset.storyStep) * step * dir, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    track.scrollBy({ left: Number(button.dataset.storyStep) * step * dir, behavior: (matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-simple')) ? 'auto' : 'smooth' });
   }));
 }
 

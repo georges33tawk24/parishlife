@@ -149,7 +149,7 @@ export function mountMap(figure, items, { L, onChoose, card }) {
   }
   function animate(to) {
     cancelAnimationFrame(frame);
-    const from = { ...view }, start = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches, dur = still ? 0 : 900;
+    const from = { ...view }, start = performance.now(), still = (matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-simple')), dur = still ? 0 : 900;
     const ease = t => 1 - Math.pow(1 - t, 4);
     const step = now => {
       const t = dur ? Math.min(1, (now - start) / dur) : 1, k = ease(t);

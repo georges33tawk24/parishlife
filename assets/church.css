@@ -15,8 +15,8 @@
 .hero-mark svg{width:22px;height:30px;flex:none;filter:drop-shadow(0 0 10px rgb(215 165 72 / .55))}
 .hero-mark::after{content:"";height:1px;flex:0 0 clamp(40px,6vw,96px);background:linear-gradient(90deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
 [dir=rtl] .hero-mark::after{background:linear-gradient(270deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
-.hero-mark span{font:600 13px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:#E8D3A6}
-[dir=rtl] .hero-mark span{letter-spacing:0;font-size:15px}
+.hero-mark span{font:600 calc(15px * var(--fs,1))/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:#E8D3A6}
+[dir=rtl] .hero-mark span{letter-spacing:0;font-size:calc(17px * var(--fs,1))}
 
 /* a parish's own church: the window a little smaller, clear of the next event card */
 .ph.hero-sanctuary .sanctuary{--stage-h:min(60svh,40vw * 1300 / 1080)}
@@ -60,20 +60,20 @@
 .wk-day.is-sunday .wk-dow{display:inline-flex;align-items:center;gap:5px;color:var(--gilt-ink)}
 .wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
 /* This week: where the Church's year stands, and its great feasts on the ribbon */
-.wk-season{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:calc(clamp(32px,4vw,52px) * -.55) 0 clamp(22px,3vw,34px);font-size:15px;color:var(--ink-2)}
+.wk-season{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:calc(clamp(32px,4vw,52px) * -.55) 0 clamp(22px,3vw,34px);font-size:calc(17px * var(--fs,1));color:var(--ink-2)}
 .wk-season svg{width:14px;height:19px;color:var(--gilt)}
-.wk-season b{font-family:var(--display);font-weight:400;font-size:20px;color:var(--gilt-ink)}
+.wk-season b{font-family:var(--display);font-weight:400;font-size:calc(20px * var(--fs,1));color:var(--gilt-ink)}
 [dir=rtl] .wk-season b{font-family:var(--arabic-display);font-weight:700}
 .wk-day.is-feast{border-color:rgb(199 158 76 / .7);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
-.wk-feast{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;margin-top:2px;padding-inline:6px;font-size:11.5px;line-height:1.25;color:var(--gilt-ink);text-align:center}
+.wk-feast{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;margin-top:2px;padding-inline:6px;font-size:calc(17px * var(--fs,1));line-height:1.25;color:var(--gilt-ink);text-align:center}
 @media(max-width:640px){.wk-feast{display:none}.wk-day.is-feast .wk-dow{color:var(--gilt-ink)}}
-/* a small phone: Arabic day names have no short forms, so they shrink to fit their cell, and
-   Sunday's cross moves above its name */
-@media(max-width:420px){
-  .wk-dow{max-width:100%;font-size:11.5px;letter-spacing:-.01em;white-space:nowrap}
-  [dir=rtl] .wk-dow{font-size:10.5px}
+/* a phone: the week sits in two rows (four days, then three) so every day's name is read at full
+   size; Arabic day names have no short forms */
+@media(max-width:640px){
+  .wk-days{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .wk-dow{max-width:100%;white-space:nowrap}
   .wk-day.is-sunday{position:relative}
-  .wk-day.is-sunday .wk-dow::before{position:absolute;top:2px;left:50%;width:7px;height:8px;translate:-50% 0}
+  .wk-day.is-sunday .wk-dow::before{position:absolute;top:3px;left:50%;width:8px;height:10px;translate:-50% 0}
 }
 /* the map: each parish a small flame, flickering */
 .map-light .core{transform-box:fill-box;transform-origin:50% 85%;animation:sn-flicker 2.2s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
@@ -97,7 +97,7 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 @keyframes bell-ring-again{0%,100%{transform:rotate(0)}10%{transform:rotate(22deg)}25%{transform:rotate(-18deg)}40%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}70%{transform:rotate(5deg)}85%{transform:rotate(-2deg)}}
 @keyframes bell-clap-again{0%,100%{transform:rotate(0)}12%{transform:rotate(30deg)}27%{transform:rotate(-26deg)}42%{transform:rotate(18deg)}57%{transform:rotate(-12deg)}72%{transform:rotate(6deg)}}
 /* About: the first letter illuminated, gold on a manuscript red */
-.about-initial{float:left;display:grid;place-items:center;width:1.32em;height:1.32em;margin:20px .26em 0 0;font-family:var(--display);font-size:72px;line-height:1;color:#F4D488;
+.about-initial{float:left;display:grid;place-items:center;width:1.32em;height:1.32em;margin:20px .26em 0 0;font-family:var(--display);font-size:calc(72px * var(--fs-d,1));line-height:1;color:#F4D488;
   background:radial-gradient(circle at 30% 25%,#9A2B2B,#5E1316 75%);border:1px solid #C9A24C;box-shadow:inset 0 0 0 4px #5E1316,inset 0 0 0 5px rgb(241 199 122 / .55),0 14px 26px -16px rgb(94 19 22 / .6);text-shadow:0 1px 0 rgb(0 0 0 / .35)}
 .about-copy .has-initial::first-letter,.about-copy .has-initial>:first-child::first-letter{font-size:0}
 /* About: a village church with its bell-cote on the ridge of the valley picture */
@@ -177,12 +177,12 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
 .pcal-day.is-feast{box-shadow:inset 0 0 0 1px rgb(199 158 76 / .65);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
 .pcal-feast{position:absolute;top:6px;inset-inline-end:6px;width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
 .pcal-day{position:relative}
-.pcal-feast-note{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-family:var(--display);font-size:20px;color:var(--gilt-ink)}
+.pcal-feast-note{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-family:var(--display);font-size:calc(20px * var(--fs,1));color:var(--gilt-ink)}
 .pcal-feast-note::before{content:"";width:12px;height:16px;background:var(--feast-cross) no-repeat 50%/contain}
 [dir=rtl] .pcal-feast-note{font-family:var(--arabic-display);font-weight:700}
 
 /* the event page: the day's place in the Church's year */
-.ev-feast{display:block;margin-top:2px;font-size:15px;color:var(--gilt-ink)}
+.ev-feast{display:block;margin-top:2px;font-size:calc(15px * var(--fs,1));color:var(--gilt-ink)}
 /* the request form: each kind of request a small gilded niche */
 .rq-kind{border-radius:60px 60px 14px 14px / 40px 40px 14px 14px;padding-top:16px;background:linear-gradient(180deg,#F3EBDC,#ECE2D0);border-color:#E3D3B2;box-shadow:inset 0 0 0 4px #F3EBDC,inset 0 0 0 5px rgb(199 158 76 / .4)}
 .rq-kind .arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .5),0 0 0 4px #FBF6EC,0 0 0 5px rgb(199 158 76 / .28)}
@@ -205,6 +205,34 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
   [dir=rtl] .ph-nav ul{-webkit-mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent);mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent)}}
 /* Arabic pages: a parish's announcement or story written in English still lines up with the page */
 [dir=rtl] :is(.news-item h3,.news-item p,.story h3,.story p){text-align:right}
+/* the hero holds larger text and a label over its search: a little less air above, a slightly
+   smaller headline on shorter screens, and the announcement's dot stays beside its first line */
+.hero-sanctuary .hero-inner{padding-top:calc(var(--header) + 4vh)}
+.hero-sanctuary .hero-title{font-size:calc(clamp(44px,min(1rem + 5.4vw,9.4svh + 4px),96px) * var(--fs-d,1))}
+[dir=rtl] .hero-sanctuary .hero-title{font-size:calc(clamp(42px,min(1rem + 4.8vw,8.6svh + 4px),88px) * var(--fs-d,1))}
+.hero-note{display:inline-grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;column-gap:12px;row-gap:2px;max-width:min(720px,100%)}
+.hero-note>:not(.note-mark){grid-column:2}
+.hero-note .note-mark{grid-row:1;align-self:center}
+.hero-search{margin-top:clamp(20px,3.4vh,32px)}
+/* the request form's text boxes in the page's own type (in Arabic too), and with larger text its
+   kinds of request sit two to a row so their descriptions keep room */
+[dir=rtl] .rq-field :is(input,textarea){font-family:var(--arabic)}
+@media(min-width:700px){html[data-text] .rq-kinds{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* a written label above every search field, so nothing is lost while typing */
+.field-cap{display:block;margin:0 0 8px;font:600 calc(17px * var(--fs,1))/1.35 var(--sans);color:var(--ink)}
+[dir=rtl] .field-cap{font-family:var(--arabic)}
+:is(.hero,.directory) .field-cap{color:var(--on-night)}
+.hero-search .field-cap{text-shadow:0 1px 10px rgb(0 0 0 / .6)}
+.pcal-tools{align-items:flex-end}
+.pcal-find{flex:1 1 260px;min-width:0}
+.pcal-find .pcal-search{width:100%}
+.picker-search{margin-top:0}
+/* under the hero's search, the way to every parish without typing */
+.hero-browse{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:14px;padding:10px 20px;border:1px solid rgb(241 199 122 / .55);border-radius:999px;
+  background:rgb(14 10 9 / .45);color:var(--on-night);font:600 calc(17px * var(--fs,1))/1.2 var(--sans);text-decoration:none;transition:border-color .2s,background-color .2s}
+[dir=rtl] .hero-browse{font-family:var(--arabic)}
+.hero-browse svg{width:20px;height:20px;fill:none;stroke:var(--gilt-hi);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hero-browse:hover{border-color:var(--gilt-hi);background:rgb(215 165 72 / .14)}
 /* ---------- the small things: gold leaf, the pointer, the fields, the scrollbar, the selection ---------- */
 /* gilded buttons: gold leaf over its bole (assets/images/gilt.webp, docs/tools/render_gilt.py), burnished
    along the top and shaded below, with a fine engraved line inside the edge; light runs across on hover */
@@ -234,7 +262,7 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
   background:#FFFDF8 linear-gradient(180deg,rgb(120 88 36 / .05),rgb(120 88 36 / 0) 10px);border-color:#DCCDB2;box-shadow:inset 0 1px 2px rgb(70 48 14 / .06);caret-color:var(--gilt-ink)}
 :is(.rq-field input,.rq-field textarea,.rq-link input,.verify-form input,.guest-request input,.guest-request textarea,.guest-request select,.collection-toolbar input):focus{
   outline:none;border-color:#A57B2C;background:#FFFEFA;box-shadow:0 0 0 4px rgb(215 165 72 / .22),inset 0 1px 2px rgb(70 48 14 / .05)}
-:is(.rq-field,.verify-form,.guest-request,.collection-toolbar) :is(input,textarea)::placeholder{color:#9A8E78;opacity:1}
+:is(.rq-field,.verify-form,.guest-request,.collection-toolbar,.picker-search,.pcal-search) :is(input,textarea)::placeholder{color:#6B6150;opacity:1}
 .hero-field input,.dir-search input,.picker-search input,.pcal-search input{caret-color:var(--gilt-hi)}
 .picker-search input,.pcal-search input{caret-color:var(--gilt-ink)}
 .hero-field:focus-within{border-color:rgb(241 199 122 / .8);box-shadow:0 0 0 4px rgb(215 165 72 / .16),0 0 40px -8px rgb(241 199 122 / .35),0 24px 60px -24px rgb(0 0 0 / .55)}

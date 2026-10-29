@@ -5,7 +5,9 @@
    numbers count up. Everything lives inside gsap.matchMedia: with reduced motion, or if
    a script fails to load, every element simply shows in its final state. */
 let mm = null, introPlayed = false, introPlayedBefore = false, lenis = null;
-const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* Simple view (assets/reading.js) asks for the same stillness as the system's reduced motion. */
+const simple = () => document.documentElement.hasAttribute('data-simple');
+const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || simple();
 /* A lighter page for phones that would struggle, or when the visitor asked to save data: no
    smooth-scrolling engine, no canvas of fireflies, no image parallax and no glass blur; the
    rest of the motion stays. */
@@ -43,7 +45,7 @@ export function animateHome(root, { onMapDrawn, onDawn } = {}) {
   gsap.registerPlugin(ScrollTrigger, ...(SplitText ? [SplitText] : []));
   mm = gsap.matchMedia();
   mm.add({ motion: '(prefers-reduced-motion: no-preference)', calm: '(prefers-reduced-motion: reduce)', fine: '(pointer: fine)' }, context => {
-    if (context.conditions.calm) { onMapDrawn?.(); return undefined; }
+    if (context.conditions.calm || simple()) { onMapDrawn?.(); return undefined; }
     if (!lite) smoothScroll(gsap, ScrollTrigger);
     const hero = root.querySelector('[data-hero]');
     const stops = [
@@ -416,13 +418,14 @@ function counters(gsap, root) {
   return () => { stop?.(); els.forEach(el => { el.textContent = new Intl.NumberFormat(document.documentElement.lang === 'ar' ? 'ar-LB' : 'en').format(Number(el.dataset.count) || 0); }); };
 }
 
-/* The About text lights up word by word as the visitor reads down the page. */
+/* The verse, set large like a heading, lights up word by word as it is read. Paragraphs are
+   never dimmed: they show at full strength from the start. */
 function litText(gsap, root) {
   if (!window.SplitText) return null;
   const blocks = [...root.querySelectorAll('[data-lit]')];
   const splits = blocks.map(b => window.SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
-  // the words start legible, only dimmed, and are all lit before they reach the middle of the screen
-  splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.4 }, {
+  // the words start legible, only a little dimmed, and are all lit before the middle of the screen
+  splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.62 }, {
     opacity: 1, ease: 'none', stagger: 0.04,
     scrollTrigger: { trigger: blocks[i], start: 'top 82%', end: 'bottom 64%', scrub: 0.6 }
   }));

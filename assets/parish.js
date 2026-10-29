@@ -209,7 +209,7 @@ function about(c, p, d, f) {
     [L('Feast day', 'عيد الرعية'), fe && `${String(f.visit.feastName || '').trim() ? fe.name + ' · ' : ''}${digits(c, fe.day)}`]].filter(r => r[1]);
   return `<section class="ph-about" id="about" aria-labelledby="about-title"><div class="site-wrap ph-about-grid">
     <figure class="ph-arch${art ? '' : ' is-night'}" data-reveal>${art ? `<img src="${safe(art)}" alt="${safe(f.name)}" loading="lazy" decoding="async" data-parallax="-6">` : `${monogram(f.name)}<span class="ph-arch-light" aria-hidden="true"></span>`}</figure>
-    <div class="ph-about-copy" ${f.history ? 'data-lit' : ''}>
+    <div class="ph-about-copy">
       <h2 id="about-title">${L(`About ${safe(f.name)}`, `عن رعية ${safe(f.name)}`)}</h2>
       ${f.history ? `<div dir="auto">${paragraphs(c, f.history)}</div>` : `<p class="ph-quiet">${L('The parish office has not published the parish’s story yet. Its Mass times, news and calendar appear here as soon as they are shared.', 'لم ينشر مكتب الرعية حكايتها بعد. تظهر هنا مواعيد القداديس والأخبار والرزنامة فور نشرها.')}</p>`}
       ${rows.length ? `<dl class="ph-dl" data-reveal>${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${safe(v)}</dd></div>`).join('')}</dl>` : ''}
@@ -468,7 +468,7 @@ function mapMount(page, c, p, f) {
   map.filter([p.id]);
   let zoomed = false;
   const zoom = () => { if (zoomed) return; zoomed = true; map.focus([p.id]); setTimeout(() => map.mark(p.id), 950); };
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(e => { if (e.some(x => x.isIntersecting)) { io.disconnect(); setTimeout(zoom, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1100); } }, { rootMargin: '0px 0px -30% 0px' }) : null;
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(e => { if (e.some(x => x.isIntersecting)) { io.disconnect(); setTimeout(zoom, (matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-simple')) ? 0 : 1100); } }, { rootMargin: '0px 0px -30% 0px' }) : null;
   io ? io.observe(figure) : zoom();
   teardown.push(() => { io?.disconnect(); map.destroy(); });
 }

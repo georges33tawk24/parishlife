@@ -33,7 +33,7 @@ export function authentication(host,enter,error='') {
       <blockquote class="auth-quote"><p>${t('“Let your light shine before others.”','«فليُضِئ نورُكم هكذا قدّام الناس»')}</p><cite>${t('Matthew 5:16','متّى ٥: ١٦')}</cite></blockquote>
     </aside>
     <main class="auth-main"><div class="auth-card">
-      <div class="auth-top"><a class="auth-brand" href="public.html">${BRAND}<span>ParishLife</span></a><button type="button" class="auth-lang" data-lang lang="${isAr()?'en':'ar'}">${t('العربية','English')}</button></div>
+      <div class="auth-top"><a class="auth-brand" href="public.html">${BRAND}<span>ParishLife</span></a><div class="auth-actions"><div data-ease-slot></div><button type="button" class="auth-lang" data-lang lang="${isAr()?'en':'ar'}">${t('العربية','English')}</button></div></div>
       <h1>${up?t('Create your account','إنشاء حساب'):t('Welcome back','أهلاً بعودتك')}</h1>
       <p class="auth-lede">${up?t('Your account connects you to the parishes you choose. It takes a minute.','حسابك يربطك بالرعايا التي تختارها. يستغرق دقيقة واحدة.'):t('Your account connects you to the parishes you choose.','حسابك يربطك بالرعايا التي تختارها.')}</p>
       <div class="auth-tabs" role="group" aria-label="${t('Account','الحساب')}"><button type="button" data-tab="login" aria-pressed="${!up}">${t('Sign in','دخول')}</button><button type="button" data-tab="signup" aria-pressed="${up}">${t('Sign up','حساب جديد')}</button><span class="auth-tabs-ink" aria-hidden="true"></span></div>
