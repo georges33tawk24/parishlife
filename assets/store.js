@@ -96,6 +96,8 @@ export const role = () => {
   const base=ROLES[S.role]||{en:'Administrator',ar:'مدير',who:null,nav:[]};
   let nav=[...base.nav];
   if(['super_admin','diocesan_admin','parish_admin'].includes(S.role))nav=[L('workspace'),...ROLES.priest.nav.filter(n=>n[0]==='l'&&!['notes','styleguide','workspace','memberhub'].includes(n[1]))];
+  // Insights and the parish CRM belong to the platform's Super Admin, whichever parish is open.
+  if((S.role==='super_admin'||session.accountUser?.role==='super_admin')&&!nav.some(n=>n[1]==='insights'))nav.unshift(L('insights'));
   if(S.role==='bishop')nav.push(L('activity'),L('sacraments'),L('people'),L('households'),L('requests'),L('calendar'),L('groups'),L('giving'),L('finance'));
   if(S.role==='member'){
     if(!session.user?.person_id)nav=[];

@@ -3,32 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="description" content="Find your parish, explore its story, and discover published Mass times, events and visiting information. ParishLife connects church communities in Lebanon.">
-  <meta name="theme-color" content="#f7f7f2">
+  <meta name="description" content="Find your parish anywhere in Lebanon: Mass times, this week's celebrations, parish news, and requests to the parish office for a baptism, a wedding or a certificate.">
+  <meta name="theme-color" content="#0E1A31">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/images/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="ParishLife">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ParishLife">
+  <meta property="og:title" content="ParishLife: find your parish in Lebanon">
+  <meta property="og:description" content="Mass times, this week's celebrations, parish news and requests to the parish office, from every parish on ParishLife.">
+  <meta property="og:image" content="/assets/images/og-home.jpg">
+  <meta name="twitter:card" content="summary_large_image">
   <title>ParishLife · Find your parish</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23233b32'/%3E%3Cpath d='M20 9v23M12 17h16' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E">
-  <link rel="preload" href="assets/fonts/NotoSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
+  <link rel="preload" href="assets/fonts/marcellus-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/source-sans-3-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="assets/reading.js"></script>
   <link rel="stylesheet" href="assets/public.css">
   <link rel="stylesheet" href="assets/collection-ui.css">
   <link rel="stylesheet" href="assets/public-features.css">
+  <link rel="stylesheet" href="assets/site.css">
+  <link rel="stylesheet" href="assets/home.css">
+  <link rel="stylesheet" href="assets/sanctuary.css">
+  <link rel="stylesheet" href="assets/parish.css">
+  <link rel="stylesheet" href="assets/church.css">
+  <link rel="stylesheet" href="assets/reading.css">
+  <script defer src="assets/vendor/gsap/gsap.min.js"></script>
+  <script defer src="assets/vendor/gsap/ScrollTrigger.min.js"></script>
+  <script defer src="assets/vendor/gsap/SplitText.min.js"></script>
+  <script defer src="assets/vendor/lenis/lenis.min.js"></script>
 </head>
 <body>
+  <div class="page-loader" aria-hidden="true"><div class="loader-mark"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="#E6DED0" stroke-width="1.4"/><path d="M1 32.5h26" stroke="#E6DED0" stroke-width="1.4"/><rect x="12.7" y="21.5" width="2.6" height="11" rx=".6" fill="#E9D3A0"/><path class="loader-flame" d="M14 12.6c1.6 2.3 2.4 3.9 2.4 5.3a2.4 2.4 0 0 1-4.8 0c0-1.4.8-3 2.4-5.3Z" fill="#F1C77A"/></svg><span>ParishLife</span><i></i></div></div>
   <a class="skip-link" href="#app" data-i18n="skip">Skip to content</a>
   <header class="site-header">
     <div class="site-wrap header-inner">
-      <a class="brand" href="public.html" aria-label="ParishLife home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 36" fill="none"><path d="M5 32V17a11 11 0 0 1 22 0v15M16 7v18M10 14h12" stroke="currentColor" stroke-width="1.8"/></svg></span><span>Parish<span class="brand-light">Life</span><small data-i18n="brandSub">FAITH & COMMUNITY</small></span></a>
-      <nav class="desktop-nav" aria-label="Main navigation"><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a><a href="public.html#about" data-i18n="aboutNav">About</a></nav>
-      <div class="header-actions"><button id="lang" class="language-button" type="button" aria-label="Switch to Arabic">العربية</button><a class="sign-in" href="index.html"><span data-i18n="signIn">Members portal</span><svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17 17 7M8.5 7H17v8.5"/></svg></a><button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open navigation"><span></span><span></span></button></div>
+      <a class="brand" href="public.html" aria-label="ParishLife home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="currentColor" stroke-width="1.8"/><path d="M1 32.5h26" stroke="currentColor" stroke-width="1.8"/><circle class="brand-light" cx="14" cy="20" r="3.2"/></svg></span><span class="brand-word">ParishLife</span></a>
+      <nav class="desktop-nav" aria-label="Main navigation"><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#week" data-i18n="week">This week</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#requests" data-i18n="requests">Ask your parish</a></nav>
+      <div class="header-actions"><div data-ease-slot></div><button id="lang" class="language-button" type="button" aria-label="Switch to Arabic" lang="ar">العربية</button><a class="sign-in" href="index.html" data-i18n="signIn">Members portal</a><button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open navigation"><span></span><span></span></button></div>
     </div>
-    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a><a href="public.html#about" data-i18n="aboutNav">About</a></nav>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="public.html#directory" data-i18n="directory" style="--i:0">Find a parish</a><a href="public.html#week" data-i18n="week" style="--i:1">This week</a><a href="public.html#times" data-i18n="times" style="--i:2">Mass times</a><a href="public.html#requests" data-i18n="requests" style="--i:3">Ask your parish</a><a href="index.html" data-i18n="signIn" style="--i:4">Members portal</a></nav>
   </header>
   <main id="app" tabindex="-1" aria-busy="true"><div class="site-wrap loading" role="status"><span class="loading-line"></span><p>Loading parish information…</p></div></main>
   <footer class="site-footer">
-    <div class="site-wrap footer-main"><div><a class="brand" href="public.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 36" fill="none" focusable="false"><path d="M5 32V17a11 11 0 0 1 22 0v15M16 7v18M10 14h12" stroke="currentColor" stroke-width="1.8"/></svg></span><span>Parish<span class="brand-light">Life</span></span></a><p data-i18n="footerIntro">A little closer to your parish. A little closer to one another.</p></div><div class="footer-links"><span class="eyebrow" data-i18n="explore">Explore</span><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#events" data-i18n="events">Parish life</a></div><div class="footer-links"><span class="eyebrow" data-i18n="stayConnected">Stay connected</span><a href="index.html" data-i18n="signIn">Members portal</a><a href="public.html#about" data-i18n="aboutNav">About</a><button class="text-button" id="footer-lang" type="button">العربية</button></div></div>
-    <div class="site-wrap footer-bottom"><span>© <span id="year">2026</span> ParishLife</span><span data-i18n="footer">Information published by participating parishes.</span><a class="ext-link" href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer"><span data-i18n="photoCredit">Illustrative photography · Unsplash</span><svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17 17 7M8.5 7H17v8.5"/></svg></a></div>
+    <div class="site-wrap footer-main">
+      <div class="footer-brand"><a class="brand" href="public.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="currentColor" stroke-width="1.8"/><path d="M1 32.5h26" stroke="currentColor" stroke-width="1.8"/><circle class="brand-light" cx="14" cy="20" r="3.2"/></svg></span><span class="brand-word">ParishLife</span></a><p data-i18n="footerIntro">The parishes of Lebanon, each with its light on.</p></div>
+      <nav class="footer-links" aria-labelledby="footer-explore"><h2 id="footer-explore" data-i18n="explore">Explore</h2><a href="public.html#directory" data-i18n="directory">Find a parish</a><a href="public.html#week" data-i18n="week">This week</a><a href="public.html#times" data-i18n="times">Mass times</a><a href="public.html#requests" data-i18n="requests">Ask your parish</a><a href="public.html?view=verify" data-i18n="verify">Check a signed document</a></nav>
+      <nav class="footer-links" aria-labelledby="footer-parishes"><h2 id="footer-parishes" data-i18n="forParishes">For parishes</h2><a href="index.html" data-i18n="signIn">Members portal</a><a href="public.html?view=bundles" data-i18n="bundles">ParishLife bundles</a><a href="public.html#about" data-i18n="aboutNav">About ParishLife</a><button class="text-button" id="footer-lang" type="button" lang="ar">العربية</button></nav>
+    </div>
+    <div class="site-wrap footer-bottom"><span>© <span id="year">2026</span> ParishLife</span><span data-i18n="footer">Information published by participating parishes.</span><span data-i18n="mapCredit">Map outline from Natural Earth</span><a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer" data-i18n="photoCredit">Illustrative photographs from Unsplash</a></div>
+    <div class="footer-mark" aria-hidden="true">ParishLife</div>
   </footer>
-  <noscript><div class="site-wrap empty"><h2>Explore ParishLife</h2><p>Please enable JavaScript to load the parish directory and published parish information.</p><a href="index.html">Parish office sign in</a></div></noscript>
+  <noscript><div class="site-wrap empty"><h2>Explore ParishLife</h2><p>Please enable JavaScript to load the parish directory and published parish information.</p><a href="index.html">Parish office sign in</a><div lang="ar" dir="rtl"><h2>استكشف ParishLife</h2><p>يُرجى تفعيل JavaScript لعرض دليل الرعايا والمعلومات التي تنشرها الرعايا.</p><a href="index.html">دخول مكاتب الرعايا</a></div></div></noscript>
   <script type="module" src="assets/public.js"></script>
 </body>
 </html>
-

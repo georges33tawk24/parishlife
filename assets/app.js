@@ -37,6 +37,7 @@ import { accountPage } from './views/account.js';
 import { ministryRequests } from './views/ministry-requests.js';
 import { inboxPage } from './views/inbox.js';
 import { workspacePage } from './views/workspace.js';
+import { insightsPage } from './views/insights.js';
 
 /* ---------------- routes ---------------- */
 export const ROUTES = {
@@ -47,6 +48,7 @@ export const ROUTES = {
   ministryrequests: { ico:'groups', en:'Ministry membership', ar:'عضوية الخدمات', view:ministryRequests },
   inbox: { ico:'msg', en:'Inbox', ar:'البريد', view:inboxPage },
   workspace: { ico:'shield', en:'Administration', ar:'الإدارة', view:workspacePage },
+  insights: { ico:'reports', en:'Insights', ar:'المؤشرات', view:insightsPage },
   account: { ico:'settings', en:'My account', ar:'حسابي', view:accountPage },
   memberhome: { ico:'dash', en:'Home', ar:'الرئيسية', view:Member.home },
   myrequests: { ico:'sacr', en:'My requests', ar:'طلباتي', mEn:'Requests', mAr:'طلباتي', view:requestsPage },

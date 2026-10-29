@@ -1,0 +1,290 @@
+/* The church through the public site: the hero's words over the sanctuary, the parish and banner
+   framings of it, and the details of every section (gilded niches, stars, bell, initial, frieze).
+   The scene itself is assets/sanctuary.css. */
+/* the words stay over the darker side of the wall; the candles stay within reach of the pointer */
+.hero-sanctuary .hero-shade{background:linear-gradient(90deg,rgb(9 7 6 / .78) 0%,rgb(9 7 6 / .46) 38%,rgb(9 7 6 / 0) 62%),linear-gradient(0deg,rgb(9 7 6 / .74) 0%,rgb(9 7 6 / 0) 34%),linear-gradient(180deg,rgb(9 7 6 / .55) 0%,rgb(9 7 6 / 0) 22%)}
+[dir=rtl] .hero-sanctuary .hero-shade{background:linear-gradient(270deg,rgb(9 7 6 / .78) 0%,rgb(9 7 6 / .46) 38%,rgb(9 7 6 / 0) 62%),linear-gradient(0deg,rgb(9 7 6 / .74) 0%,rgb(9 7 6 / 0) 34%),linear-gradient(180deg,rgb(9 7 6 / .55) 0%,rgb(9 7 6 / 0) 22%)}
+.hero-sanctuary .hero-inner,.hero-sanctuary .hero-row{pointer-events:none}
+.hero-sanctuary .hero-inner>*,.hero-sanctuary .hero-row>*{pointer-events:auto}
+.hero-sanctuary .hero-tip{background:#1A1210;border-color:rgb(241 199 122 / .28)}
+.hero-sanctuary .hero-note{background:rgb(14 10 9 / .55)}
+.hero-sanctuary .hero-field{background:rgb(16 11 10 / .66)}
+.hero-sanctuary .hero-suggest{background:#16100E}
+/* a gold rule with the cross over the headline */
+.hero-mark{display:flex;align-items:center;gap:14px;margin:0 0 clamp(14px,2.4vh,22px);color:var(--gilt-hi)}
+.hero-mark svg{width:22px;height:30px;flex:none;filter:drop-shadow(0 0 10px rgb(215 165 72 / .55))}
+.hero-mark::after{content:"";height:1px;flex:0 0 clamp(40px,6vw,96px);background:linear-gradient(90deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
+[dir=rtl] .hero-mark::after{background:linear-gradient(270deg,rgb(215 165 72 / .8),rgb(215 165 72 / 0))}
+.hero-mark span{font:600 calc(15px * var(--fs,1))/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:#E8D3A6}
+[dir=rtl] .hero-mark span{letter-spacing:0;font-size:calc(17px * var(--fs,1))}
+
+/* a parish's own church: the window a little smaller, clear of the next event card */
+.ph.hero-sanctuary .sanctuary{--stage-h:min(60svh,40vw * 1300 / 1080)}
+/* the banner above a parish's other pages: the top of its window, without the candles */
+.sub-hero.is-sanctuary{background:#0B0807}
+.sub-sanctuary .sanctuary{--stage-h:150%}
+.sub-sanctuary .sn-stage{top:calc(var(--header) * .45)}
+.sub-sanctuary .sn-lamp{display:none}
+.sub-sanctuary .sn-candles,.sub-sanctuary .sn-inscription{display:none}
+.sub-art.sub-sanctuary::after{z-index:1;background:linear-gradient(90deg,rgb(9 7 6 / .9) 12%,rgb(9 7 6 / .5) 55%,rgb(9 7 6 / .1)),linear-gradient(0deg,rgb(9 7 6 / .8),transparent 40%)}
+[dir=rtl] .sub-art.sub-sanctuary::after{background:linear-gradient(270deg,rgb(9 7 6 / .9) 12%,rgb(9 7 6 / .5) 55%,rgb(9 7 6 / .1)),linear-gradient(0deg,rgb(9 7 6 / .8),transparent 40%)}
+@media(max-width:1099px),(max-aspect-ratio:4/5){
+  .hero-sanctuary .hero-shade{background:linear-gradient(180deg,rgb(9 7 6 / .82) 0%,rgb(9 7 6 / .6) 48%,rgb(9 7 6 / .2) 78%,rgb(9 7 6 / .5) 100%)}
+}
+
+/* ---------- the rest of the homepage, in the same church ---------- */
+/* the night sections rise like arches with a gilded edge */
+.directory,.stories,.join,.ph-min,.ph-gallery{box-shadow:inset 0 1.5px 0 rgb(215 165 72 / .55),inset 0 30px 42px -34px rgb(215 165 72 / .3)}
+/* warm limestone for the light sections, and the night sections painted like a chapel ceiling */
+.directory,.stories,.join,.ph-min,.ph-gallery{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='%23E6BF6E'%3E%3Cg transform='translate%2863.3 242.8%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2828.8 68.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%28120.0 118.6%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%28106.3 126.4%29' fill-opacity='0.3'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='123.7' cy='230.3' r='0.8' fill-opacity='0.3'/%3E%3Cg transform='translate%28206.7 102.3%29' fill-opacity='0.18'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2890.6 176.7%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2842.7 23.7%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='44.2' cy='217.9' r='1.5' fill-opacity='0.36'/%3E%3Cg transform='translate%2895.0 222.3%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2831.8 176.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Cg transform='translate%2856.2 44.6%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Ccircle cx='217.0' cy='230.8' r='1.0' fill-opacity='0.3'/%3E%3Cg transform='translate%2810.9 91.7%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3C/svg%3E")}
+.join{background-image:radial-gradient(ellipse 70% 60% at 50% 105%,rgb(215 165 72 / .2),transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='%23E6BF6E'%3E%3Cg transform='translate%2863.3 242.8%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2828.8 68.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%28120.0 118.6%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%28106.3 126.4%29' fill-opacity='0.3'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='123.7' cy='230.3' r='0.8' fill-opacity='0.3'/%3E%3Cg transform='translate%28206.7 102.3%29' fill-opacity='0.18'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2890.6 176.7%29' fill-opacity='0.24'%3E%3Cpath d='M0 -4.2L1.18 -1.18L4.2 0L1.18 1.18L0 4.2L-1.18 1.18L-4.2 0L-1.18 -1.18Z'/%3E%3C/g%3E%3Cg transform='translate%2842.7 23.7%29' fill-opacity='0.36'%3E%3Cpath d='M0 -2.2L0.62 -0.62L2.2 0L0.62 0.62L0 2.2L-0.62 0.62L-2.2 0L-0.62 -0.62Z'/%3E%3C/g%3E%3Ccircle cx='44.2' cy='217.9' r='1.5' fill-opacity='0.36'/%3E%3Cg transform='translate%2895.0 222.3%29' fill-opacity='0.24'%3E%3Cpath d='M0 -2.8L0.78 -0.78L2.8 0L0.78 0.78L0 2.8L-0.78 0.78L-2.8 0L-0.78 -0.78Z'/%3E%3C/g%3E%3Cg transform='translate%2831.8 176.4%29' fill-opacity='0.36'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Cg transform='translate%2856.2 44.6%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3Ccircle cx='217.0' cy='230.8' r='1.0' fill-opacity='0.3'/%3E%3Cg transform='translate%2810.9 91.7%29' fill-opacity='0.18'%3E%3Cpath d='M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z'/%3E%3C/g%3E%3C/svg%3E")}
+/* the verse: a rose window drawn in gold behind the words, turning very slowly, and the cross above */
+.verse{position:relative;isolation:isolate}
+.verse::before{content:"";position:absolute;z-index:-2;left:50%;top:0;width:min(980px,130vw);height:62%;translate:-50% 0;background:var(--mosaic,none) 0 0/180px 180px;opacity:.46;
+  -webkit-mask:radial-gradient(ellipse 50% 100% at 50% 0%,#000 0,rgb(0 0 0 / .8) 40%,transparent 76%);mask:radial-gradient(ellipse 50% 100% at 50% 0%,#000 0,rgb(0 0 0 / .8) 40%,transparent 76%);pointer-events:none}
+.verse-rose{position:absolute;z-index:-1;left:50%;top:50%;width:min(92vw,820px);aspect-ratio:1;translate:-50% -50%;color:#B88B33;opacity:.17;pointer-events:none}
+.verse-rose svg{width:100%;height:100%;animation:sn-turn 260s linear infinite}
+@keyframes sn-turn{to{transform:rotate(360deg)}}
+.verse-cross{display:block;width:32px;color:#8E2424;filter:drop-shadow(0 1px 0 rgb(255 240 200 / .7)) drop-shadow(0 0 16px rgb(255 214 140 / .7))}
+.verse-cross svg{display:block;width:100%;height:auto}
+
+/* Ask your parish: each arch a gilded niche, gold leaf in its lunette and the cross at its crown */
+.arch{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23B88A2E'%3E%3Cpath d='M5.2 1.5h1.6v13H5.2zM1.5 5.6h9v1.6h-9z'/%3E%3C/svg%3E") no-repeat 50% 14px/11px 15px,radial-gradient(ellipse 72% 30% at 50% 0%,rgb(228 186 96 / .42),rgb(228 186 96 / 0) 72%),linear-gradient(180deg,#F0E7D6,#E2D6C1);
+  box-shadow:inset 0 0 0 7px #EFE5D3,inset 0 0 0 8px rgb(199 158 76 / .62)}
+.arch:hover,.arch:focus-visible{box-shadow:inset 0 0 0 7px #F2E9D8,inset 0 0 0 8px rgb(199 158 76 / .85),0 26px 40px -26px rgb(21 32 58 / .45)}
+.arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .55),0 0 0 5px #FBF6EC,0 0 0 6px rgb(199 158 76 / .3)}
+/* the three steps, numbered as on a church clock */
+.steps li::before{content:counter(step,upper-roman);border-color:rgb(199 158 76 / .8);color:var(--gilt-ink);box-shadow:inset 0 0 0 3px var(--mist),inset 0 0 0 4px rgb(199 158 76 / .35)}
+[dir=rtl] .steps li::before{content:counter(step,arabic-indic)}
+/* This week: Sundays carry the cross */
+.wk-day.is-sunday .wk-dow{display:inline-flex;align-items:center;gap:5px;color:var(--gilt-ink)}
+.wk-day.is-sunday .wk-dow::before{content:"";width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
+/* This week: where the Church's year stands, and its great feasts on the ribbon */
+.wk-season{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:calc(clamp(32px,4vw,52px) * -.55) 0 clamp(22px,3vw,34px);font-size:calc(17px * var(--fs,1));color:var(--ink-2)}
+.wk-season svg{width:14px;height:19px;color:var(--gilt)}
+.wk-season b{font-family:var(--display);font-weight:400;font-size:calc(20px * var(--fs,1));color:var(--gilt-ink)}
+[dir=rtl] .wk-season b{font-family:var(--arabic-display);font-weight:700}
+.wk-day.is-feast{border-color:rgb(199 158 76 / .7);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
+.wk-feast{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;margin-top:2px;padding-inline:6px;font-size:calc(17px * var(--fs,1));line-height:1.25;color:var(--gilt-ink);text-align:center}
+@media(max-width:640px){.wk-feast{display:none}.wk-day.is-feast .wk-dow{color:var(--gilt-ink)}}
+/* a phone: the week sits in two rows (four days, then three) so every day's name is read at full
+   size; Arabic day names have no short forms */
+@media(max-width:640px){
+  .wk-days{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .wk-dow{max-width:100%;white-space:nowrap}
+  .wk-day.is-sunday{position:relative}
+  .wk-day.is-sunday .wk-dow::before{position:absolute;top:3px;left:50%;width:8px;height:10px;translate:-50% 0}
+}
+/* the map: each parish a small flame, flickering */
+.map-light .core{transform-box:fill-box;transform-origin:50% 85%;animation:sn-flicker 2.2s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
+.map-light .wick-light{fill:#FFFBEF;pointer-events:none}
+/* the brand's light in its niche breathes like a flame */
+.brand-light{transform-box:fill-box;transform-origin:50% 70%;animation:brand-flame 3.2s ease-in-out infinite alternate}
+@keyframes brand-flame{0%{opacity:.85;transform:scale(.92)}45%{opacity:1;transform:scale(1.06,1.1)}70%{opacity:.92;transform:scale(.98,1.02)}100%{opacity:1;transform:scale(1.04)}}
+/* Mass times: a bell in its belfry, rung as the section arrives */
+.times .sec-head .times-mark{margin-bottom:6px}
+button.times-mark{border:0;padding:0;cursor:var(--hand,pointer);font:inherit}
+button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px}
+.times-mark .bell{width:30px;height:30px;overflow:visible}
+.bell-body{transform-box:view-box;transform-origin:50% 12%}
+.bell-clapper{transform-box:view-box;transform-origin:50% 40%}
+.is-in .bell-body,.times-mark:hover .bell-body{animation:bell-ring 2.6s cubic-bezier(.36,.07,.19,.97) .5s 1}
+.is-in .bell-clapper,.times-mark:hover .bell-clapper{animation:bell-clap 2.6s cubic-bezier(.36,.07,.19,.97) .5s 1}
+@keyframes bell-ring{0%,100%{transform:rotate(0)}10%{transform:rotate(22deg)}25%{transform:rotate(-18deg)}40%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}70%{transform:rotate(5deg)}85%{transform:rotate(-2deg)}}
+@keyframes bell-clap{0%,100%{transform:rotate(0)}12%{transform:rotate(30deg)}27%{transform:rotate(-26deg)}42%{transform:rotate(18deg)}57%{transform:rotate(-12deg)}72%{transform:rotate(6deg)}}
+.times-mark.is-ringing .bell-body{animation:bell-ring-again 2.6s cubic-bezier(.36,.07,.19,.97) 1}
+.times-mark.is-ringing .bell-clapper{animation:bell-clap-again 2.6s cubic-bezier(.36,.07,.19,.97) 1}
+@keyframes bell-ring-again{0%,100%{transform:rotate(0)}10%{transform:rotate(22deg)}25%{transform:rotate(-18deg)}40%{transform:rotate(13deg)}55%{transform:rotate(-9deg)}70%{transform:rotate(5deg)}85%{transform:rotate(-2deg)}}
+@keyframes bell-clap-again{0%,100%{transform:rotate(0)}12%{transform:rotate(30deg)}27%{transform:rotate(-26deg)}42%{transform:rotate(18deg)}57%{transform:rotate(-12deg)}72%{transform:rotate(6deg)}}
+/* About: the first letter illuminated, gold on a manuscript red */
+.about-initial{float:left;display:grid;place-items:center;width:1.32em;height:1.32em;margin:20px .26em 0 0;font-family:var(--display);font-size:calc(72px * var(--fs-d,1));line-height:1;color:#F4D488;
+  background:radial-gradient(circle at 30% 25%,#9A2B2B,#5E1316 75%);border:1px solid #C9A24C;box-shadow:inset 0 0 0 4px #5E1316,inset 0 0 0 5px rgb(241 199 122 / .55),0 14px 26px -16px rgb(94 19 22 / .6);text-shadow:0 1px 0 rgb(0 0 0 / .35)}
+.about-copy .has-initial::first-letter,.about-copy .has-initial>:first-child::first-letter{font-size:0}
+/* About: a village church with its bell-cote on the ridge of the valley picture */
+.about-mark{position:relative}
+/* the footer opens on a carved frieze of crosses */
+.site-footer::before{content:"";display:block;height:28px;margin:-44px 0 44px;opacity:.4;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='28' viewBox='0 0 96 28' fill='none' stroke='%23D7A548' stroke-width='1.1'%3E%3Cpath d='M0 2.5H96M0 25.5H96' stroke-opacity='.5'/%3E%3Ccircle cx='24' cy='14' r='8' stroke-opacity='.8'/%3E%3Cpath d='M24 8.6v10.8M18.6 14h10.8' stroke-width='1.4'/%3E%3Cpath d='M72 7.5l6.5 6.5-6.5 6.5-6.5-6.5z' stroke-opacity='.7'/%3E%3Ccircle cx='72' cy='14' r='1.6' fill='%23D7A548' stroke='none'/%3E%3Cpath d='M44 14h8M92 14h8M-4 14h8' stroke-opacity='.45'/%3E%3C/svg%3E") repeat-x 0 50%/96px 28px}
+
+/* ---------- documents: the tracking page and the check page as parchment, sealed in wax ---------- */
+:root{--feast-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 16' fill='%23D7A548'%3E%3Cpath d='M5.1 2h1.8v13H5.1zM1.2 6.1h9.6v1.8H1.2z'/%3E%3Ccircle cx='6' cy='1.6' r='1.3'/%3E%3Ccircle cx='1.1' cy='7' r='1.1'/%3E%3Ccircle cx='10.9' cy='7' r='1.1'/%3E%3C/svg%3E");--wax:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='w' cx='38%25' cy='32%25' r='70%25'%3E%3Cstop offset='0' stop-color='%23D4574B'/%3E%3Cstop offset='.55' stop-color='%23A42A26'/%3E%3Cstop offset='1' stop-color='%236E1616'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpolygon points='62.00,32.00 59.18,36.79 60.19,42.26 55.90,45.80 54.98,51.28 49.74,53.14 47.00,57.98 41.44,57.94 37.21,61.54 32.00,59.60 26.79,61.54 22.56,57.94 17.00,57.98 14.26,53.14 9.02,51.28 8.10,45.80 3.81,42.26 4.82,36.79 2.00,32.00 4.82,27.21 3.81,21.74 8.10,18.20 9.02,12.72 14.26,10.86 17.00,6.02 22.56,6.06 26.79,2.46 32.00,4.40 37.21,2.46 41.44,6.06 47.00,6.02 49.74,10.86 54.98,12.72 55.90,18.20 60.19,21.74 59.18,27.21' fill='url%28%23w%29'/%3E%3Ccircle cx='32' cy='32' r='20.5' fill='none' stroke='%236E1616' stroke-opacity='.55' stroke-width='1.6'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23F2A08F' stroke-opacity='.35' stroke-width='.8'/%3E%3Cg fill='%237A1A18' fill-opacity='.75'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3Ccircle cx='32' cy='19.4' r='2.2'/%3E%3Ccircle cx='32' cy='44.6' r='2.2'/%3E%3Ccircle cx='21.4' cy='30' r='2.2'/%3E%3Ccircle cx='42.6' cy='30' r='2.2'/%3E%3C/g%3E%3Cg fill='%23F6B3A2' fill-opacity='.35' transform='translate%28-.6 -.6%29'%3E%3Cpath d='M30.4 20h3.2v24h-3.2zM22 28.4h20v3.2H22z'/%3E%3C/g%3E%3C/svg%3E")}
+.track-card,.verify-card{background:linear-gradient(180deg,#FFFDF8,#FAF4E8);border-color:#E6D7B8;box-shadow:inset 0 0 0 6px #FFFDF8,inset 0 0 0 7px rgb(199 158 76 / .32),0 40px 80px -46px rgb(60 40 20 / .45)}
+.track-lamp{width:58px;height:58px;border-radius:50%;background:var(--wax) 50%/contain no-repeat;box-shadow:none;filter:drop-shadow(0 6px 8px rgb(90 20 20 / .35));animation:none}
+.verify-seal{width:72px;height:72px;background:var(--wax) 50%/contain no-repeat;color:transparent;filter:drop-shadow(0 6px 10px rgb(90 20 20 / .35))}
+.verify-seal svg{display:none}
+/* each finished step lights a candle; the current one burns brightest */
+.track-steps li{padding-top:2px}
+.track-steps li span{width:7px;height:24px;margin-top:16px;border:0;border-radius:2px 2px 1px 1px;background:linear-gradient(90deg,#A58E68,#EADBB8 45%,#C9B38A)}
+.track-steps li span::after{content:"";position:absolute;left:50%;bottom:calc(100% + 3px);width:9px;height:15px;margin-left:-4.5px;border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
+  background:radial-gradient(ellipse 50% 62% at 50% 74%,#FFF 0,#FFF0C2 24%,#FFB84A 56%,rgb(255 130 40 / 0) 82%);opacity:0;scale:.2;transform-origin:50% 90%;transition:opacity .6s,scale .8s cubic-bezier(.2,1.5,.4,1)}
+.track-steps li span::before{content:"";position:absolute;left:50%;bottom:calc(100% - 6px);width:46px;height:46px;margin-left:-23px;border-radius:50%;background:radial-gradient(circle,rgb(255 196 110 / .45),transparent 70%);opacity:0;transition:opacity 1s}
+.track-steps li.is-done span,.track-steps li.is-current span{background:linear-gradient(180deg,rgb(255 232 180 / .8),transparent 30%),linear-gradient(90deg,#B89C64,#F4E3B6 45%,#D3B57A)}
+.track-steps li.is-done span::after,.track-steps li.is-current span::after{opacity:1;scale:1;animation:sn-flicker 1.9s ease-in-out infinite}
+.track-steps li.is-current span::before{opacity:1}
+.track-steps li.is-current span{box-shadow:none;border:0}
+.track-steps li.is-warn span::after{background:radial-gradient(ellipse 50% 62% at 50% 74%,#FFF 0,#FFC9B8 24%,#E0503A 56%,rgb(200 60 40 / 0) 82%)}
+.track-steps li::before{top:38px}
+
+/* From the parishes: each announcement a notice on parchment, sealed at its head like a letter */
+.news-list{gap:clamp(18px,2.4vw,28px)}
+.news-item{position:relative;padding:34px clamp(20px,2.4vw,30px) 26px;border:1px solid #E6D7B8;border-radius:6px;background:linear-gradient(180deg,#FFFDF8,#FAF4E8);
+  box-shadow:inset 0 0 0 5px #FFFDF8,inset 0 0 0 6px rgb(199 158 76 / .28),0 24px 44px -34px rgb(60 40 20 / .5)}
+.news-item::before{content:"";position:absolute;top:-17px;inset-inline-start:clamp(20px,2.4vw,30px);width:34px;height:34px;background:var(--wax) 50%/contain no-repeat;filter:drop-shadow(0 4px 5px rgb(90 20 20 / .3))}
+.news-item.is-lead{padding-inline-end:clamp(20px,2.4vw,30px)}
+.news-item time{color:var(--gilt-ink)}
+/* the pictures of the night sections hang in gilded arches */
+.story-arch,.about-mark{box-shadow:0 0 0 1px rgb(215 165 72 / .6),0 0 0 7px rgb(14 26 49 / .9),0 0 0 8px rgb(215 165 72 / .32),0 40px 80px -40px rgb(0 0 0 / .6)}
+.about-mark{box-shadow:0 0 0 1px rgb(199 158 76 / .7),0 0 0 7px #F5F1E8,0 0 0 8px rgb(199 158 76 / .45),0 40px 80px -40px rgb(14 26 49 / .55)}
+
+/* A parish without a photograph: its About arch is an icon, gold leaf laid in squares, a haloed
+   initial in cinnabar, the raised border of the icon board and a red lamp burning before it */
+.ph-arch.is-night{background:radial-gradient(circle at 50% 36%,rgb(255 246 214 / .5),rgb(255 240 200 / 0) 48%),radial-gradient(ellipse 90% 70% at 50% 45%,rgb(80 44 8 / 0) 55%,rgb(80 44 8 / .38)),#C9973F url("images/gilt.webp") 0 0/240px 240px;box-shadow:inset 0 0 0 10px #5E1A16,inset 0 0 0 11px rgb(241 199 122 / .75),inset 0 0 0 16px rgb(94 26 22 / .18),0 40px 80px -40px rgb(60 30 10 / .6)}
+.ph-arch.is-night::after{inset:24px;border-color:rgb(110 26 22 / .5)}
+.ph-arch.is-night::before{content:"";position:absolute;left:50%;top:44%;width:62%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
+  background:radial-gradient(circle,transparent 0 60%,rgb(120 70 15 / .55) 61% 62%,transparent 63% 69%,rgb(120 70 15 / .4) 70% 71%,transparent 72%),repeating-conic-gradient(rgb(255 244 200 / .32) 0 3deg,transparent 3deg 9deg);
+  -webkit-mask:radial-gradient(circle,#000 71%,transparent 72%);mask:radial-gradient(circle,#000 71%,transparent 72%)}
+.ph-arch.is-night .monogram b{position:relative;top:-6%;color:#7A1A18;text-shadow:0 1px 0 rgb(255 240 200 / .6),0 0 30px rgb(255 240 200 / .5)}
+/* the lamp before the icon: a votive in ruby glass, its flame showing through */
+.ph-arch.is-night .ph-arch-light{width:20px;height:24px;margin-left:-10px;border-radius:3px 3px 7px 7px;background:radial-gradient(ellipse 30% 26% at 50% 46%,#FFF4D6,#FFC07A 55%,rgb(255 150 90 / 0) 100%),linear-gradient(90deg,#5E0A10,#C0182A 30%,#E0303A 50%,#B01526 72%,#5A0910);
+  box-shadow:inset 0 2px 0 rgb(255 200 190 / .45),inset 0 -3px 4px rgb(60 0 6 / .5),0 0 18px 6px rgb(255 110 80 / .55),0 0 60px 20px rgb(200 40 40 / .28)}
+/* the ministries stand in gilded niches on the night blue */
+.ph-card::before{content:"";position:absolute;inset:7px;border-radius:193px 193px 15px 15px / 123px 123px 15px 15px;border:1px solid rgb(215 165 72 / .26);pointer-events:none}
+.ph-card-arch{box-shadow:0 0 0 1px rgb(215 165 72 / .6),0 0 0 4px rgb(14 26 49),0 0 0 5px rgb(215 165 72 / .3)}
+
+/* the phone menu: the nave at night, and a stand of candles burning under the links */
+.mobile-nav{background:linear-gradient(180deg,#0B0807 34%,rgb(11 8 7 / .82) 70%,rgb(11 8 7 / .95)),radial-gradient(ellipse 70% 34% at 50% 92%,rgb(255 170 80 / .22),transparent 70%),#0B0807}
+.mobile-nav::before{content:"";position:absolute;left:50%;bottom:104px;width:220px;height:106px;translate:-50% 0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 96'%3E%3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23FFD68A' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23FFD68A' stop-opacity='0'/%3E%3C/radialGradient%3E%3CradialGradient id='f' cx='50%25' cy='70%25' r='60%25'%3E%3Cstop offset='0' stop-color='%23FFFFFF'/%3E%3Cstop offset='.35' stop-color='%23FFF0C2'/%3E%3Cstop offset='.7' stop-color='%23FFB84A'/%3E%3Cstop offset='1' stop-color='%23FF8A2A' stop-opacity='0'/%3E%3C/radialGradient%3E%3ClinearGradient id='w' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%239E8256'/%3E%3Cstop offset='.45' stop-color='%23F2E2B8'/%3E%3Cstop offset='1' stop-color='%23B8996A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='40' cy='36' r='16' fill='url%28%23g%29'/%3E%3Crect x='37.4' y='44' width='5.2' height='40' rx='1' fill='url%28%23w%29'/%3E%3Cpath d='M40 27c3 4.2 4 6.8 4 9a4 4 0 0 1-8 0c0-2.2 1-4.8 4-9Z' fill='url%28%23f%29'/%3E%3Ccircle cx='70' cy='24' r='16' fill='url%28%23g%29'/%3E%3Crect x='67.4' y='32' width='5.2' height='52' rx='1' fill='url%28%23w%29'/%3E%3Cpath d='M70 15c3 4.2 4 6.8 4 9a4 4 0 0 1-8 0c0-2.2 1-4.8 4-9Z' fill='url%28%23f%29'/%3E%3Ccircle cx='100' cy='16' r='16' fill='url%28%23g%29'/%3E%3Crect x='97.4' y='24' width='5.2' height='60' rx='1' fill='url%28%23w%29'/%3E%3Cpath d='M100 7c3 4.2 4 6.8 4 9a4 4 0 0 1-8 0c0-2.2 1-4.8 4-9Z' fill='url%28%23f%29'/%3E%3Ccircle cx='130' cy='28' r='16' fill='url%28%23g%29'/%3E%3Crect x='127.4' y='36' width='5.2' height='48' rx='1' fill='url%28%23w%29'/%3E%3Cpath d='M130 19c3 4.2 4 6.8 4 9a4 4 0 0 1-8 0c0-2.2 1-4.8 4-9Z' fill='url%28%23f%29'/%3E%3Ccircle cx='160' cy='38' r='16' fill='url%28%23g%29'/%3E%3Crect x='157.4' y='46' width='5.2' height='38' rx='1' fill='url%28%23w%29'/%3E%3Cpath d='M160 29c3 4.2 4 6.8 4 9a4 4 0 0 1-8 0c0-2.2 1-4.8 4-9Z' fill='url%28%23f%29'/%3E%3Crect x='22' y='82' width='156' height='7' rx='2' fill='%23B98B3A'/%3E%3Crect x='22' y='82' width='156' height='2' rx='1' fill='%23E6C47A'/%3E%3C/svg%3E") 50% 100%/contain no-repeat;pointer-events:none;animation:menu-candles 2.4s ease-in-out infinite alternate}
+@keyframes menu-candles{from{opacity:.82}to{opacity:1}}
+.mobile-nav a{position:relative}
+
+/* a page that could not be shown: an unlit candle in its arch, which the visitor may light */
+button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inherit;transition:box-shadow .8s}
+.lost-candle{position:relative;width:8px;height:46px;border-radius:2px 2px 1px 1px;background:linear-gradient(90deg,#9E8256,#F2E2B8 45%,#B8996A)}
+.lost-candle::before{content:"";position:absolute;left:50%;top:-6px;width:1.6px;height:6px;margin-left:-.8px;background:#2A1A10}
+.lost-candle i{position:absolute;left:50%;bottom:calc(100% + 4px);width:11px;height:22px;margin-left:-5.5px;border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
+  background:radial-gradient(ellipse 50% 62% at 50% 74%,#FFF 0,#FFF0C2 24%,#FFB84A 56%,rgb(255 130 40 / 0) 82%);opacity:0;scale:.1;transform-origin:50% 90%;transition:opacity .5s,scale .9s cubic-bezier(.2,1.5,.4,1)}
+.lost-arch.is-lit{box-shadow:inset 0 -60px 70px -30px rgb(255 190 100 / .45),0 30px 60px -30px rgb(14 26 49 / .5)}
+.lost-arch.is-lit .lost-candle i{opacity:1;scale:1;animation:sn-flicker 2s ease-in-out .9s infinite}
+
+/* For parishes: the bundles as gilded niches, the way in numbered like a church clock */
+.fp-card:not(.is-complete){background:radial-gradient(ellipse 72% 26% at 50% 0%,rgb(228 186 96 / .36),rgb(228 186 96 / 0) 72%),linear-gradient(180deg,#F0E7D6,#E2D6C1);
+  box-shadow:inset 0 0 0 7px #EFE5D3,inset 0 0 0 8px rgb(199 158 76 / .6)}
+.fp-card.is-complete{box-shadow:inset 0 0 0 7px var(--night),inset 0 0 0 8px rgb(215 165 72 / .55),0 30px 60px -30px rgb(14 26 49 / .6)}
+.fp-steps li::before{content:counter(fp,upper-roman);background:radial-gradient(circle at 35% 30%,#22335C,var(--night));box-shadow:0 0 0 3px var(--mist),0 0 0 4px rgb(199 158 76 / .55)}
+[dir=rtl] .fp-steps li::before{content:counter(fp,arabic-indic)}
+
+/* the parish calendar: Sundays in gilt, feasts marked with the cross, named on the day */
+.pcal-day.is-sunday .pcal-n{color:var(--gilt-ink)}
+.pcal-day.is-feast{box-shadow:inset 0 0 0 1px rgb(199 158 76 / .65);background:linear-gradient(180deg,#FFF8E8,#FFFDF7)}
+.pcal-feast{position:absolute;top:6px;inset-inline-end:6px;width:9px;height:12px;background:var(--feast-cross) no-repeat 50%/contain}
+.pcal-day{position:relative}
+.pcal-feast-note{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-family:var(--display);font-size:calc(20px * var(--fs,1));color:var(--gilt-ink)}
+.pcal-feast-note::before{content:"";width:12px;height:16px;background:var(--feast-cross) no-repeat 50%/contain}
+[dir=rtl] .pcal-feast-note{font-family:var(--arabic-display);font-weight:700}
+
+/* the event page: the day's place in the Church's year */
+.ev-feast{display:block;margin-top:2px;font-size:calc(15px * var(--fs,1));color:var(--gilt-ink)}
+/* the request form: each kind of request a small gilded niche */
+.rq-kind{border-radius:60px 60px 14px 14px / 40px 40px 14px 14px;padding-top:16px;background:linear-gradient(180deg,#F3EBDC,#ECE2D0);border-color:#E3D3B2;box-shadow:inset 0 0 0 4px #F3EBDC,inset 0 0 0 5px rgb(199 158 76 / .4)}
+.rq-kind .arch-icon{box-shadow:0 0 0 1px rgb(199 158 76 / .5),0 0 0 4px #FBF6EC,0 0 0 5px rgb(199 158 76 / .28)}
+
+/* the light that sweeps a gilded button is clipped without making the button scrollable (in Arabic
+   the sweep waits on the start side, which overflow:hidden would let scroll) */
+.btn-gilt,.hero-field button{overflow:clip}
+/* fingers need room: the footer's links, its credits and small text buttons get a full touch height */
+@media(pointer:coarse){
+  .footer-links a,.footer-links button{display:inline-flex;align-items:center;min-height:40px}
+  .footer-links{gap:2px}
+  .footer-bottom a{display:inline-flex;align-items:center;min-height:36px}
+  .dir-tools .text-button,.text-button{min-height:44px;min-width:44px;justify-content:center}
+  .ph-crumbs a,.brand,.pcal-ev-link{display:inline-flex;align-items:center;min-height:40px}
+}
+/* on a tablet the map stays within most of a screen, so the parishes show below it straight away */
+@media(min-width:600px) and (max-width:960px){.lebanon-map>svg{max-height:62svh}}
+/* on a phone the page's sections scroll sideways; their ends fade so the row reads as one that moves */
+@media(max-width:899px){.ph-nav ul{-webkit-mask:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 30px),transparent);mask:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 30px),transparent)}
+  [dir=rtl] .ph-nav ul{-webkit-mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent);mask:linear-gradient(270deg,transparent,#000 16px,#000 calc(100% - 30px),transparent)}}
+/* Arabic pages: a parish's announcement or story written in English still lines up with the page */
+[dir=rtl] :is(.news-item h3,.news-item p,.story h3,.story p){text-align:right}
+/* the hero holds larger text and a label over its search: a little less air above, a slightly
+   smaller headline on shorter screens, and the announcement's dot stays beside its first line */
+.hero-sanctuary .hero-inner{padding-top:calc(var(--header) + 4vh)}
+.hero-sanctuary .hero-title{font-size:calc(clamp(44px,min(1rem + 5.4vw,9.4svh + 4px),96px) * var(--fs-d,1))}
+[dir=rtl] .hero-sanctuary .hero-title{font-size:calc(clamp(42px,min(1rem + 4.8vw,8.6svh + 4px),88px) * var(--fs-d,1))}
+.hero-note{display:inline-grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;column-gap:12px;row-gap:2px;max-width:min(720px,100%)}
+.hero-note>:not(.note-mark){grid-column:2}
+.hero-note .note-mark{grid-row:1;align-self:center}
+.hero-search{margin-top:clamp(20px,3.4vh,32px)}
+/* the request form's text boxes in the page's own type (in Arabic too), and with larger text its
+   kinds of request sit two to a row so their descriptions keep room */
+[dir=rtl] .rq-field :is(input,textarea){font-family:var(--arabic)}
+@media(min-width:700px){html[data-text] .rq-kinds{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* the request form's round choices and its checkbox, large enough to see and to hit */
+.rq-opt input{width:22px;height:22px;flex:none}
+.rq-check input{width:26px;height:26px}
+/* a written label above every search field, so nothing is lost while typing */
+.field-cap{display:block;margin:0 0 8px;font:600 calc(17px * var(--fs,1))/1.35 var(--sans);color:var(--ink)}
+[dir=rtl] .field-cap{font-family:var(--arabic)}
+:is(.hero,.directory) .field-cap{color:var(--on-night)}
+.hero-search .field-cap{text-shadow:0 1px 10px rgb(0 0 0 / .6)}
+.pcal-tools{align-items:flex-end}
+.pcal-find{flex:1 1 260px;min-width:0}
+.pcal-find .pcal-search{width:100%}
+.picker-search{margin-top:0}
+/* under the hero's search, the way to every parish without typing */
+.hero-browse{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:14px;padding:10px 20px;border:1px solid rgb(241 199 122 / .55);border-radius:999px;
+  background:rgb(14 10 9 / .45);color:var(--on-night);font:600 calc(17px * var(--fs,1))/1.2 var(--sans);text-decoration:none;transition:border-color .2s,background-color .2s}
+[dir=rtl] .hero-browse{font-family:var(--arabic)}
+.hero-browse svg{width:20px;height:20px;fill:none;stroke:var(--gilt-hi);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hero-browse:hover{border-color:var(--gilt-hi);background:rgb(215 165 72 / .14)}
+/* ---------- the small things: gold leaf, the pointer, the fields, the scrollbar, the selection ---------- */
+/* gilded buttons: gold leaf over its bole (assets/images/gilt.webp, docs/tools/render_gilt.py), burnished
+   along the top and shaded below, with a fine engraved line inside the edge; light runs across on hover */
+.btn-gilt,.hero-field button,.mobile-nav a:last-child,.chip[aria-pressed=true],.sign-in:hover{background:linear-gradient(180deg,rgb(255 247 222 / .5),rgb(255 247 222 / .06) 46%,rgb(96 60 12 / 0) 54%,rgb(96 60 12 / .24)),#D4A24B url("images/gilt.webp") 0 0/240px 240px;border-color:transparent;color:#1A1306;text-shadow:0 1px 0 rgb(255 238 196 / .5);
+  box-shadow:inset 0 1px 0 rgb(255 248 226 / .8),inset 0 -1.5px 0 rgb(96 60 12 / .42),inset 0 0 0 1px rgb(128 88 24 / .36),0 10px 26px -12px rgb(215 165 72 / .7)}
+.btn-gilt:hover,.hero-field button:hover,.mobile-nav a:last-child:hover{background:linear-gradient(180deg,rgb(255 250 232 / .68),rgb(255 247 222 / .18) 46%,rgb(96 60 12 / 0) 56%,rgb(96 60 12 / .16)),#DDAE55 url("images/gilt.webp") 0 0/240px 240px}
+.btn-gilt:active,.hero-field button:active{transform:translateY(0);box-shadow:inset 0 2px 7px rgb(96 60 12 / .38),inset 0 0 0 1px rgb(128 88 24 / .4)}
+.hero-field button{position:relative;overflow:hidden;isolation:isolate}
+.hero-field button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255 / .5) 50%,transparent 70%);transform:translateX(-120%);transition:transform .9s var(--ease-out)}
+.hero-field button:hover::after{transform:translateX(120%)}
+.btn-line:hover{border-color:var(--gilt-hi)}
+.btn-ink-line:hover{border-color:var(--gilt-ink)}
+
+/* the pointer: a fine arrow inlaid with gold, and a candle's flame over anything that can be chosen.
+   Only for a mouse; the flame's tip is the point. */
+:root{--hand:pointer;--arrow:auto}
+@media(pointer:fine){
+  :root{--arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='none' stroke='%231B1410' stroke-width='3.4' stroke-linejoin='round'/%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='%231B1410' stroke='%23F6E7C1' stroke-width='1.3' stroke-linejoin='round'/%3E %3Cpath d='M6.5 7.8v8.6' stroke='%23D7A548' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") 4 3,auto;--hand:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32'%3E %3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23FFCF75' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23FFCF75' stop-opacity='0'/%3E%3C/radialGradient%3E %3CradialGradient id='f' cx='.5' cy='.74' r='.66'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.34' stop-color='%23FFEDB8'/%3E%3Cstop offset='.72' stop-color='%23F5AE45'/%3E%3Cstop offset='1' stop-color='%23D2661C'/%3E%3C/radialGradient%3E%3C/defs%3E %3Ccircle cx='12' cy='12.5' r='11.5' fill='url(%23g)'/%3E %3Cpath d='M12 1.4C13.3 5.4 17.3 8.4 17.3 13.4a5.3 5.3 0 0 1-10.6 0C6.7 9.6 10.1 7.2 12 1.4Z' fill='url(%23f)' stroke='%233A1E06' stroke-width='1' stroke-linejoin='round'/%3E %3Cpath d='M12 10.6c-1 1.6-1.7 2.8-1.7 3.9a1.7 1.7 0 0 0 3.4 0c0-1.1-.7-2.3-1.7-3.9Z' fill='%23FFFDF6'/%3E %3Cpath d='M12 17.4v2.8' stroke='%232A1606' stroke-width='1.2' stroke-linecap='round'/%3E %3Crect x='8.2' y='20' width='7.6' height='11.2' rx='1.4' fill='%23F3E6C6' stroke='%233A2A18' stroke-width='1'/%3E %3Cpath d='M9.6 21.4v8.2' stroke='%23fff' stroke-width='1' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") 12 2,pointer}
+  html{cursor:var(--arrow)}
+  :is(p,li,h1,h2,h3,h4,blockquote,dd,td,th,figcaption,address){cursor:auto}
+  input:not([type=checkbox],[type=radio],[type=range],[type=submit],[type=button],[type=reset]),textarea,[contenteditable=true]{cursor:text}
+  a[href],button:not(:disabled),summary,label[for],select,[role=button],[role=tab],input:is([type=checkbox],[type=radio],[type=submit],[type=button]){cursor:var(--hand)}
+}
+
+/* fields: warm parchment with a faint shadow at the top, and gold when they take the pen */
+:is(.rq-field input,.rq-field textarea,.rq-link input,.verify-form input,.guest-request input,.guest-request textarea,.guest-request select,.collection-toolbar input){
+  background:#FFFDF8 linear-gradient(180deg,rgb(120 88 36 / .05),rgb(120 88 36 / 0) 10px);border-color:#DCCDB2;box-shadow:inset 0 1px 2px rgb(70 48 14 / .06);caret-color:var(--gilt-ink)}
+:is(.rq-field input,.rq-field textarea,.rq-link input,.verify-form input,.guest-request input,.guest-request textarea,.guest-request select,.collection-toolbar input):focus{
+  outline:none;border-color:#A57B2C;background:#FFFEFA;box-shadow:0 0 0 4px rgb(215 165 72 / .22),inset 0 1px 2px rgb(70 48 14 / .05)}
+:is(.rq-field,.verify-form,.guest-request,.collection-toolbar,.picker-search,.pcal-search) :is(input,textarea)::placeholder{color:#6B6150;opacity:1}
+.hero-field input,.dir-search input,.picker-search input,.pcal-search input{caret-color:var(--gilt-hi)}
+.picker-search input,.pcal-search input{caret-color:var(--gilt-ink)}
+.hero-field:focus-within{border-color:rgb(241 199 122 / .8);box-shadow:0 0 0 4px rgb(215 165 72 / .16),0 0 40px -8px rgb(241 199 122 / .35),0 24px 60px -24px rgb(0 0 0 / .55)}
+:root{accent-color:#8A6420}
+
+/* the scrollbar: a gilt rod on parchment */
+html{scrollbar-color:#B48737 #E9E1D1}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:#E9E1D1}
+::-webkit-scrollbar-thumb{border:3px solid #E9E1D1;border-radius:12px;background:linear-gradient(90deg,#A27428,#E4C27C 50%,#A27428)}
+
+/* the selection: gold leaf on the light pages, candlelight on the night ones */
+::selection{background:rgb(215 165 72 / .34);color:inherit}
+:is(.on-night,.hero,.directory,.stories,.join,.site-footer) ::selection{background:rgb(241 199 122 / .4);color:#FFF8E6}
+
+@media(prefers-reduced-motion:reduce){
+  .hero-field button::after{transition:none}
+  .bell-body,.bell-clapper{animation:none!important}
+  .verse-rose svg{animation:none}
+  .track-steps li span::after{animation:none;transition:none}
+  .map-light .core,.brand-light,.mobile-nav::before,.lost-arch.is-lit .lost-candle i{animation:none}
+}

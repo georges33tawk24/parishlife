@@ -23,6 +23,8 @@ export function setLang(next) {
   try { localStorage.setItem(STORE, next); } catch { /* private mode */ }
   document.documentElement.lang = next;
   document.documentElement.dir = LANGS[next].dir;
+  const skip = document.querySelector('a.skip');
+  if (skip) skip.textContent = next === 'ar' ? 'انتقل إلى المحتوى' : 'Skip to content';
 }
 
 /* Western digits throughout — Lebanese parish books use them — so numbers are

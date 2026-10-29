@@ -7,7 +7,7 @@
 .collection-calendar .cal-head>div{padding:12px;background:var(--muted,#edf0e8);font-size:12px;text-align:center}
 .collection-calendar .cal-day{min-height:125px;padding:8px;border-inline-end:1px solid var(--border,#d8dfdb);border-top:1px solid var(--border,#d8dfdb)}
 .collection-calendar .cal-day.out{opacity:.55}.collection-calendar .cal-day.today .dn{background:var(--primary,#233b32);color:#fff;border-radius:50%;padding:4px 7px}
-.collection-event{display:flex;flex-direction:column;gap:3px;width:100%;text-align:start;padding:8px;margin-top:6px;border:0;border-radius:7px;background:var(--selection,#e0e9e2);color:var(--text,#233b32);font:inherit;font-size:12px;cursor:pointer}
+.collection-event{display:flex;flex-direction:column;gap:3px;width:100%;text-align:start;padding:8px;margin-top:6px;border:0;border-radius:7px;background:var(--selection,#e0e9e2);color:var(--text,#233b32);font:inherit;font-size:12px;cursor:var(--hand,pointer)}
 .collection-event:hover,.collection-event:focus-visible{outline:2px solid var(--primary,#233b32);outline-offset:1px}.collection-event small{opacity:.85}
 .collection-list{display:grid;gap:10px}.collection-list-item{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;border:1px solid var(--border,#d8dfdb);border-radius:12px;padding:14px;background:var(--surface,#fff)}
 .collection-list-item .collection-event{margin:0}.collection-list-item>time{font-size:13px}

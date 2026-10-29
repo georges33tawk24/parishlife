@@ -6,8 +6,11 @@ import { releaseGuestDocument } from './guest-delivery.js';
 import { accountServices } from './account-services.js';
 /* Account-level data is separate from parish records and ministry rosters. */
 import { ministryHandle } from './ministry.js';
+import { siteContent } from './site-content.js';
 import modules from '../../backend/modules.json' with { type: 'json' };
 import schema from '../../backend/workspace-schema.json' with { type: 'json' };
+import { passwordProblem } from './sign-in.js';
+import { VISIT_KEYS, PROFILE_KEYS, checkProfile } from './public-site.js';
 import { need, NOW, tokenHex, tokenUrlsafe, sha256hex, passwordHash } from './py.js';
 import { loginName } from './accounts.js';
 import { ROUNDS } from './member.js';
@@ -26,6 +29,15 @@ export function initializeWorkspace(db) {
       await db.batch([
         db.prepare("INSERT OR IGNORE INTO pl_grants SELECT 'migration-diocese-'||id,id,'diocese',diocese,'diocesan_admin',1,NULL,? FROM users WHERE role='diocesan_admin' AND diocese IN (SELECT id FROM dioceses WHERE id<>'pl-platform')").bind(NOW()),
         db.prepare('INSERT OR IGNORE INTO pl_authorization_migrations VALUES(1,?)').bind(NOW())
+      ]);
+    }
+    if (!await db.prepare('SELECT 1 FROM pl_authorization_migrations WHERE version=2').first()) {
+      // A database first created by the parishlife-v2 line keeps its Super Admins in
+      // role_assignments. Mirror only the active global ones as grants; nothing else is promoted.
+      const legacy=(await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('role_assignments','access_blocks')").first()).n===2;
+      await db.batch([
+        ...(legacy?[db.prepare("INSERT OR IGNORE INTO pl_grants SELECT 'migration-v2-'||user_id,user_id,'global','*','super_admin',1,NULL,? FROM (SELECT DISTINCT user_id FROM role_assignments WHERE role='superadmin' AND scope='system' AND status='active' AND ended_at IS NULL AND user_id NOT IN (SELECT user_id FROM access_blocks WHERE scope='global' AND lifted_at IS NULL))").bind(NOW())]:[]),
+        db.prepare('INSERT OR IGNORE INTO pl_authorization_migrations VALUES(2,?)').bind(NOW())
       ]);
     }
     const columns=await db.prepare("SELECT name FROM pragma_table_info('uploaded_files')").all();
@@ -72,6 +84,7 @@ export async function workspaceSignup(c,q) {
   need(age>=13&&age<=120,'Accounts are available to people aged 13 and older.');
   need(typeof q.password==='string'&&q.password.length>=8&&q.password.length<=200,'Choose a password of at least 8 characters.');
   need(q.password===q.confirmPassword,'The passwords do not match.');
+  const weak=await passwordProblem(q.password,[email,phone]);need(!weak,weak);
   for(const value of [email,phone].filter(Boolean)){
     need(!await c.first('SELECT 1 FROM users WHERE username=?',value)&&!await c.first('SELECT 1 FROM pl_identities WHERE value=?',value),
       'This contact already has an account. Sign in to connect additional methods.',409);
@@ -79,7 +92,7 @@ export async function workspaceSignup(c,q) {
   const recent=await c.first('SELECT COUNT(*) AS n FROM pl_accounts WHERE created_at>?',new Date(Date.now()-3600000).toISOString());
   need(recent.n<30,'Too many registrations. Please try again later.',429);
   const uid='u-'+tokenHex(12),stamp=NOW();
-  c.run("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','ParishLife accounts')");
+  c.run("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','ParishLife accounts')");
   c.run('INSERT INTO users VALUES(?,?,?,?,?,?,?)',uid,email||phone,first+' '+last,'member','pl-platform',null,passwordHash(q.password,tokenHex(16),ROUNDS));
   const data={profile:{firstName:first,lastName:last,birthDate:born,email,phone},theme:{scheme:'forest',mode:'light'},profileComplete:false};
   c.run('INSERT INTO pl_accounts VALUES(?,?,?)',uid,JSON.stringify(data),stamp);
@@ -91,7 +104,8 @@ export async function platformRole(c,u) {
   if(await isSuperAdmin(c,u))return 'super_admin';
   if(u.role==='bishop')return 'bishop';
   if(await c.first("SELECT 1 FROM pl_grants g JOIN dioceses d ON d.id=g.scope_id WHERE g.user_id=? AND g.scope_type='diocese' AND g.role='diocesan_admin' AND g.active=1",u.id))return 'diocesan_admin';
-  return EXTRA_ROLES.includes(u.role)?'member':u.role;
+  // parishlife-v2 stored plain accounts with the role "user": they are members here.
+  return EXTRA_ROLES.includes(u.role)||u.role==='user'?'member':u.role;
 }
 export async function sessionData(c,u) {
   const data=await account(c,u);
@@ -198,7 +212,7 @@ export async function publicProfile(c,pid,state) {
     const title=await c.first('SELECT title FROM pl_clergy_titles WHERE user_id=? ORDER BY created_at DESC LIMIT 1',r.id);clergy.push({name:r.name,title:title?.title||'Priest'});
   }
   return {clergy,parishPhoto:state.PHOTOS?.parish||'',gallery:state.PARISH.gallery||[],ministries:(state.GROUPS||[]).filter(g=>(g.vis||'public')==='public'&&g.public!==false).map(g=>({id:g.id,name:g.name||'',nameAr:g.ar||g.nameAr||'',description:g.description||'',responsible:g.leaderName||state.PEOPLE.find(p=>p.id===g.leader)?.lat||'',joining:'Send an inquiry to the parish office.'})),
-    publicRequests:(await parishPlan(c,pid)).publicRequests!==false,visit:Object.fromEntries(['email','officeHours','confessionTimes','accessibility','latitude','longitude','website'].map(k=>[k,state.PARISH[k]||'']))};
+    publicRequests:(await parishPlan(c,pid)).publicRequests!==false,visit:Object.fromEntries(VISIT_KEYS.map(k=>[k,state.PARISH[k]||'']))};
 }
 export async function parishContext(c,user,pid,snapshot=null) {
   snapshot??=await authorizationSnapshot(c,user);
@@ -287,13 +301,14 @@ async function adminHandle(c,u,path,method,q) {
   if(path==='/api/workspace/public-profile'){
     need(manage.includes(manager),'Parish management access required.',403);
     const row=await c.first('SELECT revision,data FROM states WHERE parish_id=?',pid),state=JSON.parse(row.data);
-    const keys=['phone','email','address','officeHours','confessionTimes','accessibility','website','latitude','longitude'];
+    const keys=PROFILE_KEYS;
     if(method==='GET')return {revision:row.revision,profile:{...Object.fromEntries(keys.map(k=>[k,state.PARISH[k]??''])),gallery:state.PARISH.gallery||[],massTimes:state.CONTENT?.massTimes?.en||'',massTimesAr:state.CONTENT?.massTimes?.ar||''}};
     need(method==='PUT','Method not allowed.',405);need(q.revision===row.revision,'Parish details changed. Reopen this form before saving.',409);
     const values=Object.fromEntries([...keys,'massTimes','massTimesAr'].map(k=>[k,String(q[k]??'').trim()]));
     need(Object.values(values).every(v=>v.length<=2000),'Keep each field within 2,000 characters.');
     need(!values.email||EMAIL.test(values.email),'Enter a valid parish email address.');
     need(!values.website||/^https:\/\/[^\s]+$/.test(values.website),'Use an HTTPS website address.');
+    checkProfile(values);
     const gallery=q.gallery||[];need(Array.isArray(gallery)&&gallery.length<=12&&gallery.every(v=>typeof v==='string'&&v.length<=2000&&/^https:\/\/[^\s]+$/.test(v)),'Add up to twelve HTTPS image links.');
     need(!!values.latitude===!!values.longitude,'Enter both coordinates or leave both empty.');
     if(values.latitude)need(Number.isFinite(Number(values.latitude))&&Math.abs(Number(values.latitude))<=90&&Number.isFinite(Number(values.longitude))&&Math.abs(Number(values.longitude))<=180,'Enter valid coordinates.');
@@ -480,6 +495,7 @@ async function adminHandle(c,u,path,method,q) {
   return null;
 }
 export async function workspaceHandle(c,u,path,method,q) {
+  const site=await siteContent(c,u,path,method,q);if(site!==null)return site;
   if(path==='/api/public/auth-options'&&method==='GET')return {providers:['google','apple','microsoft'].map(id=>({id,available:false})),verification:{email:false,sms:false,authenticator:false}};
   if(path==='/api/public/guest-requests'&&method==='POST'){
     const pid=q.parish;
@@ -565,7 +581,7 @@ export async function workspaceHandle(c,u,path,method,q) {
   if(path==='/api/workspace/dioceses'&&method==='POST'){
     need((await isSuperAdmin(c,u)),'Only the super administrator creates dioceses.',403);
     const name=String(q.name||'').trim();need(name.length>=2&&name.length<=120,'Enter a diocese name.');
-    const id='diocese-'+tokenHex(8);c.run('INSERT INTO dioceses VALUES(?,?)',id,name);history(c,u,id,'diocese.created',{name});return {id};
+    const id='diocese-'+tokenHex(8);c.run('INSERT INTO dioceses(id,name) VALUES(?,?)',id,name);history(c,u,id,'diocese.created',{name});return {id};
   }
   if(path==='/api/workspace/request-counts'&&method==='GET'){
     const pid=q.parish;need(await officeAccess(c,u,pid),'Office access required.',403);

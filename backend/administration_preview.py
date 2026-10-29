@@ -25,8 +25,8 @@ def main():
         password=secrets.token_urlsafe(28)
         hashed=server.password_hash(password)
         with server.connect() as connection:
-            connection.execute("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','Platform')")
-            connection.execute("INSERT INTO dioceses VALUES('empty-preview','Empty preview archdiocese')")
+            connection.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','Platform')")
+            connection.execute("INSERT INTO dioceses(id,name) VALUES('empty-preview','Empty preview archdiocese')")
             for name,role,diocese in [('preview-root','member','pl-platform'),('preview-bishop','bishop','beirut'),
                                       ('preview-parish','member','beirut'),('preview-arch','member','empty-preview'),
                                       ('preview-secretary','member','pl-platform')]:

@@ -13,7 +13,10 @@
     "directory": ".",
     "binding": "ASSETS",
     "html_handling": "none",
-    "not_found_handling": "none"
+    "not_found_handling": "none",
+    /* The public site goes through the Worker so a shared parish or event link carries that
+       parish's or event's preview (title, picture, description) for WhatsApp and others. */
+    "run_worker_first": ["/public.html"]
   },
   "d1_databases": [
     {

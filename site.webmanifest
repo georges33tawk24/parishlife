@@ -1,0 +1,18 @@
+{
+  "name": "ParishLife",
+  "short_name": "ParishLife",
+  "description": "Find your parish in Lebanon: Mass times, this week's celebrations, parish news and requests to the parish office.",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0E1A31",
+  "theme_color": "#0E1A31",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    { "src": "/assets/images/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/images/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/images/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

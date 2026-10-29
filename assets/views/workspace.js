@@ -3,6 +3,7 @@ import { api, session, loadSession } from '../api.js';
 import { hydrate } from '../persist.js';
 import { S,bus,canSee,role } from '../store.js';
 import { editPublicProfile } from './public-profile.js';
+import { editHomepage } from './homepage-editor.js';
 import { t } from '../i18n.js';
 import { esc, pageHead, panel, openDrawer, closeOverlays, toast } from '../ui.js';
 import { paginateCollections } from '../collection-ui.js';
@@ -40,6 +41,7 @@ workspacePage.mount=async host=>{
       ${scope.canCreateDiocese?`<button class="btn btn-secondary" data-new-diocese>${L('New diocese','أبرشية جديدة')}</button>`:''}
       ${diocesan?`<button class="btn btn-secondary" data-shared-plan>${L('Shared parish bundle','باقة مشتركة للرعايا')}</button>`:''}
       ${diocesan?`<button class="btn btn-secondary" data-new-parish>${L('New parish','رعية جديدة')}</button>`:''}
+      ${scope.isSuperAdmin?`<button class="btn btn-secondary" data-homepage>${L('Homepage','الصفحة الرئيسية')}</button>`:''}
       ${auth==='super_admin'?`<button class="btn btn-secondary" data-emergency>${L('Emergency message review','مراجعة رسالة في حالة طارئة')}</button>`:''}
       <button class="btn btn-primary" data-new-account>${L('Create account','إنشاء حساب')}</button>
       ${parishId?`<button class="btn btn-secondary" data-public-profile>${L('Edit public parish profile','تعديل صفحة الرعية العامة')}</button>`:''}
@@ -54,6 +56,7 @@ workspacePage.mount=async host=>{
       `}`;
     body.querySelector('[data-workspace-parish]')?.addEventListener('change',e=>{parishId=e.target.value;workspacePage.mount(host);});
     body.querySelector('[data-public-profile]')?.addEventListener('click',()=>editPublicProfile(parishId,refresh));
+    body.querySelector('[data-homepage]')?.addEventListener('click',()=>editHomepage());
     body.querySelector('[data-user-search]')?.addEventListener('input',e=>body.querySelectorAll('[data-search]').forEach(r=>r.hidden=!r.dataset.search.includes(e.target.value.toLowerCase().trim())));
     body.querySelector('[data-emergency]')?.addEventListener('click',()=>form(L('Emergency message access','الوصول إلى رسالة في حالة طارئة'),`<p class="help">${L('Open one specific message using its reference. Your reason and access are recorded.','افتح رسالة محددة بواسطة مرجعها. يُسجّل سببك ووصولك.')}</p>`+field('id',L('Message reference','مرجع الرسالة'))+`<label class="formrow"><span class="label">${L('Specific emergency or reported problem','الحالة الطارئة أو المشكلة المبلّغ عنها')}</span><textarea class="textarea" name="reason" required minlength="20" maxlength="1000"></textarea></label>`,async q=>{body._emergency=await api('workspace/emergency-message','POST',q);},async()=>{const m=body._emergency;openDrawer({title:m.title,body:`<p>${esc(m.id)} · ${esc(m.created_at)}</p><div class="message-body">${esc(m.body)}</div>`});}));
     body.querySelectorAll('[data-bishop-review]').forEach(b=>b.onclick=()=>{const r=certificates.find(r=>r.id===b.dataset.bishopReview&&r.parish===b.dataset.parish);form(L('Bishop acceptance','قبول المطران'),`<p>${esc(r.reference)} · ${esc(r.person)}</p><p>${L('Signed by','موقّعة من')}: ${esc(r.signedBy)}</p>${r.note?`<p>${L('Priest’s resubmission note','ملاحظة الكاهن عند إعادة التقديم')}: ${esc(r.note)}</p>`:''}`+select('decision',L('Decision','القرار'),option('accepted',L('Accept','قبول'))+option('returned',L('Return to priest','إعادة للكاهن')))+`<label class="formrow"><span class="label">${L('Note (required when returning)','ملاحظة (إلزامية عند الإعادة)')}</span><textarea class="textarea" name="note" maxlength="1000"></textarea></label>`,q=>api('workspace/certificates','POST',{...q,id:r.id,parish:r.parish,revision:r.revision}),refresh);});

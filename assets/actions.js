@@ -379,6 +379,7 @@ export const VERBS = {
   'issue-new':    () => CR.create('issue'),
   'content-edit': (b, a) => F.contentEdit(a),
   'portal-open':  () => window.open(`public.html?parish=${encodeURIComponent(session.parishId || '')}`, '_blank', 'noopener'),
+  'homepage-edit': () => import('./views/homepage-editor.js').then(m => m.editHomepage()),
   'line-edit':    (b, a) => F.lineEdit(a),
   'line-reverse': (b, a) => F.lineReverse(a),
   'svc-request':  (b, a) => F.svcRequestOpen(a),

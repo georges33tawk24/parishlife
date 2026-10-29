@@ -7,6 +7,9 @@ import secrets
 import copy
 from pathlib import Path
 
+from .sign_in import password_problem
+from .public_site import VISIT_KEYS, PROFILE_KEYS, check_profile
+
 SCHEMA = json.loads(Path(__file__).with_name('workspace-schema.json').read_text(encoding='utf-8'))
 MODULES = json.loads(Path(__file__).with_name('modules.json').read_text(encoding='utf-8'))
 EXTRA_ROLES = {'super_admin', 'diocesan_admin', 'parish_admin'}
@@ -34,6 +37,16 @@ def initialize(c):
             c.execute("INSERT OR IGNORE INTO pl_grants VALUES(?,?, 'diocese',?,'diocesan_admin',1,NULL,?)",
                       (secrets.token_hex(12), user['id'], user['diocese'], now()))
         c.execute('INSERT INTO pl_authorization_migrations VALUES(1,?)', (now(),))
+    if not c.execute('SELECT 1 FROM pl_authorization_migrations WHERE version=2').fetchone():
+        # A database first created by the parishlife-v2 line keeps its Super Admins in
+        # role_assignments. Mirror only the active global ones as grants; nothing else is promoted.
+        tables = {r['name'] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('role_assignments','access_blocks')")}
+        if tables == {'role_assignments', 'access_blocks'}:
+            for row in c.execute("SELECT DISTINCT user_id FROM role_assignments WHERE role='superadmin' AND scope='system' AND status='active' AND ended_at IS NULL "
+                                 "AND user_id NOT IN (SELECT user_id FROM access_blocks WHERE scope='global' AND lifted_at IS NULL)").fetchall():
+                c.execute("INSERT OR IGNORE INTO pl_grants VALUES(?,?,'global','*','super_admin',1,NULL,?)",
+                          (secrets.token_hex(12), row['user_id'], now()))
+        c.execute('INSERT INTO pl_authorization_migrations VALUES(2,?)', (now(),))
 
 
 def history(c, user, scope, action, detail):
@@ -89,6 +102,8 @@ def signup(c, q, normalize, hash_password, require):
     password = q.get('password')
     require(isinstance(password, str) and 8 <= len(password) <= 200, 'Choose a password of at least 8 characters.')
     require(password == q.get('confirmPassword'), 'The passwords do not match.')
+    weak = password_problem(password, [email, phone])
+    require(not weak, weak)
     for value in [email, phone]:
         if value:
             require(not c.execute('SELECT 1 FROM users WHERE username=?', (value,)).fetchone()
@@ -98,7 +113,7 @@ def signup(c, q, normalize, hash_password, require):
     require(c.execute('SELECT COUNT(*) FROM pl_accounts WHERE created_at>?', (since,)).fetchone()[0] < 30,
             'Too many registrations. Please try again later.', 429)
     uid, stamp = 'u-' + secrets.token_hex(12), now()
-    c.execute("INSERT OR IGNORE INTO dioceses VALUES('pl-platform','ParishLife accounts')")
+    c.execute("INSERT OR IGNORE INTO dioceses(id,name) VALUES('pl-platform','ParishLife accounts')")
     c.execute('INSERT INTO users VALUES(?,?,?,?,?,?,?)',
               (uid, email or phone, first+' '+last, 'member', 'pl-platform', None, hash_password(password)))
     data = {'profile': {'firstName': first, 'lastName': last, 'birthDate': born, 'email': email, 'phone': phone},
@@ -118,7 +133,8 @@ def platform_role(c, user):
         return 'bishop'
     if c.execute("SELECT 1 FROM pl_grants g JOIN dioceses d ON d.id=g.scope_id WHERE g.user_id=? AND g.scope_type='diocese' AND g.role='diocesan_admin' AND g.active=1", (user['id'],)).fetchone():
         return 'diocesan_admin'
-    return 'member' if user['role'] in EXTRA_ROLES else user['role']
+    # parishlife-v2 stored plain accounts with the role "user": they are members here.
+    return 'member' if user['role'] in EXTRA_ROLES or user['role'] == 'user' else user['role']
 
 
 def session_data(c, user):
@@ -267,7 +283,7 @@ def public_profile(c, pid, state):
                        joining='Send an inquiry to the parish office.')
                   for g in state.get('GROUPS', []) if g.get('vis','public')=='public' and g.get('public',True)]
     return {'clergy': clergy, 'ministries': ministries, 'parishPhoto':state.get('PHOTOS',{}).get('parish',''), 'gallery':parish.get('gallery',[]),
-            'publicRequests':parish_plan(c,pid).get('publicRequests',True), 'visit': {k: parish.get(k, '') for k in ('email','officeHours','confessionTimes','accessibility','latitude','longitude','website')}}
+            'publicRequests':parish_plan(c,pid).get('publicRequests',True), 'visit': {k: parish.get(k, '') for k in VISIT_KEYS}}
 
 
 def parish_context(c, user, pid, snapshot=None):
@@ -388,7 +404,7 @@ def admin_handle(c,user,path,method,q,require):
         require(manager in manage,'Parish management access required.',403)
         row=c.execute('SELECT revision,data FROM states WHERE parish_id=?',(pid,)).fetchone()
         state=json.loads(row['data'])
-        keys=('phone','email','address','officeHours','confessionTimes','accessibility','website','latitude','longitude')
+        keys=PROFILE_KEYS
         if method=='GET':
             return {'revision':row['revision'],'profile':{**{k:state['PARISH'].get(k,'') for k in keys},'gallery':state['PARISH'].get('gallery',[]),'massTimes':state.get('CONTENT',{}).get('massTimes',{}).get('en',''),'massTimesAr':state.get('CONTENT',{}).get('massTimes',{}).get('ar','')}}
         require(method=='PUT','Method not allowed.',405)
@@ -397,6 +413,7 @@ def admin_handle(c,user,path,method,q,require):
         require(all(len(v)<=2000 for v in values.values()),'Keep each field within 2,000 characters.')
         require(not values['email'] or EMAIL.fullmatch(values['email']),'Enter a valid parish email address.')
         require(not values['website'] or re.fullmatch(r'https://[^\s]+',values['website']),'Use an HTTPS website address.')
+        check_profile(values,require)
         gallery=q.get('gallery',[])
         require(isinstance(gallery,list) and len(gallery)<=12 and all(isinstance(v,str) and len(v)<=2000 and re.fullmatch(r'https://[^\s]+',v) for v in gallery),'Add up to twelve HTTPS image links.')
         require(bool(values['latitude'])==bool(values['longitude']),'Enter both coordinates or leave both empty.')
@@ -681,6 +698,10 @@ def create_staff(c,user,q,hash_password,require):
 
 def handle(c, user, path, method, q, require):
     """Return None for routes belonging to the established server."""
+    from .site_content import handle as site_content
+    result = site_content(c, user, path, method, q, require)
+    if result is not None:
+        return result
     if path == '/api/public/auth-options' and method == 'GET':
         return {'providers': [{'id': p, 'available': False} for p in ('google','apple','microsoft')],
                 'verification': {'email': False, 'sms': False, 'authenticator': False}}
@@ -798,7 +819,7 @@ def handle(c, user, path, method, q, require):
         name=str(q.get('name') or '').strip()
         require(2<=len(name)<=120,'Enter a diocese name.')
         did='diocese-'+secrets.token_hex(8)
-        c.execute('INSERT INTO dioceses VALUES(?,?)',(did,name))
+        c.execute('INSERT INTO dioceses(id,name) VALUES(?,?)',(did,name))
         history(c,user,did,'diocese.created',{'name':name})
         return {'id':did}
     if path == '/api/workspace/request-counts' and method == 'GET':

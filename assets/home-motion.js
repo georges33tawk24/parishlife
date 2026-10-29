@@ -1,0 +1,465 @@
+/* Homepage motion with GSAP (and Lenis for smooth scrolling). The orchestrated moment is
+   the valley: the camera settles, the villages light up, then one gold light per parish;
+   scrolling turns the night into the dawn render while the layers part. Sections then
+   arrive once, headings rise word by word, the About text lights up as it is read, and
+   numbers count up. Everything lives inside gsap.matchMedia: with reduced motion, or if
+   a script fails to load, every element simply shows in its final state. */
+let mm = null, introPlayed = false, introPlayedBefore = false, lenis = null;
+/* Simple view (assets/reading.js) asks for the same stillness as the system's reduced motion. */
+const simple = () => document.documentElement.hasAttribute('data-simple');
+const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || simple();
+/* A lighter page for phones that would struggle, or when the visitor asked to save data: no
+   smooth-scrolling engine, no canvas of fireflies, no image parallax and no glass blur; the
+   rest of the motion stays. */
+export const lite = (() => {
+  try {
+    const n = navigator;
+    return !!(n.connection?.saveData || (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && matchMedia('(pointer: coarse)').matches));
+  } catch { return false; }
+})();
+if (lite) document.documentElement.classList.add('is-lite');
+
+export function stopHomeMotion() { mm?.revert(); mm = null; }
+
+/* Scroll to a section, smoothly when motion is welcome; offset clears the sticky header (and a
+   parish page's section bar). */
+export function scrollToTarget(el, offset = 72) {
+  if (!el) return;
+  if (lenis) lenis.scrollTo(el, { offset: -offset, duration: 1.4 });
+  else scrollTo({ top: el.getBoundingClientRect().top + scrollY - offset, behavior: still() ? 'auto' : 'smooth' });
+}
+
+function smoothScroll(gsap, ScrollTrigger) {
+  if (lenis || !window.Lenis || still()) return;
+  lenis = new window.Lenis({ lerp: 0.09, smoothWheel: true, anchors: { offset: -72 } });
+  lenis.on('scroll', ScrollTrigger.update);
+  gsap.ticker.add(time => lenis?.raf(time * 1000));
+  gsap.ticker.lagSmoothing(0);
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', e => { if (e.matches) { lenis?.destroy(); lenis = null; } });
+}
+
+export function animateHome(root, { onMapDrawn, onDawn } = {}) {
+  stopHomeMotion();
+  const { gsap, ScrollTrigger, SplitText } = window;
+  if (!gsap || !ScrollTrigger) { onMapDrawn?.(); onDawn?.(); return; }
+  gsap.registerPlugin(ScrollTrigger, ...(SplitText ? [SplitText] : []));
+  mm = gsap.matchMedia();
+  mm.add({ motion: '(prefers-reduced-motion: no-preference)', calm: '(prefers-reduced-motion: reduce)', fine: '(pointer: fine)' }, context => {
+    if (context.conditions.calm || simple()) { onMapDrawn?.(); return undefined; }
+    if (!lite) smoothScroll(gsap, ScrollTrigger);
+    const hero = root.querySelector('[data-hero]');
+    const stops = [
+      hero && heroMotion(gsap, hero, onDawn),
+      hero && context.conditions.fine && pointerDepth(gsap, hero),
+      hero && !lite && fireflies(hero),
+      hero && !lite && motes(hero),
+      context.conditions.fine && magnetic(gsap, root),
+      context.conditions.fine && tilt(root),
+      context.conditions.fine && candle(root),
+      context.conditions.fine && dragScroll(root),
+      headings(gsap, root),
+      reveals(gsap, root),
+      counters(gsap, root),
+      litText(gsap, root),
+      !lite && parallaxImages(gsap, root),
+      mapMotion(gsap, root, onMapDrawn)
+    ];
+    // Web fonts and images change the page height after the triggers are measured.
+    const refresh = () => ScrollTrigger.refresh();
+    document.fonts?.ready.then(refresh);
+    addEventListener('load', refresh, { once: true });
+    root.querySelectorAll('img').forEach(img => { if (!img.complete) img.addEventListener('load', refresh, { once: true }); });
+    return () => stops.forEach(stop => typeof stop === 'function' && stop());
+  });
+}
+
+function heroMotion(gsap, hero, onDawn) {
+  const title = hero.querySelector('.hero-title');
+  let dawnAsked = false;
+  const askDawn = () => { if (!dawnAsked) { dawnAsked = true; onDawn?.(); } };
+  /* Tweens only for what this hero has: the homepage valley, a parish's valley or photograph. */
+  const add = (tl, method, selector, ...args) => { const els = hero.querySelectorAll(selector); if (els.length) tl[method](els, ...args); return tl; };
+  const intro = gsap.timeline({ defaults: { ease: 'expo.out' }, onComplete: askDawn });
+  /* The homepage settles on the whole valley; a parish page flies in to its own light. */
+  const push = Number(hero.dataset.push) || 0;
+  if (push) {
+    add(intro, 'fromTo', '.valley', { opacity: 0 }, { opacity: 1, duration: 1.8, ease: 'sine.out' }, 0);
+    add(intro, 'fromTo', '.valley', { scale: 1.04 }, { scale: push, duration: 5.2, ease: 'power2.inOut' }, 0);
+  } else add(intro, 'fromTo', '.valley', { scale: 1.16, opacity: 0 }, { scale: 1.04, opacity: 1, duration: 3.6, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.ph-photo img', { scale: 1.2, opacity: 0 }, { scale: 1.04, opacity: 1, duration: 3.4, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.sub-art img', { scale: 1.12, opacity: 0 }, { scale: 1, opacity: 0.55, duration: 2.6, ease: 'power3.out', stagger: 0.2 }, 0);
+  add(intro, 'from', '.vl-sky', { yPercent: -4, duration: 3 }, 0);
+  add(intro, 'from', '.vl-far', { yPercent: 5, duration: 3 }, 0.1);
+  add(intro, 'from', '.vl-near', { yPercent: 9, duration: 3 }, 0.2);
+  add(intro, 'fromTo', '.vl-mist', { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6);
+  add(intro, 'fromTo', '.vl-glow', { opacity: 0 }, { opacity: 1, duration: 2.6, ease: 'sine.inOut' }, 1.0);
+  if (title && window.SplitText) {
+    // Words only: Arabic letters must stay joined.
+    const split = window.SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
+    intro.from(split.words, { yPercent: 145, rotate: 3, duration: 1.5, stagger: 0.075 }, 0.55);
+  } else if (title) intro.from(title, { y: 30, opacity: 0, duration: 1.2 }, 0.55);
+  add(intro, 'from', '[data-hero-rise]', { y: 26, opacity: 0, duration: 1.2, stagger: 0.12 }, 1.15);
+  add(intro, 'from', '.valley-light', { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, push ? 3.4 : 1.9);
+  add(intro, 'from', '.valley-light b', { opacity: 0, x: -10, duration: 1.2 }, push ? 4.1 : 2.6);
+  add(intro, 'from', '.ph-next', { y: 40, opacity: 0, duration: 1.4 }, 1.6);
+  /* The homepage sanctuary: the wall comes out of the dark, the glass takes the light from the
+     cross outward, the shafts reach into the nave, then the parishes' candles are lit one by one. */
+  add(intro, 'fromTo', '.sn-wall', { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 2.6, ease: 'power2.out' }, 0);
+  add(intro, 'fromTo', '.sn-arcade', { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6);
+  add(intro, 'fromTo', '.sn-haze', { opacity: 0 }, { opacity: 0.5, duration: 4, ease: 'sine.inOut' }, 1.6);
+  add(intro, 'from', '.sn-inscription', { opacity: 0, duration: 2 }, 1.4);
+  add(intro, 'from', '.sn-stage', { yPercent: 4, duration: 3, ease: 'power3.out' }, 0);
+  add(intro, 'fromTo', '.sn-dark', { opacity: 0.88 }, { opacity: 0, duration: 2, stagger: 0.35, ease: 'sine.inOut' }, 0.35);
+  add(intro, 'fromTo', '.sn-bloom, .sn-spill', { opacity: 0 }, { opacity: 1, duration: 2.4, ease: 'sine.inOut' }, 0.8);
+  add(intro, 'fromTo', '.sn-beams', { opacity: 0 }, { opacity: 1, duration: 2.8, ease: 'sine.inOut' }, 1.2);
+  add(intro, 'from', '.sn-lamp', { yPercent: -30, opacity: 0, duration: 2.2, ease: 'power3.out' }, 0.5);
+  const candles = [...hero.querySelectorAll('.sn-candle.is-parish')];
+  if (!introPlayed) candles.forEach((el, i) => { el.classList.remove('is-lit'); intro.call(() => el.classList.add('is-lit'), null, 1.9 + i * 0.22); });
+  introPlayedBefore = introPlayed;
+  if (introPlayed) intro.progress(1);
+  introPlayed = true;
+
+  // Scrolling out of the hero: night turns to dawn while the layers part.
+  const day = gsap.timeline({
+    defaults: { ease: 'none' },
+    scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: 0.8, onUpdate: self => { if (self.progress > 0.02) askDawn(); } }
+  });
+  add(day, 'to', '.vl-sky', { yPercent: 16 }, 0);
+  add(day, 'to', '.vl-far', { yPercent: 10 }, 0);
+  add(day, 'to', '.vl-near', { yPercent: 3, scale: 1.06, transformOrigin: '50% 100%' }, 0);
+  add(day, 'to', '.vl-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
+  add(day, 'to', '.vl-glow, .shooting-star', { opacity: 0 }, 0);
+  add(day, 'to', '.vl-lights', { opacity: 0.2 }, 0.1);
+  add(day, 'to', '.vl-embers', { opacity: 0 }, 0);
+  add(day, 'to', '.ph-photo img', { yPercent: 12, scale: 1.1 }, 0);
+  add(day, 'to', '.sub-art', { yPercent: 18 }, 0);
+  add(day, 'to', '.ph-next', { yPercent: -40, opacity: 0, ease: 'power1.in' }, 0);
+  add(day, 'to', '.hero-inner, .sub-inner', { yPercent: -18, opacity: 0, ease: 'power1.in' }, 0);
+  // the sanctuary: the window rises past, its glass warms as the morning comes
+  add(day, 'to', '.sn-stage', { yPercent: -10 }, 0);
+  add(day, 'to', '.sn-wall', { yPercent: 6 }, 0);
+  add(day, 'to', '.sn-arcade', { yPercent: 3 }, 0);
+  add(day, 'to', '.sn-lamp', { yPercent: -14 }, 0);
+  add(day, 'to', '.sn-dawn', { opacity: 1, ease: 'sine.inOut' }, 0.05);
+  add(day, 'to', '.sn-motes', { opacity: 0.3 }, 0.2);
+  return () => { intro.kill(); hero.querySelectorAll('.sn-candle.is-parish').forEach(el => el.classList.add('is-lit')); };
+}
+
+/* Warm sparks rise slowly from the villages, flicker and fade: the valley breathing at night.
+   A canvas inside the valley art; it sleeps while the hero is out of view or the tab is hidden. */
+function fireflies(hero) {
+  const art = hero.querySelector('.hero-art');
+  if (!art || !hero.querySelector('[data-valley]')) return null;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'vl-embers';
+  canvas.setAttribute('aria-hidden', 'true');
+  art.appendChild(canvas);
+  const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1), rtl = document.documentElement.dir === 'rtl';
+  const sprite = document.createElement('canvas');
+  sprite.width = sprite.height = 32;
+  const s = sprite.getContext('2d'), g = s.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(0.25, 'rgba(255,205,120,.7)'); g.addColorStop(1, 'rgba(215,165,72,0)');
+  s.fillStyle = g; s.fillRect(0, 0, 32, 32);
+  let w = 0, h = 0, frame = 0, last = 0, running = false;
+  const sparks = [];
+  const size = () => { w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; };
+  const spawn = (fresh = false) => {
+    // mostly over the far side of the valley, where the villages glow
+    const side = Math.random() < 0.75 ? 0.42 + Math.random() * 0.56 : Math.random() * 0.42;
+    return { x: (rtl ? 1 - side : side) * w, y: h * (0.5 + Math.random() * 0.32), vy: -(5 + Math.random() * 12), sway: 6 + Math.random() * 14,
+      phase: Math.random() * 6.28, r: 3 + Math.random() * 5, life: 0, span: 7 + Math.random() * 9, age: fresh ? Math.random() * 6 : 0 };
+  };
+  const tick = now => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of sparks) {
+      p.age += dt;
+      const t = p.age / p.span;
+      if (t >= 1) { Object.assign(p, spawn()); continue; }
+      p.y += p.vy * dt;
+      const x = p.x + Math.sin(p.phase + p.age * 0.9) * p.sway;
+      const flicker = 0.65 + 0.35 * Math.sin(p.phase * 3 + p.age * 5.3);
+      ctx.globalAlpha = Math.sin(Math.PI * t) * flicker * 0.55;
+      ctx.drawImage(sprite, x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+    }
+    if (running) frame = requestAnimationFrame(tick);
+  };
+  const start = () => { if (running || document.hidden) return; running = true; last = 0; frame = requestAnimationFrame(tick); };
+  const stop = () => { running = false; cancelAnimationFrame(frame); };
+  size();
+  for (let i = 0; i < 38; i++) sparks.push(spawn(true));
+  const ro = new ResizeObserver(size); ro.observe(art);
+  const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
+  io.observe(hero);
+  const vis = () => (document.hidden ? stop() : start());
+  document.addEventListener('visibilitychange', vis);
+  return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
+}
+
+/* Dust in the light from the window: specks drift slowly through the shafts, catching the light
+   as they cross it. A canvas over the sanctuary; it sleeps while the hero is out of view. */
+function motes(hero) {
+  const art = hero.querySelector('.hero-art'), stage = hero.querySelector('[data-sn-stage]');
+  if (!art || !stage) return null;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'sn-motes';
+  canvas.setAttribute('aria-hidden', 'true');
+  art.appendChild(canvas);
+  const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1), rtl = document.documentElement.dir === 'rtl';
+  let w = 0, h = 0, frame = 0, last = 0, running = false, beams = [], wicks = [], sinceWicks = 0;
+  const motesList = [], smoke = [];
+  // a thin thread of smoke from each lit candle, and a breath of it when a visitor lights one
+  const findWicks = () => {
+    const a = art.getBoundingClientRect();
+    wicks = [...stage.querySelectorAll('.sn-candle.is-lit .sn-flame')].map(f => { const r = f.getBoundingClientRect(); return [r.left + r.width / 2 - a.left, r.top - a.top]; }).filter(([x, y]) => y > 0);
+  };
+  const puff = (x, y, n = 1, strong = false) => { for (let i = 0; i < n; i++) smoke.push({ x: x + (Math.random() - .5) * 2, y, vy: -(14 + Math.random() * 16), age: 0, span: 2.6 + Math.random() * 2.2, phase: Math.random() * 6.28, r: 1.2 + Math.random(), a: strong ? .2 : .07 + Math.random() * .05 }); };
+  const lit = e => { findWicks(); const a = art.getBoundingClientRect(), r = e.detail.getBoundingClientRect(); puff(r.left + r.width / 2 - a.left, r.top - a.top - 4, 7, true); };
+  art.addEventListener('sn-lit', lit);
+  // the shafts in canvas pixels: the same outlines the window draws (home-sanctuary.js)
+  const size = () => {
+    w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    const a = art.getBoundingClientRect(), r = stage.getBoundingClientRect();
+    const map = ([u, v]) => [rtl ? r.right - a.left - (u + 40) / 1080 * r.width : r.left - a.left + (u + 40) / 1080 * r.width, r.top - a.top + v / 1300 * r.height];
+    beams = (art._beams || []).map(b => ({ outline: b.outline.map(map), from: map(b.from), to: map(b.to) }));
+  };
+  const inside = (poly, x, y) => { let hit = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit; } return hit; };
+  const along = (b, x, y) => { const dx = b.to[0] - b.from[0], dy = b.to[1] - b.from[1]; return ((x - b.from[0]) * dx + (y - b.from[1]) * dy) / (dx * dx + dy * dy); };
+  const spawn = () => {
+    const b = beams[Math.floor(Math.random() * beams.length)];
+    if (!b) return { x: -9, y: -9, life: 0, span: 1, age: 0, r: 1, vx: 0, vy: 0, phase: 0, t: 1 };
+    const xs = b.outline.map(p => p[0]), ys = b.outline.map(p => p[1]);
+    for (let k = 0; k < 24; k++) {
+      const x = Math.min(...xs) + Math.random() * (Math.max(...xs) - Math.min(...xs)), y = Math.min(...ys) + Math.random() * (Math.max(...ys) - Math.min(...ys));
+      const t = along(b, x, y);
+      if (t > 0.08 && t < 0.8 && inside(b.outline, x, y) && y < h) return { x, y, t, r: 0.5 + Math.random() * 1.5, vx: (Math.random() - 0.5) * 7, vy: -2 + Math.random() * 7, phase: Math.random() * 6.28, age: 0, span: 6 + Math.random() * 8 };
+    }
+    return { x: -9, y: -9, t: 1, r: 1, vx: 0, vy: 0, phase: 0, age: 0, span: 1 };
+  };
+  const tick = now => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = '#FFF4DC';
+    for (const m of motesList) {
+      m.age += dt;
+      if (m.age >= m.span) { Object.assign(m, spawn()); continue; }
+      m.x += (m.vx + Math.sin(m.phase + m.age * 0.7) * 3) * dt; m.y += m.vy * dt;
+      const glint = 0.55 + 0.45 * Math.sin(m.phase * 2 + m.age * 2.4);
+      ctx.globalAlpha = Math.sin(Math.PI * m.age / m.span) * glint * (1 - m.t) * 0.75;
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 6.283); ctx.fill();
+    }
+    sinceWicks += dt;
+    if (sinceWicks > 1.2) { sinceWicks = 0; findWicks(); }
+    for (const [x, y] of wicks) if (Math.random() < dt * 2.2) puff(x, y - 4);
+    ctx.globalCompositeOperation = 'source-over';
+    for (let i = smoke.length - 1; i >= 0; i--) {
+      const p = smoke[i];
+      p.age += dt;
+      if (p.age >= p.span) { smoke.splice(i, 1); continue; }
+      const t = p.age / p.span;
+      p.y += p.vy * dt; p.vy *= 1 - dt * .25;
+      const x = p.x + Math.sin(p.phase + p.age * 1.7) * (2 + t * 14), r = p.r + t * 13;
+      const g = ctx.createRadialGradient(x, p.y, 0, x, p.y, r);
+      g.addColorStop(0, `rgba(226,214,200,${(p.a * Math.sin(Math.PI * t)).toFixed(3)})`); g.addColorStop(1, 'rgba(226,214,200,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, p.y, r, 0, 6.283); ctx.fill();
+    }
+    ctx.fillStyle = '#FFF4DC';
+    if (running) frame = requestAnimationFrame(tick);
+  };
+  const start = () => { if (running || document.hidden) return; running = true; last = 0; frame = requestAnimationFrame(tick); };
+  const stop = () => { running = false; cancelAnimationFrame(frame); };
+  size();
+  for (let i = 0; i < 90; i++) { const m = spawn(); m.age = Math.random() * m.span; motesList.push(m); }
+  const ro = new ResizeObserver(size); ro.observe(art);
+  const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
+  io.observe(hero);
+  const vis = () => (document.hidden ? stop() : start());
+  document.addEventListener('visibilitychange', vis);
+  return () => { stop(); ro.disconnect(); io.disconnect(); art.removeEventListener('sn-lit', lit); document.removeEventListener('visibilitychange', vis); canvas.remove(); };
+}
+
+/* The layers drift with the pointer at different depths. */
+function pointerDepth(gsap, hero) {
+  const layers = [['.vl-sky', 6], ['.vl-far', 13], ['.vl-mist-a', 20], ['.vl-near', 26], ['.vl-mist-b', 34], ['.sn-wall', 5], ['.sn-arcade', 9], ['.sn-stage', 12], ['.sn-lamp', 24]]
+    .map(([s, k]) => [hero.querySelector(s), k]).filter(([el]) => el)
+    .map(([el, k]) => ({ k, x: gsap.quickTo(el, 'x', { duration: 1.4, ease: 'power3.out' }), y: gsap.quickTo(el, 'y', { duration: 1.4, ease: 'power3.out' }) }));
+  const move = e => {
+    const r = hero.getBoundingClientRect();
+    if (e.clientY > r.bottom) return;
+    const dx = (e.clientX / innerWidth - 0.5) * 2, dy = ((e.clientY - r.top) / r.height - 0.5) * 2;
+    layers.forEach(l => { l.x(-dx * l.k); l.y(-dy * l.k * 0.5); });
+  };
+  addEventListener('pointermove', move, { passive: true });
+  return () => removeEventListener('pointermove', move);
+}
+
+/* Gold buttons lean toward the pointer, and spring back when it leaves. */
+function magnetic(gsap, root) {
+  const off = [];
+  root.querySelectorAll('.btn-gilt, .hero-field button, .ph-next').forEach(el => {
+    const x = gsap.quickTo(el, 'x', { duration: 0.6, ease: 'power3.out' }), y = gsap.quickTo(el, 'y', { duration: 0.6, ease: 'power3.out' });
+    const move = e => { const r = el.getBoundingClientRect(); x((e.clientX - r.left - r.width / 2) * 0.22); y((e.clientY - r.top - r.height / 2) * 0.3); };
+    const leave = () => { x(0); y(0); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave);
+    off.push(() => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); gsap.set(el, { clearProps: 'x,y' }); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* Arches and cards turn a few degrees toward the pointer; a sheen follows it. */
+function tilt(root) {
+  const off = [];
+  root.querySelectorAll('[data-tilt]').forEach(el => {
+    const move = e => {
+      const r = el.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+      el.style.setProperty('--ry', ((px - 0.5) * 9).toFixed(2) + 'deg');
+      el.style.setProperty('--rx', ((0.5 - py) * 7).toFixed(2) + 'deg');
+      el.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
+      el.style.setProperty('--gy', (py * 100).toFixed(1) + '%');
+    };
+    const leave = () => { el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave);
+    off.push(() => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* On the night sections a candle's glow follows the pointer. */
+function candle(root) {
+  const off = [];
+  root.querySelectorAll('.hero, .directory, .stories, .join, .ph-min, .ph-gallery').forEach(section => {
+    section.classList.add('has-candle');
+    const move = e => { const r = section.getBoundingClientRect(); section.style.setProperty('--mx', (e.clientX - r.left) + 'px'); section.style.setProperty('--my', (e.clientY - r.top) + 'px'); section.classList.add('is-lit'); };
+    const leave = () => section.classList.remove('is-lit');
+    section.addEventListener('pointermove', move, { passive: true }); section.addEventListener('pointerleave', leave);
+    off.push(() => { section.removeEventListener('pointermove', move); section.removeEventListener('pointerleave', leave); section.classList.remove('has-candle', 'is-lit'); });
+  });
+  return () => off.forEach(fn => fn());
+}
+
+/* The stories row can be dragged with a mouse, and keeps a little momentum. */
+function dragScroll(root) {
+  const track = root.querySelector('[data-story-track]');
+  if (!track) return null;
+  let down = null, moved = false, velocity = 0, last = 0, frame = 0;
+  const start = e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; cancelAnimationFrame(frame); down = { x: e.clientX, left: track.scrollLeft }; moved = false; last = e.clientX; velocity = 0; };
+  const move = e => {
+    if (!down) return;
+    const dx = e.clientX - down.x;
+    if (Math.abs(dx) > 4 && !moved) { moved = true; track.classList.add('is-dragging'); track.setPointerCapture?.(e.pointerId); }
+    if (moved) { track.scrollLeft = down.left - dx; velocity = e.clientX - last; last = e.clientX; }
+  };
+  const end = () => {
+    if (!down) return;
+    down = null;
+    // snapping waits until the glide has settled
+    const glide = () => { if (Math.abs(velocity) < 0.5) { track.classList.remove('is-dragging'); return; } track.scrollLeft -= velocity; velocity *= 0.92; frame = requestAnimationFrame(glide); };
+    if (moved) glide(); else track.classList.remove('is-dragging');
+  };
+  const click = e => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } };
+  track.addEventListener('pointerdown', start); addEventListener('pointermove', move); addEventListener('pointerup', end); track.addEventListener('click', click, true);
+  return () => { cancelAnimationFrame(frame); track.removeEventListener('pointerdown', start); removeEventListener('pointermove', move); removeEventListener('pointerup', end); track.removeEventListener('click', click, true); };
+}
+
+/* Reveals use IntersectionObserver rather than measured scroll positions, so content
+   that loads late above them can never leave a section hidden. */
+function whenSeen(elements, onEnter, rootMargin = '0px 0px -10% 0px') {
+  if (!elements.length) return null;
+  const io = new IntersectionObserver(entries => {
+    const seen = entries.filter(e => e.isIntersecting).map(e => e.target);
+    seen.forEach(el => io.unobserve(el));
+    if (seen.length) onEnter(seen);
+  }, { rootMargin });
+  elements.forEach(el => io.observe(el));
+  return () => io.disconnect();
+}
+
+/* Section headings rise word by word from behind a mask. */
+function headings(gsap, root) {
+  if (!window.SplitText) return null;
+  const list = [...root.querySelectorAll('section:not([data-hero]) h2')];
+  const splits = list.map(h => window.SplitText.create(h, { type: 'words', mask: 'words', aria: 'auto' }));
+  splits.forEach(s => gsap.set(s.words, { yPercent: 145 }));
+  const stop = whenSeen(list, els => els.forEach(h => {
+    const s = splits[list.indexOf(h)];
+    gsap.to(s.words, { yPercent: 0, duration: 1.3, ease: 'expo.out', stagger: 0.06 });
+  }));
+  return () => { stop?.(); splits.forEach(s => s.revert()); };
+}
+
+function reveals(gsap, root) {
+  const blocks = [...root.querySelectorAll('[data-reveal]')];
+  const items = [...root.querySelectorAll('[data-reveal-item]')].filter(el => !el.closest('.arcade'));
+  const arches = [...root.querySelectorAll('.arcade > li')];
+  if (blocks.length) gsap.set(blocks, { y: 32, opacity: 0 });
+  if (items.length) gsap.set(items, { y: 28, opacity: 0 });
+  if (arches.length) gsap.set(arches, { y: 60, scaleY: 0.86, opacity: 0, transformOrigin: '50% 100%' });
+  const a = whenSeen(blocks, els => { els.forEach(el => el.classList.add('is-in')); gsap.to(els, { y: 0, opacity: 1, duration: 1.1, ease: 'expo.out', stagger: 0.08, overwrite: true }); });
+  const b = whenSeen(items, els => gsap.to(els, { y: 0, opacity: 1, duration: 1, ease: 'expo.out', stagger: 0.07, overwrite: true }));
+  // the arcade is built arch by arch
+  const c = whenSeen(arches.slice(0, 1), () => gsap.to(arches, { y: 0, scaleY: 1, opacity: 1, duration: 1.3, ease: 'expo.out', stagger: 0.09, overwrite: true }));
+  return () => { a?.(); b?.(); c?.(); };
+}
+
+/* Numbers count up once they come into view, in the page's own digits. */
+function counters(gsap, root) {
+  const els = [...root.querySelectorAll('[data-count]')];
+  const fmt = new Intl.NumberFormat(document.documentElement.lang === 'ar' ? 'ar-LB' : 'en');
+  els.forEach(el => { el.textContent = fmt.format(0); });
+  const stop = whenSeen(els, seen => seen.forEach(el => {
+    const n = { v: 0 }, to = Number(el.dataset.count) || 0;
+    gsap.to(n, { v: to, delay: el.closest('[data-hero]') && !introPlayedBefore ? 1.3 : 0, duration: Math.min(2.4, 0.9 + to * 0.05), ease: 'power2.out', onUpdate: () => { el.textContent = fmt.format(Math.round(n.v)); } });
+  }), '0px');
+  return () => { stop?.(); els.forEach(el => { el.textContent = new Intl.NumberFormat(document.documentElement.lang === 'ar' ? 'ar-LB' : 'en').format(Number(el.dataset.count) || 0); }); };
+}
+
+/* The verse, set large like a heading, lights up word by word as it is read. Paragraphs are
+   never dimmed: they show at full strength from the start. */
+function litText(gsap, root) {
+  if (!window.SplitText) return null;
+  const blocks = [...root.querySelectorAll('[data-lit]')];
+  const splits = blocks.map(b => window.SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
+  // the words start legible, only a little dimmed, and are all lit before the middle of the screen
+  splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.62 }, {
+    opacity: 1, ease: 'none', stagger: 0.04,
+    scrollTrigger: { trigger: blocks[i], start: 'top 82%', end: 'bottom 64%', scrub: 0.6 }
+  }));
+  return () => splits.forEach(s => s.revert());
+}
+
+/* Images in arches drift slightly against the scroll. */
+function parallaxImages(gsap, root) {
+  root.querySelectorAll('[data-parallax]').forEach(img => {
+    gsap.fromTo(img, { yPercent: -Number(img.dataset.parallax || 8) }, {
+      yPercent: Number(img.dataset.parallax || 8), ease: 'none',
+      scrollTrigger: { trigger: img.parentElement, start: 'top bottom', end: 'bottom top', scrub: true }
+    });
+  });
+  const join = root.querySelector('.join-art');
+  if (join) {
+    const imgs = join.querySelectorAll('img');
+    imgs.forEach((img, i) => gsap.fromTo(img, { yPercent: [6, 10, 16][i] || 0 }, {
+      yPercent: 0, ease: 'none', scrollTrigger: { trigger: join.parentElement, start: 'top bottom', end: 'bottom bottom', scrub: true }
+    }));
+  }
+  return null;
+}
+
+function mapMotion(gsap, root, onMapDrawn) {
+  const figure = root.querySelector('[data-lebanon-map]');
+  if (!figure) return null;
+  const lines = figure.querySelectorAll('.map-contours path, .map-rivers path');
+  figure.classList.add('lights-off');
+  gsap.set(lines, { strokeDasharray: 1, strokeDashoffset: 1 });
+  const draw = gsap.timeline({ paused: true, onComplete: () => onMapDrawn?.() })
+    .to(figure.querySelectorAll('.map-contours path'), { strokeDashoffset: 0, duration: 2.6, ease: 'power2.inOut', stagger: 0.12 }, 0)
+    .to(figure.querySelectorAll('.map-rivers path'), { strokeDashoffset: 0, duration: 2, ease: 'power1.inOut' }, 0.8)
+    .add(() => figure.classList.remove('lights-off'), 1.4);
+  const stop = whenSeen([figure], () => draw.play(), '0px 0px -25% 0px');
+  return () => { stop?.(); figure.classList.remove('lights-off'); };
+}
