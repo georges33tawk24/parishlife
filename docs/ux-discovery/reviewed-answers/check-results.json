@@ -1,0 +1,267 @@
+{
+  "status": "PASS",
+  "counts": {
+    "questions": 436,
+    "sections": 32,
+    "scenarios": 30,
+    "workflows": 65,
+    "forms": 65,
+    "field_bindings": 878,
+    "transitions": 553,
+    "local_links_checked": 5880
+  },
+  "checks": [
+    {
+      "check": "Canonical question IDs/order/uniqueness",
+      "passed": true,
+      "detail": {
+        "canonical": 436,
+        "answers": 436,
+        "unique": 436
+      }
+    },
+    {
+      "check": "Original exact question wording",
+      "passed": true,
+      "detail": {
+        "question_texts": 436
+      }
+    },
+    {
+      "check": "All canonical sections",
+      "passed": true,
+      "detail": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S08",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26",
+        "S27",
+        "S28",
+        "S29",
+        "S30",
+        "S31",
+        "S32"
+      ]
+    },
+    {
+      "check": "Required per-question answer metadata",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "Question-specific acceptance coverage",
+      "passed": true,
+      "detail": 436
+    },
+    {
+      "check": "All scenario IDs/order/wording/mapping",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Fictional starting data",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Permitted actors / screens",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Messages and notices",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Failure / cancellation / recovery",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Expected end state and data/audit evidence",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Scenario component: Acceptance decision",
+      "passed": true,
+      "detail": 30
+    },
+    {
+      "check": "Workflow/form/notification section mapping",
+      "passed": true,
+      "detail": {
+        "workflows": 65,
+        "forms": 65,
+        "notice_groups": 65
+      }
+    },
+    {
+      "check": "All ten rows on every workflow card",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "Every defined transition in workflow and notification tables",
+      "passed": true,
+      "detail": {
+        "transitions": 553,
+        "missing": []
+      }
+    },
+    {
+      "check": "Explicit field-binding rows and unique IDs",
+      "passed": true,
+      "detail": {
+        "bindings": 878,
+        "missing": []
+      }
+    },
+    {
+      "check": "No empty form",
+      "passed": true,
+      "detail": [
+        "FM01",
+        "FM02",
+        "FM03",
+        "FM04",
+        "FM05",
+        "FM06",
+        "FM07",
+        "FM08",
+        "FM09",
+        "FM10",
+        "FM11",
+        "FM12",
+        "FM13",
+        "FM14",
+        "FM15",
+        "FM16",
+        "FM17",
+        "FM18",
+        "FM19",
+        "FM20",
+        "FM21",
+        "FM22",
+        "FM23",
+        "FM24",
+        "FM25",
+        "FM26",
+        "FM27",
+        "FM28",
+        "FM29",
+        "FM30",
+        "FM31",
+        "FM32",
+        "FM33",
+        "FM34",
+        "FM35",
+        "FM36",
+        "FM37",
+        "FM38",
+        "FM39",
+        "FM40",
+        "FM41",
+        "FM42",
+        "FM43",
+        "FM44",
+        "FM45",
+        "FM46",
+        "FM47",
+        "FM48",
+        "FM49",
+        "FM50",
+        "FM51",
+        "FM52",
+        "FM53",
+        "FM54",
+        "FM55",
+        "FM56",
+        "FM57",
+        "FM58",
+        "FM59",
+        "FM60",
+        "FM61",
+        "FM62",
+        "FM63",
+        "FM64",
+        "FM65"
+      ]
+    },
+    {
+      "check": "Local Markdown links and anchors",
+      "passed": true,
+      "detail": {
+        "checked": 5880,
+        "broken": []
+      }
+    },
+    {
+      "check": "Original questionnaire/owner files/drafts/prompt preserved",
+      "passed": true,
+      "detail": {
+        "hashed_originals": 7,
+        "changed": []
+      }
+    },
+    {
+      "check": "No unrelated implementation instructions in answers",
+      "passed": true,
+      "detail": "Unrelated source material excluded; report may identify its heading."
+    },
+    {
+      "check": "No unresolved old appendix references",
+      "passed": true,
+      "detail": "Old source references replaced with actual pack files."
+    },
+    {
+      "check": "No generic question acceptance fallback",
+      "passed": true,
+      "detail": "Every canonical question has authored observable criterion."
+    },
+    {
+      "check": "No obsolete ordinary 12-character recommendation",
+      "passed": true,
+      "detail": "Reviewed 16–200 proposal used; prior source remains preserved."
+    },
+    {
+      "check": "Combined-home owner direction retained",
+      "passed": true,
+      "detail": "Explicit source direction and effective prior-instruction recording preserved."
+    },
+    {
+      "check": "No TODO/TBD answer placeholders",
+      "passed": true,
+      "detail": "Missing real facts are explicit U inputs, not unexplained placeholders."
+    }
+  ],
+  "errors": [],
+  "external_references": [
+    "https://pages.nist.gov/800-63-4/sp800-63b.html",
+    "https://www.w3.org/TR/WCAG22/"
+  ],
+  "scope": "Documentation integrity and stated cross-reference invariants only; not semantic proof, runtime validation, jurisdiction policy approval or user testing."
+}
