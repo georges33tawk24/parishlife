@@ -218,6 +218,9 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
    kinds of request sit two to a row so their descriptions keep room */
 [dir=rtl] .rq-field :is(input,textarea){font-family:var(--arabic)}
 @media(min-width:700px){html[data-text] .rq-kinds{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* the request form's round choices and its checkbox, large enough to see and to hit */
+.rq-opt input{width:22px;height:22px;flex:none}
+.rq-check input{width:26px;height:26px}
 /* a written label above every search field, so nothing is lost while typing */
 .field-cap{display:block;margin:0 0 8px;font:600 calc(17px * var(--fs,1))/1.35 var(--sans);color:var(--ink)}
 [dir=rtl] .field-cap{font-family:var(--arabic)}
