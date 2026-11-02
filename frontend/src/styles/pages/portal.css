@@ -1,0 +1,10 @@
+/* The members portal's styles, in the order the cascade expects (see public.css). */
+@import '../parishlife.css';
+@import '../app.css';
+@import '../cms-design.css';
+@import '../collection-ui.css';
+@import '../account.css';
+@import '../insights.css';
+@import '../sanctuary.css';
+@import '../auth.css';
+@import '../reading.css';

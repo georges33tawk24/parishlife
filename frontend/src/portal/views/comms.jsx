@@ -1,7 +1,5 @@
-import { joinNodes } from "../ui/html.js";
+import { joinNodes, nodesOr, paint } from "../ui/html.js";
 import { Select } from "../ui/components.jsx";
-/* USED: Avatar, C, Empty, Icon, PageHead, Paged, Panel, Pill, Status, TabBar, Table, Who | HTML: nodesOr */
-import { nodesOr, paint } from "../ui/html.js";
 /* Modules 11, 13, 14 — communication centre, notices & bulletin, music, portal. */
 import { t, isAr, num, fmtDate } from "../../lib/i18n.js";
 import { is, S, bus } from "../model/store.js";

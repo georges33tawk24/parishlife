@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Avatar, C, Empty, Icon, PageHead, Paged, Panel, Pill, Stat, Status, TabBar, Table, Who | HTML: css, nodesOr, htmlAttrs */
 import { css, nodesOr, htmlAttrs, paint, markup } from "../ui/html.js";
 import { CalendarView } from "../ui/collection.jsx";
 /* Modules 3, 4, 6, 8, 9, 10 — groups, calendar, services, volunteers,

@@ -1,7 +1,6 @@
 /* The product page's entry: its styles and the page, in the language remembered on this device. */
 import { createRoot } from 'react-dom/client';
-import '../styles/parishlife.css';
-import '../styles/landing.css';
+import '../styles/pages/landing.css';
 import { Landing } from './Landing.jsx';
 
 let lang = 'en';

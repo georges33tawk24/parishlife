@@ -1,6 +1,5 @@
 import { Select } from "../ui/components.jsx";
 import { paint, markup } from "../ui/html.js";
-/* USED: C, Empty, Icon, PageHead, Panel, Pill, Stat, Status, TabBar, Table, Who | HTML:  */
 /* Module 7 — sacrament requests, preparation, register entries and certificates. */
 import { t, isAr, fmtDate, fmtDateIn, num } from "../../lib/i18n.js";
 import { is, bus, S, save } from "../model/store.js";

@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Icon, Paged, Pill | HTML: htmlAttrs */
 import { htmlAttrs, paint } from "../ui/html.js";
 /* Member portal: ask the parish for a sacrament, a certificate, a hall or room, or anything else;
    follow it step by step, and withdraw it while it waits. Requests reach the parish office's

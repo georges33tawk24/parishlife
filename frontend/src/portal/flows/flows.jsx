@@ -1,6 +1,5 @@
 import { Select } from "../ui/components.jsx";
 import { paint, markup } from "../ui/html.js";
-/* USED: Avatar, C, Icon, Status, Who | HTML:  */
 /* Real flows behind every button. Each one opens a designed surface, and on
    confirm changes the in-memory parish, re-renders and says what happened.
    Reversible changes carry Undo, as sheet 04 asks. */

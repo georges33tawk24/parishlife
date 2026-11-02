@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: C, Icon, Pill, Who | HTML: css */
 import { css, paint } from "../ui/html.js";
 /* Online requests: what parishioners send from the member portal — a sacrament, a certificate,
    a hall or room, or anything else. The parish office or the priest reviews each one here;

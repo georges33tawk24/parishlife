@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: C, Pill | HTML:  */
 /* Registration facts remain independent: a seat, applicable consent, transport, and actual payments. */
 import * as D from "../model/data.js";
 import { t, isAr, fmtDate } from "../../lib/i18n.js";

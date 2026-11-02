@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Amount, Avatar, C, Empty, Icon, PageHead, Panel, Pill, Stat, Status, TabBar, Table, Who | HTML: css */
 import { css } from "../ui/html.js";
 /* Module 12 — giving, funds, expenses, receipts, campaigns, reconciliation. */
 import { t, isAr, num, usd, lbp, fmtDate } from "../../lib/i18n.js";

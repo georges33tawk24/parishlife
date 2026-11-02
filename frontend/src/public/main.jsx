@@ -1,14 +1,6 @@
 /* The public site's entry: its styles, the analytics of what visitors do, the offline copy, and the app. */
 import { createRoot } from 'react-dom/client';
-import '../styles/public.css';
-import '../styles/collection-ui.css';
-import '../styles/public-features.css';
-import '../styles/site.css';
-import '../styles/home.css';
-import '../styles/sanctuary.css';
-import '../styles/parish.css';
-import '../styles/church.css';
-import '../styles/reading.css';
+import '../styles/pages/public.css';
 import { watchActions } from '../lib/beacon.js';
 import { PublicApp, startingLanguage, setDocumentLanguage } from './App.jsx';
 import { DEFAULT_PHOTOS } from './site.jsx';

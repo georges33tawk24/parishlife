@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: C | HTML: nodesOr */
 import { nodesOr, paint } from "../ui/html.js";
 /* Printed schedules: "Print my schedule" and the priests' Mass schedule.
    Both are chosen in a dialog with a live count, laid out as a proper A4 sheet, and printed from a

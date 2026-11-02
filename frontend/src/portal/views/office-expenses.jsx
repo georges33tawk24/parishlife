@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: C, Empty, Icon, PageHead, Pill, Table | HTML:  */
 import { t, isAr, fmtDate } from "../../lib/i18n.js";
 import { S, is, bus } from "../model/store.js";
 import { OFFICE_LEDGER, PARISH } from "../model/data.js";

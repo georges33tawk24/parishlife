@@ -1,4 +1,3 @@
-/* USED: C, Empty, Icon, PageHead, Paged, Pill, SearchField, Stat, Status, TabBar, Table, Who | HTML: css */
 import { css, paint } from "../ui/html.js";
 /* Module 5 — facilities, equipment, reservations, maintenance, issues, rentals. */
 import { t, isAr, num, usd, fmtDate, fmtLong, month, dayShort } from "../../lib/i18n.js";

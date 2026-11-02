@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: C, Icon | HTML: htmlAttrs, nodesOr, css */
 import { htmlAttrs, nodesOr, css, paint } from "../ui/html.js";
 /* Create, edit and delete for every kind of record, from one registry.
    Each entry says where the records live in data.js, which fields the form

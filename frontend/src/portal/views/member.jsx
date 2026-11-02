@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Paged | HTML: nodesOr */
 import { nodesOr } from "../ui/html.js";
 import { CalendarView } from "../ui/collection.jsx";
 /* A member sees a server-built projection, never the parish administration state. */

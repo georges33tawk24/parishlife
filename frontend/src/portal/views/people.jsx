@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Avatar, C, Empty, Icon, PageHead, Paged, Panel, Pill, SearchField, Stat, Status, TabBar, Table, Who | HTML: css, joinNodes, nodesOr */
 import { css, joinNodes, nodesOr, paint } from "../ui/html.js";
 /* Module 2 — people, households, duplicates, import and controlled archival. */
 import { t, isAr, num, fmtDate, usd, matches } from "../../lib/i18n.js";
@@ -308,7 +307,7 @@ export function people(tab = '') {
       }}><button className="btn-icon dense" data-act="page:prev" aria-label={t('Previous page', 'الصفحة السابقة')} disabled={!!(S.ui.peoplePage === 0)}><Icon name='chevL' size={15} /></button>{" "}<span className="mono t-caption" style={{
           minWidth: "44px",
           textAlign: "center"
-        }}>{S.ui.peoplePage + 1} / {pages}</span>{" "}<button className="btn-icon dense" data-act="page:next" aria-label={t('Next page', 'الصفحة التالية')} disabled={!!(S.ui.peoplePage >= pages - 1)}><Icon name='chevR' size={15} /></button></span></>} />{" "}<div id="bulkhost" /></>;
+        }}>{S.ui.peoplePage + 1} / {pages}</span>{" "}<button className="btn-icon dense" data-act="page:next" aria-label={t('Next page', 'الصفحة التالية')} disabled={!!(S.ui.peoplePage >= pages - 1)}><Icon name='chevR' size={15} /></button></span></>} onBulk={n => paint(document.getElementById('bulkhost'), n ? <C.BulkBar n={n} /> : null)} />{" "}<div id="bulkhost" /></>;
 }
 
 /* The row menu from sheet 03: edit, find duplicates, certificate with a

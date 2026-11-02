@@ -1,4 +1,3 @@
-/* USED: Amount, C, Empty, Icon, PageHead, Paged, Panel, Pill, SectionH, Stat, Status, Who | HTML: css, nodesOr */
 import { css, nodesOr } from "../ui/html.js";
 /* Dashboard — one per role. The priest lands on what needs a signature, the
    treasurer on what is open in the safe, the volunteer on the door. */

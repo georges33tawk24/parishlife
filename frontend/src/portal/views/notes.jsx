@@ -1,5 +1,4 @@
 import { Select } from "../ui/components.jsx";
-/* USED: Empty, Icon, PageHead, Panel, Pill, Table | HTML:  */
 /* Clergy-only pastoral notes and follow-up tasks share one parish-scoped collection. */
 import { t, isAr, fmtDate } from "../../lib/i18n.js";
 import { S, is, bus } from "../model/store.js";
