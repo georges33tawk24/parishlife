@@ -20,9 +20,12 @@
   <link rel="preload" href="/assets/fonts/source-sans-3-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Easier reading (src/reading/EasyReading.jsx) and the language, applied before the first frame. -->
   <script>(() => { const r = document.documentElement; try { const s = localStorage.getItem('pl-text'); if (s === '2' || s === '3') r.dataset.text = s; if (localStorage.getItem('pl-simple') === '1') r.dataset.simple = ''; const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
-  <script type="module" crossorigin src="/assets/app/public-D3--9SrQ.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/app/index-D_o_LyxF.js">
-  <link rel="stylesheet" crossorigin href="/assets/app/public-CSqJYZYo.css">
+  <script type="module" crossorigin src="/assets/app/public-BHvDtA5z.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/app/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/assets/app/react-B2uBGhTx.js">
+  <link rel="modulepreload" crossorigin href="/assets/app/site-defaults-DxkUfGlb.js">
+  <link rel="stylesheet" crossorigin href="/assets/app/site-defaults-pqAlioiW.css">
+  <link rel="stylesheet" crossorigin href="/assets/app/public-D2nlDlT7.css">
 </head>
 <body>
   <div class="page-loader" aria-hidden="true"><div class="loader-mark"><svg viewBox="0 0 28 34" fill="none" focusable="false"><path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="#E6DED0" stroke-width="1.4"/><path d="M1 32.5h26" stroke="#E6DED0" stroke-width="1.4"/><rect x="12.7" y="21.5" width="2.6" height="11" rx=".6" fill="#E9D3A0"/><path class="loader-flame" d="M14 12.6c1.6 2.3 2.4 3.9 2.4 5.3a2.4 2.4 0 0 1-4.8 0c0-1.4.8-3 2.4-5.3Z" fill="#F1C77A"/></svg><span>ParishLife</span><i></i></div></div>

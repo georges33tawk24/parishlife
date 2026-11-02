@@ -12,7 +12,7 @@ self.addEventListener('activate', event => {
 });
 
 const kept = url => url.pathname === '/' || url.pathname === '/public.html' || url.pathname === '/site.webmanifest'
-  || (url.pathname.startsWith('/assets/') && !url.pathname.startsWith('/assets/views/'))
+  || (url.pathname.startsWith('/assets/') && !url.pathname.startsWith('/assets/app/portal-'))
   || (url.pathname.startsWith('/api/public/') && !url.pathname.startsWith('/api/public/track/') && !url.pathname.startsWith('/api/public/guest-files/') && !url.pathname.startsWith('/api/public/verify/'));
 
 self.addEventListener('fetch', event => {

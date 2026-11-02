@@ -26,7 +26,9 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      input: { index: here('index.html'), public: here('public.html'), landing: here('landing.html') }
+      input: { portal: here('index.html'), public: here('public.html'), landing: here('landing.html') },
+      /* React itself is shared by the three pages, in a file of its own */
+      output: { manualChunks: id => /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) ? 'react' : undefined }
     }
   },
   /* `npm run dev` beside server.py: the API, the images and the fonts come from it. */

@@ -1,6 +1,6 @@
 # ParishLife
 
-ParishLife is a bilingual parish administration application served by a small Python 3.11+ HTTP server. The browser uses ES modules without a build step. SQLite is the authoritative store; the browser holds only the current view model. Start the application with `server.py`, not the older static `.claude/serve.py` script.
+ParishLife is a bilingual parish administration application served by a small Python 3.11+ HTTP server. The browser side is a React application in `frontend/`, built with Vite into the pages the server already serves (`index.html`, `public.html`, `landing.html` and `assets/app/`); the built files are committed, so running the site needs no build. SQLite is the authoritative store; the browser holds only the current view model. Start the application with `server.py`, not the older static `.claude/serve.py` script.
 
 ## Start locally
 
@@ -20,6 +20,23 @@ Leaders can save group messaging automation and rule configurations. They are re
 
 The first start creates `var/parishlife.sqlite3` from `backend/seed.json`. Saint Elias contains sample data; the other sample parishes start with independent empty records. The `var/` directory is ignored by Git. Back up the database file with the server stopped or with SQLite's backup facility. The browser's Data snapshot export is a review artifact, not a database restore path.
 
+## Front end (React)
+
+The front end lives in `frontend/` (React 19, Vite 7). After changing anything under `frontend/src`, rebuild:
+
+```powershell
+cd frontend
+npm install        # once
+npm run build      # writes index.html, public.html, landing.html and assets/app/ at the repository root
+```
+
+`npm run build` first clears `assets/app/`, so old hashed files never linger; commit the rebuilt files with the source. For live editing, run `server.py 4399` and, in another terminal, `npm run dev` in `frontend/`: Vite serves the pages on port 5173 and passes `/api`, images and fonts through to the Python server.
+
+- `frontend/src/public/`: the public site (homepage, parish pages, calendars, requests, tracking, checks).
+- `frontend/src/landing/`: the product page.
+- `frontend/src/portal/`: the members portal and parish office. `shell/` holds sign-in (`Auth.jsx`), the frame and router (`Portal.jsx`) and the route table (`routes.jsx`); `views/` the screens; `flows/` the dialogs and record forms shared between screens; `ui/` the design-system components (`ui.jsx`, `components.jsx`, `icons.jsx`, the calendar, signatures, charts); `model/` the session, the parish view model and its saving; `actions.jsx` the verbs behind every `data-act` control.
+- `frontend/src/lib/`: language, liturgical calendar, search, theme and other helpers both sides share; `frontend/src/styles/`: the stylesheets.
+
 ## Cloudflare
 
 The same application also runs on Cloudflare Workers with a Cloudflare D1 database, without `server.py`; see [cloudflare/README.md](cloudflare/README.md).
@@ -29,17 +46,17 @@ The same application also runs on Cloudflare Workers with a Cloudflare D1 databa
 - `server.py`: same-origin HTTP API, password-authenticated sessions, CSRF token, parish assignment checks, collection write permissions, SQLite schema, migrations, register workflow, and audit trail.
 - `backend/seed.json`: initial sample state.
 - `backend/workspace.py`, `workspace-schema.json`, `account_services.py`, `profile_services.py`, `ministry.py`, `guest_links.py` and `guest_delivery.py`: additive account, authority, membership, profile review and guest request services. Matching Worker modules live under `cloudflare/src/`.
-- `assets/collection-ui.js`, `assets/theme.js`, `assets/auth.js`: shared calendar/pagination controls, personal appearance and account entry screens.
-- `assets/api.js`: authenticated session and parish API client.
-- `assets/persist.js`: hydrates the browser view model from SQLite and saves changed collections with an optimistic revision check.
-- `assets/data.js`: shape and initial values of the frontend view model.
-- `assets/app.js`, `assets/store.js`: shell, router, signed-in role, parish selection, and navigation.
-- `assets/views/`: screens. `assets/views/people.js` covers people and households; `assets/views/oversight.js` is the separate bishop view; `assets/views/records.js` covers requests, preparation, register entries, certificates, and anniversaries; `assets/views/notes.js` covers private pastoral notes and tasks; `assets/views/parish.js` covers calendar, Services & Activities, groups, registration, and check-in.
-- `assets/planning.js`: selects and copies service plans and templates without sharing their order-of-service arrays.
-- `assets/print.js`: prints a sheet from a hidden frame (no new tab), saves files, and turns the certificate drawing into a PNG.
-- `assets/schedules.js`: the "Print my week" sheet and the clergy Mass schedule.
-- `assets/crud.js`, `assets/flows.js`, `assets/actions.js`: shared record forms and user actions.
-- `assets/parishlife.css`, `assets/app.css`, `assets/components.js`, `assets/ui.js`: design system and controls.
+- `frontend/src/portal/ui/collection.jsx`, `frontend/src/lib/theme.js`, `frontend/src/portal/shell/Auth.jsx`: the shared calendar, personal appearance and account entry screens; lists page themselves through `Paged` and `Table` in `ui/ui.jsx`.
+- `frontend/src/portal/model/api.js`: authenticated session and parish API client.
+- `frontend/src/portal/model/persist.js`: hydrates the browser view model from SQLite and saves changed collections with an optimistic revision check.
+- `frontend/src/portal/model/data.js`: shape and initial values of the frontend view model.
+- `frontend/src/portal/shell/Portal.jsx`, `shell/routes.jsx`, `model/store.js`: shell, router, signed-in role, parish selection, and navigation.
+- `frontend/src/portal/views/`: screens. `people.jsx` covers people and households; `oversight.jsx` is the separate bishop view; `records.jsx` covers requests, preparation, register entries, certificates, and anniversaries; `notes.jsx` covers private pastoral notes and tasks; `parish.jsx` covers calendar, Services & Activities, groups, registration, and check-in.
+- `frontend/src/portal/model/planning.js`: selects and copies service plans and templates without sharing their order-of-service arrays.
+- `frontend/src/portal/flows/print.js`: prints a sheet from a hidden frame (no new tab), saves files, and turns the certificate drawing into a PNG.
+- `frontend/src/portal/flows/schedules.jsx`: the "Print my week" sheet and the clergy Mass schedule.
+- `frontend/src/portal/flows/crud.jsx`, `flows/flows.jsx`, `actions.jsx`: shared record forms and user actions.
+- `frontend/src/styles/parishlife.css`, `app.css`, `frontend/src/portal/ui/components.jsx`, `ui/ui.jsx`: design system and controls.
 
 The API resolves authority from stored assignments and scoped grants, never a role submitted by the browser. Bishops and diocesan administrators are limited to their diocese; parish administrators are limited to their parish. Clergy appointments may span several parishes, each with a separate person link. Only bishops change clergy titles. A bishop or super administrator can explicitly delegate clergy appointments to a diocesan administrator. Private pastoral notes are author-only unless their author shares them with the current parish priests; administrators do not inherit access. Finance administration is available to Super Admins, bishops, Archdiocese Admins, Parish Admins and priests; treasurers retain their existing access. Finance viewing can also be delegated without editing or certificate-signing authority. Register approval and signature actions remain with priests.
 
@@ -53,7 +70,7 @@ People belong to a parish and may be members of one household. New households re
 
 A family begins a sacrament by asking the parish office to enter a request. The secretary may review it, while the priest can accept or decline it directly without waiting for that review. Accepted requests move to Preparation, where the office records the date and checks the requirements. Only completed preparation can move to the scheduled celebration. After the celebration, the office submits the entry for priest review; priest approval assigns its official register number. The request reference and full history remain linked to the same record. Requests is the searchable action queue and completed request history. The Sacraments page has two tabs, Preparation and Anniversaries; there is no separate register list — an approved entry is reached from Requests or from the person's Sacraments tab, and "Export register (CSV)" downloads every approved entry. Certificate requests can be linked to a planned sacrament and wait for its official entry, or go directly to clergy review when one already exists. Certificate issuance is a separate clergy action. The register-correction screens were removed from the interface (the server's correction actions and any stored corrections are kept). Cancelling preparation or declining a request keeps its history. Each record shows its progress as numbered steps with the single next step and who takes it; every finished step says the date and time it happened, the current one says since when it has waited, and the celebration step shows the planned date and time. The office sets a celebration time beside its date (in Preparation and in Edit details, half-hour steps); the parishioner sees it on their request page and in the "date set" notification. An approved entry or certificate appears as a small A4 preview: click it for full size in Arabic, English or bilingual, print it, or download it as a PDF (through the print dialog), a PNG or an SVG — all drawn from the same vector sheet.
 
-Parishioners can also ask online. In the member portal, **My requests** (`assets/views/member-requests.js`) lets a member request a baptism, First Communion, confirmation, marriage, funeral or certificate for themselves or someone in their household, book a hall, room or outdoor space (with the times already taken shown as they choose), or ask for anything else in their own words (a house blessing, a Mass intention, a visit to someone who is sick). For a baptism, the request can also be for a child who is not registered yet. Signed-in members retain their detailed request forms, while the public parish page also accepts guest requests without sign-in, and the parish website editor has a matching section for its introduction. Online requests wait in their own table (`member_requests`), outside the parish state, so a parishioner never edits the record the office works on. The office reviews them in Requests (`assets/views/online-requests.js`): accepting one creates the usual sacrament or certificate entry, which a secretary sends to the priest and a priest can accept for preparation directly. A child gets a new person record or is matched to an existing one, and can join the requester's household. A certificate is linked to the official entry when one exists. Declining requires a message to the parishioner. The parishioner follows each step on their request page, with a notification when the request is accepted, declined, dated, prepared, recorded, cancelled or ready to collect. They can withdraw a request until the office has handled it. The reasons the office gives for declining, rejecting or cancelling are shown to the parishioner, and those dialogs say so.
+Parishioners can also ask online. In the member portal, **My requests** (`frontend/src/portal/views/member-requests.jsx`) lets a member request a baptism, First Communion, confirmation, marriage, funeral or certificate for themselves or someone in their household, book a hall, room or outdoor space (with the times already taken shown as they choose), or ask for anything else in their own words (a house blessing, a Mass intention, a visit to someone who is sick). For a baptism, the request can also be for a child who is not registered yet. Signed-in members retain their detailed request forms, while the public parish page also accepts guest requests without sign-in, and the parish website editor has a matching section for its introduction. Online requests wait in their own table (`member_requests`), outside the parish state, so a parishioner never edits the record the office works on. The office reviews them in Requests (`frontend/src/portal/views/online-requests.jsx`): accepting one creates the usual sacrament or certificate entry, which a secretary sends to the priest and a priest can accept for preparation directly. A child gets a new person record or is matched to an existing one, and can join the requester's household. A certificate is linked to the official entry when one exists. Declining requires a message to the parishioner. The parishioner follows each step on their request page, with a notification when the request is accepted, declined, dated, prepared, recorded, cancelled or ready to collect. They can withdraw a request until the office has handled it. The reasons the office gives for declining, rejecting or cancelling are shown to the parishioner, and those dialogs say so.
 
 A booking that the office accepts becomes a reservation (`RES-…`) in Reservations: a secretary sends it to the priest, a priest confirms it directly, and confirming, refusing (with a reason the parishioner reads) or removing it notifies the parishioner. A general request is accepted and then marked as done, or declined with a message.
 

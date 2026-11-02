@@ -20,7 +20,7 @@ The light through the glass follows the hour in Beirut: rose and gold at dawn, s
 shafts by day, amber in the evening, moonlight at night (`?light=dawn`, `day`, `dusk` or `night`
 shows another hour).
 
-The sanctuary also keeps the season of the Church's year (`assets/liturgy.js`): in the Season of
+The sanctuary also keeps the season of the Church's year (`frontend/src/lib/liturgy.js`): in the Season of
 the Holy Cross the window throws a cross of light on the wall; at the Birth and the Epiphany a
 star shines over the window; in Lent and Passion Week a violet veil hangs across it; at the
 Resurrection the paschal candle stands at the end of the sill, bearing the Alpha, the Omega and
@@ -112,10 +112,10 @@ Checked against the common generated-page defaults, and changed:
 
 ## Motion
 
-GSAP 3.15 (ScrollTrigger and SplitText, vendored in `assets/vendor/gsap/`) and Lenis 1.3 smooth
-scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/home-motion.js`:
+GSAP 3.15 (ScrollTrigger and SplitText, the `gsap` package in `frontend/package.json`) and Lenis 1.3 smooth
+scrolling (the `lenis` package), all inside `gsap.matchMedia()` in `frontend/src/public/motion.js`:
 
-- **Homepage sanctuary** (`assets/home-sanctuary.js`, `assets/sanctuary.css`): the wall comes out
+- **Homepage sanctuary** (`frontend/src/public/Sanctuary.jsx`, `frontend/src/styles/sanctuary.css`): the wall comes out
   of the dark, the panes of glass take the light one group after another (the rose first), the shafts
   reach into the nave, the lamp settles on its chains, then the parishes' candles are lit one by one.
   Afterwards clouds pass behind the glass, the light behind it shifts, the shafts brighten and dim,
@@ -131,7 +131,7 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   drifts through the shafts (a seamless haze made on the visitor's device, masked to the shafts);
   each lit candle sends up a thread of smoke and lights the brass beneath it.
 - **Further down:** a gold rule with the cross draws under each section heading, and This week says
-  where the Maronite year stands (`assets/liturgy.js`: the seasons from the Sunday of the Consecration
+  where the Maronite year stands (`frontend/src/lib/liturgy.js`: the seasons from the Sunday of the Consecration
   of the Church through Great Lent, the Resurrection, Pentecost and the Holy Cross, reckoned from
   Gregorian Easter) and marks the great feasts on the ribbon; on a feast day the hero's kicker names
   it. Sundays carry the cross. The night sections are a chapel ceiling of small gold stars and rise
@@ -145,7 +145,7 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   depth of field). On the map each parish
   is a small flickering flame. The footer opens on a carved frieze of crosses, and the brand's light
   breathes like a flame.
-- **The small things** (`assets/church.css`, and `assets/auth.css` for the sign-in screen): the gilded
+- **The small things** (`frontend/src/styles/church.css`, and `frontend/src/styles/auth.css` for the sign-in screen): the gilded
   buttons are gold leaf over its bole (`assets/images/gilt.webp`, rendered by
   `docs/tools/render_gilt.py`: squares of leaf with their overlapping edges, burnish and wrinkles),
   burnished along the top with an engraved line inside the edge, and light runs across them on
@@ -154,7 +154,7 @@ scrolling (`assets/vendor/lenis/`), all inside `gsap.matchMedia()` in `assets/ho
   `cursor:var(--hand,pointer)`, so the portal, which does not set it, keeps the usual hand). Fields
   are warm parchment and turn gold when written in; the scrollbar is a gilt rod on parchment; text
   is selected in gold leaf, or candlelight on the night sections; checkboxes take the gilt ink.
-- **Easier reading** (`assets/reading.js`, `assets/reading.css`, on the public site and the sign-in
+- **Easier reading** (`frontend/src/reading/EasyReading.jsx`, `frontend/src/styles/reading.css`, on the public site and the sign-in
   screen): a header button with two A's ("Text size") opens a panel with three sizes, A, A+ and
   A++, and a Simple view switch; both are remembered on the device and applied in the page's head,
   so a page is drawn at the chosen size from its first frame. Every font size on these pages is
@@ -262,14 +262,14 @@ A parish's page (`public.html?parish=…`) speaks the homepage's language:
   and `sw.js` keeps what the public pages last showed readable without a connection (the network
   always comes first; the portal and private links are never kept). On a phone asking to save data,
   or one with little memory, the page drops smooth scrolling, the fireflies, image parallax and glass
-  blur (`lite` in `assets/home-motion.js`).
+  blur (`lite` in `frontend/src/public/motion.js`).
 
 ## Sign in and sign up
 
 The members portal opens beside the same church window as the public site (its light by the hour, the
 lamp, the incense, a few candles already lit and the rest for the visitor to light), next to a compact
-form on warm limestone, in the public site's type and colours (`assets/auth.css`, scoped to
-`.account-auth`; the scene comes from `assets/sanctuary.css`).
+form on warm limestone, in the public site's type and colours (`frontend/src/styles/auth.css`, scoped to
+`.account-auth`; the scene comes from `frontend/src/styles/sanctuary.css`).
 
 - **Sign in:** one field for an email, a phone number (typed as it is dialled in Lebanon) or a
   username, the password, "Forgot your password?" (the parish office resets it), and **Sign in with a
@@ -300,27 +300,27 @@ form on warm limestone, in the public site's type and colours (`assets/auth.css`
 
 | Part | Files |
 | --- | --- |
-| Page shell, header, footer | `public.html`, `assets/site.css` (fonts, tokens, chrome; shared by every public page) |
-| Homepage | `assets/home.js`, `assets/home.css`; wired in `assets/public.js` (`homeView`, `mountHome`) |
-| Sanctuary scene | `assets/home-sanctuary.js` (the window picture and a parish's initial over it, arcade, light, haze, lamp and candles, mosaic) and `assets/sanctuary.css`; rendered pictures in `assets/images/sanctuary/` made by `docs/tools/render_sanctuary.py`, `render_wall.py` and `render_candle.py`; used by the homepage, parish pages, their banners and the sign-in screen |
-| Church details | `assets/church.css` (loaded last on public pages: hero words over the scene, niches, stars, bell, initial, notices, wax seals, frieze, flames on the map, gilded buttons, pointer, fields), `assets/liturgy.js` (seasons and feasts) |
-| Valley (parish pages) | `assets/home-valley.js`; rendered layers in `assets/images/valley/` and village spots in `assets/data/valley.js`, made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
-| Map of Lebanon | `assets/home-map.js`, data in `assets/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
-| Motion | `assets/home-motion.js` (homepage and parish pages) |
-| Parish pages | `assets/parish.js`, `assets/parish.css`, calendar in `assets/public-calendar.js`; request sending and tracking in `assets/public-features.js` |
-| Sign in and sign up | `assets/auth.js`, `assets/auth.css`; passkeys in `assets/passkeys.js`, Turnstile in `assets/turnstile.js` |
-| Search | `assets/search.js` (homepage hero, directory and parish picker) |
+| Page shell, header, footer | `public.html`, `frontend/src/styles/site.css` (fonts, tokens, chrome; shared by every public page) |
+| Homepage | `frontend/src/public/Home.jsx`, `frontend/src/styles/home.css`; wired in `frontend/src/public/App.jsx` (`homeView`, `mountHome`) |
+| Sanctuary scene | `frontend/src/public/Sanctuary.jsx` (the window picture and a parish's initial over it, arcade, light, haze, lamp and candles, mosaic) and `frontend/src/styles/sanctuary.css`; rendered pictures in `assets/images/sanctuary/` made by `docs/tools/render_sanctuary.py`, `render_wall.py` and `render_candle.py`; used by the homepage, parish pages, their banners and the sign-in screen |
+| Church details | `frontend/src/styles/church.css` (loaded last on public pages: hero words over the scene, niches, stars, bell, initial, notices, wax seals, frieze, flames on the map, gilded buttons, pointer, fields), `frontend/src/lib/liturgy.js` (seasons and feasts) |
+| Valley | rendered layers in `assets/images/valley/` (drawn by the stylesheets), made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
+| Map of Lebanon | `frontend/src/public/LebanonMap.jsx`, data in `frontend/src/lib/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
+| Motion | `frontend/src/public/motion.js` (homepage and parish pages) |
+| Parish pages | `frontend/src/public/Parish.jsx`, `frontend/src/styles/parish.css`, calendar in `frontend/src/public/calendar.jsx`; request sending and tracking in `frontend/src/public/Features.jsx` |
+| Sign in and sign up | `frontend/src/portal/shell/Auth.jsx`, `frontend/src/styles/auth.css`; passkeys in `frontend/src/portal/model/passkeys.js`, Turnstile in `frontend/src/lib/turnstile.js` |
+| Search | `frontend/src/lib/search.js` (homepage hero, directory and parish picker) |
 | Public data, previews | `backend/public_site.py` and `cloudflare/src/public-site.js` (kept in parity) |
 | Sign-in protections, passkeys | `backend/sign_in.py` and `cloudflare/src/sign-in.js` (kept in parity), `backend/common-passwords.json` |
 | App and offline | `site.webmanifest`, `sw.js`, `assets/images/icons/` |
-| Built-in wording | `assets/site-defaults.js`, shared by the homepage and the editor |
-| Homepage editor | `assets/views/homepage-editor.js` |
+| Built-in wording | `frontend/src/lib/site-defaults.js`, shared by the homepage and the editor |
+| Homepage editor | `frontend/src/portal/views/homepage-editor.jsx` |
 | Homepage content API | `backend/site_content.py` and `cloudflare/src/site-content.js` (kept in parity), table `pl_site_content` in `backend/workspace-schema.json` |
 
 ### Insights and the parish CRM (Super Admin)
 
-Dashboard → **Insights** (`assets/views/insights.js`, charts in `assets/views/insight-charts.js`,
-styles in `assets/insights.css`; data from `backend/analytics.py` and `cloudflare/src/analytics.js`,
+Dashboard → **Insights** (`frontend/src/portal/views/insights.jsx`, charts in `frontend/src/portal/views/insight-charts.jsx`,
+styles in `frontend/src/styles/insights.css`; data from `backend/analytics.py` and `cloudflare/src/analytics.js`,
 kept in parity).
 
 - **Overview:** visits, page views, requests sent, new accounts, parishes followed, links shared and
@@ -356,7 +356,7 @@ kept in parity).
   for which parish, when, and whether the signature is valid and the document unchanged (the
   fingerprint is computed again from the record). A withdrawn signature says so.
 - Files: `backend/signatures.py` and `cloudflare/src/signatures.js` (kept in parity),
-  `assets/signing.js`, tables `pl_signers`, `pl_signatures` and `pl_letters`.
+  `frontend/src/portal/model/signing.js`, tables `pl_signers`, `pl_signatures` and `pl_letters`.
 
 ### Public data and link previews
 
@@ -408,7 +408,7 @@ close lights gather into a numbered cluster that zooms in when chosen.
 ### Rebuilding the map data
 
 ```
-python docs/tools/build_lebanon_map.py natural-earth-vector/geojson/ assets/data/lebanon-map.js assets/images/lebanon-relief.webp
+python docs/tools/build_lebanon_map.py natural-earth-vector/geojson/ frontend/src/lib/data/lebanon-map.js assets/images/lebanon-relief.webp
 ```
 
 It needs numpy, shapely and pillow, and a checkout of
@@ -481,8 +481,8 @@ python3 docs/tools/render_candle.py assets/images/sanctuary
 ### Assets and licences
 
 - Marcellus, Amiri and Source Sans 3: SIL Open Font License, notices in `assets/fonts/`.
-- GSAP 3.15.0: GreenSock Standard "No Charge" License, see `assets/vendor/gsap/README.md`.
-- Lenis 1.3.26: MIT License, `assets/vendor/lenis/LICENSE.txt`.
+- GSAP 3.15.0: GreenSock Standard "No Charge" License (the `gsap` npm package, `frontend/node_modules/gsap/README.md` once installed).
+- Lenis 1.3.26: MIT License (the `lenis` npm package).
 - The valley images, mist and `crest-dawn.webp` are generated by `docs/tools/render_valley.py`.
 - The sanctuary pictures in `assets/images/sanctuary/`, `gilt.webp` and `votives.webp` are generated
   by the tools above.
