@@ -137,7 +137,7 @@ button.times-mark:focus-visible{outline:2px solid var(--gilt);outline-offset:3px
 
 /* A parish without a photograph: its About arch is an icon, gold leaf laid in squares, a haloed
    initial in cinnabar, the raised border of the icon board and a red lamp burning before it */
-.ph-arch.is-night{background:radial-gradient(circle at 50% 36%,rgb(255 246 214 / .5),rgb(255 240 200 / 0) 48%),radial-gradient(ellipse 90% 70% at 50% 45%,rgb(80 44 8 / 0) 55%,rgb(80 44 8 / .38)),#C9973F url("images/gilt.webp") 0 0/240px 240px;box-shadow:inset 0 0 0 10px #5E1A16,inset 0 0 0 11px rgb(241 199 122 / .75),inset 0 0 0 16px rgb(94 26 22 / .18),0 40px 80px -40px rgb(60 30 10 / .6)}
+.ph-arch.is-night{background:radial-gradient(circle at 50% 36%,rgb(255 246 214 / .5),rgb(255 240 200 / 0) 48%),radial-gradient(ellipse 90% 70% at 50% 45%,rgb(80 44 8 / 0) 55%,rgb(80 44 8 / .38)),#C9973F url("/assets/images/gilt.webp") 0 0/240px 240px;box-shadow:inset 0 0 0 10px #5E1A16,inset 0 0 0 11px rgb(241 199 122 / .75),inset 0 0 0 16px rgb(94 26 22 / .18),0 40px 80px -40px rgb(60 30 10 / .6)}
 .ph-arch.is-night::after{inset:24px;border-color:rgb(110 26 22 / .5)}
 .ph-arch.is-night::before{content:"";position:absolute;left:50%;top:44%;width:62%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
   background:radial-gradient(circle,transparent 0 60%,rgb(120 70 15 / .55) 61% 62%,transparent 63% 69%,rgb(120 70 15 / .4) 70% 71%,transparent 72%),repeating-conic-gradient(rgb(255 244 200 / .32) 0 3deg,transparent 3deg 9deg);
@@ -239,9 +239,9 @@ button.lost-arch{border:0;padding:0 0 30px;cursor:var(--hand,pointer);font:inher
 /* ---------- the small things: gold leaf, the pointer, the fields, the scrollbar, the selection ---------- */
 /* gilded buttons: gold leaf over its bole (assets/images/gilt.webp, docs/tools/render_gilt.py), burnished
    along the top and shaded below, with a fine engraved line inside the edge; light runs across on hover */
-.btn-gilt,.hero-field button,.mobile-nav a:last-child,.chip[aria-pressed=true],.sign-in:hover{background:linear-gradient(180deg,rgb(255 247 222 / .5),rgb(255 247 222 / .06) 46%,rgb(96 60 12 / 0) 54%,rgb(96 60 12 / .24)),#D4A24B url("images/gilt.webp") 0 0/240px 240px;border-color:transparent;color:#1A1306;text-shadow:0 1px 0 rgb(255 238 196 / .5);
+.btn-gilt,.hero-field button,.mobile-nav a:last-child,.chip[aria-pressed=true],.sign-in:hover{background:linear-gradient(180deg,rgb(255 247 222 / .5),rgb(255 247 222 / .06) 46%,rgb(96 60 12 / 0) 54%,rgb(96 60 12 / .24)),#D4A24B url("/assets/images/gilt.webp") 0 0/240px 240px;border-color:transparent;color:#1A1306;text-shadow:0 1px 0 rgb(255 238 196 / .5);
   box-shadow:inset 0 1px 0 rgb(255 248 226 / .8),inset 0 -1.5px 0 rgb(96 60 12 / .42),inset 0 0 0 1px rgb(128 88 24 / .36),0 10px 26px -12px rgb(215 165 72 / .7)}
-.btn-gilt:hover,.hero-field button:hover,.mobile-nav a:last-child:hover{background:linear-gradient(180deg,rgb(255 250 232 / .68),rgb(255 247 222 / .18) 46%,rgb(96 60 12 / 0) 56%,rgb(96 60 12 / .16)),#DDAE55 url("images/gilt.webp") 0 0/240px 240px}
+.btn-gilt:hover,.hero-field button:hover,.mobile-nav a:last-child:hover{background:linear-gradient(180deg,rgb(255 250 232 / .68),rgb(255 247 222 / .18) 46%,rgb(96 60 12 / 0) 56%,rgb(96 60 12 / .16)),#DDAE55 url("/assets/images/gilt.webp") 0 0/240px 240px}
 .btn-gilt:active,.hero-field button:active{transform:translateY(0);box-shadow:inset 0 2px 7px rgb(96 60 12 / .38),inset 0 0 0 1px rgb(128 88 24 / .4)}
 .hero-field button{position:relative;overflow:hidden;isolation:isolate}
 .hero-field button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255 / .5) 50%,transparent 70%);transform:translateX(-120%);transition:transform .9s var(--ease-out)}

@@ -27,7 +27,7 @@
 .vl-lights{position:absolute;inset:0}
 .vl-embers{position:absolute;inset:0;pointer-events:none}
 .vl-mist{pointer-events:none;overflow:hidden;mix-blend-mode:screen}
-.vl-mist i{position:absolute;inset:0 auto 0 0;width:200%;background:url("images/valley/mist.webp") repeat-x 0 50%/50% 100%;animation:mist 110s linear infinite}
+.vl-mist i{position:absolute;inset:0 auto 0 0;width:200%;background:url("/assets/images/valley/mist.webp") repeat-x 0 50%/50% 100%;animation:mist 110s linear infinite}
 .vl-mist-a{top:34%;bottom:26%;opacity:.5}
 .vl-mist-b{top:48%;bottom:8%;opacity:.26}
 .vl-mist-b i{animation-duration:160s;animation-direction:reverse;background-size:50% 120%}

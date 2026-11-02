@@ -1,8 +1,8 @@
 /* ParishLife public design: shared rhythm inspired by Mahloole and the Angry Monkey family. */
-@font-face{font-family:"Noto Sans";src:url("fonts/NotoSans-Regular.woff2") format("woff2");font-style:normal;font-weight:400;font-display:swap}
-@font-face{font-family:"Noto Sans";src:url("fonts/NotoSans-Bold.woff2") format("woff2");font-style:normal;font-weight:600 900;font-display:swap}
-@font-face{font-family:"Noto Sans Arabic";src:url("fonts/NotoSansArabic-Regular.woff2") format("woff2");font-style:normal;font-weight:400;font-display:swap}
-@font-face{font-family:"Noto Sans Arabic";src:url("fonts/NotoSansArabic-Bold.woff2") format("woff2");font-style:normal;font-weight:600 900;font-display:swap}
+@font-face{font-family:"Noto Sans";src:url("/assets/fonts/NotoSans-Regular.woff2") format("woff2");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Noto Sans";src:url("/assets/fonts/NotoSans-Bold.woff2") format("woff2");font-style:normal;font-weight:600 900;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("/assets/fonts/NotoSansArabic-Regular.woff2") format("woff2");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("/assets/fonts/NotoSansArabic-Bold.woff2") format("woff2");font-style:normal;font-weight:600 900;font-display:swap}
 :root{--paper:#f7f7f2;--paper-rgb:247 247 242;--white:#fff;--forest:#233b32;--forest-rgb:35 59 50;--forest-hover:#365545;--deep-rgb:23 45 35;--icon:#5d755c;--sage-soft:#99ae94;--ink:#273d33;--muted:#64716a;--sage:#7e927f;--line:#dce1d8;--gold:#a99467;--soft:#eef1e9;--radius:12px;--header:91px;font-family:"Noto Sans","Noto Sans Arabic",sans-serif;color:var(--ink);background:var(--paper);font-synthesis:weight}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:120px}
@@ -88,7 +88,7 @@ svg{display:block}
 .card-bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;padding-top:18px;margin-top:auto;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
 .card-open{display:flex;gap:8px;align-items:center;color:var(--forest);font-weight:600}
 .card-open .icon{width:16px;height:16px}
-.fixed-story{background:linear-gradient(90deg,#172d23d9,#182a2160),url("images/church-light.jpg") center 58%/cover no-repeat fixed;min-height:490px;position:relative;color:white;display:flex;align-items:center}
+.fixed-story{background:linear-gradient(90deg,#172d23d9,#182a2160),url("/assets/images/church-light.jpg") center 58%/cover no-repeat fixed;min-height:490px;position:relative;color:white;display:flex;align-items:center}
 .fixed-story .site-wrap{padding-block:80px}
 .fixed-story .eyebrow{color:#e0e7d9}
 .fixed-story h2{font-size:clamp(40px,4.6vw,61px);margin-top:20px;line-height:1.13}
@@ -147,7 +147,7 @@ svg{display:block}
 .breadcrumbs{display:flex;gap:12px;align-items:center;padding-block:23px;font-size:11px;color:var(--muted)}
 .breadcrumbs .icon{width:12px;height:12px}
 .breadcrumbs a:hover{text-decoration:underline}
-.profile-hero{background:linear-gradient(90deg,rgb(var(--deep-rgb) / .91),rgb(var(--deep-rgb) / .44)),url("images/church-interior.jpg") center 55%/cover no-repeat fixed;padding-block:82px 95px;color:#fff}
+.profile-hero{background:linear-gradient(90deg,rgb(var(--deep-rgb) / .91),rgb(var(--deep-rgb) / .44)),url("/assets/images/church-interior.jpg") center 55%/cover no-repeat fixed;padding-block:82px 95px;color:#fff}
 .profile-hero h1{font-size:clamp(45px,5.5vw,75px);margin-block:17px 20px;max-width:900px}
 .profile-hero p{color:#edf0e4;font-size:15px;max-width:630px;line-height:1.85}
 .profile-nav{background:var(--paper);border-bottom:1px solid var(--line);position:sticky;top:var(--header);z-index:10}
@@ -185,7 +185,7 @@ a.contact-row:hover{text-decoration:underline}
 @keyframes arrive{from{opacity:.65;transform:translateY(12px)}to{opacity:1;transform:none}}
 [dir=rtl] h1,[dir=rtl] h2,[dir=rtl] h3,[dir=rtl] .eyebrow{letter-spacing:0}
 [dir=rtl] .icon-arrow,[dir=rtl] .icon-chevron{transform:scaleX(-1)}
-[dir=rtl] .fixed-story{background-image:linear-gradient(270deg,#172d23df,#182a2160),url("images/church-light.jpg")}
+[dir=rtl] .fixed-story{background-image:linear-gradient(270deg,#172d23df,#182a2160),url("/assets/images/church-light.jpg")}
 [dir=rtl] .brand small{letter-spacing:0;font-size:9px}
 [dir=rtl] .site-header .brand{direction:ltr}
 /* sacraments and certificates: each card starts a request in the member portal */
@@ -227,7 +227,7 @@ a.contact-row:hover{text-decoration:underline}
 
 /* Keep the decorative vertical caption outside the image in both writing directions. */
 .vertical-label{right:0;left:auto}
-[dir=rtl] .profile-hero{background-image:linear-gradient(270deg,rgb(var(--deep-rgb) / .91),rgb(var(--deep-rgb) / .44)),url("images/church-interior.jpg")}
+[dir=rtl] .profile-hero{background-image:linear-gradient(270deg,rgb(var(--deep-rgb) / .91),rgb(var(--deep-rgb) / .44)),url("/assets/images/church-interior.jpg")}
 .reveal{animation:none}
 .reveal.is-visible{animation:arrive .6s ease both}
 @media(prefers-reduced-motion:reduce){.reveal.is-visible{animation:none}}

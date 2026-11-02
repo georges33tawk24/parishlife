@@ -3,7 +3,15 @@
    scrolling turns the night into the dawn render while the layers part. Sections then
    arrive once, headings rise word by word, the About text lights up as it is read, and
    numbers count up. Everything lives inside gsap.matchMedia: with reduced motion, or if
-   a script fails to load, every element simply shows in its final state. */
+   a script fails to load, every element simply shows in its final state. In React, a page calls
+   animateHome on its root element from an effect, and stopHomeMotion when it goes. */
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { SplitText } from 'gsap/SplitText';
+import Lenis from 'lenis';
+import { BEAMS, beamOutline } from './sanctuary-geometry.js';
+
+gsap.registerPlugin(ScrollTrigger, SplitText);
 let mm = null, introPlayed = false, introPlayedBefore = false, lenis = null;
 /* Simple view (assets/reading.js) asks for the same stillness as the system's reduced motion. */
 const simple = () => document.documentElement.hasAttribute('data-simple');
@@ -29,9 +37,9 @@ export function scrollToTarget(el, offset = 72) {
   else scrollTo({ top: el.getBoundingClientRect().top + scrollY - offset, behavior: still() ? 'auto' : 'smooth' });
 }
 
-function smoothScroll(gsap, ScrollTrigger) {
-  if (lenis || !window.Lenis || still()) return;
-  lenis = new window.Lenis({ lerp: 0.09, smoothWheel: true, anchors: { offset: -72 } });
+function smoothScroll() {
+  if (lenis || still()) return;
+  lenis = new Lenis({ lerp: 0.09, smoothWheel: true, anchors: { offset: -72 } });
   lenis.on('scroll', ScrollTrigger.update);
   gsap.ticker.add(time => lenis?.raf(time * 1000));
   gsap.ticker.lagSmoothing(0);
@@ -40,13 +48,10 @@ function smoothScroll(gsap, ScrollTrigger) {
 
 export function animateHome(root, { onMapDrawn, onDawn } = {}) {
   stopHomeMotion();
-  const { gsap, ScrollTrigger, SplitText } = window;
-  if (!gsap || !ScrollTrigger) { onMapDrawn?.(); onDawn?.(); return; }
-  gsap.registerPlugin(ScrollTrigger, ...(SplitText ? [SplitText] : []));
   mm = gsap.matchMedia();
   mm.add({ motion: '(prefers-reduced-motion: no-preference)', calm: '(prefers-reduced-motion: reduce)', fine: '(pointer: fine)' }, context => {
     if (context.conditions.calm || simple()) { onMapDrawn?.(); return undefined; }
-    if (!lite) smoothScroll(gsap, ScrollTrigger);
+    if (!lite) smoothScroll();
     const hero = root.querySelector('[data-hero]');
     const stops = [
       hero && heroMotion(gsap, hero, onDawn),
@@ -93,11 +98,11 @@ function heroMotion(gsap, hero, onDawn) {
   add(intro, 'from', '.vl-near', { yPercent: 9, duration: 3 }, 0.2);
   add(intro, 'fromTo', '.vl-mist', { opacity: 0 }, { opacity: 1, duration: 3, ease: 'sine.inOut' }, 0.6);
   add(intro, 'fromTo', '.vl-glow', { opacity: 0 }, { opacity: 1, duration: 2.6, ease: 'sine.inOut' }, 1.0);
-  if (title && window.SplitText) {
+  if (title) {
     // Words only: Arabic letters must stay joined.
-    const split = window.SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
+    const split = SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
     intro.from(split.words, { yPercent: 145, rotate: 3, duration: 1.5, stagger: 0.075 }, 0.55);
-  } else if (title) intro.from(title, { y: 30, opacity: 0, duration: 1.2 }, 0.55);
+  }
   add(intro, 'from', '[data-hero-rise]', { y: 26, opacity: 0, duration: 1.2, stagger: 0.12 }, 1.15);
   add(intro, 'from', '.valley-light', { scale: 0, opacity: 0, duration: 1.1, stagger: 0.2, ease: 'back.out(3)' }, push ? 3.4 : 1.9);
   add(intro, 'from', '.valley-light b', { opacity: 0, x: -10, duration: 1.2 }, push ? 4.1 : 2.6);
@@ -223,7 +228,7 @@ function motes(hero) {
     w = art.clientWidth; h = art.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
     const a = art.getBoundingClientRect(), r = stage.getBoundingClientRect();
     const map = ([u, v]) => [rtl ? r.right - a.left - (u + 40) / 1080 * r.width : r.left - a.left + (u + 40) / 1080 * r.width, r.top - a.top + v / 1300 * r.height];
-    beams = (art._beams || []).map(b => ({ outline: b.outline.map(map), from: map(b.from), to: map(b.to) }));
+    beams = BEAMS.map(beamOutline).map(b => ({ outline: b.outline.map(map), from: map(b.from), to: map(b.to) }));
   };
   const inside = (poly, x, y) => { let hit = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit; } return hit; };
   const along = (b, x, y) => { const dx = b.to[0] - b.from[0], dy = b.to[1] - b.from[1]; return ((x - b.from[0]) * dx + (y - b.from[1]) * dy) / (dx * dx + dy * dy); };
@@ -381,9 +386,8 @@ function whenSeen(elements, onEnter, rootMargin = '0px 0px -10% 0px') {
 
 /* Section headings rise word by word from behind a mask. */
 function headings(gsap, root) {
-  if (!window.SplitText) return null;
   const list = [...root.querySelectorAll('section:not([data-hero]) h2')];
-  const splits = list.map(h => window.SplitText.create(h, { type: 'words', mask: 'words', aria: 'auto' }));
+  const splits = list.map(h => SplitText.create(h, { type: 'words', mask: 'words', aria: 'auto' }));
   splits.forEach(s => gsap.set(s.words, { yPercent: 145 }));
   const stop = whenSeen(list, els => els.forEach(h => {
     const s = splits[list.indexOf(h)];
@@ -421,9 +425,8 @@ function counters(gsap, root) {
 /* The verse, set large like a heading, lights up word by word as it is read. Paragraphs are
    never dimmed: they show at full strength from the start. */
 function litText(gsap, root) {
-  if (!window.SplitText) return null;
   const blocks = [...root.querySelectorAll('[data-lit]')];
-  const splits = blocks.map(b => window.SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
+  const splits = blocks.map(b => SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
   // the words start legible, only a little dimmed, and are all lit before the middle of the screen
   splits.forEach((s, i) => gsap.fromTo(s.words, { opacity: 0.62 }, {
     opacity: 1, ease: 'none', stagger: 0.04,

@@ -209,6 +209,7 @@
   .section,.section-lg{padding-block:var(--s6)}
   .facts{grid-template-columns:repeat(2,1fr);gap:var(--s4)}
   .hero{padding-block:var(--s6)}
+}
 
 /* Phones: the top bar keeps the brand, the language switch and nothing else —
    the hero carries the call to action a few hundred pixels below anyway. */
