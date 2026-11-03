@@ -10,9 +10,9 @@ import { AddressCascade, readAddressCascade } from '../ui/geography.jsx';
 
 const fields = { name: ['Full name', 'الاسم الكامل'], nameAr: ['Arabic name', 'الاسم بالعربية'], birthDate: ['Date of birth', 'تاريخ الميلاد'], phone: ['Phone', 'الهاتف'], email: ['Email', 'البريد الإلكتروني'], occupation: ['Occupation', 'المهنة'], language: ['Preferred language', 'اللغة المفضلة'], governorate: ['Governorate', 'المحافظة'], district: ['District', 'القضاء'], town: ['Town', 'البلدة'], townAr: ['Town in Arabic', 'البلدة بالعربية'], sector: ['Sector', 'الحيّ'] };
 const status = s => ({ pending: t('Waiting for office review', 'بانتظار مراجعة المكتب'), approved: t('Approved', 'مقبول'), declined: t('Declined', 'مرفوض') })[s] || s;
-const Changes = ({ data }) => <div className="tablewrap"><table className="tbl">
+const Changes = ({ data }) => <div className="tablewrap"><div className="tablescroll"><table className="tbl">
   <thead><tr><th>{t('Field', 'الحقل')}</th><th>{t('Current record at submission', 'السجل وقت التقديم')}</th><th>{t('Requested value', 'القيمة المطلوبة')}</th></tr></thead>
-  <tbody>{Object.entries(data.changes).map(([k, v]) => <tr key={k}><td>{fields[k] ? t(...fields[k]) : k}</td><td>{data.before[k] || '—'}</td><td>{v || '—'}</td></tr>)}</tbody></table></div>;
+  <tbody>{Object.entries(data.changes).map(([k, v]) => <tr key={k}><td>{fields[k] ? t(...fields[k]) : k}</td><td>{data.before[k] || '—'}</td><td>{v || '—'}</td></tr>)}</tbody></table></div></div>;
 
 /* ---------- on My account: what each parish holds about me ---------- */
 function CorrectionForm({ record, pending, done }) {

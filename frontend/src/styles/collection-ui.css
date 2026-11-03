@@ -12,3 +12,27 @@
 .collection-list{display:grid;gap:10px}.collection-list-item{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;border:1px solid var(--border,#d8dfdb);border-radius:12px;padding:14px;background:var(--surface,#fff)}
 .collection-list-item .collection-event{margin:0}.collection-list-item>time{font-size:13px}
 @media(max-width:650px){.collection-toolbar .input{max-width:none;flex:1 1 150px}.collection-list-item{grid-template-columns:1fr}.collection-pages{justify-content:center}}
+
+/* An event in the grid reads from the start of its line and wraps rather than losing both ends. */
+.collection-calendar .collection-event{align-items:flex-start;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+
+/* The day under the month on a phone: the grid fits the screen and marks the days that have events
+   with a dot; tapping a day lists its events below. Wider screens show the events in the grid. */
+.collection-day{display:none}
+@media (max-width:640px){
+  .collection-calendar-scroll{overflow:visible}
+  .collection-calendar{min-width:0}
+  .collection-calendar .cal-head>div{padding:8px 2px;font-size:11px;letter-spacing:0}
+  .collection-calendar .cal-day{display:grid;grid-template-columns:repeat(auto-fill,7px);gap:4px;align-content:start;min-height:58px;padding:6px 4px}
+  .collection-calendar .cal-day .dn{grid-column:1/-1;justify-self:start}
+  .collection-calendar .cal-day button.dn::after{content:"";position:absolute;inset:0}
+  .collection-calendar .cal-day.picked{box-shadow:inset 0 0 0 2px var(--primary,#233b32)}
+  .collection-calendar .collection-event{width:7px;height:7px;padding:0;margin:0;border-radius:999px;background:var(--primary,#233b32);pointer-events:none}
+  .collection-calendar .collection-event>*{display:none}
+  .collection-day{display:block;margin-top:16px}
+  .collection-day h3{margin:0 0 10px;font:600 17px/24px var(--sans)}
+  .collection-day .collection-list{gap:8px}
+  .collection-day .collection-event{margin:0;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:12px 14px;font-size:15px;white-space:normal}
+  .collection-day .collection-event time{font-weight:600;font-variant-numeric:tabular-nums}
+  .collection-day .collection-event small{flex-basis:100%}
+}

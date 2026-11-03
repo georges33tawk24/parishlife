@@ -48,18 +48,27 @@ export function CalendarView({ events, state, onOpen, onChange }) {
   }
   const offset = mode === 'week' ? 0 : start.getDay();
   const count = mode === 'week' ? 7 : Math.ceil((new Date(end - 86400000).getDate() + offset) / 7) * 7;
+  const on = key => items.filter(e => e.date === key).sort((a, b) => a.time.localeCompare(b.time));
+  /* On a phone the grid only marks the days that have events; the chosen day (today by default)
+     is listed under it. */
+  const inView = key => key >= dayKey(start) && key < dayKey(end);
+  const picked = [state.day, dayKey(new Date())].find(key => key && inView(key)) || '';
   return <>{controls}
     <div className="collection-period"><button className="btn btn-secondary" data-calendar-step="-1" aria-label={t('Previous period', 'الفترة السابقة')} onClick={() => step(-1)}>‹</button>
       <strong>{dateLabel}</strong>
       <button className="btn btn-secondary" data-calendar-step="1" aria-label={t('Next period', 'الفترة التالية')} onClick={() => step(1)}>›</button>
-      <button className="btn btn-ghost" data-calendar-today onClick={() => set({ date: dayKey(new Date()) })}>{t('Today', 'اليوم')}</button></div>
+      <button className="btn btn-ghost" data-calendar-today onClick={() => set({ date: dayKey(new Date()), day: '' })}>{t('Today', 'اليوم')}</button></div>
     <div className="collection-calendar-scroll"><div className="cal collection-calendar">
       <div className="cal-head">{Array.from({ length: 7 }, (_, i) => <div key={i}>{new Date(2026, 9, 4 + i).toLocaleDateString(locale, { weekday: 'short' })}</div>)}</div>
       <div className="cal-grid">{Array.from({ length: count }, (_, i) => {
         const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i - offset), key = dayKey(date);
-        return <div key={key} className={`cal-day${mode === 'month' && date.getMonth() !== anchor.getMonth() ? ' out' : ''}${key === dayKey(new Date()) ? ' today' : ''}`}>
-          <time className="dn" dateTime={key}>{date.getDate()}</time>
-          {items.filter(e => e.date === key).sort((a, b) => a.time.localeCompare(b.time)).map(e => <Fragment key={e.id}>{event(e)}</Fragment>)}</div>;
+        return <div key={key} className={`cal-day${mode === 'month' && date.getMonth() !== anchor.getMonth() ? ' out' : ''}${key === dayKey(new Date()) ? ' today' : ''}${key === picked ? ' picked' : ''}`}>
+          <button type="button" className="dn" aria-pressed={key === picked} onClick={() => set({ day: key })}><time dateTime={key}>{date.getDate()}</time></button>
+          {on(key).map(e => <Fragment key={e.id}>{event(e)}</Fragment>)}</div>;
       })}</div></div></div>
+    <section className="collection-day" aria-live="polite">{picked ? <>
+      <h3>{new Date(picked + 'T12:00:00').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+      {on(picked).length ? <div className="collection-list">{on(picked).map(event)}</div> : <p className="help">{t('Nothing on this day.', 'لا شيء في هذا اليوم.')}</p>}
+    </> : <p className="help">{t('Choose a day to see its events.', 'اختر يومًا لعرض أحداثه.')}</p>}</section>
   </>;
 }

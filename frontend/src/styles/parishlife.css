@@ -337,7 +337,16 @@ button.chip svg{flex:none}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);
   overflow:hidden;box-shadow:var(--e1)
 }
-.tablescroll{overflow-x:auto}
+/* A table wider than the screen scrolls inside its card; a soft shadow at an edge says there is
+   more to that side, and disappears once the reader reaches it. */
+.tablescroll{
+  overflow-x:auto;
+  background:
+    linear-gradient(to right,var(--surface) 40%,transparent) left/28px 100% no-repeat local,
+    linear-gradient(to left,var(--surface) 40%,transparent) right/28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%,rgba(16,24,20,.18),transparent) left/12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%,rgba(16,24,20,.18),transparent) right/12px 100% no-repeat scroll
+}
 table.tbl{width:100%;border-collapse:collapse;font:400 14px/20px var(--sans)}
 table.tbl th{
   height:40px;padding:0 16px;text-align:start;white-space:nowrap;
@@ -352,6 +361,9 @@ table.tbl tbody tr.clickable{cursor:pointer}
 table.tbl .num{text-align:end;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 table.tbl th.num{text-align:end}
 table.tbl .shrink{width:1%;white-space:nowrap}
+/* a column whose text should not be squeezed to a few words a line */
+table.tbl .wide{min-width:200px}
+.nowrap{white-space:nowrap}
 /* On a phone a six-column register is unreadable, so secondary columns drop
    out rather than forcing a sideways scroll for the name. */
 @media (max-width:980px){table.tbl .hide-md{display:none}}

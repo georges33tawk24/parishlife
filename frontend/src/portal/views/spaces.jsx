@@ -453,7 +453,8 @@ export function reservations() {
       cls: 'shrink'
     }, {
       label: L('Request', 'الطلب'),
-      sort: true
+      sort: true,
+      cls: 'wide'
     }, {
       label: L('Room', 'القاعة'),
       cls: 'hide-sm'

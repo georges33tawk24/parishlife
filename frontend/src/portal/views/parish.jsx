@@ -2159,7 +2159,8 @@ export function registrations(tab = '') {
         marginBottom: "16px"
       }}><Stat k={L('Forms', 'الاستمارات')} v={REGISTRATIONS.length} d={L('for parish events', 'لأحداث الرعية')} />{" "}<Stat k={L('Open forms', 'استمارات مفتوحة')} v={REGISTRATIONS.filter(form => form.open && linkedEvent(form)).length} d={L('accepting participants', 'تقبل المشتركين')} />{" "}<Stat k={L('Participants', 'المشتركون')} v={REGISTRANTS.length} d={L('across linked forms', 'في الاستمارات المرتبطة')} /></div><Table cols={[{
         label: L('Event', 'الحدث'),
-        sort: true
+        sort: true,
+        cls: 'wide'
       }, {
         label: L('Capacity', 'السعة')
       }, {

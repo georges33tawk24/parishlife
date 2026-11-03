@@ -1530,3 +1530,5 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .registration-section h3 {margin:0 0 12px;font-size:16px}
 @media(max-width:1150px){.pastoral-tools.toolbar{flex-wrap:wrap}.pastoral-tools .seg{order:2;flex-basis:100%}.pastoral-columns{grid-template-columns:1fr}}
 @media(max-width:650px){.office-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.pastoral-tools #note-search{flex:1 1 170px;max-width:none;width:auto}.office-toolbar{align-items:stretch}.office-toolbar .formrow{flex:1 1 140px}.office-toolbar .input,.office-toolbar .select{width:100%}}
+/* a long status on a card wraps inside it rather than running past its edge */
+.gridcards .pill{max-width:100%;white-space:normal;height:auto;min-height:22px}

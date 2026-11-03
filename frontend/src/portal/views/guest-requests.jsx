@@ -47,13 +47,13 @@ export function GuestRequests() {
       <a className="btn btn-secondary" href="#/requests">{t('All parish requests', 'كل طلبات الرعية')}</a>
       <div className="collection-toolbar"><input className="input" type="search" data-search="" placeholder={t('Search guest requests', 'ابحث في طلبات الزوّار')} aria-label={t('Search requests', 'البحث في الطلبات')} value={q} onChange={e => setQ(e.target.value)} />
         <Select data-status="" aria-label={t('Status', 'الحالة')} value={status} onChange={e => setStatus(e.target.value)}><option value="">{t('All statuses', 'كل الحالات')}</option>{Object.entries(names).map(([v, l]) => <option key={v} value={v}>{t(...l)}</option>)}</Select></div>
-      <div className="tablewrap" ref={table}><table className="tbl"><thead><tr>{[t('Applicant', 'مقدّم الطلب'), t('Type', 'النوع'), t('Contact', 'التواصل'), t('Status', 'الحالة'), t('Received', 'الاستلام'), t('Review', 'مراجعة')].map((x, i) => <th key={i}>{x}</th>)}</tr></thead>
+      <div className="tablewrap" ref={table}><div className="tablescroll"><table className="tbl"><thead><tr>{[t('Applicant', 'مقدّم الطلب'), t('Type', 'النوع'), t('Contact', 'التواصل'), t('Status', 'الحالة'), t('Received', 'الاستلام'), t('Review', 'مراجعة')].map((x, i) => <th key={i}>{x}</th>)}</tr></thead>
         <tbody>{data.requests.map(r => {
           const text = [r.details.name, r.details.description, r.details.email, r.details.phone].join(' ').toLowerCase();
           return <tr key={r.id} data-search-text={text} data-request-status={r.status} hidden={!text.includes(query) || (!!status && r.status !== status)}>
             <td>{r.details.name}</td><td>{r.details.kind}</td><td>{r.details.email || r.details.phone}</td><td>{names[r.status] ? t(...names[r.status]) : r.status}</td><td>{r.created_at.slice(0, 10)}</td>
             <td><button className="btn btn-secondary btn-dense" data-review={r.id} onClick={() => review(r)}>{t('Review', 'مراجعة')}{r.pendingLinks ? ' · ' + r.pendingLinks + ' ' + t('account links', 'ربط حسابات') : ''}</button></td></tr>;
-        })}</tbody></table></div>
+        })}</tbody></table></div></div>
       <CollectionPages target={table} body={c => c.querySelector('tbody')} />
       {data.requests.length ? null : <p>{t('No guest requests yet.', 'لا طلبات زوّار بعد.')}</p>}</>}</div>
   </>;

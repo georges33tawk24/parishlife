@@ -144,7 +144,7 @@ export function useChartTips(root) {
 export function DataTable({ caption, head, rows }) {
   const box = useRef(null);
   return <details className="viz-data"><summary>{t('Show the numbers', 'عرض الأرقام')}</summary>
-    <div className="tablewrap" ref={box}><table className="tbl"><caption className="sr-only">{caption}</caption><thead><tr>{head.map((h, i) => <th key={i} scope="col">{h}</th>)}</tr></thead>
-      <tbody>{rows.map((r, j) => <tr key={j}>{r.map((cell, i) => i ? <td key={i} className="num">{cell}</td> : <th key={i} scope="row">{cell}</th>)}</tr>)}</tbody></table></div>
+    <div className="tablewrap" ref={box}><div className="tablescroll"><table className="tbl"><caption className="sr-only">{caption}</caption><thead><tr>{head.map((h, i) => <th key={i} scope="col">{h}</th>)}</tr></thead>
+      <tbody>{rows.map((r, j) => <tr key={j}>{r.map((cell, i) => i ? <td key={i} className="num">{cell}</td> : <th key={i} scope="row">{cell}</th>)}</tr>)}</tbody></table></div></div>
     <CollectionPages target={box} body={c => c.querySelector('tbody')} /></details>;
 }
