@@ -9,10 +9,25 @@ import { fileURLToPath } from 'node:url';
 const here = path => fileURLToPath(new URL(path, import.meta.url));
 const server = 'http://127.0.0.1:4399';
 
-/* The stylesheets' images and fonts are served from assets/, not built: say nothing about them. */
+/* Three notices describe how this project is meant to work, so the build leaves them out and any
+   other warning stands out:
+   - the stylesheets' images and fonts are served from assets/, not built;
+   - the pages are written to the repository root, the parent of this folder, on purpose;
+   - a few actions use import() to run after the current click has finished, not to split code. */
 const logger = createLogger();
-const warn = logger.warn;
-logger.warn = (message, options) => { if (!/^\/assets\/(images|fonts)\/.* didn't resolve at build time/.test(message)) warn(message, options); };
+const expected = [
+  /\/assets\/(images|fonts)\/\S+ referenced in .* didn't resolve at build time/,
+  /build\.outDir must not be the same directory of root or a parent directory of root/,
+  /dynamic import will not move module into another chunk/
+];
+const quiet = message => expected.some(pattern => pattern.test(message));
+const { warn, warnOnce } = logger;
+logger.warn = (message, options) => {
+  if (!quiet(message)) warn(message, options);
+};
+logger.warnOnce = (message, options) => {
+  if (!quiet(message)) warnOnce(message, options);
+};
 
 export default defineConfig({
   plugins: [react()],
@@ -28,12 +43,20 @@ export default defineConfig({
     rollupOptions: {
       input: { portal: here('index.html'), public: here('public.html'), landing: here('landing.html') },
       /* React itself is shared by the three pages, in a file of its own */
-      output: { manualChunks: id => /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) ? 'react' : undefined }
+      output: {
+        manualChunks: id => (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) ? 'react' : undefined)
+      }
     }
   },
   /* `npm run dev` beside server.py: the API, the images and the fonts come from it. */
   server: {
     port: 5173,
-    proxy: { '/api': server, '/assets/images': server, '/assets/fonts': server, '/sw.js': server, '/site.webmanifest': server }
+    proxy: {
+      '/api': server,
+      '/assets/images': server,
+      '/assets/fonts': server,
+      '/sw.js': server,
+      '/site.webmanifest': server
+    }
   }
 });

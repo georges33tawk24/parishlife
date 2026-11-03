@@ -1,0 +1,2 @@
+# built output and data the formatter should leave alone
+src/lib/data/

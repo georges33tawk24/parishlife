@@ -6,14 +6,27 @@ import { PublicApp, startingLanguage, setDocumentLanguage } from './App.jsx';
 import { DEFAULT_PHOTOS } from './site.jsx';
 
 /* A parish photograph that fails to load gives way to an illustrative one. */
-document.addEventListener('error', event => {
-  const image = event.target;
-  if (!(image instanceof HTMLImageElement) || !image.matches('.parish-card-photo,.profile-photo,.public-gallery img') || image.dataset.defaultPhoto) return;
-  image.dataset.defaultPhoto = 'true'; image.src = DEFAULT_PHOTOS[0];
-  image.alt = document.documentElement.lang === 'ar' ? 'صورة توضيحية افتراضية لكنيسة' : 'Default illustrative church photograph';
-  const caption = image.closest('figure')?.querySelector('figcaption');
-  if (caption) caption.textContent = image.alt;
-}, true);
+document.addEventListener(
+  'error',
+  event => {
+    const image = event.target;
+    if (
+      !(image instanceof HTMLImageElement) ||
+      !image.matches('.parish-card-photo,.profile-photo,.public-gallery img') ||
+      image.dataset.defaultPhoto
+    )
+      return;
+    image.dataset.defaultPhoto = 'true';
+    image.src = DEFAULT_PHOTOS[0];
+    image.alt =
+      document.documentElement.lang === 'ar'
+        ? 'صورة توضيحية افتراضية لكنيسة'
+        : 'Default illustrative church photograph';
+    const caption = image.closest('figure')?.querySelector('figcaption');
+    if (caption) caption.textContent = image.alt;
+  },
+  true
+);
 
 const lang = startingLanguage();
 setDocumentLanguage(lang);

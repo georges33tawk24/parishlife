@@ -5,8 +5,8 @@
 //
 // The window is 1000 by 1300 units, drawn in a viewBox of -40 0 1080 1300 so the sill can reach
 // past the jambs. GLASS_OPENINGS are the openings the glass fills, the same ones the site's scene
-// uses (GLASS in frontend/src/public/sanctuary-geometry.js).
-import { GLASS as OPENINGS } from '../../frontend/src/public/sanctuary-geometry.js';
+// uses (GLASS in frontend/src/public/components/sanctuary-geometry.js).
+import { GLASS as OPENINGS } from '../../frontend/src/public/components/sanctuary-geometry.js';
 const GLASS_OPENINGS = {
   rose: OPENINGS.rose.map(c => `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>`).join(''),
   left: `<path d="${OPENINGS.left}"/>`,

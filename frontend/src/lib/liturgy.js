@@ -8,14 +8,26 @@ const key = date => date.toISOString().slice(0, 10);
 
 /* Easter Sunday in the Gregorian calendar (Meeus/Jones/Butcher). */
 export function easter(y) {
-  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31), date = ((h + l - 7 * m + 114) % 31) + 1;
+  const a = y % 19,
+    b = Math.floor(y / 100),
+    c = y % 100,
+    d = Math.floor(b / 4),
+    e = b % 4,
+    f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30,
+    i = Math.floor(c / 4),
+    k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7,
+    m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31),
+    date = ((h + l - 7 * m + 114) % 31) + 1;
   return day(y, month, date);
 }
 /* The Sunday of the Consecration of the Church opens the year: eight Sundays before Christmas. */
 function consecration(y) {
-  const christmas = day(y, 12, 25), back = christmas.getUTCDay() || 7;
+  const christmas = day(y, 12, 25),
+    back = christmas.getUTCDay() || 7;
   return add(christmas, -back - 49);
 }
 
@@ -32,8 +44,11 @@ const SEASONS = {
 
 /* The season a civil date falls in: { id, en, ar }. */
 export function season(iso) {
-  const [y, m, d] = iso.split('-').map(Number), date = day(y, m, d), e = easter(y);
-  const consecrated = consecration(y), announcements = add(consecrated, 14);
+  const [y, m, d] = iso.split('-').map(Number),
+    date = day(y, m, d),
+    e = easter(y);
+  const consecrated = consecration(y),
+    announcements = add(consecrated, 14);
   let id;
   if (date >= consecrated && date < announcements) id = 'church';
   else if (date >= announcements || date < day(y, 1, 6)) id = 'birth';
@@ -65,11 +80,18 @@ const FIXED = {
 
 /* The great feast on a civil date, if any: { en, ar }. */
 export function feastOn(iso) {
-  const [y] = iso.split('-').map(Number), e = easter(y);
-  const movable = { [key(add(e, -7))]: ['Palm Sunday', 'أحد الشعانين'], [key(add(e, -2))]: ['Good Friday', 'الجمعة العظيمة'],
-    [key(e)]: ['Easter, the Resurrection', 'عيد القيامة المجيدة'], [key(add(e, 39))]: ['The Ascension', 'عيد الصعود'], [key(add(e, 49))]: ['Pentecost', 'عيد العنصرة'] };
+  const [y] = iso.split('-').map(Number),
+    e = easter(y);
+  const movable = {
+    [key(add(e, -7))]: ['Palm Sunday', 'أحد الشعانين'],
+    [key(add(e, -2))]: ['Good Friday', 'الجمعة العظيمة'],
+    [key(e)]: ['Easter, the Resurrection', 'عيد القيامة المجيدة'],
+    [key(add(e, 39))]: ['The Ascension', 'عيد الصعود'],
+    [key(add(e, 49))]: ['Pentecost', 'عيد العنصرة']
+  };
   // Saint Charbel is kept on the third Sunday of July
-  const july = day(y, 7, 1), charbel = add(july, ((7 - july.getUTCDay()) % 7) + 14);
+  const july = day(y, 7, 1),
+    charbel = add(july, ((7 - july.getUTCDay()) % 7) + 14);
   movable[key(charbel)] = ['Saint Charbel', 'عيد مار شربل'];
   const hit = movable[iso] || FIXED[iso.slice(5)];
   return hit ? { en: hit[0], ar: hit[1] } : null;

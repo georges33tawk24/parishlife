@@ -115,7 +115,7 @@ Checked against the common generated-page defaults, and changed:
 GSAP 3.15 (ScrollTrigger and SplitText, the `gsap` package in `frontend/package.json`) and Lenis 1.3 smooth
 scrolling (the `lenis` package), all inside `gsap.matchMedia()` in `frontend/src/public/motion.js`:
 
-- **Homepage sanctuary** (`frontend/src/public/Sanctuary.jsx`, `frontend/src/styles/sanctuary.css`): the wall comes out
+- **Homepage sanctuary** (`frontend/src/public/components/Sanctuary.jsx`, `frontend/src/styles/sanctuary.css`): the wall comes out
   of the dark, the panes of glass take the light one group after another (the rose first), the shafts
   reach into the nave, the lamp settles on its chains, then the parishes' candles are lit one by one.
   Afterwards clouds pass behind the glass, the light behind it shifts, the shafts brighten and dim,
@@ -301,25 +301,25 @@ form on warm limestone, in the public site's type and colours (`frontend/src/sty
 | Part | Files |
 | --- | --- |
 | Page shell, header, footer | `public.html`, `frontend/src/styles/site.css` (fonts, tokens, chrome; shared by every public page) |
-| Homepage | `frontend/src/public/Home.jsx`, `frontend/src/styles/home.css`; wired in `frontend/src/public/App.jsx` (`homeView`, `mountHome`) |
-| Sanctuary scene | `frontend/src/public/Sanctuary.jsx` (the window picture and a parish's initial over it, arcade, light, haze, lamp and candles, mosaic) and `frontend/src/styles/sanctuary.css`; rendered pictures in `assets/images/sanctuary/` made by `docs/tools/render_sanctuary.py`, `render_wall.py` and `render_candle.py`; used by the homepage, parish pages, their banners and the sign-in screen |
+| Homepage | `frontend/src/public/pages/Home.jsx`, `frontend/src/styles/home.css`; wired in `frontend/src/public/App.jsx` (`homeView`, `mountHome`) |
+| Sanctuary scene | `frontend/src/public/components/Sanctuary.jsx` (the window picture and a parish's initial over it, arcade, light, haze, lamp and candles, mosaic) and `frontend/src/styles/sanctuary.css`; rendered pictures in `assets/images/sanctuary/` made by `docs/tools/render_sanctuary.py`, `render_wall.py` and `render_candle.py`; used by the homepage, parish pages, their banners and the sign-in screen |
 | Church details | `frontend/src/styles/church.css` (loaded last on public pages: hero words over the scene, niches, stars, bell, initial, notices, wax seals, frieze, flames on the map, gilded buttons, pointer, fields), `frontend/src/lib/liturgy.js` (seasons and feasts) |
 | Valley | rendered layers in `assets/images/valley/` (drawn by the stylesheets), made by `docs/tools/render_valley.py` (wide and tall framings, night and dawn); mirrored in Arabic |
-| Map of Lebanon | `frontend/src/public/LebanonMap.jsx`, data in `frontend/src/lib/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
+| Map of Lebanon | `frontend/src/public/components/LebanonMap.jsx`, data in `frontend/src/lib/data/lebanon-map.js`, relief in `assets/images/lebanon-relief.webp` |
 | Motion | `frontend/src/public/motion.js` (homepage and parish pages) |
-| Parish pages | `frontend/src/public/Parish.jsx`, `frontend/src/styles/parish.css`, calendar in `frontend/src/public/calendar.jsx`; request sending and tracking in `frontend/src/public/Features.jsx` |
+| Parish pages | `frontend/src/public/pages/ParishPage.jsx`, `frontend/src/styles/parish.css`, calendar in `frontend/src/public/components/ParishCalendar.jsx`; request sending and tracking in `frontend/src/public/Features.jsx` |
 | Sign in and sign up | `frontend/src/portal/shell/Auth.jsx`, `frontend/src/styles/auth.css`; passkeys in `frontend/src/portal/model/passkeys.js`, Turnstile in `frontend/src/lib/turnstile.js` |
 | Search | `frontend/src/lib/search.js` (homepage hero, directory and parish picker) |
 | Public data, previews | `backend/public_site.py` and `cloudflare/src/public-site.js` (kept in parity) |
 | Sign-in protections, passkeys | `backend/sign_in.py` and `cloudflare/src/sign-in.js` (kept in parity), `backend/common-passwords.json` |
 | App and offline | `site.webmanifest`, `sw.js`, `assets/images/icons/` |
 | Built-in wording | `frontend/src/lib/site-defaults.js`, shared by the homepage and the editor |
-| Homepage editor | `frontend/src/portal/views/homepage-editor.jsx` |
+| Homepage editor | `frontend/src/portal/features/communicate/homepage-editor.jsx` |
 | Homepage content API | `backend/site_content.py` and `cloudflare/src/site-content.js` (kept in parity), table `pl_site_content` in `backend/workspace-schema.json` |
 
 ### Insights and the parish CRM (Super Admin)
 
-Dashboard → **Insights** (`frontend/src/portal/views/insights.jsx`, charts in `frontend/src/portal/views/insight-charts.jsx`,
+Dashboard → **Insights** (`frontend/src/portal/features/administration/insights.jsx`, charts in `frontend/src/portal/features/administration/insight-charts.jsx`,
 styles in `frontend/src/styles/insights.css`; data from `backend/analytics.py` and `cloudflare/src/analytics.js`,
 kept in parity).
 

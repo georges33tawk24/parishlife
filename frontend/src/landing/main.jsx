@@ -4,5 +4,9 @@ import '../styles/pages/landing.css';
 import { Landing } from './Landing.jsx';
 
 let lang = 'en';
-try { lang = localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; } catch { /* private mode */ }
+try {
+  lang = localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en';
+} catch {
+  /* private mode */
+}
 createRoot(document.getElementById('root')).render(<Landing initialLang={lang} />);

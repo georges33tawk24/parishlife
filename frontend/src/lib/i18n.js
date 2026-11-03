@@ -6,12 +6,17 @@
    Adding French later means a third argument and one more case here. */
 
 const STORE = 'pl-lang';
-export const LANGS = { en: { label: 'EN', dir: 'ltr', name: 'English' },
-                       ar: { label: 'ع',  dir: 'rtl', name: 'العربية' } };
+export const LANGS = {
+  en: { label: 'EN', dir: 'ltr', name: 'English' },
+  ar: { label: 'ع', dir: 'rtl', name: 'العربية' }
+};
 
 export let lang = (() => {
-  try { return LANGS[localStorage.getItem(STORE)] ? localStorage.getItem(STORE) : 'en'; }
-  catch { return 'en'; }
+  try {
+    return LANGS[localStorage.getItem(STORE)] ? localStorage.getItem(STORE) : 'en';
+  } catch {
+    return 'en';
+  }
 })();
 
 export const isAr = () => lang === 'ar';
@@ -20,7 +25,11 @@ export const t = (en, ar) => (lang === 'ar' && ar != null ? ar : en);
 export function setLang(next) {
   if (!LANGS[next]) return;
   lang = next;
-  try { localStorage.setItem(STORE, next); } catch { /* private mode */ }
+  try {
+    localStorage.setItem(STORE, next);
+  } catch {
+    /* private mode */
+  }
   document.documentElement.lang = next;
   document.documentElement.dir = LANGS[next].dir;
   const skip = document.querySelector('a.skip');
@@ -34,11 +43,29 @@ export const num = n => NF.format(n);
 export const usd = n => '$' + NF.format(Number(n).toFixed(2));
 export const lbp = n => 'L.L ' + NF.format(Math.round(n));
 
-const MONTHS = [['January','كانون الثاني'],['February','شباط'],['March','آذار'],['April','نيسان'],
-  ['May','أيار'],['June','حزيران'],['July','تموز'],['August','آب'],['September','أيلول'],
-  ['October','تشرين الأول'],['November','تشرين الثاني'],['December','كانون الأول']];
-const DAYS = [['Sunday','الأحد'],['Monday','الإثنين'],['Tuesday','الثلاثاء'],['Wednesday','الأربعاء'],
-  ['Thursday','الخميس'],['Friday','الجمعة'],['Saturday','السبت']];
+const MONTHS = [
+  ['January', 'كانون الثاني'],
+  ['February', 'شباط'],
+  ['March', 'آذار'],
+  ['April', 'نيسان'],
+  ['May', 'أيار'],
+  ['June', 'حزيران'],
+  ['July', 'تموز'],
+  ['August', 'آب'],
+  ['September', 'أيلول'],
+  ['October', 'تشرين الأول'],
+  ['November', 'تشرين الثاني'],
+  ['December', 'كانون الأول']
+];
+const DAYS = [
+  ['Sunday', 'الأحد'],
+  ['Monday', 'الإثنين'],
+  ['Tuesday', 'الثلاثاء'],
+  ['Wednesday', 'الأربعاء'],
+  ['Thursday', 'الخميس'],
+  ['Friday', 'الجمعة'],
+  ['Saturday', 'السبت']
+];
 
 export const month = i => t(...MONTHS[i]);
 export const day = i => t(...DAYS[i]);
@@ -64,17 +91,26 @@ export function fmtDateIn(d, language) {
   if (!d) return '—';
   const x = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(x.getTime())) return '—';
-  if (language === 'ar' || language === 'en') return `${x.getDate()} ${MONTHS[x.getMonth()][language === 'ar' ? 1 : 0]} ${x.getFullYear()}`;
+  if (language === 'ar' || language === 'en')
+    return `${x.getDate()} ${MONTHS[x.getMonth()][language === 'ar' ? 1 : 0]} ${x.getFullYear()}`;
   return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`;
 }
-export const fmtTime = s => s;   // stored already as "10:30"
+export const fmtTime = s => s; // stored already as "10:30"
 
 /* Search compares folded text: case, Latin accents (Rahmé → rahme), Arabic hamza seats, tashkeel,
    tatweel, ة/ه, ى/ي and Arabic-Indic digits all fold away, so either spelling finds the record.
    A query that is a phone number matches the digits whatever the spacing or the leading 0 / +961. */
-export const fold = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f\u0670\u0640]/g, '')
-  .replace(/ٱ/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660)
-  .toLowerCase().replace(/\s+/g, ' ').trim();
+export const fold = s =>
+  String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f\u064b-\u065f\u0670\u0640]/g, '')
+    .replace(/ٱ/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 export function matches(text, q) {
   const f = fold(q);
   if (!f) return true;

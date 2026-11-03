@@ -5,43 +5,94 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 
 /* The icon sprite: paths lifted from the design system app shell, 20px @ 1.5 stroke. */
 const SPRITE = {
-  dash: ['M3.4 3.4h5.8v5.8H3.4zM10.8 3.4h5.8v3.6h-5.8zM10.8 8.6h5.8v8h-5.8zM3.4 10.8h5.8v5.8H3.4z', { strokeLinejoin: 'round' }],
+  dash: [
+    'M3.4 3.4h5.8v5.8H3.4zM10.8 3.4h5.8v3.6h-5.8zM10.8 8.6h5.8v8h-5.8zM3.4 10.8h5.8v5.8H3.4z',
+    { strokeLinejoin: 'round' }
+  ],
   people: ['M7 6.4a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 17c0-3.2 2.7-5 6-5s6 1.8 6 5', { strokeLinecap: 'round' }],
-  family: ['M4.4 6.6a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0M11.6 7.4a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M2.6 16.4c0-2.5 1.9-4 4.2-4s4.2 1.5 4.2 4M13.4 12.6c2.2 0 4 1.4 4 3.8', { strokeLinecap: 'round' }],
-  sacr: ['M4.4 3.6h7.6l3.6 3.2v9.6H4.4zM12 3.6v3.2h3.6M7.2 10.4h5.6M7.2 13.2h3.6', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
+  family: [
+    'M4.4 6.6a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0M11.6 7.4a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M2.6 16.4c0-2.5 1.9-4 4.2-4s4.2 1.5 4.2 4M13.4 12.6c2.2 0 4 1.4 4 3.8',
+    { strokeLinecap: 'round' }
+  ],
+  sacr: [
+    'M4.4 3.6h7.6l3.6 3.2v9.6H4.4zM12 3.6v3.2h3.6M7.2 10.4h5.6M7.2 13.2h3.6',
+    { strokeLinejoin: 'round', strokeLinecap: 'round' }
+  ],
   attend: ['M3.6 3.6h12.8v12.8H3.6zM6.8 10.2l2.6 2.6 4.2-4.8', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
-  give: ['M3.4 10a6.6 6.6 0 1 0 13.2 0a6.6 6.6 0 1 0 -13.2 0M10 6.2v7.6M7.8 8.2h4.4M7.8 11.8h4.4', { strokeLinecap: 'round' }],
+  give: [
+    'M3.4 10a6.6 6.6 0 1 0 13.2 0a6.6 6.6 0 1 0 -13.2 0M10 6.2v7.6M7.8 8.2h4.4M7.8 11.8h4.4',
+    { strokeLinecap: 'round' }
+  ],
   fin: ['M3.6 16.4h12.8M5.4 16.4V9.6M9.4 16.4V5M13.4 16.4v-4.8', { strokeLinecap: 'round' }],
   events: ['M4 5.2h12v11.2H4zM4 8.8h12M7.4 3.4v3.2M12.6 3.4v3.2', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
-  groups: ['M4.2 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M11.4 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M7.8 13.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0', {}],
-  vol: ['M7.2 6.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0M4.4 16.8v-1.4a3 3 0 0 1 3-3h5.2a3 3 0 0 1 3 3v1.4', { strokeLinecap: 'round' }],
+  groups: [
+    'M4.2 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M11.4 6.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M7.8 13.6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0',
+    {}
+  ],
+  vol: [
+    'M7.2 6.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0M4.4 16.8v-1.4a3 3 0 0 1 3-3h5.2a3 3 0 0 1 3 3v1.4',
+    { strokeLinecap: 'round' }
+  ],
   msg: ['M3.4 4.4h13.2v8.6H8.2L4.8 16.2V13H3.4z', { strokeLinejoin: 'round' }],
-  reports: ['M5 3.6h6.4l3.6 3.4v9.4H5zM11.4 3.6V7h3.6M7.8 10.8h4.4M7.8 13.4h3', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
+  reports: [
+    'M5 3.6h6.4l3.6 3.4v9.4H5zM11.4 3.6V7h3.6M7.8 10.8h4.4M7.8 13.4h3',
+    { strokeLinejoin: 'round', strokeLinecap: 'round' }
+  ],
   settings: ['M3.6 7h12.8M3.6 13h12.8M7.6 4.8v4.4M12.4 10.8v4.4', { strokeLinecap: 'round' }],
   checkin: ['M10 3.6v8.8M6.6 9l3.4 3.4L13.4 9M4 16.4h12', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
   notes: ['M5 3.6h10v12.8H5zM7.8 7.2h4.4M7.8 10h4.4M7.8 12.8h2.6', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
-  check: ['M3 8.4l3.2 3.2L13 4.8', { strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round' }, '0 0 16 16'],
+  check: [
+    'M3 8.4l3.2 3.2L13 4.8',
+    { strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round' },
+    '0 0 16 16'
+  ],
   warn: ['M10 3.2 17.4 16H2.6zM10 8.2v3.4M10 13.6v.9', { strokeLinejoin: 'round', strokeLinecap: 'round' }],
-  bell: ['M5.4 8.4a4.6 4.6 0 1 1 9.2 0c0 3 1.4 4.2 1.4 4.2H4S5.4 11.4 5.4 8.4M8.4 15.4a1.8 1.8 0 0 0 3.2 0', { strokeLinecap: 'round', strokeLinejoin: 'round' }],
+  bell: [
+    'M5.4 8.4a4.6 4.6 0 1 1 9.2 0c0 3 1.4 4.2 1.4 4.2H4S5.4 11.4 5.4 8.4M8.4 15.4a1.8 1.8 0 0 0 3.2 0',
+    { strokeLinecap: 'round', strokeLinejoin: 'round' }
+  ],
   search: ['M4.2 9.4a5.2 5.2 0 1 0 10.4 0a5.2 5.2 0 1 0 -10.4 0M13.4 13.4 16.6 16.6', { strokeLinecap: 'round' }]
 };
 function Sprite() {
-  return <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
-    <g id="ic-base" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></g>
-  </defs>
-    {Object.entries(SPRITE).map(([id, [d, line, box = '0 0 20 20']]) => <symbol key={id} id={'ic-' + id} viewBox={box}><path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" {...line} /></symbol>)}
-  </svg>;
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+      <defs>
+        <g
+          id="ic-base"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        ></g>
+      </defs>
+      {Object.entries(SPRITE).map(([id, [d, line, box = '0 0 20 20']]) => (
+        <symbol key={id} id={'ic-' + id} viewBox={box}>
+          <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" {...line} />
+        </symbol>
+      ))}
+    </svg>
+  );
 }
-const Use = ({ id, size = 17, ...props }) => <svg width={size} height={size} {...props}><use href={'#ic-' + id} /></svg>;
+const Use = ({ id, size = 17, ...props }) => (
+  <svg width={size} height={size} {...props}>
+    <use href={'#ic-' + id} />
+  </svg>
+);
 
 /* Rails are the ones drawn in the design system app shell (05).
    ["l", en, ar, icon, badge, active] for a link, ["h", en, ar] for a heading. */
 const ROLES = {
   priest: {
-    en: 'Parish priest', ar: 'كاهن الرعية', user: 'Fr. Antoine Khoury', userAr: 'الأب أنطوان خوري', initials: 'AK',
+    en: 'Parish priest',
+    ar: 'كاهن الرعية',
+    user: 'Fr. Antoine Khoury',
+    userAr: 'الأب أنطوان خوري',
+    initials: 'AK',
     noteEn: 'Full access. The only role that can see pastoral notes, sign certificates and change the exchange rate.',
     noteAr: 'صلاحية كاملة. الدور الوحيد الذي يرى الملاحظات الرعوية ويوقّع الشهادات ويغيّر سعر الصرف.',
-    titleEn: 'Good evening, Fr. Antoine', titleAr: 'مساء الخير يا أبونا أنطوان',
+    titleEn: 'Good evening, Fr. Antoine',
+    titleAr: 'مساء الخير يا أبونا أنطوان',
     subEn: 'Sunday 4 October · 3 certificates awaiting your signature',
     subAr: 'الأحد ٤ تشرين الأول · ٣ شهادات بانتظار توقيعك',
     items: [
@@ -64,10 +115,15 @@ const ROLES = {
     ]
   },
   secretary: {
-    en: 'Secretary', ar: 'أمينة السرّ', user: 'Rita Nassar', userAr: 'ريتا نصّار', initials: 'RN',
+    en: 'Secretary',
+    ar: 'أمينة السرّ',
+    user: 'Rita Nassar',
+    userAr: 'ريتا نصّار',
+    initials: 'RN',
     noteEn: 'People, records, events and messaging. Giving is not in the rail at all — hidden modules do not appear.',
     noteAr: 'المؤمنون والسجلّات والأحداث والمراسلة. التقدمات غائبة كلياً عن الشريط — الإخفاء أفضل من الإطفاء.',
-    titleEn: 'Good morning, Rita', titleAr: 'صباح الخير يا ريتا',
+    titleEn: 'Good morning, Rita',
+    titleAr: 'صباح الخير يا ريتا',
     subEn: '4 certificate requests · 2 new registrations from the portal',
     subAr: '٤ طلبات شهادات · تسجيلان جديدان من البوّابة',
     items: [
@@ -86,10 +142,16 @@ const ROLES = {
     ]
   },
   treasurer: {
-    en: 'Treasurer', ar: 'أمين الصندوق', user: 'Nabil Saade', userAr: 'نبيل سعادة', initials: 'NS',
-    noteEn: 'Money only. Sees amounts and envelope numbers but not pastoral notes, and is the one who can edit the parish rate.',
+    en: 'Treasurer',
+    ar: 'أمين الصندوق',
+    user: 'Nabil Saade',
+    userAr: 'نبيل سعادة',
+    initials: 'NS',
+    noteEn:
+      'Money only. Sees amounts and envelope numbers but not pastoral notes, and is the one who can edit the parish rate.',
     noteAr: 'المال فقط. يرى المبالغ وأرقام المظاريف لا الملاحظات الرعوية، وهو من يعدّل سعر الرعية.',
-    titleEn: 'Giving overview', titleAr: 'نظرة على التقدمات',
+    titleEn: 'Giving overview',
+    titleAr: 'نظرة على التقدمات',
     subEn: 'Session 214 is open · rate last set 6 days ago',
     subAr: 'الجلسة ٢١٤ مفتوحة · آخر ضبط للسعر قبل ٦ أيام',
     items: [
@@ -110,11 +172,19 @@ const ROLES = {
     ]
   },
   leader: {
-    en: 'Ministry leader', ar: 'مسؤولة خدمة', user: 'Maya Haddad', userAr: 'مايا حدّاد', initials: 'MH',
-    noteEn: 'Scoped to the groups she leads. Every list she opens is already filtered to her people — the parish list, giving and other groups are not in the rail at all.',
-    noteAr: 'محصورة بالمجموعات التي تقودها. كل لائحة تفتحها مرشّحة مسبقاً على أفرادها — لائحة الرعية والتقدمات والمجموعات الأخرى غائبة كلياً عن الشريط.',
-    titleEn: 'Choir & Catechism G4', titleAr: 'الجوقة وتعليم مسيحي — الصف الرابع',
-    subEn: '42 members · 2 swap requests waiting', subAr: '٤٢ عضواً · طلبا تبديل بالانتظار',
+    en: 'Ministry leader',
+    ar: 'مسؤولة خدمة',
+    user: 'Maya Haddad',
+    userAr: 'مايا حدّاد',
+    initials: 'MH',
+    noteEn:
+      'Scoped to the groups she leads. Every list she opens is already filtered to her people — the parish list, giving and other groups are not in the rail at all.',
+    noteAr:
+      'محصورة بالمجموعات التي تقودها. كل لائحة تفتحها مرشّحة مسبقاً على أفرادها — لائحة الرعية والتقدمات والمجموعات الأخرى غائبة كلياً عن الشريط.',
+    titleEn: 'Choir & Catechism G4',
+    titleAr: 'الجوقة وتعليم مسيحي — الصف الرابع',
+    subEn: '42 members · 2 swap requests waiting',
+    subAr: '٤٢ عضواً · طلبا تبديل بالانتظار',
     items: [
       ['l', 'Dashboard', 'لوحة القيادة', 'dash', '', 1],
       ['h', 'My ministry', 'خدمتي'],
@@ -132,68 +202,249 @@ const caps = { letterSpacing: '.06em', textTransform: 'uppercase' };
 
 function Roles({ L }) {
   const [current, setCurrent] = useState('priest');
-  const r = ROLES[current], ar = L(false, true);
-  return <>
-    <div className="roletabs" style={{ marginTop: 32 }} id="roletabs">{ORDER.map(key => <button key={key} type="button" className={'chip' + (key === current ? ' chip-on' : '')} aria-pressed={key === current} onClick={() => setCurrent(key)}>{ar ? ROLES[key].ar : ROLES[key].en}</button>)}</div>
-    <div className="rolebody">
-      <div className="rolerail" id="rolerail">{r.items.map((it, i) => it[0] === 'h' ? <div key={i} className="navgroup">{ar ? it[2] : it[1]}</div>
-        : <div key={i} className={'navitem' + (it[5] ? ' on' : '')}><Use id={it[3]} aria-hidden="true" /><span>{ar ? it[2] : it[1]}</span>{it[4] ? <span className="badge tnum" dir="ltr">{it[4]}</span> : null}</div>)}</div>
-      <div className="card" style={{ padding: 28 }}>
-        <div className="row" style={{ gap: 14 }}>
-          <span className="avatar" style={{ width: 44, height: 44, fontSize: 15 }} id="roleinitials">{r.initials}</span>
-          <div><div className="t-sub" id="roleuser">{ar ? r.userAr : r.user}</div><div className="t-ui dim" id="rolename">{ar ? r.ar : r.en}</div></div>
+  const r = ROLES[current],
+    ar = L(false, true);
+  return (
+    <>
+      <div className="roletabs" style={{ marginTop: 32 }} id="roletabs">
+        {ORDER.map(key => (
+          <button
+            key={key}
+            type="button"
+            className={'chip' + (key === current ? ' chip-on' : '')}
+            aria-pressed={key === current}
+            onClick={() => setCurrent(key)}
+          >
+            {ar ? ROLES[key].ar : ROLES[key].en}
+          </button>
+        ))}
+      </div>
+      <div className="rolebody">
+        <div className="rolerail" id="rolerail">
+          {r.items.map((it, i) =>
+            it[0] === 'h' ? (
+              <div key={i} className="navgroup">
+                {ar ? it[2] : it[1]}
+              </div>
+            ) : (
+              <div key={i} className={'navitem' + (it[5] ? ' on' : '')}>
+                <Use id={it[3]} aria-hidden="true" />
+                <span>{ar ? it[2] : it[1]}</span>
+                {it[4] ? (
+                  <span className="badge tnum" dir="ltr">
+                    {it[4]}
+                  </span>
+                ) : null}
+              </div>
+            )
+          )}
         </div>
-        <hr className="rule" style={{ margin: '20px 0' }} />
-        <p className="t-body dim" id="rolenote">{ar ? r.noteAr : r.noteEn}</p>
-        <div className="stack" style={{ gap: 6, marginTop: 20 }}>
-          <div className="t-caption dimmer" style={caps}>{L('Lands on', 'الشاشة الأولى')}</div>
-          <div className="t-sub" id="roletitle">{ar ? r.titleAr : r.titleEn}</div>
-          <div className="t-ui dim" id="rolesub">{ar ? r.subAr : r.subEn}</div>
+        <div className="card" style={{ padding: 28 }}>
+          <div className="row" style={{ gap: 14 }}>
+            <span className="avatar" style={{ width: 44, height: 44, fontSize: 15 }} id="roleinitials">
+              {r.initials}
+            </span>
+            <div>
+              <div className="t-sub" id="roleuser">
+                {ar ? r.userAr : r.user}
+              </div>
+              <div className="t-ui dim" id="rolename">
+                {ar ? r.ar : r.en}
+              </div>
+            </div>
+          </div>
+          <hr className="rule" style={{ margin: '20px 0' }} />
+          <p className="t-body dim" id="rolenote">
+            {ar ? r.noteAr : r.noteEn}
+          </p>
+          <div className="stack" style={{ gap: 6, marginTop: 20 }}>
+            <div className="t-caption dimmer" style={caps}>
+              {L('Lands on', 'الشاشة الأولى')}
+            </div>
+            <div className="t-sub" id="roletitle">
+              {ar ? r.titleAr : r.titleEn}
+            </div>
+            <div className="t-ui dim" id="rolesub">
+              {ar ? r.subAr : r.subEn}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </>;
+    </>
+  );
 }
 
 const MODULES = [
-  ['people', ['People', 'المؤمنون'], ['Arabic and Latin names, governorate–district–town address, +961 phone, rite, visitor or member status.', 'اسم عربي ولاتيني، عنوان بالمحافظة والقضاء والبلدة، هاتف ‎+961‎، طقس، وحالة زائر أو منتسب.']],
-  ['family', ['Families', 'العائلات'], ['Households linked to one home and one envelope number, with children carried under both names.', 'أسر مترابطة بمنزل واحد ومظروف واحد، مع أطفال يحملون الاسمين.']],
-  ['sacr', ['Sacraments', 'الأسرار'], ['Baptism, chrismation, communion, marriage, burial — with A4 certificates the priest signs before they print.', 'معمودية وميرون ومناولة وإكليل ودفن — مع شهادات تُطبع على مقاس A4 وتوقيع الكاهن.']],
-  ['attend', ['Attendance', 'الحضور'], ['Mass counts and event check-in, with guardian pickup codes when needed.', 'عدّ القداس وتسجيل وصول المشتركين إلى الأحداث، مع رمز لاستلام الأطفال عند الحاجة.']],
-  ['events', ['Events', 'الأحداث'], ['A calendar carrying the feast overlay for your rite — a gold dot on a date always means feast day.', 'رزنامة تحمل طبقة أعياد الطقس، ونقطة ذهبية على كل يوم عيد.']],
-  ['groups', ['Groups', 'المجموعات'], ['Choir, catechism, sodalities, youth — each with its own leader, roster and attendance.', 'جوقة، تعليم مسيحي، أخويّات، شبيبة — لكلٍّ مسؤولها ولائحته وحضوره.']],
-  ['vol', ['Volunteers', 'المتطوّعون'], ['A rota board with swap requests, and a reminder that reaches people on WhatsApp before their turn.', 'لوحة مناوبات بطلبات تبديل، وتذكير يصل عبر واتساب قبل الخدمة.']],
-  ['msg', ['Messaging', 'المراسلة'], ['WhatsApp first, SMS as fallback, email last — the order a Lebanese parish already uses.', 'واتساب أولاً، ثم رسالة قصيرة، ثم بريد إلكتروني — بالترتيب نفسه الذي تستعمله الرعية أصلاً.']],
-  ['give', ['Giving', 'التقدمات'], ['Counting sessions with numbered envelopes, unattributed cash, pledges, and year-end statements in both currencies.', 'جلسات عدّ بمظاريف مرقّمة، ونقد غير مسمّى، وتعهّدات، وكشوفات سنوية بالعملتين.']],
-  ['fin', ['Finance', 'المالية'], ['Funds, expenses, budget versus actual and reconciliation — every line stamped with its rate.', 'صناديق ومصاريف وموازنة مقابل فعلي ومطابقة — كلها تحمل سعر الصرف.']],
-  ['reports', ['Reports', 'التقارير'], ['Eparchy and council reports, exported to PDF or Excel in either language.', 'تقارير للأبرشية وللمجلس، تُصدَّر إلى PDF وExcel بأيّ من اللغتين.']],
-  ['checkin', ['Member portal', 'بوّابة المؤمنين'], ['Families update their own address and phone and request a certificate, without reaching anyone else\'s record.', 'تحدّث العائلات عنوانها وهاتفها بنفسها، وتطلب شهادة، من دون أن تدخل إلى سجلّات غيرها.']]
+  [
+    'people',
+    ['People', 'المؤمنون'],
+    [
+      'Arabic and Latin names, governorate–district–town address, +961 phone, rite, visitor or member status.',
+      'اسم عربي ولاتيني، عنوان بالمحافظة والقضاء والبلدة، هاتف ‎+961‎، طقس، وحالة زائر أو منتسب.'
+    ]
+  ],
+  [
+    'family',
+    ['Families', 'العائلات'],
+    [
+      'Households linked to one home and one envelope number, with children carried under both names.',
+      'أسر مترابطة بمنزل واحد ومظروف واحد، مع أطفال يحملون الاسمين.'
+    ]
+  ],
+  [
+    'sacr',
+    ['Sacraments', 'الأسرار'],
+    [
+      'Baptism, chrismation, communion, marriage, burial — with A4 certificates the priest signs before they print.',
+      'معمودية وميرون ومناولة وإكليل ودفن — مع شهادات تُطبع على مقاس A4 وتوقيع الكاهن.'
+    ]
+  ],
+  [
+    'attend',
+    ['Attendance', 'الحضور'],
+    [
+      'Mass counts and event check-in, with guardian pickup codes when needed.',
+      'عدّ القداس وتسجيل وصول المشتركين إلى الأحداث، مع رمز لاستلام الأطفال عند الحاجة.'
+    ]
+  ],
+  [
+    'events',
+    ['Events', 'الأحداث'],
+    [
+      'A calendar carrying the feast overlay for your rite — a gold dot on a date always means feast day.',
+      'رزنامة تحمل طبقة أعياد الطقس، ونقطة ذهبية على كل يوم عيد.'
+    ]
+  ],
+  [
+    'groups',
+    ['Groups', 'المجموعات'],
+    [
+      'Choir, catechism, sodalities, youth — each with its own leader, roster and attendance.',
+      'جوقة، تعليم مسيحي، أخويّات، شبيبة — لكلٍّ مسؤولها ولائحته وحضوره.'
+    ]
+  ],
+  [
+    'vol',
+    ['Volunteers', 'المتطوّعون'],
+    [
+      'A rota board with swap requests, and a reminder that reaches people on WhatsApp before their turn.',
+      'لوحة مناوبات بطلبات تبديل، وتذكير يصل عبر واتساب قبل الخدمة.'
+    ]
+  ],
+  [
+    'msg',
+    ['Messaging', 'المراسلة'],
+    [
+      'WhatsApp first, SMS as fallback, email last — the order a Lebanese parish already uses.',
+      'واتساب أولاً، ثم رسالة قصيرة، ثم بريد إلكتروني — بالترتيب نفسه الذي تستعمله الرعية أصلاً.'
+    ]
+  ],
+  [
+    'give',
+    ['Giving', 'التقدمات'],
+    [
+      'Counting sessions with numbered envelopes, unattributed cash, pledges, and year-end statements in both currencies.',
+      'جلسات عدّ بمظاريف مرقّمة، ونقد غير مسمّى، وتعهّدات، وكشوفات سنوية بالعملتين.'
+    ]
+  ],
+  [
+    'fin',
+    ['Finance', 'المالية'],
+    [
+      'Funds, expenses, budget versus actual and reconciliation — every line stamped with its rate.',
+      'صناديق ومصاريف وموازنة مقابل فعلي ومطابقة — كلها تحمل سعر الصرف.'
+    ]
+  ],
+  [
+    'reports',
+    ['Reports', 'التقارير'],
+    [
+      'Eparchy and council reports, exported to PDF or Excel in either language.',
+      'تقارير للأبرشية وللمجلس، تُصدَّر إلى PDF وExcel بأيّ من اللغتين.'
+    ]
+  ],
+  [
+    'checkin',
+    ['Member portal', 'بوّابة المؤمنين'],
+    [
+      "Families update their own address and phone and request a certificate, without reaching anyone else's record.",
+      'تحدّث العائلات عنوانها وهاتفها بنفسها، وتطلب شهادة، من دون أن تدخل إلى سجلّات غيرها.'
+    ]
+  ]
 ];
 const FAQ = [
-  [['Does it work without internet?', 'هل يعمل من دون إنترنت؟'], ['Yes. Entry continues on the machine itself during a cut, changes queue behind a banner that says so plainly, and everything syncs when the line returns. The only thing that waits for a connection is sending messages.', 'نعم. يتابع الإدخال على الجهاز نفسه خلال الانقطاع، وتُصطفّ التغييرات مع لافتة واضحة، ثم تُزامن عند عودة الخط. الشيء الوحيد الذي ينتظر الاتصال هو إرسال الرسائل.']],
-  [['Can we keep our paper registers?', 'هل نستطيع الاحتفاظ بسجلّاتنا الورقية؟'], ['Yes, and many parishes do. ParishLife prints A4 pages carrying the same register numbering, so the bound book stays the legal original while the system is what you search and report from.', 'نعم، والكثير من الرعايا تفعل. تطبع ParishLife على مقاس A4 بترقيم السجلّ نفسه، فيبقى الدفتر هو الأصل القانوني ويكون النظام هو ما تبحث فيه وتُصدر منه التقارير.']],
-  [['What happens when the exchange rate moves?', 'ماذا يحصل حين يتغيّر سعر الصرف؟'], ['Past records do not change. Every amount is stored with the rate that produced it, so a receipt reprinted next year gives the same figure. A new rate applies only going forward, and the system warns you when the rate has gone stale instead of quietly using it.', 'السجلّات القديمة لا تتغيّر. كل مبلغ محفوظ مع السعر الذي أنتجه، فإعادة طباعة إيصال من العام الماضي تعطي الرقم نفسه. السعر الجديد يسري على ما هو آتٍ فقط، ويحذّرك النظام حين يتقادم السعر.']],
-  [['Who can see what?', 'من يرى ماذا؟'], ['Staff access follows their office role, while members use a personal portal. The priest sees pastoral notes and approves certificates. The secretary does not see finances, the treasurer does not see pastoral notes, and a ministry leader sees only their groups. A volunteer can sign in as a member without belonging to a group.', 'للموظفين صلاحيات بحسب دورهم، وللأعضاء بوابة شخصية. الكاهن يرى الملاحظات الرعوية ويعتمد الشهادات. أمين السرّ لا يرى المال. أمين الصندوق لا يرى الملاحظات. مسؤول الخدمة يرى مجموعاته فقط. يمكن للمتطوع تسجيل الدخول كعضو، حتى لو لم يكن في أي مجموعة.']],
-  [['Can parishioners see their own records?', 'هل يستطيع المؤمنون رؤية سجلّاتهم؟'], ['Through the member portal a family updates its own address, phone and members, requests a certificate and sees its own giving statement. It reaches no one else\'s record, and every change is reviewed by the office before it lands.', 'عبر بوّابة المؤمنين: تحدّث العائلة عنوانها وهاتفها وأفرادها، وتطلب شهادة، وترى كشف تقدماتها. لا تصل إلى سجلّ أحد آخر، وكل تعديل يمرّ على المكتب قبل اعتماده.']],
-  [['Where is the data kept, and can we export it?', 'أين تُحفظ البيانات، وهل نستطيع تصديرها؟'], ['A full copy on the parish computer and an encrypted copy on the server. Export to Excel or PDF in either language is always available, without asking and without a fee. The records belong to the parish.', 'نسخة كاملة على حاسوب الرعية ونسخة مشفّرة على الخادم. التصدير متاح دائماً إلى Excel وPDF بأيّ من اللغتين، من دون طلب ومن دون رسم. السجلّات ملك الرعية.']]
+  [
+    ['Does it work without internet?', 'هل يعمل من دون إنترنت؟'],
+    [
+      'Yes. Entry continues on the machine itself during a cut, changes queue behind a banner that says so plainly, and everything syncs when the line returns. The only thing that waits for a connection is sending messages.',
+      'نعم. يتابع الإدخال على الجهاز نفسه خلال الانقطاع، وتُصطفّ التغييرات مع لافتة واضحة، ثم تُزامن عند عودة الخط. الشيء الوحيد الذي ينتظر الاتصال هو إرسال الرسائل.'
+    ]
+  ],
+  [
+    ['Can we keep our paper registers?', 'هل نستطيع الاحتفاظ بسجلّاتنا الورقية؟'],
+    [
+      'Yes, and many parishes do. ParishLife prints A4 pages carrying the same register numbering, so the bound book stays the legal original while the system is what you search and report from.',
+      'نعم، والكثير من الرعايا تفعل. تطبع ParishLife على مقاس A4 بترقيم السجلّ نفسه، فيبقى الدفتر هو الأصل القانوني ويكون النظام هو ما تبحث فيه وتُصدر منه التقارير.'
+    ]
+  ],
+  [
+    ['What happens when the exchange rate moves?', 'ماذا يحصل حين يتغيّر سعر الصرف؟'],
+    [
+      'Past records do not change. Every amount is stored with the rate that produced it, so a receipt reprinted next year gives the same figure. A new rate applies only going forward, and the system warns you when the rate has gone stale instead of quietly using it.',
+      'السجلّات القديمة لا تتغيّر. كل مبلغ محفوظ مع السعر الذي أنتجه، فإعادة طباعة إيصال من العام الماضي تعطي الرقم نفسه. السعر الجديد يسري على ما هو آتٍ فقط، ويحذّرك النظام حين يتقادم السعر.'
+    ]
+  ],
+  [
+    ['Who can see what?', 'من يرى ماذا؟'],
+    [
+      'Staff access follows their office role, while members use a personal portal. The priest sees pastoral notes and approves certificates. The secretary does not see finances, the treasurer does not see pastoral notes, and a ministry leader sees only their groups. A volunteer can sign in as a member without belonging to a group.',
+      'للموظفين صلاحيات بحسب دورهم، وللأعضاء بوابة شخصية. الكاهن يرى الملاحظات الرعوية ويعتمد الشهادات. أمين السرّ لا يرى المال. أمين الصندوق لا يرى الملاحظات. مسؤول الخدمة يرى مجموعاته فقط. يمكن للمتطوع تسجيل الدخول كعضو، حتى لو لم يكن في أي مجموعة.'
+    ]
+  ],
+  [
+    ['Can parishioners see their own records?', 'هل يستطيع المؤمنون رؤية سجلّاتهم؟'],
+    [
+      "Through the member portal a family updates its own address, phone and members, requests a certificate and sees its own giving statement. It reaches no one else's record, and every change is reviewed by the office before it lands.",
+      'عبر بوّابة المؤمنين: تحدّث العائلة عنوانها وهاتفها وأفرادها، وتطلب شهادة، وترى كشف تقدماتها. لا تصل إلى سجلّ أحد آخر، وكل تعديل يمرّ على المكتب قبل اعتماده.'
+    ]
+  ],
+  [
+    ['Where is the data kept, and can we export it?', 'أين تُحفظ البيانات، وهل نستطيع تصديرها؟'],
+    [
+      'A full copy on the parish computer and an encrypted copy on the server. Export to Excel or PDF in either language is always available, without asking and without a fee. The records belong to the parish.',
+      'نسخة كاملة على حاسوب الرعية ونسخة مشفّرة على الخادم. التصدير متاح دائماً إلى Excel وPDF بأيّ من اللغتين، من دون طلب ومن دون رسم. السجلّات ملك الرعية.'
+    ]
+  ]
 ];
-const PERSON_ROWS = [['GH', 'Georges Haddad', 'جورج حدّاد', ['Hadath', 'الحدث'], '$50.00', '4,475,000'], ['RN', 'Rita Nassar', 'ريتا نصّار', ['Baabda', 'بعبدا'], '$120.00', '10,740,000'],
-  ['MH', 'Maya Haddad', 'مايا حدّاد', ['Hadath', 'الحدث'], null, '—'], ['NS', 'Nabil Saade', 'نبيل سعادة', ['Hadath', 'الحدث'], '$80.00', '7,160,000']];
+const PERSON_ROWS = [
+  ['GH', 'Georges Haddad', 'جورج حدّاد', ['Hadath', 'الحدث'], '$50.00', '4,475,000'],
+  ['RN', 'Rita Nassar', 'ريتا نصّار', ['Baabda', 'بعبدا'], '$120.00', '10,740,000'],
+  ['MH', 'Maya Haddad', 'مايا حدّاد', ['Hadath', 'الحدث'], null, '—'],
+  ['NS', 'Nabil Saade', 'نبيل سعادة', ['Hadath', 'الحدث'], '$80.00', '7,160,000']
+];
 
 /* Scroll reveal: each section's direct content rises in once, siblings a beat apart. */
 function useReveal() {
   useEffect(() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return undefined;
     document.documentElement.classList.add('motion');
-    const items = document.querySelectorAll('.section .wrap > *, .section-lg .wrap > *, .shot, .module, .footer .wrap > *');
-    const io = new IntersectionObserver(entries => entries.forEach(e => {
-      if (!e.isIntersecting) return;
-      e.target.classList.add('in'); io.unobserve(e.target);
-    }), { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    const items = document.querySelectorAll(
+      '.section .wrap > *, .section-lg .wrap > *, .shot, .module, .footer .wrap > *'
+    );
+    const io = new IntersectionObserver(
+      entries =>
+        entries.forEach(e => {
+          if (!e.isIntersecting) return;
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }),
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }
+    );
     items.forEach(el => {
       const sibs = [...el.parentElement.children].filter(x => x.matches('.module'));
       if (el.matches('.module')) el.style.transitionDelay = `${Math.min(sibs.indexOf(el) % 4, 3) * 60}ms`;
-      el.setAttribute('data-reveal', ''); io.observe(el);
+      el.setAttribute('data-reveal', '');
+      io.observe(el);
     });
     return () => io.disconnect();
   }, []);
@@ -201,429 +452,892 @@ function useReveal() {
 
 export function Landing({ initialLang }) {
   const [lang, setLang] = useState(initialLang);
-  const L = (en, ar) => lang === 'ar' ? ar : en;
+  const L = (en, ar) => (lang === 'ar' ? ar : en);
   useLayoutEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    try { localStorage.setItem('pl-lang', lang); } catch { /* private mode */ }
+    try {
+      localStorage.setItem('pl-lang', lang);
+    } catch {
+      /* private mode */
+    }
   }, [lang]);
   useReveal();
   const check = <Use id="check" size={15} />;
-  return <>
-    <Sprite />
-    <header className="topbar">
-      <div className="wrap">
-        <a className="brand" href="#top">
-          <span className="mark" aria-hidden="true">P</span>
-          <span className="name">{L('ParishLife', 'حياة الرعية')}</span>
-        </a>
-        <nav className="navlinks" aria-label="Primary">
-          <a href="#how">{L('How it works', 'كيف يعمل')}</a>
-          <a href="#modules">{L('Modules', 'الوحدات')}</a>
-          <a href="#roles">{L('Roles', 'الأدوار')}</a>
-          <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
-          <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
-        </nav>
-        <div className="langtoggle" role="group" aria-label="Language">
-          <button type="button" data-lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
-          <button type="button" data-lang="ar" aria-pressed={lang === 'ar'} lang="ar" onClick={() => setLang('ar')}>ع</button>
-        </div>
-        <a className="btn btn-primary" href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
-      </div>
-    </header>
-
-    <main id="top">
-
-      <section className="hero">
+  return (
+    <>
+      <Sprite />
+      <header className="topbar">
         <div className="wrap">
-          <p className="eyebrow" style={{ maxWidth: 420 }}><span>{L('ParishLife · حياة الرعية', 'حياة الرعية · ParishLife')}</span></p>
-          <h1 className="hero-title" style={{ marginTop: 20 }}>{L('Your parish register, kept the way your parish actually works.', 'سجلّ رعيّتك، محفوظ كما تعمل رعيّتك فعلاً.')}</h1>
-          <p className="lede" style={{ marginTop: 24 }}>{L('ParishLife keeps people, sacraments, attendance and the collection in one place — in Arabic and in English, in dollars and in lira. And it keeps recording when the power goes out.', 'يجمع «حياة الرعية» المؤمنين والأسرار والحضور والتقدمات في مكان واحد — بالعربية والإنكليزية، بالدولار والليرة. ويتابع التسجيل حين تنقطع الكهرباء.')}</p>
-          <div className="hero-actions">
-            <a className="btn btn-primary btn-lg" href="#book">{L('Book a walkthrough', 'احجز عرضاً تجريبياً')}</a>
-            <a className="btn btn-secondary btn-lg" href="#how">{L('See how it works', 'شاهد كيف يعمل')}</a>
-          </div>
-
-          <div className="facts">
-            <div className="fact">
-              <div className="k">EN{' / '}<span lang="ar">ع</span></div>
-              <div className="v">{L('Every screen drawn in both directions, not translated later.', 'كل شاشة مرسومة بالاتجاهين، لا ترجمة لاحقة.')}</div>
-            </div>
-            <div className="fact">
-              <div className="k" dir="ltr">{'$ / L.L'}</div>
-              <div className="v">{L('Every amount in both currencies, with the rate that produced it.', 'كل مبلغ بالعملتين، مع السعر الذي أنتجه.')}</div>
-            </div>
-            <div className="fact">
-              <div className="k">5</div>
-              <div className="v">{L('roles: priest, secretary, treasurer, ministry leader, and member.', 'أدوار: كاهن، أمين سرّ، أمين صندوق، مسؤول خدمة، وعضو.')}</div>
-            </div>
-            <div className="fact">
-              <div className="k">{L('Offline', 'بلا إنترنت')}</div>
-              <div className="v">{L('Keeps recording through a cut, syncs when the line returns.', 'يتابع التسجيل خلال انقطاع التيار ويزامن لاحقاً.')}</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ paddingBottom: 96 }}>
-        <div className="wrap">
-          <div className="shot">
-            <div className="shot-bar"><i></i><i></i><i></i><span className="mono">parishlife.app / saint-elias</span></div>
-            <div className="shell">
-              <aside className="shell-rail">
-                <div className="shell-parish">
-                  <span className="mark" aria-hidden="true">P</span>
-                  <span>
-                    <b>{L('Saint Elias', 'مار الياس')}</b>
-                    <small>{L('Hadath · Maronite', 'الحدث · ماروني')}</small>
-                  </span>
-                </div>
-                <div className="navgroup">{L('General', 'عام')}</div>
-                <div className="navitem on"><Use id="dash" /><span>{L('Dashboard', 'لوحة القيادة')}</span></div>
-                <div className="navgroup">{L('Records', 'السجلات')}</div>
-                <div className="navitem"><Use id="people" /><span>{L('People', 'المؤمنون')}</span><span className="badge tnum">1,380</span></div>
-                <div className="navitem"><Use id="family" /><span>{L('Families', 'العائلات')}</span><span className="badge tnum">412</span></div>
-                <div className="navitem"><Use id="sacr" /><span>{L('Sacraments', 'الأسرار')}</span><span className="badge tnum">3</span></div>
-                <div className="navgroup">{L('Parish life', 'حياة الرعية')}</div>
-                <div className="navitem"><Use id="attend" /><span>{L('Attendance', 'الحضور')}</span></div>
-                <div className="navitem"><Use id="give" /><span>{L('Giving', 'التقدمات')}</span></div>
-                <div className="syncline"><span className="dot"></span><span>{L('All changes synced', 'تمّت مزامنة كل التغييرات')}</span></div>
-              </aside>
-              <div className="shell-main">
-                <div className="shell-top">
-                  <span></span>
-                  <div className="shell-search"><Use id="search" size={14} /><span>{L('Search people, records, pages', 'ابحث عن شخص أو سجل')}</span><kbd>⌘K</kbd></div>
-                  <div className="shell-right"><span className="shell-bell"><Use id="bell" size={16} /><i></i></span><span className="avatar">AK</span></div>
-                </div>
-                <div className="shell-body">
-                  <div className="shell-head">
-                    <div>
-                      <h4>{L('Parishioners', 'المؤمنون')}</h4>
-                      <p><span dir="ltr" className="tnum">1,380</span> <span>{L('records · 412 families · updated today', 'سجلاً · ٤١٢ عائلة · آخر تحديث اليوم')}</span></p>
-                    </div>
-                    <span className="pill pill-success" style={{ marginInlineStart: 'auto' }}><span className="dot"></span><span>{L('Counting session 214 open', 'جلسة العدّ ٢١٤ مفتوحة')}</span></span>
-                    <a className="btn btn-primary" style={{ minHeight: 32, padding: '0 14px', fontSize: 13 }} href="#book">{L('New parishioner', 'مؤمن جديد')}</a>
-                  </div>
-                  <div className="mtable">
-                    <div className="th">
-                      <span>{L('Name', 'الاسم')}</span>
-                      <span>{L('Town', 'البلدة')}</span>
-                      <span className="num">{L('Last gift', 'آخر تقدمة')}</span>
-                      <span className="num">L.L</span>
-                    </div>
-                    {PERSON_ROWS.map(([initials, name, ar, town, usd, lbp]) => <div key={initials} className="tr">
-                      <span className="who"><span className="avatar">{initials}</span><span><b>{name}</b><small>{ar}</small></span></span>
-                      <span className="dim">{L(...town)}</span>
-                      <span className="num">{usd || <span className="pill">{L('Visitor', 'زائرة')}</span>}</span><span className="num dim">{lbp}</span>
-                    </div>)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className="t-caption dimmer" style={{ marginTop: 12, textAlign: 'center' }}>{L('The real shell. Switch to ع above — the rail, the table and the filters all mirror.', 'لقطة من الواجهة — الشريط الجانبي والجدول وأشرطة التصفية كلها تنعكس بالعربية.')}</p>
-        </div>
-      </section>
-
-      <hr className="rule" />
-
-      <section className="section" id="why">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Why', 'لماذا')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20, maxWidth: '20ch' }}>{L('The parish office as it actually is — not as software assumes it is.', 'مكتب الرعية كما هو فعلاً، لا كما تفترضه البرامج.')}</h2>
-          <div className="grid g4" style={{ marginTop: 40 }}>
-            {[[['Two registers, two alphabets', 'سجلّان، أبجديّتان'], ['The baptism book is written in Arabic. The phone list the office searches is in Latin letters. Most software makes you pick one.', 'سجلّ المعمودية بالعربية. لائحة الهواتف التي يبحث فيها المكتب بالحروف اللاتينية. معظم البرامج تجبرك على الاختيار.']],
-              [['A collection counted in cash', 'تقدمة تُعدّ نقداً'], ['Envelopes, two currencies, and a rate that moved since last Sunday. A spreadsheet loses the rate the moment you overwrite the cell.', 'مظاريف وعملتان وسعر صرف تغيّر منذ الأحد الماضي. جداول «إكسل» تفقد السعر.']],
-              [['Three hours of state power', 'ثلاث ساعات كهرباء'], ['The connection drops in the middle of an entry. What was already typed should not disappear with it.', 'ينقطع الاتصال في منتصف الإدخال. ما كُتب أصلاً يجب ألّا يضيع.']],
-              [['One volunteer, one laptop', 'متطوّع واحد وحاسوب واحد'], ['Whoever is in the office on Tuesday has to be able to use it untrained, on an eight-year-old monitor in poor light.', 'من يكون في المكتب يوم الثلاثاء يجب أن يستطيع استعماله بلا تدريب، على شاشة قديمة وإضاءة ضعيفة.']]
-            ].map(([h, p]) => <div key={h[0]} className="card card-flat">
-              <h3>{L(...h)}</h3>
-              <p className="t-body dim" style={{ marginTop: 8 }}>{L(...p)}</p>
-            </div>)}
-          </div>
-        </div>
-      </section>
-
-      <hr className="rule" />
-
-      <section className="section-lg" id="how">
-        <div className="wrap stack" style={{ gap: 72 }}>
-
-          <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
-            <div>
-              <p className="eyebrow" style={{ maxWidth: 200 }}><span>{L('01 — Bilingual', '٠١ — ثنائي اللغة')}</span></p>
-              <h2 className="t-heading" style={{ marginTop: 20 }}>{L('Bilingual in the record itself, not in a translation layer.', 'ثنائي اللغة في السجلّ نفسه، لا في الترجمة.')}</h2>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('The Arabic name is what the certificate prints. The Latin transliteration is what the office searches by. Both are stored on every record, always, and both are always shown — the interface language only decides which one leads.', 'الاسم العربي هو ما تطبعه الشهادة. الحرف اللاتيني هو ما يبحث به المكتب. الاثنان محفوظان على كل سجلّ دائماً، والاثنان يظهران دائماً — لغة الواجهة تقرّر فقط أيّهما يتصدّر.')}</p>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('In Arabic everything mirrors: the sidebar side, the table column order, the chart axis, the drawer entry edge, every chevron. Clocks, logos and the play triangle never flip.', 'وبالعربية ينعكس كل شيء: جهة الشريط الجانبي، ترتيب أعمدة الجدول، محور الرسم البياني، حافة دخول الدرج، وأسهم التنقّل. الساعات والشعارات وأزرار التشغيل لا تنعكس أبداً.')}</p>
-            </div>
-            <div className="card" style={{ padding: 32 }}>
-              <div className="row" style={{ gap: 16 }}>
-                <span className="avatar" style={{ width: 56, height: 56, fontSize: 19 }}>GH</span>
-                <div>
-                  <div style={{ font: '600 26px/1.5 var(--arabic)' }}>جورج حدّاد</div>
-                  <div className="t-ui dim" style={{ marginTop: 2 }}>Georges Haddad</div>
-                </div>
-              </div>
-              <hr className="rule" style={{ margin: '20px 0' }} />
-              <div className="t-caption dimmer" style={caps}>{L('Certificate name', 'اسم الشهادة')}</div>
-              <div style={{ font: '600 18px/1.6 var(--arabic)', marginTop: 4 }}>جورج الياس حدّاد</div>
-              <div className="t-caption dimmer" style={{ ...caps, marginTop: 16 }}>{L('Search key', 'مفتاح البحث')}</div>
-              <div className="t-ui" style={{ marginTop: 4 }}>Georges Haddad · Georges Hadad · جورج حداد</div>
-            </div>
-          </div>
-
-          <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
-            <div className="card" style={{ padding: 32 }}>
-              <div className="t-caption dimmer" style={caps}>{L('Counting session 214 — total', 'جلسة العدّ ٢١٤ — المجموع')}</div>
-              <div className="amount" style={{ marginTop: 12 }} dir="ltr">
-                <div className="usd">$1,250.00</div>
-                <div className="lbp">L.L 111,875,000</div>
-                <div className="rate">at 89,500 · set 4 Oct 2026</div>
-              </div>
-              <hr className="rule" style={{ margin: '20px 0' }} />
-              <div className="stack" style={{ gap: 10 }}>
-                <div className="field"><span className="prefix">USD</span><span className="value" dir="ltr">1,250.00</span></div>
-                <div className="field"><span className="prefix">L.L</span><span className="value" dir="ltr">111,875,000</span></div>
-              </div>
-              <div className="alert alert-warning" style={{ marginTop: 16 }}>
-                <Use id="warn" size={18} />
-                <span><b>{L('Rate is 6 days old', 'السعر عمره ٦ أيام')}</b><span>{L('Set it again before you close the session so the receipts carry the right figure.', 'أعِد ضبطه قبل إقفال الجلسة كي تحمل الإيصالات السعر الصحيح.')}</span></span>
-              </div>
-            </div>
-            <div>
-              <p className="eyebrow" style={{ maxWidth: 200 }}><span>{L('02 — Currency', '٠٢ — العملة')}</span></p>
-              <h2 className="t-heading" style={{ marginTop: 20 }}>{L('Every amount carries the rate that produced it.', 'كل مبلغ يحمل معه السعر الذي أنتجه.')}</h2>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('USD leads at full size, lira follows in mono beneath it. The rate that produced the figure travels with it — because last month\'s rate is a different number, and a receipt reprinted next year has to still be true.', 'الدولار يتصدّر بالحجم الكامل، والليرة تتبعه بخط أحادي المسافة تحته. والسعر الذي أنتج الرقم يسافر معه، لأنّ سعر الشهر الماضي رقم آخر.')}</p>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('The rate is set once in the top bar. Receipts, statements, pledge balances and the budget all derive from it, and the system tells you when it has gone stale rather than quietly using it.', 'يُضبط السعر مرة واحدة في الشريط العلوي. الإيصالات والكشوفات والتقارير تُحتسب كلها منه، ويحذّرك النظام حين يتقادم.')}</p>
-            </div>
-          </div>
-
-          <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
-            <div>
-              <p className="eyebrow" style={{ maxWidth: 200 }}><span>{L('03 — Resilience', '٠٣ — الصمود')}</span></p>
-              <h2 className="t-heading" style={{ marginTop: 20 }}>{L('Written for the power cut, not in spite of it.', 'مكتوب على مقاس انقطاع الكهرباء، لا رغماً عنه.')}</h2>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('When the connection drops, entry continues on the machine in front of you. Changes queue, the banner says so in plain words rather than a small icon, and everything syncs when the line comes back.', 'حين ينقطع الاتصال يتابع الإدخال على الجهاز أمامك. تُصطفّ التغييرات، ويقول الشريط ذلك بكلام واضح لا برمز صغير، ثم تُزامن كلها عند عودة الخط.')}</p>
-              <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>{L('Three states, all of them in the shell rather than per screen: offline, draft saved, changes queued. Nobody has to learn a fourth.', 'ثلاث حالات فقط، وكلّها في هيكل التطبيق لا داخل كل شاشة: غير متصل، مسوّدة محفوظة، تغييرات في الانتظار.')}</p>
-            </div>
-            <div className="stack" style={{ gap: 12 }}>
-              <div className="alert alert-info">
-                <Use id="warn" size={18} />
-                <span><b>{L('You are offline.', 'أنت غير متصل بالإنترنت.')}</b><span>{L('Work is being saved on this computer and will sync when the connection returns.', 'يتم حفظ العمل على هذا الحاسوب وسيُزامَن عند عودة الاتصال.')}</span></span>
-              </div>
-              <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
-                <span className="pill pill-info"><span className="dot"></span><span>{L('Draft saved', 'مسوّدة محفوظة')}</span></span>
-                <span className="t-caption dimmer mono">{L('14 seconds ago', 'قبل ١٤ ثانية')}</span>
-              </div>
-              <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
-                <span className="pill pill-warning"><span className="dot"></span><span>{L('3 changes queued', '٣ تغييرات في الانتظار')}</span></span>
-                <span className="t-caption dimmer">{L('will send when the line returns', 'تُرسل عند عودة الاتصال')}</span>
-              </div>
-              <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
-                <span className="pill pill-success"><span className="dot"></span><span>{L('All changes synced', 'تمّت مزامنة كل التغييرات')}</span></span>
-                <span className="t-caption dimmer mono">{L('last sync 19:14', 'آخر مزامنة ١٩:١٤')}</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <hr className="rule" />
-
-      <section className="section" id="modules">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Modules', 'الوحدات')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20, maxWidth: '22ch' }}>{L('Everything a parish keeps, in one place.', 'كل ما تحتفظ به الرعية، في مكان واحد.')}</h2>
-          <div className="grid g3" style={{ marginTop: 40 }}>
-            {MODULES.map(([icon, name, text]) => <div key={icon} className="module"><span className="ico"><Use id={icon} size={20} /></span><span><b>{L(...name)}</b><p>{L(...text)}</p></span></div>)}
-          </div>
-        </div>
-      </section>
-
-      <hr className="rule" />
-
-      <section className="section" id="roles">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Roles', 'الأدوار')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20, maxWidth: '24ch' }}>{L('Modules a role cannot use are absent, not dimmed.', 'الوحدات الممنوعة غائبة، لا مطفأة.')}</h2>
-          <p className="lede" style={{ marginTop: 16 }}>{L('The treasurer does not see pastoral notes. The secretary does not see money. A ministry leader sees only the people in the groups they lead. Same rail, five different products.', 'أمين الصندوق لا يرى الملاحظات الرعوية. أمين السرّ لا يرى المال. مسؤول الخدمة يرى مجموعته فقط. الشريط الجانبي نفسه، وخمسة منتجات مختلفة.')}</p>
-          <Roles L={L} />
-        </div>
-      </section>
-
-      <section className="section-lg panel-dark" id="lebanon">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Built for Lebanon', 'من أجل لبنان')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20, maxWidth: '26ch' }}>{L('These are not localisation afterthoughts. They are tokens in the data model.', 'ليست توطيناً لاحقاً — بل رموز في نموذج البيانات نفسه.')}</h2>
-          <div className="grid g2" style={{ marginTop: 48, gap: 24 }}>
-
-            <div className="card">
-              <h3 className="t-sub">{L('Rite', 'الطقس')}</h3>
-              <p className="t-body dim" style={{ marginTop: 8 }}>{L('Set once in the setup wizard, then it filters the sacrament list, the certificate templates and the feast overlay on every calendar.', 'يُضبط مرة واحدة في معالج الإعداد، ثم يرشّح لائحة الأسرار وقوالب الشهادات وطبقة الأعياد على كل رزنامة.')}</p>
-              <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                {[['Maronite', 'ماروني'], ['Greek Orthodox', 'روم أرثوذكس'], ['Melkite', 'روم كاثوليك'], ['Armenian', 'أرمني'], ['Syriac', 'سرياني'], ['Latin', 'لاتيني'], ['Evangelical', 'إنجيلي']]
-                  .map(([en, ar], i) => <span key={en} className={'chip' + (i === 0 ? ' chip-on' : '')}>{L(en, ar)}</span>)}
-              </div>
-            </div>
-
-            <div className="card">
-              <h3 className="t-sub">{L('Address & phone', 'العنوان والهاتف')}</h3>
-              <p className="t-body dim" style={{ marginTop: 8 }}>{L('A governorate → district → town cascade, then a free building line and a landmark line. No postal code field exists anywhere in the product.', 'تسلسل محافظة ← قضاء ← بلدة، ثم سطر حرّ للبناية وسطر لمَعلَم. لا حقل رمز بريدي في أيّ مكان من المنتج.')}</p>
-              <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                <span className="chip">{L('Mount Lebanon', 'جبل لبنان')}</span><span className="dimmer">→</span>
-                <span className="chip">{L('Baabda', 'بعبدا')}</span><span className="dimmer">→</span>
-                <span className="chip chip-on">{L('Hadath', 'الحدث')}</span>
-              </div>
-              <div className="t-ui dim" style={{ marginTop: 12 }}>{L('Imm. Khoury, 3rd floor — behind the municipality', 'بناية خوري، الطابق الثالث — خلف البلدية')}</div>
-              <div className="field" style={{ marginTop: 12, maxWidth: 240 }} dir="ltr"><span className="prefix">+961</span><span className="value">3 421 887</span></div>
-            </div>
-
-            <div className="card">
-              <h3 className="t-sub">{L('Channel order', 'ترتيب القنوات')}</h3>
-              <p className="t-body dim" style={{ marginTop: 8 }}>{L('WhatsApp is the default because it is what the parish already uses. SMS is the fallback. Email is last, and for most parishes it is never used at all.', 'واتساب هو الافتراضي لأنّه ما تستعمله الرعية أصلاً. الرسالة القصيرة احتياط، والبريد الإلكتروني أخيراً.')}</p>
-              <div className="row" style={{ gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-                <span className="chip chip-on">WhatsApp <span className="t-caption" style={{ marginInlineStart: 6, opacity: .7 }}>{L('default', 'افتراضي')}</span></span>
-                <span className="chip">SMS <span className="t-caption" style={{ marginInlineStart: 6, opacity: .7 }}>{L('fallback', 'احتياط')}</span></span>
-                <span className="chip">{L('Email — last', 'بريد إلكتروني — أخيراً')}</span>
-              </div>
-            </div>
-
-            <div className="card">
-              <h3 className="t-sub">{L('Direction', 'الاتجاه')}</h3>
-              <p className="t-body dim" style={{ marginTop: 8 }}>{L('Arabic mirrors everything: sidebar side, table column order, chart axis, drawer entry edge, chevrons, progress fill. Clocks, logos, media controls and the play triangle never flip.', 'العربية تعكس كل شيء: جهة الشريط، ترتيب الأعمدة، محور الرسم، حافة الدرج، الأسهم، امتلاء شريط التقدّم. الساعات والشعارات وأزرار الوسائط ومثلّث التشغيل لا تنعكس أبداً.')}</p>
-              <div className="row" style={{ gap: 8, marginTop: 16 }}>
-                <span className="chip mono" dir="ltr">dir=ltr</span>
-                <span className="chip chip-on mono" dir="ltr">dir=rtl</span>
-              </div>
-              <p className="t-caption" style={{ marginTop: 12, color: 'var(--ink)' }}>{L('Numerals and amounts stay left-to-right in both directions.', 'الأرقام والمبالغ تبقى من اليسار إلى اليمين في الحالتين.')}</p>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      <section className="section-lg" id="pricing">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Pricing', 'الأسعار')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20, maxWidth: '22ch' }}>{L('Priced in dollars, payable in either currency.', 'تُسعَّر بالدولار، وتُدفع بأيّ من العملتين.')}</h2>
-          <p className="lede" style={{ marginTop: 16 }}>{L('Shown in both currencies at the same parish rate the system uses inside. No setup fee, no annual lock-in.', 'السعر يظهر بالعملتين على سعر الرعية نفسه المستعمل داخل النظام. لا رسوم إعداد، ولا عقد سنوي.')}</p>
-
-          <div className="grid g3" style={{ marginTop: 40 }}>
-            <div className="card plan">
-              <div>
-                <div className="t-ui dim">{L('Small parish', 'رعية صغيرة')}</div>
-                <div className="amount" style={{ marginTop: 10 }} dir="ltr"><div className="usd">$19<span className="t-ui dim" style={{ fontWeight: 400 }}>/mo</span></div><div className="lbp">L.L 1,700,500</div><div className="rate">at 89,500</div></div>
-              </div>
-              <p className="t-body dim">{L('Up to 500 records. One or two people in the office.', 'حتى ٥٠٠ سجلّ. مستعمل واحد أو اثنان.')}</p>
-              <ul>
-                <li>{check}<span>{L('People, families, sacraments', 'المؤمنون والعائلات والأسرار')}</span></li>
-                <li>{check}<span>{L('A4 certificate printing', 'الشهادات على مقاس A4')}</span></li>
-                <li>{check}<span>{L('Offline working and sync', 'العمل بلا إنترنت والمزامنة')}</span></li>
-              </ul>
-              <a className="btn btn-secondary" href="#book">{L('Start', 'ابدأ')}</a>
-            </div>
-
-            <div className="card plan featured">
-              <div>
-                <div className="row" style={{ gap: 10 }}>
-                  <span className="t-ui dim">{L('Parish', 'رعية')}</span>
-                  <span className="pill pill-info"><span className="dot"></span><span>{L('Most parishes', 'الأكثر اختياراً')}</span></span>
-                </div>
-                <div className="amount" style={{ marginTop: 10 }} dir="ltr"><div className="usd">$49<span className="t-ui dim" style={{ fontWeight: 400 }}>/mo</span></div><div className="lbp">L.L 4,385,500</div><div className="rate">at 89,500</div></div>
-              </div>
-              <p className="t-body dim">{L('Unlimited records, all five roles, every module.', 'سجلّات غير محدودة، وخمسة أدوار، وكل الوحدات.')}</p>
-              <ul>
-                <li>{check}<span>{L('Everything in Small parish', 'كل ما في الباقة الصغيرة')}</span></li>
-                <li>{check}<span>{L('Giving, finance, counting sessions', 'التقدمات والمالية وجلسات العدّ')}</span></li>
-                <li>{check}<span>{L('WhatsApp messaging and rotas', 'مراسلة واتساب والمناوبات')}</span></li>
-                <li>{check}<span>{L('Member portal', 'بوّابة المؤمنين')}</span></li>
-              </ul>
-              <a className="btn btn-primary" href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
-            </div>
-
-            <div className="card plan">
-              <div>
-                <div className="t-ui dim">{L('Eparchy', 'أبرشية')}</div>
-                <div className="amount" style={{ marginTop: 10 }}><div className="usd">{L('Let\'s talk', 'حسب الطلب')}</div><div className="lbp" style={{ fontFamily: 'var(--sans)' }}>{L('several parishes, consolidated reporting', 'عدة رعايا وتقارير موحّدة')}</div></div>
-              </div>
-              <p className="t-body dim">{L('One dashboard across parishes, shared certificate templates, support in Arabic.', 'لوحة موحّدة للأبرشية، وقوالب شهادات مشتركة، ودعم بالعربية.')}</p>
-              <ul>
-                <li>{check}<span>{L('Everything in Parish', 'كل ما في باقة الرعية')}</span></li>
-                <li>{check}<span>{L('Cross-parish reporting', 'تقارير موحّدة عبر الرعايا')}</span></li>
-                <li>{check}<span>{L('Paper register migration', 'ترحيل السجلّات الورقية')}</span></li>
-              </ul>
-              <a className="btn btn-secondary" href="#book">{L('Contact us', 'تواصل معنا')}</a>
-            </div>
-          </div>
-          <p className="t-caption dimmer" style={{ marginTop: 20 }}>{L('Lira figures are computed at the parish rate and move with it.', 'تُحتسب مبالغ الليرة على سعر الرعية وتتغيّر معه.')}</p>
-        </div>
-      </section>
-
-      <hr className="rule" />
-
-      <section className="section" id="faq">
-        <div className="wrap">
-          <p className="eyebrow"><span>{L('Questions', 'أسئلة متكرّرة')}</span></p>
-          <h2 className="t-display" style={{ marginTop: 20 }}>{L('What every parish asks first.', 'ما تسأله كل رعية قبل أن تبدأ.')}</h2>
-          <div className="faq" style={{ marginTop: 32 }}>
-            {FAQ.map(([q, a], i) => <details key={i} open={i === 0 ? true : undefined}>
-              <summary>{L(...q)}</summary>
-              <p>{L(...a)}</p>
-            </details>)}
-          </div>
-        </div>
-      </section>
-
-      <section className="section-lg panel-dark" id="book">
-        <div className="wrap" style={{ textAlign: 'center' }}>
-          <h2 className="t-display" style={{ maxWidth: '20ch', marginInline: 'auto' }}>{L('Set your parish up in one afternoon.', 'أعدّ رعيّتك في بعد ظهر واحد.')}</h2>
-          <p className="lede" style={{ margin: '16px auto 0', maxWidth: '56ch' }}>{L('We walk you through setup together: the rite, the roles, the rate, and the first hundred records out of your book. In Arabic or in English.', 'نمشي معك في الإعداد: الطقس، والأدوار، وسعر الصرف، وأول مئة سجلّ من دفترك. بالعربية أو بالإنكليزية.')}</p>
-          <div className="row" style={{ gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
-            <a className="btn btn-on-dark btn-lg" href="mailto:hello@parishlife.app">{L('Book a walkthrough', 'احجز عرضاً تجريبياً')}</a>
-            <a className="btn btn-outline-dark btn-lg" href="https://wa.me/9613421887">{L('Message us on WhatsApp', 'راسلنا على واتساب')}</a>
-          </div>
-          <p className="t-caption" style={{ marginTop: 20, color: 'rgba(255,255,255,.6)' }}>{L('30 minutes · no commitment · we bring your sample data already loaded.', '٣٠ دقيقة · بلا التزام · نحضر لك بياناتك التجريبية مسبقاً.')}</p>
-        </div>
-      </section>
-
-    </main>
-
-    <footer className="footer">
-      <div className="wrap">
-        <div className="grid g4">
-          <div>
-            <div className="brand"><span className="mark" aria-hidden="true">P</span><span className="name">ParishLife</span></div>
-            <div style={{ font: '600 20px/1.6 var(--arabic)', color: 'var(--text-3)', marginTop: 6 }}>حياة الرعية</div>
-            <p className="t-caption dimmer" style={{ marginTop: 12, maxWidth: '30ch' }}>{L('Parish management built in Lebanon, for parishes in Lebanon.', 'إدارة رعايا مبنية في لبنان، للرعايا في لبنان.')}</p>
-          </div>
-          <div>
-            <h5>{L('Product', 'المنتج')}</h5>
+          <a className="brand" href="#top">
+            <span className="mark" aria-hidden="true">
+              P
+            </span>
+            <span className="name">{L('ParishLife', 'حياة الرعية')}</span>
+          </a>
+          <nav className="navlinks" aria-label="Primary">
+            <a href="#how">{L('How it works', 'كيف يعمل')}</a>
             <a href="#modules">{L('Modules', 'الوحدات')}</a>
             <a href="#roles">{L('Roles', 'الأدوار')}</a>
-            <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
-            <a href="#faq">{L('Questions', 'أسئلة متكرّرة')}</a>
-          </div>
-          <div>
-            <h5>{L('Parish', 'الرعية')}</h5>
-            <a href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
             <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
-            <a href="#how">{L('Working offline', 'العمل بلا إنترنت')}</a>
+            <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
+          </nav>
+          <div className="langtoggle" role="group" aria-label="Language">
+            <button type="button" data-lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>
+              EN
+            </button>
+            <button type="button" data-lang="ar" aria-pressed={lang === 'ar'} lang="ar" onClick={() => setLang('ar')}>
+              ع
+            </button>
           </div>
-          <div>
-            <h5>{L('Contact', 'تواصل')}</h5>
-            <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
-            <a href="https://wa.me/9613421887" dir="ltr">+961 3 421 887</a>
-            <a href="#">{L('Beirut, Lebanon', 'بيروت، لبنان')}</a>
+          <a className="btn btn-primary" href="#book">
+            {L('Book a walkthrough', 'احجز عرضاً')}
+          </a>
+        </div>
+      </header>
+
+      <main id="top">
+        <section className="hero">
+          <div className="wrap">
+            <p className="eyebrow" style={{ maxWidth: 420 }}>
+              <span>{L('ParishLife · حياة الرعية', 'حياة الرعية · ParishLife')}</span>
+            </p>
+            <h1 className="hero-title" style={{ marginTop: 20 }}>
+              {L(
+                'Your parish register, kept the way your parish actually works.',
+                'سجلّ رعيّتك، محفوظ كما تعمل رعيّتك فعلاً.'
+              )}
+            </h1>
+            <p className="lede" style={{ marginTop: 24 }}>
+              {L(
+                'ParishLife keeps people, sacraments, attendance and the collection in one place — in Arabic and in English, in dollars and in lira. And it keeps recording when the power goes out.',
+                'يجمع «حياة الرعية» المؤمنين والأسرار والحضور والتقدمات في مكان واحد — بالعربية والإنكليزية، بالدولار والليرة. ويتابع التسجيل حين تنقطع الكهرباء.'
+              )}
+            </p>
+            <div className="hero-actions">
+              <a className="btn btn-primary btn-lg" href="#book">
+                {L('Book a walkthrough', 'احجز عرضاً تجريبياً')}
+              </a>
+              <a className="btn btn-secondary btn-lg" href="#how">
+                {L('See how it works', 'شاهد كيف يعمل')}
+              </a>
+            </div>
+
+            <div className="facts">
+              <div className="fact">
+                <div className="k">
+                  EN{' / '}
+                  <span lang="ar">ع</span>
+                </div>
+                <div className="v">
+                  {L(
+                    'Every screen drawn in both directions, not translated later.',
+                    'كل شاشة مرسومة بالاتجاهين، لا ترجمة لاحقة.'
+                  )}
+                </div>
+              </div>
+              <div className="fact">
+                <div className="k" dir="ltr">
+                  {'$ / L.L'}
+                </div>
+                <div className="v">
+                  {L(
+                    'Every amount in both currencies, with the rate that produced it.',
+                    'كل مبلغ بالعملتين، مع السعر الذي أنتجه.'
+                  )}
+                </div>
+              </div>
+              <div className="fact">
+                <div className="k">5</div>
+                <div className="v">
+                  {L(
+                    'roles: priest, secretary, treasurer, ministry leader, and member.',
+                    'أدوار: كاهن، أمين سرّ، أمين صندوق، مسؤول خدمة، وعضو.'
+                  )}
+                </div>
+              </div>
+              <div className="fact">
+                <div className="k">{L('Offline', 'بلا إنترنت')}</div>
+                <div className="v">
+                  {L(
+                    'Keeps recording through a cut, syncs when the line returns.',
+                    'يتابع التسجيل خلال انقطاع التيار ويزامن لاحقاً.'
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section style={{ paddingBottom: 96 }}>
+          <div className="wrap">
+            <div className="shot">
+              <div className="shot-bar">
+                <i></i>
+                <i></i>
+                <i></i>
+                <span className="mono">parishlife.app / saint-elias</span>
+              </div>
+              <div className="shell">
+                <aside className="shell-rail">
+                  <div className="shell-parish">
+                    <span className="mark" aria-hidden="true">
+                      P
+                    </span>
+                    <span>
+                      <b>{L('Saint Elias', 'مار الياس')}</b>
+                      <small>{L('Hadath · Maronite', 'الحدث · ماروني')}</small>
+                    </span>
+                  </div>
+                  <div className="navgroup">{L('General', 'عام')}</div>
+                  <div className="navitem on">
+                    <Use id="dash" />
+                    <span>{L('Dashboard', 'لوحة القيادة')}</span>
+                  </div>
+                  <div className="navgroup">{L('Records', 'السجلات')}</div>
+                  <div className="navitem">
+                    <Use id="people" />
+                    <span>{L('People', 'المؤمنون')}</span>
+                    <span className="badge tnum">1,380</span>
+                  </div>
+                  <div className="navitem">
+                    <Use id="family" />
+                    <span>{L('Families', 'العائلات')}</span>
+                    <span className="badge tnum">412</span>
+                  </div>
+                  <div className="navitem">
+                    <Use id="sacr" />
+                    <span>{L('Sacraments', 'الأسرار')}</span>
+                    <span className="badge tnum">3</span>
+                  </div>
+                  <div className="navgroup">{L('Parish life', 'حياة الرعية')}</div>
+                  <div className="navitem">
+                    <Use id="attend" />
+                    <span>{L('Attendance', 'الحضور')}</span>
+                  </div>
+                  <div className="navitem">
+                    <Use id="give" />
+                    <span>{L('Giving', 'التقدمات')}</span>
+                  </div>
+                  <div className="syncline">
+                    <span className="dot"></span>
+                    <span>{L('All changes synced', 'تمّت مزامنة كل التغييرات')}</span>
+                  </div>
+                </aside>
+                <div className="shell-main">
+                  <div className="shell-top">
+                    <span></span>
+                    <div className="shell-search">
+                      <Use id="search" size={14} />
+                      <span>{L('Search people, records, pages', 'ابحث عن شخص أو سجل')}</span>
+                      <kbd>⌘K</kbd>
+                    </div>
+                    <div className="shell-right">
+                      <span className="shell-bell">
+                        <Use id="bell" size={16} />
+                        <i></i>
+                      </span>
+                      <span className="avatar">AK</span>
+                    </div>
+                  </div>
+                  <div className="shell-body">
+                    <div className="shell-head">
+                      <div>
+                        <h4>{L('Parishioners', 'المؤمنون')}</h4>
+                        <p>
+                          <span dir="ltr" className="tnum">
+                            1,380
+                          </span>{' '}
+                          <span>
+                            {L('records · 412 families · updated today', 'سجلاً · ٤١٢ عائلة · آخر تحديث اليوم')}
+                          </span>
+                        </p>
+                      </div>
+                      <span className="pill pill-success" style={{ marginInlineStart: 'auto' }}>
+                        <span className="dot"></span>
+                        <span>{L('Counting session 214 open', 'جلسة العدّ ٢١٤ مفتوحة')}</span>
+                      </span>
+                      <a
+                        className="btn btn-primary"
+                        style={{ minHeight: 32, padding: '0 14px', fontSize: 13 }}
+                        href="#book"
+                      >
+                        {L('New parishioner', 'مؤمن جديد')}
+                      </a>
+                    </div>
+                    <div className="mtable">
+                      <div className="th">
+                        <span>{L('Name', 'الاسم')}</span>
+                        <span>{L('Town', 'البلدة')}</span>
+                        <span className="num">{L('Last gift', 'آخر تقدمة')}</span>
+                        <span className="num">L.L</span>
+                      </div>
+                      {PERSON_ROWS.map(([initials, name, ar, town, usd, lbp]) => (
+                        <div key={initials} className="tr">
+                          <span className="who">
+                            <span className="avatar">{initials}</span>
+                            <span>
+                              <b>{name}</b>
+                              <small>{ar}</small>
+                            </span>
+                          </span>
+                          <span className="dim">{L(...town)}</span>
+                          <span className="num">{usd || <span className="pill">{L('Visitor', 'زائرة')}</span>}</span>
+                          <span className="num dim">{lbp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="t-caption dimmer" style={{ marginTop: 12, textAlign: 'center' }}>
+              {L(
+                'The real shell. Switch to ع above — the rail, the table and the filters all mirror.',
+                'لقطة من الواجهة — الشريط الجانبي والجدول وأشرطة التصفية كلها تنعكس بالعربية.'
+              )}
+            </p>
+          </div>
+        </section>
+
+        <hr className="rule" />
+
+        <section className="section" id="why">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Why', 'لماذا')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20, maxWidth: '20ch' }}>
+              {L(
+                'The parish office as it actually is — not as software assumes it is.',
+                'مكتب الرعية كما هو فعلاً، لا كما تفترضه البرامج.'
+              )}
+            </h2>
+            <div className="grid g4" style={{ marginTop: 40 }}>
+              {[
+                [
+                  ['Two registers, two alphabets', 'سجلّان، أبجديّتان'],
+                  [
+                    'The baptism book is written in Arabic. The phone list the office searches is in Latin letters. Most software makes you pick one.',
+                    'سجلّ المعمودية بالعربية. لائحة الهواتف التي يبحث فيها المكتب بالحروف اللاتينية. معظم البرامج تجبرك على الاختيار.'
+                  ]
+                ],
+                [
+                  ['A collection counted in cash', 'تقدمة تُعدّ نقداً'],
+                  [
+                    'Envelopes, two currencies, and a rate that moved since last Sunday. A spreadsheet loses the rate the moment you overwrite the cell.',
+                    'مظاريف وعملتان وسعر صرف تغيّر منذ الأحد الماضي. جداول «إكسل» تفقد السعر.'
+                  ]
+                ],
+                [
+                  ['Three hours of state power', 'ثلاث ساعات كهرباء'],
+                  [
+                    'The connection drops in the middle of an entry. What was already typed should not disappear with it.',
+                    'ينقطع الاتصال في منتصف الإدخال. ما كُتب أصلاً يجب ألّا يضيع.'
+                  ]
+                ],
+                [
+                  ['One volunteer, one laptop', 'متطوّع واحد وحاسوب واحد'],
+                  [
+                    'Whoever is in the office on Tuesday has to be able to use it untrained, on an eight-year-old monitor in poor light.',
+                    'من يكون في المكتب يوم الثلاثاء يجب أن يستطيع استعماله بلا تدريب، على شاشة قديمة وإضاءة ضعيفة.'
+                  ]
+                ]
+              ].map(([h, p]) => (
+                <div key={h[0]} className="card card-flat">
+                  <h3>{L(...h)}</h3>
+                  <p className="t-body dim" style={{ marginTop: 8 }}>
+                    {L(...p)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <hr className="rule" />
+
+        <section className="section-lg" id="how">
+          <div className="wrap stack" style={{ gap: 72 }}>
+            <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
+              <div>
+                <p className="eyebrow" style={{ maxWidth: 200 }}>
+                  <span>{L('01 — Bilingual', '٠١ — ثنائي اللغة')}</span>
+                </p>
+                <h2 className="t-heading" style={{ marginTop: 20 }}>
+                  {L(
+                    'Bilingual in the record itself, not in a translation layer.',
+                    'ثنائي اللغة في السجلّ نفسه، لا في الترجمة.'
+                  )}
+                </h2>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    'The Arabic name is what the certificate prints. The Latin transliteration is what the office searches by. Both are stored on every record, always, and both are always shown — the interface language only decides which one leads.',
+                    'الاسم العربي هو ما تطبعه الشهادة. الحرف اللاتيني هو ما يبحث به المكتب. الاثنان محفوظان على كل سجلّ دائماً، والاثنان يظهران دائماً — لغة الواجهة تقرّر فقط أيّهما يتصدّر.'
+                  )}
+                </p>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    'In Arabic everything mirrors: the sidebar side, the table column order, the chart axis, the drawer entry edge, every chevron. Clocks, logos and the play triangle never flip.',
+                    'وبالعربية ينعكس كل شيء: جهة الشريط الجانبي، ترتيب أعمدة الجدول، محور الرسم البياني، حافة دخول الدرج، وأسهم التنقّل. الساعات والشعارات وأزرار التشغيل لا تنعكس أبداً.'
+                  )}
+                </p>
+              </div>
+              <div className="card" style={{ padding: 32 }}>
+                <div className="row" style={{ gap: 16 }}>
+                  <span className="avatar" style={{ width: 56, height: 56, fontSize: 19 }}>
+                    GH
+                  </span>
+                  <div>
+                    <div style={{ font: '600 26px/1.5 var(--arabic)' }}>جورج حدّاد</div>
+                    <div className="t-ui dim" style={{ marginTop: 2 }}>
+                      Georges Haddad
+                    </div>
+                  </div>
+                </div>
+                <hr className="rule" style={{ margin: '20px 0' }} />
+                <div className="t-caption dimmer" style={caps}>
+                  {L('Certificate name', 'اسم الشهادة')}
+                </div>
+                <div style={{ font: '600 18px/1.6 var(--arabic)', marginTop: 4 }}>جورج الياس حدّاد</div>
+                <div className="t-caption dimmer" style={{ ...caps, marginTop: 16 }}>
+                  {L('Search key', 'مفتاح البحث')}
+                </div>
+                <div className="t-ui" style={{ marginTop: 4 }}>
+                  Georges Haddad · Georges Hadad · جورج حداد
+                </div>
+              </div>
+            </div>
+
+            <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
+              <div className="card" style={{ padding: 32 }}>
+                <div className="t-caption dimmer" style={caps}>
+                  {L('Counting session 214 — total', 'جلسة العدّ ٢١٤ — المجموع')}
+                </div>
+                <div className="amount" style={{ marginTop: 12 }} dir="ltr">
+                  <div className="usd">$1,250.00</div>
+                  <div className="lbp">L.L 111,875,000</div>
+                  <div className="rate">at 89,500 · set 4 Oct 2026</div>
+                </div>
+                <hr className="rule" style={{ margin: '20px 0' }} />
+                <div className="stack" style={{ gap: 10 }}>
+                  <div className="field">
+                    <span className="prefix">USD</span>
+                    <span className="value" dir="ltr">
+                      1,250.00
+                    </span>
+                  </div>
+                  <div className="field">
+                    <span className="prefix">L.L</span>
+                    <span className="value" dir="ltr">
+                      111,875,000
+                    </span>
+                  </div>
+                </div>
+                <div className="alert alert-warning" style={{ marginTop: 16 }}>
+                  <Use id="warn" size={18} />
+                  <span>
+                    <b>{L('Rate is 6 days old', 'السعر عمره ٦ أيام')}</b>
+                    <span>
+                      {L(
+                        'Set it again before you close the session so the receipts carry the right figure.',
+                        'أعِد ضبطه قبل إقفال الجلسة كي تحمل الإيصالات السعر الصحيح.'
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="eyebrow" style={{ maxWidth: 200 }}>
+                  <span>{L('02 — Currency', '٠٢ — العملة')}</span>
+                </p>
+                <h2 className="t-heading" style={{ marginTop: 20 }}>
+                  {L('Every amount carries the rate that produced it.', 'كل مبلغ يحمل معه السعر الذي أنتجه.')}
+                </h2>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    "USD leads at full size, lira follows in mono beneath it. The rate that produced the figure travels with it — because last month's rate is a different number, and a receipt reprinted next year has to still be true.",
+                    'الدولار يتصدّر بالحجم الكامل، والليرة تتبعه بخط أحادي المسافة تحته. والسعر الذي أنتج الرقم يسافر معه، لأنّ سعر الشهر الماضي رقم آخر.'
+                  )}
+                </p>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    'The rate is set once in the top bar. Receipts, statements, pledge balances and the budget all derive from it, and the system tells you when it has gone stale rather than quietly using it.',
+                    'يُضبط السعر مرة واحدة في الشريط العلوي. الإيصالات والكشوفات والتقارير تُحتسب كلها منه، ويحذّرك النظام حين يتقادم.'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid g2" style={{ alignItems: 'center', gap: 64 }}>
+              <div>
+                <p className="eyebrow" style={{ maxWidth: 200 }}>
+                  <span>{L('03 — Resilience', '٠٣ — الصمود')}</span>
+                </p>
+                <h2 className="t-heading" style={{ marginTop: 20 }}>
+                  {L('Written for the power cut, not in spite of it.', 'مكتوب على مقاس انقطاع الكهرباء، لا رغماً عنه.')}
+                </h2>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    'When the connection drops, entry continues on the machine in front of you. Changes queue, the banner says so in plain words rather than a small icon, and everything syncs when the line comes back.',
+                    'حين ينقطع الاتصال يتابع الإدخال على الجهاز أمامك. تُصطفّ التغييرات، ويقول الشريط ذلك بكلام واضح لا برمز صغير، ثم تُزامن كلها عند عودة الخط.'
+                  )}
+                </p>
+                <p className="t-body dim" style={{ marginTop: 16, maxWidth: '52ch' }}>
+                  {L(
+                    'Three states, all of them in the shell rather than per screen: offline, draft saved, changes queued. Nobody has to learn a fourth.',
+                    'ثلاث حالات فقط، وكلّها في هيكل التطبيق لا داخل كل شاشة: غير متصل، مسوّدة محفوظة، تغييرات في الانتظار.'
+                  )}
+                </p>
+              </div>
+              <div className="stack" style={{ gap: 12 }}>
+                <div className="alert alert-info">
+                  <Use id="warn" size={18} />
+                  <span>
+                    <b>{L('You are offline.', 'أنت غير متصل بالإنترنت.')}</b>
+                    <span>
+                      {L(
+                        'Work is being saved on this computer and will sync when the connection returns.',
+                        'يتم حفظ العمل على هذا الحاسوب وسيُزامَن عند عودة الاتصال.'
+                      )}
+                    </span>
+                  </span>
+                </div>
+                <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
+                  <span className="pill pill-info">
+                    <span className="dot"></span>
+                    <span>{L('Draft saved', 'مسوّدة محفوظة')}</span>
+                  </span>
+                  <span className="t-caption dimmer mono">{L('14 seconds ago', 'قبل ١٤ ثانية')}</span>
+                </div>
+                <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
+                  <span className="pill pill-warning">
+                    <span className="dot"></span>
+                    <span>{L('3 changes queued', '٣ تغييرات في الانتظار')}</span>
+                  </span>
+                  <span className="t-caption dimmer">
+                    {L('will send when the line returns', 'تُرسل عند عودة الاتصال')}
+                  </span>
+                </div>
+                <div className="card row" style={{ gap: 10, padding: '16px 20px' }}>
+                  <span className="pill pill-success">
+                    <span className="dot"></span>
+                    <span>{L('All changes synced', 'تمّت مزامنة كل التغييرات')}</span>
+                  </span>
+                  <span className="t-caption dimmer mono">{L('last sync 19:14', 'آخر مزامنة ١٩:١٤')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <hr className="rule" />
+
+        <section className="section" id="modules">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Modules', 'الوحدات')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20, maxWidth: '22ch' }}>
+              {L('Everything a parish keeps, in one place.', 'كل ما تحتفظ به الرعية، في مكان واحد.')}
+            </h2>
+            <div className="grid g3" style={{ marginTop: 40 }}>
+              {MODULES.map(([icon, name, text]) => (
+                <div key={icon} className="module">
+                  <span className="ico">
+                    <Use id={icon} size={20} />
+                  </span>
+                  <span>
+                    <b>{L(...name)}</b>
+                    <p>{L(...text)}</p>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <hr className="rule" />
+
+        <section className="section" id="roles">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Roles', 'الأدوار')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20, maxWidth: '24ch' }}>
+              {L('Modules a role cannot use are absent, not dimmed.', 'الوحدات الممنوعة غائبة، لا مطفأة.')}
+            </h2>
+            <p className="lede" style={{ marginTop: 16 }}>
+              {L(
+                'The treasurer does not see pastoral notes. The secretary does not see money. A ministry leader sees only the people in the groups they lead. Same rail, five different products.',
+                'أمين الصندوق لا يرى الملاحظات الرعوية. أمين السرّ لا يرى المال. مسؤول الخدمة يرى مجموعته فقط. الشريط الجانبي نفسه، وخمسة منتجات مختلفة.'
+              )}
+            </p>
+            <Roles L={L} />
+          </div>
+        </section>
+
+        <section className="section-lg panel-dark" id="lebanon">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Built for Lebanon', 'من أجل لبنان')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20, maxWidth: '26ch' }}>
+              {L(
+                'These are not localisation afterthoughts. They are tokens in the data model.',
+                'ليست توطيناً لاحقاً — بل رموز في نموذج البيانات نفسه.'
+              )}
+            </h2>
+            <div className="grid g2" style={{ marginTop: 48, gap: 24 }}>
+              <div className="card">
+                <h3 className="t-sub">{L('Rite', 'الطقس')}</h3>
+                <p className="t-body dim" style={{ marginTop: 8 }}>
+                  {L(
+                    'Set once in the setup wizard, then it filters the sacrament list, the certificate templates and the feast overlay on every calendar.',
+                    'يُضبط مرة واحدة في معالج الإعداد، ثم يرشّح لائحة الأسرار وقوالب الشهادات وطبقة الأعياد على كل رزنامة.'
+                  )}
+                </p>
+                <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                  {[
+                    ['Maronite', 'ماروني'],
+                    ['Greek Orthodox', 'روم أرثوذكس'],
+                    ['Melkite', 'روم كاثوليك'],
+                    ['Armenian', 'أرمني'],
+                    ['Syriac', 'سرياني'],
+                    ['Latin', 'لاتيني'],
+                    ['Evangelical', 'إنجيلي']
+                  ].map(([en, ar], i) => (
+                    <span key={en} className={'chip' + (i === 0 ? ' chip-on' : '')}>
+                      {L(en, ar)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card">
+                <h3 className="t-sub">{L('Address & phone', 'العنوان والهاتف')}</h3>
+                <p className="t-body dim" style={{ marginTop: 8 }}>
+                  {L(
+                    'A governorate → district → town cascade, then a free building line and a landmark line. No postal code field exists anywhere in the product.',
+                    'تسلسل محافظة ← قضاء ← بلدة، ثم سطر حرّ للبناية وسطر لمَعلَم. لا حقل رمز بريدي في أيّ مكان من المنتج.'
+                  )}
+                </p>
+                <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                  <span className="chip">{L('Mount Lebanon', 'جبل لبنان')}</span>
+                  <span className="dimmer">→</span>
+                  <span className="chip">{L('Baabda', 'بعبدا')}</span>
+                  <span className="dimmer">→</span>
+                  <span className="chip chip-on">{L('Hadath', 'الحدث')}</span>
+                </div>
+                <div className="t-ui dim" style={{ marginTop: 12 }}>
+                  {L('Imm. Khoury, 3rd floor — behind the municipality', 'بناية خوري، الطابق الثالث — خلف البلدية')}
+                </div>
+                <div className="field" style={{ marginTop: 12, maxWidth: 240 }} dir="ltr">
+                  <span className="prefix">+961</span>
+                  <span className="value">3 421 887</span>
+                </div>
+              </div>
+
+              <div className="card">
+                <h3 className="t-sub">{L('Channel order', 'ترتيب القنوات')}</h3>
+                <p className="t-body dim" style={{ marginTop: 8 }}>
+                  {L(
+                    'WhatsApp is the default because it is what the parish already uses. SMS is the fallback. Email is last, and for most parishes it is never used at all.',
+                    'واتساب هو الافتراضي لأنّه ما تستعمله الرعية أصلاً. الرسالة القصيرة احتياط، والبريد الإلكتروني أخيراً.'
+                  )}
+                </p>
+                <div className="row" style={{ gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+                  <span className="chip chip-on">
+                    WhatsApp{' '}
+                    <span className="t-caption" style={{ marginInlineStart: 6, opacity: 0.7 }}>
+                      {L('default', 'افتراضي')}
+                    </span>
+                  </span>
+                  <span className="chip">
+                    SMS{' '}
+                    <span className="t-caption" style={{ marginInlineStart: 6, opacity: 0.7 }}>
+                      {L('fallback', 'احتياط')}
+                    </span>
+                  </span>
+                  <span className="chip">{L('Email — last', 'بريد إلكتروني — أخيراً')}</span>
+                </div>
+              </div>
+
+              <div className="card">
+                <h3 className="t-sub">{L('Direction', 'الاتجاه')}</h3>
+                <p className="t-body dim" style={{ marginTop: 8 }}>
+                  {L(
+                    'Arabic mirrors everything: sidebar side, table column order, chart axis, drawer entry edge, chevrons, progress fill. Clocks, logos, media controls and the play triangle never flip.',
+                    'العربية تعكس كل شيء: جهة الشريط، ترتيب الأعمدة، محور الرسم، حافة الدرج، الأسهم، امتلاء شريط التقدّم. الساعات والشعارات وأزرار الوسائط ومثلّث التشغيل لا تنعكس أبداً.'
+                  )}
+                </p>
+                <div className="row" style={{ gap: 8, marginTop: 16 }}>
+                  <span className="chip mono" dir="ltr">
+                    dir=ltr
+                  </span>
+                  <span className="chip chip-on mono" dir="ltr">
+                    dir=rtl
+                  </span>
+                </div>
+                <p className="t-caption" style={{ marginTop: 12, color: 'var(--ink)' }}>
+                  {L(
+                    'Numerals and amounts stay left-to-right in both directions.',
+                    'الأرقام والمبالغ تبقى من اليسار إلى اليمين في الحالتين.'
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="section-lg" id="pricing">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Pricing', 'الأسعار')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20, maxWidth: '22ch' }}>
+              {L('Priced in dollars, payable in either currency.', 'تُسعَّر بالدولار، وتُدفع بأيّ من العملتين.')}
+            </h2>
+            <p className="lede" style={{ marginTop: 16 }}>
+              {L(
+                'Shown in both currencies at the same parish rate the system uses inside. No setup fee, no annual lock-in.',
+                'السعر يظهر بالعملتين على سعر الرعية نفسه المستعمل داخل النظام. لا رسوم إعداد، ولا عقد سنوي.'
+              )}
+            </p>
+
+            <div className="grid g3" style={{ marginTop: 40 }}>
+              <div className="card plan">
+                <div>
+                  <div className="t-ui dim">{L('Small parish', 'رعية صغيرة')}</div>
+                  <div className="amount" style={{ marginTop: 10 }} dir="ltr">
+                    <div className="usd">
+                      $19
+                      <span className="t-ui dim" style={{ fontWeight: 400 }}>
+                        /mo
+                      </span>
+                    </div>
+                    <div className="lbp">L.L 1,700,500</div>
+                    <div className="rate">at 89,500</div>
+                  </div>
+                </div>
+                <p className="t-body dim">
+                  {L('Up to 500 records. One or two people in the office.', 'حتى ٥٠٠ سجلّ. مستعمل واحد أو اثنان.')}
+                </p>
+                <ul>
+                  <li>
+                    {check}
+                    <span>{L('People, families, sacraments', 'المؤمنون والعائلات والأسرار')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('A4 certificate printing', 'الشهادات على مقاس A4')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('Offline working and sync', 'العمل بلا إنترنت والمزامنة')}</span>
+                  </li>
+                </ul>
+                <a className="btn btn-secondary" href="#book">
+                  {L('Start', 'ابدأ')}
+                </a>
+              </div>
+
+              <div className="card plan featured">
+                <div>
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="t-ui dim">{L('Parish', 'رعية')}</span>
+                    <span className="pill pill-info">
+                      <span className="dot"></span>
+                      <span>{L('Most parishes', 'الأكثر اختياراً')}</span>
+                    </span>
+                  </div>
+                  <div className="amount" style={{ marginTop: 10 }} dir="ltr">
+                    <div className="usd">
+                      $49
+                      <span className="t-ui dim" style={{ fontWeight: 400 }}>
+                        /mo
+                      </span>
+                    </div>
+                    <div className="lbp">L.L 4,385,500</div>
+                    <div className="rate">at 89,500</div>
+                  </div>
+                </div>
+                <p className="t-body dim">
+                  {L(
+                    'Unlimited records, all five roles, every module.',
+                    'سجلّات غير محدودة، وخمسة أدوار، وكل الوحدات.'
+                  )}
+                </p>
+                <ul>
+                  <li>
+                    {check}
+                    <span>{L('Everything in Small parish', 'كل ما في الباقة الصغيرة')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('Giving, finance, counting sessions', 'التقدمات والمالية وجلسات العدّ')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('WhatsApp messaging and rotas', 'مراسلة واتساب والمناوبات')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('Member portal', 'بوّابة المؤمنين')}</span>
+                  </li>
+                </ul>
+                <a className="btn btn-primary" href="#book">
+                  {L('Book a walkthrough', 'احجز عرضاً')}
+                </a>
+              </div>
+
+              <div className="card plan">
+                <div>
+                  <div className="t-ui dim">{L('Eparchy', 'أبرشية')}</div>
+                  <div className="amount" style={{ marginTop: 10 }}>
+                    <div className="usd">{L("Let's talk", 'حسب الطلب')}</div>
+                    <div className="lbp" style={{ fontFamily: 'var(--sans)' }}>
+                      {L('several parishes, consolidated reporting', 'عدة رعايا وتقارير موحّدة')}
+                    </div>
+                  </div>
+                </div>
+                <p className="t-body dim">
+                  {L(
+                    'One dashboard across parishes, shared certificate templates, support in Arabic.',
+                    'لوحة موحّدة للأبرشية، وقوالب شهادات مشتركة، ودعم بالعربية.'
+                  )}
+                </p>
+                <ul>
+                  <li>
+                    {check}
+                    <span>{L('Everything in Parish', 'كل ما في باقة الرعية')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('Cross-parish reporting', 'تقارير موحّدة عبر الرعايا')}</span>
+                  </li>
+                  <li>
+                    {check}
+                    <span>{L('Paper register migration', 'ترحيل السجلّات الورقية')}</span>
+                  </li>
+                </ul>
+                <a className="btn btn-secondary" href="#book">
+                  {L('Contact us', 'تواصل معنا')}
+                </a>
+              </div>
+            </div>
+            <p className="t-caption dimmer" style={{ marginTop: 20 }}>
+              {L(
+                'Lira figures are computed at the parish rate and move with it.',
+                'تُحتسب مبالغ الليرة على سعر الرعية وتتغيّر معه.'
+              )}
+            </p>
+          </div>
+        </section>
+
+        <hr className="rule" />
+
+        <section className="section" id="faq">
+          <div className="wrap">
+            <p className="eyebrow">
+              <span>{L('Questions', 'أسئلة متكرّرة')}</span>
+            </p>
+            <h2 className="t-display" style={{ marginTop: 20 }}>
+              {L('What every parish asks first.', 'ما تسأله كل رعية قبل أن تبدأ.')}
+            </h2>
+            <div className="faq" style={{ marginTop: 32 }}>
+              {FAQ.map(([q, a], i) => (
+                <details key={i} open={i === 0 ? true : undefined}>
+                  <summary>{L(...q)}</summary>
+                  <p>{L(...a)}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section-lg panel-dark" id="book">
+          <div className="wrap" style={{ textAlign: 'center' }}>
+            <h2 className="t-display" style={{ maxWidth: '20ch', marginInline: 'auto' }}>
+              {L('Set your parish up in one afternoon.', 'أعدّ رعيّتك في بعد ظهر واحد.')}
+            </h2>
+            <p className="lede" style={{ margin: '16px auto 0', maxWidth: '56ch' }}>
+              {L(
+                'We walk you through setup together: the rite, the roles, the rate, and the first hundred records out of your book. In Arabic or in English.',
+                'نمشي معك في الإعداد: الطقس، والأدوار، وسعر الصرف، وأول مئة سجلّ من دفترك. بالعربية أو بالإنكليزية.'
+              )}
+            </p>
+            <div className="row" style={{ gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
+              <a className="btn btn-on-dark btn-lg" href="mailto:hello@parishlife.app">
+                {L('Book a walkthrough', 'احجز عرضاً تجريبياً')}
+              </a>
+              <a className="btn btn-outline-dark btn-lg" href="https://wa.me/9613421887">
+                {L('Message us on WhatsApp', 'راسلنا على واتساب')}
+              </a>
+            </div>
+            <p className="t-caption" style={{ marginTop: 20, color: 'rgba(255,255,255,.6)' }}>
+              {L(
+                '30 minutes · no commitment · we bring your sample data already loaded.',
+                '٣٠ دقيقة · بلا التزام · نحضر لك بياناتك التجريبية مسبقاً.'
+              )}
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer className="footer">
+        <div className="wrap">
+          <div className="grid g4">
+            <div>
+              <div className="brand">
+                <span className="mark" aria-hidden="true">
+                  P
+                </span>
+                <span className="name">ParishLife</span>
+              </div>
+              <div style={{ font: '600 20px/1.6 var(--arabic)', color: 'var(--text-3)', marginTop: 6 }}>
+                حياة الرعية
+              </div>
+              <p className="t-caption dimmer" style={{ marginTop: 12, maxWidth: '30ch' }}>
+                {L(
+                  'Parish management built in Lebanon, for parishes in Lebanon.',
+                  'إدارة رعايا مبنية في لبنان، للرعايا في لبنان.'
+                )}
+              </p>
+            </div>
+            <div>
+              <h5>{L('Product', 'المنتج')}</h5>
+              <a href="#modules">{L('Modules', 'الوحدات')}</a>
+              <a href="#roles">{L('Roles', 'الأدوار')}</a>
+              <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
+              <a href="#faq">{L('Questions', 'أسئلة متكرّرة')}</a>
+            </div>
+            <div>
+              <h5>{L('Parish', 'الرعية')}</h5>
+              <a href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
+              <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
+              <a href="#how">{L('Working offline', 'العمل بلا إنترنت')}</a>
+            </div>
+            <div>
+              <h5>{L('Contact', 'تواصل')}</h5>
+              <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
+              <a href="https://wa.me/9613421887" dir="ltr">
+                +961 3 421 887
+              </a>
+              <a href="#">{L('Beirut, Lebanon', 'بيروت، لبنان')}</a>
+            </div>
+          </div>
+          <hr className="rule" style={{ margin: '32px 0 20px' }} />
+          <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
+            <span className="t-caption dimmer">© 2026 ParishLife</span>
+            <span className="t-caption dimmer">{L('Privacy', 'الخصوصية')}</span>
+            <span className="t-caption dimmer">{L('Terms', 'الشروط')}</span>
+            <span className="t-caption dimmer mono" style={{ marginInlineStart: 'auto' }}>
+              Inter · IBM Plex Sans Arabic · 8px grid
+            </span>
           </div>
         </div>
-        <hr className="rule" style={{ margin: '32px 0 20px' }} />
-        <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
-          <span className="t-caption dimmer">© 2026 ParishLife</span>
-          <span className="t-caption dimmer">{L('Privacy', 'الخصوصية')}</span>
-          <span className="t-caption dimmer">{L('Terms', 'الشروط')}</span>
-          <span className="t-caption dimmer mono" style={{ marginInlineStart: 'auto' }}>Inter · IBM Plex Sans Arabic · 8px grid</span>
-        </div>
-      </div>
-    </footer>
-  </>;
+      </footer>
+    </>
+  );
 }
