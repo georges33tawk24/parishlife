@@ -12,6 +12,7 @@ import {
   blank,
   date,
   field,
+  eventTitle,
   footer,
   groupName,
   memberItem,
@@ -275,7 +276,7 @@ function concernDrawer() {
             <option value="">—</option>
             {[...M.events, ...M.meetings].map((x, i) => (
               <option key={i} value={txt(x.id)}>
-                {txt(x.title)}
+                {txt(eventTitle(x))}
               </option>
             ))}
           </Select>

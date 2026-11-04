@@ -1,7 +1,7 @@
 /* What the member pages and drawers share: dates, status labels, cards, and the schedule built
    from meetings and notes. */
 import { Select } from '../../ui/components.jsx';
-import { t, fmtDate } from '../../../lib/i18n.js';
+import { t, isAr, fmtDate } from '../../../lib/i18n.js';
 import { M, memberAction, loadMember } from '../../model/member-data.js';
 import { session } from '../../model/api.js';
 import { hydrate } from '../../model/persist.js';
@@ -11,6 +11,14 @@ import { openDrawer, closeOverlays, toast } from '../../ui/ui.jsx';
 const L = (en, ar) => t(en, ar);
 
 export const date = value => (value ? fmtDate(value) : '—');
+
+/* What the server sends members, in the reader's language. An event carries titleAr. A parish notice
+   arrives with its English title as the title and its Arabic title as the body: the reader's
+   language comes first, the other below it. Anything else shows as its author wrote it. */
+export const eventTitle = e => (isAr() ? e.titleAr || e.title : e.title);
+const notice = x => x?.kind === 'announcement' && String(x.id || '').startsWith('notice-') && !!x.body;
+export const itemTitle = x => (notice(x) && isAr() ? x.body : x.title);
+export const itemBody = x => (notice(x) && isAr() ? x.title : x.body);
 
 export const txt = value => String(value ?? '');
 
@@ -252,7 +260,7 @@ export function memberItem(type, id) {
   const item = type === 'event' ? M.events.find(x => x.id === id) : M.formation.find(x => x.id === id);
   if (!item) return;
   openDrawer({
-    title: item.title || item.name,
+    title: type === 'event' ? eventTitle(item) : item.title || item.name,
     sub: type === 'event' ? `${date(item.d)} · ${txt(item.t || '')}` : groupName(item.groupId),
     body: (
       <>

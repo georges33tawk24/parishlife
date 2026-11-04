@@ -12,7 +12,18 @@ import { Paged } from '../../ui/ui.jsx';
 import { safeRichText } from '../../../lib/rich-text.js';
 import { homeCard } from './requests.jsx';
 import { noticeText, phoneShow } from '../../model/sacrament-requests.js';
-import { blank, date, groupName, memberItem, scheduleState, todayKey, txt } from './member-shared.jsx';
+import {
+  blank,
+  date,
+  eventTitle,
+  groupName,
+  itemBody,
+  itemTitle,
+  memberItem,
+  scheduleState,
+  todayKey,
+  txt
+} from './member-shared.jsx';
 import { mount } from './member-drawers.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -172,7 +183,7 @@ export function home() {
                 .slice(0, 4)
                 .map((e, i) => (
                   <div key={i} className="member-simple-row">
-                    <span>{txt(e.title)}</span>
+                    <span>{txt(eventTitle(e))}</span>
                     <small>{date(e.date || e.d)}</small>
                   </div>
                 )),
@@ -190,7 +201,7 @@ export function home() {
                 .slice(0, 2)
                 .map((x, i) => (
                   <p key={i}>
-                    <b>{txt(x.title)}</b>
+                    <b>{txt(itemTitle(x))}</b>
                     <br />
                     <small>{txt(groupName(x.groupId))}</small>
                   </p>
@@ -330,6 +341,7 @@ export function calendar() {
   const items = [
     ...M.events.map(e => ({
       ...e,
+      title: eventTitle(e),
       date: e.d,
       time: e.t,
       type: 'event',
@@ -450,7 +462,7 @@ export function messages() {
               <div className="member-row">
                 <div>
                   <h2>
-                    {txt(x.title)} {!x.read ? status(L('Unread', 'غير مقروء')) : ''}
+                    {txt(itemTitle(x))} {!x.read ? status(L('Unread', 'غير مقروء')) : ''}
                   </h2>
                   <p>
                     {txt(groupName(x.groupId))} · {date(x.at)}
@@ -464,7 +476,7 @@ export function messages() {
                       : L('Message', 'رسالة')
                 )}
               </div>
-              <p>{txt(x.body)}</p>
+              <p>{txt(itemBody(x))}</p>
               {x.attachment ? (
                 <a
                   className="btn btn-secondary btn-dense"
@@ -533,12 +545,12 @@ export function feed() {
               {card(
                 <>
                   <h2>
-                    {txt(x.title)} {x.pinned ? status(L('Pinned', 'مثبّت')) : ''}
+                    {txt(itemTitle(x))} {x.pinned ? status(L('Pinned', 'مثبّت')) : ''}
                   </h2>
                   <p className="dim">
                     {txt(groupName(x.groupId))} · {date(x.at)} · {txt(x.category)}
                   </p>
-                  <div>{x.html ? safeRichText(x.html) : txt(x.body)}</div>
+                  <div>{x.html ? safeRichText(x.html) : txt(itemBody(x))}</div>
                   {x.attachment ? (
                     <a
                       className="btn btn-secondary btn-dense"
