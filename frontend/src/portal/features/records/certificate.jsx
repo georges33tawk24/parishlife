@@ -25,7 +25,7 @@ import { workflow as serverWorkflow, hydrate } from '../../model/persist.js';
 import { sign } from '../../model/signing.js';
 import { Drawing } from '../../ui/signature.jsx';
 import { passkeyMessage } from '../../model/passkeys.js';
-import { SACRAMENTS, PEOPLE, person } from '../../model/data.js';
+import { SACRAMENTS, PEOPLE, PREP_REQUIREMENTS, person } from '../../model/data.js';
 import { onlineMark, sharedNote } from './online-requests.jsx';
 import { certificateName, languageName } from '../../model/sacrament-requests.js';
 import {
@@ -198,8 +198,18 @@ const HIST = {
   reject: ['Rejected', 'رُفض'],
   cancelled: ['Cancelled', 'أُلغي'],
   'source linked': ['Register entry linked', 'رُبط القيد'],
-  correction: ['Corrected', 'صُحّح']
+  correction: ['Corrected', 'صُحّح'],
+  'documents updated': ['Documents updated', 'حُدّثت المستندات']
 };
+
+/* A history reason that names a required document is shown in the reader's language. */
+const REQUIREMENT_AR = Object.fromEntries(
+  Object.values(PREP_REQUIREMENTS)
+    .flat()
+    .map(([en, ar]) => [en, ar])
+);
+const histReason = h =>
+  h.action === 'documents updated' && REQUIREMENT_AR[h.reason] ? L(h.reason, REQUIREMENT_AR[h.reason]) : h.reason;
 
 const histLabel = a =>
   HIST[a]
@@ -462,7 +472,7 @@ export function certificate(id, lang = '') {
                       )}
                       {h.reason ? (
                         <small className="dim" style={{ display: 'block' }}>
-                          {h.reason}
+                          {histReason(h)}
                         </small>
                       ) : (
                         ''

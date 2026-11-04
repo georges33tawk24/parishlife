@@ -122,13 +122,13 @@ notices.mount = host => {
           <div className="formgrid">
             <div className="formrow">
               <label className="label" htmlFor="bulletin-en">
-                English introduction
+                {L('Introduction in English', 'المقدمة بالإنكليزية')}
               </label>
               <textarea className="input" id="bulletin-en" rows="3" defaultValue={CONTENT.bulletin?.en || ''} />
             </div>{' '}
             <div className="formrow">
               <label className="label" htmlFor="bulletin-ar">
-                المقدمة بالعربية
+                {L('Introduction in Arabic', 'المقدمة بالعربية')}
               </label>
               <textarea
                 className="input"
@@ -142,13 +142,13 @@ notices.mount = host => {
           <div className="formgrid">
             <div className="formrow">
               <label className="label" htmlFor="intentions-en">
-                Mass intentions (English, one per line)
+                {L('Mass intentions in English, one per line', 'نوايا القداديس بالإنكليزية، سطر لكل نيّة')}
               </label>
               <textarea className="input" id="intentions-en" rows="3" defaultValue={CONTENT.intentions?.en || ''} />
             </div>{' '}
             <div className="formrow">
               <label className="label" htmlFor="intentions-ar">
-                نوايا القداديس (عربي، سطر لكل نيّة)
+                {L('Mass intentions in Arabic, one per line', 'نوايا القداديس بالعربية، سطر لكل نيّة')}
               </label>
               <textarea
                 className="input"

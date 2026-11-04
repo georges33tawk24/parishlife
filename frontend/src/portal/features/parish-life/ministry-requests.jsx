@@ -2,13 +2,23 @@
    leave one, and review requests within one's role. */
 
 import { useEffect, useState } from 'react';
-import { api } from '../../model/api.js';
+import { api, session } from '../../model/api.js';
+import { GROUPS, PARISH } from '../../model/data.js';
 import { t } from '../../../lib/i18n.js';
 import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const L = t,
   open = ['requested', 'awaiting-priest', 'withdrawal-requested', 'leave-requested'];
+
+/* The server names groups and parishes in English; those of the open parish are shown in the
+   reader's language from the parish's own records. */
+const groupLabel = (id, parish, fallback) => {
+  const g = parish === session.parishId ? GROUPS.find(x => x.id === id) : null;
+  return g ? L(g.name, g.ar || g.name) : fallback;
+};
+const parishLabel = (parish, fallback) =>
+  parish === session.parishId && PARISH.nameAr ? L(fallback, PARISH.nameAr) : fallback;
 
 const statuses = {
   requested: ['Awaiting leader or priest', 'بانتظار المسؤول أو الكاهن'],
@@ -81,7 +91,7 @@ export function MinistryRequests() {
       L('Confirm decision', 'تأكيد القرار'),
       <>
         <p>
-          {r.groupName} · {r.name}
+          {groupLabel(r.group_id, r.parish_id, r.groupName)} · {r.name}
         </p>
         <p>{text}</p>
       </>,
@@ -102,9 +112,9 @@ export function MinistryRequests() {
       <article key={r.id} className="ministry-request">
         <div>
           <h3>
-            {r.groupName} · {r.name}
+            {groupLabel(r.group_id, r.parish_id, r.groupName)} · {r.name}
           </h3>
-          <p>{r.parishName}</p>
+          <p>{parishLabel(r.parish_id, r.parishName)}</p>
           <span className="pill">{label(r.status)}</span>
           {r.kind === 'leave' ? (
             <p className="help">
@@ -157,7 +167,7 @@ export function MinistryRequests() {
         : L('Request to join ministry', 'طلب الانضمام للخدمة'),
       <>
         <p>
-          {g.name} · {g.parishName}
+          {groupLabel(g.id, g.parish, g.name)} · {parishLabel(g.parish, g.parishName)}
         </p>
         <p className="help">
           {g.member
@@ -189,7 +199,10 @@ export function MinistryRequests() {
         r =>
           (filter !== 'own' || r.own) &&
           (filter !== 'review' || (r.canReview && !r.own && open.includes(r.status))) &&
-          [r.groupName, r.name, r.parishName].join(' ').toLowerCase().includes(q)
+          [r.groupName, r.name, r.parishName, groupLabel(r.group_id, r.parish_id, ''), parishLabel(r.parish_id, '')]
+            .join(' ')
+            .toLowerCase()
+            .includes(q)
       )
     : [];
   return (
@@ -255,11 +268,13 @@ export function MinistryRequests() {
                     const pending = data.requests.some(
                         r => r.own && r.group_id === g.id && r.parish_id === g.parish && open.includes(r.status)
                       ),
-                      name = (g.name + ' ' + g.parishName).toLowerCase();
+                      name = [g.name, g.parishName, groupLabel(g.id, g.parish, ''), parishLabel(g.parish, '')]
+                        .join(' ')
+                        .toLowerCase();
                     return (
                       <article key={g.parish + g.id} className="inbox-card" data-name={name} hidden={!name.includes(q)}>
-                        <h3>{g.name}</h3>
-                        <p>{g.parishName}</p>
+                        <h3>{groupLabel(g.id, g.parish, g.name)}</h3>
+                        <p>{parishLabel(g.parish, g.parishName)}</p>
                         <p>{g.description}</p>
                         <button
                           className="btn btn-secondary"
