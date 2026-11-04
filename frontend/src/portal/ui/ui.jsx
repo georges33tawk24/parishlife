@@ -545,12 +545,18 @@ export function openModal(opts) {
 }
 
 const FOCUSABLE =
-  'a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])';
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]';
+/* what the keyboard can reach: not an element taken out of the tab order, nor one hidden from
+   assistive technology (the native select behind a designed dropdown) */
+const reachable = root =>
+  [...root.querySelectorAll(FOCUSABLE)].filter(
+    el => el.tabIndex >= 0 && !el.closest('[aria-hidden="true"]') && el.getClientRects().length
+  );
 /* Move focus into the dialog and keep Tab inside it — a drawer the keyboard can tab out of behind
    the scrim is worse than no drawer. */
 const trapTab = e => {
   if (e.key !== 'Tab') return;
-  const f = [...e.currentTarget.querySelectorAll(FOCUSABLE)].filter(el => el.getClientRects().length);
+  const f = reachable(e.currentTarget);
   if (!f.length) return;
   const first = f[0],
     last = f[f.length - 1];
@@ -668,7 +674,10 @@ function Layer({ layer }) {
       if (box.current && !box.current.contains(e.target) && !layer.anchor.contains(e.target)) closeMenu();
     };
     const escape = e => {
-      if (e.key === 'Escape') closeMenu();
+      if (e.key !== 'Escape') return;
+      const anchor = layer.anchor;
+      closeMenu();
+      if (anchor?.isConnected) anchor.focus(); // the keyboard carries on from the button that opened it
     };
     document.addEventListener('click', outside);
     document.addEventListener('keydown', escape);
@@ -752,7 +761,7 @@ export function OverlayHost() {
     if (!current || !open) return;
     const host = el.current,
       g = current.gen;
-    const els = [...host.querySelectorAll(FOCUSABLE)];
+    const els = reachable(host);
     (els.find(e => !e.hasAttribute('data-close')) || els[0])?.focus();
     /* what a dialog wires once it is drawn runs as soon as React has finished drawing it */
     if (current.onMount)

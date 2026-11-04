@@ -10,28 +10,43 @@ import { ok } from './dialog-helpers.jsx';
 const L = (en, ar) => t(en, ar);
 
 /* Inline validation as sheet 03 draws it: the field turns red, the message sits under
-   it and focus moves there; it clears as soon as the person types. */
-export function need(el, sel, msg, ok = v => !!v) {
+   it and focus moves there; it clears as soon as the person types or chooses. A designed dropdown
+   shows the state on its button, which is also what takes focus. */
+let needN = 0;
+export function need(el, sel, msg, ok = v => !!v, focus = true) {
   const inp = el.querySelector(sel);
   if (!inp || ok(inp.value.trim())) return true;
+  const shown = inp.dataset.dd && inp.nextElementSibling?.matches('.dd-trigger') ? inp.nextElementSibling : inp;
   const row = inp.closest('.formrow') || inp.parentElement;
   let h = row.querySelector('[data-need]');
   if (!h) {
-    h = Object.assign(document.createElement('span'), { className: 'help help-error' });
+    h = Object.assign(document.createElement('span'), { className: 'help help-error', id: `need${++needN}` });
     h.dataset.need = '1';
     row.append(h);
   }
   h.textContent = msg;
-  inp.setAttribute('aria-invalid', 'true');
-  inp.focus();
-  inp.addEventListener(
-    'input',
-    () => {
-      inp.removeAttribute('aria-invalid');
-      h.remove();
-    },
-    { once: true }
-  );
+  const described = shown.getAttribute('aria-describedby');
+  if (!described?.split(' ').includes(h.id))
+    shown.setAttribute('aria-describedby', described ? `${described} ${h.id}` : h.id);
+  shown.setAttribute('aria-invalid', 'true');
+  if (focus) shown.focus();
+  const clear = () => {
+    shown.removeAttribute('aria-invalid');
+    const rest = (shown.getAttribute('aria-describedby') || '').split(' ').filter(x => x && x !== h.id);
+    if (rest.length) shown.setAttribute('aria-describedby', rest.join(' '));
+    else shown.removeAttribute('aria-describedby');
+    h.remove();
+  };
+  inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', clear, { once: true });
+  return false;
+}
+
+/** Several required fields at once: every missing one is marked, and the first of them takes focus. */
+export function needAll(el, list) {
+  const missing = list.filter(([sel, msg, ok]) => !need(el, sel, msg, ok, false));
+  if (!missing.length) return true;
+  const first = el.querySelector(missing[0][0]);
+  (first?.dataset.dd && first.nextElementSibling?.matches('.dd-trigger') ? first.nextElementSibling : first)?.focus();
   return false;
 }
 

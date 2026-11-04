@@ -365,12 +365,18 @@ export function formNew() {
       }
       el.querySelector('#rf_go').addEventListener('click', async () => {
         let e = sel.value === '__new__' ? draft : eventById(sel.value);
-        if (!e)
-          return toast(
-            L('Select an eligible event', 'اختر حدثاً صالحاً'),
-            canMakeEvent ? L('Or create the event here first.', 'أو أنشئ الحدث هنا أولاً.') : '',
-            'warning'
-          );
+        if (
+          !e &&
+          !need(
+            el,
+            '#rf_e',
+            canMakeEvent
+              ? L('Choose the event, or create it here first', 'اختر الحدث، أو أنشئه هنا أولاً')
+              : L('Choose the event', 'اختر الحدث'),
+            () => false
+          )
+        )
+          return;
         if (e === draft) {
           e = { id: 'ev' + Date.now().toString(36), ...draft };
           D.EVENTS.push(e);

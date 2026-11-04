@@ -23,7 +23,7 @@ import {
 } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { download } from '../../shell/actions.jsx';
-import { need } from '../../shared/dialogs.jsx';
+import { need, needAll } from '../../shared/dialogs.jsx';
 import { workflow as serverWorkflow } from '../../model/persist.js';
 import { fileName } from '../../shared/print.js';
 import {
@@ -937,7 +937,8 @@ sacraments.mount = host => {
         el.querySelector('#srq_save').addEventListener('click', async () => {
           const manual = el.querySelector('#srq-new-child').checked,
             personId = el.querySelector('#srq_person').value;
-          if (!manual && !personId) return toast(L('Choose a person', 'اختر شخصاً'), '', 'warning');
+          if (!manual && !need(el, '#srq_person', L('Choose who receives the sacrament', 'اختر من سيقبل السرّ')))
+            return;
           const child = manual
             ? {
                 lat: el.querySelector('#srq-child-lat').value.trim(),
@@ -947,12 +948,15 @@ sacraments.mount = host => {
                 mother: el.querySelector('#srq-child-mother').value.trim()
               }
             : null;
-          if (manual && (!child.lat || !child.ar || !child.born))
-            return toast(
-              L('Complete the child’s names and birth date', 'أكمل اسمَي الطفل وتاريخ ميلاده'),
-              '',
-              'warning'
-            );
+          if (
+            manual &&
+            !needAll(el, [
+              ['#srq-child-lat', L('Enter the child’s English name', 'أدخل اسم الطفل بالإنكليزية')],
+              ['#srq-child-ar', L('Enter the child’s Arabic name', 'أدخل اسم الطفل بالعربية')],
+              ['#srq-child-born', L('Enter the birth date', 'أدخل تاريخ الولادة')]
+            ])
+          )
+            return;
           const id = 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
           const btn = el.querySelector('#srq_save');
           btn.disabled = true;

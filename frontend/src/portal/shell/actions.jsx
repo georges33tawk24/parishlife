@@ -64,6 +64,7 @@ import {
 import { contentEdit } from '../features/communicate/website-dialogs.jsx';
 import { deleteSpecimen, ruleAdd, tagAdd, webhookAdd } from '../features/administration/administration-dialogs.jsx';
 import * as CR from '../shared/record-editor.jsx';
+import { setFieldValue } from '../ui/components.jsx';
 import { backupJSON, persist } from '../model/persist.js';
 import { selectedCheckin } from '../model/event-workflows.js';
 import { session } from '../model/api.js';
@@ -277,29 +278,37 @@ export const VERBS = {
   },
 
   /* giving & finance -------------------------------------------- */
+  /* An envelope from the counting drawer: its number (or the next one), fund, giver unless anonymous,
+     and the amount as typed, in the currency the field shows; the drawer stays open for the next. */
   'env-add': () => {
-    const el = document.querySelector('.drawer');
-    const envNo = el?.querySelector('#envno')?.value?.trim() || String(140 + D.BATCH.lines.length).padStart(4, '0');
-    const amt = parseFloat((el?.querySelector('#giveamt')?.value || '50').replace(/,/g, '')) || 50;
-    const lira = el?.querySelector('#aslira')?.checked;
-    D.BATCH.lines.push(
-      lira
-        ? {
-            env: envNo,
-            p: null,
-            lbp: Math.round(amt * D.RATE.value),
-            fund: 'general',
-            note: 'Given in lira',
-            noteAr: 'أُعطي بالليرة'
-          }
-        : { env: envNo, p: null, usd: amt, fund: 'general' }
-    );
-    closeOverlays();
+    const el = document.querySelector('.drawer.open');
+    if (!el) return;
+    const amount = el.querySelector('#giveamt');
+    const typed = () => parseFloat(amount.value.replace(/,/g, ''));
+    if (!need(el, '#giveamt', L('Enter an amount above zero', 'أدخل مبلغاً أكبر من صفر'), () => typed() > 0)) return;
+    const envNo = el.querySelector('#envno').value.trim() || String(140 + D.BATCH.lines.length).padStart(4, '0');
+    const inLira = amount.closest('.field')?.querySelector('.prefix')?.textContent.trim() === 'L.L';
+    const usdAmount = inLira ? typed() / D.RATE.value : typed();
+    const keepLira = el.querySelector('#aslira').checked;
+    const line = {
+      env: envNo,
+      p: el.querySelector('#envanon').checked ? null : el.querySelector('#givep').dataset.pid || null,
+      fund: el.querySelector('#envfund').value || 'general'
+    };
+    if (keepLira)
+      Object.assign(line, {
+        lbp: Math.round(inLira ? typed() : typed() * D.RATE.value),
+        note: 'Given in lira',
+        noteAr: 'أُعطي بالليرة'
+      });
+    else line.usd = Math.round(usdAmount * 100) / 100;
+    D.BATCH.lines.push(line);
     refresh();
-    ok(
-      L('Envelope added', 'أُضيف المظروف'),
-      `${envNo} · ${lira ? 'L.L ' + num(Math.round(amt * D.RATE.value)) : usd(amt)}`
-    );
+    ok(L('Envelope added', 'أُضيف المظروف'), `${envNo} · ${keepLira ? 'L.L ' + num(line.lbp) : usd(line.usd)}`);
+    /* ready for the next envelope */
+    for (const sel of ['#envno', '#givep']) setFieldValue(el.querySelector(sel), '');
+    delete el.querySelector('#givep').dataset.pid;
+    el.querySelector('#envno').focus();
   },
   'batch-close': () => {
     D.BATCH.status = 'closed';

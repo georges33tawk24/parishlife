@@ -7,6 +7,7 @@ import { Icon } from '../../ui/icons.jsx';
 import { persist } from '../../model/persist.js';
 import { session } from '../../model/api.js';
 import { PageHead, Panel, Table, Pill, Empty, openDrawer, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
+import { needAll } from '../../shared/dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -261,7 +262,7 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
       <>
         <div className="formrow">
           <label className="label" htmlFor="pastoral-person">
-            {L('Person', 'الشخص')} {itemKind === 'task' ? L('(optional)', '(اختياري)') : ''}
+            {L('Person', 'الشخص')} {itemKind === 'task' ? L('(optional)', '(اختياري)') : <span className="req">*</span>}
           </label>{' '}
           <Select defaultValue={item?.p || initialPerson} id="pastoral-person">
             <option value="">
@@ -387,14 +388,15 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
       el.querySelector('#pastoral-save').addEventListener('click', async e => {
         const body = el.querySelector('#pastoral-body').value.trim(),
           p = el.querySelector('#pastoral-person').value;
-        if (!body) {
-          el.querySelector('#pastoral-body').focus();
-          return;
-        }
-        if (itemKind === 'note' && !p) {
-          el.querySelector('#pastoral-person').focus();
-          return;
-        }
+        const checks = [
+          [
+            '#pastoral-body',
+            itemKind === 'task' ? L('Describe the task', 'صِف المهمة') : L('Write the note', 'اكتب الملاحظة')
+          ]
+        ];
+        if (itemKind === 'note')
+          checks.unshift(['#pastoral-person', L('Choose who the note is about', 'اختر الشخص المعني بالملاحظة')]);
+        if (!needAll(el, checks)) return;
         e.currentTarget.disabled = true;
         const values = {
           kind: itemKind,

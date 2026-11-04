@@ -8,6 +8,7 @@ import { persist } from '../../model/persist.js';
 import { PageHead, Table, Empty, Icon, Pill, openDrawer, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { printSheet } from '../../shared/print.js';
+import { needAll } from '../../shared/dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -323,16 +324,18 @@ function entryForm(record = null, kind = 'expense') {
       el.querySelector('#oe-amount').step = 'any';
       el.querySelector('#oe-save').addEventListener('click', async e => {
         const value = id => el.querySelector('#oe-' + id)?.value.trim() || '';
+        if (
+          !needAll(el, [
+            ['#oe-date', L('Enter the date', 'أدخل التاريخ')],
+            ['#oe-amount', L('Enter an amount above zero', 'أدخل مبلغاً أكبر من صفر'), v => Number(v) > 0],
+            ['#oe-description', L('Describe the transaction', 'صِف العملية')]
+          ])
+        )
+          return;
         if (!el.querySelector('form').reportValidity()) return;
         const amount = Number(value('amount')),
           date = value('date'),
           currency = value('currency');
-        if (!Number.isFinite(amount) || amount <= 0 || !date || !value('description'))
-          return toast(
-            L('Enter a date, description and positive amount', 'أدخل تاريخاً ووصفاً ومبلغاً موجباً'),
-            '',
-            'warning'
-          );
         const receipt = el.querySelector('#oe-receipt')?.files?.[0];
         if (receipt && (!/\.(pdf|png|jpe?g)$/i.test(receipt.name) || receipt.size > 10_000_000))
           return toast(

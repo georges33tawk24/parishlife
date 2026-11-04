@@ -4,6 +4,7 @@ import { S } from '../../model/store.js';
 import { Icon, PageHead, Who, Pill, Table, Empty } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { AUDIT, person } from '../../model/data.js';
+import { auditAction, auditTime } from '../../shared/audit-words.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -60,10 +61,16 @@ export function audit() {
           attrs: 'data-find-item',
           cells: [
             <span className="mono dim" dir="ltr">
-              {a.at}
+              {auditTime(a.at)}
             </span>,
-            a.who && person(a.who) ? <Who p={person(a.who)} /> : a.actorName || '—',
-            L(a.what, a.whatAr),
+            a.who && person(a.who) ? (
+              <Who p={person(a.who)} />
+            ) : a.actorName === 'System' ? (
+              L('System', 'النظام')
+            ) : (
+              a.actorName || '—'
+            ),
+            auditAction(a),
             <Pill label={KINDS[a.kind][0]} tone={KINDS[a.kind][1]} />
           ]
         }))}

@@ -8,6 +8,7 @@ import { t, isAr, num, usd, month, dayShort, matches } from '../../lib/i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from '../model/data.js';
 import { parishAPI, session } from '../model/api.js';
 import { Avatar, toast, openPopover, closeMenu } from './ui.jsx';
+import { useVersion } from '../shell/version.js';
 export { AddressCascade } from './geography.jsx';
 
 /* ---------------- buttons ---------------- */
@@ -345,14 +346,21 @@ export const NamePair = () => (
         {t('English name', 'الاسم الإنكليزي')}
         <span className="req">*</span>
       </label>
-      <input className="input" id="latname" dir="ltr" placeholder="Georges Haddad" />
+      <input className="input" id="latname" dir="ltr" placeholder="Georges Haddad" required />
     </div>
     <div className="formrow">
       <label className="label" htmlFor="arname">
         {t('Arabic name', 'الاسم العربي')}
         <span className="req">*</span>
       </label>
-      <input className="input" id="arname" dir="rtl" style={{ fontFamily: 'var(--arabic)' }} placeholder="جورج حدّاد" />
+      <input
+        className="input"
+        id="arname"
+        dir="rtl"
+        style={{ fontFamily: 'var(--arabic)' }}
+        placeholder="جورج حدّاد"
+        required
+      />
     </div>
   </div>
 );
@@ -435,8 +443,10 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
     [open, setOpen] = useState(false),
     input = useRef(null);
   const hits = q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)).slice(0, 6) : [];
-  const choose = value => {
-    input.current.value = value;
+  /* the chosen person's id stays on the field (data-pid) until the name is typed over */
+  const choose = p => {
+    input.current.value = isAr() ? p.ar : p.lat;
+    input.current.dataset.pid = p.id;
     setOpen(false);
   };
   return (
@@ -452,6 +462,7 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
           placeholder={t('Type a name in either script', 'اكتب الاسم بأي حرف')}
           ref={input}
           onInput={e => {
+            delete e.target.dataset.pid;
             setQ(e.target.value);
             setOpen(!!e.target.value);
           }}
@@ -460,7 +471,7 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
         <div className="ac-list" hidden={!open || !q}>
           {!q ? null : hits.length ? (
             hits.map(p => (
-              <button key={p.id} className="ac-opt" data-pid={p.id} onClick={() => choose(isAr() ? p.ar : p.lat)}>
+              <button key={p.id} className="ac-opt" data-pid={p.id} onClick={() => choose(p)}>
                 <Avatar p={p} cls="avatar-sm" />
                 <span>
                   <b>{isAr() ? p.ar : p.lat}</b>
@@ -478,7 +489,7 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
                 data-create
                 onMouseDown={e => {
                   e.preventDefault();
-                  PEOPLE.unshift({
+                  const added = {
                     id: 'p' + Date.now(),
                     lat: q,
                     ar: q,
@@ -490,8 +501,9 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
                     born: '1990-01-01',
                     hh: null,
                     tags: []
-                  });
-                  choose(q);
+                  };
+                  PEOPLE.unshift(added);
+                  choose(added);
                   toast(
                     t('Added as a visitor', 'أُضيف كزائر'),
                     t('Complete the record from People when you can.', 'أكمل السجل من صفحة المؤمنين لاحقاً.'),
@@ -838,7 +850,9 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
   );
 }
 
+/* Redraws itself when a photo changes (refresh), wherever it sits: a page, a drawer, the style guide. */
 export function AvatarUpload({ k = 'specimen' }) {
+  useVersion();
   const ph = PHOTOS[k],
     label = k === 'parish' ? 'P' : k === 'new' || k === 'specimen' ? 'GH' : initials(person(k));
   return (
@@ -1440,6 +1454,16 @@ export const Select = forwardRef(function Select({ className = 'select', childre
       if (lab.htmlFor) lab.htmlFor = btnId;
       btn.current.setAttribute('aria-labelledby', lab.id);
     } else if (props['aria-label']) btn.current.setAttribute('aria-label', props['aria-label']);
+    else {
+      /* a label wrapped around the dropdown names it, without the dropdown's own text */
+      const wrap = sel.current.closest('label');
+      if (wrap) {
+        const copy = wrap.cloneNode(true);
+        copy.querySelectorAll('select, button, [role=listbox], .dd-list').forEach(n => n.remove());
+        const name = copy.textContent.replace(/\s+/g, ' ').trim();
+        if (name) btn.current.setAttribute('aria-label', name);
+      }
+    }
   }, []);
   const close = (focusBack = false) => {
     setOpen(false);

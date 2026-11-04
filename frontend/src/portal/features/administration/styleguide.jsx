@@ -236,13 +236,13 @@ export function styleguide(tab = '') {
                   {L('Spacing scale', 'سلّم المسافات')}
                 </div>{' '}
                 {[
-                  [4, 'icon→label'],
-                  [8, 'field→helper'],
-                  [16, 'between fields'],
-                  [24, 'card padding'],
-                  [32, 'page gutter'],
-                  [48, 'between sections'],
-                  [64, 'page top/bottom']
+                  [4, L('icon → label', 'أيقونة ← تسمية')],
+                  [8, L('field → helper', 'حقل ← نص مساعد')],
+                  [16, L('between fields', 'بين الحقول')],
+                  [24, L('card padding', 'حشوة البطاقة')],
+                  [32, L('page gutter', 'هامش الصفحة')],
+                  [48, L('between sections', 'بين الأقسام')],
+                  [64, L('page top / bottom', 'أعلى الصفحة وأسفلها')]
                 ].map(([n, u], i) => (
                   <div key={i} className="row" style={{ gap: '10px', marginBottom: '6px' }}>
                     <span className="mono t-caption" style={{ width: '26px' }}>
@@ -258,10 +258,10 @@ export function styleguide(tab = '') {
                   {L('Radius', 'الاستدارة')}
                 </div>{' '}
                 {[
-                  ['6px', 'inputs'],
-                  ['10px', 'cards, buttons'],
-                  ['14px', 'modals, drawers'],
-                  ['999px', 'pills, avatars']
+                  ['6px', L('inputs', 'الحقول')],
+                  ['10px', L('cards, buttons', 'البطاقات والأزرار')],
+                  ['14px', L('modals, drawers', 'النوافذ والأدراج')],
+                  ['999px', L('pills, avatars', 'الشارات والصور الرمزية')]
                 ].map(([r, u], i) => (
                   <div key={i} className="row" style={{ gap: '10px', marginBottom: '8px' }}>
                     <span
@@ -279,10 +279,10 @@ export function styleguide(tab = '') {
                   {L('Elevation', 'الارتفاع')}
                 </div>{' '}
                 {[
-                  ['0 · line', 'none', '1px border'],
-                  ['1 · card', 'var(--e1)', 'cards'],
-                  ['2 · menu', 'var(--e2)', 'menus, popovers'],
-                  ['3 · modal', 'var(--e3)', 'modals']
+                  ['0 · line', 'none', L('1px border', 'حدّ ١px')],
+                  ['1 · card', 'var(--e1)', L('cards', 'البطاقات')],
+                  ['2 · menu', 'var(--e2)', L('menus, popovers', 'القوائم والنوافذ المنبثقة')],
+                  ['3 · modal', 'var(--e3)', L('modals', 'النوافذ')]
                 ].map(([n, sh, u], i) => (
                   <div key={i} className="row" style={{ gap: '10px', marginBottom: '10px' }}>
                     <span

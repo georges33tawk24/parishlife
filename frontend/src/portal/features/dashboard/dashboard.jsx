@@ -30,6 +30,7 @@ import {
 } from '../../model/data.js';
 import { waitingOnline, onlineTitle, subjectOf } from '../records/online-requests.jsx';
 import * as C from '../../ui/components.jsx';
+import { auditAction, auditTime } from '../../shared/audit-words.js';
 
 const greet = () => {
   const p = me(),
@@ -163,9 +164,10 @@ function activityPanel(limit = 5) {
     return (
       <div key={i} className={`tl-item ${a.kind === 'error' || a.kind === 'sensitive' ? 'accent' : ''}`}>
         <div className="when">
-          {a.at?.slice(11) || ''} · {a.actorName || (p ? (isAr() ? p.ar : p.lat) : 'System')}
+          <span dir="ltr">{auditTime(a.at).slice(11)}</span> ·{' '}
+          {p ? (isAr() ? p.ar : p.lat) : a.actorName && a.actorName !== 'System' ? a.actorName : t('System', 'النظام')}
         </div>{' '}
-        <div className="what">{t(a.what, a.whatAr)}</div>
+        <div className="what">{auditAction(a)}</div>
       </div>
     );
   });

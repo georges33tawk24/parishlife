@@ -550,12 +550,19 @@ export const ENT = {
     ed: ['Edit pledge', 'تعديل التعهّد'],
     del: ['Delete this pledge?', 'حذف هذا التعهّد؟'],
     fields: () => [
-      { k: 'p', label: L('Donor', 'المتبرّع'), type: 'select', options: people },
+      {
+        k: 'p',
+        label: L('Donor', 'المتبرّع'),
+        type: 'select',
+        req: true,
+        choose: L('Choose the donor', 'اختر المتبرّع'),
+        options: people
+      },
       { k: 'fund', label: L('Fund', 'الصندوق'), type: 'select', options: funds },
       { k: 'pledged', label: L('Pledged (USD)', 'المتعهَّد به (دولار)'), type: 'number', min: 1, req: true },
       { k: 'paid', label: L('Paid so far (USD)', 'المدفوع حتى الآن (دولار)'), type: 'number', min: 0 }
     ],
-    blank: () => ({ id: uid('pl'), p: 'p1', pledged: 500, paid: 0, fund: 'building' }),
+    blank: () => ({ id: uid('pl'), p: '', pledged: 500, paid: 0, fund: 'building' }),
     check: v => (+v.paid > +v.pledged ? ['paid', L('More than was pledged', 'أكثر من المتعهَّد به')] : null)
   },
   campaign: {
@@ -1063,6 +1070,8 @@ export const ENT = {
             label: L('Parishioner', 'المؤمن'),
             type: 'select',
             full: true,
+            req: true,
+            choose: L('Choose a parishioner', 'اختر مؤمناً'),
             options: () => people().filter(([id]) => !D.VOLUNTEERS.some(v => v.p === id))
           }
         : { k: 'p', label: L('Parishioner', 'المؤمن'), type: 'select', full: true, options: people, disabled: true },
@@ -1108,7 +1117,7 @@ export const ENT = {
         k: 'training',
         label: L('Training completed', 'التدريب المُنجَز'),
         full: true,
-        ph: 'Safeguarding 2026, First aid',
+        ph: L('Safeguarding 2026, First aid', 'الحماية ٢٠٢٦، الإسعافات الأولية'),
         get: x => (x.training || []).join(', '),
         set: (x, v) => {
           x.training = list(v);
@@ -1116,7 +1125,7 @@ export const ENT = {
       }
     ],
     blank: () => ({
-      p: people().find(([id]) => !D.VOLUNTEERS.some(v => v.p === id))?.[0] || 'p1',
+      p: '',
       skills: [],
       skillsAr: [],
       clearance: 'missing',
@@ -1155,6 +1164,7 @@ function fieldHTML(f, x) {
       <div className="formrow" {...htmlAttrs(span)}>
         {label}{' '}
         <Select id={id} defaultValue={v == null ? undefined : String(v)} disabled={!!f.disabled}>
+          {f.choose ? <option value="">{f.choose}</option> : null}
           {f.options().map(([ov, en, ar], i) => (
             <option key={i} value={ov}>
               {L(en, ar ?? en)}
@@ -1236,7 +1246,8 @@ function valid(el, fields, ent, vals, x) {
         el,
         '#cf_' + f.k,
         L('This is required', 'هذا الحقل مطلوب'),
-        f.type === 'number' ? v => v !== '' && +v >= (f.min ?? 0) : undefined
+        f.type === 'number' ? v => v !== '' && +v >= (f.min ?? 0) : undefined,
+        false
       )
     )
       ok = false;
@@ -1246,14 +1257,15 @@ function valid(el, fields, ent, vals, x) {
         el,
         '#cf_' + f.k,
         f.min > 0 ? L(`At least ${f.min}`, `على الأقل ${f.min}`) : L('Cannot be negative', 'لا يمكن أن يكون سالباً'),
-        v => v === '' || +v >= (f.min ?? 0)
+        v => v === '' || +v >= (f.min ?? 0),
+        false
       )
     )
       ok = false;
   }
   const bad = ok && ent.check?.(vals, x);
   if (bad) {
-    need(el, '#cf_' + bad[0], bad[1], () => false);
+    need(el, '#cf_' + bad[0], bad[1], () => false, false);
     ok = false;
   }
   if (!ok) el.querySelector('[aria-invalid=true]')?.focus();

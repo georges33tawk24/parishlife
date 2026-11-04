@@ -6,6 +6,7 @@ import { S } from '../../model/store.js';
 import { PageHead, Table, Stat, Status, openDrawer, Icon } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { CalendarView } from '../../ui/collection.jsx';
+import { auditAction } from '../../shared/audit-words.js';
 
 const cache = new Map();
 
@@ -327,8 +328,8 @@ function ParishView({ entry, id }) {
         <Rows
           items={entry.activity.map(a => [
             new Date(a.at).toLocaleString(document.documentElement.lang === 'ar' ? 'ar-LB' : 'en-GB'),
-            a.actor,
-            a.action.replaceAll('.', ' ')
+            a.actor === 'System' ? L('System', 'النظام') : a.actor,
+            auditAction({ what: a.action })
           ])}
           cols={[L('When', 'الوقت'), L('By', 'بواسطة'), L('Activity', 'النشاط')]}
         />

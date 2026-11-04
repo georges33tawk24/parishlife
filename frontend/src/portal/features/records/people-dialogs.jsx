@@ -833,17 +833,9 @@ export function avatarRemove(btn, key) {
   });
 }
 
-/* Redraw the upload control where it sits (often inside a drawer), then the page and the rail behind it. */
+/* The upload control redraws itself (C.AvatarUpload reads the photos on every refresh); the parish
+   photo and the signed-in person's also show in the rail, which needs the whole shell drawn again. */
 function photoShown(btn, key) {
-  const host = document.querySelector(`[data-photo="${key}"]`);
-  if (host) {
-    host.outerHTML = <C.AvatarUpload k={key} />;
-    document.querySelector(`[data-photo="${key}"]`) && wireIn(document.querySelector(`[data-photo="${key}"]`));
-  }
   if (key === 'parish' || key === me()?.id) bus.renderAll();
   else refresh();
-}
-
-async function wireIn(el) {
-  const { wireActions } = await import('../../shell/actions.jsx');
 }

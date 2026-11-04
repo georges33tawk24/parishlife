@@ -187,14 +187,22 @@ export function tagAdd(btn) {
   inp.placeholder = L('New tag', 'وسم جديد');
   btn.replaceWith(inp);
   inp.focus();
-  const done = () => {
+  /* Enter, Escape and leaving the field all end it once: putting the button back blurs the field. */
+  let ended = false;
+  const end = keep => {
+    if (ended || !inp.isConnected) return;
+    ended = true;
     const v = inp.value.trim();
-    if (v) inp.insertAdjacentHTML('beforebegin', <span className="chip">{v}</span>);
+    if (keep && v) inp.before(Object.assign(document.createElement('span'), { className: 'chip', textContent: v }));
     inp.replaceWith(btn);
+    btn.focus();
   };
   inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter') done();
-    if (e.key === 'Escape') inp.replaceWith(btn);
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    /* the key must not go on to press the button that focus returns to */
+    e.preventDefault();
+    e.stopPropagation();
+    end(e.key === 'Enter');
   });
-  inp.addEventListener('blur', done);
+  inp.addEventListener('blur', () => end(true));
 }

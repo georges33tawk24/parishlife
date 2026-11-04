@@ -61,6 +61,9 @@ const STABS = () => [
   ['templates', 'Templates', 'القوالب']
 ];
 
+/* the preparation states a request can be in, for requests saved without their Arabic */
+const PREP_AR = { 'documents missing': 'مستندات ناقصة', 'awaiting venue': 'بانتظار القاعة' };
+
 export function services(tab = '', planId = '') {
   if (is('leader')) {
     const meetings = GROUPS.flatMap(g => groupInfo(g.id).meetings.map(m => ({ g, m }))).sort((a, b) =>
@@ -314,7 +317,7 @@ export function services(tab = '', planId = '') {
                 r.prep === 'complete' ? (
                   <Pill label={L('Complete', 'مكتمل')} tone="success" />
                 ) : (
-                  <Pill label={L(r.prep, r.prepAr || r.prep)} tone="warning" />
+                  <Pill label={L(r.prep, r.prepAr || PREP_AR[r.prep] || r.prep)} tone="warning" />
                 ),
                 <Status k={r.status} />,
                 <button className="btn btn-secondary btn-dense" data-act={`svc-request:${r.id}`}>

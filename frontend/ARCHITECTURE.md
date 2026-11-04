@@ -49,8 +49,9 @@ frontend/src/
     ├── ui/              the design system: ui.jsx (page head, panels, tables, tabs, drawers,
     │                    modals, menus, toasts), components.jsx (fields, selects, alerts, …),
     │                    icons, the shared calendar, signatures, address fields
-    ├── shared/          what every feature uses: dialogs.jsx (confirm, share, preview, …),
-    │                    record-editor.jsx (create/edit/delete any kind of record), print.js
+    ├── shared/          what every feature uses: dialogs.jsx (confirm, share, preview, the
+    │                    required-field check), record-editor.jsx (create/edit/delete any kind of
+    │                    record), audit-words.js (audit actions and times in words), print.js
     └── features/        the screens, grouped as the sidebar groups them
         ├── dashboard/
         ├── records/         people, person, households, sacraments, requests, certificates, notes
@@ -115,6 +116,14 @@ Every file starts with a comment that says what it holds.
 2. Add it to `ROUTES` in `routes.jsx` with its icon and English and Arabic names.
 3. Add the route to the `nav` of each role that should see it in `model/store.js`.
 
+### Checking a form before it saves
+
+Use `need(el, '#field', message)` from `shared/dialogs.jsx` for one required field, or
+`needAll(el, [['#a', message], ['#b', message, test]])` for several: each missing field turns red with
+its message under it, the first takes focus, and the mark clears as soon as the person types or
+chooses. It works on text boxes, text areas and the designed dropdowns alike. Prefer it to a toast,
+which disappears and does not say which field is missing.
+
 ### Adding a button that does something
 
 1. Give the button `data-act="my-verb:argument"`.
@@ -126,7 +135,8 @@ Every file starts with a comment that says what it holds.
 Many portal screens began as HTML strings and were converted to JSX, so a few bridges remain in
 `portal/ui/html.js`: `paint(el, jsx)` draws JSX into an element a `.mount` function found, `markup(jsx)`
 turns JSX into an HTML string for printing and downloads, and `css`/`htmlAttrs` read inline styles and
-attributes written as text. New code should prefer React state and event handlers (`onClick`,
+attributes written as text. Never hand JSX to `innerHTML`, `outerHTML` or `insertAdjacentHTML` (it would
+show as "[object Object]"): render it with React, or pass it through `markup()` first. New code should prefer React state and event handlers (`onClick`,
 `useState`), as the component screens (`account.jsx`, `inbox.jsx`, `insights.jsx`) do.
 
 ## Conventions

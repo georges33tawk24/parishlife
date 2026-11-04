@@ -1,6 +1,6 @@
 /* Service-plan dialogs: adding and arranging items, plans and templates, service requests, and
    slides for the screen. */
-import { Fragment } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { markup } from '../../ui/html.js';
 import { t, fmtDate } from '../../../lib/i18n.js';
@@ -145,12 +145,14 @@ export function servicePlanNew(templateId = '') {
   });
 }
 
-function serviceTemplateRow(item = {}) {
+/* One line of a template's order of service. Its fields keep their own text; Save reads them back. */
+function TemplateRow({ item, rowKey, onMove, onRemove }) {
   const leaders = [...D.PEOPLE.map(p => [p.id, L(p.lat, p.ar)]), ...D.GROUPS.map(g => [g.id, L(g.name, g.ar)])];
   return (
     <div
       className="card card-flat"
       data-st-row=""
+      data-st-key={rowKey}
       data-note-ar={item.noteAr || ''}
       data-original-note={item.note || ''}
       style={{ padding: '10px', marginBottom: '8px' }}
@@ -212,10 +214,60 @@ function serviceTemplateRow(item = {}) {
             label={L('Move up', 'نقل للأعلى')}
             data-st-move="-1"
             style={{ transform: 'rotate(180deg)' }}
+            onClick={() => onMove(-1)}
           />{' '}
-          <C.IconBtn ico="chevD" label={L('Move down', 'نقل للأسفل')} data-st-move="1" />{' '}
-          <C.IconBtn ico="trash" label={L('Remove item', 'إزالة البند')} data-st-remove="" />
+          <C.IconBtn ico="chevD" label={L('Move down', 'نقل للأسفل')} data-st-move="1" onClick={() => onMove(1)} />{' '}
+          <C.IconBtn ico="trash" label={L('Remove item', 'إزالة البند')} data-st-remove="" onClick={onRemove} />
         </span>
+      </div>
+    </div>
+  );
+}
+
+/* The order of service: items are added, moved and removed here; focus follows the item it acted on. */
+function TemplateItems({ order }) {
+  const [rows, setRows] = useState(() => order.map((item, key) => ({ key, item })));
+  const nextKey = useRef(order.length),
+    box = useRef(null),
+    focusNext = useRef('');
+  useLayoutEffect(() => {
+    const target = focusNext.current ? box.current.querySelector(focusNext.current) : null;
+    focusNext.current = '';
+    target?.focus();
+  });
+  const add = () => {
+    const key = nextKey.current++;
+    focusNext.current = `[data-st-key="${key}"] [data-st-title]`;
+    setRows(list => [...list, { key, item: {} }]);
+  };
+  const move = (key, by) => {
+    focusNext.current = `[data-st-key="${key}"] [data-st-move="${by}"]`;
+    setRows(list => {
+      const from = list.findIndex(r => r.key === key),
+        to = from + by;
+      if (to < 0 || to >= list.length) return list;
+      const copy = [...list];
+      [copy[from], copy[to]] = [copy[to], copy[from]];
+      return copy;
+    });
+  };
+  const remove = key => {
+    focusNext.current = '#st_add';
+    setRows(list => list.filter(r => r.key !== key));
+  };
+  return (
+    <div ref={box}>
+      <div className="row" style={{ justifyContent: 'space-between', margin: '12px 0 8px' }}>
+        <b>{L('Order of service', 'ترتيب الخدمة')}</b>{' '}
+        <button className="btn btn-secondary btn-dense" id="st_add" onClick={add}>
+          <Icon name="plus" size={15} />
+          {L('Add item', 'إضافة بند')}
+        </button>
+      </div>{' '}
+      <div id="st_items">
+        {rows.map(({ key, item }) => (
+          <TemplateRow key={key} rowKey={key} item={item} onMove={by => move(key, by)} onRemove={() => remove(key)} />
+        ))}
       </div>
     </div>
   );
@@ -274,18 +326,7 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
             </Select>
           </div>
         </div>{' '}
-        <div className="row" style={{ justifyContent: 'space-between', margin: '12px 0 8px' }}>
-          <b>{L('Order of service', 'ترتيب الخدمة')}</b>{' '}
-          <button className="btn btn-secondary btn-dense" id="st_add">
-            <Icon name="plus" size={15} />
-            {L('Add item', 'إضافة بند')}
-          </button>
-        </div>{' '}
-        <div id="st_items">
-          {(source?.order || []).map((item, i, all) => (
-            <Fragment key={i}>{serviceTemplateRow(item, i, all)}</Fragment>
-          ))}
-        </div>
+        <TemplateItems order={source?.order || []} />
       </>
     ),
     foot: (
@@ -300,24 +341,6 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
     ),
     onMount(el) {
       const items = el.querySelector('#st_items');
-      el.querySelector('#st_add').addEventListener('click', () => {
-        items.insertAdjacentHTML('beforeend', serviceTemplateRow());
-        items.lastElementChild.querySelector('[data-st-title]').focus();
-      });
-      items.addEventListener('click', event => {
-        const row = event.target.closest('[data-st-row]');
-        if (!row) return;
-        if (event.target.closest('[data-st-remove]')) {
-          row.remove();
-          return;
-        }
-        const move = event.target.closest('[data-st-move]');
-        if (!move) return;
-        if (move.dataset.stMove === '-1' && row.previousElementSibling)
-          items.insertBefore(row, row.previousElementSibling);
-        if (move.dataset.stMove === '1' && row.nextElementSibling) items.insertBefore(row.nextElementSibling, row);
-        move.focus();
-      });
       el.querySelector('#st_save').addEventListener('click', () => {
         if (!need(el, '#st_name', L('Name the template', 'سمّ القالب'))) return;
         const order = [];
@@ -729,7 +752,9 @@ export function svcRequestNew(kind = 'Mass|قدّاس') {
           notes: val(el, '#sq_n'),
           documents: {},
           paperDocuments: {},
-          prep: requestRequirements({ kind: en }).some(([, , required]) => required) ? 'documents missing' : 'complete',
+          ...(requestRequirements({ kind: en }).some(([, , required]) => required)
+            ? { prep: 'documents missing', prepAr: 'مستندات ناقصة' }
+            : { prep: 'complete' }),
           status: 'pending',
           stage: 'request',
           history: []

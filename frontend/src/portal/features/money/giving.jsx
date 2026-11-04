@@ -469,19 +469,24 @@ giving.mount = host => {
               </label>{' '}
               <Select id="envfund">
                 {FUNDS.map((f, i) => (
-                  <option key={i}>{L(f.name, f.ar)}</option>
+                  <option key={i} value={f.id}>
+                    {L(f.name, f.ar)}
+                  </option>
                 ))}
               </Select>
             </div>
           </div>{' '}
           <C.PersonPicker label={L('Given by', 'المتبرّع')} id="givep" />{' '}
-          <C.CurrencyField label={L('Amount', 'المبلغ')} value="50.00" stale={false} id="giveamt" /> <C.SplitCurrency />{' '}
+          <C.CurrencyField label={L('Amount', 'المبلغ')} value="" stale={false} id="giveamt" /> <C.SplitCurrency />{' '}
           <div className="stack" style={{ gap: '10px' }}>
             <label className="check">
               <input type="checkbox" id="aslira" />
               <span>{L('Given in lira, keep it as lira', 'أُعطي بالليرة، احفظه ليرة')}</span>
             </label>{' '}
-            <C.CheckRow label={L('Anonymous — record the amount, not the giver', 'مجهول — سجّل المبلغ لا المتبرّع')} />
+            <C.CheckRow
+              id="envanon"
+              label={L('Anonymous — record the amount, not the giver', 'مجهول — سجّل المبلغ لا المتبرّع')}
+            />
           </div>
         </>
       ),

@@ -27,6 +27,7 @@ import * as C from '../../ui/components.jsx';
 import * as CR from '../../shared/record-editor.jsx';
 import { personEdit } from './people-dialogs.jsx';
 import { compose } from '../communicate/messaging-dialogs.jsx';
+import { needAll } from '../../shared/dialogs.jsx';
 import { download } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { printSheet } from '../../shared/print.js';
@@ -1185,7 +1186,13 @@ export function newPersonDrawer() {
         if (saving) return;
         const lat = el.querySelector('#latname')?.value.trim(),
           ar = el.querySelector('#arname')?.value.trim();
-        if (!lat || !ar) return toast(t('Both names are required', 'الاسمان مطلوبان'), '', 'warning');
+        if (
+          !needAll(el, [
+            ['#latname', t('Enter the English name', 'أدخل الاسم الإنكليزي')],
+            ['#arname', t('Enter the Arabic name', 'أدخل الاسم العربي')]
+          ])
+        )
+          return;
         const address = readAddressCascade(el);
         if (
           (address.governorate || address.district || address.town) &&
