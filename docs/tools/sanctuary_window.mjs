@@ -4,8 +4,14 @@
 // them their materials; the site shows the rendered pictures (assets/images/sanctuary).
 //
 // The window is 1000 by 1300 units, drawn in a viewBox of -40 0 1080 1300 so the sill can reach
-// past the jambs. GLASS_OPENINGS (assets/home-sanctuary.js) are the openings the glass fills.
-import { GLASS_OPENINGS } from '../../assets/home-sanctuary.js';
+// past the jambs. GLASS_OPENINGS are the openings the glass fills, the same ones the site's scene
+// uses (GLASS in frontend/src/public/components/sanctuary-geometry.js).
+import { GLASS as OPENINGS } from '../../frontend/src/public/components/sanctuary-geometry.js';
+const GLASS_OPENINGS = {
+  rose: OPENINGS.rose.map(c => `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>`).join(''),
+  left: `<path d="${OPENINGS.left}"/>`,
+  right: `<path d="${OPENINGS.right}"/>`
+};
 
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const r1 = v => Math.round(v * 10) / 10;

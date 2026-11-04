@@ -1,0 +1,513 @@
+/* Notes and tasks: the clergy's pastoral notes and follow-ups, filtered and searched. */
+import { Select } from '../../ui/components.jsx';
+import { t, fmtDate } from '../../../lib/i18n.js';
+import { S, is, bus } from '../../model/store.js';
+import { NOTES, PEOPLE, person } from '../../model/data.js';
+import { Icon } from '../../ui/icons.jsx';
+import { persist } from '../../model/persist.js';
+import { session } from '../../model/api.js';
+import { PageHead, Panel, Table, Pill, Empty, openDrawer, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
+import { needAll } from '../../shared/dialogs.jsx';
+
+const L = (en, ar) => t(en, ar);
+
+const priorities = [
+  ['ordinary', 'Low', 'منخفضة'],
+  ['attention', 'Medium', 'متوسطة'],
+  ['urgent', 'High', 'عالية']
+];
+
+const rank = { urgent: 0, attention: 1, ordinary: 2 };
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const recent = (a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0);
+
+const label = n => L(n.body, n.bodyAr || n.body);
+
+export function notes() {
+  if (!is('priest'))
+    return (
+      <Empty
+        glyph="shield"
+        title={L('Not available for this role', 'غير متاح لهذا الدور')}
+        body={L('Pastoral notes and tasks are restricted to clergy.', 'الملاحظات والمهام الرعوية محصورة بالإكليروس.')}
+      />
+    );
+  const filter = S.ui.noteFilter || 'all',
+    sort = S.ui.noteSort || 'recent';
+  const counts = {
+    all: NOTES.length,
+    pinned: NOTES.filter(n => n.pinned).length,
+    pending: NOTES.filter(n => n.kind === 'task' && !n.done).length,
+    completed: NOTES.filter(n => n.kind === 'task' && n.done).length,
+    high: NOTES.filter(n => n.priority === 'urgent').length
+  };
+  const allowed = n =>
+    filter === 'all' ||
+    (filter === 'pinned' && n.pinned) ||
+    (filter === 'pending' && n.kind === 'task' && !n.done) ||
+    (filter === 'completed' && n.kind === 'task' && n.done) ||
+    (filter === 'high' && n.priority === 'urgent');
+  const rows = NOTES.filter(allowed)
+    .slice()
+    .sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) return Number(!!b.pinned) - Number(!!a.pinned);
+      if (sort === 'priority') return (rank[a.priority] ?? 2) - (rank[b.priority] ?? 2) || recent(a, b);
+      if (sort === 'due')
+        return (a.due || '9999').localeCompare(b.due || '9999') || (rank[a.priority] ?? 2) - (rank[b.priority] ?? 2);
+      return recent(a, b);
+    });
+  const row = n => {
+    const p = n.p ? person(n.p) : null;
+    const search = `${n.body} ${n.bodyAr || ''} ${p?.lat || ''} ${p?.ar || ''}`.toLocaleLowerCase();
+    return {
+      attrs: `data-note="${n.id}" data-search="${search}"`,
+      cells: [
+        p ? <a href={`#/person/${p.id}`}>{p.lat}</a> : '—',
+        <>
+          <b>{label(n)}</b>
+          {n.kind === 'task' && n.assignee ? (
+            <small>
+              {L('Assigned to', 'المكلّف')} {person(n.assignee)?.lat || '—'}
+            </small>
+          ) : (
+            ''
+          )}
+        </>,
+        n.priority === 'urgent' ? (
+          <Pill label={L('High', 'عالية')} tone="danger" />
+        ) : n.priority === 'attention' ? (
+          <Pill label={L('Medium', 'متوسطة')} tone="warning" />
+        ) : (
+          <Pill label={L('Low', 'منخفضة')} />
+        ),
+        n.kind === 'task' ? (n.due ? fmtDate(n.due) : '—') : n.at ? fmtDate(n.at) : '—',
+        n.kind === 'task' ? (
+          <Pill
+            label={n.done ? L('Completed', 'مكتملة') : L('Pending', 'معلّقة')}
+            tone={n.done ? 'success' : 'warning'}
+          />
+        ) : (
+          '—'
+        ),
+        n.authorUserId !== session.user.id ? (
+          <Pill label={L('Shared by another priest', 'شاركها كاهن آخر')} />
+        ) : (
+          <span className="rowacts">
+            {n.kind === 'task' ? (
+              <button
+                className="btn-icon"
+                data-note-done={n.id}
+                aria-label={n.done ? L('Reopen task', 'إعادة فتح المهمة') : L('Complete task', 'إكمال المهمة')}
+              >
+                <Icon name="check" size={17} />
+              </button>
+            ) : (
+              ''
+            )}{' '}
+            <button
+              className="btn-icon"
+              data-note-pin={n.id}
+              aria-label={n.pinned ? L('Unpin', 'إلغاء التثبيت') : L('Pin', 'تثبيت')}
+              aria-pressed={!!n.pinned}
+            >
+              <Icon name="pin" size={17} />
+            </button>{' '}
+            <button className="btn btn-secondary btn-dense" data-note-edit={n.id}>
+              {L('Edit', 'تعديل')}
+            </button>
+          </span>
+        )
+      ]
+    };
+  };
+  const columns = [
+    { label: L('Person', 'الشخص') },
+    { label: L('Content', 'المحتوى') },
+    { label: L('Priority', 'الأولوية') },
+    { label: L('Due or recorded', 'الاستحقاق أو التسجيل') },
+    { label: L('Status', 'الحالة') },
+    { label: '' }
+  ];
+  return (
+    <>
+      <PageHead
+        crumbs={[{ label: L('Records', 'السجلات') }, { label: L('Notes & Tasks', 'الملاحظات والمهام') }]}
+        title={L('Notes & Tasks', 'الملاحظات والمهام')}
+        sub={L(
+          'Tasks are work to complete, with an optional clergy assignee and due date. Notes are reference information and observations, without a deadline.',
+          'المهام أعمال تُنجز مع كاهن مكلّف وموعد اختياريين. الملاحظات معلومات مرجعية ومشاهدات دون موعد إنجاز.'
+        )}
+        actions={
+          <>
+            <button className="btn btn-secondary" data-note-new="note">
+              <Icon name="notes" size={17} />
+              {L('New note', 'ملاحظة جديدة')}
+            </button>{' '}
+            <button className="btn btn-primary" data-note-new="task">
+              <Icon name="plus" size={17} />
+              {L('New task', 'مهمة جديدة')}
+            </button>
+          </>
+        }
+      />{' '}
+      <div className="stats pastoral-stats" style={{ margin: '20px 0 16px' }}>
+        <div className="stat">
+          <span className="k">{L('Pending tasks', 'مهام معلّقة')}</span>
+          <span className="v">{counts.pending}</span>
+        </div>{' '}
+        <div className="stat">
+          <span className="k">{L('High priority', 'أولوية عالية')}</span>
+          <span className="v">{counts.high}</span>
+        </div>{' '}
+        <div className="stat">
+          <span className="k">{L('Pinned', 'مثبّتة')}</span>
+          <span className="v">{counts.pinned}</span>
+        </div>
+      </div>{' '}
+      <div className="toolbar pastoral-tools" style={{ marginBottom: '14px' }}>
+        <input
+          className="input"
+          id="note-search"
+          type="search"
+          placeholder={L('Search notes and tasks', 'ابحث في الملاحظات والمهام')}
+          aria-label={L('Search notes and tasks', 'البحث في الملاحظات والمهام')}
+          defaultValue={S.ui.noteQuery || ''}
+        />{' '}
+        <div className="seg" role="group" aria-label={L('Filter notes and tasks', 'تصفية الملاحظات والمهام')}>
+          {[
+            ['all', 'All', 'الكل'],
+            ['pinned', 'Pinned', 'مثبّتة'],
+            ['pending', 'Pending', 'معلّقة'],
+            ['completed', 'Completed', 'مكتملة'],
+            ['high', 'High priority', 'عالية الأولوية']
+          ].map(([key, en, ar], i) => (
+            <button key={i} data-note-filter={key} aria-pressed={filter === key}>
+              {L(en, ar)} <span className="tnum">{counts[key]}</span>
+            </button>
+          ))}
+        </div>{' '}
+        <Select defaultValue={sort} id="note-sort" aria-label={L('Sort notes and tasks', 'ترتيب الملاحظات والمهام')}>
+          {[
+            ['recent', 'Newest', 'الأحدث'],
+            ['priority', 'Priority', 'الأولوية'],
+            ['due', 'Due date', 'تاريخ الاستحقاق']
+          ].map(([key, en, ar], i) => (
+            <option key={i} value={key}>
+              {L(en, ar)}
+            </option>
+          ))}
+        </Select>
+      </div>{' '}
+      <div className="pastoral-columns">
+        <Panel title={L('Notes', 'الملاحظات')} tight={true}>
+          <Table
+            cols={columns}
+            rows={rows.filter(n => n.kind !== 'task').map(row)}
+            empty={
+              <Empty
+                glyph="notes"
+                title={L('No notes in this view', 'لا ملاحظات في هذا العرض')}
+                body={L('Create a note or change the filter.', 'أنشئ ملاحظة أو غيّر المرشّح.')}
+              />
+            }
+          />
+        </Panel>{' '}
+        <Panel title={L('Tasks', 'المهام')} tight={true}>
+          <Table
+            cols={columns}
+            rows={rows.filter(n => n.kind === 'task').map(row)}
+            empty={
+              <Empty
+                glyph="notes"
+                title={L('No tasks in this view', 'لا مهام في هذا العرض')}
+                body={L('Create a task or change the filter.', 'أنشئ مهمة أو غيّر المرشّح.')}
+              />
+            }
+          />
+        </Panel>
+      </div>
+      <p className="help" id="note-no-search" hidden>
+        {L('No matching items.', 'لا عناصر مطابقة.')}
+      </p>
+    </>
+  );
+}
+
+export function openPastoralForm(item = null, type = 'note', initialPerson = null) {
+  if (!is('priest')) return;
+  if (item && item.authorUserId !== session.user.id) return;
+  const editing = !!item,
+    itemKind = item?.kind || type;
+  openDrawer({
+    title: editing
+      ? itemKind === 'task'
+        ? L('Edit task', 'تعديل مهمة')
+        : L('Edit note', 'تعديل ملاحظة')
+      : itemKind === 'task'
+        ? L('New follow-up task', 'مهمة متابعة جديدة')
+        : L('New pastoral note', 'ملاحظة رعوية جديدة'),
+    sub:
+      itemKind === 'task'
+        ? L(
+            'Actionable work. Assign only to clergy who may access these confidential records.',
+            'عمل قابل للإنجاز. يُكلّف به فقط الإكليروس المخوّل بالاطلاع على هذه السجلات السرية.'
+          )
+        : L(
+            'Reference information or an observation. Notes have no completion status or deadline.',
+            'معلومة مرجعية أو مشاهدة. الملاحظات دون حالة إنجاز أو موعد نهائي.'
+          ),
+    body: (
+      <>
+        <div className="formrow">
+          <label className="label" htmlFor="pastoral-person">
+            {L('Person', 'الشخص')} {itemKind === 'task' ? L('(optional)', '(اختياري)') : <span className="req">*</span>}
+          </label>{' '}
+          <Select defaultValue={item?.p || initialPerson} id="pastoral-person">
+            <option value="">
+              {L(
+                itemKind === 'task' ? 'General parish task' : 'Select a person',
+                itemKind === 'task' ? 'مهمة عامة للرعية' : 'اختر شخصاً'
+              )}
+            </option>
+            {PEOPLE.map((p, i) => (
+              <option key={i} value={p.id}>
+                {p.lat} · {p.ar}
+              </option>
+            ))}
+          </Select>
+        </div>{' '}
+        <div className="formrow">
+          <label className="label" htmlFor="pastoral-body">
+            {itemKind === 'task' ? L('Task', 'المهمة') : L('Note', 'الملاحظة')} <span className="req">*</span>
+          </label>{' '}
+          <textarea className="textarea" id="pastoral-body" rows="4" maxLength="500" defaultValue={item?.body || ''} />
+        </div>{' '}
+        <details className="pastoral-translation" open={!!(item?.bodyAr && item.bodyAr !== item.body)}>
+          <summary>{L('Arabic text (optional)', 'النص العربي (اختياري)')}</summary>{' '}
+          <div className="formrow">
+            <label className="label" htmlFor="pastoral-body-ar">
+              {L('Arabic text', 'النص العربي')}
+            </label>{' '}
+            <textarea
+              className="textarea"
+              id="pastoral-body-ar"
+              rows="3"
+              maxLength="500"
+              dir="rtl"
+              defaultValue={item?.bodyAr && item.bodyAr !== item.body ? item.bodyAr : ''}
+            />
+          </div>
+        </details>{' '}
+        <div className="formgrid">
+          <div className="formrow">
+            <label className="label" htmlFor="pastoral-priority">
+              {L('Priority', 'الأولوية')}
+            </label>{' '}
+            <Select defaultValue={item?.priority || 'ordinary'} id="pastoral-priority">
+              {priorities.map(([key, en, ar], i) => (
+                <option key={i} value={key}>
+                  {L(en, ar)}
+                </option>
+              ))}
+            </Select>
+          </div>{' '}
+          {itemKind === 'task' ? (
+            <div className="formrow">
+              <label className="label" htmlFor="pastoral-due">
+                {L('Due date', 'تاريخ الاستحقاق')}
+              </label>
+              <input className="input" id="pastoral-due" type="date" defaultValue={item?.due || ''} />
+            </div>
+          ) : (
+            ''
+          )}
+        </div>{' '}
+        {itemKind === 'task' ? (
+          <div className="formrow">
+            <label className="label" htmlFor="pastoral-assignee">
+              {L('Assigned clergy (optional)', 'الكاهن المكلّف (اختياري)')}
+            </label>
+            <Select defaultValue={item?.assignee} id="pastoral-assignee">
+              <option value="">{L('Unassigned', 'دون تكليف')}</option>
+              {PEOPLE.filter(p => p.status === 'clergy').map((p, i) => (
+                <option key={i} value={p.id}>
+                  {p.lat} · {p.ar}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : (
+          ''
+        )}{' '}
+        <label className="formrow">
+          <span className="label">{L('Who can read this?', 'من يقرأ هذا؟')}</span>
+          <Select defaultValue={item?.visibility} id="pastoral-visibility">
+            <option value="personal">{L('Only me', 'أنا فقط')}</option>
+            <option value="parish-priests">
+              {L('Priests assigned to this parish', 'الكهنة المعيّنون في هذه الرعية')}
+            </option>
+          </Select>
+        </label>{' '}
+        <p className="help">
+          {L(
+            'Personal notes remain private to their author, including after a priest changes parish.',
+            'تبقى الملاحظات الشخصية خاصة بكاتبها، حتى بعد انتقال الكاهن.'
+          )}
+        </p>{' '}
+        <label className="check">
+          <input type="checkbox" id="pastoral-pinned" defaultChecked={!!item?.pinned} />
+          <span>{L('Keep this pinned', 'تثبيت هذا العنصر')}</span>
+        </label>
+      </>
+    ),
+    foot: (
+      <>
+        {editing ? (
+          <button className="btn btn-danger-quiet" id="pastoral-delete">
+            <Icon name="trash" size={16} />
+            {L('Delete', 'حذف')}
+          </button>
+        ) : (
+          ''
+        )}{' '}
+        <button className="btn btn-secondary" data-close="" style={{ marginInlineStart: 'auto' }}>
+          {L('Cancel', 'إلغاء')}
+        </button>{' '}
+        <button className="btn btn-primary" id="pastoral-save">
+          {editing
+            ? L('Save changes', 'حفظ التعديلات')
+            : itemKind === 'task'
+              ? L('Add task', 'إضافة المهمة')
+              : L('Save note', 'حفظ الملاحظة')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#pastoral-save').addEventListener('click', async e => {
+        const body = el.querySelector('#pastoral-body').value.trim(),
+          p = el.querySelector('#pastoral-person').value;
+        const checks = [
+          [
+            '#pastoral-body',
+            itemKind === 'task' ? L('Describe the task', 'صِف المهمة') : L('Write the note', 'اكتب الملاحظة')
+          ]
+        ];
+        if (itemKind === 'note')
+          checks.unshift(['#pastoral-person', L('Choose who the note is about', 'اختر الشخص المعني بالملاحظة')]);
+        if (!needAll(el, checks)) return;
+        e.currentTarget.disabled = true;
+        const values = {
+          kind: itemKind,
+          p: p || null,
+          body,
+          bodyAr: el.querySelector('#pastoral-body-ar').value.trim() || body,
+          priority: el.querySelector('#pastoral-priority').value,
+          due: el.querySelector('#pastoral-due')?.value || '',
+          assignee: itemKind === 'task' ? el.querySelector('#pastoral-assignee').value || null : null,
+          pinned: el.querySelector('#pastoral-pinned').checked,
+          visibility: el.querySelector('#pastoral-visibility').value
+        };
+        if (editing) Object.assign(item, values);
+        else NOTES.unshift({ id: 'nt' + crypto.randomUUID(), at: today(), done: false, ...values });
+        if (!(await persist())) {
+          el.querySelector('#pastoral-save').disabled = false;
+          return;
+        }
+        closeOverlays();
+        bus.refresh();
+        toast(editing ? L('Updated', 'حُدّث') : L('Saved', 'حُفظ'), body, 'success');
+      });
+      el.querySelector('#pastoral-delete')?.addEventListener('click', () =>
+        openModal({
+          title: L('Delete this pastoral item?', 'حذف هذا العنصر الرعوي؟'),
+          sub: L('This removes it from the parish record.', 'سيُحذف من سجل الرعية.'),
+          foot: (
+            <>
+              <button className="btn btn-secondary" data-close="">
+                {L('Keep', 'إبقاء')}
+              </button>
+              <button className="btn btn-danger" id="pastoral-confirm-delete">
+                {L('Delete', 'حذف')}
+              </button>
+            </>
+          ),
+          onMount(dialog) {
+            dialog.querySelector('#pastoral-confirm-delete').addEventListener('click', async () => {
+              const index = NOTES.findIndex(n => n.id === item.id);
+              if (index >= 0) NOTES.splice(index, 1);
+              if (!(await persist())) return;
+              closeOverlays();
+              bus.refresh();
+              toast(L('Deleted', 'حُذف'), '', 'success');
+            });
+          }
+        })
+      );
+    }
+  });
+}
+
+notes.mount = host => {
+  host
+    .querySelectorAll('[data-note-new]')
+    .forEach(b => b.addEventListener('click', () => openPastoralForm(null, b.dataset.noteNew)));
+  host.querySelectorAll('[data-note-filter]').forEach(b =>
+    b.addEventListener('click', () => {
+      S.ui.noteFilter = b.dataset.noteFilter;
+      bus.refresh();
+    })
+  );
+  host.querySelector('#note-sort')?.addEventListener('change', e => {
+    S.ui.noteSort = e.target.value;
+    bus.refresh();
+  });
+  host.querySelector('#note-search')?.addEventListener('input', e => {
+    const query = e.target.value.trim().toLocaleLowerCase();
+    S.ui.noteQuery = e.target.value;
+    let shown = 0;
+    host.querySelectorAll('[data-note]').forEach(row => {
+      row.hidden = !row.dataset.search.includes(query);
+      if (!row.hidden) shown++;
+    });
+    const none = host.querySelector('#note-no-search');
+    if (none) none.hidden = shown > 0;
+  });
+  host.querySelectorAll('[data-note-done]').forEach(b =>
+    b.addEventListener('click', async () => {
+      const item = NOTES.find(n => n.id === b.dataset.noteDone);
+      if (!item || item.kind !== 'task') return;
+      item.done = !item.done;
+      if (!(await persist())) return;
+      bus.refresh();
+      toast(item.done ? L('Task completed', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), '', 'success');
+    })
+  );
+  host.querySelectorAll('[data-note-pin]').forEach(b =>
+    b.addEventListener('click', async () => {
+      const item = NOTES.find(n => n.id === b.dataset.notePin);
+      if (!item) return;
+      item.pinned = !item.pinned;
+      if (!(await persist())) return;
+      bus.refresh();
+    })
+  );
+  host.querySelectorAll('[data-note-edit]').forEach(b =>
+    b.addEventListener('click', () => {
+      const item = NOTES.find(n => n.id === b.dataset.noteEdit);
+      if (item) openPastoralForm(item);
+    })
+  );
+  host.querySelector('#note-search')?.dispatchEvent(new Event('input'));
+};
+
+/* the note editor, opened from anywhere a note or a person is shown */
+export function noteNew(pid) {
+  openPastoralForm(null, 'note', pid || null);
+}
+
+export function noteEdit(id) {
+  const note = NOTES.find(x => x.id === id);
+  if (note) openPastoralForm(note);
+}

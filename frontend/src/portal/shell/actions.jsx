@@ -1,0 +1,1030 @@
+/* What every data-act control does. A screen marks a button data-act="verb:arguments"; the shell
+   (Portal.jsx) finds the verb in VERBS below and calls it. Most verbs open a dialog from a
+   feature's *-dialogs.jsx file; others change the parish records (model/data.js) directly and call
+   bus.refresh(), which redraws the screen and saves the change to the server (model/persist.js). */
+import { t, isAr, num, usd } from '../../lib/i18n.js';
+import { bus, S } from '../model/store.js';
+import { toast, closeOverlays, openModal } from '../ui/ui.jsx';
+import * as D from '../model/data.js';
+import { confirmAction, need, parishSwitch, previewDoc, recordChooser, share } from '../shared/dialogs.jsx';
+import {
+  archivePeople,
+  avatarPick,
+  avatarRemove,
+  bulkGroup,
+  familyAdd,
+  invite,
+  personEdit,
+  portalCompare,
+  portalDecide,
+  relationEdit,
+  restorePerson
+} from '../features/records/people-dialogs.jsx';
+import {
+  broadcast,
+  compose,
+  composeToPerson,
+  designTemplate,
+  remind
+} from '../features/communicate/messaging-dialogs.jsx';
+import { rotaRemove, rotaSwap } from '../features/parish-life/rota-dialogs.jsx';
+import {
+  calDay,
+  calShift,
+  downloadICS,
+  eventCancel,
+  eventDuplicate
+} from '../features/parish-life/calendar-dialogs.jsx';
+import { lineEdit, lineReverse, receipt, statement, statementsAll } from '../features/money/money-dialogs.jsx';
+import {
+  addToService,
+  svcRequestNew,
+  svcRequestOpen,
+  svcTemplateUse
+} from '../features/parish-life/services-dialogs.jsx';
+import { noteEdit, noteNew } from '../features/records/notes.jsx';
+import { handover, meetingNew, memberAdd, memberMenu, postAdd } from '../features/parish-life/groups-dialogs.jsx';
+import {
+  hymnRestore,
+  hymnText,
+  play,
+  setlistOpen,
+  sheetOpen,
+  textEdit
+} from '../features/communicate/music-dialogs.jsx';
+import { fieldAdd, fieldMenu, formNew } from '../features/parish-life/registrations-dialogs.jsx';
+import {
+  checkinManual,
+  incidentNew,
+  incidentOpen,
+  pickupAdd,
+  pickupRemove,
+  scan
+} from '../features/parish-life/checkin-dialogs.jsx';
+import { contentEdit } from '../features/communicate/website-dialogs.jsx';
+import { deleteSpecimen, ruleAdd, tagAdd, webhookAdd } from '../features/administration/administration-dialogs.jsx';
+import * as CR from '../shared/record-editor.jsx';
+import { setFieldValue } from '../ui/components.jsx';
+import { backupJSON, persist } from '../model/persist.js';
+import { selectedCheckin } from '../model/event-workflows.js';
+import { session } from '../model/api.js';
+
+const L = (en, ar) => t(en, ar);
+
+const refresh = () => bus.refresh();
+
+/* ---------- a genuine client-side CSV export ---------- */
+function tableToRows(wrap) {
+  const table = wrap?.querySelector('table.tbl');
+  if (!table) return null;
+  const cell = td => td.innerText.replace(/\s+/g, ' ').trim();
+  const head = [...table.querySelectorAll('thead th')].map(cell).filter((_, i, a) => a.length);
+  const body = [...table.querySelectorAll('tbody tr:not(.detail)')].map(tr => [...tr.children].map(cell));
+  return [head, ...body];
+}
+
+const csv = rows => rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+
+export function download(name, text, type = 'text/csv;charset=utf-8') {
+  /* Excel needs a BOM to read Arabic in a CSV; calendars and SVG must not carry one. */
+  const body = type.startsWith('text/csv') ? '\uFEFF' + text : text;
+  const url = URL.createObjectURL(new Blob([body], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportNearest(btn) {
+  const host = document.getElementById('view');
+  const wrap = btn.closest('.panel, .wellpad')?.querySelector('.tablewrap') || host.querySelector('.tablewrap');
+  let rows = tableToRows(wrap);
+  if (!rows) {
+    const bars = [...host.querySelectorAll('.barchart .row')].map(r => [
+      r.querySelector('.top span')?.innerText.trim() || '',
+      r.querySelector('.top .v')?.innerText.trim() || ''
+    ]);
+    const kpis = [...host.querySelectorAll('.kpi, .stat')].map(k => [
+      k.querySelector('.k')?.innerText.trim() || '',
+      k.querySelector('.v')?.innerText.trim() || ''
+    ]);
+    if (bars.length || kpis.length) rows = [['Measure', 'Value'], ...kpis, ...bars];
+  }
+  if (!rows) {
+    toast(
+      L('Nothing to export on this screen', 'لا شيء للتصدير في هذه الشاشة'),
+      L('Open a list first.', 'افتح لائحة أولاً.'),
+      'warning'
+    );
+    return;
+  }
+  const name = `parishlife-${S.route.replace(/\//g, '-')}-2026-10-04.csv`;
+  download(name, csv(rows));
+  toast(L('Exported', 'تمّ التصدير'), `${name} · ${rows.length - 1} ${L('rows', 'صفاً')}`, 'success');
+}
+
+/* ---------- helpers ---------- */
+const picked = () =>
+  [...document.querySelectorAll('#view [data-row]:checked')].map(c => c.closest('tr')?.dataset.riP).filter(Boolean);
+
+const find = (arr, id) => arr.find(x => x.id === id);
+
+const stamp = () => {
+  const d = new Date(),
+    z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`;
+};
+
+const ok = (title, body = '', opts) => toast(title, body, 'success', opts);
+
+/* ---------- the verbs ---------- */
+export const VERBS = {
+  print: () => window.print(),
+  'print-week': () => import('../features/parish-life/schedules.jsx').then(m => m.printWeekDialog()),
+  export: exportNearest,
+
+  /* reservations ------------------------------------------------ */
+  'res-approve': (btn, id) => {
+    const r = find(D.RESERVATIONS, id);
+    if (!r) return;
+    if (S.role === 'secretary') {
+      r.stage = 'priest';
+      ok(
+        L('Forwarded to the priest', 'أُحيل إلى الكاهن'),
+        L(`${r.ref} is now waiting on Fr. Antoine.`, `${r.ref} بانتظار الأب أنطوان.`)
+      );
+    } else {
+      const other = D.resClash(r); // approving one of two clashing requests refuses the other
+      const was = { r: { status: r.status, stage: r.stage }, o: other && { status: other.status, stage: other.stage } };
+      r.status = 'approved';
+      r.stage = 'done';
+      if (other) {
+        other.status = 'rejected';
+        other.stage = 'done';
+      }
+      ok(
+        L('Reservation approved', 'تمّت الموافقة على الحجز'),
+        other
+          ? L(
+              `${r.ref} holds the room; ${other.ref} was refused and its requester told.`,
+              `${r.ref} يحجز القاعة؛ ورُفض ${other.ref} وأُبلغ صاحبه.`
+            )
+          : L(`${r.ref} now holds the room.`, `${r.ref} يحجز القاعة الآن.`),
+        {
+          action: {
+            label: L('Undo', 'تراجع'),
+            fn: () => {
+              Object.assign(r, was.r);
+              if (other) Object.assign(other, was.o);
+              refresh();
+            }
+          }
+        }
+      );
+    }
+    closeOverlays();
+    refresh();
+  },
+  'res-reject': (btn, id) => {
+    const r = find(D.RESERVATIONS, id);
+    if (!r) return;
+    const refuse = reason => {
+      r.status = 'rejected';
+      r.stage = 'done';
+      if (reason) r.reason = reason;
+      closeOverlays();
+      refresh();
+      toast(
+        L('Reservation rejected', 'رُفض الحجز'),
+        L('The slot is free again and the requester has been told.', 'تحرّر الوقت وأُبلغ مقدّم الطلب.'),
+        'warning'
+      );
+    };
+    if (!r.memberRequestId && r.status !== 'approved') return refuse('');
+    /* A parishioner who booked online reads the reason on their request page; a confirmed booking is never cancelled by one click. */
+    openModal({
+      title:
+        r.status === 'approved'
+          ? L('Cancel this booking?', 'إلغاء هذا الحجز؟')
+          : L('Refuse this booking?', 'رفض هذا الحجز؟'),
+      body: (
+        <div className="formrow">
+          <label className="label" htmlFor="res-reason">
+            {r.memberRequestId ? L('Why — the parishioner reads this', 'السبب — يقرؤه المؤمن') : L('Why', 'السبب')}
+            <span className="req">*</span>
+          </label>
+          <textarea
+            className="textarea"
+            id="res-reason"
+            rows="3"
+            maxLength="500"
+            aria-describedby="res-reason-help"
+          ></textarea>
+          <span className="help" id="res-reason-help">
+            {L(
+              'For example: the hall is being painted that week. You can suggest another day.',
+              'مثلاً: تُطلى القاعة في ذلك الأسبوع. يمكنك اقتراح يوم آخر.'
+            )}
+          </span>
+        </div>
+      ),
+      foot: (
+        <>
+          <button className="btn btn-secondary" data-close>
+            {L('Keep it', 'إبقاء الحجز')}
+          </button>
+          <button
+            className="btn btn-danger"
+            id="res-reason-yes"
+            onClick={e => {
+              const el = e.currentTarget.closest('.modal');
+              if (
+                !need(
+                  el,
+                  '#res-reason',
+                  r.memberRequestId
+                    ? L('Tell the parishioner why.', 'أخبر المؤمن بالسبب.')
+                    : L('Say why.', 'اذكر السبب.')
+                )
+              )
+                return;
+              refuse(el.querySelector('#res-reason').value.trim());
+            }}
+          >
+            {r.status === 'approved' ? L('Cancel booking', 'إلغاء الحجز') : L('Refuse booking', 'رفض الحجز')}
+          </button>
+        </>
+      )
+    });
+  },
+
+  /* people ------------------------------------------------------ */
+  /* A record a parishioner made by registering online, once the office has checked it */
+  'person-verify': (btn, id) => {
+    const p = find(D.PEOPLE, id);
+    if (!p?.registeredOnline) return;
+    p.registeredOnline = {
+      ...p.registeredOnline,
+      verified: true,
+      verifiedBy: session.user?.name || '',
+      verifiedAt: stamp()
+    };
+    refresh();
+    ok(
+      L('Record verified', 'تمّ التحقّق من السجل'),
+      L(`${p.lat} is now a verified parishioner.`, `${p.ar || p.lat} مؤمن مُتحقَّق منه الآن.`)
+    );
+  },
+
+  /* giving & finance -------------------------------------------- */
+  /* An envelope from the counting drawer: its number (or the next one), fund, giver unless anonymous,
+     and the amount as typed, in the currency the field shows; the drawer stays open for the next. */
+  'env-add': () => {
+    const el = document.querySelector('.drawer.open');
+    if (!el) return;
+    const amount = el.querySelector('#giveamt');
+    const typed = () => parseFloat(amount.value.replace(/,/g, ''));
+    if (!need(el, '#giveamt', L('Enter an amount above zero', 'أدخل مبلغاً أكبر من صفر'), () => typed() > 0)) return;
+    const envNo = el.querySelector('#envno').value.trim() || String(140 + D.BATCH.lines.length).padStart(4, '0');
+    const inLira = amount.closest('.field')?.querySelector('.prefix')?.textContent.trim() === 'L.L';
+    const usdAmount = inLira ? typed() / D.RATE.value : typed();
+    const keepLira = el.querySelector('#aslira').checked;
+    const line = {
+      env: envNo,
+      p: el.querySelector('#envanon').checked ? null : el.querySelector('#givep').dataset.pid || null,
+      fund: el.querySelector('#envfund').value || 'general'
+    };
+    if (keepLira)
+      Object.assign(line, {
+        lbp: Math.round(inLira ? typed() : typed() * D.RATE.value),
+        note: 'Given in lira',
+        noteAr: 'أُعطي بالليرة'
+      });
+    else line.usd = Math.round(usdAmount * 100) / 100;
+    D.BATCH.lines.push(line);
+    refresh();
+    ok(L('Envelope added', 'أُضيف المظروف'), `${envNo} · ${keepLira ? 'L.L ' + num(line.lbp) : usd(line.usd)}`);
+    /* ready for the next envelope */
+    for (const sel of ['#envno', '#givep']) setFieldValue(el.querySelector(sel), '');
+    delete el.querySelector('#givep').dataset.pid;
+    el.querySelector('#envno').focus();
+  },
+  'batch-close': () => {
+    D.BATCH.status = 'closed';
+    closeOverlays();
+    refresh();
+    ok(
+      L('Counting session 214 closed', 'أُقفلت جلسة العدّ ٢١٤'),
+      L(
+        'Posted to the fund balances. Corrections now need a reversing entry.',
+        'قُيّدت في أرصدة الصناديق. والتصحيح يحتاج قيداً عكسياً.'
+      )
+    );
+  },
+  'exp-approve': (btn, id) => {
+    const x = find(D.EXPENSES, id);
+    if (!x) return;
+    x.status = 'approved';
+    refresh();
+    ok(L('Expense approved', 'اعتُمد المصروف'), `${L(x.what, x.whatAr)} · ${usd(x.usd)}`);
+  },
+  'exp-add': () => CR.create('expense'),
+  'bank-match': (btn, id) => {
+    const b = find(D.BANKLINES, id);
+    if (!b) return;
+    b.matched = 'cs214';
+    refresh();
+    ok(L('Matched', 'تمّت المطابقة'), L('Reconciled against counting session 214.', 'طوبقت مع جلسة العدّ ٢١٤.'));
+  },
+
+  'dup-merge': (btn, i) => {
+    const [d] = D.DUPLICATES.splice(+i, 1);
+    if (!d) return;
+    refresh();
+    ok(
+      L('Records merged', 'دُمج السجلّان'),
+      L('The kept record now carries both envelope histories.', 'السجل المحتفَظ به يحمل تاريخ المظروفين.'),
+      {
+        action: {
+          label: L('Undo', 'تراجع'),
+          fn: () => {
+            D.DUPLICATES.splice(+i, 0, d);
+            refresh();
+          }
+        }
+      }
+    );
+  },
+  'dup-dismiss': (btn, i) => {
+    const [d] = D.DUPLICATES.splice(+i, 1);
+    if (!d) return;
+    refresh();
+    ok(
+      L('Marked as not a duplicate', 'عُلّم كغير مكرّر'),
+      L('They will not be suggested again.', 'لن يُقترحا مجدداً.'),
+      {
+        action: {
+          label: L('Undo', 'تراجع'),
+          fn: () => {
+            D.DUPLICATES.splice(+i, 0, d);
+            refresh();
+          }
+        }
+      }
+    );
+  },
+  restore: (btn, id) => restorePerson(id),
+
+  /* groups ------------------------------------------------------ */
+  'join-approve': (btn, pid) => {
+    const gid = (S.route === 'groups' && S.params[0]) || 'g1',
+      g = D.groupInfo(gid);
+    g.requests = g.requests.filter(r => r.p !== pid);
+    if (!g.roster.some(r => r.p === pid)) {
+      g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 });
+      const grp = D.group(gid);
+      if (grp && S.role !== 'leader') grp.members += 1;
+    }
+    refresh();
+    ok(
+      L('Added to the group', 'أُضيف إلى المجموعة'),
+      L('They are on the roster and will be messaged.', 'أصبح على اللائحة وستصله الرسائل.')
+    );
+  },
+  'join-decline': (btn, pid) => {
+    const g = D.groupInfo((S.route === 'groups' && S.params[0]) || 'g1');
+    g.requests = g.requests.filter(r => r.p !== pid);
+    refresh();
+    toast(
+      L('Request declined', 'رُفض الطلب'),
+      L('Nothing is sent to them automatically.', 'لا يُرسَل إليه شيء تلقائياً.'),
+      'warning'
+    );
+  },
+  'task-toggle': (btn, i) => {
+    const tk = D.groupInfo((S.route === 'groups' && S.params[0]) || 'g1').tasks[+i];
+    if (!tk) return;
+    tk.done = !tk.done;
+    refresh();
+    ok(tk.done ? L('Task done', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), L(tk.what, tk.whatAr));
+  },
+
+  /* volunteers -------------------------------------------------- */
+  'sub-invite': (btn, pid) => {
+    for (const tm of D.ROTA.teams) {
+      const slot = tm.filled.find(f => !f.p || f.s === 'declined');
+      if (slot) {
+        slot.p = pid;
+        slot.s = 'pending';
+        break;
+      }
+    }
+    closeOverlays();
+    refresh();
+    ok(L('Invitation sent', 'أُرسلت الدعوة'), L('They have until Monday to reply.', 'لديه مهلة حتى الإثنين للردّ.'));
+  },
+  'vol-add': () => CR.create('volunteer'),
+
+  /* check-in ---------------------------------------------------- */
+  checkout: (btn, pid) => {
+    const p = D.person(pid);
+    const active = selectedCheckin();
+    if (!active) return;
+    active.rows = active.rows.filter(r => r.p !== pid);
+    active.present = active.rows.length;
+    refresh();
+    ok(
+      L('Checked out', 'سُجّل الخروج'),
+      L(
+        `${p ? p.lat : ''} was removed from this event’s present roster.`,
+        `أُزيل ${p ? p.ar : ''} من لائحة الحاضرين لهذا الحدث.`
+      )
+    );
+  },
+
+  'notice-add': () => CR.create('notice'),
+  'prayer-publish': (btn, id) => {
+    const p = find(D.PRAYERS, id);
+    if (!p) return;
+    p.status = 'approved';
+    refresh();
+    ok(
+      L('Published to the parish list', 'نُشرت في لائحة الرعية'),
+      L('Moderated, as the policy requires.', 'مُراجَعة كما تقتضي السياسة.')
+    );
+  },
+  'portal-accept': (b, id) => portalDecide(id, true),
+  'portal-compare': (b, id) => portalCompare(id),
+
+  /* workflows --------------------------------------------------- */
+  /* A task moves one step at a time; the last step finishes it and takes it off the open list. */
+  'run-step': (btn, id) => {
+    const r = find(D.RUNS, id);
+    if (!r) return;
+    const w = find(D.WORKFLOWS, r.wf),
+      steps = w?.steps || [],
+      stepsAr = w?.stepsAr || steps,
+      p = r.subject ? D.person(r.subject) : null;
+    const note = document.querySelector('.drawer.open #runnote')?.value.trim() || '';
+    const before = { step: r.step, at: D.RUNS.indexOf(r) };
+    const doneEn = steps[r.step] || '',
+      doneAr = stepsAr[r.step] || doneEn;
+    r.doneAt = { ...(r.doneAt || {}), [r.step]: stamp() }; // each step keeps the date and time it was done
+    r.step = Math.min(r.total, r.step + 1);
+    const finished = r.step >= r.total;
+    if (finished) D.RUNS.splice(before.at, 1);
+    const entry = [
+      stamp(),
+      `${w?.name || ''}: “${doneEn}” done${p ? ` for ${p.lat}` : ''}${finished ? ' — task finished' : ''}${note ? ` — ${note}` : ''}`,
+      `${w?.ar || ''}: أُنجزت «${doneAr}»${p ? ` لـ ${p.ar}` : ''}${finished ? ' — اكتملت المهمّة' : ''}${note ? ` — ${note}` : ''}`,
+      'ok'
+    ];
+    D.RUN_LOG.unshift(entry);
+    closeOverlays();
+    refresh();
+    ok(
+      finished ? L('Task finished', 'اكتملت المهمّة') : L('Step done', 'أُنجزت الخطوة'),
+      finished
+        ? L(
+            `${w?.name || ''}${p ? ` for ${p.lat}` : ''} is complete.`,
+            `اكتمل «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}.`
+          )
+        : L(`Next: ${steps[r.step] || ''}`, `التالي: ${stepsAr[r.step] || ''}`),
+      {
+        action: {
+          label: L('Undo', 'تراجع'),
+          fn: () => {
+            /* by id: a failed save reloads the parish, and the task may already be back */
+            const live = D.RUNS.find(x => x.id === r.id);
+            if (live) live.step = before.step;
+            else D.RUNS.splice(Math.min(before.at, D.RUNS.length), 0, Object.assign(r, { step: before.step }));
+            const i = D.RUN_LOG.indexOf(entry);
+            if (i >= 0) D.RUN_LOG.splice(i, 1);
+            refresh();
+          }
+        }
+      }
+    );
+  },
+  'issue-assign': (btn, id) => {
+    const i = find(D.ISSUES, id);
+    if (!i) return;
+    i.status = 'approved';
+    refresh();
+    ok(L('Assigned', 'أُسند'), L('The responsible person has been notified.', 'أُبلغ المسؤول.'));
+  },
+
+  /* create, edit and delete any record kind registered in shared/record-editor.jsx ------ */
+  'hh-view': (b, v) => {
+    S.ui.hhView = v;
+    refresh();
+  },
+  'request-filter': (b, v) => {
+    S.ui.requestFilter = v;
+    refresh();
+  },
+  'wh-toggle': (b, i) => {
+    const w = D.WEBHOOKS[+i];
+    if (!w) return;
+    w.active = b.checked;
+    refresh();
+    ok(w.active ? L('Webhook on', 'الخطّاف مفعّل') : L('Webhook paused', 'الخطّاف متوقّف'), w.url);
+  },
+  'auto-toggle': async (b, i) => {
+    const a = D.AUTOMATIONS[+i];
+    if (!a) return;
+    a.active = b.checked;
+    if (!(await persist())) return;
+    refresh();
+    ok(
+      a.active ? L('Automation plan enabled', 'فُعّلت خطة الأتمتة') : L('Automation plan paused', 'أُوقفت خطة الأتمتة'),
+      L(a.what || a.name || '', a.whatAr || a.ar || '')
+    );
+  },
+  'data-export': () => {
+    download(`parishlife-snapshot-${new Date().toISOString().slice(0, 10)}.json`, backupJSON(), 'application/json');
+    ok(
+      L('Data snapshot downloaded', 'نُزّلت صورة البيانات'),
+      L(
+        'An administrator manages database backups and restores.',
+        'يدير المسؤول النسخ الاحتياطية لقاعدة البيانات واستعادتها.'
+      )
+    );
+  },
+  'rec-new': (b, kind) => CR.create(kind),
+  'book-room': (b, vid) => CR.create('reservation', { venue: vid }),
+  'eq-filter': (b, f) => {
+    S.ui.eqFilter = f || 'all';
+    refresh();
+  },
+  'res-filter': (b, f) => {
+    S.ui.resFilter = f;
+    refresh();
+  },
+  'rec-edit': (b, a) => {
+    const [k, id] = a.split('|');
+    CR.edit(k, id);
+  },
+  'rec-del': (b, a) => {
+    const [k, id] = a.split('|');
+    CR.remove(k, id);
+  },
+  'rec-menu': (b, a) => {
+    const [k, id] = a.split('|');
+    CR.menu(b, k, id);
+  },
+
+  /* flows: every one opens a designed surface and completes for real */
+  compose: (b, a) => compose(a || 'all'),
+  greet: (b, i) => {
+    const x = D.anniversaryItems()[+i];
+    if (!x) return;
+    compose('all', {
+      title: L('Anniversary greeting', 'تهنئة بالذكرى'),
+      subject: `${x.years} years — ${x.couple}`,
+      body: `Dear ${x.couple}, our parish remembers your ${x.kind} anniversary with you.`,
+      bodyAr: `الأعزّاء ${x.ar}، تحتفل رعيتنا معكم بذكرى ${x.kind}.`
+    });
+  },
+  remind: (b, a) => remind(a || 'rota'),
+  broadcast: () => broadcast(),
+  'rota-fill': (b, a) => invite('rota', a),
+  'rota-remove': (b, a) => rotaRemove(a),
+  'rota-swap': (b, a) => rotaSwap(b, a),
+  'share-cert': () =>
+    share({ title: L('Certificate', 'شهادة'), text: L('Your certificate from Saint Elias', 'شهادتك من مار الياس') }),
+  doc: (b, a) => previewDoc(a || 'Document'),
+  ics: () => downloadICS(),
+  receipt: (b, a) => {
+    const [no, pid, amt] = (a || 'R-2026-0884|p1|50').split('|');
+    receipt(no, pid, +amt);
+  },
+  statement: (b, a) => statement(a || 'p1'),
+  'statements-all': () => statementsAll(),
+  design: (b, a) => designTemplate(a || 0),
+  'record-new': () => recordChooser(),
+  'person-edit': (b, a) => personEdit(a),
+  'household-new': () => CR.create('household'),
+  'relation-edit': (b, a) => relationEdit(a),
+  'family-add': (b, hid) => familyAdd(hid),
+  'family-link': (b, pid) => familyAdd(null, pid),
+  'note-new': (b, a) => noteNew(a),
+  'note-edit': (b, a) => noteEdit(a),
+  'group-new': () => CR.create('group'),
+  'member-add': (b, a) => memberAdd(a || 'g1'),
+  'meeting-new': () => meetingNew(),
+  'post-add': b => postAdd(b),
+  handover: () => handover(),
+  'cal-prev': () => calShift(-1),
+  'cal-next': () => calShift(1),
+  'cal-today': () => calShift(0),
+  'cal-day': (b, a) => calDay(+a),
+  view: (b, a) => {
+    const [k, v] = a.split('|');
+    S.ui[k] = +v;
+    refresh();
+  },
+  'people-env': () => {
+    S.ui.peopleEnv = !S.ui.peopleEnv;
+    S.ui.peoplePage = 0;
+    refresh();
+  },
+  'people-new-open': () => {
+    S.ui.peopleNew = true;
+    S.ui.peoplePage = 0;
+    location.hash = '#/people';
+  },
+  'music-clear': () => {
+    S.ui.music = {};
+    refresh();
+  },
+  transpose: (b, a) => {
+    const [id, n] = a.split('|');
+    S.ui.transpose = { ...S.ui.transpose, [id]: +n };
+    refresh();
+  },
+  'cal-kind': (b, k) => {
+    const off = S.ui.calOff || [];
+    S.ui.calOff = off.includes(k) ? off.filter(x => x !== k) : [...off, k];
+    refresh();
+  },
+  'event-dup': (b, a) => eventDuplicate(a),
+  'event-cancel': (b, a) => eventCancel(a),
+  'svc-tpl': (b, a) => svcTemplateUse(a),
+  'to-service': (b, a) => addToService(a),
+  play: (b, a) => play(a),
+  'hymn-new': () => CR.create('hymn'),
+  'setlist-new': () => CR.create('setlist'),
+  'setlist-open': (b, a) => setlistOpen(a),
+  'sheet-open': (b, a) => sheetOpen(a),
+  'vol-edit': (b, a) => CR.edit('volunteer', a),
+  'form-new': () => formNew(),
+  'field-add': () => fieldAdd(),
+  'field-menu': (b, a) => fieldMenu(b, a),
+  scan: () => scan(),
+  'checkin-manual': () => checkinManual(),
+  'pickup-add': (b, a) => pickupAdd(a),
+  'pickup-remove': (b, a) => {
+    const [pid, i] = a.split('|');
+    pickupRemove(pid, i);
+  },
+  'incident-new': () => incidentNew(),
+  'incident-open': (b, a) => incidentOpen(a),
+  'content-edit': (b, a) => contentEdit(a),
+  'portal-open': () =>
+    window.open(`public.html?parish=${encodeURIComponent(session.parishId || '')}`, '_blank', 'noopener'),
+  'homepage-edit': () => import('../features/communicate/homepage-editor.jsx').then(m => m.editHomepage()),
+  'line-edit': (b, a) => lineEdit(a),
+  'line-reverse': (b, a) => lineReverse(a),
+  'svc-request': (b, a) => svcRequestOpen(a),
+  'svc-request-new': (b, a) => svcRequestNew(a),
+  'hymn-restore': (b, a) => {
+    const [mid, i] = a.split('|');
+    hymnRestore(mid, i);
+  },
+  'hymn-text': (b, a) => {
+    const [mid, what] = a.split('|');
+    hymnText(mid, what);
+  },
+  'inst-edit': (b, a) => {
+    const [mid, i] = a.split('|'),
+      n = D.MUSIC_DETAIL[mid]?.notes[+i];
+    if (!n) return;
+    textEdit({
+      title: L('Instrument note', 'ملاحظة الآلة'),
+      label: L(n[0], n[1]),
+      value: L(n[2], n[3]),
+      onSave: v => {
+        n[2] = v;
+        n[3] = v;
+      }
+    });
+  },
+  'member-menu': (b, a) => memberMenu(b, a),
+  'person-menu': (b, pid) => import('../features/records/people.jsx').then(m => m.personMenu(b, pid)),
+  'compose-person': () => composeToPerson(),
+  'evtask-toggle': (b, a) => {
+    const [eid, ti] = a.split('|');
+    const ev = D.EVENTS.find(x => x.id === eid);
+    if (!ev) return;
+    const tk = D.eventInfo(ev).tasks[+ti];
+    if (!tk) return;
+    tk[4] = !tk[4];
+    refresh(); // the open drawer redraws from the data
+    ok(tk[4] ? L('Task done', 'أُنجزت المهمة') : L('Task reopened', 'أُعيد فتح المهمة'), L(tk[0], tk[1]));
+  },
+  'archive-specimen': () =>
+    toast(
+      L('Georges Haddad was archived', 'أُرشف جورج حدّاد'),
+      L('Removed from lists and messaging. Records kept.', 'أُزيل من اللوائح والمراسلة. والسجلات محفوظة.'),
+      '',
+      { action: { label: L('Undo', 'تراجع'), fn: () => ok(L('Restored', 'استُرجع')) } }
+    ),
+  page: (b, a) => {
+    S.ui.peoplePage = Math.max(0, S.ui.peoplePage + (a === 'next' ? 1 : -1));
+    refresh();
+  },
+  pdf: () => {
+    toast(L('Choose “Save as PDF” in the print dialog', 'اختر «حفظ كـPDF» في نافذة الطباعة'), '', 'success');
+    setTimeout(() => window.print(), 400);
+  },
+
+  /* bulk actions work on whatever rows are ticked in the table ---- */
+  'bulk-message': () => {
+    const ids = picked();
+    compose(ids.length === 1 ? ids[0] : 'all', {
+      title:
+        ids.length === 1
+          ? L('Message 1 person', 'مراسلة شخص واحد')
+          : L(`Message ${ids.length || 14} people`, `مراسلة ${ids.length || 14} أشخاص`)
+    });
+  },
+  'bulk-group': b => bulkGroup(b, picked()),
+  'bulk-export': () => {
+    const ids = picked();
+    const rows = [
+      ['English name', 'Arabic name', 'Town', 'Phone', 'Status'],
+      ...(ids.length ? ids : D.PEOPLE.slice(0, 14).map(p => p.id))
+        .map(D.person)
+        .filter(Boolean)
+        .map(x => [x.lat, x.ar, x.town, x.phone, x.status])
+    ];
+    download(`parishlife-selected-${rows.length - 1}.csv`, csv(rows));
+    ok(
+      L('Exported', 'تمّ التصدير'),
+      rows.length === 2 ? L('1 row', 'صفّ واحد') : `${rows.length - 1} ${L('rows', 'صفوف')}`
+    );
+  },
+  'bulk-archive': () => {
+    const ids = picked();
+    if (!ids.length) return toast(L('Tick the people to archive first', 'حدّد الأشخاص أولاً'), '', 'warning');
+    archivePeople(ids);
+  },
+
+  'parish-switch': (b, id) => parishSwitch(id),
+  'wf-new': () => CR.create('workflow'),
+  'wf-pause': (b, id) => {
+    const w = find(D.WORKFLOWS, id);
+    if (!w) return;
+    w.paused = !w.paused;
+    refresh();
+    toast(
+      w.paused ? L(`${w.name} paused`, `أُوقف «${w.ar}» مؤقتاً`) : L(`${w.name} resumed`, `استُؤنف «${w.ar}»`),
+      w.paused
+        ? L(
+            'No new requests start in it until you resume. Tasks already open wait where they are.',
+            'لا تبدأ فيه طلبات جديدة حتى الاستئناف. والمهام المفتوحة تنتظر مكانها.'
+          )
+        : '',
+      w.paused ? 'warning' : 'success'
+    );
+  },
+  'wf-queue': (b, id) => {
+    S.ui.runWf = id || '';
+    if (location.hash !== '#/forms/runs') location.hash = '#/forms/runs';
+    else refresh();
+  },
+  'wf-retry': () => {
+    D.RUN_LOG.unshift([
+      '2026-10-04 19:32',
+      'Retry 2 of 3 — WhatsApp gateway answered',
+      'محاولة ٢ من ٣ — استجابت بوابة واتساب',
+      'ok'
+    ]);
+    refresh();
+    ok(
+      L('Failed steps retried', 'أُعيدت الخطوات الفاشلة'),
+      L('The message went through on the second attempt.', 'نجحت الرسالة في المحاولة الثانية.')
+    );
+  },
+  'wf-cancel': (b, id) => {
+    const r = find(D.RUNS, id);
+    if (!r) return;
+    const w = find(D.WORKFLOWS, r.wf),
+      p = r.subject ? D.person(r.subject) : null;
+    confirmAction({
+      title: L('Cancel this task?', 'إلغاء هذه المهمّة؟'),
+      body: L(
+        'Steps already done stay done and nothing more is sent. The task leaves the open list.',
+        'تبقى الخطوات المنجزة ولا يُرسل شيء بعدها. وتخرج المهمّة من لائحة المهام المفتوحة.'
+      ),
+      cta: L('Cancel task', 'إلغاء المهمّة'),
+      back: L('Keep the task', 'إبقاء المهمّة'),
+      danger: true,
+      onBack: () => import('../features/administration/forms.jsx').then(m => m.openRun(id)),
+      then: () => {
+        const live = find(D.RUNS, id),
+          at = D.RUNS.indexOf(live);
+        if (at < 0) return;
+        D.RUNS.splice(at, 1);
+        const entry = [
+          stamp(),
+          `${w?.name || ''} cancelled${p ? ` for ${p.lat}` : ''}`,
+          `أُلغي «${w?.ar || ''}»${p ? ` لـ ${p.ar}` : ''}`,
+          'err'
+        ];
+        D.RUN_LOG.unshift(entry);
+        closeOverlays();
+        refresh();
+        toast(L('Task cancelled', 'أُلغيت المهمّة'), L(w?.name || '', w?.ar || ''), 'warning', {
+          action: {
+            label: L('Undo', 'تراجع'),
+            fn: () => {
+              if (!D.RUNS.some(x => x.id === id)) D.RUNS.splice(Math.min(at, D.RUNS.length), 0, live);
+              const i = D.RUN_LOG.indexOf(entry);
+              if (i >= 0) D.RUN_LOG.splice(i, 1);
+              refresh();
+            }
+          }
+        });
+      }
+    });
+  },
+  'dom-add-field': () => CR.create('field'),
+  'dom-add-rule': () => ruleAdd(),
+  'rule-del': (b, id) => {
+    const i = D.FORM_RULES.findIndex(r => r.id === id);
+    if (i < 0) return;
+    const [r] = D.FORM_RULES.splice(i, 1);
+    refresh();
+    ok(L('Rule removed', 'أُزيلت القاعدة'), '', {
+      action: {
+        label: L('Undo', 'تراجع'),
+        fn: () => {
+          D.FORM_RULES.splice(i, 0, r);
+          refresh();
+        }
+      }
+    });
+  },
+  'report-schedule': () => {
+    closeOverlays();
+    ok(
+      L('Report scheduled', 'جُدول التقرير'),
+      L('First delivery on 1 November, 07:00.', 'أول إرسال في ١ تشرين الثاني، ٠٧:٠٠.')
+    );
+  },
+  'settings-save': () =>
+    ok(
+      L('Settings saved', 'حُفظت الإعدادات'),
+      L('Every role sees the change immediately.', 'يرى كل دور التغيير فوراً.')
+    ),
+  'session-revoke': (b, i) => {
+    const [x] = D.SESSIONS.splice(+i, 1);
+    if (!x) return;
+    refresh();
+    ok(L('Session ended', 'أُنهيت الجلسة'), L('That device has been signed out.', 'سُجّل خروج ذلك الجهاز.'), {
+      action: {
+        label: L('Undo', 'تراجع'),
+        fn: () => {
+          D.SESSIONS.splice(+i, 0, x);
+          refresh();
+        }
+      }
+    });
+  },
+  'webhook-add': () => webhookAdd(),
+  'key-rotate': () =>
+    confirmAction({
+      title: D.PARISH.apiKeyRevoked
+        ? L('Issue a new key?', 'إصدار مفتاح جديد؟')
+        : L('Rotate the key?', 'تدوير المفتاح؟'),
+      body: L(
+        'The old key stops working in 24 hours. The eparchy will need the new one.',
+        'يتوقّف المفتاح القديم خلال ٢٤ ساعة. وستحتاج الأبرشية الجديد.'
+      ),
+      cta: L('Issue key', 'إصدار المفتاح'),
+      then: () => {
+        D.PARISH.apiKey = Math.random().toString(16).slice(2, 6);
+        delete D.PARISH.apiKeyRevoked;
+        refresh();
+        ok(
+          L('New key issued', 'صدر مفتاح جديد'),
+          L('Copy the new key into the eparchy system.', 'انسخ المفتاح الجديد إلى نظام الأبرشية.')
+        );
+      }
+    }),
+  'key-revoke': () =>
+    confirmAction({
+      title: L('Revoke this key?', 'إلغاء هذا المفتاح؟'),
+      body: L('The eparchy reporting link stops immediately.', 'يتوقّف ربط تقارير الأبرشية فوراً.'),
+      cta: L('Revoke', 'إلغاء'),
+      danger: true,
+      then: () => {
+        D.PARISH.apiKeyRevoked = true;
+        refresh();
+        toast(L('Key revoked', 'أُلغي المفتاح'), '', 'warning', {
+          action: {
+            label: L('Undo', 'تراجع'),
+            fn: () => {
+              delete D.PARISH.apiKeyRevoked;
+              refresh();
+            }
+          }
+        });
+      }
+    }),
+  'avatar-upload': (b, key) => avatarPick(b, key),
+  'avatar-remove': (b, key) => avatarRemove(b, key),
+
+  /* design-system specimens behave like the real thing ----------- */
+  'spec-save': () => ok(L('Record saved', 'حُفظ السجل'), L('Every mutation toasts.', 'كل تعديل يُنبّه.')),
+  'spec-cancel': () => toast(L('Changes discarded', 'أُلغيت التعديلات')),
+  'spec-retry': () =>
+    toast(
+      L('Trying again', 'جارٍ إعادة المحاولة'),
+      L('In the product this sends the request again.', 'في التطبيق يعيد هذا إرسال الطلب.')
+    ),
+  'spec-delete': () => deleteSpecimen(),
+  'spec-clear': () => {
+    S.ui.peopleStatus = null;
+    ok(L('All filters cleared', 'مُسحت كل المرشّحات'));
+  },
+  'tag-add': b => tagAdd(b),
+
+  'filter-clear': b => {
+    b.closest('.menu')
+      ?.querySelectorAll('input[type=checkbox]')
+      .forEach(c => {
+        c.checked = false;
+      });
+  },
+  'filter-apply': b => {
+    const n = b.closest('.menu')?.querySelectorAll('input[type=checkbox]:checked').length || 0;
+    ok(L('Filter applied', 'طُبّق المرشّح'), L(`${n} statuses selected`, `${n} حالات محدّدة`));
+  },
+
+  /* generic, still real ----------------------------------------- */
+  save: () => {
+    closeOverlays();
+    ok(L('Saved', 'حُفظ'), L('Your changes are kept on this device.', 'تعديلاتك محفوظة على هذا الجهاز.'));
+  },
+  'qr-revoke': () => {
+    const d = D.groupInfo((S.route === 'groups' && S.params[0]) || 'g1');
+    d.qrRevoked = true;
+    closeOverlays();
+    refresh();
+    toast(
+      L('Join code revoked', 'أُلغي رمز الانتساب'),
+      L(
+        'The printed poster no longer works; print a new code when you need one.',
+        'الملصق المطبوع لم يعد يعمل؛ اطبع رمزاً جديداً عند الحاجة.'
+      ),
+      'warning',
+      {
+        action: {
+          label: L('Undo', 'تراجع'),
+          fn: () => {
+            delete d.qrRevoked;
+            refresh();
+          }
+        }
+      }
+    );
+  },
+
+  'block-cancel': (b, i) => {
+    const m = D.MAINTENANCE[+i];
+    if (!m) return;
+    D.MAINTENANCE.splice(+i, 1);
+    refresh();
+    const v = D.venue(m.venue);
+    ok(L('Block cancelled', 'أُلغي الإغلاق'), L(`${v.name} takes bookings again`, `${v.ar} تقبل الحجوزات مجدداً`), {
+      action: {
+        label: L('Undo', 'تراجع'),
+        fn: () => {
+          D.MAINTENANCE.splice(+i, 0, m);
+          refresh();
+        }
+      }
+    });
+  },
+  'recurring-toggle': (b, i) => {
+    const r = D.RECURRING[+i];
+    if (!r) return;
+    r.paused = !r.paused;
+    refresh();
+    ok(
+      r.paused ? L('Standing gift paused', 'أُوقف العطاء الدائم') : L('Standing gift resumed', 'استُؤنف العطاء الدائم'),
+      `${isAr() ? D.person(r.p).ar : D.person(r.p).lat} · ${usd(r.amount)}`,
+      {
+        action: {
+          label: L('Undo', 'تراجع'),
+          fn: () => {
+            r.paused = !r.paused;
+            refresh();
+          }
+        }
+      }
+    );
+  }
+};
+
+/** Run the verb a control names. data-act is "verb" or "verb:arg". */
+export function runAction(el) {
+  const [verb, ...rest] = el.dataset.act.split(':');
+  const fn = VERBS[verb];
+  if (fn) fn(el, rest.join(':'));
+  else console.warn('ParishLife: no verb for', el.dataset.act); // never a fake success
+}

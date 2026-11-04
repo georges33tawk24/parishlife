@@ -157,7 +157,7 @@ Relevant files:
 - `backend/administration-schema.json`: indexes, scope constraints and last-Super-Admin safeguards.
 - `backend/administration.py` and `cloudflare/src/administration.js`: matching administrative workflows.
 - `backend/workspace.py` and `cloudflare/src/workspace.js`: current scoped authority and account lifecycle.
-- `assets/views/administration-access.js`: administrative assignments, optional secretaries and audit history.
+- `frontend/src/portal/features/administration/administration-access.jsx`: administrative assignments, optional secretaries and audit history.
 - `backend/account_security.py`, `cloudflare/src/account-security.js`, and `assets/account-security.js`: credential changes and protected recovery.
 
 New scoped staff accounts use an ordinary account identity and explicit
