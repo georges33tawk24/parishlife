@@ -1,6 +1,7 @@
-/* The audit trail in words, wherever it shows (the audit screen, the dashboard's recent activity).
-   The server records an English phrase or an internal code, repeated where the Arabic would be,
-   and its time as an ISO stamp in UTC with microseconds; the sample rows use "YYYY-MM-DD HH:MM". */
+/* The audit trail in words, wherever it shows (the audit screen, the dashboard's recent activity, the
+   archdiocese view of a parish). The server records an English phrase or an internal code, repeated
+   where the Arabic would be, and its time as an ISO stamp in UTC with microseconds; the sample rows
+   use "YYYY-MM-DD HH:MM". */
 import { t } from '../../lib/i18n.js';
 
 const ACTIONS = {

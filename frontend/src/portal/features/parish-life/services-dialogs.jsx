@@ -241,15 +241,13 @@ function TemplateItems({ order }) {
     setRows(list => [...list, { key, item: {} }]);
   };
   const move = (key, by) => {
+    const from = rows.findIndex(r => r.key === key),
+      to = from + by;
+    if (to < 0 || to >= rows.length) return;
     focusNext.current = `[data-st-key="${key}"] [data-st-move="${by}"]`;
-    setRows(list => {
-      const from = list.findIndex(r => r.key === key),
-        to = from + by;
-      if (to < 0 || to >= list.length) return list;
-      const copy = [...list];
-      [copy[from], copy[to]] = [copy[to], copy[from]];
-      return copy;
-    });
+    const copy = [...rows];
+    [copy[from], copy[to]] = [copy[to], copy[from]];
+    setRows(copy);
   };
   const remove = key => {
     focusNext.current = '#st_add';
