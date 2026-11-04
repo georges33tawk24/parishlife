@@ -95,7 +95,7 @@ export function fmtDateIn(d, language) {
     return `${x.getDate()} ${MONTHS[x.getMonth()][language === 'ar' ? 1 : 0]} ${x.getFullYear()}`;
   return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`;
 }
-export const fmtTime = s => s; // stored already as "10:30"
+// stored already as "10:30"
 
 /* Search compares folded text: case, Latin accents (Rahmé → rahme), Arabic hamza seats, tashkeel,
    tatweel, ة/ه, ى/ي and Arabic-Indic digits all fold away, so either spelling finds the record.

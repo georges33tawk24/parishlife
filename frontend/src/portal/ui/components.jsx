@@ -265,6 +265,7 @@ export const SplitCurrency = () => (
         <span className="prefix">$</span>
         <input
           className="value"
+          aria-label={t('Amount given in dollars', 'المبلغ المُعطى بالدولار')}
           defaultValue="900.00"
           dir="ltr"
           style={{ border: 0, background: 'none', width: '100%' }}
@@ -274,6 +275,7 @@ export const SplitCurrency = () => (
         <span className="prefix">L.L</span>
         <input
           className="value"
+          aria-label={t('Amount given in lira', 'المبلغ المُعطى بالليرة')}
           defaultValue="31,325,000"
           dir="ltr"
           style={{ border: 0, background: 'none', width: '100%' }}
@@ -357,7 +359,7 @@ export const NamePair = () => (
 
 export const RiteSelect = ({ id = 'newrite' }) => (
   <div className="formrow">
-    <label className="label">
+    <label htmlFor={id} className="label">
       {t('Rite', 'الطقس')}
       <span className="req">*</span>
     </label>
@@ -620,9 +622,11 @@ export function DatePicker({ y: year = 2026, m: monthIndex = 9, sel: selected = 
 
 export const TimeField = () => (
   <div className="formrow">
-    <label className="label">{t('Service time', 'وقت الخدمة')}</label>
+    <label className="label" htmlFor="tf_time">
+      {t('Service time', 'وقت الخدمة')}
+    </label>
     <div className="row" style={{ gap: 8 }}>
-      <input className="input mono" defaultValue="10:30" style={{ maxWidth: 110 }} dir="ltr" />
+      <input id="tf_time" className="input mono" defaultValue="10:30" style={{ maxWidth: 110 }} dir="ltr" />
       <BGroup items={['AM', 'PM']} sel={0} />
     </div>
     <span className="help">
@@ -643,8 +647,16 @@ export function DateRange() {
   const [on, setOn] = useState(3);
   return (
     <div className="formrow">
-      <label className="label">{t('Date range', 'المدى الزمني')}</label>
-      <input className="input mono" defaultValue="1 Jan – 30 Sep 2026" dir="ltr" style={{ maxWidth: 260 }} />
+      <label className="label" htmlFor="dr_range">
+        {t('Date range', 'المدى الزمني')}
+      </label>
+      <input
+        id="dr_range"
+        className="input mono"
+        defaultValue="1 Jan – 30 Sep 2026"
+        dir="ltr"
+        style={{ maxWidth: 260 }}
+      />
       <div className="presets" style={{ marginTop: 10 }}>
         {presets.map((l, i) => (
           <button key={i} aria-pressed={i === on} onClick={() => setOn(i)}>

@@ -129,10 +129,10 @@ export function calendar(tab = '') {
         aria-label={L('Show on the calendar', 'اعرض على الرزنامة')}
         style={{ marginInlineStart: 'auto' }}
       >
-        {CAL_KINDS.map(([k, en, ar]) => {
+        {CAL_KINDS.map(([k, en, ar], i) => {
           const on = !(S.ui.calOff || []).includes(k);
           return (
-            <button className={`chip ${on ? 'chip-on' : ''}`} aria-pressed={on} data-act={`cal-kind:${k}`}>
+            <button key={i} className={`chip ${on ? 'chip-on' : ''}`} aria-pressed={on} data-act={`cal-kind:${k}`}>
               {on ? <Icon name="check" size={13} /> : ''}
               {L(en, ar)}
             </button>
@@ -259,8 +259,9 @@ export function calendar(tab = '') {
               </div>
             ))}{' '}
             <div className="dv-track">
-              {evs.map(e => (
+              {evs.map((e, i) => (
                 <button
+                  key={i}
                   className={`cal-ev dv-ev ${e.kind === 'mass' ? 'mass' : e.kind === 'pending' ? 'pending' : ''}`}
                   data-ev={e.id}
                   style={css(`top:${top(e.t) + 2}px;height:${(mins(e) / 60) * ROW - 4}px`)}
@@ -312,22 +313,23 @@ export function calendar(tab = '') {
         {filters}
         <div className="cal">
           <div className="cal-head">
-            {days.map(d => (
-              <div>
+            {days.map((d, i) => (
+              <div key={i}>
                 {dayShort(d.getDay())} {d.getDate()}
               </div>
             ))}
           </div>{' '}
           <div className="cal-grid">
-            {days.map(d => {
+            {days.map((d, i) => {
               const evs = calEvents()
                 .filter(e => e.d === iso(d))
                 .sort(byTime);
               return (
-                <div className="cal-day" style={{ minHeight: '280px' }}>
+                <div key={i} className="cal-day" style={{ minHeight: '280px' }}>
                   {nodesOr(
-                    evs.map(e => (
+                    evs.map((e, i) => (
                       <span
+                        key={i}
                         className={`cal-ev ${e.kind === 'mass' ? 'mass' : e.kind === 'pending' ? 'pending' : ''}`}
                         data-ev={e.id}
                       >
@@ -355,7 +357,7 @@ export function calendar(tab = '') {
   for (let i = 0; i < lead; i++) cells.push({ d: new Date(y, m, -(lead - i - 1)), out: true });
   for (let i = 1; i <= days; i++) cells.push({ d: new Date(y, m, i), out: false });
   while (cells.length % 7) cells.push({ d: new Date(y, m + 1, cells.length - days - lead + 1), out: true });
-  const grid = cells.map(({ d, out }) => {
+  const grid = cells.map(({ d, out }, i) => {
     const key = iso(d),
       evs = calEvents()
         .filter(e => e.d === key)
@@ -363,7 +365,7 @@ export function calendar(tab = '') {
       feast = FEASTS[key],
       today = key === iso(TODAY);
     return (
-      <div className={`cal-day ${out ? 'out' : ''} ${today ? 'today' : ''}`}>
+      <div key={i} className={`cal-day ${out ? 'out' : ''} ${today ? 'today' : ''}`}>
         <button className="dn" data-day={key} aria-label={fmtLong(key)}>
           {d.getDate()}
           {feast && !today ? <span className="feast" /> : ''}
@@ -375,8 +377,9 @@ export function calendar(tab = '') {
         ) : (
           ''
         )}{' '}
-        {evs.slice(0, 3).map(e => (
+        {evs.slice(0, 3).map((e, i) => (
           <span
+            key={i}
             className={`cal-ev ${e.kind === 'mass' ? 'mass' : e.kind === 'pending' ? 'pending' : ''}`}
             data-ev={e.id}
             title={L(e.title, e.titleAr)}
@@ -395,8 +398,8 @@ export function calendar(tab = '') {
       {filters}
       <div className="cal">
         <div className="cal-head">
-          {[0, 1, 2, 3, 4, 5, 6].map(i => (
-            <div>{dayShort(i)}</div>
+          {[0, 1, 2, 3, 4, 5, 6].map((i, k) => (
+            <div key={k}>{dayShort(i)}</div>
           ))}
         </div>{' '}
         <div className="cal-grid">{grid}</div>
@@ -406,8 +409,8 @@ export function calendar(tab = '') {
           ['mass', L('Mass', 'قدّاس')],
           ['', L('Parish event', 'حدث رعوي')],
           ['pending', L('Pending reservation — holds the slot', 'حجز معلّق — يحجز الوقت')]
-        ].map(([cls, lbl]) => (
-          <span className="row" style={{ gap: '7px' }}>
+        ].map(([cls, lbl], i) => (
+          <span key={i} className="row" style={{ gap: '7px' }}>
             <span className={`cal-ev cal-sw ${cls}`} /> <span className="t-caption dim">{lbl}</span>
           </span>
         ))}{' '}
@@ -471,8 +474,11 @@ calendar.mount = host => {
       body: (
         <>
           <div className="formrow">
-            <label className="label">{L('Subscription link (iCal)', 'رابط الاشتراك (iCal)')}</label>{' '}
+            <label className="label" htmlFor="cal_ics">
+              {L('Subscription link (iCal)', 'رابط الاشتراك (iCal)')}
+            </label>{' '}
             <input
+              id="cal_ics"
               className="input mono"
               readOnly
               dir="ltr"
@@ -533,14 +539,14 @@ function eventTemplateDrawer(id) {
             <label className="label" htmlFor="ct_kind">
               {L('Category', 'الفئة')}
             </label>
-            <Select id="ct_kind">
+            <Select defaultValue={tpl?.kind} id="ct_kind">
               {[
                 ['event', 'Parish event', 'حدث رعوي'],
                 ['mass', 'Mass', 'قدّاس'],
                 ['group', 'Group', 'مجموعة'],
                 ['sacr', 'Sacrament', 'سرّ']
-              ].map(([v, en, ar]) => (
-                <option value={v} selected={!!(tpl?.kind === v)}>
+              ].map(([v, en, ar], i) => (
+                <option key={i} value={v}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -550,9 +556,9 @@ function eventTemplateDrawer(id) {
             <label className="label" htmlFor="ct_venue">
               {L('Default room', 'القاعة الافتراضية')}
             </label>
-            <Select id="ct_venue">
-              {VENUES.map(v => (
-                <option value={v.id} selected={!!(tpl?.venue === v.id)}>
+            <Select defaultValue={tpl?.venue} id="ct_venue">
+              {VENUES.map((v, i) => (
+                <option key={i} value={v.id}>
                   {L(v.name, v.ar)}
                 </option>
               ))}
@@ -669,25 +675,27 @@ function eventDrawer(id, isNew = false, pre = null) {
               <label className="label" htmlFor="ev_template">
                 {L('Template', 'القالب')}
               </label>{' '}
-              <Select id="ev_template">
+              <Select defaultValue={pre?.templateId} id="ev_template">
                 <option value="">{L('None', 'بلا')}</option>
-                {EVENT_TEMPLATES.map(x => (
-                  <option value={x.id} selected={!!(pre?.templateId === x.id)}>
+                {EVENT_TEMPLATES.map((x, i) => (
+                  <option key={i} value={x.id}>
                     {L(x.name, x.nameAr)}
                   </option>
                 ))}
               </Select>
             </div>{' '}
             <div className="formrow">
-              <label className="label">{L('Category', 'الفئة')}</label>{' '}
-              <Select id="ev_cat">
+              <label htmlFor="ev_cat" className="label">
+                {L('Category', 'الفئة')}
+              </label>{' '}
+              <Select defaultValue={pre?.kind || 'event'} id="ev_cat">
                 {[
                   ['event', 'Parish life', 'حياة الرعية'],
                   ['mass', 'Worship', 'العبادة'],
                   ['group', 'Formation', 'التنشئة'],
                   ['sacr', 'Sacrament', 'سرّ']
-                ].map(([v, en, ar]) => (
-                  <option value={v} selected={!!((pre?.kind || 'event') === v)}>
+                ].map(([v, en, ar], i) => (
+                  <option key={i} value={v}>
                     {L(en, ar)}
                   </option>
                 ))}
@@ -701,9 +709,9 @@ function eventDrawer(id, isNew = false, pre = null) {
               <label className="label" htmlFor="ev_v">
                 {L('Room', 'القاعة')}
               </label>{' '}
-              <Select id="ev_v">
-                {VENUES.map(v => (
-                  <option value={v.id} selected={!!((pre?.venue || 'v3') === v.id)}>
+              <Select defaultValue={pre?.venue || 'v3'} id="ev_v">
+                {VENUES.map((v, i) => (
+                  <option key={i} value={v.id}>
                     {L(v.name, v.ar)}
                   </option>
                 ))}
@@ -720,11 +728,9 @@ function eventDrawer(id, isNew = false, pre = null) {
             <label className="label" htmlFor="ev_subtype">
               {L('Sacrament event type', 'نوع حدث السرّ')}
             </label>{' '}
-            <Select id="ev_subtype">
+            <Select id="ev_subtype" defaultValue={initialWedding ? 'wedding' : ''}>
               <option value="">{L('Other sacrament', 'سرّ آخر')}</option>
-              <option value="wedding" selected={!!initialWedding}>
-                {L('Wedding', 'إكليل')}
-              </option>
+              <option value="wedding">{L('Wedding', 'إكليل')}</option>
             </Select>
           </div>{' '}
           <div id="ev-participants" hidden={!initialWedding}>
@@ -755,24 +761,18 @@ function eventDrawer(id, isNew = false, pre = null) {
               <label className="label" htmlFor="ev_visibility">
                 {L('Visibility', 'الظهور')}
               </label>{' '}
-              <Select id="ev_visibility">
-                <option value="public" selected={!!(!ed?.visibility || ed.visibility === 'public')}>
-                  {L('Public — parish calendar', 'عام — رزنامة الرعية')}
-                </option>
-                <option value="groups" selected={!!(ed?.visibility === 'groups')}>
-                  {L('Selected groups only', 'للمجموعات المحدّدة فقط')}
-                </option>
-                <option value="confidential" selected={!!(ed?.visibility === 'confidential')}>
-                  {L('Clergy and office only', 'للإكليروس والمكتب فقط')}
-                </option>
+              <Select id="ev_visibility" defaultValue={ed?.visibility || 'public'}>
+                <option value="public">{L('Public — parish calendar', 'عام — رزنامة الرعية')}</option>
+                <option value="groups">{L('Selected groups only', 'للمجموعات المحدّدة فقط')}</option>
+                <option value="confidential">{L('Clergy and office only', 'للإكليروس والمكتب فقط')}</option>
               </Select>
             </div>
           </div>{' '}
           <div id="ev-visible-groups" hidden={!(ed?.visibility === 'groups')}>
             <label className="label">{L('Groups allowed to see this event', 'المجموعات المخوّلة رؤية الحدث')}</label>{' '}
             <div className="choice-grid">
-              {GROUPS.map(g => (
-                <label className="row">
+              {GROUPS.map((g, i) => (
+                <label key={i} className="row">
                   <input
                     type="checkbox"
                     data-ev-group=""
@@ -787,8 +787,8 @@ function eventDrawer(id, isNew = false, pre = null) {
           <div id="ev-priest-box" hidden={!((pre?.kind || 'event') === 'mass')}>
             <label className="label">{L('Assigned priests', 'الكهنة المكلّفون')}</label>{' '}
             <div className="choice-grid">
-              {PEOPLE.filter(p => p.status === 'clergy').map(p => (
-                <label className="row">
+              {PEOPLE.filter(p => p.status === 'clergy').map((p, i) => (
+                <label key={i} className="row">
                   <input
                     type="checkbox"
                     data-ev-priest=""
@@ -997,8 +997,8 @@ function eventDrawer(id, isNew = false, pre = null) {
             <>
               <dt>{L('Tags', 'الوسوم')}</dt>
               <dd>
-                {d.tags.map(x => (
-                  <span className="chip" style={{ marginInlineEnd: '6px' }}>
+                {d.tags.map((x, i) => (
+                  <span key={i} className="chip" style={{ marginInlineEnd: '6px' }}>
                     {x}
                   </span>
                 ))}
@@ -1028,8 +1028,8 @@ function eventDrawer(id, isNew = false, pre = null) {
             [L('No', 'لا'), d.rsvp.no],
             [L('Maybe', 'ربما'), d.rsvp.maybe],
             [L('No reply', 'بلا ردّ'), d.rsvp.none]
-          ].map(([k, v]) => (
-            <div className="card card-flat" style={{ padding: '12px' }}>
+          ].map(([k, v], i) => (
+            <div key={i} className="card card-flat" style={{ padding: '12px' }}>
               <div className="t-caption dim">{k}</div>{' '}
               <div style={{ font: '600 20px/26px var(--sans)', fontVariantNumeric: 'tabular-nums' }}>{v}</div>
             </div>
@@ -1055,8 +1055,8 @@ function eventDrawer(id, isNew = false, pre = null) {
               {L('Required items', 'المستلزمات')}
             </h4>{' '}
             <div className="stack" style={{ gap: '8px' }}>
-              {d.bring.map(([en, ar]) => (
-                <C.CheckRow label={L(en, ar)} />
+              {d.bring.map(([en, ar], i) => (
+                <C.CheckRow key={i} label={L(en, ar)} />
               ))}
             </div>
           </>
@@ -1069,7 +1069,7 @@ function eventDrawer(id, isNew = false, pre = null) {
         </h4>{' '}
         {d.tasks.length ? '' : <p className="t-caption dim">{L('No tasks yet.', 'لا مهام بعد.')}</p>}{' '}
         {d.tasks.map(([en, ar, p, due, done], ti) => (
-          <div className={`listrow ${done ? 'is-done' : ''}`} style={{ paddingInline: 0 }}>
+          <div key={ti} className={`listrow ${done ? 'is-done' : ''}`} style={{ paddingInline: 0 }}>
             <Avatar p={person(p)} cls="avatar-sm" />
             <span className="grow">
               <b>{L(en, ar)}</b>{' '}
@@ -1089,8 +1089,8 @@ function eventDrawer(id, isNew = false, pre = null) {
         </h4>{' '}
         <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
           {nodesOr(
-            REGISTRATIONS.filter(form => form.eventId === e.id).map(form => (
-              <a className="chip" href="#/registrations">
+            REGISTRATIONS.filter(form => form.eventId === e.id).map((form, i) => (
+              <a key={i} className="chip" href="#/registrations">
                 <Icon name="registr" size={14} /> {L(form.event, form.eventAr)}
               </a>
             )),

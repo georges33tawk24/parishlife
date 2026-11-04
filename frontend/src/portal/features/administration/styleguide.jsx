@@ -181,8 +181,8 @@ export function styleguide(tab = '') {
                     ],
                     ['t-ui', 'Buttons, table cells, nav, inputs', 'الأزرار وخلايا الجدول والتنقل', '14 / 20 / 500'],
                     ['t-caption', 'Helper text, timestamps, hints.', 'نص مساعد وطوابع زمنية', '12 / 18 / 400']
-                  ].map(([cls, en, ar, sp]) => (
-                    <tr>
+                  ].map(([cls, en, ar, sp], i) => (
+                    <tr key={i}>
                       <td>
                         <span className="mono t-caption">{cls}</span>
                       </td>
@@ -243,8 +243,8 @@ export function styleguide(tab = '') {
                   [32, 'page gutter'],
                   [48, 'between sections'],
                   [64, 'page top/bottom']
-                ].map(([n, u]) => (
-                  <div className="row" style={{ gap: '10px', marginBottom: '6px' }}>
+                ].map(([n, u], i) => (
+                  <div key={i} className="row" style={{ gap: '10px', marginBottom: '6px' }}>
                     <span className="mono t-caption" style={{ width: '26px' }}>
                       {n}
                     </span>{' '}
@@ -262,8 +262,8 @@ export function styleguide(tab = '') {
                   ['10px', 'cards, buttons'],
                   ['14px', 'modals, drawers'],
                   ['999px', 'pills, avatars']
-                ].map(([r, u]) => (
-                  <div className="row" style={{ gap: '10px', marginBottom: '8px' }}>
+                ].map(([r, u], i) => (
+                  <div key={i} className="row" style={{ gap: '10px', marginBottom: '8px' }}>
                     <span
                       style={css(
                         `width:34px;height:26px;border:1px solid var(--border-strong);border-radius:${r};background:var(--surface)`
@@ -283,8 +283,8 @@ export function styleguide(tab = '') {
                   ['1 · card', 'var(--e1)', 'cards'],
                   ['2 · menu', 'var(--e2)', 'menus, popovers'],
                   ['3 · modal', 'var(--e3)', 'modals']
-                ].map(([n, sh, u]) => (
-                  <div className="row" style={{ gap: '10px', marginBottom: '10px' }}>
+                ].map(([n, sh, u], i) => (
+                  <div key={i} className="row" style={{ gap: '10px', marginBottom: '10px' }}>
                     <span
                       style={css(
                         `width:34px;height:26px;border:1px solid var(--border);border-radius:6px;background:var(--surface);box-shadow:${sh}`
@@ -307,8 +307,8 @@ export function styleguide(tab = '') {
                 [264, L('sidebar expanded', 'الشريط الموسّع')],
                 [72, L('sidebar collapsed', 'الشريط المطوي')],
                 [20, L('icon, 1.5 stroke', 'أيقونة، سماكة ١٫٥')]
-              ].map(([n, u]) => (
-                <div>
+              ].map(([n, u], i) => (
+                <div key={i}>
                   <div className="mono" style={{ fontSize: '19px', fontVariantNumeric: 'tabular-nums' }}>
                     {n}
                   </div>{' '}
@@ -442,10 +442,12 @@ export function styleguide(tab = '') {
           <>
             <div className="formgrid">
               <div className="formrow">
-                <label className="label">{L('Fund', 'الصندوق')}</label>{' '}
-                <Select>
-                  {FUNDS.map(f => (
-                    <option>{L(f.name, f.ar)}</option>
+                <label className="label" htmlFor="sg_fund">
+                  {L('Fund', 'الصندوق')}
+                </label>{' '}
+                <Select id="sg_fund">
+                  {FUNDS.map((f, i) => (
+                    <option key={i}>{L(f.name, f.ar)}</option>
                   ))}
                 </Select>
               </div>{' '}
@@ -1018,8 +1020,8 @@ export function styleguide(tab = '') {
             <div className="divider" />{' '}
             <div className="row" style={{ gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="avatar-stack">
-                {['p1', 'p4', 'p3'].map(i => (
-                  <span className="avatar">
+                {['p1', 'p4', 'p3'].map((i, k) => (
+                  <span key={k} className="avatar">
                     {person(i)
                       .lat.split(' ')
                       .map(x => x[0])
@@ -1030,8 +1032,10 @@ export function styleguide(tab = '') {
                   +9
                 </span>
               </span>{' '}
-              {['avatar-sm', '', 'avatar-lg', 'avatar-xl'].map(c => (
-                <span className={`avatar ${c}`}>GH</span>
+              {['avatar-sm', '', 'avatar-lg', 'avatar-xl'].map((c, i) => (
+                <span key={i} className={`avatar ${c}`}>
+                  GH
+                </span>
               ))}
             </div>
           </>

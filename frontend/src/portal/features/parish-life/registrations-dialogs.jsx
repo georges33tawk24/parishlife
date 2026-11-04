@@ -47,8 +47,8 @@ export function formNew() {
       ) : (
         ''
       )}{' '}
-      {eligibleEvents().map(e => (
-        <option value={e.id}>
+      {eligibleEvents().map((e, i) => (
+        <option key={i} value={e.id}>
           {L(e.title, e.titleAr)} · {e.d} · {place(e.venue)}
         </option>
       ))}
@@ -116,8 +116,10 @@ export function formNew() {
                     {L('Room', 'القاعة')}
                   </label>
                   <Select id="ne_v">
-                    {D.VENUES.map(v => (
-                      <option value={v.id}>{place(v.id)}</option>
+                    {D.VENUES.map((v, i) => (
+                      <option key={i} value={v.id}>
+                        {place(v.id)}
+                      </option>
                     ))}
                   </Select>
                 </div>
@@ -131,8 +133,10 @@ export function formNew() {
                   {L('Kind of event', 'نوع الحدث')}
                 </label>
                 <Select id="ne_k">
-                  {KINDS.map(([k, lab]) => (
-                    <option value={k}>{lab}</option>
+                  {KINDS.map(([k, lab], i) => (
+                    <option key={i} value={k}>
+                      {lab}
+                    </option>
                   ))}
                 </Select>{' '}
                 <span className="help">
@@ -148,8 +152,10 @@ export function formNew() {
                 </label>
                 <Select id="ne_group">
                   <option value="">{L('Choose a group', 'اختر مجموعة')}</option>
-                  {D.GROUPS.map(g => (
-                    <option value={g.id}>{L(g.name, g.ar)}</option>
+                  {D.GROUPS.map((g, i) => (
+                    <option key={i} value={g.id}>
+                      {L(g.name, g.ar)}
+                    </option>
                   ))}
                 </Select>
               </div>{' '}
@@ -443,7 +449,9 @@ export function fieldAdd() {
           <C.Field label={L('Label (Arabic)', 'التسمية (عربي)')} dir="rtl" ar={true} id="ff_ar" />
         </div>{' '}
         <div className="formrow">
-          <label className="label">{L('Type', 'النوع')}</label>
+          <label htmlFor="ff_t" className="label">
+            {L('Type', 'النوع')}
+          </label>
           <Select id="ff_t">
             <option value="text">{L('Short text', 'نصّ قصير')}</option>
             <option value="choice">{L('Choice', 'اختيار')}</option>

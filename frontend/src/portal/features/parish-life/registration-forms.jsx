@@ -133,10 +133,10 @@ export function participantForm(form, record = null) {
           <label className="label" htmlFor="rp-person">
             {L('Participant', 'المشترك')}
           </label>
-          <Select id="rp-person" required disabled={!!record}>
+          <Select defaultValue={record?.p} id="rp-person" required disabled={!!record}>
             <option value="">{L('Choose a person', 'اختر شخصاً')}</option>
-            {people.map(p => (
-              <option value={p.id} selected={!!(p.id === record?.p)}>
+            {people.map((p, i) => (
+              <option key={i} value={p.id}>
                 {p.lat} · {p.ar}
               </option>
             ))}
@@ -154,19 +154,19 @@ export function participantForm(form, record = null) {
             <label className="label" htmlFor="rp-status">
               {L('Place status', 'حالة المقعد')}
             </label>
-            <Select id="rp-status" disabled={!!(record?.status === 'cancelled')}>
+            <Select
+              id="rp-status"
+              defaultValue={!record || ['pending', 'paid'].includes(record.status) ? 'pending' : record.status}
+              disabled={!!(record?.status === 'cancelled')}
+            >
               {record?.status === 'awaiting-approval' ? (
                 <option value="awaiting-approval">{L('Awaiting review', 'بانتظار المراجعة')}</option>
               ) : (
                 ''
               )}
               {record?.status === 'cancelled' ? <option value="cancelled">{L('Cancelled', 'ملغى')}</option> : ''}
-              <option value="pending" selected={!!(!record || ['pending', 'paid'].includes(record.status))}>
-                {L('Reserved', 'محجوز')}
-              </option>
-              <option value="registered" selected={!!(record?.status === 'registered')}>
-                {L('Confirmed', 'مؤكّد')}
-              </option>
+              <option value="pending">{L('Reserved', 'محجوز')}</option>
+              <option value="registered">{L('Confirmed', 'مؤكّد')}</option>
             </Select>
           </div>{' '}
           <div id="rp-consent-area">
@@ -182,10 +182,10 @@ export function participantForm(form, record = null) {
           <label className="label" htmlFor="rp-transport">
             {L('Transport choice', 'اختيار النقل')}
           </label>
-          <Select id="rp-transport">
+          <Select defaultValue={record?.transport} id="rp-transport">
             <option value="">{L('Not specified', 'غير محدّد')}</option>
-            {options.map(option => (
-              <option value={option.id} selected={!!(record?.transport === option.id)}>
+            {options.map((option, i) => (
+              <option key={i} value={option.id}>
                 {L(option.name, option.nameAr || option.name)}
                 {option.fee ? ` (+${registrationMoney(option.fee, form)})` : ''}
               </option>
@@ -243,8 +243,8 @@ export function participantForm(form, record = null) {
               <summary>
                 {L('Payment history', 'سجل الدفعات')} ({record.payments.length})
               </summary>
-              {record.payments.map(payment => (
-                <div className="listrow">
+              {record.payments.map((payment, i) => (
+                <div key={i} className="listrow">
                   <span>
                     {fmtDate(payment.at)} · {payment.method} · {payment.reference || ''}
                   </span>

@@ -168,16 +168,16 @@ function scheduleSheet(start, end, o, layout = 'detailed') {
       </header>{' '}
       {days
         .filter(day => day.items.length || layout === 'detailed')
-        .map(({ d, key, items }) => (
-          <section className="ps-day">
+        .map(({ d, key, items }, i) => (
+          <section key={i} className="ps-day">
             <h2>
               <span>{fmtLong(d)}</span>
               {FEASTS[key] ? <small>{L(...FEASTS[key])}</small> : ''}
             </h2>{' '}
             {items.length ? (
               <table>
-                {items.map(x => (
-                  <tr>
+                {items.map((x, i) => (
+                  <tr key={i}>
                     <td className="tm">
                       {x.t || ''}
                       {x.to ? `–${x.to}` : ''}
@@ -250,8 +250,8 @@ export function printWeekDialog() {
             ['day', L('Today', 'اليوم')],
             ['week', L('This week', 'هذا الأسبوع')],
             ['month', L('This month', 'هذا الشهر')]
-          ].map(([key, name]) => (
-            <button type="button" data-pw-range={key}>
+          ].map(([key, name], i) => (
+            <button key={i} type="button" data-pw-range={key}>
               {name}
             </button>
           ))}
@@ -269,8 +269,8 @@ export function printWeekDialog() {
           {L('Include', 'تضمين')}
         </div>{' '}
         <div className="stack" style={{ gap: '10px' }}>
-          {WEEK_OPTS().map(([k, lab, on]) => (
-            <C.CheckRow label={lab} checked={on} id={'pw_' + k} />
+          {WEEK_OPTS().map(([k, lab, on], i) => (
+            <C.CheckRow key={i} label={lab} checked={on} id={'pw_' + k} />
           ))}
         </div>{' '}
         <p className="t-caption dim" id="pw_count" style={{ marginTop: '16px' }} />
@@ -311,8 +311,8 @@ export function printWeekDialog() {
             {nodesOr(
               scheduleDays(start, end, o)
                 .filter(d => d.items.length || layout === 'detailed')
-                .map(d => (
-                  <div className="listrow" style={{ paddingInline: 0 }}>
+                .map((d, i) => (
+                  <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                     <span className="mono">{iso(d.d)}</span>
                     <span className="grow">
                       {d.items.length
@@ -405,18 +405,18 @@ const massesIn = r => {
 
 function priestRows(list, forPrint) {
   const byDay = list.reduce((m, e) => ((m[e.d] = [...(m[e.d] || []), e]), m), {});
-  return Object.entries(byDay).map(([d, es]) =>
+  return Object.entries(byDay).map(([d, es], i) =>
     forPrint ? (
-      <section className="ps-day">
+      <section key={i} className="ps-day">
         <h2>
           <span>{fmtLong(d)}</span>
           {FEASTS[d] ? <small>{L(...FEASTS[d])}</small> : ''}
         </h2>
         <table>
-          {es.map(e => {
+          {es.map((e, i) => {
             const pr = priestsOf(e);
             return (
-              <tr>
+              <tr key={i}>
                 <td className="tm">
                   {e.t}
                   {e.to ? `–${e.to}` : ''}
@@ -438,10 +438,10 @@ function priestRows(list, forPrint) {
         </table>
       </section>
     ) : (
-      es.map(e => {
+      es.map((e, i) => {
         const pr = priestsOf(e);
         return (
-          <tr>
+          <tr key={i}>
             <td className="ps-when">
               <span className="mono">{fmtDate(d)}</span>
               <small>
@@ -518,8 +518,8 @@ export function priestScheduleDialog() {
       <>
         <div className="toolbar" style={{ marginBottom: '12px' }}>
           <span className="seg" role="group" aria-label={L('Period', 'الفترة')}>
-            {RANGES().map(([k, lab]) => (
-              <button type="button" data-range={k} aria-pressed={k === r}>
+            {RANGES().map(([k, lab], i) => (
+              <button key={i} type="button" data-range={k} aria-pressed={k === r}>
                 {lab}
               </button>
             ))}

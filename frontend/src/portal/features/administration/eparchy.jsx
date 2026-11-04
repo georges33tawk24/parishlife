@@ -180,8 +180,8 @@ assignments.mount = async host => {
     paint(
       body,
       data.priests.length ? (
-        data.priests.map(priest => (
-          <section className="panel" style={{ marginBottom: '16px' }} data-priest={priest.id}>
+        data.priests.map((priest, i) => (
+          <section key={i} className="panel" style={{ marginBottom: '16px' }} data-priest={priest.id}>
             <div className="panel-h">
               <h3>{priest.name}</h3>
             </div>
@@ -190,8 +190,8 @@ assignments.mount = async host => {
                 {nodesOr(
                   data.parishes
                     .filter(p => priest.parishes.includes(p.id))
-                    .map(p => (
-                      <div className="listrow">
+                    .map((p, i) => (
+                      <div key={i} className="listrow">
                         <span>
                           {L(p.name, p.ar)} · {L(p.town, p.townAr)}
                         </span>

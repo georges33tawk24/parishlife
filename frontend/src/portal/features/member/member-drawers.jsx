@@ -67,8 +67,10 @@ function profileDrawer() {
               'date of birth',
               'ministry memberships',
               'profile picture'
-            ].map(x => (
-              <option value={x}>{x}</option>
+            ].map((x, i) => (
+              <option key={i} value={x}>
+                {x}
+              </option>
             ))}
           </Select>
         </div>
@@ -208,8 +210,10 @@ function messageDrawer() {
             {L('Ministry', 'الخدمة')}
           </label>
           <Select id="message-group">
-            {M.groups.map(g => (
-              <option value={txt(g.id)}>{txt(g.name)}</option>
+            {M.groups.map((g, i) => (
+              <option key={i} value={txt(g.id)}>
+                {txt(g.name)}
+              </option>
             ))}
           </Select>
         </div>
@@ -245,8 +249,8 @@ function concernDrawer() {
           <Select id="concern-category">
             {M.categories
               .filter(x => x.active)
-              .map(x => (
-                <option>{txt(x.name)}</option>
+              .map((x, i) => (
+                <option key={i}>{txt(x.name)}</option>
               ))}
           </Select>
         </div>{' '}
@@ -256,8 +260,10 @@ function concernDrawer() {
           </label>
           <Select id="concern-group">
             <option value="">—</option>
-            {M.groups.map(g => (
-              <option value={txt(g.id)}>{txt(g.name)}</option>
+            {M.groups.map((g, i) => (
+              <option key={i} value={txt(g.id)}>
+                {txt(g.name)}
+              </option>
             ))}
           </Select>
         </div>{' '}
@@ -267,8 +273,10 @@ function concernDrawer() {
           </label>
           <Select id="concern-event">
             <option value="">—</option>
-            {[...M.events, ...M.meetings].map(x => (
-              <option value={txt(x.id)}>{txt(x.title)}</option>
+            {[...M.events, ...M.meetings].map((x, i) => (
+              <option key={i} value={txt(x.id)}>
+                {txt(x.title)}
+              </option>
             ))}
           </Select>
         </div>{' '}
@@ -286,8 +294,8 @@ function concernDrawer() {
           <legend>{L('Choose who may review this concern', 'اختر من يمكنه مراجعة هذه الشكوى')}</legend>
           {M.reviewers
             .filter(r => r.id !== session.user.id)
-            .map(r => (
-              <label className="member-toggle">
+            .map((r, i) => (
+              <label key={i} className="member-toggle">
                 <span>{txt(r.name)}</span>
                 <input type="checkbox" data-concern-reviewer="" defaultValue={txt(r.id)} />
               </label>
@@ -379,8 +387,10 @@ function publishDrawer() {
               ['resource', 'Resource'],
               ['opportunity', 'Volunteer opportunity'],
               ['discussion', 'Group conversation']
-            ].map(([id, name]) => (
-              <option value={id}>{name}</option>
+            ].map(([id, name], i) => (
+              <option key={i} value={id}>
+                {name}
+              </option>
             ))}
           </Select>
         </div>{' '}
@@ -396,8 +406,10 @@ function publishDrawer() {
             )}
             {M.groups
               .filter(g => M.managedGroups.includes(g.id))
-              .map(g => (
-                <option value={txt(g.id)}>{txt(g.name)}</option>
+              .map((g, i) => (
+                <option key={i} value={txt(g.id)}>
+                  {txt(g.name)}
+                </option>
               ))}
           </Select>
         </div>{' '}
@@ -407,8 +419,8 @@ function publishDrawer() {
           </label>
           <Select id="publish-meeting">
             <option value="">—</option>
-            {M.meetings.map(m => (
-              <option value={txt(m.id)} data-group={txt(m.groupId)}>
+            {M.meetings.map((m, i) => (
+              <option key={i} value={txt(m.id)} data-group={txt(m.groupId)}>
                 {txt(m.title)} · {date(m.date)}
               </option>
             ))}
@@ -497,8 +509,8 @@ function reviewDrawer(x) {
         ) : (
           ''
         )}{' '}
-        {x.updates.map(y => (
-          <p>
+        {x.updates.map((y, i) => (
+          <p key={i}>
             {date(y.at)} · {txt(y.status)} · {txt(y.text)}
             {y.internal ? (
               <>
@@ -517,10 +529,10 @@ function reviewDrawer(x) {
             <label className="label" htmlFor="review-assignee">
               {L('Assign to independent reviewer', 'تعيين مراجع مستقل')}
             </label>
-            <Select id="review-assignee">
+            <Select defaultValue={x.assignedTo} id="review-assignee">
               <option value="">{L('Choose reviewer', 'اختر مراجعاً')}</option>
-              {M.reviewers.map(r => (
-                <option value={txt(r.id)} selected={!!(x.assignedTo === r.id)}>
+              {M.reviewers.map((r, i) => (
+                <option key={i} value={txt(r.id)}>
                   {txt(r.name)}
                 </option>
               ))}
@@ -538,9 +550,9 @@ function reviewDrawer(x) {
               <label className="label" htmlFor="review-status">
                 {L('Public status', 'الحالة العامة')}
               </label>
-              <Select id="review-status">
-                {statuses.map(s => (
-                  <option selected={!!(x.status === s)}>{s}</option>
+              <Select defaultValue={x.status} id="review-status">
+                {statuses.map((s, i) => (
+                  <option key={i}>{s}</option>
                 ))}
               </Select>
             </div>
@@ -584,8 +596,8 @@ function discussionDrawer(x) {
         <p>{txt(x.body)}</p>{' '}
         <Paged className="member-list">
           {nodesOr(
-            x.replies.map(r => (
-              <div className="member-card">
+            x.replies.map((r, i) => (
+              <div key={i} className="member-card">
                 <b>{txt(r.author)}</b>
                 <small>· {date(r.at)}</small>
                 <p>{txt(r.body)}</p>

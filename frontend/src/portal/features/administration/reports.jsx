@@ -116,8 +116,8 @@ export function reports(id = '') {
         }
       />{' '}
       <Paged className="gridcards">
-        {REPORTS.map(([slug, ic, en, ar, se, sa]) => (
-          <a className="panel" href={`#/reports/${slug}`} style={{ display: 'block' }}>
+        {REPORTS.map(([slug, ic, en, ar, se, sa], i) => (
+          <a key={i} className="panel" href={`#/reports/${slug}`} style={{ display: 'block' }}>
             <div className="panel-b">
               <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
                 <span className="avatar avatar-lg">
@@ -182,10 +182,10 @@ function reportDetail(slug) {
         <C.BGroup items={PERIODS.map(p => L(p[0], p[1]))} sel={pi} k="repPeriod" />
       )}{' '}
       {MONEY.includes(r[0]) ? (
-        <Select style={{ width: 'auto' }} id="repfund" aria-label={L('Fund', 'الصندوق')}>
+        <Select defaultValue={fund} style={{ width: 'auto' }} id="repfund" aria-label={L('Fund', 'الصندوق')}>
           <option value="">{L('All funds', 'كل الصناديق')}</option>
-          {FUNDS.map(f => (
-            <option value={f.id} selected={!!(fund === f)}>
+          {FUNDS.map((f, i) => (
+            <option key={i} value={f.id}>
               {L(f.name, f.ar)}
             </option>
           ))}
@@ -424,16 +424,20 @@ reports.mount = host => {
         <>
           <div className="formgrid">
             <div className="formrow">
-              <label className="label">{L('Every', 'كل')}</label>{' '}
-              <Select>
+              <label className="label" htmlFor="rs_every">
+                {L('Every', 'كل')}
+              </label>{' '}
+              <Select id="rs_every">
                 <option>{L('Month', 'شهر')}</option>
                 <option>{L('Quarter', 'فصل')}</option>
                 <option>{L('Week', 'أسبوع')}</option>
               </Select>
             </div>{' '}
             <div className="formrow">
-              <label className="label">{L('Format', 'الصيغة')}</label>{' '}
-              <Select>
+              <label className="label" htmlFor="rs_format">
+                {L('Format', 'الصيغة')}
+              </label>{' '}
+              <Select id="rs_format">
                 <option>PDF</option>
                 <option>Excel</option>
                 <option>CSV</option>

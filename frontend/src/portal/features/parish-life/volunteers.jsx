@@ -70,10 +70,11 @@ export function volunteers(tab = '') {
           <Stat k={L('Meetings held', 'اجتماعات أُقيمت')} v={held.length} d={L('across my groups', 'في مجموعاتي')} />
         </div>{' '}
         {nodesOr(
-          managed.map(g => {
+          managed.map((g, k) => {
             const d = groupInfo(g.id);
             return (
               <Panel
+                key={k}
                 title={L(g.name, g.ar)}
                 more={
                   <>
@@ -94,7 +95,7 @@ export function volunteers(tab = '') {
                   </button>
                 </div>{' '}
                 {d.roles.map(([pid, en, ar], i) => (
-                  <div className="listrow">
+                  <div key={i} className="listrow">
                     <span className="grow">
                       {L(person(pid)?.lat || pid, person(pid)?.ar || pid)}
                       <small>{L(en, ar)}</small>
@@ -201,8 +202,10 @@ export function volunteers(tab = '') {
                 cells: [
                   <Who p={person(v.p)} />,
                   <span className="row" style={{ gap: '4px', flexWrap: 'wrap' }}>
-                    {(isAr() ? v.skillsAr : v.skills).map(s => (
-                      <span className="chip">{s}</span>
+                    {(isAr() ? v.skillsAr : v.skills).map((s, i) => (
+                      <span key={i} className="chip">
+                        {s}
+                      </span>
                     ))}
                   </span>,
                   <span className="dim t-caption">{v.avail.join(' · ')}</span>,
@@ -271,8 +274,8 @@ export function volunteers(tab = '') {
               )}
             />
           )}{' '}
-          {SIGNUP_SHEETS.map(s => (
-            <section className="panel">
+          {SIGNUP_SHEETS.map((s, i) => (
+            <section key={i} className="panel">
               <div className="panel-b">
                 <div className="row" style={{ gap: '12px', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
@@ -360,13 +363,13 @@ export function volunteers(tab = '') {
   /* rota board — sheet 04: drag a person onto a role. Green dot confirmed, amber awaiting
      reply, red border a double-booking; a swap request is a pending badge on the card. */
   const onTeams = id => ROTA.teams.filter(tm => tm.filled.some(f => f.p === id && f.s !== 'declined'));
-  const cols = teams.map(tm => {
+  const cols = teams.map((tm, i) => {
     const ti = ROTA.teams.indexOf(tm);
     const cards = tm.filled.map((f, si) => {
       const at = `${ti}|${si}`;
       if (!f.p)
         return (
-          <button className="rota-slot" data-accept="any" data-slot={at} data-act={`rota-fill:${at}`}>
+          <button key={si} className="rota-slot" data-accept="any" data-slot={at} data-act={`rota-fill:${at}`}>
             <span className="idle">{L(`Assign ${tm.one}`, `إسناد ${tm.oneAr}`)}</span>
             <span className="rel">{L('Release here', 'أفلت هنا')}</span>
           </button>
@@ -384,6 +387,7 @@ export function volunteers(tab = '') {
               : L(p.town, p.townAr);
       return (
         <div
+          key={si}
           className={`rota-card ${f.s}${dbl ? ' dbl' : ''}`}
           draggable="true"
           data-slot={at}
@@ -430,7 +434,7 @@ export function volunteers(tab = '') {
     });
     const ok = tm.filled.filter(f => f.p && f.s === 'accepted').length;
     return (
-      <section className="rota-col">
+      <section key={i} className="rota-col">
         <header>
           <b>{L(tm.team, tm.teamAr)}</b>
           <small>{L(tm.one, tm.oneAr)}</small>{' '}
@@ -442,8 +446,8 @@ export function volunteers(tab = '') {
       </section>
     );
   });
-  const tray = VOLUNTEERS.map(v => person(v.p)).map(p => (
-    <span className="rota-chip" draggable="true" data-p={p.id}>
+  const tray = VOLUNTEERS.map(v => person(v.p)).map((p, i) => (
+    <span key={i} className="rota-chip" draggable="true" data-p={p.id}>
       <Avatar p={p} cls="avatar-xs" />
       {isAr() ? p.ar : p.lat}
     </span>
@@ -619,8 +623,8 @@ volunteers.mount = host => {
           'Free at that hour, trained for this team, clearance valid, and not already serving twice this week.',
           'متفرّغون في تلك الساعة، مدرَّبون، إفادتهم سارية، وغير مناوبين مرّتين هذا الأسبوع.'
         ),
-        body: ['p16', 'p9', 'p5'].map(id => (
-          <div className="listrow">
+        body: ['p16', 'p9', 'p5'].map((id, i) => (
+          <div key={i} className="listrow">
             <Who p={person(id)} />
             <span className="grow" /> <Pill label={L('Clearance valid', 'إفادة سارية')} tone="success" />{' '}
             <button className="btn btn-secondary btn-dense" data-act={`sub-invite:${id}`}>
@@ -671,8 +675,10 @@ function ministryRoleForm(gid) {
             {L('Role', 'الدور')}
           </label>
           <Select id="role_name">
-            {MINISTRY_ROLES.map(([en, ar]) => (
-              <option value={en}>{L(en, ar)}</option>
+            {MINISTRY_ROLES.map(([en, ar], i) => (
+              <option key={i} value={en}>
+                {L(en, ar)}
+              </option>
             ))}
           </Select>
         </div>
@@ -681,8 +687,10 @@ function ministryRoleForm(gid) {
             {L('Group member', 'عضو المجموعة')}
           </label>
           <Select id="role_person">
-            {d.roster.map(r => (
-              <option value={r.p}>{L(person(r.p)?.lat || r.p, person(r.p)?.ar || r.p)}</option>
+            {d.roster.map((r, i) => (
+              <option key={i} value={r.p}>
+                {L(person(r.p)?.lat || r.p, person(r.p)?.ar || r.p)}
+              </option>
             ))}
           </Select>
         </div>

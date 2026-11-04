@@ -36,10 +36,10 @@ export function music(id, tab = '') {
     m => (!f.occ || m.occasion === f.occ) && (!f.part || m.part === f.part) && (!f.lang || m.lang === f.lang)
   );
   const choice = (key, all, allAr, values) => (
-    <Select style={{ width: 'auto' }} data-mfilter={key} aria-label={L(all, allAr)}>
+    <Select defaultValue={f[key]} style={{ width: 'auto' }} data-mfilter={key} aria-label={L(all, allAr)}>
       <option value="">{L(all, allAr)}</option>
-      {values.map(([v, en, ar]) => (
-        <option value={v} selected={!!(f[key] === v)}>
+      {values.map(([v, en, ar], i) => (
+        <option key={i} value={v}>
           {L(en, ar)}
         </option>
       ))}
@@ -325,8 +325,8 @@ function hymn(id, tab) {
                   </td>
                 </tr>
               )}
-              {d.lyrics.map(r => (
-                <tr>
+              {d.lyrics.map((r, i) => (
+                <tr key={i}>
                   <td style={{ fontSize: '16px' }}>{r[0]}</td>
                   <td style={{ fontFamily: 'var(--arabic)', fontSize: '16px' }}>{r[1]}</td>
                   <td>{r[2]}</td>
@@ -338,8 +338,9 @@ function hymn(id, tab) {
         <div className="sidecol">
           {musicLinks.length ? (
             <Panel title={L('Listen online', 'استمع عبر الإنترنت')}>
-              {musicLinks.map(([label, url]) => (
+              {musicLinks.map(([label, url], i) => (
                 <a
+                  key={i}
                   className="btn btn-secondary btn-dense"
                   href={url}
                   target="_blank"
@@ -354,8 +355,8 @@ function hymn(id, tab) {
             ''
           )}{' '}
           <Panel title={L('Personal annotations', 'ملاحظات شخصية')}>
-            {d.annotations.map(([p, en, ar]) => (
-              <div className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
+            {d.annotations.map(([p, en, ar], i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
                 <Avatar p={person(p)} cls="avatar-sm" />
                 <span className="grow t-caption">{L(en, ar)}</span>
               </div>
@@ -393,8 +394,8 @@ function hymn(id, tab) {
               <span className="chip chip-on">{transposeKey(m.key, shift) || '—'}</span>
             </div>{' '}
             <div className="presets" style={{ marginTop: '12px' }}>
-              {[-2, -1, 0, 1, 2].map(n => (
-                <button aria-pressed={n === shift} data-act={`transpose:${m.id}|${n}`}>
+              {[-2, -1, 0, 1, 2].map((n, i) => (
+                <button key={i} aria-pressed={n === shift} data-act={`transpose:${m.id}|${n}`}>
                   {n > 0 ? '+' + n : n === 0 ? '0' : '−' + -n}
                 </button>
               ))}
@@ -416,7 +417,7 @@ function hymn(id, tab) {
         <Panel title={L('Instrument notes', 'ملاحظات الآلات')} tight={true}>
           {nodesOr(
             d.notes.map(([inst, instAr, en, ar], ni) => (
-              <div className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
+              <div key={ni} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
                 <span className="chip" style={{ flex: 'none' }}>
                   {L(inst, instAr)}
                 </span>{' '}
@@ -443,7 +444,7 @@ function hymn(id, tab) {
           )}
           <div className="timeline">
             {d.versions.map(([en, ar, when, by], i) => (
-              <div className={`tl-item ${i === 0 ? 'accent' : ''}`}>
+              <div key={i} className={`tl-item ${i === 0 ? 'accent' : ''}`}>
                 <div className="when">
                   {fmtDate(when)} · {isAr() ? person(by).ar : person(by).lat}
                 </div>{' '}
@@ -488,8 +489,8 @@ function hymn(id, tab) {
           </dl>{' '}
           <div className="divider" />{' '}
           <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-            {d.uses.map(u => (
-              <span className="chip chip-on">
+            {d.uses.map((u, i) => (
+              <span key={i} className="chip chip-on">
                 <Icon name="check" size={13} /> {u}
               </span>
             ))}{' '}
@@ -620,8 +621,8 @@ music.mount = host => {
         'ترتبط اللائحة بخطة الخدمة، فلا يفترق ترتيب الخدمة عن ملف الجوقة.'
       ),
       body: nodesOr(
-        SETLISTS.map(s => (
-          <div className="listrow">
+        SETLISTS.map((s, i) => (
+          <div key={i} className="listrow">
             <span className="grow">
               <b>{L(s.name, s.ar)}</b>{' '}
               <small>

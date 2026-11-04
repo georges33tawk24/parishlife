@@ -104,10 +104,10 @@ export const timeSelect = (id, value = '') => (
     <label className="label" htmlFor={id}>
       {L('Celebration time', 'وقت الاحتفال')}
     </label>{' '}
-    <Select id={id} dir="ltr">
+    <Select defaultValue={value} id={id} dir="ltr">
       <option value="">{L('Not set yet', 'لم يُحدَّد بعد')}</option>
-      {[...new Set([...CELEBRATION_TIMES, ...(value ? [value] : [])])].sort().map(x => (
-        <option value={x} selected={!!(x === value)}>
+      {[...new Set([...CELEBRATION_TIMES, ...(value ? [value] : [])])].sort().map((x, i) => (
+        <option key={i} value={x}>
           {x}
         </option>
       ))}

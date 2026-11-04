@@ -1,5 +1,6 @@
 /* Ministries and membership: explore the ministries of the parishes someone follows, ask to join or
    leave one, and review requests within one's role. */
+
 import { useEffect, useState } from 'react';
 import { api } from '../../model/api.js';
 import { t } from '../../../lib/i18n.js';

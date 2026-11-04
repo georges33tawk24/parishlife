@@ -1,5 +1,6 @@
 /* Requests that arrived online (from the public site or a member): the office's review drawer,
    notes shared with the applicant, and their place in the request queues. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { css, paint } from '../../ui/html.js';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
@@ -281,14 +282,16 @@ function matchBlock(r) {
             : L('Recommended when the child is not listed below', 'مستحسن إذا لم يكن الطفل مدرجاً أدناه'),
           { checked: !exact, disabled: !!exact }
         )}{' '}
-        {matches.map(({ p, exact: same }) =>
-          option(
-            p.id,
-            `${p.lat} · ${p.ar}`,
-            `${L('Born', 'مواليد')} ${p.born ? fmtDay(p.born) : '—'}${same ? ` · ${L('Same name and birth date', 'الاسم وتاريخ الولادة نفسيهما')}` : ` · ${L('Similar name', 'اسم مشابه')}`}`,
-            { checked: exact?.p.id === p.id }
-          )
-        )}
+        {matches.map(({ p, exact: same }, i) => (
+          <Fragment key={i}>
+            {option(
+              p.id,
+              `${p.lat} · ${p.ar}`,
+              `${L('Born', 'مواليد')} ${p.born ? fmtDay(p.born) : '—'}${same ? ` · ${L('Same name and birth date', 'الاسم وتاريخ الولادة نفسيهما')}` : ` · ${L('Similar name', 'اسم مشابه')}`}`,
+              { checked: exact?.p.id === p.id }
+            )}
+          </Fragment>
+        ))}
       </div>{' '}
       {home ? (
         <label className="check or-household">
@@ -319,13 +322,13 @@ function sourceBlock(r) {
           {L('Take the certificate from', 'تؤخذ الشهادة من')}
         </label>{' '}
         <Select id="or-source">
-          {sources.map(s => (
-            <option value={`official:${s.id}`}>
+          {sources.map((s, i) => (
+            <option key={i} value={`official:${s.id}`}>
               {s.reg} · {kindLabel(s.kind)} · {s.date ? fmtDate(s.date) : ''} ({L('official', 'رسمي')})
             </option>
           ))}
-          {planned.map(s => (
-            <option value={`pending:${s.id}`}>
+          {planned.map((s, i) => (
+            <option key={i} value={`pending:${s.id}`}>
               {s.reg} · {kindLabel(s.kind)} ({L('not approved yet', 'لم يُعتمد بعد')})
             </option>
           ))}

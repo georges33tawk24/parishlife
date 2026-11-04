@@ -1,5 +1,7 @@
 /* My requests: a member's sacrament, certificate and hall requests, and the card on their home
    page. */
+import { Fragment } from 'react';
+
 import { t, fmtDate } from '../../../lib/i18n.js';
 import { M, memberAction } from '../../model/member-data.js';
 import { session } from '../../model/api.js';
@@ -152,7 +154,11 @@ function listPage() {
         ? section(
             'active',
             L('Current requests', 'طلباتك الحالية'),
-            <Paged className="mr-cards">{active.map(requestCard)}</Paged>
+            <Paged className="mr-cards">
+              {active.map((item, i, all) => (
+                <Fragment key={i}>{requestCard(item, i, all)}</Fragment>
+              ))}
+            </Paged>
           )
         : ''}{' '}
       {section(
@@ -173,7 +179,11 @@ function listPage() {
         ? section(
             'earlier',
             L('Completed and closed', 'المنجزة والمغلقة'),
-            <Paged className="mr-cards">{earlier.map(requestCard)}</Paged>
+            <Paged className="mr-cards">
+              {earlier.map((item, i, all) => (
+                <Fragment key={i}>{requestCard(item, i, all)}</Fragment>
+              ))}
+            </Paged>
           )
         : ''}
     </div>
@@ -281,14 +291,18 @@ export function homeCard() {
             {L('View all', 'عرض الكل')}
           </a>
         </div>{' '}
-        <Paged className="mr-cards">{active.slice(0, 2).map(requestCard)}</Paged>
+        <Paged className="mr-cards">
+          {active.slice(0, 2).map((item, i, all) => (
+            <Fragment key={i}>{requestCard(item, i, all)}</Fragment>
+          ))}
+        </Paged>
       </section>
     );
   return (
     <section className="member-card mr-home mr-home-cta">
       <div className="mr-home-icons" aria-hidden="true">
-        {['water', 'rings', 'rooms'].map(i => (
-          <span>
+        {['water', 'rings', 'rooms'].map((i, k) => (
+          <span key={k}>
             <Icon name={i} size={20} />
           </span>
         ))}

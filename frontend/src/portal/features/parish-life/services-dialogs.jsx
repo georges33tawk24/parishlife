@@ -1,10 +1,11 @@
 /* Service-plan dialogs: adding and arranging items, plans and templates, service requests, and
    slides for the screen. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { markup } from '../../ui/html.js';
 import { t, fmtDate } from '../../../lib/i18n.js';
 import { go, me, is } from '../../model/store.js';
-import { Icon, toast, openDrawer, openModal, closeOverlays, Status, openMenu } from '../../ui/ui.jsx';
+import { Icon, toast, openDrawer, openModal, closeOverlays, Status } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
 import { currentPlan, copyOrder, allPlans, normalizePlanOrder } from '../../model/planning.js';
@@ -25,7 +26,7 @@ export function slides() {
       .replace(/^-|-$/g, '') || 'service'
   }-slides.html`;
   const deck = plan.order.map((o, i) => (
-    <section className="s">
+    <section key={i} className="s">
       <div className="k">
         {i + 1} / {plan.order.length}
       </div>{' '}
@@ -47,93 +48,6 @@ export function slides() {
   );
   closeOverlays();
   ok(L('Slides generated', 'تمّ توليد الشرائح'), `${plan.order.length + 1} ${L('slides', 'شريحة')}`);
-}
-
-export function svcItemAdd() {
-  openDrawer({
-    title: L('Add to the order of service', 'إضافة إلى ترتيب الخدمة'),
-    body: (
-      <>
-        <div className="formgrid">
-          <C.Field label={L('Item (English)', 'البند (إنكليزي)')} req={true} id="si_en" />{' '}
-          <C.Field label={L('Item (Arabic)', 'البند (عربي)')} dir="rtl" ar={true} id="si_ar" />
-        </div>{' '}
-        <div className="formgrid">
-          <C.Stepper label={L('Minutes', 'الدقائق')} value={3} id="si_min" />{' '}
-          <div className="formrow">
-            <label className="label">{L('Led by', 'يقوده')}</label>
-            <Select id="si_who">
-              <option value="p17">Fr. Antoine Khoury</option>
-              <option value="g1">{L('Saint Elias Choir', 'جوقة مار الياس')}</option>
-              <option value="p6">Carla Abou Jaoude</option>
-            </Select>
-          </div>
-        </div>{' '}
-        <C.Field label={L('Instructions', 'تعليمات')} id="si_note" />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="si_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Add item', 'إضافة البند')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#si_go').addEventListener('click', () => {
-        if (!need(el, '#si_en', L('Name the item', 'سمّ البند'))) return;
-        const en = val(el, '#si_en');
-        currentPlan().order.push({
-          dur: val(el, '#si_min') || '3',
-          t: en,
-          ar: val(el, '#si_ar') || en,
-          note: val(el, '#si_note'),
-          noteAr: val(el, '#si_note'),
-          who: el.querySelector('#si_who').value
-        });
-        closeOverlays();
-        refresh();
-        ok(L('Added to the order', 'أُضيف إلى الترتيب'), en);
-      });
-    }
-  });
-}
-
-export function svcItemMenu(btn, i) {
-  i = +i;
-  const o = currentPlan().order;
-  const move = d => {
-    const j = i + d;
-    if (j < 0 || j >= o.length) return;
-    [o[i], o[j]] = [o[j], o[i]];
-    refresh();
-  };
-  openMenu(btn, [
-    { label: L('Move up', 'نقل للأعلى'), icon: 'chevL', fn: () => move(-1) },
-    { label: L('Move down', 'نقل للأسفل'), icon: 'chevR', fn: () => move(1) },
-    { sep: true },
-    {
-      label: L('Remove', 'إزالة'),
-      icon: 'trash',
-      danger: true,
-      fn: () => {
-        const [it] = o.splice(i, 1);
-        refresh();
-        ok(L('Removed from the order', 'أُزيل من الترتيب'), it.t, {
-          action: {
-            label: L('Undo', 'تراجع'),
-            fn: () => {
-              o.splice(i, 0, it);
-              refresh();
-            }
-          }
-        });
-      }
-    }
-  ]);
 }
 
 export function svcTemplateUse(i) {
@@ -170,10 +84,10 @@ export function servicePlanNew(templateId = '') {
           <label className="label" htmlFor="sp_template">
             {L('Start from template', 'ابدأ من قالب')}
           </label>{' '}
-          <Select id="sp_template">
+          <Select defaultValue={templateId} id="sp_template">
             <option value="">{L('Blank plan', 'خطة فارغة')}</option>
-            {D.SERVICE_TEMPLATES.map(x => (
-              <option value={x.id} selected={!!(x.id === templateId)}>
+            {D.SERVICE_TEMPLATES.map((x, i) => (
+              <option key={i} value={x.id}>
                 {L(x.name, x.ar)} · {x.order.length} {L('items', 'بنود')}
               </option>
             ))}
@@ -231,117 +145,6 @@ export function servicePlanNew(templateId = '') {
   });
 }
 
-export function servicePlanEdit() {
-  const plan = currentPlan();
-  openDrawer({
-    title: L('Plan details', 'تفاصيل الخطة'),
-    body: (
-      <>
-        <div className="formgrid">
-          <C.Field label={L('Name', 'الاسم')} req={true} id="pe_name" value={plan.title} />{' '}
-          <C.Field label={L('Arabic name', 'الاسم العربي')} id="pe_ar" value={plan.titleAr} />
-        </div>{' '}
-        <div className="formgrid">
-          <C.Field label={L('Date', 'التاريخ')} type="date" id="pe_date" value={plan.date} />{' '}
-          <C.Field label={L('Time', 'الوقت')} type="time" id="pe_time" value={plan.time || '10:30'} />
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="pe_venue">
-            {L('Venue', 'المكان')}
-          </label>
-          <Select id="pe_venue">
-            {D.VENUES.map(v => (
-              <option value={v.id} selected={!!(v.id === plan.venue)}>
-                {L(v.name, v.ar)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="pe_status">
-            {L('Status', 'الحالة')}
-          </label>
-          <Select id="pe_status">
-            {[
-              ['draft', 'Draft', 'مسودة'],
-              ['scheduled', 'Scheduled', 'مجدول'],
-              ['ready', 'Ready', 'جاهز'],
-              ['completed', 'Completed', 'منجز']
-            ].map(([v, en, ar]) => (
-              <option value={v} selected={!!(v === plan.status)}>
-                {L(en, ar)}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </>
-    ),
-    foot: (
-      <>
-        {plan.id !== D.SERVICE.id ? (
-          <button className="btn btn-danger-quiet" id="pe_delete">
-            {L('Delete plan', 'حذف الخطة')}
-          </button>
-        ) : (
-          ''
-        )}{' '}
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>
-        <button className="btn btn-primary" id="pe_save">
-          {L('Save', 'حفظ')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#pe_save').addEventListener('click', () => {
-        if (
-          !need(el, '#pe_name', L('Name the service', 'سمّ الخدمة')) ||
-          !need(el, '#pe_date', L('Choose a date', 'اختر التاريخ'))
-        )
-          return;
-        Object.assign(plan, {
-          title: val(el, '#pe_name'),
-          titleAr: val(el, '#pe_ar') || val(el, '#pe_name'),
-          date: val(el, '#pe_date'),
-          time: val(el, '#pe_time') || '10:30',
-          venue: val(el, '#pe_venue'),
-          status: val(el, '#pe_status')
-        });
-        closeOverlays();
-        refresh();
-        ok(L('Plan updated', 'حُدّثت الخطة'));
-      });
-      el.querySelector('#pe_delete')?.addEventListener('click', () => {
-        closeOverlays();
-        openModal({
-          title: L('Delete this plan?', 'حذف هذه الخطة؟'),
-          body: <p>{L(plan.title, plan.titleAr)}</p>,
-          foot: (
-            <>
-              <button className="btn btn-secondary" data-close="">
-                {L('Keep plan', 'إبقاء الخطة')}
-              </button>
-              <button className="btn btn-danger" id="pd_confirm">
-                {L('Delete plan', 'حذف الخطة')}
-              </button>
-            </>
-          ),
-          onMount(mod) {
-            mod.querySelector('#pd_confirm').addEventListener('click', () => {
-              D.SERVICE_PLANS.splice(D.SERVICE_PLANS.indexOf(plan), 1);
-              closeOverlays();
-              refresh();
-              go('services');
-              ok(L('Plan deleted', 'حُذفت الخطة'));
-            });
-          }
-        });
-      });
-    }
-  });
-}
-
 function serviceTemplateRow(item = {}) {
   const leaders = [...D.PEOPLE.map(p => [p.id, L(p.lat, p.ar)]), ...D.GROUPS.map(g => [g.id, L(g.name, g.ar)])];
   return (
@@ -382,10 +185,15 @@ function serviceTemplateRow(item = {}) {
         />
       </div>{' '}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '7px', alignItems: 'center' }}>
-        <Select data-st-who="" aria-label={L('Led by', 'يقوده')} style={{ minWidth: '140px', flex: '1 1 140px' }}>
+        <Select
+          defaultValue={item.who}
+          data-st-who=""
+          aria-label={L('Led by', 'يقوده')}
+          style={{ minWidth: '140px', flex: '1 1 140px' }}
+        >
           <option value="">{L('Unassigned', 'غير محدّد')}</option>
-          {leaders.map(([v, label]) => (
-            <option value={v} selected={!!(item.who === v)}>
+          {leaders.map(([v, label], i) => (
+            <option key={i} value={v}>
               {label}
             </option>
           ))}
@@ -403,7 +211,7 @@ function serviceTemplateRow(item = {}) {
             ico="chevD"
             label={L('Move up', 'نقل للأعلى')}
             data-st-move="-1"
-            style="transform:rotate(180deg)"
+            style={{ transform: 'rotate(180deg)' }}
           />{' '}
           <C.IconBtn ico="chevD" label={L('Move down', 'نقل للأسفل')} data-st-move="1" />{' '}
           <C.IconBtn ico="trash" label={L('Remove item', 'إزالة البند')} data-st-remove="" />
@@ -441,9 +249,9 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
             <label className="label" htmlFor="st_venue">
               {L('Default venue', 'المكان الافتراضي')}
             </label>
-            <Select id="st_venue">
-              {D.VENUES.map(v => (
-                <option value={v.id} selected={!!(v.id === (source?.venue || 'v1'))}>
+            <Select defaultValue={source?.venue || 'v1'} id="st_venue">
+              {D.VENUES.map((v, i) => (
+                <option key={i} value={v.id}>
                   {L(v.name, v.ar)}
                 </option>
               ))}
@@ -453,13 +261,13 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
             <label className="label" htmlFor="st_lang">
               {L('Language', 'اللغة')}
             </label>
-            <Select id="st_lang">
+            <Select defaultValue={source?.language} id="st_lang">
               {[
                 ['Arabic & Syriac', 'عربي وسرياني'],
                 ['Bilingual', 'ثنائي اللغة'],
                 ['English', 'إنكليزي']
-              ].map(([en, ar]) => (
-                <option value={en} selected={!!(en === source?.language)}>
+              ].map(([en, ar], i) => (
+                <option key={i} value={en}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -473,7 +281,11 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
             {L('Add item', 'إضافة بند')}
           </button>
         </div>{' '}
-        <div id="st_items">{(source?.order || []).map(serviceTemplateRow)}</div>
+        <div id="st_items">
+          {(source?.order || []).map((item, i, all) => (
+            <Fragment key={i}>{serviceTemplateRow(item, i, all)}</Fragment>
+          ))}
+        </div>
       </>
     ),
     foot: (
@@ -608,8 +420,10 @@ export function addToService(mid) {
         </label>{' '}
         <Select id="music_target">
           <option value="">{L('Choose one', 'اختر واحدة')}</option>
-          {targets.map(target => (
-            <option value={target.id}>{target.label}</option>
+          {targets.map((target, i) => (
+            <option key={i} value={target.id}>
+              {target.label}
+            </option>
           ))}
         </Select>
       </div>
@@ -832,8 +646,10 @@ export function svcRequestNew(kind = 'Mass|قدّاس') {
           </label>
           <Select id="sq_p">
             <option value="">{L('Choose a person', 'اختر شخصاً')}</option>
-            {D.PEOPLE.map(p => (
-              <option value={p.id}>{L(p.lat, p.ar)}</option>
+            {D.PEOPLE.map((p, i) => (
+              <option key={i} value={p.id}>
+                {L(p.lat, p.ar)}
+              </option>
             ))}
           </Select>
         </div>{' '}
@@ -847,8 +663,10 @@ export function svcRequestNew(kind = 'Mass|قدّاس') {
           </label>
           <Select id="sq_v">
             <option value="">{L('To be arranged', 'يُحدّد لاحقاً')}</option>
-            {D.VENUES.map(v => (
-              <option value={v.id}>{L(v.name, v.ar)}</option>
+            {D.VENUES.map((v, i) => (
+              <option key={i} value={v.id}>
+                {L(v.name, v.ar)}
+              </option>
             ))}
           </Select>
         </div>{' '}

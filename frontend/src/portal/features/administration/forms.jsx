@@ -165,8 +165,8 @@ export function forms(tab = '') {
           <div>
             <Panel title={L('Certificate request form', 'استمارة طلب شهادة')}>
               {nodesOr(
-                FORM_FIELDS.map(f => (
-                  <div className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
+                FORM_FIELDS.map((f, i) => (
+                  <div key={i} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
                     <span style={{ color: 'var(--text-3)', marginTop: '2px' }}>
                       <Icon
                         name={
@@ -209,11 +209,11 @@ export function forms(tab = '') {
           <div className="sidecol">
             <Panel title={L('Show a field only when…', 'أظهر الحقل فقط حين…')}>
               {nodesOr(
-                FORM_RULES.map(r => {
+                FORM_RULES.map((r, i) => {
                   const a = FORM_FIELDS.find(f => f.id === r.show),
                     b = FORM_FIELDS.find(f => f.id === r.when);
                   return (
-                    <div className="rulecard">
+                    <div key={i} className="rulecard">
                       <span className="grow">
                         {L('Show', 'أظهر')} <b>{a ? L(a.label, a.labelAr) : '—'}</b> {L('only when', 'فقط حين يكون')}{' '}
                         <b>{b ? L(b.label, b.labelAr) : '—'}</b> {L(...(RULE_OPS[r.op] || [r.op, r.op]))}{' '}
@@ -252,8 +252,8 @@ export function forms(tab = '') {
         {head}
         <Panel title={L('What happened, newest first', 'ما جرى، الأحدث أولاً')}>
           <div className="timeline">
-            {RUN_LOG.map(([when, en, ar, kind]) => (
-              <div className={`tl-item ${kind === 'err' ? 'accent' : ''}`}>
+            {RUN_LOG.map(([when, en, ar, kind], i) => (
+              <div key={i} className={`tl-item ${kind === 'err' ? 'accent' : ''}`}>
                 <div className="when">{stampText(when)}</div>{' '}
                 <div className="what">
                   {L(en, ar)}
@@ -269,8 +269,8 @@ export function forms(tab = '') {
         </Panel>{' '}
         <div className="grid g2">
           <Panel title={L('Pause or resume a workflow', 'إيقاف مسار أو استئنافه')}>
-            {WORKFLOWS.map(w => (
-              <div className="listrow" style={{ paddingInline: 0 }}>
+            {WORKFLOWS.map((w, i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                 <span className="grow">
                   <b>{L(w.name, w.ar)}</b>
                   <small>
@@ -311,11 +311,11 @@ export function forms(tab = '') {
         </div>
       </>
     );
-  const cards = WORKFLOWS.map(w => {
+  const cards = WORKFLOWS.map((w, k) => {
     const steps = wfSteps(w),
       open = RUNS.filter(r => r.wf === w.id).length;
     return (
-      <section className="panel">
+      <section key={k} className="panel">
         <div className="panel-b">
           <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
             <span className="avatar avatar-lg">
@@ -336,7 +336,7 @@ export function forms(tab = '') {
           <div className="divider" />{' '}
           <ol className="wfsteps">
             {steps.map((st, i) => (
-              <li>
+              <li key={i}>
                 <span className="n">{i + 1}</span>
                 {st}
               </li>
@@ -422,7 +422,7 @@ export function openRun(id) {
       <>
         <ol className="runsteps">
           {steps.map((st, i) => (
-            <li className={i < r.step ? 'done' : i === r.step ? 'now' : ''}>
+            <li key={i} className={i < r.step ? 'done' : i === r.step ? 'now' : ''}>
               <span className="dot" aria-hidden="true">
                 {i < r.step ? <Icon name="check" size={13} /> : i + 1}
               </span>{' '}

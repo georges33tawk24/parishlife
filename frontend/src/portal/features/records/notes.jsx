@@ -181,19 +181,19 @@ export function notes() {
             ['pending', 'Pending', 'معلّقة'],
             ['completed', 'Completed', 'مكتملة'],
             ['high', 'High priority', 'عالية الأولوية']
-          ].map(([key, en, ar]) => (
-            <button data-note-filter={key} aria-pressed={filter === key}>
+          ].map(([key, en, ar], i) => (
+            <button key={i} data-note-filter={key} aria-pressed={filter === key}>
               {L(en, ar)} <span className="tnum">{counts[key]}</span>
             </button>
           ))}
         </div>{' '}
-        <Select id="note-sort" aria-label={L('Sort notes and tasks', 'ترتيب الملاحظات والمهام')}>
+        <Select defaultValue={sort} id="note-sort" aria-label={L('Sort notes and tasks', 'ترتيب الملاحظات والمهام')}>
           {[
             ['recent', 'Newest', 'الأحدث'],
             ['priority', 'Priority', 'الأولوية'],
             ['due', 'Due date', 'تاريخ الاستحقاق']
-          ].map(([key, en, ar]) => (
-            <option value={key} selected={!!(sort === key)}>
+          ].map(([key, en, ar], i) => (
+            <option key={i} value={key}>
               {L(en, ar)}
             </option>
           ))}
@@ -263,15 +263,15 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
           <label className="label" htmlFor="pastoral-person">
             {L('Person', 'الشخص')} {itemKind === 'task' ? L('(optional)', '(اختياري)') : ''}
           </label>{' '}
-          <Select id="pastoral-person">
+          <Select defaultValue={item?.p || initialPerson} id="pastoral-person">
             <option value="">
               {L(
                 itemKind === 'task' ? 'General parish task' : 'Select a person',
                 itemKind === 'task' ? 'مهمة عامة للرعية' : 'اختر شخصاً'
               )}
             </option>
-            {PEOPLE.map(p => (
-              <option value={p.id} selected={!!((item?.p || initialPerson) === p.id)}>
+            {PEOPLE.map((p, i) => (
+              <option key={i} value={p.id}>
                 {p.lat} · {p.ar}
               </option>
             ))}
@@ -304,9 +304,9 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
             <label className="label" htmlFor="pastoral-priority">
               {L('Priority', 'الأولوية')}
             </label>{' '}
-            <Select id="pastoral-priority">
-              {priorities.map(([key, en, ar]) => (
-                <option value={key} selected={!!((item?.priority || 'ordinary') === key)}>
+            <Select defaultValue={item?.priority || 'ordinary'} id="pastoral-priority">
+              {priorities.map(([key, en, ar], i) => (
+                <option key={i} value={key}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -328,10 +328,10 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
             <label className="label" htmlFor="pastoral-assignee">
               {L('Assigned clergy (optional)', 'الكاهن المكلّف (اختياري)')}
             </label>
-            <Select id="pastoral-assignee">
+            <Select defaultValue={item?.assignee} id="pastoral-assignee">
               <option value="">{L('Unassigned', 'دون تكليف')}</option>
-              {PEOPLE.filter(p => p.status === 'clergy').map(p => (
-                <option value={p.id} selected={!!(item?.assignee === p.id)}>
+              {PEOPLE.filter(p => p.status === 'clergy').map((p, i) => (
+                <option key={i} value={p.id}>
                   {p.lat} · {p.ar}
                 </option>
               ))}
@@ -342,9 +342,9 @@ export function openPastoralForm(item = null, type = 'note', initialPerson = nul
         )}{' '}
         <label className="formrow">
           <span className="label">{L('Who can read this?', 'من يقرأ هذا؟')}</span>
-          <Select id="pastoral-visibility">
+          <Select defaultValue={item?.visibility} id="pastoral-visibility">
             <option value="personal">{L('Only me', 'أنا فقط')}</option>
-            <option value="parish-priests" selected={!!(item?.visibility === 'parish-priests')}>
+            <option value="parish-priests">
               {L('Priests assigned to this parish', 'الكهنة المعيّنون في هذه الرعية')}
             </option>
           </Select>

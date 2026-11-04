@@ -23,7 +23,7 @@ export const addMin = (hm, m) => {
 };
 
 export function groupCards(items, tab = '') {
-  return items.map(g => {
+  return items.map((g, i) => {
     const leader = person(g.leader);
     const visTone = g.vis === 'confidential' ? 'danger' : g.vis === 'private' ? 'warning' : '';
     const visLabel =
@@ -33,7 +33,7 @@ export function groupCards(items, tab = '') {
           ? L('Private', 'خاص')
           : L('Public', 'عام');
     return (
-      <section className="panel card-link" data-find-item="">
+      <section key={i} className="panel card-link" data-find-item="">
         <div className="panel-b">
           <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
             <span className="avatar avatar-lg">

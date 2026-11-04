@@ -278,7 +278,7 @@ export function Auth({ enter, error = '', onLanguage }) {
             <cite>{t('Matthew 5:16', 'متّى ٥: ١٦')}</cite>
           </blockquote>
         </aside>
-        <main className="auth-main">
+        <main className="auth-main" id="well" tabIndex="-1">
           <div className="auth-card">
             <div className="auth-top">
               <a className="auth-brand" href="public.html">

@@ -1,4 +1,5 @@
 /* What the member request pages share: titles, people, dates, times and the summary of a request. */
+import { Fragment } from 'react';
 import { paint } from '../../ui/html.js';
 import { t, isAr } from '../../../lib/i18n.js';
 import { M, loadMember } from '../../model/member-data.js';
@@ -83,8 +84,8 @@ const minutes = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 
 export function kindGrid(kinds, cls = '') {
   return (
     <div className={`mr-kinds${cls}`}>
-      {kinds.map(k => (
-        <a className="mr-kind" href={`#/myrequests/new/${k.id}`}>
+      {kinds.map((k, i) => (
+        <a key={i} className="mr-kind" href={`#/myrequests/new/${k.id}`}>
           <span className="mr-kind-icon" aria-hidden="true">
             <Icon name={k.icon} size={22} />
           </span>{' '}
@@ -138,8 +139,8 @@ export function availability(d) {
     chosen = d.from && d.to && d.from < d.to;
   const list = items => (
     <ul>
-      {items.map(b => (
-        <li>
+      {items.map((b, i) => (
+        <li key={i}>
           <bdi dir="ltr">
             {txt(b.from)}–{txt(b.to)}
           </bdi>{' '}
@@ -260,13 +261,13 @@ export function summaryRows(d) {
 /* Each value is isolated, so an English note or a phone number reads in its own direction inside Arabic. */
 export const summaryList = (rows, cls = '') => (
   <dl className={`mr-summary${cls}`}>
-    {rows.map(([k, v, dir]) => (
-      <>
+    {rows.map(([k, v, dir], i) => (
+      <Fragment key={i}>
         <dt>{txt(k)}</dt>
         <dd>
           <bdi dir={dir ? dir : undefined}>{txt(v)}</bdi>
         </dd>
-      </>
+      </Fragment>
     ))}
   </dl>
 );
@@ -341,8 +342,8 @@ export function showProblems(host, list) {
       <span>
         <b>{L('Please check the following:', 'يُرجى التحقّق مما يلي:')}</b>
         <ul>
-          {list.map(([id, message]) => (
-            <li>
+          {list.map(([id, message], i) => (
+            <li key={i}>
               <a href={`#${id}`} data-focus={id}>
                 {txt(message)}
               </a>

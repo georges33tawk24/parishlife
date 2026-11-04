@@ -106,8 +106,8 @@ export function settings(tab = '') {
         </div>{' '}
         <div className="sidecol">
           <Panel title={L('Clergy and staff', 'الإكليروس والموظّفون')} tight={true}>
-            {['p17', 'p18', 'p4', 'p15'].map(id => (
-              <div className="listrow" style={{ paddingInline: 0 }}>
+            {['p17', 'p18', 'p4', 'p15'].map((id, i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                 <Who p={person(id)} /> <span className="grow" />
                 <C.IconBtn ico="edit" label={L('Edit', 'تعديل')} data-act={`person-edit:${id}`} />
               </div>
@@ -186,7 +186,7 @@ export function settings(tab = '') {
                 ['89,200', '12 Sep 2026', 'p15'],
                 ['90,100', '3 Aug 2026', 'p15']
               ].map(([v, d, p], i) => (
-                <div className={`tl-item ${i === 0 ? 'accent' : ''}`}>
+                <div key={i} className={`tl-item ${i === 0 ? 'accent' : ''}`}>
                   <div className="when">
                     {d} · {isAr() ? person(p).ar : person(p).lat}
                   </div>{' '}
@@ -268,7 +268,7 @@ export function settings(tab = '') {
               [L('Online payments', 'الدفع الإلكتروني'), false],
               [L('AI assistance', 'مساعدة الذكاء الاصطناعي'), false]
             ].map(([l, on], i) => (
-              <C.SwitchRow label={l} checked={on} pref={`mod.${i}`} />
+              <C.SwitchRow key={i} label={l} checked={on} pref={`mod.${i}`} />
             ))}
           </div>{' '}
           <p className="help" style={{ marginTop: '14px' }}>
@@ -289,22 +289,24 @@ export function settings(tab = '') {
                 <thead>
                   <tr>
                     <th>{L('Action', 'الإجراء')}</th>
-                    {Object.values(ROLES).map(r => (
-                      <th style={{ textAlign: 'center' }}>{L(r.en, r.ar)}</th>
+                    {Object.values(ROLES).map((r, i) => (
+                      <th key={i} style={{ textAlign: 'center' }}>
+                        {L(r.en, r.ar)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {PERMISSIONS.map(([code, en, ar, roles]) => (
-                    <tr>
+                  {PERMISSIONS.map(([code, en, ar, roles], i) => (
+                    <tr key={i}>
                       <td>
                         <b style={{ font: '500 13px/18px var(--sans)' }}>{L(en, ar)}</b>{' '}
                         <small className="t-caption mono dimmer" style={{ display: 'block' }}>
                           {code}
                         </small>
                       </td>
-                      {Object.keys(ROLES).map(k => (
-                        <td style={{ textAlign: 'center' }}>
+                      {Object.keys(ROLES).map((k, i) => (
+                        <td key={i} style={{ textAlign: 'center' }}>
                           {roles.includes(k) ? (
                             <span style={{ color: 'var(--success)' }}>
                               <Icon name="check" size={17} />
@@ -323,8 +325,8 @@ export function settings(tab = '') {
         </div>{' '}
         <div className="sidecol">
           <Panel title={L('Roles', 'الأدوار')} tight={true}>
-            {Object.entries(ROLES).map(([k, r]) => (
-              <div className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
+            {Object.entries(ROLES).map(([k, r], i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
                 <span className="grow">
                   <b>{L(r.en, r.ar)}</b>
                   <small style={{ whiteSpace: 'normal' }}>{L(r.noteEn, r.noteAr)}</small>
@@ -340,21 +342,22 @@ export function settings(tab = '') {
                 'يمكن منح شخص مسمّى إجراءً واحداً أو حرمانه منه. والمنع الصريح يتقدّم دائماً على منح الدور، ولكل استثناء سبب وتاريخ مراجعة.'
               )}
             </p>{' '}
-            {EXCEPTIONS.map(x => (
-              <div className="listrow" style={{ paddingInline: 0, marginTop: '10px' }}>
-                <Who p={person(x.p)} /> <span className="grow" />
-                <Pill label={`${x.effect} ${x.action}`} tone={x.effect === '+' ? 'success' : 'danger'} />{' '}
-                <C.IconBtn
-                  ico="close"
-                  label={L('Remove exception', 'إزالة الاستثناء')}
-                  data-act={`exception-del:${x.id}`}
-                />
-              </div>
-            ))}{' '}
-            <button className="btn btn-secondary btn-dense" style={{ marginTop: '10px' }} data-act="perm-exception">
-              <Icon name="plus" size={15} />
-              {L('Add exception', 'إضافة استثناء')}
-            </button>
+            {EXCEPTIONS.length ? (
+              EXCEPTIONS.map((x, i) => (
+                <div key={i} className="listrow" style={{ paddingInline: 0, marginTop: '10px' }}>
+                  <Who p={person(x.p)} /> <span className="grow" />
+                  <Pill label={`${x.effect} ${x.action}`} tone={x.effect === '+' ? 'success' : 'danger'} />
+                </div>
+              ))
+            ) : (
+              <p className="t-caption dim">{L('No exceptions are recorded.', 'لا استثناءات مسجّلة.')}</p>
+            )}{' '}
+            <p className="help" style={{ marginTop: '10px' }}>
+              {L(
+                'Exceptions are kept by the platform administrators: the parish sees them here but does not change them.',
+                'يحفظ مسؤولو المنصّة الاستثناءات: تراها الرعية هنا ولا تغيّرها.'
+              )}
+            </p>
           </Panel>
         </div>
       </div>
@@ -383,7 +386,7 @@ export function settings(tab = '') {
           </Panel>{' '}
           <Panel title={L('Active sessions and devices', 'الجلسات والأجهزة النشطة')} tight={true}>
             {SESSIONS.map((s, si) => (
-              <div className="listrow" style={{ paddingInline: 0 }}>
+              <div key={si} className="listrow" style={{ paddingInline: 0 }}>
                 <Icon name="card" size={17} cls="dimmer" />
                 <span className="grow">
                   <b>{L(s.device, s.deviceAr)}</b>{' '}
@@ -402,8 +405,9 @@ export function settings(tab = '') {
             ))}
           </Panel>{' '}
           <Panel title={L('Security alerts', 'تنبيهات الأمان')}>
-            {SECURITY_ALERTS.map(a => (
+            {SECURITY_ALERTS.map((a, i) => (
               <C.InlineAlert
+                key={i}
                 tone={a.level === 'warning' ? 'warning' : 'info'}
                 title={L(a.what, a.whatAr)}
                 body={a.at}
@@ -450,8 +454,8 @@ export function settings(tab = '') {
                   ),
                   'check'
                 ]
-              ].map(([x, i]) => (
-                <li className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
+              ].map(([x, i], k) => (
+                <li key={k} className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
                   <Icon name={i} size={17} cls="dimmer" /> <span className="t-caption">{x}</span>
                 </li>
               ))}
@@ -475,8 +479,8 @@ export function settings(tab = '') {
                 [L('Safeguarding and incident reports', 'تقارير الحماية والحوادث'), 'shield'],
                 [L('Donor details and amounts', 'تفاصيل المتبرّعين والمبالغ'), 'give'],
                 [L('Notes & Tasks', 'الملاحظات والمهام'), 'notes']
-              ].map(([x, i]) => (
-                <li className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
+              ].map(([x, i], k) => (
+                <li key={k} className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
                   <Icon name={i} size={17} cls="dimmer" /> <span className="t-caption">{x}</span>
                 </li>
               ))}
@@ -571,8 +575,10 @@ export function settings(tab = '') {
                     {w.url}
                   </span>,
                   <span className="row" style={{ gap: '4px', flexWrap: 'wrap' }}>
-                    {w.events.map(e => (
-                      <span className="chip">{e}</span>
+                    {w.events.map((e, i) => (
+                      <span key={i} className="chip">
+                        {e}
+                      </span>
                     ))}
                   </span>,
                   <Pill label={w.scope} tone="info" />,
@@ -656,8 +662,8 @@ function reviewDeletions() {
         )
       : '',
     body: reqs.length ? (
-      reqs.map(p => (
-        <div className="listrow" style={{ paddingInline: 0 }}>
+      reqs.map((p, i) => (
+        <div key={i} className="listrow" style={{ paddingInline: 0 }}>
           <Who p={p} />
           <span className="grow" />{' '}
           <button className="btn btn-secondary btn-dense" data-del-no={p.id}>

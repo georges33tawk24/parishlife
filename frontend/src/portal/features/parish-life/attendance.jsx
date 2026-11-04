@@ -99,17 +99,17 @@ export function meetingReview(mid) {
           ''
         )}{' '}
         <div className="meeting-review-grid">
-          {categories.map(([value, label]) => {
+          {categories.map(([value, label], i) => {
             const ids = peopleIds.filter(pid => attendanceValue(meeting, pid) === value);
             return (
-              <section className={`meeting-review-column attendance-${value || 'unrecorded'}`}>
+              <section key={i} className={`meeting-review-column attendance-${value || 'unrecorded'}`}>
                 <h3>
                   {label} <span>{ids.length}</span>
                 </h3>{' '}
                 <div className="meeting-review-list">
                   {ids.length ? (
-                    ids.map(pid => (
-                      <button type="button" data-review-person={pid}>
+                    ids.map((pid, i) => (
+                      <button key={i} type="button" data-review-person={pid}>
                         {L(person(pid)?.lat || pid, person(pid)?.ar || pid)}
                         <Icon name="chevD" size={14} />
                       </button>
@@ -200,8 +200,8 @@ export function attendanceMatrix(g, d) {
               ['present', 'Present', 'حاضر'],
               ['excused', 'Excused', 'معذور'],
               ['absent', 'Absent', 'غائب']
-            ].map(([key, en, ar]) => (
-              <div>
+            ].map(([key, en, ar], i) => (
+              <div key={i}>
                 <span>{L(en, ar)}</span>
                 <b>{overall[key]}</b>
                 <small>{known ? Math.round((overall[key] / known) * 100) : 0}%</small>
@@ -315,8 +315,9 @@ export function attendanceMatrix(g, d) {
                 >
                   {L('Member', 'العضو')}
                 </th>
-                {meetings.map(m => (
+                {meetings.map((m, i) => (
                   <th
+                    key={i}
                     style={{
                       position: 'sticky',
                       top: 0,
@@ -340,10 +341,10 @@ export function attendanceMatrix(g, d) {
               </tr>
             </thead>
             <tbody>
-              {visibleRoster.map(r => {
+              {visibleRoster.map((r, i) => {
                 const p = person(r.p);
                 return (
-                  <tr data-attendance-member={`${p?.lat || ''} ${p?.ar || ''}`.toLowerCase()}>
+                  <tr key={i} data-attendance-member={`${p?.lat || ''} ${p?.ar || ''}`.toLowerCase()}>
                     <th
                       className="attendance-name"
                       scope="row"
@@ -372,11 +373,14 @@ export function attendanceMatrix(g, d) {
                         ''
                       )}
                     </th>
-                    {meetings.map(m => {
+                    {meetings.map((m, i) => {
                       const value = attendanceValue(m, r.p),
                         invited = !m.participants?.length || m.participants.includes(r.p);
                       return (
-                        <td style={{ padding: '6px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+                        <td
+                          key={i}
+                          style={{ padding: '6px', borderTop: '1px solid var(--border)', textAlign: 'center' }}
+                        >
                           {!invited && !value ? (
                             <span className="dim" title={L('Not invited', 'غير مدعو')}>
                               —
@@ -533,8 +537,8 @@ export function attendanceImport(gid) {
             {d.meetings
               .slice()
               .sort((a, b) => b.d.localeCompare(a.d))
-              .map(m => (
-                <option value={meetingId(m)}>
+              .map((m, i) => (
+                <option key={i} value={meetingId(m)}>
                   {m.title || L('Meeting', 'اجتماع')} · {fmtDate(m.d)}
                 </option>
               ))}
@@ -644,14 +648,14 @@ export function attendanceImport(gid) {
                       L('Status', 'الحالة'),
                       L('Current', 'الحالي'),
                       L('Review', 'المراجعة')
-                    ].map(label => (
-                      <th>{label}</th>
+                    ].map((label, i) => (
+                      <th key={i}>{label}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {results.slice(0, 100).map(row => (
-                    <tr>
+                  {results.slice(0, 100).map((row, i) => (
+                    <tr key={i}>
                       <td>{row.line}</td>
                       <td>{row.source || '—'}</td>
                       <td>{row.p ? L(row.p.lat, row.p.ar) : '—'}</td>
@@ -694,7 +698,11 @@ export function attendanceImport(gid) {
           return;
         }
         const headings = workbook[0] || [],
-          options = headings.map((heading, index) => <option value={index}>{heading || `Column ${index + 1}`}</option>);
+          options = headings.map((heading, index) => (
+            <option key={index} value={index}>
+              {heading || `Column ${index + 1}`}
+            </option>
+          ));
         paint(
           mapping,
           <>

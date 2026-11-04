@@ -197,7 +197,7 @@ export function detailPage(id) {
             <h2 id="mr-status-title">{L('Where your request stands', 'أين أصبح طلبك')}</h2>{' '}
             <ol className={`steps${closed ? ' closed' : ''}`}>
               {steps.map((s, i) => (
-                <li className={i < done ? 'done' : i === done && !closed ? 'now' : ''}>
+                <li key={i} className={i < done ? 'done' : i === done && !closed ? 'now' : ''}>
                   <span className="dot" aria-hidden="true">
                     {i < done ? <Icon name="check" size={13} /> : i + 1}
                   </span>
@@ -230,8 +230,8 @@ export function detailPage(id) {
               : quote(L('Message from the parish office', 'رسالة من مكتب الرعية'), r.response)}{' '}
             {dates.length ? (
               <dl className="mr-dates">
-                {dates.map(([k, v]) => (
-                  <div>
+                {dates.map(([k, v], i) => (
+                  <div key={i}>
                     <dt>{txt(k)}</dt>
                     <dd>{v.startsWith('<bdi') ? v : txt(v)}</dd>
                   </div>
@@ -261,8 +261,8 @@ export function detailPage(id) {
                 </span>
               </div>{' '}
               <ul className="mr-checklist">
-                {p.preparation.map(x => (
-                  <li className={x.done ? 'done' : ''}>
+                {p.preparation.map((x, i) => (
+                  <li key={i} className={x.done ? 'done' : ''}>
                     <Icon name={x.done ? 'check' : 'doc'} size={16} />
                     <span>{txt(t(x.en, x.ar))}</span>{' '}
                     <small>
@@ -287,8 +287,8 @@ export function detailPage(id) {
               {p.events
                 .slice()
                 .reverse()
-                .map(e => (
-                  <li>
+                .map((e, i) => (
+                  <li key={i}>
                     <span className="mr-timeline-dot" aria-hidden="true" />
                     <span className="mr-timeline-what">{txt(eventLabel(e.key))}</span>
                     <time dateTime={txt(e.at)}>{fmtStamp(e.at)}</time>

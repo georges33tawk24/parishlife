@@ -52,7 +52,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': server,
+      // keep the browser's Host: the API accepts a write only when its Origin matches the Host
+      '/api': { target: server, changeOrigin: false },
       '/assets/images': server,
       '/assets/fonts': server,
       '/sw.js': server,

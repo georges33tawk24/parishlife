@@ -359,8 +359,8 @@ export function sacraments(tab = '', below = null) {
                 ['waiting', 'Waiting', 'بانتظار'],
                 ['completed', 'Completed', 'مكتملة'],
                 ['all', 'All', 'الكل']
-              ].map(([v, en, ar]) => (
-                <button aria-pressed={f === v} data-act={`request-filter:${v}`}>
+              ].map(([v, en, ar], i) => (
+                <button key={i} aria-pressed={f === v} data-act={`request-filter:${v}`}>
                   {L(en, ar)}
                 </button>
               ))}
@@ -368,26 +368,41 @@ export function sacraments(tab = '', below = null) {
             <div className="grow" style={{ minWidth: '190px', maxWidth: '290px' }}>
               <C.SearchClear ph={L('Name or reference', 'الاسم أو المرجع')} id="requestsearch" data-find="" />
             </div>{' '}
-            <Select id="reqcategory" aria-label={L('Request category', 'فئة الطلب')} style={{ width: 'auto' }}>
+            <Select
+              defaultValue={cat}
+              id="reqcategory"
+              aria-label={L('Request category', 'فئة الطلب')}
+              style={{ width: 'auto' }}
+            >
               <option value="">{L('All categories', 'كل الفئات')}</option>
-              {categories.map(([v, en, ar]) => (
-                <option value={v} selected={!!(cat === v)}>
+              {categories.map(([v, en, ar], i) => (
+                <option key={i} value={v}>
                   {L(en, ar)}
                 </option>
               ))}
             </Select>{' '}
-            <Select id="reqstatus" aria-label={L('Request status', 'حالة الطلب')} style={{ width: 'auto' }}>
+            <Select
+              defaultValue={state}
+              id="reqstatus"
+              aria-label={L('Request status', 'حالة الطلب')}
+              style={{ width: 'auto' }}
+            >
               <option value="">{L('Any status', 'كل الحالات')}</option>
-              {[...new Set(items.map(x => x.state))].sort().map(v => (
-                <option value={v} selected={!!(state === v)}>
+              {[...new Set(items.map(x => x.state))].sort().map((v, i) => (
+                <option key={i} value={v}>
                   {statusLabel(v)}
                 </option>
               ))}
             </Select>{' '}
-            <Select id="reqowner" aria-label={L('Responsible role', 'الدور المسؤول')} style={{ width: 'auto' }}>
+            <Select
+              defaultValue={owner}
+              id="reqowner"
+              aria-label={L('Responsible role', 'الدور المسؤول')}
+              style={{ width: 'auto' }}
+            >
               <option value="">{L('All responsible roles', 'كل المسؤولين')}</option>
-              {[...new Set(items.map(x => x.owner).filter(Boolean))].map(v => (
-                <option value={v} selected={!!(owner === v)}>
+              {[...new Set(items.map(x => x.owner).filter(Boolean))].map((v, i) => (
+                <option key={i} value={v}>
                   {v}
                 </option>
               ))}
@@ -399,10 +414,15 @@ export function sacraments(tab = '', below = null) {
             </label>
             <input className="input" id="reqdate" type="date" defaultValue={date} style={{ width: 'auto' }} />
             {items.some(x => x.priority) ? (
-              <Select id="reqpriority" aria-label={L('Priority', 'الأولوية')} style={{ width: 'auto' }}>
+              <Select
+                defaultValue={priority}
+                id="reqpriority"
+                aria-label={L('Priority', 'الأولوية')}
+                style={{ width: 'auto' }}
+              >
                 <option value="">{L('Any priority', 'أي أولوية')}</option>
-                {[...new Set(items.map(x => x.priority).filter(Boolean))].map(v => (
-                  <option value={v} selected={!!(priority === v)}>
+                {[...new Set(items.map(x => x.priority).filter(Boolean))].map((v, i) => (
+                  <option key={i} value={v}>
                     {v}
                   </option>
                 ))}
@@ -563,8 +583,8 @@ export function sacraments(tab = '', below = null) {
           </div>{' '}
           {layout === 'combined' || !items.length
             ? renderTable(items)
-            : [...new Set(items.map(a => a.kind))].map(kind => (
-                <Panel title={kindLabel(kind)} tight={true}>
+            : [...new Set(items.map(a => a.kind))].map((kind, i) => (
+                <Panel key={i} title={kindLabel(kind)} tight={true}>
                   {renderTable(items.filter(a => a.kind === kind))}
                 </Panel>
               ))}{' '}
@@ -646,10 +666,10 @@ export function sacraments(tab = '', below = null) {
         <details style={{ marginTop: '20px' }}>
           <summary>{L('Preparation requirements by sacrament', 'متطلبات التحضير بحسب السرّ')}</summary>
           <div className="grid g2" style={{ marginTop: '16px' }}>
-            {Object.entries(PREP_REQUIREMENTS).map(([k, reqs]) => (
-              <Panel title={kindLabel(k)}>
-                {reqs.map(([en, ar]) => (
-                  <div className="listrow">
+            {Object.entries(PREP_REQUIREMENTS).map(([k, reqs], i) => (
+              <Panel key={i} title={kindLabel(k)}>
+                {reqs.map(([en, ar], i) => (
+                  <div key={i} className="listrow">
                     <Icon name="check" size={15} />
                     {L(en, ar)}
                   </div>
@@ -730,9 +750,9 @@ sacraments.mount = host => {
               {L('Parishioner', 'صاحب الطلب')}
               <span className="req">*</span>
             </label>
-            <Select id="req_person">
-              {PEOPLE.map(p => (
-                <option value={p.id} selected={!!(initial?.person === p.id)}>
+            <Select defaultValue={initial?.person} id="req_person">
+              {PEOPLE.map((p, i) => (
+                <option key={i} value={p.id}>
                   {isAr() ? p.ar : p.lat}
                 </option>
               ))}
@@ -742,15 +762,15 @@ sacraments.mount = host => {
             <label className="label" htmlFor="req_source">
               {L('Related sacrament', 'السرّ المرتبط')}
             </label>
-            <Select id="req_source">
+            <Select defaultValue={selected} id="req_source">
               <option value="">{L('No entry yet — request will wait', 'لا قيد بعد — الطلب سينتظر')}</option>
-              {sources.map(s => (
-                <option value={`official:${s.id}`} selected={!!(selected === s.id)}>
+              {sources.map((s, i) => (
+                <option key={i} value={`official:${s.id}`}>
                   {s.reg} · {nameIn(person(s.person))} · {kindLabel(s.kind)} ({L('official', 'رسمي')})
                 </option>
               ))}
-              {pending.map(s => (
-                <option value={`pending:${s.id}`}>
+              {pending.map((s, i) => (
+                <option key={i} value={`pending:${s.id}`}>
                   {s.reg} · {nameIn(person(s.person))} · {kindLabel(s.kind)} ({L('pending', 'قيد الانتظار')})
                 </option>
               ))}
@@ -845,8 +865,10 @@ sacraments.mount = host => {
             <Select id="srq_kind">
               {Object.entries(KIND)
                 .filter(([k]) => k !== 'certificate')
-                .map(([k, v]) => (
-                  <option value={k}>{L(v[0], v[1])}</option>
+                .map(([k, v], i) => (
+                  <option key={i} value={k}>
+                    {L(v[0], v[1])}
+                  </option>
                 ))}
             </Select>
           </div>{' '}
@@ -856,8 +878,10 @@ sacraments.mount = host => {
             </label>
             <Select id="srq_person">
               <option value="">{L('Choose a person', 'اختر شخصاً')}</option>
-              {PEOPLE.map(p => (
-                <option value={p.id}>{isAr() ? p.ar : p.lat}</option>
+              {PEOPLE.map((p, i) => (
+                <option key={i} value={p.id}>
+                  {isAr() ? p.ar : p.lat}
+                </option>
               ))}
             </Select>
           </div>{' '}
@@ -986,7 +1010,7 @@ sacraments.mount = host => {
             </div>
             <div className="stack" style={{ gap: '10px', marginTop: '16px' }}>
               {requirements.map(([en, ar, required], i) => (
-                <label className="check">
+                <label key={i} className="check">
                   <input
                     type="checkbox"
                     data-prep-item={i}

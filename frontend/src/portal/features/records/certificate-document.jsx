@@ -1,4 +1,5 @@
 /* The certificate itself: drawn as SVG in English or Arabic, previewed, printed and downloaded. */
+import { Fragment } from 'react';
 import { paint, markup } from '../../ui/html.js';
 import { t, fmtDateIn } from '../../../lib/i18n.js';
 import { Icon, openModal, openMenu, toast } from '../../ui/ui.jsx';
@@ -73,8 +74,9 @@ export function certificateSVG(s, lang = 'bilingual') {
         [199, 11],
         [11, 286],
         [199, 286]
-      ].map(([cx, cy]) => (
+      ].map(([cx, cy], i) => (
         <rect
+          key={i}
           x={cx - 1.4}
           y={cy - 1.4}
           width="2.8"
@@ -294,7 +296,9 @@ export function certificateSVG(s, lang = 'bilingual') {
       role="img"
       aria-label={label}
     >
-      {out}
+      {out.map((part, i) => (
+        <Fragment key={i}>{part}</Fragment>
+      ))}
     </svg>
   );
 }
@@ -308,8 +312,8 @@ export function docCard(s, lang) {
       <div className="panel-h">
         <h3>{docTitle(s)}</h3>{' '}
         <span className="seg doclang" role="group" aria-label={L('Document language', 'لغة الوثيقة')}>
-          {DOC_LANGS().map(([k, lab]) => (
-            <button type="button" aria-pressed={lang === k} data-go={`certificate/${s.id}/${k}`}>
+          {DOC_LANGS().map(([k, lab], i) => (
+            <button key={i} type="button" aria-pressed={lang === k} data-go={`certificate/${s.id}/${k}`}>
               {lab}
             </button>
           ))}
@@ -459,8 +463,8 @@ export function viewDoc(s, lang) {
       <>
         <div className="docview-bar">
           <span className="seg" role="group" aria-label={L('Document language', 'لغة الوثيقة')}>
-            {DOC_LANGS().map(([k, lab]) => (
-              <button type="button" aria-pressed={cur === k} data-vlang={k}>
+            {DOC_LANGS().map(([k, lab], i) => (
+              <button key={i} type="button" aria-pressed={cur === k} data-vlang={k}>
                 {lab}
               </button>
             ))}

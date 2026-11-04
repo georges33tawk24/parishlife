@@ -1,5 +1,6 @@
 /* Small bridges for markup that arrives as text: attributes written as a string, a style written as
    CSS, a list joined with a separator, and a node turned back into HTML for a print sheet or a file. */
+import { createElement, Fragment } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
@@ -72,7 +73,8 @@ export function htmlAttrs(text) {
 }
 
 /** A list of nodes with a separator between them. */
-export const joinNodes = (list, sep) => list.flatMap((node, i) => (i ? [sep, node] : [node]));
+export const joinNodes = (list, sep) =>
+  list.map((node, i) => createElement(Fragment, { key: i }, i ? sep : null, node));
 /** An empty list falls back, as an empty string of markup used to. */
 export const nodesOr = (list, fallback) => (list && list.length ? list : fallback);
 

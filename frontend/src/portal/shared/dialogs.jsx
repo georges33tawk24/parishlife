@@ -43,7 +43,9 @@ export function share({ title, url = location.href, text = '' }) {
     body: (
       <>
         <div className="formrow">
-          <label className="label">{L('Link', 'الرابط')}</label>{' '}
+          <label className="label" htmlFor="shurl">
+            {L('Link', 'الرابط')}
+          </label>{' '}
           <div className="field">
             <input
               className="value"
@@ -151,8 +153,9 @@ export function recordChooser() {
           ['events', L('Event', 'حدث'), 'calendar', 'evnew'],
           ['rooms', L('Room request', 'طلب قاعة'), 'reservations', 'newres'],
           ['give', L('Counting session', 'جلسة عدّ'), 'giving', 'addenv']
-        ].map(([ic, lab, route, trigger]) => (
+        ].map(([ic, lab, route, trigger], i) => (
           <button
+            key={i}
             className="card card-flat"
             data-choose={`${route}|${trigger}`}
             style={{

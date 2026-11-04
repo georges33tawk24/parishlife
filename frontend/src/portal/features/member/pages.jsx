@@ -1,5 +1,6 @@
 /* The member's own pages: home, ministries, meetings, attendance, calendar, announcements,
    resources, formation, commitments, notes, profile, concerns and notifications. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { nodesOr } from '../../ui/html.js';
 import { CalendarView } from '../../ui/collection.jsx';
@@ -145,8 +146,8 @@ export function home() {
           <>
             <h2>{L('My ministries', 'خدماتي')}</h2>
             {M.groups.length
-              ? M.groups.map(g => (
-                  <div className="member-simple-row">
+              ? M.groups.map((g, i) => (
+                  <div key={i} className="member-simple-row">
                     <b>{txt(g.name)}</b>
                     {status(g.position || L('Member', 'عضو'))}
                   </div>
@@ -169,8 +170,8 @@ export function home() {
             {nodesOr(
               sorted([...upcoming(), ...M.events.filter(e => e.d >= todayKey())])
                 .slice(0, 4)
-                .map(e => (
-                  <div className="member-simple-row">
+                .map((e, i) => (
+                  <div key={i} className="member-simple-row">
                     <span>{txt(e.title)}</span>
                     <small>{date(e.date || e.d)}</small>
                   </div>
@@ -187,8 +188,8 @@ export function home() {
               M.content
                 .filter(x => ['announcement', 'post'].includes(x.kind))
                 .slice(0, 2)
-                .map(x => (
-                  <p>
+                .map((x, i) => (
+                  <p key={i}>
                     <b>{txt(x.title)}</b>
                     <br />
                     <small>{txt(groupName(x.groupId))}</small>
@@ -221,19 +222,21 @@ export function ministries() {
       )}{' '}
       <Paged className="member-grid">
         {nodesOr(
-          M.groups.map(g =>
-            card(
-              <>
-                <h2>{txt(g.name)}</h2>
-                <p>{txt(g.category)}</p>
-                <p>{status(g.position || L('Member', 'عضو'))}</p>
-                <div className="member-actions">
-                  {link('mymeetings', L('Meetings', 'الاجتماعات'))}
-                  {link('myresources', L('Resources', 'الموارد'))}
-                </div>
-              </>
-            )
-          ),
+          M.groups.map((g, i) => (
+            <Fragment key={i}>
+              {card(
+                <>
+                  <h2>{txt(g.name)}</h2>
+                  <p>{txt(g.category)}</p>
+                  <p>{status(g.position || L('Member', 'عضو'))}</p>
+                  <div className="member-actions">
+                    {link('mymeetings', L('Meetings', 'الاجتماعات'))}
+                    {link('myresources', L('Resources', 'الموارد'))}
+                  </div>
+                </>
+              )}
+            </Fragment>
+          )),
           blank(L('No ministry membership is recorded for your account.', 'لا توجد عضوية خدمة مسجّلة لحسابك.'))
         )}
       </Paged>
@@ -257,8 +260,10 @@ export function meetings() {
       <div className="member-toolbar">
         <Select data-filter="group" aria-label={L('Ministry', 'الخدمة')}>
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
-          {M.groups.map(g => (
-            <option value={txt(g.id)}>{txt(g.name)}</option>
+          {M.groups.map((g, i) => (
+            <option key={i} value={txt(g.id)}>
+              {txt(g.name)}
+            </option>
           ))}
         </Select>
       </div>{' '}
@@ -299,14 +304,16 @@ export function attendancePage() {
       <div className="member-toolbar">
         <Select data-filter="group">
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
-          {M.groups.map(g => (
-            <option value={txt(g.id)}>{txt(g.name)}</option>
+          {M.groups.map((g, i) => (
+            <option key={i} value={txt(g.id)}>
+              {txt(g.name)}
+            </option>
           ))}
         </Select>
         <Select data-filter="source">
           <option value="">{L('All statuses', 'كل الحالات')}</option>
-          {['present', 'absent', 'excused', 'late', 'unrecorded', 'upcoming'].map(x => (
-            <option>{x}</option>
+          {['present', 'absent', 'excused', 'late', 'unrecorded', 'upcoming'].map((x, i) => (
+            <option key={i}>{x}</option>
           ))}
         </Select>
       </div>{' '}
@@ -373,8 +380,10 @@ export function calendar() {
             ['Reminder', 'Reminders', 'التذكيرات'],
             ['Tasks', 'Tasks', 'المهام'],
             ['Formation', 'Formation', 'التنشئة']
-          ].map(([value, en, ar]) => (
-            <option value={value}>{L(en, ar)}</option>
+          ].map(([value, en, ar], i) => (
+            <option key={i} value={value}>
+              {L(en, ar)}
+            </option>
           ))}
         </Select>
       </div>{' '}
@@ -421,8 +430,8 @@ export function messages() {
             ['announcements', 'Announcements', 'الإعلانات'],
             ['archived', 'Archived', 'الأرشيف'],
             ['all', 'All', 'الكل']
-          ].map(([id, en, ar]) => (
-            <button data-message-filter={id} aria-pressed={filter === id}>
+          ].map(([id, en, ar], i) => (
+            <button key={i} data-message-filter={id} aria-pressed={filter === id}>
               {L(en, ar)}
             </button>
           ))}
@@ -436,8 +445,8 @@ export function messages() {
       </div>{' '}
       <Paged className="member-list">
         {nodesOr(
-          selected.map(x => (
-            <div className="member-card member-search-row" data-search={txt(x.title + ' ' + x.body)}>
+          selected.map((x, i) => (
+            <div key={i} className="member-card member-search-row" data-search={txt(x.title + ' ' + x.body)}>
               <div className="member-row">
                 <div>
                   <h2>
@@ -519,32 +528,34 @@ export function feed() {
       </div>
       <Paged className="member-list">
         {nodesOr(
-          rows.map(x =>
-            card(
-              <>
-                <h2>
-                  {txt(x.title)} {x.pinned ? status(L('Pinned', 'مثبّت')) : ''}
-                </h2>
-                <p className="dim">
-                  {txt(groupName(x.groupId))} · {date(x.at)} · {txt(x.category)}
-                </p>
-                <div>{x.html ? safeRichText(x.html) : txt(x.body)}</div>
-                {x.attachment ? (
-                  <a
-                    className="btn btn-secondary btn-dense"
-                    download={txt(x.attachment.name)}
-                    href={txt(x.attachment.data)}
-                  >
-                    {L('Download attachment', 'تنزيل المرفق')}
-                  </a>
-                ) : (
-                  ''
-                )}
-              </>,
-              'member-search-row',
-              { 'data-search': txt(x.title + ' ' + x.body) }
-            )
-          ),
+          rows.map((x, i) => (
+            <Fragment key={i}>
+              {card(
+                <>
+                  <h2>
+                    {txt(x.title)} {x.pinned ? status(L('Pinned', 'مثبّت')) : ''}
+                  </h2>
+                  <p className="dim">
+                    {txt(groupName(x.groupId))} · {date(x.at)} · {txt(x.category)}
+                  </p>
+                  <div>{x.html ? safeRichText(x.html) : txt(x.body)}</div>
+                  {x.attachment ? (
+                    <a
+                      className="btn btn-secondary btn-dense"
+                      download={txt(x.attachment.name)}
+                      href={txt(x.attachment.data)}
+                    >
+                      {L('Download attachment', 'تنزيل المرفق')}
+                    </a>
+                  ) : (
+                    ''
+                  )}
+                </>,
+                'member-search-row',
+                { 'data-search': txt(x.title + ' ' + x.body) }
+              )}
+            </Fragment>
+          )),
           blank(L('No updates have been published yet.', 'لم تُنشر مستجدات بعد.'))
         )}
       </Paged>
@@ -563,8 +574,10 @@ export function resources() {
       <div className="member-toolbar">
         <Select data-filter="group">
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
-          {M.groups.map(g => (
-            <option value={txt(g.id)}>{txt(g.name)}</option>
+          {M.groups.map((g, i) => (
+            <option key={i} value={txt(g.id)}>
+              {txt(g.name)}
+            </option>
           ))}
         </Select>
         <input
@@ -576,8 +589,9 @@ export function resources() {
       </div>
       <Paged className="member-list">
         {nodesOr(
-          rows.map(x => (
+          rows.map((x, i) => (
             <div
+              key={i}
               className="member-card member-filter-row member-search-row"
               data-group={txt(x.groupId)}
               data-search={txt(x.title + ' ' + x.body + ' ' + x.category)}
@@ -616,23 +630,25 @@ export function formation() {
       )}{' '}
       <Paged className="member-list">
         {nodesOr(
-          M.formation.map(x =>
-            card(
-              <>
-                <div>
-                  <h2>{txt(x.name)}</h2>
-                  <p>{txt(groupName(x.groupId))}</p>
-                  {x.description ? <p>{txt(x.description)}</p> : ''}
-                </div>
-                {status(
-                  x.completion?.date
-                    ? L('Completed', 'مكتمل') + ' · ' + date(x.completion.date)
-                    : L('Available', 'متاح')
-                )}
-              </>,
-              'member-formation-card'
-            )
-          ),
+          M.formation.map((x, i) => (
+            <Fragment key={i}>
+              {card(
+                <>
+                  <div>
+                    <h2>{txt(x.name)}</h2>
+                    <p>{txt(groupName(x.groupId))}</p>
+                    {x.description ? <p>{txt(x.description)}</p> : ''}
+                  </div>
+                  {status(
+                    x.completion?.date
+                      ? L('Completed', 'مكتمل') + ' · ' + date(x.completion.date)
+                      : L('Available', 'متاح')
+                  )}
+                </>,
+                'member-formation-card'
+              )}
+            </Fragment>
+          )),
           blank(L('No formation material is assigned to your ministries.', 'لا مواد تنشئة مخصصة لخدماتك حالياً.'))
         )}
       </Paged>
@@ -650,8 +666,8 @@ export function commitments() {
       )}
       <Paged className="member-list">
         {nodesOr(
-          rows.map(x => (
-            <div className="member-card">
+          rows.map((x, i) => (
+            <div key={i} className="member-card">
               <h2>{txt(x.title)}</h2>
               <p>
                 {txt(groupName(x.groupId))} · {txt(x.category)}
@@ -749,8 +765,8 @@ export function notes() {
           </div>{' '}
           <div className="member-todos">
             {nodesOr(
-              todos.map(x => (
-                <div className={`member-todo ${x.done ? 'done' : ''}`}>
+              todos.map((x, i) => (
+                <div key={i} className={`member-todo ${x.done ? 'done' : ''}`}>
                   <label>
                     <input type="checkbox" data-todo-toggle={txt(x.id)} defaultChecked={!!x.done} />
                     <span>{txt(x.title)}</span>
@@ -783,15 +799,16 @@ export function notes() {
             />
             <Select data-filter="category">
               <option value="">{L('All categories', 'كل الفئات')}</option>
-              {[...new Set(rows.map(n => n.category).filter(Boolean))].map(x => (
-                <option>{txt(x)}</option>
+              {[...new Set(rows.map(n => n.category).filter(Boolean))].map((x, i) => (
+                <option key={i}>{txt(x)}</option>
               ))}
             </Select>
           </div>{' '}
           <Paged className="member-list">
             {nodesOr(
-              rows.map(n => (
+              rows.map((n, i) => (
                 <div
+                  key={i}
                   className="member-card member-filter-row member-search-row"
                   data-category={txt(n.category)}
                   data-search={txt(n.title + ' ' + n.body + ' ' + n.tags.join(' '))}
@@ -893,8 +910,8 @@ export function profile() {
             ['meetings', 'Meeting updates and reminders', 'تحديثات وتذكيرات الاجتماعات'],
             ['announcements', 'Announcements', 'الإعلانات'],
             ['messages', 'Ministry messages', 'رسائل الخدمة']
-          ].map(([key, en, ar]) => (
-            <label className="member-toggle">
+          ].map(([key, en, ar], i) => (
+            <label key={i} className="member-toggle">
               <span>{L(en, ar)}</span>
               <input type="checkbox" data-preference={key} defaultChecked={!!M.preferences[key]} />
             </label>
@@ -911,8 +928,8 @@ export function profile() {
         ? card(
             <>
               <h2>{L('Update requests', 'طلبات التحديث')}</h2>
-              {M.profileRequests.map(x => (
-                <div className="member-simple-row">
+              {M.profileRequests.map((x, i) => (
+                <div key={i} className="member-simple-row">
                   <span>
                     {txt(x.field)} · {txt(x.requested_value)}
                   </span>
@@ -943,34 +960,36 @@ export function concerns() {
       </div>
       <Paged className="member-list">
         {nodesOr(
-          M.concerns.map(x =>
-            card(
-              <>
-                <div className="member-row">
-                  <h2>{txt(x.subject)}</h2>
-                  {status(x.status)}
-                </div>
-                <p>
-                  {date(x.created_at)} ·{' '}
-                  {x.anonymous ? L('Anonymous to reviewers', 'مجهول الهوية للمراجعين') : L('Identified', 'معرّف')}
-                </p>
-                <div className="member-updates">
-                  {x.updates.map(y => (
-                    <p>
-                      <b>
-                        {date(y.at)} · {txt(y.status)}
-                      </b>
-                      <br />
-                      {txt(y.text)}
-                    </p>
-                  ))}
-                </div>
-                <button className="btn btn-secondary btn-dense" data-concern-follow={txt(x.id)}>
-                  {L('Add information', 'إضافة معلومات')}
-                </button>
-              </>
-            )
-          ),
+          M.concerns.map((x, k) => (
+            <Fragment key={k}>
+              {card(
+                <>
+                  <div className="member-row">
+                    <h2>{txt(x.subject)}</h2>
+                    {status(x.status)}
+                  </div>
+                  <p>
+                    {date(x.created_at)} ·{' '}
+                    {x.anonymous ? L('Anonymous to reviewers', 'مجهول الهوية للمراجعين') : L('Identified', 'معرّف')}
+                  </p>
+                  <div className="member-updates">
+                    {x.updates.map((y, i) => (
+                      <p key={i}>
+                        <b>
+                          {date(y.at)} · {txt(y.status)}
+                        </b>
+                        <br />
+                        {txt(y.text)}
+                      </p>
+                    ))}
+                  </div>
+                  <button className="btn btn-secondary btn-dense" data-concern-follow={txt(x.id)}>
+                    {L('Add information', 'إضافة معلومات')}
+                  </button>
+                </>
+              )}
+            </Fragment>
+          )),
           blank(L('You have no submissions yet.', 'ليس لديك طلبات بعد.'))
         )}
       </Paged>
@@ -1005,29 +1024,31 @@ export function notificationsPage() {
                   )
                 : {})
             }))
-            .map(x =>
-              card(
-                <>
-                  <div className="member-row">
-                    <h2>
-                      {txt(x.title)} {!x.read ? status(L('New', 'جديد')) : ''}
-                    </h2>
-                    <small>{date(x.at)}</small>
-                  </div>
-                  {x.body ? <p>{txt(x.body)}</p> : ''}
-                  <div className="member-actions">
-                    {x.read ? (
-                      ''
-                    ) : (
-                      <button className="btn btn-secondary btn-dense" data-notification-read={txt(x.id)}>
-                        {L('Mark read', 'تعليم كمقروء')}
-                      </button>
-                    )}
-                    {link(x.route, L('Open', 'فتح'))}
-                  </div>
-                </>
-              )
-            ),
+            .map((x, i) => (
+              <Fragment key={i}>
+                {card(
+                  <>
+                    <div className="member-row">
+                      <h2>
+                        {txt(x.title)} {!x.read ? status(L('New', 'جديد')) : ''}
+                      </h2>
+                      <small>{date(x.at)}</small>
+                    </div>
+                    {x.body ? <p>{txt(x.body)}</p> : ''}
+                    <div className="member-actions">
+                      {x.read ? (
+                        ''
+                      ) : (
+                        <button className="btn btn-secondary btn-dense" data-notification-read={txt(x.id)}>
+                          {L('Mark read', 'تعليم كمقروء')}
+                        </button>
+                      )}
+                      {link(x.route, L('Open', 'فتح'))}
+                    </div>
+                  </>
+                )}
+              </Fragment>
+            )),
           blank(L('You are all caught up.', 'لا إشعارات جديدة.'))
         )}
       </Paged>
@@ -1065,8 +1086,8 @@ export function hub() {
                 )}
               </p>
               {nodesOr(
-                M.leaderConcerns.map(x => (
-                  <div className="member-simple-row">
+                M.leaderConcerns.map((x, i) => (
+                  <div key={i} className="member-simple-row">
                     <span>
                       <b>{txt(x.subject)}</b>
                       <small style={{ display: 'block' }}>
@@ -1087,8 +1108,8 @@ export function hub() {
           {nodesOr(
             M.content
               .filter(x => x.kind === 'message' && x.recipientId === session.user?.id)
-              .map(x => (
-                <div className="member-simple-row">
+              .map((x, i) => (
+                <div key={i} className="member-simple-row">
                   <span>
                     {txt(groupName(x.groupId))} · {txt(x.body)}
                   </span>
@@ -1105,8 +1126,8 @@ export function hub() {
         <>
           <h2>{L('Volunteer responses', 'ردود المتطوعين')}</h2>
           {nodesOr(
-            M.volunteerReview.map(x => (
-              <div className="member-simple-row">
+            M.volunteerReview.map((x, i) => (
+              <div key={i} className="member-simple-row">
                 <span>
                   {txt(x.name)} · {txt(x.title)} · {txt(x.status)}
                 </span>
@@ -1127,8 +1148,8 @@ export function hub() {
         ? card(
             <>
               <h2>{L('Profile update requests', 'طلبات تحديث الملفات')}</h2>
-              {M.profileReview.map(x => (
-                <div className="member-simple-row">
+              {M.profileReview.map((x, i) => (
+                <div key={i} className="member-simple-row">
                   <span>
                     {txt(x.name)} · {txt(x.field)}: {txt(x.requested_value)} · {txt(x.status)}
                   </span>
@@ -1151,8 +1172,8 @@ export function hub() {
                 )}
               </p>
               {nodesOr(
-                M.review.map(x => (
-                  <div className="member-simple-row">
+                M.review.map((x, i) => (
+                  <div key={i} className="member-simple-row">
                     <span>
                       {txt(x.reference)} · {txt(x.subject)} · {txt(x.status)}{' '}
                       {x.anonymous ? L('(anonymous)', '(مجهول)') : ''}
@@ -1174,8 +1195,8 @@ export function hub() {
               <button className="btn btn-secondary btn-dense" data-category-add="">
                 {L('Add category', 'إضافة فئة')}
               </button>
-              {M.categories.map(x => (
-                <div className="member-simple-row">
+              {M.categories.map((x, i) => (
+                <div key={i} className="member-simple-row">
                   <span>
                     {txt(x.name)} {status(x.active ? L('Active', 'نشطة') : L('Hidden', 'مخفية'))}
                   </span>

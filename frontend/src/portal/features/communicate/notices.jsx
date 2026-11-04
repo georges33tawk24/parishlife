@@ -13,8 +13,8 @@ const L = (en, ar) => t(en, ar);
 
 export function notices() {
   const rows = nodesOr(
-    NOTICES.map(n => (
-      <div className="listrow" style={{ alignItems: 'flex-start' }}>
+    NOTICES.map((n, i) => (
+      <div key={i} className="listrow" style={{ alignItems: 'flex-start' }}>
         <span className="grow">
           <b>{L(n.title, n.ar)}</b>{' '}
           <small>
@@ -70,8 +70,8 @@ export function notices() {
             {nodesOr(
               EVENTS.filter(m => m.kind === 'mass' && m.d >= new Date().toISOString().slice(0, 10))
                 .slice(0, 8)
-                .map(m => (
-                  <div className="listrow" style={{ paddingInline: 0 }}>
+                .map((m, i) => (
+                  <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                     <span className="mono dim" style={{ width: '94px', flex: 'none' }}>
                       {m.d} · {m.t}
                     </span>{' '}
@@ -221,8 +221,8 @@ notices.mount = host => {
               {intro ? <p style={{ marginTop: '18px', whiteSpace: 'pre-wrap' }}>{intro}</p> : ''}{' '}
               <h4>{L('Masses', 'القداديس')}</h4>
               {nodesOr(
-                masses.map(m => (
-                  <div className="listrow">
+                masses.map((m, i) => (
+                  <div key={i} className="listrow">
                     <span className="mono">
                       {m.d} · {m.t}
                     </span>
@@ -234,8 +234,10 @@ notices.mount = host => {
               {intentions.length ? (
                 <>
                   <h4>{L('Mass intentions', 'نوايا القداديس')}</h4>
-                  {intentions.map(text => (
-                    <div className="listrow">{text}</div>
+                  {intentions.map((text, i) => (
+                    <div key={i} className="listrow">
+                      {text}
+                    </div>
                   ))}
                 </>
               ) : (
@@ -243,7 +245,11 @@ notices.mount = host => {
               )}{' '}
               <h4>{L('Parish notices', 'إعلانات الرعية')}</h4>
               {nodesOr(
-                notices.map(n => <div className="listrow">{L(n.title, n.ar)}</div>),
+                notices.map((n, i) => (
+                  <div key={i} className="listrow">
+                    {L(n.title, n.ar)}
+                  </div>
+                )),
                 <p>{L('No parish notices this week.', 'لا إعلانات للرعية هذا الأسبوع.')}</p>
               )}
             </>

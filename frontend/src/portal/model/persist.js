@@ -7,8 +7,7 @@ const snapshot = () => JSON.parse(JSON.stringify(Object.fromEntries(KEYS.map(k =
 let baseline = {},
   running = null,
   again = false,
-  lastSaved = null,
-  recovery = null;
+  lastSaved = null;
 export let saveFailed = false;
 function applyKey(k, value) {
   if (Array.isArray(D[k])) {
@@ -92,7 +91,6 @@ export function persist() {
     } catch (error) {
       saveFailed = true;
       again = false;
-      recovery = snapshot();
       try {
         await hydrate();
       } catch {
@@ -107,19 +105,10 @@ export function persist() {
   });
   return running;
 }
-export const recoveryJSON = () => JSON.stringify({ v: 2, parish: session.parishId, d: recovery }, null, 2);
 export const savedAt = () => lastSaved;
 export const savedSize = () => JSON.stringify(baseline).length;
 export const backupJSON = () =>
   JSON.stringify({ v: 2, parish: session.parishId, at: new Date().toISOString(), d: snapshot() }, null, 2);
-export function restoreBackup() {
-  throw new Error(
-    'Restore requires an administrator-reviewed database migration. Browser backups cannot replace approved records.'
-  );
-}
-export function resetData() {
-  throw new Error('Server records cannot be reset from the browser.');
-}
 export async function workflow(action, id, extra = {}) {
   if (!(await persist())) throw new Error('Resolve the pending save before continuing.');
   await parishAPI('workflow', 'POST', { action, id, revision: session.revision, ...extra });

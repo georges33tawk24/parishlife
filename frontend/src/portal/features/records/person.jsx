@@ -64,8 +64,8 @@ function skillPicker(selected = []) {
         placeholder={t('Search existing skills', 'ابحث عن مهارة موجودة')}
       />{' '}
       <div className="choice-grid skill-choices" style={{ maxHeight: '180px', overflow: 'auto', marginTop: '8px' }}>
-        {options.map(s => (
-          <label className="check" data-skill-choice="">
+        {options.map((s, i) => (
+          <label key={i} className="check" data-skill-choice="">
             <input type="checkbox" defaultValue={s} defaultChecked={!!selected.includes(s)} />
             <span>{s}</span>
           </label>
@@ -276,15 +276,19 @@ export function personView(id, tab = '') {
             <h4 className="t-ui">{t('Skills', 'المهارات')}</h4>{' '}
             <div className="row" style={{ gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
               {(x.skills || []).length ? (
-                x.skills.map(s => <span className="chip">{s}</span>)
+                x.skills.map((s, i) => (
+                  <span key={i} className="chip">
+                    {s}
+                  </span>
+                ))
               ) : (
                 <span className="dim">{t('No skills recorded.', 'لا مهارات مسجّلة.')}</span>
               )}
             </div>{' '}
             <div className="divider" /> <h4 className="t-ui">{t('Important dates', 'التواريخ المهمّة')}</h4>{' '}
             {nodesOr(
-              (x.dates || []).map(([en, ar, d]) => (
-                <div className="listrow" style={{ paddingInline: 0 }}>
+              (x.dates || []).map(([en, ar, d], i) => (
+                <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                   <span className="grow">
                     <b>{t(en, ar)}</b>
                   </span>
@@ -299,8 +303,8 @@ export function personView(id, tab = '') {
                 <div className="ac-group" style={{ paddingInline: 0 }}>
                   {t('Parish fields', 'حقول الرعية')}
                 </div>{' '}
-                {x.fields.map(([en, ar, v]) => (
-                  <div className="listrow" style={{ paddingInline: 0 }}>
+                {x.fields.map(([en, ar, v], i) => (
+                  <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                     <span className="grow">{t(en, ar)}</span>
                     <b>{v}</b>
                   </div>
@@ -318,8 +322,8 @@ export function personView(id, tab = '') {
               house.members
                 .map(person)
                 .filter(Boolean)
-                .map(m => (
-                  <a className="listrow" href={`#/person/${m.id}`}>
+                .map((m, i) => (
+                  <a key={i} className="listrow" href={`#/person/${m.id}`}>
                     <Who p={m} />
                     <span className="grow" />{' '}
                     {m.id === house.head ? <Pill label={t('Head', 'ربّ العائلة')} tone="info" /> : ''}
@@ -361,8 +365,8 @@ export function personView(id, tab = '') {
               {house.members
                 .map(person)
                 .filter(Boolean)
-                .map(m => (
-                  <div className="listrow">
+                .map((m, i) => (
+                  <div key={i} className="listrow">
                     <Who p={m} />
                     <span className="grow" />{' '}
                     <span className="dim t-caption">
@@ -391,8 +395,8 @@ export function personView(id, tab = '') {
                 const marked = mates.filter(m => m.emergency),
                   list = marked.length ? marked : mates.filter(adult);
                 return list.length ? (
-                  list.map(m => (
-                    <div className="listrow">
+                  list.map((m, i) => (
+                    <div key={i} className="listrow">
                       <Who p={m} />
                       <span className="grow" /> <span className="t-caption dim">{relLabel(m, house)}</span>{' '}
                       <C.IconBtn
@@ -513,8 +517,8 @@ export function personView(id, tab = '') {
           }
         >
           {nodesOr(
-            GROUPS.filter(g => memberships.has(g.id)).map(g => (
-              <a className="listrow" href={`#/groups/${g.id}`}>
+            GROUPS.filter(g => memberships.has(g.id)).map((g, i) => (
+              <a key={i} className="listrow" href={`#/groups/${g.id}`}>
                 <b className="grow">{t(g.name, g.ar)}</b>
                 <span className="dim">{t(g.cat, g.catAr)}</span>
               </a>
@@ -697,8 +701,8 @@ export function personView(id, tab = '') {
       <div className="tabbody">
         <Panel title={t('Notes & Tasks', 'الملاحظات والمهام')} tight={true}>
           {nodesOr(
-            NOTES.filter(n => n.p === p.id).map(n => (
-              <div className="listrow" style={{ alignItems: 'flex-start' }}>
+            NOTES.filter(n => n.p === p.id).map((n, i) => (
+              <div key={i} className="listrow" style={{ alignItems: 'flex-start' }}>
                 <span className="grow">
                   <small className="mono dim">{n.at}</small>
                   <span style={{ display: 'block' }}>{t(n.body, n.bodyAr)}</span>
@@ -1011,8 +1015,8 @@ function editPersonGroups(id) {
     sub: t('Choose groups, then review the changes before saving.', 'اختر المجموعات ثم راجع التغييرات قبل الحفظ.'),
     body: (
       <div className="choice-grid">
-        {GROUPS.map(g => (
-          <label className="row">
+        {GROUPS.map((g, i) => (
+          <label key={i} className="row">
             <input type="checkbox" defaultValue={g.id} data-group-choice="" defaultChecked={!!before.has(g.id)} />
             <span>{t(g.name, g.ar)}</span>
           </label>
@@ -1119,7 +1123,7 @@ function editProfileExtra(id) {
         {occupationField('extra-occupation', x.occupation || '')}{' '}
         <div className="stack" id="extra-dates">
           {[...dates, ['', '', '']].map(([en, ar, d], i) => (
-            <div className="formgrid" data-date-row="">
+            <div key={i} className="formgrid" data-date-row="">
               <C.Field
                 label={t('Date label (English)', 'تسمية التاريخ (إنكليزي)')}
                 value={en || ''}

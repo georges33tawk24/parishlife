@@ -251,10 +251,10 @@ export function giving(tab = '') {
             />
           )}{' '}
           <div className="grid g2">
-            {CAMPAIGNS.map(c => {
+            {CAMPAIGNS.map((c, i) => {
               const pct = c.goal ? Math.min(100, Math.round((c.raised / c.goal) * 100)) : 0;
               return (
-                <section className="panel">
+                <section key={i} className="panel">
                   <div className="panel-b">
                     <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
                       <b style={{ font: '600 16px/22px var(--sans)', flex: 1, minWidth: 0 }}>{L(c.name, c.ar)}</b>
@@ -464,10 +464,12 @@ giving.mount = host => {
           <div className="formgrid">
             <C.Field label={L('Envelope no.', 'رقم المظروف')} ph="0142" dir="ltr" id="envno" />{' '}
             <div className="formrow">
-              <label className="label">{L('Fund', 'الصندوق')}</label>{' '}
-              <Select>
-                {FUNDS.map(f => (
-                  <option>{L(f.name, f.ar)}</option>
+              <label className="label" htmlFor="envfund">
+                {L('Fund', 'الصندوق')}
+              </label>{' '}
+              <Select id="envfund">
+                {FUNDS.map((f, i) => (
+                  <option key={i}>{L(f.name, f.ar)}</option>
                 ))}
               </Select>
             </div>

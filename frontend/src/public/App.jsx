@@ -67,6 +67,13 @@ export function PublicApp({ initialLang }) {
     sort: params.get('sort') === 'town' ? 'town' : 'name'
   }));
   const [online, setOnline] = useState(navigator.onLine !== false);
+  /* A private tracking link opened in a tab already on the site changes only the address's hash. */
+  const [hash, setHash] = useState(location.hash);
+  useEffect(() => {
+    const follow = () => setHash(location.hash);
+    addEventListener('hashchange', follow);
+    return () => removeEventListener('hashchange', follow);
+  }, []);
   const c = useMemo(
     () => makeSite({ lang, directory: data.directory, details: data.details, site: data.site, filters, setFilters }),
     [lang, data, filters]
@@ -140,7 +147,7 @@ export function PublicApp({ initialLang }) {
   /* Which page this address asks for. */
   const p = data.directory.find(x => x.id === selected),
     d = data.details.get(selected);
-  const token = location.hash.startsWith('#track=') ? location.hash.slice(7) : '';
+  const token = hash.startsWith('#track=') ? hash.slice(7) : '';
   const verify = params.get('verify') ?? (params.get('view') === 'verify' ? '' : null);
   const retry = (
     <button className="btn btn-gilt retry-load" type="button" onClick={load}>
@@ -154,7 +161,7 @@ export function PublicApp({ initialLang }) {
     page = <VerifyPage code={verify} />;
     view = 'verify';
   } else if (token) {
-    page = <TrackingPage token={token} />;
+    page = <TrackingPage key={token} token={token} />;
     view = 'track';
   } else if (data.loading && !data.directory.length) {
     page = (

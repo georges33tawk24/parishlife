@@ -183,6 +183,7 @@ export function messaging(tab = '') {
           <Paged className="gridcards">
             {TEMPLATES.map((tp, ti) => (
               <button
+                key={ti}
                 className="panel"
                 style={{ cursor: 'pointer', textAlign: 'start', border: '1px solid var(--border)' }}
                 data-act={`design:${ti}`}
@@ -386,9 +387,9 @@ function messageConfigForm(key, gid = '', index = -1) {
           <label className="label" htmlFor="mc_group">
             {L('Group', 'المجموعة')}
           </label>
-          <Select id="mc_group" disabled={!!item}>
-            {GROUPS.map(g => (
-              <option value={g.id} selected={!!(g.id === gid)}>
+          <Select defaultValue={gid} id="mc_group" disabled={!!item}>
+            {GROUPS.map((g, i) => (
+              <option key={i} value={g.id}>
                 {L(g.name, g.ar)}
               </option>
             ))}

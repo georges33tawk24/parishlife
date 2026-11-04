@@ -138,7 +138,9 @@ export function pickupAdd(pid) {
           <C.Field label={L('Name (Arabic)', 'الاسم (عربي)')} dir="rtl" ar={true} id="pk_ar" />
         </div>{' '}
         <div className="formrow">
-          <label className="label">{L('Relationship', 'الصلة')}</label>
+          <label htmlFor="pk_r" className="label">
+            {L('Relationship', 'الصلة')}
+          </label>
           <Select id="pk_r">
             <option>grandparent</option>
             <option>aunt</option>
@@ -199,10 +201,14 @@ export function incidentNew() {
       <>
         <C.PersonPicker label={L('Child involved', 'الطفل المعني')} id="in_p" />{' '}
         <div className="formrow">
-          <label className="label">{L('Where', 'أين')}</label>
+          <label htmlFor="in_room" className="label">
+            {L('Where', 'أين')}
+          </label>
           <Select id="in_room">
-            {D.VENUES.map(v => (
-              <option value={v.id}>{L(v.name, v.ar)}</option>
+            {D.VENUES.map((v, i) => (
+              <option key={i} value={v.id}>
+                {L(v.name, v.ar)}
+              </option>
             ))}
           </Select>
         </div>{' '}

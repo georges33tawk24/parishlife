@@ -51,8 +51,8 @@ export const occupationField = (id, value = '') => (
       placeholder={t('Start typing or enter your own', 'ابدأ بالكتابة أو أدخل مهنتك')}
     />{' '}
     <datalist id={`${id}-options`}>
-      {occupationOptions().map(x => (
-        <option value={x} />
+      {occupationOptions().map((x, i) => (
+        <option key={i} value={x} />
       ))}
     </datalist>
   </div>

@@ -1,6 +1,7 @@
 /* The record editor: one definition per kind of record (its fields, how they are checked and
    saved) and the drawers that create, edit and delete any of them, plus the actions button on each
    row. */
+import { Fragment } from 'react';
 import { Select } from '../ui/components.jsx';
 import { htmlAttrs, nodesOr, css, paint } from '../ui/html.js';
 import { t } from '../../lib/i18n.js';
@@ -276,8 +277,10 @@ export const ENT = {
           head,
           <>
             <option value="">{L('Not set', 'غير محدّد')}</option>
-            {chosen.map(i => (
-              <option value={i.value}>{D.person(i.value)?.lat || i.value}</option>
+            {chosen.map((i, k) => (
+              <option key={k} value={i.value}>
+                {D.person(i.value)?.lat || i.value}
+              </option>
             ))}
           </>
         );
@@ -1151,9 +1154,9 @@ function fieldHTML(f, x) {
     return (
       <div className="formrow" {...htmlAttrs(span)}>
         {label}{' '}
-        <Select id={id} disabled={!!f.disabled}>
-          {f.options().map(([ov, en, ar]) => (
-            <option value={ov} selected={!!(String(ov) === String(v))}>
+        <Select id={id} defaultValue={v == null ? undefined : String(v)} disabled={!!f.disabled}>
+          {f.options().map(([ov, en, ar], i) => (
+            <option key={i} value={ov}>
               {L(en, ar ?? en)}
             </option>
           ))}
@@ -1176,8 +1179,8 @@ function fieldHTML(f, x) {
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,220px),1fr))', gap: '8px' }}
         >
           {nodesOr(
-            f.options().map(([ov, en, ar]) => (
-              <label className="check">
+            f.options().map(([ov, en, ar], i) => (
+              <label key={i} className="check">
                 <input type="checkbox" defaultValue={ov} defaultChecked={!!(raw || []).includes(ov)} />{' '}
                 <span>{L(en, ar ?? en)}</span>
               </label>
@@ -1296,7 +1299,11 @@ function form(kind, x, isNew) {
     sub: ent.sub ? L(...ent.sub) : isNew ? '' : ent.name(x),
     body: (
       <>
-        <div className="formgrid">{fields.map(f => fieldHTML(f, x))}</div>
+        <div className="formgrid">
+          {fields.map((f, i) => (
+            <Fragment key={i}>{fieldHTML(f, x)}</Fragment>
+          ))}
+        </div>
         {ent.extra ? ent.extra(x, isNew) : ''}
       </>
     ),

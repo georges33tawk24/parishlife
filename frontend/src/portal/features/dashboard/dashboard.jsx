@@ -78,8 +78,8 @@ const clashNote = () => {
 /* ---------- shared blocks ---------- */
 /* Requests parishioners sent online — sacraments, certificates, bookings and anything else — newest first. */
 const onlineRows = () =>
-  waitingOnline().map(r => (
-    <a className="listrow" href={`#/requests/online/${r.id}`}>
+  waitingOnline().map((r, i) => (
+    <a key={i} className="listrow" href={`#/requests/online/${r.id}`}>
       <Who p={subjectOf(r)} />{' '}
       <span className="grow">
         <b>{onlineTitle(r)}</b>
@@ -135,8 +135,8 @@ const newOnline = () => {
 };
 
 function todayPanel() {
-  const rows = todayEvents().map(e => (
-    <a className="listrow" href="#/calendar">
+  const rows = todayEvents().map((e, i) => (
+    <a key={i} className="listrow" href="#/calendar">
       <span className="mono dim" style={{ width: '46px', flex: 'none' }}>
         {e.t}
       </span>{' '}
@@ -158,10 +158,10 @@ function todayPanel() {
 }
 
 function activityPanel(limit = 5) {
-  const rows = AUDIT.slice(0, limit).map(a => {
+  const rows = AUDIT.slice(0, limit).map((a, i) => {
     const p = person(a.who);
     return (
-      <div className={`tl-item ${a.kind === 'error' || a.kind === 'sensitive' ? 'accent' : ''}`}>
+      <div key={i} className={`tl-item ${a.kind === 'error' || a.kind === 'sensitive' ? 'accent' : ''}`}>
         <div className="when">
           {a.at?.slice(11) || ''} · {a.actorName || (p ? (isAr() ? p.ar : p.lat) : 'System')}
         </div>{' '}
@@ -193,8 +193,8 @@ function rotaGaps() {
         />
       </Panel>
     );
-  const rows = gaps.map(({ tm, f, at }) => (
-    <div className="listrow">
+  const rows = gaps.map(({ tm, f, at }, i) => (
+    <div key={i} className="listrow">
       <span className="grow">
         <b>{t(tm.team, tm.teamAr)}</b>{' '}
         <small>
@@ -222,10 +222,10 @@ function rotaGaps() {
 
 /* ---------- role dashboards ---------- */
 function priest() {
-  const sigRows = awaitingSig().map(s => {
+  const sigRows = awaitingSig().map((s, i) => {
     const p = person(s.person);
     return (
-      <a className="listrow sigrow" href={`#/certificate/${s.id}`}>
+      <a key={i} className="listrow sigrow" href={`#/certificate/${s.id}`}>
         <Who p={p} />{' '}
         <span className="grow">
           <b>{t(s.kind[0].toUpperCase() + s.kind.slice(1), s.kindAr)}</b> <small className="mono">{s.reg}</small>
@@ -235,8 +235,8 @@ function priest() {
       </a>
     );
   });
-  const resRows = pendingRes().map(r => (
-    <a className="listrow" href="#/reservations">
+  const resRows = pendingRes().map((r, i) => (
+    <a key={i} className="listrow" href="#/reservations">
       <span className="grow">
         <b>{t(r.title, r.titleAr)}</b>{' '}
         <small>
@@ -248,8 +248,8 @@ function priest() {
   ));
   const annRows = anniversaryItems()
     .slice(0, 6)
-    .map(a => (
-      <div className="listrow">
+    .map((a, i) => (
+      <div key={i} className="listrow">
         <span className="grow">
           <b>{isAr() ? a.ar : a.couple}</b>{' '}
           <small>
@@ -332,10 +332,10 @@ function priest() {
 
 function secretary() {
   const certs = SACRAMENTS.filter(s => s.kind === 'certificate' && s.status !== 'issued');
-  const rows = certs.map(s => {
+  const rows = certs.map((s, i) => {
     const p = person(s.person);
     return (
-      <a className="listrow" href={`#/certificate/${s.id}`}>
+      <a key={i} className="listrow" href={`#/certificate/${s.id}`}>
         <Who p={p} />{' '}
         <span className="grow">
           <b>{t(s.kind[0].toUpperCase() + s.kind.slice(1), s.kindAr)}</b> <small className="mono">{s.reg}</small>
@@ -424,8 +424,8 @@ function secretary() {
           </a>
         </Panel>{' '}
         <Panel title={t('Groups & contacts', 'المجموعات والتواصل')} tight={true}>
-          {GROUPS.map(g => (
-            <a className="listrow" href={`#/groups/${g.id}/roster`}>
+          {GROUPS.map((g, i) => (
+            <a key={i} className="listrow" href={`#/groups/${g.id}/roster`}>
               <span className="grow">
                 <b>{t(g.name, g.ar)}</b>
                 <small>{t(person(g.leader)?.lat || '', person(g.leader)?.ar || '')}</small>
@@ -445,10 +445,10 @@ function treasurer() {
   const total = BATCH.lines.reduce((a, l) => a + (l.usd || 0), 0);
   const liraOnly = BATCH.lines.reduce((a, l) => a + (l.lbp || 0), 0);
   const pendingX = EXPENSES.filter(x => x.status === 'awaiting-approval');
-  const fundRows = FUNDS.map(f => {
+  const fundRows = FUNDS.map((f, i) => {
     const pct = Math.min(100, Math.round((f.actual / f.budget) * 100));
     return (
-      <div className="listrow" style={{ alignItems: 'flex-start' }}>
+      <div key={i} className="listrow" style={{ alignItems: 'flex-start' }}>
         <span className="grow">
           <b>{t(f.name, f.ar)}</b>{' '}
           <small dir="ltr" style={{ textAlign: 'start' }}>
@@ -462,8 +462,8 @@ function treasurer() {
       </div>
     );
   });
-  const xRows = pendingX.map(x => (
-    <div className="listrow">
+  const xRows = pendingX.map((x, i) => (
+    <div key={i} className="listrow">
       <span className="grow">
         <b>{t(x.what, x.whatAr)}</b>
         <small>{fmtDate(x.d)}</small>
@@ -566,8 +566,8 @@ function leader() {
     )
     .sort((a, b) => (a.m.d + a.m.t).localeCompare(b.m.d + b.m.t));
   const recorded = meetings.reduce((count, meeting) => count + Object.keys(meeting.attendance || {}).length, 0);
-  const cards = mine.map(g => (
-    <a className="panel card-link" href={`#/groups/${g.id}`} style={{ display: 'block' }}>
+  const cards = mine.map((g, i) => (
+    <a key={i} className="panel card-link" href={`#/groups/${g.id}`} style={{ display: 'block' }}>
       <div className="panel-b">
         <div className="row" style={{ gap: '10px' }}>
           <span className="avatar">
@@ -607,8 +607,9 @@ function leader() {
         }
       />{' '}
       <div className="stats">
-        {mine.slice(0, 2).map(g => (
+        {mine.slice(0, 2).map((g, i) => (
           <Stat
+            key={i}
             k={t(g.name, g.ar)}
             v={g.members}
             d={g.meets ? t(g.meets, g.meetsAr) : t('no fixed meeting', 'بلا اجتماع ثابت')}
@@ -634,8 +635,8 @@ function leader() {
       <div className="grid g2">
         <Panel title={t('Next ministry meetings', 'اجتماعات الخدمة القادمة')}>
           {nodesOr(
-            upcoming.slice(0, 5).map(({ g, m }) => (
-              <a className="listrow" href={`#/groups/${g.id}/meetings`}>
+            upcoming.slice(0, 5).map(({ g, m }, i) => (
+              <a key={i} className="listrow" href={`#/groups/${g.id}/meetings`}>
                 <span className="grow">
                   <b>{m.title || t('Ministry meeting', 'اجتماع الخدمة')}</b>{' '}
                   <small>

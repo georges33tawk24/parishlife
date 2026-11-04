@@ -104,9 +104,9 @@ export function officeExpenses() {
           <label className="label" htmlFor="office-currency">
             {L('Currency', 'العملة')}
           </label>
-          <Select id="office-currency">
-            <option selected={!!(currency === 'USD')}>USD</option>
-            <option selected={!!(currency === 'LBP')}>LBP</option>
+          <Select defaultValue={currency} id="office-currency">
+            <option>USD</option>
+            <option>LBP</option>
           </Select>
         </div>{' '}
         <button className="btn btn-secondary" data-office-print-month="">
@@ -123,8 +123,8 @@ export function officeExpenses() {
           ['received', 'Allowance received', 'المخصّص المستلم'],
           ['spent', 'Office expenses', 'مصاريف المكتب'],
           ['balance', 'Remaining balance', 'الرصيد المتبقّي']
-        ].map(([key, en, ar]) => (
-          <div className="stat">
+        ].map(([key, en, ar], i) => (
+          <div key={i} className="stat">
             <span className="k">{L(en, ar)}</span>
             <strong className="v" dir="ltr">
               {money(summary[key], currency)}
@@ -147,14 +147,14 @@ export function officeExpenses() {
           placeholder={L('Description, supplier or reference', 'الوصف أو المورّد أو المرجع')}
           aria-label={L('Search transactions', 'البحث في العمليات')}
         />{' '}
-        <Select id="office-kind" aria-label={L('Transaction type', 'نوع العملية')}>
+        <Select defaultValue={filter} id="office-kind" aria-label={L('Transaction type', 'نوع العملية')}>
           {[
             ['all', 'All transactions', 'كل العمليات'],
             ['expense', 'Expenses', 'المصاريف'],
             ['allowance', 'Allowances', 'المخصّصات'],
             ['opening', 'Opening balance', 'الرصيد الافتتاحي']
-          ].map(([key, en, ar]) => (
-            <option value={key} selected={!!(filter === key)}>
+          ].map(([key, en, ar], i) => (
+            <option key={i} value={key}>
               {L(en, ar)}
             </option>
           ))}
@@ -233,9 +233,9 @@ function entryForm(record = null, kind = 'expense') {
             <label className="label" htmlFor="oe-currency">
               {L('Currency', 'العملة')}
             </label>
-            <Select id="oe-currency">
-              <option selected={!!(currency === 'USD')}>USD</option>
-              <option selected={!!(currency === 'LBP')}>LBP</option>
+            <Select defaultValue={currency} id="oe-currency">
+              <option>USD</option>
+              <option>LBP</option>
             </Select>
           </div>
         </div>{' '}
@@ -252,9 +252,9 @@ function entryForm(record = null, kind = 'expense') {
             <label className="label" htmlFor="oe-category">
               {L('Category', 'الفئة')}
             </label>
-            <Select id="oe-category">
-              {categories.map(([en, ar]) => (
-                <option value={en} selected={!!(record?.category === en)}>
+            <Select defaultValue={record?.category} id="oe-category">
+              {categories.map(([en, ar], i) => (
+                <option key={i} value={en}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -545,14 +545,14 @@ function printMonth() {
                 'Description|الوصف',
                 'Supplier / reference|المورّد / المرجع',
                 'Amount|المبلغ'
-              ].map(x => (
-                <th>{L(...x.split('|'))}</th>
+              ].map((x, i) => (
+                <th key={i}>{L(...x.split('|'))}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(row => (
-              <tr>
+            {rows.map((row, i) => (
+              <tr key={i}>
                 <td>{fmtDate(row.date)}</td>
                 <td>{typeLabel(row.kind)}</td>
                 <td>{row.description}</td>

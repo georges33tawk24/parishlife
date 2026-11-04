@@ -1,5 +1,6 @@
 /* Groups and ministries: the list and one group's overview, roster, meetings, attendance, posts,
    tasks, milestones and resources. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { css, nodesOr } from '../../ui/html.js';
 import { t, isAr, fmtDate, fmtLong } from '../../../lib/i18n.js';
@@ -247,8 +248,8 @@ function meetingCard(g, m) {
         {!is('secretary') && m.done && m.absent?.length ? (
           <details className="meeting-details">
             <summary>{L('Excused absence details', 'تفاصيل الغياب بعذر')}</summary>{' '}
-            {m.absent.map(([pid, en, ar]) => (
-              <p>
+            {m.absent.map(([pid, en, ar], i) => (
+              <p key={i}>
                 {L(person(pid)?.lat || pid, person(pid)?.ar || pid)} · {L(en, ar)}
               </p>
             ))}
@@ -340,8 +341,8 @@ function groupDetail(id, tab) {
       <div className="splitview">
         <div className="stack" style={{ gap: '16px' }}>
           <Panel title={L('Leadership', 'المسؤوليات')} tight={true}>
-            {d.roles.map(([p, en, ar]) => (
-              <div className="listrow">
+            {d.roles.map(([p, en, ar], i) => (
+              <div key={i} className="listrow">
                 <Who p={person(p)} />
                 <span className="grow" />
                 <span className="chip">{L(en, ar)}</span>
@@ -350,8 +351,8 @@ function groupDetail(id, tab) {
           </Panel>{' '}
           <Panel title={L('Join requests', 'طلبات الانتساب')} tight={true}>
             {d.requests.length ? (
-              d.requests.map(r => (
-                <div className="listrow">
+              d.requests.map((r, i) => (
+                <div key={i} className="listrow">
                   <Who p={person(r.p)} />
                   <span className="grow">
                     <small className="mono">{fmtDate(r.at)}</small>
@@ -624,8 +625,9 @@ function groupDetail(id, tab) {
                       return (
                         <div className={`cal-day${outside ? ' out' : ''}${date === today ? ' today' : ''}`}>
                           <span className="dn">{day.getDate()}</span>
-                          {items.map(m => (
+                          {items.map((m, k) => (
                             <button
+                              key={k}
                               className="cal-ev ministry-calendar-event"
                               data-meeting-edit={meetingId(m)}
                               title={m.title || L('Group meeting', 'اجتماع المجموعة')}
@@ -651,7 +653,9 @@ function groupDetail(id, tab) {
                     <h3>{L('Upcoming', 'القادمة')}</h3>
                     <span className="badge badge-quiet">{upcoming.length}</span>
                   </div>
-                  {upcoming.map(m => meetingCard(g, m))}
+                  {upcoming.map((m, i) => (
+                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  ))}
                 </section>
               ) : (
                 ''
@@ -662,7 +666,9 @@ function groupDetail(id, tab) {
                     <h3>{L('Earlier meetings', 'الاجتماعات السابقة')}</h3>
                     <span className="badge badge-quiet">{earlier.length}</span>
                   </div>
-                  {earlier.map(m => meetingCard(g, m))}
+                  {earlier.map((m, i) => (
+                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  ))}
                 </section>
               ) : (
                 ''
@@ -681,8 +687,8 @@ function groupDetail(id, tab) {
               {L('Post', 'نشر')}
             </button>
             <div className="divider" />
-            {d.posts.map(p => (
-              <div className="group-announcement">
+            {d.posts.map((p, i) => (
+              <div key={i} className="group-announcement">
                 <div className="row" style={{ gap: '10px' }}>
                   <Avatar p={person(p.by)} cls="avatar-sm" />{' '}
                   <span>
@@ -701,8 +707,8 @@ function groupDetail(id, tab) {
         </div>{' '}
         <div className="sidecol">
           <Panel title={L('Files and learning resources', 'الملفات وموارد التنشئة')}>
-            {d.files.map(([en, ar, size]) => (
-              <div className="listrow" style={{ paddingInline: 0 }}>
+            {d.files.map(([en, ar, size], i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                 <Icon name="doc" size={17} cls="dimmer" />{' '}
                 <span className="grow">
                   <b>{isAr() ? ar : en}</b>
@@ -764,12 +770,12 @@ function groupDetail(id, tab) {
                   (filter === 'all' || (filter === 'available' && r.qty > lent) || (filter === 'loaned' && lent > 0))
                 );
               })
-              .map(r => {
+              .map((r, i) => {
                 const lent = d.resourceLoans
                   .filter(l => l.resourceId === r.id && !l.returnedAt)
                   .reduce((n, l) => n + l.qty, 0);
                 return (
-                  <section className="panel">
+                  <section key={i} className="panel">
                     <div className="panel-b">
                       <h3 className="resource-name">
                         <span>{r.name}</span>
@@ -909,8 +915,8 @@ function groupDetail(id, tab) {
               .sort(
                 (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (a.due || '9999').localeCompare(b.due || '9999')
               )
-              .map(tk => (
-                <div className="listrow pastoral-row" style={{ paddingInline: 0 }}>
+              .map((tk, i) => (
+                <div key={i} className="listrow pastoral-row" style={{ paddingInline: 0 }}>
                   <button
                     className="btn-icon"
                     data-group-task-done={tk.index}
@@ -1003,10 +1009,11 @@ function groupDetail(id, tab) {
           {nodesOr(
             d.milestones
               .filter(m => !m.archived)
-              .map(m => {
+              .map((m, i) => {
                 const names = Object.entries(m.completions || {}).sort((a, b) => a[1].date.localeCompare(b[1].date));
                 return (
                   <Panel
+                    key={i}
                     title={L(m.name, m.ar)}
                     more={
                       <>
@@ -1041,8 +1048,8 @@ function groupDetail(id, tab) {
                     </div>{' '}
                     {names.length ? (
                       `<details><summary>${L('View completions', 'عرض الإنجازات')} · ${names.length}</summary>` +
-                      names.map(([pid, record]) => (
-                        <div className="listrow" style={{ paddingInline: 0 }}>
+                      names.map(([pid, record], i) => (
+                        <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                           <span className="grow">
                             <b>{L(person(pid)?.lat || pid, person(pid)?.ar || pid)}</b>{' '}
                             <small>
@@ -1088,8 +1095,8 @@ function groupDetail(id, tab) {
       <div style={{ maxWidth: '720px' }}>
         <Panel title={L('Membership and leadership history', 'سجل العضوية والمسؤوليات')}>
           <div className="timeline">
-            {d.history.map(([en, ar, when]) => (
-              <div className="tl-item">
+            {d.history.map(([en, ar, when], i) => (
+              <div key={i} className="tl-item">
                 <div className="when">{fmtDate(when)}</div>
                 <div className="what">{L(en, ar)}</div>
               </div>
@@ -1172,8 +1179,8 @@ groups.mount = host => {
         body: nodesOr(
           d.milestones
             .filter(m => !m.archived)
-            .map(m => (
-              <div className="listrow">
+            .map((m, i) => (
+              <div key={i} className="listrow">
                 <span className="grow">
                   <b>{L(m.name, m.ar)}</b>
                   <small>
@@ -1344,8 +1351,8 @@ groups.mount = host => {
                 {L('present among recorded meetings', 'حاضر من الاجتماعات المسجّلة')}
               </span>
             </div>
-            {rows.map(m => (
-              <div className="listrow" style={{ paddingInline: 0 }}>
+            {rows.map((m, i) => (
+              <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                 <span className="grow">
                   {fmtDate(m.d)} · {m.t}
                 </span>{' '}
@@ -1398,8 +1405,10 @@ groups.mount = host => {
           </div>{' '}
           <div className="formgrid" style={{ marginTop: '16px' }}>
             <div className="formrow">
-              <label className="label">{L('Expires', 'ينتهي')}</label>{' '}
-              <Select>
+              <label className="label" htmlFor="gq_expires">
+                {L('Expires', 'ينتهي')}
+              </label>{' '}
+              <Select id="gq_expires">
                 <option>{L('In 7 days', 'بعد ٧ أيام')}</option>
                 <option>{L('In 30 days', 'بعد ٣٠ يوماً')}</option>
                 <option>{L('Never', 'أبداً')}</option>
@@ -1439,13 +1448,9 @@ function groupTaskForm(index = -1) {
           <label className="label" htmlFor="gt_kind">
             {L('Type', 'النوع')}
           </label>
-          <Select id="gt_kind">
-            <option value="task" selected={!!(item?.kind !== 'note')}>
-              {L('Task', 'مهمة')}
-            </option>
-            <option value="note" selected={!!(item?.kind === 'note')}>
-              {L('Note', 'ملاحظة')}
-            </option>
+          <Select id="gt_kind" defaultValue={item?.kind === 'note' ? 'note' : 'task'}>
+            <option value="task">{L('Task', 'مهمة')}</option>
+            <option value="note">{L('Note', 'ملاحظة')}</option>
           </Select>
         </div>
         <C.Field label={L('Text', 'النص')} id="gt_what" value={item?.what || ''} req={true} />
@@ -1455,10 +1460,10 @@ function groupTaskForm(index = -1) {
             <label className="label" htmlFor="gt_who">
               {L('Owner', 'المسؤول')}
             </label>
-            <Select id="gt_who">
+            <Select defaultValue={item?.who} id="gt_who">
               <option value="">—</option>
-              {d.roster.map(r => (
-                <option value={r.p} selected={!!(item?.who === r.p)}>
+              {d.roster.map((r, i) => (
+                <option key={i} value={r.p}>
                   {L(person(r.p)?.lat || r.p, person(r.p)?.ar || r.p)}
                 </option>
               ))}

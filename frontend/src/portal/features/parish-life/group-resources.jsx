@@ -28,14 +28,14 @@ export function resourceForm(id = '') {
             <label className="label" htmlFor="rs_condition">
               {L('Condition', 'الحالة')}
             </label>
-            <Select id="rs_condition">
+            <Select defaultValue={r?.condition} id="rs_condition">
               {[
                 ['good', 'Good', 'جيد'],
                 ['fair', 'Fair', 'مقبول'],
                 ['repair', 'Needs repair', 'يحتاج تصليح'],
                 ['damaged', 'Damaged', 'تالف']
-              ].map(([v, en, ar]) => (
-                <option value={v} selected={!!(r?.condition === v)}>
+              ].map(([v, en, ar], i) => (
+                <option key={i} value={v}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -377,8 +377,8 @@ export function formationRecord(id, pid = '') {
           <div className="formation-member-choices">
             {d.roster
               .filter(r => !pid || r.p === pid)
-              .map(r => (
-                <label className="check">
+              .map((r, i) => (
+                <label key={i} className="check">
                   <input
                     type="checkbox"
                     name="fr_person"

@@ -10,7 +10,6 @@ import { persist } from '../../model/persist.js';
 import { safeRichText } from '../../../lib/rich-text.js';
 import { curGroup, nameOf, ok, refresh, val } from '../../shared/dialog-helpers.jsx';
 import { need } from '../../shared/dialogs.jsx';
-import { pickPerson } from '../records/people-dialogs.jsx';
 import { compose } from '../communicate/messaging-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -35,8 +34,8 @@ export function memberAdd(gid = curGroup()) {
           placeholder={L('Search names', 'البحث عن أسماء')}
         />{' '}
         <div className="choice-grid" style={{ marginTop: '12px' }} id="group-member-choices">
-          {candidates.map(p => (
-            <label className="row" data-member-name={(p.lat + ' ' + p.ar).toLowerCase()}>
+          {candidates.map((p, i) => (
+            <label key={i} className="row" data-member-name={(p.lat + ' ' + p.ar).toLowerCase()}>
               <input type="checkbox" defaultValue={p.id} data-member-choice="" />
               <span>
                 {p.lat} · {p.ar}
@@ -141,8 +140,8 @@ export function meetingNew(gid = curGroup()) {
               [4, 'TH', 'الخميس'],
               [5, 'F', 'الجمعة'],
               [6, 'SA', 'السبت']
-            ].map(([day, en, ar]) => (
-              <label className="repeat-day">
+            ].map(([day, en, ar], i) => (
+              <label key={i} className="repeat-day">
                 <input
                   type="checkbox"
                   defaultValue={day}
@@ -169,8 +168,8 @@ export function meetingNew(gid = curGroup()) {
         <fieldset className="formrow" id="m_people" hidden>
           <legend className="label">{L('Participants', 'المشاركون')}</legend>
           <div className="choice-grid">
-            {detail.roster.map(r => (
-              <label className="check">
+            {detail.roster.map((r, i) => (
+              <label key={i} className="check">
                 <input type="checkbox" defaultValue={r.p} />
                 <span>{L(D.person(r.p)?.lat || r.p, D.person(r.p)?.ar || r.p)}</span>
               </label>
@@ -325,13 +324,9 @@ export function meetingEdit(id) {
           <label className="label" htmlFor="me_kind">
             {L('Meeting for', 'الاجتماع لـ')}
           </label>
-          <Select id="me_kind">
-            <option value="group" selected={!!(meeting.kind !== 'committee')}>
-              {L('All group members', 'جميع أعضاء المجموعة')}
-            </option>
-            <option value="committee" selected={!!(meeting.kind === 'committee')}>
-              {L('Committee / people in charge', 'اللجنة / المسؤولون')}
-            </option>
+          <Select id="me_kind" defaultValue={meeting.kind === 'committee' ? 'committee' : 'group'}>
+            <option value="group">{L('All group members', 'جميع أعضاء المجموعة')}</option>
+            <option value="committee">{L('Committee / people in charge', 'اللجنة / المسؤولون')}</option>
           </Select>
         </div>{' '}
         <C.Field
@@ -361,8 +356,8 @@ export function meetingEdit(id) {
         <fieldset className="formrow" id="me_people" hidden={!meeting.participants?.length}>
           <legend className="label">{L('Participants', 'المشاركون')}</legend>
           <div className="choice-grid">
-            {gd().roster.map(r => (
-              <label className="check">
+            {gd().roster.map((r, i) => (
+              <label key={i} className="check">
                 <input type="checkbox" defaultValue={r.p} defaultChecked={!!meeting.participants?.includes(r.p)} />
                 <span>{L(D.person(r.p)?.lat || r.p, D.person(r.p)?.ar || r.p)}</span>
               </label>
@@ -491,59 +486,6 @@ export async function postAdd(btn) {
   ok(L('Posted to the group', 'نُشر في المجموعة'));
 }
 
-export function taskAdd() {
-  openModal({
-    title: L('Add a task', 'إضافة مهمة'),
-    body: (
-      <>
-        <C.Field label={L('Task', 'المهمة')} req={true} id="tk_w" />{' '}
-        <div className="formgrid">
-          <C.PersonPicker label={L('Owner', 'المسؤول')} id="tk_o" />{' '}
-          <C.Field label={L('Due', 'المهلة')} type="date" value="2026-10-18" id="tk_d" />
-        </div>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="tk_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Add task', 'إضافة المهمة')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#tk_go').addEventListener('click', () => {
-        if (!need(el, '#tk_w', L('Name the task', 'سمّ المهمة'))) return;
-        const w = val(el, '#tk_w');
-        gd().tasks.unshift({ what: w, whatAr: w, who: me()?.id || 'p3', due: val(el, '#tk_d'), done: false });
-        closeOverlays();
-        refresh();
-        ok(L('Task added', 'أُضيفت المهمة'), w);
-      });
-    }
-  });
-}
-
-export function milestoneRecord(i) {
-  const m = gd().milestones[+i];
-  if (!m) return;
-  pickPerson({
-    title: L('Record completion', 'تسجيل إنجاز'),
-    sub: L(m.name, m.ar),
-    cta: L('Record', 'تسجيل'),
-    onPick: p => {
-      if (!gd().roster.some(member => member.p === p.id))
-        return toast(L('Choose a group member', 'اختر عضواً من المجموعة'), '', 'warning');
-      m.completions ||= {};
-      m.completions[p.id] = { date: new Date().toISOString().slice(0, 10), notes: '' };
-      refresh();
-      ok(L('Milestone recorded', 'سُجّلت المحطة'), `${nameOf(p)} · ${L(m.name, m.ar)}`);
-    }
-  });
-}
-
 export function handover() {
   const group = D.GROUPS.find(x => x.id === curGroup()),
     detail = group && D.groupInfo(group.id);
@@ -570,8 +512,10 @@ export function handover() {
           </label>
           <Select id="ho_to">
             <option value="">{L('Choose an existing member', 'اختر عضواً موجوداً')}</option>
-            {people.map(p => (
-              <option value={p.id}>{L(p.lat, p.ar)}</option>
+            {people.map((p, i) => (
+              <option key={i} value={p.id}>
+                {L(p.lat, p.ar)}
+              </option>
             ))}
           </Select>
         </div>{' '}

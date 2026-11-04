@@ -40,9 +40,9 @@ export function compose(audience = 'all', { subject = '', body = '', bodyAr = ''
         <div className="formrow">
           <label className="label">{L('Send to', 'إرسال إلى')}</label>{' '}
           {groupAudience ? (
-            <Select id="mgroup">
-              {D.GROUPS.map(g => (
-                <option value={g.id} selected={!!(g.id === curGroup())}>
+            <Select defaultValue={curGroup()} id="mgroup">
+              {D.GROUPS.map((g, i) => (
+                <option key={i} value={g.id}>
                   {L(g.name, g.ar)}
                 </option>
               ))}

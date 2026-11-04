@@ -167,13 +167,6 @@ export const Stat = ({ k, v, d }) => (
   </div>
 );
 
-export const Btn = ({ label, kind = 'secondary', ico = '', size = '', ...props }) => (
-  <button className={`btn btn-${kind} ${size}`} {...props}>
-    {ico ? <Icon name={ico} size={17} /> : null}
-    {label}
-  </button>
-);
-
 export const SearchField = ({ ph, ...props }) => (
   <div className="search">
     <Icon name="search" size={17} />

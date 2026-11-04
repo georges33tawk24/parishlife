@@ -27,8 +27,9 @@ export function pickPerson({ title, sub = '', cta, onPick, exclude = [], allow =
       <>
         <C.SearchClear ph={L('Type a name in either script', 'اكتب الاسم بأي حرف')} id="ppq" />{' '}
         <div className="stack" id="pplist" style={{ marginTop: '12px' }}>
-          {list.map(p => (
+          {list.map((p, i) => (
             <label
+              key={i}
               className="listrow"
               style={{ paddingInline: '4px', cursor: 'pointer' }}
               data-name={`${p.lat} ${p.ar} ${p.phone}`}
@@ -370,14 +371,16 @@ export function personEdit(id) {
           <C.Field label={L('Arabic name', 'الاسم العربي')} req={true} value={p.ar} dir="rtl" ar={true} id="e_ar" />{' '}
           <C.Field label={L('Date of birth', 'تاريخ الولادة')} type="date" value={p.born} id="e_born" />{' '}
           <div className="formrow">
-            <label className="label">{L('Status', 'الحالة')}</label>{' '}
-            <Select id="e_st">
+            <label htmlFor="e_st" className="label">
+              {L('Status', 'الحالة')}
+            </label>{' '}
+            <Select defaultValue={p.status} id="e_st">
               {[
                 ['member', 'Member', 'منتسب'],
                 ['visitor', 'Visitor', 'زائر'],
                 ['clergy', 'Clergy', 'إكليروس']
-              ].map(([v, en, ar]) => (
-                <option value={v} selected={!!(p.status === v)}>
+              ].map(([v, en, ar], i) => (
+                <option key={i} value={v}>
                   {L(en, ar)}
                 </option>
               ))}
@@ -457,9 +460,9 @@ export const RELS = [
 export const relOf = (p, h) => p.rel || (h?.head === p.id ? 'head' : 'relative');
 
 const relSelect = (id, cur) => (
-  <Select id={id}>
-    {RELS.map(([v, en, ar]) => (
-      <option value={v} selected={!!(v === cur)}>
+  <Select defaultValue={cur} id={id}>
+    {RELS.map(([v, en, ar], i) => (
+      <option key={i} value={v}>
         {L(en, ar)}
       </option>
     ))}
@@ -509,14 +512,14 @@ export function relationEdit(pid) {
             <label className="label" htmlFor="relto">
               {L('Related to', 'صلة بـ')}
             </label>
-            <Select id="relto">
+            <Select defaultValue={p.relativeTo} id="relto">
               <option value="">{L('Not specified', 'غير محدد')}</option>
               {h.members
                 .filter(mid => mid !== p.id)
-                .map(mid => {
+                .map((mid, i) => {
                   const m = D.person(mid);
                   return (
-                    <option value={mid} selected={!!(p.relativeTo === mid)}>
+                    <option key={i} value={mid}>
                       {nameOf(m)}
                     </option>
                   );
@@ -637,10 +640,10 @@ export function familyAdd(hid, pid) {
               {L('Person', 'الشخص')}
             </label>
             <Select id="fa_p">
-              {D.PEOPLE.filter(x => !fixedH || !fixedH.members.includes(x.id)).map(x => {
+              {D.PEOPLE.filter(x => !fixedH || !fixedH.members.includes(x.id)).map((x, i) => {
                 const h2 = D.HOUSEHOLDS.find(y => y.members.includes(x.id));
                 return (
-                  <option value={x.id}>
+                  <option key={i} value={x.id}>
                     {nameOf(x)}
                     {h2 ? ` — ${L(`now in ${h2.name}`, `حالياً في ${h2.ar}`)}` : ''}
                   </option>
@@ -657,8 +660,8 @@ export function familyAdd(hid, pid) {
               {L('Household', 'العائلة')}
             </label>
             <Select id="fa_h">
-              {D.HOUSEHOLDS.map(x => (
-                <option value={x.id}>
+              {D.HOUSEHOLDS.map((x, i) => (
+                <option key={i} value={x.id}>
                   {L(x.name, x.ar)} · {L(x.town, x.townAr)}
                 </option>
               ))}
@@ -707,8 +710,10 @@ export function familyAdd(hid, pid) {
             <option value="">{L('Not specified', 'غير محدد')}</option>
             {(h?.members || [])
               .filter(mid => mid !== fixedP?.id)
-              .map(mid => (
-                <option value={mid}>{nameOf(D.person(mid))}</option>
+              .map((mid, i) => (
+                <option key={i} value={mid}>
+                  {nameOf(D.person(mid))}
+                </option>
               ))}
           </>
         );

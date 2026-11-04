@@ -43,7 +43,7 @@ export function setlistOpen(id) {
     body: s.items.map((mid, i) => {
       const m = D.MUSIC.find(x => x.id === mid);
       return m ? (
-        <div className="listrow" style={{ paddingInline: 0 }}>
+        <div key={i} className="listrow" style={{ paddingInline: 0 }}>
           <span className="mono dim" style={{ width: '22px' }}>
             {i + 1}
           </span>
@@ -112,8 +112,8 @@ export function sheetOpen(id) {
         <div className="choice-grid" style={{ marginTop: '14px' }}>
           {D.VOLUNTEERS.map(v => D.person(v.p))
             .filter(Boolean)
-            .map(p => (
-              <label className="check">
+            .map((p, i) => (
+              <label key={i} className="check">
                 <input
                   type="checkbox"
                   name="sheet-person"

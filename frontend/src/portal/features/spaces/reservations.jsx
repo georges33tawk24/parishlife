@@ -120,11 +120,12 @@ export function reservations() {
           d={L('target: 2 days', 'الهدف: يومان')}
         />
       </div>{' '}
-      {clashing.slice(0, 1).map(r => {
+      {clashing.slice(0, 1).map((r, i) => {
         const o = resClash(r),
           v = venue(r.venue);
         return (
           <C.InlineAlert
+            key={i}
             tone="warning"
             title={L(`${r.ref} clashes with ${o.ref}`, `تعارض بين ${r.ref} و${o.ref}`)}
             body={L(
@@ -141,8 +142,8 @@ export function reservations() {
             ['mine', 'Awaiting me', 'بانتظاري'],
             ['approved', 'Approved', 'موافَق'],
             ['rejected', 'Rejected', 'مرفوض']
-          ].map(([k, en, ar]) => (
-            <button aria-pressed={f === k} data-act={`res-filter:${k}`}>
+          ].map(([k, en, ar], i) => (
+            <button key={i} aria-pressed={f === k} data-act={`res-filter:${k}`}>
               {L(en, ar)}
             </button>
           ))}
@@ -213,7 +214,7 @@ const RES_STEPS = {
 
 const resHistory = r =>
   r.history.map((h, i) => (
-    <div className={`tl-item${i === r.history.length - 1 ? ' accent' : ''}`}>
+    <div key={i} className={`tl-item${i === r.history.length - 1 ? ' accent' : ''}`}>
       <div className="when">
         {L(...(RES_STEPS[h.action] || [h.action, h.action]))}
         {h.at ? ` · ${fmtDate(h.at)}` : ''}
@@ -237,7 +238,7 @@ function stageBar(current) {
   return (
     <div style={{ display: 'flex', margin: '4px 0 20px' }}>
       {STAGES.map(([en, ar], i) => (
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div key={i} style={{ flex: 1, minWidth: 0 }}>
           <div
             style={css(
               `height:4px;border-radius:99px;background:${i <= idx ? 'var(--primary)' : 'var(--border)'};margin-inline-end:${i === 3 ? 0 : '4px'}`
@@ -387,8 +388,8 @@ function resDrawer(id) {
             L('Chairs and tables returned to the store', 'إعادة الكراسي والطاولات إلى المستودع'),
             L('Lights and generator switched off', 'إطفاء الإنارة والمولّد'),
             L('Kitchen left clean', 'ترك المطبخ نظيفاً')
-          ].map(x => (
-            <C.CheckRow label={x} />
+          ].map((x, i) => (
+            <C.CheckRow key={i} label={x} />
           ))}
         </div>{' '}
         <div className="divider" />{' '}

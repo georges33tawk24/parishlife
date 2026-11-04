@@ -87,10 +87,10 @@ export function checkin(tab = '') {
         <label className="label" htmlFor="checkin-event">
           {L('Check-in event', 'حدث تسجيل الوصول')}
         </label>{' '}
-        <Select id="checkin-event" style={{ maxWidth: '380px' }}>
+        <Select defaultValue={chosenEvent?.id} id="checkin-event" style={{ maxWidth: '380px' }}>
           <option value="">{L('Select event', 'اختر حدثاً')}</option>
-          {selectableCheckinEvents().map(e => (
-            <option value={e.id} selected={!!(chosenEvent?.id === e.id)}>
+          {selectableCheckinEvents().map((e, i) => (
+            <option key={i} value={e.id}>
               {L(e.title, e.titleAr)} · {e.d} {e.t} · {eventVenue(e)?.name || ''}
             </option>
           ))}
@@ -133,10 +133,10 @@ export function checkin(tab = '') {
           />{' '}
           <div className="stack" style={{ gap: '16px', marginTop: '16px' }}>
             {nodesOr(
-              [...eventParticipants].map(pid => {
+              [...eventParticipants].map((pid, i) => {
                 const v = PICKUP[pid] || { approved: [], restricted: [], required: false };
                 return (
-                  <section className="panel">
+                  <section key={i} className="panel">
                     <div className="panel-h">
                       <Who p={person(pid)} />
                       <span style={{ marginInlineStart: 'auto' }} />{' '}
@@ -172,7 +172,7 @@ export function checkin(tab = '') {
                         {L('Approved to collect', 'مفوَّضون بالاستلام')}
                       </div>{' '}
                       {v.approved.map(([en, ar, rel], ai) => (
-                        <div className="listrow" style={{ paddingInline: 0 }}>
+                        <div key={ai} className="listrow" style={{ paddingInline: 0 }}>
                           <span className="grow">
                             <b>{isAr() ? ar : en}</b>
                             <small>{rel}</small>
@@ -183,8 +183,13 @@ export function checkin(tab = '') {
                       {v.restricted.length ? (
                         <>
                           <div className="divider" />{' '}
-                          {v.restricted.map(([en, ar]) => (
-                            <C.InlineAlert tone="danger" title={L('Do not release', 'لا تُسلّم')} body={L(en, ar)} />
+                          {v.restricted.map(([en, ar], i) => (
+                            <C.InlineAlert
+                              key={i}
+                              tone="danger"
+                              title={L('Do not release', 'لا تُسلّم')}
+                              body={L(en, ar)}
+                            />
                           ))}
                         </>
                       ) : (
@@ -302,10 +307,10 @@ export function checkin(tab = '') {
     );
 
   /* room roster */
-  const rows = session.rows.map(r => {
+  const rows = session.rows.map((r, i) => {
     const p = person(r.p);
     return (
-      <div className="listrow">
+      <div key={i} className="listrow">
         <Who p={p} />{' '}
         <span className="grow">
           {r.alert ? (

@@ -90,8 +90,8 @@ export function services(tab = '', planId = '') {
             )}
           </span>
         </div>{' '}
-        {GROUPS.map(g => (
-          <Panel title={L(g.name, g.ar)} tight={true}>
+        {GROUPS.map((g, i) => (
+          <Panel key={i} title={L(g.name, g.ar)} tight={true}>
             <Table
               cols={[
                 { label: L('Meeting', 'الاجتماع') },
@@ -237,15 +237,15 @@ export function services(tab = '', planId = '') {
             </label>{' '}
             <label className="formrow" style={{ margin: 0 }}>
               <span className="label">{L('Status', 'الحالة')}</span>
-              <Select data-service-filter="status">
+              <Select defaultValue={f.status} data-service-filter="status">
                 {[
                   ['', 'All statuses', 'كل الحالات'],
                   ['draft', 'Draft', 'مسودة'],
                   ['scheduled', 'Scheduled', 'مجدول'],
                   ['ready', 'Ready', 'جاهز'],
                   ['completed', 'Completed', 'منجز']
-                ].map(([v, en, ar]) => (
-                  <option value={v} selected={!!(f.status === v)}>
+                ].map(([v, en, ar], i) => (
+                  <option key={i} value={v}>
                     {L(en, ar)}
                   </option>
                 ))}
@@ -334,8 +334,9 @@ export function services(tab = '', planId = '') {
                   ['Prayer meeting', 'لقاء صلاة', 'groups'],
                   ['Retreat', 'خلوة', 'events'],
                   ['Special celebration', 'احتفال خاص', 'events']
-                ].map(([en, ar, ic]) => (
+                ].map(([en, ar, ic], i) => (
                   <button
+                    key={i}
                     className="card card-flat"
                     style={{ cursor: 'pointer', textAlign: 'start' }}
                     data-act={`svc-request-new:${en}|${ar}`}
@@ -412,6 +413,7 @@ export function services(tab = '', planId = '') {
     const aLabel = !a ? '' : a.lat ? (isAr() ? a.ar : a.lat) : L(a.name, a.ar);
     return (
       <div
+        key={oi}
         className="oos-row"
         data-service-row={oi}
         draggable={canEdit ? 'true' : undefined}
@@ -568,8 +570,9 @@ services.mount = host => {
         title: L('Choose ministry', 'اختر الخدمة'),
         body: (
           <Paged className="gridcards">
-            {GROUPS.map(g => (
+            {GROUPS.map((g, i) => (
               <button
+                key={i}
                 className="panel card-link"
                 style={{ cursor: 'pointer', textAlign: 'start', padding: '18px' }}
                 data-leader-group={g.id}
@@ -706,9 +709,9 @@ function editPlanDetails(redraw) {
           <label className="label" htmlFor="pd_venue">
             {L('Venue', 'المكان')}
           </label>
-          <Select id="pd_venue">
-            {VENUES.map(v => (
-              <option value={v.id} selected={!!(v.id === plan.venue)}>
+          <Select defaultValue={plan.venue} id="pd_venue">
+            {VENUES.map((v, i) => (
+              <option key={i} value={v.id}>
                 {L(v.name, v.ar)}
               </option>
             ))}
@@ -718,14 +721,14 @@ function editPlanDetails(redraw) {
           <label className="label" htmlFor="pd_status">
             {L('Status', 'الحالة')}
           </label>
-          <Select id="pd_status">
+          <Select defaultValue={plan.status} id="pd_status">
             {[
               ['draft', 'Draft', 'مسودة'],
               ['scheduled', 'Scheduled', 'مجدول'],
               ['ready', 'Ready', 'جاهز'],
               ['completed', 'Completed', 'منجز']
-            ].map(([v, en, ar]) => (
-              <option value={v} selected={!!(v === plan.status)}>
+            ].map(([v, en, ar], i) => (
+              <option key={i} value={v}>
                 {L(en, ar)}
               </option>
             ))}
@@ -794,10 +797,10 @@ function editPlanItem(index, redraw) {
           <label className="label" htmlFor="pi_who">
             {L('Led by', 'يقوده')}
           </label>
-          <Select id="pi_who">
+          <Select defaultValue={item?.who} id="pi_who">
             <option value="">{L('Unassigned', 'غير محدّد')}</option>
-            {[...GROUPS.map(g => [g.id, L(g.name, g.ar)]), ...personOptions()].map(([id, name]) => (
-              <option value={id} selected={!!(id === item?.who)}>
+            {[...GROUPS.map(g => [g.id, L(g.name, g.ar)]), ...personOptions()].map(([id, name], i) => (
+              <option key={i} value={id}>
                 {name}
               </option>
             ))}

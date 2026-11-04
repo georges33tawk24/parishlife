@@ -72,10 +72,10 @@ export function registrations(tab = '') {
             <label className="label" htmlFor="registration-select">
               {L('Registration form', 'استمارة التسجيل')}
             </label>{' '}
-            <Select id="registration-select" style={{ maxWidth: '360px' }}>
+            <Select defaultValue={selected?.id} id="registration-select" style={{ maxWidth: '360px' }}>
               <option value="">{L('Select a form', 'اختر استمارة')}</option>
-              {REGISTRATIONS.map(f => (
-                <option value={f.id} selected={!!(selected?.id === f.id)}>
+              {REGISTRATIONS.map((f, i) => (
+                <option key={i} value={f.id}>
                   {L(f.event, f.eventAr)}
                 </option>
               ))}
@@ -142,7 +142,7 @@ export function registrations(tab = '') {
           <div>
             <Panel title={L(selected.event, selected.eventAr)} tight={false}>
               {selected.fields.map(([en, ar, type, req, he, ha], fi) => (
-                <div className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
+                <div key={fi} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
                   <span style={{ color: 'var(--text-3)', marginTop: '2px' }}>
                     <Icon
                       name={
@@ -188,8 +188,8 @@ export function registrations(tab = '') {
                 <span className="usd">{registrationMoney(selected.fee, selected)}</span>
               </div>{' '}
               <div className="divider" />{' '}
-              {(selected.discounts || []).map(([en, ar, v]) => (
-                <div className="listrow" style={{ paddingInline: 0 }}>
+              {(selected.discounts || []).map(([en, ar, v], i) => (
+                <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                   <span className="grow">{L(en, ar)}</span>
                   <b className="mono">{v}</b>
                 </div>
@@ -197,8 +197,8 @@ export function registrations(tab = '') {
               <div className="ac-group" style={{ paddingInline: 0 }}>
                 {L('Instalments', 'أقساط')}
               </div>{' '}
-              {(selected.installments || []).map(([en, ar, v]) => (
-                <div className="listrow" style={{ paddingInline: 0 }}>
+              {(selected.installments || []).map(([en, ar, v], i) => (
+                <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                   <span className="grow">{L(en, ar)}</span>
                   <b className="mono">{registrationMoney(v, selected)}</b>
                 </div>

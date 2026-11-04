@@ -76,10 +76,10 @@ export function households() {
       {t('Open household', 'فتح العائلة')}
     </a>
   );
-  const cards = HOUSEHOLDS.map(h => {
+  const cards = HOUSEHOLDS.map((h, i) => {
     const members = h.members.map(person).filter(Boolean);
     return (
-      <section className="panel" data-find-item="" data-household-id={h.id}>
+      <section key={i} className="panel" data-find-item="" data-household-id={h.id}>
         <div className="panel-b">
           <div className="row" style={{ gap: '12px', alignItems: 'flex-start' }}>
             {selectBox(h)}
@@ -106,8 +106,8 @@ export function households() {
           <div className="divider" />{' '}
           <div className="row" style={{ gap: '8px' }}>
             <span className="avatar-stack">
-              {members.map(m => (
-                <Avatar p={m} cls="avatar-sm" />
+              {members.map((m, i) => (
+                <Avatar key={i} p={m} cls="avatar-sm" />
               ))}
             </span>{' '}
             <span className="t-caption dim">
@@ -298,8 +298,8 @@ export function householdView(id = '') {
             ['list', 'List', 'قائمة'],
             ['tree', 'Tree', 'شجرة'],
             ['both', 'Both', 'كلاهما']
-          ].map(([key, en, ar]) => (
-            <button data-hh-detail-view={key} aria-pressed={view === key}>
+          ].map(([key, en, ar], i) => (
+            <button key={i} data-hh-detail-view={key} aria-pressed={view === key}>
               {t(en, ar)}
             </button>
           ))}
@@ -313,8 +313,8 @@ export function householdView(id = '') {
           ) : (
             <Panel title={t('Members and relationships', 'الأفراد وصلاتهم')} tight={true}>
               {nodesOr(
-                members.map(m => (
-                  <a className="listrow" href={`#/person/${m.id}`}>
+                members.map((m, i) => (
+                  <a key={i} className="listrow" href={`#/person/${m.id}`}>
                     <Who p={m} />
                     <span className="grow" />
                     <span className="dim">{relLabel(m, h)}</span>

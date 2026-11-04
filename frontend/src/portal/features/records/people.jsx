@@ -2,7 +2,7 @@
    directory, adding a person, and each person's actions menu. */
 import { Select } from '../../ui/components.jsx';
 import { css, paint } from '../../ui/html.js';
-import { t, isAr, num, matches } from '../../../lib/i18n.js';
+import { t, isAr, num, matches, fmtDate } from '../../../lib/i18n.js';
 import { is, canSee, go, S, bus } from '../../model/store.js';
 import {
   Icon,
@@ -12,6 +12,7 @@ import {
   Status,
   Pill,
   Table,
+  Empty,
   openDrawer,
   openModal,
   closeOverlays,
@@ -119,7 +120,7 @@ function peopleExport() {
         </div>{' '}
         <div className="choice-grid">
           {options.map(([key, en, ar], i) => (
-            <label className="row">
+            <label key={i} className="row">
               <input type="checkbox" data-export-field={key} defaultChecked={!!(i < 6)} />
               <span>{t(en, ar)}</span>
             </label>
@@ -176,7 +177,8 @@ function peopleExport() {
 const TABS = () => [
   ['', 'All people', 'كل المؤمنين'],
   ['duplicates', 'Duplicates', 'التكرارات', DUPLICATES.length],
-  ['import', 'Import', 'استيراد']
+  ['import', 'Import', 'استيراد'],
+  ['archived', 'Archived', 'المؤرشفون', ARCHIVED.length]
 ];
 
 /* ---------------- list ---------------- */
@@ -226,6 +228,13 @@ export function people(tab = '') {
       <>
         {head}
         {importView()}
+      </>
+    );
+  if (tab === 'archived')
+    return (
+      <>
+        {head}
+        {archivedPeople()}
       </>
     );
   // Archived records are retained for history; account status is managed separately.
@@ -303,18 +312,18 @@ export function people(tab = '') {
             {(S.ui.peopleStatus || ['member', 'visitor']).length}
           </span>
         </button>{' '}
-        <Select style={{ width: 'auto' }} id="ptown" aria-label={t('Town', 'البلدة')}>
+        <Select defaultValue={town} style={{ width: 'auto' }} id="ptown" aria-label={t('Town', 'البلدة')}>
           <option value="">{t('All towns', 'كل البلدات')}</option>
-          {[...new Map(PEOPLE.filter(x => x.town).map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar]) => (
-            <option value={en} selected={!!(town === en)}>
+          {[...new Map(PEOPLE.filter(x => x.town).map(x => [x.town, x.townAr])).entries()].sort().map(([en, ar], i) => (
+            <option key={i} value={en}>
               {t(en, ar)}
             </option>
           ))}
         </Select>{' '}
-        <Select style={{ width: 'auto' }} id="prite" aria-label={t('Rite', 'الطقس')}>
+        <Select defaultValue={rite} style={{ width: 'auto' }} id="prite" aria-label={t('Rite', 'الطقس')}>
           <option value="">{t('All rites', 'كل الطقوس')}</option>
-          {[...new Set(PEOPLE.map(x => x.rite).filter(Boolean))].sort().map(r => (
-            <option value={r} selected={!!(rite === r)}>
+          {[...new Set(PEOPLE.map(x => x.rite).filter(Boolean))].sort().map((r, i) => (
+            <option key={i} value={r}>
               {riteLabel(r)}
             </option>
           ))}
@@ -590,8 +599,8 @@ export function deleteGuard(p, { dry = false } = {}) {
     body: (
       <>
         <div className="stack">
-          {links.map(([a, b]) => (
-            <div className="listrow" style={{ paddingInline: 0 }}>
+          {links.map(([a, b], i) => (
+            <div key={i} className="listrow" style={{ paddingInline: 0 }}>
               <span className="grow">{a}</span>
               <b className="mono">{b}</b>
             </div>
@@ -602,7 +611,7 @@ export function deleteGuard(p, { dry = false } = {}) {
         ) : (
           <>
             <div className="formrow" style={{ marginTop: '16px' }}>
-              <label className="label">
+              <label htmlFor="dg_in" className="label">
                 {t('Type', 'اكتب')} <b>{p.lat}</b> {t('to confirm', 'للتأكيد')}
               </label>{' '}
               <input className="input" id="dg_in" autoComplete="off" />
@@ -724,8 +733,9 @@ people.mount = host => {
         >
           {t('Status', 'الحالة')}
         </div>{' '}
-        {opts.map(([k, lab]) => (
+        {opts.map(([k, lab], i) => (
           <label
+            key={i}
             className="opt"
             style={{
               display: 'flex',
@@ -837,7 +847,7 @@ function duplicates() {
       />{' '}
       <div className="stack" style={{ gap: '16px', marginTop: '20px' }}>
         {DUPLICATES.map((d, i) => (
-          <section className="panel">
+          <section key={i} className="panel">
             <div className="panel-h">
               <h3>{t('Possible match', 'تطابق محتمل')}</h3>{' '}
               <span className="pill pill-warning" style={{ marginInlineStart: 'auto' }}>
@@ -848,7 +858,7 @@ function duplicates() {
             <div className="panel-b">
               <div className="grid g2" style={{ gap: '16px' }}>
                 {[d.a, d.b].map((r, j) => (
-                  <div className="card card-flat">
+                  <div key={j} className="card card-flat">
                     <div className="row" style={{ gap: '10px' }}>
                       <span className="avatar">
                         {r.lat
@@ -937,10 +947,14 @@ function importView() {
             rows={importDraft.header.map((name, i) => ({
               cells: [
                 name,
-                <Select data-import-map={i} aria-label={`${t('Map column', 'طابق العمود')} ${name}`}>
+                <Select
+                  defaultValue={importDraft.map[i]}
+                  data-import-map={i}
+                  aria-label={`${t('Map column', 'طابق العمود')} ${name}`}
+                >
                   <option value="">{t('Skip', 'تخطّ')}</option>
-                  {importFields.map(([key, label]) => (
-                    <option value={key} selected={!!(importDraft.map[i] === key)}>
+                  {importFields.map(([key, label], k) => (
+                    <option key={k} value={key}>
                       {t(label, label)}
                     </option>
                   ))}
@@ -1042,16 +1056,16 @@ function printPeopleDirectory() {
                 t('Household', 'العائلة'),
                 t('Town', 'البلدة'),
                 t('Phone', 'الهاتف')
-              ].map(x => (
-                <th>{x}</th>
+              ].map((x, i) => (
+                <th key={i}>{x}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {listed.map(p => {
+            {listed.map((p, i) => {
               const h = hh(p.hh);
               return (
-                <tr>
+                <tr key={i}>
                   <td dir="auto">{p.lat}</td>
                   <td dir="auto">{p.ar}</td>
                   <td>{h ? t(h.name, h.ar || h.name) : ''}</td>
@@ -1106,7 +1120,9 @@ export function newPersonDrawer() {
             </Select>
           </div>{' '}
           <div className="formrow">
-            <label className="label">{t('Language', 'اللغة')}</label>{' '}
+            <label htmlFor="newlang" className="label">
+              {t('Language', 'اللغة')}
+            </label>{' '}
             <Select id="newlang">
               <option value="ar">{t('Arabic', 'العربية')}</option>
               <option value="en">{t('English', 'الإنكليزية')}</option>
@@ -1117,8 +1133,8 @@ export function newPersonDrawer() {
         <div className="formrow">
           <label className="label">{t('Assign to existing groups', 'إسناد إلى مجموعات قائمة')}</label>
           <div className="choice-grid">
-            {GROUPS.map(g => (
-              <label className="row">
+            {GROUPS.map((g, i) => (
+              <label key={i} className="row">
                 <input type="checkbox" id={`newgroup-${g.id}`} />
                 <span>{t(g.name, g.ar)}</span>
               </label>
@@ -1254,4 +1270,58 @@ export function newPersonDrawer() {
       el.querySelector('#person-save-next').addEventListener('click', () => save(true));
     }
   });
+}
+
+/* ---------------- archived ----------------
+   Archiving takes a person out of the active lists and keeps their history; here they can be
+   restored, or reviewed for permanent deletion. */
+function archivedPeople() {
+  return (
+    <div className="tabbody">
+      <C.InlineAlert
+        tone="info"
+        title={t('Archived records remain restorable', 'تبقى السجلات المؤرشفة قابلة للاسترجاع')}
+        body={t(
+          'Archive removes a person from active lists and preserves linked history. Permanent deletion requires an unlinked record and typed confirmation.',
+          'تزيل الأرشفة الشخص من اللوائح النشطة وتحفظ السجلات المرتبطة به. يتطلّب الحذف النهائي سجلاً بلا روابط وتأكيداً بكتابة الاسم.'
+        )}
+      />
+      <Table
+        cols={[
+          { label: t('Name', 'الاسم') },
+          { label: t('Archived', 'أُرشف') },
+          { label: t('By', 'بواسطة'), cls: 'hide-sm' },
+          { label: '', cls: 'shrink' }
+        ]}
+        rows={ARCHIVED.map(p => ({
+          key: p.id,
+          cells: [
+            <a href={`#/person/${p.id}`}>
+              <b>{isAr() ? p.ar : p.lat}</b>
+            </a>,
+            <span className="mono dim">{fmtDate(p.archived)}</span>,
+            <span className="dim">{(isAr() ? person(p.archivedBy)?.ar : person(p.archivedBy)?.lat) || '—'}</span>,
+            <span className="row" style={{ gap: '6px' }}>
+              <button className="btn btn-secondary btn-dense" data-act={`restore:${p.id}`}>
+                {t('Restore', 'استرجاع')}
+              </button>{' '}
+              <button className="btn btn-danger-quiet btn-dense" data-delete-archived={p.id}>
+                {t('Review deletion', 'مراجعة الحذف')}
+              </button>
+            </span>
+          ]
+        }))}
+        empty={
+          <Empty
+            glyph="people"
+            title={t('Nobody is archived', 'لا أحد مؤرشف')}
+            body={t(
+              'Archive someone from their row menu; they can be restored here.',
+              'أرشف شخصاً من قائمة صفّه؛ ويمكن استرجاعه هنا.'
+            )}
+          />
+        }
+      />
+    </div>
+  );
 }

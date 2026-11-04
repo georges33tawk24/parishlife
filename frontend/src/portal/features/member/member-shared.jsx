@@ -97,8 +97,8 @@ function meetingDrawer(m) {
         {m.resources?.length ? (
           <>
             <h3>{L('Meeting resources', 'موارد الاجتماع')}</h3>
-            {m.resources.map(r => (
-              <p>
+            {m.resources.map((r, i) => (
+              <p key={i}>
                 {txt(r.title)}{' '}
                 {r.attachment ? (
                   <a download={txt(r.attachment.name)} href={txt(r.attachment.data)}>
@@ -157,9 +157,9 @@ export function noteDrawer(n = null) {
           <label className="label" htmlFor="note-category">
             {L('Category', 'الفئة')}
           </label>
-          <Select id="note-category">
-            {['Personal', 'Meeting Notes', 'Spiritual', 'Ministry', 'Tasks', 'Ideas'].map(x => (
-              <option selected={!!(n?.category === x)}>{x}</option>
+          <Select defaultValue={n?.category} id="note-category">
+            {['Personal', 'Meeting Notes', 'Spiritual', 'Ministry', 'Tasks', 'Ideas'].map((x, i) => (
+              <option key={i}>{x}</option>
             ))}
           </Select>
         </div>{' '}
@@ -169,10 +169,10 @@ export function noteDrawer(n = null) {
           <label className="label" htmlFor="note-meeting">
             {L('Linked meeting (optional)', 'الاجتماع المرتبط (اختياري)')}
           </label>
-          <Select id="note-meeting">
+          <Select defaultValue={n?.meetingId} id="note-meeting">
             <option value="">—</option>
-            {M.meetings.map(m => (
-              <option value={txt(m.id)} selected={!!(n?.meetingId === m.id)}>
+            {M.meetings.map((m, i) => (
+              <option key={i} value={txt(m.id)}>
                 {txt(m.title)} · {date(m.date)}
               </option>
             ))}

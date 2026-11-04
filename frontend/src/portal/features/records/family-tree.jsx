@@ -1,4 +1,6 @@
 /* The family tree of a person or household, drawn from recorded relations. */
+import { Fragment } from 'react';
+
 import { t, isAr } from '../../../lib/i18n.js';
 import { Icon, Empty, Avatar } from '../../ui/ui.jsx';
 import { RELS } from './people-dialogs.jsx';
@@ -184,8 +186,10 @@ export function familyTree(h, focus) {
       {u.kids.length ? (
         <div className="ft-branch">
           <div className="ft-row">
-            {u.kids.map(k => (
-              <div className={`ft-cell ${k.pt ? 'ft-pair' : ''}`}>{draw(k)}</div>
+            {u.kids.map((k, i) => (
+              <div key={i} className={`ft-cell ${k.pt ? 'ft-pair' : ''}`}>
+                {draw(k)}
+              </div>
             ))}
           </div>
         </div>
@@ -197,12 +201,20 @@ export function familyTree(h, focus) {
   return (
     <div className="ftree">
       <div className="ft-canvas">
-        <div className="ft-forest">{forest.map(draw)}</div>
+        <div className="ft-forest">
+          {forest.map((item, i, all) => (
+            <Fragment key={i}>{draw(item, i, all)}</Fragment>
+          ))}
+        </div>
       </div>{' '}
       {side.length ? (
         <div className="ft-side">
           <span className="overline">{t('Also in the household', 'أيضاً في العائلة')}</span>{' '}
-          <div className="ft-row">{side.map(node)}</div>
+          <div className="ft-row">
+            {side.map((item, i, all) => (
+              <Fragment key={i}>{node(item, i, all)}</Fragment>
+            ))}
+          </div>
         </div>
       ) : (
         ''

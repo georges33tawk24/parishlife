@@ -1,5 +1,6 @@
 /* Money documents and corrections: receipts and giving statements, and editing or reversing a
    counted line. */
+import { Fragment } from 'react';
 import { markup } from '../../ui/html.js';
 import { t, isAr, num, usd, fmtDate } from '../../../lib/i18n.js';
 import { Icon, toast, openDrawer, openModal, closeOverlays } from '../../ui/ui.jsx';
@@ -175,10 +176,10 @@ function statementHTML(pid) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => {
+          {rows.map((r, i) => {
             const f = D.FUNDS.find(x => x.id === r.fund);
             return (
-              <tr>
+              <tr key={i}>
                 <td>{f ? L(f.name, f.ar) : r.fund}</td>
                 <td className="num">{r.usd ? usd(r.usd) : '—'}</td>
                 <td className="num">{r.lbp ? num(r.lbp) : '—'}</td>
@@ -247,7 +248,10 @@ export function statementsAll() {
           clearInterval(tick);
           download(
             'statements-2026-saint-elias.html',
-            docShell('Statements 2026', heads.map(statementHTML)),
+            docShell(
+              'Statements 2026',
+              heads.map((item, i, all) => <Fragment key={i}>{statementHTML(item, i, all)}</Fragment>)
+            ),
             'text/html'
           );
           closeOverlays();

@@ -174,4 +174,3 @@ export function Icon({ name, size = 18, cls = '' }) {
     </svg>
   );
 }
-export const ICONS = P;

@@ -1,6 +1,7 @@
 /* Administrative access within a scope: who holds which role, assigning and revoking it, the
    optional secretaries, system accounts, and the history. The server supplies the roles that may
    be assigned; the browser never invents authority. */
+
 import { useEffect, useState } from 'react';
 import { api, session } from '../../model/api.js';
 import { t, isAr } from '../../../lib/i18n.js';

@@ -197,8 +197,8 @@ export function finance(tab = '') {
                   L('Refunds and failed payments', 'الاسترجاعات والدفعات الفاشلة'),
                   L('Duplicate payment notifications', 'إشعارات الدفع المكرَّر'),
                   L('A full audit history on every change', 'سجل تدقيق كامل لكل تغيير')
-                ].map(x => (
-                  <li className="row" style={{ gap: '10px' }}>
+                ].map((x, i) => (
+                  <li key={i} className="row" style={{ gap: '10px' }}>
                     <Icon name="check" size={16} cls="dimmer" />
                     <span className="t-caption">{x}</span>
                   </li>

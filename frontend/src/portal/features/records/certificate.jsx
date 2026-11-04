@@ -1,5 +1,6 @@
 /* One sacrament record or certificate request: its progress, next step, celebration, history,
    documents and signatures. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { paint } from '../../ui/html.js';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
@@ -145,7 +146,7 @@ const progressPanel = s => {
           {stages.map(([label, done], i) => {
             const at = stepWhen(s, stages, i, now);
             return (
-              <li className={done ? 'done' : i === now ? 'now' : ''}>
+              <li key={i} className={done ? 'done' : i === now ? 'now' : ''}>
                 <span className="dot" aria-hidden="true">
                   {done ? <Icon name="check" size={13} /> : i + 1}
                 </span>
@@ -382,11 +383,11 @@ export function certificate(id, lang = '') {
   const details = (
     <Panel title={L('Details', 'التفاصيل')}>
       <dl className="dl">
-        {dlRows.filter(Boolean).map(([k, v]) => (
-          <>
+        {dlRows.filter(Boolean).map(([k, v], i) => (
+          <Fragment key={i}>
             <dt>{k}</dt>
             <dd>{v}</dd>
-          </>
+          </Fragment>
         ))}
       </dl>{' '}
       {s.requestNotes ? (
@@ -421,8 +422,8 @@ export function certificate(id, lang = '') {
         <>
           {people.length ? (
             <dl className="dl" style={{ marginBottom: '14px' }}>
-              {people.map(([k, by, at]) => (
-                <>
+              {people.map(([k, by, at], i) => (
+                <Fragment key={i}>
                   <dt>{k}</dt>
                   <dd>
                     {by}
@@ -430,7 +431,7 @@ export function certificate(id, lang = '') {
                       {when(at)}
                     </small>
                   </dd>
-                </>
+                </Fragment>
               ))}
             </dl>
           ) : (
@@ -441,8 +442,8 @@ export function certificate(id, lang = '') {
               {s.history
                 .slice()
                 .reverse()
-                .map(h => (
-                  <div className="tl-item">
+                .map((h, i) => (
+                  <div key={i} className="tl-item">
                     <div className="when">{when(h.at)}</div>{' '}
                     <div className="what">
                       {histLabel(h.action)}
@@ -958,10 +959,10 @@ certificate.mount = (host, id, lang = '') => {
               <label className="label" htmlFor="edit_celebrant">
                 {L('Celebrant', 'المحتفل')}
               </label>
-              <Select id="edit_celebrant">
+              <Select defaultValue={record.celebrant} id="edit_celebrant">
                 <option value="">{L('To be assigned', 'يُحدّد لاحقاً')}</option>
-                {PEOPLE.filter(p => p.status === 'clergy' || p.id === record.celebrant).map(p => (
-                  <option value={p.id} selected={!!(p.id === record.celebrant)}>
+                {PEOPLE.filter(p => p.status === 'clergy' || p.id === record.celebrant).map((p, i) => (
+                  <option key={i} value={p.id}>
                     {isAr() ? p.ar : p.lat}
                   </option>
                 ))}
@@ -1057,8 +1058,8 @@ certificate.mount = (host, id, lang = '') => {
             {L('Approved entry', 'القيد المعتمد')}
           </label>
           <Select id="link_source">
-            {sources.map(s => (
-              <option value={s.id}>
+            {sources.map((s, i) => (
+              <option key={i} value={s.id}>
                 {s.reg} · {kindLabel(s.kind)}
               </option>
             ))}

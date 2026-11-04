@@ -1,5 +1,6 @@
 /* Asking the parish for something: the request form step by step (who, where and when, the
    details) with what to prepare. */
+import { Fragment } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { htmlAttrs } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
@@ -201,10 +202,10 @@ const input = (id, label, value, { type = 'text', req = false, help = '', attrs 
 const select = (id, label, value, options, { req = false, placeholder = '' } = {}) => (
   <div className="formrow mr-field">
     {labelFor(id, label, req)}{' '}
-    <Select id={id} aria-required={req ? 'true' : undefined} aria-describedby={`${id}-error`}>
+    <Select id={id} defaultValue={txt(value)} aria-required={req ? 'true' : undefined} aria-describedby={`${id}-error`}>
       <option value="">{txt(placeholder)}</option>
-      {options.map(([v, text]) => (
-        <option value={txt(v)} selected={!!(v === value)}>
+      {options.map(([v, text], i) => (
+        <option key={i} value={txt(v)}>
           {txt(text)}
         </option>
       ))}
@@ -215,8 +216,8 @@ const select = (id, label, value, options, { req = false, placeholder = '' } = {
 
 const pills = (name, items, value, otherLabel) => (
   <div className="mr-pills">
-    {items.map(([en, ar]) => (
-      <label className="mr-pill">
+    {items.map(([en, ar], i) => (
+      <label key={i} className="mr-pill">
         <input type="radio" name={name} defaultValue={txt(en)} defaultChecked={!!(value === en)} />
         <span>{txt(t(en, ar))}</span>
       </label>
@@ -286,12 +287,14 @@ function stepWho(d) {
       </div>
     </div>
   );
-  const people = choices.map(s =>
-    option(s.id, s.self ? L('You', 'أنت') + ' — ' + nameOf(s) : nameOf(s), s.blocked || otherName(s), {
-      disabled: !!s.blocked,
-      checked: d.subject === s.id && !s.blocked
-    })
-  );
+  const people = choices.map((s, i) => (
+    <Fragment key={i}>
+      {option(s.id, s.self ? L('You', 'أنت') + ' — ' + nameOf(s) : nameOf(s), s.blocked || otherName(s), {
+        disabled: !!s.blocked,
+        checked: d.subject === s.id && !s.blocked
+      })}
+    </Fragment>
+  ));
   const none = !choices.length && d.kind !== 'baptism';
   return (
     <>
@@ -335,8 +338,8 @@ function stepPlace(d) {
       <fieldset className="mr-fieldset" id="mr-venue-group" aria-describedby="mr-venue-error">
         <legend className="mr-legend">{L('Which place would you like?', 'أي مكان تريد؟')}</legend>{' '}
         <div className="mr-choices mr-choices-2">
-          {venues.map(v => (
-            <label className="mr-choice">
+          {venues.map((v, i) => (
+            <label key={i} className="mr-choice">
               <input type="radio" name="mr-venue" defaultValue={txt(v.id)} defaultChecked={!!(d.venue === v.id)} />{' '}
               <span className="mr-choice-body">
                 <b>{txt(t(v.name, v.ar || v.name))}</b>
@@ -491,10 +494,10 @@ function stepDetails(d) {
         <fieldset className="mr-fieldset" id="mr-of-group" aria-describedby="mr-of-error">
           <legend className="mr-legend mr-legend-sm">{L('Which certificate?', 'أي شهادة؟')}</legend>{' '}
           <div className="mr-choices mr-choices-2">
-            {CERTIFICATE_OF.map(([id]) => {
+            {CERTIFICATE_OF.map(([id], i) => {
               const onRecord = subject?.onRecord.includes(id);
               return (
-                <label className="mr-choice">
+                <label key={i} className="mr-choice">
                   <input type="radio" name="mr-of" defaultValue={id} defaultChecked={!!(d.certificateOf === id)} />{' '}
                   <span className="mr-choice-body">
                     <b>{txt(certificateName(id))}</b>
@@ -523,8 +526,8 @@ function stepDetails(d) {
         <fieldset className="mr-fieldset">
           <legend className="mr-legend mr-legend-sm">{L('Language of the certificate', 'لغة الشهادة')}</legend>{' '}
           <div className="mr-pills">
-            {LANGUAGES.map(([id]) => (
-              <label className="mr-pill">
+            {LANGUAGES.map(([id], i) => (
+              <label key={i} className="mr-pill">
                 <input type="radio" name="mr-language" defaultValue={id} defaultChecked={!!(d.language === id)} />
                 <span>{txt(languageName(id))}</span>
               </label>
@@ -558,7 +561,9 @@ function stepDetails(d) {
   }
   return (
     <>
-      {body}
+      {body.map((part, i) => (
+        <Fragment key={i}>{part}</Fragment>
+      ))}
       {phoneField(d)}
       {notesField(d)}
     </>
@@ -595,8 +600,8 @@ function prepareAside(kind) {
       <section className="member-card">
         <h2>{L('Places you can book', 'الأماكن المتاحة للحجز')}</h2>
         <ul className="mr-checklist">
-          {(M.requestOptions?.venues || []).map(v => (
-            <li>
+          {(M.requestOptions?.venues || []).map((v, i) => (
+            <li key={i}>
               <Icon name="rooms" size={16} />
               <span>{txt(t(v.name, v.ar || v.name))}</span>
               <small>{L(`${v.cap} people`, `${v.cap} شخصاً`)}</small>
@@ -639,8 +644,8 @@ function prepareAside(kind) {
     const body = list.length ? (
       <>
         <ul className="mr-checklist">
-          {list.map(([en, ar, required]) => (
-            <li>
+          {list.map(([en, ar, required], i) => (
+            <li key={i}>
               <Icon name="doc" size={16} />
               <span>{txt(t(en, ar))}</span>
               <small>{required ? L('Required', 'مطلوب') : L('Optional', 'اختياري')}</small>
@@ -675,8 +680,8 @@ function prepareAside(kind) {
       <section className="member-card">
         <h2>{L('After you send it', 'بعد الإرسال')}</h2>
         <ol className="mr-mini-steps">
-          {after.map(x => (
-            <li>{x}</li>
+          {after.map((x, i) => (
+            <li key={i}>{x}</li>
           ))}
         </ol>
       </section>
@@ -731,6 +736,7 @@ export function newPage(kind) {
           <ol className="mr-progress" aria-label={L('Steps', 'الخطوات')}>
             {steps.map((label, i) => (
               <li
+                key={i}
                 data-step-mark={i + 1}
                 aria-current={d.step === i + 1 ? 'step' : undefined}
                 className={d.step > i + 1 ? 'done' : ''}

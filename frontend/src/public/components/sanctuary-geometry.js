@@ -27,11 +27,6 @@ export const GLASS = {
   right: 'M530 1170V760A175 175 0 0 1 880 760V1170Z'
 };
 
-/* The same openings as SVG markup, for masks drawn outside React. */
-export const GLASS_MARKUP =
-  GLASS.rose.map(c => `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>`).join('') +
-  `<path d="${GLASS.left}"/><path d="${GLASS.right}"/>`;
-
 /* Where the light falls: each shaft is the window opening drawn out along the sun's direction. */
 const SUN = (() => {
   const x = -0.72,

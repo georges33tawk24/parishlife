@@ -1,7 +1,7 @@
 /* Administration dialogs: workflow rules, permission exceptions, webhooks, tags, and permanently
    deleting a record. */
 import { Select } from '../../ui/components.jsx';
-import { t, fmtDate } from '../../../lib/i18n.js';
+import { t } from '../../../lib/i18n.js';
 import { toast, openModal, closeOverlays } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
@@ -11,7 +11,11 @@ import { need } from '../../shared/dialogs.jsx';
 const L = (en, ar) => t(en, ar);
 
 export function ruleAdd() {
-  const opts = D.FORM_FIELDS.map(f => <option value={f.id}>{L(f.label, f.labelAr)}</option>);
+  const opts = D.FORM_FIELDS.map((f, i) => (
+    <option key={i} value={f.id}>
+      {L(f.label, f.labelAr)}
+    </option>
+  ));
   openModal({
     title: L('Add a rule', 'إضافة قاعدة'),
     body: (
@@ -87,73 +91,6 @@ export function ruleAdd() {
   });
 }
 
-export function permException() {
-  openModal({
-    title: L('Add an exception', 'إضافة استثناء'),
-    sub: L(
-      'An explicit deny always beats a role grant. Every exception needs a reason and a review date.',
-      'المنع الصريح يتقدّم دائماً على منح الدور. ولكل استثناء سبب وتاريخ مراجعة.'
-    ),
-    body: (
-      <>
-        <C.PersonPicker label={L('Person', 'الشخص')} id="px_p" />{' '}
-        <div className="formgrid">
-          <div className="formrow">
-            <label className="label">{L('Action', 'الإجراء')}</label>
-            <Select id="px_a">
-              {D.PERMISSIONS.map(p => (
-                <option value={p[0]}>{L(p[1], p[2])}</option>
-              ))}
-            </Select>
-          </div>{' '}
-          <div className="formrow">
-            <label className="label">{L('Effect', 'الأثر')}</label>
-            <Select id="px_e">
-              <option value="+">{L('Allow', 'سماح')}</option>
-              <option value="−">{L('Deny', 'منع')}</option>
-            </Select>
-          </div>
-        </div>{' '}
-        <C.Field label={L('Reason', 'السبب')} req={true} id="px_r" />{' '}
-        <C.Field label={L('Review on', 'المراجعة في')} type="date" value="2027-01-31" id="px_d" />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="px_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Add exception', 'إضافة الاستثناء')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#px_go').addEventListener('click', () => {
-        if (!need(el, '#px_r', L('Give a reason', 'اذكر السبب'))) return;
-        const typed = val(el, '#px_p').toLowerCase();
-        const p = D.PEOPLE.find(x => typed && (x.lat.toLowerCase().includes(typed) || x.ar.includes(typed)));
-        if (!need(el, '#px_p', L('Choose the person from the list', 'اختر الشخص من اللائحة'), () => !!p)) return;
-        const x = {
-          id: 'ex' + Date.now().toString(36),
-          p: p.id,
-          action: val(el, '#px_a'),
-          effect: val(el, '#px_e'),
-          reason: val(el, '#px_r'),
-          review: val(el, '#px_d')
-        };
-        D.EXCEPTIONS.push(x);
-        closeOverlays();
-        refresh();
-        ok(
-          L('Exception added', 'أُضيف الاستثناء'),
-          `${el.querySelector('#px_e').value} ${el.querySelector('#px_a').value} · ${L('review', 'مراجعة')} ${fmtDate(val(el, '#px_d'))}`
-        );
-      });
-    }
-  });
-}
-
 export function webhookAdd() {
   openModal({
     title: L('Add a webhook', 'إضافة خطّاف'),
@@ -164,8 +101,8 @@ export function webhookAdd() {
           {L('Events', 'الأحداث')}
         </div>{' '}
         <div className="stack" style={{ gap: '8px' }}>
-          {['sacrament.registered', 'report.published', 'message.failed', 'reservation.approved'].map(ev => (
-            <label className="check">
+          {['sacrament.registered', 'report.published', 'message.failed', 'reservation.approved'].map((ev, i) => (
+            <label key={i} className="check">
               <input type="checkbox" defaultValue={ev} />
               <span className="mono" style={{ fontSize: '13px' }}>
                 {ev}
@@ -210,7 +147,7 @@ export function deleteSpecimen() {
     sub: L('This cannot be undone.', 'لا يمكن التراجع.'),
     body: (
       <div className="formrow">
-        <label className="label">
+        <label htmlFor="ds_in" className="label">
           {L('Type', 'اكتب')} <b>Georges Haddad</b> {L('to confirm', 'للتأكيد')}
         </label>{' '}
         <input className="input" id="ds_in" autoComplete="off" />

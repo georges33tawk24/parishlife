@@ -1,5 +1,6 @@
 /* Facilities and resources: rooms, equipment, maintenance and issues, each room's availability and
    blocking it for maintenance. */
+import { Fragment } from 'react';
 import { css, paint } from '../../ui/html.js';
 import { t, usd, fmtDate, fmtLong, month, dayShort } from '../../../lib/i18n.js';
 import { bus, S, me } from '../../model/store.js';
@@ -86,8 +87,8 @@ export function facilities(tab = '') {
               <C.SearchClear ph={L('Search equipment', 'ابحث في التجهيزات')} id="eqsearch" data-find="" />
             </div>{' '}
             <span className="seg" role="group" aria-label={L('Show', 'عرض')}>
-              {FILTERS.map(([k, lab, test]) => (
-                <button type="button" aria-pressed={f === k} data-act={`eq-filter:${k}`}>
+              {FILTERS.map(([k, lab, test], i) => (
+                <button key={i} type="button" aria-pressed={f === k} data-act={`eq-filter:${k}`}>
                   {lab}
                   <span className="segn">{EQUIPMENT.filter(test).length}</span>
                 </button>
@@ -306,8 +307,8 @@ export function facilities(tab = '') {
         </div>
       </>
     );
-  const cards = VENUES.map(v => (
-    <section className="panel">
+  const cards = VENUES.map((v, i) => (
+    <section key={i} className="panel">
       <div className="panel-b">
         <div
           style={{
@@ -336,8 +337,9 @@ export function facilities(tab = '') {
           ) : (
             <Pill label={L('Stairs only', 'درج فقط')} tone="warning" />
           )}{' '}
-          {MAINTENANCE.filter(m => m.venue === v.id).map(m => (
+          {MAINTENANCE.filter(m => m.venue === v.id).map((m, i) => (
             <Pill
+              key={i}
               label={L(`Blocked ${fmtDate(m.from)} – ${fmtDate(m.to)}`, `مغلقة ${fmtDate(m.from)} – ${fmtDate(m.to)}`)}
               tone="danger"
             />
@@ -501,16 +503,19 @@ function availabilityDrawer(vid) {
             <C.IconBtn ico="chevR" label={L('Next month', 'الشهر التالي')} data-avm="1" />
           </div>{' '}
           <div className="avail-grid" role="grid">
-            {[0, 1, 2, 3, 4, 5, 6].map(i => (
-              <span className="dh">{dayShort(i)}</span>
+            {[0, 1, 2, 3, 4, 5, 6].map((i, k) => (
+              <span key={k} className="dh">
+                {dayShort(i)}
+              </span>
             ))}{' '}
-            {cells.map(d => {
-              if (!d) return <span />;
+            {cells.map((d, i) => {
+              if (!d) return <span key={i} />;
               const k = isoD(d),
                 bl = blockOn(vid, k),
                 busy = !bl && heldOn(vid, k).length;
               return (
                 <button
+                  key={i}
                   type="button"
                   className={`ad${k === day ? ' on' : ''}${k === isoD(TODAY) ? ' today' : ''}${k < isoD(TODAY) ? ' past' : ''}${bl ? ' blocked' : ''}`}
                   data-avday={k}
@@ -568,8 +573,8 @@ function availabilityDrawer(vid) {
           ) : (
             <>
               <div className="avail-strip" aria-hidden="true">
-                {items.map(it => (
-                  <>
+                {items.map((it, i) => (
+                  <Fragment key={i}>
                     {it.buffer ? (
                       <span
                         className="seg buf"
@@ -585,12 +590,12 @@ function availabilityDrawer(vid) {
                       style={css(`inset-inline-start:${pct(it.from)};width:${width(it.from, it.to)}`)}
                       title={it.title}
                     />
-                  </>
+                  </Fragment>
                 ))}
               </div>{' '}
               <div className="avail-scale" aria-hidden="true">
-                {[7, 11, 15, 19, 23].map(h => (
-                  <span>{String(h).padStart(2, '0')}:00</span>
+                {[7, 11, 15, 19, 23].map((h, i) => (
+                  <span key={i}>{String(h).padStart(2, '0')}:00</span>
                 ))}
               </div>{' '}
               {past ? (
@@ -613,9 +618,9 @@ function availabilityDrawer(vid) {
                   : L('Free all day, 07:00 – 23:00.', 'متاحة طوال اليوم، 07:00 – 23:00.')}
               </p>{' '}
               <ol className="avail-list">
-                {rows.map(({ it, g }) =>
+                {rows.map(({ it, g }, i) =>
                   it ? (
-                    <li className="held">
+                    <li key={i} className="held">
                       <span className="tm mono">
                         {hhmm(it.from)}–{hhmm(it.to)}
                       </span>
@@ -636,7 +641,7 @@ function availabilityDrawer(vid) {
                       </span>
                     </li>
                   ) : (
-                    <li className="free">
+                    <li key={i} className="free">
                       <span className="tm mono">
                         {hhmm(g[0])}–{hhmm(g[1])}
                       </span>
@@ -822,8 +827,8 @@ function blockDrawer(vid) {
                 )}
               />
               <ul className="blocklist">
-                {list.map(x => (
-                  <li>
+                {list.map((x, i) => (
+                  <li key={i}>
                     <span className="mono dim">
                       {fmtDate(x.d)} · {x.t}
                     </span>

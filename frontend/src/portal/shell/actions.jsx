@@ -38,23 +38,12 @@ import {
 import { lineEdit, lineReverse, receipt, statement, statementsAll } from '../features/money/money-dialogs.jsx';
 import {
   addToService,
-  slides,
-  svcItemAdd,
-  svcItemMenu,
   svcRequestNew,
   svcRequestOpen,
   svcTemplateUse
 } from '../features/parish-life/services-dialogs.jsx';
 import { noteEdit, noteNew } from '../features/records/notes.jsx';
-import {
-  handover,
-  meetingNew,
-  memberAdd,
-  memberMenu,
-  milestoneRecord,
-  postAdd,
-  taskAdd
-} from '../features/parish-life/groups-dialogs.jsx';
+import { handover, meetingNew, memberAdd, memberMenu, postAdd } from '../features/parish-life/groups-dialogs.jsx';
 import {
   hymnRestore,
   hymnText,
@@ -73,15 +62,9 @@ import {
   scan
 } from '../features/parish-life/checkin-dialogs.jsx';
 import { contentEdit } from '../features/communicate/website-dialogs.jsx';
-import {
-  deleteSpecimen,
-  permException,
-  ruleAdd,
-  tagAdd,
-  webhookAdd
-} from '../features/administration/administration-dialogs.jsx';
+import { deleteSpecimen, ruleAdd, tagAdd, webhookAdd } from '../features/administration/administration-dialogs.jsx';
 import * as CR from '../shared/record-editor.jsx';
-import { backupJSON, persist, workflow as serverWorkflow } from '../model/persist.js';
+import { backupJSON, persist } from '../model/persist.js';
 import { selectedCheckin } from '../model/event-workflows.js';
 import { session } from '../model/api.js';
 
@@ -159,19 +142,6 @@ export const VERBS = {
   print: () => window.print(),
   'print-week': () => import('../features/parish-life/schedules.jsx').then(m => m.printWeekDialog()),
   export: exportNearest,
-
-  'export-json': () => {
-    download(
-      'parishlife-parish.json',
-      JSON.stringify(
-        { parish: D.PARISH, rate: D.RATE, people: D.PEOPLE.length, households: D.HOUSEHOLDS.length },
-        null,
-        2
-      ),
-      'application/json'
-    );
-    ok(L('Exported', 'تمّ التصدير'), 'parishlife-parish.json');
-  },
 
   /* reservations ------------------------------------------------ */
   'res-approve': (btn, id) => {
@@ -306,23 +276,6 @@ export const VERBS = {
     );
   },
 
-  /* sacraments -------------------------------------------------- */
-  'sacr-sign': async (btn, id) => {
-    const s = find(D.SACRAMENTS, id);
-    if (!s) return;
-    try {
-      await serverWorkflow('issue', id, { verified: true });
-      closeOverlays();
-      refresh();
-      ok(
-        L('Signed and issued', 'وُقّعت وصدرت'),
-        L(`${s.reg} is now in the issuance history.`, `${s.reg} في سجل الإصدار الآن.`)
-      );
-    } catch (e) {
-      toast(L('Could not issue certificate', 'تعذّر إصدار الشهادة'), e.message, 'danger');
-    }
-  },
-
   /* giving & finance -------------------------------------------- */
   'env-add': () => {
     const el = document.querySelector('.drawer');
@@ -376,65 +329,6 @@ export const VERBS = {
     ok(L('Matched', 'تمّت المطابقة'), L('Reconciled against counting session 214.', 'طوبقت مع جلسة العدّ ٢١٤.'));
   },
 
-  /* people ------------------------------------------------------ */
-  'person-add': () => {
-    const el = document.querySelector('.drawer');
-    const ar = el?.querySelector('#arname')?.value?.trim();
-    const lat = el?.querySelector('#latname')?.value?.trim();
-    if (!ar || !lat) {
-      toast(
-        L('Both names are required', 'الاسمان مطلوبان'),
-        L(
-          'The Arabic name is what a certificate prints; the English one is the search key.',
-          'الاسم العربي هو ما تطبعه الشهادة، واللاتيني مفتاح البحث.'
-        ),
-        'warning'
-      );
-      return;
-    }
-    const id = 'p' + Date.now().toString(36);
-    D.PEOPLE.unshift({
-      id,
-      lat,
-      ar,
-      town: 'Hadath',
-      townAr: 'الحدث',
-      rite: 'Maronite',
-      status: 'member',
-      phone: el?.querySelector('#newphone')?.value?.trim() || '—',
-      born: el?.querySelector('input[type=date]')?.value || '1990-01-01',
-      hh: null,
-      tags: []
-    });
-    el?.querySelectorAll('input[id^="newgroup-"]:checked').forEach(input => {
-      const gid = input.id.slice('newgroup-'.length),
-        group = find(D.GROUPS, gid);
-      if (!group) return;
-      const detail =
-        D.GROUP_DETAIL[gid] ||
-        (D.GROUP_DETAIL[gid] = {
-          roster: [],
-          assistant: null,
-          roles: [],
-          requests: [],
-          meetings: [],
-          posts: [],
-          files: []
-        });
-      detail.roster ||= [];
-      if (!detail.roster.some(r => r.p === id))
-        detail.roster.push({ p: id, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 });
-      group.members = detail.roster.length;
-    });
-    if (D.PHOTOS.new) {
-      D.PHOTOS[id] = D.PHOTOS.new;
-      delete D.PHOTOS.new;
-    }
-    closeOverlays();
-    refresh();
-    document.querySelector(`#view tr[data-ri-p="${id}"]`)?.classList.add('flash');
-    ok(L('Parishioner added', 'أُضيف المؤمن'), `${lat} · ${ar}`);
-  },
   'dup-merge': (btn, i) => {
     const [d] = D.DUPLICATES.splice(+i, 1);
     if (!d) return;
@@ -540,17 +434,6 @@ export const VERBS = {
     );
   },
 
-  /* communication ----------------------------------------------- */
-  'msg-send': () => compose('all'),
-  'msg-retry': () =>
-    toast(
-      L('External delivery is not connected', 'الإرسال الخارجي غير موصول'),
-      L(
-        'No SMS was sent. Use the established contact method outside ParishLife.',
-        'لم تُرسل رسالة قصيرة. استخدم وسيلة التواصل المعتمدة خارج ParishLife.'
-      ),
-      'warning'
-    ),
   'notice-add': () => CR.create('notice'),
   'prayer-publish': (btn, id) => {
     const p = find(D.PRAYERS, id);
@@ -697,11 +580,9 @@ export const VERBS = {
   },
   remind: (b, a) => remind(a || 'rota'),
   broadcast: () => broadcast(),
-  invite: (b, a) => invite(a || 'rota'),
   'rota-fill': (b, a) => invite('rota', a),
   'rota-remove': (b, a) => rotaRemove(a),
   'rota-swap': (b, a) => rotaSwap(b, a),
-  share: (b, a) => share({ title: a || document.title }),
   'share-cert': () =>
     share({ title: L('Certificate', 'شهادة'), text: L('Your certificate from Saint Elias', 'شهادتك من مار الياس') }),
   doc: (b, a) => previewDoc(a || 'Document'),
@@ -712,7 +593,6 @@ export const VERBS = {
   },
   statement: (b, a) => statement(a || 'p1'),
   'statements-all': () => statementsAll(),
-  slides: () => slides(),
   design: (b, a) => designTemplate(a || 0),
   'record-new': () => recordChooser(),
   'person-edit': (b, a) => personEdit(a),
@@ -726,8 +606,6 @@ export const VERBS = {
   'member-add': (b, a) => memberAdd(a || 'g1'),
   'meeting-new': () => meetingNew(),
   'post-add': b => postAdd(b),
-  'task-add': () => taskAdd(),
-  milestone: (b, a) => milestoneRecord(a),
   handover: () => handover(),
   'cal-prev': () => calShift(-1),
   'cal-next': () => calShift(1),
@@ -740,11 +618,6 @@ export const VERBS = {
   },
   'people-env': () => {
     S.ui.peopleEnv = !S.ui.peopleEnv;
-    S.ui.peoplePage = 0;
-    refresh();
-  },
-  'people-new': () => {
-    S.ui.peopleNew = !S.ui.peopleNew;
     S.ui.peoplePage = 0;
     refresh();
   },
@@ -769,12 +642,6 @@ export const VERBS = {
   },
   'event-dup': (b, a) => eventDuplicate(a),
   'event-cancel': (b, a) => eventCancel(a),
-  'svc-add': () => svcItemAdd(),
-  'svc-item': (b, a) => svcItemMenu(b, a),
-  'svc-reorder': () => {
-    S.ui.reorder = !S.ui.reorder;
-    refresh();
-  },
   'svc-tpl': (b, a) => svcTemplateUse(a),
   'to-service': (b, a) => addToService(a),
   play: (b, a) => play(a),
@@ -795,8 +662,6 @@ export const VERBS = {
   },
   'incident-new': () => incidentNew(),
   'incident-open': (b, a) => incidentOpen(a),
-  'venue-new': () => CR.create('venue'),
-  'issue-new': () => CR.create('issue'),
   'content-edit': (b, a) => contentEdit(a),
   'portal-open': () =>
     window.open(`public.html?parish=${encodeURIComponent(session.parishId || '')}`, '_blank', 'noopener'),
@@ -805,16 +670,6 @@ export const VERBS = {
   'line-reverse': (b, a) => lineReverse(a),
   'svc-request': (b, a) => svcRequestOpen(a),
   'svc-request-new': (b, a) => svcRequestNew(a),
-  'svc-move': (b, a) => {
-    const [i, d] = a.split('|').map(Number);
-    const o = D.SERVICE.order,
-      j = i + d;
-    if (j >= 0 && j < o.length) {
-      [o[i], o[j]] = [o[j], o[i]];
-      refresh();
-    }
-  },
-  'notice-edit': (b, a) => CR.edit('notice', a),
   'hymn-restore': (b, a) => {
     const [mid, i] = a.split('|');
     hymnRestore(mid, i);
@@ -898,8 +753,6 @@ export const VERBS = {
     archivePeople(ids);
   },
 
-  /* eparchy, workflows, reports, settings ------------------------- */
-  'eparchy-msg': () => compose('eparchy', { title: L('Eparchy announcement', 'إعلان أبرشي') }),
   'parish-switch': (b, id) => parishSwitch(id),
   'wf-new': () => CR.create('workflow'),
   'wf-pause': (b, id) => {
@@ -996,21 +849,6 @@ export const VERBS = {
       }
     });
   },
-  'exception-del': (b, id) => {
-    const i = D.EXCEPTIONS.findIndex(x => x.id === id);
-    if (i < 0) return;
-    const [x] = D.EXCEPTIONS.splice(i, 1);
-    refresh();
-    ok(L('Exception removed', 'أُزيل الاستثناء'), `${x.effect} ${x.action}`, {
-      action: {
-        label: L('Undo', 'تراجع'),
-        fn: () => {
-          D.EXCEPTIONS.splice(i, 0, x);
-          refresh();
-        }
-      }
-    });
-  },
   'report-schedule': () => {
     closeOverlays();
     ok(
@@ -1023,7 +861,6 @@ export const VERBS = {
       L('Settings saved', 'حُفظت الإعدادات'),
       L('Every role sees the change immediately.', 'يرى كل دور التغيير فوراً.')
     ),
-  'perm-exception': () => permException(),
   'session-revoke': (b, i) => {
     const [x] = D.SESSIONS.splice(+i, 1);
     if (!x) return;
@@ -1085,6 +922,11 @@ export const VERBS = {
   /* design-system specimens behave like the real thing ----------- */
   'spec-save': () => ok(L('Record saved', 'حُفظ السجل'), L('Every mutation toasts.', 'كل تعديل يُنبّه.')),
   'spec-cancel': () => toast(L('Changes discarded', 'أُلغيت التعديلات')),
+  'spec-retry': () =>
+    toast(
+      L('Trying again', 'جارٍ إعادة المحاولة'),
+      L('In the product this sends the request again.', 'في التطبيق يعيد هذا إرسال الطلب.')
+    ),
   'spec-delete': () => deleteSpecimen(),
   'spec-clear': () => {
     S.ui.peopleStatus = null;
@@ -1167,9 +1009,6 @@ export const VERBS = {
         }
       }
     );
-  },
-  'rate-open': () => {
-    document.getElementById('userbtn')?.click();
   }
 };
 

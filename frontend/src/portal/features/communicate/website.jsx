@@ -105,7 +105,7 @@ function portalContent() {
             state = !filled ? 'empty' : c.published === false ? 'draft' : 'published';
           const preview = L(c.en || '', c.ar || '') || c.en || c.ar || '';
           return (
-            <article className="cms-section-card" aria-labelledby={`cms-${key}-title`}>
+            <article key={index} className="cms-section-card" aria-labelledby={`cms-${key}-title`}>
               <div className="cms-card-top">
                 <span className="cms-section-number" aria-hidden="true">
                   {String(index + 1).padStart(2, '0')}
@@ -296,8 +296,8 @@ export function portal(tab = '') {
                 {onlineNote}
                 {PORTAL_REQUESTS.length ? (
                   <>
-                    {PORTAL_REQUESTS.map(r => (
-                      <div className="listrow" style={{ paddingInline: 0 }}>
+                    {PORTAL_REQUESTS.map((r, i) => (
+                      <div key={i} className="listrow" style={{ paddingInline: 0 }}>
                         <span className="grow">
                           <b>{L(r.what, r.whatAr)}</b>{' '}
                           <small>
@@ -360,8 +360,8 @@ export function portal(tab = '') {
                   [L('Discover groups and request membership', 'اكتشاف المجموعات وطلب الانتساب'), 'groups'],
                   [L('See their volunteer schedule and registrations', 'رؤية مناوباته وتسجيلاته'), 'vol'],
                   [L('Set their own notification preferences', 'ضبط تفضيلات إشعاراته'), 'bell']
-                ].map(([x, i]) => (
-                  <li className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
+                ].map(([x, i], k) => (
+                  <li key={k} className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
                     <Icon name={i} size={17} cls="dimmer" />
                     <span className="t-caption">{x}</span>
                   </li>
