@@ -1,0 +1,9 @@
+<!-- Purpose: opens the production API, development tests, and private maintenance tool together.
+     Main contents: project membership only; only ParishLife.Api is deployed to App Service. -->
+<Solution>
+  <Project Path="ParishLife.Api/ParishLife.Api.csproj" />
+  <Project Path="ParishLife.AppHost/ParishLife.AppHost.csproj" />
+  <Project Path="ParishLife.UnitTests/ParishLife.UnitTests.csproj" />
+  <Project Path="ParishLife.IntegrationTests/ParishLife.IntegrationTests.csproj" />
+  <Project Path="tools/ParishLife.Maintenance/ParishLife.Maintenance.csproj" />
+</Solution>

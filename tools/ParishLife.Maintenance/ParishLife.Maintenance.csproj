@@ -1,0 +1,7 @@
+<!-- Purpose: builds explicit, private operator commands; never deployed with the public API.
+     Main contents: executable settings and a reference to the API's shared backend services. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../ParishLife.Api/ParishLife.Api.csproj" /></ItemGroup>
+</Project>

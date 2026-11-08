@@ -1,0 +1,190 @@
+{
+  "contractVersion": 1,
+  "database": "ParishLife",
+  "capacity": "Serverless",
+  "defaultConsistencyLevel": "Strong",
+  "provisioning": "Explicit operator setup via tools/Initialize-Cosmos.ps1 or Portal; never applied by API startup",
+  "containers": [
+    {
+      "id": "Accounts",
+      "partitionKey": {
+        "paths": [
+          "/partitionKey"
+        ],
+        "kind": "Hash",
+        "version": 2
+      },
+      "indexingPolicy": {
+        "automatic": true,
+        "indexingMode": "consistent",
+        "includedPaths": [
+          {
+            "path": "/partitionKey/?"
+          },
+          {
+            "path": "/type/?"
+          }
+        ],
+        "excludedPaths": [
+          {
+            "path": "/*"
+          }
+        ]
+      }
+    },
+    {
+      "id": "LoginAliases",
+      "partitionKey": {
+        "paths": [
+          "/partitionKey"
+        ],
+        "kind": "Hash",
+        "version": 2
+      },
+      "indexingPolicy": {
+        "automatic": true,
+        "indexingMode": "consistent",
+        "includedPaths": [
+          {
+            "path": "/partitionKey/?"
+          },
+          {
+            "path": "/type/?"
+          }
+        ],
+        "excludedPaths": [
+          {
+            "path": "/*"
+          }
+        ]
+      }
+    },
+    {
+      "id": "TenantControl",
+      "partitionKey": {
+        "paths": [
+          "/partitionKey"
+        ],
+        "kind": "Hash",
+        "version": 2
+      },
+      "indexingPolicy": {
+        "automatic": true,
+        "indexingMode": "consistent",
+        "includedPaths": [
+          {
+            "path": "/partitionKey/?"
+          },
+          {
+            "path": "/type/?"
+          },
+          {
+            "path": "/data/accountId/?"
+          },
+          {
+            "path": "/data/revoked/?"
+          },
+          {
+            "path": "/data/delegatingOrganizationId/?"
+          },
+          {
+            "path": "/data/associationId/?"
+          },
+          {
+            "path": "/data/startsAt/?"
+          },
+          {
+            "path": "/data/endsAt/?"
+          },
+          {
+            "path": "/data/eventId/?"
+          },
+          {
+            "path": "/data/status/?"
+          },
+          {
+            "path": "/data/published/?"
+          },
+          {
+            "path": "/data/visibility/?"
+          }
+        ],
+        "excludedPaths": [
+          {
+            "path": "/*"
+          }
+        ]
+      }
+    },
+    {
+      "id": "Billing",
+      "partitionKey": {
+        "paths": [
+          "/partitionKey"
+        ],
+        "kind": "Hash",
+        "version": 2
+      },
+      "indexingPolicy": {
+        "automatic": true,
+        "indexingMode": "consistent",
+        "includedPaths": [
+          {
+            "path": "/partitionKey/?"
+          },
+          {
+            "path": "/type/?"
+          },
+          {
+            "path": "/data/invoiceId/?"
+          },
+          {
+            "path": "/data/status/?"
+          },
+          {
+            "path": "/data/leaseUntil/?"
+          }
+        ],
+        "excludedPaths": [
+          {
+            "path": "/*"
+          }
+        ]
+      }
+    },
+    {
+      "id": "Catalog",
+      "partitionKey": {
+        "paths": [
+          "/partitionKey"
+        ],
+        "kind": "Hash",
+        "version": 2
+      },
+      "indexingPolicy": {
+        "automatic": true,
+        "indexingMode": "consistent",
+        "includedPaths": [
+          {
+            "path": "/partitionKey/?"
+          },
+          {
+            "path": "/type/?"
+          }
+        ],
+        "excludedPaths": [
+          {
+            "path": "/*"
+          }
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "TTL disabled: omit defaultTtl. No unique-key policies. No provisioned throughput on serverless containers.",
+    "Item id is indexed by Cosmos under consistent indexing; the implemented people query orders by id.",
+    "This is a manual configuration manifest, not a Bicep or automatic deployment script.",
+    "Calendar/reservation revision 2026-11-08: required TenantControl date/event/status/publication index paths are prepared for explicit operator review. This source change does not update Azure; metadata readiness rejects incompatible policies and does not prove completed index transformation or live query behavior."
+  ],
+  "queryContractUpdated": "2026-11-08"
+}

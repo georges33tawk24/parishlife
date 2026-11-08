@@ -1,0 +1,1353 @@
+{
+  "prepared": "2026-11-03",
+  "scope": "Full retained catalogue tracked; backend/Azure foundation, account security, jurisdiction/staff and manual calendar/facility/reservation slices implemented; no full-product or live Azure acceptance claim",
+  "catalogue_entries": 149,
+  "statuses": {
+    "partial": 36,
+    "not_started": 113
+  },
+  "entries": [
+    {
+      "id": "A01",
+      "workflow": "Register without creating a parish Person",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Email registration, alias ownership and manual contact verification; no auto-created Person.",
+      "remaining": "Self-service contact delivery, full profile/age/guardian policy and recovery remain.",
+      "questionnaire_references": "S06.01–07"
+    },
+    {
+      "id": "A02",
+      "workflow": "Sign in with email, phone or username",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Email or username/password login, lockout, secure cookies and verified MFA completion; username-only bootstrap administrators work without fabricated emails.",
+      "remaining": "Phone sign-in, wider contact/alias workflows, recovery and live-service acceptance remain.",
+      "questionnaire_references": "S06.03–04"
+    },
+    {
+      "id": "A03",
+      "workflow": "Sign out and revoke sessions",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Persisted own sessions, logout/revocation, stamp/method checks, honest Active/Expired/Revoked/Invalidated status and explicitly restricted recovery sessions.",
+      "remaining": "Full session lifecycle pagination/retention and real-service persistence acceptance remain.",
+      "questionnaire_references": "S06.11–12 S31.11"
+    },
+    {
+      "id": "A04",
+      "workflow": "Change own password",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Password change uses Identity and invalidates sessions.",
+      "remaining": "Broader privileged step-up/recovery policy and live persistence acceptance remain.",
+      "questionnaire_references": "S06.07 S06.11"
+    },
+    {
+      "id": "A05",
+      "workflow": "Recover member or privileged credentials",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Password plus single-use saved code can open only a restricted recovery session. Lost-device reset requires another current MFA-authenticated Super Admin identity review, fresh actor proofs, exact account/version, expiry and owner proof of the replacement device.",
+      "remaining": "Verified-contact password recovery, recovery with no usable factor or saved code, broader break-glass policy, notifications and live/hosted acceptance remain.",
+      "questionnaire_references": "S06.08 S02.13"
+    },
+    {
+      "id": "A06",
+      "workflow": "External sign-in, contact verification and alias changes",
+      "module": "Accounts",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S06.05–06 S06.11"
+    },
+    {
+      "id": "A07",
+      "workflow": "MFA enrollment and privileged recovery",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Owner MFA enrollment/rotation and protected recovery codes; atomic code/challenge/session consumption; reviewed, expiring, account-bound reset approvals consumed with the new device. Real local service/cookie/CSRF/Identity HTTP tests and typed OpenAPI pass.",
+      "remaining": "Frontend integration deferred. All-factors-lost recovery, password/contact recovery, approved disable/alternate methods, delivery, worklists, retention and live Cosmos/hosted acceptance remain.",
+      "questionnaire_references": "S06.06 S06.08 U10"
+    },
+    {
+      "id": "A08",
+      "workflow": "Personal profile and appearance",
+      "module": "Accounts",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S06.02 S07.12 S30.05"
+    },
+    {
+      "id": "A09",
+      "workflow": "Follow, primary parish and combined personal activity",
+      "module": "Accounts",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.01–06 S07.01–02"
+    },
+    {
+      "id": "A10",
+      "workflow": "Office-reviewed parish membership and person link",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S07.03–08"
+    },
+    {
+      "id": "A11",
+      "workflow": "Create and claim Person invitations",
+      "module": "Accounts/People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S06.09–10 S07.08"
+    },
+    {
+      "id": "A12",
+      "workflow": "Propose and review official profile corrections",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S07.09–12"
+    },
+    {
+      "id": "A13",
+      "workflow": "Associate a guest case with an account",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.15 S15.11"
+    },
+    {
+      "id": "P01",
+      "workflow": "People collection, creation and profile tabs",
+      "module": "People",
+      "status": "partial",
+      "implemented_slice": "Basic parish-owned Person create/read/page through explicit projections.",
+      "remaining": "Rich profile tabs, field-level controls and most person details remain.",
+      "questionnaire_references": "S08.01–09"
+    },
+    {
+      "id": "P02",
+      "workflow": "Geography, extra facts, skills, medical declarations and consent",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S08.04–06 S08.11"
+    },
+    {
+      "id": "P03",
+      "workflow": "Archive and restore people",
+      "module": "People",
+      "status": "partial",
+      "implemented_slice": "Version-checked archive/restore flag and audit.",
+      "remaining": "Dependent workflow impact and full lifecycle policies remain.",
+      "questionnaire_references": "S10.07–08"
+    },
+    {
+      "id": "P04",
+      "workflow": "Permanent removal and erasure review",
+      "module": "People/Administration",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S10.07 S32.01–04"
+    },
+    {
+      "id": "P05",
+      "workflow": "Duplicate suggestions, merge and unmerge review",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S10.04–06"
+    },
+    {
+      "id": "P06",
+      "workflow": "People import and historical intake",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S10.01–03 S10.12"
+    },
+    {
+      "id": "P07",
+      "workflow": "Search, filters, bulk actions and exports",
+      "module": "People/Reporting",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.10–13 S08.12 S32.04"
+    },
+    {
+      "id": "P08",
+      "workflow": "Household membership, shared address and contact",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S09.01–03 S09.07–10"
+    },
+    {
+      "id": "P09",
+      "workflow": "Family relationships and contact/head changes",
+      "module": "People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S09.04–09"
+    },
+    {
+      "id": "P10",
+      "workflow": "Opt-in directory and household envelope IDs",
+      "module": "People/Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S09.11–12 S24.03"
+    },
+    {
+      "id": "O01",
+      "workflow": "Diocese establishment and first bishop",
+      "module": "Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Super Admin establishment/verification and independently reviewed first-bishop acceptance; actual bishop authority now authorizes bounded staff invitations with fresh proofs, safe management scope versions and dated duties.",
+      "remaining": "Official multilingual/jurisdiction profiles, bishop succession/revocation, independent exceptional recovery, worklists/reminders, hosted/live Cosmos acceptance and central purchase remain. No organization/clergy facts are seeded.",
+      "questionnaire_references": "S01.01 S02.01–02 S02.12–13"
+    },
+    {
+      "id": "O02",
+      "workflow": "Create and activate parish",
+      "module": "Organizations",
+      "status": "partial",
+      "implemented_slice": "Independent parish representative setup/verification; first factual jurisdiction requires its MFA-protected representative proposal and exact current bishop decision with evidence, fresh proofs and conditional parish/proposal writes. Commercial association remains separate.",
+      "remaining": "Official profile approval/activation/readiness, contested claims, reassignment, formal vacancy/handover, publishing, closure and succession remain.",
+      "questionnaire_references": "S02.03 S32.06"
+    },
+    {
+      "id": "O03",
+      "workflow": "Grant/revoke scoped roles and exact lookup",
+      "module": "Access",
+      "status": "partial",
+      "implemented_slice": "Owner-controlled explicit account grants/revocation plus selected accepted appointment duties. Exact account/scope, current MFA/dates, non-unioned permissions, persistent explicit denials and acting-capacity fingerprints/audit are enforced on the implemented paths.",
+      "remaining": "The complete role catalogue, bounded delegated administration, staff recovery/succession, broader workspaces and hosted/live acceptance remain.",
+      "questionnaire_references": "S02.05 S02.09–14 S29.02–04"
+    },
+    {
+      "id": "O04",
+      "workflow": "Zero or several secretaries and team leads",
+      "module": "Access/Organizations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S01.03 S02.04 S02.08 S29.05"
+    },
+    {
+      "id": "O05",
+      "workflow": "Parish or global suspension/deactivation",
+      "module": "Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S02.10–13 S29.06"
+    },
+    {
+      "id": "O06",
+      "workflow": "Clergy title and multi-parish appointment",
+      "module": "Access",
+      "status": "partial",
+      "implemented_slice": "Bishop-authorized Archdiocese Admin and parish-priest invitations with real evidence, own acceptance, dates/duties, issuer recheck, suspension/resumption/revocation/review history, safe discovery and exact selected capacity. Head periods are part of priest office, cannot overlap accepted/suspended reservations and have explicit change history. Same account may hold independent parish appointments; no implicit cross-parish union.",
+      "remaining": "Full official clergy titles/profiles, formal acting/vacancy/handover policies, bishop succession/revocation, notifications/worklists, exceptional recovery, legacy appointment review/migration, all-module integration and live cross-scope/Cosmos acceptance remain.",
+      "questionnaire_references": "S02.01–04 S29.07"
+    },
+    {
+      "id": "O07",
+      "workflow": "Manual bundles and diocesan sponsorship",
+      "module": "Administration",
+      "status": "partial",
+      "implemented_slice": "Immutable plan snapshots, independent invoices, operator-confirmed cash, durable paid coverage.",
+      "remaining": "Full commercial lifecycle, central coverage, refunds, payer transfer and final terms remain.",
+      "questionnaire_references": "S29.09–13"
+    },
+    {
+      "id": "O08",
+      "workflow": "Bishop overview, map and aggregates",
+      "module": "Reporting/Organizations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S29.14–16"
+    },
+    {
+      "id": "C01",
+      "workflow": "Explicit scoped Allow/Deny and delegation limits",
+      "module": "Access",
+      "status": "partial",
+      "implemented_slice": "Current explicit allows/denies, association-bound grants and immediate epoch invalidation.",
+      "remaining": "Complete permission catalogue and bounded grant administration/role policy remain.",
+      "questionnaire_references": "S02.05 S02.11 S03.03"
+    },
+    {
+      "id": "Q01",
+      "workflow": "Unified office triage and history",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.07–09 S11.07–12"
+    },
+    {
+      "id": "Q02",
+      "workflow": "Member sacrament intake and representation",
+      "module": "Requests/Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.01–06 S13"
+    },
+    {
+      "id": "Q03",
+      "workflow": "Baptism for unregistered child and reviewed matching",
+      "module": "Requests/People",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S08.02–04 S13.01–03"
+    },
+    {
+      "id": "Q04",
+      "workflow": "Certificate request from existing/planned source",
+      "module": "Requests/Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.01–02 S14.08–09"
+    },
+    {
+      "id": "Q05",
+      "workflow": "Member facility request",
+      "module": "Requests/Facilities",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.01 S23.02–08"
+    },
+    {
+      "id": "Q06",
+      "workflow": "General request, appointment, intention, blessing or visit",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.01 S13.10 S13.13"
+    },
+    {
+      "id": "Q07",
+      "workflow": "Applicant edit/withdrawal and progress tracking",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.07–13 S12.12"
+    },
+    {
+      "id": "Q08",
+      "workflow": "Guest intake without account",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S04.10–11 S11.02–06"
+    },
+    {
+      "id": "Q09",
+      "workflow": "Private guest tracking and file access",
+      "module": "Requests/Files",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.14–15 S15.09–11"
+    },
+    {
+      "id": "Q10",
+      "workflow": "Office guest review and completion",
+      "module": "Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.05–13"
+    },
+    {
+      "id": "Q11",
+      "workflow": "Private upload, replace, read and remove",
+      "module": "Files",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S15.04–08 S31.10"
+    },
+    {
+      "id": "Q12",
+      "workflow": "Document checklist and paper evidence",
+      "module": "Files/Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S12.03–04 S15.01–03"
+    },
+    {
+      "id": "Q13",
+      "workflow": "Document release, withdrawal and collection",
+      "module": "Files/Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.04 S14.13 S15.09–12"
+    },
+    {
+      "id": "S01",
+      "workflow": "Office entry, optional precheck and priest acceptance",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S02.07 S12.01–02"
+    },
+    {
+      "id": "S02",
+      "workflow": "Amend accepted request",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11.11–13 S12.08–11"
+    },
+    {
+      "id": "S03",
+      "workflow": "Preparation, date and cancellation",
+      "module": "Sacraments/Scheduling",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S12.03–05 S12.11"
+    },
+    {
+      "id": "S04",
+      "workflow": "Record actual celebration and submit entry",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S12.06–08 S13.08–09"
+    },
+    {
+      "id": "S05",
+      "workflow": "Official register approval and numbering",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S12.08–09 S12.13"
+    },
+    {
+      "id": "S06",
+      "workflow": "Certificate source selection and preparation review",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S13.11–12 S14.01–09"
+    },
+    {
+      "id": "S07",
+      "workflow": "Priest signing and issuance",
+      "module": "Documents/Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.04 S14.10–12"
+    },
+    {
+      "id": "S08",
+      "workflow": "Bishop accept, return and resubmission",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.03–07"
+    },
+    {
+      "id": "S09",
+      "workflow": "Official register correction",
+      "module": "Sacraments",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S10.10 S12.10–13"
+    },
+    {
+      "id": "S10",
+      "workflow": "Official sheets, preview and export",
+      "module": "Documents",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.09–10 S30.19"
+    },
+    {
+      "id": "S11",
+      "workflow": "Sacramental anniversaries and greetings",
+      "module": "Sacraments/Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S16.12 S26"
+    },
+    {
+      "id": "K01",
+      "workflow": "Calendar events and source-owned amendments",
+      "module": "Scheduling",
+      "status": "partial",
+      "implemented_slice": "Manual draft create/edit/detail/window APIs, explicit confirmation/publication/unpublication/cancellation, current-state replay and parish root fences prevent linked-booking races. Generic commands refuse official/clergy/ministry source forgery.",
+      "remaining": "Official/source-owned amendments, full rescheduling previews, clergy scheduling, registrations/volunteers integration, acknowledgments and real notifications remain.",
+      "questionnaire_references": "S16.01–06 S16.13"
+    },
+    {
+      "id": "K02",
+      "workflow": "Event templates and recurring occurrences",
+      "module": "Scheduling",
+      "status": "partial",
+      "implemented_slice": "Bounded atomic recurring manual drafts preserve local wall times across normal DST changes. Missing/ambiguous generated local times fail atomically for explicit review; current occurrence replay and deterministic IDs are implemented.",
+      "remaining": "Reusable templates, occurrence exceptions, forward/eligible-series amendments, impact previews and real notifications remain.",
+      "questionnaire_references": "S16.04 S17.07"
+    },
+    {
+      "id": "K03",
+      "workflow": "Public, ministry and confidential event visibility",
+      "module": "Scheduling",
+      "status": "partial",
+      "implemented_slice": "Scoped parish/private views redact private subjects/categories/authors/reasons/links and writable versions. Draft/confirmed/cancelled redacted states stay honest. Anonymous published manual activities/cancellations use a safe DTO; unreviewed legacy source records are excluded.",
+      "remaining": "Ministry membership audiences, approved source/public-profile adapters, private feed/export access and wider granular privacy policies remain.",
+      "questionnaire_references": "S04.09 S16.02–03"
+    },
+    {
+      "id": "K04",
+      "workflow": "Clergy/personal schedules, print and calendar links",
+      "module": "Scheduling/Publishing",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S16.07–10"
+    },
+    {
+      "id": "K05",
+      "workflow": "Service/activity plans and reusable running orders",
+      "module": "Scheduling",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S17.01–08"
+    },
+    {
+      "id": "K06",
+      "workflow": "Music library, materials and setlists",
+      "module": "Scheduling",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S17.09–12"
+    },
+    {
+      "id": "M01",
+      "workflow": "Ministry creation, type and public listing",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S18.01–04 S18.12"
+    },
+    {
+      "id": "M02",
+      "workflow": "Roster and membership history",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S18.05–06 S19.06"
+    },
+    {
+      "id": "M03",
+      "workflow": "Join, private leave, priest final decision and withdrawal",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S18.04–10"
+    },
+    {
+      "id": "M04",
+      "workflow": "Leader/assistant handover",
+      "module": "Ministries/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S18.11 S02.10"
+    },
+    {
+      "id": "M05",
+      "workflow": "Meetings, materials and RSVP",
+      "module": "Ministries/Scheduling",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S19.01–03"
+    },
+    {
+      "id": "M06",
+      "workflow": "Attendance grid, corrections and CSV/XLSX import",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S19.04–08"
+    },
+    {
+      "id": "M07",
+      "workflow": "Formation milestones and completion",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S19.09"
+    },
+    {
+      "id": "M08",
+      "workflow": "Digital resources and physical loans",
+      "module": "Ministries/Facilities",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S19.10–11"
+    },
+    {
+      "id": "M09",
+      "workflow": "Volunteer skills, eligibility and actual hours",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S20.01–03 S20.09"
+    },
+    {
+      "id": "M10",
+      "workflow": "Rota, invitations, declines, swaps and replacements",
+      "module": "Ministries/Scheduling",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S20.03–08"
+    },
+    {
+      "id": "M11",
+      "workflow": "Signup sheets and volunteer commitments",
+      "module": "Ministries",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S20.04–05 S20.10"
+    },
+    {
+      "id": "E01",
+      "workflow": "Event registration forms and dynamic fields",
+      "module": "Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S21.01–04 S21.15–16"
+    },
+    {
+      "id": "E02",
+      "workflow": "Reserve/confirm participants, consent and transport",
+      "module": "Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S21.03–09"
+    },
+    {
+      "id": "E03",
+      "workflow": "Actual event receipt and balance",
+      "module": "Registrations/Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S21.10–13 S25.10"
+    },
+    {
+      "id": "E04",
+      "workflow": "Waitlist offers, cancellation and refunds",
+      "module": "Registrations/Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S21.05–06 S21.14"
+    },
+    {
+      "id": "E05",
+      "workflow": "Event arrival, checkout and reentry",
+      "module": "Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S22.01–05 S22.13"
+    },
+    {
+      "id": "E06",
+      "workflow": "Authorized collectors and child pickup",
+      "module": "Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S22.06–09"
+    },
+    {
+      "id": "E07",
+      "workflow": "Restricted incident record and review",
+      "module": "Care/Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S22.10–11"
+    },
+    {
+      "id": "E08",
+      "workflow": "Present roster and emergency print",
+      "module": "Registrations",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S22.12–14"
+    },
+    {
+      "id": "F01",
+      "workflow": "Resources and venue facts",
+      "module": "Facilities",
+      "status": "partial",
+      "implemented_slice": "Actual room/space metadata, occupant capacity, setup/cleanup, explicit pairwise exclusions, versions and dependency-safe configuration are implemented in the existing TenantControl container.",
+      "remaining": "Approved full venue profiles, locations/accessibility/operating hours, approval policy and other resource kinds remain.",
+      "questionnaire_references": "S23.01–03"
+    },
+    {
+      "id": "F02",
+      "workflow": "Availability and setup/cleanup intervals",
+      "module": "Facilities/Scheduling",
+      "status": "partial",
+      "implemented_slice": "Exclusive actual resource holds and conditional guards enforce setup/cleanup and symmetric pairwise exclusion conflicts. Busy/unavailable interval DTOs omit booking subjects; independent rooms sharing an excluded combined venue are not overblocked.",
+      "remaining": "Operating hours/preferences, clergy and equipment capacity, alternatives, cross-parish personal availability and live Cosmos race/query acceptance remain.",
+      "questionnaire_references": "S23.03–04 S23.07"
+    },
+    {
+      "id": "F03",
+      "workflow": "Office reservation and confirmation/refusal/cancel",
+      "module": "Facilities",
+      "status": "partial",
+      "implemented_slice": "Exact draft-event-linked intake, decision, queued allocation, actual final confirmation, refusal, cancellation, compensation and current-state replay are implemented. Worker leases, release tombstones and account/security/selected-capacity/coverage rechecks prevent stale authority and delayed resurrection. Real hosted worker and cookie/CSRF HTTP flows are tested.",
+      "remaining": "Full requester/customer workflows, terms acceptance/deposits/payments, revised approval matrices, rescheduling/handover, notifications and hosted Azure acceptance remain.",
+      "questionnaire_references": "S23.04–08 S23.11"
+    },
+    {
+      "id": "F04",
+      "workflow": "Maintenance and affected bookings",
+      "module": "Facilities",
+      "status": "partial",
+      "implemented_slice": "Explicit Serviceable/OutOfService changes require reason/version and resolve affected bookings; private resource-block events can use the real reservation flow. Structural changes preserve active allocation assumptions.",
+      "remaining": "Scheduled maintenance/repair work orders, review/notification of affected bookings, issue lifecycle and operational reporting remain.",
+      "questionnaire_references": "S23.12 S23.14"
+    },
+    {
+      "id": "F05",
+      "workflow": "Equipment stock and reservations",
+      "module": "Facilities",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S23.01 S23.13"
+    },
+    {
+      "id": "F06",
+      "workflow": "Facility issue reporting and repair",
+      "module": "Facilities",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S23.14"
+    },
+    {
+      "id": "F07",
+      "workflow": "External renters, terms, deposits and payments",
+      "module": "Facilities/Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S23.09–11 S23.15"
+    },
+    {
+      "id": "N01",
+      "workflow": "Inbox send/reply, read and archive",
+      "module": "Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.01–06"
+    },
+    {
+      "id": "N02",
+      "workflow": "Exceptional exact-message review",
+      "module": "Communications/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.16 S02.13"
+    },
+    {
+      "id": "N03",
+      "workflow": "Posts, announcements, discussions and resources",
+      "module": "Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.07 S19.02"
+    },
+    {
+      "id": "N04",
+      "workflow": "In-app notifications and preferences",
+      "module": "Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.09 S26.11–15"
+    },
+    {
+      "id": "N05",
+      "workflow": "Broadcast/template and external delivery",
+      "module": "Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.09–15"
+    },
+    {
+      "id": "N06",
+      "workflow": "Parish website drafts, publishing and gallery",
+      "module": "Publishing",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S05.01–12 S04.05–09"
+    },
+    {
+      "id": "N07",
+      "workflow": "Prayer intentions and publication",
+      "module": "Communications/Care",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.08 S13.10"
+    },
+    {
+      "id": "H01",
+      "workflow": "Account-private notes and personal tasks",
+      "module": "Care",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S28.01 S28.05–06 S31.03"
+    },
+    {
+      "id": "H02",
+      "workflow": "Pastoral notes, tasks and explicit priest sharing",
+      "module": "Care",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S28.02–06 U13"
+    },
+    {
+      "id": "H03",
+      "workflow": "Identified/anonymous concern and own follow-up",
+      "module": "Care",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S27.01–05 S27.11–14"
+    },
+    {
+      "id": "H04",
+      "workflow": "Independent concern review, assignment and resolution",
+      "module": "Care",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S27.06–10 S27.12–14"
+    },
+    {
+      "id": "H05",
+      "workflow": "Concern categories and reviewer capabilities",
+      "module": "Care/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S27.03 S27.05–09"
+    },
+    {
+      "id": "G01",
+      "workflow": "Giving/envelope counting session and lines",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.01–06"
+    },
+    {
+      "id": "G02",
+      "workflow": "Independent verification, close/post and reversals",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.07–10"
+    },
+    {
+      "id": "G03",
+      "workflow": "Pledges and receipt allocations",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.11 S24.14"
+    },
+    {
+      "id": "G04",
+      "workflow": "Standing/recurring gift intentions",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.11"
+    },
+    {
+      "id": "G05",
+      "workflow": "Campaigns and progress",
+      "module": "Finance/Publishing",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.12"
+    },
+    {
+      "id": "G06",
+      "workflow": "Contribution receipts and annual statements",
+      "module": "Finance/Documents",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.13–14"
+    },
+    {
+      "id": "G07",
+      "workflow": "Funds, budgets, expenses and approvals",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S25.01–07"
+    },
+    {
+      "id": "G08",
+      "workflow": "Bank import, allocation and reconciliation",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S25.08–10"
+    },
+    {
+      "id": "G09",
+      "workflow": "Exchange rates and dual-currency reporting",
+      "module": "Finance",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S24.04–05 S25.06–07"
+    },
+    {
+      "id": "G10",
+      "workflow": "Office allowances, purchases, openings and vouchers",
+      "module": "OfficeLedger",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S25.11–14"
+    },
+    {
+      "id": "W01",
+      "workflow": "Custom form fields and conditional rules",
+      "module": "Workflows",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S21.04 S28.07–09"
+    },
+    {
+      "id": "W02",
+      "workflow": "Workflow run, step result, pause/cancel/reopen",
+      "module": "Workflows",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S28.07–12"
+    },
+    {
+      "id": "W03",
+      "workflow": "Operational dashboards, reports and complete exports",
+      "module": "Reporting",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.07–12 S29.14–17"
+    },
+    {
+      "id": "W04",
+      "workflow": "Scheduled report delivery",
+      "module": "Reporting/Communications",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S26.10–15 S29.18"
+    },
+    {
+      "id": "W05",
+      "workflow": "Operational, administrative and restricted audit",
+      "module": "Administration",
+      "status": "partial",
+      "implemented_slice": "Authoritative audit accompanies implemented protected batches; identity/security audit is separated.",
+      "remaining": "Audit query/export/access/retention workflows and restricted module audits remain.",
+      "questionnaire_references": "S29.17 S02.07 S32.04"
+    },
+    {
+      "id": "W06",
+      "workflow": "Settings, retention and integration capability",
+      "module": "Administration",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S29.08 S29.18 S32.01"
+    },
+    {
+      "id": "W07",
+      "workflow": "Data snapshot, backup and operator recovery",
+      "module": "Administration",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S31.16 S32.05 U15"
+    },
+    {
+      "id": "U01",
+      "workflow": "English/French/Arabic, RTL and responsive UI",
+      "module": "Frontend/Publishing",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S01.09 S30"
+    },
+    {
+      "id": "U02",
+      "workflow": "Command search, tables, filters and calendars",
+      "module": "Frontend/Reporting",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S03.10–14 S30.16–18"
+    },
+    {
+      "id": "U03",
+      "workflow": "Save state, stale edits, drafts and lost-response recovery",
+      "module": "API foundation/Frontend",
+      "status": "partial",
+      "implemented_slice": "Backend version conflicts, operation replay and explicit pending activation outcomes.",
+      "remaining": "React integration and full UI save/draft/lost-response experience remain.",
+      "questionnaire_references": "S31.01–15"
+    },
+    {
+      "id": "U04",
+      "workflow": "Design specimens and demonstration actions",
+      "module": "Frontend",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S30 S32.11"
+    },
+    {
+      "id": "C02",
+      "workflow": "Paging, cancellation, UTC and guarded deletion foundation",
+      "module": "API foundation",
+      "status": "partial",
+      "implemented_slice": "Async persistence, scoped cursor pagination, ETags, operation receipts, validation and ProblemDetails.",
+      "remaining": "Provider-service verification and application of the foundation to remaining modules remain.",
+      "questionnaire_references": "S01.11 S31"
+    },
+    {
+      "id": "D01",
+      "workflow": "Combined Home, explicit role choice and all-parish browse",
+      "module": "Accounts/Frontend",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S02.05 S03.01–06"
+    },
+    {
+      "id": "D02",
+      "workflow": "Record prior priest instruction effectively as secretary",
+      "module": "Sacraments/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S02.07–09 S12.08 U04"
+    },
+    {
+      "id": "X01",
+      "workflow": "Passkey enrollment, login and removal",
+      "module": "Accounts",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S06.06 S06.11"
+    },
+    {
+      "id": "X02",
+      "workflow": "Login throttling and compromised-password screening",
+      "module": "Accounts",
+      "status": "partial",
+      "implemented_slice": "Persisted Identity lockout and per-instance IP limits.",
+      "remaining": "Compromised-password lookup, wider multi-instance controls and live security acceptance remain.",
+      "questionnaire_references": "S06.07 S06.12 U10"
+    },
+    {
+      "id": "X03",
+      "workflow": "Signature setup and exact document authorization",
+      "module": "Documents",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.10 S15.09 U05 U10"
+    },
+    {
+      "id": "X04",
+      "workflow": "Signed letters for guest requests",
+      "module": "Documents/Requests",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S11 S14.10 S15.09–11"
+    },
+    {
+      "id": "X05",
+      "workflow": "Public signature verification and revocation",
+      "module": "Documents",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S14.10–12 S15.10"
+    },
+    {
+      "id": "X06",
+      "workflow": "Public-site metrics and Super Admin Insights",
+      "module": "Reporting",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S29.14–17 S32.01"
+    },
+    {
+      "id": "X07",
+      "workflow": "Parish CRM and adoption follow-up",
+      "module": "Administration",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S29.01 S29.14 S32.05–08"
+    },
+    {
+      "id": "X08",
+      "workflow": "Platform homepage content editing",
+      "module": "Publishing",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S05 S30.15"
+    },
+    {
+      "id": "X09",
+      "workflow": "Interactive public map, distance, visiting/follow links",
+      "module": "Publishing/Frontend",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S04.01–09"
+    },
+    {
+      "id": "X10",
+      "workflow": "Public calendars, subscriptions and share metadata",
+      "module": "Publishing/Scheduling",
+      "status": "partial",
+      "implemented_slice": "Anonymous bounded JSON calendar exposes only explicitly published manual public activities and actual cancellation status, excluding private/account/source details; no token-based external integration is fabricated.",
+      "remaining": "Approved parish-profile integration, source adapters, ICS exports/subscriptions, revocable private feeds, share metadata and delivery remain.",
+      "questionnaire_references": "S04.12 S05.08 S16.10–13"
+    },
+    {
+      "id": "X11",
+      "workflow": "Public offline reading and install metadata",
+      "module": "Frontend",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S31.05–07"
+    },
+    {
+      "id": "X12",
+      "workflow": "Liturgical season/feast display and public decoration",
+      "module": "Scheduling/Frontend",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S01.07 S16.11 S30.17"
+    },
+    {
+      "id": "X13",
+      "workflow": "Optional Turnstile and public authentication capability",
+      "module": "Accounts/Infrastructure",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "questionnaire_references": "S06.05–06 S29.18 U10"
+    },
+    {
+      "id": "SUB01",
+      "workflow": "Register an independent parish",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Parish registration without a registered archdiocese.",
+      "remaining": "Full claim/dispute/public onboarding UX remains.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB02",
+      "workflow": "Verify a parish representative and establish parish-controlled administration",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Platform verification and first parish-owner control; no fake clergy authority.",
+      "remaining": "Final representative evidence policy and succession/contested claims remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB03",
+      "workflow": "Purchase and activate a parish subscription",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Independent purchase through manual cash invoices, immutable receipts and paid coverage activation.",
+      "remaining": "Real-service verification, full billing UI and final commercial policy remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB04",
+      "workflow": "Manage an independent parish subscription and billing",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Own invoice/payment/coverage read and explicit plan purchase.",
+      "remaining": "Plan changes, cancellation, credits, complete billing history listing and renewal policy remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB05",
+      "workflow": "Manage parish users and permissions independently",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Owner-controlled parish grants independent of a diocesan account.",
+      "remaining": "Full staff/role appointments and delegated grant administration remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB06",
+      "workflow": "Establish centralized archdiocese coverage",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Archdiocese workspace can register/verify independently.",
+      "remaining": "Actual central contracts, multiple-parish coverage purchase and sponsorship acceptance remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB07",
+      "workflow": "Request, approve or decline an optional archdiocese association",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Parish proposal and separate archdiocese acceptance/decline; association changes no data grant/payer.",
+      "remaining": "Invitation directory/worklists, withdrawal/expiry and complete organizational terms remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB08",
+      "workflow": "Authorize and review exact archdiocese access or delegated management",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Explicit per-account permission delegation bound to the exact association epoch.",
+      "remaining": "Full data category/report/export grants, sensitive record policies and management delegation remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB09",
+      "workflow": "Transfer future subscription coverage between parish and archdiocese",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB10",
+      "workflow": "End an association or revoke archdiocese delegation",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "End association invalidates its access epoch while preserving local grants, data and independent coverage.",
+      "remaining": "Coverage continuity for central sponsorship and complete relationship notice policy remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB11",
+      "workflow": "Handle renewal failure, grace, suspension, cancellation and reactivation",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "partial",
+      "implemented_slice": "Effective start/end enforcement on implemented paid modules.",
+      "remaining": "Renewal notices, grace, cancellation, suspension, refund/reactivation commercial flows remain.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    },
+    {
+      "id": "SUB12",
+      "workflow": "Review contested parish ownership and recover parish administration",
+      "module": "Subscriptions/Organizations/Access",
+      "status": "not_started",
+      "implemented_slice": "",
+      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
+    }
+  ],
+  "updated": "2026-11-08"
+}

@@ -1,0 +1,266 @@
+[
+  {
+    "from": "ParishLife.Api\\Program.cs",
+    "to": "ParishLife.Api\\Program.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\DependencyInjection.cs",
+    "to": "ParishLife.Api\\Extensions\\ServiceCollectionExtensions.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\InfrastructureReadiness.cs",
+    "to": "ParishLife.Api\\Services\\Operations\\InfrastructureReadiness.cs"
+  },
+  {
+    "from": "ParishLife.IntegrationTests\\ApiFactory.cs",
+    "to": "ParishLife.IntegrationTests\\ApiFactory.cs"
+  },
+  {
+    "from": "ParishLife.IntegrationTests\\HttpWorkflowTests.cs",
+    "to": "ParishLife.IntegrationTests\\HttpWorkflowTests.cs"
+  },
+  {
+    "from": "ParishLife.IntegrationTests\\PersistenceContractTests.cs",
+    "to": "ParishLife.IntegrationTests\\PersistenceContractTests.cs"
+  },
+  {
+    "from": "ParishLife.UnitTests\\WorkflowTests.cs",
+    "to": "ParishLife.UnitTests\\WorkflowTests.cs"
+  },
+  {
+    "from": "tools\\ParishLife.Maintenance\\Program.cs",
+    "to": "tools\\ParishLife.Maintenance\\Program.cs"
+  },
+  {
+    "from": "ParishLife.UnitTests\\Fakes\\ScenarioStore.cs",
+    "to": "ParishLife.UnitTests\\Fakes\\ScenarioStore.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\BackgroundWork\\BillingActivationWorker.cs",
+    "to": "ParishLife.Api\\BackgroundJobs\\BillingActivationWorker.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\CosmosOptions.cs",
+    "to": "ParishLife.Api\\Configuration\\CosmosOptions.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\DocumentDatabase.cs",
+    "to": "ParishLife.Api\\Data\\Cosmos\\DocumentDatabase.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\Documents.cs",
+    "to": "ParishLife.Api\\Data\\Cosmos\\Documents.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\PartitionDocuments.cs",
+    "to": "ParishLife.Api\\Data\\Cosmos\\PartitionDocuments.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\PlanDbContext.cs",
+    "to": "ParishLife.Api\\Data\\Cosmos\\PlanDbContext.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Cosmos\\StorageQuery.cs",
+    "to": "ParishLife.Api\\Data\\Cosmos\\StorageQuery.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Identity\\AccountAccess.cs",
+    "to": "ParishLife.Api\\Identity\\AccountAccess.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Identity\\AccountService.cs",
+    "to": "ParishLife.Api\\Services\\Accounts\\AccountService.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Identity\\AccountSessionService.cs",
+    "to": "ParishLife.Api\\Identity\\AccountSessionService.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Identity\\CosmosIdentityStore.cs",
+    "to": "ParishLife.Api\\Identity\\CosmosIdentityStore.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Identity\\ParishUser.cs",
+    "to": "ParishLife.Api\\Identity\\ParishUser.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Local\\LocalDocumentDatabase.cs",
+    "to": "ParishLife.Api\\Data\\Local\\LocalDocumentDatabase.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Local\\LocalPlanRepository.cs",
+    "to": "ParishLife.Api\\Data\\Local\\LocalPlanRepository.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Local\\StorageOptions.cs",
+    "to": "ParishLife.Api\\Configuration\\StorageOptions.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Properties\\AssemblyInfo.cs",
+    "to": "ParishLife.Api\\Properties\\AssemblyInfo.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\BillingRepository.cs",
+    "to": "ParishLife.Api\\Repositories\\Billing\\BillingRepository.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\ParishRepository.cs",
+    "to": "ParishLife.Api\\Repositories\\Organizations\\ParishRepository.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\PeopleRepository.cs",
+    "to": "ParishLife.Api\\Repositories\\People\\PeopleRepository.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\PlanRepository.cs",
+    "to": "ParishLife.Api\\Repositories\\Billing\\PlanRepository.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\RecordTransactions.cs",
+    "to": "ParishLife.Api\\Repositories\\Common\\RecordTransactions.cs"
+  },
+  {
+    "from": "ParishLife.Infrastructure\\Repositories\\ResourceAllocator.cs",
+    "to": "ParishLife.Api\\Repositories\\Scheduling\\ResourceAllocator.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Access\\Permissions.cs",
+    "to": "ParishLife.Api\\Models\\Access\\Permissions.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Billing\\Subscription.cs",
+    "to": "ParishLife.Api\\Models\\Billing\\Subscription.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Common\\DomainException.cs",
+    "to": "ParishLife.Api\\Models\\Common\\DomainException.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Ministries\\Models.cs",
+    "to": "ParishLife.Api\\Models\\Ministries\\Models.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Organizations\\Parish.cs",
+    "to": "ParishLife.Api\\Models\\Organizations\\Parish.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\People\\Person.cs",
+    "to": "ParishLife.Api\\Models\\People\\Person.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Registrations\\Models.cs",
+    "to": "ParishLife.Api\\Models\\Registrations\\Models.cs"
+  },
+  {
+    "from": "ParishLife.Domain\\Scheduling\\Models.cs",
+    "to": "ParishLife.Api\\Models\\Scheduling\\Models.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Billing\\BillingService.cs",
+    "to": "ParishLife.Api\\Services\\Billing\\BillingService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Billing\\Contracts.cs",
+    "to": "ParishLife.Api\\DTOs\\Billing\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Common\\Contracts.cs",
+    "to": "ParishLife.Api\\Models\\Common\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Common\\RecordTransactions.cs",
+    "to": "ParishLife.Api\\Models\\Common\\RecordTransactions.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Ministries\\Contracts.cs",
+    "to": "ParishLife.Api\\DTOs\\Ministries\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Ministries\\MinistryService.cs",
+    "to": "ParishLife.Api\\Services\\Ministries\\MinistryService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Organizations\\Contracts.cs",
+    "to": "ParishLife.Api\\DTOs\\Organizations\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Organizations\\ParishService.cs",
+    "to": "ParishLife.Api\\Services\\Organizations\\ParishService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Organizations\\Responses.cs",
+    "to": "ParishLife.Api\\DTOs\\Organizations\\Responses.cs"
+  },
+  {
+    "from": "ParishLife.Application\\People\\PeopleService.cs",
+    "to": "ParishLife.Api\\Services\\People\\PeopleService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\People\\Responses.cs",
+    "to": "ParishLife.Api\\DTOs\\People\\Responses.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Registrations\\Contracts.cs",
+    "to": "ParishLife.Api\\DTOs\\Registrations\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Registrations\\RegistrationService.cs",
+    "to": "ParishLife.Api\\Services\\Registrations\\RegistrationService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\Contracts.cs",
+    "to": "ParishLife.Api\\DTOs\\Scheduling\\Contracts.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\ReservationService.cs",
+    "to": "ParishLife.Api\\Services\\Scheduling\\ReservationService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\SchedulingService.cs",
+    "to": "ParishLife.Api\\Services\\Scheduling\\CalendarService.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Controllers\\AccountsController.cs",
+    "to": "ParishLife.Api\\Controllers\\Accounts\\AccountsController.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Controllers\\AdministrationController.cs",
+    "to": "ParishLife.Api\\Controllers\\Administration\\AdministrationController.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Controllers\\BillingController.cs",
+    "to": "ParishLife.Api\\Controllers\\Billing\\BillingController.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Controllers\\ParishesController.cs",
+    "to": "ParishLife.Api\\Controllers\\Organizations\\ParishesController.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Controllers\\PeopleController.cs",
+    "to": "ParishLife.Api\\Controllers\\People\\PeopleController.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Middleware\\ApiExceptionHandler.cs",
+    "to": "ParishLife.Api\\Middleware\\ApiExceptionHandler.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Security\\CurrentActor.cs",
+    "to": "ParishLife.Api\\Authorization\\CurrentActor.cs"
+  },
+  {
+    "from": "ParishLife.Api\\Security\\ValidateCsrfFilter.cs",
+    "to": "ParishLife.Api\\Authorization\\ValidateCsrfFilter.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\SchedulingService.cs",
+    "to": "ParishLife.Api\\Services\\Scheduling\\ActivityPlanningService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\SchedulingService.cs",
+    "to": "ParishLife.Api\\Services\\Scheduling\\FacilityService.cs"
+  },
+  {
+    "from": "ParishLife.Application\\Scheduling\\ReservationService.cs",
+    "to": "ParishLife.Api\\Services\\Scheduling\\ReservationProcessor.cs"
+  }
+]

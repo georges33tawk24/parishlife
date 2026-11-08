@@ -1,0 +1,59 @@
+// Purpose: checks that deployment index validation rejects missing/overridden query paths while accepting compatible existing policies.
+// Main tests: default and explicit policy compatibility, missing calendar ranges, precise exclusions and disabled indexing fail safely.
+
+using Microsoft.Azure.Cosmos;
+using ParishLife.Api.Configuration;
+using ParishLife.Api.Models;
+using Xunit;
+
+namespace ParishLife.Tests;
+
+public class CosmosIndexContractTests
+{
+    [Fact]
+    public void Default_automatic_policy_supports_the_required_query_paths()
+    {
+        var container = new ContainerProperties("TenantControl", "/partitionKey");
+        container.IndexingPolicy.IncludedPaths.Clear();
+        container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = "/*" });
+        container.IndexingPolicy.ExcludedPaths.Clear();
+        CosmosIndexContract.ValidateTenant(container);
+    }
+    [Fact]
+    public void Explicit_policy_preserves_private_unindexed_fields_and_indexes_only_required_paths()
+    {
+        var container = Explicit();
+        CosmosIndexContract.ValidateTenant(container);
+        container.IndexingPolicy.IncludedPaths.Remove(container.IndexingPolicy.IncludedPaths.Single(item => item.Path == "/data/startsAt/?"));
+        Assert.Equal("calendar_index_contract_mismatch", Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container)).Code);
+    }
+    [Fact]
+    public void A_more_precise_exclusion_overrides_a_broad_inclusion()
+    {
+        var container = new ContainerProperties("TenantControl", "/partitionKey");
+        container.IndexingPolicy.IncludedPaths.Clear();
+        container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = "/*" });
+        container.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = "/data/endsAt/?" });
+        Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
+    }
+    [Fact]
+    public void Disabled_or_nonautomatic_indexing_is_never_reported_compatible()
+    {
+        var container = Explicit();
+        container.IndexingPolicy.Automatic = false;
+        Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
+        container.IndexingPolicy.Automatic = true;
+        container.IndexingPolicy.IndexingMode = IndexingMode.None;
+        Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
+    }
+    private static ContainerProperties Explicit()
+    {
+        var container = new ContainerProperties("TenantControl", "/partitionKey");
+        container.IndexingPolicy.IncludedPaths.Clear();
+        container.IndexingPolicy.ExcludedPaths.Clear();
+        container.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = "/*" });
+        foreach (var path in CosmosIndexContract.RequiredTenantPaths)
+            container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = path });
+        return container;
+    }
+}

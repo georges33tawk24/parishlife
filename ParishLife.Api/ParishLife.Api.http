@@ -1,0 +1,25 @@
+### Purpose: provides read-only checks for the directly launched backend API.
+### Main requests: liveness, dependency readiness, anti-forgery token, and plan catalogue.
+### Under Aspire, use the API URL displayed by the dashboard.
+
+@ParishLife.Api_HostAddress = https://localhost:7243
+
+GET {{ParishLife.Api_HostAddress}}/health/live
+Accept: application/json
+
+###
+
+GET {{ParishLife.Api_HostAddress}}/api/auth/csrf
+Accept: application/json
+
+###
+
+GET {{ParishLife.Api_HostAddress}}/health/ready
+Accept: application/json
+
+###
+
+GET {{ParishLife.Api_HostAddress}}/api/plans
+Accept: application/json
+
+###
