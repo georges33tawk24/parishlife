@@ -41,7 +41,7 @@ public class AttendanceSheetDto
 
     public int NotRecordedCount { get; set; }
 
-    public int GuestCount { get; set; }
+    public int? GuestCount { get; set; }
 
     public int Denominator { get; set; }
 

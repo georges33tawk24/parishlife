@@ -32,11 +32,11 @@ using ParishLife.Api.Repositories.People;
 using ParishLife.Api.Repositories.Scheduling;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Billing;
+using ParishLife.Api.Services.Ministries;
 using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
 using ParishLife.Api.Services.Scheduling;
-using ParishLife.Api.Services.Ministries;
 
 namespace ParishLife.Api.Extensions;
 
@@ -90,6 +90,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MinistryDepartureService>();
         services.AddScoped<MinistryMeetingService>();
         services.AddScoped<MinistryAttendanceService>();
+        services.AddScoped<MinistryRsvpPrivacyService>();
         services.AddScoped<ReservationMeetingAccess>();
         services.AddScoped<CalendarService>();
         services.AddScoped<FacilityService>();

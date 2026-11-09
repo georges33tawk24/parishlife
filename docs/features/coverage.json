@@ -1,10 +1,10 @@
 {
   "prepared": "2026-11-03",
-  "scope": "Full retained catalogue tracked; backend/Azure foundation, account security, jurisdiction/staff and manual calendar/facility/reservation slices implemented; no full-product or live Azure acceptance claim",
+  "scope": "Full retained catalogue; single-API Azure foundation, account/MFA, staff, calendar/reservations and ministry/meeting/attendance slices implemented with remaining acceptance; no whole-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 36,
-    "not_started": 113
+    "partial": 42,
+    "not_started": 107
   },
   "entries": [
     {
@@ -39,8 +39,8 @@
       "workflow": "Change own password",
       "module": "Accounts",
       "status": "partial",
-      "implemented_slice": "Password change uses Identity and invalidates sessions.",
-      "remaining": "Broader privileged step-up/recovery policy and live persistence acceptance remain.",
+      "implemented_slice": "Personal change with fresh password and enabled-MFA proof, maintained Identity validation/hash/stamp staged into one account transaction, pending-enrollment supersession and old session/challenge invalidation. Safe current-outcome retries exclude credentials from fingerprints/receipts/audit. Legacy-hash proof cannot persist a rehash before final acceptance; real local HTTP/CSRF and rollback tests cover this.",
+      "remaining": "Approved compromised/common-password screening, credential/contact reset and all-factors-lost recovery, actual security notifications and live Cosmos/hosted persistence acceptance remain.",
       "questionnaire_references": "S06.07 S06.11"
     },
     {
@@ -569,54 +569,54 @@
       "id": "M01",
       "workflow": "Ministry creation, type and public listing",
       "module": "Ministries",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Draft/type/approved-purpose and separate publication/intake commands; verified-parish anonymous description projection, current-state replay, safe unlisted-member overview and actual priest authority.",
+      "remaining": "Active description revision, multilingual approved public content/contact/eligibility presentation, group merge/split and wider publishing acceptance remain.",
       "questionnaire_references": "S18.01–04 S18.12"
     },
     {
       "id": "M02",
       "workflow": "Roster and membership history",
       "module": "Ministries",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Final priest approval creates a current roster projection plus a distinct dated membership period; departure closes it and rejoin preserves old intervals. Own membership and neutral protected rosters/history are available.",
+      "remaining": "Reviewed legacy backfill/import/correction, full person-profile integration, representation/guardian policies, guest records and approved broader historical member views remain.",
       "questionnaire_references": "S18.05–06 S19.06"
     },
     {
       "id": "M03",
       "workflow": "Join, private leave, priest final decision and withdrawal",
       "module": "Ministries",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Self/assisted evidenced Join, actual person links, independent leader/priest review and direct priest approval, applicant-safe explanations, saved-stage information returns/resubmission, guarded withdrawals and private applicant/priest Leave with protected reasons. Atomic departure ends membership/linked leadership and permits archived-person cleanup.",
+      "remaining": "Wider guardian/representation and eligibility policy inputs, reviewed terminal reopening/appeal, loan/task follow-up, optional-contact preferences and actual outcome notification delivery remain.",
       "questionnaire_references": "S18.04–10"
     },
     {
       "id": "M04",
       "workflow": "Leader/assistant handover",
       "module": "Ministries/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Evidenced dated Leader/Assistant appointments, independent handover/end, privileged evidence/history and current MFA/account checks. Explicit attendance/private-RSVP duties require matching delegator capabilities and current scope; duty review preserves office dates and denials.",
+      "remaining": "Task/resource handover mappings, ministry merge/split/closure impact review and wider invitation/review workflows remain.",
       "questionnaire_references": "S18.11 S02.10"
     },
     {
       "id": "M05",
       "workflow": "Meetings, materials and RSVP",
       "module": "Ministries/Scheduling",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Meeting owns one exact source calendar occurrence; atomic draft/edit/confirm/cancel with real reservation allocation/release gates, safe current-member future audience, scoped history and personal RSVP with actual deadline/modes. Separate protected optional RSVP reason with explicit reader duty and original-author history.",
+      "remaining": "Recurring meeting exceptions, approved historical member/material audiences, real material access/files, guest/representation RSVP and actual notification delivery remain.",
       "questionnaire_references": "S19.01–03"
     },
     {
       "id": "M06",
       "workflow": "Attendance grid, corrections and CSV/XLSX import",
       "module": "Ministries",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Resumable bounded occurrence-date roster snapshots from retained membership periods, paged grid/counters, six explicit statuses, atomic conditional entries, unknown coverage/denominator, own historical row, review closure and protected attributed closed-sheet corrections.",
+      "remaining": "Guest/additional-person intake, month-wide multi-meeting reporting closure, CSV/XLSX preview/import/reversal and wider authorized reports/exports remain. Metrics are explicitly labeled; no official formation eligibility is inferred.",
       "questionnaire_references": "S19.04–08"
     },
     {
@@ -1349,5 +1349,5 @@
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     }
   ],
-  "updated": "2026-11-08"
+  "updated": "2026-11-09"
 }

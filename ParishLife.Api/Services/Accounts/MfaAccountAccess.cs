@@ -1,5 +1,6 @@
 // Purpose: checks current account eligibility and fresh password/authenticator proofs for account-security workflows.
-// Main functions: CurrentAsync, RequireMfaAsync, PasswordAsync, AuthenticatorAsync, VerifyAsync, FailAsync, IsEligibleOperatorAsync, IsVerifiedMfaAccountAsync; store properties stage maintained Identity changes.
+// Main functions: CurrentAsync, RequireMfaAsync, PasswordAsync, AuthenticatorAsync, VerifyAsync, FailAsync, IsEligibleOperatorAsync, IsVerifiedMfaAccountAsync;
+// password proof uses the configured Identity hasher without persisting a legacy rehash before the complete protected transaction.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Identity;
@@ -27,9 +28,13 @@ public class MfaAccountAccess(ParishUserManager users, SignInManager<ParishUser>
 
     internal async Task PasswordAsync(ParishUser user, string? password)
     {
-        if (password is null || password.Length > 200
-            || !(await signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true)).Succeeded)
+        if (password is null || password.Length > 200 || !await signIn.CanSignInAsync(user) || await users.IsLockedOutAsync(user))
             throw InvalidProof();
+        // CheckPasswordSignInAsync/CheckPasswordAsync may immediately persist a legacy rehash and security stamp.
+        // A fresh proof must not change credentials before later authenticator proof and the final conditional batch.
+        if (user.PasswordHash is not { } hash
+            || users.PasswordHasher.VerifyHashedPassword(user, hash, password) == PasswordVerificationResult.Failed)
+            await FailAsync(user);
     }
 
     internal async Task<ParishUser> RequireMfaAsync(CancellationToken ct)

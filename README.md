@@ -1,6 +1,6 @@
 # ParishLife backend
 
-C#/.NET 10 backend with one production API project, organized into understandable folders. The current stage covers the backend/Azure foundation, local Aspire monitoring, MiniDevOps-style DTO/model classes, account MFA, first bishop, factual jurisdiction, selected staff capacities, and the manual calendar/facility/reservation flow. Frontend integration is deferred. The full product is still under implementation; see `docs/architecture/backend-foundation.md` and the feature coverage register.
+C#/.NET 10 backend with one production API project, organized into understandable folders. The current stage covers the backend/Azure foundation, local Aspire monitoring, MiniDevOps-style DTO/model classes, account security, first bishop, factual jurisdiction, selected staff capacities, calendar/facility/reservations, and ministry membership/meetings/attendance. Frontend integration is deferred. The full product is still under implementation; see `docs/architecture/backend-foundation.md` and the feature coverage register.
 
 ## Projects
 
@@ -20,6 +20,8 @@ The bishop can invite Archdiocese Admins and parish priests through dated, accep
 
 Manual calendar drafts/publication, privacy-safe busy views, local-time recurring drafts, room/space configuration, buffered availability and durable office bookings are now integrated. Reservations remain pending until the worker confirms every resource; conflicts/cancellation use recoverable compensation. See `docs/operations/calendar-and-reservations.md`, including the required query-index review and remaining clergy/source/rental/notification work.
 
+Ministry lifecycle and safe public/member projections, reviewed identity links and join/private-departure decisions, dated leadership/duties, source-owned meetings/RSVP, protected private planning reasons and occurrence-date attendance are now wired. Attendance snapshots are resumable and do not infer absence from missing data. See [ministries and attendance](docs/operations/ministries-and-attendance.md) for routes, permissions, storage and remaining acceptance.
+
 ## Build and verify
 
 From this directory, using a serviced .NET 10 SDK/runtime:
@@ -29,6 +31,8 @@ dotnet restore ParishLife.slnx --locked-mode
 dotnet build ParishLife.slnx -c Release --no-restore
 dotnet test ParishLife.slnx -c Release --no-build --no-restore
 ```
+
+The [9 November verification record](docs/verification/backend-2026-11-09.md) records 169 passing local tests, a clean Release build, API-only publish checks and the live Azure checks still outstanding. These results do not establish whole-product completion.
 
 ## Run with Aspire
 
