@@ -1,4 +1,4 @@
-// Purpose: rechecks the durable initiator's current account, exact selected appointment/grant, denials and coverage without impersonating a browser user.
+// Purpose: rechecks the durable initiator's current account, exact selected appointment/grant, denials and coverage plus exact ministry source authority without impersonating a browser user.
 // Main functions: CaptureStampAsync records the authorizing security version; RequireAsync rejects withdrawn, expired, reset or wrong-scope authority before allocations proceed.
 
 using Microsoft.AspNetCore.Identity;
@@ -41,6 +41,35 @@ public class ReservationWorkAuthorization(IRecordTransactions records, IParishRe
             throw Changed();
         if (!(await parishes.GetCoveragesAsync(work.ParishId, ct)).Any(value => value.Includes("facilities", clock.GetUtcNow())))
             throw Changed();
+        if (work.MinistryId is not null || work.MeetingId is not null)
+        {
+            if (work.MinistryId is not { } ministry || work.MeetingId is not { } meetingId
+                || !await proof.IsVerifiedMfaAccountAsync(work.ActorId, ct)
+                || grant?.Denies.Contains(Permissions.MinistriesManage, StringComparer.Ordinal) == true)
+                throw Changed();
+            var scope = SchedulingScope.For(work.ParishId);
+            var group = await records.ReadAsync<Ministry>(scope, "ministry:" + ministry, ct);
+            var meeting = await records.ReadAsync<MinistryMeeting>(scope, "ministryMeeting:" + meetingId, ct);
+            var reservation = await records.ReadAsync<Reservation>(scope, "reservation:" + work.ReservationId, ct);
+            var occurrence = meeting is null ? null : await records.ReadAsync<CalendarEvent>(scope, "event:" + meeting.Value.EventId, ct);
+            if (group?.Value.Status != "Active" || group.Value.ParishId != work.ParishId || meeting is null || occurrence is null
+                || meeting.Value.MinistryId != ministry || meeting.Value.Status != "Draft" || reservation is null
+                || reservation.Value.EventId != meeting.Value.EventId || reservation.Value.StartsAt != meeting.Value.StartsAt
+                || reservation.Value.EndsAt != meeting.Value.EndsAt || !ReservationMeetingAccess.Matches(work.ParishId, occurrence.Value, meeting.Value)
+                || !(await parishes.GetCoveragesAsync(work.ParishId, ct)).Any(value => value.Includes("ministries", clock.GetUtcNow())))
+                throw Changed();
+            if (work.ActingAppointmentId is { } selectedOffice)
+            {
+                var office = await records.ReadAsync<StaffAppointment>(scope, "staffAppointment:" + selectedOffice, ct);
+                if (office?.Value.Permits(Permissions.MinistriesManage, clock.GetUtcNow()) != true) throw Changed();
+            }
+            else
+            {
+                var leader = await records.ReadAsync<MinistryLeader>(scope, "ministryLeader:" + ministry + ":" + work.ActorId, ct);
+                if (leader?.Value.Current(clock.GetUtcNow()) != true || leader.Value.AccountId != work.ActorId
+                    || leader.Value.MinistryId != ministry || leader.Value.Role is not ("Leader" or "Assistant")) throw Changed();
+            }
+        }
         return root;
     }
     private static DomainException Changed() => new("authorization_changed", "The recorded reservation authority or coverage is no longer current.", FailureKind.Conflict);

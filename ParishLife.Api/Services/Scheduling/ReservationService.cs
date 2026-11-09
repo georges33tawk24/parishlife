@@ -1,5 +1,5 @@
 // Purpose: accepts exact event-linked room requests and queues auditable allocation/cancellation work without fabricating confirmation.
-// Main functions: RequestAsync, ActAsync, GetAsync, ListAsync; helpers restrict private/source events and return current safe state on replay.
+// Main functions: RequestAsync, ActAsync, GetAsync, ListAsync; helpers validate manual or exact meeting sources and return current safe state on replay.
 
 using ParishLife.Api.DTOs.Scheduling;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -11,7 +11,7 @@ using ParishLife.Api.Models.Enums;
 namespace ParishLife.Api.Services.Scheduling;
 
 public class ReservationService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, FacilityService facilities,
-    ReservationWorkAuthorization authorization, TimeProvider clock)
+    ReservationWorkAuthorization authorization, ReservationMeetingAccess meetingAccess, TimeProvider clock)
 {
     private async Task<Versioned<Parish>> Authorize(string parish, bool allocation, CancellationToken ct)
     {
@@ -28,9 +28,9 @@ public class ReservationService(IRecordTransactions records, IParishAccess acces
             return await View(parish, (await Read(parish, prior.Id, ct)).Value, ct);
         ScheduleRules.ValidatePeriod(request.StartsAt, request.EndsAt);
         var occurrence = await SchedulingScope.ReadEventAsync(records, parish, Guard.Id(request.EventId), ct);
-        SchedulingScope.RequireEditableEvent(occurrence.Value, actor.AccountId);
+        await meetingAccess.RequireAsync(parish, occurrence.Value, true, ct);
         if (occurrence.Value.Status != "Draft" || request.StartsAt != occurrence.Value.StartsAt || request.EndsAt != occurrence.Value.EndsAt || request.StartsAt <= clock.GetUtcNow())
-            throw new DomainException("reservation_event_mismatch", "Reserve the exact future period of a manual draft occurrence.", FailureKind.Conflict);
+            throw new DomainException("reservation_event_mismatch", "Reserve the exact future period of an authorized draft occurrence.", FailureKind.Conflict);
         var selected = new[] { Guard.Id(request.ResourceId) }.Concat(request.AdditionalResourceIds?.Select(Guard.Id) ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (selected.Length > 25)
             throw new DomainException("allocation_limit", "Select at most 25 facilities.");
@@ -67,7 +67,7 @@ public class ReservationService(IRecordTransactions records, IParishAccess acces
         var row = await Read(parish, id, ct);
         var value = row.Value;
         var occurrence = await SchedulingScope.ReadEventAsync(records, parish, value.EventId, ct);
-        SchedulingScope.RequireEditableEvent(occurrence.Value, actor.AccountId);
+        await meetingAccess.RequireAsync(parish, occurrence.Value, request.Action == "confirm", ct);
         var reason = Guard.Text(request.Reason, "Decision reason", 2000);
         var changes = new List<RecordChange> { SchedulingScope.Fence(root) };
         if (request.Action == "confirm")
@@ -81,6 +81,8 @@ public class ReservationService(IRecordTransactions records, IParishAccess acces
                 ParishId = parish,
                 ReservationId = id,
                 ActorId = actor.AccountId,
+                MinistryId = occurrence.Value.SourceType == "MinistryMeeting" ? occurrence.Value.MinistryId : null,
+                MeetingId = occurrence.Value.SourceType == "MinistryMeeting" ? occurrence.Value.SourceId : null,
                 ActingAppointmentId = actor.ActingAppointmentId,
                 ActorSecurityStamp = await authorization.CaptureStampAsync(actor.AccountId, ct),
                 Fingerprint = op.Fingerprint,
@@ -137,7 +139,8 @@ public class ReservationService(IRecordTransactions records, IParishAccess acces
     private async Task<ReservationDto> View(string parish, Reservation value, CancellationToken ct)
     {
         var occurrence = (await SchedulingScope.ReadEventAsync(records, parish, value.EventId, ct)).Value;
-        var hidden = occurrence.Visibility is "Private" or "Ministry" && occurrence.CreatedBy != actor.AccountId;
+        var hidden = occurrence.Visibility == "Private" && occurrence.CreatedBy != actor.AccountId
+            || occurrence.Visibility == "Ministry" && !await meetingAccess.CanReadAsync(parish, occurrence, ct);
         var work = value.CurrentWorkId is null ? null : await records.ReadAsync<ReservationWork>(SchedulingScope.For(parish), "reservationWork:" + value.CurrentWorkId, ct);
         return new()
         {

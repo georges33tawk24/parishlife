@@ -36,6 +36,7 @@ using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
 using ParishLife.Api.Services.Scheduling;
+using ParishLife.Api.Services.Ministries;
 
 namespace ParishLife.Api.Extensions;
 
@@ -81,6 +82,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BillingService>();
         services.AddScoped<PeopleService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
+        services.AddScoped<MinistryAccess>();
+        services.AddScoped<MinistryService>();
+        services.AddScoped<MinistryApplicationService>();
+        services.AddScoped<MinistryLeadershipService>();
+        services.AddScoped<MinistryPersonLinkService>();
+        services.AddScoped<MinistryDepartureService>();
+        services.AddScoped<MinistryMeetingService>();
+        services.AddScoped<MinistryAttendanceService>();
+        services.AddScoped<ReservationMeetingAccess>();
         services.AddScoped<CalendarService>();
         services.AddScoped<FacilityService>();
         services.AddScoped<ReservationService>();
@@ -173,6 +183,7 @@ public static class ServiceCollectionExtensions
             .AddUserConfirmation<VerifiedAccountConfirmation>().AddTokenProvider<DataProtectorTokenProvider<ParishUser>>(TokenOptions.DefaultProvider)
             .AddTokenProvider<AuthenticatorTokenProvider<ParishUser>>(TokenOptions.DefaultAuthenticatorProvider);
         services.AddScoped<AccountService>();
+        services.AddScoped<AccountPasswordService>();
         services.AddScoped<AccountCookieService>();
         services.AddScoped<MfaAccountAccess>();
         services.AddScoped<MfaRecoveryService>();

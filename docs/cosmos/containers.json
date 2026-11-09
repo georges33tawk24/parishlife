@@ -107,6 +107,30 @@
           },
           {
             "path": "/data/visibility/?"
+          },
+          {
+            "path": "/data/ministryId/?"
+          },
+          {
+            "path": "/data/kind/?"
+          },
+          {
+            "path": "/data/applicantAccountId/?"
+          },
+          {
+            "path": "/data/applicationId/?"
+          },
+          {
+            "path": "/data/publicListed/?"
+          },
+          {
+            "path": "/data/meetingId/?"
+          },
+          {
+            "path": "/data/joinedAt/?"
+          },
+          {
+            "path": "/data/personId/?"
           }
         ],
         "excludedPaths": [
@@ -184,7 +208,8 @@
     "TTL disabled: omit defaultTtl. No unique-key policies. No provisioned throughput on serverless containers.",
     "Item id is indexed by Cosmos under consistent indexing; the implemented people query orders by id.",
     "This is a manual configuration manifest, not a Bicep or automatic deployment script.",
-    "Calendar/reservation revision 2026-11-08: required TenantControl date/event/status/publication index paths are prepared for explicit operator review. This source change does not update Azure; metadata readiness rejects incompatible policies and does not prove completed index transformation or live query behavior."
+    "Calendar/reservation revision 2026-11-08: required TenantControl date/event/status/publication index paths are prepared for explicit operator review. This source change does not update Azure; metadata readiness rejects incompatible policies and does not prove completed index transformation or live query behavior.",
+    "Ministries revision 2026-11-09: ministry, application, ownership and public-listing filters use the existing TenantControl container. Private departure/application text is protected at application level; no new RestrictedCases container or live policy update is required by this implementation. Apply additive index changes only after reviewing the actual deployed policy."
   ],
-  "queryContractUpdated": "2026-11-08"
+  "queryContractUpdated": "2026-11-09"
 }

@@ -17,6 +17,9 @@ public static class Permissions
     public const string SchedulePublish = "schedule.publish";
     public const string FacilitiesManage = "facilities.manage";
     public const string MinistriesManage = "ministries.manage";
+    public const string MinistriesAttendanceRecord = "ministries.attendance.record";
+    public const string MinistriesAttendanceReview = "ministries.attendance.review";
+    public const string MinistriesRsvpPrivateRead = "ministries.rsvp.private.read";
     public const string RequestsManage = "requests.manage";
     public const string SacramentsRecord = "sacraments.record";
     public const string ClergyApprove = "clergy.approve";
@@ -80,6 +83,9 @@ public static class Permissions
         SchedulePublish,
         FacilitiesManage,
         MinistriesManage,
+        MinistriesAttendanceRecord,
+        MinistriesAttendanceReview,
+        MinistriesRsvpPrivateRead,
         RequestsManage,
         SacramentsRecord,
         ClergyApprove,

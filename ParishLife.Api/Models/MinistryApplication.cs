@@ -1,5 +1,5 @@
-// Purpose: represents ministry application business state and rules.
-// Main members: Id, MinistryId, PersonId, ApplicantAccountId, Kind, Status, SubmittedBy, and related workflow details.
+// Purpose: stores a ministry join/departure request separately from its effective roster membership.
+// Main members: identity and stage fields, actual review dates, policy revision and protected applicant/evidence text.
 
 namespace ParishLife.Api.Models;
 
@@ -27,5 +27,19 @@ public class MinistryApplication
 
     public DateTimeOffset? DecidedAt { get; set; } = null;
 
+    public string? ReturnResumeStatus { get; set; }
+
     public string? PriorStatus { get; set; } = null;
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+
+    public DateTimeOffset? RecommendedAt { get; set; }
+
+    public int PolicyRevision { get; set; }
+
+    public string? ProtectedReason { get; set; }
+
+    public string? ProtectedRepresentationEvidence { get; set; }
+
+    public string? ProtectedEligibilityReviewReference { get; set; }
 }

@@ -109,20 +109,12 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
     }
 
     [Authorize, HttpPost("password")]
-    public async Task<IActionResult> ChangePassword(ChangePasswordDto request)
+    public async Task<ActionResult<PasswordChangeResultDto>> ChangePassword(ChangeAccountPasswordDto request,
+        [FromServices] AccountPasswordService passwords, CancellationToken ct)
     {
-        if (request.NewPassword is null || request.NewPassword.Length is < 16 or > 200 || request.CurrentPassword is null || request.CurrentPassword.Length > 200)
-            throw new DomainException("invalid_password", "New password must contain 16–200 characters.");
-        var user = await users.GetUserAsync(User);
-        if (user is null)
-            return Unauthorized();
-        if (await users.CheckPasswordAsync(user, request.NewPassword))
-            throw new DomainException("password_unchanged", "Choose a password different from the current password.");
-        var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-        if (!result.Succeeded)
-            throw new DomainException("password_change_failed", "The password could not be changed with the supplied current credentials/version.");
+        var result = await passwords.ChangeAsync(request, ct);
         await signIn.SignOutAsync();
-        return NoContent();
+        return Ok(result);
     }
 
 }

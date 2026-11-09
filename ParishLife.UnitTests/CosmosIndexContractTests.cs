@@ -46,6 +46,16 @@ public class CosmosIndexContractTests
         container.IndexingPolicy.IndexingMode = IndexingMode.None;
         Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
     }
+    [Theory]
+    [InlineData("/data/meetingId/?")]
+    [InlineData("/data/joinedAt/?")]
+    [InlineData("/data/personId/?")]
+    public void Missing_meeting_or_attendance_query_paths_are_rejected(string path)
+    {
+        var container = Explicit();
+        container.IndexingPolicy.IncludedPaths.Remove(container.IndexingPolicy.IncludedPaths.Single(item => item.Path == path));
+        Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
+    }
     private static ContainerProperties Explicit()
     {
         var container = new ContainerProperties("TenantControl", "/partitionKey");

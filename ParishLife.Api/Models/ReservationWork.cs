@@ -1,5 +1,5 @@
 // Purpose: stores the durable coordination state for a multi-resource reservation attempt.
-// Main members: Id, ParishId, ReservationId, ActorId, Fingerprint, Status, Resources, and related workflow details.
+// Main members: Id, ParishId, ReservationId, ActorId, MinistryId, MeetingId, Fingerprint, Status, Resources, and related workflow details.
 
 namespace ParishLife.Api.Models;
 
@@ -12,6 +12,10 @@ public class ReservationWork
     public string ReservationId { get; set; } = string.Empty;
 
     public string ActorId { get; set; } = string.Empty;
+
+    public string? MinistryId { get; set; }
+
+    public string? MeetingId { get; set; }
 
     public string? ActingAppointmentId { get; set; }
 

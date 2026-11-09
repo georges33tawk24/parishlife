@@ -12,11 +12,11 @@ public class ApplyMinistryDto
     public Guid OperationId { get; set; }
 
     [Required]
-    [StringLength(500)]
+    [StringLength(10)]
     public string Kind { get; set; } = string.Empty;
     [NotEmptyGuid]
     public Guid? PersonId { get; set; } = null;
 
-    [StringLength(500)]
+    [StringLength(1000)]
     public string? RepresentationEvidence { get; set; } = null;
 }

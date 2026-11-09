@@ -1,5 +1,5 @@
 // Purpose: represents ministry leader business state and rules.
-// Main functions: Current.
+// Main functions: Current checks the dated appointment; appointment and ending metadata preserve the actual authority history.
 
 namespace ParishLife.Api.Models;
 
@@ -10,6 +10,8 @@ public class MinistryLeader
     public string MinistryId { get; set; } = string.Empty;
 
     public string AccountId { get; set; } = string.Empty;
+
+    public string[] Duties { get; set; } = Array.Empty<string>();
 
     public string Role { get; set; } = string.Empty;
 
@@ -23,5 +25,16 @@ public class MinistryLeader
 
     public string EvidenceReference { get; set; } = string.Empty;
 
-    public bool Current(DateTimeOffset now) => !Revoked && StartsAt <= now && (EndsAt is null || now < EndsAt);
+    public DateTimeOffset AppointedAt { get; set; }
+
+    public DateTimeOffset? EndedAt { get; set; }
+
+    public string? EndedBy { get; set; }
+
+    public string? EndReason { get; set; }
+
+    public string? ReplacesAccountId { get; set; }
+
+    public bool Current(DateTimeOffset now) => !Revoked && EndedAt is null && StartsAt <= now
+        && AppointedAt <= now && (EndsAt is null || now < EndsAt);
 }

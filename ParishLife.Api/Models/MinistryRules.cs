@@ -11,6 +11,7 @@ public static class MinistryRules
         "Late",
         "Absent",
         "Excused",
+        "NotExpected",
         "NotRecorded"
     };
     public static bool IsLiturgy(string kind) => kind.Equals("Mass", StringComparison.OrdinalIgnoreCase) || kind.Equals("Liturgy", StringComparison.OrdinalIgnoreCase) || kind.Equals("DivineLiturgy", StringComparison.OrdinalIgnoreCase);

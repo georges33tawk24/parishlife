@@ -17,7 +17,7 @@ public static class StaffAppointmentRules
     {
         Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ReportsRead,
         Permissions.ScheduleRead, Permissions.ScheduleManage, Permissions.SchedulePublish,
-        Permissions.FacilitiesManage, Permissions.MinistriesManage, Permissions.RequestsManage,
+        Permissions.FacilitiesManage, Permissions.MinistriesManage, Permissions.MinistriesAttendanceRecord, Permissions.MinistriesAttendanceReview, Permissions.MinistriesRsvpPrivateRead, Permissions.PublishingManage, Permissions.RequestsManage,
         Permissions.SacramentsRecord, Permissions.DocumentsRelease, Permissions.RegistrationsManage, Permissions.CheckIn
     };
 

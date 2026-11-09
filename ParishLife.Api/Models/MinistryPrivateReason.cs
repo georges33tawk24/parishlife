@@ -1,5 +1,5 @@
-// Purpose: represents ministry private reason business state and rules.
-// Main members: Id, ParishId, MinistryId, ApplicationId, ApplicantAccountId, Reason, RecordedAt.
+// Purpose: stores an encrypted confidential departure reason in the existing parish transaction partition.
+// Main members: Id, ParishId, MinistryId, ApplicationId, ApplicantAccountId, ProtectedReason, RecordedAt.
 
 namespace ParishLife.Api.Models;
 
@@ -15,7 +15,7 @@ public class MinistryPrivateReason
 
     public string ApplicantAccountId { get; set; } = string.Empty;
 
-    public string Reason { get; set; } = string.Empty;
+    public string ProtectedReason { get; set; } = string.Empty;
 
     public DateTimeOffset RecordedAt { get; set; }
 }

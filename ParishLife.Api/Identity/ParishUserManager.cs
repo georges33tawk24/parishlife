@@ -1,5 +1,6 @@
 // Purpose: retains ASP.NET Core Identity behavior while exposing its recovery-code generator for staged atomic account writes.
-// Main functions: CreateRecoveryCodes stages framework-generated codes; CreateSecurityStamp stages an Identity-generated security version.
+// Main functions: CreateRecoveryCodes stages framework-generated codes; CreateSecurityStamp stages an Identity-generated security version;
+// StagePasswordAsync uses the maintained validator/hash/stamp routine before the service's atomic account commit.
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -16,4 +17,7 @@ public class ParishUserManager(IUserStore<ParishUser> store, IOptions<IdentityOp
         => Enumerable.Range(0, 10).Select(_ => CreateTwoFactorRecoveryCode()).Distinct(StringComparer.Ordinal).ToArray();
 
     internal string CreateSecurityStamp() => GenerateNewAuthenticatorKey();
+
+    internal Task<IdentityResult> StagePasswordAsync(ParishUser user, string newPassword)
+        => UpdatePasswordHash(user, newPassword, validatePassword: true);
 }

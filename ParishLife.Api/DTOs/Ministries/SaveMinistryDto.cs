@@ -1,5 +1,5 @@
 // Purpose: represents save ministry input/output data.
-// Main members: OperationId, Version, Name, Kind, Purpose, EligibilityPolicyReference.
+// Main members: OperationId, Version, Name, Kind, Purpose, EligibilityPolicyReference, PublicInformation.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -15,17 +15,19 @@ public class SaveMinistryDto
     public string? Version { get; set; }
 
     [Required]
-    [StringLength(500)]
+    [StringLength(200)]
     public string Name { get; set; } = string.Empty;
 
     [Required]
-    [StringLength(500)]
+    [StringLength(80)]
     public string Kind { get; set; } = string.Empty;
 
     [Required]
-    [StringLength(10000)]
+    [StringLength(4000)]
     public string Purpose { get; set; } = string.Empty;
 
-    [StringLength(500)]
+    [StringLength(1000)]
     public string? EligibilityPolicyReference { get; set; } = null;
+    [StringLength(4000)]
+    public string? PublicInformation { get; set; }
 }
