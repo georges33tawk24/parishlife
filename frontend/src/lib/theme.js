@@ -238,6 +238,12 @@ export function applyTheme(theme, root = document.documentElement) {
         '--selection-hover': '#3D5472',
         '--primary-subtle': '#2B3C52',
         '--link': overlay(scheme.primary, 0.72),
+        /* on a dark page the primary colour is the pale one, and what sits on it is dark */
+        '--primary': overlay(scheme.primary, 0.72),
+        '--primary-hover': overlay(scheme.primary, 0.82),
+        '--accent': overlay(scheme.primary, 0.72),
+        '--chart-1': overlay(scheme.primary, 0.72),
+        '--on-primary': '#11161E',
         '--success-subtle': '#173B2A',
         '--success-ink': '#A5E6BD',
         '--success-border': '#397B54',

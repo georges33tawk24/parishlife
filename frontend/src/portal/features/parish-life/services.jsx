@@ -125,7 +125,7 @@ export function services(tab = '', planId = '') {
         ))}{' '}
         {!meetings.length ? (
           <Empty
-            glyph="calendar"
+            glyph="events"
             title={L('No meetings yet', 'لا اجتماعات بعد')}
             body={L('Schedule one from your group page.', 'جدول اجتماعاً من صفحة مجموعتك.')}
           />

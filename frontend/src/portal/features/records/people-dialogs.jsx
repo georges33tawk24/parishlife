@@ -226,10 +226,10 @@ export function portalDecide(id, accept) {
     accept ? L('Change accepted', 'اعتُمد التعديل') : L('Change declined', 'رُفض التعديل'),
     accept
       ? L(
-          `${r.what} — the record is updated and the family has been told.`,
-          `${r.whatAr} — حُدّث السجل وأُبلغت العائلة.`
+          `${r.what} — the record is updated. Nothing is sent automatically.`,
+          `${r.whatAr} — حُدّث السجل. لا يُرسَل شيء تلقائياً.`
         )
-      : L('The family is told the change was not applied.', 'تُبلَّغ العائلة بأن التعديل لم يُطبَّق.'),
+      : L('The change was not applied. Nothing is sent automatically.', 'لم يُطبَّق التعديل. لا يُرسَل شيء تلقائياً.'),
     accept ? 'success' : '',
     {
       action: {

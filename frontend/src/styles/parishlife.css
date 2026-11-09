@@ -5,6 +5,9 @@
    Forest green, muted sage, and warm-white surfaces.
    ============================================================ */
 
+/* A local font with Inter's measurements, so the page does not shift when Inter arrives. */
+@font-face{font-family:'Inter Fallback';src:local('Arial');size-adjust:107.06%;ascent-override:90.49%;descent-override:22.56%;line-gap-override:0%}
+
 /* ParishLife palette: forest, sage and warm white. */
 :root{
   /* Forest, sage and warm-white design system shared by management screens. */
@@ -13,8 +16,10 @@
   --line:var(--border); --surface-2:var(--surface-soft);
 
   --primary:#233B32; --primary-hover:#172B23; --primary-subtle:#EDF0E8; --primary-rgb:35 59 50;
+  --on-primary:#FFFFFF; /* text on anything filled with --primary; theme.js turns it dark in dark mode */
   --ink:#233B32; --on-dark:#EDF0E8; --on-dark-rgb:237 240 232;
   --selection:#D6E1D0; --selection-hover:#DCE2DB;
+  --feast:#B8892F; /* clears 3:1 on white and on the dark surfaces */
   --accent:#233B32;
   --chart-1:#233B32; --chart-2:#607068; --chart-3:#9BAC9F; --chart-4:#D6E1D0;
   --text:#233B32; --text-2:#607068; --text-3:#607068;
@@ -40,16 +45,20 @@
   --e1:0 1px 2px rgb(var(--primary-rgb) / .06);
   --e2:0 4px 12px rgb(var(--primary-rgb) / .09);
   --e3:0 16px 40px rgb(var(--primary-rgb) / .16);
-  --focus:0 0 0 3px rgb(var(--primary-rgb) / .22);
+  /* the ring clears 3:1 everywhere: a gap in the surface colour, then the text colour */
+  --focus:0 0 0 2px var(--surface),0 0 0 4px var(--text);
+  --focus-soft:0 0 0 3px rgb(var(--primary-rgb) / .22); /* beside a border that has already turned dark */
 
   /* sizing */
   --h-control:40px; --h-row:48px; --h-topbar:64px; --rail:264px;
 
   /* motion */
-  --t-micro:120ms; --t-std:180ms; --ease:cubic-bezier(.2,.6,.2,1);
+  --t-micro:120ms; --t-std:180ms;
+  --ease:cubic-bezier(.23,1,.32,1);        /* things arriving and responding */
+  --ease-drawer:cubic-bezier(.32,.72,0,1); /* a drawer or sheet sliding in */
 
   /* type */
-  --sans:'Inter',system-ui,-apple-system,sans-serif;
+  --sans:'Inter','Inter Fallback',system-ui,-apple-system,sans-serif;
   --arabic:'IBM Plex Sans Arabic','Inter',system-ui,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --fs-hero:clamp(38px,5.6vw,72px);
@@ -66,14 +75,35 @@ body{
   -webkit-font-smoothing:antialiased; text-wrap:pretty;
 }
 img,svg{display:block;max-width:100%}
+small{font-size:max(12px,.8333em)}
 h1,h2,h3,h4,p,figure{margin:0}
 a{color:var(--primary);text-decoration:none}
 a:hover{color:var(--primary-hover)}
-:focus-visible{outline:none;box-shadow:var(--focus);border-radius:var(--r-input)}
+/* the transparent outline is what Windows high-contrast mode paints, as it drops box-shadows */
+:focus-visible{outline:2px solid transparent;outline-offset:2px;box-shadow:var(--focus);border-radius:var(--r-input)}
+/* a whole region focused by code (the page after sign-in, a dialog) is where reading resumes, not a control */
+[tabindex="-1"]:focus-visible{outline:none;box-shadow:none}
+/* the parts of the page the browser draws carry the palette too */
+::selection{background:var(--selection);color:var(--text)}
+html{caret-color:var(--primary);scrollbar-color:var(--border-strong) transparent}
+a{text-underline-offset:.18em}
+:where(input[type=checkbox],input[type=radio]){flex:none;width:18px;height:18px;accent-color:var(--primary)}
+/* Less motion means nothing travels and nothing loops, not that nothing responds: state changes
+   still fade, so the reader can see what happened. The iteration count matters: an endless
+   spinner at .01ms does not stop, it strobes. */
 @media (prefers-reduced-motion:reduce){
-  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
   html{scroll-behavior:auto}
+  *,*::before,*::after{
+    animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important;
+    transition-duration:.01ms!important;transition-delay:0s!important
+  }
+  .scrim,.drawer,.modal .sheet,.toast{transform:none!important;transition:opacity 160ms linear,visibility 160ms linear!important}
+  .drawer:not(.open){opacity:0;visibility:hidden}
+  .menu,#view.view-in{animation:pl-fade 160ms linear!important}
+  .spinner,.btn .spin{animation:pl-breathe 1.4s ease-in-out infinite!important}
 }
+@keyframes pl-fade{from{opacity:0}}
+@keyframes pl-breathe{50%{opacity:.35}}
 
 /* Arabic: one step larger, line-heights one step looser */
 [dir=rtl] body,body[dir=rtl]{font-family:var(--arabic);font-size:17px;line-height:32px}
@@ -130,8 +160,8 @@ a:hover{color:var(--primary-hover)}
   background:none;color:var(--text);white-space:nowrap;
   transition:background var(--t-micro) var(--ease),color var(--t-micro) var(--ease);
 }
-.btn-primary{background:var(--primary);color:var(--surface);border-color:var(--primary)}
-.btn-primary:hover{background:var(--primary-hover);color:var(--surface);border-color:var(--primary-hover)}
+.btn-primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-hover);color:var(--on-primary);border-color:var(--primary-hover)}
 .btn-primary:active{box-shadow:inset 0 2px 4px rgb(var(--primary-rgb) / .18)}
 .btn-secondary{background:var(--surface);border-color:var(--border);color:var(--text)}
 .btn-secondary:hover{background:var(--primary-subtle);border-color:var(--border-strong)}
@@ -156,6 +186,9 @@ a:hover{color:var(--primary-hover)}
 .pill-warning{background:var(--warning-subtle);color:var(--warning-ink);border-color:var(--warning-border)}
 .pill-danger {background:var(--danger-subtle); color:var(--danger-ink); border-color:var(--danger-border)}
 .pill-info   {background:var(--info-subtle);   color:var(--info-ink);   border-color:var(--info-border)}
+/* the usual state, said quietly: no chip, so that a pill in a list always means something */
+.pill.pill-quiet,.pill.pill-quiet:has(.sticon){background:none;border-color:transparent;padding-inline:0;color:var(--text-2)}
+[data-mode=dark] .pill.pill-quiet{background:none}
 .chip{
   display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;
   border:1px solid var(--border);background:var(--surface);
@@ -163,7 +196,7 @@ a:hover{color:var(--primary-hover)}
 }
 .chip-on{background:var(--selection);border-color:var(--selection);color:var(--text)}
 /* filter chips are buttons: they press, and show a tick when on */
-button.chip{cursor:pointer;gap:6px;transition:background var(--t-micro) var(--ease),border-color var(--t-micro) var(--ease),color var(--t-micro) var(--ease)}
+button.chip{cursor:pointer;gap:6px;transition:background var(--t-micro) var(--ease),border-color var(--t-micro) var(--ease),color var(--t-micro) var(--ease),transform var(--t-micro) var(--ease)}
 button.chip:hover{border-color:var(--border-strong);color:var(--text)}
 button.chip.chip-on:hover{background:var(--selection-hover);border-color:var(--selection-hover);color:var(--text)}
 button.chip svg{flex:none}
@@ -224,6 +257,18 @@ button.chip svg{flex:none}
   display:grid;place-items:center;font:600 12px/1 var(--sans);flex:none;overflow:hidden;
   text-transform:uppercase;letter-spacing:.02em
 }
+.avatar[data-tone="0"]{background:#DFE9DA;color:#2C4A35}
+.avatar[data-tone="1"]{background:#F0E6D0;color:#5E4A1E}
+.avatar[data-tone="2"]{background:#F3DFDD;color:#6E2F2B}
+.avatar[data-tone="3"]{background:#DCE8F2;color:#234B6B}
+.avatar[data-tone="4"]{background:#E7E0F0;color:#4A3470}
+.avatar[data-tone="5"]{background:#F1E1D3;color:#6B3F1F}
+[data-mode=dark] .avatar[data-tone="0"]{background:#2A3D33;color:#BFE0C8}
+[data-mode=dark] .avatar[data-tone="1"]{background:#40361F;color:#EBD9AE}
+[data-mode=dark] .avatar[data-tone="2"]{background:#452B2B;color:#F2C9C5}
+[data-mode=dark] .avatar[data-tone="3"]{background:#233A4E;color:#BBD9F2}
+[data-mode=dark] .avatar[data-tone="4"]{background:#352C4A;color:#D7C8F2}
+[data-mode=dark] .avatar[data-tone="5"]{background:#43301F;color:#EFCFB2}
 .avatar.has-photo{background-size:cover;background-position:center;background-color:var(--muted)}
 .avatar-sm{width:26px;height:26px;font-size:10px}
 .avatar-lg{width:48px;height:48px;font-size:17px}
@@ -242,7 +287,7 @@ button.chip svg{flex:none}
 .textarea{padding:10px 12px;line-height:22px;min-height:96px;resize:vertical}
 .input::placeholder,.textarea::placeholder{color:var(--text-3)}
 .input:hover,.select:hover,.textarea:hover{border-color:var(--border-strong)}
-.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus)}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-soft)}
 .input:disabled,.select:disabled{background:var(--muted);color:var(--text-3);cursor:not-allowed}
 .input[aria-invalid=true],.select[aria-invalid=true],.textarea[aria-invalid=true]{border-color:var(--danger);box-shadow:0 0 0 3px rgb(var(--primary-rgb) / .16)}
 /* iPhone Safari zooms into any field set below 16px, and leaves the page zoomed afterwards */
@@ -253,12 +298,15 @@ button.chip svg{flex:none}
   background-repeat:no-repeat;background-position:right 10px center;background-size:16px
 }
 [dir=rtl] .select{background-position:left 10px center}
+/* an image cannot use currentColor, so dark mode needs its own chevrons */
+[data-mode=dark] .select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23C3CEC6' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M6 8.5l4 4 4-4'/%3E%3C/svg%3E")}
+[data-mode=dark] .dd-trigger[aria-expanded=true]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23C3CEC6' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M6 11.5l4-4 4 4'/%3E%3C/svg%3E")}
 /* designed dropdown: the trigger is the field, the list is drawn like the menus */
 .dd-native{position:absolute!important;inset-inline-start:0;top:0;width:1px!important;height:1px!important;min-height:0!important;
   padding:0!important;border:0!important;opacity:0;pointer-events:none;overflow:hidden}
 .dd-trigger{display:flex;align-items:center;text-align:start;cursor:pointer;color:var(--text)}
 .dd-trigger .dd-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dd-trigger[aria-expanded=true]{border-color:var(--primary);box-shadow:var(--focus);
+.dd-trigger[aria-expanded=true]{border-color:var(--primary);box-shadow:var(--focus-soft);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23233B32' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M6 11.5l4-4 4 4'/%3E%3C/svg%3E")}
 .dd{position:fixed;z-index:140;max-width:min(380px,calc(100vw - 16px));padding:6px;background:var(--surface);border:1px solid var(--border);
   border-radius:var(--r-card);box-shadow:var(--e3);animation:pl-menu 120ms var(--ease)}
@@ -275,7 +323,7 @@ button.chip svg{flex:none}
 .dd-search svg{position:absolute;inset-inline-start:10px;color:var(--text-3);pointer-events:none}
 .dd-q{width:100%;height:36px;padding-inline:32px 10px;border:1px solid var(--border);border-radius:var(--r-input);background:var(--bg);
   font:400 13px/1 var(--sans);color:var(--text)}
-.dd-q:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus)}
+.dd-q:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-soft)}
 .dd-none{padding:10px;font:400 13px/18px var(--sans);color:var(--text-3)}
 [dir=rtl] .dd,.dd[dir=rtl] .dd-opt{font-family:var(--arabic)}
 .label{display:block;font:500 13px/18px var(--sans);color:var(--text);margin-bottom:6px}
@@ -289,15 +337,16 @@ button.chip svg{flex:none}
 .check input{
   appearance:none;margin:2px 0 0;width:18px;height:18px;flex:none;cursor:pointer;
   border:1.5px solid var(--border-strong);border-radius:4px;background:var(--surface);
-  display:grid;place-content:center;transition:all var(--t-micro) var(--ease)
+  display:grid;place-content:center;
+  transition:background-color var(--t-micro) var(--ease),border-color var(--t-micro) var(--ease)
 }
 .check input[type=radio]{border-radius:999px}
 .check input:checked{background:var(--primary);border-color:var(--primary)}
 .check input[type=checkbox]:checked::after{
-  content:"";width:10px;height:6px;border:2px solid #FFFFFF;border-top:0;border-inline-end:0;
+  content:"";width:10px;height:6px;border:2px solid var(--on-primary);border-top:0;border-inline-end:0;
   transform:rotate(-45deg) translate(1px,-1px)
 }
-.check input[type=radio]:checked::after{content:"";width:7px;height:7px;border-radius:999px;background:#FFFFFF}
+.check input[type=radio]:checked::after{content:"";width:7px;height:7px;border-radius:999px;background:var(--on-primary)}
 .check input:focus-visible{box-shadow:var(--focus)}
 
 /* switch */
@@ -307,7 +356,7 @@ button.chip svg{flex:none}
 .switch input::after{content:"";position:absolute;inset-inline-start:2px;top:2px;width:18px;height:18px;
   border-radius:999px;background:#FFFFFF;transition:transform var(--t-micro) var(--ease);box-shadow:var(--e1)}
 .switch input:checked{background:var(--primary)}
-.switch input:checked::after{transform:translateX(16px)}
+.switch input:checked::after{transform:translateX(16px);background:var(--on-primary)}
 [dir=rtl] .switch input:checked::after{transform:translateX(-16px)}
 .switch input:focus-visible{box-shadow:var(--focus)}
 
@@ -352,12 +401,12 @@ table.tbl{width:100%;border-collapse:collapse;font:400 14px/20px var(--sans)}
 table.tbl th{
   height:40px;padding:0 16px;text-align:start;white-space:nowrap;
   background:var(--surface-soft);border-bottom:1px solid var(--border);
-  font:500 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--text-2)
+  font:500 13px/18px var(--sans);color:var(--text-2)
 }
 table.tbl td{height:var(--h-row);padding:8px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
 table.tbl tbody tr:last-child td{border-bottom:0}
 table.tbl tbody tr{transition:background var(--t-micro) var(--ease)}
-table.tbl tbody tr:hover{background:var(--muted)}
+table.tbl tbody tr:hover{background:var(--surface-soft)}
 table.tbl tbody tr.clickable{cursor:pointer}
 table.tbl .num{text-align:end;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 table.tbl th.num{text-align:end}
@@ -411,7 +460,7 @@ table.tbl .wide{min-width:200px}
 .menu button:focus-visible{box-shadow:inset 0 0 0 2px var(--primary)}
 .menu .sep + button.danger{margin-top:0}
 .menu{animation:pl-menu 120ms var(--ease)}
-@keyframes pl-menu{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes pl-menu{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 
 /* ---------- drawer & modal ---------- */
 .scrim{
@@ -423,10 +472,10 @@ table.tbl .wide{min-width:200px}
   position:fixed;z-index:95;top:0;bottom:0;inset-inline-end:0;width:min(100%,var(--drawer-w,420px));
   background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--e3);
   display:flex;flex-direction:column;
-  transform:translateX(100%);transition:transform 240ms var(--ease)
+  transform:translateX(100%);transition:transform 200ms var(--ease)
 }
 [dir=rtl] .drawer{transform:translateX(-100%)}
-.drawer.open{transform:none}
+.drawer.open{transform:none;transition:transform 300ms var(--ease-drawer)}
 .drawer-lg{--drawer-w:720px}
 .drawer-head,.modal-head{
   display:flex;align-items:flex-start;gap:var(--s3);padding:20px 24px;border-bottom:1px solid var(--border);flex:none
@@ -443,9 +492,9 @@ table.tbl .wide{min-width:200px}
 .modal .sheet{
   width:min(100%,560px);min-width:0;justify-self:center;max-height:calc(100vh - 48px);background:var(--surface);
   border-radius:var(--r-modal);box-shadow:var(--e3);display:flex;flex-direction:column;
-  opacity:0;transform:translateY(8px) scale(.99);transition:all var(--t-std) var(--ease);pointer-events:auto
+  opacity:0;transform:scale(.97);transition:opacity 120ms var(--ease),transform 120ms var(--ease);pointer-events:auto
 }
-.modal.open .sheet{opacity:1;transform:none}
+.modal.open .sheet{opacity:1;transform:none;transition-duration:200ms}
 .iconbtn{
   width:32px;height:32px;border-radius:var(--r-input);border:0;background:none;cursor:pointer;
   display:grid;place-items:center;color:var(--text-2);flex:none;
@@ -460,8 +509,9 @@ table.tbl .wide{min-width:200px}
   display:flex;align-items:flex-start;gap:10px;min-width:280px;max-width:380px;padding:12px 14px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--e2);
   font:400 14px/20px var(--sans);pointer-events:auto;
-  animation:pl-toast-in 180ms var(--ease);transition:opacity var(--t-std) var(--ease),transform var(--t-std) var(--ease)
+  transition:opacity var(--t-std) var(--ease),transform var(--t-std) var(--ease)
 }
+@starting-style{.toast{opacity:0;transform:translateY(8px)}}
 .toast b{display:block;font-weight:600}
 .toast .tbody{flex:1;min-width:0}
 .toast .tbody > span:not(.act){display:block;color:var(--text-2)}
@@ -472,11 +522,11 @@ table.tbl .wide{min-width:200px}
 .toast.warning .bar{background:var(--warning)}
 .toast.danger .bar{background:var(--danger)}
 @keyframes pl-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-/* press feedback: a button gives by a pixel under the pointer */
+/* press feedback: a control gives a little under the pointer, at once */
 .btn,.btn-icon,.iconbtn{transition-property:background,color,border-color,box-shadow,transform}
-.btn:active:not(:disabled),.btn-icon:active:not(:disabled),.iconbtn:active{transform:translateY(1px)}
+.btn:active:not(:disabled),.btn-icon:active:not(:disabled),.iconbtn:active,button.chip:active{transform:scale(.97)}
 /* a page arriving, and a record that just changed */
-@keyframes pl-view{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pl-view{from{opacity:0}to{opacity:1}}
 @keyframes pl-flash-ring{from{box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 34%,transparent),var(--e1)}to{box-shadow:0 0 0 3px transparent,var(--e1)}}
 @keyframes pl-flash-bg{from{background-color:var(--primary-subtle)}to{background-color:transparent}}
 .panel.flash,.card.flash,.stat.flash,.cal-ev.flash{animation:pl-flash-ring 1.6s var(--ease)}
@@ -498,12 +548,12 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 /* ---------- misc ---------- */
 .badge{
   display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;
-  border-radius:999px;background:var(--selection);color:var(--ink);
-  font:500 11px/1 var(--sans);font-variant-numeric:tabular-nums
+  border-radius:999px;background:var(--selection);color:var(--text);
+  font:500 12px/1 var(--sans);font-variant-numeric:tabular-nums
 }
 .badge-quiet{background:var(--muted);color:var(--text-2)}
 .kbd{
-  font:400 11px/1 var(--mono);border:1px solid var(--border);border-radius:4px;
+  font:400 12px/1 var(--mono);border:1px solid var(--border);border-radius:4px;
   padding:3px 5px;background:var(--surface);color:var(--text-2)
 }
 .meter{display:block;height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
@@ -514,11 +564,11 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .dl dd{margin:0;color:var(--text)}
 .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [hidden]{display:none!important}
-.overline{font:600 11px/16px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--text-2)}
+.overline{font:600 12px/16px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--text-2)}
 .sr{position:absolute;inset-inline-start:0;top:0;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .skip{
   position:fixed;z-index:200;top:8px;inset-inline-start:8px;padding:10px 16px;border-radius:var(--r-input);
-  background:var(--primary);color:#FFFFFF;font:500 14px/1 var(--sans);transform:translateY(-200%)
+  background:var(--primary);color:var(--on-primary);font:500 14px/1 var(--sans);transform:translateY(-200%)
 }
 .skip:focus{transform:none;color:#FFFFFF}
 
@@ -564,7 +614,9 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 }
 .bgroup button:last-child{border-inline-end:0}
 .bgroup button:hover{background:var(--muted);color:var(--text)}
-.bgroup button[aria-pressed=true]{background:var(--primary);color:#FFFFFF}
+.bgroup button[aria-pressed=true]{background:var(--primary);color:var(--on-primary)}
+/* at 320px a row of filters wraps: otherwise its last option runs off the screen with no way to reach it */
+.seg,.bgroup{max-width:100%;flex-wrap:wrap}
 
 /* ---------- field states ---------- */
 .label .req{color:var(--danger);margin-inline-start:2px}
@@ -600,7 +652,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
   display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:var(--h-control);padding:5px 8px;
   border:1px solid var(--border);border-radius:var(--r-input);background:var(--surface);cursor:text
 }
-.chipfield:focus-within{border-color:var(--primary);box-shadow:var(--focus)}
+.chipfield:focus-within,.stepper:focus-within,.rte:focus-within{border-color:var(--primary);box-shadow:var(--focus-soft)}
 .chipfield .tag{
   display:inline-flex;align-items:center;gap:6px;padding:3px 6px 3px 9px;border-radius:999px;
   background:var(--primary-subtle);color:var(--primary);font:500 12px/18px var(--sans)
@@ -626,7 +678,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .ac-opt b{font-weight:500}
 .ac-opt mark{background:none;color:var(--primary);font-weight:600}
 .ac-opt small{display:block;font:400 12px/16px var(--sans);color:var(--text-2)}
-.ac-group{font:500 10px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);padding:12px 10px 5px}
+.ac-group{font:500 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);padding:12px 10px 5px}
 .ac-none{padding:14px 10px;font:400 13px/20px var(--sans);color:var(--text-2)}
 
 /* ---------- date & time ---------- */
@@ -634,18 +686,18 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .dp-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .dp-head b{flex:1;text-align:center;font:600 14px/20px var(--sans)}
 .dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-.dp-grid .dow{font:500 10px/1 var(--sans);color:var(--text-3);text-align:center;padding:6px 0;text-transform:uppercase}
+.dp-grid .dow{font:500 12px/1 var(--sans);color:var(--text-3);text-align:center;padding:6px 0;text-transform:uppercase}
 .dp-grid button{
   aspect-ratio:1;border:0;background:none;cursor:pointer;border-radius:var(--r-input);position:relative;
   font:400 13px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--text)
 }
 .dp-grid button:hover{background:var(--muted)}
 .dp-grid button.out{color:var(--text-3)}
-.dp-grid button.sel{background:var(--primary);color:#FFFFFF}
+.dp-grid button.sel{background:var(--primary);color:var(--on-primary)}
 .dp-grid button.today{box-shadow:inset 0 0 0 1px var(--primary)}
 .dp-grid button.feast::after{
   content:"";position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
-  width:4px;height:4px;border-radius:99px;background:var(--accent)
+  width:4px;height:4px;border-radius:99px;background:var(--feast)
 }
 .dp-foot{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font:400 12px/16px var(--sans);color:var(--text-2)}
 .dp-foot .dot{width:5px;height:5px;border-radius:99px;background:var(--accent);flex:none}
@@ -654,12 +706,13 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
   border:1px solid var(--border);background:var(--surface);border-radius:999px;cursor:pointer;
   padding:5px 11px;font:500 12px/16px var(--sans);color:var(--text-2)
 }
-.presets button:hover,.presets button[aria-pressed=true]{background:var(--primary);border-color:var(--primary);color:#FFFFFF}
+.presets button:hover,.presets button[aria-pressed=true]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
 
 /* ---------- dropzone & avatar upload ---------- */
 .drop{
   border:1.5px dashed var(--border-strong);border-radius:var(--r-card);background:var(--surface);
-  padding:28px 20px;text-align:center;color:var(--text-2);transition:all var(--t-micro) var(--ease)
+  padding:28px 20px;text-align:center;color:var(--text-2);
+  transition:background-color var(--t-micro) var(--ease),border-color var(--t-micro) var(--ease),color var(--t-micro) var(--ease)
 }
 .drop.over{border-color:var(--primary);background:var(--primary-subtle);color:var(--primary)}
 .drop b{display:block;font:500 14px/20px var(--sans);color:var(--text)}
@@ -674,7 +727,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .filerow.err{border-color:var(--border);background:var(--danger-subtle);color:var(--danger-ink)}
 .filerow .grow{flex:1;min-width:0}
 .filerow b{display:block;font:500 13px/18px var(--sans)}
-.filerow small{display:block;font:400 11px/16px var(--mono);color:var(--text-2)}
+.filerow small{display:block;font:400 12px/16px var(--mono);color:var(--text-2)}
 
 /* ---------- rich text ---------- */
 .rte{border:1px solid var(--border);border-radius:var(--r-input);background:var(--surface);overflow:hidden}
@@ -696,14 +749,14 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 }
 .menu .opt:hover{background:var(--muted)}
 .menu .opt .n{margin-inline-start:auto;font:400 12px/1 var(--mono);color:var(--text-3)}
-.menu .head{padding:8px 10px 4px;font:500 10px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3)}
+.menu .head{padding:8px 10px 4px;font:500 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3)}
 .menu .foot{display:flex;gap:8px;padding:8px 6px 2px;border-top:1px solid var(--border);margin-top:6px}
 .menu .sub{position:relative}
 .menu .sub > .menu{position:absolute;top:-6px;inset-inline-start:100%;margin-inline-start:4px}
 
 .bulkbar{
   position:sticky;bottom:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;
-  background:var(--primary);color:#FFFFFF;border-radius:var(--r-card);box-shadow:var(--e3);
+  background:var(--primary);color:var(--on-primary);border-radius:var(--r-card);box-shadow:var(--e3);
   font:500 14px/20px var(--sans);animation:pl-bulk 180ms var(--ease)
 }
 @keyframes pl-bulk{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -717,23 +770,23 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
   font:400 13px/20px var(--sans);animation:pl-menu 120ms var(--ease)
 }
 .tip{
-  position:absolute;z-index:110;padding:6px 9px;border-radius:6px;background:var(--text);color:#FFFFFF;
+  position:absolute;z-index:110;padding:6px 9px;border-radius:6px;background:var(--text);color:var(--surface);
   font:400 12px/16px var(--sans);white-space:nowrap;pointer-events:none;opacity:0;
   transition:opacity var(--t-micro) var(--ease)
 }
 .tip.on{opacity:1}
+.tip.instant{transition:none}
 
 /* ---------- command palette ---------- */
 .cmdk{
   position:fixed;z-index:130;inset:0;display:grid;place-items:start center;padding:12vh 20px 20px;
-  background:rgb(var(--primary-rgb) / .38);opacity:0;pointer-events:none;transition:opacity var(--t-std) var(--ease)
+  background:rgb(var(--primary-rgb) / .38);visibility:hidden
 }
-.cmdk.open{opacity:1;pointer-events:auto}
+.cmdk.open{visibility:visible} /* hidden, not just transparent: a closed palette must leave the tab order */
 .cmdk .box{
   width:min(100%,600px);background:var(--surface);border-radius:var(--r-modal);box-shadow:var(--e3);
-  overflow:hidden;transform:translateY(-8px);transition:transform var(--t-std) var(--ease)
+  overflow:hidden
 }
-.cmdk.open .box{transform:none}
 .cmdk .q{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
 .cmdk .q input{flex:1;border:0;background:none;font:400 16px/24px var(--sans);color:var(--text)}
 .cmdk .q input:focus{outline:none}
@@ -771,7 +824,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 /* ---------- tabs with counts ---------- */
 .tabs .n{
   display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;
-  border-radius:999px;background:var(--muted);color:var(--text-2);font:500 11px/1 var(--sans)
+  border-radius:999px;background:var(--muted);color:var(--text-2);font:500 12px/1 var(--sans)
 }
 .tabs button[aria-selected=true] .n{background:var(--selection);color:var(--text)}
 

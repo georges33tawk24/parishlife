@@ -271,7 +271,7 @@ export function attendanceMatrix(g, d) {
       </div>{' '}
       {!meetings.length ? (
         <Empty
-          glyph="calendar"
+          glyph="events"
           title={L('No meetings this month', 'لا اجتماعات هذا الشهر')}
           body={L('Add a meeting or choose another month.', 'أضف اجتماعاً أو اختر شهراً آخر.')}
         />

@@ -4,10 +4,10 @@
 .palette-options>label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px}
 .palette-dot{width:18px;height:18px;border-radius:50%;border:1px solid var(--border)}
 .account-parishes>article{display:flex;justify-content:space-between;gap:24px;align-items:center;padding:22px 0;border-bottom:1px solid var(--border)}
-.account-parishes h3{font-size:17px}.account-parishes p{margin:8px 0}
+.account-parishes h3{font-size:17px}.account-parishes h3 a{display:inline-block;padding-block:3px}.account-parishes p{margin:8px 0}
 [data-access-management] .account-parishes>article>div{min-width:0;overflow-wrap:anywhere}
 [data-access-management] .account-actions{max-width:100%}
-[data-mode=dark] .panel,[data-mode=dark] .card,[data-mode=dark] .topbar-app,[data-mode=dark] .tablewrap,[data-mode=dark] .tbl tbody,[data-mode=dark] .drawer,[data-mode=dark] .modal-box,[data-mode=dark] .popover,[data-mode=dark] .input,[data-mode=dark] .select,[data-mode=dark] .textarea{background:var(--surface);color:var(--text)}
+[data-mode=dark] .panel,[data-mode=dark] .card,[data-mode=dark] .topbar-app,[data-mode=dark] .tablewrap,[data-mode=dark] .tbl tbody,[data-mode=dark] .drawer,[data-mode=dark] .modal-box,[data-mode=dark] .popover,[data-mode=dark] .input,[data-mode=dark] .select,[data-mode=dark] .textarea{background-color:var(--surface);color:var(--text)}
 [data-mode=dark] .btn-secondary,[data-mode=dark] .btn-ghost{background:var(--surface-soft);color:var(--text)}
 [data-mode=dark] a:not(.btn-primary):not(.navitem){color:var(--link)}
 [data-mode=dark] .pill{background:var(--surface-soft);color:var(--text)}

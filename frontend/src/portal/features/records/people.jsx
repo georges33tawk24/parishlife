@@ -726,7 +726,7 @@ people.mount = host => {
           className="head"
           style={{
             padding: '8px 10px 4px',
-            font: '500 10px/1 var(--sans)',
+            font: '500 12px/1 var(--sans)',
             letterSpacing: '.09em',
             textTransform: 'uppercase',
             color: 'var(--text-3)'

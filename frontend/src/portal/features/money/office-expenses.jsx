@@ -176,7 +176,7 @@ export function officeExpenses() {
           ]}
           rows={rows.map(row => ({
             cells: [
-              fmtDate(row.date),
+              <span style={{ whiteSpace: 'nowrap' }}>{fmtDate(row.date)}</span>,
               <Pill label={typeLabel(row.kind)} tone={row.kind === 'expense' ? 'warning' : 'info'} />,
               <>
                 <b>{row.description}</b>

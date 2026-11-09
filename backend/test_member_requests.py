@@ -255,8 +255,9 @@ class MemberRequestTests(unittest.TestCase):
         self.assertEqual(self.request('charbel', result['id'])['progress']['stage'], 'signing')
         self.flow('priest', 'issue', 'sc-web-1', verified=True)
         item = self.request('charbel', result['id'])
-        self.assertEqual(item['progress']['stage'], 'ready')
-        self.assertEqual(self.notifications('charbel'), ['request-accepted', 'request-ready'])
+        # a signed certificate now waits for the bishop to accept it before it is ready
+        self.assertEqual(item['progress']['stage'], 'review')
+        self.assertEqual(self.notifications('charbel')[0], 'request-accepted')
 
     def test_waiting_certificate_and_cancellation_reason(self):
         result = self.action('nada', 'sacramentRequest', kind='certificate', personId='p3', certificateOf='confirmation',

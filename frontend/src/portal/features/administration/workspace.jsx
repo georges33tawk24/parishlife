@@ -550,6 +550,7 @@ export function WorkspacePage() {
                 type="search"
                 data-user-search=""
                 placeholder={L('Search accounts', 'ابحث عن حساب')}
+                aria-label={L('Search accounts', 'ابحث عن حساب')}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
               />

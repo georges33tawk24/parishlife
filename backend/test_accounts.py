@@ -52,7 +52,15 @@ class AccountTests(unittest.TestCase):
             connection.close()
 
     def signup(self, **values):
-        body = dict(parish='p-elias', method='phone', phone='03 123 456', name='Antoinette Khoury', password='rosary2026')
+        body = dict(firstName='Antoinette', lastName='Khoury', birthDate='1990-05-01', phone='03 123 456',
+                    password='rosary2026', confirmPassword='rosary2026')
+        if 'name' in values:
+            body['firstName'], _, body['lastName'] = values.pop('name').strip().partition(' ')
+        if values.get('method') == 'email':
+            body.pop('phone')
+        values.pop('method', None), values.pop('parish', None)
+        if 'password' in values:
+            body['confirmPassword'] = values['password']
         body.update(values)
         return self.call('POST', '/api/signup', body)
 
@@ -125,9 +133,8 @@ class AccountTests(unittest.TestCase):
 
     def test_signup_checks_every_field(self):
         cases = [
-            (dict(parish='nowhere'), 400, 'Choose your parish.'),
-            (dict(name=' A '), 400, 'Enter your full name.'),
-            (dict(method='fax'), 400, 'Choose a phone number or an email address.'),
+            (dict(firstName=' '), 400, 'Enter your first and last name.'),
+            (dict(birthDate='soon'), 400, 'Enter your date of birth.'),
             (dict(phone='12'), 400, 'Enter a valid phone number.'),
             (dict(phone='call me'), 400, 'Enter a valid phone number.'),
             (dict(method='email', email='not-an-email'), 400, 'Enter a valid email address.'),
@@ -140,16 +147,15 @@ class AccountTests(unittest.TestCase):
                 self.assertEqual((result[0], result[1].get('error')), (status, message))
         self.assertEqual(self.signup()[0], 200)
         status, data, _ = self.signup(phone='+961 3 123 456', name='Someone Else')
-        self.assertEqual((status, data['error']), (409, 'This phone number already has an account. Sign in instead.'))
+        self.assertEqual((status, data['error']), (409, 'This contact already has an account. Sign in to connect additional methods.'))
         self.signup(method='email', email='a@b.co')
         status, data, _ = self.signup(method='email', email='A@B.co')
-        self.assertEqual((status, data['error']), (409, 'This email address already has an account. Sign in instead.'))
+        self.assertEqual((status, data['error']), (409, 'This contact already has an account. Sign in to connect additional methods.'))
 
     def test_too_many_new_accounts_in_an_hour_are_refused(self):
-        with server.connect() as c:
-            for _ in range(server.SIGNUPS_PER_HOUR):
-                c.execute("INSERT INTO audit(parish_id,actor,at,action,detail) VALUES('p-elias',NULL,?,'member.signup','{}')", (server.NOW(),))
-        status, data, _ = self.signup()
+        for n in range(30):  # the limit in workspace.signup
+            self.assertEqual(self.signup(method='email', email=f'person{n}@example.com')[0], 200)
+        status, data, _ = self.signup(method='email', email='one-too-many@example.com')
         self.assertEqual(status, 429)
         self.assertIn('try again later', data['error'])
 

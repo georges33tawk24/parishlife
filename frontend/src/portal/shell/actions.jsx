@@ -197,7 +197,12 @@ export const VERBS = {
       refresh();
       toast(
         L('Reservation rejected', 'رُفض الحجز'),
-        L('The slot is free again and the requester has been told.', 'تحرّر الوقت وأُبلغ مقدّم الطلب.'),
+        r.memberReference
+          ? L(
+              'The slot is free again and the parishioner is told, with your reason.',
+              'تحرّر الوقت ويُبلَّغ المؤمن مع السبب.'
+            )
+          : L('The slot is free again. Nothing is sent automatically.', 'تحرّر الوقت. لا يُرسَل شيء تلقائياً.'),
         'warning'
       );
     };
@@ -512,7 +517,10 @@ export const VERBS = {
     if (!i) return;
     i.status = 'approved';
     refresh();
-    ok(L('Assigned', 'أُسند'), L('The responsible person has been notified.', 'أُبلغ المسؤول.'));
+    ok(
+      L('Assigned', 'أُسند'),
+      L('Nothing is sent automatically, so let them know.', 'لا يُرسَل شيء تلقائياً، فأبلِغ المسؤول.')
+    );
   },
 
   /* create, edit and delete any record kind registered in shared/record-editor.jsx ------ */
@@ -784,19 +792,6 @@ export const VERBS = {
     S.ui.runWf = id || '';
     if (location.hash !== '#/forms/runs') location.hash = '#/forms/runs';
     else refresh();
-  },
-  'wf-retry': () => {
-    D.RUN_LOG.unshift([
-      '2026-10-04 19:32',
-      'Retry 2 of 3 — WhatsApp gateway answered',
-      'محاولة ٢ من ٣ — استجابت بوابة واتساب',
-      'ok'
-    ]);
-    refresh();
-    ok(
-      L('Failed steps retried', 'أُعيدت الخطوات الفاشلة'),
-      L('The message went through on the second attempt.', 'نجحت الرسالة في المحاولة الثانية.')
-    );
   },
   'wf-cancel': (b, id) => {
     const r = find(D.RUNS, id);

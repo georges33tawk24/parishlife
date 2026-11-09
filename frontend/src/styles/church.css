@@ -288,3 +288,13 @@ html{scrollbar-color:#B48737 #E9E1D1}
   .track-steps li span::after{animation:none;transition:none}
   .map-light .core,.brand-light,.mobile-nav::before,.lost-arch.is-lit .lost-candle i{animation:none}
 }
+
+/* A tap on a touch screen also reports a hover: what lifts under a mouse stays still under a finger. */
+@media(hover:none){
+  .ph-next:hover,.pcal-day:hover,.pcal-ev:hover,[dir=rtl] .pcal-ev:hover,.ph-near-list a:hover,.ph-mass:hover,
+  .wk-tonight a:hover,button.wk-day:hover,.wk-ev-link:hover,.button:hover,.btn:hover,.parish-card:hover,.request-card:hover,
+  .ph-photo-btn:hover img,.story:hover .story-arch img{transform:none}
+}
+/* no word left alone on a last line, and headings that break evenly */
+:where(h1,h2,h3,h4){text-wrap:balance}
+:where(p,li){text-wrap:pretty}

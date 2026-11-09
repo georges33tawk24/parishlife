@@ -284,26 +284,13 @@ export function forms(tab = '') {
                 </button>
               </div>
             ))}{' '}
-            <div className="row" style={{ gap: '8px', marginTop: '14px' }}>
-              <button className="btn btn-secondary btn-dense" data-act="wf-retry">
-                {L('Retry messages that failed', 'إعادة إرسال الرسائل الفاشلة')}
-              </button>
-            </div>{' '}
-            <p className="t-caption dim" style={{ marginTop: '12px' }}>
-              {L(
-                'Retrying never sends a message twice: anything already delivered is skipped.',
-                'إعادة المحاولة لا تُرسل رسالة مرّتين: ما وصل سابقاً يُتخطّى.'
-              )}
-            </p>
           </Panel>{' '}
           <Panel title={L('When something goes wrong', 'حين يتعطّل شيء')}>
             <dl className="dl">
-              <dt>{L('A message fails', 'فشل رسالة')}</dt>
+              <dt>{L('External delivery', 'الإرسال الخارجي')}</dt>
               <dd>
-                {L('Tried again up to 3 times, a little later each time', 'تُعاد حتى ٣ مرّات، بفاصل أطول كل مرّة')}
+                {L('Not connected: nothing is sent outside ParishLife', 'غير موصول: لا يُرسَل شيء خارج «حياة الرعية»')}
               </dd>
-              <dt>{L('It still fails', 'إن استمرّ الفشل')}</dt>
-              <dd>{L('The workflow stops and tells the person responsible', 'يتوقّف المسار ويُبلغ المسؤول')}</dd>
               <dt>{L('Sensitive steps', 'الخطوات الحسّاسة')}</dt>
               <dd>{L('Always wait for a person', 'تنتظر شخصاً دائماً')}</dd>
             </dl>

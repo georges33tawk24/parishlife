@@ -59,7 +59,8 @@ html[data-mode=dark] .ins{
 .viz-base{stroke:var(--axis);stroke-width:1}
 .viz-tick{font-size:11.5px;fill:var(--tick);font-variant-numeric:tabular-nums}
 .viz-cross{stroke:var(--axis);stroke-width:1}
-.viz-hit{cursor:crosshair;outline:none}
+.viz-hit{cursor:crosshair}
+.viz-hit:focus-visible{outline:2px solid var(--primary);box-shadow:none}
 .viz-hit:focus-visible{outline:2px solid var(--link,#2a78d6);outline-offset:2px}
 .viz-key{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--text-2)}
 .viz-key li{display:inline-flex;align-items:center;gap:8px}
@@ -89,7 +90,8 @@ html[data-mode=dark] .ins{
 .viz-seg{min-width:4px;transition:filter .2s}
 .viz-seg:first-child{border-start-start-radius:4px;border-end-start-radius:4px}
 .viz-seg:last-child{border-start-end-radius:4px;border-end-end-radius:4px}
-.viz-seg:hover,.viz-seg:focus-visible{filter:brightness(1.15);outline:none}
+.viz-seg:hover,.viz-seg:focus-visible{filter:brightness(1.15)}
+.viz-seg:focus-visible{outline:2px solid var(--primary);outline-offset:1px;box-shadow:none}
 .viz-legend{display:grid;gap:8px;margin:0;padding:0;list-style:none}
 .viz-legend li{display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;align-items:center;gap:10px;font-size:14px;color:var(--text)}
 .viz-legend i{width:10px;height:10px;border-radius:3px}
@@ -151,7 +153,8 @@ html[data-mode=dark] .ins{
 .ins-table{margin:0}
 .ins-table th,.ins-table td{vertical-align:middle}
 .ins-table tbody tr{cursor:pointer;transition:background-color .15s}
-.ins-table tbody tr:hover,.ins-table tbody tr:focus-visible{background:var(--surface-soft);outline:none}
+.ins-table tbody tr:hover,.ins-table tbody tr:focus-visible{background:var(--surface-soft)}
+.ins-table tbody tr:focus-visible{box-shadow:inset 0 0 0 2px var(--primary)}
 .ins-table tbody th b{display:block;font-weight:600}
 .ins-table small{display:block;font-size:12px;font-weight:400;color:var(--text-2)}
 .ins-table td.num{font-variant-numeric:tabular-nums}

@@ -29,6 +29,7 @@ import {
   resClash
 } from '../../model/data.js';
 import { waitingOnline, onlineTitle, subjectOf } from '../records/online-requests.jsx';
+import { kindLabel } from '../records/records-shared.jsx';
 import * as C from '../../ui/components.jsx';
 import { auditAction, auditTime } from '../../shared/audit-words.js';
 
@@ -152,6 +153,7 @@ function todayPanel() {
       title={t(`Today at ${PARISH.name}`, `اليوم في ${PARISH.nameAr}`)}
       more={<a href="#/calendar">{t('Whole week', 'الأسبوع كلّه')}</a>}
       tight={true}
+      none={t('Nothing on the calendar today.', 'لا شيء في التقويم اليوم.')}
     >
       {rows}
     </Panel>
@@ -175,8 +177,9 @@ function activityPanel(limit = 5) {
     <Panel
       title={t('Recent activity', 'النشاط الأخير')}
       more={is('priest') ? <a href="#/audit">{t('Audit trail', 'سجل التدقيق')}</a> : ''}
+      none={t('Nothing recorded yet.', 'لم يُسجَّل شيء بعد.')}
     >
-      <div className="timeline">{rows}</div>
+      {rows.length ? <div className="timeline">{rows}</div> : null}
     </Panel>
   );
 }
@@ -255,7 +258,7 @@ function priest() {
         <span className="grow">
           <b>{isAr() ? a.ar : a.couple}</b>{' '}
           <small>
-            {t(`${a.kind} · ${a.years} years · ${fmtDate(a.on)}`, `${a.kind} · ${a.years} سنة · ${fmtDate(a.on)}`)}
+            {kindLabel(a.kind)} · {t(`${a.years} years`, `${a.years} سنة`)} · {fmtDate(a.on)}
           </small>
         </span>{' '}
         <span className="pill">{a.years}</span>
@@ -302,31 +305,40 @@ function priest() {
           }
         />
       </div>{' '}
-      <div className="grid g2">
-        {onlinePanel()}{' '}
-        <Panel
-          title={t('Awaiting your signature', 'بانتظار توقيعك')}
-          more={<a href="#/sacraments">{t('All sacraments', 'كل الأسرار')}</a>}
-          tight={true}
-        >
-          {sigRows}
-        </Panel>{' '}
-        {todayPanel()}{' '}
-        <Panel
-          title={t('Reservations to decide', 'حجوزات بانتظار قرارك')}
-          more={<a href="#/reservations">{t('All reservations', 'كل الحجوزات')}</a>}
-          tight={true}
-        >
-          {resRows}
-        </Panel>{' '}
-        <Panel
-          title={t('Sacramental anniversaries', 'ذكريات الأسرار')}
-          more={<a href="#/sacraments/anniversaries">{t('All', 'الكل')}</a>}
-          tight={true}
-        >
-          {annRows}
-        </Panel>{' '}
-        {rotaGaps()} {activityPanel(4)}
+      {/* what is waiting for the priest leads; what is simply happening keeps it company */}
+      <div className="dash-cols">
+        <div>
+          {onlinePanel()}
+          <Panel
+            title={t('Awaiting your signature', 'بانتظار توقيعك')}
+            none={t('Nothing is waiting for your signature.', 'لا شيء بانتظار توقيعك.')}
+            more={<a href="#/sacraments">{t('All sacraments', 'كل الأسرار')}</a>}
+            tight={true}
+          >
+            {sigRows}
+          </Panel>
+          <Panel
+            title={t('Reservations to decide', 'حجوزات بانتظار قرارك')}
+            none={t('No reservations are waiting for a decision.', 'لا حجوزات بانتظار قرارك.')}
+            more={<a href="#/reservations">{t('All reservations', 'كل الحجوزات')}</a>}
+            tight={true}
+          >
+            {resRows}
+          </Panel>
+          {rotaGaps()}
+        </div>
+        <div>
+          {todayPanel()}
+          <Panel
+            title={t('Sacramental anniversaries', 'ذكريات الأسرار')}
+            none={t('No anniversaries coming up.', 'لا ذكريات قريبة.')}
+            more={<a href="#/sacraments/anniversaries">{t('All', 'الكل')}</a>}
+            tight={true}
+          >
+            {annRows}
+          </Panel>
+          {activityPanel(4)}
+        </div>
       </div>
     </>
   );

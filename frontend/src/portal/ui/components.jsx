@@ -178,6 +178,7 @@ export function SearchClear({ ph, id = 'sc', ...input }) {
         id={id}
         type="search"
         placeholder={ph}
+        aria-label={ph}
         style={{ paddingInline: '36px 34px' }}
         ref={field}
         {...input}
@@ -320,7 +321,7 @@ export function PhoneField({
           <span style={{ display: 'flex', alignItems: 'center', paddingInlineEnd: 10 }}>
             <span className="pill pill-success">
               <span className="dot"></span>
-              {t('on WhatsApp', 'على واتساب')}
+              {t('Mobile', 'جوّال')}
             </span>
           </span>
         ) : null}
@@ -1188,32 +1189,35 @@ export const Kpi = ({ k, v, sub, delta, dir = 'up', spark = null }) => (
   </div>
 );
 
-export const BarChart = ({ rows }) => (
-  <div className="barchart">
-    {rows.map((r, i) => {
-      const pct = Math.min(140, Math.round((r.v / r.max) * 100));
-      return (
-        <div key={i} className="row">
-          <div className="top">
-            <span>{r.label}</span>
-            <span className="v" dir="ltr">
-              {r.text ?? `${usd(r.v)} / ${usd(r.max)}`}
-            </span>
-          </div>
-          <div className="track">
-            <i className={pct > 100 ? 'over' : ''} style={{ width: Math.min(100, pct) + '%' }}></i>
-            {pct > 100 ? <span className="goal" style={{ insetInlineStart: '100%' }}></span> : null}
-          </div>
-          {pct > 100 ? (
-            <div className="t-caption" style={{ color: 'var(--danger-ink)', marginTop: 4 }}>
-              {pct}% — {t('over budget', 'تجاوز الموازنة')}
+export const BarChart = ({ rows }) =>
+  !rows.length ? (
+    <p className="panel-none">{t('Nothing here yet.', 'لا شيء هنا بعد.')}</p>
+  ) : (
+    <div className="barchart">
+      {rows.map((r, i) => {
+        const pct = Math.min(140, Math.round((r.v / r.max) * 100));
+        return (
+          <div key={i} className="row">
+            <div className="top">
+              <span>{r.label}</span>
+              <span className="v" dir="ltr">
+                {r.text ?? `${usd(r.v)} / ${usd(r.max)}`}
+              </span>
             </div>
-          ) : null}
-        </div>
-      );
-    })}
-  </div>
-);
+            <div className="track">
+              <i className={pct > 100 ? 'over' : ''} style={{ width: Math.min(100, pct) + '%' }}></i>
+              {pct > 100 ? <span className="goal" style={{ insetInlineStart: '100%' }}></span> : null}
+            </div>
+            {pct > 100 ? (
+              <div className="t-caption" style={{ color: 'var(--danger-ink)', marginTop: 4 }}>
+                {pct}% — {t('over budget', 'تجاوز الموازنة')}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 
 export function Donut({ segments, size = 132 }) {
   const chartPalette = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)'];

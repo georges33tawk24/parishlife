@@ -63,7 +63,7 @@ class PublicSiteTests(unittest.TestCase):
         directory = self.public()['parishes']
         self.assertEqual({item['id'] for item in directory}, set(expected))
         for item in directory:
-            self.assertEqual(set(item), {'id', 'name', 'ar', 'town', 'townAr'})
+            self.assertEqual(set(item), {'id', 'name', 'ar', 'town', 'townAr', 'diocese'})
             self.assertEqual(item['townAr'], expected[item['id']]['townAr'])
 
     def test_public_detail_filters_drafts_private_events_and_other_parishes(self):
@@ -84,7 +84,7 @@ class PublicSiteTests(unittest.TestCase):
                            EVENTS=[dict(id='other-parish', kind='event')],
                            EVENT_DETAIL={'other-parish': {'visibility': 'public'}})
         page = self.public('p-elias')
-        self.assertEqual(set(page), {'parish', 'content', 'events', 'posts'})
+        self.assertEqual(set(page), {'parish', 'content', 'events', 'posts', 'visit', 'parishPhoto', 'gallery', 'clergy', 'publicRequests', 'ministries'})
         self.assertEqual(page['content'], {'welcome': {'en': 'Public welcome', 'ar': 'أهلاً'}})
         self.assertEqual({event['id'] for event in page['events']}, {'published', 'legacy-mass'})
         for event in page['events']:
@@ -108,7 +108,8 @@ class PublicSiteTests(unittest.TestCase):
                          ['Office address', 'عنوان المكتب', '01234567'])
 
     def test_local_images_and_fonts_are_served_without_exposing_internal_files(self):
-        server.ROOT = Path(self.temp.name) / 'website'
+        # resolved: on macOS the temp folder is a symlink, and the server rightly refuses paths outside ROOT
+        server.ROOT = (Path(self.temp.name) / 'website').resolve()
         files = {
             'public.html': b'public page',
             'assets/public.css': b'body{}',

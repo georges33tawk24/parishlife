@@ -478,7 +478,7 @@ export const ENT = {
       setup: 0
     }),
     check: v => (v.from >= v.to ? ['to', L('Ends before it starts', 'ينتهي قبل أن يبدأ')] : null),
-    delNote: ['The slot is freed and the requester is told.', 'يتحرّر الوقت ويُبلَّغ مقدّم الطلب.']
+    delNote: ['The slot is freed. Nothing is sent automatically.', 'يتحرّر الوقت. لا يُرسَل شيء تلقائياً.']
   },
   fund: {
     list: () => D.FUNDS,

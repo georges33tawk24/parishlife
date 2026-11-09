@@ -131,7 +131,10 @@ export function rotaSwap(anchor, at) {
           refresh();
           toast(
             L('Swap declined', 'رُفض التبديل'),
-            L(`${nameOf(by)} is told on WhatsApp.`, `يُبلَّغ ${nameOf(by)} عبر واتساب.`),
+            L(
+              `${nameOf(by)} stays on. Nothing is sent automatically.`,
+              `يبقى ${nameOf(by)} في مكانه. لا يُرسَل شيء تلقائياً.`
+            ),
             '',
             undo(restore)
           );

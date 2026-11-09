@@ -594,7 +594,7 @@ export function certificate(id, lang = '') {
               ['draft', 'scheduled'].includes(s.status) &&
               (s.kind === 'certificate' ? !!source : s.date <= today()) ? (
               <button className="btn btn-primary" id="submit">
-                <Icon name="send" size={17} />
+                <Icon name="check" size={17} />
                 {s.status === 'scheduled'
                   ? L('Confirm celebrated and send for approval', 'تأكيد الاحتفال وإرساله للاعتماد')
                   : L('Send to the priest', 'إرسال إلى الكاهن')}

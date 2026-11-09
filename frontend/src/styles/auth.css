@@ -24,7 +24,7 @@
 .auth-art .sn-spill{background:radial-gradient(ellipse 60% 44% at 50% 34%,var(--spill-a),transparent 70%),radial-gradient(ellipse 50% 22% at 50% 62%,rgb(255 168 80 / .2),transparent 70%)}
 .auth-art .sn-wall::after{background:radial-gradient(ellipse 80% 70% at 50% 38%,rgb(8 6 5 / 0) 0,rgb(8 6 5 / .55) 60%,rgb(5 4 3 / .92) 100%)}
 .auth-shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgb(9 7 6 / .35),transparent 22%,transparent 64%,rgb(9 7 6 / .9))}
-.auth-quote{position:absolute;inset-inline:clamp(28px,5vw,64px);bottom:clamp(28px,6vh,64px);margin:0;color:#EEF1F6;animation:rise 1.4s .5s var(--a-ease) both}
+.auth-quote{position:absolute;inset-inline:clamp(28px,5vw,64px);bottom:clamp(28px,6vh,64px);margin:0;color:#EEF1F6;animation:rise .7s .15s var(--a-ease) both}
 .auth-quote p{margin:0;max-width:16em;font:400 clamp(calc(28px * var(--fs,1)),1rem + 1.8vw,44px)/1.2 var(--a-display);text-wrap:balance}
 [dir=rtl] .auth-quote p{font-weight:700;line-height:1.5}
 .auth-quote cite{display:block;margin-top:14px;font:600 calc(17px * var(--fs,1)) var(--a-sans);font-style:normal;color:var(--gilt-hi)}
@@ -32,7 +32,7 @@
 /* the form */
 .auth-main{display:grid;place-items:center;padding:clamp(24px,4vw,56px) clamp(16px,4vw,56px)}
 .auth-card{width:min(100%,520px)}
-.account-auth.is-first .auth-card{animation:rise 1s var(--a-ease) both}
+.account-auth.is-first .auth-card{animation:rise .45s var(--a-ease) both}
 .auth-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:clamp(24px,4vh,40px)}
 .auth-brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;direction:ltr}
 .auth-brand svg{width:24px;height:30px}
@@ -53,14 +53,14 @@
 [dir=rtl] .auth-card h1{font-weight:700;line-height:1.35}
 .auth-lede{margin:10px 0 0;color:var(--ink-2)}
 .auth-tabs{position:relative;display:grid;grid-template-columns:1fr 1fr;margin:24px 0 22px;padding:4px;border-radius:999px;background:#ECE4D6}
-.auth-tabs button{position:relative;z-index:1;min-height:42px;border:0;border-radius:999px;background:transparent;color:var(--ink-2);font:600 calc(17px * var(--fs,1)) var(--a-sans);cursor:var(--hand,pointer);transition:color .3s}
+.auth-tabs button{position:relative;z-index:1;min-height:42px;border:0;border-radius:999px;background:transparent;color:var(--ink-2);font:600 calc(17px * var(--fs,1)) var(--a-sans);cursor:var(--hand,pointer);transition:color .15s}
 .auth-tabs button[aria-pressed=true]{color:#EEF1F6}
 .auth-tabs-ink{position:absolute;top:4px;bottom:4px;left:4px;border-radius:999px;background:var(--night);box-shadow:0 8px 18px -10px rgb(14 26 49 / .7)}
-.auth-tabs.is-ready .auth-tabs-ink{transition:transform .5s var(--a-ease),width .5s var(--a-ease)}
+.auth-tabs.is-ready .auth-tabs-ink{transition:transform .24s var(--a-ease),width .24s var(--a-ease)}
 .auth-form{display:grid;gap:14px}
 .af-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .af{display:grid;gap:6px;min-width:0}
-.account-auth.is-first .af,.account-auth.is-first .af-set,.account-auth.is-first .af-rules,.account-auth.is-first .af-forgot-row,.account-auth.is-first .auth-submit,.account-auth.is-first .auth-or,.account-auth.is-first .auth-passkey{animation:rise .9s calc(.15s + var(--i,0) * .05s) var(--a-ease) both}
+.account-auth.is-first .af,.account-auth.is-first .af-set,.account-auth.is-first .af-rules,.account-auth.is-first .af-forgot-row,.account-auth.is-first .auth-submit,.account-auth.is-first .auth-or,.account-auth.is-first .auth-passkey{animation:rise .4s calc(.04s + var(--i,0) * .03s) var(--a-ease) both}
 .af-label{font-size:calc(17px * var(--fs,1));font-weight:600;color:var(--ink)}
 .af-label small{font-weight:400;color:var(--ink-2)}
 .af-box{position:relative;display:flex}
@@ -168,3 +168,4 @@
   .account-auth :is(a[href],button:not(:disabled),label[for],select,[role=tab],input:is([type=checkbox],[type=radio])){cursor:var(--hand)}
 }
 @media(prefers-reduced-motion:reduce){.auth-quote,.account-auth.is-first *{animation:none!important}.auth-tabs-ink,.auth-submit,.auth-submit::after{transition:none!important}}
+@media(hover:none){.auth-passkey:hover,.auth-submit:hover{transform:none}}

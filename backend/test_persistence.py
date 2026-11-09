@@ -45,7 +45,8 @@ class ParishPersistenceTests(unittest.TestCase):
 
     def test_clergy_note_persists_and_is_hidden_from_secretary(self):
         _, state = self.state()
-        items = copy.deepcopy(state['NOTES'])
+        # a client only ever holds the notes it may see: its own, and those shared with the priests
+        items = []
         items.append(dict(id='test-follow-up', kind='task', p=None, at='2026-09-28',
                           body='Call family', bodyAr='اتصال بالعائلة', priority='urgent',
                           pinned=True, done=False, due='2026-10-01'))
@@ -133,7 +134,7 @@ class ParishPersistenceTests(unittest.TestCase):
         _, state = self.state()
         sections = copy.deepcopy(state['CONTENT'])
         sections['welcome'] = dict(en='Welcome to Saint Elias', ar='أهلاً بكم في مار الياس', published=False)
-        self.patch('secretary', 'CONTENT', sections)
+        self.patch('priest', 'CONTENT', sections)
         self.assertFalse(self.state()[1]['CONTENT']['welcome']['published'])
         sections['welcome']['published'] = True
         self.patch('priest', 'CONTENT', sections)
@@ -143,7 +144,7 @@ class ParishPersistenceTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 403)
         sections['welcome']['en'] = 'x' * 10001
         with self.assertRaises(server.Problem):
-            self.patch('secretary', 'CONTENT', sections)
+            self.patch('priest', 'CONTENT', sections)
 
     def test_baptism_request_creates_and_links_child_without_account(self):
         revision, _ = self.state()
@@ -338,7 +339,7 @@ class ParishPersistenceTests(unittest.TestCase):
                     cap=10,taken=1,fee=0,deadline='2026-12-01',waiting=0,open=True,
                     fields=[],discounts=[],installments=[])
         registrant = dict(id='visibility-registrant',registrationId=form['id'],p='p1',
-                          paid=0,status='pending',consent=False,transport='own')
+                          paid=0,status='pending',consent=False,transport='')
         with server.connect() as c:
             server.save_patch(c,self.users['secretary'],'p-elias',dict(revision=revision,changes={
                 'REGISTRATIONS':state['REGISTRATIONS']+[form],
@@ -363,7 +364,7 @@ class ParishPersistenceTests(unittest.TestCase):
                     cap=10,taken=1,fee=0,deadline='2026-12-01',waiting=0,open=True,
                     fields=[],discounts=[],installments=[])
         participant = dict(id='checkin-registrant',registrationId=form['id'],p='p1',
-                           paid=0,status='pending',consent=False,transport='own')
+                           paid=0,status='registered',consent=False,transport='')
         with server.connect() as c:
             server.save_patch(c,self.users['secretary'],'p-elias',dict(revision=revision,changes={
                 'REGISTRATIONS':state['REGISTRATIONS']+[form],
@@ -391,8 +392,8 @@ class ParishPersistenceTests(unittest.TestCase):
         form = dict(id='leader-checkin-form',eventId=event['id'],event=event['title'],eventAr=event['titleAr'],
                     cap=10,taken=2,fee=0,deadline='2026-12-01',waiting=0,open=True,
                     fields=[],discounts=[],installments=[])
-        participants = [dict(id='leader-reg-'+p,registrationId=form['id'],p=p,paid=0,status='pending',
-                             consent=True,transport='own') for p in ('p19','p20')]
+        participants = [dict(id='leader-reg-'+p,registrationId=form['id'],p=p,paid=0,status='registered',
+                             consent=True,transport='') for p in ('p19','p20')]
         with server.connect() as c:
             server.save_patch(c,self.users['secretary'],'p-elias',dict(revision=revision,changes={
                 'REGISTRATIONS':state['REGISTRATIONS']+[form],

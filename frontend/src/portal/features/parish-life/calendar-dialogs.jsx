@@ -85,13 +85,20 @@ export function eventCancel(id) {
   const [e] = D.EVENTS.splice(i, 1);
   closeOverlays();
   refresh();
-  ok(L('Event cancelled', 'أُلغي الحدث'), L('Everyone who said yes has been told.', 'أُبلغ كل من أكّد حضوره.'), {
-    action: {
-      label: L('Undo', 'تراجع'),
-      fn: () => {
-        D.EVENTS.splice(i, 0, e);
-        refresh();
+  ok(
+    L('Event cancelled', 'أُلغي الحدث'),
+    L(
+      'Nothing is sent automatically, so let those who said yes know.',
+      'لا يُرسَل شيء تلقائياً، فأبلِغ من أكّدوا حضورهم.'
+    ),
+    {
+      action: {
+        label: L('Undo', 'تراجع'),
+        fn: () => {
+          D.EVENTS.splice(i, 0, e);
+          refresh();
+        }
       }
     }
-  });
+  );
 }

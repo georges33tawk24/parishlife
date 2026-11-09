@@ -338,17 +338,25 @@ function ParishView({ entry, id }) {
   );
 }
 
+const inflight = new Map();
+
 export function Oversight({ params: [id = '', detail = '', detailId = ''] = [] }) {
   const [entry, setEntry] = useState(() => cache.get(key(id)));
   useEffect(() => {
     const k = key(id),
       old = cache.get(k);
-    if (old && (old.loading || Date.now() - (old.loadedAt || 0) < 60_000)) return;
+    if (old && !old.loading && Date.now() - (old.loadedAt || 0) < 60_000) return;
     if (!old) cache.set(k, { loading: true });
-    api(id ? `parishes/${encodeURIComponent(id)}/oversight` : 'oversight')
-      .then(data => cache.set(k, { ...data, loadedAt: Date.now() }))
-      .catch(error => cache.set(k, { error: error.message, loadedAt: Date.now() }))
-      .finally(() => setEntry(cache.get(k)));
+    /* every mounted copy waits on the one request: a remount during the load must still get the answer */
+    if (!inflight.has(k))
+      inflight.set(
+        k,
+        api(id ? `parishes/${encodeURIComponent(id)}/oversight` : 'oversight')
+          .then(data => cache.set(k, { ...data, loadedAt: Date.now() }))
+          .catch(error => cache.set(k, { error: error.message, loadedAt: Date.now() }))
+          .finally(() => inflight.delete(k))
+      );
+    inflight.get(k).then(() => setEntry(cache.get(k)));
   }, []);
   const head = (
     <PageHead

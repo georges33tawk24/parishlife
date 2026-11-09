@@ -579,7 +579,7 @@ function groupDetail(id, tab) {
           </div>{' '}
           {!d.meetings.length ? (
             <Empty
-              glyph="calendar"
+              glyph="events"
               title={L('No meetings yet', 'لا اجتماعات بعد')}
               body={L('Add the first meeting for this ministry.', 'أضف أول اجتماع لهذه الخدمة.')}
             />

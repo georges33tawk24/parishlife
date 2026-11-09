@@ -54,7 +54,8 @@ export function CalendarView({ events, state, onOpen, onChange }) {
       <div className="seg" role="group" aria-label={t('Calendar view', 'عرض الرزنامة')}>
         {[
           ['month', 'Month', 'شهر'],
-          ['week', 'Week', 'أسبوع']
+          ['week', 'Week', 'أسبوع'],
+          ['list', 'List', 'قائمة']
         ].map(([v, en, ar]) => (
           <button
             key={v}
@@ -67,15 +68,6 @@ export function CalendarView({ events, state, onOpen, onChange }) {
           </button>
         ))}
       </div>
-      <button
-        className="btn btn-secondary"
-        type="button"
-        data-calendar-mode="list"
-        aria-pressed={mode === 'list'}
-        onClick={() => set({ mode: 'list' })}
-      >
-        {t('List', 'قائمة')}
-      </button>
       <input
         className="input"
         type="search"

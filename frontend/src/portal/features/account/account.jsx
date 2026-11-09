@@ -245,6 +245,7 @@ export function AccountPage() {
             type="search"
             data-parish-search=""
             placeholder={t('Search parishes', 'ابحث عن رعية')}
+            aria-label={t('Search parishes', 'ابحث عن رعية')}
             ref={search}
             value={query}
             onChange={e => setQuery(e.target.value)}

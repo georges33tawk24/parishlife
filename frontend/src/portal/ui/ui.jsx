@@ -59,6 +59,9 @@ export const SectionH = ({ title, more }) => (
 
 /* ---------- atoms ---------- */
 /** Initials, or the person's photo when one has been uploaded. slot overrides the photo slot (e.g. 'parish'). */
+/* one gentle colour per person, the same every time, so a list of people is quicker to scan */
+const toneOf = key => [...String(key || '')].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6;
+
 export function Avatar({ p, cls = '', slot = p?.id }) {
   return PHOTOS[slot] ? (
     <span
@@ -67,7 +70,7 @@ export function Avatar({ p, cls = '', slot = p?.id }) {
       aria-hidden="true"
     ></span>
   ) : (
-    <span className={'avatar ' + cls} aria-hidden="true">
+    <span className={'avatar ' + cls} data-tone={toneOf(slot || initials(p))} aria-hidden="true">
       {initials(p)}
     </span>
   );
@@ -113,7 +116,7 @@ const STATUS = {
   sent: ['Sent', 'أُرسلت', 'success', 'st-sent'],
   paid: ['Paid', 'مدفوع', 'success', 'st-ok'],
   closed: ['Closed', 'مقفلة', 'success', 'st-ok'],
-  member: ['Member', 'منتسب', 'success', 'st-ok'],
+  member: ['Member', 'منتسب', 'quiet', 'st-ok'],
   ready: ['Ready', 'جاهز', 'success', 'st-ok'],
   completed: ['Completed', 'مكتمل', 'success', 'st-ok'],
   celebrated: ['Celebrated', 'تمّ الاحتفال', 'success', 'st-ok'],
@@ -170,7 +173,7 @@ export const Stat = ({ k, v, d }) => (
 export const SearchField = ({ ph, ...props }) => (
   <div className="search">
     <Icon name="search" size={17} />
-    <input className="input" type="search" placeholder={ph} {...props} />
+    <input className="input" type="search" placeholder={ph} aria-label={ph} {...props} />
   </div>
 );
 
@@ -185,15 +188,22 @@ export const Empty = ({ glyph, title, body, action }) => (
   </div>
 );
 
-export const Panel = ({ title, more, tight = false, children }) => (
+/* a list with no rows arrives as [], or as a run of nothing and spaces between tags */
+const blank = c =>
+  c == null || c === false || (typeof c === 'string' && !c.trim()) || (Array.isArray(c) && c.every(blank));
+
+/* A panel with nothing in it says so, rather than standing empty. `none` gives it the words. */
+export const Panel = ({ title, more, tight = false, none, children }) => (
   <section className="panel">
     {title ? (
       <div className="panel-h">
-        <h3>{title}</h3>
+        <h2>{title}</h2>
         {more ? <div className="more">{more}</div> : null}
       </div>
     ) : null}
-    <div className={'panel-b ' + (tight ? 'tight' : '')}>{children}</div>
+    <div className={'panel-b ' + (tight ? 'tight' : '')}>
+      {blank(children) ? <p className="panel-none">{none || t('Nothing here yet.', 'لا شيء هنا بعد.')}</p> : children}
+    </div>
   </section>
 );
 
@@ -662,6 +672,8 @@ function Layer({ layer }) {
       left = rtl ? r.left : r.right - mw;
     if (layer.kind === 'menu' && top + mh > innerHeight - 8) top = Math.max(8, r.top - mh - 8);
     left = Math.min(Math.max(8, left), innerWidth - mw - 8);
+    /* it grows out of the corner nearest the button that opened it */
+    el.style.transformOrigin = `${rtl ? 'left' : 'right'} ${top < r.top ? 'bottom' : 'top'}`;
     Object.assign(
       el.style,
       { position: 'fixed', top: top + 'px', left: left + 'px', zIndex: 140 },
@@ -736,7 +748,12 @@ export function toast(title, body = '', tone = '', { action } = {}) {
   };
   overlay.toasts = [...overlay.toasts, { id, title, body, tone, action, kill }];
   emit();
-  if (tone !== 'danger') setTimeout(kill, action ? 10000 : 6000);
+  /* a toast (and its Undo) must not run out in a tab nobody is looking at */
+  const expire = () =>
+    document.hidden
+      ? document.addEventListener('visibilitychange', () => setTimeout(kill, 3000), { once: true })
+      : kill();
+  if (tone !== 'danger') setTimeout(expire, action ? 10000 : 6000);
   return kill;
 }
 
@@ -810,39 +827,38 @@ export function OverlayHost() {
         </>
       ) : null}
       {o.layer ? <Layer layer={o.layer} /> : null}
-      {o.toasts.length ? (
-        <div className="toasts" role="status" aria-live="polite">
-          {o.toasts.map(x => (
-            <div
-              key={x.id}
-              className={'toast ' + x.tone}
-              style={x.leaving ? { opacity: 0, transform: 'translateY(6px)' } : undefined}
-            >
-              <span className="bar"></span>
-              <span className="tbody">
-                <b>{x.title}</b>
-                {x.body ? <span>{x.body}</span> : null}
-                {x.action ? (
-                  <span className="act">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        x.action.fn();
-                        x.kill();
-                      }}
-                    >
-                      {x.action.label}
-                    </button>
-                  </span>
-                ) : null}
-              </span>
-              <button className="iconbtn tclose" type="button" aria-label={t('Dismiss', 'إغلاق')} onClick={x.kill}>
-                <Icon name="close" size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {/* always on the page: a screen reader only announces changes inside a region it already knows */}
+      <div className="toasts" role="status" aria-live="polite">
+        {o.toasts.map(x => (
+          <div
+            key={x.id}
+            className={'toast ' + x.tone}
+            style={x.leaving ? { opacity: 0, transform: 'translateY(6px)' } : undefined}
+          >
+            <span className="bar"></span>
+            <span className="tbody">
+              <b>{x.title}</b>
+              {x.body ? <span>{x.body}</span> : null}
+              {x.action ? (
+                <span className="act">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      x.action.fn();
+                      x.kill();
+                    }}
+                  >
+                    {x.action.label}
+                  </button>
+                </span>
+              ) : null}
+            </span>
+            <button className="iconbtn tclose" type="button" aria-label={t('Dismiss', 'إغلاق')} onClick={x.kill}>
+              <Icon name="close" size={15} />
+            </button>
+          </div>
+        ))}
+      </div>
     </>,
     document.body
   );

@@ -1,6 +1,7 @@
 /* 20px icon set, 1.5 stroke — the design system's only icon spec.
    Paths for the module icons come straight from the app-shell sheet. */
 const P = {
+  menu: 'M3.5 5.5h13M3.5 10h13M3.5 14.5h13',
   dash: 'M3.4 3.4h5.8v5.8H3.4zM10.8 3.4h5.8v3.6h-5.8zM10.8 8.6h5.8v8h-5.8zM3.4 10.8h5.8v5.8H3.4z',
   people: 'M7 6.4a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 17c0-3.2 2.7-5 6-5s6 1.8 6 5',
   family:

@@ -20,6 +20,7 @@ import {
 import * as C from '../../ui/components.jsx';
 import { persist } from '../../model/persist.js';
 import { memberAction } from '../../model/member-data.js';
+import { kindLabel } from './records-shared.jsx';
 import { phoneShow } from '../../model/sacrament-requests.js';
 import * as D from '../../model/data.js';
 import {
@@ -481,7 +482,7 @@ export function personView(id, tab = '') {
           ]}
           rows={sacr.map(s => ({
             cells: [
-              <b>{s.kind}</b>,
+              <b>{kindLabel(s.kind)}</b>,
               <span className="mono">{s.reg}</span>,
               <span className="dim">{fmtDate(s.date)}</span>,
               <Status k={s.status} />,
@@ -573,7 +574,7 @@ export function personView(id, tab = '') {
         ...SACRAMENTS.filter(s => s.person === p.id).map(s => ({
           date: s.date,
           label: t('Sacrament recorded', 'سُجّل سرّ'),
-          detail: `${s.kind} · ${s.reg}`
+          detail: `${kindLabel(s.kind)} · ${s.reg}`
         })),
         ...GROUPS.flatMap(g =>
           (GROUP_DETAIL[g.id]?.meetings || [])
@@ -647,7 +648,7 @@ export function personView(id, tab = '') {
                 }))}
                 empty={
                   <Empty
-                    glyph="giving"
+                    glyph="give"
                     title={t(
                       'No attributed gifts in the current counting session',
                       'لا تقدمات منسوبة في جلسة العدّ الحالية'

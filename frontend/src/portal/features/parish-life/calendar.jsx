@@ -17,7 +17,8 @@ import {
   closeOverlays,
   toast,
   Avatar,
-  openMenu
+  openMenu,
+  TabBar
 } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { need } from '../../shared/dialogs.jsx';
@@ -89,14 +90,14 @@ export function calendar(tab = '') {
           </>
         }
       />
-      <div className="collection-toolbar">
-        <a className="btn btn-secondary" href="#/calendar">
-          {L('Calendar', 'الرزنامة')}
-        </a>
-        <a className="btn btn-secondary" href="#/calendar/templates">
-          {L('Templates', 'القوالب')}
-        </a>
-      </div>
+      <TabBar
+        base="calendar"
+        items={[
+          ['', 'Calendar', 'الرزنامة'],
+          ['templates', 'Templates', 'القوالب']
+        ]}
+        active={tab === 'templates' ? 'templates' : ''}
+      />
     </>
   );
   if (tab !== 'templates') {
@@ -371,7 +372,7 @@ export function calendar(tab = '') {
           {feast && !today ? <span className="feast" /> : ''}
         </button>{' '}
         {feast && !out ? (
-          <span className="t-caption" style={{ color: 'var(--accent)', fontSize: '10px', lineHeight: '14px' }}>
+          <span className="t-caption" style={{ color: 'var(--accent)', fontSize: '12px', lineHeight: '14px' }}>
             {L(...feast)}
           </span>
         ) : (

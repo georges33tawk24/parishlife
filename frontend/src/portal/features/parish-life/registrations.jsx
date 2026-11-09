@@ -389,7 +389,7 @@ export function registrations(tab = '') {
     const pct = r.cap ? Math.min(100, Math.round((r.taken / r.cap) * 100)) : 0;
     const linked = !!linkedEvent(r),
       next = !linked
-        ? L('Link an event', 'اربط حدثاً')
+        ? '—'
         : !r.open
           ? L('Open the form to accept people', 'افتح الاستمارة لقبول الأشخاص')
           : r.taken >= r.cap
@@ -425,7 +425,9 @@ export function registrations(tab = '') {
         ) : (
           <span className="dim">{L('Free', 'مجاني')}</span>
         ),
-        <span className="dim">{fmtDate(r.deadline)}</span>,
+        <span className="dim" style={{ whiteSpace: 'nowrap' }}>
+          {fmtDate(r.deadline)}
+        </span>,
         r.open ? <Status k="open" /> : <Status k="draft" />,
         <span className="t-caption dim">{next}</span>,
         <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>

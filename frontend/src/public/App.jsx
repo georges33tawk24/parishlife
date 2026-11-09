@@ -283,6 +283,15 @@ export function PublicApp({ initialLang }) {
     requestAnimationFrame(() => document.body.classList.add('is-ready'));
   });
 
+  /* While the first data loads, the splash covers the screen: a header and footer drawn now would only
+     jump when the page arrives, which counts as layout shift against the site. */
+  if (data.loading && !data.directory.length && verify === null && !token)
+    return (
+      <p className="sr-only" role="status">
+        {L('Loading parish information…', 'جارٍ تحميل معلومات الرعايا…')}
+      </p>
+    );
+
   /* The page is drawn afresh in the other language, as a new page. */
   return (
     <SiteContext.Provider value={c}>

@@ -31,6 +31,8 @@ class MemberPortalTests(unittest.TestCase):
         self.temp.cleanup()
 
     def action(self, who, op, **values):
+        if op == 'concern':
+            values.setdefault('reviewers', [self.users['priest']['id']])  # the submitter now chooses who reviews
         with server.connect() as c:
             return server.member_action(c, self.users[who], 'p-elias', dict(op=op, **values))
 

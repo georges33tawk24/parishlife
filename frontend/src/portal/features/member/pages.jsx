@@ -536,6 +536,7 @@ export function feed() {
           type="search"
           data-member-search=""
           placeholder={L('Search updates', 'البحث في المستجدات')}
+          aria-label={L('Search updates', 'البحث في المستجدات')}
         />
       </div>
       <Paged className="member-list">
@@ -597,6 +598,7 @@ export function resources() {
           type="search"
           data-member-search=""
           placeholder={L('Search resources', 'البحث في الموارد')}
+          aria-label={L('Search resources', 'البحث في الموارد')}
         />
       </div>
       <Paged className="member-list">
@@ -808,6 +810,7 @@ export function notes() {
               data-note-search=""
               defaultValue={txt(query)}
               placeholder={L('Search notes', 'البحث في الملاحظات')}
+              aria-label={L('Search notes', 'البحث في الملاحظات')}
             />
             <Select data-filter="category">
               <option value="">{L('All categories', 'كل الفئات')}</option>

@@ -80,35 +80,52 @@ function onInput(e) {
   if (e.target.matches('input[data-find]')) applyFind(e.target);
 }
 
-/* Tooltips: a button's data-tip shows above it after a short hover, or at once on focus. */
+/* Tooltips: a button's data-tip shows above it after a short hover, or at once on focus. Once one has
+   been open, the next opens with no wait, so moving along a row of icons does not feel slow. */
 function useTooltips() {
   useEffect(() => {
     let tip = null,
-      wait = 0;
+      wait = 0,
+      closedAt = 0;
+    const warm = () => Date.now() - closedAt < 500;
     const hide = () => {
       clearTimeout(wait);
+      if (tip) closedAt = Date.now();
       tip?.remove();
       tip = null;
     };
     const show = el => {
+      const instant = warm();
       hide();
+      /* the rail's label is on screen unless the rail is collapsed: then there is nothing to add */
+      const label = el.querySelector('.nl');
+      if (label && getComputedStyle(label).display !== 'none') return;
       tip = document.createElement('span');
-      tip.className = 'tip';
+      tip.className = 'tip' + (instant ? ' instant' : '');
       tip.textContent = el.dataset.tip;
       document.body.append(tip);
-      const r = el.getBoundingClientRect();
-      tip.style.top = `${r.top - tip.offsetHeight - 8 + scrollY}px`;
-      tip.style.left = `${r.left + r.width / 2 - tip.offsetWidth / 2}px`;
+      const r = el.getBoundingClientRect(),
+        w = tip.offsetWidth,
+        h = tip.offsetHeight;
+      if (el.closest('.rail')) {
+        tip.style.top = `${r.top + r.height / 2 - h / 2 + scrollY}px`;
+        tip.style.left = `${document.documentElement.dir === 'rtl' ? r.left - w - 8 : r.right + 8}px`;
+      } else {
+        tip.style.top = `${(r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + scrollY}px`;
+        tip.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+      }
       const shown = tip;
       requestAnimationFrame(() => shown.classList.add('on'));
     };
     const over = e => {
       const el = e.target.closest?.('[data-tip]');
       if (!el || el.contains(e.relatedTarget)) return;
+      const delay = tip || warm() ? 0 : 400;
       hide();
+      closedAt = delay ? closedAt : Date.now();
       wait = setTimeout(() => {
         if (el.matches(':hover')) show(el);
-      }, 400);
+      }, delay);
     };
     const out = e => {
       const el = e.target.closest?.('[data-tip]');
@@ -315,6 +332,7 @@ function Palette({ open, onClose }) {
             ref={input}
             value={q}
             placeholder={t('Search people, records, pages and actions', 'ابحث عن شخص أو سجل أو صفحة أو إجراء')}
+            aria-label={t('Search people, records, pages and actions', 'ابحث عن شخص أو سجل أو صفحة أو إجراء')}
             onChange={e => {
               setQ(e.target.value);
               setActive(0);
@@ -925,6 +943,9 @@ export function Portal() {
                   className={'navitem ' + (on ? 'on' : '')}
                   href={'#/' + n[1]}
                   aria-current={on ? 'page' : undefined}
+                  /* collapsed, the label is display:none, which also takes it away from a screen reader */
+                  aria-label={badge ? `${t(rt.en, rt.ar)} (${badge})` : t(rt.en, rt.ar)}
+                  data-tip={t(rt.en, rt.ar)}
                   onClick={() => setRailOpen(false)}
                 >
                   <Icon name={rt.ico} size={18} />
@@ -971,7 +992,7 @@ export function Portal() {
               aria-label={t('Open menu', 'فتح القائمة')}
               onClick={() => setRailOpen(true)}
             >
-              <Icon name="dash" size={19} />
+              <Icon name="menu" size={19} />
             </button>
             <div className="gsearch">
               <div className="search">
@@ -1013,6 +1034,10 @@ export function Portal() {
             </div>
           </header>
           {/* every change redraws the screen from the parish data, as a fresh page would */}
+          {/* moving between pages is otherwise silent to a screen reader; outside the view, which is redrawn */}
+          <span className="sr" id="route-said" role="status">
+            {ROUTES[S.route] ? t(ROUTES[S.route].en, ROUTES[S.route].ar) : ''}
+          </span>
           <main className="well" id="well" tabIndex="-1">
             <View key={S.route + '/' + S.params.join('/') + '#' + version} />
           </main>

@@ -204,7 +204,7 @@ export function messaging(tab = '') {
                     <span
                       style={{
                         display: 'block',
-                        fontSize: '11px',
+                        fontSize: '12px',
                         opacity: '.7',
                         letterSpacing: '.1em',
                         textTransform: 'uppercase'
