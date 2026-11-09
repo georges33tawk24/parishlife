@@ -22,6 +22,8 @@ Manual calendar drafts/publication, privacy-safe busy views, local-time recurrin
 
 Ministry lifecycle and safe public/member projections, reviewed identity links and join/private-departure decisions, dated leadership/duties, source-owned meetings/RSVP, protected private planning reasons and occurrence-date attendance are now wired. Attendance snapshots are resumable and do not infer absence from missing data. See [ministries and attendance](docs/operations/ministries-and-attendance.md) for routes, permissions, storage and remaining acceptance.
 
+Personal account display/language/appearance now has safe preview/reset and conditional saves, separately from sign-in and official Person facts. [Account-private notes/tasks](docs/operations/personal-workspace.md) provide protected own drafts/history and task lifecycle without administrator fallback; [profile operations](docs/operations/account-profile.md) describe the personal settings contract. Reviewed guest attendance remains separate from member denominators and grants no ministry membership.
+
 ## Build and verify
 
 From this directory, using a serviced .NET 10 SDK/runtime:
@@ -32,7 +34,7 @@ dotnet build ParishLife.slnx -c Release --no-restore
 dotnet test ParishLife.slnx -c Release --no-build --no-restore
 ```
 
-The [9 November verification record](docs/verification/backend-2026-11-09.md) records 169 passing local tests, a clean Release build, API-only publish checks and the live Azure checks still outstanding. These results do not establish whole-product completion.
+The [latest 9 November verification record](docs/verification/backend-2026-11-09-personal-and-guests.md) records 196 passing local tests, a clean Release build, API-only publish checks and live Azure checks still outstanding. The [169-test record](docs/verification/backend-2026-11-09.md) is the earlier checkpoint. These results do not establish whole-product completion.
 
 ## Run with Aspire
 
@@ -44,7 +46,7 @@ The launcher prints a private dashboard login URL. Keep its token private. The A
 
 By default AppHost selects the configured Azure Cosmos service using your developer credentials and disables background jobs. `/health/live` reports the HTTP process; `/health/ready` reports required dependency metadata access. Azure access failures must remain visible as unhealthy, not be described as successful integration. Azure endpoint links are configuration references; the API readiness probe reports actual dependency access rather than inventing healthy Azure resources.
 
-For deliberate local runner testing, set `Backend__RunBackgroundJobs=true` before launching AppHost, then clear it afterwards. Queued reservations remain pending while the runner is disabled. The API worker checks final configuration; AppHost startup still creates no business records. Calendar/reservation queries use reviewed `TenantControl` index paths; readiness now checks that policy as well as partition/TTL metadata. No Azure index changes are applied at startup.
+For deliberate local runner testing, set `Backend__RunBackgroundJobs=true` before launching AppHost, then clear it afterwards. Queued reservations remain pending while the runner is disabled. The API worker checks final configuration; AppHost startup still creates no business records. Queries use reviewed `TenantControl` and personal-workspace `Accounts` metadata index paths; readiness checks these policies as well as partition/TTL metadata. No Azure index changes are applied at startup.
 
 For isolated local development only, you can set `Backend__UseAzure=false` before launching AppHost, then clear that variable afterwards. This uses local documents and separate development Data Protection keys. It is not the production provider or proof of Azure connectivity. Never point automated write tests at production.
 

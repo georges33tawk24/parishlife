@@ -1,5 +1,5 @@
-// Purpose: coordinates a resumable occurrence-date member snapshot, measured attendance and attributed reporting closure.
-// Main members: Id, ParishId, MinistryId, MeetingId, EventId, MeetingStartsAt, MeetingEndsAt, TimeZone, Status, SnapshotPhase, SnapshotCursor, SnapshotPages, CreatedAt, CreatedBy, SnapshotCompletedAt, MetricDefinition, ExpectedCount, PresentCount, LateCount, AbsentCount, ExcusedCount, NotExpectedCount, NotRecordedCount, ClosedAt, ClosedBy, ProtectedReportingReference, ProtectedCloseReason.
+// Purpose: coordinates a resumable occurrence-date member snapshot, separate recorded guest counters and attributed reporting closure.
+// Main members: occurrence/scope identity, resumable snapshot state, member counters, optional GuestCounts and protected reporting-closure evidence.
 
 namespace ParishLife.Api.Models;
 
@@ -50,6 +50,8 @@ public class AttendanceSheet
     public int NotExpectedCount { get; set; }
 
     public int NotRecordedCount { get; set; }
+
+    public AttendanceGuestCounts? GuestCounts { get; set; }
 
     public DateTimeOffset? ClosedAt { get; set; }
 

@@ -50,12 +50,36 @@ public class CosmosIndexContractTests
     [InlineData("/data/meetingId/?")]
     [InlineData("/data/joinedAt/?")]
     [InlineData("/data/personId/?")]
+    [InlineData("/data/participantKind/?")]
     public void Missing_meeting_or_attendance_query_paths_are_rejected(string path)
     {
         var container = Explicit();
         container.IndexingPolicy.IncludedPaths.Remove(container.IndexingPolicy.IncludedPaths.Single(item => item.Path == path));
         Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
     }
+    [Theory]
+    [InlineData("/data/kind/?")]
+    [InlineData("/data/status/?")]
+    [InlineData("/data/itemId/?")]
+    public void Account_workspaces_require_indexed_metadata_while_private_content_remains_excluded(string missing)
+    {
+        var container = new ContainerProperties("Accounts", "/partitionKey");
+        container.IndexingPolicy.IncludedPaths.Clear();
+        container.IndexingPolicy.ExcludedPaths.Clear();
+        container.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = "/*" });
+        foreach (var path in CosmosIndexContract.RequiredAccountPaths)
+            container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = path });
+        CosmosIndexContract.ValidateAccounts(container);
+        container.IndexingPolicy.IncludedPaths.Remove(container.IndexingPolicy.IncludedPaths.Single(item => item.Path == missing));
+        Assert.Equal("account_index_contract_mismatch", Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateAccounts(container)).Code);
+        container.IndexingPolicy.IncludedPaths.Clear();
+        container.IndexingPolicy.ExcludedPaths.Clear();
+        container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = "/*" });
+        CosmosIndexContract.ValidateAccounts(container);
+        container.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = missing });
+        Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateAccounts(container));
+    }
+
     private static ContainerProperties Explicit()
     {
         var container = new ContainerProperties("TenantControl", "/partitionKey");

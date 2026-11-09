@@ -1,5 +1,5 @@
 // Purpose: records actual ministry-meeting attendance using resumable dated-roster snapshots, scoped duties and attributable corrections.
-// Main functions: OpenAsync, AdvanceSnapshotAsync, GetAsync, GridAsync, RecordAsync, CloseAsync, CorrectAsync, OwnAsync and HistoryAsync;
+// Main functions: OpenAsync, AdvanceSnapshotAsync, GetAsync, GridAsync, AddGuestAsync, RecordAsync, CloseAsync, CorrectAsync, OwnAsync and HistoryAsync;
 // helpers preserve exact source ownership, conditional counters, current authorization and protected review evidence independently from RSVP.
 
 using System.Security.Cryptography;
@@ -43,7 +43,8 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             MeetingEndsAt = source.Meeting.Value.EndsAt,
             TimeZone = source.Meeting.Value.TimeZone,
             CreatedAt = op.At,
-            CreatedBy = actor.AccountId
+            CreatedBy = actor.AccountId,
+            GuestCounts = new AttendanceGuestCounts()
         };
         var changes = Fences(root, group, source);
         changes[2] = RecordChange.Replace("ministryMeeting:" + meetingId, "ministryMeeting", source.Meeting.Value, Versions.Require(request.MeetingVersion));
@@ -145,7 +146,11 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         var page = await records.PageAsync<AttendanceRow>(MinistryAccess.Scope(parish), "attendanceRow", size, cursor, ct,
             Equal("ministryId", ministry), Equal("meetingId", meetingId));
         foreach (var row in page.Items)
+        {
             ValidateRow(parish, ministry, meetingId, row.Value);
+            if (row.Value.ParticipantKind == "Guest" && sheet.Value.GuestCounts is null)
+                throw Review("Existing guest rows require an evidenced counter reconciliation before this grid is presented.");
+        }
         if ((await ReadSheetAsync(parish, ministry, meetingId, ct)).Version != sheet.Version)
             throw State("Attendance changed while reading this page; reload the current summary and rows.");
         return new()
@@ -154,6 +159,68 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             Items = page.Items.Select(row => new Versioned<AttendanceValueDto> { Value = RowView(row.Value), Version = row.Version }).ToArray(),
             ContinuationToken = page.ContinuationToken
         };
+    }
+
+    public async Task<Versioned<AttendanceSheetDto>> AddGuestAsync(string parish, string ministry, string meetingId, AttendanceGuestDto request, CancellationToken ct)
+    {
+        var root = await access.RootAsync(parish, ct);
+        var group = await access.RequireAttendanceAsync(parish, ministry, ct, review: true, requireModule: false);
+        var source = await SourceAsync(parish, ministry, meetingId, ct, false);
+        var sheet = await ReadSheetAsync(parish, ministry, meetingId, ct);
+        EnsureSource(sheet.Value, source.Meeting.Value);
+        var scope = MinistryAccess.Scope(parish);
+        var personId = Guard.Id(request.PersonId);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-attendance-guest:v1:" + ministry + ":" + meetingId);
+        if (await records.ReplayAsync<CommandResult>(scope, op, ct) is not null)
+            return await ReviewerViewAsync(parish, ministry, meetingId, ct);
+        await access.ModuleAsync(parish, ct);
+        RequireComplete(sheet.Value);
+        if (sheet.Value.Status != "Ready" || source.Meeting.Value.Status != "Confirmed")
+            throw State("Review additional participants on a ready, confirmed occurrence before reporting closure.");
+        RequireStatus(request.Status);
+        if (request.Status != "NotRecorded")
+            await access.RequireAttendanceAsync(parish, ministry, ct);
+        var reference = Guard.Text(request.IdentityReviewReference, "Actual additional-person identity review", 1000);
+        var reason = Guard.Text(request.Reason, "Actual additional-participant reason", 2000);
+        var person = await records.ReadAsync<Person>(scope, "person:" + personId, ct);
+        if (person?.Value is not { Archived: false } || person.Value.Id != personId || person.Value.ParishId != parish)
+            throw MinistryAccess.Missing();
+        if (await records.ReadAsync<AttendanceRow>(scope, RowKey(meetingId, personId), ct) is not null)
+            throw State("This person already has an occurrence row; correct that row without duplicating or reclassifying their roster history.");
+        if (sheet.Value.GuestCounts is null)
+        {
+            // Older sheets did not capture guests. Establish an actual empty guest set, never overwrite unknown existing rows.
+            var existing = await records.PageAsync<AttendanceRow>(scope, "attendanceRow", 1, null, ct,
+                Equal("ministryId", ministry), Equal("meetingId", meetingId), Equal("participantKind", "Guest"));
+            if (existing.Items.Count != 0 || existing.ContinuationToken is not null)
+                throw Review("Existing additional-person records require an explicit counter reconciliation.");
+            sheet.Value.GuestCounts = new AttendanceGuestCounts();
+        }
+        var row = new AttendanceRow
+        {
+            Id = meetingId + ":" + personId,
+            ParishId = parish,
+            MinistryId = ministry,
+            MeetingId = meetingId,
+            PersonId = personId,
+            ParticipantKind = "Guest",
+            Status = request.Status,
+            RecordedAt = request.Status == "NotRecorded" ? null : op.At,
+            RecordedBy = request.Status == "NotRecorded" ? null : actor.AccountId
+        };
+        sheet.Value.GuestCounts.Total = checked(sheet.Value.GuestCounts.Total + 1);
+        AdjustForRow(sheet.Value, row, request.Status, 1);
+        ValidateCounters(sheet.Value);
+        var changes = Fences(root, group, source);
+        changes.Add(RecordChange.Replace("person:" + personId, "person", person.Value, person.Version));
+        changes.Add(RecordChange.Create(RowKey(meetingId, personId), "attendanceRow", row));
+        changes.Add(RecordChange.Replace(SheetKey(meetingId), "attendanceSheet", sheet.Value, Versions.Require(request.Version)));
+        changes.Add(Change(sheet.Value, "guest-add", personId, null, request.Status, op, reason, reference, "Guest"));
+        await RecheckAsync(parish, ministry, true, true, ct);
+        if (request.Status != "NotRecorded")
+            await RecheckAsync(parish, ministry, false, true, ct);
+        await records.CommitAsync(scope, op, "ministry.attendance_guest_review", meetingId, changes, Result(sheet.Value), ct);
+        return await ReviewerViewAsync(parish, ministry, meetingId, ct);
     }
 
     public async Task<Versioned<AttendanceSheetDto>> RecordAsync(string parish, string ministry, string meetingId, AttendanceWriteDto request, CancellationToken ct)
@@ -185,13 +252,13 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             var reason = row.Value.RecordedAt is null ? Optional(entry.CorrectionReason, "Observation reason", 2000)
                 : Guard.Text(entry.CorrectionReason, "Actual correction reason", 2000);
             var previous = row.Value.Status;
-            Adjust(sheet.Value, previous, -1);
-            Adjust(sheet.Value, entry.Status, 1);
+            AdjustForRow(sheet.Value, row.Value, previous, -1);
+            AdjustForRow(sheet.Value, row.Value, entry.Status, 1);
             row.Value.Status = entry.Status;
             row.Value.RecordedAt = op.At;
             row.Value.RecordedBy = actor.AccountId;
             changes.Add(RecordChange.Replace(RowKey(meetingId, person), "attendanceRow", row.Value, Versions.Require(entry.Version)));
-            changes.Add(Change(sheet.Value, "record", person, previous, entry.Status, op, reason, null));
+            changes.Add(Change(sheet.Value, "record", person, previous, entry.Status, op, reason, null, row.Value.ParticipantKind));
         }
         ValidateCounters(sheet.Value);
         changes.Add(RecordChange.Replace(SheetKey(meetingId), "attendanceSheet", sheet.Value, Versions.Require(request.Version)));
@@ -250,8 +317,8 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         var reason = Guard.Text(request.Reason, "Actual correction reason", 2000);
         var reference = Guard.Text(request.ReviewReference, "Actual eligible review reference", 1000);
         var previous = row.Value.Status;
-        Adjust(sheet.Value, previous, -1);
-        Adjust(sheet.Value, request.Status, 1);
+        AdjustForRow(sheet.Value, row.Value, previous, -1);
+        AdjustForRow(sheet.Value, row.Value, request.Status, 1);
         ValidateCounters(sheet.Value);
         row.Value.Status = request.Status;
         row.Value.RecordedBy = actor.AccountId;
@@ -259,7 +326,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         var changes = Fences(root, group, source);
         changes.Add(RecordChange.Replace(SheetKey(meetingId), "attendanceSheet", sheet.Value, Versions.Require(request.Version)));
         changes.Add(RecordChange.Replace(RowKey(meetingId, person), "attendanceRow", row.Value, Versions.Require(request.RowVersion)));
-        changes.Add(Change(sheet.Value, "correct-closed", person, previous, request.Status, op, reason, reference));
+        changes.Add(Change(sheet.Value, "correct-closed", person, previous, request.Status, op, reason, reference, row.Value.ParticipantKind));
         await RecheckAsync(parish, ministry, true, false, ct);
         await records.CommitAsync(scope, op, "ministry.attendance_correct", meetingId, changes, Result(sheet.Value), ct);
         return await ReviewerViewAsync(parish, ministry, meetingId, ct);
@@ -374,7 +441,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
          RecordChange.Replace("event:" + source.Calendar.Value.Id, "event", source.Calendar.Value, source.Calendar.Version)];
 
     private RecordChange Change(AttendanceSheet sheet, string action, string? person, string? previous, string next,
-        Operation op, string? reason, string? reference)
+        Operation op, string? reason, string? reference, string? participantKind = null)
     {
         var id = op.Id + (person is null ? string.Empty : ":" + person);
         return RecordChange.Create("attendanceChange:" + id, "attendanceChange", new AttendanceChange
@@ -385,6 +452,8 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             MeetingId = sheet.MeetingId,
             Action = action,
             PersonId = person,
+            ParticipantKind = person is null ? null : participantKind ?? "Member",
+            GuestCounts = CopyGuests(sheet.GuestCounts),
             PreviousStatus = previous,
             NewStatus = next,
             ActorId = actor.AccountId,
@@ -412,6 +481,8 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             MeetingId = value.MeetingId,
             Action = value.Action,
             PersonId = value.PersonId,
+            ParticipantKind = value.ParticipantKind,
+            GuestCounts = GuestView(value.GuestCounts),
             PreviousStatus = value.PreviousStatus,
             NewStatus = value.NewStatus,
             ActorId = value.ActorId,
@@ -454,7 +525,8 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
             ExcusedCount = value.ExcusedCount,
             NotExpectedCount = value.NotExpectedCount,
             NotRecordedCount = value.NotRecordedCount,
-            GuestCount = null,
+            GuestCount = value.GuestCounts?.Total,
+            GuestCounts = GuestView(value.GuestCounts),
             Denominator = denominator,
             PresentOrLate = value.PresentCount + value.LateCount,
             RecordedExpected = cancelled || !complete ? 0 : recorded,
@@ -471,8 +543,65 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
     private static void ValidateRow(string parish, string ministry, string meeting, AttendanceRow value)
     {
         if (value.ParishId != parish || value.MinistryId != ministry || value.MeetingId != meeting || !CanonicalId(value.PersonId)
-            || value.ParticipantKind != "Member" || !CanonicalId(value.MembershipPeriodId) || !Statuses.Contains(value.Status))
+            || value.Id != meeting + ":" + value.PersonId || !Statuses.Contains(value.Status)
+            || (value.ParticipantKind == "Member" ? !CanonicalId(value.MembershipPeriodId)
+                : value.ParticipantKind != "Guest" || !string.IsNullOrEmpty(value.MembershipPeriodId)))
             throw Review("An attendance row has incompatible identity, audience or state and needs review.");
+    }
+
+    private static AttendanceGuestCounts? CopyGuests(AttendanceGuestCounts? value) => value is null ? null : new()
+    {
+        Total = value.Total,
+        Present = value.Present,
+        Late = value.Late,
+        Absent = value.Absent,
+        Excused = value.Excused,
+        NotExpected = value.NotExpected,
+        NotRecorded = value.NotRecorded
+    };
+
+    private static AttendanceGuestCountsDto? GuestView(AttendanceGuestCounts? value) => value is null ? null : new()
+    {
+        Total = value.Total,
+        Present = value.Present,
+        Late = value.Late,
+        Absent = value.Absent,
+        Excused = value.Excused,
+        NotExpected = value.NotExpected,
+        NotRecorded = value.NotRecorded
+    };
+
+    private static void AdjustForRow(AttendanceSheet sheet, AttendanceRow row, string status, int delta)
+    {
+        if (row.ParticipantKind == "Member")
+        {
+            Adjust(sheet, status, delta);
+            return;
+        }
+        var guests = sheet.GuestCounts ?? throw Review("Guest counter reconciliation is required before changing existing additional-person rows.");
+        switch (status)
+        {
+            case "Present":
+                guests.Present = checked(guests.Present + delta);
+                break;
+            case "Late":
+                guests.Late = checked(guests.Late + delta);
+                break;
+            case "Absent":
+                guests.Absent = checked(guests.Absent + delta);
+                break;
+            case "Excused":
+                guests.Excused = checked(guests.Excused + delta);
+                break;
+            case "NotExpected":
+                guests.NotExpected = checked(guests.NotExpected + delta);
+                break;
+            case "NotRecorded":
+                guests.NotRecorded = checked(guests.NotRecorded + delta);
+                break;
+            default:
+                throw Review("Unsupported additional-person attendance state requires review.");
+        }
     }
 
     private static void Adjust(AttendanceSheet sheet, string status, int delta)
@@ -507,6 +636,12 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         var counts = new[] { value.PresentCount, value.LateCount, value.AbsentCount, value.ExcusedCount, value.NotExpectedCount, value.NotRecordedCount };
         if (value.ExpectedCount < 0 || counts.Any(x => x < 0) || counts.Sum(x => (long)x) != value.ExpectedCount)
             throw Review("The saved attendance counters need reconciliation before this sheet can be read or changed.");
+        if (value.GuestCounts is { } guests)
+        {
+            var additional = new[] { guests.Present, guests.Late, guests.Absent, guests.Excused, guests.NotExpected, guests.NotRecorded };
+            if (guests.Total < 0 || additional.Any(x => x < 0) || additional.Sum(x => (long)x) != guests.Total)
+                throw Review("The additional-person attendance counters need explicit reconciliation.");
+        }
     }
 
     private static void RequireComplete(AttendanceSheet value)

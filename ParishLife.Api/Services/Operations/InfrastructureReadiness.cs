@@ -98,6 +98,11 @@ public sealed class InfrastructureReadiness(CosmosClient? client, IOptions<Cosmo
             if (response.Resource.PartitionKeyPath != "/partitionKey" || response.Resource.DefaultTimeToLive is not null)
                 throw new DomainException("container_contract_mismatch", "A Cosmos partition/TTL contract does not match the application.", FailureKind.Unavailable);
             checks["Cosmos:" + name] = "Metadata readable; /partitionKey and disabled TTL verified.";
+            if (name == Containers.Accounts)
+            {
+                Configuration.CosmosIndexContract.ValidateAccounts(response.Resource);
+                checks["Cosmos:Accounts:Indexes"] = "Required personal-workspace query paths readable; metadata checks do not inspect protected content or test live queries.";
+            }
             if (name == Containers.TenantControl)
             {
                 Configuration.CosmosIndexContract.ValidateTenant(response.Resource);

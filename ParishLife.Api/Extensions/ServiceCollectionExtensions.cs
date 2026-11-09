@@ -36,6 +36,7 @@ using ParishLife.Api.Services.Ministries;
 using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
+using ParishLife.Api.Services.PersonalWorkspace;
 using ParishLife.Api.Services.Scheduling;
 
 namespace ParishLife.Api.Extensions;
@@ -81,6 +82,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ParishService>();
         services.AddScoped<BillingService>();
         services.AddScoped<PeopleService>();
+        services.AddScoped<PersonalWorkspaceService>();
+        services.AddScoped<AccountProfileService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
         services.AddScoped<MinistryAccess>();
         services.AddScoped<MinistryService>();

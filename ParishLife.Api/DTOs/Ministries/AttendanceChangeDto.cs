@@ -1,5 +1,5 @@
 // Purpose: returns attendance history only to an explicitly authorized reviewer, including decrypted purpose-scoped evidence.
-// Main members: Id, MeetingId, Action, PersonId, PreviousStatus, NewStatus, ActorId, ActingAppointmentId, RecordedAt, Reason, ReviewReference, ExpectedCount, PresentCount, LateCount, AbsentCount, ExcusedCount, NotExpectedCount, NotRecordedCount.
+// Main members: occurrence/person/participant kind, attributed old/new states, protected review text and separate member/guest counter snapshots.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -12,6 +12,10 @@ public class AttendanceChangeDto
     public string Action { get; set; } = string.Empty;
 
     public string? PersonId { get; set; }
+
+    public string? ParticipantKind { get; set; }
+
+    public AttendanceGuestCountsDto? GuestCounts { get; set; }
 
     public string? PreviousStatus { get; set; }
 

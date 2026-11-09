@@ -1,5 +1,5 @@
 // Purpose: preserves attributed attendance old/new states, counters and protected review evidence without general audit text.
-// Main members: Id, ParishId, MinistryId, MeetingId, Action, PersonId, PreviousStatus, NewStatus, ActorId, ActingAppointmentId, RecordedAt, ProtectedReason, ProtectedReference, ExpectedCount, PresentCount, LateCount, AbsentCount, ExcusedCount, NotExpectedCount, NotRecordedCount.
+// Main members: exact scope/person/participant kind, old/new status, actor/time, member and guest counter snapshots, protected reason/reference.
 
 namespace ParishLife.Api.Models;
 
@@ -16,6 +16,10 @@ public class AttendanceChange
     public string Action { get; set; } = string.Empty;
 
     public string? PersonId { get; set; }
+
+    public string? ParticipantKind { get; set; }
+
+    public AttendanceGuestCounts? GuestCounts { get; set; }
 
     public string? PreviousStatus { get; set; }
 

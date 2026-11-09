@@ -1,4 +1,4 @@
-// Purpose: stores one occurrence-date roster member and explicitly recorded state independently from RSVP.
+// Purpose: stores one occurrence-date roster member or reviewed guest and explicit attendance independently from RSVP.
 // Main members: Id, ParishId, MinistryId, MeetingId, PersonId, MembershipPeriodId, ParticipantKind, Status, RecordedAt, RecordedBy.
 
 namespace ParishLife.Api.Models;

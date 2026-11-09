@@ -1,5 +1,5 @@
 // Purpose: exposes typed actual-meeting attendance snapshot, entry, review and own-record endpoints under current scoped duties.
-// Main functions: Open, Snapshot, Get, Grid, Record, Close, Correct, Mine and History delegate source/privacy/conditional-write rules to MinistryAttendanceService.
+// Main functions: Open, Snapshot, Get, Grid, Guest, Record, Close, Correct, Mine and History delegate source/privacy/conditional-write rules to MinistryAttendanceService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,6 +33,9 @@ public class MinistryAttendanceController(MinistryAttendanceService service) : C
     [HttpPost("records")]
     public async Task<ActionResult<Versioned<AttendanceSheetDto>>> Record(Guid parishId, Guid ministryId, Guid meetingId, AttendanceWriteDto request, CancellationToken ct)
         => Ok(await service.RecordAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(meetingId), request, ct));
+    [HttpPost("guests")]
+    public async Task<ActionResult<Versioned<AttendanceSheetDto>>> Guest(Guid parishId, Guid ministryId, Guid meetingId, AttendanceGuestDto request, CancellationToken ct)
+        => Ok(await service.AddGuestAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(meetingId), request, ct));
     [HttpPost("close")]
     public async Task<ActionResult<Versioned<AttendanceSheetDto>>> Close(Guid parishId, Guid ministryId, Guid meetingId, AttendanceCloseDto request, CancellationToken ct)
         => Ok(await service.CloseAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(meetingId), request, ct));

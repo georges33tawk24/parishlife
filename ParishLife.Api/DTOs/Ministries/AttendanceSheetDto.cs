@@ -1,5 +1,5 @@
 // Purpose: returns honest snapshot/lifecycle and labeled denominator/coverage counts without private reasons or evidence.
-// Main members: MeetingId, MinistryId, Status, SnapshotPhase, SnapshotPages, MeetingStartsAt, MeetingEndsAt, TimeZone, SnapshotCompletedAt, ClosedAt, MetricDefinition, ExpectedCount, PresentCount, LateCount, AbsentCount, ExcusedCount, NotExpectedCount, NotRecordedCount, GuestCount, Denominator, PresentOrLate, RecordedExpected, CoveragePercent, PresentOrLatePercent, SnapshotComplete, CancelledOccurrence.
+// Main members: occurrence/snapshot/lifecycle, expected-member counts and coverage, separate recorded GuestCount/GuestCounts and cancellation state.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -42,6 +42,8 @@ public class AttendanceSheetDto
     public int NotRecordedCount { get; set; }
 
     public int? GuestCount { get; set; }
+
+    public AttendanceGuestCountsDto? GuestCounts { get; set; }
 
     public int Denominator { get; set; }
 

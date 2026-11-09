@@ -1,10 +1,10 @@
 {
   "prepared": "2026-11-03",
-  "scope": "Full retained catalogue; single-API Azure foundation, account/MFA, staff, calendar/reservations and ministry/meeting/attendance slices implemented with remaining acceptance; no whole-product/live Azure claim",
+  "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 42,
-    "not_started": 107
+    "partial": 44,
+    "not_started": 105
   },
   "entries": [
     {
@@ -74,9 +74,9 @@
       "id": "A08",
       "workflow": "Personal profile and appearance",
       "module": "Accounts",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Own display name, optional interface-language preference and constrained light/dark preset/custom primary choices; nonpersisting readable-color preview and appearance-only reset. Personal capacity/MFA/eligibility, overposting rejection, atomic account/profile versions, safe exact retries and session/security/official-Person preservation are covered by real local service/HTTP tests.",
+      "remaining": "Broader optional signup/profile fields, frontend application and draft preservation, approved design/language/accessibility acceptance, photos/directory and live hosted acceptance remain. Contacts/security/official-record corrections stay separate.",
       "questionnaire_references": "S06.02 S07.12 S30.05"
     },
     {
@@ -615,8 +615,8 @@
       "workflow": "Attendance grid, corrections and CSV/XLSX import",
       "module": "Ministries",
       "status": "partial",
-      "implemented_slice": "Resumable bounded occurrence-date roster snapshots from retained membership periods, paged grid/counters, six explicit statuses, atomic conditional entries, unknown coverage/denominator, own historical row, review closure and protected attributed closed-sheet corrections.",
-      "remaining": "Guest/additional-person intake, month-wide multi-meeting reporting closure, CSV/XLSX preview/import/reversal and wider authorized reports/exports remain. Metrics are explicitly labeled; no official formation eligibility is inferred.",
+      "implemented_slice": "Resumable occurrence-date member snapshots, six explicit states, coherent paged grid/counters, conditional batches, own history, review closure and protected corrections. Reviewed existing-person guest rows have separate counters, require review plus record duty for initial observations, confer no membership/access and preserve legacy uncertainty on nonterminal pages; local service/HTTP regressions pass.",
+      "remaining": "Wider guest/representation identity intake, missing guest admission after closed reports, month-wide multi-meeting closure, reviewed historical roster corrections, CSV/XLSX preview/import/reversal and authorized aggregate exports remain. Metrics stay explicitly labeled; no official formation eligibility is inferred.",
       "questionnaire_references": "S19.04–08"
     },
     {
@@ -866,9 +866,9 @@
       "id": "H01",
       "workflow": "Account-private notes and personal tasks",
       "module": "Care",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Account-author-only encrypted notes/tasks, private drafts/category/tags/due/priority, explicit task completion/reopening, note/task archive/restore and protected attributed revision history. Account/item conditional transactions, encrypted exact retry input, private bounded cursors and HTTP/CSRF/recovery/capacity/isolation tests are implemented.",
+      "remaining": "Attachments/downloads, permission-checked links, reminder/recurrence delivery, approved deletion/trash/retention/recovery/export, frontend drafts/accessibility/language and live hosted acceptance remain. Personal workspace grants no pastoral/shared task authority.",
       "questionnaire_references": "S28.01 S28.05–06 S31.03"
     },
     {

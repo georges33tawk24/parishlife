@@ -23,6 +23,8 @@ The initial containers are `Accounts`, `LoginAliases`, `TenantControl`, `Billing
 
 The calendar/reservation slice also stores isolated resource partitions in TenantControl and requires its date/event/status/publication index paths. See [the calendar runbook](../operations/calendar-and-reservations.md). Readiness accepts a compatible broad policy or explicit includes, honoring more precise exclusions. Compare deployed metadata first; preserve other required paths and prepare an additive update if needed. No index update was applied by implementation or startup. Completed transformation and actual Cosmos query/race behavior still need controlled verification.
 
+Personal notes/tasks add bounded Accounts queries on `/data/kind/?`, `/data/status/?` and `/data/itemId/?`; reviewed guest attendance adds TenantControl `/data/participantKind/?`. The local [container contract](../cosmos/containers.json) and read-only readiness now include these requirements. Content/retry snapshots stay protected and require no plaintext content index. Existing broader policies may already be compatible; do not replace a deployed policy wholesale or claim a source change applied it. These workflows reuse the current containers, credentials and Data Protection provider without provisioning new resources.
+
 ## Authentication and Data Protection
 
 App Service uses an explicitly selected user-assigned managed identity. Local development/operator tools use signed-in developer credentials with managed-identity probing excluded. Azure RBAC, Cosmos data-plane roles, and network reachability are independent of parish application permissions.

@@ -23,6 +23,15 @@
           },
           {
             "path": "/type/?"
+          },
+          {
+            "path": "/data/kind/?"
+          },
+          {
+            "path": "/data/status/?"
+          },
+          {
+            "path": "/data/itemId/?"
           }
         ],
         "excludedPaths": [
@@ -131,6 +140,9 @@
           },
           {
             "path": "/data/personId/?"
+          },
+          {
+            "path": "/data/participantKind/?"
           }
         ],
         "excludedPaths": [
