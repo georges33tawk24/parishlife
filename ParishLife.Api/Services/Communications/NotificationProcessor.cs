@@ -1,5 +1,5 @@
 // Purpose: resumes bounded pages of pending required in-app notification obligations without a browser identity or leases.
-// Main functions: ProcessOneAsync reloads exact parish work; ProcessPageAsync advances a private continuation and isolates safe failure categories.
+// Main functions: ProcessOneAsync dispatches the exact saved work ID/version; ProcessPageAsync advances a private continuation and isolates safe failures.
 
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Models;
@@ -14,7 +14,7 @@ public class NotificationProcessor(IRecordTransactions records, NotificationServ
         var scope = new RecordScope { Area = RecordArea.Parish, OwnerId = parish };
         var row = await records.ReadAsync<NotificationWork>(scope, "notificationWork:" + id, ct);
         if (row is null || row.Value.Id != id || row.Value.ParishId != parish || row.Value.Status != "Pending") return;
-        await notifications.DispatchAsync(parish, row.Value.AccountId, row.Value.DedupKey, ct);
+        await notifications.DispatchWorkAsync(parish, id, ct);
     }
 
     public async Task<string?> ProcessPageAsync(string? cursor, CancellationToken ct)
