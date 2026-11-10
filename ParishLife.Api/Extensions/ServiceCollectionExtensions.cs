@@ -48,6 +48,7 @@ using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
 using ParishLife.Api.Services.PersonalWorkspace;
 using ParishLife.Api.Services.Scheduling;
+using ParishLife.Api.Services.Workflows;
 
 namespace ParishLife.Api.Extensions;
 
@@ -141,6 +142,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WebsiteService>();
         services.AddScoped<ParishCrmService>();
         services.AddScoped<HomepageService>();
+        services.AddScoped<WorkflowAccess>();
+        services.AddScoped<WorkflowDefinitionService>();
+        services.AddScoped<WorkflowRunService>();
         services.AddScoped<WorkOverviewService>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();

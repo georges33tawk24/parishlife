@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 126,
-    "not_started": 23
+    "partial": 128,
+    "not_started": 21
   },
   "entries": [
     {
@@ -1001,18 +1001,18 @@
       "id": "W01",
       "workflow": "Custom form fields and conditional rules",
       "module": "Workflows",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Versioned parish custom forms reusing the event-registration field model: Text/Choice/Boolean/Number/Date fields, required, conditional show and new conditional require rules (earlier field, reachable value) evaluated server-side; forms pinned to immutable published workflow versions; per-field restricted privacy class with purpose-bound protected storage and redacted projections; template validation of permissions, step branches and keys; draft/publish of exactly the reviewed draft by current MFA workflows.manage holders in the selected capacity, exact replay and ETag conflicts. Registration forms gain conditional require. Local tests only (docs/operations/custom-workflows.md).",
+      "remaining": "S21.04/S28.08-09 detail is proposed, not owner-approved. Not delivered: attachment/file fields, EN/FR/AR labels and applicant preview rendering, fee/consent snapshots for workflow forms, separate publisher/approver role, diocesan templates with parish adaptation, assignee-existence check at publish, member/guest-facing forms, frontend builder. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S21.04 S28.07–09"
     },
     {
       "id": "W02",
       "workflow": "Workflow run, step result, pause/cancel/reopen",
       "module": "Workflows",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Workflow runs pinned to the viewed published version: start by holders of the version's start permission in Open mode; ordered steps with conditional skip; current-step Completed/Declined results only by holders of that step's permission in the selected capacity; process-owner pause/resume/cancel/reopen with reason (reopen = new cycle redoing the ending step); definition modes Open/PausedNew/SafetyStop with explicit effects; immutable history with actor, selected appointment, cycle and reason; worklist of actionable runs; parish-root/definition/run ETag fences and exact replay. Local tests only (docs/operations/custom-workflows.md).",
+      "remaining": "S28.10-12/WF49 detail is proposed, not owner-approved. Not delivered: parallel approvals, return-for-information/resubmission (T90/T91), deadlines/reminders/escalation, transfer, transition notifications, active-run version migration, cancel impact review of linked resources/money, connected outcomes (steps never perform or prove signatures, payments, releases or sacraments), member self-start/withdraw, frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S28.07–12"
     },
     {
