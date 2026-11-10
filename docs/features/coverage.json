@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 125,
-    "not_started": 24
+    "partial": 126,
+    "not_started": 23
   },
   "entries": [
     {
@@ -1190,9 +1190,9 @@
       "id": "X08",
       "workflow": "Platform homepage content editing",
       "module": "Publishing",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Platform homepage editor for current MFA platform operators: one versioned working draft (hero, announcement, stories, about, join, section order; EN/FR/AR plain text; https or site-relative links only), per-language readiness, publication of exactly the reviewed draft version only when every ordered block is complete in all three languages, immutable revision history with superseding, exact-retry replay, and an anonymous public projection of the live revision. Local tests only.",
+      "remaining": "Contract is the proposed X08 matrix entry; the legacy editor's exact safe-link rules and story limit were not available, so the 50-story bound and link policy are conservative implementation choices, not agreed policy. Not delivered: uploaded assets/images (private Blob), scheduled publication, revert-to-revision, a separate approver (single operator publishes), delegated content editors and the frontend editor/preview. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S05 S30.15"
     },
     {

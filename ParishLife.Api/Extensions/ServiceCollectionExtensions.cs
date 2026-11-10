@@ -140,6 +140,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RentalService>();
         services.AddScoped<WebsiteService>();
         services.AddScoped<ParishCrmService>();
+        services.AddScoped<HomepageService>();
         services.AddScoped<WorkOverviewService>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();
