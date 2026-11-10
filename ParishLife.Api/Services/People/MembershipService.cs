@@ -2,6 +2,7 @@
 // and members' field-by-field corrections to their own official Person record.
 // Main functions: FollowAsync, UnfollowAsync, SetPrimaryAsync, MyParishesAsync, RequestAsync, WithdrawRequestAsync, DecideAsync,
 // OwnRequestsAsync, QueueAsync, ProposeCorrectionAsync, WithdrawCorrectionAsync, ReviewCorrectionAsync and CorrectionsAsync.
+// Required membership/correction notices are staged in their final source transactions and dispatched after commit.
 
 using ParishLife.Api.DTOs.Ministries;
 using ParishLife.Api.DTOs.People;
@@ -185,9 +186,11 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         var root = await parishes.GetAsync(parish, ct) ?? throw Missing();
         await records.CommitAsync(Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id, request.Action }, clock, null, actor.ActingAppointmentId),
             "membership." + request.Action.Replace('-', '_'), id,
-            [Fence(root), RecordChange.Replace("membershipRequest:" + id, "membershipRequest", item, row.Version)], new CommandResult { Id = id, Status = item.Status }, ct);
-        await notifications.NotifyAsync(item.ApplicantAccountId, parish, "membership.decision", "Your parish membership request has an update.",
-            "/api/parishes/" + parish + "/membership-requests/mine", required: true, "membership:" + id + ":" + row.Version, ct);
+            [Fence(root), RecordChange.Replace("membershipRequest:" + id, "membershipRequest", item, row.Version),
+             notifications.StageRequired(parish, item.ApplicantAccountId, "membership.decision", "Your parish membership request has an update.",
+                 "/api/parishes/" + parish + "/membership-requests/mine", "membership:" + id + ":" + row.Version, "MembershipApplicant", id, item.DecidedAt.Value)],
+            new CommandResult { Id = id, Status = item.Status }, ct);
+        await notifications.DispatchAsync(parish, item.ApplicantAccountId, "membership:" + id + ":" + row.Version, ct);
         return Project(item, true);
     }
 
@@ -275,9 +278,11 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         // Approved fields change the Person in the same transaction; the correction keeps every old value.
         await records.CommitAsync(Parish(parish), op, "person.correction_review", id,
             [Fence(root), RecordChange.Replace("profileCorrection:" + id, "profileCorrection", item, Versions.Require(request.Version)),
-             RecordChange.Replace("person:" + item.PersonId, "person", personRow.Value, personRow.Version)], new CommandResult { Id = id, Status = item.Status }, ct);
-        await notifications.NotifyAsync(item.ApplicantAccountId, parish, "profile.correction", "Your profile correction has been reviewed.",
-            "/api/parishes/" + parish + "/profile-corrections/mine", required: true, "correction:" + id, ct);
+             RecordChange.Replace("person:" + item.PersonId, "person", personRow.Value, personRow.Version),
+             notifications.StageRequired(parish, item.ApplicantAccountId, "profile.correction", "Your profile correction has been reviewed.",
+                 "/api/parishes/" + parish + "/profile-corrections/mine", "correction:" + id, "CorrectionApplicant", id, op.At)],
+            new CommandResult { Id = id, Status = item.Status }, ct);
+        await notifications.DispatchAsync(parish, item.ApplicantAccountId, "correction:" + id, ct);
         return Project(item);
     }
 

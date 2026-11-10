@@ -109,6 +109,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IncidentService>();
         services.AddScoped<CommunicationsService>();
         services.AddScoped<NotificationService>();
+        services.AddScoped<NotificationAudience>();
+        services.AddScoped<NotificationProcessor>();
         services.AddScoped<InboxService>();
         services.AddScoped<GivingService>();
         services.AddScoped<ExpenseService>();
@@ -153,6 +155,7 @@ public static class ServiceCollectionExtensions
         {
             services.AddHostedService<BillingActivationWorker>();
             services.AddHostedService<ReservationWorker>();
+            services.AddHostedService<NotificationWorker>();
         }
         services.AddHealthChecks().AddCheck<BackendReadinessHealthCheck>("backend_dependencies", tags: ["ready"]);
         return services;

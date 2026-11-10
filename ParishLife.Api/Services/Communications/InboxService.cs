@@ -1,6 +1,7 @@
 // Purpose: runs inbox conversations: members with the parish office, and office staff directly with linked parishioners.
 // Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync and ArchiveAsync; helpers check participation or office capacity,
-// keep per-participant read/archive state and notify recipients in-app. There is no searchable person directory, and sent messages are final.
+// keep per-participant read/archive state and stage required recipient notices with each message. There is no searchable person directory,
+// and sent messages are final; notice dispatch happens independently after the source commit.
 
 using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -69,8 +70,9 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var changes = new List<RecordChange> { RecordChange.Create(Key(item.Id), "conversation", item), RecordChange.Create("inboxMessage:" + message.Id, "inboxMessage", message) };
         changes.AddRange(participants.Select(p => RecordChange.Create(MemberKey(item.Id, p), "conversationMember",
             new ConversationMember { ConversationId = item.Id, AccountId = p, LastReadAt = p == actor.AccountId ? op.At : null })));
+        changes.AddRange(NoticeChanges(parish, item, message));
         await records.CommitAsync(Scope(parish), op, "inbox.start", item.Id, changes, new CommandResult { Id = item.Id, Status = "Started" }, ct);
-        await NotifyAsync(parish, item, message, ct);
+        await DispatchNoticesAsync(parish, item, message, ct);
         return await ProjectAsync(parish, item, ct);
     }
 
@@ -111,10 +113,15 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var capacity = item.Kind == "Office" && !item.ParticipantAccountIds.Contains(actor.AccountId) || item.Kind == "Direct" && item.CreatedBy == actor.AccountId ? "Office" : "Self";
         var message = new InboxMessage { Id = op.Id, ConversationId = id, AuthorAccountId = actor.AccountId, Capacity = capacity, Body = Guard.Text(request.Body, "Message", 10000), At = op.At };
         item.LastMessageAt = op.At;
+        var changes = new List<RecordChange>
+        {
+            RecordChange.Create("inboxMessage:" + message.Id, "inboxMessage", message),
+            RecordChange.Replace(Key(id), "conversation", item, row.Version)
+        };
+        changes.AddRange(NoticeChanges(parish, item, message));
         await records.CommitAsync(Scope(parish), op, "inbox.message", id,
-            [RecordChange.Create("inboxMessage:" + message.Id, "inboxMessage", message), RecordChange.Replace(Key(id), "conversation", item, row.Version)],
-            new CommandResult { Id = message.Id, Status = "Sent" }, ct);
-        await NotifyAsync(parish, item, message, ct);
+            changes, new CommandResult { Id = message.Id, Status = "Sent" }, ct);
+        await DispatchNoticesAsync(parish, item, message, ct);
         return Project(message);
     }
 
@@ -157,11 +164,15 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         catch (DomainException error) when (error.Code == "write_conflict") { }
     }
 
-    private async Task NotifyAsync(string parish, Conversation item, InboxMessage message, CancellationToken ct)
+    private IEnumerable<RecordChange> NoticeChanges(string parish, Conversation item, InboxMessage message)
+        => item.ParticipantAccountIds.Where(p => p != message.AuthorAccountId).Distinct(StringComparer.Ordinal)
+            .Select(recipient => notifications.StageRequired(parish, recipient, "inbox.message", "You have a new message from your parish.",
+                "/api/parishes/" + parish + "/inbox/" + item.Id, "inbox:" + message.Id, "InboxParticipant", item.Id, message.At));
+
+    private async Task DispatchNoticesAsync(string parish, Conversation item, InboxMessage message, CancellationToken ct)
     {
-        foreach (var recipient in item.ParticipantAccountIds.Where(p => p != message.AuthorAccountId))
-            await notifications.NotifyAsync(recipient, parish, "inbox.message", "You have a new message from your parish.",
-                "/api/parishes/" + parish + "/inbox/" + item.Id, required: true, "inbox:" + message.Id, ct);
+        foreach (var recipient in item.ParticipantAccountIds.Where(p => p != message.AuthorAccountId).Distinct(StringComparer.Ordinal))
+            await notifications.DispatchAsync(parish, recipient, "inbox:" + message.Id, ct);
     }
 
     private async Task<Versioned<Conversation>> ReadAsync(string parish, string id, CancellationToken ct)

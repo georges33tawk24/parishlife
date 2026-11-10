@@ -2,6 +2,7 @@
 // anonymous or identified submission, fixed-audience entries and reviewer/submitter transitions. Nobody else receives cases, counts or signals.
 // Main functions: AppointReviewerAsync, EndReviewerAsync, ReviewerOptionsAsync, SubmitAsync, ActAsync, PostEntryAsync, EntriesAsync,
 // GetAsync, OwnAsync and AssignedAsync; helpers enforce current reviewer eligibility on every request.
+// Required submitter notices are staged in the same source transaction, without copying confidential content into previews.
 
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
@@ -156,10 +157,13 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         if (reviewer is not null && !string.IsNullOrWhiteSpace(request.NextAction))
             item.NextAction = Guard.Text(request.NextAction, "Next action", 500);
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Parish(parish), op, "care.concern_" + request.Action.Replace('-', '_'), id,
-            [RecordChange.Replace(Key(id), "concern", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
+        var changes = new List<RecordChange> { RecordChange.Replace(Key(id), "concern", item, Versions.Require(request.Version)) };
         if (reviewer is not null)
-            await NotifySubmitterAsync(item, op, ct);
+            changes.Add(SubmitterNotice(item, op));
+        await records.CommitAsync(Parish(parish), op, "care.concern_" + request.Action.Replace('-', '_'), id,
+            changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        if (reviewer is not null)
+            await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
         return Project(item, reviewer);
     }
 
@@ -199,9 +203,11 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             item.UpdatedAt = op.At;
             changes.Add(RecordChange.Replace(Key(id), "concern", item, row.Version));
         }
+        if (request.Kind is "MessageToSubmitter" or "InformationRequest")
+            changes.Add(SubmitterNotice(item, op));
         await records.CommitAsync(Parish(parish), op, "care.concern_entry", id, changes, new CommandResult { Id = entry.Id, Status = entry.Kind }, ct);
         if (request.Kind is "MessageToSubmitter" or "InformationRequest")
-            await NotifySubmitterAsync(item, op, ct);
+            await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
         return Project(parish, entry);
     }
 
@@ -254,9 +260,9 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
     }
 
     // The notice names no category, subject, identity or accusation, so lock screens and previews reveal nothing.
-    private Task NotifySubmitterAsync(Concern item, Operation op, CancellationToken ct)
-        => notifications.NotifyAsync(item.ApplicantAccountId, item.ParishId, "concern.update", "There is an update to your confidential case.",
-            "/api/parishes/" + item.ParishId + "/concerns/" + item.Id, required: true, "concern:" + op.Id, ct);
+    private RecordChange SubmitterNotice(Concern item, Operation op)
+        => notifications.StageRequired(item.ParishId, item.ApplicantAccountId, "concern.update", "There is an update to your confidential case.",
+            "/api/parishes/" + item.ParishId + "/concerns/" + item.Id, "concern:" + op.Id, "ConcernApplicant", item.Id, op.At);
 
     private async Task<ConcernReviewer> RequireReviewerAsync(Concern item, CancellationToken ct)
     {

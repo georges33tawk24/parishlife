@@ -2,6 +2,7 @@
 // Main functions: SubmitAsync, GuestSubmitAsync, GuestGetAsync, GuestActAsync, ActAsync, SetChecklistAsync, PostMessageAsync, MessagesAsync,
 // ClaimGuestAsync, DecideAssociationAsync, RotateTrackingAsync, HandoverAsync, GetAsync, OwnAsync, QueueAsync and HistoryAsync; helpers keep requester/subject/relationship/authority separate, keep distinct
 // Received/Accepted/Approved-by-priest/Date-confirmed/Completed facts, and separate applicant-visible explanations from internal notes.
+// Required applicant notices are staged with the source transition and dispatched independently after commit.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -209,13 +210,22 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
                 throw State("This action is not available in the case's current state.");
         }
         item.UpdatedAt = clock.GetUtcNow();
+        // Applicant-visible changes notify a signed-in applicant; internal triage, matching and links do not.
+        var recipient = request.Action is "accept" or "return" or "decline" or "cancel" or "clergy-approve" or "confirm-date" or "complete"
+            ? item.ApplicantAccountId : null;
+        var dedupKey = "request:" + op.Id;
+        var changes = new List<RecordChange>
+        {
+            Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)),
+            History(item, request.Action, previous.Status, previous, op, actor.AccountId)
+        };
+        if (recipient is not null)
+            changes.Add(notifications.StageRequired(parish, recipient, "request.update", "There is an update to your request.",
+                "/api/parishes/" + parish + "/requests/" + id, dedupKey, "RequestApplicant", id, op.At));
         await records.CommitAsync(Scope(parish), op, "request." + request.Action.Replace('-', '_'), id,
-            [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)), History(item, request.Action, previous.Status, previous, op, actor.AccountId)],
-            new CommandResult { Id = id, Status = item.Status }, ct);
-        // Applicant-visible changes notify a signed-in applicant in-app; internal triage, matching and links do not.
-        if (item.ApplicantAccountId is { } applicant && request.Action is "accept" or "return" or "decline" or "cancel" or "clergy-approve" or "confirm-date" or "complete")
-            await notifications.NotifyAsync(applicant, parish, "request.update", "There is an update to your request " + item.Reference + ".",
-                "/api/parishes/" + parish + "/requests/" + id, required: true, "request:" + op.Id, ct);
+            changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        if (recipient is not null)
+            await notifications.DispatchAsync(parish, recipient, dedupKey, ct);
         return Project(item, true);
     }
 
@@ -349,10 +359,12 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         await records.CommitAsync(Scope(parish), op, request.Approve ? "request.associate" : "request.association_decline", id,
             [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)),
              History(item, request.Approve ? "associate" : "association-decline", previous.Status, previous, op, actor.AccountId),
-             MessageChange(item, "Internal", "Office", actor.AccountId, note, op)],
+             MessageChange(item, "Internal", "Office", actor.AccountId, note, op),
+             notifications.StageRequired(parish, claimant, "request.update", "There is an update to your request association.",
+                 request.Approve ? "/api/parishes/" + parish + "/requests/" + id : null,
+                 "request-association:" + op.Id, "RequestAssociation", id, op.At)],
             new CommandResult { Id = id, Status = item.Status }, ct);
-        await notifications.NotifyAsync(claimant, parish, "request.update", "There is an update to your request association.",
-            request.Approve ? "/api/parishes/" + parish + "/requests/" + id : null, required: true, "request-association:" + op.Id, ct);
+        await notifications.DispatchAsync(parish, claimant, "request-association:" + op.Id, ct);
         return Project(item, true);
     }
 

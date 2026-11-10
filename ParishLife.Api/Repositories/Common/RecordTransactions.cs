@@ -57,6 +57,8 @@ internal sealed class RecordTransactions(PartitionDocuments documents, IDataProt
         if (type == "reservationWork")
             query = query.Where(StorageFilter.Or(StorageFilter.Eq("data.status", "Allocating"),
             StorageFilter.Or(StorageFilter.Eq("data.status", "Cancelling"), StorageFilter.Eq("data.status", "Compensating"))));
+        if (type == "notificationWork")
+            query = query.Where(StorageFilter.Eq("data.status", "Pending"));
         return documents.QueryPageAsync<T>(container, null, query, Math.Clamp(size, 1, 100), continuation, ct);
     }
 

@@ -313,4 +313,3 @@ public class EvidenceIntegrityTests
             => inner.CommitAsync(scope, operation, action, resourceId, changes, result, ct, reason);
     }
 }
-

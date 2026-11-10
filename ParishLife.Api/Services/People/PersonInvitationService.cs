@@ -1,6 +1,7 @@
 // Purpose: issues single-use, seven-day person invitations from the office and lets the intended recipient's own verified account claim
 // the person link; conflicting claims stop for office review instead of linking.
 // Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync and ListAsync.
+// Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -127,11 +128,13 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
         }
         changes.Add(RecordChange.Replace("personInvitation:" + id, "personInvitation", item, row.Version));
+        if (conflict)
+            changes.Add(notifications.StageRequired(parish, item.CreatedBy, "person.invitation", "A person invitation needs office review.",
+                "/api/parishes/" + parish + "/person-invitations", "person-invitation:" + id, "InvitationIssuer", id, op.At));
         await records.CommitAsync(Scope(parish), op, conflict ? "person.invitation_conflict" : "person.invitation_accept", id, changes,
             new CommandResult { Id = id, Status = item.Status }, ct);
         if (conflict)
-            await notifications.NotifyAsync(item.CreatedBy, parish, "person.invitation", "A person invitation needs office review.",
-                "/api/parishes/" + parish + "/person-invitations", required: true, "person-invitation:" + id, ct);
+            await notifications.DispatchAsync(parish, item.CreatedBy, "person-invitation:" + id, ct);
         return Project(item);
     }
 

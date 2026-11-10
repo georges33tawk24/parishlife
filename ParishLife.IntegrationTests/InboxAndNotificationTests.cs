@@ -97,7 +97,7 @@ public class InboxAndNotificationTests
         f.As(applicant, mfa: false);
         var notice = Assert.Single((await x.Notifications.ListAsync(null, 25, null, default)).Items);
         Assert.Equal(("Required", "Unread"), (notice.Kind, notice.Status));
-        Assert.Contains(created.Reference, notice.Title);
+        Assert.Equal("There is an update to your request.", notice.Title);
         Assert.Equal("Read", (await x.Notifications.SetStateAsync(notice.Id, new NotificationStateDto { Status = "Read" }, default)).Status);
         Assert.Empty((await x.Notifications.ListAsync("Unread", 25, null, default)).Items);
 

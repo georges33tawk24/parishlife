@@ -1,6 +1,7 @@
 // Purpose: lets the bishop of a parish's jurisdiction suspend, reinstate or close it. Suspension and closure stop ordinary parish
 // operations through the shared access checks while every record, receipt and history entry stays; closure is not reversed here.
 // Main functions: ChangeAsync and HistoryAsync.
+// Required owner notices are staged in the status transaction and can dispatch even after suspension or closure.
 
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -49,9 +50,11 @@ public class ParishStatusService(IRecordTransactions records, IParishRepository 
         };
         root.Value.Status = to;
         await records.CommitAsync(Scope(parish), op, "parish." + request.Action, parish,
-            [RecordChange.Replace("parish", "parish", root.Value, Versions.Require(request.Version)), RecordChange.Create("parishStatusChange:" + op.Id, "parishStatusChange", change)],
+            [RecordChange.Replace("parish", "parish", root.Value, Versions.Require(request.Version)), RecordChange.Create("parishStatusChange:" + op.Id, "parishStatusChange", change),
+             notifications.StageRequired(parish, root.Value.OwnerAccountId, "parish.status", "Your parish's operating status has changed.", null,
+                 "parish-status:" + op.Id, "ParishOwner", parish, op.At)],
             new CommandResult { Id = op.Id, Status = to.ToString() }, ct);
-        await notifications.NotifyAsync(root.Value.OwnerAccountId, parish, "parish.status", "Your parish's operating status has changed.", null, required: true, "parish-status:" + op.Id, ct);
+        await notifications.DispatchAsync(parish, root.Value.OwnerAccountId, "parish-status:" + op.Id, ct);
         return Project(change);
     }
 

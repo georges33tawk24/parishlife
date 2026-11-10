@@ -1,6 +1,7 @@
 // Purpose: keeps restricted incident records: recorders store a protected factual report, and only incident handlers read it and move it through
 // Recorded -> Assigned -> FollowUp -> Resolved -> Closed (with reopen), with attributed amendments, reviewer-only notes and communication records.
 // Main functions: RecordAsync, ActAsync, GetAsync and ListAsync. Event participation, ordinary leadership and office access grant nothing here.
+// Handler-assignment notices are staged with the incident change and dispatched after commit without private report text.
 
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
@@ -113,12 +114,18 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
         }
         entry.ProtectedText = Protector(parish, id).Protect(text!);
         item.Entries.Add(entry);
-        await records.CommitAsync(Scope(parish), op, "incident." + request.Action.Replace('-', '_'), id,
-            [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace("incident:" + id, "incident", item, Versions.Require(request.Version))],
-            new CommandResult { Id = id, Status = item.Status }, ct);
+        var changes = new List<RecordChange>
+        {
+            RecordChange.Replace("parish", "parish", root.Value, root.Version),
+            RecordChange.Replace("incident:" + id, "incident", item, Versions.Require(request.Version))
+        };
         if (request.Action == "assign")
-            await notifications.NotifyAsync(item.HandlerAccountId!, parish, "incident.assigned", "An incident record has been assigned to you.",
-                "/api/parishes/" + parish + "/incidents/" + id, required: true, "incident:" + op.Id, ct);
+            changes.Add(notifications.StageRequired(parish, item.HandlerAccountId!, "incident.assigned", "An incident record has been assigned to you.",
+                "/api/parishes/" + parish + "/incidents/" + id, "incident:" + op.Id, "IncidentHandler", id, op.At));
+        await records.CommitAsync(Scope(parish), op, "incident." + request.Action.Replace('-', '_'), id,
+            changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        if (request.Action == "assign")
+            await notifications.DispatchAsync(parish, item.HandlerAccountId!, "incident:" + op.Id, ct);
         return Project(item);
     }
 
