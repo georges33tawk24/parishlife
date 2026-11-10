@@ -50,8 +50,10 @@ internal sealed class RecordTransactions(PartitionDocuments documents, IDataProt
 
     public Task<Page<Versioned<T>>> ScanWorkAsync<T>(RecordArea area, string type, int size, string? continuation, CancellationToken ct)
     {
-        if (type is not ("reservationWork" or "backgroundJob" or "notificationWork" or "subscriptionWork"))
-            throw new InvalidOperationException("Only runtime-owned due-work types can be scanned across partitions.");
+        // The only non-runtime type is the platform operators' CRM worklist; it is never scannable from any other area.
+        if (type is not ("reservationWork" or "backgroundJob" or "notificationWork" or "subscriptionWork")
+            && !(type == "parishCrmRecord" && area == RecordArea.Platform))
+            throw new InvalidOperationException("Only runtime-owned due-work types and the platform CRM worklist can be scanned across partitions.");
         var (container, _) = Location(new RecordScope { Area = area, OwnerId = "worker" });
         var query = StorageQuery.Type(type);
         if (type == "reservationWork")

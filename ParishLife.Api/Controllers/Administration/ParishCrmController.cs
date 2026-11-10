@@ -1,5 +1,5 @@
 // Purpose: exposes private manual parish CRM/follow-up for current personal MFA platform operators; no automated outreach or public directory is provided.
-// Main functions: Get, Save, Note, Entry, History and Due delegate exact scope, concurrency and permission rules to ParishCrmService.
+// Main functions: Get, Save, Note, Entry, History, Due and Worklist delegate exact scope, concurrency and permission rules to ParishCrmService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +31,10 @@ public class ParishCrmController(ParishCrmService service) : ControllerBase
     [HttpGet("history")]
     public async Task<ActionResult<Page<ParishCrmEntryDto>>> History(Guid parishId, CancellationToken ct, int size = 25, string? cursor = null)
         => Ok(await service.HistoryAsync(Guard.Id(parishId), size, cursor, ct));
+
+    [HttpGet("~/api/administration/parish-crm/worklist")]
+    public async Task<ActionResult<Page<Versioned<ParishCrmDto>>>> Worklist(CancellationToken ct, string? stage = null, bool dueOnly = false, int size = 50, string? cursor = null)
+        => Ok(await service.WorklistAsync(stage, dueOnly, size, cursor, ct));
 
     [HttpGet("due-follow-up")]
     public async Task<ActionResult<Versioned<ParishCrmDto>?>> Due(Guid parishId, CancellationToken ct)

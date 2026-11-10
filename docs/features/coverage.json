@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 124,
-    "not_started": 25
+    "partial": 125,
+    "not_started": 24
   },
   "entries": [
     {
@@ -1181,9 +1181,9 @@
       "id": "X07",
       "workflow": "Parish CRM and adoption follow-up",
       "module": "Administration",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Private manual parish CRM for current MFA platform operators: one record per parish with Onboarding/Active/Attention/Paused stage, eligible-operator owner, dated follow-up with explicit next action, versioned conditional writes, immutable history with protected reasons/notes, exact-retry replay, due-follow-up read and a cross-parish operator worklist (stage/due filters). Local tests only.",
+      "remaining": "Stage vocabulary, worklist and note rules come from the proposed X07 contract, not approved policy. Not delivered: any automatic outreach (by design), delegated non-Super-Admin operators, linked private files, worklist paging that fills a page after filtering, live Cosmos cross-partition query acceptance, and the S29/S32 dashboard presentation (frontend deferred).",
       "questionnaire_references": "S29.01 S29.14 S32.05–08"
     },
     {

@@ -1,5 +1,5 @@
 // Purpose: manages private, manual parish CRM/follow-up for current personal MFA platform operators in one exact parish-specific Catalog partition.
-// Main functions: GetAsync, SaveAsync, AddNoteAsync, EntryAsync, HistoryAsync and DueAsync preserve conditional writes, immutable history,
+// Main functions: GetAsync, SaveAsync, AddNoteAsync, EntryAsync, HistoryAsync, DueAsync and WorklistAsync preserve conditional writes, immutable history,
 // protected note/reason text and exact retries; they never infer adoption, grant parish authority, inspect confidential modules or send outreach.
 
 using Microsoft.AspNetCore.DataProtection;
@@ -19,6 +19,7 @@ public class ParishCrmService(IRecordTransactions records, IParishRepository par
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Platform, OwnerId = "crm:" + parish };
     private static string EntryKey(string id) => "parishCrmEntry:" + id;
     private IDataProtector Protector(string parish, string id) => protection.CreateProtector("ParishLife.ParishCrm.v1", parish, id);
+    internal static readonly string[] Stages = ["Onboarding", "Active", "Attention", "Paused"];
     private static DomainException Missing() => new("resource_not_found", "The requested CRM resource is unavailable.", FailureKind.NotFound);
 
     private async Task RequireAsync(string parish, CancellationToken ct)
@@ -55,7 +56,7 @@ public class ParishCrmService(IRecordTransactions records, IParishRepository par
             throw new DomainException("invalid_input", "A dated follow-up needs an explicit next action.");
         var current = new ParishCrmRecord
         {
-            ParishId = parish, TrackingStatus = Guard.Text(request.TrackingStatus, "Tracking status", 80), AssignedOperatorAccountId = assigned,
+            ParishId = parish, TrackingStatus = Stage(request.TrackingStatus), AssignedOperatorAccountId = assigned,
             NextAction = next, FollowUpAt = at, CreatedAt = previous?.Value.CreatedAt ?? op.At, UpdatedAt = op.At, UpdatedBy = actor.AccountId
         };
         var entry = new ParishCrmEntry
@@ -131,6 +132,28 @@ public class ParishCrmService(IRecordTransactions records, IParishRepository par
         return row.Value.FollowUpAt is { } due && due <= clock.GetUtcNow()
             ? new Versioned<ParishCrmDto> { Value = Project(row.Value), Version = row.Version } : null;
     }
+
+    // Cross-parish adoption worklist: one operator-only page of current records, optionally one stage or only follow-ups already due.
+    // Each parish keeps its own independent partition, so a page may hold fewer rows than requested after filtering; follow the continuation.
+    public async Task<Page<Versioned<ParishCrmDto>>> WorklistAsync(string? stage, bool dueOnly, int size, string? cursor, CancellationToken ct)
+    {
+        await proof.RequireMfaAsync(ct);
+        await platform.RequireOperatorAsync(ct);
+        var wanted = string.IsNullOrWhiteSpace(stage) ? null : Stage(stage);
+        var page = await records.ScanWorkAsync<ParishCrmRecord>(RecordArea.Platform, "parishCrmRecord", Math.Clamp(size, 1, 100), cursor, ct);
+        var now = clock.GetUtcNow();
+        var items = page.Items
+            .Where(row => Guid.TryParseExact(row.Value.ParishId, "N", out var id) && id != Guid.Empty)
+            .Where(row => wanted is null || row.Value.TrackingStatus == wanted)
+            .Where(row => !dueOnly || row.Value.FollowUpAt is { } due && due <= now)
+            .OrderBy(row => row.Value.FollowUpAt is null).ThenBy(row => row.Value.FollowUpAt).ThenBy(row => row.Value.ParishId, StringComparer.Ordinal)
+            .Select(row => new Versioned<ParishCrmDto> { Value = Project(row.Value), Version = row.Version }).ToArray();
+        return new Page<Versioned<ParishCrmDto>> { Items = items, ContinuationToken = page.ContinuationToken };
+    }
+
+    private static string Stage(string? value)
+        => Stages.FirstOrDefault(s => string.Equals(s, value?.Trim(), StringComparison.Ordinal))
+            ?? throw new DomainException("invalid_input", "Use Onboarding, Active, Attention or Paused as the tracking status.");
 
     private async Task<Versioned<ParishCrmRecord>> ReadAsync(string parish, CancellationToken ct)
         => await records.ReadAsync<ParishCrmRecord>(Scope(parish), "profile", ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();

@@ -1,7 +1,7 @@
 // Purpose: verifies private manual parish CRM/follow-up (X07) through the real local services, Identity accounts and storage.
 // Main tests: only current MFA platform operators may read or write; one record per exact parish with optimistic versions; immutable history
 // keeps previous/current snapshots; reasons and notes are protected at rest; exact retries replay; future note occurrences, ineligible
-// assignees and dateless-action follow-ups are refused; due follow-up reads honor the clock; parishes never see each other's records.
+// assignees, unknown stages and dateless-action follow-ups are refused; the cross-parish worklist is operator-only and filterable; due follow-up reads honor the clock; parishes never see each other's records.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Administration;
@@ -43,7 +43,7 @@ public class ParishCrmTests
         return new Setup(f, await RegisterParishAsync(f, "CRM isolated parish"));
     }
 
-    private static ParishCrmSaveDto Save(string? version, string status = "Contacted", string reason = "Initial private follow-up reason", Guid? assigned = null,
+    private static ParishCrmSaveDto Save(string? version, string status = "Onboarding", string reason = "Initial private follow-up reason", Guid? assigned = null,
         string? action = null, DateTimeOffset? at = null)
         => new() { OperationId = Guid.NewGuid(), Version = version, TrackingStatus = status, Reason = reason, AssignedOperatorAccountId = assigned, NextAction = action, FollowUpAt = at };
 
@@ -61,13 +61,13 @@ public class ParishCrmTests
         Assert.Equal(f.FirstAdmin, created.By);
 
         var current = await x.Crm.GetAsync(x.Parish, default);
-        Assert.Equal(("Contacted", "Call the parish priest"), (current.Value.TrackingStatus, current.Value.NextAction));
+        Assert.Equal(("Onboarding", "Call the parish priest"), (current.Value.TrackingStatus, current.Value.NextAction));
 
         f.Clock.Now = f.Clock.Now.AddMinutes(5);
-        var updated = await x.Crm.SaveAsync(x.Parish, Save(current.Version, status: "Onboarding", reason: "SECRET-REASON-TWO"), default);
+        var updated = await x.Crm.SaveAsync(x.Parish, Save(current.Version, status: "Active", reason: "SECRET-REASON-TWO"), default);
         Assert.Equal("Updated", updated.Kind);
-        Assert.Equal("Contacted", updated.Previous!.TrackingStatus);
-        Assert.Equal("Onboarding", updated.Current.TrackingStatus);
+        Assert.Equal("Onboarding", updated.Previous!.TrackingStatus);
+        Assert.Equal("Active", updated.Current.TrackingStatus);
         Assert.Equal(created.Current.CreatedAt, updated.Current.CreatedAt);
 
         var history = await x.Crm.HistoryAsync(x.Parish, 25, null, default);
@@ -93,11 +93,11 @@ public class ParishCrmTests
         Assert.Single((await x.Crm.HistoryAsync(x.Parish, 25, null, default)).Items);
 
         // Overwriting an existing record without a version is refused as version_required, and a stale version conflicts; nothing is written.
-        Assert.Equal("version_required", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(null, status: "Other"), default))).Code);
+        Assert.Equal("version_required", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(null, status: "Paused"), default))).Code);
         var version = (await x.Crm.GetAsync(x.Parish, default)).Version;
-        await x.Crm.SaveAsync(x.Parish, Save(version, status: "Moved"), default);
-        Assert.Equal("write_conflict", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(version, status: "Stale"), default))).Code);
-        Assert.Equal("Moved", (await x.Crm.GetAsync(x.Parish, default)).Value.TrackingStatus);
+        await x.Crm.SaveAsync(x.Parish, Save(version, status: "Attention"), default);
+        Assert.Equal("write_conflict", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(version, status: "Paused"), default))).Code);
+        Assert.Equal("Attention", (await x.Crm.GetAsync(x.Parish, default)).Value.TrackingStatus);
         Assert.Equal(2, (await x.Crm.HistoryAsync(x.Parish, 25, null, default)).Items.Count);
 
         // A version supplied before any record exists is a conflict, never an implicit create.
@@ -126,7 +126,7 @@ public class ParishCrmTests
         {
             denied();
             await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.GetAsync(x.Parish, default));
-            await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(null, status: "Denied"), default));
+            await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(null, status: "Paused"), default));
             await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.HistoryAsync(x.Parish, 25, null, default));
             await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.DueAsync(x.Parish, default));
         }
@@ -182,7 +182,7 @@ public class ParishCrmTests
 
         // The note advanced the record version, so the earlier version can no longer be used, and the tracked facts did not change.
         Assert.NotEqual(version, (await x.Crm.GetAsync(x.Parish, default)).Version);
-        Assert.Equal("Contacted", (await x.Crm.GetAsync(x.Parish, default)).Value.TrackingStatus);
+        Assert.Equal("Onboarding", (await x.Crm.GetAsync(x.Parish, default)).Value.TrackingStatus);
         Assert.Equal("write_conflict", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.AddNoteAsync(x.Parish, note(version, f.Clock.Now.AddHours(-1)), default))).Code);
 
         var records = f.Services.GetRequiredService<IRecordTransactions>();
@@ -210,5 +210,58 @@ public class ParishCrmTests
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => x.Crm.GetAsync(other, default))).Kind);
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => x.Crm.EntryAsync(other, saved.Id, default))).Kind);
         Assert.Empty((await x.Crm.HistoryAsync(other, 25, null, default)).Items);
+    }
+
+    [Fact]
+    public async Task Tracking_status_is_one_of_the_four_adoption_stages()
+    {
+        await using var f = new LocalBackendFixture();
+        var x = await CreateAsync(f);
+        f.As(f.FirstAdmin);
+        foreach (var bad in new[] { "Contacted", "onboarding", "", "   ", "Great parish", "Onboarding;Active" })
+            Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.SaveAsync(x.Parish, Save(null, status: bad), default))).Code);
+        Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => x.Crm.GetAsync(x.Parish, default))).Kind);
+        foreach (var stage in new[] { "Onboarding", "Active", "Attention", "Paused" })
+        {
+            var version = await x.Crm.GetAsync(x.Parish, default).ContinueWith(t => t.IsFaulted ? null : t.Result.Version);
+            await x.Crm.SaveAsync(x.Parish, Save(version, status: stage), default);
+            Assert.Equal(stage, (await x.Crm.GetAsync(x.Parish, default)).Value.TrackingStatus);
+        }
+    }
+
+    [Fact]
+    public async Task Worklist_is_operator_only_filterable_and_orders_due_follow_ups_first()
+    {
+        await using var f = new LocalBackendFixture();
+        var x = await CreateAsync(f);
+        var second = await RegisterParishAsync(f, "Second worklist parish");
+        var third = await RegisterParishAsync(f, "Third worklist parish");
+        await RegisterParishAsync(f, "Never tracked parish");
+        f.As(f.FirstAdmin);
+        var now = f.Clock.Now;
+        await x.Crm.SaveAsync(x.Parish, Save(null, status: "Active"), default);
+        await x.Crm.SaveAsync(second, Save(null, status: "Attention", action: "Phone the priest", at: now.AddDays(1)), default);
+        await x.Crm.SaveAsync(third, Save(null, status: "Attention", action: "Visit the office", at: now.AddDays(2)), default);
+
+        var all = await x.Crm.WorklistAsync(null, false, 50, null, default);
+        Assert.Equal([second, third, x.Parish], all.Items.Select(i => i.Value.ParishId).ToArray());
+        Assert.Equal([second, third], (await x.Crm.WorklistAsync("Attention", false, 50, null, default)).Items.Select(i => i.Value.ParishId).ToArray());
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Crm.WorklistAsync("Thriving", false, 50, null, default))).Code);
+        Assert.Empty((await x.Crm.WorklistAsync(null, true, 50, null, default)).Items);
+
+        f.Clock.Now = now.AddDays(1).AddMinutes(1);
+        Assert.Equal([second], (await x.Crm.WorklistAsync(null, true, 50, null, default)).Items.Select(i => i.Value.ParishId).ToArray());
+        f.Clock.Now = now.AddDays(3);
+        Assert.Equal([second, third], (await x.Crm.WorklistAsync(null, true, 50, null, default)).Items.Select(i => i.Value.ParishId).ToArray());
+
+        // A parish that was never tracked is simply absent from the worklist.
+        Assert.Equal(3, all.Items.Count);
+
+        var member = await f.CreateVerifiedMemberAsync();
+        foreach (var denied in new Action[] { () => f.As(f.Nominee), () => f.As(member, mfa: false), () => f.As(f.FirstAdmin, mfa: false), () => f.AsRecovery(f.FirstAdmin) })
+        {
+            denied();
+            await Assert.ThrowsAnyAsync<DomainException>(() => x.Crm.WorklistAsync(null, false, 50, null, default));
+        }
     }
 }
