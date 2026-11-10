@@ -11,7 +11,7 @@ internal static class CosmosIndexContract
 {
     internal static readonly string[] RequiredTenantPaths = ["/partitionKey/?", "/type/?", "/data/accountId/?", "/data/startsAt/?", "/data/endsAt/?",
         "/data/eventId/?", "/data/status/?", "/data/published/?", "/data/visibility/?",
-        "/data/ministryId/?", "/data/kind/?", "/data/applicantAccountId/?", "/data/applicationId/?", "/data/publicListed/?", "/data/meetingId/?", "/data/joinedAt/?", "/data/personId/?", "/data/participantKind/?"];
+        "/data/ministryId/?", "/data/kind/?", "/data/applicantAccountId/?", "/data/applicationId/?", "/data/publicListed/?", "/data/meetingId/?", "/data/joinedAt/?", "/data/personId/?", "/data/participantKind/?", "/data/registrationId/?", "/data/opportunityId/?", "/data/householdId/?", "/data/equipmentId/?", "/data/requestId/?", "/data/conversationId/?"];
 
     internal static readonly string[] RequiredAccountPaths = ["/partitionKey/?", "/type/?", "/data/kind/?", "/data/status/?", "/data/itemId/?"];
 

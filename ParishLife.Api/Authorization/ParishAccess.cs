@@ -20,8 +20,8 @@ public class ParishAccess(IParishRepository repository, ICurrentActor actor, Tim
             throw new DomainException("resource_not_found", "The requested resource is unavailable.", FailureKind.NotFound);
         var parish = await repository.GetAsync(parishId, ct)
             ?? throw new DomainException("resource_not_found", "The requested resource is unavailable.", FailureKind.NotFound);
-        if (parish.Value.Status == ParishStatus.Closed)
-            throw new DomainException("parish_closed", "This parish is closed for ordinary operations.", FailureKind.Forbidden);
+        if (parish.Value.Status is ParishStatus.Closed or ParishStatus.Suspended)
+            throw new DomainException("parish_closed", "This parish is " + (parish.Value.Status == ParishStatus.Closed ? "closed" : "suspended") + " for ordinary operations.", FailureKind.Forbidden);
         return parish;
     }
 

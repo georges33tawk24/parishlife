@@ -13,6 +13,9 @@ public class EventRegistration
 
     public string PersonId { get; set; } = string.Empty;
 
+    // Office or Self; the requester stays in CreatedBy and the participant in PersonId.
+    public string Origin { get; set; } = "Office";
+
     public string FormVersionId { get; set; } = string.Empty;
 
     public string Status { get; set; } = string.Empty;

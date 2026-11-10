@@ -14,7 +14,7 @@ public class ChangeMinistryLeaderDutiesDto
     [Required, StringLength(1024)]
     public string Version { get; set; } = string.Empty;
 
-    [Required, MaxLength(3)]
+    [Required, MaxLength(7)]
     public string[] Duties { get; set; } = Array.Empty<string>();
 
     [Required, StringLength(1000)]

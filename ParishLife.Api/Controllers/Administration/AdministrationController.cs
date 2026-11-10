@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for administration workflows; delegates work to backend services.
-// Main functions: Verification, ArchdioceseVerification, Invoice, Readiness.
+// Main functions: Verification, ArchdioceseVerification, Invoice, Readiness and Capabilities.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,4 +37,8 @@ public sealed class AdministrationController(ParishService parishes, BillingServ
         await platform.RequireOperatorAsync(ct);
         return Ok(await readiness.CheckAsync(ct));
     }
+
+    // Any signed-in user may read what the platform can really do; it contains no secrets.
+    [HttpGet("/api/capabilities")]
+    public IActionResult Capabilities([FromServices] CapabilityService capabilities) => Ok(capabilities.List());
 }

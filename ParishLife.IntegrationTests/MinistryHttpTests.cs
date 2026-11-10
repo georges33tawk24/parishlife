@@ -282,7 +282,7 @@ public class MinistryHttpTests
         }));
     }
 
-    private static async Task LoginAsync(HttpClient client, string username, bool mfa = false)
+    internal static async Task LoginAsync(HttpClient client, string username, bool mfa = false)
     {
         await CsrfAsync(client);
         var response = await client.PostAsJsonAsync("/api/auth/login", new { username, password = Password });
@@ -301,14 +301,14 @@ public class MinistryHttpTests
         await CsrfAsync(client);
     }
 
-    private static async Task CsrfAsync(HttpClient client)
+    internal static async Task CsrfAsync(HttpClient client)
     {
         var value = await ReadAsync<JsonElement>(await client.GetAsync("/api/auth/csrf"));
         client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         client.DefaultRequestHeaders.Add("X-CSRF-TOKEN", value.GetProperty("token").GetString());
     }
 
-    private static async Task<T> ReadAsync<T>(HttpResponseMessage response)
+    internal static async Task<T> ReadAsync<T>(HttpResponseMessage response)
     {
         Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         return (await response.Content.ReadFromJsonAsync<T>())!;

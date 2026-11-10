@@ -1,8 +1,7 @@
-// Purpose: represents save plan input/output data.
-// Main members: OperationId, Version, EventId, Title, Items.
+// Purpose: creates or edits a service plan (with EventId) or template (without), optionally copying a template.
+// Main members: OperationId, Version, EventId, TemplateId, Title, PlanType, CoordinatorAccountId, CelebrantAccountId and Items.
 
 using System.ComponentModel.DataAnnotations;
-using ParishLife.Api.Models;
 using ParishLife.Api.Validation;
 
 namespace ParishLife.Api.DTOs.Scheduling;
@@ -13,13 +12,29 @@ public class SavePlanDto
     public Guid OperationId { get; set; }
 
     [StringLength(1024)]
-    public string? Version { get; set; }
+    public string? Version { get; set; } = null;
+
     [NotEmptyGuid]
-    public Guid EventId { get; set; }
+    public Guid? EventId { get; set; } = null;
+
+    [NotEmptyGuid]
+    public Guid? TemplateId { get; set; } = null;
 
     [Required]
-    [StringLength(500)]
+    [StringLength(300)]
     public string Title { get; set; } = string.Empty;
+
     [Required]
-    public ServicePlanItem[] Items { get; set; } = Array.Empty<ServicePlanItem>();
+    [RegularExpression("^(Liturgy|Activity)$")]
+    public string PlanType { get; set; } = string.Empty;
+
+    [NotEmptyGuid]
+    public Guid CoordinatorAccountId { get; set; }
+
+    [NotEmptyGuid]
+    public Guid? CelebrantAccountId { get; set; } = null;
+
+    [Required]
+    [MaxLength(80)]
+    public PlanItemDto[] Items { get; set; } = Array.Empty<PlanItemDto>();
 }

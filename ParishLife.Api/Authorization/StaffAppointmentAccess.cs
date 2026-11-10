@@ -30,8 +30,8 @@ public class StaffAppointmentAccess(IRecordTransactions records, IParishReposito
         var grant = await parishes.GetGrantAsync(parishId, actor.AccountId, ct);
         if (!row.Value.Permits(permission, clock.GetUtcNow()) || grant?.Denies.Contains(permission, StringComparer.Ordinal) == true)
             throw Missing();
-        if (parish.Value.Status == ParishStatus.Closed)
-            throw new DomainException("parish_closed", "This parish is closed for ordinary operations.", FailureKind.Forbidden);
+        if (parish.Value.Status is ParishStatus.Closed or ParishStatus.Suspended)
+            throw new DomainException("parish_closed", "This parish is " + (parish.Value.Status == ParishStatus.Closed ? "closed" : "suspended") + " for ordinary operations.", FailureKind.Forbidden);
         return parish;
     }
 

@@ -291,9 +291,9 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
 
     private async Task<string[]> ValidateDutiesAsync(string parish, string[]? duties, CancellationToken ct, bool authorize = true)
     {
-        if (duties is null || duties.Length > 3 || duties.Distinct(StringComparer.Ordinal).Count() != duties.Length
-            || duties.Any(value => value is not ("attendance.record" or "attendance.review" or "rsvp.private.read")))
-            throw State("Use distinct supported privacy/attendance duties; appointment alone grants neither access.");
+        if (duties is null || duties.Length > 7 || duties.Distinct(StringComparer.Ordinal).Count() != duties.Length
+            || duties.Any(value => value is not ("attendance.record" or "attendance.review" or "rsvp.private.read" or "formation.record" or "formation.review" or "resources.custody" or "volunteers.coordinate")))
+            throw State("Use distinct supported privacy/attendance/formation duties; appointment alone grants none of them.");
         foreach (var duty in authorize ? duties : [])
             await access.RequireAsync(parish, DutyPermission(duty), ct);
         return duties.Order(StringComparer.Ordinal).ToArray();
@@ -304,6 +304,10 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         "attendance.record" => Permissions.MinistriesAttendanceRecord,
         "attendance.review" => Permissions.MinistriesAttendanceReview,
         "rsvp.private.read" => Permissions.MinistriesRsvpPrivateRead,
+        "formation.record" => Permissions.MinistriesFormationRecord,
+        "formation.review" => Permissions.MinistriesFormationReview,
+        "resources.custody" => Permissions.MinistriesResourcesManage,
+        "volunteers.coordinate" => Permissions.MinistriesVolunteersManage,
         _ => throw State("Unsupported ministry duty.")
     };
 

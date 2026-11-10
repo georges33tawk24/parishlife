@@ -22,7 +22,7 @@ public class AppointLeaderDto
     [StringLength(20)]
     public string Role { get; set; } = string.Empty;
 
-    [Required, MaxLength(3)]
+    [Required, MaxLength(7)]
     public string[] Duties { get; set; } = Array.Empty<string>();
 
     public DateTimeOffset StartsAt { get; set; }

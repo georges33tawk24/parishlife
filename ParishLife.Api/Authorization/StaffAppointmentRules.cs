@@ -16,9 +16,10 @@ public static class StaffAppointmentRules
     public static readonly IReadOnlySet<string> PriestDuties = new HashSet<string>(StringComparer.Ordinal)
     {
         Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ReportsRead,
-        Permissions.ScheduleRead, Permissions.ScheduleManage, Permissions.SchedulePublish,
-        Permissions.FacilitiesManage, Permissions.MinistriesManage, Permissions.MinistriesAttendanceRecord, Permissions.MinistriesAttendanceReview, Permissions.MinistriesRsvpPrivateRead, Permissions.PublishingManage, Permissions.RequestsManage,
-        Permissions.SacramentsRecord, Permissions.DocumentsRelease, Permissions.RegistrationsManage, Permissions.CheckIn
+        Permissions.ScheduleRead, Permissions.ScheduleManage, Permissions.SchedulePublish, Permissions.MusicManage,
+        Permissions.FacilitiesManage, Permissions.MinistriesManage, Permissions.MinistriesAttendanceRecord, Permissions.MinistriesAttendanceReview, Permissions.MinistriesRsvpPrivateRead, Permissions.MinistriesFormationRecord, Permissions.MinistriesFormationReview, Permissions.MinistriesResourcesManage, Permissions.MinistriesVolunteersManage, Permissions.PublishingManage, Permissions.RequestsManage,
+        Permissions.SacramentsRecord, Permissions.DocumentsRelease, Permissions.RegistrationsManage, Permissions.CheckIn,
+        Permissions.IncidentsRecord, Permissions.IncidentsManage, Permissions.PeopleMedicalManage
     };
 
     public static void ValidateDuties(StaffAppointmentRole role, string[]? allows, string[]? denies)

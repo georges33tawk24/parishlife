@@ -7,5 +7,6 @@ public enum ParishStatus
 {
     PendingVerification,
     Verified,
-    Closed
+    Closed,
+    Suspended
 }

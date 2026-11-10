@@ -1,5 +1,5 @@
 // Purpose: enforces current ministry, office, priest and personal boundaries without merging selected roles.
-// Main functions: OfficeAsync, PriestAsync, LeaderAsync, ReaderAsync, RequireAttendanceAsync, PersonalAsync, OwnLinkAsync and RootAsync; Scope, Fence and MemberKey identify atomic parish records.
+// Main functions: OfficeAsync, PriestAsync, LeaderAsync, ReaderAsync, RequireAttendanceAsync, RequireFormationAsync, RequireCustodyAsync, RequireCoordinatorAsync, IsCurrentMemberAsync, PersonalAsync, OwnLinkAsync and RootAsync; Scope, Fence and MemberKey identify atomic parish records.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Identity;
@@ -76,12 +76,33 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
         catch (DomainException error) when (error.Kind == FailureKind.NotFound) { }
         return await LeaderAsync(parish, ministry, ct, false);
     }
-    internal async Task<Versioned<Ministry>> RequireAttendanceAsync(string parish, string ministry, CancellationToken ct,
+    internal Task<Versioned<Ministry>> RequireAttendanceAsync(string parish, string ministry, CancellationToken ct,
         bool review = false, bool requireModule = true, bool readOnly = false)
+        => RequireDutyAsync(parish, ministry, ct, (Permissions.MinistriesAttendanceRecord, "attendance.record"),
+            (Permissions.MinistriesAttendanceReview, "attendance.review"), review, requireModule, readOnly);
+
+    // Formation recording (instructor/coordinator) and qualified review are separate explicit duties, like attendance.
+    internal Task<Versioned<Ministry>> RequireFormationAsync(string parish, string ministry, CancellationToken ct,
+        bool review = false, bool readOnly = false)
+        => RequireDutyAsync(parish, ministry, ct, (Permissions.MinistriesFormationRecord, "formation.record"),
+            (Permissions.MinistriesFormationReview, "formation.review"), review, !readOnly, readOnly);
+
+    // Custody of physical group belongings is its own explicit duty; it grants no formation, attendance or private-reason access.
+    internal Task<Versioned<Ministry>> RequireCustodyAsync(string parish, string ministry, CancellationToken ct, bool readOnly = false)
+        => RequireDutyAsync(parish, ministry, ct, (Permissions.MinistriesResourcesManage, "resources.custody"),
+            (Permissions.MinistriesResourcesManage, "resources.custody"), false, !readOnly, readOnly);
+
+    // Volunteer coordination (opportunities, confirmations, hours review) is its own explicit duty.
+    internal Task<Versioned<Ministry>> RequireCoordinatorAsync(string parish, string ministry, CancellationToken ct, bool readOnly = false)
+        => RequireDutyAsync(parish, ministry, ct, (Permissions.MinistriesVolunteersManage, "volunteers.coordinate"),
+            (Permissions.MinistriesVolunteersManage, "volunteers.coordinate"), false, !readOnly, readOnly);
+
+    private async Task<Versioned<Ministry>> RequireDutyAsync(string parish, string ministry, CancellationToken ct,
+        (string Permission, string Duty) record, (string Permission, string Duty) reviewer, bool review, bool requireModule, bool readOnly)
     {
         var group = await LeaderAsync(parish, ministry, ct, requireModule);
-        var permissions = readOnly ? new[] { Permissions.MinistriesAttendanceRecord, Permissions.MinistriesAttendanceReview }
-            : new[] { review ? Permissions.MinistriesAttendanceReview : Permissions.MinistriesAttendanceRecord };
+        var permissions = readOnly ? new[] { record.Permission, reviewer.Permission }
+            : new[] { review ? reviewer.Permission : record.Permission };
         if (actor.ActingAppointmentId is not null)
         {
             foreach (var permission in permissions)
@@ -96,7 +117,7 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
         if (leader is null || !leader.Value.Current(clock.GetUtcNow())) throw Missing();
         foreach (var permission in permissions)
         {
-            var duty = permission == Permissions.MinistriesAttendanceReview ? "attendance.review" : "attendance.record";
+            var duty = permission == reviewer.Permission ? reviewer.Duty : record.Duty;
             if (leader.Value.Duties?.Contains(duty, StringComparer.Ordinal) == true
                 && grant?.Denies.Contains(permission, StringComparer.Ordinal) != true) return group;
         }
@@ -116,6 +137,15 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
         if (leader?.Value.Current(clock.GetUtcNow()) != true || leader.Value.Duties?.Contains("rsvp.private.read", StringComparer.Ordinal) != true
             || grant?.Denies.Contains(Permissions.MinistriesRsvpPrivateRead, StringComparer.Ordinal) == true) throw Missing();
         return group;
+    }
+
+    // Shared membership rule for new member work (formation, loans): a current period and an unarchived parish Person.
+    internal async Task<bool> IsCurrentMemberAsync(string parish, string ministry, string person, DateTimeOffset at, CancellationToken ct)
+    {
+        var member = await records.ReadAsync<MinistryMembership>(Scope(parish), MemberKey(ministry, person), ct);
+        var row = await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct);
+        return member is not null && member.Value.MinistryId == ministry && member.Value.PersonId == person && member.Value.Current(at)
+            && row is not null && !row.Value.Archived && row.Value.ParishId == parish;
     }
 
     internal async Task PersonalAsync(CancellationToken ct)

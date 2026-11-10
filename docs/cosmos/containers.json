@@ -143,6 +143,24 @@
           },
           {
             "path": "/data/participantKind/?"
+          },
+          {
+            "path": "/data/registrationId/?"
+          },
+          {
+            "path": "/data/opportunityId/?"
+          },
+          {
+            "path": "/data/householdId/?"
+          },
+          {
+            "path": "/data/equipmentId/?"
+          },
+          {
+            "path": "/data/requestId/?"
+          },
+          {
+            "path": "/data/conversationId/?"
           }
         ],
         "excludedPaths": [

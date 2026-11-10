@@ -33,6 +33,15 @@ using ParishLife.Api.Repositories.Scheduling;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Billing;
 using ParishLife.Api.Services.Ministries;
+using ParishLife.Api.Services.Files;
+using ParishLife.Api.Services.Publishing;
+using ParishLife.Api.Services.Reporting;
+using ParishLife.Api.Services.Registrations;
+using ParishLife.Api.Services.Requests;
+using ParishLife.Api.Services.Sacraments;
+using ParishLife.Api.Services.Care;
+using ParishLife.Api.Services.Communications;
+using ParishLife.Api.Services.Finance;
 using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
@@ -80,8 +89,31 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ParishJurisdictionService>();
         services.AddScoped<BishopAppointmentService>();
         services.AddScoped<ParishService>();
+        services.AddScoped<ParishStatusService>();
+        services.AddScoped<OfficeCoverageService>();
         services.AddScoped<BillingService>();
         services.AddScoped<PeopleService>();
+        services.AddScoped<HouseholdService>();
+        services.AddScoped<MembershipService>();
+        services.AddScoped<PersonInvitationService>();
+        services.AddScoped<PeopleDirectoryService>();
+        services.AddScoped<PersonFactsService>();
+        services.AddScoped<DuplicateService>();
+        services.AddScoped<PeopleImportService>();
+        services.AddScoped<PersonDataService>();
+        services.AddScoped<RequestService>();
+        services.AddScoped<SacramentService>();
+        services.AddScoped<CertificateService>();
+        services.AddScoped<PastoralNoteService>();
+        services.AddScoped<ConcernService>();
+        services.AddScoped<IncidentService>();
+        services.AddScoped<CommunicationsService>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<InboxService>();
+        services.AddScoped<GivingService>();
+        services.AddScoped<ExpenseService>();
+        services.AddScoped<BankReconciliationService>();
+        services.AddScoped<OfficeLedgerService>();
         services.AddScoped<PersonalWorkspaceService>();
         services.AddScoped<AccountProfileService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
@@ -94,9 +126,24 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MinistryMeetingService>();
         services.AddScoped<MinistryAttendanceService>();
         services.AddScoped<MinistryRsvpPrivacyService>();
+        services.AddScoped<MinistryFormationService>();
+        services.AddScoped<MinistryResourceService>();
+        services.AddScoped<MinistryVolunteerService>();
+        services.AddScoped<RegistrationService>();
         services.AddScoped<ReservationMeetingAccess>();
         services.AddScoped<CalendarService>();
+        services.AddScoped<ScheduleService>();
+        services.AddScoped<RentalService>();
+        services.AddScoped<WebsiteService>();
+        services.AddScoped<WorkOverviewService>();
+        services.AddScoped<CapabilityService>();
+        services.AddScoped<DocumentSheetService>();
+        services.AddScoped<EvidenceService>();
+        services.AddScoped<ServicePlanService>();
+        services.AddScoped<MusicLibraryService>();
         services.AddScoped<FacilityService>();
+        services.AddScoped<EquipmentService>();
+        services.AddScoped<FacilityIssueService>();
         services.AddScoped<ReservationService>();
         services.AddScoped<ReservationWorkAuthorization>();
         services.AddScoped<ReservationProcessor>();
@@ -150,6 +197,9 @@ public static class ServiceCollectionExtensions
             ? new LocalDocumentDatabase(StorageOptions.ResolveLocalPath(provider.GetRequiredService<StorageOptions>(), environment))
             : new CosmosDocumentDatabase(provider.GetRequiredService<CosmosClient>(), provider.GetRequiredService<IOptions<CosmosOptions>>().Value.Database));
         services.AddScoped(provider => new PartitionDocuments(provider.GetRequiredService<IDocumentDatabase>()));
+        services.AddSingleton<IEvidenceStore>(provider => IsLocal(provider.GetRequiredService<StorageOptions>())
+            ? new Data.Local.LocalEvidenceStore(StorageOptions.ResolveLocalPath(provider.GetRequiredService<StorageOptions>(), environment))
+            : new Data.Blob.BlobEvidenceStore(provider.GetRequiredService<BlobServiceClient>().GetBlobContainerClient(provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value.EvidenceContainer)));
         services.AddSingleton(provider => new BlobServiceClient(new Uri(provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value.ServiceUri), provider.GetRequiredService<TokenCredential>()));
         services.AddSingleton(provider =>
         {

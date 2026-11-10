@@ -51,6 +51,12 @@ public class CosmosIndexContractTests
     [InlineData("/data/joinedAt/?")]
     [InlineData("/data/personId/?")]
     [InlineData("/data/participantKind/?")]
+    [InlineData("/data/registrationId/?")]
+    [InlineData("/data/opportunityId/?")]
+    [InlineData("/data/householdId/?")]
+    [InlineData("/data/equipmentId/?")]
+    [InlineData("/data/requestId/?")]
+    [InlineData("/data/conversationId/?")]
     public void Missing_meeting_or_attendance_query_paths_are_rejected(string path)
     {
         var container = Explicit();

@@ -1,5 +1,5 @@
-// Purpose: represents submit hours input/output data.
-// Main members: OperationId, EventId, StartsAt, EndsAt, BreakMinutes, EvidenceReference, PersonId.
+// Purpose: submits actual volunteer hours for one assignment.
+// Main members: OperationId, StartsAt, EndsAt, BreakMinutes and EvidenceReference.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -10,18 +10,14 @@ public class SubmitHoursDto
 {
     [NotEmptyGuid]
     public Guid OperationId { get; set; }
-    [NotEmptyGuid]
-    public Guid EventId { get; set; }
 
     public DateTimeOffset StartsAt { get; set; }
 
     public DateTimeOffset EndsAt { get; set; }
 
+    [Range(0, 1440)]
     public int BreakMinutes { get; set; }
 
-    [Required]
-    [StringLength(500)]
-    public string EvidenceReference { get; set; } = string.Empty;
-    [NotEmptyGuid]
-    public Guid? PersonId { get; set; } = null;
+    [StringLength(1000)]
+    public string? EvidenceReference { get; set; } = null;
 }

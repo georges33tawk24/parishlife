@@ -80,3 +80,28 @@ Only the explicit initializer's no-Azure preview was run. No policy was applied,
 Tests cover actual local Identity/services/storage, cookie/MFA/CSRF HTTP, separate editing/publication rights, source forgery and legacy exclusion, private reasons/redaction, recurrence/DST rollback, conflicting concurrent bookings, buffers/exclusion pairs, partial compensation, delayed-hold tombstones, stale rollback, role/MFA/security-stamp withdrawal, service failure/lease resumption, protected facility changes and actual hosted-runner completion. These are isolated tests without church seeds or production access.
 
 The full backend remains unfinished. Clergy/personal availability and cross-parish duties, official source amendments, recurrence templates/exceptions/forward edits, ministry audiences, public-profile gates/feeds, deposits/rental terms acceptance/payments, equipment stock, work orders, acknowledgments and actual notifications remain tracked. The preserved service-plan/music code was separated into `ActivityPlanningService` for its later reviewed integration, rather than exposed as an accepted feature.
+
+## Personal and priest schedules (K04)
+
+Source basis: S16.08, S16.10 (proposed). Periods are up to 92 days.
+
+- `GET /api/me/schedule?from=&to=` lists, for each followed parish where the account is linked to a person, that person's event registrations (not cancelled or draft), confirmed or awaiting volunteer shifts and scheduled sacraments, each labelled with its parish.
+- `GET /api/parishes/{parish}/clergy/schedule?from=&to=` (priest acting appointment, MFA) lists only the priest's own duties: scheduled sacraments where they are the celebrant and assigned requests with a confirmed date. No private notes or case details are included.
+- Add `format=ics` to either for a one-off iCalendar download in UTC; items with a parish time zone note it. Revocable subscription feeds are not offered until operational.
+
+Not implemented: print layouts in EN/FR/AR, filters by event type, revocable subscription feeds, public/member redacted calendar exports and clergy duties on calendar events (events carry no clergy assignments yet).
+
+## External renters and rental agreements (F07)
+
+Source basis: S23.09–S23.10, S23.15 (proposed). Routes under `/api/parishes/{parish}` need current MFA and the facilities module.
+
+- `POST /renters` and `GET /renters` (facilities.manage) keep external renters (name, organization, responsible contact, verification reference) separate from parish membership. Public availability never shows them.
+- `PUT /reservations/{reservation}/rental` (facilities.manage) proposes the agreement's terms snapshot: renter, fee, deposit, currency and cancellation text. Later rate changes never alter an existing agreement, and once approved it cannot be re-proposed.
+- `POST /reservations/{reservation}/rental/actions` with the current version:
+  - `approve` (finance.approve, a different person from the proposer).
+  - `accept`, recording the renter's acceptance evidence.
+  - `deposit-received` and `fee-received` (finance.post), recording actual receipts with a reference and date, never beyond the agreed amounts.
+  - `refund-deposit`, `retain-deposit` and `waive-fee` (finance.approve), within what is held or outstanding and with a reason.
+- `GET /reservations/{reservation}/rental` shows the deposit state (NotRequired, Due, PartlyReceived, Held, Settled), the deposit held and the fee outstanding, all derived only from recorded payments. Nothing simulates an electronic payment.
+
+Not implemented: linking rental receipts into the Finance ledger and bank matching, rescheduling/cancellation fee rules, a renter-facing application and tracking page, insurance/permission evidence, renter-to-account association, and frontend.

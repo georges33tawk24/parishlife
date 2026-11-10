@@ -62,3 +62,16 @@ Automated tests use the actual backend, Identity, cookie/CSRF flows and isolated
 The code uses only the existing `TenantControl` container for this slice and creates no Azure resources. Local race tests do not prove Cosmos service behavior. Live query/indexing/transaction acceptance remains pending Azure authentication. Bishop authority is rechecked before a parish write; archdiocese authority and parish data occupy different partitions, so this is not a cross-partition atomic bishop-retirement protocol. That wider succession/handover process is unfinished.
 
 Remaining governance includes bishop succession/revocation and independently reviewed exceptional recovery, full official multilingual profiles, contested jurisdiction/claims, formal vacancy/acting/handover procedure, notifications/worklists/reminders, other staff roles and bounded delegated administration. Older unreviewed `clergyAppointment` documents are retained but do not automatically become accepted offices under this authority model. Review/migration must be explicit. Broad product features remain tracked in `docs/features/coverage.json`; this slice is not full backend completion or frontend integration.
+
+## Office coverage and handover (O04) — 10 November 2026
+
+Source basis: S01.03, S02.04, S02.08, S29.05. A parish may have no secretary or several: office duties come from direct access grants (any number) and from appointed priests' duties.
+
+- `GET /api/parishes/{parish}/office/coverage` (access.manage, MFA) lists every current direct-grant holder with office duties (people.write, requests.manage, registrations.manage, sacraments.record, communications.manage), their grant end and their open assigned requests and incidents. With no holder it says so; appointed priests and the owner carry on within their own access, and nothing is reassigned automatically.
+- Before revoking a departing secretary, `POST /api/parishes/{parish}/requests/handover` (access.manage, MFA) moves their open request cases to another account that currently holds requests.manage, up to 45 per run with a history entry per case; `Remaining` says whether to run it again. Revocation itself is unchanged (`POST /api/parishes/{parish}/grants/revoke` by the owner).
+
+## Parish suspension and closure (O05) — 10 November 2026
+
+Source basis: S02.11, S29.06. `POST /api/parishes/{parish}/status` (the bishop of the parish's jurisdiction, MFA, current parish version) with `suspend`, `reinstate` or `close` and a reason. Suspension stops ordinary parish operations at the next protected read or write, for direct grants, appointments and member routes alike, until reinstated; closure is final here. Every record, receipt and history entry stays. Each change is kept in `GET .../status/history` and leaves the parish owner a required notification.
+
+Not implemented: the last-secretary warning inside the revoke call itself, handover of incidents, registrations and drafts, team-lead designation for office staff, global account deactivation (operator-only today), protection of higher-authority suspensions from lower overrides beyond the bishop-only rule, and reopening a closed parish.

@@ -15,11 +15,16 @@ public static class Permissions
     public const string ScheduleRead = "schedule.read";
     public const string ScheduleManage = "schedule.manage";
     public const string SchedulePublish = "schedule.publish";
+    public const string MusicManage = "music.manage";
     public const string FacilitiesManage = "facilities.manage";
     public const string MinistriesManage = "ministries.manage";
     public const string MinistriesAttendanceRecord = "ministries.attendance.record";
     public const string MinistriesAttendanceReview = "ministries.attendance.review";
     public const string MinistriesRsvpPrivateRead = "ministries.rsvp.private.read";
+    public const string MinistriesFormationRecord = "ministries.formation.record";
+    public const string MinistriesFormationReview = "ministries.formation.review";
+    public const string MinistriesResourcesManage = "ministries.resources.manage";
+    public const string MinistriesVolunteersManage = "ministries.volunteers.manage";
     public const string RequestsManage = "requests.manage";
     public const string SacramentsRecord = "sacraments.record";
     public const string ClergyApprove = "clergy.approve";
@@ -38,6 +43,9 @@ public static class Permissions
     public const string SettingsManage = "settings.manage";
     public const string ImportsManage = "imports.manage";
     public const string ExportsManage = "exports.manage";
+    public const string IncidentsRecord = "incidents.record";
+    public const string IncidentsManage = "incidents.manage";
+    public const string PeopleMedicalManage = "people.medical.manage";
     public static readonly IReadOnlySet<string> SetupOwner = new HashSet<string>(StringComparer.Ordinal)
     {
         ParishManage,
@@ -81,11 +89,16 @@ public static class Permissions
         ScheduleRead,
         ScheduleManage,
         SchedulePublish,
+        MusicManage,
         FacilitiesManage,
         MinistriesManage,
         MinistriesAttendanceRecord,
         MinistriesAttendanceReview,
         MinistriesRsvpPrivateRead,
+        MinistriesFormationRecord,
+        MinistriesFormationReview,
+        MinistriesResourcesManage,
+        MinistriesVolunteersManage,
         RequestsManage,
         SacramentsRecord,
         ClergyApprove,
@@ -103,6 +116,9 @@ public static class Permissions
         AuditRead,
         SettingsManage,
         ImportsManage,
-        ExportsManage
+        ExportsManage,
+        IncidentsRecord,
+        IncidentsManage,
+        PeopleMedicalManage
     };
 }
