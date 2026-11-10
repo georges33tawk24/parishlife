@@ -1,5 +1,7 @@
 // Purpose: returns a certificate with its source snapshot, gates, release record and a plain statement of what the digital copy is.
-// Main members: Id, Reference, Version, ReplacesId, SubjectPersonId, Sacrament, SourceRecordId, RequestId, Language, Quantity, Purpose, Status, Snapshot, OfficialNumber, gate and release facts and CopyStatement.
+// Main members: identity/source/request, prepared snapshot, gate/release facts, CopyStatement and safe notification outcome.
+
+using ParishLife.Api.DTOs.Communications;
 
 namespace ParishLife.Api.DTOs.Sacraments;
 
@@ -64,4 +66,7 @@ public class CertificateDto
     public string? WithdrawalReason { get; set; } = null;
 
     public string CopyStatement { get; set; } = "Digital copy for reference only; the wet-signed and sealed paper issued by the parish is the official document.";
+
+    // Loaded only after certificate command/read authorization; list views leave this null.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

@@ -1,5 +1,5 @@
 // Purpose: represents event registration business state and rules.
-// Main members: Id, ParishId, EventId, PersonId, FormVersionId, Status, Transport, and related workflow details.
+// Main members: Id, ParishId, EventId, PersonId, FormVersionId, Status, Transport, arrangements and the latest tracked notification-work batch.
 
 namespace ParishLife.Api.Models;
 
@@ -51,4 +51,7 @@ public class EventRegistration
     public string Presence { get; set; } = "NotArrived";
 
     public DateTimeOffset? LastPresenceAt { get; set; } = null;
+
+    // Null means legacy/untracked; an empty list means the latest tracked transition required no account notice.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

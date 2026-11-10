@@ -2,12 +2,16 @@
 // Main members: Id, Reference, Kind, Summary, Details, PreferredDates, Origin, requester/subject/relationship facts, Status, StatusMeaning, decision facts, explanation, triage, checklist, links and dates.
 
 using ParishLife.Api.Models;
+using ParishLife.Api.DTOs.Communications;
 
 namespace ParishLife.Api.DTOs.Requests;
 
 public class ParishRequestDto
 {
     public string Id { get; set; } = string.Empty;
+
+    // Loaded on single-record reads and notifying commands; list/history projections leave it unloaded.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 
     public string Reference { get; set; } = string.Empty;
 

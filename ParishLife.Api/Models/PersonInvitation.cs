@@ -1,5 +1,5 @@
 // Purpose: represents an office-issued, single-use invitation that lets one account claim the link to one existing Person.
-// Main members: Id, ParishId, PersonId, TokenHash, Status, Delivery, CreatedBy, CreatedAt, ExpiresAt, UsedByAccountId, UsedAt and ReviewReason.
+// Main members: Id, ParishId, PersonId, TokenHash, Status, Delivery, CreatedBy, dates, UsedByAccountId, ReviewReason and latest notification-work pointers.
 
 namespace ParishLife.Api.Models;
 
@@ -30,4 +30,7 @@ public class PersonInvitation
     public DateTimeOffset? UsedAt { get; set; }
 
     public string? ReviewReason { get; set; }
+
+    // Internal source linkage only; token previews and claim responses never expose these pointers.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

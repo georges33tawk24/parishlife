@@ -1,11 +1,13 @@
 // Purpose: returns a conversation with the caller's own unread and archive state.
-// Main members: Id, Kind, Subject, ParticipantAccountIds, LastMessageAt, Unread and Archived.
+// Main members: Id, Kind, Subject, ParticipantAccountIds, LastMessageAt, Unread, Archived and optionally loaded NotificationOutcome.
 
 namespace ParishLife.Api.DTOs.Communications;
 
 public class ConversationDto
 {
     public string Id { get; set; } = string.Empty;
+
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 

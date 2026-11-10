@@ -3,23 +3,26 @@
 // ConfigureAsync, PolicyAsync, FormAsync, PolicyActionAsync, ReviseFormAsync, RegisterAsync, RegisterOwnAsync, OwnAsync,
 // CancelOwnAsync, GetAsync, Registration, ListAsync, ActAsync, AmendAsync, Optional, ValidateCollectors, ValidateEligibility,
 // ReceiptAsync, RequestRefundAsync, RefundActionAsync, MovementsAsync, RefundsAsync, Door, DoorListAsync, DoorRegistrationAsync,
-// CashierListAsync, CashierRegistrationAsync, ApplicantFormAsync, PresenceAsync, PresentAsync and the response projections.
+// CashierListAsync, CashierRegistrationAsync, ApplicantFormAsync, PresenceAsync, PresentAsync and authorized notification-outcome projections.
+// Decision notices are committed with the registration only for a proven self-applicant; office recorders never become guessed recipients.
 // Every staff path requires current MFA, and registration changes fence the parish root and the event policy,
 // so concurrent seat allocation and stale authority fail instead of committing.
 
 using ParishLife.Api.DTOs.Registrations;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Communications;
 using ParishLife.Api.Services.Ministries;
 
 namespace ParishLife.Api.Services.Registrations;
 
 public sealed class RegistrationService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, IAccountDirectory accounts,
-    MfaAccountAccess proof, MinistryAccess own, TimeProvider clock)
+    MfaAccountAccess proof, MinistryAccess own, NotificationService notifications, NotificationOutcomeReader outcomes, TimeProvider clock)
 {
     private static RecordScope Scope(string parish) => new RecordScope
     {
@@ -223,7 +226,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var root = await Authorize(parish, Permissions.RegistrationsManage, ct);
         var op = Op(request.OperationId, request, "registration:" + eventId);
         if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is { } replay)
-            return replay;
+            return (await Registration(parish, eventId, replay.Id, ct)).Value;
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
         RequireEligibleEvent(occurrence.Value);
@@ -259,7 +262,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             Received = 0,
             Refunded = 0,
             CreatedAt = op.At,
-            CreatedBy = actor.AccountId
+            CreatedBy = actor.AccountId,
+            NotificationWorkIds = []
         };
         return await records.CommitAsync(Scope(parish), op, "registration.submit", id, [Fence(root), RecordChange.Create(RowKey(id), "registration", item), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], item, ct);
     }
@@ -288,8 +292,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
     {
         var root = await Authorize(parish, Permissions.RegistrationsManage, ct);
         var op = Op(request.OperationId, request, "registration-action:" + id);
-        if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is { } replay)
-            return replay;
+        if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is not null)
+            return (await Registration(parish, eventId, id, ct)).Value;
         var row = await Registration(parish, eventId, id, ct);
         var item = row.Value;
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
@@ -320,7 +324,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 Received = item.Received,
                 Refunded = item.Refunded,
                 CreatedAt = item.CreatedAt,
-                CreatedBy = item.CreatedBy,
+                CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                 OfferUntil = null,
                 Presence = item.Presence,
                 LastPresenceAt = item.LastPresenceAt
@@ -358,7 +362,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                     Received = item.Received,
                     Refunded = item.Refunded,
                     CreatedAt = item.CreatedAt,
-                    CreatedBy = item.CreatedBy,
+                    CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                     OfferUntil = null,
                     Presence = "NotArrived",
                     LastPresenceAt = item.LastPresenceAt
@@ -392,7 +396,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                         Received = item.Received,
                         Refunded = item.Refunded,
                         CreatedAt = item.CreatedAt,
-                        CreatedBy = item.CreatedBy,
+                        CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                         OfferUntil = null,
                         Presence = item.Presence,
                         LastPresenceAt = item.LastPresenceAt
@@ -408,7 +412,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                                 throw Invalid("Review the earlier waiting participant first.");
                     }
 
-                    if (request.Action != "confirm" && (request.OfferUntil is null || Guard.Utc(request.OfferUntil.Value) <= clock.GetUtcNow() || request.OfferUntil > occurrence.Value.StartsAt))
+                    if (request.Action != "confirm" && (request.OfferUntil is null || Guard.Utc(request.OfferUntil.Value) <= clock.GetUtcNow() || request.OfferUntil >= occurrence.Value.StartsAt))
                         throw new DomainException("offer_deadline_required", "Set an explicit future offer deadline before the event.");
                     item = new EventRegistration
                     {
@@ -431,7 +435,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                         Received = item.Received,
                         Refunded = item.Refunded,
                         CreatedAt = item.CreatedAt,
-                        CreatedBy = item.CreatedBy,
+                        CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                         OfferUntil = request.Action == "confirm" ? null : request.OfferUntil,
                         Presence = item.Presence,
                         LastPresenceAt = item.LastPresenceAt
@@ -445,16 +449,49 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         }
 
         changes.Add(RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version));
+        var recipient = await StageApplicantNoticeAsync(parish, item, op, changes, ct);
         changes.Add(RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)));
-        return await records.CommitAsync(Scope(parish), op, "registration." + request.Action, id, changes, item, ct, request.Reason);
+        var committed = await records.CommitAsync(Scope(parish), op, "registration." + request.Action, id, changes, item, ct, request.Reason);
+        if (recipient is not null)
+            await notifications.DispatchAsync(parish, recipient, "registration:" + op.Id, ct);
+        return committed;
+    }
+
+    private async Task<string?> StageApplicantNoticeAsync(string parish, EventRegistration item, Operation op, List<RecordChange> changes, CancellationToken ct)
+    {
+        item.NotificationWorkIds = [];
+        if (item.Origin != "Self" || !Guid.TryParse(item.CreatedBy, out var account) || account == Guid.Empty)
+            return null;
+        var applicant = Guard.Id(account);
+        var linkKey = "personAccountLink:" + applicant;
+        var claimKey = "personAccountClaim:" + item.PersonId;
+        var link = await records.ReadAsync<PersonAccountLink>(Scope(parish), linkKey, ct);
+        var claim = await records.ReadAsync<CommandResult>(Scope(parish), claimKey, ct);
+        var person = await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct);
+        if (link?.Value.Active != true || link.Value.AccountId != applicant || link.Value.ParishId != parish || link.Value.PersonId != item.PersonId
+            || claim?.Value.Id != applicant || claim.Value.Status != "Linked" || person?.Value.Archived != false || person.Value.Id != item.PersonId || person.Value.ParishId != parish)
+            return null;
+        changes.Add(RecordChange.Replace(linkKey, "personAccountLink", link.Value, link.Version));
+        changes.Add(RecordChange.Replace(claimKey, "personAccountClaim", claim.Value, claim.Version));
+        if (!changes.Any(change => change.Id == "person:" + item.PersonId))
+            changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
+        var title = item.Status == "Reserved"
+            ? "There is an update to your event registration. Review its response deadline."
+            : "There is an update to your event registration.";
+        var notice = notifications.StageRequired(parish, applicant, "registration.update", title,
+            "/api/parishes/" + parish + "/calendar/events/" + item.EventId + "/registrations/mine",
+            "registration:" + op.Id, "RegistrationApplicant", item.Id, op.At);
+        changes.Add(notice);
+        item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+        return applicant;
     }
 
     public async Task<EventRegistration> AmendAsync(string parish, string eventId, string id, AmendParticipantDto request, CancellationToken ct)
     {
         var root = await Authorize(parish, Permissions.RegistrationsManage, ct);
         var op = Op(request.OperationId, request, "registration-amend:" + id);
-        if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is { } replay)
-            return replay;
+        if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is not null)
+            return (await Registration(parish, eventId, id, ct)).Value;
         var row = await Registration(parish, eventId, id, ct);
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
@@ -489,7 +526,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             Received = row.Value.Received,
             Refunded = row.Value.Refunded,
             CreatedAt = row.Value.CreatedAt,
-            CreatedBy = row.Value.CreatedBy,
+            CreatedBy = row.Value.CreatedBy, NotificationWorkIds = row.Value.NotificationWorkIds,
             OfferUntil = row.Value.OfferUntil,
             Presence = row.Value.Presence,
             LastPresenceAt = row.Value.LastPresenceAt
@@ -560,7 +597,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             RecordedBy = actor.AccountId,
             ApprovedBy = null
         };
-        return await records.CommitAsync(Scope(parish), op, "registration.cash_received", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", new EventRegistration { Id = item.Id, Origin = item.Origin, ParishId = item.ParishId, EventId = item.EventId, PersonId = item.PersonId, FormVersionId = item.FormVersionId, Status = item.Status, Transport = item.Transport, Answers = item.Answers, ConsentEvidence = item.ConsentEvidence, GuardianAuthorityEvidence = item.GuardianAuthorityEvidence, Collectors = item.Collectors, IndependentDeparture = item.IndependentDeparture, Fee = item.Fee, Currency = item.Currency, Precision = item.Precision, Received = item.Received + request.Amount, Refunded = item.Refunded, CreatedAt = item.CreatedAt, CreatedBy = item.CreatedBy, OfferUntil = item.OfferUntil, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt }, Versions.Require(request.Version)), RecordChange.Create("registrationMovement:" + op.Id, "registrationMovement", receipt)], receipt, ct);
+        return await records.CommitAsync(Scope(parish), op, "registration.cash_received", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", new EventRegistration { Id = item.Id, Origin = item.Origin, ParishId = item.ParishId, EventId = item.EventId, PersonId = item.PersonId, FormVersionId = item.FormVersionId, Status = item.Status, Transport = item.Transport, Answers = item.Answers, ConsentEvidence = item.ConsentEvidence, GuardianAuthorityEvidence = item.GuardianAuthorityEvidence, Collectors = item.Collectors, IndependentDeparture = item.IndependentDeparture, Fee = item.Fee, Currency = item.Currency, Precision = item.Precision, Received = item.Received + request.Amount, Refunded = item.Refunded, CreatedAt = item.CreatedAt, CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds, OfferUntil = item.OfferUntil, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt }, Versions.Require(request.Version)), RecordChange.Create("registrationMovement:" + op.Id, "registrationMovement", receipt)], receipt, ct);
     }
 
     public async Task<RegistrationRefund> RequestRefundAsync(string parish, string eventId, string id, RequestEventRefundDto request, CancellationToken ct)
@@ -660,7 +697,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         }
         else
             throw new DomainException("invalid_refund_action", "Use approve, reject or record.");
-        changes.Add(RecordChange.Replace(RowKey(id), "registration", request.Action == "record" ? new EventRegistration { Id = registration.Value.Id, Origin = registration.Value.Origin, ParishId = registration.Value.ParishId, EventId = registration.Value.EventId, PersonId = registration.Value.PersonId, FormVersionId = registration.Value.FormVersionId, Status = registration.Value.Status, Transport = registration.Value.Transport, Answers = registration.Value.Answers, ConsentEvidence = registration.Value.ConsentEvidence, GuardianAuthorityEvidence = registration.Value.GuardianAuthorityEvidence, Collectors = registration.Value.Collectors, IndependentDeparture = registration.Value.IndependentDeparture, Fee = registration.Value.Fee, Currency = registration.Value.Currency, Precision = registration.Value.Precision, Received = registration.Value.Received, Refunded = registration.Value.Refunded + item.Amount, CreatedAt = registration.Value.CreatedAt, CreatedBy = registration.Value.CreatedBy, OfferUntil = registration.Value.OfferUntil, Presence = registration.Value.Presence, LastPresenceAt = registration.Value.LastPresenceAt } : registration.Value, registration.Version));
+        changes.Add(RecordChange.Replace(RowKey(id), "registration", request.Action == "record" ? new EventRegistration { Id = registration.Value.Id, Origin = registration.Value.Origin, ParishId = registration.Value.ParishId, EventId = registration.Value.EventId, PersonId = registration.Value.PersonId, FormVersionId = registration.Value.FormVersionId, Status = registration.Value.Status, Transport = registration.Value.Transport, Answers = registration.Value.Answers, ConsentEvidence = registration.Value.ConsentEvidence, GuardianAuthorityEvidence = registration.Value.GuardianAuthorityEvidence, Collectors = registration.Value.Collectors, IndependentDeparture = registration.Value.IndependentDeparture, Fee = registration.Value.Fee, Currency = registration.Value.Currency, Precision = registration.Value.Precision, Received = registration.Value.Received, Refunded = registration.Value.Refunded + item.Amount, CreatedAt = registration.Value.CreatedAt, CreatedBy = registration.Value.CreatedBy, NotificationWorkIds = registration.Value.NotificationWorkIds, OfferUntil = registration.Value.OfferUntil, Presence = registration.Value.Presence, LastPresenceAt = registration.Value.LastPresenceAt } : registration.Value, registration.Version));
         changes.Add(RecordChange.Replace("registrationRefund:" + refundId, "registrationRefund", item, Versions.Require(request.Version)));
         return await records.CommitAsync(Scope(parish), op, "registration.refund_" + request.Action, id, changes, item, ct, request.Reason);
     }
@@ -794,7 +831,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 Received = item.Received,
                 Refunded = item.Refunded,
                 CreatedAt = item.CreatedAt,
-                CreatedBy = item.CreatedBy,
+                CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                 OfferUntil = item.OfferUntil,
                 Presence = "Present",
                 LastPresenceAt = request.OccurredAt
@@ -829,7 +866,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 Received = item.Received,
                 Refunded = item.Refunded,
                 CreatedAt = item.CreatedAt,
-                CreatedBy = item.CreatedBy,
+                CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds,
                 OfferUntil = item.OfferUntil,
                 Presence = "Departed",
                 LastPresenceAt = request.OccurredAt
@@ -900,7 +937,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var root = await own.RootAsync(parish, ct);
         var op = Op(request.OperationId, request, "registration-own:" + eventId);
         if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is { } replay)
-            return ToDto(replay, clock.GetUtcNow(), false);
+            return await ProjectAsync((await Registration(parish, eventId, replay.Id, ct)).Value, false, ct);
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
         RequireEligibleEvent(occurrence.Value);
@@ -922,13 +959,13 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             Id = id, ParishId = parish, EventId = eventId, PersonId = person.Value.Id, Origin = "Self", FormVersionId = form.Id,
             Status = "Submitted", Transport = request.Transport, Answers = request.Answers, ConsentEvidence = Optional(request.ConsentEvidence),
             Collectors = [], Fee = policy.Value.Fee, Currency = policy.Value.Currency, Precision = policy.Value.Precision,
-            CreatedAt = op.At, CreatedBy = actor.AccountId
+            CreatedAt = op.At, CreatedBy = actor.AccountId, NotificationWorkIds = []
         };
         var result = await records.CommitAsync(Scope(parish), op, "registration.submit_own", id,
             [Fence(root), RecordChange.Create(RowKey(id), "registration", item), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version),
              RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)],
             item, ct);
-        return ToDto(result, clock.GetUtcNow(), false);
+        return await ProjectAsync(result, false, ct);
     }
 
     public async Task<Versioned<EventRegistrationDto>> OwnAsync(string parish, string eventId, CancellationToken ct)
@@ -937,7 +974,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var row = await records.ReadAsync<EventRegistration>(Scope(parish), RowKey(RegistrationId(eventId, link.Value.PersonId)), ct);
         if (row is null || row.Value.EventId != eventId || row.Value.PersonId != link.Value.PersonId)
             throw new DomainException("registration_resource_unavailable", "The requested registration is unavailable.", FailureKind.NotFound);
-        return new Versioned<EventRegistrationDto> { Version = row.Version, Value = ToDto(row.Value, clock.GetUtcNow(), false) };
+        return new Versioned<EventRegistrationDto> { Version = row.Version, Value = await ProjectAsync(row.Value, false, ct) };
     }
 
     public async Task<EventRegistrationDto> CancelOwnAsync(string parish, string eventId, CancelOwnRegistrationDto request, CancellationToken ct)
@@ -946,7 +983,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var root = await own.RootAsync(parish, ct);
         var op = Op(request.OperationId, request, "registration-own-cancel:" + eventId);
         if (await records.ReplayAsync<EventRegistration>(Scope(parish), op, ct) is { } replay)
-            return ToDto(replay, clock.GetUtcNow(), false);
+            return await ProjectAsync((await Registration(parish, eventId, replay.Id, ct)).Value, false, ct);
         var id = RegistrationId(eventId, link.Value.PersonId);
         var row = await Registration(parish, eventId, id, ct);
         if (row.Value.PersonId != link.Value.PersonId)
@@ -958,14 +995,35 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var item = row.Value;
         item.Status = "Cancelled";
         item.OfferUntil = null;
+        var changes = new List<RecordChange> { Fence(root) };
+        var recipient = await StageApplicantNoticeAsync(parish, item, op, changes, ct);
+        changes.Add(RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)));
+        changes.Add(RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version));
         // Cancelling never returns money; a refund is a separate reviewed finance request.
         var result = await records.CommitAsync(Scope(parish), op, "registration.cancel_own", id,
-            [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)),
-             RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version)], item, ct);
-        return ToDto(result, clock.GetUtcNow(), false);
+            changes, item, ct);
+        if (recipient is not null)
+            await notifications.DispatchAsync(parish, recipient, "registration:" + op.Id, ct);
+        return await ProjectAsync(result, false, ct);
     }
 
     internal EventRegistrationDto StaffView(EventRegistration item) => ToDto(item, clock.GetUtcNow(), true);
+
+    internal Task<EventRegistrationDto> StaffViewAsync(EventRegistration item, CancellationToken ct) => ProjectAsync(item, true, ct);
+
+    private async Task<EventRegistrationDto> ProjectAsync(EventRegistration item, bool staff, CancellationToken ct)
+    {
+        var result = ToDto(item, clock.GetUtcNow(), staff);
+        result.NotificationOutcome = await outcomes.ReadAsync(item.ParishId, item.NotificationWorkIds, ct);
+        return result;
+    }
+
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string eventId, string id, CancellationToken ct)
+    {
+        await Authorize(parish, Permissions.RegistrationsManage, ct);
+        var row = await Registration(parish, eventId, id, ct);
+        return await outcomes.ReadAsync(parish, row.Value.NotificationWorkIds, ct);
+    }
 
     internal static RegistrationPolicyDto ToDto(RegistrationPolicy x) => new()
     {

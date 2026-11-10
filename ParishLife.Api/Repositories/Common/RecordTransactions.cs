@@ -1,4 +1,4 @@
-// Purpose: RecordTransactions implements the common responsibility in the ParishLife backend.
+// Purpose: provides conditional scoped documents and durable receipts using existing configured containers; global platform control uses Catalog.
 // Main functions: ReadAsync, ReplayAsync, ScanWorkAsync, PageAsync, CommitAsync, BadCursor.
 
 using System.Security.Cryptography;
@@ -30,7 +30,7 @@ internal sealed class RecordTransactions(PartitionDocuments documents, IDataProt
             RecordArea.PrivateCase => ("RestrictedCases", "case:" + scope.OwnerId),
             RecordArea.Account => (Containers.Accounts, "account:" + scope.OwnerId),
             RecordArea.Public => ("Publishing", "public:" + scope.OwnerId),
-            RecordArea.Platform => ("Platform", "platform:" + scope.OwnerId),
+            RecordArea.Platform => (Containers.Catalog, "platform:" + scope.OwnerId),
             _ => throw new InvalidOperationException("Unsupported transaction scope.")
         };
     }

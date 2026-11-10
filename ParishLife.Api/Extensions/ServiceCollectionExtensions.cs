@@ -31,6 +31,7 @@ using ParishLife.Api.Repositories.Organizations;
 using ParishLife.Api.Repositories.People;
 using ParishLife.Api.Repositories.Scheduling;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Administration;
 using ParishLife.Api.Services.Billing;
 using ParishLife.Api.Services.Ministries;
 using ParishLife.Api.Services.Files;
@@ -111,6 +112,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationService>();
         services.AddScoped<NotificationAudience>();
         services.AddScoped<NotificationProcessor>();
+        services.AddScoped<NotificationOutcomeReader>();
         services.AddScoped<InboxService>();
         services.AddScoped<GivingService>();
         services.AddScoped<ExpenseService>();
@@ -137,6 +139,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ScheduleService>();
         services.AddScoped<RentalService>();
         services.AddScoped<WebsiteService>();
+        services.AddScoped<ParishCrmService>();
         services.AddScoped<WorkOverviewService>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();

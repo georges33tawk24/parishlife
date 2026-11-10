@@ -1,11 +1,13 @@
 // Purpose: represents one request case from intake to closure, with separate requester, subject, relationship and authority facts.
-// Main members: Id, Reference, ParishId, Kind, Summary, Details, PreferredDates, Origin, requester/subject/authority facts, Status, distinct decision facts, triage, checklist, links and audit facts.
+// Main members: Id, Reference, ParishId, Kind, Summary, Details, PreferredDates, Origin, requester/subject/authority facts, Status, decision facts, triage, checklist, links and the latest tracked notice pointers.
 
 namespace ParishLife.Api.Models;
 
 public class ParishRequest
 {
     public string Id { get; set; } = string.Empty;
+
+    public List<string>? NotificationWorkIds { get; set; } = null;
 
     // Stable applicant-facing reference.
     public string Reference { get; set; } = string.Empty;

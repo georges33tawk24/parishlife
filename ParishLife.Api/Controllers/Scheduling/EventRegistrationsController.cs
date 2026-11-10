@@ -1,12 +1,13 @@
 // Purpose: exposes event registration policy/forms, office and own registrations, money movements, refunds and door presence over HTTP.
 // Main functions: Configure, Policy, PolicyAction, ReviseForm, Form, ApplicantForm, Register, List, Get, Act, Amend, Mine, RegisterOwn,
 // CancelOwn, DoorList, DoorRegistration, CashierList, CashierRegistration, Receipt, Movements, RequestRefund, Refunds, RefundAction,
-// Presence and Present; the service enforces authority, versioned applicant consent/form context and transitions,
+// Presence, Present and authorized NotificationOutcome; the service enforces authority, versioned applicant consent/form context and transitions,
 // and this controller maps stored records to response DTOs.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.Registrations;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Registrations;
 
@@ -44,7 +45,7 @@ public class EventRegistrationsController(RegistrationService service) : Control
 
     [HttpPost("registrations")]
     public async Task<ActionResult<EventRegistrationDto>> Register(Guid parishId, Guid eventId, RegisterParticipantDto request, CancellationToken ct)
-        => Ok(service.StaffView(await service.RegisterAsync(Guard.Id(parishId), Guard.Id(eventId), request, ct)));
+        => Ok(await service.StaffViewAsync(await service.RegisterAsync(Guard.Id(parishId), Guard.Id(eventId), request, ct), ct));
 
     [HttpGet("registrations")]
     public async Task<ActionResult<Page<Versioned<EventRegistrationDto>>>> List(Guid parishId, Guid eventId, CancellationToken ct, int size = 25, string? cursor = null)
@@ -77,6 +78,10 @@ public class EventRegistrationsController(RegistrationService service) : Control
     public async Task<ActionResult<Versioned<EventRegistrationDto>>> Mine(Guid parishId, Guid eventId, CancellationToken ct)
         => Ok(await service.OwnAsync(Guard.Id(parishId), Guard.Id(eventId), ct));
 
+    [HttpGet("registrations/mine/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> OwnNotificationOutcome(Guid parishId, Guid eventId, CancellationToken ct)
+        => Ok((await service.OwnAsync(Guard.Id(parishId), Guard.Id(eventId), ct)).Value.NotificationOutcome);
+
     [HttpPost("registrations/mine")]
     public async Task<ActionResult<EventRegistrationDto>> RegisterOwn(Guid parishId, Guid eventId, RegisterOwnDto request, CancellationToken ct)
         => Ok(await service.RegisterOwnAsync(Guard.Id(parishId), Guard.Id(eventId), request, ct));
@@ -89,16 +94,20 @@ public class EventRegistrationsController(RegistrationService service) : Control
     public async Task<ActionResult<Versioned<EventRegistrationDto>>> Get(Guid parishId, Guid eventId, Guid registrationId, CancellationToken ct)
     {
         var row = await service.GetAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), ct);
-        return Ok(new Versioned<EventRegistrationDto> { Version = row.Version, Value = service.StaffView(row.Value) });
+        return Ok(new Versioned<EventRegistrationDto> { Version = row.Version, Value = await service.StaffViewAsync(row.Value, ct) });
     }
+
+    [HttpGet("registrations/{registrationId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid eventId, Guid registrationId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), ct));
 
     [HttpPost("registrations/{registrationId:guid}/actions")]
     public async Task<ActionResult<EventRegistrationDto>> Act(Guid parishId, Guid eventId, Guid registrationId, RegistrationActionDto request, CancellationToken ct)
-        => Ok(service.StaffView(await service.ActAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), request, ct)));
+        => Ok(await service.StaffViewAsync(await service.ActAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), request, ct), ct));
 
     [HttpPost("registrations/{registrationId:guid}/amend")]
     public async Task<ActionResult<EventRegistrationDto>> Amend(Guid parishId, Guid eventId, Guid registrationId, AmendParticipantDto request, CancellationToken ct)
-        => Ok(service.StaffView(await service.AmendAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), request, ct)));
+        => Ok(await service.StaffViewAsync(await service.AmendAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), request, ct), ct));
 
     [HttpPost("registrations/{registrationId:guid}/receipts")]
     public async Task<ActionResult<RegistrationMovementDto>> Receipt(Guid parishId, Guid eventId, Guid registrationId, RecordEventReceiptDto request, CancellationToken ct)

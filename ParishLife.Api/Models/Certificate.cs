@@ -1,5 +1,5 @@
 // Purpose: represents one certificate/extract from a registered sacramental entry through preparation, priest signing, optional bishop acceptance, issue and release.
-// Main members: Id, ParishId, Reference, Version, ReplacesId, PersonId, Kind, SourceRecordId, RequestId, Language, Quantity, Purpose, Status, snapshot and gate/release facts.
+// Main members: identity/source/request, issued snapshot, signature/release gates and the latest tracked required-notification batch.
 
 namespace ParishLife.Api.Models;
 
@@ -79,4 +79,7 @@ public class Certificate
     public string CreatedBy { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    // Null preserves legacy uncertainty; an empty list records that no validated account notice was required for the tracked transition.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

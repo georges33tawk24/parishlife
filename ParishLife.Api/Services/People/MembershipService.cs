@@ -1,11 +1,13 @@
 // Purpose: handles following and primary-parish preferences, office-reviewed membership requests that end in a verified person link,
 // and members' field-by-field corrections to their own official Person record.
 // Main functions: FollowAsync, UnfollowAsync, SetPrimaryAsync, MyParishesAsync, RequestAsync, WithdrawRequestAsync, DecideAsync,
-// OwnRequestsAsync, QueueAsync, ProposeCorrectionAsync, WithdrawCorrectionAsync, ReviewCorrectionAsync and CorrectionsAsync.
+// OwnRequestsAsync, QueueAsync, ProposeCorrectionAsync, WithdrawCorrectionAsync, ReviewCorrectionAsync, CorrectionsAsync,
+// MembershipNotificationOutcomeAsync and CorrectionNotificationOutcomeAsync expose source-authorized partial outcomes without recipient details.
 // Required membership/correction notices are staged in their final source transactions and dispatched after commit.
 
 using ParishLife.Api.DTOs.Ministries;
 using ParishLife.Api.DTOs.People;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -19,7 +21,8 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.People;
 
 public class MembershipService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, MinistryAccess own,
-    MinistryPersonLinkService links, PeopleService people, NotificationService notifications, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
+    MinistryPersonLinkService links, PeopleService people, NotificationService notifications, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock,
+    NotificationOutcomeReader notificationOutcomes)
 {
     private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordScope Account(string account) => new() { Area = RecordArea.Account, OwnerId = account };
@@ -92,7 +95,7 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         await own.RootAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "membership-request:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is { } prior)
-            return Project((await ReadRequestAsync(parish, prior.Id, ct)).Value, false);
+            return await ProjectOutcomeAsync(parish, (await ReadRequestAsync(parish, prior.Id, ct)).Value, false, ct);
         if ((await records.ReadAsync<PersonAccountLink>(Parish(parish), "personAccountLink:" + actor.AccountId, ct))?.Value.Active == true)
             throw State("Your account is already linked to a member record in this parish.");
         if ((await OwnRowsAsync(parish, ct)).Any(r => r.Status is "Submitted" or "NeedsInformation"))
@@ -103,12 +106,13 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
             FamilyName = Guard.Text(request.FamilyName, "Family name", 100), BirthDate = request.BirthDate,
             Contact = string.IsNullOrWhiteSpace(request.Contact) ? null : Guard.Text(request.Contact, "Contact", 300),
             Locality = string.IsNullOrWhiteSpace(request.Locality) ? null : Guard.Text(request.Locality, "Locality", 200),
-            Note = string.IsNullOrWhiteSpace(request.Note) ? null : Guard.Text(request.Note, "Note", 1000), SubmittedAt = op.At
+            Note = string.IsNullOrWhiteSpace(request.Note) ? null : Guard.Text(request.Note, "Note", 1000), SubmittedAt = op.At,
+            NotificationWorkIds = []
         };
         await records.CommitAsync(Parish(parish), op, "membership.request", item.Id, [RecordChange.Create("membershipRequest:" + item.Id, "membershipRequest", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         await WriteFollowAsync(actor.AccountId, parish, ct);
-        return Project(item, false);
+        return await ProjectOutcomeAsync(parish, item, false, ct);
     }
 
     public async Task<MembershipRequestDto> WithdrawRequestAsync(string parish, string id, CancellationToken ct)
@@ -122,7 +126,7 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         row.Value.Status = "Withdrawn";
         await records.CommitAsync(Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock), "membership.withdraw", id,
             [RecordChange.Replace("membershipRequest:" + id, "membershipRequest", row.Value, row.Version)], new CommandResult { Id = id, Status = row.Value.Status }, ct);
-        return Project(row.Value, false);
+        return await ProjectOutcomeAsync(parish, row.Value, false, ct);
     }
 
     public async Task<MembershipRequestDto> DecideAsync(string parish, string id, MembershipDecisionDto request, CancellationToken ct)
@@ -184,14 +188,40 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         item.DecidedBy = actor.AccountId;
         item.DecidedAt = clock.GetUtcNow();
         var root = await parishes.GetAsync(parish, ct) ?? throw Missing();
+        var notice = notifications.StageRequired(parish, item.ApplicantAccountId, "membership.decision", "Your parish membership request has an update.",
+            "/api/parishes/" + parish + "/membership-requests/mine", "membership:" + id + ":" + row.Version, "MembershipApplicant", id, item.DecidedAt.Value);
+        item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
         await records.CommitAsync(Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id, request.Action }, clock, null, actor.ActingAppointmentId),
             "membership." + request.Action.Replace('-', '_'), id,
-            [Fence(root), RecordChange.Replace("membershipRequest:" + id, "membershipRequest", item, row.Version),
-             notifications.StageRequired(parish, item.ApplicantAccountId, "membership.decision", "Your parish membership request has an update.",
-                 "/api/parishes/" + parish + "/membership-requests/mine", "membership:" + id + ":" + row.Version, "MembershipApplicant", id, item.DecidedAt.Value)],
+            [Fence(root), RecordChange.Replace("membershipRequest:" + id, "membershipRequest", item, row.Version), notice],
             new CommandResult { Id = id, Status = item.Status }, ct);
         await notifications.DispatchAsync(parish, item.ApplicantAccountId, "membership:" + id + ":" + row.Version, ct);
-        return Project(item, true);
+        return await ProjectOutcomeAsync(parish, item, true, ct);
+    }
+
+    public async Task<NotificationOutcomeDto> MembershipNotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        var item = (await ReadRequestAsync(parish, id, ct)).Value;
+        await RequireOutcomeReaderAsync(parish, item.ApplicantAccountId, ct);
+        return await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+    }
+
+    public async Task<NotificationOutcomeDto> CorrectionNotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        var item = (await ReadCorrectionAsync(parish, id, ct)).Value;
+        await RequireOutcomeReaderAsync(parish, item.ApplicantAccountId, ct);
+        return await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+    }
+
+    private async Task RequireOutcomeReaderAsync(string parish, string applicant, CancellationToken ct)
+    {
+        if (actor.AccountId == applicant && actor.ActingAppointmentId is null)
+        {
+            await own.PersonalAsync(ct);
+            return;
+        }
+        try { await OfficeAsync(parish, ct); }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { throw Missing(); }
     }
 
     public async Task<IReadOnlyList<MembershipRequestDto>> OwnRequestsAsync(string parish, CancellationToken ct)
@@ -212,7 +242,7 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         var link = await own.OwnLinkAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "profile-correction:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is { } prior)
-            return Project((await ReadCorrectionAsync(parish, prior.Id, ct)).Value);
+            return await ProjectOutcomeAsync(parish, (await ReadCorrectionAsync(parish, prior.Id, ct)).Value, ct);
         if ((await records.CollectAsync<ProfileCorrection>(Parish(parish), "profileCorrection", ct, 200, Equal("personId", link.Value.PersonId))).Any(r => r.Value.Status == "Pending"))
             throw State("You already have a correction waiting for review; withdraw it to propose a different one.");
         if (request.Fields is null || request.Fields.Length is < 1 or > 4 || request.Fields.Select(f => f.Field).Distinct().Count() != request.Fields.Length)
@@ -229,10 +259,10 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
                 throw new DomainException("invalid_input", "Name and birth-date corrections need supporting evidence.");
             return new ProfileCorrectionField { Field = f.Field, OldValue = Value(person, f.Field), NewValue = value, Evidence = evidence };
         }).ToArray();
-        var item = new ProfileCorrection { Id = op.Id, ParishId = parish, ApplicantAccountId = actor.AccountId, PersonId = person.Id, Fields = fields, SubmittedAt = op.At };
+        var item = new ProfileCorrection { Id = op.Id, ParishId = parish, ApplicantAccountId = actor.AccountId, PersonId = person.Id, Fields = fields, SubmittedAt = op.At, NotificationWorkIds = [] };
         await records.CommitAsync(Parish(parish), op, "person.correction_propose", item.Id, [RecordChange.Create("profileCorrection:" + item.Id, "profileCorrection", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
-        return Project(item);
+        return await ProjectOutcomeAsync(parish, item, ct);
     }
 
     public async Task<ProfileCorrectionDto> WithdrawCorrectionAsync(string parish, string id, CancellationToken ct)
@@ -246,7 +276,7 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         row.Value.Status = "Withdrawn";
         await records.CommitAsync(Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock), "person.correction_withdraw", id,
             [RecordChange.Replace("profileCorrection:" + id, "profileCorrection", row.Value, row.Version)], new CommandResult { Id = id, Status = row.Value.Status }, ct);
-        return Project(row.Value);
+        return await ProjectOutcomeAsync(parish, row.Value, ct);
     }
 
     public async Task<ProfileCorrectionDto> ReviewCorrectionAsync(string parish, string id, ReviewProfileCorrectionDto request, CancellationToken ct)
@@ -254,7 +284,7 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "profile-correction-review:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is not null)
-            return Project((await ReadCorrectionAsync(parish, id, ct)).Value);
+            return await ProjectOutcomeAsync(parish, (await ReadCorrectionAsync(parish, id, ct)).Value, ct);
         var item = (await ReadCorrectionAsync(parish, id, ct)).Value;
         if (item.Status != "Pending" || item.ApplicantAccountId == actor.AccountId)
             throw State("A different reviewer decides a pending correction.");
@@ -275,15 +305,16 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
         item.Status = "Reviewed";
         item.ReviewedBy = actor.AccountId;
         item.ReviewedAt = op.At;
+        var notice = notifications.StageRequired(parish, item.ApplicantAccountId, "profile.correction", "Your profile correction has been reviewed.",
+            "/api/parishes/" + parish + "/profile-corrections/mine", "correction:" + id, "CorrectionApplicant", id, op.At);
+        item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
         // Approved fields change the Person in the same transaction; the correction keeps every old value.
         await records.CommitAsync(Parish(parish), op, "person.correction_review", id,
             [Fence(root), RecordChange.Replace("profileCorrection:" + id, "profileCorrection", item, Versions.Require(request.Version)),
-             RecordChange.Replace("person:" + item.PersonId, "person", personRow.Value, personRow.Version),
-             notifications.StageRequired(parish, item.ApplicantAccountId, "profile.correction", "Your profile correction has been reviewed.",
-                 "/api/parishes/" + parish + "/profile-corrections/mine", "correction:" + id, "CorrectionApplicant", id, op.At)],
+             RecordChange.Replace("person:" + item.PersonId, "person", personRow.Value, personRow.Version), notice],
             new CommandResult { Id = id, Status = item.Status }, ct);
         await notifications.DispatchAsync(parish, item.ApplicantAccountId, "correction:" + id, ct);
-        return Project(item);
+        return await ProjectOutcomeAsync(parish, item, ct);
     }
 
     public async Task<IReadOnlyList<Versioned<ProfileCorrectionDto>>> CorrectionsAsync(string parish, bool mine, CancellationToken ct)
@@ -339,10 +370,24 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
     }
 
     private async Task<Versioned<MembershipRequest>> ReadRequestAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<MembershipRequest>(Parish(parish), "membershipRequest:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<MembershipRequest>(Parish(parish), "membershipRequest:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
 
     private async Task<Versioned<ProfileCorrection>> ReadCorrectionAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<ProfileCorrection>(Parish(parish), "profileCorrection:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<ProfileCorrection>(Parish(parish), "profileCorrection:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
+
+    private async Task<MembershipRequestDto> ProjectOutcomeAsync(string parish, MembershipRequest item, bool office, CancellationToken ct)
+    {
+        var result = Project(item, office);
+        result.NotificationOutcome = await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
+    }
+
+    private async Task<ProfileCorrectionDto> ProjectOutcomeAsync(string parish, ProfileCorrection item, CancellationToken ct)
+    {
+        var result = Project(item);
+        result.NotificationOutcome = await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
+    }
 
     private static MembershipRequestDto Project(MembershipRequest x, bool office) => new()
     {

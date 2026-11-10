@@ -2,8 +2,10 @@
 // the bishop's policy requires it, issue, verified release, withdrawal and versioned reissue.
 // Main functions: CreateAsync, ActAsync, GetAsync, ListAsync and SetPolicyAsync; helpers check office, priest, bishop and release authority,
 // freeze the source snapshot at preparation and refuse issuing a snapshot the source has since amended.
+// Release/withdrawal notices require a matching linked request applicant; source changes and safe outcome reads preserve existing authority gates.
 
 using ParishLife.Api.DTOs.Sacraments;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -11,11 +13,13 @@ using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Communications;
 
 namespace ParishLife.Api.Services.Sacraments;
 
 public class CertificateService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, IClergyAuthority clergy,
-    IArchdioceseAuthority bishops, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
+    IArchdioceseAuthority bishops, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications,
+    NotificationOutcomeReader outcomes, TimeProvider clock)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "certificate:" + id;
@@ -63,16 +67,20 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         var root = await StaffAsync(parish, Permissions.SacramentsRecord, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "certificate:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await ReadAsync(parish, prior.Id, ct)).Value);
+            return await ProjectAsync((await ReadAsync(parish, prior.Id, ct)).Value, ct);
         var person = Guard.Id(request.SubjectPersonId);
         var item = new Certificate
         {
             Id = op.Id, ParishId = parish, Reference = "CERT-" + op.Id[..10].ToUpperInvariant(), Version = 1, PersonId = person, Kind = request.Sacrament,
             RequestId = request.RequestId is { } r ? Guard.Id(r) : null, Language = request.Language is "en" or "fr" or "ar" ? request.Language : throw new DomainException("invalid_input", "Use en, fr or ar."),
             Quantity = request.Quantity is >= 1 and <= 20 ? request.Quantity : throw new DomainException("invalid_input", "Request 1–20 copies."),
-            Purpose = string.IsNullOrWhiteSpace(request.Purpose) ? null : Guard.Text(request.Purpose, "Purpose", 300), CreatedBy = actor.AccountId, CreatedAt = op.At
+            Purpose = string.IsNullOrWhiteSpace(request.Purpose) ? null : Guard.Text(request.Purpose, "Purpose", 300), CreatedBy = actor.AccountId, CreatedAt = op.At,
+            NotificationWorkIds = []
         };
         var changes = new List<RecordChange> { Fence(root) };
+        var linkedRequest = await LinkedRequestAsync(parish, item, strict: true, ct);
+        if (linkedRequest is not null)
+            changes.Add(RecordChange.Replace("request:" + linkedRequest.Value.Id, "parishRequest", linkedRequest.Value, linkedRequest.Version));
         if (request.ReplacesCertificateId is { } replaces)
         {
             // A replacement is a new version with its own reference and reason; it repeats every gate.
@@ -89,7 +97,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
             item.Status = "WaitingForSource";
         changes.Add(RecordChange.Create(Key(item.Id), "certificate", item));
         await records.CommitAsync(Scope(parish), op, "certificates.create", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
-        return Project(item);
+        return await ProjectAsync(item, ct);
     }
 
     public async Task<CertificateDto> ActAsync(string parish, string id, CertificateActionDto request, CancellationToken ct)
@@ -119,7 +127,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "certificate-action:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value);
+            return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         switch (request.Action)
         {
@@ -189,16 +197,46 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
             default:
                 throw State("This certificate action is not available in its current state.");
         }
+        var changes = new List<RecordChange> { Fence(root) };
+        string? recipient = null;
+        if (request.Action is "release" or "withdraw")
+        {
+            item.NotificationWorkIds = [];
+            // A legacy mismatched request must not prevent withdrawal, and can never supply a guessed notification recipient.
+            var linkedRequest = await LinkedRequestAsync(parish, item, strict: request.Action == "release", ct);
+            if (linkedRequest is not null)
+            {
+                changes.Add(RecordChange.Replace("request:" + linkedRequest.Value.Id, "parishRequest", linkedRequest.Value, linkedRequest.Version));
+                if (Guid.TryParse(linkedRequest.Value.ApplicantAccountId, out var account) && account != Guid.Empty)
+                {
+                    recipient = Guard.Id(account);
+                    var notice = notifications.StageRequired(parish, recipient, "certificate.update", "There is an update to your certificate request.",
+                        "/api/parishes/" + parish + "/requests/" + linkedRequest.Value.Id, "certificate:" + op.Id, "CertificateApplicant", id, op.At);
+                    changes.Add(notice);
+                    item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+                }
+            }
+        }
+        changes.Add(RecordChange.Replace(Key(id), "certificate", item, Versions.Require(request.Version)));
         await records.CommitAsync(Scope(parish), op, "certificates." + request.Action.Replace('-', '_'), id,
-            [Fence(root), RecordChange.Replace(Key(id), "certificate", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
-        return Project(item);
+            changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        if (recipient is not null)
+            await notifications.DispatchAsync(parish, recipient, "certificate:" + op.Id, ct);
+        return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
     }
 
     public async Task<Versioned<CertificateDto>> GetAsync(string parish, string id, CancellationToken ct)
     {
         await ReaderAsync(parish, ct);
         var row = await ReadAsync(parish, id, ct);
-        return new Versioned<CertificateDto> { Version = row.Version, Value = Project(row.Value) };
+        return new Versioned<CertificateDto> { Version = row.Version, Value = await ProjectAsync(row.Value, ct) };
+    }
+
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        await ReaderAsync(parish, ct);
+        var row = await ReadAsync(parish, id, ct);
+        return await outcomes.ReadAsync(parish, row.Value.NotificationWorkIds, ct);
     }
 
     public async Task<IReadOnlyList<Versioned<CertificateDto>>> ListAsync(string parish, string? status, CancellationToken ct)
@@ -240,6 +278,17 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         return row;
     }
 
+    private async Task<Versioned<ParishRequest>?> LinkedRequestAsync(string parish, Certificate item, bool strict, CancellationToken ct)
+    {
+        if (item.RequestId is null) return null;
+        var row = await records.ReadAsync<ParishRequest>(Scope(parish), "request:" + item.RequestId, ct);
+        if (row?.Value.Id == item.RequestId && row.Value.ParishId == parish && row.Value.SubjectPersonId == item.PersonId)
+            return row;
+        if (strict)
+            throw State("A linked request must belong to this parish and identify the same certificate subject.");
+        return null;
+    }
+
     private async Task<Versioned<Certificate>> ReadAsync(string parish, string id, CancellationToken ct)
     {
         var row = await records.ReadAsync<Certificate>(Scope(parish), Key(id), ct) ?? throw Missing();
@@ -252,6 +301,13 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     {
         RequireBishopAcceptance = x.RequireBishopAcceptance, Reason = x.Reason, ApprovedBy = x.ApprovedBy, ApprovedAt = x.ApprovedAt
     };
+
+    private async Task<CertificateDto> ProjectAsync(Certificate item, CancellationToken ct)
+    {
+        var result = Project(item);
+        result.NotificationOutcome = await outcomes.ReadAsync(item.ParishId, item.NotificationWorkIds, ct);
+        return result;
+    }
 
     private static CertificateDto Project(Certificate x) => new()
     {

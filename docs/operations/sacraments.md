@@ -50,6 +50,16 @@ Source basis: S14.01–S14.14 and S15.09–S15.12 (proposed). No national docume
 - A reissue is a new certificate (`ReplacesCertificateId` plus a reason) with its own reference and version, and it repeats every gate.
 - Reads are limited to sacraments.record staff, the parish's priests and its bishop.
 
+### Certificate request links and required notices
+
+- A supplied `RequestId` must identify a request in the same parish whose matched `SubjectPersonId` equals the certificate person. Creation and a new release refuse missing/mismatched links; the linked request is conditionally fenced so concurrent subject rematching cannot release or notify from a stale snapshot. This does not infer a request from a person's name, contacts or certificate recorder.
+- Actual release and withdrawal stage a neutral required notice only for that validated request's recorded account applicant, in the same certificate transaction. The notice links to the applicant's own request, includes no certificate/sacrament/person details or private reasons, and grants no certificate-file access. No guardian, representative or physical collector account is inferred. A certificate without a proven linked account has no account notice; normal verified office collection remains available.
+- Withdrawal remains possible for a legacy mismatched request link, preserving release history and sending no guessed notice. It does not erase or recall a previously handed-over paper or downloaded copy.
+- Command and authorized single-certificate responses include `NotificationOutcome` (`Status` and `Meaning` only). `NotTracked` preserves legacy uncertainty, `NotRequired` records a tracked transition with no eligible account notice, `Pending` separates an effective certificate action from outstanding notice confirmation, `Stored` means available in-app, and `Unconfirmed` means tracking could not be checked. Worker retry can repair recipient storage without repeating the release. Non-notifying certificate actions retain the previous tracked batch. No external delivery, reading, acknowledgment, file release or electronic signature is implied.
+- `GET /api/parishes/{parish}/certificates/{certificate}/notification-outcome` uses the existing certificate reader gate (sacraments.record, current priest or jurisdiction bishop). It is not a member/public certificate feed or a general work-status lookup; documents.release alone gains no extra read permission. Lists leave `NotificationOutcome` null and never expose internal work IDs or recipient counts.
+
+Isolated regressions cover recipient interruption with an effective release, actorless repair and replay, withdrawal and preserved release facts, missing/wrong-subject request links, concurrent request rematching, no guessed recipient, legacy uncertainty and HTTP read boundaries. They do not prove live Cosmos behavior or official digital-document validity.
+
 ## Anniversaries (S11)
 
 - `GET /api/parishes/{parish}/sacraments/anniversaries?from=yyyy-MM-dd&days=30` (priest or sacraments.record; 1–92 days) lists upcoming anniversaries of registered Baptism, FirstCommunion, Confirmation and Marriage entries. Only registered entries with a recorded celebration date count, amendments included, and the recorded calendar date is kept wherever the viewer is. Archived people are left out.

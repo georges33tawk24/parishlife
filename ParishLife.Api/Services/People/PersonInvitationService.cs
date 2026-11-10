@@ -1,12 +1,13 @@
 // Purpose: issues single-use, seven-day person invitations from the office and lets the intended recipient's own verified account claim
 // the person link; conflicting claims stop for office review instead of linking.
-// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync and ListAsync.
+// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, ListAsync and office-only NotificationOutcomeAsync.
 // Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.DTOs.People;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -20,7 +21,7 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.People;
 
 public class PersonInvitationService(IRecordTransactions records, IParishAccess access, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof,
-    UserManager<ParishUser> users, NotificationService notifications, TimeProvider clock)
+    UserManager<ParishUser> users, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader notificationOutcomes)
 {
     private const string Purpose = "Link your account to your parish member record. It grants no ministry membership or staff authority.";
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(7);
@@ -59,7 +60,8 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var item = new PersonInvitation
         {
-            Id = op.Id, ParishId = parish, PersonId = person, TokenHash = Hash(token), CreatedBy = actor.AccountId, CreatedAt = op.At, ExpiresAt = op.At + Lifetime
+            Id = op.Id, ParishId = parish, PersonId = person, TokenHash = Hash(token), CreatedBy = actor.AccountId, CreatedAt = op.At, ExpiresAt = op.At + Lifetime,
+            NotificationWorkIds = []
         };
         changes.Add(RecordChange.Create("personInvitation:" + item.Id, "personInvitation", item));
         await records.CommitAsync(Scope(parish), op, "person.invite", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -127,10 +129,14 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
                 : RecordChange.Replace(claimKey, "personAccountClaim", claim.Value, claim.Version));
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
         }
-        changes.Add(RecordChange.Replace("personInvitation:" + id, "personInvitation", item, row.Version));
         if (conflict)
-            changes.Add(notifications.StageRequired(parish, item.CreatedBy, "person.invitation", "A person invitation needs office review.",
-                "/api/parishes/" + parish + "/person-invitations", "person-invitation:" + id, "InvitationIssuer", id, op.At));
+        {
+            var notice = notifications.StageRequired(parish, item.CreatedBy, "person.invitation", "A person invitation needs office review.",
+                "/api/parishes/" + parish + "/person-invitations", "person-invitation:" + id, "InvitationIssuer", id, op.At);
+            item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+            changes.Add(notice);
+        }
+        changes.Add(RecordChange.Replace("personInvitation:" + id, "personInvitation", item, row.Version));
         await records.CommitAsync(Scope(parish), op, conflict ? "person.invitation_conflict" : "person.invitation_accept", id, changes,
             new CommandResult { Id = id, Status = item.Status }, ct);
         if (conflict)
@@ -143,7 +149,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-invitation-revoke:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value);
+            return await ProjectOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status is not ("Open" or "NeedsReview"))
             throw State("Only an open invitation or one waiting for review can be revoked.");
@@ -151,7 +157,15 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         await records.CommitAsync(Scope(parish), op, "person.invitation_revoke", id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace("personInvitation:" + id, "personInvitation", item, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = item.Status }, ct);
-        return Project(item);
+        return await ProjectOutcomeAsync(parish, item, ct);
+    }
+
+    // Delivery diagnostics are office-only: possessing a token or having used it never authorizes this read.
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        await OfficeAsync(parish, ct);
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        return await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
     }
 
     public async Task<IReadOnlyList<Versioned<PersonInvitationDto>>> ListAsync(string parish, string? person, CancellationToken ct)
@@ -163,7 +177,14 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
     }
 
     private async Task<Versioned<PersonInvitation>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<PersonInvitation>(Scope(parish), "personInvitation:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<PersonInvitation>(Scope(parish), "personInvitation:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
+
+    private async Task<PersonInvitationDto> ProjectOutcomeAsync(string parish, PersonInvitation item, CancellationToken ct)
+    {
+        var result = Project(item);
+        result.NotificationOutcome = await notificationOutcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
+    }
 
     private async Task<Versioned<PersonInvitation>> TokenAsync(string parish, string id, string? token, CancellationToken ct)
     {

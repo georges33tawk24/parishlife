@@ -1,5 +1,6 @@
 // Purpose: checks a durable notification recipient's current typed source audience without impersonating a browser user.
-// Main functions: IsEligibleAsync and StaffAsync check active accounts, exact participants/owners, independent grants or accepted priest duties.
+// Main functions: IsEligibleAsync checks exact applicants, linked self-registrants, certificate-request subjects and participants/owners;
+// StaffAsync checks independent grants or accepted priest duties without combining capacities.
 
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -16,7 +17,7 @@ public class NotificationAudience(IRecordTransactions records, IParishRepository
     internal static readonly IReadOnlySet<string> Supported = new HashSet<string>(StringComparer.Ordinal)
     {
         "RequestApplicant", "RequestAssociation", "MembershipApplicant", "CorrectionApplicant", "ConcernApplicant",
-        "InboxParticipant", "IncidentHandler", "InvitationIssuer", "ParishOwner"
+        "InboxParticipant", "IncidentHandler", "InvitationIssuer", "ParishOwner", "RegistrationApplicant", "CertificateApplicant"
     };
 
     internal async Task<bool> IsEligibleAsync(NotificationWork work, CancellationToken ct)
@@ -57,6 +58,28 @@ public class NotificationAudience(IRecordTransactions records, IParishRepository
             {
                 var source = (await records.ReadAsync<Concern>(scope, "concern:" + work.ResourceId, ct))?.Value;
                 return source?.Id == work.ResourceId && source.ParishId == work.ParishId && source.ApplicantAccountId == work.AccountId;
+            }
+            case "RegistrationApplicant":
+            {
+                var source = (await records.ReadAsync<EventRegistration>(scope, "registration:" + work.ResourceId, ct))?.Value;
+                if (source?.Id != work.ResourceId || source.ParishId != work.ParishId || source.Origin != "Self"
+                    || source.CreatedBy != work.AccountId || string.IsNullOrWhiteSpace(source.PersonId)
+                    || root.Value.Status != ParishStatus.Verified) return false;
+                var link = (await records.ReadAsync<PersonAccountLink>(scope, "personAccountLink:" + work.AccountId, ct))?.Value;
+                if (link?.Active != true || link.ParishId != work.ParishId || link.AccountId != work.AccountId || link.PersonId != source.PersonId) return false;
+                var claim = (await records.ReadAsync<CommandResult>(scope, "personAccountClaim:" + source.PersonId, ct))?.Value;
+                var person = (await records.ReadAsync<Person>(scope, "person:" + source.PersonId, ct))?.Value;
+                return claim?.Id == work.AccountId && claim.Status == "Linked" && person?.Archived == false
+                    && person.Id == source.PersonId && person.ParishId == work.ParishId;
+            }
+            case "CertificateApplicant":
+            {
+                var source = (await records.ReadAsync<Certificate>(scope, "certificate:" + work.ResourceId, ct))?.Value;
+                if (source?.Id != work.ResourceId || source.ParishId != work.ParishId || string.IsNullOrWhiteSpace(source.PersonId)
+                    || source.RequestId is not { } requestId) return false;
+                var request = (await records.ReadAsync<ParishRequest>(scope, "request:" + requestId, ct))?.Value;
+                return request?.Id == requestId && request.ParishId == work.ParishId && request.ApplicantAccountId == work.AccountId
+                    && request.SubjectPersonId == source.PersonId;
             }
             case "InboxParticipant":
             {

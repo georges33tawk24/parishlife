@@ -1,9 +1,10 @@
 // Purpose: exposes office-issued person invitations and the recipient's preview/accept over HTTP; the token travels in a header, never the URL.
-// Main functions: Create, List, Revoke, Preview and Accept delegate rules to PersonInvitationService.
+// Main functions: Create, List, Revoke, Preview, Accept and office-only NotificationOutcome delegate rules to PersonInvitationService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.People;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.People;
 
@@ -21,6 +22,10 @@ public class PersonInvitationsController(PersonInvitationService service) : Cont
     [HttpGet("person-invitations")]
     public async Task<ActionResult<IReadOnlyList<Versioned<PersonInvitationDto>>>> List(Guid parishId, CancellationToken ct, Guid? personId = null)
         => Ok(await service.ListAsync(Guard.Id(parishId), personId is { } p ? Guard.Id(p) : null, ct));
+
+    [HttpGet("person-invitations/{invitationId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid invitationId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(invitationId), ct));
 
     [HttpPost("person-invitations/{invitationId:guid}/revoke")]
     public async Task<ActionResult<PersonInvitationDto>> Revoke(Guid parishId, Guid invitationId, RevokePersonInvitationDto request, CancellationToken ct)

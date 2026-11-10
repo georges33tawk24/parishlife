@@ -1,5 +1,5 @@
 // Purpose: represents a member's proposed corrections to their own official Person record, reviewed field by field.
-// Main members: Id, ParishId, ApplicantAccountId, PersonId, Fields, Status, ReviewedBy and dates.
+// Main members: Id, ParishId, ApplicantAccountId, PersonId, Fields, Status, ReviewedBy, dates and latest notification-work pointers.
 
 namespace ParishLife.Api.Models;
 
@@ -23,4 +23,7 @@ public class ProfileCorrection
     public DateTimeOffset? ReviewedAt { get; set; } = null;
 
     public DateTimeOffset SubmittedAt { get; set; }
+
+    // Null preserves the distinction between historical unknown tracking and no required notice.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

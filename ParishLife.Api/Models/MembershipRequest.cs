@@ -1,5 +1,5 @@
 // Purpose: represents an account's request for office-reviewed parish membership and a verified person link.
-// Main members: Id, ParishId, ApplicantAccountId, supplied identity facts, Note, Status, PersonId, ApplicantReason, decision facts and dates.
+// Main members: Id, ParishId, ApplicantAccountId, supplied identity facts, Note, Status, PersonId, ApplicantReason, decision facts, dates and latest notification-work pointers.
 
 namespace ParishLife.Api.Models;
 
@@ -36,4 +36,7 @@ public class MembershipRequest
     public DateTimeOffset? DecidedAt { get; set; } = null;
 
     public DateTimeOffset SubmittedAt { get; set; }
+
+    // Null means historical tracking is unavailable; an empty list explicitly records no required notice yet.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

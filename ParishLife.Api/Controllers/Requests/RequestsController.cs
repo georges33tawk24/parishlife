@@ -1,11 +1,12 @@
 // Purpose: exposes request cases for applicants and the parish office, plus anonymous guest intake/tracking with a private token header.
 // Main functions: Submit, Mine, Queue, Get, Act, SetChecklist, Messages, PostMessage, History, Handover, Claim, Associate, RotateTracking, GuestSubmit,
-// GuestGet, GuestAct, GuestMessages and GuestPostMessage delegate rules to RequestService.
+// GuestGet, GuestAct, GuestMessages, GuestPostMessage and NotificationOutcome delegate rules to RequestService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ParishLife.Api.DTOs.Requests;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Requests;
 
@@ -30,6 +31,10 @@ public class RequestsController(RequestService service) : ControllerBase
     [HttpGet("{requestId:guid}")]
     public async Task<ActionResult<Versioned<ParishRequestDto>>> Get(Guid parishId, Guid requestId, CancellationToken ct)
         => Ok(await service.GetAsync(Guard.Id(parishId), Guard.Id(requestId), ct));
+
+    [HttpGet("{requestId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid requestId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(requestId), ct));
 
     [HttpPost("{requestId:guid}/actions")]
     public async Task<ActionResult<ParishRequestDto>> Act(Guid parishId, Guid requestId, RequestActionDto request, CancellationToken ct)

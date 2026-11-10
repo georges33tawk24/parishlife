@@ -1,5 +1,5 @@
 // Purpose: runs inbox conversations: members with the parish office, and office staff directly with linked parishioners.
-// Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync and ArchiveAsync; helpers check participation or office capacity,
+// Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync, ArchiveAsync, NotificationOutcomeAsync and MessageNotificationOutcomeAsync; helpers check participation or office capacity,
 // keep per-participant read/archive state and stage required recipient notices with each message. There is no searchable person directory,
 // and sent messages are final; notice dispatch happens independently after the source commit.
 
@@ -15,7 +15,7 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.Communications;
 
 public class InboxService(IRecordTransactions records, IParishAccess access, MinistryAccess own, NotificationService notifications,
-    ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
+    ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock, NotificationOutcomeReader outcomes)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "conversation:" + id;
@@ -59,7 +59,12 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "conversation:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return await ProjectAsync(parish, (await ReadAsync(parish, prior.Id, ct)).Value, ct);
+        {
+            var previous = (await ReadAsync(parish, prior.Id, ct)).Value;
+            var replay = await ProjectAsync(parish, previous, ct);
+            replay.NotificationOutcome = await outcomes.ReadAsync(parish, previous.NotificationWorkIds, ct);
+            return replay;
+        }
         var item = new Conversation
         {
             Id = op.Id, ParishId = parish, Kind = kind, Subject = Guard.Text(request.Subject, "Subject", 300), ParticipantAccountIds = participants,
@@ -70,20 +75,25 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var changes = new List<RecordChange> { RecordChange.Create(Key(item.Id), "conversation", item), RecordChange.Create("inboxMessage:" + message.Id, "inboxMessage", message) };
         changes.AddRange(participants.Select(p => RecordChange.Create(MemberKey(item.Id, p), "conversationMember",
             new ConversationMember { ConversationId = item.Id, AccountId = p, LastReadAt = p == actor.AccountId ? op.At : null })));
-        changes.AddRange(NoticeChanges(parish, item, message));
+        TrackNotices(parish, item, message, changes);
         await records.CommitAsync(Scope(parish), op, "inbox.start", item.Id, changes, new CommandResult { Id = item.Id, Status = "Started" }, ct);
         await DispatchNoticesAsync(parish, item, message, ct);
-        return await ProjectAsync(parish, item, ct);
+        var result = await ProjectAsync(parish, item, ct);
+        result.NotificationOutcome = await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
     }
 
     public async Task<IReadOnlyList<ConversationDto>> ListAsync(string parish, CancellationToken ct)
     {
         var office = await IsOfficeAsync(parish, ct);
+        if (!office) await own.PersonalAsync(ct);
         var ids = (await records.CollectAsync<ConversationMember>(Scope(parish), "conversationMember", ct, 2000, Equal("accountId", actor.AccountId)))
             .Select(m => m.Value.ConversationId).ToHashSet(StringComparer.Ordinal);
         var result = new List<ConversationDto>();
         foreach (var id in ids)
-            if (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) is { } row)
+            if (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) is { } row
+                && row.Value.ParticipantAccountIds.Contains(actor.AccountId, StringComparer.Ordinal)
+                && (row.Value.Kind != "Direct" || row.Value.CreatedBy != actor.AccountId || office))
                 result.Add(await ProjectAsync(parish, row.Value, ct));
         // The shared office inbox is visible to authorized office staff, each acting under their own account.
         if (office)
@@ -108,7 +118,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var item = await AccessibleAsync(parish, id, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "inbox-message:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + prior.Id, ct))!.Value);
+            return await MessageViewAsync(parish, (await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + prior.Id, ct))!.Value, ct);
         // Staff replying in a member's office conversation write for the parish office, attributed to their own account.
         var capacity = item.Kind == "Office" && !item.ParticipantAccountIds.Contains(actor.AccountId) || item.Kind == "Direct" && item.CreatedBy == actor.AccountId ? "Office" : "Self";
         var message = new InboxMessage { Id = op.Id, ConversationId = id, AuthorAccountId = actor.AccountId, Capacity = capacity, Body = Guard.Text(request.Body, "Message", 10000), At = op.At };
@@ -118,11 +128,11 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
             RecordChange.Create("inboxMessage:" + message.Id, "inboxMessage", message),
             RecordChange.Replace(Key(id), "conversation", item, row.Version)
         };
-        changes.AddRange(NoticeChanges(parish, item, message));
+        TrackNotices(parish, item, message, changes);
         await records.CommitAsync(Scope(parish), op, "inbox.message", id,
             changes, new CommandResult { Id = message.Id, Status = "Sent" }, ct);
         await DispatchNoticesAsync(parish, item, message, ct);
-        return Project(message);
+        return await MessageViewAsync(parish, message, ct);
     }
 
     public async Task<ConversationDto> ArchiveAsync(string parish, string id, bool archived, CancellationToken ct)
@@ -140,8 +150,11 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
             throw Missing();
         if (item.ParticipantAccountIds.Contains(actor.AccountId))
         {
-            if (item.Kind == "Direct" && item.CreatedBy == actor.AccountId && !await IsOfficeAsync(parish, ct))
-                throw Missing();
+            if (item.Kind == "Direct" && item.CreatedBy == actor.AccountId)
+            {
+                if (!await IsOfficeAsync(parish, ct)) throw Missing();
+            }
+            else await own.PersonalAsync(ct);
             return item;
         }
         if (item.Kind == "Office" && await IsOfficeAsync(parish, ct))
@@ -168,6 +181,36 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         => item.ParticipantAccountIds.Where(p => p != message.AuthorAccountId).Distinct(StringComparer.Ordinal)
             .Select(recipient => notifications.StageRequired(parish, recipient, "inbox.message", "You have a new message from your parish.",
                 "/api/parishes/" + parish + "/inbox/" + item.Id, "inbox:" + message.Id, "InboxParticipant", item.Id, message.At));
+
+    private void TrackNotices(string parish, Conversation item, InboxMessage message, List<RecordChange> changes)
+    {
+        var notices = NoticeChanges(parish, item, message).ToArray();
+        var ids = notices.Select(change => ((NotificationWork)change.Value!).Id).ToList();
+        message.NotificationWorkIds = ids;
+        item.NotificationWorkIds = [.. ids];
+        changes.AddRange(notices);
+    }
+
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        var item = await AccessibleAsync(parish, id, ct);
+        return await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+    }
+
+    public async Task<NotificationOutcomeDto> MessageNotificationOutcomeAsync(string parish, string conversation, string id, CancellationToken ct)
+    {
+        await AccessibleAsync(parish, conversation, ct);
+        var row = await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + id, ct);
+        if (row is null || row.Value.Id != id || row.Value.ConversationId != conversation) throw Missing();
+        return await outcomes.ReadAsync(parish, row.Value.NotificationWorkIds, ct);
+    }
+
+    private async Task<InboxMessageDto> MessageViewAsync(string parish, InboxMessage item, CancellationToken ct)
+    {
+        var result = Project(item);
+        result.NotificationOutcome = await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
+    }
 
     private async Task DispatchNoticesAsync(string parish, Conversation item, InboxMessage message, CancellationToken ct)
     {

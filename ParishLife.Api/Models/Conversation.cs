@@ -1,11 +1,13 @@
 // Purpose: represents an inbox conversation: a member with the parish office, or a direct staff conversation with named participants.
-// Main members: Id, ParishId, Kind, Subject, ParticipantAccountIds, CreatedBy, CreatedAt and LastMessageAt.
+// Main members: Id, ParishId, Kind, Subject, ParticipantAccountIds, CreatedBy, dates and latest tracked notice pointers.
 
 namespace ParishLife.Api.Models;
 
 public class Conversation
 {
     public string Id { get; set; } = string.Empty;
+
+    public List<string>? NotificationWorkIds { get; set; } = null;
 
     public string ParishId { get; set; } = string.Empty;
 

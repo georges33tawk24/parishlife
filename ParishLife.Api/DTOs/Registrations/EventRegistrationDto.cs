@@ -1,6 +1,7 @@
 // Purpose: returns one participant registration; staff projections include evidence and collectors, own projections omit them.
-// Main members: Id, EventId, PersonId, FormVersionId, Origin, effective Status, answers, evidence, collectors, money balance and presence.
+// Main members: Id, EventId, PersonId, FormVersionId, Origin, effective Status, answers, evidence, balance, presence and safe notification outcome.
 
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 
 namespace ParishLife.Api.DTOs.Registrations;
@@ -48,4 +49,7 @@ public class EventRegistrationDto
     public string Presence { get; set; } = string.Empty;
 
     public DateTimeOffset? LastPresenceAt { get; set; } = null;
+
+    // Loaded for authorized single/command views; list views leave this null and expose no work IDs or recipient counts.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

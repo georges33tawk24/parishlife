@@ -1,5 +1,7 @@
 // Purpose: returns a profile correction with per-field decisions.
-// Main members: Id, PersonId, Fields, Status and dates.
+// Main members: Id, PersonId, Fields, Status, dates and a separately loaded safe NotificationOutcome.
+
+using ParishLife.Api.DTOs.Communications;
 
 namespace ParishLife.Api.DTOs.People;
 
@@ -16,4 +18,6 @@ public class ProfileCorrectionDto
     public DateTimeOffset SubmittedAt { get; set; }
 
     public DateTimeOffset? ReviewedAt { get; set; } = null;
+
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

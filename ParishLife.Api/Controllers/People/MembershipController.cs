@@ -1,10 +1,11 @@
 // Purpose: exposes parish following, primary-parish choice, membership requests and member profile corrections over HTTP.
 // Main functions: Follow, Unfollow, Primary, MyParishes, Apply, MyRequests, Withdraw, Decide, Queue, ProposeCorrection,
-// WithdrawCorrection, ReviewCorrection, MyCorrections and PendingCorrections delegate rules to MembershipService.
+// WithdrawCorrection, ReviewCorrection, MyCorrections, PendingCorrections and source-authorized notification outcome reads delegate rules to MembershipService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.People;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.People;
 
@@ -49,6 +50,10 @@ public class MembershipController(MembershipService service) : ControllerBase
     public async Task<ActionResult<IReadOnlyList<Versioned<MembershipRequestDto>>>> Queue(Guid parishId, CancellationToken ct)
         => Ok(await service.QueueAsync(Guard.Id(parishId), ct));
 
+    [HttpGet("parishes/{parishId:guid}/membership-requests/{requestId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> MembershipNotificationOutcome(Guid parishId, Guid requestId, CancellationToken ct)
+        => Ok(await service.MembershipNotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(requestId), ct));
+
     [HttpPost("parishes/{parishId:guid}/profile-corrections")]
     public async Task<ActionResult<ProfileCorrectionDto>> ProposeCorrection(Guid parishId, ProposeProfileCorrectionDto request, CancellationToken ct)
         => Ok(await service.ProposeCorrectionAsync(Guard.Id(parishId), request, ct));
@@ -68,4 +73,8 @@ public class MembershipController(MembershipService service) : ControllerBase
     [HttpGet("parishes/{parishId:guid}/profile-corrections")]
     public async Task<ActionResult<IReadOnlyList<Versioned<ProfileCorrectionDto>>>> PendingCorrections(Guid parishId, CancellationToken ct)
         => Ok(await service.CorrectionsAsync(Guard.Id(parishId), false, ct));
+
+    [HttpGet("parishes/{parishId:guid}/profile-corrections/{correctionId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> CorrectionNotificationOutcome(Guid parishId, Guid correctionId, CancellationToken ct)
+        => Ok(await service.CorrectionNotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(correctionId), ct));
 }

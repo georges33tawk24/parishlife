@@ -1,5 +1,7 @@
 // Purpose: returns a membership request; applicants see their own status and explanation only.
-// Main members: Id, ApplicantAccountId, GivenName, FamilyName, BirthDate, Contact, Locality, Note, Status, PersonId, ApplicantReason and dates.
+// Main members: Id, applicant-visible facts, office-only links, decision dates and a separately loaded safe NotificationOutcome.
+
+using ParishLife.Api.DTOs.Communications;
 
 namespace ParishLife.Api.DTOs.People;
 
@@ -30,4 +32,7 @@ public class MembershipRequestDto
     public DateTimeOffset SubmittedAt { get; set; }
 
     public DateTimeOffset? DecidedAt { get; set; } = null;
+
+    // Null in list projections means the outcome was not loaded, not that delivery succeeded.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

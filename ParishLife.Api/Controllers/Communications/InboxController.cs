@@ -1,5 +1,5 @@
 // Purpose: exposes the caller's in-app notifications and preferences, and parish inbox conversations, over HTTP.
-// Main functions: Notifications, SetNotificationState, Preferences, SavePreferences, Start, Conversations, Messages, Post and Archive.
+// Main functions: Notifications, SetNotificationState, Preferences, SavePreferences, Start, Conversations, Messages, Post, Archive and source-specific notice outcomes.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +39,14 @@ public class InboxController(NotificationService notifications, InboxService inb
     [HttpGet("api/parishes/{parishId:guid}/inbox/{conversationId:guid}")]
     public async Task<ActionResult<IReadOnlyList<InboxMessageDto>>> Messages(Guid parishId, Guid conversationId, CancellationToken ct)
         => Ok(await inbox.MessagesAsync(Guard.Id(parishId), Guard.Id(conversationId), ct));
+
+    [HttpGet("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid conversationId, CancellationToken ct)
+        => Ok(await inbox.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(conversationId), ct));
+
+    [HttpGet("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/messages/{messageId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> MessageNotificationOutcome(Guid parishId, Guid conversationId, Guid messageId, CancellationToken ct)
+        => Ok(await inbox.MessageNotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(conversationId), Guard.Id(messageId), ct));
 
     [HttpPost("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/messages")]
     public async Task<ActionResult<InboxMessageDto>> Post(Guid parishId, Guid conversationId, PostInboxMessageDto request, CancellationToken ct)

@@ -3,10 +3,12 @@
 // ClaimGuestAsync, DecideAssociationAsync, RotateTrackingAsync, HandoverAsync, GetAsync, OwnAsync, QueueAsync and HistoryAsync; helpers keep requester/subject/relationship/authority separate, keep distinct
 // Received/Accepted/Approved-by-priest/Date-confirmed/Completed facts, and separate applicant-visible explanations from internal notes.
 // Required applicant notices are staged with the source transition and dispatched independently after commit.
+// NotificationOutcomeAsync and WithOutcomeAsync expose only this authorized case's latest tracked notice outcome, without recipient/work identifiers.
 
 using System.Security.Cryptography;
 using System.Text;
 using ParishLife.Api.DTOs.Requests;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
@@ -19,7 +21,8 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.Requests;
 
 public class RequestService(IRecordTransactions records, IParishAccess access, IClergyAuthority clergy, IAccountDirectory accounts,
-    MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications, TimeProvider clock)
+    MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications, TimeProvider clock,
+    NotificationOutcomeReader outcomes)
 {
     internal static readonly string[] Terminal = ["Completed", "Declined", "Withdrawn", "Cancelled"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -132,7 +135,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-action:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value, true);
+            return await WithOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, true, ct);
         var item = row.Value;
         var previous = Copy(item);
         var open = !Terminal.Contains(item.Status);
@@ -220,13 +223,17 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             History(item, request.Action, previous.Status, previous, op, actor.AccountId)
         };
         if (recipient is not null)
-            changes.Add(notifications.StageRequired(parish, recipient, "request.update", "There is an update to your request.",
-                "/api/parishes/" + parish + "/requests/" + id, dedupKey, "RequestApplicant", id, op.At));
+        {
+            var notice = notifications.StageRequired(parish, recipient, "request.update", "There is an update to your request.",
+                "/api/parishes/" + parish + "/requests/" + id, dedupKey, "RequestApplicant", id, op.At);
+            item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+            changes.Add(notice);
+        }
         await records.CommitAsync(Scope(parish), op, "request." + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (recipient is not null)
             await notifications.DispatchAsync(parish, recipient, dedupKey, ct);
-        return Project(item, true);
+        return await WithOutcomeAsync(parish, item, true, ct);
     }
 
     public async Task<ParishRequestDto> SetChecklistAsync(string parish, string id, SetChecklistDto request, CancellationToken ct)
@@ -339,7 +346,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-association:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value, true);
+            return await WithOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, true, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         var claimant = item.ClaimantAccountId ?? throw State("No account association is waiting for review.");
         if (claimant == actor.AccountId)
@@ -356,16 +363,17 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         }
         item.ClaimantAccountId = null;
         item.UpdatedAt = op.At;
+        var associationNotice = notifications.StageRequired(parish, claimant, "request.update", "There is an update to your request association.",
+            request.Approve ? "/api/parishes/" + parish + "/requests/" + id : null, "request-association:" + op.Id, "RequestAssociation", id, op.At);
+        item.NotificationWorkIds = [((NotificationWork)associationNotice.Value!).Id];
         await records.CommitAsync(Scope(parish), op, request.Approve ? "request.associate" : "request.association_decline", id,
             [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)),
              History(item, request.Approve ? "associate" : "association-decline", previous.Status, previous, op, actor.AccountId),
              MessageChange(item, "Internal", "Office", actor.AccountId, note, op),
-             notifications.StageRequired(parish, claimant, "request.update", "There is an update to your request association.",
-                 request.Approve ? "/api/parishes/" + parish + "/requests/" + id : null,
-                 "request-association:" + op.Id, "RequestAssociation", id, op.At)],
+             associationNotice],
             new CommandResult { Id = id, Status = item.Status }, ct);
         await notifications.DispatchAsync(parish, claimant, "request-association:" + op.Id, ct);
-        return Project(item, true);
+        return await WithOutcomeAsync(parish, item, true, ct);
     }
 
     // After identity review, a leaked tracking link is replaced; the new token is shown once to the office to pass on.
@@ -436,7 +444,17 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             if (row.Value.ApplicantAccountId != actor.AccountId)
                 throw Missing();
         }
-        return new Versioned<ParishRequestDto> { Version = row.Version, Value = Project(row.Value, office) };
+        return new Versioned<ParishRequestDto> { Version = row.Version, Value = await WithOutcomeAsync(parish, row.Value, office, ct) };
+    }
+
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+        => (await GetAsync(parish, id, ct)).Value.NotificationOutcome!;
+
+    private async Task<ParishRequestDto> WithOutcomeAsync(string parish, ParishRequest item, bool office, CancellationToken ct)
+    {
+        var result = Project(item, office);
+        result.NotificationOutcome = await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+        return result;
     }
 
     public async Task<Page<Versioned<ParishRequestDto>>> OwnAsync(string parish, int size, string? cursor, CancellationToken ct)
@@ -552,6 +570,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             throw new DomainException("invalid_input", "Explain your authority to make this request for someone else.");
         return new ParishRequest
         {
+            NotificationWorkIds = [],
             Id = op.Id, Reference = "R-" + op.Id[..10].ToUpperInvariant(), ParishId = parish, Kind = kind, Summary = Guard.Text(summary, "Summary", 300),
             Details = Details(details), PreferredDates = string.IsNullOrWhiteSpace(dates) ? null : Guard.Text(dates, "Preferred dates", 500),
             Relationship = relationship, AuthorityBasis = basis, CreatedBy = createdBy, ReceivedAt = op.At, UpdatedAt = op.At
