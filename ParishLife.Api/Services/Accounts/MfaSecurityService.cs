@@ -40,7 +40,8 @@ public class MfaSecurityService(IRecordTransactions records, MfaAccountAccess pr
             new { Kind = "mfa.begin", request.RecoveryRequestId }, clock); // Proofs never enter fingerprints, receipts, audit, or logs.
         var current = await records.ReadAsync<MfaEnrollment>(scope, EnrollmentKey, ct);
         if (await records.ReplayAsync<CommandResult>(scope, operation, ct) is not null)
-            return await EnrollmentViewAsync(RequirePending(current, user, id));
+            // A duplicate may commit between the earlier snapshot and receipt read; validate its current saved enrollment.
+            return await EnrollmentViewAsync(RequirePending(await records.ReadAsync<MfaEnrollment>(scope, EnrollmentKey, ct), user, id));
         var candidate = new ParishUser { Id = user.Id };
         await proof.AuthenticatorStore.SetAuthenticatorKeyAsync(candidate, users.GenerateNewAuthenticatorKey(), ct);
         var pending = new MfaEnrollment
