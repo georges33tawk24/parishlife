@@ -127,7 +127,8 @@ public class CertificateNotificationOutcomeTests
             await x.Requests.ActAsync(x.Parish, applicant.Request, new RequestActionDto
             {
                 OperationId = Guid.NewGuid(), Version = (await RowAsync<ParishRequest>(x, "request:" + applicant.Request)).Version,
-                Action = "match-subject", SubjectPersonId = Guid.Parse(other.Person)
+                Action = "match-subject", SubjectPersonId = Guid.Parse(other.Person),
+                AuthorityEvidence = "Identity review matched this case to a different person"
             }, default);
         });
         var producer = ActivatorUtilities.CreateInstance<CertificateService>(f.Services, intercepted);

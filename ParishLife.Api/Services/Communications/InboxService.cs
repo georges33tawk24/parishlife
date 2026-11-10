@@ -90,15 +90,20 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var ids = (await records.CollectAsync<ConversationMember>(Scope(parish), "conversationMember", ct, 2000, Equal("accountId", actor.AccountId)))
             .Select(m => m.Value.ConversationId).ToHashSet(StringComparer.Ordinal);
         var result = new List<ConversationDto>();
+        var listed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in ids)
             if (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) is { } row
                 && row.Value.ParticipantAccountIds.Contains(actor.AccountId, StringComparer.Ordinal)
                 && (row.Value.Kind != "Direct" || row.Value.CreatedBy != actor.AccountId || office))
+            {
+                listed.Add(id);
                 result.Add(await ProjectAsync(parish, row.Value, ct));
-        // The shared office inbox is visible to authorized office staff, each acting under their own account.
+            }
+        // The shared office inbox is visible to authorized office staff, each acting under their own account. Staff who opened a
+        // member's Office conversation have a read-state row without being a participant, so only already-listed rows are skipped.
         if (office)
             foreach (var row in await records.CollectAsync<Conversation>(Scope(parish), "conversation", ct, 2000, Equal("kind", "Office")))
-                if (!ids.Contains(row.Value.Id))
+                if (!listed.Contains(row.Value.Id))
                     result.Add(await ProjectAsync(parish, row.Value, ct));
         return result.OrderByDescending(c => c.LastMessageAt).ToArray();
     }
