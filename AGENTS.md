@@ -1,6 +1,8 @@
 # ParishLife working instructions
 
 - Follow the owner's current chat instructions. Backend implementation and an Aspire AppHost are authorized; frontend integration is deferred.
+- The owner explicitly authorized continued work and verified pushes to `https://github.com/georges33tawk24/parishlife.git`, branch `backend` (remote `upstream`). Work on the local `backend` branch tracking `upstream/backend`; fetch before publishing, preserve Georges's commits, and never force-push. `origin` is Colin's different repository.
+- Organize continued implementation into batches covering ten related cards, with parallel bounded work where useful. Report actual criteria completed and remaining blockers per card; do not call a partial card complete or count an improvement as a newly started card.
 - Keep production business code in `ParishLife.Api`, with controllers, services, repositories, interfaces, DTOs, models, configuration, and Azure adapters in folders. Do not recreate Application/Domain/Infrastructure projects.
 - Follow the inspected MiniDevOps DTO/model convention: ordinary public classes, explicit get/set properties, safe defaults, one public type per file, and validation attributes on input DTOs. Put named `*Dto` classes under `DTOs/<Feature>`, models directly under `Models`, and model enums under `Models/Enums`. Do not introduce positional records or grouped Contracts.cs/Models.cs files there. Keep Cosmos IDs/partitions and UTC times rather than relational navigation graphs.
 - Start every code file created or rewritten with a brief comment describing its purpose and its main functions/members. Use valid syntax for C#, PowerShell, and XML; explain strict JSON configuration in the accompanying documentation rather than inserting invalid comments.
