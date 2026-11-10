@@ -812,9 +812,9 @@
       "id": "N02",
       "workflow": "Exceptional exact-message review",
       "module": "Communications/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Participants report one exact inbox message with a protected explanation and see only their own report and its neutral outcome. Platform operators (MFA, no selected appointment) request review of one exact message with a recorded reason; a different, non-conflicted operator must approve a 5-1440 minute window or decline; only the requester reads that single message inside the window, each read audited and counted; participants/creators/authors of the conversation are excluded from every step; closing a review closes its report with a neutral reporter outcome. Local tests only (MessageReviewTests).",
+      "remaining": "Proposed S26.16/S02.13/P26 basis, not owner-approved. Access-window bounds are technical, not agreed policy. Not delivered: blocking unwanted contact, a parish-level or independent non-platform report handler and safe escalation route, reporter/reviewer notifications, report retention, reauthentication on request, frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.16 S02.13"
     },
     {
@@ -831,7 +831,7 @@
       "workflow": "In-app notifications and preferences",
       "module": "Communications",
       "status": "partial",
-      "implemented_slice": "Per-account deduplicated in-app notices with Required/Optional kinds, read/unread/archive and optional-topic/language preferences. All current required-notice producers atomically stage Pending work with their source changes in the parish partition; a bounded background relay checks the current typed audience, confirms recipient record/legacy receipt and conditionally acknowledges Stored. Neutral previews exclude private case content. Recovery, acknowledgment, concurrency, authorization and hosted-worker checks are recorded in the reliability verification report. New work uses versioned parish-scoped identities; matching legacy notices/receipts are reused without resetting read state, and known pending legacy cross-parish collisions recover without changing the work identity. Exact-version dispatch and invalid/unsupported receipt or identity refusal have isolated regressions.",
+      "implemented_slice": "Per-account deduplicated in-app notices with Required/Optional kinds, read/unread/archive and optional-topic/language preferences. All current required-notice producers atomically stage Pending work with their source changes in the parish partition; a bounded background relay checks the current typed audience, confirms recipient record/legacy receipt and conditionally acknowledges Stored. Neutral previews exclude private case content. Recovery, acknowledgment, concurrency, authorization and hosted-worker checks are recorded in the reliability verification report. New work uses versioned parish-scoped identities; matching legacy notices/receipts are reused without resetting read state, and known pending legacy cross-parish collisions recover without changing the work identity. Exact-version dispatch and invalid/unsupported receipt or identity refusal have isolated regressions. Source-scoped Pending/Stored outcome reads now also cover parish status changes (jurisdiction bishop), incident assignments (incidents.manage handlers) and concern reviewer actions/entries (eligible selected reviewer only; never submitter, unselected reviewers, office, bishop or platform operators); recovery sessions refused (CareStatusNotificationOutcomeTests).",
       "remaining": "Combined-home notification center across parishes, reminder rules, quiet hours/digests and external delivery tracking remain. Historical pre-outbox missing notices are not automatically reconstructed; invalid receipt/identity conflicts still need authoritative operator review, and no pending-work retention/deletion policy is invented.",
       "questionnaire_references": "S03.09 S26.11–15"
     },
@@ -839,9 +839,9 @@
       "id": "N05",
       "workflow": "Broadcast/template and external delivery",
       "module": "Communications",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Parish templates and broadcasts by communications.manage staff: approval by a different staff account against the exact version, immutable after approval, cancel with reason; Members or Ministry audiences resolved at send time from active links, current ministry membership, active verified accounts and the optional parish.broadcast opt-out; one in-app copy stored atomically with the send and visible only to its recipients; counts-only audience preview; per-channel state InApp Stored and Email/Sms/Push NotConfigured (never sent). Local tests only (BroadcastTests).",
+      "remaining": "Proposed S26.09-S26.15/P26 basis, not owner-approved. Not delivered: any external provider, delivery attempts/retries/failure follow-up, scheduling and reminder rules runner, quiet hours/digests, per-recipient read state, bell notifications for broadcasts, multilingual linked versions, ministry-leader authorship, audiences above the 2000-recipient technical bound (needs a resumable fan-out job), frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.09–15"
     },
     {

@@ -117,6 +117,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationProcessor>();
         services.AddScoped<NotificationOutcomeReader>();
         services.AddScoped<InboxService>();
+        services.AddScoped<MessageReviewService>();
+        services.AddScoped<BroadcastService>();
         services.AddScoped<GivingService>();
         services.AddScoped<ExpenseService>();
         services.AddScoped<BankReconciliationService>();

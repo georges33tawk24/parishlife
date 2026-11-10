@@ -1,5 +1,5 @@
 // Purpose: runs inbox conversations: members with the parish office, and office staff directly with linked parishioners.
-// Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync, ArchiveAsync, NotificationOutcomeAsync and MessageNotificationOutcomeAsync; helpers check participation or office capacity,
+// Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync, ArchiveAsync, NotificationOutcomeAsync, MessageNotificationOutcomeAsync and internal AccessibleAsync; helpers check participation or office capacity,
 // keep per-participant read/archive state and stage required recipient notices with each message. There is no searchable person directory,
 // and sent messages are final; notice dispatch happens independently after the source commit.
 
@@ -148,7 +148,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         return await ProjectAsync(parish, item, ct);
     }
 
-    private async Task<Conversation> AccessibleAsync(string parish, string id, CancellationToken ct)
+    internal async Task<Conversation> AccessibleAsync(string parish, string id, CancellationToken ct)
     {
         var item = (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) ?? throw Missing()).Value;
         if (item.ParishId != parish)
