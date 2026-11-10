@@ -1,5 +1,7 @@
 # Backend reliability verification — 10 November 2026
 
+> Historical 324-test checkpoint. The [331-test continuation](backend-2026-11-10-notification-identity.md) implements the scoped-key and known legacy-pending recovery work listed below; use it and current STATUS for the latest state.
+
 This checkpoint verifies local backend commit **`7bed477618d27f5f4fe06a24bf343af2289db919`** on `dev/colin/backend-reliability-20261110`, after pulled baseline `a4cb405899bb6fde0e9c186dde1f4bb1ee1be24f`. The owner requested continued implementation here; the earlier Claude handover is historical. These code changes are committed locally and **not pushed**. A fresh clone of Georges's backend does not include them.
 
 The retained feature register remains **149 cards: 124 partial, 25 not started, zero fully accepted**. This checkpoint advances Q11, E01, E02, E05 and N04 acceptance work without promoting any card or claiming full-product completion.

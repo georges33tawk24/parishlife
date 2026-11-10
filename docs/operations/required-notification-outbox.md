@@ -13,7 +13,7 @@ The two work states mean:
 | State | Meaning |
 | --- | --- |
 | `Pending` | Recipient storage has not been acknowledged. A recipient notice **may already exist**, for example after account storage succeeds but acknowledgment fails, or eligibility changes before acknowledgment. Do not treat this state as proof that nothing reached the account. |
-| `Stored` | The dispatcher confirmed a matching in-app recipient notice and its receipt, rechecked the audience, and committed the acknowledgment. It does not mean emailed, delivered to a device or read. |
+| `Stored` | The dispatcher confirmed a matching in-app recipient notice and its receipt, rechecked the audience, and committed the acknowledgment. New acknowledgments record its actual `RecipientNotificationId`, which may differ from the work ID when reusing or recovering a legacy identity. It does not mean emailed, delivered to a device or read. |
 
 Known storage/configuration failures leave work pending and log only the failure type. They do not change an already effective business action into a failed action. Missing permissions or incompatible storage may require operator repair; another worker tick is not proof those problems will resolve themselves. Caller cancellation propagates, with the already committed obligation retained.
 
@@ -49,14 +49,28 @@ When enabled, the worker makes an initial pass, then processes on fifteen-second
 
 Parish work uses the existing `TenantControl` container and `parish:{id}` partition. Recipient notices use the existing `Accounts` container and account partition. Pending scans use the existing type/status index paths; staff lookups use the existing account-id path. No container, index policy, credential, RBAC rule or Azure resource is created or changed by this implementation or worker startup. These source contracts do not establish that the deployed Azure configuration has been verified.
 
-## Existing identities and recovery limits
+## Versioned identities and legacy recovery
 
-The recipient identifier remains derived from the existing account-plus-deduplication-key hash. The existing system-notification operation ID and fingerprint are preserved. A retry keeps the original notice timestamp, legacy title wording and Read/Unread/Archived state. It never resets an already read notice to unread merely to acknowledge work.
+`NotificationWork.IdentityVersion` defaults to **1** when an existing serialized work record has no such field. `StageRequired` now creates version **2** work. Its ID is the first sixteen SHA-256 bytes, formatted as a GUID, of UTF-8 `ParishLife.Notification.v2\n` followed by the JSON string array `[account, parish, dedupKey]`. The domain prefix and array encoding distinguish the new contract and include the parish boundary. New staged obligations for one account with the same event key in different parishes therefore have independent identities.
 
-Before acknowledging, the dispatcher checks notification ID, account, parish, topic, kind, source link and matching receipt. A write conflict alone is not evidence of successful recipient storage.
+Version 2 recipient writes use that scoped ID and a versioned `notification:v2:{parish}` receipt scope. The receipt fingerprint contains identity version, parish, topic and deduplication key; it contains no private message, request, concern or incident content. Direct `NotifyAsync`, including optional calls, deliberately retains its original account-plus-deduplication-key ID and original receipt fingerprint.
 
-The historical hash does not include the parish. Reusing a deduplication key for the same account across parishes can therefore collide. A notice from another parish is never overwritten or counted as this obligation's success: this is treated as `notification_identity_conflict`, and the new work remains pending for authorized operator review. The work record has no persisted failure-category field; logs contain failure types only. This change does not redesign that legacy key contract or automatically rekey conflicting obligations.
+`DispatchAsync(parish, account, dedupKey)` resolves existing version 2 work first, then existing legacy work. The processor uses `DispatchWorkAsync(parish, id)` for the **exact saved work ID**, so a pending version 1 obligation is not accidentally skipped in favor of a newer identity. The saved version must agree with the derived work ID and parish; an unsupported version or malformed identity remains pending for review. Existing stored work is not rewritten or upgraded.
 
-The recovery boundary applies to **newly staged obligations** from the integrated producers. It does not backfill notices missed before outbox staging existed, and replaying an old completed business operation does not manufacture a historical work record. Optional direct `NotifyAsync` calls retain their existing mute behavior; required notices bypass optional-topic muting.
+For version 2 work, an existing scoped recipient row is checked first and must have its matching scoped receipt. If absent, a matching legacy recipient row can be reused only with its original matching receipt. Checks include notification ID, account, parish, topic, kind and source link. Historical title wording, original timestamp and Read/Unread/Archived state remain untouched. A write conflict or a recipient row by itself does not prove successful storage. A matching row with a missing or incompatible receipt remains pending rather than creating another notice.
+
+The legacy hash omitted the parish. An exact legacy ID/account row explicitly naming a different nonempty parish no longer blocks a new scoped notice for a proven obligation. The foreign notice is preserved, and the dispatcher creates or verifies the correctly scoped recipient notice instead. Same-parish topic/kind/link conflicts and malformed legacy ID/account values still remain pending; they are not treated as permission to create a second notice under another key.
+
+This narrow recovery also applies to an **existing pending version 1 obligation** whose recipient ID collided with another parish. That durable work already records the source obligation and still must pass current typed-audience checks. The dispatcher prefers a matching existing scoped recipient, including one stored before a lost acknowledgment, or creates/verifies it when the exact legacy row belongs to another parish. It preserves the work's original ID and `IdentityVersion = 1`; it creates no new source obligation. The acknowledgment records the actual confirmed `RecipientNotificationId`, whether legacy or scoped. Older already-stored work can retain a null recipient-ID field and is left unchanged.
+
+Unresolved identity/receipt conflicts remain pending for authorized operator review without overwriting a notice. The work record has no persisted failure-category field; logs contain failure types only. Unsupported or corrupt identities are not automatically migrated.
+
+## Rollout and historical limits
+
+The normal producer operation-receipt replay path returns before preparing another `StageRequired` change, and the source transaction also honors an existing committed receipt. A completed source operation is not replayed to manufacture a version 2 obligation. This change does not backfill notices missed before outbox staging existed or reconstruct missing historical source events.
+
+Operators must coordinate old/new relay rollout and must not manually duplicate one event as both version 1 and version 2 work. Account commits deduplicate within the selected recipient identity; they do **not atomically reserve both legacy and scoped IDs together**. Independently duplicated obligations or overlapping older relay behavior can race before a matching recipient is visible. Reuse of a confirmed legacy notice is compatibility and narrow recovery, not a claim of atomic cross-version migration.
+
+Optional direct `NotifyAsync` calls retain their existing mute behavior; required staged notices bypass optional-topic muting.
 
 No email/SMS/push delivery, delivery receipts, quiet-hour/digest scheduler, retention period, automatic purge or evidence-deletion policy is added. Work acknowledgment is not a claim of whole-product or live-service acceptance. No Azure acceptance checks were performed for this change; current local verification is recorded separately by the repository's verification checkpoint.

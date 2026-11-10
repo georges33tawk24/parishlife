@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-10",
+  "timezone": "Asia/Beirut",
+  "code_commit": "18fc9c6d20d3e8018d1c3caccc1f7b4951816a17",
+  "branch": "dev/colin/backend-reliability-20261110",
+  "build": {
+    "configuration": "Release",
+    "sdk": "10.0.403",
+    "solution_projects": 5,
+    "warnings": 0,
+    "errors": 0
+  },
+  "tests": {
+    "passed": 331,
+    "failed": 0,
+    "skipped": 0,
+    "unit": 56,
+    "integration": 275
+  },
+  "api_publish": {
+    "top_level_files": 61,
+    "recursive_files": 71,
+    "excluded_components_found": [],
+    "use_app_host": false
+  },
+  "source_audit": {
+    "source_files": 803,
+    "dto_files": 353,
+    "model_files": 179,
+    "missing_summaries": [],
+    "convention_violations": [],
+    "api_project_references": [],
+    "default_business_document_count": 0
+  },
+  "azure_cli_authenticated": false,
+  "live_azure_acceptance": false,
+  "cards": {
+    "total": 149,
+    "partial": 124,
+    "not_started": 25,
+    "fully_accepted": 0
+  },
+  "remote_push_performed": false,
+  "focused_notification_tests": 34,
+  "notification_identity_version_for_new_work": 2,
+  "legacy_pending_work_compatibility": true,
+  "previous_verified_code_commit": "7bed477618d27f5f4fe06a24bf343af2289db919"
+}

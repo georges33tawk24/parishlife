@@ -17,7 +17,7 @@ First inspect branch, status, remotes, recent commits and any uncommitted work. 
 
 In this local checkout, `upstream` is Georges's repository, while `origin` is `https://github.com/ColinSleiman/ParishLife.git`. Verify rather than assuming that `origin` is the requested source. Preserve the separate `dev/colin-following` WIP at `c81a30d`; its eleven unwired following DTO/model files must not be blindly overlaid onto the newer implementation.
 
-The active local development branch is `dev/colin/backend-reliability-20261110`, including MFA fix `9ea2473`, evidence/registration fix `ba843cf`, durable-notice code `7bed477` and documentation. The earlier Claude handover branch is preserved; the owner currently continues implementation here. Local changes were not pushed to either remote. If you are using a fresh remote clone, explicitly recognize that you lack these local commits; obtain/port the reviewed fix and documents instead of pretending the remote already contains them.
+The active local development branch is `dev/colin/backend-reliability-20261110`, including MFA fix `9ea2473`, evidence/registration fix `ba843cf`, durable-notice code `7bed477`, scoped-identity/legacy recovery `18fc9c6` and documentation. The earlier Claude handover branch is preserved; the owner currently continues implementation here. Local changes were not pushed to either remote. If you are using a fresh remote clone, explicitly recognize that you lack these local commits; obtain/port the reviewed fix and documents instead of pretending the remote already contains them.
 
 Fetch and inspect upstream developments before integrating them. Preserve local changes and authors' commits. Use an isolated development branch, no hard reset or force push. Honor push authorization only for its actual remote and branch; an instruction to pull Georges's backend is not by itself authorization to publish there. Do not apply an old authorization for Colin's repository to another repository.
 
@@ -98,7 +98,7 @@ Run the appropriate focused checks while developing, then the required full chec
 
 Do not redo the completed pull, MFA, evidence, registration or notification-recovery fixes unnecessarily. Read current `STATUS.md`, the latest verification and the remaining coverage criteria. The original review findings are historical and have focused local regressions; this is not full-product acceptance.
 
-The next concrete N04 work is a versioned parish-scoped notification identity and authoritative legacy reconciliation. Current cross-parish legacy-key collisions remain safely Pending, without overwrite or false acknowledgment. Prove independent same-operation keys across parishes, preserve matching legacy receipts/read state and do not manufacture older missed notifications. Then expose appropriate pending/stored component outcomes and continue unimplemented backend requirements in dependency order, with frontend deferred and actual policy inputs explicit.
+Parish-scoped notification identities and narrow recovery of existing pending legacy collisions are now verified; preserve matching legacy receipts/read state and do not manufacture older missed notifications. The next concrete N04 work is appropriately authorized, source-scoped pending/stored component outcomes. Follow current STATUS and actual S31.10; avoid a general private recipient/count feed or a claim of external delivery. Then continue unimplemented backend requirements in dependency order, with frontend deferred and actual policy inputs explicit.
 
 ## 9. Meaning of my message “continue”
 
