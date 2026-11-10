@@ -1,4 +1,4 @@
-# ParishLife — Claude backend continuation master prompt
+# ParishLife backend continuation master prompt
 
 You are my senior C#/.NET backend engineering collaborator. Continue the existing ParishLife backend from the actual checked-out repository. Perform implementation, review, debugging, tests and documentation; a plan or suggested code alone does not satisfy a request to work. Preserve the existing verified work. Do not restart the project or replace its architecture.
 
@@ -17,7 +17,7 @@ First inspect branch, status, remotes, recent commits and any uncommitted work. 
 
 In this local checkout, `upstream` is Georges's repository, while `origin` is `https://github.com/ColinSleiman/ParishLife.git`. Verify rather than assuming that `origin` is the requested source. Preserve the separate `dev/colin-following` WIP at `c81a30d`; its eleven unwired following DTO/model files must not be blindly overlaid onto the newer implementation.
 
-The prepared local continuation branch is `dev/colin/claude-handover-20261110`. It contains an additional verified MFA race fix, commit `9ea24732c50693a9125738aaab4fb56e285163f0`, and handover documents. They were not pushed to either remote. If you are using a fresh remote clone, explicitly recognize that you lack these local commits; obtain/port the reviewed fix and documents instead of pretending the remote already contains them.
+The active local development branch is `dev/colin/backend-reliability-20261110`, including MFA fix `9ea2473`, evidence/registration fix `ba843cf`, durable-notice code `7bed477` and documentation. The earlier Claude handover branch is preserved; the owner currently continues implementation here. Local changes were not pushed to either remote. If you are using a fresh remote clone, explicitly recognize that you lack these local commits; obtain/port the reviewed fix and documents instead of pretending the remote already contains them.
 
 Fetch and inspect upstream developments before integrating them. Preserve local changes and authors' commits. Use an isolated development branch, no hard reset or force push. Honor push authorization only for its actual remote and branch; an instruction to pull Georges's backend is not by itself authorization to publish there. Do not apply an old authorization for Colin's repository to another repository.
 
@@ -96,15 +96,9 @@ Run the appropriate focused checks while developing, then the required full chec
 
 ## 8. Execute the next work, starting with known gaps
 
-Do not redo the completed pull or the local MFA fix unnecessarily. Read `STATUS.md` and the review report, reproduce the next source finding and repair it with tests. Initial priorities are:
+Do not redo the completed pull, MFA, evidence, registration or notification-recovery fixes unnecessarily. Read current `STATUS.md`, the latest verification and the remaining coverage criteria. The original review findings are historical and have focused local regressions; this is not full-product acceptance.
 
-1. **Request-file integrity:** preserve the original request version during upload, prevent a concurrent closed/triaged case from being overwritten, durably bind retries to the actual content digest and verify reused staged blob bytes. Simulate failure between blob storage and metadata commit.
-2. **Applicant file gates:** enforce the actual parish-status/entitlement/privacy contract on new writes while preserving only specifically authorized history/cleanup. Test suspension, closure, lapse and ownership.
-3. **Registration integrity/usability:** recheck eligibility after event changes; pin the exact form revision the applicant answered; provide narrow versioned door/finance projections so restricted duties work without gaining full registration management or private answers.
-4. **Durable required notifications:** source outbox/relay/retry, deduplication, current target authorization and no sensitive previews. Prove recovery from an interruption instead of claiming best-effort calls are reliable.
-5. Continue remaining backend card criteria and not-started backend work in dependency order. Leave frontend work deferred and real policy/operational inputs explicit.
-
-These are focused source-review findings, not proof of a complete security audit. Do not mark one fixed from a summary or guess missing consent/retention policy.
+The next concrete N04 work is a versioned parish-scoped notification identity and authoritative legacy reconciliation. Current cross-parish legacy-key collisions remain safely Pending, without overwrite or false acknowledgment. Prove independent same-operation keys across parishes, preserve matching legacy receipts/read state and do not manufacture older missed notifications. Then expose appropriate pending/stored component outcomes and continue unimplemented backend requirements in dependency order, with frontend deferred and actual policy inputs explicit.
 
 ## 9. Meaning of my message “continue”
 

@@ -1,47 +1,37 @@
 # Current ParishLife continuation state
 
-Updated **10 November 2026**, owner timezone Asia/Beirut. Read this file before acting on **continue**. Verify live Git state; this is a checkpoint, not an immutable claim about future remote HEADs.
+Updated **10 November 2026**, owner timezone Asia/Beirut. Read this before acting on **continue**, then verify actual Git state. The owner currently wants implementation to continue here; a Claude switch is deferred.
 
 ## Repository and preserved work
 
 - Working folder: `C:\Users\User\source\repos\ParishLife`.
-- Requested incoming repository: `https://github.com/georges33tawk24/parishlife.git`, branch `backend`, remote `upstream`.
-- Pulled baseline: `a4cb405899bb6fde0e9c186dde1f4bb1ee1be24f` — Add remaining backend slices with tests and runbooks. Local `backend` was fast-forwarded to it.
-- `origin` still points to `https://github.com/ColinSleiman/ParishLife.git`; its observed backend was `1a550c0`. No remote URL was replaced and no changes were pushed during this handover.
-- Earlier local WIP is preserved on `dev/colin-following`, commit `c81a30de2431933c2efe7dfad016f622325d24c5`: eleven unwired following DTO/model files. The pulled implementation already has following/membership behavior; compare rather than blindly merging WIP.
-- Current local continuation branch: `dev/colin/claude-handover-20261110`. It includes local fix `9ea24732c50693a9125738aaab4fb56e285163f0` plus these handover documents. This branch is **not pushed**; a fresh clone of Georges's backend alone does not include the local fix/documents.
+- Incoming repository: `https://github.com/georges33tawk24/parishlife.git`, branch `backend`, remote `upstream`; pulled baseline/local backend and observed remote-tracking HEAD `a4cb405899bb6fde0e9c186dde1f4bb1ee1be24f`.
+- Active development branch: **`dev/colin/backend-reliability-20261110`**. Relevant backend code commit: **`7bed477618d27f5f4fe06a24bf343af2289db919`**. No push was performed; a fresh remote clone lacks these local changes.
+- Local fixes: `9ea2473` MFA replay; `ba843cf` request-file/registration integrity; `7bed477` durable required notices. Documentation commits may follow without changing that tested code.
+- `origin` remains Colin's different repository (`https://github.com/ColinSleiman/ParishLife.git`). An earlier push instruction for it is not authorization to publish to Georges's remote.
+- Earlier continuation branch `dev/colin/claude-handover-20261110` and `dev/colin-following` WIP at `c81a30de2431933c2efe7dfad016f622325d24c5` remain preserved. The latter's eleven unwired following DTO/models must not overwrite the newer membership implementation.
 
-## Verified state
+## Verified checkpoint
 
-- Incoming change from `1a550c0`: one commit, 446 files changed, 24,203 insertions / 678 deletions.
-- Feature register: **149 cards — 124 partial, 25 not started, zero fully accepted**. Eighty cards advanced from not_started to partial. No claim of 124 completed cards or a product completion percentage.
-- Locked restore and full five-project Release build on .NET SDK **10.0.403** passed; zero build warnings/errors, including Aspire AppHost compilation.
-- First full run of the unmodified incoming baseline: 40 unit passed; integration 237 passed / 1 failed. The failure exposed an MFA duplicate-enrollment replay race.
-- Deterministic regression failed before the fix. The fix reloads the saved enrollment after observing a committed receipt; all ID/account/status/security-stamp/expiry checks remain.
-- After that local fix: **279 tests passed — 40 unit / 239 integration, zero failures/skips**. Focused MFA regression: 16 passed.
-- API-only publish passed: 61 top-level / 71 recursive files; no tests, AppHost, maintenance executable or local-data components.
-- Source audit: 790 C# files with summaries; 349 DTO and 178 model/enum files, no convention violations, zero API ProjectReferences, zero default development business JSON documents.
-- Azure CLI still requested `az login` during the fresh state check. No successful live Azure acceptance, live write, infrastructure change, deployment or bootstrap is claimed.
-- Aspire was built, not relaunched. Earlier health/startup evidence in runbooks is historical. Incoming documentation's 220/278-test reports reflect its author's earlier runs; the fresh observations above supersede them for this local checkout.
+- **324 tests passed: 56 unit / 268 integration; 0 failures/skips.** Full five-project Release build, including Aspire: 0 warnings/errors. API-only publish: 61 top-level / 71 recursive files, no test/AppHost/maintenance/local-data components.
+- Evidence/registration fixes first passed 314 tests; ten notification-recovery regressions extend that result. The earlier MFA 279-test and incoming author's 278/220-test reports are historical.
+- Source audit: 803 C# files with summaries; 353 DTO / 179 model/enum files; no convention violations, API project references or default development business documents.
+- Azure CLI still requested `az login`. No live Azure acceptance/write, resource or RBAC/index changes, deployment or bootstrap. Aspire was built, not relaunched; actual hosted-worker verification used the isolated API test host.
+- Feature register remains **149 cards: 124 partial / 25 not started / 0 fully accepted**. Q11/E01/E02/E05/N04 have stronger verified behavior; those broad cards still have acceptance gaps.
+- [Detailed verification, commands and limitations](../verification/backend-2026-11-10-reliability.md); [sanitized counts](../verification/backend-2026-11-10-reliability-results.json).
 
-## Immediate next work
+## Addressed review findings
 
-**Start with request-file data integrity, not another broad feature-count claim.** See the detailed source findings and links in [REVIEW-2026-11-10.md](REVIEW-2026-11-10.md).
+The seven findings in the original [pull review](REVIEW-2026-11-10.md) now have local implementation/regressions: original request/parish ETag fencing; content-bound immutable file retries; current applicant file gates; lifecycle event eligibility; versioned limited door/cashier reads; viewed-form pinning; and durable required-notice staging/recovery. This is focused verification, not a full audit or product acceptance.
 
-1. Reproduce and fix `EvidenceService.UploadAsync` pairing an old request payload with a newly fetched ETag. A concurrent close/triage must not be overwritten. Preserve original version, current authorization and transactional fences; add deterministic failure/race tests.
-2. Fix upload operation/content binding and staged-blob integrity. Same operation/metadata/length with changed bytes must not produce new metadata pointing to an older blob. Pin/check the actual digest and verify immutable staged content; test failure between blob and metadata commits.
-3. Review applicant file status/entitlement gates, distinguishing prohibited new writes from any explicitly permitted historical reading/cleanup. Add suspension/closure/lapse tests from actual policy, without inventing a blanket retention rule.
-4. Revalidate registration event kind/source/visibility throughout its lifecycle; require the form version actually answered; add safe versioned door/cashier projections so narrow roles can work without registrations.manage.
-5. Replace best-effort required notifications with a durable source outbox/retry and honest delivery state. Simulate interruption between source and recipient commits; retries must repair the missing notice without duplication or sensitive previews.
-6. Then continue the remaining backend requirements and acceptance gaps from coverage, workflows and actual source evidence. Frontend work stays deferred.
+See [requests](../operations/requests.md#case-files-q11), [registrations](../operations/event-registrations.md) and [notification recovery](../operations/required-notification-outbox.md). The file gate requires verified parish/requests coverage for both file audiences; it does not invent retention exemptions. Ordinary unlinked applicants remain supported without MFA. Notification history audiences preserve their actual own-case relationship, including confidential submitter tracking after leaving a parish.
 
-The file/registration/notification items are **source-review findings awaiting regression and repair**, not a comprehensive runtime audit. The MFA race is the one reproduced and fixed during this handover. Do not mark the other findings resolved without evidence.
+## Immediate next executable work
 
-## Read next
+1. **N04 scoped notification identity:** read proposed S31.09–S31.11 and the new outbox runbook. Design a versioned parish-scoped recipient identity that preserves matching legacy records/receipts and read state. Prove two parishes using the same client operation key can each store their own required notice. Current mismatch is safely Pending, but it is not automatic resolution. Reconstruct older missing obligations only with authoritative event/recipient evidence; never manufacture history.
+2. Review how authorized callers/operators see durable Pending/Stored component outcomes without private recipient/content leakage. The work records and worker exist; broader status UX/API, queue metrics and retention policy are not fully accepted.
+3. Continue remaining backend criteria in the canonical [coverage register](../features/coverage.json), following actual workflow/permission/field/acceptance references in [SOURCES](SOURCES.md). Preserve all 25 not-started cards, frontend deferral and unresolved policy/factual inputs. Do not redo completed fixes or count partial cards as finished.
 
-1. [MASTER-PROMPT.md](MASTER-PROMPT.md): owner constraints and work loop.
-2. [SOURCES.md](SOURCES.md): governing instructions, actual external requirements and historical distinctions.
-3. [REVIEW-2026-11-10.md](REVIEW-2026-11-10.md): pull review, verification provenance and concrete findings.
-4. [CARDS-2026-11-10.md](CARDS-2026-11-10.md): all 149 snapshot cards; canonical mutable register is `docs/features/coverage.json`.
+Keep `AGENTS.md` and the [master brief](MASTER-PROMPT.md) conventions: single production API, MiniDevOps class/file layout, top-of-code summaries, existing Azure only, no business seeds, explicit two-account operator bootstrap, isolated meaningful tests and no frontend integration. Live Azure acceptance requires authorized access; CLI authentication is currently missing, not evidence that infrastructure is absent.
 
-Update this file after meaningful verified work: branch/base/commits; current task; files changed; exact commands and results; local versus published state; blockers; next executable action. Preserve older verification as historical, not current success.
+Update this checkpoint after verified work. No process is promised to continue after a turn ends; the next **continue** resumes from these actual files.

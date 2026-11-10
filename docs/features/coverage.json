@@ -390,7 +390,7 @@
       "workflow": "Private upload, replace, read and remove",
       "module": "Files",
       "status": "partial",
-      "implemented_slice": "Private request-case files: content-detected PDF/JPEG/PNG only, 10 MB and 20 active files per case, preserved original names outside the storage path, SHA-256, duplicate-safe retries, reasoned replacement keeping the earlier version, applicant sees only own uploads, audited office removal without deleting content, read-only closed cases; write-once local store or the existing private evidence Blob container. Real local service tests pass.",
+      "implemented_slice": "Private request-case files: signature-checked PDF/JPEG/PNG, 10 MB and 20 active files per case; immutable originals, SHA-256, audience-limited reads and reasoned replacement/removal. Upload/removal fence original case and parish versions; legacy receipt replay verifies bytes; staged retries create or prove identical content; downloads check size/hash; current applicant/office eligibility is rechecked after I/O. Atomic local publication/reads and conditional Blob create-or-match have isolated concurrency/failure/SDK-double regressions. Live Azure acceptance remains separate.",
       "remaining": "Managed-identity data access on the evidence container (an RBAC change not made here), malware scanning, page-count checks, image processing, files on other record types, evidence reuse, guest uploads and frontend remain.",
       "questionnaire_references": "S15.04–08 S31.10"
     },
@@ -669,7 +669,7 @@
       "workflow": "Event registration forms and dynamic fields",
       "module": "Registrations",
       "status": "partial",
-      "implemented_slice": "Per-event draft policy with up to 40 typed/conditional form fields, versioned forms pinned per registration, open/close for confirmed future manual parish activities. Local service and HTTP/CSRF tests pass.",
+      "implemented_slice": "Per-event draft policy with up to 40 typed/conditional fields and immutable form versions. Office/self submissions require the FormVersionId actually viewed and reject stale forms; applicant-safe form reads expose terms/questions without staff assignments. Opening and subsequent registration decisions recheck eligible manual parish activity kind/audience/source ownership and conditionally fence event versions. Isolated service and HTTP regressions pass.",
       "remaining": "Multilingual forms, form previews/exports, templates and approved policy inputs remain.",
       "questionnaire_references": "S21.01–04 S21.15–16"
     },
@@ -678,7 +678,7 @@
       "workflow": "Reserve/confirm participants, consent and transport",
       "module": "Registrations",
       "status": "partial",
-      "implemented_slice": "Office registration of existing people and member self-registration via reviewed person links; reserve/confirm with age, consent, guardian-authority and collection checks; per-event policy fence prevents overbooking seats and transport. Local service and HTTP/CSRF tests pass.",
+      "implemented_slice": "Office registration and member self-registration through reviewed person links pin the viewed form version; reserve/confirm retain age, consent, guardian-authority and collection checks, with event/policy fences for seats and transport. A limited versioned cashier view supports receipts/refund requests without registrations.manage or private answers. Isolated service/HTTP/CSRF regressions pass.",
       "remaining": "Guest/public registration with provisional identity review, guardian registration for linked children, transport rosters, notifications and live Cosmos acceptance remain.",
       "questionnaire_references": "S21.03–09"
     },
@@ -705,7 +705,7 @@
       "workflow": "Event arrival, checkout and reentry",
       "module": "Registrations",
       "status": "partial",
-      "implemented_slice": "Assigned door operators record ordered arrival, checkout and reentry within the event window, with paper-entry reasons for late entries. Local service and HTTP/CSRF tests pass.",
+      "implemented_slice": "Assigned check-in operators obtain paged/individual versioned confirmed-participant views with only door details, then record ordered arrival, collector-verified checkout and reentry. Admission rechecks event eligibility; writes conditionally fence event/person/policy state. Views exclude answers, private consent/authority evidence and finance. Narrow-role real HTTP/CSRF regressions pass.",
       "remaining": "Badge/QR check-in, offline door mode and live acceptance remain.",
       "questionnaire_references": "S22.01–05 S22.13"
     },
@@ -831,8 +831,8 @@
       "workflow": "In-app notifications and preferences",
       "module": "Communications",
       "status": "partial",
-      "implemented_slice": "In-app notifications stored per account with deduplication, Required versus Optional kinds, read/unread/archive, muted optional topics and language preference; wired to request, concern (neutral wording) and inbox events. Local service tests pass.",
-      "remaining": "Combined-home notification center across parishes, reminder rules, quiet hours/digests and external delivery tracking remain.",
+      "implemented_slice": "Per-account deduplicated in-app notices with Required/Optional kinds, read/unread/archive and optional-topic/language preferences. All current required-notice producers atomically stage Pending work with their source changes in the parish partition; a bounded background relay checks the current typed audience, confirms recipient record/legacy receipt and conditionally acknowledges Stored. Neutral previews exclude private case content. Recovery, acknowledgment, concurrency, authorization and hosted-worker checks are recorded in the reliability verification report.",
+      "remaining": "Combined-home notification center across parishes, reminder rules, quiet hours/digests and external delivery tracking remain. Historical pre-outbox missing notices are not automatically reconstructed; legacy cross-parish dedup collisions require reviewed resolution, and no pending-work retention/deletion policy is invented.",
       "questionnaire_references": "S03.09 S26.11–15"
     },
     {

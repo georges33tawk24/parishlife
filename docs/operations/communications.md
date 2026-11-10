@@ -14,7 +14,7 @@ Any signed-in personal account submits an intention with the most public use it 
 
 ## Notifications (`/api/notifications`)
 
-- Other modules store in-app notifications after their own committed change, with a deduplication key so a retried event is stored once. Request updates (accept, return, decline, cancel, priest approval, date confirmation, completion) notify signed-in applicants. Concern updates send only "There is an update to your confidential case" with no category, subject or identity. New inbox messages notify the other participants.
+- Seven integrated services now stage required notice work in the same parish transaction as the source change, then store the recipient notice and acknowledge the work separately. A failed or interrupted dispatch leaves new obligations pending for recovery; pending work may already have a recipient notice if acknowledgment failed. Request updates use neutral wording; concern updates reveal no category, subject or identity; inbox notices go to the current permitted participants. The [required notification runbook](required-notification-outbox.md) lists all nine audiences, worker bounds, current-access checks, legacy deduplication limits and recovery behavior. It does not backfill notices missed before staging existed or claim external delivery.
 - `GET /api/notifications?status=`, `POST /api/notifications/{id}/state` (Read/Unread/Archived) and `GET/PUT /api/notifications/preferences` (muted optional topics, language, digest). Required own-case and security notices cannot be muted.
 
 ## Inbox (`/api/parishes/{parish}/inbox`)

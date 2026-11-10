@@ -1,5 +1,7 @@
 # ParishLife backend
 
+Current local development checkpoint: **324 tests pass**, including required-notice interruption recovery, immutable request-file retries and limited-role registration HTTP workflows. See the [verification and remaining limits](docs/verification/backend-2026-11-10-reliability.md) and [current continuation state](docs/continuation/STATUS.md). The local continuation is not yet pushed to the shared backend branch.
+
 C#/.NET 10 backend with one production API project, organized into understandable folders. The current stage covers the backend/Azure foundation, local Aspire monitoring, MiniDevOps-style DTO/model classes, account security, first bishop, factual jurisdiction, selected staff capacities, calendar/facility/reservations, and ministry membership/meetings/attendance. Frontend integration is deferred. The full product is still under implementation; see `docs/architecture/backend-foundation.md` and the feature coverage register.
 
 ## Projects

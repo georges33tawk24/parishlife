@@ -1,5 +1,7 @@
 # Moving ParishLife continuation to Claude
 
+> Historical optional Claude setup guide. The owner currently continues implementation here on `dev/colin/backend-reliability-20261110`; use [STATUS.md](STATUS.md) and the [latest verification](../verification/backend-2026-11-10-reliability.md) for current commits, tests and next work. Branch/count/setup observations below describe the earlier handover.
+
 Prepared **10 November 2026**. The backend was pulled from Georges's repository and reviewed. All existing work was preserved. The current local continuation also includes a verified MFA race fix and this handover; those additions have not been pushed.
 
 ## Recommended setup
