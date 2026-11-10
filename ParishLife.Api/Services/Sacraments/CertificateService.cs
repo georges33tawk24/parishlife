@@ -3,9 +3,12 @@
 // Main functions: CreateAsync, ActAsync, GetAsync, ListAsync and SetPolicyAsync; helpers check office, priest, bishop and release authority,
 // freeze the source snapshot at preparation and refuse issuing a snapshot the source has since amended.
 // Release/withdrawal notices require a matching linked request applicant; source changes and safe outcome reads preserve existing authority gates.
+// AuthorizationPreviewAsync and AuthorizeAsync (X03) let the priest who recorded signing electronically authorize the exact prepared content
+// under bishop-approved wording; a return clears the authorization and issuing a reissue marks the replaced certificate superseded.
 
 using ParishLife.Api.DTOs.Sacraments;
 using ParishLife.Api.DTOs.Communications;
+using ParishLife.Api.DTOs.Documents;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -14,12 +17,13 @@ using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Communications;
+using ParishLife.Api.Services.Documents;
 
 namespace ParishLife.Api.Services.Sacraments;
 
 public class CertificateService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, IClergyAuthority clergy,
     IArchdioceseAuthority bishops, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications,
-    NotificationOutcomeReader outcomes, TimeProvider clock)
+    NotificationOutcomeReader outcomes, DocumentSignatureService signatures, TimeProvider clock)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "certificate:" + id;
@@ -166,6 +170,8 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
                 item.SignedAt = null;
                 item.AcceptedBy = null;
                 item.AcceptedAt = null;
+                // Returned content is no longer the authorized version; the signature record itself is kept.
+                item.AuthorizationCode = null;
                 item.Status = "Returned";
                 break;
             case "issue" when item.Status == "AuthorizedForIssuance":
@@ -198,6 +204,13 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
                 throw State("This certificate action is not available in its current state.");
         }
         var changes = new List<RecordChange> { Fence(root) };
+        if (request.Action == "issue" && item.ReplacesId is { } replaced)
+        {
+            // Issuing a reissue marks the earlier certificate superseded so its verification shows which version is current.
+            var old = await ReadAsync(parish, replaced, ct);
+            old.Value.SupersededById = item.Id;
+            changes.Add(RecordChange.Replace(Key(old.Value.Id), "certificate", old.Value, old.Version));
+        }
         string? recipient = null;
         if (request.Action is "release" or "withdraw")
         {
@@ -223,6 +236,65 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         if (recipient is not null)
             await notifications.DispatchAsync(parish, recipient, "certificate:" + op.Id, ct);
         return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
+    }
+
+    public async Task<AuthorizationPreviewDto> AuthorizationPreviewAsync(string parish, string id, CancellationToken ct)
+    {
+        await ReaderAsync(parish, ct);
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        var content = await AuthorizedContentAsync(parish, item, ct);
+        return new AuthorizationPreviewDto
+        {
+            DocumentType = "Certificate", DocumentId = item.Id, Reference = item.Reference, Version = item.Version, Content = content,
+            ContentHash = DocumentSignatureService.Hash(content), CurrentCode = item.AuthorizationCode, Statement = DocumentSignatureService.NotOfficial
+        };
+    }
+
+    // Electronic authorization is a separate personal act of the priest who recorded signing, bound to the exact previewed content.
+    public async Task<CertificateDto> AuthorizeAsync(string parish, string id, AuthorizeDocumentDto request, CancellationToken ct)
+    {
+        await proof.RequireMfaAsync(ct);
+        await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
+        var root = await parishes.GetAsync(parish, ct) ?? throw Missing();
+        // The authenticator code is a credential and never enters the operation fingerprint.
+        var op = actor.CreateOperation(request.OperationId, new { request.Version, request.ExpectedContentHash }, clock, "certificate-authorization:v1:" + id);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+            return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        if (item.Status is not ("AwaitingBishop" or "AuthorizedForIssuance" or "Issued") || item.AuthorizationCode is not null)
+            throw State("Only a signed, unauthorized certificate awaiting bishop review, authorized for issuance or issued can be authorized electronically.");
+        if (item.SignedBy != actor.AccountId)
+            throw new DomainException("clergy_authority_required", "Only the priest who signed this certificate can authorize it electronically.", FailureKind.Forbidden);
+        var content = await AuthorizedContentAsync(parish, item, ct);
+        var (signature, change) = await signatures.PrepareAsync(parish, "Certificate", item.Id, item.Reference, item.Version, content, "Parish priest", request, op.At, ct);
+        item.AuthorizationCode = signature.Code;
+        item.AuthorizationCodes = [.. item.AuthorizationCodes, signature.Code];
+        await records.CommitAsync(Scope(parish), op, "certificates.authorize", id,
+            [Fence(root), RecordChange.Replace(Key(id), "certificate", item, Versions.Require(request.Version)), change],
+            new CommandResult { Id = id, Status = item.Status }, ct);
+        return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
+    }
+
+    // The exact authorized content: prepared snapshot, identity, recipient link and the hash of the bishop-approved wording.
+    private async Task<Dictionary<string, string>> AuthorizedContentAsync(string parish, Certificate item, CancellationToken ct)
+    {
+        if (item.Snapshot.Count == 0 || item.SourceRecordId is null)
+            throw State("Prepare the certificate before authorizing it.");
+        var template = (await records.ReadAsync<DocumentTemplate>(Scope(parish), "documentTemplate:" + item.Kind + ":" + item.Language, ct))?.Value;
+        if (template?.Status != "Approved")
+            throw State("There is no bishop-approved " + item.Language + " wording for " + item.Kind + " certificates, so there is no exact document to authorize.");
+        var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct))?.Value;
+        var content = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["documentType"] = "Certificate", ["sacrament"] = item.Kind, ["reference"] = item.Reference,
+            ["version"] = item.Version.ToString(System.Globalization.CultureInfo.InvariantCulture), ["language"] = item.Language,
+            ["subjectPersonId"] = item.PersonId, ["subjectName"] = person is null ? "" : person.GivenName + " " + person.FamilyName,
+            ["officialNumber"] = item.OfficialNumber ?? "", ["requestId"] = item.RequestId ?? "", ["sourceRecordId"] = item.SourceRecordId,
+            ["templateSha256"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(template.Body)))
+        };
+        foreach (var fact in item.Snapshot)
+            content["fact." + fact.Key] = fact.Value;
+        return content;
     }
 
     public async Task<Versioned<CertificateDto>> GetAsync(string parish, string id, CancellationToken ct)
@@ -316,6 +388,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         Snapshot = new(x.Snapshot), OfficialNumber = x.OfficialNumber, BishopReviewRequired = x.BishopReviewRequired, PreparedBy = x.PreparedBy,
         SignedBy = x.SignedBy, SignedAt = x.SignedAt, AcceptedBy = x.AcceptedBy, AcceptedAt = x.AcceptedAt, ReturnReason = x.ReturnReason,
         IssuedBy = x.IssuedBy, IssuedAt = x.IssuedAt, ReleasedBy = x.ReleasedBy, ReleasedAt = x.ReleasedAt, RecipientName = x.RecipientName,
-        RecipientRelationship = x.RecipientRelationship, VerificationMethod = x.VerificationMethod, WithdrawalReason = x.WithdrawalReason
+        RecipientRelationship = x.RecipientRelationship, VerificationMethod = x.VerificationMethod, WithdrawalReason = x.WithdrawalReason,
+        AuthorizationCode = x.AuthorizationCode, AuthorizationCodes = [.. x.AuthorizationCodes], SupersededById = x.SupersededById
     };
 }

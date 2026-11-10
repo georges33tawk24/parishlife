@@ -1,7 +1,8 @@
 // Purpose: keeps authority-supplied certificate templates per sacrament and language (proposed by a parish priest, approved by the bishop)
 // and renders a certificate as a printable HTML sheet from its own prepared snapshot, escaped, right-to-left for Arabic, and
 // always labelled DRAFT or COPY: no format produced here is an official document by itself.
-// Main functions: ProposeAsync, ApproveAsync, TemplatesAsync and RenderAsync.
+// Main functions: ProposeAsync, ApproveAsync, TemplatesAsync and RenderAsync; an electronically authorized certificate is rendered from its
+// authorized name and wording only, with the priest's printed authority, the verification code and its honest official status.
 
 using System.Net;
 using System.Text;
@@ -14,11 +15,12 @@ using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Documents;
 
 namespace ParishLife.Api.Services.Sacraments;
 
 public partial class DocumentSheetService(IRecordTransactions records, IParishRepository parishes, IClergyAuthority clergy, IArchdioceseAuthority bishops,
-    CertificateService certificates, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
+    CertificateService certificates, DocumentSignatureService signatures, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
     private static readonly string[] Fields = ["name", "reference", "officialNumber", "celebratedAt", "place", "celebrantName", "witnesses", "bookReference", "issuedAt"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -84,10 +86,19 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
             throw State("There is no approved " + certificate.Language + " template for " + certificate.Sacrament + " certificates; preparing one is a task for the priest and bishop.");
         // The certificate's own snapshot (taken when it was prepared) is used, so later register or profile changes never alter it.
         var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + certificate.SubjectPersonId, ct))?.Value;
+        var name = person is null ? null : person.GivenName + " " + person.FamilyName;
+        var authorization = certificate.AuthorizationCode is { } code ? await signatures.ReadAsync(parish, code, ct) : null;
+        if (authorization is not null)
+        {
+            // An authorized sheet must show exactly what was authorized: the same wording and the subject name as authorized.
+            if (authorization.Content.GetValueOrDefault("templateSha256") != Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(template.Body))))
+                throw State("The approved wording changed after this certificate was authorized; return, prepare and authorize it again.");
+            name = authorization.Content.GetValueOrDefault("subjectName");
+        }
         var facts = certificate.Snapshot;
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["name"] = person is null ? null : person.GivenName + " " + person.FamilyName, ["reference"] = certificate.Reference, ["officialNumber"] = certificate.OfficialNumber,
+            ["name"] = name, ["reference"] = certificate.Reference, ["officialNumber"] = certificate.OfficialNumber,
             ["celebratedAt"] = facts.GetValueOrDefault("celebratedAt"), ["place"] = facts.GetValueOrDefault("place"), ["celebrantName"] = facts.GetValueOrDefault("celebrantName"),
             ["witnesses"] = facts.GetValueOrDefault("witnesses"), ["bookReference"] = facts.GetValueOrDefault("bookReference"),
             ["issuedAt"] = certificate.IssuedAt?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
@@ -101,13 +112,27 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
             return WebUtility.HtmlEncode(value);
         });
         // Official validity comes from the issuing authority's signed and sealed paper, not from this file.
-        var banner = certificate.Status is "Issued" or "Released"
+        var banner = certificate.Status is "Issued" or "Released" && authorization?.ArrangementReference is not null
+            ? "ELECTRONICALLY AUTHORIZED under the issuing authority's recorded arrangement; confirm its current status with the verification code."
+            : certificate.Status is "Issued" or "Released"
             ? "COPY: official only as the signed and sealed paper issued by the parish."
             : "DRAFT: not valid; this certificate is " + certificate.Status + ".";
         var html = new StringBuilder("<!doctype html><html lang=\"").Append(template.Language).Append("\" dir=\"").Append(template.Language == "ar" ? "rtl" : "ltr")
             .Append("\"><head><meta charset=\"utf-8\"><title>").Append(WebUtility.HtmlEncode(certificate.Reference)).Append("</title><style>@page{size:A4;margin:20mm}")
             .Append(".banner{border:2px solid #000;padding:4mm;font-weight:bold}.missing{background:#eee}</style></head><body><p class=\"banner\" dir=\"ltr\">")
-            .Append(WebUtility.HtmlEncode(banner)).Append("</p><div class=\"body\">").Append(body.Replace("\n", "<br>")).Append("</div></body></html>");
+            .Append(WebUtility.HtmlEncode(banner)).Append("</p><div class=\"body\">").Append(body.Replace("\n", "<br>")).Append("</div>");
+        if (authorization is not null)
+        {
+            // The printed authority is the signing priest; office attribution stays in internal history.
+            var status = await signatures.StatusAsync(authorization, ct);
+            html.Append("<p class=\"authority\" dir=\"ltr\">").Append(WebUtility.HtmlEncode("Electronically authorized by " + authorization.SignerName + ", "
+                + authorization.SignerAuthority + ", on " + authorization.SignedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                + ". Verification code: " + authorization.Code + " (current status: " + status + "). "
+                + (authorization.ArrangementReference is null ? DocumentSignatureService.NotOfficial
+                    : "Authorized under the issuing authority's recorded electronic-signature arrangement " + authorization.ArrangementReference + ".")))
+                .Append("</p>");
+        }
+        html.Append("</body></html>");
         return html.ToString();
     }
 

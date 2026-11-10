@@ -45,6 +45,7 @@ using ParishLife.Api.Services.Sacraments;
 using ParishLife.Api.Services.Care;
 using ParishLife.Api.Services.Communications;
 using ParishLife.Api.Services.Finance;
+using ParishLife.Api.Services.Documents;
 using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
@@ -159,6 +160,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ReportScheduleProcessor>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();
+        services.AddScoped<DocumentSignatureService>();
+        services.AddScoped<RequestLetterService>();
         services.AddScoped<EvidenceService>();
         services.AddScoped<ServicePlanService>();
         services.AddScoped<MusicLibraryService>();

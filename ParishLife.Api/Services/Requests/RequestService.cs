@@ -548,7 +548,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             Body = Guard.Text(body, "Message", 4000), At = op.At
         });
 
-    private async Task<Versioned<ParishRequest>> GuestCaseAsync(string parish, string id, string? token, CancellationToken ct)
+    internal async Task<Versioned<ParishRequest>> GuestCaseAsync(string parish, string id, string? token, CancellationToken ct)
     {
         await own.RootAsync(parish, ct);
         var row = await ReadAsync(parish, id, ct);

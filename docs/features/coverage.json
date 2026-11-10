@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 133,
-    "not_started": 16
+    "partial": 136,
+    "not_started": 13
   },
   "entries": [
     {
@@ -1145,27 +1145,27 @@
       "id": "X03",
       "workflow": "Signature setup and exact document authorization",
       "module": "Documents",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Signer setup (own printed name, personal capacity, MFA, no recovery session); bishop-recorded electronic-signature arrangement defaulting to not approved; electronic authorization of the exact prepared certificate content (canonical fields + bishop-approved wording hash) by the priest who recorded signing, in his current appointment, with MFA, the previewed content hash and a fresh authenticator code kept out of fingerprints/audit; immutable Data-Protection-sealed record with a 128-bit verification code; return clears and reissue supersedes; the printable sheet shows the priest's printed authority, code and honest official status. Local tests only.",
+      "remaining": "All rules are the proposed S14.10/S15.09 answers, not owner-approved policy; official validity stays a U05 factual input (no arrangement, wording, seals or signers supplied). Not delivered: one-use server challenge/passkey assertion (TOTP may be reused within its step), drawn signature images, substitute/acting signers, separate bishop co-signature, PDF/QR output, legacy issued documents and the frontend. Live Cosmos/Key Vault key-ring acceptance not performed.",
       "questionnaire_references": "S14.10 S15.09 U05 U10"
     },
     {
       "id": "X04",
       "workflow": "Signed letters for guest requests",
       "module": "Documents/Requests",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Office letters on any request case including guest requests: requests.manage drafts and revises; a current parish priest electronically authorizes the exact text (same signing mechanism as X03); documents.release releases only after the server matches the re-entered request reference, addressee and signed content hash, to a verified applicant account or in person with evidence; withdrawal and versioned replacement keep history and supersede; release/withdrawal fence the request and stage a neutral applicant notice; the tracking token lists released letters but never their text or code; the applicant account reads text released to it. Local tests only.",
+      "remaining": "Proposed contract; the matrix's separate office letter authority is not implemented because no grantable signing permission exists and S14.10 names the priest as printed authority (needs an authority decision). Not delivered: letterhead/templates, PDF output, contact-challenge or short-lived download sessions (U10), disclosure-incident work after wrongful release, notification-outcome reads for letters, and the frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S11 S14.10 S15.09–11"
     },
     {
       "id": "X05",
       "workflow": "Public signature verification and revocation",
       "module": "Documents",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous, rate-limited GET /api/public/document-verifications/{code} returning only status/meaning, document type, reference, version, issuing parish, printed authority, time and an honest official statement (reference only unless the bishop recorded an approved arrangement); status derived from the current document (Valid, NotYetIssued, Superseded, Withdrawn, Invalidated, Revoked) plus content-hash/Data Protection seal integrity checks; staff read; append-only revocation by a current priest or the jurisdiction bishop with an internal reason. Local tests only.",
+      "remaining": "Proposed contract; a code/QR is never treated as proof of official validity (U05). Not delivered: verification of an uploaded PDF/file, QR images, recipient notification after revocation, disclosure review worklist, legacy document records and the frontend. Live Cosmos/Key Vault acceptance and the single catalog pointer partition's load are unmeasured.",
       "questionnaire_references": "S14.10–12 S15.10"
     },
     {

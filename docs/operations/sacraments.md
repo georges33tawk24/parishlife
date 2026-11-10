@@ -80,4 +80,4 @@ Source basis: S14.09–S14.10, S30.19 (proposed). The system never writes or tra
   - A missing value is shown as `[field not recorded]`, never invented.
   - Every sheet carries a banner: **DRAFT** until issued, then **COPY**. The official document remains the signed and sealed paper until an approved electronic signature and verification arrangement exists.
 
-Not implemented: PDF generation, bilingual layouts, the printed priest-name block, serial/QR verification (X05), and register-page and other sheets (rosters, vouchers, receipts).
+Electronic authorization, the printed priest-name block for authorized certificates and code verification are described in [document-signatures.md](document-signatures.md). Not implemented: PDF generation, QR images, bilingual layouts, and register-page and other sheets (rosters, vouchers, receipts).
