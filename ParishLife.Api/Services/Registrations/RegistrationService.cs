@@ -1,9 +1,10 @@
 // Purpose: Contains event registration, consent, capacity, receipts/refunds, and presence state transitions.
-// Main functions: Scope, Op, Authorize, Fence, Get, Invalid, PolicyKey, RowKey, Event, Participants, CapacityAvailable,
+// Main functions: Scope, Op, Authorize, Fence, Get, Invalid, PolicyKey, RowKey, Event, RequireEligibleEvent, ViewedFormAsync, Participants, CapacityAvailable,
 // ConfigureAsync, PolicyAsync, FormAsync, PolicyActionAsync, ReviseFormAsync, RegisterAsync, RegisterOwnAsync, OwnAsync,
 // CancelOwnAsync, GetAsync, Registration, ListAsync, ActAsync, AmendAsync, Optional, ValidateCollectors, ValidateEligibility,
-// ReceiptAsync, RequestRefundAsync, RefundActionAsync, MovementsAsync, RefundsAsync, Door, PresenceAsync, PresentAsync and
-// the ToDto projections. Every staff path requires current MFA, and every write fences the parish root and the event policy,
+// ReceiptAsync, RequestRefundAsync, RefundActionAsync, MovementsAsync, RefundsAsync, Door, DoorListAsync, DoorRegistrationAsync,
+// CashierListAsync, CashierRegistrationAsync, ApplicantFormAsync, PresenceAsync, PresentAsync and the response projections.
+// Every staff path requires current MFA, and registration changes fence the parish root and the event policy,
 // so concurrent seat allocation and stale authority fail instead of committing.
 
 using ParishLife.Api.DTOs.Registrations;
@@ -51,6 +52,23 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return item;
     }
 
+    private static void RequireEligibleEvent(CalendarEvent item)
+    {
+        if (item.Kind != "ParishActivity" || item.Visibility is not ("Parish" or "Public")
+            || item.SourceType is not null || item.SourceId is not null || item.MinistryId is not null || item.ClergyAccountIds?.Length > 0)
+            throw new DomainException("event_not_eligible", "Registration is available for parish or public manual parish activities only.", FailureKind.Conflict);
+    }
+
+    private async Task<RegistrationForm> ViewedFormAsync(string parish, RegistrationPolicy policy, Guid viewedFormId, CancellationToken ct)
+    {
+        if (Guard.Id(viewedFormId) != policy.FormVersionId)
+            throw new DomainException("registration_form_changed", "The registration form has changed. Read the current form and review its questions before submitting again.", FailureKind.Conflict);
+        var form = await Get<RegistrationForm>(parish, "registrationForm:" + policy.FormVersionId, ct);
+        if (form.Value.EventId != policy.EventId)
+            throw Invalid("This form belongs to a different event.");
+        return form.Value;
+    }
+
     private async Task<IReadOnlyList<Versioned<EventRegistration>>> Participants(string parish, string eventId, CancellationToken ct) => await records.CollectAsync<EventRegistration>(Scope(parish), "registration", ct, 5000, new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
     private async Task<bool> CapacityAvailable(string parish, RegistrationPolicy policy, bool transport, string? except, CancellationToken ct)
     {
@@ -66,8 +84,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             return replay;
         var occurrence = await Event(parish, eventId, ct);
         // Registration applies to manual parish activities; source-owned meetings use RSVP and appointments/blocks are private.
-        if (occurrence.Value.Kind != "ParishActivity" || occurrence.Value.SourceType is not null || occurrence.Value.Visibility == "Private")
-            throw new DomainException("event_not_eligible", "Registration is available for parish or public manual parish activities only.");
+        RequireEligibleEvent(occurrence.Value);
         if (request.Capacity is < 1 or > 4000 || request.TransportCapacity < 0 || request.TransportCapacity > request.Capacity || request.MinimumAge is < 0 or > 120 || request.MaximumAge is < 0 or > 120 || request.MaximumAge < request.MinimumAge || request.ChildAgeThreshold is < 1 or > 25 || request.Fields is null || request.DoorAccountIds is null || request.DoorAccountIds.Length > 40)
             throw new DomainException("invalid_registration_policy", "Use bounded capacity, explicit age/guardian policy and bounded form/operator lists.");
         RegistrationRules.Money(request.Fee, Guard.Text(request.Currency, "Currency", 3), request.Precision);
@@ -133,6 +150,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             return replay;
         var row = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
+        if (request.Action == "open")
+            RequireEligibleEvent(occurrence.Value);
         var status = request.Action switch
         {
             "open" when occurrence.Value.Status == "Confirmed" && occurrence.Value.StartsAt > clock.GetUtcNow() => "Open",
@@ -207,15 +226,16 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             return replay;
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
+        RequireEligibleEvent(occurrence.Value);
         if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
             throw Invalid("Registration is closed for this event.");
         var person = await Get<Person>(parish, "person:" + Guard.Id(request.PersonId), ct);
         if (person.Value.Archived)
             throw Invalid("Restore or review the archived person before registering.");
-        var form = await Get<RegistrationForm>(parish, "registrationForm:" + policy.Value.FormVersionId, ct);
+        var form = await ViewedFormAsync(parish, policy.Value, request.FormVersionId, ct);
         if (request.Answers is null || request.Collectors is null)
             throw new DomainException("participant_input_required", "Answers and collector lists are required.");
-        RegistrationRules.ValidateAnswers(form.Value.Fields, request.Answers);
+        RegistrationRules.ValidateAnswers(form.Fields, request.Answers);
         ValidateCollectors(request.Collectors);
         var id = RegistrationId(eventId, person.Value.Id);
         var item = new EventRegistration
@@ -225,7 +245,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             EventId = eventId,
             PersonId = person.Value.Id,
             Origin = "Office",
-            FormVersionId = form.Value.Id,
+            FormVersionId = form.Id,
             Status = "Submitted",
             Transport = request.Transport,
             Answers = request.Answers,
@@ -309,6 +329,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         else
         {
             var occurrence = await Event(parish, eventId, ct);
+            RequireEligibleEvent(occurrence.Value);
             if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
                 throw Invalid("Registration decisions require an open future event.");
             var person = await Get<Person>(parish, "person:" + item.PersonId, ct);
@@ -437,6 +458,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var row = await Registration(parish, eventId, id, ct);
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
+        RequireEligibleEvent(occurrence.Value);
         var person = await Get<Person>(parish, "person:" + row.Value.PersonId, ct);
         if (row.Value.Presence == "Present" || row.Value.Status == "Cancelled")
             throw Invalid("Amendments are unavailable for present or cancelled participants.");
@@ -479,7 +501,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 throw Invalid("The changed transport selection exceeds available capacity.");
         }
 
-        return await records.CommitAsync(Scope(parish), op, "registration.amend", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version)], item, ct, request.Reason);
+        return await records.CommitAsync(Scope(parish), op, "registration.amend", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], item, ct, request.Reason);
     }
 
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, "Evidence", 2000);
@@ -668,6 +690,69 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return (root, policy);
     }
 
+    public async Task<Page<Versioned<DoorRegistrationDto>>> DoorListAsync(string parish, string eventId, int size, string? cursor, CancellationToken ct)
+    {
+        await Door(parish, eventId, ct);
+        var page = await records.PageAsync<EventRegistration>(Scope(parish), "registration", size, cursor, ct,
+            new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId },
+            new RecordCondition { Path = "status", Comparison = "eq", Value = "Confirmed" });
+        var items = new List<Versioned<DoorRegistrationDto>>();
+        foreach (var row in page.Items)
+            items.Add(new Versioned<DoorRegistrationDto> { Version = row.Version, Value = await DoorViewAsync(parish, row.Value, ct) });
+        return new Page<Versioned<DoorRegistrationDto>> { Items = items.ToArray(), ContinuationToken = page.ContinuationToken };
+    }
+
+    public async Task<Versioned<DoorRegistrationDto>> DoorRegistrationAsync(string parish, string eventId, string id, CancellationToken ct)
+    {
+        await Door(parish, eventId, ct);
+        var row = await Registration(parish, eventId, id, ct);
+        if (row.Value.Status != "Confirmed")
+            throw new DomainException("registration_resource_unavailable", "The requested confirmed participant is unavailable.", FailureKind.NotFound);
+        return new Versioned<DoorRegistrationDto> { Version = row.Version, Value = await DoorViewAsync(parish, row.Value, ct) };
+    }
+
+    private async Task<DoorRegistrationDto> DoorViewAsync(string parish, EventRegistration item, CancellationToken ct)
+    {
+        var person = await Get<Person>(parish, "person:" + item.PersonId, ct);
+        return new DoorRegistrationDto
+        {
+            Id = item.Id, EventId = item.EventId, DisplayName = person.Value.GivenName + " " + person.Value.FamilyName,
+            Status = item.Status, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt, IndependentDeparture = item.IndependentDeparture,
+            Collectors = item.Collectors.Select(x => new DoorCollectorDto { Id = x.Id, Name = x.Name }).ToArray()
+        };
+    }
+
+    public async Task<Page<Versioned<CashierRegistrationDto>>> CashierListAsync(string parish, string eventId, int size, string? cursor, CancellationToken ct)
+    {
+        await Authorize(parish, Permissions.FinanceEnter, ct);
+        await access.RequireModuleAsync(parish, "finance", ct);
+        var page = await records.PageAsync<EventRegistration>(Scope(parish), "registration", size, cursor, ct,
+            new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
+        var items = new List<Versioned<CashierRegistrationDto>>();
+        foreach (var row in page.Items)
+            items.Add(new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, ct) });
+        return new Page<Versioned<CashierRegistrationDto>> { Items = items.ToArray(), ContinuationToken = page.ContinuationToken };
+    }
+
+    public async Task<Versioned<CashierRegistrationDto>> CashierRegistrationAsync(string parish, string eventId, string id, CancellationToken ct)
+    {
+        await Authorize(parish, Permissions.FinanceEnter, ct);
+        await access.RequireModuleAsync(parish, "finance", ct);
+        var row = await Registration(parish, eventId, id, ct);
+        return new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, ct) };
+    }
+
+    private async Task<CashierRegistrationDto> CashierViewAsync(string parish, EventRegistration item, CancellationToken ct)
+    {
+        var person = await Get<Person>(parish, "person:" + item.PersonId, ct);
+        return new CashierRegistrationDto
+        {
+            Id = item.Id, EventId = item.EventId, DisplayName = person.Value.GivenName + " " + person.Value.FamilyName,
+            Status = RegistrationRules.EffectiveStatus(item, clock.GetUtcNow()), Fee = item.Fee, Currency = item.Currency, Precision = item.Precision,
+            Received = item.Received, Refunded = item.Refunded, Outstanding = item.Fee - item.Received + item.Refunded
+        };
+    }
+
     public async Task<PresenceChange> PresenceAsync(string parish, string eventId, string id, RecordPresenceDto request, CancellationToken ct)
     {
         var (root, policy) = await Door(parish, eventId, ct);
@@ -677,6 +762,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var row = await Registration(parish, eventId, id, ct);
         var item = row.Value;
         var occurrence = await Event(parish, eventId, ct);
+        if (request.Action is "arrive" or "reenter")
+            RequireEligibleEvent(occurrence.Value);
         var person = await Get<Person>(parish, "person:" + item.PersonId, ct);
         if (item.Status != "Confirmed")
             throw Invalid("Only confirmed participants may use the event arrival process.");
@@ -763,7 +850,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             VerificationEvidence = Optional(request.VerificationEvidence),
             PaperReason = Optional(request.PaperReason)
         };
-        return await records.CommitAsync(Scope(parish), op, "registration.presence_" + request.Action, id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Create("presence:" + op.Id, "presence", change), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version)], change, ct);
+        return await records.CommitAsync(Scope(parish), op, "registration.presence_" + request.Action, id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Create("presence:" + op.Id, "presence", change), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], change, ct);
     }
 
     public async Task<PresentRoster> PresentAsync(string parish, string eventId, CancellationToken ct)
@@ -786,6 +873,26 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         };
     }
 
+    public async Task<RegistrationApplicantFormDto> ApplicantFormAsync(string parish, string eventId, CancellationToken ct)
+    {
+        await own.OwnLinkAsync(parish, ct);
+        await access.RequireModuleAsync(parish, "core", ct);
+        var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
+        var occurrence = await Event(parish, eventId, ct);
+        RequireEligibleEvent(occurrence.Value);
+        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
+            throw Invalid("Registration is closed for this event.");
+        var form = await Get<RegistrationForm>(parish, "registrationForm:" + policy.Value.FormVersionId, ct);
+        if (form.Value.EventId != eventId)
+            throw Invalid("This form belongs to a different event.");
+        return new RegistrationApplicantFormDto
+        {
+            EventId = eventId, FormVersionId = form.Value.Id, Fields = form.Value.Fields, Fee = policy.Value.Fee,
+            Currency = policy.Value.Currency, Precision = policy.Value.Precision, MinimumAge = policy.Value.MinimumAge,
+            MaximumAge = policy.Value.MaximumAge, ConsentRequired = policy.Value.ConsentRequired, ConsentText = policy.Value.ConsentText
+        };
+    }
+
     public async Task<EventRegistrationDto> RegisterOwnAsync(string parish, string eventId, RegisterOwnDto request, CancellationToken ct)
     {
         var link = await own.OwnLinkAsync(parish, ct);
@@ -796,22 +903,23 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             return ToDto(replay, clock.GetUtcNow(), false);
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
-        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow() || occurrence.Value.Visibility == "Private")
+        RequireEligibleEvent(occurrence.Value);
+        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
             throw Invalid("Registration is closed for this event.");
         var person = await Get<Person>(parish, "person:" + link.Value.PersonId, ct);
         if (person.Value.Archived)
             throw Invalid("Ask the parish office to review your record before registering.");
-        var form = await Get<RegistrationForm>(parish, "registrationForm:" + policy.Value.FormVersionId, ct);
+        var form = await ViewedFormAsync(parish, policy.Value, request.FormVersionId, ct);
         if (request.Answers is null)
             throw new DomainException("participant_input_required", "Answers are required.");
-        RegistrationRules.ValidateAnswers(form.Value.Fields, request.Answers);
+        RegistrationRules.ValidateAnswers(form.Fields, request.Answers);
         var id = RegistrationId(eventId, person.Value.Id);
         if (await records.ReadAsync<EventRegistration>(Scope(parish), RowKey(id), ct) is not null)
             throw Invalid("You already have a registration for this event; the office can reinstate a cancelled one.");
         // Self-registration only submits. Capacity, eligibility, guardian arrangements and confirmation stay with the office path.
         var item = new EventRegistration
         {
-            Id = id, ParishId = parish, EventId = eventId, PersonId = person.Value.Id, Origin = "Self", FormVersionId = form.Value.Id,
+            Id = id, ParishId = parish, EventId = eventId, PersonId = person.Value.Id, Origin = "Self", FormVersionId = form.Id,
             Status = "Submitted", Transport = request.Transport, Answers = request.Answers, ConsentEvidence = Optional(request.ConsentEvidence),
             Collectors = [], Fee = policy.Value.Fee, Currency = policy.Value.Currency, Precision = policy.Value.Precision,
             CreatedAt = op.At, CreatedBy = actor.AccountId
@@ -872,7 +980,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
     // Own projections show the member's answers, status, balance and presence, never staff evidence, collectors or the recorder.
     internal static EventRegistrationDto ToDto(EventRegistration x, DateTimeOffset now, bool staff) => new()
     {
-        Id = x.Id, EventId = x.EventId, PersonId = x.PersonId, Origin = x.Origin, Status = RegistrationRules.EffectiveStatus(x, now),
+        Id = x.Id, EventId = x.EventId, PersonId = x.PersonId, FormVersionId = x.FormVersionId, Origin = x.Origin, Status = RegistrationRules.EffectiveStatus(x, now),
         Transport = x.Transport, Answers = new(x.Answers), ConsentEvidence = staff ? x.ConsentEvidence : null,
         GuardianAuthorityEvidence = staff ? x.GuardianAuthorityEvidence : null, Collectors = staff ? x.Collectors : null,
         IndependentDeparture = x.IndependentDeparture, Fee = x.Fee, Currency = x.Currency, Received = x.Received, Refunded = x.Refunded,

@@ -1,6 +1,7 @@
 // Purpose: exposes event registration policy/forms, office and own registrations, money movements, refunds and door presence over HTTP.
-// Main functions: Configure, Policy, PolicyAction, ReviseForm, Form, Register, List, Get, Act, Amend, Mine, RegisterOwn, CancelOwn,
-// Receipt, Movements, RequestRefund, Refunds, RefundAction, Presence and Present; the service enforces authority and transitions,
+// Main functions: Configure, Policy, PolicyAction, ReviseForm, Form, ApplicantForm, Register, List, Get, Act, Amend, Mine, RegisterOwn,
+// CancelOwn, DoorList, DoorRegistration, CashierList, CashierRegistration, Receipt, Movements, RequestRefund, Refunds, RefundAction,
+// Presence and Present; the service enforces authority, versioned applicant consent/form context and transitions,
 // and this controller maps stored records to response DTOs.
 
 using Microsoft.AspNetCore.Authorization;
@@ -37,6 +38,10 @@ public class EventRegistrationsController(RegistrationService service) : Control
     public async Task<ActionResult<RegistrationFormDto>> Form(Guid parishId, Guid eventId, Guid formId, CancellationToken ct)
         => Ok(RegistrationService.ToDto(await service.FormAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(formId), ct)));
 
+    [HttpGet("registration/applicant-form")]
+    public async Task<ActionResult<RegistrationApplicantFormDto>> ApplicantForm(Guid parishId, Guid eventId, CancellationToken ct)
+        => Ok(await service.ApplicantFormAsync(Guard.Id(parishId), Guard.Id(eventId), ct));
+
     [HttpPost("registrations")]
     public async Task<ActionResult<EventRegistrationDto>> Register(Guid parishId, Guid eventId, RegisterParticipantDto request, CancellationToken ct)
         => Ok(service.StaffView(await service.RegisterAsync(Guard.Id(parishId), Guard.Id(eventId), request, ct)));
@@ -51,6 +56,22 @@ public class EventRegistrationsController(RegistrationService service) : Control
             ContinuationToken = page.ContinuationToken
         });
     }
+
+    [HttpGet("registrations/door")]
+    public async Task<ActionResult<Page<Versioned<DoorRegistrationDto>>>> DoorList(Guid parishId, Guid eventId, CancellationToken ct, int size = 25, string? cursor = null)
+        => Ok(await service.DoorListAsync(Guard.Id(parishId), Guard.Id(eventId), size, cursor, ct));
+
+    [HttpGet("registrations/{registrationId:guid}/door")]
+    public async Task<ActionResult<Versioned<DoorRegistrationDto>>> DoorRegistration(Guid parishId, Guid eventId, Guid registrationId, CancellationToken ct)
+        => Ok(await service.DoorRegistrationAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), ct));
+
+    [HttpGet("registrations/cashier")]
+    public async Task<ActionResult<Page<Versioned<CashierRegistrationDto>>>> CashierList(Guid parishId, Guid eventId, CancellationToken ct, int size = 25, string? cursor = null)
+        => Ok(await service.CashierListAsync(Guard.Id(parishId), Guard.Id(eventId), size, cursor, ct));
+
+    [HttpGet("registrations/{registrationId:guid}/cashier")]
+    public async Task<ActionResult<Versioned<CashierRegistrationDto>>> CashierRegistration(Guid parishId, Guid eventId, Guid registrationId, CancellationToken ct)
+        => Ok(await service.CashierRegistrationAsync(Guard.Id(parishId), Guard.Id(eventId), Guard.Id(registrationId), ct));
 
     [HttpGet("registrations/mine")]
     public async Task<ActionResult<Versioned<EventRegistrationDto>>> Mine(Guid parishId, Guid eventId, CancellationToken ct)

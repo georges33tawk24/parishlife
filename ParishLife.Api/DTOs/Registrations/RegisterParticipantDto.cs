@@ -1,5 +1,5 @@
 // Purpose: represents register participant input/output data.
-// Main members: OperationId, PersonId, Transport, Answers, ConsentEvidence, GuardianAuthorityEvidence, Collectors, and related workflow details.
+// Main members: OperationId, PersonId, the viewed FormVersionId, answers, transport, consent and guardian arrangements.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Models;
@@ -13,6 +13,9 @@ public class RegisterParticipantDto
     public Guid OperationId { get; set; }
     [NotEmptyGuid]
     public Guid PersonId { get; set; }
+
+    [NotEmptyGuid]
+    public Guid FormVersionId { get; set; }
 
     public bool Transport { get; set; }
     [Required]

@@ -207,7 +207,8 @@ public class EventRegistrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path + "/mine")).StatusCode);
 
         await MinistryHttpTests.LoginAsync(client, member.Username);
-        var request = new RegisterOwnDto { OperationId = Guid.NewGuid(), Answers = new() { ["diet"] = "Vegetarian" } };
+        var form = await MinistryHttpTests.ReadAsync<RegistrationApplicantFormDto>(await client.GetAsync(path.Replace("/registrations", "/registration/applicant-form")));
+        var request = new RegisterOwnDto { OperationId = Guid.NewGuid(), FormVersionId = Guid.Parse(form.FormVersionId), Answers = new() { ["diet"] = "Vegetarian" } };
         client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.False((await client.PostAsJsonAsync(path + "/mine", request)).IsSuccessStatusCode);
         await MinistryHttpTests.CsrfAsync(client);
@@ -298,15 +299,21 @@ public class EventRegistrationTests
     private static async Task<EventRegistration> RegisterAsync(Setup x, string person, bool guardian = false)
     {
         x.S.Use();
+        var policy = await x.Service.PolicyAsync(x.Parish, x.EventId, default);
+        var form = await x.Service.FormAsync(x.Parish, x.EventId, policy.Value.FormVersionId, default);
         return await x.Service.RegisterAsync(x.Parish, x.EventId, new RegisterParticipantDto
         {
-            OperationId = Guid.NewGuid(), PersonId = Guid.Parse(person), Transport = false, Answers = new() { ["diet"] = "None" },
+            OperationId = Guid.NewGuid(), PersonId = Guid.Parse(person), FormVersionId = Guid.Parse(form.Id), Transport = false, Answers = new() { ["diet"] = "None" },
             GuardianAuthorityEvidence = guardian ? "Isolated verified guardian authority" : null, Collectors = guardian ? [Collector()] : []
         }, default);
     }
 
-    private static Task<EventRegistrationDto> RegisterOwnAsync(Setup x)
-        => x.Service.RegisterOwnAsync(x.Parish, x.EventId, new RegisterOwnDto { OperationId = Guid.NewGuid(), Answers = new() { ["diet"] = "None" } }, default);
+    private static async Task<EventRegistrationDto> RegisterOwnAsync(Setup x)
+        => await x.Service.RegisterOwnAsync(x.Parish, x.EventId, new RegisterOwnDto
+        {
+            OperationId = Guid.NewGuid(), FormVersionId = Guid.Parse((await x.Service.ApplicantFormAsync(x.Parish, x.EventId, default)).FormVersionId),
+            Answers = new() { ["diet"] = "None" }
+        }, default);
 
     private static AuthorizedCollector Collector() => new() { Id = "collector-1", Name = "Isolated collector", AuthorityEvidence = "Isolated guardian designation" };
 

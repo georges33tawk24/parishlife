@@ -1,5 +1,5 @@
 // Purpose: returns one participant registration; staff projections include evidence and collectors, own projections omit them.
-// Main members: Id, EventId, PersonId, Origin, effective Status, answers, evidence, collectors, money balance, offer deadline and presence.
+// Main members: Id, EventId, PersonId, FormVersionId, Origin, effective Status, answers, evidence, collectors, money balance and presence.
 
 using ParishLife.Api.Models;
 
@@ -12,6 +12,8 @@ public class EventRegistrationDto
     public string EventId { get; set; } = string.Empty;
 
     public string PersonId { get; set; } = string.Empty;
+
+    public string FormVersionId { get; set; } = string.Empty;
 
     public string Origin { get; set; } = string.Empty;
 
