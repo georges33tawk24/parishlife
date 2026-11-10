@@ -29,6 +29,8 @@ using ParishLife.Api.Repositories.Billing;
 using ParishLife.Api.Repositories.Common;
 using ParishLife.Api.Repositories.Organizations;
 using ParishLife.Api.Repositories.People;
+using ParishLife.Api.Repositories.Reporting;
+using ParishLife.Api.Interfaces.Repositories.Reporting;
 using ParishLife.Api.Repositories.Scheduling;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Administration;
@@ -146,6 +148,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WorkflowDefinitionService>();
         services.AddScoped<WorkflowRunService>();
         services.AddScoped<WorkOverviewService>();
+        services.AddScoped<IParishDirectory, ParishDirectory>();
+        services.AddScoped<ISiteMetricStore, SiteMetricStore>();
+        services.AddScoped<ParishLocationService>();
+        services.AddScoped<BishopOverviewService>();
+        services.AddScoped<SiteInsightsService>();
+        services.AddScoped<ReportScheduleService>();
+        services.AddScoped<ReportScheduleProcessor>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();
         services.AddScoped<EvidenceService>();
@@ -164,6 +173,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<BillingActivationWorker>();
             services.AddHostedService<ReservationWorker>();
             services.AddHostedService<NotificationWorker>();
+            services.AddHostedService<ReportScheduleWorker>();
         }
         services.AddHealthChecks().AddCheck<BackendReadinessHealthCheck>("backend_dependencies", tags: ["ready"]);
         return services;

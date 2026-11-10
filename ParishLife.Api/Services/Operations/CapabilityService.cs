@@ -21,7 +21,7 @@ public class CapabilityService(IConfiguration configuration, StorageOptions stor
             new() { Name = "Electronic signatures", Available = false, Behaviour = "Not configured: the signed and sealed paper is the official document; downloads are copies." },
             new() { Name = "External sign-in", Available = false, Behaviour = "Not configured: accounts use ParishLife credentials with MFA." },
             new() { Name = "Bot check", Available = false, Behaviour = "Not configured: public forms rely on rate limiting and office review." },
-            new() { Name = "Scheduled jobs", Available = jobs, Behaviour = jobs ? "Enabled for reservation holds; scheduled publishing and report delivery are not implemented." : "Disabled in this environment." },
+            new() { Name = "Scheduled jobs", Available = jobs, Behaviour = jobs ? "Enabled for reservation holds, notifications and in-app scheduled report delivery; scheduled publishing is not implemented." : "Disabled in this environment." },
             new() { Name = "Private file storage", Available = true, Behaviour = local ? "Local development folder." : "Existing private evidence Blob container (needs the identity's data access)." },
             new() { Name = "Retention and deletion", Available = false, Behaviour = "No retention classes are approved: nothing is deleted automatically; closures remove only optional personal data." }
         ];

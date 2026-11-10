@@ -281,9 +281,9 @@
       "id": "O08",
       "workflow": "Bishop overview, map and aggregates",
       "module": "Reporting/Organizations",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Bishop overview for a current accepted MFA bishop in his own selected capacity: parishes in his recorded, bishop-accepted jurisdiction only, alphabetical (no ranking), explicit UTC period, each measure defined (current priests as distinct accounts, head-priest designation, other staff, open requests, requests received in period, certificates awaiting bishop, pending membership requests, published events in period) with confidential/person/finance/attendance categories explicitly excluded and no record contents; map projection showing only coordinates a parish manager recorded with their source (new versioned, idempotent parish location record), others NotRecorded. Local tests only.",
+      "remaining": "Proposed S29.14-16 material, not owner-approved. Not delivered: finance/giving/budget, attendance, participation and membership-change measures (MT05/06/10-12/14 definitions unapproved), small-count suppression threshold (none in sources), exports CSV/XLSX/PDF and EN/FR/AR labels, other diocesan readers, map tile provider and frontend. Jurisdiction is filtered in memory (index path not present; bounded 2000/200). Live Cosmos acceptance not performed.",
       "questionnaire_references": "S29.14–16"
     },
     {
@@ -1028,9 +1028,9 @@
       "id": "W04",
       "workflow": "Scheduled report delivery",
       "module": "Reporting/Communications",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Personal-capacity MFA schedules (Daily/Weekly, local hour, IANA time zone) for in-app delivery of the parish work overview to oneself; pause/resume/cancel with versions and replay; background runner (BackgroundJobs:Enabled) re-authorizes the recipient each run (active MFA account, open parish, current direct grant per queue) and atomically stores one snapshot + notice per due time; lost access gives a contentless NotAuthorized run, pauses the schedule and hides earlier snapshots on read; email copies recorded as NotConfigured, never sent. Local tests only.",
+      "remaining": "Proposed contract, not owner-approved. Not delivered: other schedulable reports (bishop overview, finance), schedules under selected staff appointments, email/SMS providers, quiet hours/digests, external retry/escalation, shared audiences, export attachments and frontend. Missed runs are not backfilled. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.10–15 S29.18"
     },
     {
@@ -1172,9 +1172,9 @@
       "id": "X06",
       "workflow": "Public-site metrics and Super Admin Insights",
       "module": "Reporting",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous public-site beacon with allowlisted kinds (home/directory/parish view, request start), language and verified parish only, stored as sharded daily counters with no IP, visitor key, device, referrer, search or location data and no receipt/audit for untrusted beacons (dropped under repeated conflict, never inflated); Super Admin Insights for current MFA platform operators only: daily counts plus parish counts by status and jurisdiction coverage, with explanatory notes, no parish names or clergy/person/case/finance data and no record access. Local tests only.",
+      "remaining": "Proposed contract, not owner-approved. Not delivered: funnels, referrer/device aggregates and visitor hashes (deliberately not stored), completeness/health scores, scoped non-operator viewers, bot check, approved retention period (S32.01; nothing purged), exports and frontend beacon/dashboards. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S29.14–17 S32.01"
     },
     {
