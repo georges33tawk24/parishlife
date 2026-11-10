@@ -1,9 +1,10 @@
 // Purpose: exposes restricted incident recording and handling over HTTP.
-// Main functions: Record, Act, Get and List delegate rules to IncidentService.
+// Main functions: Record, Act, Get, List and NotificationOutcome delegate rules to IncidentService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.Care;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Care;
 
@@ -23,6 +24,10 @@ public class IncidentsController(IncidentService service) : ControllerBase
     [HttpGet("{incidentId:guid}")]
     public async Task<ActionResult<Versioned<IncidentDto>>> Get(Guid parishId, Guid incidentId, CancellationToken ct)
         => Ok(await service.GetAsync(Guard.Id(parishId), Guard.Id(incidentId), ct));
+
+    [HttpGet("{incidentId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid incidentId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(incidentId), ct));
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<Versioned<IncidentDto>>>> List(Guid parishId, CancellationToken ct, string? status = null, Guid? eventId = null)

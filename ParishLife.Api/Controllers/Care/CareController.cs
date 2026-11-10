@@ -1,10 +1,11 @@
 // Purpose: exposes priests' pastoral notes, confidential concerns and bishop-appointed concern reviewers over HTTP.
 // Main functions: SaveNote, UpdateNote, NoteAction, GetNote, ListNotes, ReviewerOptions, Submit, Act, PostEntry, Entries, Get, Mine,
-// Assigned, AppointReviewer and EndReviewer delegate rules to PastoralNoteService and ConcernService.
+// Assigned, reviewer-only notice outcomes, AppointReviewer and EndReviewer delegate rules to PastoralNoteService and ConcernService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.Care;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Care;
 
@@ -64,6 +65,14 @@ public class CareController(PastoralNoteService notes, ConcernService concerns) 
     [HttpGet("api/parishes/{parishId:guid}/concerns/{concernId:guid}/entries")]
     public async Task<ActionResult<IReadOnlyList<ConcernEntryDto>>> Entries(Guid parishId, Guid concernId, CancellationToken ct)
         => Ok(await concerns.EntriesAsync(Guard.Id(parishId), Guard.Id(concernId), ct));
+
+    [HttpGet("api/parishes/{parishId:guid}/concerns/{concernId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid concernId, CancellationToken ct)
+        => Ok(await concerns.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(concernId), ct));
+
+    [HttpGet("api/parishes/{parishId:guid}/concerns/{concernId:guid}/entries/{entryId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> EntryNotificationOutcome(Guid parishId, Guid concernId, Guid entryId, CancellationToken ct)
+        => Ok(await concerns.EntryNotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(concernId), Guard.Id(entryId), ct));
 
     [HttpPost("api/archdioceses/{archdioceseId:guid}/concern-reviewers")]
     public async Task<ActionResult<ReviewerOptionDto>> AppointReviewer(Guid archdioceseId, AppointReviewerDto request, CancellationToken ct)

@@ -1,11 +1,12 @@
 // Purpose: keeps restricted incident records: recorders store a protected factual report, and only incident handlers read it and move it through
 // Recorded -> Assigned -> FollowUp -> Resolved -> Closed (with reopen), with attributed amendments, reviewer-only notes and communication records.
-// Main functions: RecordAsync, ActAsync, GetAsync and ListAsync. Event participation, ordinary leadership and office access grant nothing here.
+// Main functions: RecordAsync, ActAsync, GetAsync, ListAsync and handler-only NotificationOutcomeAsync (latest assignment notice). Event participation, ordinary leadership and office access grant nothing here.
 // Handler-assignment notices are staged with the incident change and dispatched after commit without private report text.
 
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using ParishLife.Api.DTOs.Care;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
@@ -17,7 +18,7 @@ using ParishLife.Api.Services.Communications;
 namespace ParishLife.Api.Services.Care;
 
 public class IncidentService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, MfaAccountAccess proof,
-    IDataProtectionProvider protection, NotificationService notifications, TimeProvider clock)
+    IDataProtectionProvider protection, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader outcomes)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested incident is unavailable.", FailureKind.NotFound);
@@ -69,7 +70,11 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
         var root = await RequireAsync(parish, Permissions.IncidentsManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "incident-action:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value);
+        {
+            // ponytail: an assign replay reports the latest assignment notice; keep per-entry pointers if reassignment replays need their own.
+            var current = (await ReadAsync(parish, id, ct)).Value;
+            return await WithOutcomeAsync(parish, current, request.Action == "assign" ? current.NotificationWorkIds : [], ct);
+        }
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Entries.Count >= 200)
             throw State("This incident has reached its entry limit; record a linked follow-up incident.");
@@ -120,13 +125,31 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
             RecordChange.Replace("incident:" + id, "incident", item, Versions.Require(request.Version))
         };
         if (request.Action == "assign")
-            changes.Add(notifications.StageRequired(parish, item.HandlerAccountId!, "incident.assigned", "An incident record has been assigned to you.",
-                "/api/parishes/" + parish + "/incidents/" + id, "incident:" + op.Id, "IncidentHandler", id, op.At));
+        {
+            var notice = notifications.StageRequired(parish, item.HandlerAccountId!, "incident.assigned", "An incident record has been assigned to you.",
+                "/api/parishes/" + parish + "/incidents/" + id, "incident:" + op.Id, "IncidentHandler", id, op.At);
+            item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+            changes.Add(notice);
+        }
         await records.CommitAsync(Scope(parish), op, "incident." + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (request.Action == "assign")
             await notifications.DispatchAsync(parish, item.HandlerAccountId!, "incident:" + op.Id, ct);
-        return Project(item);
+        return await WithOutcomeAsync(parish, item, request.Action == "assign" ? item.NotificationWorkIds : [], ct);
+    }
+
+    // Incident handlers only: whether the latest assigned handler's in-app notice was stored. Stored is not reading or external delivery.
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        await RequireAsync(parish, Permissions.IncidentsManage, ct);
+        return await outcomes.ReadAsync(parish, (await ReadAsync(parish, id, ct)).Value.NotificationWorkIds, ct);
+    }
+
+    private async Task<IncidentDto> WithOutcomeAsync(string parish, Incident item, IReadOnlyList<string>? work, CancellationToken ct)
+    {
+        var result = Project(item);
+        result.NotificationOutcome = await outcomes.ReadAsync(parish, work, ct);
+        return result;
     }
 
     public async Task<Versioned<IncidentDto>> GetAsync(string parish, string id, CancellationToken ct)

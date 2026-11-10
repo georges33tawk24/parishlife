@@ -1,8 +1,9 @@
 // Purpose: exposes the jurisdiction bishop's parish suspension, reinstatement and closure, and the owner's office coverage view, over HTTP.
-// Main functions: Change and History delegate to ParishStatusService; OfficeCoverage delegates to OfficeCoverageService.
+// Main functions: Change, History and NotificationOutcome delegate to ParishStatusService; OfficeCoverage delegates to OfficeCoverageService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Organizations;
@@ -19,6 +20,10 @@ public class ParishStatusController(ParishStatusService service, OfficeCoverageS
     [HttpGet("status/history")]
     public async Task<ActionResult<IReadOnlyList<ParishStatusChangeDto>>> History(Guid parishId, CancellationToken ct)
         => Ok(await service.HistoryAsync(Guard.Id(parishId), ct));
+
+    [HttpGet("status/history/{changeId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid changeId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(changeId), ct));
 
     [HttpGet("office/coverage")]
     public async Task<ActionResult<OfficeCoverageDto>> OfficeCoverage(Guid parishId, CancellationToken ct)

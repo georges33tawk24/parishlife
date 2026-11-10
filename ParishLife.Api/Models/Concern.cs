@@ -1,5 +1,5 @@
 // Purpose: represents a confidential concern visible only to its submitter and its selected, eligible independent reviewers.
-// Main members: Id, ParishId, ArchdioceseId, Category, Urgency, ProtectedContent, ApplicantAccountId (submitter), Anonymous, implicated and selected reviewers, assignment, Status and dates.
+// Main members: Id, ParishId, ArchdioceseId, Category, Urgency, ProtectedContent, ApplicantAccountId (submitter), Anonymous, implicated and selected reviewers, assignment, Status, dates and the latest reviewer notice pointer.
 
 namespace ParishLife.Api.Models;
 
@@ -39,4 +39,7 @@ public class Concern
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    // Internal pointer to the latest reviewer-action submitter notice (entries keep their own); never projected to the submitter.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

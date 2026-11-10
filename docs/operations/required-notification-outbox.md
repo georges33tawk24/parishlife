@@ -41,6 +41,19 @@ Eligibility is checked before recipient storage and again before acknowledgment.
 
 Inactive accounts, revoked staff, changed handlers and other currently ineligible audiences leave their work `Pending`. This implementation does not discard that work, silently substitute another recipient or introduce a `Suppressed` state.
 
+## Source-scoped outcome reads (proposed S31.10)
+
+Each producer saves its latest required-notice work pointer(s) on the source record in the same transaction and exposes the outcome only through that source's existing authority. There is no general work, recipient or count feed. The `NotificationOutcome` projection carries only `Status` (`NotTracked`, `NotRequired`, `Pending`, `Stored`, `Unconfirmed`) and `Meaning`; never work IDs, recipient accounts, topics or counts. `Pending` is not proof that no notice exists, and `Stored` is not proof of reading or external delivery. Lists leave it null.
+
+| Source | Read route | Who may read |
+| --- | --- | --- |
+| Requests, membership, corrections, invitations, registrations, certificates, inbox | see their runbooks | the source's existing applicant/office/reader gate |
+| Parish status change | command response; `GET /api/parishes/{parish}/status/history/{change}/notification-outcome` | the jurisdiction bishop with MFA (the history reader) |
+| Incident assignment | `assign` action response; `GET /api/parishes/{parish}/incidents/{incident}/notification-outcome` (latest assignment) | current `incidents.manage` with MFA and office coverage |
+| Concern reviewer update | reviewer action/entry response; `GET .../concerns/{concern}/notification-outcome` (latest reviewer action) and `.../entries/{entry}/notification-outcome` | a currently eligible, selected, non-implicated reviewer with MFA; never the submitter, unselected reviewers, office, bishop or platform operators |
+
+Actions that stage no notice (an incident note, a reviewer-only concern note) report `NotRequired` in their own response rather than echoing an earlier notice. An exact replay of an assignment or reviewer action reports the latest tracked notice for that source (a known ponytail limit). Records written before tracking report `NotTracked`; nothing is backfilled. Recovery sessions are refused by the MFA gates.
+
 ## Worker and storage
 
 `NotificationWorker` follows the reservation worker's `BackgroundJobs:Enabled` gate. An explicit value wins; when absent, jobs are disabled in Development and enabled outside Development. Hosted workers are not registered for the private operator-workstation mode.
