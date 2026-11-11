@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 145,
-    "not_started": 4
+    "partial": 146,
+    "not_started": 3
   },
   "entries": [
     {
@@ -1055,9 +1055,9 @@
       "id": "W07",
       "workflow": "Data snapshot, backup and operator recovery",
       "module": "Administration",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Private operator tool only (no public endpoint; service registered only for the operator workstation): snapshot-export writes every existing container's records (system properties stripped, protected fields left as dp1 ciphertext) plus record-referenced evidence with a versioned manifest of counts/partitions/SHA-256 and a printed manifest hash; the Data Protection key ring and secrets are never read; a two-pass check refuses exports changed by concurrent writes; snapshot-verify checks hashes, counts, duplicates and the exact file set offline; snapshot-restore re-verifies, refuses the source or any non-empty/incomplete target, dry-runs by default, writes create-only per-partition batches, reads everything back and appends an operations.snapshot_restore audit row in the target. Runbook docs/operations/data-snapshot-and-recovery.md; DataSnapshotTests (5) on isolated Local storage. S31.16/WF64 detail is proposed, not owner-approved.",
+      "remaining": "U15 inputs unresolved and deliberately not defaulted: retention, schedule, RPO/RTO, backup owner/custodian, snapshot storage location, key-ring custody and restore-exercise cadence. No live Cosmos/Blob run or real restore exercise (blocks recovery-readiness claim); no scheduled snapshots, tool-side encryption, streaming for large datasets or in-place recovery; S32.05 help/support routing to real responsible roles not implemented; browser Data snapshot labelling belongs to the export cards and frontend (deferred).",
       "questionnaire_references": "S31.16 S32.05 U15"
     },
     {

@@ -189,6 +189,22 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<NotificationWorker>();
             services.AddHostedService<ReportScheduleWorker>();
         }
+        else
+        {
+            // W07: snapshot export/restore exists only in the private operator tool, never in the web host.
+            services.AddScoped(provider =>
+            {
+                var storage = provider.GetRequiredService<StorageOptions>();
+                var local = IsLocal(storage);
+                var root = local ? StorageOptions.ResolveLocalPath(storage, environment) : "";
+                var cosmos = provider.GetRequiredService<IOptions<CosmosOptions>>().Value;
+                var blob = provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+                return new DataSnapshotService(provider.GetRequiredService<IDocumentDatabase>(), provider.GetRequiredService<IEvidenceStore>(),
+                    local ? "Local:" + Path.Combine(root, "documents") : "Cosmos:" + cosmos.Endpoint.TrimEnd('/').ToLowerInvariant() + "/" + cosmos.Database,
+                    local ? "Local:" + Path.Combine(root, "evidence") : "Blob:" + blob.ServiceUri.TrimEnd('/').ToLowerInvariant() + "/" + blob.EvidenceContainer,
+                    local, provider.GetRequiredService<TimeProvider>());
+            });
+        }
         services.AddHealthChecks().AddCheck<BackendReadinessHealthCheck>("backend_dependencies", tags: ["ready"]);
         return services;
     }

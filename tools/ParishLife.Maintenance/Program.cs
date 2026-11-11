@@ -1,5 +1,6 @@
-// Purpose: provides explicit private bootstrap, manual identity-review, and read-only infrastructure commands.
-// Main members: MaintenanceActor.
+// Purpose: provides explicit private bootstrap, manual identity-review, read-only infrastructure, and operator snapshot
+// export/verify/restore (W07; restore only into an empty isolated target, dry-run unless --apply) commands.
+// Main members: Option, MaintenanceActor.
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -22,16 +23,28 @@ if (settingsIndex >= 0)
     settingsDirectory = Path.GetFullPath(arguments[settingsIndex + 1]);
     arguments.RemoveRange(settingsIndex, 2);
 }
+var apply = arguments.Remove("--apply");
+var expectedHash = Option(arguments, "--expect");
 if (arguments.Count == 0)
 {
     Console.WriteLine("Commands: check-infrastructure | bootstrap-superadmins | verify-identity <account UUID>");
-    Console.WriteLine("Options: --local uses isolated local documents; --settings <directory> locates API configuration.");
+    Console.WriteLine("          snapshot-export <new directory> | snapshot-verify <directory> | snapshot-restore <directory> [--apply]");
+    Console.WriteLine("Options: --local uses isolated local documents; --settings <directory> locates API configuration;");
+    Console.WriteLine("         --expect <manifest SHA-256> checks the hash recorded in your change record; --apply writes (otherwise a dry run).");
     Console.WriteLine("Azure commands use the signed-in operator's credentials; no resources are provisioned.");
     return;
 }
 
 try
 {
+    if (arguments is ["snapshot-verify", var verifyDirectory])
+    {
+        // Offline: reads only the snapshot directory; no storage, credentials or settings are needed.
+        var verified = await DataSnapshotService.VerifyAsync(verifyDirectory, expectedHash, CancellationToken.None);
+        Console.WriteLine($"Snapshot {verified.SnapshotId} verified: {verified.Containers.Sum(c => c.Records)} records in {verified.Containers.Count} containers, {verified.Evidence.Count} evidence files.");
+        Console.WriteLine("Manifest SHA-256: " + await DataSnapshotService.ManifestSha256Async(verifyDirectory, CancellationToken.None));
+        return;
+    }
     var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
     {
         EnvironmentName = local ? Environments.Development : Environments.Production
@@ -103,6 +116,42 @@ try
                 Console.WriteLine("Manual identity review recorded; email confirmation is unchanged and earlier sessions/challenges are invalidated.");
                 break;
             }
+        case "snapshot-export" when arguments.Count == 2:
+            {
+                Console.WriteLine("Export reads every record container and referenced evidence; the key ring and secrets are never read. Stop writes first.");
+                Console.Write("Operator change/approval reference: ");
+                var manifest = await scope.ServiceProvider.GetRequiredService<DataSnapshotService>().ExportAsync(arguments[1], Console.ReadLine() ?? "", CancellationToken.None);
+                Console.WriteLine($"Snapshot {manifest.SnapshotId}: {manifest.Containers.Sum(c => c.Records)} records in {manifest.Containers.Count} containers, {manifest.Evidence.Count} evidence files.");
+                Console.WriteLine("Record this manifest SHA-256 in your change record: " + await DataSnapshotService.ManifestSha256Async(arguments[1], CancellationToken.None));
+                Console.WriteLine("Store the directory privately; it holds personal data. A snapshot is not proven restorable until a restore exercise passes.");
+                break;
+            }
+        case "snapshot-restore" when arguments.Count == 2:
+            {
+                var snapshots = scope.ServiceProvider.GetRequiredService<DataSnapshotService>();
+                Console.Write("Operator change/approval reference: ");
+                var reference = Console.ReadLine() ?? "";
+                var plan = await snapshots.RestoreAsync(arguments[1], expectedHash, reference, apply: false, CancellationToken.None);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(plan, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
+                if (plan.Status != "DryRunReady")
+                {
+                    Environment.ExitCode = 2;
+                    break;
+                }
+                if (!apply)
+                {
+                    Console.WriteLine("Dry run only; nothing was written. Re-run with --apply to restore into this empty target.");
+                    break;
+                }
+                Console.Write($"Type RESTORE {plan.SnapshotId} INTO {plan.TargetDocuments} to proceed: ");
+                if (Console.ReadLine() != $"RESTORE {plan.SnapshotId} INTO {plan.TargetDocuments}")
+                    throw new InvalidOperationException("Restore was not confirmed.");
+                var report = await snapshots.RestoreAsync(arguments[1], expectedHash, reference, apply: true, CancellationToken.None);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
+                if (report.Status != "Restored")
+                    Environment.ExitCode = 2;
+                break;
+            }
         default:
             throw new InvalidOperationException("Unknown command or incorrect arguments.");
     }
@@ -125,6 +174,18 @@ static string FindSettingsDirectory()
                 return api;
         }
     throw new InvalidOperationException("Supply --settings <directory> containing the API appsettings.json.");
+}
+
+static string? Option(List<string> arguments, string name)
+{
+    var index = arguments.IndexOf(name);
+    if (index < 0)
+        return null;
+    if (index + 1 >= arguments.Count)
+        throw new ArgumentException(name + " requires a value.");
+    var value = arguments[index + 1];
+    arguments.RemoveRange(index, 2);
+    return value;
 }
 
 static void Check(IdentityResult result)

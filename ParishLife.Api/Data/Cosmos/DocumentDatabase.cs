@@ -1,7 +1,7 @@
 // Purpose: Runs Cosmos point reads and bounded queries/batches inside one complete container/partition transaction
 // boundary.
 // Main functions: CreateItem, UpsertItem, ReplaceItem, DeleteItem, Add, ExecuteAsync, Dispose, Container,
-// ReadAsync, QueryAsync, CommitAsync.
+// ReadAsync, QueryAsync, CommitAsync, ContainersAsync (operator snapshot enumeration).
 
 using System.Net;
 using System.Text.Json;
@@ -19,6 +19,9 @@ internal interface IDocumentDatabase
     Task<StoredRow?> ReadAsync(string container, string key, string id, CancellationToken ct);
     Task<StoredPage> QueryAsync(string container, string? key, StorageQuery query, int size, string? continuation, CancellationToken ct);
     Task<IReadOnlyList<string>> CommitAsync(string container, string key, IReadOnlyList<DocumentMutation> mutations, CancellationToken ct);
+
+    // Existing containers only (never creates one); used by private operator snapshot/restore commands.
+    Task<IReadOnlyList<string>> ContainersAsync(CancellationToken ct);
 }
 
 internal sealed class DocumentBatch(IDocumentDatabase database, string container, string key)
@@ -132,5 +135,14 @@ internal sealed class CosmosDocumentDatabase(CosmosClient client, string databas
         if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed || response.Any(r => r.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed))
             throw new DomainException("write_conflict", "The current version or unique identifier changed.", FailureKind.Conflict);
         throw new DomainException("persistence_unavailable", "The operation outcome is unknown. Check before retrying with the same operation ID.", FailureKind.Unavailable);
+    }
+
+    public async Task<IReadOnlyList<string>> ContainersAsync(CancellationToken ct)
+    {
+        var names = new List<string>();
+        using var iterator = client.GetDatabase(database).GetContainerQueryIterator<ContainerProperties>();
+        while (iterator.HasMoreResults)
+            names.AddRange((await iterator.ReadNextAsync(ct)).Select(c => c.Id));
+        return names.Order(StringComparer.Ordinal).ToArray();
     }
 }

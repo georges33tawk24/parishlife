@@ -1,6 +1,6 @@
 // Purpose: Provides explicit Development-only document files with partition locks, conditional writes, and atomic
 // file replacement.
-// Main functions: DirectoryFor, PathFor, LockAsync, LoadAsync, ReadAsync, QueryAsync, CommitAsync.
+// Main functions: DirectoryFor, PathFor, LockAsync, LoadAsync, ReadAsync, QueryAsync, CommitAsync, ContainersAsync.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -123,5 +123,13 @@ internal sealed class LocalDocumentDatabase(string root) : IDocumentDatabase
         }
 
         return versions;
+    }
+
+    public Task<IReadOnlyList<string>> ContainersAsync(CancellationToken ct)
+    {
+        var documents = Path.Combine(root, "documents");
+        IReadOnlyList<string> names = Directory.Exists(documents)
+            ? Directory.GetDirectories(documents).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal).ToArray() : [];
+        return Task.FromResult(names);
     }
 }
