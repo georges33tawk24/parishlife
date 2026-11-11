@@ -14,6 +14,7 @@ import { TrackingPage } from './pages/TrackingPage.jsx';
 import { VerifyPage } from './pages/VerifyPage.jsx';
 import { BundlesPage } from './pages/BundlesPage.jsx';
 import { LostPage } from './pages/LostPage.jsx';
+import { loadDirectory, loadParish } from './api-data.js';
 
 const params = new URLSearchParams(location.search);
 const selected = params.get('parish');
@@ -40,12 +41,6 @@ export function startingLanguage() {
     }
   }
   return lang;
-}
-
-async function getJSON(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw Object.assign(new Error('Could not load parish information'), { status: response.status });
-  return response.json();
 }
 
 export function PublicApp({ initialLang }) {
@@ -83,23 +78,14 @@ export function PublicApp({ initialLang }) {
   const load = useCallback(async () => {
     setData(d => ({ ...d, loading: true, loadFailure: false }));
     try {
-      // One overview of every parish; the homepage content is optional (without it the page uses its built-in wording).
-      const [overview, siteContent] = await Promise.all([
-        getJSON('/api/public/overview'),
-        getJSON('/api/public/site').catch(() => null)
-      ]);
-      const directory = overview.parishes || [],
-        details = new Map(Object.entries(overview.details || {})),
+      // The directory from ParishLife.Api, with each parish's website and calendar (public/api-data.js).
+      // The homepage editor's content is not connected yet, so the page keeps its built-in wording.
+      const { directory, details } = await loadDirectory(),
+        siteContent = null,
         failed = [];
-      // A parish's own pages need everything its office published, not only the overview's share.
-      if (selected && directory.some(p => p.id === selected)) {
-        try {
-          details.set(selected, await getJSON('/api/public/parishes/' + encodeURIComponent(selected)));
-        } catch {
-          details.delete(selected);
-          failed.push(selected);
-        }
-      }
+      // A parish's own page also needs its ministries.
+      const chosen = selected && directory.find(p => p.id === selected);
+      if (chosen) details.set(selected, await loadParish(chosen));
       if (filters.town && !directory.some(p => p.town === filters.town)) setFilters(f => ({ ...f, town: '' }));
       setData({ loading: false, directory, details, site: siteContent, failed, loadFailure: false });
     } catch (error) {

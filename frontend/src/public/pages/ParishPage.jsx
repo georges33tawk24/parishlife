@@ -695,6 +695,7 @@ function Follow({ p, f }) {
     webcal = c.feedURL(p.id, 'webcal:'),
     feed = c.feedURL(p.id),
     whatsapp = https(f.visit.whatsapp);
+  if (!feed) return null; // no public calendar feed to subscribe to yet
   return (
     <div className="ph-follow" data-reveal>
       <span className="ph-follow-mark" aria-hidden="true">

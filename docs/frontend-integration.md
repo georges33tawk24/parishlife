@@ -18,6 +18,7 @@ The frontend was written for the earlier Python server. It loads a whole parish 
 | Bot check | When the API has Turnstile on, the widget shows on sign-in and sign-up and its token goes in `X-Turnstile-Token` | `GET /api/auth/capabilities` |
 | Session | Account, parishes followed or joined, and a role per parish from the account's capacities; sign-out | `GET /api/auth/me`, `GET /api/me/parishes`, `GET /api/me/capacities`, `POST /api/auth/logout` |
 | People | List (all pages), add (form and CSV import), archive, archived list | `GET/POST /api/parishes/{id}/people`, `POST .../people/{personId}/archive` |
+| Public site | The parish directory; for each parish, its published website sections (Mass times, history, welcome, contact, sacraments), its public calendar for the next 120 days and its ministries; visit counts for Insights | `GET /api/public/parishes`, `GET .../parishes/{id}/website`, `.../calendar`, `.../ministries`, `POST /api/public/site-metrics` |
 
 **Roles from capacities:**
 
@@ -40,8 +41,10 @@ Finance is visible to the priest and to grants with `finance.read`. People are l
   - create with an operation id, and archive
   - a stale token retried once
   - unsupported edits undone and reported
+  - the public directory and parish pages, including events on the parish's own clock and cancelled events left out
 - The merged API was built in Release (0 warnings) and run locally (`Backend__UseAzure=false`). Through the Vite proxy these all worked: `GET /api/auth/capabilities`, the CSRF token, `POST /api/auth/register` (202) and the sign-in request.
 - Sign-in returned 401 because a new account must be verified first. That is the API's rule, and the message says so (see `frontend/README.md`).
+- The public site loaded its directory from `GET /api/public/parishes` and recorded a visit (`POST /api/public/site-metrics`, 202), in English and Arabic, with no script errors. The directory was empty, because no parish is published in local data.
 
 **Not yet verified:** a signed-in session and the People screens against the live API. Both need a verified account and a priest appointment, which locally only the interactive operator commands can create.
 
@@ -52,8 +55,15 @@ Finance is visible to the priest and to grants with `finance.read`. People are l
 | Email verification and email change | `POST /api/auth/contact-verification`, `.../confirm`, `email-change` | No code-entry step yet; codes need a delivery provider (`contactVerificationDelivery`) |
 | Passkeys | `POST /api/auth/login/passkey/options`, `login/passkey`, `passkeys/registration` | Passkey sign-in is hidden; `model/passkeys.js` still calls the old routes |
 | External sign-in | `/api/auth/external/{provider}/...` (Google, Microsoft when configured) | Not shown |
-| Public parish directory | `GET /api/public/parishes` (paged, optional distance) | The public site still asks `GET /api/public/overview` and says the directory is not connected |
+| Parishes near me | `POST /api/public/parishes/nearby` | The site's "Near me" still sorts the loaded list in the browser |
+| Requests without an account | Anonymous request routes (`RequestsController`) | Request buttons are hidden on the public site; the form still posts to the old route |
+| Checking a signed document | `GET /api/public/document-verifications/{code}` | The verify page expects "signature valid" and "content matches"; the API returns a status, its meaning and an official statement instead, so the page needs rewording, not just a new URL |
+| Platform homepage content | `GET /api/public/homepage` | The homepage keeps its built-in wording |
 | Combined home | `GET /api/me/home` | Members get an empty view with the notice |
+
+## Public site: what stays empty
+
+The API's public parish has a name, locality, diocese, coordinates and links. The site's Arabic names, rite, phone, address, clergy, photos, news, WhatsApp and livestream have no public API field, so they stay empty and their sections do not show. The API has no public calendar feed (`.ics`), so the "subscribe in my calendar" offer is left out. Visits count only the four kinds the API accepts (home, directory, parish page, request started); the old beacon's actions, referrer and search text are no longer sent.
 
 ## Not connected
 
@@ -74,4 +84,5 @@ Finance is visible to the priest and to grants with `finance.read`. People are l
 1. **Role mapping.** Confirm the table above, in particular that a grant with records work is the secretary's view and a finance-only grant the treasurer's.
 2. **Person fields.** Where should the Arabic name, town hierarchy, rite, member/visitor status and envelope number live: person facts, or new fields?
 3. **Production hosting.** The pages and the API must share one HTTPS host, for example the API serving `frontend/dist`, or a front door routing `/api` to the API. The API's `CLAUDE.md` currently says to deploy only the API publish output, so this changes deployment.
-4. **SDK.** The repository pins .NET SDK 10.0.401. This work used 10.0.105, building from outside the repository so `global.json` stayed unchanged; re-run on a 10.0.4xx SDK before relying on it.
+4. **Public parish profile.** Should the public parish projection gain the fields the site shows (Arabic name, rite, phone, address, photos, clergy, WhatsApp, livestream), and a calendar feed?
+5. **SDK.** The repository pins .NET SDK 10.0.401. This work used 10.0.105, building from outside the repository so `global.json` stayed unchanged; re-run on a 10.0.4xx SDK before relying on it.

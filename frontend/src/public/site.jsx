@@ -106,15 +106,9 @@ export function makeSite({ lang, directory = [], details = new Map(), site = nul
     /* Visitors can request without an account; the office owns subsequent processing. */
     requestURL: (id, kind) => 'public.html?parish=' + encodeURIComponent(id) + '&request=' + encodeURIComponent(kind),
     calendarURL: id => 'public.html?parish=' + encodeURIComponent(id) + '&view=calendar',
-    /* The calendar feed of a parish, for calendars to subscribe to (webcal opens the calendar app). */
-    feedURL: (id, scheme = location.protocol) =>
-      scheme.replace(':', '') +
-      '://' +
-      location.host +
-      '/api/public/parishes/' +
-      encodeURIComponent(id) +
-      '/calendar.ics' +
-      (lang === 'ar' ? '?lang=ar' : ''),
+    /* The calendar feed of a parish, for calendars to subscribe to. ParishLife.Api has no public
+       calendar feed (.ics) yet, so there is no address and the parish page leaves the offer out. */
+    feedURL: () => '',
     /* A link to share: absolute, and in the language the visitor is reading. */
     shareURL: path =>
       new URL(path + (lang === 'ar' ? (path.includes('?') ? '&' : '?') + 'lang=ar' : ''), location.href).href,

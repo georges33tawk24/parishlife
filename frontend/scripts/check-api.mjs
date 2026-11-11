@@ -65,6 +65,53 @@ globalThis.fetch = async (url, options = {}) => {
       { kind: 'ParishGrant', parishId: 'Q', scopeName: 'Saint Q', capabilities: ['finance.read', 'finance.enter'] },
       { kind: 'Bishop', archdioceseId: 'A', scopeName: 'Archeparchy', capabilities: [] }
     ]);
+  // the anonymous public routes the public site reads
+  if (path === 'public/parishes')
+    return json(200, {
+      items: [
+        {
+          parishId: 'X',
+          name: 'Saint Elias',
+          locality: 'Hadath',
+          dioceseName: 'Beirut',
+          latitude: 33.83,
+          longitude: 35.53
+        }
+      ],
+      distanceUnavailable: [],
+      total: 1
+    });
+  if (path === 'public/parishes/X/website')
+    return json(200, [
+      { key: 'mass-times', language: 'en', title: 'Mass times', body: 'Sunday 9:00' },
+      { key: 'mass-times', language: 'ar', title: 'القداديس', body: 'الأحد ٩:٠٠' },
+      { key: 'parking', language: 'en', title: 'Parking', body: 'Behind the hall' }
+    ]);
+  if (path.startsWith('public/parishes/X/calendar?'))
+    return json(200, {
+      items: [
+        {
+          id: 'e1',
+          title: 'Sunday Mass',
+          kind: 'Mass',
+          status: 'Confirmed',
+          startsAt: '2026-11-15T07:00:00Z',
+          timeZone: 'Asia/Beirut'
+        },
+        {
+          id: 'e2',
+          title: 'Cancelled vigil',
+          kind: 'Event',
+          status: 'Cancelled',
+          startsAt: '2026-11-16T16:00:00Z',
+          timeZone: 'Asia/Beirut'
+        }
+      ]
+    });
+  if (path.startsWith('public/parishes/X/ministries?'))
+    return json(200, {
+      items: [{ id: 'm1', name: 'Choir', purpose: 'Sings at Sunday Mass', publicInformation: null }]
+    });
   return json(404); // a route the API does not have
 };
 
@@ -138,5 +185,34 @@ assert.equal(events.at(-1).detail, notConnected);
 
 // a route the API does not have says so plainly
 await assert.rejects(api('workspace/plan'), { message: notConnected });
+
+// the public site: the directory and a parish's pages, from the anonymous routes
+const { loadDirectory, loadParish } = await import('../src/public/api-data.js');
+const { directory, details } = await loadDirectory();
+assert.deepEqual(directory, [
+  {
+    id: 'X',
+    name: 'Saint Elias',
+    ar: '',
+    town: 'Hadath',
+    townAr: '',
+    diocese: 'Beirut',
+    latitude: 33.83,
+    longitude: 35.53
+  }
+]);
+const x = details.get('X');
+assert.deepEqual(x.content, { massTimes: { en: 'Sunday 9:00', ar: 'الأحد ٩:٠٠' } }, 'known sections only, by language');
+assert.deepEqual(
+  x.events.map(e => [e.id, e.d, e.t, e.kind]),
+  [['e1', '2026-11-15', '09:00', 'mass']],
+  "on the parish's own clock, without cancelled events"
+);
+assert.equal(x.publicRequests, false, 'no request buttons until the request form is connected');
+assert.deepEqual(x.ministries, [], "ministries load with a parish's own page");
+assert.deepEqual(
+  (await loadParish(directory[0])).ministries.map(m => [m.name, m.description]),
+  [['Choir', 'Sings at Sunday Mass']]
+);
 
 console.log('check-api: all assertions passed');
