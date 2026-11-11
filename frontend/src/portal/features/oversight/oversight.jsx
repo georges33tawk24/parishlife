@@ -1,480 +1,313 @@
-/* Bishop-only reporting. The API supplies a limited read-only projection. */
-import { useEffect, useState } from 'react';
-import { api, session } from '../../model/api.js';
+/* The bishop's pages, read-only, from the API's bishop overview (GET /api/archdioceses/{id}/overview and
+   .../overview/map): what each parish of the archdiocese has in counts, the eparchy list and the parish
+   map. The API gives counts and office coverage, not parish records, so a parish's people, sacraments,
+   calendar and groups are not shown here.
+   Main members: Oversight, Eparchy, MapView. */
+import { useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { S } from '../../model/store.js';
-import { PageHead, Table, Stat, Status, openDrawer, Icon } from '../../ui/ui.jsx';
+import { PageHead, Table, Stat, Pill, Empty, Panel } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
-import { CalendarView } from '../../ui/collection.jsx';
-import { auditAction } from '../../shared/audit-words.js';
-
-const cache = new Map();
+import { bishopOverview, bishopMap, myScopes } from '../../model/modules/administration-api.js';
+import { useLoad } from '../administration/use-load.js';
 
 const L = (en, ar) => t(en, ar);
 
-const key = id => `${session.user?.id}:${id || 'all'}`;
-
-const PersonName = ({ p }) => (
-  <>
-    {p?.lat || '—'}
-    <small style={{ display: 'block' }} dir="rtl">
-      {p?.ar || ''}
-    </small>
-  </>
-);
-
-const Link = ({ to, children }) => (
-  <a href={to} className="text-link">
-    {children}
-  </a>
-);
-
-const Rows = ({ items, cols }) =>
-  items.length ? (
-    <Table cols={cols.map(label => ({ label }))} rows={items.map(cells => ({ cells }))} />
-  ) : (
-    <p className="help" style={{ padding: '18px' }}>
-      {L('No records to show.', 'لا سجلات لعرضها.')}
-    </p>
-  );
-
-const Block = ({ id, title, children }) => (
-  <details className="panel oversight-section" id={`oversight-${id}`} open>
-    <summary className="panel-h">
-      <b>{title}</b>
-      <span className="oversight-chevron" aria-hidden="true">
-        <Icon name="chevD" size={16} />
-      </span>
-    </summary>
-    <div className="panel-b tight">{children}</div>
-  </details>
-);
-
-const calendarStates = new Map();
-
-const calendarState = id => {
-  if (!calendarStates.has(id)) calendarStates.set(id, { mode: 'month' });
-  return calendarStates.get(id);
+const TONE = { Verified: 'success', PendingVerification: 'warning', Suspended: 'danger', Closed: 'quiet' };
+const STATUS_WORDS = {
+  Verified: ['Verified', 'موثّقة'],
+  PendingVerification: ['Pending verification', 'بانتظار التوثيق'],
+  Suspended: ['Suspended', 'معلّقة'],
+  Closed: ['Closed', 'مقفلة']
 };
-
-const Back = ({ parishId }) => (
-  <Link to={`#/oversight/${parishId}`}>
-    <Icon name="chevL" size={15} />
-    {L('Back to parish', 'العودة إلى الرعية')}
-  </Link>
+const StatusPill = ({ status }) => (
+  <Pill label={L(...(STATUS_WORDS[status] || [status, status]))} tone={TONE[status] || ''} />
 );
 
-function PersonDetail({ entry, parishId, personId }) {
-  const p = entry.people.find(x => x.id === personId);
-  if (!p) return <p className="alert alert-danger">{L('Person not found.', 'الشخص غير موجود.')}</p>;
-  const records = entry.records.filter(r => r.personId === personId);
-  return (
-    <>
-      <Back parishId={parishId} />
-      <h2 style={{ margin: '18px 0 8px' }}>
-        <PersonName p={p} />
-      </h2>
-      <p className="help">
-        {L(
-          'Read-only profile. Private member and pastoral records are excluded.',
-          'ملف للقراءة فقط. لا يشمل بيانات الأعضاء الخاصة أو السجلات الرعوية السرية.'
-        )}
-      </p>
-      <div className="stats" style={{ margin: '18px 0' }}>
-        <Stat k={L('Status', 'الحالة')} v={p.status} />
-        <Stat k={L('Town', 'البلدة')} v={L(p.town, p.townAr || p.town)} />
-        <Stat k={L('Rite', 'الطقس')} v={p.rite || '—'} />
-      </div>
-      <Block id="household" title={L('Household and groups', 'العائلة والمجموعات')}>
-        <div style={{ padding: '18px' }}>
-          <p>
-            {L('Household', 'العائلة')}:{' '}
-            <b>{L(p.household?.name || '—', p.household?.ar || p.household?.name || '—')}</b>
-          </p>
-          <p style={{ marginTop: '10px' }}>
-            {L('Groups', 'المجموعات')}:{' '}
-            {p.groups.length
-              ? p.groups.map((g, i) => (
-                  <span key={g.id}>
-                    {i ? ', ' : ''}
-                    <Link to={`#/oversight/${parishId}/group/${g.id}`}>{L(g.name, g.ar || g.name)}</Link>
-                  </span>
-                ))
-              : '—'}
-          </p>
-        </div>
-      </Block>
-      <Block id="records" title={L('Sacraments and requests', 'الأسرار والطلبات')}>
-        <Rows
-          items={records.map(r => [r.reference || '—', r.kind, fmtDate(r.date), <Status k={r.status} />])}
-          cols={[L('Reference', 'المرجع'), L('Type', 'النوع'), L('Date', 'التاريخ'), L('Status', 'الحالة')]}
-        />
-      </Block>
-    </>
-  );
+const day = (offset = 0) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+const startOf = d => `${d}T00:00:00Z`,
+  endOf = d => `${d}T23:59:59Z`;
+
+/* The archdioceses this account oversees (as bishop, or as archdiocese administrator). */
+function useArchdioceses() {
+  return useLoad(async () => (await myScopes()).archdioceses, []);
 }
 
-function GroupDetail({ entry, parishId, groupId }) {
-  const g = entry.groups.find(x => x.id === groupId);
-  if (!g) return <p className="alert alert-danger">{L('Group not found.', 'المجموعة غير موجودة.')}</p>;
+/* Which archdiocese is shown: the route's, else the first. */
+function Picker({ list, value, onChange }) {
+  if (list.length < 2) return null;
   return (
-    <>
-      <Back parishId={parishId} />
-      <h2 style={{ margin: '18px 0 8px' }}>{L(g.name, g.ar || g.name)}</h2>
-      <p className="help">
-        {L(
-          'Read-only group activity based on recorded meetings.',
-          'نشاط المجموعة للقراءة فقط، وفق الاجتماعات المسجلة.'
-        )}
-      </p>
-      <div className="stats" style={{ margin: '18px 0' }}>
-        <Stat k={L('Members', 'الأعضاء')} v={g.members} />
-        <Stat k={L('Meetings', 'الاجتماعات')} v={g.meetings.length} />
-        <Stat
-          k={L('Attendance', 'الحضور')}
-          v={g.attendance.percentage === null ? '—' : `${g.attendance.percentage}%`}
-          d={`${g.attendance.present} / ${g.attendance.recorded} ${L('recorded', 'مسجّل')}`}
-        />
-      </div>
-      <Block id="roster" title={L('Members', 'الأعضاء')}>
-        <Rows
-          items={g.roster.map(p => [
-            <Link to={`#/oversight/${parishId}/person/${p.id}`}>
-              <PersonName p={p} />
-            </Link>
-          ])}
-          cols={[L('Person', 'الشخص')]}
-        />
-      </Block>
-      <Block id="meetings" title={L('Meetings', 'الاجتماعات')}>
-        <Rows
-          items={g.meetings.map(m => [
-            m.title,
-            fmtDate(m.date),
-            m.time || '—',
-            m.recorded ? `${m.present} / ${m.recorded}` : '—'
-          ])}
-          cols={[
-            L('Meeting', 'الاجتماع'),
-            L('Date', 'التاريخ'),
-            L('Time', 'الوقت'),
-            L('Present / recorded', 'حاضر / مسجّل')
-          ]}
-        />
-      </Block>
-    </>
-  );
-}
-
-function ParishView({ entry, id }) {
-  const [, redraw] = useState(0);
-  const set = (field, value) => {
-    S.ui[field] = value;
-    redraw(n => n + 1);
-  };
-  const q = (S.ui.oversightRecordQ || '').toLocaleLowerCase(),
-    kind = S.ui.oversightRecordKind || '',
-    state = S.ui.oversightRecordStatus || '';
-  const filtered = entry.records.filter(
-    r =>
-      (!kind || r.kind === kind) &&
-      (!state || r.status === state) &&
-      (!q || `${r.reference} ${r.kind} ${r.person?.lat} ${r.person?.ar}`.toLocaleLowerCase().includes(q))
-  );
-  const titles = [
-    ['people', L('People', 'المؤمنون')],
-    ['records', L('Sacraments & requests', 'الأسرار والطلبات')],
-    ['events', L('Calendar', 'الرزنامة')],
-    ['groups', L('Groups', 'المجموعات')],
-    ['activity', L('Activity', 'النشاط')]
-  ];
-  const events = (entry.events || []).map(e => ({ ...e, title: L(e.title, e.titleAr || e.title), subtitle: e.kind }));
-  const openEvent = eventId => {
-    const e = events.find(x => x.id === eventId);
-    if (e)
-      openDrawer({
-        title: e.title,
-        body: (
-          <>
-            <p>
-              {e.date} · {e.time || ''}
-            </p>
-            <p>{e.kind}</p>
-          </>
-        )
-      });
-  };
-  return (
-    <>
-      <h2>
-        {entry.parish.name} <small dir="rtl">{entry.parish.ar}</small>
-      </h2>
-      <div className="stats" style={{ margin: '16px 0' }}>
-        <Stat k={L('People', 'المؤمنون')} v={entry.counts.people} />
-        <Stat k={L('Groups', 'المجموعات')} v={entry.counts.groups} />
-        <Stat k={L('Official entries', 'القيود الرسمية')} v={entry.counts.registers} />
-      </div>
-      <nav className="toolbar oversight-jump" aria-label={L('Oversight sections', 'أقسام الإشراف')}>
-        {titles.map(([section, title]) => (
-          <button
-            key={section}
-            className="btn btn-secondary btn-dense"
-            data-oversight-jump={section}
-            onClick={() =>
-              document.getElementById(`oversight-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-          >
-            {title}
-          </button>
-        ))}
-      </nav>
-      <Block id="people" title={L('People', 'المؤمنون')}>
-        <Rows
-          items={entry.people.map(p => [
-            <Link to={`#/oversight/${id}/person/${p.id}`}>
-              <PersonName p={p} />
-            </Link>,
-            <Status k={p.status} />,
-            L(p.town, p.townAr || p.town)
-          ])}
-          cols={[L('English / Arabic name', 'الاسم الإنكليزي / العربي'), L('Status', 'الحالة'), L('Town', 'البلدة')]}
-        />
-      </Block>
-      <Block id="records" title={L('Sacraments and requests', 'الأسرار والطلبات')}>
-        <div className="toolbar" style={{ padding: '14px', gap: '8px' }}>
-          <input
-            className="input"
-            id="oversight-record-q"
-            type="search"
-            placeholder={L('Search reference or person', 'ابحث عن المرجع أو الشخص')}
-            value={S.ui.oversightRecordQ || ''}
-            onChange={e => set('oversightRecordQ', e.target.value)}
-          />
-          <Select
-            id="oversight-record-kind"
-            aria-label={L('Type', 'النوع')}
-            value={kind}
-            onChange={e => set('oversightRecordKind', e.target.value)}
-          >
-            <option value="">{L('All types', 'كل الأنواع')}</option>
-            {[...new Set(entry.records.map(r => r.kind))].sort().map(x => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
-          </Select>
-          <Select
-            id="oversight-record-status"
-            aria-label={L('Status', 'الحالة')}
-            value={state}
-            onChange={e => set('oversightRecordStatus', e.target.value)}
-          >
-            <option value="">{L('All statuses', 'كل الحالات')}</option>
-            {[...new Set(entry.records.map(r => r.status))].sort().map(x => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <Rows
-          items={filtered.map(r => [
-            r.reference || '—',
-            r.personId ? (
-              <Link to={`#/oversight/${id}/person/${r.personId}`}>
-                <PersonName p={r.person} />
-              </Link>
-            ) : (
-              <PersonName p={r.person} />
-            ),
-            r.kind,
-            fmtDate(r.date),
-            <Status k={r.status} />
-          ])}
-          cols={[
-            L('Reference', 'المرجع'),
-            L('Person', 'الشخص'),
-            L('Type', 'النوع'),
-            L('Date', 'التاريخ'),
-            L('Status', 'الحالة')
-          ]}
-        />
-      </Block>
-      <Block id="events" title={L('Calendar activities', 'أنشطة الرزنامة')}>
-        <div data-oversight-calendar="">
-          {entry.events ? <CalendarView events={events} state={calendarState(id)} onOpen={openEvent} /> : null}
-        </div>
-      </Block>
-      <Block id="groups" title={L('Group activity', 'نشاط المجموعات')}>
-        <Rows
-          items={entry.groups.map(g => [
-            <Link to={`#/oversight/${id}/group/${g.id}`}>
-              {L(g.name, g.ar || g.name)}
-              <Icon name="ext" size={13} cls="ext-mark" />
-            </Link>,
-            String(g.members),
-            String(g.meetings.length),
-            g.attendance.percentage === null ? '—' : `${g.attendance.percentage}%`
-          ])}
-          cols={[
-            L('Group', 'المجموعة'),
-            L('Members', 'الأعضاء'),
-            L('Meetings', 'الاجتماعات'),
-            L('Recorded attendance', 'الحضور المسجل')
-          ]}
-        />
-      </Block>
-      <Block id="activity" title={L('Recent administrative activity', 'النشاط الإداري الأخير')}>
-        <Rows
-          items={entry.activity.map(a => [
-            new Date(a.at).toLocaleString(document.documentElement.lang === 'ar' ? 'ar-LB' : 'en-GB'),
-            a.actor === 'System' ? L('System', 'النظام') : a.actor,
-            auditAction({ what: a.action })
-          ])}
-          cols={[L('When', 'الوقت'), L('By', 'بواسطة'), L('Activity', 'النشاط')]}
-        />
-      </Block>
-    </>
-  );
-}
-
-const inflight = new Map();
-
-export function Oversight({ params: [id = '', detail = '', detailId = ''] = [] }) {
-  const [entry, setEntry] = useState(() => cache.get(key(id)));
-  useEffect(() => {
-    const k = key(id),
-      old = cache.get(k);
-    if (old && !old.loading && Date.now() - (old.loadedAt || 0) < 60_000) return;
-    if (!old) cache.set(k, { loading: true });
-    /* every mounted copy waits on the one request: a remount during the load must still get the answer */
-    if (!inflight.has(k))
-      inflight.set(
-        k,
-        api(id ? `parishes/${encodeURIComponent(id)}/oversight` : 'oversight')
-          .then(data => cache.set(k, { ...data, loadedAt: Date.now() }))
-          .catch(error => cache.set(k, { error: error.message, loadedAt: Date.now() }))
-          .finally(() => inflight.delete(k))
-      );
-    inflight.get(k).then(() => setEntry(cache.get(k)));
-  }, []);
-  const head = (
-    <PageHead
-      title={L('Parish oversight', 'الإشراف على الرعايا')}
-      sub={L(
-        'Parish activity and records. Use Administration to manage parishes, accounts and bundles.',
-        'أنشطة الرعايا وسجلاتها. استخدم الإدارة لإدارة الرعايا والحسابات والباقات.'
-      )}
-    />
-  );
-  const picker = (
     <div className="toolbar" style={{ margin: '18px 0' }}>
-      <label htmlFor="oversight-parish">{L('Parish', 'الرعية')}</label>
-      <Select
-        id="oversight-parish"
-        value={id}
-        onChange={e => {
-          location.hash = '#/oversight' + (e.target.value ? '/' + e.target.value : '');
-        }}
-      >
-        <option value="">{L('All parishes', 'كل الرعايا')}</option>
-        {session.parishes.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.name} — {p.ar}
+      <label htmlFor="oversight-archdiocese">{L('Archdiocese', 'الأبرشية')}</label>
+      <Select id="oversight-archdiocese" value={value} onChange={e => onChange(e.target.value)}>
+        {list.map(a => (
+          <option key={a.id} value={a.id}>
+            {a.name || a.id}
           </option>
         ))}
       </Select>
     </div>
   );
-  let body;
-  if (!entry || entry.loading) body = <p role="status">{L('Loading oversight…', 'جارٍ تحميل بيانات الإشراف…')}</p>;
-  else if (entry.error) body = <p className="alert alert-danger">{entry.error}</p>;
-  else if (!id)
-    body = (
-      <Rows
-        items={entry.parishes.map(x => [
-          <>
-            {x.parish.name}
-            <small style={{ display: 'block' }}>{x.parish.ar}</small>
-          </>,
-          `${x.counts.people} / ${x.counts.households}`,
-          String(x.counts.registers),
-          String(x.counts.pendingRequests),
-          String(x.counts.upcomingEvents),
-          <Link to={`#/oversight/${x.parish.id}`}>{L('View parish', 'عرض الرعية')}</Link>
-        ])}
-        cols={[
-          L('Parish', 'الرعية'),
-          L('People / households', 'المؤمنون / العائلات'),
-          L('Official entries', 'القيود الرسمية'),
-          L('Open requests', 'الطلبات المفتوحة'),
-          L('Upcoming events', 'الأحداث المقبلة'),
-          ''
-        ]}
-      />
-    );
-  else if (detail === 'person') body = <PersonDetail entry={entry} parishId={id} personId={detailId} />;
-  else if (detail === 'group') body = <GroupDetail entry={entry} parishId={id} groupId={detailId} />;
-  else body = <ParishView entry={entry} id={id} />;
+}
+
+function Shell({ title, sub, children }) {
   return (
     <>
-      {head}
-      {picker}
-      {body}
+      <PageHead title={title} sub={sub} />
+      {children}
     </>
   );
 }
 
-const ParishRows = ({ label }) => (
-  <Rows
-    items={(session.parishes || []).map(p => [
-      <>
-        {p.name}
-        <small style={{ display: 'block' }}>{p.ar}</small>
-      </>,
-      L(p.town, p.townAr || p.town),
-      <Link to={`#/oversight/${p.id}`}>{label}</Link>
-    ])}
-    cols={[L('Parish', 'الرعية'), L('Town', 'البلدة'), '']}
-  />
-);
+function Gate({ scopes, children }) {
+  if (scopes.loading) return <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (scopes.error) return <p className="alert alert-danger">{scopes.error}</p>;
+  if (!scopes.data.length)
+    return (
+      <Empty
+        glyph="shield"
+        title={L('No archdiocese to oversee', 'لا أبرشية للإشراف عليها')}
+        body={L(
+          'This account holds no bishop or archdiocese administrator appointment.',
+          'لا يملك هذا الحساب تعيين مطران أو مدير أبرشية.'
+        )}
+      />
+    );
+  return children;
+}
+
+export function Oversight() {
+  const scopes = useArchdioceses();
+  const [picked, setPicked] = useState(''),
+    [from, setFrom] = useState(day(-30)),
+    [to, setTo] = useState(day());
+  const archdiocese = picked || scopes.data?.[0]?.id || '';
+  const overview = useLoad(
+    () => (archdiocese ? bishopOverview(archdiocese, startOf(from), endOf(to)) : Promise.resolve(null)),
+    [archdiocese, from, to]
+  );
+  const o = overview.data;
+  return (
+    <Shell
+      title={L('Parish oversight', 'الإشراف على الرعايا')}
+      sub={L(
+        'Counts for each parish of your archdiocese. Parish records themselves are not shown.',
+        'أعداد كل رعية في أبرشيتك. لا تُعرض سجلات الرعايا نفسها.'
+      )}
+    >
+      <Gate scopes={scopes}>
+        <Picker list={scopes.data || []} value={archdiocese} onChange={setPicked} />
+        <div className="toolbar" style={{ margin: '12px 0' }}>
+          <label>
+            {L('From', 'من')}{' '}
+            <input
+              className="input"
+              type="date"
+              value={from}
+              max={to}
+              onChange={e => e.target.value && setFrom(e.target.value)}
+            />
+          </label>
+          <label>
+            {L('To', 'إلى')}{' '}
+            <input
+              className="input"
+              type="date"
+              value={to}
+              min={from}
+              onChange={e => e.target.value && setTo(e.target.value)}
+            />
+          </label>
+        </div>
+        {overview.error ? <p className="alert alert-danger">{overview.error}</p> : null}
+        {overview.loading && !o ? <p role="status">{L('Loading oversight…', 'جارٍ تحميل بيانات الإشراف…')}</p> : null}
+        {o ? (
+          <>
+            <div className="stats" style={{ margin: '16px 0' }}>
+              <Stat
+                k={L('Parishes', 'الرعايا')}
+                v={o.totals.parishes}
+                d={`${o.totals.parishesWithoutHeadPriest} ${L('without a head priest', 'بلا كاهن رئيسي')}`}
+              />
+              <Stat
+                k={L('Current priests', 'الكهنة الحاليون')}
+                v={o.totals.currentPriests}
+                d={`${o.totals.otherCurrentStaff} ${L('other staff', 'موظفون آخرون')}`}
+              />
+              <Stat
+                k={L('Open requests', 'الطلبات المفتوحة')}
+                v={o.totals.openRequests}
+                d={`${o.totals.requestsReceived} ${L('received', 'مستلمة')}`}
+              />
+              <Stat k={L('Certificates awaiting you', 'شهادات بانتظارك')} v={o.totals.certificatesAwaitingBishop} />
+              <Stat k={L('Membership requests', 'طلبات العضوية')} v={o.totals.membershipRequestsPending} />
+              <Stat k={L('Published events', 'الأحداث المنشورة')} v={o.totals.publishedEvents} />
+            </div>
+            <Table
+              cols={[
+                { label: L('Parish', 'الرعية') },
+                { label: L('Status', 'الحالة') },
+                { label: L('Priests', 'الكهنة'), cls: 'num' },
+                { label: L('Head priest', 'الكاهن الرئيسي') },
+                { label: L('Other staff', 'موظفون'), cls: 'num hide-sm' },
+                { label: L('Open requests', 'طلبات مفتوحة'), cls: 'num' },
+                { label: L('Certificates', 'شهادات'), cls: 'num hide-sm' },
+                { label: L('Membership', 'عضوية'), cls: 'num hide-sm' },
+                { label: L('Events', 'أحداث'), cls: 'num hide-sm' }
+              ]}
+              rows={o.parishes.map(p => ({
+                cells: [
+                  <>
+                    <b>{p.name}</b>
+                    <small style={{ display: 'block' }}>{p.locality}</small>
+                  </>,
+                  <StatusPill status={p.status} />,
+                  <span className="num">{p.currentPriests}</span>,
+                  p.headPriestDesignated ? (
+                    L('Designated', 'معيَّن')
+                  ) : (
+                    <span className="dim">{L('None', 'لا أحد')}</span>
+                  ),
+                  <span className="num dim">{p.otherCurrentStaff}</span>,
+                  <span className="num">{p.openRequests}</span>,
+                  <span className="num dim">{p.certificatesAwaitingBishop}</span>,
+                  <span className="num dim">{p.membershipRequestsPending}</span>,
+                  <span className="num dim">{p.publishedEvents}</span>
+                ]
+              }))}
+              empty={<Empty glyph="portal" title={L('No parishes in this archdiocese', 'لا رعايا في هذه الأبرشية')} />}
+            />
+            <Panel title={L('How these counts are measured', 'كيف تُقاس هذه الأعداد')}>
+              <dl className="dl">
+                {o.measures.map(m => (
+                  <div key={m.key}>
+                    <dt>{m.key}</dt>
+                    <dd>
+                      {m.definition} <small className="dim">({m.basis})</small>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {o.excluded.length ? (
+                <p className="help">
+                  {L('Not included, by design', 'غير مشمول عمداً')}: {o.excluded.join(', ')}
+                </p>
+              ) : null}
+              <p className="help">
+                {fmtDate(o.from.slice(0, 10))} – {fmtDate(o.to.slice(0, 10))} · {L('ordered', 'الترتيب')}: {o.ordering}
+              </p>
+            </Panel>
+          </>
+        ) : null}
+      </Gate>
+    </Shell>
+  );
+}
 
 export function Eparchy() {
-  const parishes = session.parishes || [];
+  const scopes = useArchdioceses();
+  const [picked, setPicked] = useState('');
+  const archdiocese = picked || scopes.data?.[0]?.id || '';
+  const overview = useLoad(
+    () => (archdiocese ? bishopOverview(archdiocese, startOf(day(-30)), endOf(day())) : Promise.resolve(null)),
+    [archdiocese]
+  );
+  const o = overview.data;
   return (
-    <>
-      <PageHead
-        title={L('Eparchy', 'الأبرشية')}
-        sub={L('Read-only overview of parishes in your archdiocese.', 'نظرة عامة للقراءة فقط على رعايا الأبرشية.')}
-      />
-      <div className="stats" style={{ margin: '18px 0' }}>
-        <Stat k={L('Parishes', 'الرعايا')} v={parishes.length} />
-        <Stat k={L('People', 'المؤمنون')} v={parishes.reduce((n, p) => n + (p.people || 0), 0)} />
-      </div>
-      <ParishRows label={L('View oversight', 'عرض الإشراف')} />
-      <p style={{ marginTop: '18px' }}>
-        <Link to="#/assignments">{L('View priest assignments', 'عرض تعيينات الكهنة')}</Link>
-      </p>
-    </>
+    <Shell
+      title={L('Eparchy', 'الأبرشية')}
+      sub={L('Read-only list of the parishes in your archdiocese.', 'قائمة للقراءة فقط برعايا أبرشيتك.')}
+    >
+      <Gate scopes={scopes}>
+        <Picker list={scopes.data || []} value={archdiocese} onChange={setPicked} />
+        {overview.error ? <p className="alert alert-danger">{overview.error}</p> : null}
+        {o ? (
+          <>
+            <div className="stats" style={{ margin: '18px 0' }}>
+              <Stat k={L('Parishes', 'الرعايا')} v={o.totals.parishes} />
+              <Stat k={L('Current priests', 'الكهنة الحاليون')} v={o.totals.currentPriests} />
+              <Stat k={L('Without a head priest', 'بلا كاهن رئيسي')} v={o.totals.parishesWithoutHeadPriest} />
+            </div>
+            <Table
+              cols={[
+                { label: L('Parish', 'الرعية') },
+                { label: L('Locality', 'البلدة') },
+                { label: L('Status', 'الحالة') }
+              ]}
+              rows={o.parishes.map(p => ({ cells: [<b>{p.name}</b>, p.locality, <StatusPill status={p.status} />] }))}
+              empty={<Empty glyph="portal" title={L('No parishes in this archdiocese', 'لا رعايا في هذه الأبرشية')} />}
+            />
+            <p style={{ marginTop: '18px' }}>
+              <a href="#/assignments" className="text-link">
+                {L('View priest assignments', 'عرض تعيينات الكهنة')}
+              </a>
+            </p>
+          </>
+        ) : overview.loading ? (
+          <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>
+        ) : null}
+      </Gate>
+    </Shell>
   );
 }
 
 export function MapView() {
+  const scopes = useArchdioceses();
+  const [picked, setPicked] = useState('');
+  const archdiocese = picked || scopes.data?.[0]?.id || '';
+  const map = useLoad(() => (archdiocese ? bishopMap(archdiocese) : Promise.resolve(null)), [archdiocese]);
+  const m = map.data;
   return (
-    <>
-      <PageHead
-        title={L('Parish map', 'خريطة الرعايا')}
-        sub={L('Find parishes in the eparchy.', 'تعرّف إلى رعايا الأبرشية.')}
-      />
-      <p className="alert alert-info">
-        {L(
-          'Exact parish coordinates have not been recorded. This list gives the known town without placing inaccurate map markers.',
-          'لم تُسجّل الإحداثيات الدقيقة للرعايا بعد. تعرض هذه القائمة البلدات المعروفة دون وضع علامات غير دقيقة على الخريطة.'
-        )}
-      </p>
-      <div style={{ marginTop: '18px' }}>
-        <ParishRows label={L('View parish', 'عرض الرعية')} />
-      </div>
-    </>
+    <Shell
+      title={L('Parish map', 'خريطة الرعايا')}
+      sub={L('Where the parishes of the archdiocese are, as recorded.', 'مواقع رعايا الأبرشية كما سُجّلت.')}
+    >
+      <Gate scopes={scopes}>
+        <Picker list={scopes.data || []} value={archdiocese} onChange={setPicked} />
+        {map.error ? <p className="alert alert-danger">{map.error}</p> : null}
+        {m ? (
+          <>
+            <p className="alert alert-info">
+              {L(
+                `${m.located} parishes have a recorded location and ${m.notLocated} do not. A parish without a recorded location is listed but never placed on a guess.`,
+                `${m.located} رعايا لها موقع مسجّل و${m.notLocated} بلا موقع. تُعرض الرعية بلا موقع في القائمة دون تقدير.`
+              )}
+            </p>
+            <Table
+              cols={[
+                { label: L('Parish', 'الرعية') },
+                { label: L('Locality', 'البلدة'), cls: 'hide-sm' },
+                { label: L('Status', 'الحالة') },
+                { label: L('Location', 'الموقع') },
+                { label: L('Source', 'المصدر'), cls: 'hide-sm' }
+              ]}
+              rows={m.parishes.map(p => ({
+                cells: [
+                  <b>{p.name}</b>,
+                  p.locality,
+                  <StatusPill status={p.status} />,
+                  p.latitude != null && p.longitude != null ? (
+                    <a
+                      className="text-link mono"
+                      dir="ltr"
+                      href={`https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=16/${p.latitude}/${p.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {p.latitude}, {p.longitude}
+                    </a>
+                  ) : (
+                    <span className="dim">{L('Not recorded', 'غير مسجّل')}</span>
+                  ),
+                  <span className="dim">{p.sourceReference || '—'}</span>
+                ]
+              }))}
+              empty={<Empty glyph="pin" title={L('No parishes in this archdiocese', 'لا رعايا في هذه الأبرشية')} />}
+            />
+          </>
+        ) : map.loading ? (
+          <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>
+        ) : null}
+      </Gate>
+    </Shell>
   );
 }
