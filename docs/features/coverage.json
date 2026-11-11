@@ -1316,9 +1316,9 @@
       "id": "SUB09",
       "workflow": "Transfer future subscription coverage between parish and archdiocese",
       "module": "Subscriptions/Organizations/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "status": "partial",
+      "implemented_slice": "Future-coverage payer transfer between a parish and a verified registered archdiocese, both directions: either side proposes, the other accepts/declines the exact version (parish controlling owner with billing.manage, archdiocese registered representative; personal capacity + MFA; proposer cannot approve for the other side; proposing approval rechecked at acceptance); pending/accepted/declined/cancelled/expired lifecycle with one pending proposal per parish; never retroactive and refused while paid coverage or recorded money runs past the effective date; acceptance appends a dated payer period fenced on the parish document, leaving invoices, receipts, data, users, grants and association untouched; parish invoices, sponsored archdiocese invoices, operator cash and paid activation all follow the payer schedule. No payment claimed. Local tests only; runbook docs/operations/subscription-payer-transfer.md.",
+      "remaining": "SUB09 is a proposed workflow; who authorizes a payer change (owner + registered representative) is an implementation choice, not approved policy. Not delivered: billing-contact notifications, archdiocese worklist of sponsored parishes/transfers, multi-parish central contracts (SUB06), credit/proration/refund and stale-invoice voiding, real payment providers, frontend. Cross-container invoice check before acceptance is a read backed by cash-time and activation-time checks. Live Cosmos acceptance not performed.",
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     },
     {
@@ -1343,9 +1343,9 @@
       "id": "SUB12",
       "workflow": "Review contested parish ownership and recover parish administration",
       "module": "Subscriptions/Organizations/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "status": "partial",
+      "implemented_slice": "Restricted contested-ownership claims: verified MFA claimant opens a claim with minimal evidence (one open claim per claimant per parish); current owner gets a generic in-app notice, a minimal view and can respond; an independent MFA platform recovery operator decides with a recorded reason and evidence reference. Recovery moves only the controlling owner in one parish transaction: prior owner grant revoked (kept), claimant gets the ordinary setup-owner grant (no clergy approval/signing), pending payer transfer and association proposals from the old control withdrawn and listed; staff grants, appointments, coverage, invoices and records stay. Claims opened against a superseded owner are refused, so competing claims cannot install two owners; rejected/withdrawn claims expose nothing; role-limited projections; replay and version conflicts. Local tests only; runbook docs/operations/parish-ownership-recovery.md.",
+      "remaining": "SUB12 is a proposed workflow; the single-operator reviewer and evidence-reference rules are implementation choices pending the owner's verification/appeal policy. Not delivered: second reviewer or appeal, competent church-authority confirmation route, out-of-band contact of representatives, cross-parish reviewer worklist, outcome notifications, exceptional support record access, freeze policy (none applied; sources do not require one), frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     }
   ],

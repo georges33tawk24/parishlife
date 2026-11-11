@@ -1,6 +1,6 @@
 // Purpose: Persists invoices, actual receipts, and durable coverage work using explicit Cosmos partition batches.
 // Main functions: P, GetInvoiceAsync, CreateInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync,
-// GetActivationStatusAsync, FindDueActivationsAsync, TryLeaseAsync, CompleteActivationAsync, CommitOrReplay.
+// GetActivationStatusAsync, FindDueActivationsAsync, TryLeaseAsync, CompleteActivationAsync, ListInvoicesAsync, CommitOrReplay.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -105,6 +105,9 @@ internal sealed class BillingRepository(PartitionDocuments documents) : IBilling
         };
         await documents.ReplaceAsync(C, Row("activation:" + completed.Id, key, "activation", completed), work.Version, ct);
     }
+
+    // ponytail: type-only partition query filtered by the caller (Billing indexes no parishId path); bounded, upgrade with an indexed path.
+    public Task<IReadOnlyList<Invoice>> ListInvoicesAsync(string billingAccountId, CancellationToken ct) => documents.QueryAsync<Invoice>(C, P(billingAccountId), StorageQuery.Type("invoice"), ct, 2000);
 
     private async Task<T> CommitOrReplay<T>(DocumentBatch batch, string key, Operation op, T result, CancellationToken ct)
         where T : class

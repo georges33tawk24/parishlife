@@ -1,7 +1,7 @@
 // Purpose: Declares the IBillingRepository boundary used by backend services without exposing provider
 // implementation details.
 // Main functions: CreateInvoiceAsync, GetInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync,
-// GetActivationStatusAsync, FindDueActivationsAsync, TryLeaseAsync, CompleteActivationAsync.
+// GetActivationStatusAsync, FindDueActivationsAsync, TryLeaseAsync, CompleteActivationAsync, ListInvoicesAsync.
 
 using ParishLife.Api.Models;
 
@@ -17,4 +17,5 @@ public interface IBillingRepository
     Task<IReadOnlyList<Versioned<ActivationWork>>> FindDueActivationsAsync(DateTimeOffset now, CancellationToken ct);
     Task<Versioned<ActivationWork>?> TryLeaseAsync(Versioned<ActivationWork> work, string owner, DateTimeOffset now, CancellationToken ct);
     Task CompleteActivationAsync(Versioned<ActivationWork> work, string status, string? errorCode, CancellationToken ct);
+    Task<IReadOnlyList<Invoice>> ListInvoicesAsync(string billingAccountId, CancellationToken ct);
 }

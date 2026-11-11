@@ -2,7 +2,7 @@
 // conditional/idempotent writes.
 // Main functions: P, A, GetAsync, GrantId, GetGrantAsync, RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync,
 // GetCoveragesAsync, ActivateCoverageAsync, GetArchdioceseAsync, RegisterArchdioceseAsync, VerifyArchdioceseAsync,
-// ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, CommitOrReplay,
+// ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, GetPayerScheduleAsync, CommitOrReplay,
 // Missing.
 
 using ParishLife.Api.Configuration;
@@ -109,11 +109,15 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             throw new DomainException("verification_required", "Coverage requires an open verified parish.", FailureKind.Conflict);
         if ((await GetCoveragesAsync(coverage.ParishId, ct)).Any(c => c.Overlaps(coverage)))
             throw new DomainException("coverage_overlap", "Another base subscription already covers part of this period. Billing review is required.", FailureKind.Conflict);
+        // An accepted payer transfer decides who may fund each future period; a mismatching paid invoice goes to billing review, never to coverage.
+        if (PayerSchedule.AccountFor((await GetPayerScheduleAsync(coverage.ParishId, ct))?.Value, coverage.ParishId, coverage.StartsAt, coverage.EndsAt) != coverage.BillingAccountId)
+            throw new DomainException("payer_mismatch", "This period's scheduled payer differs from the paying billing account. Billing review is required.", FailureKind.Conflict);
         // The parish document is a shared revision guard for EVERY coverage writer.
         // Concurrent activation sees a changed ETag and cannot oversubscribe a period.
         await CommitOrReplay(documents.Batch(C, key).ReplaceItem("parish", Row("parish", key, "parish", parish.Value), PartitionDocuments.Match(parish.Version)).CreateItem(Row("coverage:" + coverage.Id, key, "coverage", coverage)).CreateItem(Receipt(key, operation, coverage)).CreateItem(Audit(key, operation, "subscription.activate_paid", coverage.InvoiceId)), key, operation, coverage, ct);
     }
 
+    public Task<Versioned<PayerSchedule>?> GetPayerScheduleAsync(string parishId, CancellationToken ct) => documents.ReadAsync<PayerSchedule>(C, P(parishId), "payerSchedule", ct);
     public Task<Versioned<Archdiocese>?> GetArchdioceseAsync(string id, CancellationToken ct) => documents.ReadAsync<Archdiocese>(C, A(id), "organization", ct);
     public async Task<Archdiocese> RegisterArchdioceseAsync(Archdiocese organization, Operation operation, CancellationToken ct)
     {

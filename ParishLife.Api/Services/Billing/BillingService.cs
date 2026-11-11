@@ -1,7 +1,7 @@
 // Purpose: Coordinates plan/invoice/receipt operations and durable subscription coverage with current access
 // checks.
 // Main functions: ListPlansAsync, PublishPlanAsync, CreateInvoiceAsync, GetAsync, InspectForOperatorAsync,
-// ReadFinancialSummary, RecordCashAsync, GetCoverageAsync, ProcessAsync.
+// Summary, RecordCashAsync, GetCoverageAsync, ProcessAsync. Invoices and cash follow the parish's accepted payer schedule (SUB09).
 
 using ParishLife.Api.DTOs.Billing;
 using ParishLife.Api.Interfaces.Repositories.Billing;
@@ -42,6 +42,8 @@ public sealed class BillingService(IPlanRepository plans, IBillingRepository bil
         var start = Guard.Utc(request.StartsAt);
         if (start > DateTimeOffset.MaxValue.AddMonths(-plan.TermMonths))
             throw new DomainException("invalid_period", "The subscription period exceeds the supported date range.");
+        if (PayerSchedule.AccountFor((await parishes.GetPayerScheduleAsync(parishId, ct))?.Value, parishId, start, start.AddMonths(plan.TermMonths)) != parishId)
+            throw new DomainException("payer_not_parish", "An accepted payer transfer makes another payer responsible for part of this period.", FailureKind.Conflict);
         // Each published plan is immutable. Invoices retain its exact commercial snapshot.
         var op = actor.CreateOperation(request.OperationId, request, clock);
         var invoice = new Invoice
@@ -65,40 +67,44 @@ public sealed class BillingService(IPlanRepository plans, IBillingRepository bil
     public async Task<BillingSummaryDto> GetAsync(string parishId, string invoiceId, CancellationToken ct)
     {
         await access.RequireAsync(parishId, Permissions.BillingRead, ct);
-        return await ReadFinancialSummary(parishId, invoiceId, ct);
+        return await Summary(billing, parishId, invoiceId, ct);
     }
 
-    public async Task<BillingSummaryDto> InspectForOperatorAsync(string parishId, string invoiceId, CancellationToken ct)
+    // The billing account is the parish itself, or a sponsoring archdiocese for invoices it issued under an accepted payer transfer.
+    public async Task<BillingSummaryDto> InspectForOperatorAsync(string billingAccountId, string invoiceId, CancellationToken ct)
     {
         await platform.RequireOperatorAsync(ct);
-        return await ReadFinancialSummary(parishId, invoiceId, ct);
+        return await Summary(billing, billingAccountId, invoiceId, ct);
     }
 
-    private async Task<BillingSummaryDto> ReadFinancialSummary(string parishId, string invoiceId, CancellationToken ct)
+    internal static async Task<BillingSummaryDto> Summary(IBillingRepository billing, string billingAccountId, string invoiceId, CancellationToken ct)
     {
-        var invoice = await billing.GetInvoiceAsync(parishId, invoiceId, ct) ?? throw new DomainException("invoice_not_found", "The invoice does not exist.", FailureKind.NotFound);
+        var invoice = await billing.GetInvoiceAsync(billingAccountId, invoiceId, ct) ?? throw new DomainException("invoice_not_found", "The invoice does not exist.", FailureKind.NotFound);
         return new BillingSummaryDto
         {
             Invoice = new Versioned<InvoiceDto> { Value = InvoiceDto.From(invoice.Value), Version = invoice.Version },
-            Receipts = (await billing.GetReceiptsAsync(parishId, invoiceId, ct)).Select(CashReceiptDto.From).ToArray(),
-            ActivationStatus = await billing.GetActivationStatusAsync(parishId, invoiceId, ct)
+            Receipts = (await billing.GetReceiptsAsync(billingAccountId, invoiceId, ct)).Select(CashReceiptDto.From).ToArray(),
+            ActivationStatus = await billing.GetActivationStatusAsync(billingAccountId, invoiceId, ct)
         };
     }
 
-    public async Task<CashReceipt> RecordCashAsync(string parishId, string invoiceId, RecordCashDto request, CancellationToken ct)
+    public async Task<CashReceipt> RecordCashAsync(string billingAccountId, string invoiceId, RecordCashDto request, CancellationToken ct)
     {
         // Paying customers cannot self-confirm that ParishLife received money.
         await platform.RequireOperatorAsync(ct);
-        var invoice = await billing.GetInvoiceAsync(parishId, invoiceId, ct) ?? throw new DomainException("invoice_not_found", "The invoice does not exist.", FailureKind.NotFound);
+        var invoice = await billing.GetInvoiceAsync(billingAccountId, invoiceId, ct) ?? throw new DomainException("invoice_not_found", "The invoice does not exist.", FailureKind.NotFound);
         Guard.Utc(request.ReceivedAt);
         if (request.ReceivedAt > clock.GetUtcNow())
             throw new DomainException("future_receipt", "Cash receipt time cannot be in the future.");
+        // Money is not accepted for a period whose payer changed after the invoice was issued; that invoice needs billing review.
+        if (PayerSchedule.AccountFor((await parishes.GetPayerScheduleAsync(invoice.Value.ParishId, ct))?.Value, invoice.Value.ParishId, invoice.Value.StartsAt, invoice.Value.EndsAt) != invoice.Value.BillingAccountId)
+            throw new DomainException("payer_changed", "An accepted payer transfer changed who pays for this period; this invoice can no longer take payment.", FailureKind.Conflict);
         var op = actor.CreateOperation(request.OperationId, request, clock, "cash:" + invoiceId);
         var receipt = new CashReceipt
         {
             Id = op.Id,
             InvoiceId = invoiceId,
-            ParishId = parishId,
+            ParishId = invoice.Value.ParishId,
             Received = Money.Create(request.Amount, request.Currency, invoice.Value.Total.MinorUnits),
             ReceivedAt = request.ReceivedAt,
             PayerName = Guard.Text(request.PayerName, "Payer"),
@@ -107,7 +113,7 @@ public sealed class BillingService(IPlanRepository plans, IBillingRepository bil
             RecordedBy = actor.AccountId,
             RecordedAt = op.At
         };
-        return await billing.ReceiveCashAsync(parishId, invoiceId, Versions.Require(request.Version), receipt, op, ct);
+        return await billing.ReceiveCashAsync(billingAccountId, invoiceId, Versions.Require(request.Version), receipt, op, ct);
     }
 
     public async Task<IReadOnlyList<Coverage>> GetCoverageAsync(string parishId, CancellationToken ct)
