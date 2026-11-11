@@ -1,14 +1,16 @@
 /* Purpose: keeps the portal's shared view model (model/data.js) in step with ParishLife.Api.
-   Main functions: hydrate (load what the API provides into the view model), persist (send supported
-   changes to the API and undo the rest), applyData, workflow, savedAt, savedSize, backupJSON.
+   Main functions: hydrate (each connected module loads its collections), persist (each module sends
+   its changes; changes no module can save are undone and reported), applyData, workflow, savedAt,
+   savedSize, backupJSON. The modules are in model/modules/.
 
    The screens still change plain objects in place and then call persist(). The .NET API has no
-   whole-parish save, so persist() compares the view model with what was last loaded and turns the
-   changes it understands into API calls: adding people, and archiving them. Everything else is undone
-   on screen and reported, so nothing looks saved that was not. hydrate() then reloads from the API,
+   whole-parish save, so persist() compares the view model with what was last loaded and gives each
+   connected module (model/modules/) the changes to its own collections to send. Everything else is
+   undone on screen and reported, so nothing looks saved that was not. hydrate() then reloads from the API,
    so the screens always show what is actually stored. */
 import * as D from './data.js';
-import { session, parishAPI, allPages, newOperationId, notConnected } from './api.js';
+import { session, notConnected } from './api.js';
+import { MODULES } from './modules/index.js';
 
 const KEYS = Object.keys(D).filter(k => k !== 'TODAY' && D[k] && typeof D[k] === 'object' && !(D[k] instanceof Date));
 const snapshot = () => JSON.parse(JSON.stringify(Object.fromEntries(KEYS.map(k => [k, D[k]]))));
@@ -68,98 +70,19 @@ function emptyParish(parish) {
   return d;
 }
 
-/* PersonDto → the portal's person. The API keeps one given and one family name, a birth date and one
-   contact; the portal's Arabic name, town, rite, household and status have no API field yet. */
-const toPerson = p => {
-  const name = `${p.givenName || ''} ${p.familyName || ''}`.trim();
-  return {
-    id: p.id,
-    lat: name,
-    ar: name,
-    given: p.givenName,
-    family: p.familyName,
-    town: '',
-    townAr: '',
-    rite: '',
-    status: '',
-    phone: p.contact || '—',
-    born: p.birthDate || '',
-    hh: null,
-    tags: [],
-    createdAt: p.createdAt
-  };
-};
-
 export async function hydrate() {
   const parish = session.parishes.find(p => p.id === session.parishId);
   const d = emptyParish(parish);
-  if (parish && (parish.roles?.includes('priest') || parish.capabilities?.includes('people.read'))) {
-    const people = (
-      await allPages(`parishes/${encodeURIComponent(parish.id)}/people?pageSize=200`).catch(e =>
-        e.status === 403 ? [] : Promise.reject(e)
-      )
-    ).map(p => [p, toPerson(p)]);
-    d.PEOPLE = people.filter(([p]) => !p.archived).map(([, x]) => x);
-    d.ARCHIVED = people.filter(([p]) => p.archived).map(([, x]) => ({ ...x, archived: '' }));
-    d.PARISH.people = d.PEOPLE.length;
-  }
+  if (parish) for (const m of MODULES) await m.load(parish, d);
   applyData(d);
   baseline = snapshot();
   saveFailed = false;
   return true;
 }
 
-/* A new person: the portal keeps one display name, the API a given and a family name. */
-function createBody(p) {
-  const given =
-    (p.given || '').trim() ||
-    String(p.lat || '')
-      .trim()
-      .split(/\s+/)[0] ||
-    '';
-  const family =
-    (p.family || '').trim() ||
-    String(p.lat || '')
-      .trim()
-      .split(/\s+/)
-      .slice(1)
-      .join(' ');
-  const contact = p.phone && p.phone !== '—' ? String(p.phone).trim() : null;
-  return {
-    operationId: newOperationId(),
-    givenName: given,
-    familyName: family,
-    birthDate: /^\d{4}-\d{2}-\d{2}$/.test(p.born || '') ? p.born : null,
-    contact
-  };
-}
-
-/* What changed since the last load: the people supported by the API, and everything else. */
-function changes() {
-  const now = snapshot(),
-    ids = list => new Map((list || []).map(x => [x.id, x]));
-  const was = ids(baseline.PEOPLE),
-    wasArchived = ids(baseline.ARCHIVED),
-    is = ids(now.PEOPLE),
-    isArchived = ids(now.ARCHIVED);
-  const create = [...is.values()].filter(p => !was.has(p.id) && !wasArchived.has(p.id));
-  const archive = [...was.keys()].filter(id => isArchived.has(id));
-  const peopleOther =
-    [...wasArchived.keys()].some(id => is.has(id)) || // restoring is not in the API
-    [...was.keys()].some(id => !is.has(id) && !isArchived.has(id)) || // nor is deleting
-    [...is.values()].some(p => was.has(p.id) && JSON.stringify(p) !== JSON.stringify(was.get(p.id))); // nor editing
-  const other = KEYS.filter(
-    k =>
-      !['PEOPLE', 'ARCHIVED', 'PERSON_EXTRA', 'PARISH'].includes(k) &&
-      JSON.stringify(now[k]) !== JSON.stringify(baseline[k])
-  );
-  return {
-    create,
-    archive,
-    unsupported: peopleOther || other.length > 0,
-    any: create.length || archive.length || peopleOther || other.length
-  };
-}
+/* Collections a module may change in passing (counts on the parish record) without that being a save. */
+const DERIVED = ['PARISH', 'PARISHES'];
+const owned = () => new Set([...MODULES.flatMap(m => m.keys), ...DERIVED]);
 
 export function persist() {
   if (!session.user) return Promise.resolve(false);
@@ -170,16 +93,23 @@ export function persist() {
     try {
       while (again) {
         again = false;
-        const c = changes();
-        if (!c.any) continue;
-        for (const p of c.create) await parishAPI('people', 'POST', createBody(p));
-        for (const id of c.archive) await parishAPI(`people/${encodeURIComponent(id)}/archive`, 'POST');
-        if (c.unsupported) {
+        const now = snapshot(),
+          changed = KEYS.filter(k => JSON.stringify(now[k]) !== JSON.stringify(baseline[k]));
+        if (!changed.length) continue;
+        const parish = session.parishes.find(p => p.id === session.parishId);
+        let unsupported = changed.some(k => !owned().has(k)),
+          saved = false;
+        for (const m of MODULES.filter(m => m.keys.some(k => changed.includes(k)))) {
+          const result = (await m.save(baseline, now, parish)) || {};
+          unsupported ||= !!result.unsupported;
+          saved ||= !!result.saved;
+        }
+        if (unsupported) {
           ok = false;
           document.dispatchEvent(new CustomEvent('parish-save-error', { detail: notConnected }));
         }
-        await hydrate();
-        if (c.create.length || c.archive.length) lastSaved = new Date().toISOString();
+        await hydrate(); // the screens show what the API stored, and nothing it did not
+        if (saved) lastSaved = new Date().toISOString();
       }
       saveFailed = !ok;
       return ok;

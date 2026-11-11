@@ -2,6 +2,8 @@
 
 Branch `fullstack` combines the `backend` branch (ParishLife.Api, .NET 10, merged at `331135e`) with the React frontend from `frontend-new2`, in `frontend/`. Updated **11 November 2026**.
 
+How modules are connected, and who owns which screens: [`docs/frontend-modules/README.md`](frontend-modules/README.md).
+
 ## Why this is more than changing URLs
 
 The frontend was written for the earlier Python server. It loads a whole parish as one document (`GET parishes/{id}/state`, about 90 collections) and saves it back the same way. ParishLife.Api has more than 400 separate routes with their own data shapes, permission checks, versions (ETags) and operation ids. Each module's screens therefore need their data layer rewritten against that module's routes, and some screens show or edit fields the API does not have.

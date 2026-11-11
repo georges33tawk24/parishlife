@@ -12,6 +12,7 @@ import { S, MOBILE_NAV, role, me, canSee, go, save, bus } from '../model/store.j
 import { runAction } from './actions.jsx';
 import { hydrate, persist, saveFailed } from '../model/persist.js';
 import { api, loadSession, session, selectParish, signOut } from '../model/api.js';
+import { MODULES } from '../model/modules/index.js';
 import { M, loadMember } from '../model/member-data.js';
 import { applyTheme } from '../../lib/theme.js';
 import { confirmPlanNavigation, planDirty } from '../model/planning.js';
@@ -1081,9 +1082,9 @@ const moduleFor = {
   giving: 'finance',
   finance: 'finance'
 };
-/* Pages that load and save through ParishLife.Api so far. The others still show the old server's
-   screens with nothing in them, so they say so instead of looking like an empty parish. */
-const CONNECTED = new Set(['people', 'person']);
+/* Pages that load and save through ParishLife.Api so far (each connected module lists its own,
+   model/modules/). The others say so instead of looking like an empty parish. */
+const CONNECTED = new Set(MODULES.flatMap(m => m.routes));
 let shownRoute = '';
 function View() {
   const host = useRef(null);
@@ -1146,8 +1147,8 @@ function View() {
             <div className="alert alert-info" role="status">
               {S.route === 'dashboard'
                 ? t(
-                    'Only People is connected to the new backend so far. The other panels stay empty until their modules are connected.',
-                    'قسم المؤمنين وحده متّصل بالخادم الجديد حتى الآن. تبقى اللوحات الأخرى فارغة إلى أن تُوصل وحداتها.'
+                    'Not every module is connected to the new backend yet. Panels for the others stay empty until they are.',
+                    'لم تُوصل كل الوحدات بالخادم الجديد بعد. تبقى لوحات الوحدات الأخرى فارغة إلى أن تُوصل.'
                   )
                 : t(
                     "This page isn't connected to the new backend yet. It shows nothing from your parish, and changes made here are not saved.",
