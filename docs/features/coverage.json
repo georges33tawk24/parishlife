@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 126,
-    "not_started": 23
+    "partial": 146,
+    "not_started": 3
   },
   "entries": [
     {
@@ -56,9 +56,9 @@
       "id": "A06",
       "workflow": "External sign-in, contact verification and alias changes",
       "module": "Accounts",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Email-ownership verification (anonymous neutral request/confirm, six-digit hashed codes, 15-minute expiry, 5 attempts, resend throttle) and verified sign-in email change (fresh proofs, code only to the new address, old alias kept until proof, atomic account/record commit with new security stamp, alias claim/release with rollback, exact replay). Delivery goes through IContactCodeDelivery whose registered default reports NotConfigured and sends nothing, so codes are neither generated nor claimed sent and the office identity-review route stays the fallback. Configuration-gated Google/Microsoft OAuth (PKCE, provider sub only, hashed): link only for an MFA account with an MFA session and fresh proofs; sign-in resolves only linked subjects, never creates accounts/Person/membership or merges by email, and MFA accounts still complete the authenticator challenge; unlink. Unconfigured providers have no scheme and report unavailable. Local tests (captured delivery, fake OAuth backchannel).",
+      "remaining": "No email/SMS provider is configured (U10): contact verification and email change cannot complete in production until one is approved and wired. S06.05's proposed 'sign in while unverified' conflicts with the current sign-in rule and was not adopted (owner decision). Not delivered: phone contacts, standalone username rename, verified-contact password reset, identity-change notifications, Apple provider, provider app registrations/secrets, browser redirect UX for external completion, frontend and live provider/Cosmos acceptance.",
       "questionnaire_references": "S06.05–06 S06.11"
     },
     {
@@ -281,9 +281,9 @@
       "id": "O08",
       "workflow": "Bishop overview, map and aggregates",
       "module": "Reporting/Organizations",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Bishop overview for a current accepted MFA bishop in his own selected capacity: parishes in his recorded, bishop-accepted jurisdiction only, alphabetical (no ranking), explicit UTC period, each measure defined (current priests as distinct accounts, head-priest designation, other staff, open requests, requests received in period, certificates awaiting bishop, pending membership requests, published events in period) with confidential/person/finance/attendance categories explicitly excluded and no record contents; map projection showing only coordinates a parish manager recorded with their source (new versioned, idempotent parish location record), others NotRecorded. Local tests only.",
+      "remaining": "Proposed S29.14-16 material, not owner-approved. Not delivered: finance/giving/budget, attendance, participation and membership-change measures (MT05/06/10-12/14 definitions unapproved), small-count suppression threshold (none in sources), exports CSV/XLSX/PDF and EN/FR/AR labels, other diocesan readers, map tile provider and frontend. Jurisdiction is filtered in memory (index path not present; bounded 2000/200). Live Cosmos acceptance not performed.",
       "questionnaire_references": "S29.14–16"
     },
     {
@@ -812,9 +812,9 @@
       "id": "N02",
       "workflow": "Exceptional exact-message review",
       "module": "Communications/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Participants report one exact inbox message with a protected explanation and see only their own report and its neutral outcome. Platform operators (MFA, no selected appointment) request review of one exact message with a recorded reason; a different, non-conflicted operator must approve a 5-1440 minute window or decline; only the requester reads that single message inside the window, each read audited and counted; participants/creators/authors of the conversation are excluded from every step; closing a review closes its report with a neutral reporter outcome. Local tests only (MessageReviewTests).",
+      "remaining": "Proposed S26.16/S02.13/P26 basis, not owner-approved. Access-window bounds are technical, not agreed policy. Not delivered: blocking unwanted contact, a parish-level or independent non-platform report handler and safe escalation route, reporter/reviewer notifications, report retention, reauthentication on request, frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.16 S02.13"
     },
     {
@@ -831,7 +831,7 @@
       "workflow": "In-app notifications and preferences",
       "module": "Communications",
       "status": "partial",
-      "implemented_slice": "Per-account deduplicated in-app notices with Required/Optional kinds, read/unread/archive and optional-topic/language preferences. All current required-notice producers atomically stage Pending work with their source changes in the parish partition; a bounded background relay checks the current typed audience, confirms recipient record/legacy receipt and conditionally acknowledges Stored. Neutral previews exclude private case content. Recovery, acknowledgment, concurrency, authorization and hosted-worker checks are recorded in the reliability verification report. New work uses versioned parish-scoped identities; matching legacy notices/receipts are reused without resetting read state, and known pending legacy cross-parish collisions recover without changing the work identity. Exact-version dispatch and invalid/unsupported receipt or identity refusal have isolated regressions.",
+      "implemented_slice": "Per-account deduplicated in-app notices with Required/Optional kinds, read/unread/archive and optional-topic/language preferences. All current required-notice producers atomically stage Pending work with their source changes in the parish partition; a bounded background relay checks the current typed audience, confirms recipient record/legacy receipt and conditionally acknowledges Stored. Neutral previews exclude private case content. Recovery, acknowledgment, concurrency, authorization and hosted-worker checks are recorded in the reliability verification report. New work uses versioned parish-scoped identities; matching legacy notices/receipts are reused without resetting read state, and known pending legacy cross-parish collisions recover without changing the work identity. Exact-version dispatch and invalid/unsupported receipt or identity refusal have isolated regressions. Source-scoped Pending/Stored outcome reads now also cover parish status changes (jurisdiction bishop), incident assignments (incidents.manage handlers) and concern reviewer actions/entries (eligible selected reviewer only; never submitter, unselected reviewers, office, bishop or platform operators); recovery sessions refused (CareStatusNotificationOutcomeTests).",
       "remaining": "Combined-home notification center across parishes, reminder rules, quiet hours/digests and external delivery tracking remain. Historical pre-outbox missing notices are not automatically reconstructed; invalid receipt/identity conflicts still need authoritative operator review, and no pending-work retention/deletion policy is invented.",
       "questionnaire_references": "S03.09 S26.11–15"
     },
@@ -839,9 +839,9 @@
       "id": "N05",
       "workflow": "Broadcast/template and external delivery",
       "module": "Communications",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Parish templates and broadcasts by communications.manage staff: approval by a different staff account against the exact version, immutable after approval, cancel with reason; Members or Ministry audiences resolved at send time from active links, current ministry membership, active verified accounts and the optional parish.broadcast opt-out; one in-app copy stored atomically with the send and visible only to its recipients; counts-only audience preview; per-channel state InApp Stored and Email/Sms/Push NotConfigured (never sent). Local tests only (BroadcastTests).",
+      "remaining": "Proposed S26.09-S26.15/P26 basis, not owner-approved. Not delivered: any external provider, delivery attempts/retries/failure follow-up, scheduling and reminder rules runner, quiet hours/digests, per-recipient read state, bell notifications for broadcasts, multilingual linked versions, ministry-leader authorship, audiences above the 2000-recipient technical bound (needs a resumable fan-out job), frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.09–15"
     },
     {
@@ -1001,18 +1001,18 @@
       "id": "W01",
       "workflow": "Custom form fields and conditional rules",
       "module": "Workflows",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Versioned parish custom forms reusing the event-registration field model: Text/Choice/Boolean/Number/Date fields, required, conditional show and new conditional require rules (earlier field, reachable value) evaluated server-side; forms pinned to immutable published workflow versions; per-field restricted privacy class with purpose-bound protected storage and redacted projections; template validation of permissions, step branches and keys; draft/publish of exactly the reviewed draft by current MFA workflows.manage holders in the selected capacity, exact replay and ETag conflicts. Registration forms gain conditional require. Local tests only (docs/operations/custom-workflows.md).",
+      "remaining": "S21.04/S28.08-09 detail is proposed, not owner-approved. Not delivered: attachment/file fields, EN/FR/AR labels and applicant preview rendering, fee/consent snapshots for workflow forms, separate publisher/approver role, diocesan templates with parish adaptation, assignee-existence check at publish, member/guest-facing forms, frontend builder. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S21.04 S28.07–09"
     },
     {
       "id": "W02",
       "workflow": "Workflow run, step result, pause/cancel/reopen",
       "module": "Workflows",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Workflow runs pinned to the viewed published version: start by holders of the version's start permission in Open mode; ordered steps with conditional skip; current-step Completed/Declined results only by holders of that step's permission in the selected capacity; process-owner pause/resume/cancel/reopen with reason (reopen = new cycle redoing the ending step); definition modes Open/PausedNew/SafetyStop with explicit effects; immutable history with actor, selected appointment, cycle and reason; worklist of actionable runs; parish-root/definition/run ETag fences and exact replay. Local tests only (docs/operations/custom-workflows.md).",
+      "remaining": "S28.10-12/WF49 detail is proposed, not owner-approved. Not delivered: parallel approvals, return-for-information/resubmission (T90/T91), deadlines/reminders/escalation, transfer, transition notifications, active-run version migration, cancel impact review of linked resources/money, connected outcomes (steps never perform or prove signatures, payments, releases or sacraments), member self-start/withdraw, frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S28.07–12"
     },
     {
@@ -1028,9 +1028,9 @@
       "id": "W04",
       "workflow": "Scheduled report delivery",
       "module": "Reporting/Communications",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Personal-capacity MFA schedules (Daily/Weekly, local hour, IANA time zone) for in-app delivery of the parish work overview to oneself; pause/resume/cancel with versions and replay; background runner (BackgroundJobs:Enabled) re-authorizes the recipient each run (active MFA account, open parish, current direct grant per queue) and atomically stores one snapshot + notice per due time; lost access gives a contentless NotAuthorized run, pauses the schedule and hides earlier snapshots on read; email copies recorded as NotConfigured, never sent. Local tests only.",
+      "remaining": "Proposed contract, not owner-approved. Not delivered: other schedulable reports (bishop overview, finance), schedules under selected staff appointments, email/SMS providers, quiet hours/digests, external retry/escalation, shared audiences, export attachments and frontend. Missed runs are not backfilled. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S26.10–15 S29.18"
     },
     {
@@ -1055,9 +1055,9 @@
       "id": "W07",
       "workflow": "Data snapshot, backup and operator recovery",
       "module": "Administration",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Private operator tool only (no public endpoint; service registered only for the operator workstation): snapshot-export writes every existing container's records (system properties stripped, protected fields left as dp1 ciphertext) plus record-referenced evidence with a versioned manifest of counts/partitions/SHA-256 and a printed manifest hash; the Data Protection key ring and secrets are never read; a two-pass check refuses exports changed by concurrent writes; snapshot-verify checks hashes, counts, duplicates and the exact file set offline; snapshot-restore re-verifies, refuses the source or any non-empty/incomplete target, dry-runs by default, writes create-only per-partition batches, reads everything back and appends an operations.snapshot_restore audit row in the target. Runbook docs/operations/data-snapshot-and-recovery.md; DataSnapshotTests (5) on isolated Local storage. S31.16/WF64 detail is proposed, not owner-approved.",
+      "remaining": "U15 inputs unresolved and deliberately not defaulted: retention, schedule, RPO/RTO, backup owner/custodian, snapshot storage location, key-ring custody and restore-exercise cadence. No live Cosmos/Blob run or real restore exercise (blocks recovery-readiness claim); no scheduled snapshots, tool-side encryption, streaming for large datasets or in-place recovery; S32.05 help/support routing to real responsible roles not implemented; browser Data snapshot labelling belongs to the export cards and frontend (deferred).",
       "questionnaire_references": "S31.16 S32.05 U15"
     },
     {
@@ -1109,9 +1109,9 @@
       "id": "D01",
       "workflow": "Combined Home, explicit role choice and all-parish browse",
       "module": "Accounts/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "GET /api/me/home: one account-level combined home (no selected appointment, no recovery session, active verified account) across followed and served parishes with separate Following/Member/MembershipPending/Primary flags, the account's own per-parish and total unread notices, pending staff invitations, and currently valid capacities listed separately with duties after explicit denials (effective staff appointments with verified jurisdiction and open parish, current bishop seat, current ministry leadership, legacy parish grants, platform operator); home state NoParish/Personal/AwaitingAssignment/SingleCapacity (direct entry)/ChooseCapacity; GET /api/me/capacities recomputes on every call so lapsed capacities vanish without re-login; the choice stays per request (X-ParishLife-Appointment), never unioned. All-parish browse is the anonymous X09 directory. Local tests only.",
+      "remaining": "S02.05/S03.01-06 refinements are proposed. Grants and ministry leadership are discovered only in followed/served parishes (no account-side index). Not delivered: remembered per-account/role/parish views and filters, draft-preserving switch prompts, personal task/inbox counts, three-language terminology dictionary, navigation shell and frontend. Live Cosmos cross-partition query acceptance not performed.",
       "questionnaire_references": "S02.05 S03.01–06"
     },
     {
@@ -1127,9 +1127,9 @@
       "id": "X01",
       "workflow": "Passkey enrollment, login and removal",
       "module": "Accounts",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Passkey (WebAuthn) registration, list, removal and sign-in via ASP.NET Core Identity's built-in passkey handler; CosmosIdentityStore implements IUserPasskeyStore (passkeys on the account document, max 10) with a unique credential index. Registration/removal need personal capacity, no recovery cookie, and for MFA/operator accounts an MFA session plus fresh password and authenticator code (non-MFA members prove the password). Protected, five-minute, purpose/account/session/stamp-bound ceremony state; one-use login nonce committed with the session/challenge; sign-count update; removal rotates the security stamp and signs out. A passkey is one factor: MFA accounts still complete the authenticator challenge; non-MFA members get a 'passkey' session. Local tests only (fixture software authenticator).",
+      "remaining": "Sources do not mention passkeys: 'passkey is not MFA', user verification required, max 10 and the fresh-proof rule are conservative implementation choices, not owner policy (S06.06/S06.11 proposed). Not delivered: passkey rename, passkey-only accounts/password removal, attestation-statement verification ('none' accepted), cross-origin frontends (Passkeys:ServerDomain/origin review), new-sign-in notifications, frontend, real browser/authenticator and live Cosmos acceptance.",
       "questionnaire_references": "S06.06 S06.11"
     },
     {
@@ -1145,36 +1145,36 @@
       "id": "X03",
       "workflow": "Signature setup and exact document authorization",
       "module": "Documents",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Signer setup (own printed name, personal capacity, MFA, no recovery session); bishop-recorded electronic-signature arrangement defaulting to not approved; electronic authorization of the exact prepared certificate content (canonical fields + bishop-approved wording hash) by the priest who recorded signing, in his current appointment, with MFA, the previewed content hash and a fresh authenticator code kept out of fingerprints/audit; immutable Data-Protection-sealed record with a 128-bit verification code; return clears and reissue supersedes; the printable sheet shows the priest's printed authority, code and honest official status. Local tests only.",
+      "remaining": "All rules are the proposed S14.10/S15.09 answers, not owner-approved policy; official validity stays a U05 factual input (no arrangement, wording, seals or signers supplied). Not delivered: one-use server challenge/passkey assertion (TOTP may be reused within its step), drawn signature images, substitute/acting signers, separate bishop co-signature, PDF/QR output, legacy issued documents and the frontend. Live Cosmos/Key Vault key-ring acceptance not performed.",
       "questionnaire_references": "S14.10 S15.09 U05 U10"
     },
     {
       "id": "X04",
       "workflow": "Signed letters for guest requests",
       "module": "Documents/Requests",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Office letters on any request case including guest requests: requests.manage drafts and revises; a current parish priest electronically authorizes the exact text (same signing mechanism as X03); documents.release releases only after the server matches the re-entered request reference, addressee and signed content hash, to a verified applicant account or in person with evidence; withdrawal and versioned replacement keep history and supersede; release/withdrawal fence the request and stage a neutral applicant notice; the tracking token lists released letters but never their text or code; the applicant account reads text released to it. Local tests only.",
+      "remaining": "Proposed contract; the matrix's separate office letter authority is not implemented because no grantable signing permission exists and S14.10 names the priest as printed authority (needs an authority decision). Not delivered: letterhead/templates, PDF output, contact-challenge or short-lived download sessions (U10), disclosure-incident work after wrongful release, notification-outcome reads for letters, and the frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S11 S14.10 S15.09–11"
     },
     {
       "id": "X05",
       "workflow": "Public signature verification and revocation",
       "module": "Documents",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous, rate-limited GET /api/public/document-verifications/{code} returning only status/meaning, document type, reference, version, issuing parish, printed authority, time and an honest official statement (reference only unless the bishop recorded an approved arrangement); status derived from the current document (Valid, NotYetIssued, Superseded, Withdrawn, Invalidated, Revoked) plus content-hash/Data Protection seal integrity checks; staff read; append-only revocation by a current priest or the jurisdiction bishop with an internal reason. Local tests only.",
+      "remaining": "Proposed contract; a code/QR is never treated as proof of official validity (U05). Not delivered: verification of an uploaded PDF/file, QR images, recipient notification after revocation, disclosure review worklist, legacy document records and the frontend. Live Cosmos/Key Vault acceptance and the single catalog pointer partition's load are unmeasured.",
       "questionnaire_references": "S14.10–12 S15.10"
     },
     {
       "id": "X06",
       "workflow": "Public-site metrics and Super Admin Insights",
       "module": "Reporting",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous public-site beacon with allowlisted kinds (home/directory/parish view, request start), language and verified parish only, stored as sharded daily counters with no IP, visitor key, device, referrer, search or location data and no receipt/audit for untrusted beacons (dropped under repeated conflict, never inflated); Super Admin Insights for current MFA platform operators only: daily counts plus parish counts by status and jurisdiction coverage, with explanatory notes, no parish names or clergy/person/case/finance data and no record access. Local tests only.",
+      "remaining": "Proposed contract, not owner-approved. Not delivered: funnels, referrer/device aggregates and visitor hashes (deliberately not stored), completeness/health scores, scoped non-operator viewers, bot check, approved retention period (S32.01; nothing purged), exports and frontend beacon/dashboards. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S29.14–17 S32.01"
     },
     {
@@ -1199,9 +1199,9 @@
       "id": "X09",
       "workflow": "Interactive public map, distance, visiting/follow links",
       "module": "Publishing/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous all-parish directory (GET /api/public/parishes): verified parishes only, public name/locality/verified-diocese name, coordinates only from the parish manager's recorded O08 ParishLocation (no geocoding), text search; POST /nearby keeps the visitor point in the body (never stored/logged in URLs) and returns haversine approximate distance order, a genuine radius limit with an outside-radius count, and parishes without recorded location kept apart; card links to existing website/calendar/ministries/liturgical-calendar/guest-request reads and the existing follow action. Cacheable with ETag. Local tests only.",
+      "remaining": "S04 answers are proposed, not owner-approved. Not delivered: map tiles/provider and directions links (no provider configured), localized names, office hours/open-now, accessibility facts, structured next-Mass search (needs structured schedules), verified photos, diocese/locality facets, frontend map and location prompt. One location point read per parish (bounded 2000); live Cosmos acceptance not performed.",
       "questionnaire_references": "S04.01–09"
     },
     {
@@ -1217,27 +1217,27 @@
       "id": "X11",
       "workflow": "Public offline reading and install metadata",
       "module": "Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Public web-app manifest (GET /api/public/app/manifest) only from validated PublicApp configuration (404 not configured, 503 misconfigured; no invented name/branding); [PublicCache] filter gives marked anonymous reads (directory, homepage, website, public liturgical calendar, manifest, policy) public max-age plus strong ETag and 304 revalidation while every other /api response and all errors stay no-store; GET /api/public/app/offline-policy lists exactly the marked reads (attribute discovery) and states the S31.05-07 baseline: stale public reference only, no personal data offline, no offline writes. Local tests only.",
+      "remaining": "S31 answers are proposed. Not delivered: frontend service worker/install prompt and connection-required messaging, cache review of other public reads (public calendar, ministries), localized manifest, operator-supplied PublicApp values and icons (none configured), any offline write queue (explicitly unapproved).",
       "questionnaire_references": "S31.05–07"
     },
     {
       "id": "X12",
       "workflow": "Liturgical season/feast display and public decoration",
       "module": "Scheduling/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Authority-managed liturgical calendars: the current MFA bishop drafts versions with rite, year, source, version label, validity period, parish-exception permission and up to 1000 authority-supplied entries (en/fr/ar titles, rank/season labels, #RRGGBB display color), approves them (one current version per archdiocese/rite/year via a conditional seat), withdraws with reason, and corrects approved versions only through a reviewed new version that supersedes them; approved versions are immutable. Appointed priests with schedule.publish record/withdraw dated parish exceptions with reason only under a permitting approved calendar of their jurisdiction. Anonymous cacheable public read for a parish/date range with rite/source/version attribution, flagged exceptions without reasons, explicit language fallback and NotPublished status. No feasts or Easter-based seasons computed or seeded. Local tests only.",
+      "remaining": "S16.11/S01.07/S30.17 are proposed; the first archdiocese's competent authority, rite and calendar source remain inputs (U02). Bishop-only preparation is a proposed reading. Not delivered: delegated preparer/second reviewer, calendar file import, combined cross-jurisdiction view, linking events/service plans to the calendar applied at their date, display-color contrast validation (S30.17 prototype evidence U14), frontend decoration. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S01.07 S16.11 S30.17"
     },
     {
       "id": "X13",
       "workflow": "Optional Turnstile and public authentication capability",
       "module": "Accounts/Infrastructure",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Optional Cloudflare Turnstile: enforced only when Turnstile:SiteKey and SecretKey are configured (secret via App Service/Key Vault reference), server-side siteverify through a named HttpClient, optional expected hostname, 400 turnstile_failed / 503 turnstile_unavailable (fail closed), applied to register, login, passkey login options, contact-verification request and external sign-in start; disabled by default with no behaviour change. Public no-store GET /api/auth/capabilities reports password/registration, passkeys, each external provider's real availability, Turnstile enabled + public site key only, and contact delivery NotConfigured. Local tests with a fake verifier.",
+      "remaining": "Turnstile is not named in the sources; using it, the protected endpoint list and fail-closed behaviour are proposed choices under S29.18's honest-capability rule. Not delivered: guest intake (Q08) and other public forms, Cloudflare account/keys, action/cdata binding, frontend widget and live Cloudflare acceptance. Capability states are configured/unconfigured only; S29.18 Tested/Operational/Failed evidence is not tracked.",
       "questionnaire_references": "S06.05–06 S29.18 U10"
     },
     {
@@ -1316,9 +1316,9 @@
       "id": "SUB09",
       "workflow": "Transfer future subscription coverage between parish and archdiocese",
       "module": "Subscriptions/Organizations/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "status": "partial",
+      "implemented_slice": "Future-coverage payer transfer between a parish and a verified registered archdiocese, both directions: either side proposes, the other accepts/declines the exact version (parish controlling owner with billing.manage, archdiocese registered representative; personal capacity + MFA; proposer cannot approve for the other side; proposing approval rechecked at acceptance); pending/accepted/declined/cancelled/expired lifecycle with one pending proposal per parish; never retroactive and refused while paid coverage or recorded money runs past the effective date; acceptance appends a dated payer period fenced on the parish document, leaving invoices, receipts, data, users, grants and association untouched; parish invoices, sponsored archdiocese invoices, operator cash and paid activation all follow the payer schedule. No payment claimed. Local tests only; runbook docs/operations/subscription-payer-transfer.md.",
+      "remaining": "SUB09 is a proposed workflow; who authorizes a payer change (owner + registered representative) is an implementation choice, not approved policy. Not delivered: billing-contact notifications, archdiocese worklist of sponsored parishes/transfers, multi-parish central contracts (SUB06), credit/proration/refund and stale-invoice voiding, real payment providers, frontend. Cross-container invoice check before acceptance is a read backed by cash-time and activation-time checks. Live Cosmos acceptance not performed.",
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     },
     {
@@ -1343,9 +1343,9 @@
       "id": "SUB12",
       "workflow": "Review contested parish ownership and recover parish administration",
       "module": "Subscriptions/Organizations/Access",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; reviewed payer transfer/ownership recovery is not implied by ordinary account or billing operations.",
+      "status": "partial",
+      "implemented_slice": "Restricted contested-ownership claims: verified MFA claimant opens a claim with minimal evidence (one open claim per claimant per parish); current owner gets a generic in-app notice, a minimal view and can respond; an independent MFA platform recovery operator decides with a recorded reason and evidence reference. Recovery moves only the controlling owner in one parish transaction: prior owner grant revoked (kept), claimant gets the ordinary setup-owner grant (no clergy approval/signing), pending payer transfer and association proposals from the old control withdrawn and listed; staff grants, appointments, coverage, invoices and records stay. Claims opened against a superseded owner are refused, so competing claims cannot install two owners; rejected/withdrawn claims expose nothing; role-limited projections; replay and version conflicts. Local tests only; runbook docs/operations/parish-ownership-recovery.md.",
+      "remaining": "SUB12 is a proposed workflow; the single-operator reviewer and evidence-reference rules are implementation choices pending the owner's verification/appeal policy. Not delivered: second reviewer or appeal, competent church-authority confirmation route, out-of-band contact of representatives, cross-parish reviewer worklist, outcome notifications, exceptional support record access, freeze policy (none applied; sources do not require one), frontend. Live Cosmos acceptance not performed.",
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     }
   ],

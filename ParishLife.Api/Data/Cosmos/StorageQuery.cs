@@ -1,5 +1,5 @@
 // Purpose: Builds allowlisted, parameterized storage filters with a matching evaluator for isolated local tests.
-// Main functions: Matches, Sql, Eq, Lt, Lte, Gt, And, Or, Field, Type, Where, ToCosmos.
+// Main functions: Matches, Sql, Eq, Lt, Lte, Gt, And, Or, Everything, Field, Type, All, Where, ToCosmos.
 
 using System.Globalization;
 using System.Text.Json;
@@ -18,6 +18,8 @@ internal abstract record StorageFilter
     internal static StorageFilter Gt(string path, object value) => new Comparison(path, ">", value);
     internal static StorageFilter And(params StorageFilter[] filters) => new Junction(true, filters);
     internal static StorageFilter Or(params StorageFilter[] filters) => new Junction(false, filters);
+    // Matches every document; only the private operator snapshot enumerates whole containers.
+    internal static StorageFilter Everything { get; } = new Always();
     internal static JsonElement Field(JsonElement document, string path)
     {
         foreach (var part in path.Split('.'))
@@ -68,6 +70,12 @@ internal abstract record StorageFilter
         }
     }
 
+    private sealed record Always : StorageFilter
+    {
+        internal override bool Matches(JsonElement document) => true;
+        internal override string Sql(List<object?> parameters) => "true";
+    }
+
     private sealed record Junction(bool All, StorageFilter[] Filters) : StorageFilter
     {
         internal override bool Matches(JsonElement document) => All ? Filters.All(f => f.Matches(document)) : Filters.Any(f => f.Matches(document));
@@ -78,6 +86,7 @@ internal abstract record StorageFilter
 internal sealed record StorageQuery(StorageFilter Filter)
 {
     internal static StorageQuery Type(string type) => new(StorageFilter.Eq("type", type));
+    internal static StorageQuery All { get; } = new(StorageFilter.Everything);
     internal StorageQuery Where(StorageFilter filter) => new(StorageFilter.And(Filter, filter));
     internal QueryDefinition ToCosmos()
     {

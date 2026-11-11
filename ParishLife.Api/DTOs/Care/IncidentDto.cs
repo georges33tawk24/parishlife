@@ -1,5 +1,7 @@
 // Purpose: shows a restricted incident with its original report and every attributed entry to an authorized handler.
-// Main members: Id, EventId, Location, PersonIds, OccurredAt, RecordedAt, RecordedBy, Urgent, Status, HandlerAccountId, report fields and Entries.
+// Main members: Id, EventId, Location, PersonIds, OccurredAt, RecordedAt, RecordedBy, Urgent, Status, HandlerAccountId, report fields, Entries and the handler command's NotificationOutcome.
+
+using ParishLife.Api.DTOs.Communications;
 
 namespace ParishLife.Api.DTOs.Care;
 
@@ -32,4 +34,7 @@ public class IncidentDto
     public string? Witnesses { get; set; }
 
     public IncidentEntryDto[] Entries { get; set; } = Array.Empty<IncidentEntryDto>();
+
+    // Loaded only on an incident action response; reads and lists omit it.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

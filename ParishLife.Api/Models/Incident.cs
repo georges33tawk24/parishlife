@@ -1,5 +1,5 @@
 // Purpose: represents a restricted incident record; the initial report is protected at rest and never rewritten, later changes are attributed entries.
-// Main members: Id, ParishId, EventId, Location, PersonIds, OccurredAt, RecordedAt, RecordedBy, Urgent, Status, HandlerAccountId, ProtectedReport and Entries.
+// Main members: Id, ParishId, EventId, Location, PersonIds, OccurredAt, RecordedAt, RecordedBy, Urgent, Status, HandlerAccountId, ProtectedReport, Entries and the latest assignment notice's work pointer.
 
 namespace ParishLife.Api.Models;
 
@@ -30,4 +30,7 @@ public class Incident
     public string ProtectedReport { get; set; } = string.Empty;
 
     public List<IncidentEntry> Entries { get; set; } = new();
+
+    // Internal source linkage to the latest handler-assignment notice; null before outcomes were tracked.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }

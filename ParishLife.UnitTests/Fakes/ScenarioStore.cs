@@ -5,7 +5,7 @@
 // RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, ProposeAssociationAsync,
 // GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, PublishAsync, CreateInvoiceAsync,
 // GetInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync, GetActivationStatusAsync, FindDueActivationsAsync,
-// TryLeaseAsync, CompleteActivationAsync, CreateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
+// TryLeaseAsync, CompleteActivationAsync, GetPayerScheduleAsync, ListInvoicesAsync, CreateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
 
 using ParishLife.Api.Interfaces.Repositories.Billing;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -154,6 +154,15 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
                 AssociationId = grant.AssociationId
             };
         });
+    }
+
+    // Payer transfers are exercised by the integration tests; this double always has the default self-paying schedule.
+    public Task<Versioned<PayerSchedule>?> GetPayerScheduleAsync(string parishId, CancellationToken ct) => Task.FromResult<Versioned<PayerSchedule>?>(null);
+
+    public Task<IReadOnlyList<Invoice>> ListInvoicesAsync(string billingAccountId, CancellationToken ct)
+    {
+        lock (gate)
+            return Task.FromResult<IReadOnlyList<Invoice>>(invoices.Values.Select(i => i.Value).Where(i => i.BillingAccountId == billingAccountId).ToArray());
     }
 
     public Task<IReadOnlyList<Coverage>> GetCoveragesAsync(string id, CancellationToken ct)

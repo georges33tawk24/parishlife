@@ -4,6 +4,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.Publishing;
+using ParishLife.Api.Middleware;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Publishing;
 
@@ -32,7 +33,7 @@ public class HomepageController(HomepageService service) : ControllerBase
 [AllowAnonymous, ApiController, Route("api/public/homepage")]
 public class PublicHomepageController(HomepageService service) : ControllerBase
 {
-    [HttpGet]
+    [HttpGet, PublicCache]
     public async Task<ActionResult<PublicHomepageDto>> Published(CancellationToken ct, string? lang = null)
         => Ok(await service.PublicAsync(lang, ct));
 }

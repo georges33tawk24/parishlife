@@ -1,5 +1,6 @@
 // Purpose: represents one certificate/extract from a registered sacramental entry through preparation, priest signing, optional bishop acceptance, issue and release.
-// Main members: identity/source/request, issued snapshot, signature/release gates and the latest tracked required-notification batch.
+// Main members: identity/source/request, issued snapshot, signature/release gates, current electronic authorization and its history,
+// the replacing certificate once a reissue is issued, and the latest tracked required-notification batch.
 
 namespace ParishLife.Api.Models;
 
@@ -75,6 +76,15 @@ public class Certificate
     public string? VerificationEvidence { get; set; } = null;
 
     public string? WithdrawalReason { get; set; } = null;
+
+    // The verification code of the electronic authorization of the current prepared content; cleared when the certificate is returned.
+    public string? AuthorizationCode { get; set; } = null;
+
+    // Every authorization code ever made for this certificate, oldest first.
+    public List<string> AuthorizationCodes { get; set; } = new();
+
+    // Set when a reissue that replaces this certificate is issued.
+    public string? SupersededById { get; set; } = null;
 
     public string CreatedBy { get; set; } = string.Empty;
 

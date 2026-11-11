@@ -1,6 +1,8 @@
 // Purpose: returns a concern to its submitter or a selected reviewer; reviewer identity and anonymous submitters stay hidden.
 // Main members: Id, Category, Urgency, Summary, Details, Anonymous, SubmitterAccountId, Status, AssignedToMe, NextAction, CreatedAt and UpdatedAt.
 
+using ParishLife.Api.DTOs.Communications;
+
 namespace ParishLife.Api.DTOs.Care;
 
 public class ConcernDto
@@ -28,4 +30,7 @@ public class ConcernDto
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    // Loaded only in a selected reviewer's action response; submitter projections never receive it.
+    public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
 }

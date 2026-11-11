@@ -8,7 +8,8 @@
 // GetSecurityStampAsync, GetLockoutEndDateAsync, SetLockoutEndDateAsync, IncrementAccessFailedCountAsync,
 // ResetAccessFailedCountAsync, GetAccessFailedCountAsync, GetLockoutEnabledAsync, SetLockoutEnabledAsync,
 // SetTwoFactorEnabledAsync, GetTwoFactorEnabledAsync, SetAuthenticatorKeyAsync, GetAuthenticatorKeyAsync,
-// ReplaceCodesAsync, RedeemCodeAsync, CountCodesAsync, Dispose.
+// ReplaceCodesAsync, RedeemCodeAsync, CountCodesAsync, IndexKey, ClaimAliasAsync, FindAliasOwnerAsync, ReleaseAliasAsync, passkey store members
+// (AddOrUpdatePasskeyAsync, GetPasskeysAsync, FindByPasskeyIdAsync, FindPasskeyAsync, RemovePasskeyAsync), Dispose.
 
 using System.Net;
 using System.Security.Claims;
@@ -25,11 +26,12 @@ using static ParishLife.Api.Data.Cosmos.JsonDefaults;
 
 namespace ParishLife.Api.Identity;
 
-internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProvider clock, IDataProtectionProvider protection, IHttpContextAccessor context) : IUserPasswordStore<ParishUser>, IUserEmailStore<ParishUser>, IUserSecurityStampStore<ParishUser>, IUserLockoutStore<ParishUser>, IUserTwoFactorStore<ParishUser>, IUserAuthenticatorKeyStore<ParishUser>, IUserTwoFactorRecoveryCodeStore<ParishUser>
+internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProvider clock, IDataProtectionProvider protection, IHttpContextAccessor context) : IUserPasswordStore<ParishUser>, IUserEmailStore<ParishUser>, IUserSecurityStampStore<ParishUser>, IUserLockoutStore<ParishUser>, IUserTwoFactorStore<ParishUser>, IUserAuthenticatorKeyStore<ParishUser>, IUserTwoFactorRecoveryCodeStore<ParishUser>, IUserPasskeyStore<ParishUser>
 {
     internal static string AccountKey(string id) => "account:" + id;
-    private static string AliasKey(string normalized) => "email:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
-    private static string UsernameKey(string normalized) => "username:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+    private static string AliasKey(string normalized) => IndexKey("email", normalized);
+    private static string UsernameKey(string normalized) => IndexKey("username", normalized);
+    internal static string IndexKey(string kind, string normalized) => kind + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
     private string AuditActor => context.HttpContext is null ? "external:authorized-maintenance" : context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
 
     public async Task<IdentityResult> CreateAsync(ParishUser user, CancellationToken ct)
@@ -69,20 +71,7 @@ internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProv
             aliases.Add((AliasKey(user.NormalizedEmail), user.NormalizedEmail, "email"));
         foreach (var alias in aliases)
         {
-            var current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, alias.Key, "alias", ct);
-            if (current is null)
-            {
-                try
-                {
-                    await documents.CreateAsync(Containers.LoginAliases, Row("alias", alias.Key, "alias", new LoginAlias(user.Id, alias.Normalized, true, alias.Kind)), ct);
-                }
-                catch (DomainException exception) when (exception.Code == "write_conflict")
-                {
-                    current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, alias.Key, "alias", ct);
-                }
-            }
-
-            if (current is not null && (current.Value.AccountId != user.Id || current.Value.NormalizedEmail != alias.Normalized))
+            if (!await ClaimAliasAsync(user.Id, alias.Kind, alias.Normalized, ct))
                 return IdentityResult.Failed(new IdentityError { Code = alias.Kind == "email" ? "DuplicateEmail" : "DuplicateUserName", Description = "This login identifier is already registered." });
         }
 
@@ -296,6 +285,113 @@ internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProv
     }
 
     private static string NormalizeRecoveryCode(string code) => code.Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+
+    // Claims one unique login/credential index for an account; true when the index now belongs to that account.
+    internal async Task<bool> ClaimAliasAsync(string accountId, string kind, string normalized, CancellationToken ct)
+    {
+        var key = IndexKey(kind, normalized);
+        var current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, key, "alias", ct);
+        if (current is null)
+        {
+            try
+            {
+                await documents.CreateAsync(Containers.LoginAliases, Row("alias", key, "alias", new LoginAlias(accountId, normalized, true, kind)), ct);
+                return true;
+            }
+            catch (DomainException exception) when (exception.Code == "write_conflict")
+            {
+                current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, key, "alias", ct);
+            }
+        }
+        return current is not null && current.Value.AccountId == accountId && current.Value.NormalizedEmail == normalized;
+    }
+
+    internal async Task<string?> FindAliasOwnerAsync(string kind, string normalized, CancellationToken ct)
+    {
+        var current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, IndexKey(kind, normalized), "alias", ct);
+        return current is { Value.Active: true } && current.Value.NormalizedEmail == normalized ? current.Value.AccountId : null;
+    }
+
+    // Releases an index owned by the account (compensation or a superseded alias); another owner's index is never touched.
+    internal async Task ReleaseAliasAsync(string accountId, string kind, string normalized, CancellationToken ct)
+    {
+        var key = IndexKey(kind, normalized);
+        var current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, key, "alias", ct);
+        if (current is null || current.Value.AccountId != accountId)
+            return;
+        using var response = await documents.Batch(Containers.LoginAliases, key).DeleteItem("alias", current.Version).ExecuteAsync(ct);
+        // ponytail: a failed release leaves a stale index that FindBy* already ignores; an operator repair removes it later.
+    }
+
+    // Passkeys live on the account document; callers commit them with the account's conditional transaction.
+    public Task AddOrUpdatePasskeyAsync(ParishUser user, UserPasskeyInfo passkey, CancellationToken ct)
+    {
+        var id = Base64Url(passkey.CredentialId);
+        var existing = user.Passkeys.FirstOrDefault(p => p.CredentialId == id);
+        if (existing is null)
+        {
+            user.Passkeys.Add(new AccountPasskey
+            {
+                CredentialId = id,
+                PublicKey = Convert.ToBase64String(passkey.PublicKey),
+                Name = passkey.Name ?? "Passkey",
+                CreatedAt = passkey.CreatedAt,
+                SignCount = passkey.SignCount,
+                Transports = [.. passkey.Transports ?? []],
+                IsUserVerified = passkey.IsUserVerified,
+                IsBackupEligible = passkey.IsBackupEligible,
+                IsBackedUp = passkey.IsBackedUp
+            });
+            return Task.CompletedTask;
+        }
+        existing.SignCount = passkey.SignCount;
+        existing.IsBackedUp = passkey.IsBackedUp;
+        existing.IsUserVerified = passkey.IsUserVerified;
+        existing.Name = passkey.Name ?? existing.Name;
+        existing.LastUsedAt = clock.GetUtcNow();
+        return Task.CompletedTask;
+    }
+
+    public Task<IList<UserPasskeyInfo>> GetPasskeysAsync(ParishUser user, CancellationToken ct)
+        => Task.FromResult<IList<UserPasskeyInfo>>(user.Passkeys.Select(Info).ToList());
+
+    public async Task<ParishUser?> FindByPasskeyIdAsync(byte[] credentialId, CancellationToken ct)
+    {
+        var id = Base64Url(credentialId);
+        var index = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, IndexKey("passkey", id), "alias", ct);
+        if (index is null || index.Value.NormalizedEmail != id)
+            return null;
+        var account = await FindByIdAsync(index.Value.AccountId, ct);
+        // A claimed index without a committed account passkey still blocks reuse of that credential ID.
+        return account ?? new ParishUser { Id = index.Value.AccountId };
+    }
+
+    public Task<UserPasskeyInfo?> FindPasskeyAsync(ParishUser user, byte[] credentialId, CancellationToken ct)
+    {
+        var id = Base64Url(credentialId);
+        var found = user.Passkeys.FirstOrDefault(p => p.CredentialId == id);
+        return Task.FromResult(found is null ? null : Info(found));
+    }
+
+    public Task RemovePasskeyAsync(ParishUser user, byte[] credentialId, CancellationToken ct)
+    {
+        var id = Base64Url(credentialId);
+        user.Passkeys.RemoveAll(p => p.CredentialId == id);
+        return Task.CompletedTask;
+    }
+
+    internal static string Base64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static UserPasskeyInfo Info(AccountPasskey p) => new(Convert.FromBase64String(Base64UrlPadded(p.CredentialId)),
+        Convert.FromBase64String(p.PublicKey), p.CreatedAt, p.SignCount, [.. p.Transports], p.IsUserVerified, p.IsBackupEligible,
+        p.IsBackedUp, [], [])
+    { Name = p.Name };
+
+    private static string Base64UrlPadded(string value)
+    {
+        var text = value.Replace('-', '+').Replace('_', '/');
+        return text.PadRight(text.Length + (4 - text.Length % 4) % 4, '=');
+    }
 
     public void Dispose()
     {

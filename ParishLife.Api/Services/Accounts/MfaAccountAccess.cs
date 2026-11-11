@@ -1,5 +1,5 @@
 // Purpose: checks current account eligibility and fresh password/authenticator proofs for account-security workflows.
-// Main functions: CurrentAsync, RequireMfaAsync, PasswordAsync, AuthenticatorAsync, VerifyAsync, FailAsync, IsEligibleOperatorAsync, IsVerifiedMfaAccountAsync;
+// Main functions: CurrentAsync, RequireMfaAsync, FreshPersonalProofAsync, PasswordAsync, AuthenticatorAsync, VerifyAsync, FailAsync, IsEligibleOperatorAsync, IsVerifiedMfaAccountAsync;
 // password proof uses the configured Identity hasher without persisting a legacy rehash before the complete protected transaction.
 
 using Microsoft.AspNetCore.Identity;
@@ -42,6 +42,26 @@ public class MfaAccountAccess(ParishUserManager users, SignInManager<ParishUser>
         var user = await CurrentAsync(ct);
         if (!user.TwoFactorEnabled || RecoverySession || context.HttpContext?.User.HasClaim("amr", "mfa") != true || await users.IsLockedOutAsync(user))
             throw new DomainException("mfa_required", "Sign in with your authenticator before performing this action.", FailureKind.Forbidden);
+        return user;
+    }
+
+    // Personal sign-in-method changes: no selected capacity or recovery cookie; MFA/operator accounts need an MFA session plus fresh
+    // password and authenticator proof; ordinary members prove the current password. Proofs never leave this method.
+    internal async Task<ParishUser> FreshPersonalProofAsync(string? password, string? code, CancellationToken ct)
+    {
+        if (actor.ActingAppointmentId is not null || RecoverySession)
+            throw new DomainException("personal_security_capacity_required", "Use a normal personal sign-in before changing sign-in methods.", FailureKind.Forbidden);
+        var user = await CurrentAsync(ct);
+        if (await users.IsLockedOutAsync(user))
+            throw new DomainException("account_unavailable", "The current account is unavailable.", FailureKind.Forbidden);
+        if (user.TwoFactorEnabled || user.PlatformOperator)
+        {
+            user = await RequireMfaAsync(ct);
+            await PasswordAsync(user, password);
+            await AuthenticatorAsync(user, code);
+        }
+        else
+            await PasswordAsync(user, password);
         return user;
     }
 

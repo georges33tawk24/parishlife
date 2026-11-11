@@ -1,0 +1,16 @@
+# Public parish directory and offline metadata (X09, X11, D01 browse)
+
+Updated 11 November 2026. Source basis: S04.01–S04.09 and S31.05–S31.07, all *proposed* answers, not owner-approved policy.
+
+## Directory (anonymous)
+- `GET /api/public/parishes?q=` lists every **verified** parish (pending, closed and suspended parishes never appear) in name order. Each card has only the parish name, locality, the name of its verified jurisdiction archdiocese, and coordinates **only when a parish manager recorded them** with `PUT /api/parishes/{id}/location` (O08 `ParishLocation`; `parish.manage` + MFA). The location's source note, the parish contact, owner and verification evidence are never shown. `q` matches name, locality or diocese (≤ 100 characters).
+- `POST /api/public/parishes/nearby` takes `{ latitude, longitude, radiusKm?, query? }` in the body, so the visitor's point stays out of URLs and request logs; it is not stored. Distance is great-circle (haversine) in km, rounded to 0.1 and flagged approximate; no geocoding or map provider is called. With a radius, parishes outside it are left out and counted in `OutsideRadius`; parishes without a recorded location are returned separately in `DistanceUnavailable`, never as if they met the radius. It needs the antiforgery token like every POST.
+- Card links point to the existing reads (`website`, `calendar`, `ministries`, `liturgical-calendar`, guest `requests`) and the existing signed-in `POST /api/parishes/{id}/follow`. No new following or visiting semantics were added.
+
+## Install manifest and cache safety
+- `GET /api/public/app/manifest` returns a W3C web-app manifest built only from the `PublicApp` configuration section (`Name`, `ShortName`, `Description`, `StartUrl`, `Display`, `ThemeColor`, `BackgroundColor`, `Icons[]` with `Src`, `Sizes`, `Type`, `Purpose`). Nothing is configured in `appsettings.json`: without `PublicApp:Name` it answers 404 `app_manifest_not_configured`; invalid values (non-`#RRGGBB` colors, start URL off-site, unsafe icon links, unknown display/icon type) answer 503 `app_manifest_misconfigured`. No name or branding is invented.
+- Every `/api` response stays `Cache-Control: no-store` (Program.cs) unless the action is marked `[PublicCache]`. Marked anonymous reads (directory browse, platform homepage, parish website, public liturgical calendar, manifest, offline policy) send `Cache-Control: public, max-age=…` and a strong `ETag` from the response body, and answer `If-None-Match` with 304. Errors stay no-store.
+- `GET /api/public/app/offline-policy` lists exactly the marked reads (discovered from the attributes) and states the baseline: only those public reads may be kept offline as stale reference with their refresh time; personal and signed-in data is never stored offline; no action is queued offline.
+
+## Not delivered
+Map tiles/provider and directions links (no provider configured), localized parish names, office hours, "open now", accessibility facts, next-Mass search (needs structured schedules), parish photos, diocese/locality filter facets, the frontend service worker and install prompt, and caching of other public reads (public calendar, ministries) pending review. The browse reads each parish's location with one point read (bounded by the 2000-parish directory bound). Local tests do not prove live Cosmos behaviour.

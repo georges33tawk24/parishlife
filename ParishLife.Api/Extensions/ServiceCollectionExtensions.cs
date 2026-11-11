@@ -2,6 +2,7 @@
 // Main functions: AddParishLifeBackend, ReadStorage, IsLocal, RegisterStorage, RegisterIdentity, ConfigureDataProtection.
 
 using Azure.Core;
+using Microsoft.AspNetCore.Authentication;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys;
 using Azure.Storage.Blobs;
@@ -23,12 +24,15 @@ using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Repositories.People;
 using ParishLife.Api.Interfaces.Repositories.Scheduling;
+using ParishLife.Api.Interfaces.Services.Accounts;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Repositories.Billing;
 using ParishLife.Api.Repositories.Common;
 using ParishLife.Api.Repositories.Organizations;
 using ParishLife.Api.Repositories.People;
+using ParishLife.Api.Repositories.Reporting;
+using ParishLife.Api.Interfaces.Repositories.Reporting;
 using ParishLife.Api.Repositories.Scheduling;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Administration;
@@ -43,11 +47,13 @@ using ParishLife.Api.Services.Sacraments;
 using ParishLife.Api.Services.Care;
 using ParishLife.Api.Services.Communications;
 using ParishLife.Api.Services.Finance;
+using ParishLife.Api.Services.Documents;
 using ParishLife.Api.Services.Operations;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.Api.Services.People;
 using ParishLife.Api.Services.PersonalWorkspace;
 using ParishLife.Api.Services.Scheduling;
+using ParishLife.Api.Services.Workflows;
 
 namespace ParishLife.Api.Extensions;
 
@@ -71,6 +77,7 @@ public static class ServiceCollectionExtensions
         RegisterStorage(services, configuration, environment);
         ConfigureDataProtection(services, environment);
         RegisterIdentity(services);
+        RegisterAuthenticationCapabilities(services, configuration);
         services.AddScoped<IParishRepository, ParishRepository>();
         services.AddScoped<IBillingRepository, BillingRepository>();
         services.AddScoped<IPlanRepository>(provider => IsLocal(provider.GetRequiredService<StorageOptions>())
@@ -91,8 +98,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BishopAppointmentService>();
         services.AddScoped<ParishService>();
         services.AddScoped<ParishStatusService>();
+        services.AddScoped<OwnershipRecoveryService>();
         services.AddScoped<OfficeCoverageService>();
         services.AddScoped<BillingService>();
+        services.AddScoped<PayerTransferService>();
         services.AddScoped<PeopleService>();
         services.AddScoped<HouseholdService>();
         services.AddScoped<MembershipService>();
@@ -114,6 +123,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationProcessor>();
         services.AddScoped<NotificationOutcomeReader>();
         services.AddScoped<InboxService>();
+        services.AddScoped<MessageReviewService>();
+        services.AddScoped<BroadcastService>();
         services.AddScoped<GivingService>();
         services.AddScoped<ExpenseService>();
         services.AddScoped<BankReconciliationService>();
@@ -141,9 +152,25 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WebsiteService>();
         services.AddScoped<ParishCrmService>();
         services.AddScoped<HomepageService>();
+        services.AddScoped<PublicDirectoryService>();
+        services.AddScoped<PublicAppService>();
+        services.AddScoped<LiturgicalCalendarService>();
+        services.AddScoped<CombinedHomeService>();
+        services.AddScoped<WorkflowAccess>();
+        services.AddScoped<WorkflowDefinitionService>();
+        services.AddScoped<WorkflowRunService>();
         services.AddScoped<WorkOverviewService>();
+        services.AddScoped<IParishDirectory, ParishDirectory>();
+        services.AddScoped<ISiteMetricStore, SiteMetricStore>();
+        services.AddScoped<ParishLocationService>();
+        services.AddScoped<BishopOverviewService>();
+        services.AddScoped<SiteInsightsService>();
+        services.AddScoped<ReportScheduleService>();
+        services.AddScoped<ReportScheduleProcessor>();
         services.AddScoped<CapabilityService>();
         services.AddScoped<DocumentSheetService>();
+        services.AddScoped<DocumentSignatureService>();
+        services.AddScoped<RequestLetterService>();
         services.AddScoped<EvidenceService>();
         services.AddScoped<ServicePlanService>();
         services.AddScoped<MusicLibraryService>();
@@ -160,6 +187,23 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<BillingActivationWorker>();
             services.AddHostedService<ReservationWorker>();
             services.AddHostedService<NotificationWorker>();
+            services.AddHostedService<ReportScheduleWorker>();
+        }
+        else
+        {
+            // W07: snapshot export/restore exists only in the private operator tool, never in the web host.
+            services.AddScoped(provider =>
+            {
+                var storage = provider.GetRequiredService<StorageOptions>();
+                var local = IsLocal(storage);
+                var root = local ? StorageOptions.ResolveLocalPath(storage, environment) : "";
+                var cosmos = provider.GetRequiredService<IOptions<CosmosOptions>>().Value;
+                var blob = provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+                return new DataSnapshotService(provider.GetRequiredService<IDocumentDatabase>(), provider.GetRequiredService<IEvidenceStore>(),
+                    local ? "Local:" + Path.Combine(root, "documents") : "Cosmos:" + cosmos.Endpoint.TrimEnd('/').ToLowerInvariant() + "/" + cosmos.Database,
+                    local ? "Local:" + Path.Combine(root, "evidence") : "Blob:" + blob.ServiceUri.TrimEnd('/').ToLowerInvariant() + "/" + blob.EvidenceContainer,
+                    local, provider.GetRequiredService<TimeProvider>());
+            });
         }
         services.AddHealthChecks().AddCheck<BackendReadinessHealthCheck>("backend_dependencies", tags: ["ready"]);
         return services;
@@ -250,6 +294,52 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MfaRecoveryService>();
         services.AddScoped<MfaSecurityService>();
         services.AddScoped(provider => new AccountSessionService(provider.GetRequiredService<PartitionDocuments>(), provider.GetRequiredService<TimeProvider>()));
+    }
+
+    // X01/A06/X13: passkeys, contact verification, optional external sign-in and optional Turnstile; nothing calls out unless configured.
+    private static void RegisterAuthenticationCapabilities(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<IPasskeyHandler<ParishUser>, PasskeyHandler<ParishUser>>();
+        services.Configure<IdentityPasskeyOptions>(options =>
+        {
+            options.ServerDomain = string.IsNullOrWhiteSpace(configuration["Passkeys:ServerDomain"]) ? null : configuration["Passkeys:ServerDomain"];
+            options.UserVerificationRequirement = "required";
+        });
+        services.AddScoped<PasskeyService>();
+        services.AddOptions<TurnstileOptions>().Bind(configuration.GetSection("Turnstile"));
+        services.AddHttpClient(TurnstileVerifier.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<TurnstileVerifier>();
+        services.AddScoped<IContactCodeDelivery, UnconfiguredContactCodeDelivery>();
+        services.AddScoped<ContactVerificationService>();
+        services.AddScoped<ExternalSignInService>();
+        foreach (var (provider, endpoints) in ExternalProviderOptions.Providers)
+        {
+            var settings = configuration.GetSection("ExternalSignIn:" + provider).Get<ExternalProviderOptions>() ?? new();
+            if (!settings.Configured)
+                continue; // An unconfigured provider has no scheme, so capability reports it unavailable and its routes return 404.
+            services.AddAuthentication().AddOAuth(ExternalProviderOptions.SchemePrefix + provider, options =>
+            {
+                options.ClientId = settings.ClientId!;
+                options.ClientSecret = settings.ClientSecret!;
+                options.AuthorizationEndpoint = endpoints[0];
+                options.TokenEndpoint = endpoints[1];
+                options.UserInformationEndpoint = endpoints[2];
+                options.CallbackPath = "/api/auth/external/callback/" + provider;
+                options.SignInScheme = IdentityConstants.ExternalScheme;
+                options.UsePkce = true;
+                options.Scope.Add("openid");
+                options.ClaimActions.MapJsonKey(System.Security.Claims.ClaimTypes.NameIdentifier, "sub");
+                options.Events.OnCreatingTicket = async context =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, context.Options.UserInformationEndpoint);
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", context.AccessToken);
+                    using var response = await context.Backchannel.SendAsync(request, context.HttpContext.RequestAborted);
+                    response.EnsureSuccessStatusCode();
+                    using var user = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
+                    context.RunClaimActions(user.RootElement); // Only the stable subject is mapped; provider email is never trusted or merged.
+                };
+            });
+        }
     }
 
     private static void ConfigureDataProtection(IServiceCollection services, IHostEnvironment environment)

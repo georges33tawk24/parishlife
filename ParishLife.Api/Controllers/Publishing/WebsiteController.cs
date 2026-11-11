@@ -4,6 +4,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParishLife.Api.DTOs.Publishing;
+using ParishLife.Api.Middleware;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Publishing;
 
@@ -28,7 +29,7 @@ public class WebsiteController(WebsiteService service) : ControllerBase
 [AllowAnonymous, ApiController, Route("api/public/parishes/{parishId:guid}/website")]
 public class PublicWebsiteController(WebsiteService service) : ControllerBase
 {
-    [HttpGet]
+    [HttpGet, PublicCache]
     public async Task<ActionResult<IReadOnlyList<PublicWebsiteSectionDto>>> Published(Guid parishId, CancellationToken ct, string? lang = null)
         => Ok(await service.PublicAsync(Guard.Id(parishId), lang, ct));
 }

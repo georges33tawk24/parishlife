@@ -2,7 +2,7 @@
 // implementation details.
 // Main functions: GetAsync, GetGrantAsync, RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync, GetCoveragesAsync,
 // ActivateCoverageAsync, RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync,
-// ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync.
+// ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, GetPayerScheduleAsync.
 
 using ParishLife.Api.Models;
 
@@ -25,4 +25,5 @@ public interface IParishRepository
     Task<Versioned<AssociationRequest>?> GetAssociationAsync(string parishId, string requestId, CancellationToken ct);
     Task<AssociationRequest> DecideAssociationAsync(string parishId, string requestId, string version, bool accept, Operation operation, CancellationToken ct);
     Task<Parish> EndAssociationAsync(string parishId, string version, string reason, Operation operation, CancellationToken ct);
+    Task<Versioned<PayerSchedule>?> GetPayerScheduleAsync(string parishId, CancellationToken ct);
 }

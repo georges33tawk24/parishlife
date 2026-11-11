@@ -36,6 +36,10 @@ After signing in, each administrator can privately generate their own recovery c
 
 `verify-identity <account UUID>` records the actual operator identity-review evidence after the claimant privately proves control of the existing account credentials. It sets `IdentityVerified` and retains the evidence reference. It does not set `EmailConfirmed`, prove inbox ownership, create accounts, or grant parish/clergy/platform authority. Actual email confirmation needs a real challenge/provider workflow. Historical confirmed-email flags need appropriate review before sensitive recovery; no bulk data changes run automatically.
 
+## Data snapshot, verification and restore
+
+`snapshot-export`, `snapshot-verify` and `snapshot-restore` (dry run unless `--apply`; empty isolated target only) are documented in [data-snapshot-and-recovery.md](data-snapshot-and-recovery.md). The key ring and secrets are never included.
+
 ## Isolated local development
 
 Append `--local` only when intentionally using the separate Development document directory and keys. No local result proves Azure behavior. Do not mix production and development key rings or point test fixtures at production.

@@ -1,6 +1,6 @@
 // Purpose: Defines persisted account/security state separately from parish Person records; LoginAlias retains its
 // legacy field shape.
-// Main members: AccountSession, LoginAlias, MfaChallenge, ParishUser.
+// Main members: AccountSession, LoginAlias, MfaChallenge, ParishUser (including registered passkeys and linked external logins).
 
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Identity;
@@ -17,6 +17,8 @@ public sealed class ParishUser : IdentityUser
     public string? ProtectedRecoveryCodes { get; set; }
     public string? ContactVerificationReference { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public List<ParishLife.Api.Models.AccountPasskey> Passkeys { get; set; } = [];
+    public List<ParishLife.Api.Models.AccountExternalLogin> ExternalLogins { get; set; } = [];
 
     [JsonIgnore]
     public string? PersistenceVersion { get; set; }

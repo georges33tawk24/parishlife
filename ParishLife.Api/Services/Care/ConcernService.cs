@@ -1,12 +1,13 @@
 // Purpose: runs confidential concerns: bishop-appointed independent reviewers, submitter-chosen reviewers with implicated people excluded,
 // anonymous or identified submission, fixed-audience entries and reviewer/submitter transitions. Nobody else receives cases, counts or signals.
 // Main functions: AppointReviewerAsync, EndReviewerAsync, ReviewerOptionsAsync, SubmitAsync, ActAsync, PostEntryAsync, EntriesAsync,
-// GetAsync, OwnAsync and AssignedAsync; helpers enforce current reviewer eligibility on every request.
+// GetAsync, OwnAsync, AssignedAsync and reviewer-only NotificationOutcomeAsync/EntryNotificationOutcomeAsync; helpers enforce current reviewer eligibility on every request.
 // Required submitter notices are staged in the same source transaction, without copying confidential content into previews.
 
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using ParishLife.Api.DTOs.Care;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -20,7 +21,8 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.Care;
 
 public class ConcernService(IRecordTransactions records, IParishRepository parishes, IArchdioceseAuthority bishops, IAccountDirectory accounts,
-    MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, IDataProtectionProvider protection, NotificationService notifications, TimeProvider clock)
+    MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, IDataProtectionProvider protection, NotificationService notifications, TimeProvider clock,
+    NotificationOutcomeReader outcomes)
 {
     private static readonly string[] Categories = ["Operational", "Interpersonal", "Safeguarding", "Other"];
     private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -126,7 +128,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             reviewer = await RequireReviewerAsync(item, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "concern-action:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is not null)
-            return Project((await ReadAsync(parish, id, ct)).Value, reviewer);
+            return await ActionViewAsync((await ReadAsync(parish, id, ct)).Value, reviewer, ct);
         switch (request.Action)
         {
             case "accept" when reviewer is not null && item.Status is "Submitted" or "Reopened" && (item.AssignedReviewerId is null || item.AssignedReviewerId == reviewer.Id):
@@ -159,12 +161,45 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         item.UpdatedAt = op.At;
         var changes = new List<RecordChange> { RecordChange.Replace(Key(id), "concern", item, Versions.Require(request.Version)) };
         if (reviewer is not null)
-            changes.Add(SubmitterNotice(item, op));
+        {
+            var notice = SubmitterNotice(item, op);
+            item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+            changes.Add(notice);
+        }
         await records.CommitAsync(Parish(parish), op, "care.concern_" + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (reviewer is not null)
             await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
-        return Project(item, reviewer);
+        return await ActionViewAsync(item, reviewer, ct);
+    }
+
+    // Only a currently eligible selected reviewer learns whether the neutral submitter notice was stored in-app. It reveals no
+    // identity or account detail, and Pending is not proof that no notice exists. Submitters use their own notification list.
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
+    {
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        if (item.ApplicantAccountId == actor.AccountId) throw Missing();
+        await RequireReviewerAsync(item, ct);
+        return await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
+    }
+
+    public async Task<NotificationOutcomeDto> EntryNotificationOutcomeAsync(string parish, string id, string entry, CancellationToken ct)
+    {
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        if (item.ApplicantAccountId == actor.AccountId) throw Missing();
+        await RequireReviewerAsync(item, ct);
+        var row = await records.ReadAsync<ConcernEntry>(Parish(parish), "concernEntry:" + entry, ct);
+        if (row?.Value is not { } value || value.Id != entry || value.RequestId != id) throw Missing();
+        return await outcomes.ReadAsync(parish, value.NotificationWorkIds, ct);
+    }
+
+    // ponytail: a reviewer's replay reports the latest reviewer notice; keep per-operation pointers if exact older replays need their own.
+    private async Task<ConcernDto> ActionViewAsync(Concern item, ConcernReviewer? reviewer, CancellationToken ct)
+    {
+        var result = Project(item, reviewer);
+        if (reviewer is not null)
+            result.NotificationOutcome = await outcomes.ReadAsync(item.ParishId, item.NotificationWorkIds, ct);
+        return result;
     }
 
     public async Task<ConcernEntryDto> PostEntryAsync(string parish, string id, PostConcernEntryDto request, CancellationToken ct)
@@ -204,11 +239,20 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             changes.Add(RecordChange.Replace(Key(id), "concern", item, row.Version));
         }
         if (request.Kind is "MessageToSubmitter" or "InformationRequest")
-            changes.Add(SubmitterNotice(item, op));
+        {
+            var notice = SubmitterNotice(item, op);
+            entry.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
+            changes.Add(notice);
+        }
+        else if (reviewer is not null)
+            entry.NotificationWorkIds = [];
         await records.CommitAsync(Parish(parish), op, "care.concern_entry", id, changes, new CommandResult { Id = entry.Id, Status = entry.Kind }, ct);
         if (request.Kind is "MessageToSubmitter" or "InformationRequest")
             await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
-        return Project(parish, entry);
+        var result = Project(parish, entry);
+        if (reviewer is not null)
+            result.NotificationOutcome = await outcomes.ReadAsync(parish, entry.NotificationWorkIds, ct);
+        return result;
     }
 
     public async Task<IReadOnlyList<ConcernEntryDto>> EntriesAsync(string parish, string id, CancellationToken ct)

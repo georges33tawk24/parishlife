@@ -1,5 +1,5 @@
 // Purpose: one recorded parish suspension, reinstatement or closure, kept as history.
-// Main members: Id, ParishId, Action, From, To, Reason, By and At.
+// Main members: Id, ParishId, Action, From, To, Reason, By, At and the owner notice's work pointer.
 
 using ParishLife.Api.Models.Enums;
 
@@ -22,4 +22,7 @@ public class ParishStatusChange
     public string By { get; set; } = string.Empty;
 
     public DateTimeOffset At { get; set; }
+
+    // Internal source linkage only; null on changes recorded before notice outcomes were tracked.
+    public List<string>? NotificationWorkIds { get; set; } = null;
 }
