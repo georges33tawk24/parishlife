@@ -672,6 +672,7 @@ function Calendar({ p, d, f }) {
             L={L}
             lang={c.lang}
             events={d.events || []}
+            liturgy={d.liturgy}
             place={[f.name, f.town].filter(Boolean).join(', ')}
             link={e => c.eventURL(p.id, e.id)}
           />

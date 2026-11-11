@@ -79,7 +79,15 @@ export function Lines({ text }) {
 }
 
 /* The page's "c": everything a section needs to speak the visitor's language. */
-export function makeSite({ lang, directory = [], details = new Map(), site = null, filters, setFilters }) {
+export function makeSite({
+  lang,
+  directory = [],
+  details = new Map(),
+  site = null,
+  liturgy = null,
+  filters,
+  setFilters
+}) {
   const L = (en, ar) => (lang === 'ar' ? ar : en);
   const pair = (obj, en = 'en', ar = 'ar') => obj?.[lang === 'ar' ? ar : en] || obj?.[en] || obj?.[ar] || '';
   const content = (d, key) => pair(d?.content?.[key]);
@@ -93,6 +101,7 @@ export function makeSite({ lang, directory = [], details = new Map(), site = nul
     directory,
     details,
     site,
+    liturgy,
     filters,
     setFilters,
     parishName: p => pair(p, 'name', 'ar'),
@@ -212,6 +221,13 @@ export function dioceseName(c, name) {
   if (!m) return name;
   const sees = m[2].split(/\s+and\s+/i).map(x => SEES[x.trim().toLowerCase()]);
   return sees.every(Boolean) ? 'أبرشية ' + sees.join(' و') : name;
+}
+
+/* The label for the liturgical year of the rite whose approved calendar was read. */
+export function yearLabel(L, rite) {
+  return /maronite|مارون/i.test(rite || '')
+    ? L('In the Maronite year', 'في السنة الطقسية المارونية')
+    : L('In the liturgical year', 'في السنة الطقسية');
 }
 
 /* Bilingual CMS text: the visitor's language, else the built-in wording in that language. */
