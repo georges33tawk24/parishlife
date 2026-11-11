@@ -131,7 +131,6 @@ export function Auth({ enter, error = '', onLanguage }) {
   }, [tab, isAr()]);
   useEffect(() => {
     check.current = null;
-    if (!up) return undefined;
     let live = true;
     mountTurnstile(box.current, isAr() ? 'ar' : 'en').then(state => {
       if (live) check.current = state;
@@ -211,7 +210,8 @@ export function Auth({ enter, error = '', onLanguage }) {
         await register({
           email: q.email.trim(),
           password: q.password,
-          displayName: `${q.firstName.trim()} ${q.lastName.trim()}`
+          displayName: `${q.firstName.trim()} ${q.lastName.trim()}`,
+          turnstile: check.current?.token
         });
         setBusy({ ...busy, submit: false });
         setNote(
@@ -224,7 +224,7 @@ export function Auth({ enter, error = '', onLanguage }) {
       }
       if (challenge) await completeTwoFactor(challenge, q.code);
       else {
-        const result = await signIn(q.username, q.password);
+        const result = await signIn(q.username, q.password, check.current?.token);
         if (result.twoFactor) {
           setChallenge(result.twoFactor);
           return setBusy({ ...busy, submit: false });
@@ -349,7 +349,6 @@ export function Auth({ enter, error = '', onLanguage }) {
                       )}
                     </li>
                   </ul>
-                  <div className="af-turnstile" data-turnstile hidden ref={box}></div>
                   <div className="auth-honeypot" aria-hidden="true">
                     <input name="website" tabIndex="-1" autoComplete="off" />
                   </div>
@@ -423,6 +422,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                   </div>
                 </>
               )}
+              <div className="af-turnstile" data-turnstile hidden ref={box}></div>
               <p className="af-help" role="status" hidden={!note || up}>
                 {note}
               </p>

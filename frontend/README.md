@@ -53,7 +53,7 @@ You need Node 20 or later and the .NET SDK pinned in `../global.json`.
 
 ### Signing in locally
 
-The API only lets a **verified** account sign in: a confirmed email or a recorded identity review. Email delivery is not built yet, so locally:
+The API only lets a **verified** account sign in: a confirmed email or a recorded identity review. The API can confirm an email by code (`/api/auth/contact-verification`), but only with a delivery provider configured, and the sign-in page has no code step for it yet. So locally:
 
 - Create the two operator accounts with the private, interactive command `dotnet run --project tools/ParishLife.Maintenance -- bootstrap-superadmins --local` (see `docs/operations/initial-setup.md`). They sign in with a password and an authenticator code; the sign-in page asks for the code.
 - Verify an ordinary account you registered through the sign-up page with `dotnet run --project tools/ParishLife.Maintenance -- verify-identity <accountId> --local`.

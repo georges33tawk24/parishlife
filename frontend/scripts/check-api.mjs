@@ -56,17 +56,36 @@ globalThis.fetch = async (url, options = {}) => {
     people.find(p => p.id === archive[1]).archived = true;
     return json(200, {});
   }
+  if (path === 'auth/me') return json(200, { id: 'u', displayName: 'Test Account', accountVerified: true });
+  if (path === 'me/parishes')
+    return json(200, [{ parishId: 'P', name: 'Saint Test', relationship: 'Member', primary: true }]);
+  if (path === 'me/capacities')
+    return json(200, [
+      { kind: 'Priest', parishId: 'P', scopeName: 'Saint Test', capabilities: [] },
+      { kind: 'ParishGrant', parishId: 'Q', scopeName: 'Saint Q', capabilities: ['finance.read', 'finance.enter'] },
+      { kind: 'Bishop', archdioceseId: 'A', scopeName: 'Archeparchy', capabilities: [] }
+    ]);
   return json(404); // a route the API does not have
 };
 
-const { session, api, notConnected } = await import('../src/portal/model/api.js');
+const { session, api, notConnected, loadSession, selectParish } = await import('../src/portal/model/api.js');
 const D = await import('../src/portal/model/data.js');
 const { hydrate, persist } = await import('../src/portal/model/persist.js');
-Object.assign(session, {
-  parishes: [{ id: 'P', name: 'Saint Test' }],
-  parishId: 'P',
-  user: { id: 'u', role: 'priest' }
-});
+
+// the session: a role per parish from the account's capacities, and the account's own role
+await loadSession();
+assert.deepEqual(
+  session.parishes.map(p => [p.id, p.effectiveRole, p.canViewFinance]),
+  [
+    ['P', 'priest', true],
+    ['Q', 'treasurer', true]
+  ]
+);
+assert.equal(session.user.role, 'priest', 'the primary parish is selected first');
+selectParish('Q');
+assert.equal(session.user.role, 'treasurer');
+assert.equal(session.accountUser.role, 'bishop');
+selectParish('P');
 
 // loading: both pages, archived people apart, and no demo record left anywhere
 await hydrate();

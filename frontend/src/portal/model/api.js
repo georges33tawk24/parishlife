@@ -1,6 +1,6 @@
 /* Purpose: the frontend's one client for ParishLife.Api (.NET): same-origin JSON requests that carry the
    anti-forgery token, readable errors from the API's ProblemDetails, and the signed-in account's session
-   (account, parishes, role in each parish).
+   (account, parishes, role in each parish), and the bot-check token when the API asks for one.
    Main functions: api, parishAPI, loadSession, selectParish, signIn, completeTwoFactor, signOut, register,
    newOperationId.
 
@@ -30,7 +30,7 @@ const readable = (status, problem) => {
   return problem?.title && !/^[a-z_]+$/.test(problem.title) ? problem.title : 'The request failed.';
 };
 
-async function send(path, method, body) {
+async function send(path, method, body, extra = {}) {
   if (method !== 'GET' && !csrf) csrf = (await send('auth/csrf', 'GET')).token;
   let response;
   try {
@@ -41,7 +41,8 @@ async function send(path, method, body) {
       headers: {
         Accept: 'application/json',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(method === 'GET' ? {} : { 'X-CSRF-TOKEN': csrf })
+        ...(method === 'GET' ? {} : { 'X-CSRF-TOKEN': csrf }),
+        ...extra
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
@@ -64,13 +65,13 @@ async function send(path, method, body) {
   throw error;
 }
 
-export async function api(path, method = 'GET', body) {
+export async function api(path, method = 'GET', body, headers) {
   try {
-    return await send(path, method, body);
+    return await send(path, method, body, headers);
   } catch (error) {
     if (error.code !== 'csrf_invalid') throw error;
     csrf = '';
-    return send(path, method, body);
+    return send(path, method, body, headers);
   }
 }
 
@@ -97,12 +98,15 @@ export async function allPages(path, limit = 5000) {
 }
 
 /* Sign-in: a password alone, or a password and then an authenticator code. */
-export async function signIn(identifier, password) {
+/* When the bot check is on (GET /api/auth/capabilities), sign-in and registration carry its token. */
+const checked = turnstile => (turnstile ? { 'X-Turnstile-Token': turnstile } : {});
+export async function signIn(identifier, password, turnstile) {
   const id = String(identifier || '').trim();
   const result = await api(
     'auth/login',
     'POST',
-    id.includes('@') ? { email: id, password } : { username: id, password }
+    id.includes('@') ? { email: id, password } : { username: id, password },
+    checked(turnstile)
   );
   csrf = '';
   return result?.requiresTwoFactor ? { twoFactor: result.challenge } : { account: result };
@@ -124,45 +128,81 @@ export async function signOut() {
     Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
   }
 }
-export const register = ({ email, password, displayName }) =>
-  api('auth/register', 'POST', { operationId: newOperationId(), email, password, displayName });
+export const register = ({ email, password, displayName, turnstile }) =>
+  api('auth/register', 'POST', { operationId: newOperationId(), email, password, displayName }, checked(turnstile));
 
-/* The account, the parishes it follows or belongs to, and the staff appointments in effect for it.
-   The API has two staff roles: Priest (one parish) and ArchdioceseAdmin (an archdiocese). Everyone else
-   uses the member view; the portal's secretary, treasurer and leader roles have no API equivalent yet. */
+/* What each capacity means in the portal. An office grant (ParishGrant) carries capabilities: records
+   work makes the secretary's view, finance alone the treasurer's. */
+const officeRole = (capabilities = []) =>
+  capabilities.some(c => ['people.write', 'requests.manage', 'sacraments.record'].includes(c))
+    ? 'secretary'
+    : capabilities.some(c => c.startsWith('finance.'))
+      ? 'treasurer'
+      : null;
+const PARISH_ROLES = ['priest', 'secretary', 'treasurer', 'leader'];
+
+/* The account, the parishes it follows or belongs to, and its capacities (GET /api/me/capacities):
+   Priest, ParishGrant and MinistryLeader in a parish; Bishop, ArchdioceseAdmin and PlatformOperator
+   across parishes. */
 export async function loadSession() {
   const account = await api('auth/me'); // signed out: 401, and nothing else is asked
-  const [mine, staff] = await Promise.all([
+  const [mine, capacities] = await Promise.all([
     api('me/parishes').catch(() => []),
-    api('auth/staff-appointments?size=100').catch(() => ({ items: [] }))
+    api('me/capacities').catch(() => [])
   ]);
-  const appointments = (staff?.items || []).map(v => v?.value).filter(a => a?.effective);
   const parishes = new Map(
     (mine || []).map(p => [
       p.parishId,
-      { id: p.parishId, name: p.name, nameAr: p.name, primary: !!p.primary, relationship: p.relationship, roles: [] }
+      {
+        id: p.parishId,
+        name: p.name,
+        nameAr: p.name,
+        primary: !!p.primary,
+        relationship: p.relationship,
+        roles: [],
+        capabilities: []
+      }
     ])
   );
-  for (const a of appointments.filter(a => a.role === 'Priest' && a.parishId)) {
-    const p = parishes.get(a.parishId) || { id: a.parishId, name: a.scopeName, nameAr: a.scopeName, roles: [] };
-    p.roles = [...new Set([...p.roles, 'priest'])];
-    parishes.set(a.parishId, p);
+  const across = new Set();
+  for (const c of capacities || []) {
+    if (c.kind === 'PlatformOperator') across.add('super_admin');
+    if (c.kind === 'ArchdioceseAdmin') across.add('diocesan_admin');
+    if (c.kind === 'Bishop') across.add('bishop');
+    if (!c.parishId) continue;
+    const p = parishes.get(c.parishId) || {
+      id: c.parishId,
+      name: c.scopeName,
+      nameAr: c.scopeName,
+      roles: [],
+      capabilities: []
+    };
+    const role =
+      c.kind === 'Priest'
+        ? 'priest'
+        : c.kind === 'MinistryLeader'
+          ? 'leader'
+          : c.kind === 'ParishGrant'
+            ? officeRole(c.capabilities)
+            : null;
+    p.capabilities = [...new Set([...p.capabilities, ...(c.capabilities || [])])];
+    if (role) p.roles = [...new Set([...p.roles, role])];
+    parishes.set(c.parishId, p);
   }
   session.parishes = [...parishes.values()].map(p => ({
     ...p,
-    effectiveRole: p.roles.includes('priest') ? 'priest' : 'member',
-    canViewFinance: false,
+    effectiveRole: PARISH_ROLES.find(r => p.roles.includes(r)) || 'member',
+    canViewFinance: p.roles.includes('priest') || p.capabilities.includes('finance.read'),
     personId: null
   }));
   session.parishes.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
-  const archdioceseAdmin = appointments.some(a => a.role === 'ArchdioceseAdmin');
   session.accountUser = {
     id: account.id,
     name: account.displayName,
     email: account.email,
     username: account.username,
     verified: !!account.accountVerified,
-    role: archdioceseAdmin ? 'diocesan_admin' : 'member',
+    role: ['super_admin', 'diocesan_admin', 'bishop'].find(r => across.has(r)) || 'member',
     person_id: null
   };
   if (!session.parishes.some(p => p.id === session.parishId)) session.parishId = session.parishes[0]?.id || null;
@@ -177,7 +217,7 @@ export function selectParish(id) {
     session.user = {
       ...base,
       platformRole: base.role,
-      role: p?.effectiveRole === 'priest' ? 'priest' : base.role,
+      role: p && p.effectiveRole !== 'member' ? p.effectiveRole : base.role,
       canViewFinance: !!p?.canViewFinance,
       roles: p?.roles || [],
       person_id: p ? p.personId : base.person_id

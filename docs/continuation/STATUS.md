@@ -4,7 +4,7 @@ Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before actin
 
 ## Frontend integration (branch `fullstack`, 11 November 2026)
 
-At the owner's request, branch `fullstack` adds the React frontend from `frontend-new2` in `frontend/` and connects its foundation to this API: CSRF, sign-in with the authenticator step, sign-up, session and roles, and People list, add and archive. Every other module is marked "not connected" on screen. Status, gaps and owner decisions: `docs/frontend-integration.md`. No backend code changed on that branch.
+At the owner's request, branch `fullstack` adds the React frontend from `frontend-new2` in `frontend/` and connects its foundation to this API: CSRF, sign-in with the authenticator step and the optional Turnstile token, sign-up, session with roles from `GET /api/me/capacities`, and People list, add and archive. Every other module is marked "not connected" on screen. Status, gaps and owner decisions: `docs/frontend-integration.md`. No backend code changed on that branch.
 
 ## Repository and preserved work
 

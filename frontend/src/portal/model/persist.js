@@ -93,11 +93,12 @@ const toPerson = p => {
 export async function hydrate() {
   const parish = session.parishes.find(p => p.id === session.parishId);
   const d = emptyParish(parish);
-  if (parish && session.user?.role === 'priest') {
-    const people = (await allPages(`parishes/${encodeURIComponent(parish.id)}/people?pageSize=200`)).map(p => [
-      p,
-      toPerson(p)
-    ]);
+  if (parish && (parish.roles?.includes('priest') || parish.capabilities?.includes('people.read'))) {
+    const people = (
+      await allPages(`parishes/${encodeURIComponent(parish.id)}/people?pageSize=200`).catch(e =>
+        e.status === 403 ? [] : Promise.reject(e)
+      )
+    ).map(p => [p, toPerson(p)]);
     d.PEOPLE = people.filter(([p]) => !p.archived).map(([, x]) => x);
     d.ARCHIVED = people.filter(([p]) => p.archived).map(([, x]) => ({ ...x, archived: '' }));
     d.PARISH.people = d.PEOPLE.length;

@@ -12,9 +12,9 @@ const load = () =>
   }));
 let siteKey = null;
 const key = () =>
-  (siteKey ??= fetch('/api/public/auth-options')
+  (siteKey ??= fetch('/api/auth/capabilities')
     .then(r => r.json())
-    .then(o => o.turnstile || '')
+    .then(o => (o.turnstile?.enabled && o.turnstile.siteKey) || '')
     .catch(() => ''));
 
 /* Shows the check in `box`; the returned state carries its token for the request. */
