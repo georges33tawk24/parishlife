@@ -1,0 +1,496 @@
+/* ParishLife — landing page only. Design-system primitives live in parishlife.css. */
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:50;height:var(--h-topbar);
+  background:rgba(255,255,255,.9);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border)
+}
+.topbar .wrap{height:100%;display:flex;align-items:center;gap:var(--s4)}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text)}
+.brand:hover{color:var(--text)}
+.mark{
+  width:32px;height:32px;border-radius:9px;background:var(--yellow);color:var(--ink);
+  display:grid;place-items:center;font:600 16px/1 var(--sans);flex:none
+}
+.brand .name{font:600 17px/1 var(--sans);letter-spacing:-.02em}
+.navlinks{display:flex;gap:var(--s1);margin-inline-start:auto}
+.navlinks a{
+  padding:8px 12px;border-radius:var(--r-input);
+  font:500 14px/1 var(--sans);color:var(--text-2)
+}
+.navlinks a:hover{background:var(--muted);color:var(--text)}
+.langtoggle{display:flex;border:1px solid var(--border);border-radius:999px;background:var(--surface);padding:2px}
+.langtoggle button{
+  border:0;background:none;cursor:pointer;padding:6px 12px;min-height:26px;border-radius:999px;
+  font:500 13px/1 var(--sans);color:var(--text-2)
+}
+.langtoggle button[aria-pressed=true]{background:var(--primary);color:var(--on-primary)}
+
+/* ---------- hero ---------- */
+.hero{padding-block:80px var(--s7)}
+.hero-title{
+  font:600 var(--fs-hero)/1.04 var(--sans);letter-spacing:-.035em;max-width:16ch
+}
+.hero-title .ar{
+  display:block;font:600 .46em/1.5 var(--arabic);color:var(--text-3);
+  letter-spacing:0;margin-top:8px
+}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:var(--s5)}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s5);margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--border)}
+.fact .k{font:600 26px/1.2 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.fact .v{font:400 13px/19px var(--sans);color:var(--text-2);margin-top:6px;max-width:30ch}
+
+/* ---------- app-shell mockup ---------- */
+.shot{
+  border:1px solid var(--border-strong);border-radius:var(--r-modal);
+  background:var(--surface);box-shadow:var(--e3);overflow:hidden
+}
+.shot-bar{
+  height:34px;background:var(--muted);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:6px;padding:0 12px
+}
+.shot-bar i{width:9px;height:9px;border-radius:999px;background:var(--border-strong);display:block}
+.shot-bar span{margin-inline-start:8px;font:400 12px/1 var(--mono);color:var(--text-3)}
+.shell{display:flex;min-height:420px;font-size:13px}
+.shell-rail{
+  width:212px;flex:none;background:var(--ink);color:var(--light-blue);
+  border-inline-end:1px solid var(--ink);padding:14px 10px;display:flex;flex-direction:column
+}
+.shell-parish{display:flex;align-items:center;gap:9px;padding:0 6px 14px;border-bottom:1px solid rgba(255,255,255,.14);margin-bottom:12px}
+.shell-parish .mark{width:28px;height:28px;border-radius:8px;font-size:14px;background:var(--yellow);color:var(--ink)}
+.shell-parish b{display:block;font:600 13px/1.3 var(--sans);color:#FFFFFF}
+.shell-parish small{display:block;font:400 12px/1.4 var(--sans);color:rgba(255,255,255,.6)}
+.navgroup{font:500 12px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:rgba(220,238,255,.66);padding:12px 8px 6px}
+.navitem{
+  display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r-input);
+  font:500 13px/18px var(--sans);color:rgba(255,255,255,.8);position:relative
+}
+.navitem svg{flex:none;color:rgba(220,238,255,.72)}
+.navitem .badge{
+  margin-inline-start:auto;min-width:0;height:auto;padding:0;background:none;
+  font:500 12px/1 var(--mono);color:rgba(255,255,255,.62);font-variant-numeric:tabular-nums
+}
+.navitem.on{background:rgb(255 255 255 / .12);color:#FFFFFF}
+.navitem.on svg{color:#FFFFFF}
+.navitem.on::before{
+  content:"";position:absolute;inset-inline-start:-10px;top:6px;bottom:6px;width:3px;
+  border-radius:0 3px 3px 0;background:#D7A548
+}
+[dir=rtl] .navitem.on::before{border-radius:3px 0 0 3px}
+.navitem.on .badge{color:#FFFFFF}
+.shell-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+/* the app's top bar: search centred, notifications and the account hard right */
+.shell-top{
+  height:52px;flex:none;background:var(--surface);border-bottom:1px solid var(--border);
+  display:grid;grid-template-columns:1fr minmax(0,300px) 1fr;align-items:center;gap:12px;padding:0 16px
+}
+.shell-right{justify-self:end;display:flex;align-items:center;gap:10px}
+.shell-bell{position:relative;display:grid;place-items:center;width:28px;height:28px;color:var(--text-2)}
+.shell-bell i{position:absolute;top:4px;inset-inline-end:5px;width:6px;height:6px;border-radius:99px;background:var(--danger);box-shadow:0 0 0 2px var(--surface)}
+.shell-search{
+  width:100%;height:32px;border:1px solid var(--border);border-radius:999px;
+  background:var(--bg);display:flex;align-items:center;gap:8px;padding:0 10px;
+  font:400 12px/1 var(--sans);color:var(--text-3)
+}
+.shell-search kbd{
+  margin-inline-start:auto;font:400 10px/1 var(--mono);border:1px solid var(--border);
+  border-radius:4px;padding:3px 5px;background:var(--surface)
+}
+.avatar{
+  width:28px;height:28px;border-radius:999px;background:var(--primary-subtle);color:var(--primary);
+  display:grid;place-items:center;font:600 11px/1 var(--sans);flex:none
+}
+.shell-body{padding:16px;display:flex;flex-direction:column;gap:12px;flex:1}
+.shell-head{display:flex;align-items:flex-end;gap:12px}
+.shell-title{font:600 18px/24px var(--sans);letter-spacing:-.015em}
+.shell-head p{font:400 12px/18px var(--sans);color:var(--text-2);margin-top:3px}
+
+/* mini table */
+.mtable{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);overflow:hidden
+}
+.mtable .th,.mtable .tr{display:grid;grid-template-columns:1.6fr 1fr .9fr .9fr;align-items:center;gap:10px;padding:0 14px}
+.mtable .th{
+  height:34px;background:var(--muted);border-bottom:1px solid var(--border);
+  font:500 11px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--text-2)
+}
+.mtable .tr{height:46px;border-bottom:1px solid var(--border);font:400 13px/18px var(--sans)}
+.mtable .tr:last-child{border-bottom:0}
+.mtable .who{display:flex;align-items:center;gap:9px;min-width:0}
+.mtable .who b{font:500 13px/16px var(--sans);display:block}
+.mtable .who small{font:400 11px/16px var(--arabic);color:var(--text-2);display:block}
+.mtable .num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:end}
+
+/* ---------- sync / offline strip ---------- */
+.syncline{
+  display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.14);font:400 11px/16px var(--sans);color:rgba(255,255,255,.66)
+}
+.syncline .dot{width:7px;height:7px;border-radius:999px;background:var(--blue-accent);flex:none}
+
+/* ---------- dark panel ---------- */
+.panel-dark{background:var(--ink);color:#FFFFFF}
+.panel-dark .lede,.panel-dark .dim{color:rgba(255,255,255,.78)}
+.panel-dark .dimmer{color:var(--light-blue)}
+.panel-dark .eyebrow{color:var(--yellow)}
+.panel-dark .eyebrow::after{background:rgba(255,255,255,.22)}
+.panel-dark .rule{background:rgba(255,255,255,.16)}
+.panel-dark .card{background:var(--light-blue);border-color:var(--light-blue);box-shadow:none;color:var(--ink)}
+.panel-dark .card .dim,.panel-dark .card .dimmer{color:var(--ink)}
+.panel-dark .chip{background:transparent;border-color:var(--ink);color:var(--ink)}
+.panel-dark .field{color:var(--text)}  /* white field keeps dark ink on a dark panel */
+.panel-dark .chip-on{background:var(--ink);color:#FFFFFF;border-color:var(--ink)}
+.panel-dark .btn-primary{background:var(--yellow);color:var(--ink)}
+.panel-dark .btn-primary:hover{background:var(--yellow-hover);color:var(--ink)}
+
+/* ---------- module grid ---------- */
+.module{
+  display:flex;gap:12px;padding:18px;border:1px solid var(--border);border-radius:var(--r-card);
+  background:var(--surface);box-shadow:var(--e1);
+  transition:border-color var(--t-std) var(--ease),box-shadow var(--t-std) var(--ease)
+}
+.module:hover{border-color:var(--border-strong);box-shadow:var(--e2)}
+.module .ico{
+  width:36px;height:36px;border-radius:9px;background:var(--primary-subtle);color:var(--primary);
+  display:grid;place-items:center;flex:none
+}
+.module b{display:block;font:600 15px/22px var(--sans)}
+.module p{font:400 13px/20px var(--sans);color:var(--text-2);margin-top:2px}
+
+/* ---------- roles ---------- */
+.roletabs{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.roletabs .chip{cursor:pointer}
+.rolebody{display:grid;grid-template-columns:236px 1fr;gap:var(--s4);align-items:start;margin-top:var(--s4)}
+.rolerail{
+  background:var(--ink);border:1px solid var(--ink);border-radius:var(--r-card);
+  padding:12px 10px;box-shadow:var(--e1)
+}
+
+/* ---------- pricing ---------- */
+.plan{display:flex;flex-direction:column;gap:var(--s3);height:100%}
+.plan.featured{border-color:var(--primary);box-shadow:var(--e2)}
+.plan ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+.plan li{display:flex;gap:10px;font:400 14px/22px var(--sans);color:var(--text-2)}
+.plan li svg{flex:none;margin-top:5px;color:var(--success)}
+.plan .btn{margin-top:auto}
+
+/* ---------- faq (native details) ---------- */
+.faq{border-top:1px solid var(--border)}
+.faq details{border-bottom:1px solid var(--border)}
+.faq summary{
+  cursor:pointer;list-style:none;padding:20px 0;display:flex;align-items:center;gap:var(--s3);
+  font:600 17px/26px var(--sans)
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{
+  content:"+";margin-inline-start:auto;font:400 22px/1 var(--mono);color:var(--accent)
+}
+.faq details[open] summary::after{content:"\2013"}
+.faq p{padding:0 0 20px;max-width:78ch;color:var(--text-2)}
+
+/* ---------- footer ---------- */
+.footer{border-top:1px solid var(--border);padding-block:var(--s6)}
+.footer a{color:var(--text-2);font:400 14px/28px var(--sans);display:block}
+.footer a:hover{color:var(--primary)}
+.footer h5{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px}
+
+/* ---------- responsive ---------- */
+@media (max-width:1000px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:1fr}
+  .rolebody{grid-template-columns:1fr}
+  .navlinks{display:none}
+}
+@media (max-width:760px){
+  .wrap{width:min(100% - 32px,var(--wrap))}
+  .g2,.g4{grid-template-columns:1fr}
+  .section,.section-lg{padding-block:var(--s6)}
+  .facts{grid-template-columns:repeat(2,1fr);gap:var(--s4)}
+  .hero{padding-block:var(--s6)}
+}
+
+/* Phones: the top bar keeps the brand, the language switch and nothing else —
+   the hero carries the call to action a few hundred pixels below anyway. */
+@media (max-width:1000px){
+  .topbar .langtoggle{margin-inline-start:auto}
+}
+@media (max-width:620px){
+  .topbar .wrap{gap:10px}
+  .topbar > .wrap > .btn{display:none}
+  .facts{grid-template-columns:1fr 1fr}
+  .hero-title{max-width:none}
+}
+@media (max-width:420px){
+  .facts{grid-template-columns:1fr}
+  .faq summary{font-size:16px;line-height:24px}
+}
+
+
+/* ---------- motion ----------
+   The hero settles in once; sections rise into place as they reach the screen.
+   Only when scripts run and the reader has not asked for less motion. */
+@keyframes lp-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.motion .hero .wrap > *{animation:lp-rise 420ms var(--ease) both}
+.motion .hero .wrap > :nth-child(2){animation-delay:70ms}
+.motion .hero .wrap > :nth-child(3){animation-delay:140ms}
+.motion .hero .wrap > :nth-child(4){animation-delay:210ms}
+.motion .hero .wrap > :nth-child(5){animation-delay:280ms}
+.motion [data-reveal]{opacity:0;transform:translateY(10px);transition:opacity 420ms var(--ease),transform 420ms var(--ease)}
+.motion [data-reveal].in{opacity:1;transform:none}
+.module{transition:border-color var(--t-std) var(--ease),box-shadow var(--t-std) var(--ease),transform var(--t-std) var(--ease)}
+.module:hover{transform:translateY(-2px)}
+@media(hover:none){.module:hover{transform:none}}
+
+/* ---------- the counting-session demonstration ----------
+   One window running off the foot of the stage, and the session total on a card straddling its edge.
+   Travel and arrival have one curve each. Below 900px it is a different layout, not a smaller one. */
+.demo{margin:0;padding-bottom:var(--s7);--travel:cubic-bezier(.45,0,.1,1);--arrive:cubic-bezier(.25,.8,.25,1)}
+.demo-stage{
+  position:relative;height:576px;margin-inline:-24px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(#000 84%,transparent);mask-image:linear-gradient(#000 84%,transparent)
+}
+.demo .shot{position:absolute;top:24px;inset-inline:24px 148px}
+.demo .shell{min-height:640px}
+/* the card sits over the window's corner, on chrome: the head stops short of it, the table runs the full width */
+/* the card covers the window's corner, so what would sit under it is left out */
+.demo .shell-right{display:none}
+.demo .shell-head{align-items:center;justify-content:space-between;padding-inline-end:116px}
+.demo .mtable{margin-top:10px} /* clear of the card's foot */
+.demo .mtable .th,.demo .mtable .tr{grid-template-columns:minmax(0,1.6fr) .6fr .9fr 1fr}
+.demo .mtable .tr,.demo .mtable .tr:last-child{border-bottom:1px solid var(--border)}
+.demo-add{min-height:32px;padding:0 14px;font-size:13px;flex:none;transition:transform var(--t-micro) var(--ease);will-change:transform}
+.demo-add.is-pressed{transform:scale(.97)}
+
+/* the window the rows slide in: exactly as tall as the five rows it shows */
+.demo-list{height:230px;overflow:hidden}
+.demo-row{transition:opacity 240ms linear 200ms,background-color 1.2s var(--ease)}
+/* the new row stays faint until it has cleared the header's edge, and the old one is gone before the foot */
+.demo-row.is-new{background:var(--primary-subtle);transition:opacity 240ms linear 200ms,background-color 0s}
+@starting-style{.demo-row.is-new{opacity:0}}
+.demo-row.is-leaving{opacity:0;transition:opacity 140ms linear}
+.demo-filler i{display:block;height:8px;border-radius:4px;background:var(--muted);justify-self:end;width:56%}
+.demo-filler .who i{justify-self:auto}
+.demo-filler .who{gap:9px}
+.demo-filler i.demo-env{justify-self:start;width:40%}
+.demo-caret{display:inline-block;width:1px;height:1.05em;margin-inline-start:1px;vertical-align:-2px;background:var(--primary);animation:demo-caret 1s steps(1) infinite}
+@keyframes demo-caret{50%{opacity:0}}
+.demo-lira{transition:opacity 280ms linear}
+.demo-lira-v{transition:opacity 280ms linear}
+@starting-style{.demo-lira-v{opacity:0}}
+.demo-lira.is-waiting{opacity:.35}
+
+.demo-total{
+  position:absolute;z-index:2;top:32px;inset-inline-end:24px;width:248px;padding:16px 18px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);
+  box-shadow:0 1px 2px rgb(var(--primary-rgb) / .08),0 14px 30px rgb(var(--primary-rgb) / .16)
+}
+.demo-total-k{display:block;font:500 13px/18px var(--sans);color:var(--text-2)}
+.demo-usd{margin-top:4px;font:600 32px/38px var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.demo-lbp{font:500 14px/20px var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
+.demo-rate{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font:400 12px/18px var(--sans);color:var(--text-2)}
+
+.roll{font-variant-numeric:tabular-nums;white-space:pre}
+.roll-d{position:relative;display:inline-block}
+.roll-d i{display:inline-block;font-style:normal}
+.roll-d i.out{position:absolute;inset:0;animation:roll-out 200ms var(--arrive) both}
+.roll-d i.in{animation:roll-in 460ms var(--arrive) both}
+@keyframes roll-out{to{opacity:0;transform:translateY(-50%)}}
+@keyframes roll-in{from{opacity:0;transform:translateY(50%)}}
+
+.demo-cursor{position:absolute;z-index:3;top:0;left:0;pointer-events:none;transition:transform 900ms var(--travel);filter:drop-shadow(0 2px 3px rgb(0 0 0 / .25))}
+.demo-cursor path{transform-origin:5px 3px;transition:transform 100ms var(--ease)}
+.demo-cursor path.is-pressed{transform:scale(.86)}
+
+.demo-note{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 8px;margin-top:8px;font:400 13px/20px var(--sans);color:var(--text-2)}
+
+@media (max-width:1120px){
+  .demo .mtable .th,.demo .mtable .tr{grid-template-columns:minmax(0,1fr) 72px 92px;column-gap:12px}
+  .demo .demo-env{display:none}
+}
+@media (max-width:900px){
+  /* edge to edge across the column's margin: the window bleeds rather than stopping just short */
+  .demo-stage{display:flex;flex-direction:column;height:auto;max-height:620px;margin-inline:-24px}
+  .demo .shot{position:relative;top:auto;inset:auto;flex:none;box-shadow:none;border-inline:0;border-radius:0}
+  .demo-total{position:relative;top:auto;inset:auto;order:-1;width:auto;margin:0 24px -16px;padding:14px 16px}
+  .demo .shot-bar,.demo .shell-rail,.demo .shell-top,.demo-cursor{display:none}
+  .demo .shell{min-height:0}
+  .demo .shell-body{padding:32px 24px 12px}
+  .demo .shell-head{padding-inline-end:0}
+  .demo .mtable{margin-top:0}
+  .demo .mtable .tr,.demo .mtable .th{padding-inline:10px;grid-template-columns:minmax(0,1fr) 54px 76px;column-gap:8px}
+  .demo .mtable .who small{display:none}
+  .demo .mtable .tr{font-size:12px}
+}
+@media (max-width:760px){
+  .demo-stage{margin-inline:-16px}
+  .demo-total{margin-inline:16px}
+  .demo .shell-body{padding-inline:16px}
+}
+@media(prefers-reduced-motion:reduce){.demo-caret{animation:none}}
+
+/* ==========================================================================
+   The product page in ParishLife's own world: night, gilt and Marcellus, as on
+   the public site and sign-in. The app window keeps the portal's own colours.
+   ========================================================================== */
+@font-face{font-family:"Marcellus";src:url("/assets/fonts/marcellus-latin-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Source Sans 3";src:url("/assets/fonts/source-sans-3-latin-wght-normal.woff2") format("woff2-variations");font-weight:200 900;font-display:swap}
+@font-face{font-family:"Amiri";src:url("/assets/fonts/amiri-arabic-700-normal.woff2") format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("/assets/fonts/NotoSansArabic-Regular.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("/assets/fonts/NotoSansArabic-Bold.woff2") format("woff2");font-weight:700;font-display:swap}
+
+:root{
+  --night:#0E1A31;--night-deep:#08101F;--gilt:#D7A548;--gilt-hi:#F1C77A;--gilt-ink:#80601C;
+  --on-night:#EEF1F6;--on-night-2:#B9C3D6;--hair-dark:rgb(230 222 208 / .18);
+  --display:"Marcellus","Amiri",Georgia,serif;--arabic-display:"Amiri","Noto Sans Arabic",serif;
+  --sans:"Source Sans 3","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --arabic:"Noto Sans Arabic","Source Sans 3",system-ui,sans-serif;
+  --bg:#F5F1E8;--surface-soft:#F5F1E8;--muted:#ECE4D6;--border:#E0D7C7;--border-strong:#B8AD99;
+  --text:#15203A;--text-2:#4A5468;--text-3:#4A5468;
+  --primary:#0E1A31;--primary-hover:#15233F;--primary-subtle:#ECE4D6;--primary-rgb:14 26 49;
+  --ink:#0E1A31;--accent:#80601C;--selection:#E8D9B8;--selection-hover:#E0CFA8;--yellow:#E8D9B8;--on-primary:#EEF1F6;
+}
+body{font-size:18px;line-height:29px}
+
+/* what happens inside the app window stays in the app's colours and face */
+.shot,.demo-total,.rolerail{
+  --bg:#F7F7F2;--surface-soft:#F7F7F2;--muted:#EDF0E8;--border:#DCE2DB;--border-strong:#9BAC9F;
+  --text:#233B32;--text-2:#607068;--text-3:#607068;--primary:#233B32;--primary-hover:#172B23;--primary-subtle:#EDF0E8;
+  --primary-rgb:35 59 50;--ink:#233B32;--accent:#233B32;--selection:#D6E1D0;--yellow:#D6E1D0;--on-primary:#FFFFFF;
+  --brown-dark:#233B32;--light-blue:#EDF0E8;--blue-accent:#9BAC9F;
+  --sans:'Inter','Inter Fallback',system-ui,sans-serif;--arabic:'IBM Plex Sans Arabic','Inter',system-ui,sans-serif;
+  color:var(--text);font:400 13px/20px var(--sans)
+}
+[dir=rtl] .shot,[dir=rtl] .demo-total,[dir=rtl] .rolerail{font-family:var(--arabic)}
+
+/* ---------- top bar: part of the night ---------- */
+html{scroll-padding-top:var(--h-topbar)}
+.topbar{background:var(--night-deep);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:1px solid var(--hair-dark)}
+.brand,.brand:hover{color:var(--on-night)}
+.brand .mark{width:auto;height:auto;background:none;color:var(--on-night);border-radius:0}
+.brand .mark svg{width:24px;height:30px}
+.brand .name{font:400 23px/1 var(--display);letter-spacing:0}
+[dir=rtl] .brand .name{font:700 22px/1 var(--arabic-display)}
+.navlinks a{font:500 15px/1 var(--sans);color:var(--on-night-2)}
+.navlinks a:hover{background:rgb(255 255 255 / .08);color:#FFFFFF}
+.langtoggle{background:none;border-color:var(--hair-dark)}
+.langtoggle button{color:var(--on-night-2)}
+.langtoggle button[aria-pressed=true]{background:var(--on-night);color:var(--night)}
+.topbar .btn-primary{background:none;border-color:var(--hair-dark);color:var(--on-night)}
+.topbar .btn-primary:hover{background:rgb(255 255 255 / .08);border-color:var(--on-night-2);color:#FFFFFF}
+.topbar :focus-visible,.hero :focus-visible,.panel-dark :focus-visible,.footer :focus-visible{--surface:var(--night);--text:var(--on-night)}
+
+/* gold leaf, as on the public site's buttons */
+.btn-gilt,.btn-gilt:hover{color:#1B1410;border:0;text-shadow:0 1px 0 rgb(255 238 196 / .5)}
+.btn-gilt{background:linear-gradient(180deg,rgb(255 247 222 / .5),rgb(255 247 222 / .06) 46%,rgb(96 60 12 / 0) 54%,rgb(96 60 12 / .24)),#D4A24B url("/assets/images/gilt.webp") 0 0/520px 520px;box-shadow:0 12px 30px -14px rgb(215 165 72 / .8)}
+.btn-gilt:hover{background:linear-gradient(180deg,rgb(255 250 232 / .68),rgb(255 247 222 / .18) 46%,rgb(96 60 12 / 0) 56%,rgb(96 60 12 / .16)),#DDAE55 url("/assets/images/gilt.webp") 0 0/520px 520px}
+.btn-lg{min-height:52px;padding:0 26px;font:600 17px/1 var(--sans);border-radius:999px}
+.btn-outline-dark{border-color:rgb(230 222 208 / .4)}
+.btn-outline-dark:hover{border-color:var(--on-night)}
+
+/* ---------- hero: the night, the window, and the product rising out of it ---------- */
+.hero{
+  position:relative;isolation:isolate;overflow:hidden;color:var(--on-night);padding-block:88px 380px;
+  background:radial-gradient(ellipse 52% 62% at 82% 26%,rgb(215 165 72 / .2),transparent 70%),linear-gradient(180deg,var(--night-deep),var(--night) 70%)
+}
+.hero::after{
+  content:"";position:absolute;z-index:-1;top:-12px;inset-inline-end:max(-30px,calc((100vw - 1200px) / 2 - 90px));
+  width:min(44vw,580px);height:620px;background:url("/assets/images/sanctuary/window-1080.webp") center top/contain no-repeat;
+  /* the picture's edges dissolve into the night, on all sides */
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent),linear-gradient(#000 60%,transparent 92%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent),linear-gradient(#000 60%,transparent 92%);mask-composite:intersect
+}
+.hero-title{max-width:12.6ch;font:400 clamp(44px,5.3vw,74px)/1.08 var(--display);letter-spacing:0;color:var(--on-night)}
+[dir=rtl] .hero-title{font:700 clamp(40px,5.6vw,72px)/1.3 var(--arabic-display)}
+.hero .lede{margin-top:28px!important;max-width:44ch;font:400 21px/33px var(--sans);color:var(--on-night-2)}
+.hero-actions{margin-top:36px;gap:14px}
+
+.demo-band{position:relative;z-index:1;margin-top:-340px}
+.demo{padding-bottom:0}
+.demo-note{margin-top:4px;font:400 15px/22px var(--sans)}
+.demo-note .btn{font-size:14px}
+.facts{margin-top:56px;padding-top:32px;padding-bottom:88px;border-top:1px solid var(--border);gap:32px 48px}
+.fact .k{font:400 32px/1.2 var(--display);letter-spacing:0}
+[dir=rtl] .fact .k{font:700 30px/1.3 var(--arabic-display)}
+.fact .v{margin-top:8px;font:400 16px/24px var(--sans)}
+
+/* ---------- type: one voice for headings, one for reading ---------- */
+.t-display{font:400 clamp(36px,4.3vw,56px)/1.12 var(--display);letter-spacing:0;text-wrap:balance}
+.t-heading{font:400 clamp(30px,3.2vw,42px)/1.16 var(--display);letter-spacing:0;text-wrap:balance}
+.t-sub,.card h3.t-sub{font:400 24px/1.25 var(--display)}
+[dir=rtl] .t-display,[dir=rtl] .t-heading,[dir=rtl] .t-sub,[dir=rtl] .card h3.t-sub{font-family:var(--arabic-display);font-weight:700;line-height:1.4}
+.t-body{font:400 18px/29px var(--sans)}
+.t-ui{font:500 15px/22px var(--sans)}
+.t-caption{font:400 14px/21px var(--sans)}
+.lede{font:400 21px/33px var(--sans)}
+[dir=rtl] .t-body,[dir=rtl] .lede,[dir=rtl] .t-ui,[dir=rtl] .t-caption{font-family:var(--arabic)}
+.card{border-color:var(--border);box-shadow:0 1px 2px rgb(21 32 58 / .04)}
+
+/* ---------- bands of colour instead of rules ---------- */
+.section,.section-lg{padding-block:112px}
+#how,#roles,#faq{background:#FBF8F1}
+
+/* why: the statement holds while the reasons pass beside it */
+#why .wrap{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:40px 72px}
+#why h2{position:sticky;top:112px;align-self:start}
+#why .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 44px;margin-top:0!important}
+#why .card{padding:24px 0 32px;background:none;border:0;border-top:1px solid var(--border-strong);border-radius:0;box-shadow:none}
+#why .card h3{font:400 24px/1.25 var(--display)}
+[dir=rtl] #why .card h3{font:700 22px/1.4 var(--arabic-display)}
+
+/* modules: a list to read, not sixteen boxes */
+#modules .grid{gap:0 48px}
+.module,.module:hover{padding:24px 0;background:none;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none;transform:none}
+.module .ico{width:28px;height:28px;background:none;color:var(--gilt-ink)}
+.module b{font:600 18px/26px var(--sans)}
+.module p{margin-top:4px;font:400 16px/24px var(--sans)}
+
+/* the dark bands */
+.panel-dark{position:relative;background:radial-gradient(ellipse 70% 60% at 50% 0,rgb(42 74 150 / .42),transparent 70%),var(--night);color:var(--on-night)}
+.panel-dark .lede,.panel-dark .dim{color:var(--on-night-2)}
+.panel-dark .card{background:rgb(255 255 255 / .04);border-color:var(--hair-dark);color:var(--on-night)}
+.panel-dark .card .dim,.panel-dark .card .dimmer{color:var(--on-night-2)}
+.panel-dark .chip{background:none;border-color:var(--hair-dark);color:var(--on-night)}
+.panel-dark .chip-on{background:var(--on-night);border-color:var(--on-night);color:var(--night)}
+.panel-dark .btn-outline-dark:hover{background:rgb(255 255 255 / .08)}
+
+/* pricing: the plan most parishes need is the one dark surface here */
+.plan{background:#FFFDF8}
+.plan .amount .usd{font:400 46px/1.1 var(--display);letter-spacing:0}
+.plan .pill{margin-block:-3px}
+.plan.featured{background:var(--night);border-color:var(--night);color:var(--on-night);box-shadow:0 30px 60px -30px rgb(14 26 49 / .55)}
+.plan.featured .dim,.plan.featured li,.plan.featured .lbp,.plan.featured .rate{color:var(--on-night-2)}
+.plan.featured li svg{color:var(--gilt-hi)}
+.plan.featured .btn-primary{background:var(--on-night);border-color:var(--on-night);color:var(--night)}
+.plan li{font:400 16px/24px var(--sans)}
+
+.faq{border-top-color:var(--border-strong)}
+.faq summary{font:400 23px/1.3 var(--display)}
+[dir=rtl] .faq summary{font:700 21px/1.5 var(--arabic-display)}
+.faq summary::after{color:var(--gilt-ink)}
+.faq p{font:400 18px/29px var(--sans);max-width:68ch}
+
+/* the page closes in the night, with the name large and faint */
+.footer{padding-block:72px 0;background:var(--night-deep);border-top:0;color:var(--on-night-2);overflow:hidden}
+.footer .dimmer,.footer .dim,.footer div{color:var(--on-night-2)}
+.footer h5{color:var(--on-night);letter-spacing:.04em;text-transform:none;font:600 15px/1 var(--sans)}
+.footer a{font:400 16px/30px var(--sans);color:var(--on-night-2)}
+.footer a:hover{color:#FFFFFF}
+.footer .rule{background:var(--hair-dark)}
+.footer .footer-mark{margin-top:32px;direction:ltr;font:400 clamp(64px,21.4vw,292px)/.8 var(--display);text-align:center;white-space:nowrap;color:transparent;-webkit-text-stroke:1px rgb(230 222 208 / .16)}
+
+@media (max-width:1000px){
+  #why .wrap{grid-template-columns:minmax(0,1fr)}
+  #why h2{position:static}
+  .hero::after{opacity:.35;inset-inline-end:-120px;width:560px}
+}
+@media (max-width:760px){
+  .section,.section-lg{padding-block:72px}
+  .hero{padding-block:56px 260px}
+  .hero::after{opacity:.1;top:40px} /* behind running text it must stay out of the words' way */
+  .hero .lede{font-size:19px;line-height:30px}
+  .demo-band{margin-top:-220px}
+  .facts{padding-bottom:56px}
+  #why .grid{grid-template-columns:minmax(0,1fr)}
+  .btn-lg{width:100%}
+}

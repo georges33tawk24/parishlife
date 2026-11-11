@@ -1,0 +1,9 @@
+# Purpose: keeps the React frontend in its own two-space style, separate from the backend's four-space C# settings.
+# Main settings: two-space indentation and a final newline; Prettier (.prettierrc.json) does the rest.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+insert_final_newline = true

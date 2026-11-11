@@ -1,0 +1,12 @@
+/* The public site's styles, in the order the cascade expects. One file per page keeps each page's
+   order intact: the build would otherwise lift the sheets two pages share into a file of their own,
+   loaded first. */
+@import '../public.css';
+@import '../collection-ui.css';
+@import '../public-features.css';
+@import '../site.css';
+@import '../home.css';
+@import '../sanctuary.css';
+@import '../parish.css';
+@import '../church.css';
+@import '../reading.css';

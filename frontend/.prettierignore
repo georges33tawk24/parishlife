@@ -1,0 +1,4 @@
+# built output and data the formatter should leave alone
+src/lib/data/
+# the stylesheets keep their one-rule-per-line style
+*.css

@@ -106,3 +106,8 @@ artifacts/
 *.key
 *.p12
 *.snk
+
+# Frontend (React/Vite): installed packages, build output and the exported development certificate.
+frontend/node_modules
+frontend/dist/
+frontend/.cert/
