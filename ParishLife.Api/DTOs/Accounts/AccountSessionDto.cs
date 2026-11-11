@@ -30,6 +30,6 @@ public class AccountSessionDto
         IsCurrent = value.Id == currentSession,
         AuthenticationMethod = value.AuthenticationMethod == "legacy" ? "unknown" : value.AuthenticationMethod,
         Status = value.Revoked ? "Revoked" : value.ExpiresAt <= now ? "Expired"
-            : value.SecurityStamp != currentStamp || value.AuthenticationMethod is not ("pwd" or "mfa" or "recovery") ? "Invalidated" : "Active"
+            : value.SecurityStamp != currentStamp || !AccountSessionService.Methods.Contains(value.AuthenticationMethod) ? "Invalidated" : "Active"
     };
 }

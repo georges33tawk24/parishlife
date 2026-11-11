@@ -3,8 +3,8 @@
   "scope": "Full retained catalogue; single-API Azure foundation, account/security/profile/private workspace, staff, calendar/reservation and ministry/meeting/attendance/formation, loans, volunteering and event-registration slices with remaining acceptance; no full-product/live Azure claim",
   "catalogue_entries": 149,
   "statuses": {
-    "partial": 138,
-    "not_started": 11
+    "partial": 141,
+    "not_started": 8
   },
   "entries": [
     {
@@ -56,9 +56,9 @@
       "id": "A06",
       "workflow": "External sign-in, contact verification and alias changes",
       "module": "Accounts",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Email-ownership verification (anonymous neutral request/confirm, six-digit hashed codes, 15-minute expiry, 5 attempts, resend throttle) and verified sign-in email change (fresh proofs, code only to the new address, old alias kept until proof, atomic account/record commit with new security stamp, alias claim/release with rollback, exact replay). Delivery goes through IContactCodeDelivery whose registered default reports NotConfigured and sends nothing, so codes are neither generated nor claimed sent and the office identity-review route stays the fallback. Configuration-gated Google/Microsoft OAuth (PKCE, provider sub only, hashed): link only for an MFA account with an MFA session and fresh proofs; sign-in resolves only linked subjects, never creates accounts/Person/membership or merges by email, and MFA accounts still complete the authenticator challenge; unlink. Unconfigured providers have no scheme and report unavailable. Local tests (captured delivery, fake OAuth backchannel).",
+      "remaining": "No email/SMS provider is configured (U10): contact verification and email change cannot complete in production until one is approved and wired. S06.05's proposed 'sign in while unverified' conflicts with the current sign-in rule and was not adopted (owner decision). Not delivered: phone contacts, standalone username rename, verified-contact password reset, identity-change notifications, Apple provider, provider app registrations/secrets, browser redirect UX for external completion, frontend and live provider/Cosmos acceptance.",
       "questionnaire_references": "S06.05–06 S06.11"
     },
     {
@@ -1127,9 +1127,9 @@
       "id": "X01",
       "workflow": "Passkey enrollment, login and removal",
       "module": "Accounts",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Passkey (WebAuthn) registration, list, removal and sign-in via ASP.NET Core Identity's built-in passkey handler; CosmosIdentityStore implements IUserPasskeyStore (passkeys on the account document, max 10) with a unique credential index. Registration/removal need personal capacity, no recovery cookie, and for MFA/operator accounts an MFA session plus fresh password and authenticator code (non-MFA members prove the password). Protected, five-minute, purpose/account/session/stamp-bound ceremony state; one-use login nonce committed with the session/challenge; sign-count update; removal rotates the security stamp and signs out. A passkey is one factor: MFA accounts still complete the authenticator challenge; non-MFA members get a 'passkey' session. Local tests only (fixture software authenticator).",
+      "remaining": "Sources do not mention passkeys: 'passkey is not MFA', user verification required, max 10 and the fresh-proof rule are conservative implementation choices, not owner policy (S06.06/S06.11 proposed). Not delivered: passkey rename, passkey-only accounts/password removal, attestation-statement verification ('none' accepted), cross-origin frontends (Passkeys:ServerDomain/origin review), new-sign-in notifications, frontend, real browser/authenticator and live Cosmos acceptance.",
       "questionnaire_references": "S06.06 S06.11"
     },
     {
@@ -1235,9 +1235,9 @@
       "id": "X13",
       "workflow": "Optional Turnstile and public authentication capability",
       "module": "Accounts/Infrastructure",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Optional Cloudflare Turnstile: enforced only when Turnstile:SiteKey and SecretKey are configured (secret via App Service/Key Vault reference), server-side siteverify through a named HttpClient, optional expected hostname, 400 turnstile_failed / 503 turnstile_unavailable (fail closed), applied to register, login, passkey login options, contact-verification request and external sign-in start; disabled by default with no behaviour change. Public no-store GET /api/auth/capabilities reports password/registration, passkeys, each external provider's real availability, Turnstile enabled + public site key only, and contact delivery NotConfigured. Local tests with a fake verifier.",
+      "remaining": "Turnstile is not named in the sources; using it, the protected endpoint list and fail-closed behaviour are proposed choices under S29.18's honest-capability rule. Not delivered: guest intake (Q08) and other public forms, Cloudflare account/keys, action/cdata binding, frontend widget and live Cloudflare acceptance. Capability states are configured/unconfigured only; S29.18 Tested/Operational/Failed evidence is not tracked.",
       "questionnaire_references": "S06.05–06 S29.18 U10"
     },
     {

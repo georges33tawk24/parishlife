@@ -2,6 +2,7 @@
 // Main functions: AddParishLifeBackend, ReadStorage, IsLocal, RegisterStorage, RegisterIdentity, ConfigureDataProtection.
 
 using Azure.Core;
+using Microsoft.AspNetCore.Authentication;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys;
 using Azure.Storage.Blobs;
@@ -23,6 +24,7 @@ using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Repositories.People;
 using ParishLife.Api.Interfaces.Repositories.Scheduling;
+using ParishLife.Api.Interfaces.Services.Accounts;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Repositories.Billing;
@@ -75,6 +77,7 @@ public static class ServiceCollectionExtensions
         RegisterStorage(services, configuration, environment);
         ConfigureDataProtection(services, environment);
         RegisterIdentity(services);
+        RegisterAuthenticationCapabilities(services, configuration);
         services.AddScoped<IParishRepository, ParishRepository>();
         services.AddScoped<IBillingRepository, BillingRepository>();
         services.AddScoped<IPlanRepository>(provider => IsLocal(provider.GetRequiredService<StorageOptions>())
@@ -271,6 +274,52 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MfaRecoveryService>();
         services.AddScoped<MfaSecurityService>();
         services.AddScoped(provider => new AccountSessionService(provider.GetRequiredService<PartitionDocuments>(), provider.GetRequiredService<TimeProvider>()));
+    }
+
+    // X01/A06/X13: passkeys, contact verification, optional external sign-in and optional Turnstile; nothing calls out unless configured.
+    private static void RegisterAuthenticationCapabilities(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<IPasskeyHandler<ParishUser>, PasskeyHandler<ParishUser>>();
+        services.Configure<IdentityPasskeyOptions>(options =>
+        {
+            options.ServerDomain = string.IsNullOrWhiteSpace(configuration["Passkeys:ServerDomain"]) ? null : configuration["Passkeys:ServerDomain"];
+            options.UserVerificationRequirement = "required";
+        });
+        services.AddScoped<PasskeyService>();
+        services.AddOptions<TurnstileOptions>().Bind(configuration.GetSection("Turnstile"));
+        services.AddHttpClient(TurnstileVerifier.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<TurnstileVerifier>();
+        services.AddScoped<IContactCodeDelivery, UnconfiguredContactCodeDelivery>();
+        services.AddScoped<ContactVerificationService>();
+        services.AddScoped<ExternalSignInService>();
+        foreach (var (provider, endpoints) in ExternalProviderOptions.Providers)
+        {
+            var settings = configuration.GetSection("ExternalSignIn:" + provider).Get<ExternalProviderOptions>() ?? new();
+            if (!settings.Configured)
+                continue; // An unconfigured provider has no scheme, so capability reports it unavailable and its routes return 404.
+            services.AddAuthentication().AddOAuth(ExternalProviderOptions.SchemePrefix + provider, options =>
+            {
+                options.ClientId = settings.ClientId!;
+                options.ClientSecret = settings.ClientSecret!;
+                options.AuthorizationEndpoint = endpoints[0];
+                options.TokenEndpoint = endpoints[1];
+                options.UserInformationEndpoint = endpoints[2];
+                options.CallbackPath = "/api/auth/external/callback/" + provider;
+                options.SignInScheme = IdentityConstants.ExternalScheme;
+                options.UsePkce = true;
+                options.Scope.Add("openid");
+                options.ClaimActions.MapJsonKey(System.Security.Claims.ClaimTypes.NameIdentifier, "sub");
+                options.Events.OnCreatingTicket = async context =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, context.Options.UserInformationEndpoint);
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", context.AccessToken);
+                    using var response = await context.Backchannel.SendAsync(request, context.HttpContext.RequestAborted);
+                    response.EnsureSuccessStatusCode();
+                    using var user = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
+                    context.RunClaimActions(user.RootElement); // Only the stable subject is mapped; provider email is never trusted or merged.
+                };
+            });
+        }
     }
 
     private static void ConfigureDataProtection(IServiceCollection services, IHostEnvironment environment)

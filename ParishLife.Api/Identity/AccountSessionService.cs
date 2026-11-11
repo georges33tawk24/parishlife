@@ -1,5 +1,6 @@
 // Purpose: Stores revocable sessions and one-use MFA challenges; rechecks account eligibility and security stamps.
-// Main functions: CreateAsync, CreateRecoveryAsync, CommitSessionAsync, CreateChallengeAsync, GetChallengeAsync, ValidAsync, ListAsync, RevokeAsync.
+// Main functions: CreateAsync, CreateRecoveryAsync, CreateFirstFactorAsync (passkey/external single-factor sessions), CommitSessionAsync,
+// CreateChallengeAsync (optionally consuming a one-use ceremony nonce), GetChallengeAsync, ValidAsync, ListAsync, RevokeAsync.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -28,7 +29,14 @@ public sealed class AccountSessionService
     internal Task<AccountSession> CreateRecoveryAsync(ParishUser user, Versioned<MfaChallenge> challenge, CancellationToken ct)
         => CommitSessionAsync(user, challenge, "recovery", ct);
 
-    private async Task<AccountSession> CommitSessionAsync(ParishUser user, Versioned<MfaChallenge>? challenge, string method, CancellationToken ct)
+    // A passkey or linked external login is one factor; it never yields an MFA session and MFA/operator accounts must use CreateChallengeAsync.
+    internal Task<AccountSession> CreateFirstFactorAsync(ParishUser user, string method, string ceremonyNonce, CancellationToken ct)
+        => method is "passkey" or "external" ? CommitSessionAsync(user, null, method, ct, ceremonyNonce)
+            : throw new ArgumentOutOfRangeException(nameof(method));
+
+    internal static readonly string[] Methods = ["pwd", "mfa", "recovery", "passkey", "external"];
+
+    private async Task<AccountSession> CommitSessionAsync(ParishUser user, Versioned<MfaChallenge>? challenge, string method, CancellationToken ct, string? ceremonyNonce = null)
     {
         if (!user.Active || !AccountVerification.IsVerified(user) || string.IsNullOrEmpty(user.SecurityStamp) || user.PersistenceVersion is null)
             throw new DomainException("account_unavailable", "The account is not eligible to sign in.", FailureKind.Forbidden);
@@ -53,17 +61,36 @@ public sealed class AccountSessionService
         }
         else if (user.TwoFactorEnabled || user.PlatformOperator)
             throw new DomainException("mfa_required", "An authentication challenge is required.", FailureKind.Forbidden);
+        if (ceremonyNonce is not null)
+            batch.CreateItem(CeremonyRow(key, ceremonyNonce, op));
         await documents.CommitAsync(batch, ct);
         return session;
     }
 
-    public async Task<MfaLoginChallengeDto> CreateChallengeAsync(ParishUser user, CancellationToken ct)
+    public async Task<MfaLoginChallengeDto> CreateChallengeAsync(ParishUser user, CancellationToken ct, string? ceremonyNonce = null)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
         var challenge = new MfaChallenge(hash, user.Id, user.SecurityStamp!, clock.GetUtcNow().AddMinutes(5));
         var key = CosmosIdentityStore.AccountKey(user.Id);
-        await documents.CreateAsync(Containers.Accounts, Row("mfa:" + hash, key, "mfaChallenge", challenge), ct);
+        if (ceremonyNonce is null)
+            await documents.CreateAsync(Containers.Accounts, Row("mfa:" + hash, key, "mfaChallenge", challenge), ct);
+        else
+        {
+            // A passkey/external first factor consumes its one-use ceremony and saves the account (sign count) atomically with the challenge.
+            if (user.PersistenceVersion is null || !user.Active || !AccountVerification.IsVerified(user))
+                throw new DomainException("account_unavailable", "The account is not eligible to sign in.", FailureKind.Forbidden);
+            var op = new Operation
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                ActorId = user.Id,
+                Fingerprint = "first-factor-challenge",
+                At = clock.GetUtcNow()
+            };
+            await documents.CommitAsync(documents.Batch(Containers.Accounts, key)
+                .ReplaceItem("account", Row("account", key, "account", user), PartitionDocuments.Match(user.PersistenceVersion))
+                .CreateItem(Row("mfa:" + hash, key, "mfaChallenge", challenge)).CreateItem(CeremonyRow(key, ceremonyNonce, op)), ct);
+        }
         return new MfaLoginChallengeDto
         {
             AccountId = user.Id,
@@ -89,9 +116,12 @@ public sealed class AccountSessionService
         var session = await documents.ReadAsync<AccountSession>(Containers.Accounts, key, "session:" + sessionId, ct);
         return session is not null && !session.Value.Revoked && session.Value.ExpiresAt > clock.GetUtcNow()
             && session.Value.SecurityStamp == stamp && session.Value.AccountId == accountId
-            && session.Value.AuthenticationMethod is "pwd" or "mfa" or "recovery"
+            && Methods.Contains(session.Value.AuthenticationMethod)
             && (authenticationMethod is null || session.Value.AuthenticationMethod == authenticationMethod);
     }
+
+    private static Document<CommandResult> CeremonyRow(string key, string nonce, Operation op) => Row("ceremony:" + nonce, key, "ceremonyNonce",
+        new CommandResult { Id = op.Id, Status = "Consumed" });
 
     public Task<IReadOnlyList<AccountSession>> ListAsync(string accountId, CancellationToken ct) => documents.QueryAsync<AccountSession>(Containers.Accounts, CosmosIdentityStore.AccountKey(accountId), StorageQuery.Type("session"), ct, 500);
     public async Task RevokeAsync(string accountId, string sessionId, CancellationToken ct)

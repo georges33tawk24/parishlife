@@ -29,14 +29,14 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
         return Ok(new { token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken, header = "X-CSRF-TOKEN" });
     }
 
-    [AllowAnonymous, HttpPost("register")]
+    [AllowAnonymous, HttpPost("register"), TurnstileProtected]
     public async Task<IActionResult> Register(RegisterAccountDto request, CancellationToken ct)
     {
         await accounts.RegisterAsync(request, ct);
         return Accepted(new { status = "RegistrationReceived", message = "If eligible, the account can proceed after the required identity or contact verification. Existing accounts retain their credentials." });
     }
 
-    [AllowAnonymous, HttpPost("login")]
+    [AllowAnonymous, HttpPost("login"), TurnstileProtected]
     public async Task<IActionResult> Login(LoginDto request, CancellationToken ct)
     {
         var identifier = Guard.Text(request.Username ?? request.Email, "Login identifier", 254);
