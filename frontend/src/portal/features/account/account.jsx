@@ -1,44 +1,66 @@
-/* My account: the profile, the parishes someone follows, their own colours, how they sign in, and
-   (for parish staff) their signature. */
+/* My account: the profile and appearance, how the account signs in (password, email, two-factor, passkeys,
+   sessions), the parishes someone follows, and the parts other modules own (their signature, record
+   corrections and guest requests, which stay hidden until their routes are connected).
+   Routes: GET and PUT auth/profile, POST auth/profile/appearance/preview and /reset, GET auth/me,
+   GET auth/mfa/status, GET auth/capabilities; the parishes use GET me/parishes, POST and DELETE
+   parishes/{id}/follow, PUT parishes/{id}/primary and the public directory.
+   The API's profile is a display name, a language and the colours; the old form's first and last name, town,
+   address, occupation and "about me" have no API field, so they are not shown. */
 import { useEffect, useRef, useState } from 'react';
-import { changeAccountPassword } from './account-security.jsx';
+import { changeAccountPassword, changeAccountEmail } from './account-security.jsx';
+import { Mfa } from './account-mfa.jsx';
+import { Passkeys } from './account-passkeys.jsx';
+import { Sessions } from './account-sessions.jsx';
 import { GuestLinks } from './guest-links.jsx';
 import { RecordCorrections } from '../records/profile-reviews.jsx';
 import { api, session, loadSession } from '../../model/api.js';
-import { t, isAr } from '../../../lib/i18n.js';
-import { passkeysSupported, addPasskey, listPasskeys, removePasskey, passkeyMessage } from '../../model/passkeys.js';
+import {
+  loadCapabilities,
+  featuresOf,
+  loadProfile,
+  saveProfile,
+  previewAppearance,
+  resetAppearance,
+  mfaStatus,
+  themeOf,
+  appearanceOf
+} from '../../model/account.js';
+import { toParish } from '../../../public/api-data.js';
+import { t } from '../../../lib/i18n.js';
+import { passkeysSupported, passkeyMessage } from '../../model/passkeys.js';
 import { sign } from '../../model/signing.js';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { SCHEMES, schemeOf, applyTheme } from '../../../lib/theme.js';
 
-async function save(form, body) {
-  const button = form.querySelector('button');
-  button.disabled = true;
-  try {
-    await api('account', 'PUT', body);
-    toast(t('Saved', 'حُفظ'), '', 'success');
-    return true;
-  } catch (e) {
-    toast(t('Could not save', 'تعذّر الحفظ'), e.message, 'danger');
-    return false;
-  } finally {
-    button.disabled = false;
-  }
-}
+const RELATIONSHIP = () => ({ Following: t('Following', 'متابَعة'), Member: t('Member', 'عضو') });
 
-const MEMBERSHIP = () => ({
-  none: t('Not requested', 'لم تُطلب'),
-  pending: t('Office review pending', 'بانتظار مراجعة المكتب'),
-  approved: t('Approved', 'مقبولة')
-});
+/* The profile as stored changes what the rest of the portal shows: the name, the colours. */
+function applyProfile(profile) {
+  if (session.accountUser) session.accountUser.name = profile.displayName;
+  if (session.user) session.user.name = profile.displayName;
+  session.preferences = { theme: themeOf(profile.appearance), language: profile.preferredLanguage };
+  applyTheme(session.preferences.theme);
+}
+const settled = (result, saved) =>
+  result.current
+    ? toast(saved, '', 'success')
+    : toast(
+        saved,
+        t(
+          'Something else changed your account meanwhile, so what you see now is what is stored.',
+          'غيّر شيء آخر حسابك في الأثناء، فما تراه الآن هو المحفوظ.'
+        ),
+        'info'
+      );
 
 export function AccountPage() {
   const [loaded, setLoaded] = useState(null),
     [error, setError] = useState(''),
-    [round, setRound] = useState(0),
-    [busy, setBusy] = useState('');
+    [busy, setBusy] = useState(''),
+    [preview, setPreview] = useState(null),
+    [mine, setMine] = useState([]);
   const [query, setQuery] = useState(''),
     [signature, setSignature] = useState(0);
   const [welcome] = useState(() => {
@@ -52,18 +74,39 @@ export function AccountPage() {
   });
   const search = useRef(null);
   useEffect(() => {
-    Promise.all([api('account'), api('public/parishes')]).then(
-      ([data, directory]) => {
-        setLoaded({ data, directory });
-        setBusy('');
+    Promise.all([
+      loadProfile(),
+      api('auth/me'),
+      mfaStatus().catch(() => null), // a restricted sign-in may not read it
+      loadCapabilities(),
+      api('me/parishes').catch(() => []),
+      api('public/parishes').catch(() => null)
+    ]).then(
+      ([profile, account, mfa, capabilities, parishes, directory]) => {
+        const seen = new Set(),
+          list = [...(directory?.items || []), ...(directory?.distanceUnavailable || [])]
+            .map(toParish)
+            .filter(p => !seen.has(p.id) && seen.add(p.id));
+        setLoaded({
+          profile,
+          account,
+          mfa,
+          features: featuresOf(capabilities),
+          directory: list,
+          directoryFailed: !directory
+        });
+        setMine(parishes || []);
       },
       e => setError(e.message)
     );
-  }, [round]);
+  }, []);
   const head = (
     <PageHead
       title={t('My account', 'حسابي')}
-      sub={t('Your profile, parishes and personal appearance.', 'ملفك ورعاياك ومظهر حسابك.')}
+      sub={t(
+        'Your profile, how you sign in, parishes and personal appearance.',
+        'ملفك وطريقة دخولك ورعاياك ومظهر حسابك.'
+      )}
     />
   );
   if (error || !loaded)
@@ -75,25 +118,81 @@ export function AccountPage() {
         </div>
       </>
     );
-  const { data, directory } = loaded,
-    profile = data.profile || {},
-    theme = { scheme: 'forest', mode: 'light', ...data.theme };
-  const input = (key, en, ar) => (
-    <label className="formrow">
-      <span className="label">{t(en, ar)}</span>
-      <input className="input" name={key} defaultValue={profile[key] || ''} maxLength="500" />
-    </label>
-  );
+  const { profile, account, mfa, features, directory } = loaded,
+    theme = themeOf(profile.appearance);
+  const store = (next, message) => {
+    applyProfile(next);
+    setLoaded(l => ({ ...l, profile: next }));
+    setPreview(null);
+    return message;
+  };
+  const appearanceFrom = form => {
+    const data = Object.fromEntries(new FormData(form));
+    return appearanceOf({ scheme: data.scheme, mode: data.mode, primary: data.primary });
+  };
+  const run = async (form, work) => {
+    const buttons = [...form.querySelectorAll('button')];
+    buttons.forEach(b => (b.disabled = true));
+    try {
+      await work();
+    } catch (e) {
+      toast(t('Could not save', 'تعذّر الحفظ'), e.message, 'danger');
+    } finally {
+      buttons.forEach(b => (b.disabled = false));
+    }
+  };
+  const saveName = e => {
+    e.preventDefault();
+    const form = e.currentTarget,
+      data = new FormData(form);
+    return run(form, async () => {
+      const result = await saveProfile(profile, {
+        displayName: String(data.get('displayName') || '').trim(),
+        preferredLanguage: String(data.get('preferredLanguage') || ''),
+        appearance: profile.appearance
+      });
+      store(result.profile);
+      settled(result, t('Saved', 'حُفظ'));
+    });
+  };
+  const saveLook = e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    return run(form, async () => {
+      const result = await saveProfile(profile, {
+        displayName: profile.displayName,
+        preferredLanguage: profile.preferredLanguage,
+        appearance: appearanceFrom(form)
+      });
+      store(result.profile);
+      settled(result, t('Saved', 'حُفظ'));
+    });
+  };
+  const showPreview = form =>
+    run(form, async () => {
+      const result = await previewAppearance(appearanceFrom(form));
+      applyTheme(themeOf(result.appearance));
+      setPreview(result);
+    });
+  const resetLook = form =>
+    run(form, async () => {
+      const result = await resetAppearance(profile);
+      store(result.profile);
+      settled(result, t('Appearance reset', 'أُعيد المظهر إلى الأصل'));
+    });
   const affiliate = async (parish, action) => {
     setBusy(parish + action);
     try {
-      await api('account/parishes', 'POST', { parish, action });
+      setMine(
+        (await (action === 'primary'
+          ? api(`parishes/${encodeURIComponent(parish)}/primary`, 'PUT')
+          : api(`parishes/${encodeURIComponent(parish)}/follow`, action === 'unfollow' ? 'DELETE' : 'POST'))) || []
+      );
       await loadSession();
-      setRound(n => n + 1);
     } catch (e) {
-      setBusy('');
       toast(t('Could not save', 'تعذّر الحفظ'), e.message, 'danger');
     }
+    setBusy('');
   };
   const q = query.toLowerCase().trim();
   return (
@@ -105,8 +204,8 @@ export function AccountPage() {
             <h2>{t('Welcome to ParishLife', 'أهلاً بك في ParishLife')}</h2>
             <p>
               {t(
-                'Now choose your parish under My parishes: follow it for its news and events, make it your primary parish, and ask to become a member when you are ready.',
-                'اختر الآن رعيتك في «رعاياي»: تابعها لتصلك أخبارها ومناسباتها، واجعلها رعيتك الأساسية، واطلب العضوية عندما تكون مستعداً.'
+                'Now choose your parish under My parishes: follow it for its news and events and make it your primary parish.',
+                'اختر الآن رعيتك في «رعاياي»: تابعها لتصلك أخبارها ومناسباتها واجعلها رعيتك الأساسية.'
               )}
             </p>
             <button
@@ -123,32 +222,35 @@ export function AccountPage() {
           </div>
         ) : null}
         <div className="account-grid">
-          <Panel title={t('Complete Profile', 'أكمل ملفك')}>
+          <Panel title={t('My profile', 'ملفي')}>
             <p className="help">
               {t(
-                'Save your account details here. To correct an official record, use My parish records below and submit it for office review. You can return later.',
-                'احفظ معلومات حسابك هنا. لتصحيح سجل رسمي، استخدم سجلاتي الرعوية أدناه وأرسله لمراجعة المكتب. يمكنك العودة لاحقاً.'
+                'The name ParishLife shows for your account, and the language you prefer. To correct an official parish record, use My parish records below and submit it for office review.',
+                'الاسم الذي يعرضه ParishLife لحسابك واللغة التي تفضّلها. لتصحيح سجل رعوي رسمي، استخدم سجلاتي الرعوية أدناه وأرسله لمراجعة المكتب.'
               )}
             </p>
-            <form
-              data-profile=""
-              onSubmit={async e => {
-                e.preventDefault();
-                await save(e.currentTarget, { profile: Object.fromEntries(new FormData(e.currentTarget)) });
-              }}
-            >
+            <form data-profile="" key={profile.version + 'p'} onSubmit={saveName}>
               <div className="formgrid">
-                {input('firstName', 'First name', 'الاسم')}
-                {input('lastName', 'Last name', 'الشهرة')}
-                {input('town', 'Town', 'البلدة')}
-                {input('address', 'Address', 'العنوان')}
-                {input('occupation', 'Occupation', 'المهنة')}
-                {input('language', 'Preferred language', 'اللغة المفضلة')}
+                <label className="formrow">
+                  <span className="label">{t('Display name', 'الاسم المعروض')}</span>
+                  <input
+                    className="input"
+                    name="displayName"
+                    required
+                    maxLength="200"
+                    defaultValue={profile.displayName}
+                  />
+                </label>
+                <label className="formrow">
+                  <span className="label">{t('Preferred language', 'اللغة المفضلة')}</span>
+                  <Select name="preferredLanguage" defaultValue={profile.preferredLanguage}>
+                    <option value="">{t('Not set', 'غير محدّدة')}</option>
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                    <option value="fr">Français</option>
+                  </Select>
+                </label>
               </div>
-              <label className="formrow">
-                <span className="label">{t('About me', 'نبذة عني')}</span>
-                <textarea className="textarea" name="about" maxLength="500" defaultValue={profile.about || ''} />
-              </label>
               <button className="btn btn-primary">{t('Save profile', 'حفظ الملف')}</button>
             </form>
           </Panel>
@@ -159,18 +261,7 @@ export function AccountPage() {
                 'تُطبّق هذه الألوان على حسابك فقط. للمواقع العامة مظهر موحّد.'
               )}
             </p>
-            <form
-              data-theme=""
-              onSubmit={async e => {
-                e.preventDefault();
-                const form = e.currentTarget,
-                  next = Object.fromEntries(new FormData(form));
-                if (await save(form, { theme: next })) {
-                  session.preferences = { theme: next };
-                  applyTheme(next);
-                }
-              }}
-            >
+            <form data-theme="" key={profile.version + 'a'} onSubmit={saveLook}>
               <div className="palette-options">
                 {SCHEMES.map(s => (
                   <label key={s.id}>
@@ -197,33 +288,78 @@ export function AccountPage() {
                   <option value="dark">{t('Dark', 'داكن')}</option>
                 </Select>
               </label>
-              <button className="btn btn-primary">{t('Save appearance', 'حفظ المظهر')}</button>
+              {preview ? (
+                <p className="help" role="status" data-preview="">
+                  {t(
+                    `Preview, not saved yet. Text on the main color: ${preview.primaryTextContrast.toFixed(1)}:1, links: ${preview.linkContrast.toFixed(1)}:1.`,
+                    `معاينة غير محفوظة بعد. تباين النص على اللون الأساسي ${preview.primaryTextContrast.toFixed(1)}:1 والروابط ${preview.linkContrast.toFixed(1)}:1.`
+                  )}
+                </p>
+              ) : null}
+              <div className="account-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  data-preview-appearance=""
+                  onClick={e => showPreview(e.currentTarget.form)}
+                >
+                  {t('Preview', 'معاينة')}
+                </button>
+                <button className="btn btn-primary">{t('Save appearance', 'حفظ المظهر')}</button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  data-reset-appearance=""
+                  onClick={e => resetLook(e.currentTarget.form)}
+                >
+                  {t('Reset to default', 'إعادة إلى الأصل')}
+                </button>
+              </div>
             </form>
           </Panel>
-          <Panel title={t('Sign-in and security', 'الدخول والأمان')}>
-            <button type="button" className="btn btn-secondary" data-change-password="" onClick={changeAccountPassword}>
+        </div>
+        <Panel title={t('Sign-in and security', 'الدخول والأمان')}>
+          <p>
+            {t('Username', 'اسم المستخدم')}: <b>{account.username || '—'}</b>
+          </p>
+          <p>
+            {t('Email', 'البريد الإلكتروني')}: <b dir="ltr">{account.email || '—'}</b>{' '}
+            <span className="help">
+              {account.emailConfirmed ? t('Verified', 'مُتحقّق') : t('Not confirmed by a code', 'غير مؤكّد برمز')}
+            </span>
+          </p>
+          <div className="account-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              data-change-password=""
+              onClick={() => changeAccountPassword(mfa)}
+            >
               {t('Change password', 'تغيير كلمة المرور')}
             </button>
-            <p>
-              {t('Username', 'اسم المستخدم')}: <b>{session.user.username}</b>
+            {features.verification ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-change-email=""
+                onClick={() => changeAccountEmail(mfa)}
+              >
+                {t('Change email', 'تغيير البريد الإلكتروني')}
+              </button>
+            ) : null}
+          </div>
+          {features.verification ? null : (
+            <p className="help">
+              {t(
+                'Changing the sign-in email needs a code sent by email, and this deployment has no email delivery set up yet.',
+                'يحتاج تغيير بريد الدخول إلى رمز يُرسل بالبريد، ولم يُجهَّز إرسال البريد في هذه النسخة بعد.'
+              )}
             </p>
-            <div>
-              {data.identities.map((i, n) => (
-                <p key={n}>
-                  {i.kind} · {i.value}{' '}
-                  <span className="help">
-                    {i.verified_at
-                      ? t('Verified', 'مُتحقّق')
-                      : t('Verification pending setup', 'التحقّق بانتظار الإعداد')}
-                  </span>
-                </p>
-              ))}
-            </div>
-            <div className="account-passkeys" data-passkeys="">
-              <Passkeys changed={() => setSignature(n => n + 1)} />
-            </div>
-          </Panel>
-        </div>
+          )}
+          <Mfa mfa={mfa} />
+          {features.passkeys ? <Passkeys mfa={mfa} key={signature} /> : null}
+          <Sessions />
+        </Panel>
         <div data-signature="">
           <MySignature key={signature} />
         </div>
@@ -236,8 +372,8 @@ export function AccountPage() {
         <Panel title={t('My parishes', 'رعاياي')}>
           <p className="help">
             {t(
-              'Follow parishes for updates, choose your primary parish, and separately request parish membership for office review.',
-              'تابع الرعايا واختر رعيتك الأساسية وقدّم طلب عضوية مستقلاً ليراجعه المكتب.'
+              'Follow parishes for updates and choose your primary parish. Asking to become a member is not connected to the new backend yet.',
+              'تابع الرعايا واختر رعيتك الأساسية. طلب العضوية غير مربوط بالخادم الجديد بعد.'
             )}
           </p>
           <input
@@ -250,10 +386,13 @@ export function AccountPage() {
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
+          {loaded.directoryFailed ? (
+            <p className="help-error">{t('The parish directory could not be loaded.', 'تعذّر تحميل دليل الرعايا.')}</p>
+          ) : null}
           <Paged className="account-parishes" data-paginate="">
-            {directory.parishes.map(p => {
-              const a = data.affiliations.find(x => x.parish_id === p.id),
-                name = (p.name + ' ' + p.ar + ' ' + p.town).toLowerCase();
+            {directory.map(p => {
+              const a = mine.find(x => x.parishId === p.id),
+                name = (p.name + ' ' + p.town).toLowerCase();
               return (
                 <article key={p.id} data-name={name} hidden={!name.includes(q)}>
                   <div>
@@ -262,39 +401,30 @@ export function AccountPage() {
                     </h3>
                     <p>
                       {p.town}
-                      {a?.is_primary ? ' · ' + t('Primary parish', 'الرعية الأساسية') : ''}
+                      {a?.primary ? ' · ' + t('Primary parish', 'الرعية الأساسية') : ''}
                     </p>
                     <small>
-                      {t('Membership', 'العضوية')}: {MEMBERSHIP()[a?.membership || 'none'] || a.membership}
+                      {a ? RELATIONSHIP()[a.relationship] || a.relationship : t('Not following', 'غير متابَعة')}
                     </small>
                   </div>
                   <div className="account-actions">
                     <button
                       className="btn btn-secondary"
                       data-parish={p.id}
-                      data-affiliation={a?.following ? 'unfollow' : 'follow'}
-                      disabled={!!a?.is_primary || busy === p.id + (a?.following ? 'unfollow' : 'follow')}
-                      onClick={() => affiliate(p.id, a?.following ? 'unfollow' : 'follow')}
+                      data-affiliation={a ? 'unfollow' : 'follow'}
+                      disabled={a?.relationship === 'Member' || busy === p.id + (a ? 'unfollow' : 'follow')}
+                      onClick={() => affiliate(p.id, a ? 'unfollow' : 'follow')}
                     >
-                      {a?.following ? t('Unfollow', 'إلغاء المتابعة') : t('Follow', 'متابعة')}
+                      {a ? t('Unfollow', 'إلغاء المتابعة') : t('Follow', 'متابعة')}
                     </button>
                     <button
                       className="btn btn-secondary"
                       data-parish={p.id}
                       data-affiliation="primary"
-                      disabled={!!a?.is_primary || busy === p.id + 'primary'}
+                      disabled={!a || !!a.primary || busy === p.id + 'primary'}
                       onClick={() => affiliate(p.id, 'primary')}
                     >
                       {t('Make primary', 'اختيار كأساسية')}
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      data-parish={p.id}
-                      data-affiliation="request"
-                      disabled={['pending', 'approved'].includes(a?.membership) || busy === p.id + 'request'}
-                      onClick={() => affiliate(p.id, 'request')}
-                    >
-                      {t('Request membership', 'طلب العضوية')}
                     </button>
                   </div>
                 </article>
@@ -475,129 +605,5 @@ function SignatureForm({ me, done }) {
         {t('Save my signature', 'حفظ توقيعي')}
       </button>
     </form>
-  );
-}
-
-/* Passkeys on this account: added from the device being used, each removable. */
-const deviceName = () => {
-  const ua = navigator.userAgent;
-  return /iPhone/.test(ua)
-    ? 'iPhone'
-    : /iPad/.test(ua)
-      ? 'iPad'
-      : /Android/.test(ua)
-        ? 'Android'
-        : /Mac/.test(ua)
-          ? 'Mac'
-          : /Windows/.test(ua)
-            ? 'Windows'
-            : t('This device', 'هذا الجهاز');
-};
-
-const day = value => {
-  const d = new Date(value);
-  return Number.isNaN(+d) ? '' : new Intl.DateTimeFormat(isAr() ? 'ar-LB' : 'en-GB', { dateStyle: 'medium' }).format(d);
-};
-
-function Passkeys({ changed }) {
-  const [list, setList] = useState(null),
-    [error, setError] = useState(''),
-    [round, setRound] = useState(0),
-    [busy, setBusy] = useState('');
-  const supported = passkeysSupported();
-  useEffect(() => {
-    if (supported)
-      listPasskeys().then(
-        r => {
-          setList(r.passkeys);
-          setBusy('');
-        },
-        e => setError(e.message)
-      );
-  }, [round]);
-  const intro = (
-    <>
-      <h4>{t('Passkeys', 'مفاتيح المرور')}</h4>
-      <p className="help">
-        {t(
-          'Sign in with this device’s face, fingerprint or PIN instead of your password. Each device keeps its own passkey.',
-          'ادخل بوجهك أو ببصمتك أو برمز جهازك بدلاً من كلمة المرور. لكل جهاز مفتاح مروره.'
-        )}
-      </p>
-    </>
-  );
-  if (!supported)
-    return (
-      <>
-        {intro}
-        <p className="help">{t('This browser cannot use passkeys.', 'لا يدعم هذا المتصفح مفاتيح المرور.')}</p>
-      </>
-    );
-  if (error)
-    return (
-      <>
-        {intro}
-        <p className="help-error">{error}</p>
-      </>
-    );
-  if (!list) return intro;
-  const add = async () => {
-    setBusy('add');
-    try {
-      await addPasskey(deviceName());
-      toast(
-        t('Passkey added', 'أُضيف مفتاح المرور'),
-        t('Next time, choose “Sign in with a passkey”.', 'في المرة المقبلة، اختر «الدخول بمفتاح مرور».'),
-        'success'
-      );
-      setRound(n => n + 1);
-      changed();
-    } catch (e) {
-      toast(t('Could not add the passkey', 'تعذّرت إضافة مفتاح المرور'), passkeyMessage(e, t), 'danger');
-      setBusy('');
-    }
-  };
-  const remove = async id => {
-    setBusy(id);
-    try {
-      await removePasskey(id);
-      setRound(n => n + 1);
-      changed();
-    } catch (e) {
-      toast(t('Could not remove the passkey', 'تعذّرت إزالة مفتاح المرور'), e.message, 'danger');
-      setBusy('');
-    }
-  };
-  return (
-    <>
-      {intro}
-      {list.length ? (
-        <ul className="passkey-list">
-          {list.map(k => (
-            <li key={k.id}>
-              <span>
-                <b>{k.name}</b>
-                <small>
-                  {t('Added', 'أُضيف')} {day(k.created_at)}
-                  {k.last_used_at ? ` · ${t('last used', 'آخر استخدام')} ${day(k.last_used_at)}` : ''}
-                </small>
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                data-remove-passkey={k.id}
-                disabled={busy === k.id}
-                onClick={() => remove(k.id)}
-              >
-                {t('Remove', 'إزالة')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <button type="button" className="btn btn-secondary" data-add-passkey="" disabled={busy === 'add'} onClick={add}>
-        {t('Add a passkey on this device', 'أضف مفتاح مرور على هذا الجهاز')}
-      </button>
-    </>
   );
 }
