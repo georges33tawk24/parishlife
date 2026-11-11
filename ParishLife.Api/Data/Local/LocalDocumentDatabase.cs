@@ -1,5 +1,5 @@
 // Purpose: Provides explicit Development-only document files with partition locks, conditional writes, and atomic
-// file replacement.
+// file replacement. Queries are refused when they filter on a path the Cosmos index contract leaves unindexed.
 // Main functions: DirectoryFor, PathFor, LockAsync, LoadAsync, ReadAsync, QueryAsync, CommitAsync, ContainersAsync.
 
 using System.Security.Cryptography;
@@ -63,6 +63,7 @@ internal sealed class LocalDocumentDatabase(string root) : IDocumentDatabase
     {
         if (size is < 1 or > 1000)
             throw new InvalidOperationException("Queries must be bounded.");
+        Configuration.CosmosIndexContract.RequireIndexed(container, query.Filter.Paths());
         var rows = new List<(string Sort, StoredRow Row)>();
         var files = key is null ? Directory.GetFiles(DirectoryFor(container), "*.json") : [PathFor(container, key)];
         foreach (var path in files)

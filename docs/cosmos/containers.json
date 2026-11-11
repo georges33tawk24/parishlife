@@ -161,6 +161,15 @@
           },
           {
             "path": "/data/conversationId/?"
+          },
+          {
+            "path": "/data/definitionId/?"
+          },
+          {
+            "path": "/data/runId/?"
+          },
+          {
+            "path": "/data/reporterAccountId/?"
           }
         ],
         "excludedPaths": [
@@ -241,5 +250,5 @@
     "Calendar/reservation revision 2026-11-08: required TenantControl date/event/status/publication index paths are prepared for explicit operator review. This source change does not update Azure; metadata readiness rejects incompatible policies and does not prove completed index transformation or live query behavior.",
     "Ministries revision 2026-11-09: ministry, application, ownership and public-listing filters use the existing TenantControl container. Private departure/application text is protected at application level; no new RestrictedCases container or live policy update is required by this implementation. Apply additive index changes only after reviewing the actual deployed policy."
   ],
-  "queryContractUpdated": "2026-11-09"
+  "queryContractUpdated": "2026-11-11: TenantControl adds /data/definitionId/?, /data/runId/? (custom workflows) and /data/reporterAccountId/? (message reports); the local provider now refuses filters on paths outside this contract."
 }

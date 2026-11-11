@@ -1,5 +1,6 @@
 // Purpose: checks that deployment index validation rejects missing/overridden query paths while accepting compatible existing policies.
-// Main tests: default and explicit policy compatibility, missing calendar ranges, precise exclusions and disabled indexing fail safely.
+// Main tests: default and explicit policy compatibility, missing calendar ranges, precise exclusions and disabled indexing fail safely;
+// local queries on paths outside the reviewed contract are refused as live Cosmos would.
 
 using Microsoft.Azure.Cosmos;
 using ParishLife.Api.Configuration;
@@ -35,6 +36,13 @@ public class CosmosIndexContractTests
         container.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = "/*" });
         container.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = "/data/endsAt/?" });
         Assert.Throws<DomainException>(() => CosmosIndexContract.ValidateTenant(container));
+    }
+    [Fact]
+    public void Local_queries_are_limited_to_contract_index_paths()
+    {
+        CosmosIndexContract.RequireIndexed(Containers.TenantControl, ["type", "data.runId", "data.requestId"]);
+        Assert.Throws<InvalidOperationException>(() => CosmosIndexContract.RequireIndexed(Containers.TenantControl, ["data.notes"]));
+        Assert.Throws<InvalidOperationException>(() => CosmosIndexContract.RequireIndexed(Containers.Catalog, ["data.status"]));
     }
     [Fact]
     public void Disabled_or_nonautomatic_indexing_is_never_reported_compatible()

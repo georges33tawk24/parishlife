@@ -1,5 +1,6 @@
 // Purpose: verifies existing tenant and account index policies against implemented bounded queries without indexing protected content.
-// Main functions: ValidateTenant, ValidateAccounts and Covers honor include/exclude precedence; no method changes Azure policy or data.
+// Main functions: ValidateTenant, ValidateAccounts and Covers honor include/exclude precedence; RequireIndexed lets the local provider refuse
+// filters on paths the reviewed contract leaves unindexed, as live Cosmos does. No method changes Azure policy or data.
 
 using Microsoft.Azure.Cosmos;
 using ParishLife.Api.Models;
@@ -11,9 +12,29 @@ internal static class CosmosIndexContract
 {
     internal static readonly string[] RequiredTenantPaths = ["/partitionKey/?", "/type/?", "/data/accountId/?", "/data/startsAt/?", "/data/endsAt/?",
         "/data/eventId/?", "/data/status/?", "/data/published/?", "/data/visibility/?",
-        "/data/ministryId/?", "/data/kind/?", "/data/applicantAccountId/?", "/data/applicationId/?", "/data/publicListed/?", "/data/meetingId/?", "/data/joinedAt/?", "/data/personId/?", "/data/participantKind/?", "/data/registrationId/?", "/data/opportunityId/?", "/data/householdId/?", "/data/equipmentId/?", "/data/requestId/?", "/data/conversationId/?"];
+        "/data/ministryId/?", "/data/kind/?", "/data/applicantAccountId/?", "/data/applicationId/?", "/data/publicListed/?", "/data/meetingId/?", "/data/joinedAt/?", "/data/personId/?", "/data/participantKind/?", "/data/registrationId/?", "/data/opportunityId/?", "/data/householdId/?", "/data/equipmentId/?", "/data/requestId/?", "/data/conversationId/?",
+        "/data/revoked/?", "/data/delegatingOrganizationId/?", "/data/associationId/?",
+        "/data/definitionId/?", "/data/runId/?", "/data/reporterAccountId/?"];
 
     internal static readonly string[] RequiredAccountPaths = ["/partitionKey/?", "/type/?", "/data/kind/?", "/data/status/?", "/data/itemId/?"];
+
+    internal static readonly string[] RequiredBillingPaths = ["/partitionKey/?", "/type/?", "/data/invoiceId/?", "/data/status/?", "/data/leaseUntil/?"];
+
+    // Every container's queryable paths under the reviewed explicit policy (all other paths are excluded by "/*").
+    private static string[] IndexedPaths(string container) => container switch
+    {
+        Containers.TenantControl => RequiredTenantPaths,
+        Containers.Accounts => RequiredAccountPaths,
+        Containers.Billing => RequiredBillingPaths,
+        _ => ["/partitionKey/?", "/type/?"]
+    };
+
+    internal static void RequireIndexed(string container, IEnumerable<string> filterPaths)
+    {
+        foreach (var path in filterPaths)
+            if (!IndexedPaths(container).Contains("/" + path.Replace('.', '/') + "/?", StringComparer.Ordinal))
+                throw new InvalidOperationException($"Query filters on '{path}' in {container}, which the Cosmos index contract does not include; live Cosmos would reject it.");
+    }
 
     internal static void ValidateTenant(ContainerProperties container)
         => Validate(container, RequiredTenantPaths, "calendar_index_contract_mismatch",
