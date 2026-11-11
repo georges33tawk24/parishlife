@@ -1,6 +1,6 @@
 # Current ParishLife continuation state
 
-Updated **10 November 2026**, owner timezone Asia/Beirut. Read this before acting on **continue**, then verify actual Git state. The owner currently wants implementation to continue here; a Claude switch is deferred.
+Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before acting on **continue**, then verify actual Git state. The owner currently wants implementation to continue here; a Claude switch is deferred.
 
 ## Repository and preserved work
 
@@ -11,7 +11,16 @@ Updated **10 November 2026**, owner timezone Asia/Beirut. Read this before actin
 - `origin` remains Colin's different repository (`https://github.com/ColinSleiman/ParishLife.git`). The latest owner instruction explicitly selects Georges's remote and backend branch; do not publish to `origin` by assumption.
 - Earlier continuation branch `dev/colin/claude-handover-20261110` and `dev/colin-following` WIP at `c81a30de2431933c2efe7dfad016f622325d24c5` remain preserved. The latter's eleven unwired following DTO/models must not overwrite the newer membership implementation.
 
-## Verified checkpoint (11/10 evening, Linux cloud session)
+## Verified checkpoint (11/11, Linux cloud session, ponytail working style)
+
+- `backend` pushed to Georges's repo (remote `origin` in the cloud checkout = `georges33tawk24/parishlife`) at **`29ae2c5`**, fast-forward only, no force.
+- Integrated (each recorded **partial**, requirements *proposed*, see runbooks): W01/W02 custom forms + workflow runs (`custom-workflows.md`); O08 bishop overview/map, X06 site metrics/Insights, W04 scheduled in-app report delivery (`bishop-overview.md`, `site-insights.md`, `scheduled-reports.md`); N04 source-scoped outcome reads for parish status/incidents/concerns, N02 exact-message review, N05 broadcasts/templates (`communications.md`, `required-notification-outbox.md`); X03-X05 exact document authorization, priest-signed request letters, public verification/revocation (`document-signatures.md`).
+- Checks at `29ae2c5` on SDK 10.0.401: Release build 0 warnings/errors; **420 tests passed (56 unit / 364 integration)**, 0 failed. Local storage only; no live Azure.
+- Register: **136 partial / 13 not started / 0 accepted** of 149.
+- In progress on agent worktree branches (not yet integrated): `cards-sub09-sub12`, `cards-x01-a06-x13-accounts`, `cards-x09-x11-x12-d01`, `cards-w07-snapshot`. If a session dies, those local branches are lost unless pushed; redo from the card list.
+- Owner decisions surfaced: priest appointments cannot hold `workflows.manage`; letter signer is the priest (no grantable `documents.sign`); no small-count suppression threshold for bishop aggregates; N02 window/reviewer audience and N05 2,000-recipient bound are implementation choices; jurisdiction filter is in-memory pending an index path that needs authorization; electronic-signature validity (U05) still unsupplied.
+
+## Earlier verified checkpoint (11/10 evening, Linux cloud session)
 
 - Commit `eb95cd5` (notification outcomes + X07 CRM) was independently built and tested on SDK 10.0.401 (exact `global.json` pin): initial run **363/365** — two failures, both fixed here: (1) `InboxService.ListAsync` hid office-staff conversations after they were opened (read-state row existed but staff are not participants, and the office branch skipped already-seen ids) — now only genuinely listed ids are skipped; (2) `Wrong_or_rematched_request_subjects...` test omitted the required `AuthorityEvidence` on `match-subject`, so it never reached the commit conflict it asserts (test-only fix).
 - Result after fixes: **365 tests passed (56 unit / 309 integration), 0 failed/skipped; Release build 0 warnings/errors.** Not a live Azure acceptance.
