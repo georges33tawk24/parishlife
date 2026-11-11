@@ -1,5 +1,6 @@
 // Purpose: queries only one account's staff invitations in TenantControl with account-bound protected continuation tokens.
-// Main function: ForAccountAsync validates page size/cursor and uses a parameterized account filter; BadCursor rejects altered contexts.
+// Main functions: ForAccountAsync validates page size/cursor and uses a parameterized account filter; BadCursor rejects altered contexts;
+// BishopAppointmentsForAccountAsync reads only the account's own bishop appointment records (bounded, parameterized account filter).
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -43,6 +44,11 @@ internal sealed class StaffAppointmentDirectory(PartitionDocuments documents, ID
                 new Cursor(accountId, size, page.ContinuationToken), JsonDefaults.Options))
         };
     }
+
+    // A technical bound: an account holding more bishop appointment records fails loudly instead of returning a partial list.
+    public Task<IReadOnlyList<BishopAppointment>> BishopAppointmentsForAccountAsync(string accountId, CancellationToken ct)
+        => documents.QueryAsync<BishopAppointment>(Containers.TenantControl, null,
+            StorageQuery.Type("bishopAppointment").Where(StorageFilter.Eq("data.accountId", accountId)), ct, 100);
 
     private static DomainException BadCursor() => new("invalid_cursor", "The continuation token does not belong to this account and page size.");
 }
