@@ -13,12 +13,29 @@ Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before actin
 
 ## Verified checkpoint (11/11, Linux cloud session, ponytail working style)
 
-- `backend` pushed to Georges's repo (remote `origin` in the cloud checkout = `georges33tawk24/parishlife`) at **`29ae2c5`**, fast-forward only, no force.
-- Integrated (each recorded **partial**, requirements *proposed*, see runbooks): W01/W02 custom forms + workflow runs (`custom-workflows.md`); O08 bishop overview/map, X06 site metrics/Insights, W04 scheduled in-app report delivery (`bishop-overview.md`, `site-insights.md`, `scheduled-reports.md`); N04 source-scoped outcome reads for parish status/incidents/concerns, N02 exact-message review, N05 broadcasts/templates (`communications.md`, `required-notification-outbox.md`); X03-X05 exact document authorization, priest-signed request letters, public verification/revocation (`document-signatures.md`).
-- Checks at `29ae2c5` on SDK 10.0.401: Release build 0 warnings/errors; **420 tests passed (56 unit / 364 integration)**, 0 failed. Local storage only; no live Azure.
-- Register: **136 partial / 13 not started / 0 accepted** of 149.
-- In progress on agent worktree branches (not yet integrated): `cards-sub09-sub12`, `cards-x01-a06-x13-accounts`, `cards-x09-x11-x12-d01`, `cards-w07-snapshot`. If a session dies, those local branches are lost unless pushed; redo from the card list.
-- Owner decisions surfaced: priest appointments cannot hold `workflows.manage`; letter signer is the priest (no grantable `documents.sign`); no small-count suppression threshold for bishop aggregates; N02 window/reviewer audience and N05 2,000-recipient bound are implementation choices; jurisdiction filter is in-memory pending an index path that needs authorization; electronic-signature validity (U05) still unsupplied.
+- `backend` pushed to Georges's repo (in the cloud checkout the remote is `origin` = `georges33tawk24/parishlife`), fast-forward only, no force. Work was done by parallel card agents on isolated worktrees and integrated/verified here one card group at a time.
+- **All 20 previously not-started backend cards now have a verified backend slice, each recorded `partial`** (requirements are *proposed* unless the runbook says otherwise):
+  - W01/W02 custom forms + workflow runs (`custom-workflows.md`).
+  - O08 bishop overview/map, X06 site metrics + Insights, W04 scheduled in-app report delivery (`bishop-overview.md`, `site-insights.md`, `scheduled-reports.md`).
+  - N04 source-scoped outcome reads (parish status/incidents/concerns), N02 exact-message review, N05 broadcasts/templates (`communications.md`, `required-notification-outbox.md`).
+  - X03-X05 exact document authorization, priest-signed request letters, public verification/revocation (`document-signatures.md`).
+  - SUB09 future payer transfer, SUB12 contested ownership recovery (`subscription-payer-transfer.md`, `parish-ownership-recovery.md`).
+  - X01 passkeys, A06 contact verification/email change/external sign-in, X13 optional Turnstile + capability endpoint (`account-sign-in-methods.md`).
+  - X09 public directory/nearby, X11 install manifest + offline cache policy, X12 authority-approved liturgical calendars, D01 combined home/capacities (`public-directory-and-offline.md`, `liturgical-calendars.md`, `combined-home.md`).
+  - W07 private operator snapshot export/verify/restore-into-empty-target (`data-snapshot-and-recovery.md`, maintenance tool only).
+- Final checks on SDK 10.0.401 after integrating W07: `dotnet restore --locked-mode` OK; Release build **0 warnings/errors**; **453 tests passed (56 unit / 397 integration), 0 failed**; API-only publish 63 top-level / 73 recursive files, no test/AppHost/maintenance components. Local storage only; no live Azure, no deployment, no bootstrap.
+- Register: **146 partial / 3 not started (U01, U02, U04 — frontend-only, deferred) / 0 accepted** of 149. Partial is not complete.
+
+### Owner/authority decisions surfaced (not decided here)
+
+- Workflows: priest appointments cannot hold `workflows.manage`; process ownership needs an explicit parish grant.
+- Signatures: electronic-signature validity (U05) unsupplied — digital copies state "reference only"; letters are priest-signed because `documents.sign` is not grantable; signing uses a TOTP code (reusable within its 30 s window; one-time challenge/passkey is the upgrade).
+- Reporting: no small-count suppression threshold supplied for bishop aggregates; jurisdiction filter is in-memory (bounded) pending an index path that needs separate authorization; site-metric retention (S32.01) unset.
+- Communications: N02 review window (5-1440 min) and platform-operator reviewer audience, and N05 2,000-recipient bound, are implementation choices.
+- Subscriptions: archdiocese representative = the registering account (today a platform operator) — a named representative is probably wanted; ownership claims decided by one operator, no second reviewer/appeal/church confirmation; no freeze while contested.
+- Accounts: passkey treated as a first factor, not MFA; S06.05 "sign in while unverified" not adopted; email provider, Google/Microsoft app registrations and Turnstile keys not configured (features report unavailable/NotConfigured).
+- Calendars: actual rite/authority/calendar source (U02) unsupplied; bishop-only preparation is a proposed reading.
+- Backup: U15 retention/schedule/RPO/RTO/custodian/storage location unset; snapshots contain personal data and must be stored privately.
 
 ## Earlier verified checkpoint (11/10 evening, Linux cloud session)
 
@@ -42,11 +59,12 @@ See [requests](../operations/requests.md#case-files-q11), [registrations](../ope
 
 ## Immediate next executable work
 
-**Current batch is in progress:** A10/A11/A12/A13/Q01/Q13/E02/E04/N01/N04 — source-authorized notification outcomes plus missing registration/document notices, with shared reader and privacy/failure regressions. Additional previously not-started X07 (manual parish CRM) and X08 (authored platform homepage content) are being implemented independently. Their code/tests are not yet fully verified; the 25 not-started / 124 partial count remains the last accepted register until evidence is recorded. Finish and verify this work before selecting another batch, then push to Georges's backend without force.
+No card is not-started on the backend side; the remaining work is acceptance depth inside the 146 partial cards. In priority order:
 
-1. **N04 component outcome visibility:** read proposed S31.10 and the current outbox runbook. Trace each source command's permitted response/read projection before exposing Pending/Stored component outcomes. Design source-scoped status access without a general private-case recipient/count feed; test unauthorized, unrelated and recovery actors. Pending is not proof that a notice is absent, and Stored is not proof of reading/external delivery.
-2. Scoped identity and narrow existing-pending legacy collision recovery are implemented/tested in `18fc9c6`; do not redo them or backfill missing historical events. Remaining invalid same-parish/receipt/version conflicts need authoritative operator evidence. Preserve rollout coordination and no automatic retention/deletion policy.
-3. Continue remaining backend criteria in the canonical [coverage register](../features/coverage.json), following actual workflow/permission/field/acceptance references in [SOURCES](SOURCES.md). Preserve all 25 not-started cards, frontend deferral and unresolved policy/factual inputs. Do not count partial cards as finished.
+1. Get owner/authority answers for the decisions listed above; they unblock several cards' remaining criteria.
+2. Work through `remaining` in `docs/features/coverage.json`, in dependency order: notification transitions for workflows/letters/broadcasts, workflow return-for-information/parallel approvals/deadlines, combined notification center/reminders/quiet hours (N04), account-side index for legacy grants/ministry leadership (D01), streaming snapshot export (W07).
+3. With explicit authorization only: live Cosmos/Blob/Key Vault/managed-identity acceptance, index path additions (e.g. `/data/jurisdictionArchdioceseId`), provider configuration (email, OAuth, Turnstile), deployment.
+4. Frontend integration (U01/U02/U04 and the frontend parts of partial cards) remains deferred.
 
 Keep `AGENTS.md` and the [master brief](MASTER-PROMPT.md) conventions: single production API, MiniDevOps class/file layout, top-of-code summaries, existing Azure only, no business seeds, explicit two-account operator bootstrap, isolated meaningful tests and no frontend integration. Live Azure acceptance requires authorized access; CLI authentication is currently missing, not evidence that infrastructure is absent.
 
