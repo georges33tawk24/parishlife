@@ -152,6 +152,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WebsiteService>();
         services.AddScoped<ParishCrmService>();
         services.AddScoped<HomepageService>();
+        services.AddScoped<PublicDirectoryService>();
+        services.AddScoped<PublicAppService>();
+        services.AddScoped<LiturgicalCalendarService>();
+        services.AddScoped<CombinedHomeService>();
         services.AddScoped<WorkflowAccess>();
         services.AddScoped<WorkflowDefinitionService>();
         services.AddScoped<WorkflowRunService>();

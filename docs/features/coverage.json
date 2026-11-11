@@ -1109,9 +1109,9 @@
       "id": "D01",
       "workflow": "Combined Home, explicit role choice and all-parish browse",
       "module": "Accounts/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "GET /api/me/home: one account-level combined home (no selected appointment, no recovery session, active verified account) across followed and served parishes with separate Following/Member/MembershipPending/Primary flags, the account's own per-parish and total unread notices, pending staff invitations, and currently valid capacities listed separately with duties after explicit denials (effective staff appointments with verified jurisdiction and open parish, current bishop seat, current ministry leadership, legacy parish grants, platform operator); home state NoParish/Personal/AwaitingAssignment/SingleCapacity (direct entry)/ChooseCapacity; GET /api/me/capacities recomputes on every call so lapsed capacities vanish without re-login; the choice stays per request (X-ParishLife-Appointment), never unioned. All-parish browse is the anonymous X09 directory. Local tests only.",
+      "remaining": "S02.05/S03.01-06 refinements are proposed. Grants and ministry leadership are discovered only in followed/served parishes (no account-side index). Not delivered: remembered per-account/role/parish views and filters, draft-preserving switch prompts, personal task/inbox counts, three-language terminology dictionary, navigation shell and frontend. Live Cosmos cross-partition query acceptance not performed.",
       "questionnaire_references": "S02.05 S03.01–06"
     },
     {
@@ -1199,9 +1199,9 @@
       "id": "X09",
       "workflow": "Interactive public map, distance, visiting/follow links",
       "module": "Publishing/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Anonymous all-parish directory (GET /api/public/parishes): verified parishes only, public name/locality/verified-diocese name, coordinates only from the parish manager's recorded O08 ParishLocation (no geocoding), text search; POST /nearby keeps the visitor point in the body (never stored/logged in URLs) and returns haversine approximate distance order, a genuine radius limit with an outside-radius count, and parishes without recorded location kept apart; card links to existing website/calendar/ministries/liturgical-calendar/guest-request reads and the existing follow action. Cacheable with ETag. Local tests only.",
+      "remaining": "S04 answers are proposed, not owner-approved. Not delivered: map tiles/provider and directions links (no provider configured), localized names, office hours/open-now, accessibility facts, structured next-Mass search (needs structured schedules), verified photos, diocese/locality facets, frontend map and location prompt. One location point read per parish (bounded 2000); live Cosmos acceptance not performed.",
       "questionnaire_references": "S04.01–09"
     },
     {
@@ -1217,18 +1217,18 @@
       "id": "X11",
       "workflow": "Public offline reading and install metadata",
       "module": "Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Public web-app manifest (GET /api/public/app/manifest) only from validated PublicApp configuration (404 not configured, 503 misconfigured; no invented name/branding); [PublicCache] filter gives marked anonymous reads (directory, homepage, website, public liturgical calendar, manifest, policy) public max-age plus strong ETag and 304 revalidation while every other /api response and all errors stay no-store; GET /api/public/app/offline-policy lists exactly the marked reads (attribute discovery) and states the S31.05-07 baseline: stale public reference only, no personal data offline, no offline writes. Local tests only.",
+      "remaining": "S31 answers are proposed. Not delivered: frontend service worker/install prompt and connection-required messaging, cache review of other public reads (public calendar, ministries), localized manifest, operator-supplied PublicApp values and icons (none configured), any offline write queue (explicitly unapproved).",
       "questionnaire_references": "S31.05–07"
     },
     {
       "id": "X12",
       "workflow": "Liturgical season/feast display and public decoration",
       "module": "Scheduling/Frontend",
-      "status": "not_started",
-      "implemented_slice": "",
-      "remaining": "Not implemented in the replacement backend; inspect the recorded workflow/requirements before building this slice.",
+      "status": "partial",
+      "implemented_slice": "Authority-managed liturgical calendars: the current MFA bishop drafts versions with rite, year, source, version label, validity period, parish-exception permission and up to 1000 authority-supplied entries (en/fr/ar titles, rank/season labels, #RRGGBB display color), approves them (one current version per archdiocese/rite/year via a conditional seat), withdraws with reason, and corrects approved versions only through a reviewed new version that supersedes them; approved versions are immutable. Appointed priests with schedule.publish record/withdraw dated parish exceptions with reason only under a permitting approved calendar of their jurisdiction. Anonymous cacheable public read for a parish/date range with rite/source/version attribution, flagged exceptions without reasons, explicit language fallback and NotPublished status. No feasts or Easter-based seasons computed or seeded. Local tests only.",
+      "remaining": "S16.11/S01.07/S30.17 are proposed; the first archdiocese's competent authority, rite and calendar source remain inputs (U02). Bishop-only preparation is a proposed reading. Not delivered: delegated preparer/second reviewer, calendar file import, combined cross-jurisdiction view, linking events/service plans to the calendar applied at their date, display-color contrast validation (S30.17 prototype evidence U14), frontend decoration. Live Cosmos acceptance not performed.",
       "questionnaire_references": "S01.07 S16.11 S30.17"
     },
     {
