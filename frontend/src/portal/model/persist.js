@@ -70,10 +70,25 @@ function emptyParish(parish) {
   return d;
 }
 
+/* A module whose data cannot load (an error, a route not deployed yet) leaves its own pages empty with
+   the reason, instead of stopping the whole portal. An ended session (401) still stops it. */
+export const loadFailures = new Map(); // portal page → why its module did not load
+
 export async function hydrate() {
   const parish = session.parishes.find(p => p.id === session.parishId);
   const d = emptyParish(parish);
-  if (parish) for (const m of MODULES) await m.load(parish, d);
+  loadFailures.clear();
+  if (parish)
+    for (const m of MODULES) {
+      try {
+        await m.load(parish, d);
+      } catch (error) {
+        if (error.status === 401) throw error;
+        const fresh = emptyParish(parish);
+        for (const k of m.keys) d[k] = fresh[k];
+        for (const r of m.routes) loadFailures.set(r, error.message);
+      }
+    }
   applyData(d);
   baseline = snapshot();
   saveFailed = false;

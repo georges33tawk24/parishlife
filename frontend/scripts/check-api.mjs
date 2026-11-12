@@ -124,7 +124,7 @@ globalThis.fetch = async (url, options = {}) => {
 
 const { session, api, notConnected, loadSession, selectParish } = await import('../src/portal/model/api.js');
 const D = await import('../src/portal/model/data.js');
-const { hydrate, persist } = await import('../src/portal/model/persist.js');
+const { hydrate, persist, loadFailures } = await import('../src/portal/model/persist.js');
 
 // the session: a role per parish from the account's capacities, and the account's own role
 await loadSession();
@@ -143,6 +143,12 @@ selectParish('P');
 
 // loading: both pages, archived people apart, and no demo record left anywhere
 await hydrate();
+// a module whose routes this stand-in does not serve fails alone: its pages say why, People still loads
+assert.ok(!loadFailures.has('people'));
+assert.ok(
+  loadFailures.size === 0 || [...loadFailures.values()].every(m => m === notConnected),
+  'another module failing to load leaves its own pages with the reason'
+);
 assert.deepEqual(
   D.PEOPLE.map(p => [p.id, p.lat, p.phone, p.born]),
   [['a1', 'Georges Haddad', '03 421 887', '1968-03-14']]

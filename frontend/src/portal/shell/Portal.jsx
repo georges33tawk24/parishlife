@@ -10,7 +10,7 @@ import * as D from '../model/data.js';
 import { closeOverlays, toast, openModal, openDrawer, Avatar, openPopover, closeMenu, OverlayHost } from '../ui/ui.jsx';
 import { S, MOBILE_NAV, role, me, canSee, go, save, bus } from '../model/store.js';
 import { runAction } from './actions.jsx';
-import { hydrate, persist, saveFailed } from '../model/persist.js';
+import { hydrate, persist, saveFailed, loadFailures } from '../model/persist.js';
 import { api, loadSession, session, selectParish, signOut } from '../model/api.js';
 import { MODULES } from '../model/modules/index.js';
 import { M, loadMember } from '../model/member-data.js';
@@ -1143,6 +1143,12 @@ function View() {
         </div>
       ) : (
         <>
+          {loadFailures.has(S.route) ? (
+            <div className="alert alert-danger" role="alert">
+              {t('This page could not load from the backend: ', 'تعذّر تحميل هذه الصفحة من الخادم: ')}
+              {loadFailures.get(S.route)}
+            </div>
+          ) : null}
           {!CONNECTED.has(S.route) ? (
             <div className="alert alert-info" role="status">
               {S.route === 'dashboard'
