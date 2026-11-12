@@ -61,20 +61,11 @@ import {
   textEdit
 } from '../features/communicate/music-dialogs.jsx';
 import { fieldAdd, fieldMenu, formNew } from '../features/parish-life/registrations-dialogs.jsx';
-import {
-  checkinManual,
-  incidentNew,
-  incidentOpen,
-  pickupAdd,
-  pickupRemove,
-  scan
-} from '../features/parish-life/checkin-dialogs.jsx';
 import { contentEdit } from '../features/communicate/website-dialogs.jsx';
 import { deleteSpecimen, ruleAdd, tagAdd, webhookAdd } from '../features/administration/administration-dialogs.jsx';
 import * as CR from '../shared/record-editor.jsx';
 import { setFieldValue } from '../ui/components.jsx';
 import { backupJSON, persist } from '../model/persist.js';
-import { selectedCheckin } from '../model/event-workflows.js';
 import { session } from '../model/api.js';
 
 const L = (en, ar) => t(en, ar);
@@ -382,23 +373,6 @@ export const VERBS = {
   },
   'vol-add': () => CR.create('volunteer'),
 
-  /* check-in ---------------------------------------------------- */
-  checkout: (btn, pid) => {
-    const p = D.person(pid);
-    const active = selectedCheckin();
-    if (!active) return;
-    active.rows = active.rows.filter(r => r.p !== pid);
-    active.present = active.rows.length;
-    refresh();
-    ok(
-      L('Checked out', 'سُجّل الخروج'),
-      L(
-        `${p ? p.lat : ''} was removed from this event’s present roster.`,
-        `أُزيل ${p ? p.ar : ''} من لائحة الحاضرين لهذا الحدث.`
-      )
-    );
-  },
-
   'notice-add': () => CR.create('notice'),
   'prayer-publish': (btn, id) => {
     const p = find(D.PRAYERS, id);
@@ -621,15 +595,6 @@ export const VERBS = {
   'form-new': () => formNew(),
   'field-add': () => fieldAdd(),
   'field-menu': (b, a) => fieldMenu(b, a),
-  scan: () => scan(),
-  'checkin-manual': () => checkinManual(),
-  'pickup-add': (b, a) => pickupAdd(a),
-  'pickup-remove': (b, a) => {
-    const [pid, i] = a.split('|');
-    pickupRemove(pid, i);
-  },
-  'incident-new': () => incidentNew(),
-  'incident-open': (b, a) => incidentOpen(a),
   'content-edit': (b, a) => contentEdit(a),
   'portal-open': () =>
     window.open(`public.html?parish=${encodeURIComponent(session.parishId || '')}`, '_blank', 'noopener'),
