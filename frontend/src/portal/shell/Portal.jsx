@@ -448,8 +448,9 @@ function Palette({ open, onClose }) {
 /* ---------------- notifications ---------------- */
 function Notifications() {
   useVersion();
-  const visible = D.NOTIFICATIONS.map((note, index) => ({ note, index })).filter(({ note }) =>
-    note[3] === 'rate' ? canSee('settings') : allowed(String(note[3]).replace(/^#\//, '').split('/')[0])
+  const visible = D.NOTIFICATIONS.map((note, index) => ({ note, index })).filter(
+    ({ note }) =>
+      !note[3] || (note[3] === 'rate' ? canSee('settings') : allowed(String(note[3]).replace(/^#\//, '').split('/')[0]))
   );
   return (
     <>
@@ -483,7 +484,7 @@ function Notifications() {
               persist();
               closeMenu();
               if (n[3] === 'rate') rateDialog();
-              else location.hash = n[3];
+              else if (n[3]) location.hash = n[3];
             }}
           >
             <span className="nico">

@@ -1,14 +1,15 @@
 /* The communication centre: messages, automations, ready-made designs and delivery rules. */
+import { useState } from 'react';
 import { Select } from '../../ui/components.jsx';
-import { t, num } from '../../../lib/i18n.js';
+import { t, num, fmtDate } from '../../../lib/i18n.js';
 import { is, bus } from '../../model/store.js';
 import {
   Icon,
   PageHead,
   Panel,
-  Status,
   Pill,
   Table,
+  Empty,
   openDrawer,
   openModal,
   closeOverlays,
@@ -17,28 +18,49 @@ import {
   Paged
 } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import * as CR from '../../shared/record-editor.jsx';
 import { persist } from '../../model/persist.js';
-import { compose } from './messaging-dialogs.jsx';
-import { MESSAGES, TEMPLATES, AUTOMATIONS, PARISH, GROUPS, groupInfo } from '../../model/data.js';
+import { session } from '../../model/api.js';
+import { confirmAction } from '../../shared/dialogs.jsx';
+import { ok } from '../../shared/dialog-helpers.jsx';
+import { compose, broadcastForm, templateForm, designTemplate, reload, LANGUAGE_NAMES } from './messaging-dialogs.jsx';
+import { ReviewsTab } from './messaging-reviews.jsx';
+import { can, audiencePreview, broadcastAction, templateAction } from '../../model/modules/communications.js';
+import { MESSAGES, TEMPLATES, PARISH, GROUPS, groupInfo } from '../../model/data.js';
 
 const L = (en, ar) => t(en, ar);
 
-const CHANNEL = { whatsapp: ['WhatsApp', 'واتساب'], sms: ['SMS', 'رسالة قصيرة'], email: ['Email', 'بريد إلكتروني'] };
+/* The channels the API reports for a broadcast: only the app stores anything; the others have no provider. */
+const CHANNEL = {
+  InApp: ['In the app', 'داخل التطبيق'],
+  Email: ['Email', 'بريد إلكتروني'],
+  Sms: ['SMS', 'رسالة قصيرة'],
+  Push: ['Push', 'إشعار']
+};
+const CHANNEL_STATE = {
+  Stored: ['stored for recipients', 'محفوظة للمستلمين'],
+  NotSent: ['not sent yet', 'لم تُرسل بعد'],
+  NotConfigured: ['not set up', 'غير مفعّل']
+};
 
+const operator = () => session.accountUser?.role === 'super_admin';
 const MTABS = () => [
-  ['', 'Messages', 'الرسائل'],
-  [
-    'automations',
-    'Automations',
-    'الأتمتة',
-    is('leader')
-      ? GROUPS.flatMap(g => groupInfo(g.id).automations).filter(a => a.active).length
-      : AUTOMATIONS.filter(a => a.active).length
-  ],
-  ['templates', 'Designs', 'التصاميم'],
+  ['', 'Broadcasts', 'البثّ'],
+  ...(is('leader')
+    ? [
+        [
+          'automations',
+          'Automations',
+          'الأتمتة',
+          GROUPS.flatMap(g => groupInfo(g.id).automations).filter(a => a.active).length
+        ]
+      ]
+    : []),
+  ['templates', 'Templates', 'القوالب'],
+  ...(operator() ? [['reviews', 'Message reviews', 'مراجعة الرسائل']] : []),
   ['preferences', 'Rules', 'القواعد']
 ];
+
+const currentParish = () => session.parishes.find(p => p.id === session.parishId);
 
 export function messaging(tab = '') {
   const head = (
@@ -136,42 +158,12 @@ export function messaging(tab = '') {
       </>
     );
   }
-  if (tab === 'automations')
+  if (tab === 'reviews' && operator())
     return (
       <>
         {head}
         <div className="tabbody">
-          <Table
-            cols={[
-              { label: L('Automation plan', 'خطة الأتمتة') },
-              { label: L('Trigger', 'المحفّز'), cls: 'hide-sm' },
-              { label: L('Saved state', 'الحالة المحفوظة'), cls: 'shrink' }
-            ]}
-            rows={AUTOMATIONS.map((a, ai) => ({
-              cells: [
-                <b>{L(a.what, a.whatAr)}</b>,
-                <span className="dim">{L(a.on, a.onAr)}</span>,
-                <label className="switch">
-                  <input type="checkbox" defaultChecked={!!a.active} data-act={`auto-toggle:${ai}`} />
-                  <span className="sr">{L('Active', 'مفعّل')}</span>
-                </label>
-              ]
-            }))}
-          />{' '}
-          <C.InlineAlert
-            tone="info"
-            title={L('Plans only', 'خطط فقط')}
-            body={L(
-              'No scheduled runner or external delivery service is connected. These switches save a plan; they do not send messages.',
-              'لا يوجد مشغّل مجدول أو خدمة إرسال خارجية موصولة. تحفظ المفاتيح الخطة ولا ترسل رسائل.'
-            )}
-          />{' '}
-          <p className="t-caption dim" style={{ marginTop: '14px' }}>
-            {L(
-              'These are stored automation plans. No scheduled runner or external delivery service is connected.',
-              'هذه خطط أتمتة محفوظة. لا يوجد مشغّل مجدول أو خدمة إرسال خارجية موصولة.'
-            )}
-          </p>
+          <ReviewsTab parishId={session.parishId} />
         </div>
       </>
     );
@@ -180,54 +172,100 @@ export function messaging(tab = '') {
       <>
         {head}
         <div className="tabbody">
-          <Paged className="gridcards">
-            {TEMPLATES.map((tp, ti) => (
-              <button
-                key={ti}
-                className="panel"
-                style={{ cursor: 'pointer', textAlign: 'start', border: '1px solid var(--border)' }}
-                data-act={`design:${ti}`}
-              >
-                <div
-                  style={{
-                    height: '110px',
-                    background: 'var(--ink)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: 'var(--on-dark)',
-                    font: '600 14px/1 var(--sans)',
-                    textAlign: 'center',
-                    padding: '10px'
-                  }}
-                >
-                  <span>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: '12px',
-                        opacity: '.7',
-                        letterSpacing: '.1em',
-                        textTransform: 'uppercase'
-                      }}
-                    >
-                      {L(PARISH.name, PARISH.nameAr)}
-                    </span>{' '}
-                    {L(tp.name, tp.ar)}
-                  </span>
-                </div>{' '}
-                <div className="panel-b" style={{ padding: '12px' }}>
-                  <b style={{ font: '500 13px/18px var(--sans)' }}>{L(tp.name, tp.ar)}</b>{' '}
-                  <small className="t-caption dim" style={{ display: 'block', marginTop: '2px' }}>
-                    {L('Fill the date and location', 'املأ التاريخ والمكان')}
-                  </small>
+          <div className="toolbar ministry-section-heading">
+            <h2>{L('Broadcast templates', 'قوالب البثّ')}</h2>
+            <button className="btn btn-primary btn-dense" onClick={() => templateForm()}>
+              <Icon name="plus" size={15} />
+              {L('New template', 'قالب جديد')}
+            </button>
+          </div>
+          {TEMPLATES.length ? (
+            <Paged className="gridcards">
+              {TEMPLATES.map((tp, ti) => (
+                <div key={tp.id} className="panel" style={{ border: '1px solid var(--border)' }}>
+                  <div
+                    style={{
+                      height: '110px',
+                      background: 'var(--ink)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: 'var(--on-dark)',
+                      font: '600 14px/1 var(--sans)',
+                      textAlign: 'center',
+                      padding: '10px'
+                    }}
+                  >
+                    <span>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: '12px',
+                          opacity: '.7',
+                          letterSpacing: '.1em',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {L(PARISH.name, PARISH.nameAr)}
+                      </span>{' '}
+                      {tp.title}
+                    </span>
+                  </div>{' '}
+                  <div className="panel-b" style={{ padding: '12px' }}>
+                    <b style={{ font: '500 13px/18px var(--sans)' }}>{tp.name}</b>{' '}
+                    <small className="t-caption dim" style={{ display: 'block', margin: '2px 0 8px' }}>
+                      {L(...LANGUAGE_NAMES[tp.language])} ·{' '}
+                      {tp.status === 'approved'
+                        ? L('Approved', 'معتمد')
+                        : tp.status === 'retired'
+                          ? L('Retired', 'متوقف')
+                          : L('Draft', 'مسودة')}
+                    </small>
+                    <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
+                      {tp.status === 'draft' ? (
+                        <>
+                          <button className="btn btn-secondary btn-dense" onClick={() => templateForm(tp)}>
+                            {L('Edit', 'تعديل')}
+                          </button>
+                          <button className="btn btn-primary btn-dense" onClick={() => templateStep(tp, 'approve')}>
+                            {L('Approve', 'اعتماد')}
+                          </button>
+                        </>
+                      ) : null}
+                      {tp.status === 'approved' ? (
+                        <button
+                          className="btn btn-primary btn-dense"
+                          onClick={() => compose('all', { template: tp.id })}
+                        >
+                          {L('Use in a broadcast', 'استخدام في بثّ')}
+                        </button>
+                      ) : null}
+                      {tp.status !== 'retired' ? (
+                        <button className="btn btn-ghost btn-dense" onClick={() => templateStep(tp, 'retire')}>
+                          {L('Retire', 'إيقاف')}
+                        </button>
+                      ) : null}
+                      <button className="btn btn-ghost btn-dense" onClick={() => designTemplate(ti)}>
+                        {L('Poster', 'ملصق')}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </button>
-            ))}
-          </Paged>{' '}
+              ))}
+            </Paged>
+          ) : (
+            <Empty
+              glyph="doc"
+              title={L('No templates', 'لا قوالب')}
+              body={L(
+                'Save wording you reuse. A different staff member approves it before a broadcast can use it.',
+                'احفظ نصاً تعيد استخدامه. يعتمده موظف آخر قبل أن يستخدمه بثّ.'
+              )}
+            />
+          )}
           <p className="t-caption dim" style={{ marginTop: '16px' }}>
             {L(
-              'Each design carries the parish name. Fill in the date and location, then download an SVG, PNG, or JPEG announcement.',
-              'يحمل كل تصميم اسم الرعية. املأ التاريخ والمكان، ثم نزّل الإعلان بصيغة SVG أو PNG أو JPEG.'
+              'A poster is made from a template’s subject: fill in the date and place, then download it. The file is not sent anywhere.',
+              'يُصنع الملصق من موضوع القالب: املأ التاريخ والمكان ثم نزّله. لا يُرسل الملف إلى أي جهة.'
             )}
           </p>
         </div>
@@ -260,20 +298,78 @@ export function messaging(tab = '') {
         </div>
       </>
     );
+  const parish = currentParish(),
+    staff = can(parish, 'communications.manage');
   const rows = MESSAGES.map(m => ({
+    key: m.id,
     cells: [
-      <b style={{ font: '500 14px/20px var(--sans)' }}>{L(m.subject, m.subjectAr)}</b>,
-      <span className="dim">{L(m.audience, m.audienceAr)}</span>,
-      <span className="chip">{L(...CHANNEL[m.channel])}</span>,
-      <span className="num dim">{num(m.reach)}</span>,
-      <span className="dim mono" dir="ltr">
-        {m.when}
+      <b style={{ font: '500 14px/20px var(--sans)' }}>{m.subject}</b>,
+      <span className="dim">
+        {m.audience === 'Ministry'
+          ? L('A ministry', 'خدمة') +
+            (GROUPS.find(g => g.id === m.ministryId) ? ` · ${GROUPS.find(g => g.id === m.ministryId).name}` : '')
+          : L('All members', 'كل الأعضاء')}
       </span>,
-      <Status k={m.status} />,
+      <span className="chip">{L('In the app', 'داخل التطبيق')}</span>,
+      <span className="num dim">{m.status === 'sent' ? num(m.reach) : '—'}</span>,
+      <span className="dim mono" dir="ltr">
+        {m.when ? fmtDate(m.when.slice(0, 10)) : '—'}
+      </span>,
+      <BroadcastStatus m={m} />,
       <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-        {CR.recBtn('message', m.id)}
+        {m.status === 'draft' ? (
+          <button className="btn btn-secondary btn-dense" onClick={() => broadcastForm(m)}>
+            {L('Edit', 'تعديل')}
+          </button>
+        ) : null}
+        {m.status === 'draft' || m.status === 'approved' ? (
+          <button className="btn btn-ghost btn-dense" onClick={() => preview(m)}>
+            {L('Who would get it', 'من سيصله')}
+          </button>
+        ) : null}
+        {m.status === 'draft' ? (
+          <button className="btn btn-primary btn-dense" onClick={() => step(m, 'approve')}>
+            {L('Approve', 'اعتماد')}
+          </button>
+        ) : null}
+        {m.status === 'approved' ? (
+          <button className="btn btn-primary btn-dense" onClick={() => step(m, 'send')}>
+            {L('Store in the app', 'حفظ داخل التطبيق')}
+          </button>
+        ) : null}
+        {m.status === 'draft' || m.status === 'approved' ? (
+          <button className="btn btn-ghost btn-dense" onClick={() => cancelBroadcast(m)}>
+            {L('Cancel', 'إلغاء')}
+          </button>
+        ) : null}
       </span>
-    ]
+    ],
+    detail: (
+      <div className="stack" style={{ padding: '4px 0' }}>
+        <div style={{ whiteSpace: 'pre-wrap' }} dir="auto">
+          {m.body}
+        </div>
+        <small className="dim">
+          {(m.channels || [])
+            .map(
+              c =>
+                `${L(...(CHANNEL[c.channel] || [c.channel, c.channel]))}: ${L(...(CHANNEL_STATE[c.status] || [c.status, c.status]))}`
+            )
+            .join(' · ')}
+        </small>
+        {m.status === 'sent' && m.skipped ? (
+          <small className="dim">
+            {L(`${m.skipped} left out because they muted this topic.`, `${m.skipped} مستثنى لأنهم كتموا هذا الموضوع.`)}
+          </small>
+        ) : null}
+        {m.cancelReason ? (
+          <small className="dim">
+            {L('Cancelled: ', 'أُلغي: ')}
+            {m.cancelReason}
+          </small>
+        ) : null}
+      </div>
+    )
   }));
   return (
     <>
@@ -281,31 +377,177 @@ export function messaging(tab = '') {
       <div style={{ margin: '20px 0' }}>
         <C.InlineAlert
           tone="info"
-          title={L('In-app communication is available', 'التواصل داخل التطبيق متاح')}
+          title={L('Broadcasts stay inside ParishLife', 'البثّ يبقى داخل ParishLife')}
           body={L(
-            'Use Member communication to review delivered messages and published updates. The records below are historical channel entries; this app cannot verify or retry their external delivery.',
-            'استخدم التواصل مع الأعضاء لمراجعة الرسائل والمستجدات المنشورة. القيود أدناه تاريخية؛ لا يستطيع التطبيق تأكيد إرسالها خارجياً أو إعادة المحاولة.'
+            'A broadcast is drafted, approved by a different staff member, then stored in the app for each member in its audience. Email, SMS and push are not set up, so nothing is delivered outside the app.',
+            'يُكتب البثّ ثم يعتمده موظف آخر، ثم يُحفظ داخل التطبيق لكل عضو في جمهوره. البريد والرسائل القصيرة والإشعارات غير مفعّلة، فلا يصل شيء خارج التطبيق.'
           )}
-        />{' '}
-        <a className="btn btn-secondary" style={{ marginTop: '12px' }} href="#/memberhub">
-          {L('Open member communication', 'فتح التواصل مع الأعضاء')}
-        </a>
-      </div>{' '}
-      <h2>{L('Historical channel records', 'قيود القنوات التاريخية')}</h2>{' '}
-      <Table
-        cols={[
-          { label: L('Subject', 'الموضوع'), sort: true },
-          { label: L('Audience', 'الجمهور'), cls: 'hide-sm' },
-          { label: L('Channel', 'القناة'), cls: 'shrink hide-sm' },
-          { label: L('Reach', 'العدد'), cls: 'num hide-md' },
-          { label: L('When', 'الموعد'), cls: 'hide-md' },
-          { label: L('Status', 'الحالة'), cls: 'shrink' },
-          { label: '', cls: 'shrink' }
-        ]}
-        rows={rows}
-      />
+        />
+      </div>
+      {staff ? (
+        <Table
+          cols={[
+            { label: L('Subject', 'الموضوع'), sort: true },
+            { label: L('Audience', 'الجمهور'), cls: 'hide-sm' },
+            { label: L('Channel', 'القناة'), cls: 'shrink hide-sm' },
+            { label: L('Stored for', 'محفوظ لـ'), cls: 'num hide-md' },
+            { label: L('When', 'الموعد'), cls: 'hide-md' },
+            { label: L('Status', 'الحالة'), cls: 'shrink' },
+            { label: '', cls: 'shrink' }
+          ]}
+          rows={rows}
+          empty={
+            <Empty
+              glyph="msg"
+              title={L('No broadcasts', 'لا بثّ')}
+              body={L('Draft one with New message.', 'اكتب مسودة من «رسالة جديدة».')}
+            />
+          }
+        />
+      ) : (
+        <Empty
+          glyph="msg"
+          title={L('Broadcasts are managed by parish communications staff', 'يدير البثّ موظفو التواصل في الرعية')}
+          body={L(
+            'This account is not allowed to draft or approve them.',
+            'هذا الحساب غير مخوّل بكتابتها أو اعتمادها.'
+          )}
+        />
+      )}
     </>
   );
+}
+
+/* The status of a broadcast, in words that say where it is stored. */
+function BroadcastStatus({ m }) {
+  return m.status === 'sent' ? (
+    <Pill label={L('Stored in the app', 'محفوظ داخل التطبيق')} tone="success" mark="st-sent" />
+  ) : m.status === 'approved' ? (
+    <Pill label={L('Approved', 'معتمد')} tone="success" mark="st-ok" />
+  ) : m.status === 'cancelled' ? (
+    <Pill label={L('Cancelled', 'ملغى')} tone="danger" mark="st-no" />
+  ) : (
+    <Pill label={L('Draft', 'مسودة')} tone="info" mark="st-open" />
+  );
+}
+
+const explain = (m, action) =>
+  action === 'approve'
+    ? L(
+        'This approves the exact wording saved now. A different staff member than the author must do it.',
+        'يعتمد هذا النص المحفوظ الآن بالتحديد. يجب أن يقوم به موظف غير كاتبه.'
+      )
+    : L(
+        'This stores one copy in the app for every member of the audience as it is right now. It does not send email, SMS or push.',
+        'يحفظ هذا نسخة داخل التطبيق لكل عضو في الجمهور كما هو الآن. لا يرسل بريداً ولا رسائل قصيرة ولا إشعارات.'
+      );
+
+function step(m, action) {
+  confirmAction({
+    title:
+      action === 'approve'
+        ? L('Approve this broadcast?', 'اعتماد هذا البثّ؟')
+        : L('Store it in the app?', 'حفظه داخل التطبيق؟'),
+    body: explain(m, action),
+    cta: action === 'approve' ? L('Approve', 'اعتماد') : L('Store in the app', 'حفظ داخل التطبيق'),
+    then: async () => {
+      try {
+        const sent = await broadcastAction(session.parishId, m.id, m.version, action);
+        await reload();
+        ok(
+          action === 'approve' ? L('Approved', 'اعتُمد') : L('Stored in the app', 'حُفظ داخل التطبيق'),
+          action === 'approve'
+            ? ''
+            : L(
+                `${sent.recipientCount} members will see it in the app. Nothing was sent by email, SMS or push.`,
+                `${sent.recipientCount} عضواً سيرونه داخل التطبيق. لم يُرسل شيء بالبريد أو الرسائل القصيرة أو الإشعارات.`
+              )
+        );
+      } catch (error) {
+        toast(L('Not done', 'لم يتم'), error.message, 'danger');
+      }
+    }
+  });
+}
+
+function cancelBroadcast(m) {
+  openModal({
+    title: L('Cancel this broadcast?', 'إلغاء هذا البثّ؟'),
+    body: <CancelReason onDone={reason => run(m, reason)} />
+  });
+}
+async function run(m, reason) {
+  await broadcastAction(session.parishId, m.id, m.version, 'cancel', reason);
+  closeOverlays();
+  await reload();
+  ok(L('Cancelled', 'أُلغي'));
+}
+function CancelReason({ onDone }) {
+  const [error, setError] = useState('');
+  return (
+    <form
+      onSubmit={async e => {
+        e.preventDefault();
+        try {
+          await onDone(new FormData(e.currentTarget).get('reason'));
+        } catch (err) {
+          setError(err.message);
+        }
+      }}
+    >
+      <label className="formrow">
+        <span className="label">{L('Reason', 'السبب')}</span>
+        <textarea className="textarea" name="reason" required maxLength="2000" rows="3" />
+      </label>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-danger">{L('Cancel the broadcast', 'إلغاء البثّ')}</button>
+    </form>
+  );
+}
+
+async function preview(m) {
+  try {
+    const r = await audiencePreview(session.parishId, m.id);
+    toast(
+      L(`${r.eligibleCount} would receive it`, `${r.eligibleCount} سيصلهم`),
+      L(
+        `${r.skippedByPreferenceCount} skipped because they muted this topic. The audience is worked out again when it is stored.`,
+        `${r.skippedByPreferenceCount} مستثنى لأنهم كتموا هذا الموضوع. يُحتسب الجمهور من جديد عند الحفظ.`
+      ),
+      'info'
+    );
+  } catch (error) {
+    toast(L('Not available', 'غير متاح'), error.message, 'danger');
+  }
+}
+
+function templateStep(tp, action) {
+  confirmAction({
+    title:
+      action === 'approve'
+        ? L('Approve this template?', 'اعتماد هذا القالب؟')
+        : L('Retire this template?', 'إيقاف هذا القالب؟'),
+    body:
+      action === 'approve'
+        ? L('A different staff member than the author must approve it.', 'يجب أن يعتمده موظف غير كاتبه.')
+        : L(
+            'A retired template can no longer be used for new broadcasts.',
+            'لا يمكن استخدام القالب الموقوف في بثّ جديد.'
+          ),
+    cta: action === 'approve' ? L('Approve', 'اعتماد') : L('Retire', 'إيقاف'),
+    danger: action === 'retire',
+    then: async () => {
+      try {
+        await templateAction(session.parishId, tp.id, tp.version, action);
+        await reload();
+        ok(action === 'approve' ? L('Template approved', 'اعتُمد القالب') : L('Template retired', 'أُوقف القالب'));
+      } catch (error) {
+        toast(L('Not done', 'لم يتم'), error.message, 'danger');
+      }
+    }
+  });
 }
 
 messaging.mount = host => {
@@ -354,13 +596,9 @@ messaging.mount = host => {
       title: L('Send', 'إرسال'),
       body: (
         <div className="menu" style={{ position: 'static', boxShadow: 'none', border: 0, padding: 0 }}>
-          <button data-act="compose-person">
-            <Icon name="msg" size={16} />
-            {L('Message a person', 'مراسلة شخص')}
-          </button>{' '}
           <button data-act="compose:group">
             <Icon name="groups" size={16} />
-            {L('Message a group', 'مراسلة مجموعة')}
+            {L('Broadcast to a ministry', 'بثّ إلى خدمة')}
           </button>{' '}
           <button data-act="broadcast">
             <Icon name="bell" size={16} />
