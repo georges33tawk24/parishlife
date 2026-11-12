@@ -20,4 +20,17 @@ import * as member from './member.js';
 import * as administration from './administration.js';
 import * as account from './account.js';
 
-export const MODULES = [people, sacraments, facilities, calendar, ministries, registrations, finance, communications, requests, member, administration, account];
+export const MODULES = [
+  people,
+  sacraments,
+  facilities,
+  calendar,
+  ministries,
+  registrations,
+  finance,
+  communications,
+  requests,
+  member,
+  administration,
+  account
+];
