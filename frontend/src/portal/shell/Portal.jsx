@@ -1092,9 +1092,10 @@ const moduleFor = {
   giving: 'finance',
   finance: 'finance'
 };
-/* Pages that load and save through ParishLife.Api so far (each connected module lists its own,
-   model/modules/). The others say so instead of looking like an empty parish. */
-const CONNECTED = new Set(MODULES.flatMap(m => m.routes));
+/* Pages that load and save through ParishLife.Api (each connected module lists its own, model/modules/;
+   the dashboard only reads what the modules load; the style guide has no parish data). The others say so
+   instead of looking like an empty parish. */
+const CONNECTED = new Set(['dashboard', 'styleguide', ...MODULES.flatMap(m => m.routes)]);
 let shownRoute = '';
 function View() {
   const host = useRef(null);
@@ -1161,15 +1162,10 @@ function View() {
           ) : null}
           {!CONNECTED.has(S.route) ? (
             <div className="alert alert-info" role="status">
-              {S.route === 'dashboard'
-                ? t(
-                    'Not every module is connected to the new backend yet. Panels for the others stay empty until they are.',
-                    'لم تُوصل كل الوحدات بالخادم الجديد بعد. تبقى لوحات الوحدات الأخرى فارغة إلى أن تُوصل.'
-                  )
-                : t(
-                    "This page isn't connected to the new backend yet. It shows nothing from your parish, and changes made here are not saved.",
-                    'هذه الصفحة غير متّصلة بالخادم الجديد بعد. لا تعرض شيئاً من رعيتك، ولا تُحفظ التغييرات التي تُجرى فيها.'
-                  )}
+              {t(
+                "This page isn't connected to the new backend yet. It shows nothing from your parish, and changes made here are not saved.",
+                'هذه الصفحة غير متّصلة بالخادم الجديد بعد. لا تعرض شيئاً من رعيتك، ولا تُحفظ التغييرات التي تُجرى فيها.'
+              )}
             </div>
           ) : null}
           {restricted ? (
