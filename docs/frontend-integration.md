@@ -61,7 +61,7 @@ Finance is visible to the priest and to grants with `finance.read`. People are l
 | Requests without an account | Anonymous request routes (`RequestsController`) | Request buttons are hidden on the public site; the form still posts to the old route |
 | Checking a signed document | `GET /api/public/document-verifications/{code}` | The verify page expects "signature valid" and "content matches"; the API returns a status, its meaning and an official statement instead, so the page needs rewording, not just a new URL |
 | Platform homepage content | `GET /api/public/homepage` | The homepage keeps its built-in wording |
-| Combined home | `GET /api/me/home` | Members get an empty view with the notice |
+| Combined home | `GET /api/me/home` | Connected by the member module (see [`frontend-modules/member.md`](frontend-modules/member.md)) |
 
 ## Public site: what stays empty
 
@@ -78,7 +78,7 @@ The API's public parish has a name, locality, diocese, coordinates and links. Th
 | Giving and finance | Counting sessions, funds, expenses, exchange rate | Finance | The exchange rate shows 0 until connected |
 | Messages and notices | Inbox, notices, templates | Communications, broadcasts and templates | |
 | Requests | Member and guest requests, documents, files | Requests, Files | Guest tracking links have new rules (A13) |
-| Member portal | My parish life, my record, corrections | Combined home, membership, personal workspace, person data | |
+| Member portal | Connected: home, my parishes, membership, my record and corrections, ministries, meetings, formation, volunteering, concerns, notifications, consents, my data, notes and tasks | Combined home, membership, personal workspace, person data | Remaining gaps in `frontend-modules/member.md` |
 | Administration and oversight | Workspace, parishes, accounts, plans, bishop oversight | Organizations, Administration, Billing, bishop overview and map | |
 
 ## Decisions for the owner
