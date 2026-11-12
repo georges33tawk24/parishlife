@@ -4,7 +4,7 @@
    The API has no due date, owner or subject person for a run, no average duration and no automation, so
    those are not shown. Main members: forms (the page), openRun. */
 import { useState } from 'react';
-import { t, fmtDate } from '../../../lib/i18n.js';
+import { fmtDate } from '../../../lib/i18n.js';
 import { S, bus } from '../../model/store.js';
 import { session } from '../../model/api.js';
 import { hydrate } from '../../model/persist.js';
@@ -12,7 +12,7 @@ import { WORKFLOWS, RUNS, RUN_LOG } from '../../model/data.js';
 import { Icon, PageHead, Panel, Pill, Table, Empty, Stat, TabBar, Paged, openDrawer, toast } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import * as A from '../../model/modules/administration-api.js';
-import { L, openForm, Fields, csv } from './workspace-forms.jsx';
+import { L, openForm, csv } from './workspace-forms.jsx';
 
 const PERMISSIONS = [
   'people.read',
@@ -520,7 +520,6 @@ function Builder() {
 
 function FormsPage({ tab }) {
   const unavailable = !parishId();
-  const late = 0;
   const head = (
     <>
       <PageHead
@@ -633,7 +632,7 @@ function FormsPage({ tab }) {
       <div className="stats">
         <Stat k={L('Workflows', 'المسارات')} v={WORKFLOWS.length} />
         <Stat k={L('Open tasks', 'مهام مفتوحة')} v={RUNS.length} />
-        <Stat k={L('Paused', 'متوقفة')} v={RUNS.filter(r => r.status === 'Paused').length + late} />
+        <Stat k={L('Paused', 'متوقفة')} v={RUNS.filter(r => r.status === 'Paused').length} />
       </div>
       <Paged className="gridcards">
         {WORKFLOWS.map(w => (
@@ -690,5 +689,3 @@ export function forms(tab = '') {
   if (tab !== 'runs') S.ui.runWf = '';
   return <FormsPage tab={tab} />;
 }
-void t;
-void Fields;

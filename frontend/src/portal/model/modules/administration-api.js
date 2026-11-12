@@ -9,7 +9,7 @@
    are strings. Creates carry an operationId; a versioned write sends the version the API returned.
    The API has no list of all parishes, archdioceses or accounts: what is shown is what the account can
    reach through its capacities (GET /api/me/capacities), or what it opens by reference. */
-import { api, newOperationId } from '../api.js';
+import { api, newOperationId, notConnected } from '../api.js';
 
 const e = encodeURIComponent;
 const op = body => ({ operationId: newOperationId(), ...body });
@@ -34,9 +34,9 @@ export async function listAll(path, { limit = 1000, size = 50, params = {} } = {
   } while (cursor && items.length < limit);
   return items;
 }
-/* A 403 means "not allowed here": the list is empty rather than an error. */
+/* A 403 means "not allowed here"; a route the API does not answer means not connected: either way the list is empty. */
 export const orEmpty = (promise, empty = []) =>
-  promise.catch(error => (error.status === 403 ? empty : Promise.reject(error)));
+  promise.catch(error => (error.status === 403 || error.message === notConnected ? empty : Promise.reject(error)));
 
 /* What the account may reach: GET /api/me/capacities lists Priest, ParishGrant, MinistryLeader (a parish),
    Bishop and ArchdioceseAdmin (an archdiocese) and PlatformOperator (the platform). */
