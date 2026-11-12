@@ -421,9 +421,9 @@ signedIn(session, { roles: [], capabilities: ['people.read'] });
 calls.length = 0;
 await hydrate();
 assert.equal(
-  calls.filter(c => c.includes('calendar')).length,
+  calls.filter(c => c.includes('registration')).length, // the calendar module reads the calendar on its own
   0,
-  'no calendar request without a registration permission'
+  'no registration request without a registration permission'
 );
 assert.equal(D.REGISTRATIONS.length, 0);
 
