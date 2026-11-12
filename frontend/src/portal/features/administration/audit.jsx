@@ -1,10 +1,13 @@
-/* The audit trail: who did what and when, including access to restricted records. */
+/* The record of what happened in this parish, as far as ParishLife.Api lets it be read: the parish's
+   operating-status changes and the history of its open workflow runs (model/modules/administration.js).
+   The API has no general audit trail to read yet, so file opens, approvals and exports are not listed.
+   Main member: audit. */
 import { t } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
-import { Icon, PageHead, Who, Pill, Table, Empty } from '../../ui/ui.jsx';
+import { PageHead, Pill, Table, Empty } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import { AUDIT, person } from '../../model/data.js';
-import { auditAction, auditTime } from '../../shared/audit-words.js';
+import { AUDIT } from '../../model/data.js';
+import { auditTime } from '../../shared/audit-words.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -12,12 +15,10 @@ export function audit() {
   const KINDS = {
     approve: [L('Approval', 'موافقة'), 'success'],
     create: [L('Created', 'إنشاء'), 'info'],
-    publish: [L('Published', 'نشر'), 'info'],
-    settings: [L('Setting', 'إعداد'), 'info'],
-    error: [L('Failure', 'فشل'), 'danger'],
-    sensitive: [L('Sensitive access', 'وصول حسّاس'), 'warning']
+    settings: [L('Change', 'تغيير'), 'info'],
+    error: [L('Declined or cancelled', 'رفض أو إلغاء'), 'danger']
   };
-  const ONLY = [null, 'approve', 'sensitive', 'error'],
+  const ONLY = [null, 'approve', 'error'],
     kind = S.ui.auditKind || 0;
   return (
     <>
@@ -25,27 +26,24 @@ export function audit() {
         crumbs={[{ label: L('Administration', 'الإدارة') }, { label: L('Audit trail', 'سجل التدقيق') }]}
         title={L('Audit trail', 'سجل التدقيق')}
         sub={L(
-          'Who did what, and when. Available to authorized clergy and administrators in this parish. Audit records cannot be edited.',
-          'من فعل ماذا ومتى. متاح للكهنة والمديرين المخوّلين في الرعية. لا يمكن تعديل سجل التدقيق.'
+          'Recorded changes to this parish. Records cannot be edited.',
+          'التغييرات المسجّلة في هذه الرعية. لا يمكن تعديل السجلات.'
         )}
-        actions={
-          <button className="btn btn-secondary" data-act="export">
-            <Icon name="export" size={17} />
-            {L('Export', 'تصدير')}
-          </button>
-        }
+      />
+      <C.InlineAlert
+        tone="info"
+        title={L('Only part of the trail can be read yet', 'يمكن قراءة جزء من السجل فقط حالياً')}
+        body={L(
+          'ParishLife records more than this, but the API only lets the parish read its operating-status changes and workflow activity. Opened files, approvals elsewhere and exports are not listed.',
+          'تسجّل «حياة الرعية» أكثر من ذلك، لكن الواجهة لا تتيح للرعية إلا قراءة تغييرات حالتها التشغيلية ونشاط مسارات العمل. الملفات المفتوحة والموافقات الأخرى والتصديرات غير مدرجة.'
+        )}
       />{' '}
       <div className="toolbar">
         <div className="grow" style={{ maxWidth: '300px' }}>
-          <C.SearchClear ph={L('Person or action', 'الشخص أو الإجراء')} id="asearch" data-find="" />
+          <C.SearchClear ph={L('Action', 'الإجراء')} id="asearch" data-find="" />
         </div>{' '}
         <C.BGroup
-          items={[
-            L('All', 'الكل'),
-            L('Approvals', 'الموافقات'),
-            L('Sensitive access', 'وصول حسّاس'),
-            L('Failures', 'الإخفاقات')
-          ]}
+          items={[L('All', 'الكل'), L('Approvals', 'الموافقات'), L('Declined or cancelled', 'رفض أو إلغاء')]}
           sel={kind}
           k="auditKind"
         />
@@ -53,7 +51,6 @@ export function audit() {
       <Table
         cols={[
           { label: L('When', 'الوقت'), cls: 'hide-sm', sort: true },
-          { label: L('Who', 'من'), cls: 'hide-md' },
           { label: L('What', 'ماذا') },
           { label: L('Kind', 'النوع'), cls: 'shrink' }
         ]}
@@ -63,42 +60,14 @@ export function audit() {
             <span className="mono dim" dir="ltr">
               {auditTime(a.at)}
             </span>,
-            a.who && person(a.who) ? (
-              <Who p={person(a.who)} />
-            ) : a.actorName === 'System' ? (
-              L('System', 'النظام')
-            ) : (
-              a.actorName || '—'
-            ),
-            auditAction(a),
+            a.what,
             <Pill label={KINDS[a.kind][0]} tone={KINDS[a.kind][1]} />
           ]
         }))}
-        empty={
-          <Empty
-            glyph="shield"
-            title={L('Nothing of this kind was recorded', 'لم يُسجَّل شيء من هذا النوع')}
-            body={L('Choose All to see every event.', 'اختر «الكل» لرؤية كل الأحداث.')}
-          />
-        }
-      />{' '}
-      <div className="find-empty" hidden>
-        <Empty
-          glyph="search"
-          title={L('No event matches', 'لا حدث يطابق')}
-          body={L('Try a name, or part of the action.', 'جرّب اسماً أو جزءاً من الإجراء.')}
-        />
-      </div>{' '}
-      <C.InlineAlert
-        tone="info"
-        title={L('Opening a restricted record is itself an event', 'فتح سجل مقيّد هو بحدّ ذاته حدث')}
-        body={L(
-          'Staff are told this when the permission is granted, not discovered afterwards.',
-          'يُبلَّغ الموظّفون بذلك عند منح الصلاحية، لا يكتشفونه لاحقاً.'
-        )}
+        empty={<Empty glyph="shield" title={L('Nothing recorded yet', 'لم يُسجَّل شيء بعد')} />}
       />
     </>
   );
 }
 
-audit.mount = host => {};
+audit.mount = () => {};

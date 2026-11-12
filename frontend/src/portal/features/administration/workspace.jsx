@@ -1,669 +1,604 @@
-/* Administration: dioceses, parishes, accounts, bundles and access, within the authority assigned
-   to the account. */
-import { useEffect, useRef, useState } from 'react';
-import { AccessManagement } from './administration-access.jsx';
-import { api, session, loadSession } from '../../model/api.js';
-import { hydrate } from '../../model/persist.js';
-import { S, bus, canSee, role } from '../../model/store.js';
-import { editPublicProfile } from '../communicate/public-profile.jsx';
+/* Administration workspace for platform operators, bishops and archdiocese administrators, on
+   ParishLife.Api. Tabs: Organizations (archdioceses and parishes: register, verify, operating status,
+   location, association, jurisdiction, ownership claims, homepage), Appointments (workspace-appointments.jsx),
+   Access and billing (workspace-billing.jsx).
+   The API has no list of every parish, archdiocese or account. What shows is what the account reaches
+   through its capacities (GET /api/me/capacities), plus any parish or archdiocese opened by its reference
+   (kept for this browser session). Main member: WorkspacePage. */
+import { useState } from 'react';
+import { PageHead, TabBar, Pill, Empty, openDrawer, toast } from '../../ui/ui.jsx';
+import { S } from '../../model/store.js';
+import * as A from '../../model/modules/administration-api.js';
 import { editHomepage } from '../communicate/homepage-editor.jsx';
-import { t } from '../../../lib/i18n.js';
-import { PageHead, Panel, openDrawer, Paged } from '../../ui/ui.jsx';
-import { Select } from '../../ui/components.jsx';
-import { DrawerForm } from '../../ui/forms.jsx';
+import { useLoad } from './use-load.js';
+import { L, Row, Section, ReferenceBox, openForm, shortDay } from './workspace-forms.jsx';
+import { Appointments } from './workspace-appointments.jsx';
+import { AccessAndBilling } from './workspace-billing.jsx';
 
-let parishId = '';
+/* References opened by hand, kept for this browser session only. */
+const opened = (() => {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem('pl-admin-opened') || '{}');
+    return { parishes: new Set(stored.parishes || []), archdioceses: new Set(stored.archdioceses || []) };
+  } catch {
+    return { parishes: new Set(), archdioceses: new Set() };
+  }
+})();
+const remember = () => {
+  try {
+    sessionStorage.setItem(
+      'pl-admin-opened',
+      JSON.stringify({ parishes: [...opened.parishes], archdioceses: [...opened.archdioceses] })
+    );
+  } catch {
+    /* private mode */
+  }
+};
 
-const L = t,
-  roleLabel = r =>
-    ({
-      super_admin: L('Super Admin', 'المشرف العام'),
-      bishop: L('Bishop', 'المطران'),
-      diocesan_admin: L('Archdiocese Admin', 'مدير الأبرشية'),
-      parish_admin: L('Parish Admin', 'مدير الرعية'),
-      priest: L('Priest', 'كاهن'),
-      secretary: L('Secretary', 'أمانة السر'),
-      treasurer: L('Treasurer', 'أمين الصندوق'),
-      leader: L('Ministry leader', 'مسؤول خدمة'),
-      member: L('User', 'مستخدم'),
-      finance_view: L('Finance viewer', 'مشاهد المالية'),
-      clergy_assigner: L('Delegated clergy appointments', 'تفويض تعيين الكهنة')
-    })[r] || r;
-
-const Field = ({ name, label, type = 'text', value = '' }) => (
-  <label className="formrow">
-    <span className="label">{label}</span>
-    <input className="input" name={name} type={type} defaultValue={value} required />
-  </label>
+const STATUS = {
+  PendingVerification: [L('Pending verification', 'بانتظار التوثيق'), 'warning'],
+  Verified: [L('Verified', 'موثّقة'), 'success'],
+  Suspended: [L('Suspended', 'معلّقة'), 'danger'],
+  Closed: [L('Closed', 'مقفلة'), '']
+};
+const StatusPill = ({ status }) => (
+  <Pill label={(STATUS[status] || [status])[0]} tone={(STATUS[status] || [])[1] || ''} />
 );
 
-/* options: [[value, label, chosen?]] */
-const Choice = ({ name, label, options }) => (
-  <label className="formrow">
-    <span className="label">{label}</span>
-    <Select name={name} required={name !== 'personId'} defaultValue={options.find(o => o[2])?.[0]}>
-      {options.map(([v, l]) => (
-        <option key={v} value={v}>
-          {l}
-        </option>
-      ))}
-    </Select>
-  </label>
-);
+/* The organizations in reach: from capacities, then any opened by reference. Each is read with its version. */
+async function loadOrganizations() {
+  const scopes = await A.myScopes();
+  const archIds = new Set([...scopes.archdioceses.map(a => a.id), ...opened.archdioceses]),
+    parishIds = new Set([...scopes.parishes.map(p => p.id), ...opened.parishes]);
+  const read = (ids, get) =>
+    Promise.all(
+      [...ids].map(id =>
+        get(id).then(
+          r => ({ ...r.value, version: r.version }),
+          () => null
+        )
+      )
+    ).then(list => list.filter(Boolean));
+  const [archdioceses, parishes] = await Promise.all([read(archIds, A.getArchdiocese), read(parishIds, A.getParish)]);
+  return { scopes, archdioceses, parishes };
+}
 
-/* A role that only makes sense across a diocese moves the scope there by itself. */
-function ScopedForm(props) {
-  const box = useRef(null);
-  useEffect(() => {
-    const f = box.current?.querySelector('form');
-    if (!f?.elements.role || !f.elements.scopeType) return undefined;
-    const sync = () => {
-      if (['diocesan_admin', 'clergy_assigner'].includes(f.elements.role.value)) f.elements.scopeType.value = 'diocese';
-    };
-    f.elements.role.addEventListener('change', sync);
-    sync();
-    return () => f.elements.role.removeEventListener('change', sync);
-  }, []);
+function claimsDrawer(parish) {
+  const body = <Claims parish={parish} />;
+  openDrawer({ large: true, title: L('Ownership claims', 'مطالبات الملكية'), sub: parish.name, body });
+}
+
+/* Who owns a parish record is contested through a claim: opened by someone with evidence, answered by
+   the current owner, decided by a platform operator. */
+function Claims({ parish }) {
+  const { data, error, reload } = useLoad(() => A.orEmpty(A.listClaims(parish.id)), []);
+  const open = () =>
+    openForm({
+      title: L('Open a claim', 'فتح مطالبة'),
+      fields: [
+        { name: 'statement', label: L('What you are claiming and why', 'ما تطالب به ولماذا'), type: 'textarea' },
+        { name: 'evidenceReference', label: L('Evidence reference', 'مرجع الإثبات') }
+      ],
+      save: v => A.openClaim(parish.id, { statement: v.statement, evidenceReference: v.evidenceReference }),
+      done: reload
+    });
+  const act = (c, title, fields, send) =>
+    openForm({
+      title,
+      fields,
+      save: async v => {
+        const fresh = await A.getClaim(parish.id, c.id);
+        return send(fresh.version, v);
+      },
+      done: reload
+    });
   return (
-    <div ref={box} style={{ display: 'contents' }}>
-      <DrawerForm id="workspace-form" {...props} />
-    </div>
+    <>
+      <button className="btn btn-primary" data-claim-open="" onClick={open}>
+        {L('Open a claim', 'فتح مطالبة')}
+      </button>
+      {error ? <p className="alert alert-danger">{error}</p> : null}
+      {(data || []).map(c => (
+        <Row
+          key={c.id}
+          title={`${c.status} · ${shortDay(c.openedAt)}`}
+          lines={[c.statement, c.decisionReason, c.ownerResponse && `${L('Owner', 'المالك')}: ${c.ownerResponse}`]}
+          actions={
+            c.status === 'Open' ? (
+              <>
+                <button
+                  className="btn btn-secondary btn-dense"
+                  onClick={() =>
+                    act(
+                      c,
+                      L('Respond to the claim', 'الردّ على المطالبة'),
+                      [{ name: 'response', label: L('Response', 'الردّ'), type: 'textarea' }],
+                      (version, v) => A.respondClaim(parish.id, c.id, version, v.response)
+                    )
+                  }
+                >
+                  {L('Respond', 'ردّ')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-dense"
+                  onClick={() =>
+                    act(c, L('Withdraw the claim', 'سحب المطالبة'), [], version =>
+                      A.withdrawClaim(parish.id, c.id, version)
+                    )
+                  }
+                >
+                  {L('Withdraw', 'سحب')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-dense"
+                  onClick={() =>
+                    act(
+                      c,
+                      L('Decide the claim', 'البتّ في المطالبة'),
+                      [
+                        {
+                          name: 'recover',
+                          label: L('Decision', 'القرار'),
+                          type: 'select',
+                          options: [
+                            ['true', L('Recover to the claimant', 'استرداد للمطالب')],
+                            ['false', L('Keep the current owner', 'إبقاء المالك الحالي')]
+                          ]
+                        },
+                        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' },
+                        { name: 'evidenceReference', label: L('Review evidence reference', 'مرجع إثبات المراجعة') }
+                      ],
+                      (version, v) =>
+                        A.decideClaim(parish.id, c.id, {
+                          version,
+                          recover: v.recover === 'true',
+                          reason: v.reason,
+                          evidenceReference: v.evidenceReference
+                        })
+                    )
+                  }
+                >
+                  {L('Decide', 'بتّ')}
+                </button>
+              </>
+            ) : null
+          }
+        />
+      ))}
+      {data && !data.length ? <p>{L('No claims on this parish.', 'لا مطالبات على هذه الرعية.')}</p> : null}
+    </>
   );
 }
 
-const form = (title, body, save, done) =>
-  openDrawer({
-    title,
-    body: (
-      <ScopedForm save={save} done={done} saved={L('Saved', 'حُفظ')}>
-        {body}
-      </ScopedForm>
-    )
-  });
-
-export function WorkspacePage() {
-  const [loaded, setLoaded] = useState(null),
-    [error, setError] = useState(''),
-    [, setParish] = useState(parishId),
-    [query, setQuery] = useState('');
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      const scope = await api('workspace');
-      if (!scope.parishes.some(p => p.id === parishId))
-        parishId = scope.parishes.some(p => p.id === session.parishId) ? session.parishId : scope.parishes[0]?.id || '';
-      const current = scope.parishes.find(p => p.id === parishId),
-        auth =
-          current?.authority ||
-          scope.dioceses.find(d => d.authority)?.authority ||
-          session.user.platformRole ||
-          session.user.role;
-      const [people, plan, guest] = parishId
-        ? await Promise.all([
-            api('workspace/people?parish=' + encodeURIComponent(parishId)),
-            api('workspace/plan?parish=' + encodeURIComponent(parishId)),
-            api('workspace/guest-requests?parish=' + encodeURIComponent(parishId))
-          ])
-        : [{ users: [], memberships: [], people: [], grants: [] }, null, { requests: [] }];
-      const certificates = auth === 'bishop' ? (await api('workspace/certificates')).certificates : [];
-      if (live) setLoaded({ scope, auth, people, plan, guest, certificates, parish: parishId });
-    })().catch(e => {
-      if (live) setError(e.message);
-    });
-    return () => {
-      live = false;
-    };
-  }, [loaded?.parish !== parishId ? parishId : loaded?.parish]);
-  const head = (
-    <PageHead
-      title={L('Administration', 'الإدارة')}
-      sub={L(
-        'Manage dioceses, parishes, accounts and bundles within your assigned authority.',
-        'إدارة الأبرشيات والرعايا والحسابات والباقات ضمن صلاحياتك.'
-      )}
-    />
+function historyDrawer(parish) {
+  A.parishStatusHistory(parish.id).then(
+    list =>
+      openDrawer({
+        title: L('Operating status history', 'سجل الحالة التشغيلية'),
+        sub: parish.name,
+        body: list.length ? (
+          <ol className="ins-notes">
+            {list.map(c => (
+              <li key={c.id}>
+                <span className="ins-note-kind">
+                  {c.from} → {c.to}
+                </span>
+                <p>{c.reason}</p>
+                <small>{new Date(c.at).toLocaleString()}</small>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>{L('No status changes yet.', 'لا تغييرات في الحالة بعد.')}</p>
+        )
+      }),
+    e => toast(L('Could not load the history', 'تعذّر تحميل السجل'), e.message, 'danger')
   );
-  if (error || !loaded || loaded.parish !== parishId)
-    return (
-      <>
-        {head}
-        <div data-workspace="" aria-live="polite">
-          {error || L('Loading administration…', 'جارٍ تحميل الإدارة…')}
-        </div>
-      </>
-    );
-  const { scope, auth, people, plan, guest, certificates } = loaded;
-  const diocesan = ['super_admin', 'bishop', 'diocesan_admin'].includes(auth);
-  const refresh = async () => {
-    await loadSession();
-    S.role = session.user.role;
-    await hydrate();
-    if (!canSee(S.route)) S.route = role().nav.find(n => n[0] === 'l')[1];
-    bus.renderAll();
+}
+
+function Organizations({ data, reload }) {
+  const { scopes, archdioceses, parishes } = data;
+  const bishopOf = new Set(scopes.archdioceses.filter(a => a.kinds.includes('Bishop')).map(a => a.id));
+  const archOptions = scopes.archdioceses.map(a => [a.id, a.name || a.id]);
+
+  const registerArchdiocese = () =>
+    openForm({
+      title: L('Register an archdiocese', 'تسجيل أبرشية'),
+      intro: L('A platform operator verifies it afterwards.', 'يوثّقها مشغّل المنصة بعد ذلك.'),
+      fields: [
+        { name: 'name', label: L('Name', 'الاسم') },
+        { name: 'locality', label: L('Locality', 'البلدة') }
+      ],
+      save: A.registerArchdiocese,
+      done: reload
+    });
+  const registerParish = () =>
+    openForm({
+      title: L('Register a parish', 'تسجيل رعية'),
+      intro: L(
+        'The parish is pending until a platform operator verifies it.',
+        'تبقى الرعية بانتظار التوثيق إلى أن يوثّقها مشغّل المنصة.'
+      ),
+      fields: [
+        { name: 'name', label: L('Name', 'الاسم') },
+        { name: 'locality', label: L('Locality', 'البلدة') },
+        { name: 'contact', label: L('Contact (email or phone)', 'جهة الاتصال (بريد أو هاتف)') },
+        {
+          name: 'declaredArchdiocese',
+          label: L('Archdiocese, as declared (optional)', 'الأبرشية كما أُعلنت (اختياري)'),
+          required: false
+        }
+      ],
+      save: A.registerParish,
+      done: reload
+    });
+  const verify = async (org, kind) => {
+    try {
+      const inspected = await (kind === 'parish'
+        ? A.inspectParishVerification(org.id)
+        : A.inspectArchdioceseVerification(org.id));
+      openForm({
+        title: L('Verify', 'توثيق') + ' · ' + org.name,
+        intro: L(
+          'Record the evidence you checked. Verification is recorded with your name.',
+          'سجّل الإثبات الذي راجعته. يُسجَّل التوثيق باسمك.'
+        ),
+        fields: [{ name: 'evidenceReference', label: L('Evidence reference', 'مرجع الإثبات') }],
+        save: v =>
+          (kind === 'parish' ? A.verifyParish : A.verifyArchdiocese)(org.id, inspected.version, v.evidenceReference),
+        done: reload
+      });
+    } catch (e) {
+      toast(L('Could not open verification', 'تعذّر فتح التوثيق'), e.message, 'danger');
+    }
   };
-  const dioceses = scope.dioceses.map(d => [d.id, d.name]);
-  const BUNDLES = ['presence', 'office', 'community', 'complete'];
-  const emergency = () => {
-    let found = null;
-    form(
-      L('Emergency message access', 'الوصول إلى رسالة في حالة طارئة'),
-      <>
-        <p className="help">
-          {L(
-            'Open one specific message using its reference. Your reason and access are recorded.',
-            'افتح رسالة محددة بواسطة مرجعها. يُسجّل سببك ووصولك.'
-          )}
-        </p>
-        <Field name="id" label={L('Message reference', 'مرجع الرسالة')} />
-        <label className="formrow">
-          <span className="label">
-            {L('Specific emergency or reported problem', 'الحالة الطارئة أو المشكلة المبلّغ عنها')}
-          </span>
-          <textarea className="textarea" name="reason" required minLength="20" maxLength="1000" />
-        </label>
-      </>,
-      async q => {
-        found = await api('workspace/emergency-message', 'POST', q);
-      },
-      async () => {
-        const m = found;
-        openDrawer({
-          title: m.title,
-          body: (
-            <>
-              <p>
-                {m.id} · {m.created_at}
-              </p>
-              <div className="message-body">{m.body}</div>
-            </>
-          )
-        });
-      }
-    );
-  };
-  const bishopReview = r =>
-    form(
-      L('Bishop acceptance', 'قبول المطران'),
-      <>
-        <p>
-          {r.reference} · {r.person}
-        </p>
-        <p>
-          {L('Signed by', 'موقّعة من')}: {r.signedBy}
-        </p>
-        {r.note ? (
-          <p>
-            {L('Priest’s resubmission note', 'ملاحظة الكاهن عند إعادة التقديم')}: {r.note}
-          </p>
-        ) : null}
-        <Choice
-          name="decision"
-          label={L('Decision', 'القرار')}
-          options={[
-            ['accepted', L('Accept', 'قبول')],
-            ['returned', L('Return to priest', 'إعادة للكاهن')]
-          ]}
-        />
-        <label className="formrow">
-          <span className="label">{L('Note (required when returning)', 'ملاحظة (إلزامية عند الإعادة)')}</span>
-          <textarea className="textarea" name="note" maxLength="1000" />
-        </label>
-      </>,
-      q => api('workspace/certificates', 'POST', { ...q, id: r.id, parish: r.parish, revision: r.revision }),
-      refresh
-    );
-  const sharedPlan = () => {
-    const choices = scope.parishes.filter(p => ['super_admin', 'bishop', 'diocesan_admin'].includes(p.authority));
-    form(
-      L('Shared diocesan arrangement', 'ترتيب مشترك في الأبرشية'),
-      <>
-        <Field name="arrangement" label={L('Arrangement name', 'اسم الترتيب')} />
-        <Choice name="bundle" label={L('Bundle', 'الباقة')} options={BUNDLES.map(v => [v, v])} />
-        <fieldset>
-          <legend>{L('Choose parishes from one diocese', 'اختر رعايا من أبرشية واحدة')}</legend>
-          {choices.map(p => (
-            <label key={p.id} className="check">
-              <input type="checkbox" name={`parish-${p.id}`} value={p.id} />
-              {p.metadata.name}
-            </label>
-          ))}
-        </fieldset>
-      </>,
-      q =>
-        api('workspace/plans', 'POST', {
-          arrangement: q.arrangement,
-          bundle: q.bundle,
-          parishes: Object.entries(q)
-            .filter(([k]) => k.startsWith('parish-'))
-            .map(([, v]) => v)
+  const changeStatus = p =>
+    openForm({
+      title: L('Operating status', 'الحالة التشغيلية') + ' · ' + p.name,
+      fields: [
+        {
+          name: 'action',
+          label: L('Change', 'التغيير'),
+          type: 'select',
+          options: [
+            ['suspend', L('Suspend', 'تعليق')],
+            ['reinstate', L('Reinstate', 'إعادة تفعيل')],
+            ['close', L('Close', 'إقفال')]
+          ]
+        },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }
+      ],
+      save: async v => A.changeParishStatus(p.id, (await A.getParish(p.id)).version, v.action, v.reason),
+      done: reload
+    });
+  const location = async p => {
+    const current = await A.getParishLocation(p.id).catch(e => (e.status === 404 ? null : Promise.reject(e)));
+    const loc = current?.value;
+    openForm({
+      title: L('Location', 'الموقع') + ' · ' + p.name,
+      fields: [
+        {
+          name: 'latitude',
+          label: L('Latitude', 'خط العرض'),
+          type: 'number',
+          value: loc?.latitude ?? '',
+          required: false
+        },
+        {
+          name: 'longitude',
+          label: L('Longitude', 'خط الطول'),
+          type: 'number',
+          value: loc?.longitude ?? '',
+          required: false
+        },
+        {
+          name: 'sourceReference',
+          label: L('Source of the coordinates', 'مصدر الإحداثيات'),
+          value: loc?.sourceReference || '',
+          required: false
+        }
+      ],
+      save: v =>
+        A.setParishLocation(p.id, {
+          version: current?.version || null,
+          latitude: v.latitude === '' ? null : Number(v.latitude),
+          longitude: v.longitude === '' ? null : Number(v.longitude),
+          sourceReference: v.sourceReference || null
         }),
-      refresh
-    );
+      done: reload
+    });
   };
-  const newDiocese = () =>
-    form(
-      L('Create diocese', 'إنشاء أبرشية'),
-      <Field name="name" label={L('Diocese name', 'اسم الأبرشية')} />,
-      q => api('workspace/dioceses', 'POST', q),
-      refresh
-    );
-  const newParish = () =>
-    form(
-      L('Create parish', 'إنشاء رعية'),
-      <>
-        <Choice name="diocese" label={L('Diocese', 'الأبرشية')} options={dioceses} />
-        <Field name="name" label={L('Parish name', 'اسم الرعية')} />
-        <Field name="nameAr" label={L('Arabic name', 'الاسم العربي')} />
-        <Field name="town" label={L('Town', 'البلدة')} />
-        <Field name="rite" label={L('Rite', 'الطقس')} />
-        <p className="help">
-          {L(
-            'A secretary is optional. Leave this blank to appoint one later.',
-            'تعيين أمين سر اختياري. اترك الحقل فارغاً لتعيينه لاحقاً.'
-          )}
-        </p>
-        <label className="formrow">
-          <span className="label">{L('Secretary username (optional)', 'اسم مستخدم أمين السر (اختياري)')}</span>
-          <input className="input" name="secretaryUsername" maxLength="120" />
-        </label>
-      </>,
-      async q => {
-        let secretaryUserId = null;
-        if (q.secretaryUsername.trim())
-          secretaryUserId = (
-            await api('workspace/account-lookup', 'POST', {
-              scopeType: 'diocese',
-              diocese: q.diocese,
-              username: q.secretaryUsername.trim()
-            })
-          ).user.id;
-        await api('workspace/parishes', 'POST', { ...q, secretaryUserId });
+  const associate = p =>
+    openForm({
+      title: L('Associate with an archdiocese', 'ربط بأبرشية') + ' · ' + p.name,
+      intro: L('The archdiocese then accepts or declines.', 'تقبل الأبرشية بعد ذلك أو ترفض.'),
+      fields: [
+        { name: 'archdioceseId', label: L('Archdiocese reference', 'مرجع الأبرشية'), value: archOptions[0]?.[0] || '' }
+      ],
+      save: async v => A.proposeAssociation(p.id, (await A.getParish(p.id)).version, v.archdioceseId.trim()),
+      done: reload
+    });
+  const jurisdiction = p =>
+    openForm({
+      title: L('Propose jurisdiction', 'اقتراح الولاية') + ' · ' + p.name,
+      fields: [
+        { name: 'archdioceseId', label: L('Archdiocese reference', 'مرجع الأبرشية'), value: archOptions[0]?.[0] || '' },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' },
+        { name: 'evidenceReference', label: L('Evidence reference', 'مرجع الإثبات') }
+      ],
+      save: async v => {
+        const r = await A.proposeJurisdiction(p.id, {
+          version: (await A.getParish(p.id)).version,
+          archdioceseId: v.archdioceseId.trim(),
+          reason: v.reason,
+          evidenceReference: v.evidenceReference
+        });
+        toast(L('Proposal recorded', 'سُجّل الاقتراح'), `${L('Reference', 'المرجع')}: ${r.id}`, 'success');
       },
-      refresh
-    );
-  const newAccount = () => {
-    const roles = [
-      'member',
-      'secretary',
-      'treasurer',
-      'leader',
-      ...(auth !== 'parish_admin' ? ['parish_admin'] : []),
-      ...(['super_admin', 'bishop'].includes(auth) ? ['diocesan_admin'] : []),
-      ...(auth === 'super_admin' ? ['bishop'] : []),
-      ...(auth === 'bishop' ? ['priest'] : [])
-    ];
-    form(
-      L('Create account', 'إنشاء حساب'),
-      <>
-        <Field name="name" label={L('Full name', 'الاسم الكامل')} />
-        <Field name="username" label={L('Username', 'اسم المستخدم')} />
-        <Field
-          name="password"
-          label={L('Temporary password · 12+ characters', 'كلمة مرور مؤقتة · ١٢ حرفاً على الأقل')}
-          type="password"
-        />
-        <Choice name="diocese" label={L('Diocese', 'الأبرشية')} options={dioceses} />
-        <Choice name="role" label={L('Role', 'الدور')} options={roles.map(r => [r, roleLabel(r)])} />
-        <Choice
-          name="personId"
-          label={L('Link person (required for clergy and leaders)', 'ربط شخص (إلزامي للكهنة والمسؤولين)')}
-          options={[['', L('No person link yet', 'دون ربط حالياً')], ...people.people.map(p => [p.id, p.name])]}
-        />
-      </>,
-      q => api('workspace/users', 'POST', { ...q, parish: parishId || null }),
-      refresh
-    );
+      done: reload
+    });
+  const decideJurisdiction = p => {
+    openForm({
+      title: L('Decide a jurisdiction proposal', 'البتّ في اقتراح ولاية') + ' · ' + p.name,
+      intro: L(
+        'Open the proposal by its reference. Deciding needs your password and authenticator code.',
+        'افتح الاقتراح بمرجعه. يتطلّب البتّ كلمة مرورك ورمز المصادقة.'
+      ),
+      fields: [
+        { name: 'proposalId', label: L('Proposal reference', 'مرجع الاقتراح') },
+        {
+          name: 'accept',
+          label: L('Decision', 'القرار'),
+          type: 'select',
+          options: [
+            ['true', L('Accept', 'قبول')],
+            ['false', L('Decline', 'رفض')]
+          ]
+        },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' },
+        { name: 'currentPassword', label: L('Your password', 'كلمة مرورك'), type: 'password' },
+        { name: 'currentCode', label: L('Authenticator code', 'رمز المصادقة') }
+      ],
+      save: async v => {
+        const fresh = await A.getJurisdiction(p.id, v.proposalId.trim());
+        return A.decideJurisdiction(p.id, v.proposalId.trim(), {
+          version: fresh.version,
+          accept: v.accept === 'true',
+          reason: v.reason,
+          currentPassword: v.currentPassword,
+          currentCode: v.currentCode
+        });
+      },
+      done: reload
+    });
   };
-  const title = u =>
-    form(
-      L('Change clergy title', 'تغيير اللقب الكهنوتي'),
-      <Choice
-        name="title"
-        label={L('Title', 'اللقب')}
-        options={['Deacon', 'Priest', 'Monsignor', 'Archimandrite'].map(v => [v, v])}
-      />,
-      q => api('workspace/clergy-title', 'POST', { ...q, userId: u.id }),
-      refresh
-    );
-  const suspend = u =>
-    form(
-      u.inactive ? L('Reactivate access', 'إعادة تفعيل الوصول') : L('Deactivate access', 'تعطيل الوصول'),
-      <>
-        <p>{L('Records and activity are preserved.', 'تبقى السجلات والأنشطة محفوظة.')}</p>
-        <Field name="reason" label={L('Reason', 'السبب')} />
-        <Choice
-          name="scope"
-          label={L('Scope', 'النطاق')}
-          options={[
-            ['parish', L('This parish only', 'هذه الرعية فقط')],
-            ...(auth === 'super_admin' ? [['global', L('All parishes', 'كل الرعايا')]] : [])
-          ]}
-        />
-        {auth === 'super_admin' ? (
-          <Field
-            name="currentPassword"
-            label={L(
-              'Current password (required for system-wide changes)',
-              'كلمة المرور الحالية (إلزامية للتغييرات العامة)'
-            )}
-            type="password"
-          />
-        ) : null}
-      </>,
-      q => api('workspace/suspension', 'POST', { ...q, parish: parishId, userId: u.id, active: !u.inactive }),
-      refresh
-    );
-  const membership = m =>
-    form(
-      L('Review membership', 'مراجعة العضوية'),
-      <>
-        <p>
-          {L(
-            'Confirm the identity before linking an existing person record.',
-            'تأكّد من الهوية قبل ربط سجل شخص موجود.'
-          )}
-        </p>
-        <Choice
-          name="status"
-          label={L('Decision', 'القرار')}
-          options={[
-            ['approved', L('Approve', 'موافقة')],
-            ['declined', L('Decline', 'رفض')]
-          ]}
-        />
-        <Choice
-          name="personId"
-          label={L('Existing person', 'الشخص الموجود')}
-          options={[['', L('Choose a person', 'اختر شخصاً')], ...people.people.map(p => [p.id, p.name])]}
-        />
-      </>,
-      q => api('workspace/membership', 'POST', { ...q, parish: parishId, userId: m.user_id }),
-      refresh
-    );
-  const guestReview = r =>
-    form(
-      L('Review guest request', 'مراجعة طلب زائر'),
-      <>
-        <p>{r.details.description}</p>
-        <Choice
-          name="status"
-          label={L('Status', 'الحالة')}
-          options={['submitted', 'office-review', 'missing-documents', 'ready-for-collection', 'closed'].map(v => [
-            v,
-            v,
-            r.status === v
-          ])}
-        />
-        <label className="formrow">
-          <span className="label">
-            {L('Response visible on the private tracking link', 'الرد الظاهر في رابط المتابعة الخاص')}
-          </span>
-          <textarea className="textarea" name="response" maxLength="2000" defaultValue={r.response} />
-        </label>
-      </>,
-      q => api('workspace/guest-requests', 'POST', { ...q, id: r.id }),
-      refresh
-    );
-  const managePlan = () =>
-    form(
-      L('Parish bundle', 'باقة الرعية'),
-      <>
-        <Choice name="bundle" label={L('Bundle', 'الباقة')} options={BUNDLES.map(v => [v, v, v === plan.bundle])} />
-        {diocesan ? (
-          <Choice
-            name="sponsor"
-            label={L('Arrangement', 'الترتيب')}
-            options={[
-              ['parish', L('Parish managed', 'إدارة الرعية'), plan.sponsor === 'parish'],
-              ['diocese', L('Diocese sponsored', 'برعاية الأبرشية'), plan.sponsor === 'diocese']
-            ]}
-          />
-        ) : null}
-        <Choice
-          name="publicRequests"
-          label={L('Guest requests on the public profile', 'طلبات الزوّار في الموقع العام')}
-          options={[
-            ['true', L('Available', 'متاحة'), plan.publicRequests !== false],
-            ['false', L('Contact office instead', 'التواصل مع المكتب'), plan.publicRequests === false]
-          ]}
-        />
-      </>,
-      q => api('workspace/plan', 'POST', { ...q, parish: parishId, publicRequests: q.publicRequests === 'true' }),
-      refresh
-    );
-  const q = query.toLowerCase().trim();
+  const open = (kind, id) => {
+    (kind === 'parish' ? opened.parishes : opened.archdioceses).add(id);
+    remember();
+    return reload();
+  };
+  const operator = scopes.operator;
   return (
     <>
-      {head}
-      <div data-workspace="" aria-live="polite">
-        <div className="collection-toolbar">
-          {scope.canCreateDiocese ? (
-            <button className="btn btn-secondary" data-new-diocese="" onClick={newDiocese}>
-              {L('New diocese', 'أبرشية جديدة')}
-            </button>
-          ) : null}
-          {diocesan ? (
-            <button className="btn btn-secondary" data-shared-plan="" onClick={sharedPlan}>
-              {L('Shared parish bundle', 'باقة مشتركة للرعايا')}
-            </button>
-          ) : null}
-          {diocesan ? (
-            <button className="btn btn-secondary" data-new-parish="" onClick={newParish}>
-              {L('New parish', 'رعية جديدة')}
-            </button>
-          ) : null}
-          {scope.isSuperAdmin ? (
-            <button className="btn btn-secondary" data-homepage="" onClick={() => editHomepage()}>
-              {L('Homepage', 'الصفحة الرئيسية')}
-            </button>
-          ) : null}
-          {auth === 'super_admin' ? (
-            <button className="btn btn-secondary" data-emergency="" onClick={emergency}>
-              {L('Emergency message review', 'مراجعة رسالة في حالة طارئة')}
-            </button>
-          ) : null}
-          <button className="btn btn-primary" data-new-account="" onClick={newAccount}>
-            {L('Create account', 'إنشاء حساب')}
+      <div className="collection-toolbar">
+        <button className="btn btn-secondary" data-new-archdiocese="" onClick={registerArchdiocese}>
+          {L('Register an archdiocese', 'تسجيل أبرشية')}
+        </button>
+        <button className="btn btn-primary" data-new-parish="" onClick={registerParish}>
+          {L('Register a parish', 'تسجيل رعية')}
+        </button>
+        {operator ? (
+          <button className="btn btn-secondary" data-homepage="" onClick={() => editHomepage()}>
+            {L('Homepage', 'الصفحة الرئيسية')}
           </button>
-          {parishId ? (
-            <button
-              className="btn btn-secondary"
-              data-public-profile=""
-              onClick={() => editPublicProfile(parishId, refresh)}
-            >
-              {L('Edit public parish profile', 'تعديل صفحة الرعية العامة')}
-            </button>
-          ) : null}
-          {scope.parishes.length ? (
-            <label>
-              {L('Parish', 'الرعية')}{' '}
-              <Select
-                data-workspace-parish=""
-                value={parishId}
-                onChange={e => {
-                  parishId = e.target.value;
-                  setParish(parishId);
-                }}
-              >
-                {scope.parishes.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.metadata.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ) : null}
-        </div>
-        {auth === 'bishop' ? (
-          <Panel title={L('Signed certificates for acceptance', 'شهادات موقّعة للقبول')}>
-            <Paged className="account-parishes" data-paginate="">
-              {certificates.length ? (
-                certificates.map(r => (
-                  <article key={r.parish + r.id}>
-                    <div>
-                      <h3>
-                        {r.person} · {r.reference}
-                      </h3>
-                      <p>
-                        {r.parishName} · {r.signedBy}
-                      </p>
-                      <span className="pill">{r.status}</span>
-                    </div>
-                    {r.status === 'pending' ? (
+        ) : null}
+      </div>
+      <Section title={L('Archdioceses', 'الأبرشيات')}>
+        {archdioceses.length ? (
+          archdioceses.map(a => (
+            <Row
+              key={a.id}
+              data-archdiocese={a.id}
+              title={a.name}
+              lines={[
+                a.locality,
+                a.verified ? L('Verified', 'موثّقة') : L('Not verified yet', 'غير موثّقة بعد'),
+                `${L('Reference', 'المرجع')}: ${a.id}`
+              ]}
+              actions={
+                operator && !a.verified ? (
+                  <button
+                    className="btn btn-primary btn-dense"
+                    data-verify={a.id}
+                    onClick={() => verify(a, 'archdiocese')}
+                  >
+                    {L('Verify', 'توثيق')}
+                  </button>
+                ) : null
+              }
+            />
+          ))
+        ) : (
+          <p>{L('No archdiocese in reach.', 'لا أبرشية في النطاق.')}</p>
+        )}
+        <ReferenceBox
+          label={L('Open an archdiocese by reference', 'فتح أبرشية بمرجعها')}
+          onOpen={id => open('archdiocese', id)}
+        />
+      </Section>
+      <Section title={L('Parishes', 'الرعايا')}>
+        {parishes.length ? (
+          parishes.map(p => {
+            const bishop = bishopOf.has(p.jurisdictionArchdioceseId);
+            return (
+              <Row
+                key={p.id}
+                data-parish={p.id}
+                title={
+                  <>
+                    {p.name} <StatusPill status={p.status} />
+                  </>
+                }
+                lines={[
+                  `${p.locality} · ${p.contact}`,
+                  p.declaredArchdiocese && `${L('Declared archdiocese', 'الأبرشية المعلنة')}: ${p.declaredArchdiocese}`,
+                  `${L('Reference', 'المرجع')}: ${p.id}`
+                ]}
+                actions={
+                  <>
+                    {operator && p.status === 'PendingVerification' ? (
                       <button
-                        className="btn btn-primary"
-                        data-bishop-review={r.id}
-                        data-parish={r.parish}
-                        onClick={() => bishopReview(r)}
+                        className="btn btn-primary btn-dense"
+                        data-verify={p.id}
+                        onClick={() => verify(p, 'parish')}
                       >
-                        {L('Review', 'مراجعة')}
+                        {L('Verify', 'توثيق')}
                       </button>
                     ) : null}
-                  </article>
-                ))
-              ) : (
-                <p>{L('No signed certificates awaiting acceptance.', 'لا شهادات موقّعة بانتظار القبول.')}</p>
-              )}
-            </Paged>
-          </Panel>
-        ) : null}
-        <section data-access-management="">
-          <AccessManagement
-            workspace={scope}
-            parishId={parishId}
-            refreshSession={refresh}
-            parishPeople={people.people}
-          />
-        </section>
-        {!parishId ? (
+                    {bishop ? (
+                      <button
+                        className="btn btn-secondary btn-dense"
+                        data-status={p.id}
+                        onClick={() => changeStatus(p)}
+                      >
+                        {L('Operating status', 'الحالة التشغيلية')}
+                      </button>
+                    ) : null}
+                    <button className="btn btn-secondary btn-dense" onClick={() => location(p)}>
+                      {L('Location', 'الموقع')}
+                    </button>
+                    <button className="btn btn-secondary btn-dense" onClick={() => associate(p)}>
+                      {L('Associate', 'ربط')}
+                    </button>
+                    <button className="btn btn-secondary btn-dense" onClick={() => jurisdiction(p)}>
+                      {L('Propose jurisdiction', 'اقتراح الولاية')}
+                    </button>
+                    <button className="btn btn-secondary btn-dense" onClick={() => decideJurisdiction(p)}>
+                      {L('Decide proposal', 'البتّ في اقتراح')}
+                    </button>
+                    <button className="btn btn-secondary btn-dense" onClick={() => claimsDrawer(p)}>
+                      {L('Ownership claims', 'مطالبات الملكية')}
+                    </button>
+                    <button className="btn btn-secondary btn-dense" onClick={() => historyDrawer(p)}>
+                      {L('Status history', 'سجل الحالة')}
+                    </button>
+                  </>
+                }
+              />
+            );
+          })
+        ) : (
           <p>
             {L(
-              'Create a diocese and parish to begin, or assign this account a scope.',
-              'أنشئ أبرشية ورعية للبدء أو عيّن نطاقاً لهذا الحساب.'
+              'No parish in reach. Register one, or open a parish by its reference.',
+              'لا رعية في النطاق. سجّل رعية أو افتح رعية بمرجعها.'
             )}
           </p>
-        ) : (
-          <>
-            <Panel title={L('Accounts and access', 'الحسابات والصلاحيات')}>
-              <input
-                className="input"
-                type="search"
-                data-user-search=""
-                placeholder={L('Search accounts', 'ابحث عن حساب')}
-                aria-label={L('Search accounts', 'ابحث عن حساب')}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
-              <Paged className="account-parishes" data-paginate="">
-                {people.users.length ? (
-                  people.users.map(u => {
-                    const text = (u.name + ' ' + u.username).toLowerCase();
-                    return (
-                      <article key={u.id} data-search={text} hidden={!text.includes(q)}>
-                        <div>
-                          <h3>{u.name}</h3>
-                          <p>
-                            {u.username} · {roleLabel(u.effectiveRole || u.role)}
-                            {u.clergyTitle ? ' · ' + u.clergyTitle : ''}
-                          </p>
-                          <small>
-                            {u.inactive ? L('Inactive in this context', 'غير نشط في هذا النطاق') : L('Active', 'نشط')}
-                          </small>
-                        </div>
-                        <div className="account-actions">
-                          {auth === 'bishop' ? (
-                            <button className="btn btn-secondary" data-title={u.id} onClick={() => title(u)}>
-                              {L('Clergy title', 'اللقب الكهنوتي')}
-                            </button>
-                          ) : null}
-                          {u.canSuspend ? (
-                            <button className="btn btn-secondary" data-suspend={u.id} onClick={() => suspend(u)}>
-                              {u.inactive ? L('Reactivate', 'إعادة تفعيل') : L('Deactivate', 'تعطيل')}
-                            </button>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <p>{L('No accounts in this parish yet.', 'لا حسابات في هذه الرعية بعد.')}</p>
-                )}
-              </Paged>
-            </Panel>
-            <Panel title={L('Membership review', 'مراجعة العضوية')}>
-              <Paged className="account-parishes" data-paginate="">
-                {people.memberships.length ? (
-                  people.memberships.map(m => (
-                    <article key={m.user_id}>
-                      <div>
-                        <b>{m.name}</b>
-                        <p>{m.username}</p>
-                      </div>
-                      <button className="btn btn-primary" data-membership={m.user_id} onClick={() => membership(m)}>
-                        {L('Review and link person', 'مراجعة وربط الشخص')}
-                      </button>
-                    </article>
-                  ))
-                ) : (
-                  <p>{L('No pending membership requests.', 'لا طلبات عضوية معلّقة.')}</p>
-                )}
-              </Paged>
-            </Panel>
-            <Panel title={L('Guest requests', 'طلبات الزوّار')}>
-              <p className="help">
-                {L(
-                  'Office review begins here. Sacraments retain their existing priest approval and preparation process.',
-                  'تبدأ مراجعة المكتب هنا. تحتفظ الأسرار بمسار موافقة الكاهن والتحضير.'
-                )}
-              </p>
-              <Paged className="account-parishes" data-paginate="">
-                {guest.requests.length ? (
-                  guest.requests.map(r => (
-                    <article key={r.id}>
-                      <div>
-                        <h3>
-                          {r.details.name} · {r.details.kind}
-                        </h3>
-                        <p>{r.details.description}</p>
-                        <small>
-                          {r.status} · {r.details.email || r.details.phone}
-                        </small>
-                      </div>
-                      <button className="btn btn-secondary" data-guest={r.id} onClick={() => guestReview(r)}>
-                        {L('Review', 'مراجعة')}
-                      </button>
-                    </article>
-                  ))
-                ) : (
-                  <p>{L('No guest requests yet.', 'لا طلبات زوّار بعد.')}</p>
-                )}
-              </Paged>
-            </Panel>
-            <Panel title={L('Parish bundle', 'باقة الرعية')}>
-              <p>
-                {L('Current bundle', 'الباقة الحالية')}: <b>{plan.bundle}</b> · {L('Arrangement', 'الترتيب')}:{' '}
-                {plan.sponsor}
-                {plan.arrangement ? ' · ' + plan.arrangement : ''}
-              </p>
-              {plan.requestedBundle ? (
-                <p>
-                  {L('Change requested', 'طلب تغيير')}: {plan.requestedBundle}
-                </p>
-              ) : null}
-              <p className="help">
-                {L(
-                  'Manual subscription management. No payment is charged here. Records remain preserved when a bundle changes.',
-                  'إدارة اشتراك يدوية. لا تُحصّل دفعات هنا. تبقى السجلات محفوظة عند تغيير الباقة.'
-                )}
-              </p>
-              <button className="btn btn-primary" data-plan="" onClick={managePlan}>
-                {plan.sponsor === 'diocese' && !diocesan
-                  ? L('Request a bundle change', 'طلب تغيير الباقة')
-                  : L('Manage bundle', 'إدارة الباقة')}
-              </button>
-            </Panel>
-          </>
         )}
+        <ReferenceBox label={L('Open a parish by reference', 'فتح رعية بمرجعها')} onOpen={id => open('parish', id)} />
+      </Section>
+      {operator ? <Identity /> : null}
+    </>
+  );
+}
+
+/* Identity: an MFA recovery request is reviewed by an operator, by account and request reference. */
+function Identity() {
+  const review = (accountId, requestId, request) =>
+    openForm({
+      title: L('Review a recovery request', 'مراجعة طلب استرداد'),
+      intro: `${request.value?.status || ''} · ${request.value?.reason || ''}`,
+      fields: [
+        {
+          name: 'approve',
+          label: L('Decision', 'القرار'),
+          type: 'select',
+          options: [
+            ['true', L('Approve', 'موافقة')],
+            ['false', L('Decline', 'رفض')]
+          ]
+        },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' },
+        { name: 'verificationReference', label: L('Identity check reference', 'مرجع التحقق من الهوية') },
+        { name: 'currentPassword', label: L('Your password', 'كلمة مرورك'), type: 'password' },
+        { name: 'currentCode', label: L('Authenticator code', 'رمز المصادقة') }
+      ],
+      save: v =>
+        A.reviewMfaRecovery(accountId, requestId, {
+          version: request.version,
+          approve: v.approve === 'true',
+          reason: v.reason,
+          verificationReference: v.verificationReference,
+          currentPassword: v.currentPassword,
+          currentCode: v.currentCode
+        })
+    });
+  const [account, setAccount] = useState('');
+  return (
+    <Section title={L('Accounts and identity review', 'الحسابات ومراجعة الهوية')}>
+      <p className="help">
+        {L(
+          'The API has no list of accounts. Open a sign-in recovery request by the account and request references.',
+          'لا توجد قائمة بالحسابات في الواجهة. افتح طلب استرداد الدخول بمرجع الحساب ومرجع الطلب.'
+        )}
+      </p>
+      <ReferenceBox
+        label={L('Request reference', 'مرجع الطلب')}
+        extra={
+          <input
+            className="input"
+            value={account}
+            onChange={e => setAccount(e.target.value)}
+            placeholder={L('Account reference', 'مرجع الحساب')}
+            aria-label={L('Account reference', 'مرجع الحساب')}
+            required
+          />
+        }
+        onOpen={async id => review(account.trim(), id, await A.getMfaRecoveryRequest(account.trim(), id))}
+      />
+    </Section>
+  );
+}
+
+const TABS = () => [
+  ['', 'Organizations', 'المؤسسات'],
+  ['appointments', 'Appointments', 'التعيينات'],
+  ['access', 'Access and billing', 'الصلاحيات والاشتراك']
+];
+
+export function WorkspacePage({ params: [tab = ''] = [] }) {
+  if (S.route === 'assignments') tab = 'appointments';
+  tab = ['appointments', 'access'].includes(tab) ? tab : '';
+  const orgs = useLoad(loadOrganizations, []);
+  return (
+    <>
+      <PageHead
+        title={L('Administration', 'الإدارة')}
+        sub={L(
+          'Parishes, archdioceses, appointments, access and billing, within the authority you hold.',
+          'الرعايا والأبرشيات والتعيينات والصلاحيات والاشتراك ضمن الصلاحيات التي تملكها.'
+        )}
+      />
+      <TabBar base="workspace" items={TABS()} active={tab} />
+      <div data-workspace="" aria-live="polite">
+        {orgs.error ? <p className="alert alert-danger">{orgs.error}</p> : null}
+        {!orgs.data && !orgs.error ? <p role="status">{L('Loading administration…', 'جارٍ تحميل الإدارة…')}</p> : null}
+        {orgs.data ? (
+          tab === 'appointments' ? (
+            <Appointments data={orgs.data} reload={orgs.reload} />
+          ) : tab === 'access' ? (
+            <AccessAndBilling data={orgs.data} reload={orgs.reload} />
+          ) : (
+            <Organizations data={orgs.data} reload={orgs.reload} />
+          )
+        ) : null}
+        {orgs.data && !orgs.data.parishes.length && !orgs.data.archdioceses.length && tab === '' ? (
+          <Empty
+            glyph="shield"
+            title={L('Nothing in reach yet', 'لا شيء في النطاق بعد')}
+            body={L('Register a parish or open one by its reference.', 'سجّل رعية أو افتح واحدة بمرجعها.')}
+          />
+        ) : null}
       </div>
     </>
   );

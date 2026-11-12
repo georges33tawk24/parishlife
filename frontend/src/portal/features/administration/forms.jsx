@@ -1,159 +1,586 @@
-/* Forms and workflows: request workflows with their steps, open tasks, the form builder and the
-   activity log. */
-import { nodesOr, css } from '../../ui/html.js';
-import { t, isAr, fmtDate } from '../../../lib/i18n.js';
-import { S } from '../../model/store.js';
-import { Icon, PageHead, Panel, Who, Pill, Table, Empty, Stat, openDrawer, TabBar, Paged } from '../../ui/ui.jsx';
-import * as C from '../../ui/components.jsx';
-import * as CR from '../../shared/record-editor.jsx';
-import { WORKFLOWS, RUNS, RUN_LOG, FORM_FIELDS, FORM_RULES, person } from '../../model/data.js';
-import { FIELD_TYPES } from '../../shared/record-editor.jsx';
+/* Forms and workflows, on ParishLife.Api's custom-workflow routes (/api/parishes/{id}/workflows and
+   .../workflow-runs). A workflow is a form (fields, some shown only when another field has a value) and
+   ordered steps, each needing a parish permission. Edits go to the API directly and the screen reloads.
+   The API has no due date, owner or subject person for a run, no average duration and no automation, so
+   those are not shown. Main members: forms (the page), openRun. */
+import { useState } from 'react';
+import { fmtDate } from '../../../lib/i18n.js';
+import { S, bus } from '../../model/store.js';
+import { session } from '../../model/api.js';
+import { hydrate } from '../../model/persist.js';
+import { WORKFLOWS, RUNS, RUN_LOG } from '../../model/data.js';
+import { Icon, PageHead, Panel, Pill, Table, Empty, Stat, TabBar, Paged, openDrawer, toast } from '../../ui/ui.jsx';
+import { Select } from '../../ui/components.jsx';
+import * as A from '../../model/modules/administration-api.js';
+import { L, openForm, csv } from './workspace-forms.jsx';
 
-const L = (en, ar) => t(en, ar);
+const PERMISSIONS = [
+  'people.read',
+  'people.write',
+  'requests.manage',
+  'sacraments.record',
+  'clergy.approve',
+  'documents.sign',
+  'documents.release',
+  'finance.read',
+  'finance.enter',
+  'finance.approve',
+  'registrations.manage',
+  'communications.manage',
+  'publishing.manage',
+  'workflows.manage',
+  'ministries.manage',
+  'facilities.manage',
+  'schedule.manage',
+  'incidents.manage',
+  'parish.manage'
+];
+const perm = (name = 'permission', value = 'requests.manage') => ({
+  name,
+  label: L('Permission needed', 'الصلاحية المطلوبة'),
+  type: 'select',
+  value,
+  options: PERMISSIONS.map(p => [p, p])
+});
+const TYPES = [
+  ['Text', L('Text', 'نص')],
+  ['Choice', L('Choice', 'خيار')],
+  ['Boolean', L('Yes / no', 'نعم / لا')],
+  ['Number', L('Number', 'رقم')],
+  ['Date', L('Date', 'تاريخ')]
+];
+const MODES = {
+  Open: L('Open', 'مفتوح'),
+  PausedNew: L('No new runs', 'لا بدايات جديدة'),
+  SafetyStop: L('Safety stop', 'إيقاف احترازي')
+};
+const parishId = () => session.parishId;
+const slug = (text, i) =>
+  (String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '') || 'step') +
+  '_' +
+  (i + 1);
+const reload = async () => {
+  await hydrate();
+  bus.refresh();
+};
+const fail = title => e => toast(title, e.message, 'danger');
+const stamp = v => `${fmtDate(String(v).slice(0, 10))}${String(v).length > 10 ? ` · ${String(v).slice(11, 16)}` : ''}`;
 
-const WTABS = () => [
+const TABS = () => [
   ['', 'Workflows', 'المسارات'],
   ['runs', 'Open tasks', 'المهام المفتوحة', RUNS.length],
   ['builder', 'Form builder', 'بناء الاستمارة'],
   ['log', 'Activity log', 'سجل النشاط']
 ];
 
-const wfSteps = w => (w && (isAr() ? w.stepsAr : w.steps)) || w?.steps || [];
+const newWorkflow = () =>
+  openForm({
+    title: L('New workflow', 'مسار جديد'),
+    intro: L(
+      'Start with one step; add fields and more steps in the form builder.',
+      'ابدأ بخطوة واحدة؛ أضف الحقول والخطوات في بناء الاستمارة.'
+    ),
+    fields: [
+      { name: 'title', label: L('Name', 'الاسم') },
+      perm('startPermission', 'requests.manage'),
+      { name: 'stepTitle', label: L('First step', 'الخطوة الأولى') },
+      perm('stepPermission', 'requests.manage')
+    ],
+    save: v =>
+      A.createWorkflow(parishId(), {
+        title: v.title,
+        template: {
+          startPermission: v.startPermission,
+          fields: [],
+          restrictedFieldKeys: [],
+          steps: [
+            {
+              key: slug(v.stepTitle, 0),
+              title: v.stepTitle,
+              permission: v.stepPermission,
+              whenField: null,
+              whenValue: null,
+              viewsRestricted: false
+            }
+          ]
+        }
+      }),
+    done: reload
+  });
 
-const nameIn = p => (p ? L(p.lat, p.ar || p.lat) : '');
+function startRun(w) {
+  const fields = w.template?.fields || [];
+  if (!w.publishedVersionId) return toast(L('Publish the workflow first', 'انشر المسار أولاً'), '', 'warning');
+  openForm({
+    title: L('Start', 'بدء') + ' · ' + w.name,
+    fields: fields.map(f => ({
+      name: f.key,
+      label: f.label,
+      required: f.required,
+      type:
+        f.type === 'Choice'
+          ? 'select'
+          : f.type === 'Date'
+            ? 'date'
+            : f.type === 'Number'
+              ? 'number'
+              : f.type === 'Boolean'
+                ? 'select'
+                : 'text',
+      options:
+        f.type === 'Choice'
+          ? f.options.map(o => [o, o])
+          : [
+              ['true', L('Yes', 'نعم')],
+              ['false', L('No', 'لا')]
+            ]
+    })),
+    save: v =>
+      A.startRun(parishId(), w.id, {
+        versionId: w.publishedVersionId,
+        answers: Object.fromEntries(Object.entries(v).filter(([, x]) => x !== ''))
+      }),
+    done: reload
+  });
+}
 
-const RULE_OPS = { '=': ['is', 'هو'], '≠': ['is not', 'ليس'] };
+function setMode(w) {
+  openForm({
+    title: L('Run mode', 'نمط التشغيل') + ' · ' + w.name,
+    intro: L('A safety stop also freezes runs already under way.', 'الإيقاف الاحترازي يجمّد أيضاً المسارات الجارية.'),
+    fields: [
+      { name: 'mode', label: L('Mode', 'النمط'), type: 'select', value: w.mode, options: Object.entries(MODES) },
+      { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }
+    ],
+    save: v => A.setWorkflowMode(parishId(), w.id, { version: w.version, mode: v.mode, reason: v.reason }),
+    done: reload
+  });
+}
 
-export function forms(tab = '') {
-  if (tab !== 'runs') S.ui.runWf = ''; // the queue filter belongs to the visit that set it
+export function openRun(id) {
+  const r = RUNS.find(x => x.id === id);
+  if (!r) return;
+  const act = action =>
+    openForm({
+      title: action + ' · ' + r.title,
+      fields: [{ name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }],
+      save: v => A.actRun(parishId(), r.id, { version: r.version, action: action.toLowerCase(), reason: v.reason }),
+      done: reload
+    });
+  const step = () =>
+    openForm({
+      title: L('Record the current step', 'تسجيل الخطوة الحالية') + ' · ' + r.title,
+      fields: [
+        {
+          name: 'result',
+          label: L('Result', 'النتيجة'),
+          type: 'select',
+          options: [
+            ['Completed', L('Completed', 'أُنجزت')],
+            ['Declined', L('Declined', 'رُفضت')]
+          ]
+        },
+        { name: 'note', label: L('Note (optional)', 'ملاحظة (اختياري)'), required: false, type: 'textarea' }
+      ],
+      save: v =>
+        A.recordRunStep(parishId(), r.id, {
+          version: r.version,
+          stepKey: r.stepKey,
+          result: v.result,
+          note: v.note || null
+        }),
+      done: reload
+    });
+  openDrawer({
+    title: r.title,
+    sub: `${r.status} · ${L('cycle', 'دورة')} ${r.cycle}`,
+    body: (
+      <>
+        <ol className="runsteps">
+          {r.steps.map((s, i) => (
+            <li key={s.key} className={s.status === 'Completed' ? 'done' : s.key === r.stepKey ? 'now' : ''}>
+              <span className="dot" aria-hidden="true">
+                {s.status === 'Completed' ? <Icon name="check" size={13} /> : i + 1}
+              </span>{' '}
+              <span className="grow">
+                <b>{s.title}</b>
+                <small>
+                  {s.status}
+                  {s.completedAt ? ` · ${stamp(s.completedAt)}` : ''}
+                  {s.note ? ` · ${s.note}` : ''} · {s.permission}
+                </small>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <dl className="dl">
+          <dt>{L('Started', 'بدأت')}</dt>
+          <dd>{stamp(r.startedAt)}</dd>
+          {Object.entries(r.answers || {}).map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd>{r.redacted.includes(k) ? L('Restricted', 'مقيّد') : v}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="row" style={{ gap: '8px', marginTop: '16px' }}>
+          {r.status === 'InProgress' ? (
+            <button className="btn btn-primary" data-run-step="" onClick={step}>
+              {L('Record step', 'تسجيل الخطوة')}
+            </button>
+          ) : null}
+          {r.status === 'InProgress' ? (
+            <button className="btn btn-secondary" onClick={() => act('Pause')}>
+              {L('Pause', 'إيقاف مؤقّت')}
+            </button>
+          ) : null}
+          {r.status === 'Paused' ? (
+            <button className="btn btn-secondary" onClick={() => act('Resume')}>
+              {L('Resume', 'استئناف')}
+            </button>
+          ) : null}
+          <button className="btn btn-danger-quiet" data-run-cancel="" onClick={() => act('Cancel')}>
+            {L('Cancel', 'إلغاء')}
+          </button>
+        </div>
+      </>
+    )
+  });
+}
+
+function Builder() {
+  const first = WORKFLOWS.find(w => w.id === S.ui.formWf) || WORKFLOWS[0];
+  const [picked, setPicked] = useState(first?.id || '');
+  const w = WORKFLOWS.find(x => x.id === picked) || first;
+  const [draft, setDraft] = useState(() => structuredClone(w?.template || null));
+  const [seen, setSeen] = useState(w ? w.id + w.version : '');
+  if (w && seen !== w.id + w.version) {
+    setSeen(w.id + w.version);
+    setDraft(structuredClone(w.template));
+  }
+  if (!w)
+    return (
+      <Empty
+        glyph="forms"
+        title={L('No workflow yet', 'لا مسار بعد')}
+        body={L('Create a workflow to build its form.', 'أنشئ مساراً لبناء استمارته.')}
+      />
+    );
+  const edit = fn =>
+    setDraft(d => {
+      const c = structuredClone(d);
+      fn(c);
+      return c;
+    });
+  const addField = () =>
+    openForm({
+      title: L('Add a field', 'إضافة حقل'),
+      fields: [
+        { name: 'label', label: L('Label', 'العنوان') },
+        { name: 'type', label: L('Type', 'النوع'), type: 'select', options: TYPES },
+        {
+          name: 'options',
+          label: L('Choices (comma separated, for a choice field)', 'الخيارات (مفصولة بفواصل)'),
+          required: false
+        },
+        { name: 'required', label: L('Required', 'إلزامي'), type: 'check' },
+        {
+          name: 'restricted',
+          label: L('Restricted: hidden from steps not marked to see it', 'مقيّد: مخفي عن الخطوات غير المخوّلة'),
+          type: 'check'
+        }
+      ],
+      save: v =>
+        edit(d => {
+          const key = slug(v.label, d.fields.length);
+          d.fields.push({
+            key,
+            label: v.label,
+            type: v.type,
+            required: !!v.required,
+            options: v.type === 'Choice' ? csv(v.options) : [],
+            visibleWhenField: null,
+            visibleWhenValue: null
+          });
+          if (v.restricted) d.restrictedFieldKeys.push(key);
+        })
+    });
+  const addRule = () =>
+    openForm({
+      title: L('Show a field only when…', 'أظهر الحقل فقط حين…'),
+      fields: [
+        {
+          name: 'show',
+          label: L('Field to show', 'الحقل المراد إظهاره'),
+          type: 'select',
+          options: draft.fields.map(f => [f.key, f.label])
+        },
+        {
+          name: 'when',
+          label: L('When this field', 'حين يكون هذا الحقل'),
+          type: 'select',
+          options: draft.fields.map(f => [f.key, f.label])
+        },
+        { name: 'value', label: L('has this value (true / false for yes-no)', 'قيمته (true / false لنعم / لا)') }
+      ],
+      save: v =>
+        edit(d => {
+          const f = d.fields.find(x => x.key === v.show);
+          f.visibleWhenField = v.when;
+          f.visibleWhenValue = v.value;
+        })
+    });
+  const addStep = () =>
+    openForm({
+      title: L('Add a step', 'إضافة خطوة'),
+      fields: [
+        { name: 'title', label: L('Step', 'الخطوة') },
+        perm(),
+        {
+          name: 'whenField',
+          label: L('Only when this field… (optional)', 'فقط حين هذا الحقل… (اختياري)'),
+          type: 'select',
+          required: false,
+          options: [['', '—'], ...draft.fields.map(f => [f.key, f.label])]
+        },
+        { name: 'whenValue', label: L('…has this value', '…قيمته'), required: false },
+        { name: 'viewsRestricted', label: L('May see restricted fields', 'يرى الحقول المقيّدة'), type: 'check' }
+      ],
+      save: v =>
+        edit(d =>
+          d.steps.push({
+            key: slug(v.title, d.steps.length),
+            title: v.title,
+            permission: v.permission,
+            whenField: v.whenField || null,
+            whenValue: v.whenField ? v.whenValue : null,
+            viewsRestricted: !!v.viewsRestricted
+          })
+        )
+    });
+  const saveDraft = async publish => {
+    try {
+      const saved = await A.saveWorkflowDraft(parishId(), w.id, { version: w.version, title: w.name, template: draft });
+      if (publish) await A.publishWorkflow(parishId(), w.id, saved.version);
+      toast(publish ? L('Published', 'نُشر') : L('Draft saved', 'حُفظت المسوّدة'), '', 'success');
+      await reload();
+    } catch (e) {
+      fail(L('Could not save', 'تعذّر الحفظ'))(e);
+    }
+  };
+  return (
+    <div className="splitview">
+      <div>
+        <div className="toolbar">
+          <Select
+            aria-label={L('Workflow', 'المسار')}
+            value={w.id}
+            onChange={e => {
+              S.ui.formWf = e.target.value;
+              setPicked(e.target.value);
+            }}
+          >
+            {WORKFLOWS.map(x => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </Select>
+          <span className="chip">
+            {w.publishedNumber
+              ? `${L('Published version', 'النسخة المنشورة')} ${w.publishedNumber}`
+              : L('Never published', 'لم تُنشر')}
+          </span>
+        </div>
+        <Panel title={L('Fields', 'الحقول')}>
+          {draft.fields.map((f, i) => (
+            <div key={f.key} className="listrow" style={{ paddingInline: 0 }}>
+              <span className="grow">
+                <b>
+                  {f.label}
+                  {f.required ? <span style={{ color: 'var(--danger)' }}>*</span> : ''}
+                </b>
+                <small>
+                  {f.type}
+                  {f.options.length ? ` · ${f.options.join(', ')}` : ''}
+                  {draft.restrictedFieldKeys.includes(f.key) ? ` · ${L('restricted', 'مقيّد')}` : ''}
+                </small>
+              </span>
+              <button
+                className="btn btn-ghost btn-dense"
+                aria-label={L('Remove field', 'إزالة الحقل')}
+                onClick={() =>
+                  edit(d => {
+                    const [g] = d.fields.splice(i, 1);
+                    d.restrictedFieldKeys = d.restrictedFieldKeys.filter(k => k !== g.key);
+                    d.fields.forEach(x => {
+                      if (x.visibleWhenField === g.key) {
+                        x.visibleWhenField = null;
+                        x.visibleWhenValue = null;
+                      }
+                    });
+                    d.steps.forEach(s => {
+                      if (s.whenField === g.key) {
+                        s.whenField = null;
+                        s.whenValue = null;
+                      }
+                    });
+                  })
+                }
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+          ))}
+          {!draft.fields.length ? <p className="t-caption dim">{L('No fields yet.', 'لا حقول بعد.')}</p> : null}
+          <button className="btn btn-secondary btn-dense" data-add-field="" onClick={addField}>
+            {L('Add field', 'إضافة حقل')}
+          </button>
+        </Panel>
+        <Panel title={L('Steps', 'الخطوات')}>
+          <ol className="wfsteps">
+            {draft.steps.map((s, i) => (
+              <li key={s.key}>
+                <span className="n">{i + 1}</span> {s.title}{' '}
+                <small className="dim">
+                  {s.permission}
+                  {s.whenField ? ` · ${L('when', 'حين')} ${s.whenField} = ${s.whenValue}` : ''}
+                </small>
+                {draft.steps.length > 1 ? (
+                  <button
+                    className="btn btn-ghost btn-dense"
+                    aria-label={L('Remove step', 'إزالة الخطوة')}
+                    onClick={() => edit(d => d.steps.splice(i, 1))}
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+          <button className="btn btn-secondary btn-dense" data-add-step="" onClick={addStep}>
+            {L('Add step', 'إضافة خطوة')}
+          </button>
+        </Panel>
+      </div>
+      <div className="sidecol">
+        <Panel title={L('Show a field only when…', 'أظهر الحقل فقط حين…')}>
+          {draft.fields
+            .filter(f => f.visibleWhenField)
+            .map(f => (
+              <div key={f.key} className="rulecard">
+                <span className="grow">
+                  {L('Show', 'أظهر')} <b>{f.label}</b> {L('only when', 'فقط حين')}{' '}
+                  <b>{draft.fields.find(x => x.key === f.visibleWhenField)?.label}</b> = <b>{f.visibleWhenValue}</b>
+                </span>
+                <button
+                  className="btn btn-ghost btn-dense"
+                  aria-label={L('Remove rule', 'إزالة القاعدة')}
+                  onClick={() =>
+                    edit(d => {
+                      const x = d.fields.find(y => y.key === f.key);
+                      x.visibleWhenField = null;
+                      x.visibleWhenValue = null;
+                    })
+                  }
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            ))}
+          {!draft.fields.some(f => f.visibleWhenField) ? (
+            <p className="t-caption dim">
+              {L('No rules — every field always shows.', 'لا قواعد — كل الحقول تظهر دائماً.')}
+            </p>
+          ) : null}
+          <button
+            className="btn btn-secondary btn-dense"
+            data-add-rule=""
+            disabled={draft.fields.length < 2}
+            onClick={addRule}
+          >
+            {L('Add rule', 'إضافة قاعدة')}
+          </button>
+        </Panel>
+        <div className="row" style={{ gap: '8px' }}>
+          <button className="btn btn-secondary" data-save-draft="" onClick={() => saveDraft(false)}>
+            {L('Save draft', 'حفظ المسوّدة')}
+          </button>
+          <button className="btn btn-primary" data-publish="" onClick={() => saveDraft(true)}>
+            {L('Save and publish', 'حفظ ونشر')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormsPage({ tab }) {
+  const unavailable = !parishId();
   const head = (
     <>
       <PageHead
         crumbs={[{ label: L('Administration', 'الإدارة') }, { label: L('Forms & workflows', 'الاستمارات والمسارات') }]}
         title={L('Forms and workflows', 'الاستمارات ومسارات العمل')}
         sub={L(
-          'Each request moves through set steps. Every step has a person responsible and a due date, so nothing is forgotten.',
-          'يمرّ كل طلب بخطوات محدّدة، ولكل خطوة شخص مسؤول وموعد، فلا يُنسى شيء.'
+          'Each request moves through set steps, each needing a permission the person doing it holds.',
+          'يمرّ كل طلب بخطوات محدّدة، لكل خطوة صلاحية يملكها منفّذها.'
         )}
         actions={
-          <>
-            {tab === 'builder' ? (
-              ''
-            ) : (
-              <button className="btn btn-secondary" data-go="forms/builder">
-                <Icon name="doc" size={17} />
-                {L('Form templates', 'قوالب الاستمارات')}
-              </button>
-            )}{' '}
-            <button className="btn btn-primary" data-act="wf-new">
-              <Icon name="plus" size={17} />
-              {L('New workflow', 'مسار جديد')}
-            </button>
-          </>
+          <button className="btn btn-primary" data-new-workflow="" onClick={newWorkflow}>
+            <Icon name="plus" size={17} />
+            {L('New workflow', 'مسار جديد')}
+          </button>
         }
       />
-      <TabBar base="forms" items={WTABS()} active={tab} />
+      <TabBar base="forms" items={TABS()} active={tab} />
     </>
   );
+  if (unavailable)
+    return (
+      <>
+        {head}
+        <Empty glyph="forms" title={L('Choose a parish', 'اختر رعية')} />
+      </>
+    );
   if (tab === 'runs') {
-    const only = WORKFLOWS.find(w => w.id === S.ui.runWf),
-      runs = RUNS.filter(r => WORKFLOWS.some(w => w.id === r.wf) && (!only || r.wf === only.id));
-    const late = runs.filter(r => r.overdue).length;
+    const only = WORKFLOWS.find(w => w.id === S.ui.runWf);
+    const runs = RUNS.filter(r => !only || r.wf === only.id);
     return (
       <>
         {head}
         {only ? (
-          <div className="toolbar" style={{ marginBottom: '14px' }}>
-            <span className="chip chip-on" style={{ gap: '6px' }}>
-              <Icon name="filter" size={14} />
-              {L(only.name, only.ar)}
-            </span>{' '}
-            <span className="t-caption dim">
-              {runs.length} {L('open', 'مفتوحة')}
-            </span>{' '}
-            <button className="btn btn-ghost btn-dense" data-act="wf-queue:">
+          <p className="t-caption dim">
+            {only.name}{' '}
+            <a href="#/forms/runs" onClick={() => (S.ui.runWf = '')}>
               {L('Show every workflow', 'عرض كل المسارات')}
-            </button>
-          </div>
-        ) : (
-          ''
-        )}{' '}
-        {
-          <Table
-            cols={[
-              { label: L('Workflow', 'المسار'), sort: true },
-              { label: L('For', 'لـ') },
-              { label: L('Current step', 'الخطوة الحالية') },
-              { label: L('Responsible', 'المسؤول'), cls: 'hide-sm' },
-              { label: L('Due', 'الموعد'), sort: true },
-              { label: '', cls: 'shrink' }
-            ]}
-            rows={runs.map(r => {
-              const w = WORKFLOWS.find(x => x.id === r.wf),
-                steps = wfSteps(w);
-              return {
-                cls: 'clickable',
-                attrs: `data-run="${r.id}" tabindex="0"`,
-                cells: [
-                  <b>{L(w.name, w.ar)}</b>,
-                  r.subject ? (
-                    <Who p={person(r.subject)} />
-                  ) : (
-                    <span className="dim">{L('Parish expense', 'مصروف الرعية')}</span>
-                  ),
-                  <span style={{ display: 'block', minWidth: '150px' }}>
-                    <b style={{ fontWeight: 500 }}>{steps[r.step] || ''}</b>{' '}
-                    <span className="t-caption dim tnum" style={{ display: 'block' }}>
-                      {L(
-                        `Step ${Math.min(r.step + 1, r.total)} of ${r.total}`,
-                        `الخطوة ${Math.min(r.step + 1, r.total)} من ${r.total}`
-                      )}
-                    </span>{' '}
-                    <span className="meter" style={{ marginTop: '6px' }}>
-                      <i style={css(`width:${Math.round((r.step / r.total) * 100)}%`)} />
-                    </span>
-                  </span>,
-                  <Who p={person(r.owner)} />,
-                  r.overdue ? (
-                    <Pill label={`${fmtDate(r.due)} · ${L('late', 'متأخرة')}`} tone="danger" />
-                  ) : (
-                    <span className="mono dim">{fmtDate(r.due)}</span>
-                  ),
-                  <span className="btn btn-secondary btn-dense" aria-hidden="true">
-                    {L('Open', 'فتح')}
-                  </span>
-                ]
-              };
-            })}
-            empty={
-              <Empty
-                glyph="check"
-                title={L('No open tasks', 'لا مهام مفتوحة')}
-                body={
-                  only
-                    ? L('Nothing is waiting in this workflow.', 'لا شيء ينتظر في هذا المسار.')
-                    : L('Every request has been dealt with.', 'عولجت كل الطلبات.')
-                }
-              />
-            }
-          />
-        }{' '}
-        {late ? (
-          <C.InlineAlert
-            tone="warning"
-            title={
-              late === 1
-                ? L('One task is late', 'مهمّة واحدة متأخرة')
-                : L(`${late} tasks are late`, `${late} مهام متأخرة`)
-            }
-            body={L(
-              'The person responsible is reminded. Nothing is ever decided automatically.',
-              'يُذكَّر الشخص المسؤول. ولا يُتّخذ أي قرار تلقائياً.'
-            )}
-          />
-        ) : (
-          ''
-        )}
+            </a>
+          </p>
+        ) : null}
+        <Table
+          cols={[
+            { label: L('Task', 'المهمة') },
+            { label: L('Current step', 'الخطوة الحالية') },
+            { label: L('Status', 'الحالة') },
+            { label: L('Started', 'بدأت') },
+            { label: '', cls: 'shrink' }
+          ]}
+          rows={runs.map(r => ({
+            cells: [
+              <b>{r.title}</b>,
+              r.steps[r.step]?.title || '—',
+              <Pill label={r.status} tone={r.status === 'Paused' ? 'warning' : 'info'} />,
+              <span className="mono dim">{stamp(r.startedAt)}</span>,
+              <button className="btn btn-secondary btn-dense" data-run={r.id} onClick={() => openRun(r.id)}>
+                {L('Open', 'فتح')}
+              </button>
+            ]
+          }))}
+          empty={<Empty glyph="check" title={L('No open tasks', 'لا مهام مفتوحة')} />}
+        />
       </>
     );
   }
@@ -161,89 +588,7 @@ export function forms(tab = '') {
     return (
       <>
         {head}
-        <div className="splitview">
-          <div>
-            <Panel title={L('Certificate request form', 'استمارة طلب شهادة')}>
-              {nodesOr(
-                FORM_FIELDS.map((f, i) => (
-                  <div key={i} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
-                    <span style={{ color: 'var(--text-3)', marginTop: '2px' }}>
-                      <Icon
-                        name={
-                          f.type === 'file'
-                            ? 'doc'
-                            : f.type === 'person'
-                              ? 'people'
-                              : f.type === 'date'
-                                ? 'events'
-                                : 'forms'
-                        }
-                        size={17}
-                      />
-                    </span>{' '}
-                    <span className="grow">
-                      <b>
-                        {L(f.label, f.labelAr)}
-                        {f.req ? <span style={{ color: 'var(--danger)' }}>*</span> : ''}
-                      </b>{' '}
-                      {f.note ? <small style={{ whiteSpace: 'normal' }}>{L(f.note, f.noteAr)}</small> : ''}
-                    </span>{' '}
-                    <span className="chip">{L(...(FIELD_TYPES[f.type] || [f.type, f.type]))}</span>
-                    {CR.recBtn('field', f.id, L('Field options', 'خيارات الحقل'))}
-                  </div>
-                )),
-                <p className="t-caption dim">{L('No fields yet — add the first one.', 'لا حقول بعد — أضف الأول.')}</p>
-              )}{' '}
-              <button className="btn btn-secondary btn-dense" style={{ marginTop: '14px' }} data-act="dom-add-field">
-                <Icon name="plus" size={15} />
-                {L('Add field', 'إضافة حقل')}
-              </button>{' '}
-              <p className="t-caption dim" style={{ marginTop: '12px' }}>
-                {L(
-                  'Fields marked * must be filled in before the request can be sent.',
-                  'يجب ملء الحقول المعلَّمة بـ* قبل إرسال الطلب.'
-                )}
-              </p>
-            </Panel>
-          </div>{' '}
-          <div className="sidecol">
-            <Panel title={L('Show a field only when…', 'أظهر الحقل فقط حين…')}>
-              {nodesOr(
-                FORM_RULES.map((r, i) => {
-                  const a = FORM_FIELDS.find(f => f.id === r.show),
-                    b = FORM_FIELDS.find(f => f.id === r.when);
-                  return (
-                    <div key={i} className="rulecard">
-                      <span className="grow">
-                        {L('Show', 'أظهر')} <b>{a ? L(a.label, a.labelAr) : '—'}</b> {L('only when', 'فقط حين يكون')}{' '}
-                        <b>{b ? L(b.label, b.labelAr) : '—'}</b> {L(...(RULE_OPS[r.op] || [r.op, r.op]))}{' '}
-                        <b>{L(r.value, r.valueAr)}</b>
-                      </span>{' '}
-                      <C.IconBtn ico="close" label={L('Remove rule', 'إزالة القاعدة')} data-act={`rule-del:${r.id}`} />
-                    </div>
-                  );
-                }),
-                <p className="t-caption dim">
-                  {L('No rules — every field always shows.', 'لا قواعد — كل الحقول تظهر دائماً.')}
-                </p>
-              )}{' '}
-              <button className="btn btn-secondary btn-dense" style={{ marginTop: '4px' }} data-act="dom-add-rule">
-                <Icon name="plus" size={15} />
-                {L('Add rule', 'إضافة قاعدة')}
-              </button>
-            </Panel>{' '}
-            <Panel title={L('Checks before sending', 'تحقّق قبل الإرسال')}>
-              <div className="stack" style={{ gap: '10px' }}>
-                <C.CheckRow label={L('Required fields must be filled', 'الحقول المطلوبة إلزامية')} checked={true} />{' '}
-                <C.CheckRow label={L('Attachments limited to 10 MB', 'المرفقات حتى ١٠ ميغابايت')} checked={true} />{' '}
-                <C.CheckRow
-                  label={L('Refuse the same request twice within 7 days', 'رفض الطلب نفسه مرّتين خلال ٧ أيام')}
-                  checked={true}
-                />
-              </div>
-            </Panel>
-          </div>
-        </div>
+        <Builder />
       </>
     );
   if (tab === 'log')
@@ -252,245 +597,95 @@ export function forms(tab = '') {
         {head}
         <Panel title={L('What happened, newest first', 'ما جرى، الأحدث أولاً')}>
           <div className="timeline">
-            {RUN_LOG.map(([when, en, ar, kind], i) => (
+            {RUN_LOG.map(([when, en, , kind], i) => (
               <div key={i} className={`tl-item ${kind === 'err' ? 'accent' : ''}`}>
-                <div className="when">{stampText(when)}</div>{' '}
-                <div className="what">
-                  {L(en, ar)}
-                  {kind === 'err' && /retry|محاولة/i.test(en + ar) ? (
-                    <>{<Pill label={L('Retried', 'أُعيدت')} tone="warning" />}</>
-                  ) : (
-                    ''
-                  )}
-                </div>
+                <div className="when">{stamp(when)}</div>
+                <div className="what">{en}</div>
               </div>
             ))}
           </div>
-        </Panel>{' '}
-        <div className="grid g2">
-          <Panel title={L('Pause or resume a workflow', 'إيقاف مسار أو استئنافه')}>
-            {WORKFLOWS.map((w, i) => (
-              <div key={i} className="listrow" style={{ paddingInline: 0 }}>
-                <span className="grow">
-                  <b>{L(w.name, w.ar)}</b>
-                  <small>
-                    {w.paused
-                      ? L('Paused — no new requests start', 'متوقّف — لا تبدأ طلبات جديدة')
-                      : L('Running', 'يعمل')}
-                  </small>
-                </span>{' '}
-                <button className="btn btn-secondary btn-dense" data-act={`wf-pause:${w.id}`}>
-                  {w.paused ? L('Resume', 'استئناف') : L('Pause', 'إيقاف مؤقّت')}
-                </button>
-              </div>
-            ))}{' '}
-          </Panel>{' '}
-          <Panel title={L('When something goes wrong', 'حين يتعطّل شيء')}>
-            <dl className="dl">
-              <dt>{L('External delivery', 'الإرسال الخارجي')}</dt>
-              <dd>
-                {L('Not connected: nothing is sent outside ParishLife', 'غير موصول: لا يُرسَل شيء خارج «حياة الرعية»')}
-              </dd>
-              <dt>{L('Sensitive steps', 'الخطوات الحسّاسة')}</dt>
-              <dd>{L('Always wait for a person', 'تنتظر شخصاً دائماً')}</dd>
-            </dl>
-          </Panel>
-        </div>
+          {!RUN_LOG.length ? (
+            <p className="t-caption dim">{L('Nothing recorded yet.', 'لم يُسجَّل شيء بعد.')}</p>
+          ) : null}
+        </Panel>
+        <Panel title={L('Run mode', 'نمط التشغيل')}>
+          {WORKFLOWS.map(w => (
+            <div key={w.id} className="listrow" style={{ paddingInline: 0 }}>
+              <span className="grow">
+                <b>{w.name}</b>
+                <small>
+                  {MODES[w.mode] || w.mode}
+                  {w.modeReason ? ` — ${w.modeReason}` : ''}
+                </small>
+              </span>
+              <button className="btn btn-secondary btn-dense" data-mode={w.id} onClick={() => setMode(w)}>
+                {L('Change', 'تغيير')}
+              </button>
+            </div>
+          ))}
+        </Panel>
       </>
     );
-  const cards = WORKFLOWS.map((w, k) => {
-    const steps = wfSteps(w),
-      open = RUNS.filter(r => r.wf === w.id).length;
-    return (
-      <section key={k} className="panel">
-        <div className="panel-b">
-          <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
-            <span className="avatar avatar-lg">
-              <Icon name="forms" size={20} />
-            </span>{' '}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{L(w.name, w.ar)}</b>{' '}
-              <small className="t-caption dim">
-                {L('usually takes', 'يستغرق عادةً')} {L(w.avg, w.avgAr)}
-              </small>
-            </div>{' '}
-            {w.paused ? <Pill label={L('Paused', 'متوقّف')} tone="warning" mark="st-pause" /> : ''}
-            <span className={`badge ${open ? '' : 'badge-quiet'}`} title={L('Open tasks', 'مهام مفتوحة')}>
-              {open}
-            </span>
-            {CR.recBtn('workflow', w.id)}
-          </div>{' '}
-          <div className="divider" />{' '}
-          <ol className="wfsteps">
-            {steps.map((st, i) => (
-              <li key={i}>
-                <span className="n">{i + 1}</span>
-                {st}
-              </li>
-            ))}
-          </ol>{' '}
-          <button
-            className="btn btn-secondary"
-            style={{ width: '100%', marginTop: '14px', minHeight: '34px', fontSize: '13px' }}
-            data-act={`wf-queue:${w.id}`}
-          >
-            {open
-              ? L(`See ${open} open task${open === 1 ? '' : 's'}`, `عرض المهام المفتوحة (${open})`)
-              : L('No open tasks', 'لا مهام مفتوحة')}
-          </button>
-        </div>
-      </section>
-    );
-  });
-  const late = RUNS.filter(r => r.overdue),
-    lateW = late[0] && WORKFLOWS.find(w => w.id === late[0].wf);
   return (
     <>
       {head}
       <div className="stats">
-        <Stat
-          k={L('Open tasks', 'مهام مفتوحة')}
-          v={RUNS.length}
-          d={L(`in ${new Set(RUNS.map(r => r.wf)).size} workflows`, `في ${new Set(RUNS.map(r => r.wf)).size} مسارات`)}
-        />{' '}
-        <Stat
-          k={L('Late', 'متأخرة')}
-          v={late.length}
-          d={
-            late.length ? (
-              <span className="down">
-                {L(lateW?.name || '', lateW?.ar || '')} · {fmtDate(late[0].due)}
-              </span>
-            ) : (
-              L('nothing is late', 'لا شيء متأخر')
-            )
-          }
-        />{' '}
-        <Stat
-          k={L('Finished this month', 'أُنجزت هذا الشهر')}
-          v={27}
-          d={L('usually within 2 days', 'عادةً خلال يومين')}
-        />{' '}
-        <Stat
-          k={L('Automatic steps', 'خطوات تلقائية')}
-          v={4}
-          d={L('a person always checks the result', 'يراجع شخصٌ النتيجة دائماً')}
+        <Stat k={L('Workflows', 'المسارات')} v={WORKFLOWS.length} />
+        <Stat k={L('Open tasks', 'مهام مفتوحة')} v={RUNS.length} />
+        <Stat k={L('Paused', 'متوقفة')} v={RUNS.filter(r => r.status === 'Paused').length} />
+      </div>
+      <Paged className="gridcards">
+        {WORKFLOWS.map(w => (
+          <section key={w.id} className="panel" data-workflow={w.id}>
+            <div className="panel-b">
+              <div className="row" style={{ gap: '10px' }}>
+                <b className="grow">{w.name}</b>
+                {w.mode !== 'Open' ? <Pill label={MODES[w.mode]} tone="warning" /> : null}
+                <span className={`badge ${w.open ? '' : 'badge-quiet'}`}>{w.open}</span>
+              </div>
+              <ol className="wfsteps">
+                {w.steps.map((s, i) => (
+                  <li key={i}>
+                    <span className="n">{i + 1}</span>
+                    {s}
+                  </li>
+                ))}
+              </ol>
+              <div className="row" style={{ gap: '8px', marginTop: '12px' }}>
+                <button
+                  className="btn btn-primary btn-dense"
+                  data-start={w.id}
+                  disabled={w.mode !== 'Open'}
+                  onClick={() => startRun(w)}
+                >
+                  {L('Start', 'بدء')}
+                </button>
+                <a className="btn btn-secondary btn-dense" href="#/forms/runs" onClick={() => (S.ui.runWf = w.id)}>
+                  {L('Open tasks', 'المهام المفتوحة')}
+                </a>
+                <a className="btn btn-secondary btn-dense" href="#/forms/builder" onClick={() => (S.ui.formWf = w.id)}>
+                  {L('Edit', 'تعديل')}
+                </a>
+              </div>
+            </div>
+          </section>
+        ))}
+      </Paged>
+      {!WORKFLOWS.length ? (
+        <Empty
+          glyph="forms"
+          title={L('No workflow yet', 'لا مسار بعد')}
+          body={L(
+            'Create the first one with New workflow. Listing workflows needs the workflow permission in this parish.',
+            'أنشئ الأول بزر «مسار جديد». عرض المسارات يتطلب صلاحية المسارات في هذه الرعية.'
+          )}
         />
-      </div>{' '}
-      <Paged className="gridcards">{cards}</Paged>{' '}
-      <C.InlineAlert
-        tone="info"
-        title={L('Sensitive decisions always stop for a person', 'القرارات الحسّاسة تتوقّف دائماً عند شخص')}
-        body={L(
-          'Pastoral, safeguarding, financial and disciplinary steps are never completed automatically, however routine they look. Automation may prepare the work; it never decides it.',
-          'لا تُنجَز الخطوات الرعوية والحمائية والمالية والتأديبية تلقائياً مهما بدت روتينية. للأتمتة أن تُحضّر العمل لا أن تقرّره.'
-        )}
-      />
+      ) : null}
     </>
   );
 }
 
-/* One open task: its steps, who is responsible, and the next action. Also reopened after
-   "Keep the task" in the cancel confirmation. */
-/* "2026-10-04 11:02" as people read it: 4 Oct 2026 · 11:02 */
-const stampText = v =>
-  `${fmtDate(String(v).slice(0, 10))}${String(v).length > 10 ? ` · ${String(v).slice(11, 16)}` : ''}`;
-
-export function openRun(id) {
-  const r = RUNS.find(x => x.id === id),
-    w = r && WORKFLOWS.find(x => x.id === r.wf);
-  if (!w) return;
-  const steps = wfSteps(w),
-    owner = person(r.owner);
-  openDrawer({
-    title: L(w.name, w.ar),
-    sub: r.subject ? nameIn(person(r.subject)) : L('Parish expense', 'مصروف الرعية'),
-    body: (
-      <>
-        <ol className="runsteps">
-          {steps.map((st, i) => (
-            <li key={i} className={i < r.step ? 'done' : i === r.step ? 'now' : ''}>
-              <span className="dot" aria-hidden="true">
-                {i < r.step ? <Icon name="check" size={13} /> : i + 1}
-              </span>{' '}
-              <span className="grow">
-                <b>{st}</b>
-                <small>
-                  {i < r.step
-                    ? `${L('Done', 'أُنجزت')}${r.doneAt?.[i] ? ` · ${stampText(r.doneAt[i])}` : ''}`
-                    : i === r.step
-                      ? `${L('Current step', 'الخطوة الحالية')}${r.doneAt?.[i - 1] ? ` · ${L('waiting since', 'بانتظار منذ')} ${stampText(r.doneAt[i - 1])}` : ''}`
-                      : L('Still to come', 'لاحقاً')}
-                </small>
-              </span>
-            </li>
-          ))}
-        </ol>{' '}
-        <div className="divider" />{' '}
-        <dl className="dl">
-          <dt>{L('Responsible', 'المسؤول')}</dt>
-          <dd>{nameIn(owner) || '—'}</dd>
-          <dt>{L('Due', 'الموعد')}</dt>
-          <dd>
-            {fmtDate(r.due)}
-            {r.overdue ? (
-              <>
-                {' '}
-                · <span style={{ color: 'var(--danger-ink)', fontWeight: 600 }}>{L('late', 'متأخرة')}</span>
-              </>
-            ) : (
-              ''
-            )}
-          </dd>
-          <dt>{L('If it runs late', 'إن تأخّرت')}</dt>
-          <dd>{L('Fr. Antoine Khoury is reminded after 2 days', 'يُذكَّر الأب أنطوان خوري بعد يومين')}</dd>
-        </dl>{' '}
-        <div style={{ marginTop: '18px' }}>
-          <C.Textarea
-            label={L('Note for the next person (optional)', 'ملاحظة لمن يتابع (اختياري)')}
-            id="runnote"
-            max={300}
-          />
-        </div>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Close', 'إغلاق')}
-        </button>{' '}
-        <button className="btn btn-danger-quiet" data-act={`wf-cancel:${r.id}`}>
-          {L('Cancel task', 'إلغاء المهمّة')}
-        </button>{' '}
-        <button
-          className="btn btn-primary"
-          id="run_go"
-          style={{ marginInlineStart: 'auto' }}
-          data-act={`run-step:${r.id}`}
-        >
-          <Icon name="check" size={16} />
-          {r.step + 1 >= r.total ? L('Finish task', 'إنهاء المهمّة') : L('Mark step done', 'إنجاز الخطوة')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      /* start on the steps, not in the note: on a phone, focusing the note would scroll past them and
-         open the keyboard. Focus rests on the dialog itself, so no key press completes a step by accident. */
-      el.querySelector('.drawer-body').scrollTop = 0;
-      el.tabIndex = -1;
-      el.focus({ preventScroll: true });
-    }
-  });
+export function forms(tab = '') {
+  if (tab !== 'runs') S.ui.runWf = '';
+  return <FormsPage tab={tab} />;
 }
-
-forms.mount = host => {
-  host.querySelectorAll('tr[data-run]').forEach(tr => {
-    tr.addEventListener('click', () => openRun(tr.dataset.run));
-    tr.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openRun(tr.dataset.run);
-      }
-    });
-  });
-};
