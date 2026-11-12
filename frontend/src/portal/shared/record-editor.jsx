@@ -487,8 +487,8 @@ export const ENT = {
     ed: ['Edit fund', 'تعديل الصندوق'],
     del: ['Delete this fund?', 'حذف هذا الصندوق؟'],
     fields: () => [
-      ...pair('name', 'ar', 'Name (English)', 'الاسم (إنكليزي)', 'Name (Arabic)', 'الاسم (عربي)'),
-      { k: 'budget', label: L('Budget this year (USD)', 'موازنة هذه السنة (دولار)'), type: 'number', min: 0 },
+      { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
+      { k: 'purpose', label: L('What it is for', 'الغرض منه'), req: true, full: true },
       {
         k: 'restricted',
         label: L('Restricted', 'مقيّد'),
@@ -498,50 +498,68 @@ export const ENT = {
         set: bool.set('restricted')
       }
     ],
-    blank: () => ({ id: uid('f'), name: '', ar: '', budget: 0, actual: 0, restricted: false }),
-    canDelete: f =>
-      D.EXPENSES.some(x => x.fund === f.id) ||
-      D.PLEDGES.some(p => p.fund === f.id) ||
-      D.BATCH.lines.some(l => l.fund === f.id) ||
-      f.actual > 0
-        ? L(
-            'Money has been posted to this fund. It can be closed at year end, not deleted.',
-            'قُيّدت أموال في هذا الصندوق. يُقفل في آخر السنة ولا يُحذف.'
-          )
-        : true
+    blank: () => ({
+      id: uid('f'),
+      name: '',
+      ar: '',
+      purpose: '',
+      restricted: false,
+      budget: 0,
+      actual: 0,
+      balances: []
+    }),
+    canDelete: () =>
+      L(
+        'A fund cannot be deleted or edited once created; money is recorded against it.',
+        'لا يُحذف الصندوق ولا يُعدَّل بعد إنشائه؛ فالأموال تُسجَّل عليه.'
+      )
   },
   expense: {
     list: () => D.EXPENSES,
-    name: x => L(x.what, x.whatAr),
+    name: x => x.what,
     nw: ['New expense', 'مصروف جديد'],
     ed: ['Edit expense', 'تعديل المصروف'],
     del: ['Delete this expense?', 'حذف هذا المصروف؟'],
     fields: () => [
-      ...pair('what', 'whatAr', 'What was bought', 'ما الذي اشتُري', 'Arabic description', 'الوصف بالعربية', {
-        full: true
-      }),
-      { k: 'usd', label: L('Amount (USD)', 'المبلغ (دولار)'), type: 'number', min: 0.01, req: true },
+      { k: 'what', label: L('What was bought', 'ما الذي اشتُري'), req: true, full: true },
+      { k: 'payee', label: L('Paid to', 'المدفوع له'), req: true },
+      { k: 'amount', label: L('Amount', 'المبلغ'), type: 'number', min: 0.01, req: true },
+      {
+        k: 'currency',
+        label: L('Currency', 'العملة'),
+        type: 'select',
+        options: () => [
+          ['USD', 'USD'],
+          ['LBP', 'LBP'],
+          ['EUR', 'EUR']
+        ]
+      },
       { k: 'fund', label: L('Fund', 'الصندوق'), type: 'select', options: funds },
       { k: 'd', label: L('Date', 'التاريخ'), type: 'date', req: true },
-      { k: 'by', label: L('Submitted by', 'قدّمه'), type: 'select', options: people }
+      { k: 'evidence', label: L('Receipt or invoice reference', 'مرجع الإيصال أو الفاتورة'), opt: true },
+      { k: 'missingEvidence', label: L('Reason there is no receipt', 'سبب غياب الإيصال'), opt: true, full: true }
     ],
+    check: v =>
+      !v.evidence && !v.missingEvidence
+        ? ['evidence', L('Give a reference, or the reason there is none', 'أدخل مرجعاً أو سبب غيابه')]
+        : v.evidence && v.missingEvidence
+          ? ['missingEvidence', L('Give one or the other, not both', 'أدخل أحدهما لا كلاهما')]
+          : null,
     blank: () => ({
       id: uid('x'),
-      d: '2026-10-04',
+      d: new Date().toLocaleDateString('sv-SE'),
       what: '',
-      whatAr: '',
-      fund: 'general',
-      usd: '',
-      status: 'awaiting-approval',
-      by: 'p15'
+      payee: '',
+      fund: D.FUNDS[0]?.id || '',
+      amount: '',
+      currency: 'USD',
+      evidence: '',
+      missingEvidence: '',
+      status: 'draft',
+      apiStatus: 'Draft'
     }),
-    extra: () => (
-      <div style={{ marginTop: '16px' }}>
-        <label className="label">{L('Receipt', 'الإيصال')}</label>
-        <C.Dropzone id="cf_rcpt" />
-      </div>
-    ),
-    delNote: ['It is removed from the books and from the approval queue.', 'يُحذف من الدفاتر ومن قائمة الموافقات.']
+    canDelete: () =>
+      L('An expense is cancelled with a reason, using Cancel on its row.', 'يُلغى المصروف بسبب، بزر «إلغاء» في سطره.')
   },
   pledge: {
     list: () => D.PLEDGES,
@@ -559,24 +577,81 @@ export const ENT = {
         options: people
       },
       { k: 'fund', label: L('Fund', 'الصندوق'), type: 'select', options: funds },
-      { k: 'pledged', label: L('Pledged (USD)', 'المتعهَّد به (دولار)'), type: 'number', min: 1, req: true },
-      { k: 'paid', label: L('Paid so far (USD)', 'المدفوع حتى الآن (دولار)'), type: 'number', min: 0 }
+      { k: 'pledged', label: L('Pledged', 'المتعهَّد به'), type: 'number', min: 1, req: true },
+      {
+        k: 'currency',
+        label: L('Currency', 'العملة'),
+        type: 'select',
+        options: () => [
+          ['USD', 'USD'],
+          ['LBP', 'LBP'],
+          ['EUR', 'EUR']
+        ]
+      },
+      { k: 'schedule', label: L('Schedule, if any', 'الجدول إن وُجد'), opt: true, full: true }
     ],
-    blank: () => ({ id: uid('pl'), p: '', pledged: 500, paid: 0, fund: 'building' }),
-    check: v => (+v.paid > +v.pledged ? ['paid', L('More than was pledged', 'أكثر من المتعهَّد به')] : null)
+    blank: () => ({
+      id: uid('pl'),
+      p: '',
+      pledged: '',
+      paid: 0,
+      currency: 'USD',
+      schedule: '',
+      starts: new Date().toLocaleDateString('sv-SE'),
+      fund: D.FUNDS[0]?.id || ''
+    }),
+    canDelete: () =>
+      L('A pledge cannot be deleted or edited once recorded.', 'لا يُحذف التعهّد ولا يُعدَّل بعد تسجيله.')
   },
   campaign: {
     list: () => D.CAMPAIGNS,
-    name: c => L(c.name, c.ar),
+    name: c => c.name,
     nw: ['New appeal', 'حملة جديدة'],
     ed: ['Edit appeal', 'تعديل الحملة'],
     del: ['Delete this appeal?', 'حذف هذه الحملة؟'],
     fields: () => [
-      ...pair('name', 'ar', 'Name (English)', 'الاسم (إنكليزي)', 'Name (Arabic)', 'الاسم (عربي)'),
-      { k: 'goal', label: L('Goal (USD)', 'الهدف (دولار)'), type: 'number', min: 1, req: true },
-      { k: 'ends', label: L('Ends', 'تنتهي'), type: 'date', req: true }
+      { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
+      { k: 'purpose', label: L('What it is for', 'الغرض منها'), req: true, full: true },
+      { k: 'fund', label: L('Fund', 'الصندوق'), type: 'select', options: funds },
+      {
+        k: 'currency',
+        label: L('Currency', 'العملة'),
+        type: 'select',
+        options: () => [
+          ['USD', 'USD'],
+          ['LBP', 'LBP'],
+          ['EUR', 'EUR']
+        ]
+      },
+      {
+        k: 'goal',
+        label: L('Goal', 'الهدف'),
+        type: 'number',
+        min: 1,
+        req: true,
+        get: c => Object.values(c.targets || {})[0] ?? '',
+        set: (c, v) => {
+          c.targets = { [c.currency || 'USD']: v };
+        }
+      },
+      { k: 'starts', label: L('Starts', 'تبدأ'), type: 'date', req: true },
+      { k: 'ends', label: L('Ends', 'تنتهي'), type: 'date', opt: true }
     ],
-    blank: () => ({ id: uid('ca'), name: '', ar: '', goal: 10000, raised: 0, donors: 0, ends: '2026-12-31' })
+    blank: () => ({
+      id: uid('ca'),
+      name: '',
+      ar: '',
+      purpose: '',
+      fund: D.FUNDS[0]?.id || '',
+      currency: 'USD',
+      starts: new Date().toLocaleDateString('sv-SE'),
+      ends: '',
+      targets: {},
+      received: {},
+      pledged: {}
+    }),
+    canDelete: () =>
+      L('An appeal cannot be deleted or edited once created.', 'لا تُحذف الحملة ولا تُعدَّل بعد إنشائها.')
   },
   hymn: {
     list: () => D.MUSIC,

@@ -194,7 +194,8 @@ export function rateDialog() {
     const [typed, setTyped] = useState(null);
     return <RateBody canEdit={canEdit} typed={typed} setTyped={setTyped} input={null} />;
   }
-  const saveRate = e => {
+  /* The API has no exchange rate: persist() reports it as not connected and puts the old value back. */
+  const saveRate = async e => {
     const input = e.currentTarget.closest('.modal').querySelector('#rateinput');
     const value = parseInt(input.value.replace(/\D/g, ''), 10);
     if (!(value >= 10000 && value <= 500000)) return input.focus();
@@ -202,6 +203,7 @@ export function rateDialog() {
     RATE.value = value;
     RATE.setOn = new Date();
     RATE.setBy = session.user?.name || '';
+    if (!(await persist())) return;
     closeOverlays();
     bus.refresh();
     toast(t('Rate saved', 'حُفظ السعر'), `${num(value)} L.L / $`, 'success', {

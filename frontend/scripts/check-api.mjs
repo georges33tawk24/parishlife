@@ -123,6 +123,15 @@ globalThis.fetch = async (url, options = {}) => {
   if (/^parishes\/P\/(calendar\/events|plans|music)\?/.test(path))
     return json(200, { items: [], continuationToken: null });
   if (path.startsWith('public/parishes/P/liturgical-calendar?')) return json(200, { status: 'NotPublished', days: [] });
+  // the finance lists (checked in checks/finance.mjs): empty for this parish
+  if (
+    method === 'GET' &&
+    /^parishes\/P\/(finance\/(funds|balances|campaigns|pledges|contributions|expenses|bank\/lines|bank\/reconciliations)|office-ledger\/entries)$/.test(
+      path
+    )
+  )
+    return json(200, []);
+  if (path === 'parishes/P/office-ledger/balances') return json(200, { period: '2026-11', totals: {} });
   return json(404); // a route the API does not have
 };
 

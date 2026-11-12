@@ -1,11 +1,15 @@
-/* Office expenses: the monthly allowance, office purchases with receipts, and the running balance
-   in each currency. */
+/* Office expenses: the monthly allowance, office purchases with receipt references, and the running
+   balance in each currency, from ParishLife.Api's office ledger. USD and LBP are kept apart.
+   An entry is a receipt reference (or the reason there is none); the API stores no category and no
+   receipt file. A removed or reversed entry stays in the ledger's history with its reason. */
 import { Select } from '../../ui/components.jsx';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
 import { S, is, bus } from '../../model/store.js';
 import { OFFICE_LEDGER, PARISH } from '../../model/data.js';
+import { can } from './money-shared.jsx';
+import * as A from './money-actions.jsx';
 import { persist } from '../../model/persist.js';
-import { PageHead, Table, Empty, Icon, Pill, openDrawer, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
+import { PageHead, Table, Empty, Icon, Pill, openDrawer, closeOverlays, toast } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { printSheet } from '../../shared/print.js';
 import { needAll } from '../../shared/dialogs.jsx';
@@ -25,42 +29,29 @@ const typeLabel = kind =>
     ? L('Expense', 'مصروف')
     : kind === 'opening'
       ? L('Initial opening balance', 'الرصيد الافتتاحي الأول')
-      : L('Allowance received', 'مخصّص مستلم');
+      : kind === 'reversal'
+        ? L('Reversal', 'قيد عكسي')
+        : L('Allowance received', 'مخصّص مستلم');
 
-const signed = row => (row.kind === 'expense' ? -row.amount : row.amount);
-
-const categories = [
-  ['Stationery', 'قرطاسية'],
-  ['Printing', 'طباعة'],
-  ['Office supplies', 'لوازم مكتبية'],
-  ['Postage', 'بريد'],
-  ['Maintenance', 'صيانة'],
-  ['Other', 'أخرى']
-];
-
-const categoryLabel = value => {
-  const item = categories.find(([en]) => en === value);
-  return item ? L(...item) : value;
-};
+/* what the entry did to the balance, worked out by the loader from the API's entries */
+const signed = row => row.effect || 0;
 
 const monthRows = (month, currency) =>
-  OFFICE_LEDGER.filter(row => row.currency === currency && row.date.slice(0, 7) === month).sort(
-    (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
-  );
+  OFFICE_LEDGER.filter(
+    row => row.currency === currency && row.status !== 'Removed' && row.date.slice(0, 7) === month
+  ).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
 function totals(month, currency) {
   const rows = monthRows(month, currency),
     before = OFFICE_LEDGER.filter(row => row.currency === currency && row.date.slice(0, 7) < month);
-  const opening =
-    before.reduce((sum, row) => sum + signed(row), 0) +
-    rows.filter(row => row.kind === 'opening').reduce((sum, row) => sum + row.amount, 0);
-  const received = rows.filter(row => row.kind === 'allowance').reduce((sum, row) => sum + row.amount, 0);
-  const spent = rows.filter(row => row.kind === 'expense').reduce((sum, row) => sum + row.amount, 0);
+  const opening = before.reduce((sum, row) => sum + signed(row), 0);
+  const received = rows.reduce((sum, row) => sum + Math.max(signed(row), 0), 0);
+  const spent = rows.reduce((sum, row) => sum - Math.min(signed(row), 0), 0);
   return { opening, received, spent, balance: opening + received - spent };
 }
 
 export function officeExpenses() {
-  if (!is('secretary', 'priest'))
+  if (!is('secretary', 'priest', 'treasurer') && !can('finance.read'))
     return <Empty glyph="shield" title={L('Office access required', 'صلاحية المكتب مطلوبة')} body="" />;
   const month = S.ui.officeMonth || today().slice(0, 7),
     currency = S.ui.officeCurrency || 'USD',
@@ -114,9 +105,16 @@ export function officeExpenses() {
           <Icon name="print" size={16} />
           {L('Print monthly summary', 'طباعة ملخّص الشهر')}
         </button>{' '}
-        <button className="btn btn-ghost" data-office-new="opening">
-          {L('Initial opening balance', 'الرصيد الافتتاحي الأول')}
-        </button>
+        {can('finance.approve') ? (
+          <>
+            <button className="btn btn-ghost" data-office-new="opening">
+              {L('Initial opening balance', 'الرصيد الافتتاحي الأول')}
+            </button>
+            <button className="btn btn-ghost" data-office-close="">
+              {L('Close this month', 'إقفال هذا الشهر')}
+            </button>
+          </>
+        ) : null}
       </div>{' '}
       <div className="office-summary">
         {[
@@ -135,8 +133,8 @@ export function officeExpenses() {
       </div>{' '}
       <p className="help">
         {L(
-          'Previous balances carry forward automatically. USD and LBP are tracked separately. Record an initial balance only once per currency.',
-          'تُنقل الأرصدة السابقة تلقائياً. يُتابع الدولار والليرة بشكل منفصل. سجّل الرصيد الأول مرة واحدة لكل عملة.'
+          'Previous balances carry forward automatically. USD and LBP are tracked separately. Record an initial balance only once per currency; the ledger shows it inside the opening balance, not as a row.',
+          'تُنقل الأرصدة السابقة تلقائياً. يُتابع الدولار والليرة بشكل منفصل. سجّل الرصيد الأول مرة واحدة لكل عملة؛ ويظهر ضمن الرصيد الافتتاحي لا كسطر.'
         )}
       </p>{' '}
       <div className="office-toolbar">
@@ -169,7 +167,7 @@ export function officeExpenses() {
           cols={[
             { label: L('Date', 'التاريخ') },
             { label: L('Type', 'النوع') },
-            { label: L('Description / category', 'الوصف / الفئة') },
+            { label: L('Description', 'الوصف') },
             { label: L('Supplier / reference', 'المورّد / المرجع') },
             { label: L('Amount', 'المبلغ'), cls: 'num' },
             { label: L('Actions', 'الإجراءات') }
@@ -180,7 +178,7 @@ export function officeExpenses() {
               <Pill label={typeLabel(row.kind)} tone={row.kind === 'expense' ? 'warning' : 'info'} />,
               <>
                 <b>{row.description}</b>
-                <small>{categoryLabel(row.category || '')}</small>
+                <small>{row.monthClosed ? L('Month closed', 'الشهر مقفل') : ''}</small>
               </>,
               <>
                 <b>{row.payee || '—'}</b>
@@ -191,15 +189,19 @@ export function officeExpenses() {
                 <button className="btn btn-secondary btn-dense" data-office-view={row.id}>
                   {L('View', 'عرض')}
                 </button>
-                <button className="btn btn-secondary btn-dense" data-office-edit={row.id}>
-                  {L('Edit', 'تعديل')}
-                </button>
+                {!row.monthClosed && row.kind !== 'reversal' && can('finance.enter') ? (
+                  <button className="btn btn-secondary btn-dense" data-office-edit={row.id}>
+                    {L('Edit', 'تعديل')}
+                  </button>
+                ) : null}
                 <button className="btn btn-ghost btn-dense" data-office-print={row.id}>
                   {L('Print', 'طباعة')}
                 </button>
-                <button className="btn btn-danger-quiet btn-dense" data-office-delete={row.id}>
-                  {L('Delete', 'حذف')}
-                </button>
+                {row.kind !== 'reversal' && can('finance.enter') ? (
+                  <button className="btn btn-danger-quiet btn-dense" data-office-delete={row.id}>
+                    {row.monthClosed ? L('Reverse', 'عكس') : L('Remove', 'إزالة')}
+                  </button>
+                ) : null}
               </span>
             ]
           }))}
@@ -224,6 +226,23 @@ function entryForm(record = null, kind = 'expense') {
   const currency = record?.currency || S.ui.officeCurrency || 'USD';
   const date =
     record?.date || (S.ui.officeMonth && S.ui.officeMonth !== today().slice(0, 7) ? S.ui.officeMonth + '-01' : today());
+  const label = {
+    expense: [
+      L('Supplier / payee', 'المورّد / المستفيد'),
+      L('Receipt / invoice reference', 'رقم الإيصال / الفاتورة'),
+      L('Reason there is no receipt (when no reference)', 'سبب غياب الإيصال (عند عدم وجود مرجع)')
+    ],
+    allowance: [
+      L('Received from', 'مستلم من'),
+      L('Finance record of the transfer', 'السجل المالي للتحويل'),
+      L('Notes (optional)', 'ملاحظات (اختياري)')
+    ],
+    opening: [
+      L('Held by', 'محفوظ لدى'),
+      L('Reference (optional)', 'مرجع (اختياري)'),
+      L('Where this balance comes from', 'مصدر هذا الرصيد')
+    ]
+  }[kind];
   openDrawer({
     title: record ? L('Edit transaction', 'تعديل العملية') : typeLabel(kind),
     body: (
@@ -241,70 +260,49 @@ function entryForm(record = null, kind = 'expense') {
           </div>
         </div>{' '}
         <C.Field label={L('Amount', 'المبلغ')} id="oe-amount" type="number" value={record?.amount ?? ''} req={true} />{' '}
-        <C.Field
-          label={L('Description', 'الوصف')}
-          id="oe-description"
-          value={record?.description || ''}
-          req={true}
-          max={240}
-        />{' '}
+        {kind !== 'opening' ? (
+          <C.Field
+            label={L('Description', 'الوصف')}
+            id="oe-description"
+            value={record?.description || ''}
+            req={true}
+            max={300}
+          />
+        ) : null}{' '}
         {kind === 'expense' ? (
+          <C.Field label={label[0]} id="oe-payee" value={record?.payee || ''} req={true} max={200} />
+        ) : null}{' '}
+        {kind !== 'opening' ? (
+          <C.Field
+            label={label[1]}
+            id="oe-reference"
+            value={record?.reference || ''}
+            req={kind === 'allowance'}
+            max={300}
+          />
+        ) : null}{' '}
+        {kind !== 'allowance' ? (
           <div className="formrow">
-            <label className="label" htmlFor="oe-category">
-              {L('Category', 'الفئة')}
+            <label className="label" htmlFor="oe-notes">
+              {label[2]}
             </label>
-            <Select defaultValue={record?.category} id="oe-category">
-              {categories.map(([en, ar], i) => (
-                <option key={i} value={en}>
-                  {L(en, ar)}
-                </option>
-              ))}
-            </Select>
+            <textarea className="textarea" id="oe-notes" maxLength="500" defaultValue={record?.notes || ''} />
           </div>
-        ) : (
-          ''
-        )}{' '}
-        <C.Field
-          label={kind === 'expense' ? L('Supplier / payee', 'المورّد / المستفيد') : L('Received from', 'مستلم من')}
-          id="oe-payee"
-          value={record?.payee || ''}
-          max={160}
-        />{' '}
-        <C.Field
-          label={L('Receipt / reference number (optional)', 'رقم الإيصال / المرجع (اختياري)')}
-          id="oe-reference"
-          value={record?.reference || ''}
-          max={100}
-        />{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="oe-notes">
-            {L('Notes (optional)', 'ملاحظات (اختياري)')}
-          </label>
-          <textarea className="textarea" id="oe-notes" maxLength="2000" defaultValue={record?.notes || ''} />
-        </div>{' '}
+        ) : null}{' '}
         {kind === 'opening' ? (
           <p className="help">
             {L(
-              'Use the balance held before your first transaction. Future months calculate their opening balance automatically.',
-              'استعمل الرصيد المتوفّر قبل أول عملية. تُحسب الأرصدة الافتتاحية للأشهر المقبلة تلقائياً.'
+              'Use the balance held before your first transaction. It can be recorded once per currency; future months carry it forward.',
+              'استعمل الرصيد المتوفّر قبل أول عملية. يُسجَّل مرة واحدة لكل عملة؛ وتنقله الأشهر المقبلة.'
             )}
           </p>
         ) : (
-          ''
-        )}{' '}
-        {record ? (
-          <>
-            <h3 className="t-ui">{L('Receipt attachments', 'مرفقات الإيصال')}</h3>
-            <C.Dropzone id="office-receipts" scope="office-expense" ownerId={record.id} />
-          </>
-        ) : (
-          <div className="formrow">
-            <label className="label" htmlFor="oe-receipt">
-              {L('Receipt attachment (optional)', 'مرفق الإيصال (اختياري)')}
-            </label>
-            <input className="input" type="file" id="oe-receipt" accept=".pdf,.png,.jpg,.jpeg" />
-            <p className="help">{L('PDF, JPG or PNG up to 10 MB.', 'PDF أو JPG أو PNG حتى ١٠ ميغابايت.')}</p>
-          </div>
+          <p className="help">
+            {L(
+              'Receipts are kept as a reference to the document. The ledger stores no category and no receipt file.',
+              'تُحفظ الإيصالات كمرجع للمستند. ولا يحفظ الدفتر فئة ولا ملف إيصال.'
+            )}
+          </p>
         )}
       </form>
     ),
@@ -324,25 +322,30 @@ function entryForm(record = null, kind = 'expense') {
       el.querySelector('#oe-amount').step = 'any';
       el.querySelector('#oe-save').addEventListener('click', async e => {
         const value = id => el.querySelector('#oe-' + id)?.value.trim() || '';
+        const needs =
+          kind === 'opening'
+            ? [['#oe-notes', L('Say where this balance comes from', 'اذكر مصدر هذا الرصيد')]]
+            : kind === 'allowance'
+              ? [['#oe-reference', L('Give the finance record of the transfer', 'أدخل السجل المالي للتحويل')]]
+              : [['#oe-payee', L('Enter the supplier', 'أدخل المورّد')]];
         if (
           !needAll(el, [
             ['#oe-date', L('Enter the date', 'أدخل التاريخ')],
             ['#oe-amount', L('Enter an amount above zero', 'أدخل مبلغاً أكبر من صفر'), v => Number(v) > 0],
-            ['#oe-description', L('Describe the transaction', 'صِف العملية')]
+            ...(kind === 'opening' ? [] : [['#oe-description', L('Describe the transaction', 'صِف العملية')]]),
+            ...needs
           ])
         )
           return;
-        if (!el.querySelector('form').reportValidity()) return;
-        const amount = Number(value('amount')),
-          date = value('date'),
-          currency = value('currency');
-        const receipt = el.querySelector('#oe-receipt')?.files?.[0];
-        if (receipt && (!/\.(pdf|png|jpe?g)$/i.test(receipt.name) || receipt.size > 10_000_000))
+        if (kind === 'expense' && !value('reference') && !value('notes'))
           return toast(
-            L('Choose a PDF, JPG or PNG up to 10 MB', 'اختر PDF أو JPG أو PNG حتى ١٠ ميغابايت'),
+            L('Give the receipt reference, or the reason there is none', 'أدخل مرجع الإيصال أو سبب غيابه'),
             '',
             'warning'
           );
+        const amount = Number(value('amount')),
+          date = value('date'),
+          currency = value('currency');
         e.currentTarget.disabled = true;
         const entry = {
           id: record?.id || 'office-' + crypto.randomUUID(),
@@ -351,7 +354,7 @@ function entryForm(record = null, kind = 'expense') {
           currency,
           amount,
           description: value('description'),
-          category: kind === 'expense' ? value('category') : '',
+          category: '',
           payee: value('payee'),
           reference: value('reference'),
           notes: value('notes')
@@ -361,22 +364,6 @@ function entryForm(record = null, kind = 'expense') {
         if (!(await persist())) {
           el.querySelector('#oe-save').disabled = false;
           return;
-        }
-        if (receipt) {
-          try {
-            const { uploadFile } = await import('../records/request-documents.jsx');
-            await uploadFile('office-expense', entry.id, receipt);
-          } catch (error) {
-            toast(
-              L('Transaction saved; receipt upload failed', 'حُفظت العملية؛ تعذّر رفع الإيصال'),
-              error.message,
-              'warning'
-            );
-            closeOverlays();
-            bus.refresh();
-            entryForm(OFFICE_LEDGER.find(x => x.id === entry.id));
-            return;
-          }
         }
         S.ui.officeMonth = date.slice(0, 7);
         S.ui.officeCurrency = currency;
@@ -393,25 +380,20 @@ function viewEntry(row) {
     title: typeLabel(row.kind),
     sub: row.description,
     body: (
-      <>
-        <dl className="dl">
-          <dt>{L('Date', 'التاريخ')}</dt>
-          <dd>{fmtDate(row.date)}</dd>
-          <dt>{L('Amount', 'المبلغ')}</dt>
-          <dd>{money(row.amount, row.currency)}</dd>
-          <dt>{L('Category', 'الفئة')}</dt>
-          <dd>{categoryLabel(row.category || '')}</dd>
-          <dt>{L('Supplier / source', 'المورّد / المصدر')}</dt>
-          <dd>{row.payee || '—'}</dd>
-          <dt>{L('Reference', 'المرجع')}</dt>
-          <dd>{row.reference || '—'}</dd>
-          <dt>{L('Notes', 'الملاحظات')}</dt>
-          <dd>{row.notes || '—'}</dd>
-        </dl>
-        <div className="divider" />
-        <h3 className="t-ui">{L('Receipt attachments', 'مرفقات الإيصال')}</h3>
-        <C.Dropzone id="office-view-receipts" scope="office-expense" ownerId={row.id} readOnly={true} />
-      </>
+      <dl className="dl">
+        <dt>{L('Date', 'التاريخ')}</dt>
+        <dd>{fmtDate(row.date)}</dd>
+        <dt>{L('Amount', 'المبلغ')}</dt>
+        <dd>{money(row.amount, row.currency)}</dd>
+        <dt>{L('Supplier / source', 'المورّد / المصدر')}</dt>
+        <dd>{row.payee || '—'}</dd>
+        <dt>{L('Reference', 'المرجع')}</dt>
+        <dd>{row.reference || '—'}</dd>
+        <dt>{L('Notes', 'الملاحظات')}</dt>
+        <dd>{row.notes || '—'}</dd>
+        <dt>{L('Month', 'الشهر')}</dt>
+        <dd>{row.monthClosed ? L('Closed', 'مقفل') : L('Open', 'مفتوح')}</dd>
+      </dl>
     ),
     foot: (
       <>
@@ -421,56 +403,17 @@ function viewEntry(row) {
         <button className="btn btn-secondary" id="oe-view-print">
           {L('Print voucher', 'طباعة السند')}
         </button>
-        <button className="btn btn-primary" id="oe-view-edit">
-          {L('Edit', 'تعديل')}
-        </button>
+        {!row.monthClosed && row.kind !== 'reversal' && can('finance.enter') ? (
+          <button className="btn btn-primary" id="oe-view-edit">
+            {L('Edit', 'تعديل')}
+          </button>
+        ) : null}
       </>
     ),
     onMount(el) {
-      el.querySelector('#oe-view-edit').onclick = () => entryForm(row);
+      const edit = el.querySelector('#oe-view-edit');
+      if (edit) edit.onclick = () => entryForm(row);
       el.querySelector('#oe-view-print').onclick = () => printEntry(row);
-    }
-  });
-}
-
-function deleteEntry(row) {
-  openModal({
-    title: L('Delete this transaction?', 'حذف هذه العملية؟'),
-    sub: row.description,
-    body: (
-      <p>
-        {L(
-          'The monthly balance will be recalculated. Its receipt attachments will be removed; the change remains in the audit history.',
-          'سيُعاد حساب الرصيد الشهري وتُحذف مرفقات الإيصال. يبقى التغيير في سجل التدقيق.'
-        )}
-      </p>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Keep', 'إبقاء')}
-        </button>
-        <button className="btn btn-danger" id="oe-confirm-delete">
-          {L('Delete', 'حذف')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#oe-confirm-delete').onclick = async e => {
-        e.currentTarget.disabled = true;
-        OFFICE_LEDGER.splice(
-          OFFICE_LEDGER.findIndex(x => x.id === row.id),
-          1
-        );
-        if (!(await persist())) {
-          closeOverlays();
-          bus.refresh();
-          return;
-        }
-        closeOverlays();
-        bus.refresh();
-        toast(L('Transaction deleted', 'حُذفت العملية'), '', 'success');
-      };
     }
   });
 }
@@ -503,8 +446,6 @@ function printEntry(row) {
           <dd>{row.description}</dd>
           <dt>{L('Amount', 'المبلغ')}</dt>
           <dd>{money(row.amount, row.currency)}</dd>
-          <dt>{L('Category', 'الفئة')}</dt>
-          <dd>{categoryLabel(row.category || '')}</dd>
           <dt>{L('Supplier / source', 'المورّد / المصدر')}</dt>
           <dd>{row.payee || '—'}</dd>
           <dt>{L('Reference', 'المرجع')}</dt>
@@ -603,7 +544,7 @@ officeExpenses.mount = host => {
   [
     ['view', viewEntry],
     ['edit', entryForm],
-    ['delete', deleteEntry],
+    ['delete', A.officeDeleteDialog],
     ['print', printEntry]
   ].forEach(([action, fn]) =>
     host.querySelectorAll(`[data-office-${action}]`).forEach(
@@ -615,4 +556,7 @@ officeExpenses.mount = host => {
     )
   );
   host.querySelector('[data-office-print-month]')?.addEventListener('click', printMonth);
+  host
+    .querySelector('[data-office-close]')
+    ?.addEventListener('click', () => A.officeCloseMonth(S.ui.officeMonth || today().slice(0, 7)));
 };
