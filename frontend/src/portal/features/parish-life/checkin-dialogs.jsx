@@ -1,295 +1,160 @@
-/* Check-in dialogs: scanning or finding a participant, authorised pickups, and incidents. */
-import { Select } from '../../ui/components.jsx';
+/* Check-in dialogs: arrival, checkout with a verified collector, re-entry, and the authorised collectors
+   of a registration. Main members: presenceDialog, arriveNow, collectorsDialog, removeCollector.
+   Arrival and departure are recorded by ParishLife.Api for an account that holds the check-in permission
+   and is a door operator of the event; a checkout without independent departure needs one of the
+   registration's authorised collectors and a note of how their identity was checked. Collectors change
+   through the registration's amend route, which needs the registrations permission and a reason. */
 import { t } from '../../../lib/i18n.js';
-import { S } from '../../model/store.js';
-import { Icon, toast, openDrawer, openModal, closeOverlays } from '../../ui/ui.jsx';
+import { bus } from '../../model/store.js';
+import { toast } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import * as D from '../../model/data.js';
-import { canCheckIn } from './registration-forms.jsx';
-import { selectableCheckinEvents, selectedCheckin, ensureCheckinSession } from '../../model/event-workflows.js';
-import { nameOf, ok, refresh, val } from '../../shared/dialog-helpers.jsx';
-import { pickPerson } from '../records/people-dialogs.jsx';
-import { need } from '../../shared/dialogs.jsx';
+import { Select } from '../../ui/components.jsx';
+import { act, recordPresence, amendRegistration } from '../../model/modules/registrations.js';
+import { ask, collectorsText, parseCollectors, registrantName } from './registration-forms.jsx';
 
 const L = (en, ar) => t(en, ar);
+const get = (el, sel) => (el.querySelector(sel)?.value || '').trim();
+const warn = (title, body = '') => toast(title, body, 'warning');
+const done = (title, ok) => (ok && toast(title, '', 'success'), ok);
 
-export function scan() {
-  const event = selectableCheckinEvents().find(e => e.id === S.ui.checkinEventId);
-  if (!event) return toast(L('Select an event first', 'اختر حدثاً أولاً'), '', 'warning');
-  openModal({
-    title: L('Check in by registration reference', 'التسجيل برقم الاشتراك'),
-    sub: `${L(event.title, event.titleAr)} · ${event.d} ${event.t} · ${L(D.venue(event.venue)?.name || '', D.venue(event.venue)?.ar || '')}`,
-    body: (
-      <div className="formrow">
-        <label className="label" htmlFor="sc_code">
-          {L('Registrant reference', 'رقم المشترك')}
-        </label>{' '}
-        <input
-          className="input mono"
-          id="sc_code"
-          placeholder={L('Enter the reference on the registration', 'أدخل الرقم على التسجيل')}
-          dir="ltr"
-        />
-      </div>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="sc_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Check in', 'تسجيل الدخول')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      const found = () => {
-        const forms = D.REGISTRATIONS.filter(f => f.eventId === event.id).map(f => f.id);
-        const registrant = D.REGISTRANTS.find(r => r.id === val(el, '#sc_code') && forms.includes(r.registrationId));
-        if (!registrant)
-          return toast(L('Reference not registered for this event', 'الرقم غير مسجّل لهذا الحدث'), '', 'warning');
-        if (
-          !canCheckIn(
-            registrant,
-            D.REGISTRATIONS.find(f => f.id === registrant.registrationId)
-          )
-        )
-          return toast(
-            L('Confirm the place and required consent first', 'ثبّت المقعد والموافقة المطلوبة أولاً'),
-            '',
-            'warning'
-          );
-        const session = ensureCheckinSession(event.id);
-        if (session.rows.some(r => r.p === registrant.p))
-          return toast(L('Already checked in', 'مسجّل مسبقاً'), '', 'warning');
-        const pickup = D.PICKUP[registrant.p],
-          required = pickup?.required !== false && !!pickup;
-        const code = required ? String(1000 + Math.floor(Math.random() * 9000)) : '';
-        session.rows.push({
-          p: registrant.p,
-          in: new Date().toTimeString().slice(0, 5),
-          out: null,
-          guardian: pickup?.approved?.[0]?.[0] || '—',
-          pickupRequired: required,
-          code,
-          alert: ''
-        });
-        session.present = session.rows.length;
-        closeOverlays();
-        refresh();
-        ok(L('Checked in', 'سُجّل الدخول'), `${nameOf(D.person(registrant.p))} · ${L(event.title, event.titleAr)}`);
-      };
-      el.querySelector('#sc_go').addEventListener('click', found);
-    }
-  });
+/* Arrival is recorded as happening now. */
+export async function arriveNow(row) {
+  if (await act(() => recordPresence(row, 'arrive'))) {
+    bus.refresh();
+    toast(L('Arrival recorded', 'سُجّل الوصول'), registrantName(row)?.lat || '', 'success');
+  }
 }
 
-export function checkinManual() {
-  const event = selectableCheckinEvents().find(e => e.id === S.ui.checkinEventId);
-  if (!event) return toast(L('Select an event first', 'اختر حدثاً أولاً'), '', 'warning');
-  const forms = D.REGISTRATIONS.filter(f => f.eventId === event.id).map(f => f.id);
-  const allowed = D.REGISTRANTS.filter(
-    r =>
-      forms.includes(r.registrationId) &&
-      canCheckIn(
-        r,
-        D.REGISTRATIONS.find(f => f.id === r.registrationId)
-      )
-  ).map(r => r.p);
-  pickPerson({
-    title: L('Manual check-in', 'تسجيل يدوي'),
-    sub: `${L(event.title, event.titleAr)} · ${event.d} ${event.t} · ${L(D.venue(event.venue)?.name || '', D.venue(event.venue)?.ar || '')}`,
-    cta: L('Check in', 'تسجيل الدخول'),
-    exclude: selectedCheckin()?.rows.map(r => r.p) || [],
-    allow: allowed,
-    onPick: p => {
-      const pickup = D.PICKUP[p.id],
-        required = pickup?.required !== false && !!pickup;
-      const code = required ? String(1000 + Math.floor(Math.random() * 9000)) : '';
-      const session = ensureCheckinSession(event.id);
-      if (!session || session.rows.some(r => r.p === p.id)) return;
-      session.rows.push({
-        p: p.id,
-        in: new Date().toTimeString().slice(0, 5),
-        out: null,
-        guardian: pickup?.approved?.[0]?.[0] || '—',
-        pickupRequired: required,
-        code,
-        alert: ''
-      });
-      session.present = session.rows.length;
-      refresh();
-      ok(
-        L('Checked in', 'سُجّل الدخول'),
-        `${nameOf(p)}${required ? ` · ${L('pickup code', 'رمز الاستلام')} ${code}` : ` · ${L('No pickup required', 'لا حاجة إلى استلام')}`}`
+/* checkout or reenter; a checkout names the collector and how their identity was checked. */
+export function presenceDialog(row, action) {
+  const checkout = action === 'checkout';
+  const needsCollector = checkout && !row.independentDeparture;
+  const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  ask({
+    title: checkout ? L('Check out', 'تسجيل خروج') : L('Re-entry', 'إعادة دخول'),
+    sub: registrantName(row)?.lat || '',
+    cta: checkout ? L('Check out', 'تسجيل خروج') : L('Record re-entry', 'سجّل إعادة الدخول'),
+    rows: [
+      needsCollector ? (
+        <div className="formrow" key="c">
+          <label className="label" htmlFor="pr-collector">
+            {L('Collected by', 'المستلِم')}
+          </label>
+          <Select id="pr-collector">
+            <option value="">{L('Choose an authorised person', 'اختر شخصاً مفوَّضاً')}</option>
+            {row.collectors.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null,
+      needsCollector ? (
+        <C.Field
+          key="v"
+          label={L('How their identity was checked', 'كيف تحقّقت من هويته')}
+          id="pr-verify"
+          max={500}
+          req={true}
+        />
+      ) : null,
+      checkout && row.independentDeparture ? (
+        <p key="i" className="help">
+          {L('This participant may leave on their own.', 'يمكن لهذا المشترك المغادرة بمفرده.')}
+        </p>
+      ) : null,
+      <C.Field key="t" label={L('When it happened', 'متى حدث')} id="pr-time" type="datetime-local" value={local} />,
+      <C.Field
+        key="p"
+        label={L(
+          'Reason, if entered on paper later (needed after 15 minutes)',
+          'السبب إن سُجّل لاحقاً على الورق (مطلوب بعد ١٥ دقيقة)'
+        )}
+        id="pr-paper"
+        max={500}
+        opt={true}
+      />
+    ],
+    async onGo(el) {
+      const collectorId = get(el, '#pr-collector'),
+        verify = get(el, '#pr-verify'),
+        when = get(el, '#pr-time');
+      if (needsCollector && (!collectorId || !verify))
+        return (warn(L('Name the collector and how they were checked', 'سمِّ المستلِم وكيف تحقّقت منه')), false);
+      if (!when) return (warn(L('Say when it happened', 'اذكر متى حدث')), false);
+      return done(
+        checkout ? L('Checked out', 'سُجّل الخروج') : L('Re-entry recorded', 'سُجّلت إعادة الدخول'),
+        await act(() =>
+          recordPresence(row, action, {
+            occurredAt: new Date(when).toISOString(),
+            collectorId: collectorId || null,
+            verificationEvidence: verify || null,
+            paperReason: get(el, '#pr-paper') || null
+          })
+        )
       );
     }
   });
 }
 
-export function pickupAdd(pid) {
-  openModal({
-    title: L('Add an authorised person', 'إضافة شخص مفوَّض'),
-    sub: nameOf(D.person(pid)),
-    body: (
-      <>
-        <div className="formgrid">
-          <C.Field label={L('Name (English)', 'الاسم (إنكليزي)')} req={true} id="pk_en" />{' '}
-          <C.Field label={L('Name (Arabic)', 'الاسم (عربي)')} dir="rtl" ar={true} id="pk_ar" />
-        </div>{' '}
-        <div className="formrow">
-          <label htmlFor="pk_r" className="label">
-            {L('Relationship', 'الصلة')}
-          </label>
-          <Select id="pk_r">
-            <option>grandparent</option>
-            <option>aunt</option>
-            <option>uncle</option>
-            <option>family friend</option>
-          </Select>
-        </div>{' '}
-        <C.CheckRow label={L('ID checked by a member of staff', 'تحقّق موظّف من الهوية')} checked={true} />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="pk_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Authorise', 'تفويض')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#pk_go').addEventListener('click', () => {
-        if (!need(el, '#pk_en', L('Enter a name', 'أدخل اسماً'))) return;
-        const en = val(el, '#pk_en');
-        D.PICKUP[pid] ||= { approved: [], restricted: [], required: true };
-        D.PICKUP[pid].approved.push([en, val(el, '#pk_ar') || en, el.querySelector('#pk_r').value]);
-        closeOverlays();
-        refresh();
-        ok(L('Authorised to collect', 'مفوَّض بالاستلام'), en);
-      });
+/* Replace the authorised collectors and whether the participant may leave alone. */
+export function collectorsDialog(row) {
+  ask({
+    title: L('Authorised to collect', 'المفوَّضون بالاستلام'),
+    sub: registrantName(row)?.lat || '',
+    cta: L('Save', 'احفظ'),
+    rows: [
+      <C.Textarea
+        key="c"
+        label={L('One per line: name | how their authority was checked', 'سطر لكل شخص: الاسم | كيف تحقّقت صلاحيته')}
+        id="cd-list"
+        value={collectorsText(row.collectors)}
+        max={2000}
+      />,
+      <C.CheckRow
+        key="i"
+        label={L('May leave on their own', 'يمكنه المغادرة بمفرده')}
+        id="cd-alone"
+        checked={row.independentDeparture}
+      />,
+      <C.Field key="r" label={L('Reason for the change', 'سبب التعديل')} id="cd-why" max={2000} />
+    ],
+    async onGo(el) {
+      const reason = get(el, '#cd-why');
+      if (!reason) return (warn(L('Say why you are changing it', 'اذكر سبب التعديل')), false);
+      return done(
+        L('Saved', 'تم الحفظ'),
+        await act(() =>
+          amendRegistration(row, {
+            ...row,
+            reason,
+            collectors: parseCollectors(el.querySelector('#cd-list').value, row.collectors),
+            independentDeparture: el.querySelector('#cd-alone').checked
+          })
+        )
+      );
     }
   });
 }
 
-export function pickupRemove(pid, i) {
-  const list = D.PICKUP[pid].approved;
-  const [x] = list.splice(+i, 1);
-  refresh();
-  ok(L('No longer authorised', 'لم يعد مفوَّضاً'), L(x[0], x[1]), {
-    action: {
-      label: L('Undo', 'تراجع'),
-      fn: () => {
-        list.splice(+i, 0, x);
-        refresh();
-      }
-    }
-  });
-}
-
-export function incidentNew() {
-  openDrawer({
-    title: L('Record an incident', 'تسجيل حادث'),
-    sub: L(
-      'Restricted to the priest and the safeguarding lead. Opening it is logged.',
-      'مقيّد للكاهن ومسؤول الحماية. وفتحه يُسجَّل.'
-    ),
-    body: (
-      <>
-        <C.PersonPicker label={L('Child involved', 'الطفل المعني')} id="in_p" />{' '}
-        <div className="formrow">
-          <label htmlFor="in_room" className="label">
-            {L('Where', 'أين')}
-          </label>
-          <Select id="in_room">
-            {D.VENUES.map((v, i) => (
-              <option key={i} value={v.id}>
-                {L(v.name, v.ar)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <C.Textarea label={L('What happened', 'ما حدث')} id="in_what" max={600} />{' '}
-        <C.CheckRow label={L('Guardian informed', 'أُبلغ وليّ الأمر')} checked={true} />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="in_go" style={{ marginInlineStart: 'auto' }}>
-          {L('Save report', 'حفظ التقرير')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#in_go').addEventListener('click', () => {
-        if (!need(el, '#in_what', L('Describe what happened', 'صف ما حدث'))) return;
-        const w = val(el, '#in_what');
-        D.INCIDENTS.unshift({
-          id: 'in' + Date.now(),
-          at: '2026-10-04 19:31',
-          room: el.querySelector('#in_room').value,
-          what: w,
-          whatAr: w,
-          by: 'p16',
-          restricted: true
-        });
-        closeOverlays();
-        refresh();
-        ok(L('Report saved', 'حُفظ التقرير'), L('Restricted and logged.', 'مقيّد ومسجَّل.'));
-      });
-    }
-  });
-}
-
-export function incidentOpen(id) {
-  const i = D.INCIDENTS.find(x => x.id === id) || D.INCIDENTS[0];
-  openDrawer({
-    title: L('Incident report', 'تقرير حادث'),
-    sub: (
-      <>
-        <span className="mono">{i.at}</span> · {L(D.venue(i.room).name, D.venue(i.room).ar)}
-      </>
-    ),
-    body: (
-      <>
-        <C.InlineAlert
-          tone="warning"
-          title={L('Restricted record', 'سجل مقيّد')}
-          body={L('Your access to this report has been logged.', 'سُجّل وصولك إلى هذا التقرير.')}
-        />{' '}
-        <dl className="dl" style={{ marginTop: '16px' }}>
-          <dt>{L('Recorded by', 'سجّله')}</dt>
-          <dd>{nameOf(D.person(i.by))}</dd>
-          <dt>{L('When', 'متى')}</dt>
-          <dd className="mono">{i.at}</dd>
-        </dl>{' '}
-        <p className="t-body" style={{ marginTop: '14px', fontSize: '14px' }}>
-          {L(i.what, i.whatAr)}
-        </p>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Close', 'إغلاق')}
-        </button>{' '}
-        <button className="btn btn-secondary" id="io_print" style={{ marginInlineStart: 'auto' }}>
-          <Icon name="print" size={16} />
-          {L('Print', 'طباعة')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#io_print').addEventListener('click', () => {
-        closeOverlays();
-        setTimeout(() => window.print(), 250);
-      });
+export function removeCollector(row, collectorId) {
+  const gone = row.collectors.find(c => c.id === collectorId);
+  if (!gone) return;
+  ask({
+    title: L('Remove authorisation', 'إلغاء التفويض'),
+    sub: gone.name,
+    cta: L('Remove', 'إزالة'),
+    rows: [<C.Field key="r" label={L('Reason', 'السبب')} id="rc-why" max={2000} />],
+    async onGo(el) {
+      const reason = get(el, '#rc-why');
+      if (!reason) return (warn(L('Give a reason', 'اذكر السبب')), false);
+      return done(
+        L('No longer authorised', 'لم يعد مفوَّضاً'),
+        await act(() =>
+          amendRegistration(row, { ...row, reason, collectors: row.collectors.filter(c => c.id !== collectorId) })
+        )
+      );
     }
   });
 }

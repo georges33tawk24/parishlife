@@ -12,7 +12,21 @@ export const selectRegistration = id => {
   return selectedRegistration();
 };
 export const registrantsFor = form => (form ? REGISTRANTS.filter(row => row.registrationId === form.id) : []);
-export const linkedEvent = form => eventById(form?.eventId);
+/* The calendar's event when it is loaded; otherwise the event the registration module read from the API. */
+export const linkedEvent = form =>
+  eventById(form?.eventId) ||
+  (form?.d
+    ? {
+        id: form.eventId,
+        title: form.event,
+        titleAr: form.eventAr,
+        d: form.d,
+        t: form.t,
+        to: form.to,
+        kind: 'event',
+        venue: null
+      }
+    : null);
 export const eventVenue = event => VENUES.find(place => place.id === event?.venue) || null;
 export const selectableCheckinEvents = () => [
   ...new Map(
@@ -30,19 +44,3 @@ export const selectedCheckin = () => {
   const id = S.ui.checkinEventId;
   return id && selectableCheckinEvents().some(event => event.id === id) ? CHECKIN.sessions?.[id] || null : null;
 };
-export function ensureCheckinSession(id = S.ui.checkinEventId) {
-  const event = selectableCheckinEvents().find(event => event.id === id);
-  if (!event) return null;
-  CHECKIN.sessions ||= {};
-  CHECKIN.sessions[id] ||= {
-    eventId: id,
-    rows: [],
-    expected: REGISTRANTS.filter(row =>
-      REGISTRATIONS.some(form => form.id === row.registrationId && form.eventId === id)
-    ).length,
-    present: 0,
-    awaitingGuardian: 0,
-    room: event.venue
-  };
-  return CHECKIN.sessions[id];
-}
