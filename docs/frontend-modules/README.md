@@ -1,5 +1,7 @@
 # Connecting the frontend, module by module
 
+For completing the stack (backend additions, Arabic names, people's names for account ids), read [`CONVENTIONS.md`](CONVENTIONS.md) first.
+
 The portal's screens change plain objects in `frontend/src/portal/model/data.js` and call `persist()`. Each connected module is a file in `frontend/src/portal/model/modules/`, listed in `modules/index.js`:
 
 | Export | Meaning |
