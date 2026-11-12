@@ -35,7 +35,7 @@ import { MergeHistory } from './people-duplicates.jsx';
 import { consentsOf, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
-import { api, session } from '../../model/api.js';
+import { api, session, newOperationId } from '../../model/api.js';
 import * as D from '../../model/data.js';
 import {
   PEOPLE,
@@ -443,9 +443,14 @@ export function personMenu(anchor, pid) {
 
 async function inviteAccount(p) {
   try {
-    const result = await api('workspace/invitations', 'POST', { parish: session.parishId, personId: p.id });
+    // one-use invitation (card A11); the link carries the parish, the invitation and its private token
+    const result = await api(
+      `parishes/${encodeURIComponent(session.parishId)}/people/${encodeURIComponent(p.id)}/invitations`,
+      'POST',
+      { operationId: newOperationId() }
+    );
     const link = new URL('index.html', location.href);
-    link.hash = 'invite=' + result.token;
+    link.hash = 'invite=' + new URLSearchParams({ p: session.parishId, i: result.id, t: result.token });
     openModal({
       title: t('Account invitation', 'دعوة الحساب'),
       body: (

@@ -534,12 +534,19 @@ export function Portal() {
   /* Into the portal after signing in or opening an account: the page that was asked for, or the role's first page. */
   const enter = async (parishId = '') => {
     await loadSession();
-    const invitation = location.hash.startsWith('#invite=') ? location.hash.slice(8) : '';
+    const invitation = location.hash.startsWith('#invite=') ? new URLSearchParams(location.hash.slice(8)) : null;
     if (invitation) {
       try {
-        const claimed = await api('account/claim-invitation', 'POST', { token: invitation });
+        // accepting links this account to the invited person (card A11); the token travels in a header
+        const at = invitation.get('p');
+        await api(
+          `parishes/${encodeURIComponent(at)}/person-invitations/${encodeURIComponent(invitation.get('i'))}/accept`,
+          'POST',
+          undefined,
+          { 'X-ParishLife-Invitation': invitation.get('t') || '' }
+        );
         await loadSession();
-        parishId = claimed.parish;
+        parishId = at;
         history.replaceState(null, '', '#/account');
       } catch (e) {
         history.replaceState(null, '', '#/account');
