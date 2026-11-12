@@ -40,7 +40,7 @@ globalThis.fetch = async (url, options = {}) => {
     }
     sent.push([method, path, body]);
   }
-  const list = path.match(/^parishes\/P\/people\?pageSize=200&?(?:continuation=(\w+))?$/);
+  const list = path.match(/^parishes\/P\/people\?pageSize=100&?(?:continuation=(\w+))?$/);
   if (list && method === 'GET')
     return list[1] // two pages: the first ends with a continuation token
       ? json(200, { items: people.slice(1), continuationToken: null })
@@ -51,11 +51,18 @@ globalThis.fetch = async (url, options = {}) => {
     people.push(p);
     return json(200, p);
   }
+  if (path === 'parishes/P/people/duplicates') return json(200, []);
+  const one = path.match(/^parishes\/P\/people\/(\w+)$/);
+  if (one && method === 'GET') return json(200, { value: people.find(p => p.id === one[1]), version: `v-${one[1]}` });
   const archive = path.match(/^parishes\/P\/people\/(\w+)\/archive$/);
   if (archive && method === 'POST') {
+    assert.equal(body.version, `v-${archive[1]}`, 'archive sends the version the API returned');
+    assert.equal(body.archived, true);
+    assert.match(body.operationId, /^[0-9a-f-]{36}$/);
     people.find(p => p.id === archive[1]).archived = true;
     return json(200, {});
   }
+  if (path.startsWith('parishes/P/households')) return json(200, { items: [], continuationToken: null });
   if (path === 'auth/me') return json(200, { id: 'u', displayName: 'Test Account', accountVerified: true });
   if (path === 'me/parishes')
     return json(200, [{ parishId: 'P', name: 'Saint Test', relationship: 'Member', primary: true }]);

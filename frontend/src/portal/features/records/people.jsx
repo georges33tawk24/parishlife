@@ -30,6 +30,9 @@ import { compose } from '../communicate/messaging-dialogs.jsx';
 import { needAll } from '../../shared/dialogs.jsx';
 import { download } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
+import { createdId } from '../../model/modules/people.js';
+import { MergeHistory } from './people-duplicates.jsx';
+import { consentsOf, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
 import { api, session } from '../../model/api.js';
@@ -74,59 +77,43 @@ const filteredPeople = () =>
 const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 function peopleExport() {
-  const selected = [...document.querySelectorAll('#view tr[data-ri-p] [data-row]:checked')].map(
-    c => c.closest('tr').dataset.riP
-  );
   const options = [
-    ['english', 'English name', 'الاسم الإنكليزي'],
-    ['arabic', 'Arabic name', 'الاسم العربي'],
-    ['phone', 'Phone', 'الهاتف'],
-    ['town', 'Town', 'البلدة'],
-    ['rite', 'Rite', 'الطقس'],
-    ['status', 'Status', 'الحالة'],
-    ['household', 'Household', 'العائلة'],
-    ['envelope', 'Offering-envelope identifier', 'رمز مظروف العطاء'],
-    ['birth', 'Date of birth', 'تاريخ الولادة']
+    ['GivenName', 'Given name', 'الاسم الأول'],
+    ['FamilyName', 'Family name', 'اسم العائلة'],
+    ['BirthDate', 'Date of birth', 'تاريخ الولادة'],
+    ['Contact', 'Contact', 'جهة الاتصال'],
+    ['Archived', 'Archived', 'مؤرشف']
   ];
   openModal({
     title: t('Export people', 'تصدير المؤمنين'),
-    sub: t('Choose the records and fields in this CSV file.', 'اختر السجلات والحقول لهذا الملف.'),
+    sub: t(
+      'A CSV of the parish register. Each export is logged with its purpose.',
+      'ملف CSV بسجل الرعية. يُسجَّل كل تصدير مع غرضه.'
+    ),
     body: (
       <>
         <div className="formrow">
-          <label className="label" htmlFor="ex_scope">
-            {t('Scope', 'النطاق')}
+          <label className="label" htmlFor="ex_purpose">
+            {t('Purpose of this export', 'غرض التصدير')}
           </label>
-          <Select id="ex_scope">
-            {selected.length ? (
-              <option value="selected">
-                {t(`Selected people on this page (${selected.length})`, `المحدّدون في هذه الصفحة (${selected.length})`)}
-              </option>
-            ) : (
-              ''
-            )}
-            <option value="filtered">
-              {t(
-                `Current filtered results (${filteredPeople().length})`,
-                `نتائج المرشّح الحالي (${filteredPeople().length})`
-              )}
-            </option>
-            <option value="all">
-              {t(`All active people (${PEOPLE.length})`, `جميع المؤمنين النشطين (${PEOPLE.length})`)}
-            </option>
-          </Select>
+          <input className="input" id="ex_purpose" maxLength={500} />
         </div>{' '}
         <div className="label" style={{ margin: '16px 0 8px' }}>
-          {t('Fields to include', 'الحقول المطلوبة')}
+          {t('Fields to include (up to five)', 'الحقول المطلوبة (حتى خمسة)')}
         </div>{' '}
         <div className="choice-grid">
           {options.map(([key, en, ar], i) => (
             <label key={i} className="row">
-              <input type="checkbox" data-export-field={key} defaultChecked={!!(i < 6)} />
+              <input type="checkbox" data-export-field={key} defaultChecked={!!(i < 4)} />
               <span>{t(en, ar)}</span>
             </label>
           ))}
-        </div>
+        </div>{' '}
+        <label className="row" style={{ marginTop: '12px' }}>
+          <input type="checkbox" id="ex_archived" />
+          <span>{t('Include archived people', 'مع المؤرشفين')}</span>
+        </label>
+        <p className="help" id="ex_preview" />
       </>
     ),
     foot: (
@@ -140,36 +127,35 @@ function peopleExport() {
       </>
     ),
     onMount(el) {
-      el.querySelector('#export-confirm').addEventListener('click', () => {
-        const chosen = [...el.querySelectorAll('[data-export-field]:checked')].map(c => c.dataset.exportField);
-        if (!chosen.length) return toast(t('Choose at least one field', 'اختر حقلاً واحداً على الأقل'), '', 'warning');
-        const scope = el.querySelector('#ex_scope').value;
-        const rows =
-          scope === 'all'
-            ? PEOPLE
-            : scope === 'filtered'
-              ? filteredPeople()
-              : PEOPLE.filter(p => selected.includes(p.id));
-        const values = {
-          english: p => p.lat,
-          arabic: p => p.ar,
-          phone: p => p.phone,
-          town: p => p.town,
-          rite: p => p.rite,
-          status: p => p.status,
-          household: p => hh(p.hh)?.name || '',
-          envelope: p => hh(p.hh)?.envelope || '',
-          birth: p => p.born
-        };
-        download(
-          `parishlife-people-${scope}.csv`,
-          [
-            chosen.map(k => csvCell(options.find(x => x[0] === k)[1])).join(','),
-            ...rows.map(p => chosen.map(k => csvCell(values[k](p))).join(','))
-          ].join('\r\n')
-        );
-        closeOverlays();
-        toast(t('People exported', 'صُدّر المؤمنون'), `${rows.length} ${t('records', 'سجلّاً')}`, 'success');
+      const chosen = () => [...el.querySelectorAll('[data-export-field]:checked')].map(c => c.dataset.exportField);
+      const archived = () => el.querySelector('#ex_archived').checked;
+      const preview = async () => {
+        const note = el.querySelector('#ex_preview');
+        if (!chosen().length) return (note.textContent = '');
+        try {
+          const r = await previewExport(chosen(), archived());
+          note.textContent = `${r.count} ${t('people', 'شخصاً')} · ${t('never included', 'لا يُضمَّن أبداً')}: ${r.excluded.join(', ')}`;
+        } catch (error) {
+          note.textContent = error.message;
+        }
+      };
+      el.querySelectorAll('input[type=checkbox]').forEach(c => c.addEventListener('change', preview));
+      preview();
+      el.querySelector('#export-confirm').addEventListener('click', async e => {
+        const columns = chosen(),
+          purpose = el.querySelector('#ex_purpose').value.trim();
+        if (!columns.length) return toast(t('Choose at least one field', 'اختر حقلاً واحداً على الأقل'), '', 'warning');
+        if (!purpose) return toast(t('Say what the export is for', 'اذكر غرض التصدير'), '', 'warning');
+        e.currentTarget.disabled = true;
+        try {
+          const csv = await exportPeople({ purpose, columns, includeArchived: archived() });
+          download('parishlife-people.csv', csv);
+          closeOverlays();
+          toast(t('People exported', 'صُدّر المؤمنون'), '', 'success');
+        } catch (error) {
+          e.currentTarget.disabled = false;
+          toast(t('Export failed', 'فشل التصدير'), error.message, 'danger');
+        }
       });
     }
   });
@@ -840,7 +826,7 @@ function duplicates() {
     <div className="tabbody">
       <C.InlineAlert
         tone="warning"
-        title={t('2 possible duplicates', 'تكراران محتملان')}
+        title={t(`${DUPLICATES.length} possible duplicates`, `${DUPLICATES.length} تكرارات محتملة`)}
         body={t(
           'Suggested for review only. ParishLife never merges login identities automatically.',
           'مقترحة للمراجعة فقط. لا يدمج «حياة الرعية» هويات الدخول تلقائياً أبداً.'
@@ -853,7 +839,7 @@ function duplicates() {
               <h3>{t('Possible match', 'تطابق محتمل')}</h3>{' '}
               <span className="pill pill-warning" style={{ marginInlineStart: 'auto' }}>
                 <span className="dot" />
-                {d.score}% {t('similar', 'تشابه')}
+                {(d.signals || []).join(' · ')}
               </span>
             </div>{' '}
             <div className="panel-b">
@@ -875,8 +861,6 @@ function duplicates() {
                     <dl className="dl" style={{ marginTop: '12px', fontSize: '13px' }}>
                       <dt>{t('Town', 'البلدة')}</dt>
                       <dd>{r.town}</dd>
-                      <dt>{t('Envelope', 'المظروف')}</dt>
-                      <dd className="mono">{r.env}</dd>
                       <dt>{t('Born', 'الولادة')}</dt>
                       <dd className="mono">{r.born}</dd>
                     </dl>{' '}
@@ -899,6 +883,7 @@ function duplicates() {
           </section>
         ))}
       </div>
+      <MergeHistory />
     </div>
   );
 }
@@ -1029,8 +1014,12 @@ function importView() {
   );
 }
 
-function printPeopleDirectory() {
-  const listed = PEOPLE.filter(p => PERSON_EXTRA[p.id]?.directory).sort((a, b) => a.lat.localeCompare(b.lat));
+async function printPeopleDirectory() {
+  /* the API has no parish-wide consent list, so each person's consents are read now */
+  const consents = await consentsOf(PEOPLE.map(p => p.id)).catch(() => new Map());
+  const listed = PEOPLE.filter(p =>
+    (consents.get(p.id) || []).some(r => r.value.kind === 'Directory' && r.value.status === 'Given')
+  ).sort((a, b) => a.lat.localeCompare(b.lat));
   if (!listed.length)
     return toast(
       t('Nobody to print yet', 'لا أحد للطباعة بعد'),
@@ -1095,7 +1084,6 @@ export function newPersonDrawer() {
     body: (
       <>
         <C.NamePair />
-        <C.RiteSelect />
         <C.PhoneField id="newphone" value="" required={false} />{' '}
         <div className="formgrid">
           <C.Field label={t('Date of birth', 'تاريخ الولادة')} type="date" id="newborn" />
@@ -1106,20 +1094,6 @@ export function newPersonDrawer() {
         </h4>{' '}
         <C.AddressCascade /> <div className="divider" />{' '}
         <div className="formgrid">
-          <div className="formrow">
-            <label className="label" htmlFor="newblood">
-              {t('Blood type', 'زمرة الدم')}
-              <span className="opt">{t('(for emergencies)', '(للطوارئ)')}</span>
-            </label>{' '}
-            <Select id="newblood">
-              <option value="">—</option>
-              <option>O+</option>
-              <option>O−</option>
-              <option>A+</option>
-              <option>B+</option>
-              <option>AB+</option>
-            </Select>
-          </div>{' '}
           <div className="formrow">
             <label htmlFor="newlang" className="label">
               {t('Language', 'اللغة')}
@@ -1208,8 +1182,8 @@ export function newPersonDrawer() {
           ar,
           town: address.town || '',
           townAr: address.townAr || '',
-          rite: el.querySelector('#newrite')?.value || 'Maronite',
-          status: 'member',
+          rite: '',
+          status: '',
           phone: el.querySelector('#newphone')?.value.trim() || '—',
           born: el.querySelector('#newborn')?.value || '',
           hh: null,
@@ -1221,7 +1195,6 @@ export function newPersonDrawer() {
         PERSON_EXTRA[id] = {
           address,
           directory,
-          blood: el.querySelector('#newblood')?.value || '',
           lang: el.querySelector('#newlang')?.value || 'ar',
           occupation: el.querySelector('#newoccupation')?.value.trim() || '',
           channel: announcement ? 'whatsapp' : '',
@@ -1271,7 +1244,7 @@ export function newPersonDrawer() {
         if (addNext) {
           bus.refresh();
           newPersonDrawer();
-        } else go('person/' + id);
+        } else go('person/' + createdId(id));
       }
       el.querySelector('#person-save').addEventListener('click', () => save(false));
       el.querySelector('#person-save-next').addEventListener('click', () => save(true));

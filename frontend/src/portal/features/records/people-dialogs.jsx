@@ -8,7 +8,8 @@ import { bus, me } from '../../model/store.js';
 import { toast, openDrawer, openModal, closeOverlays, Who, openMenu } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
-import { persist } from '../../model/persist.js';
+import { persist, hydrate } from '../../model/persist.js';
+import { openPerson } from '../../model/modules/people-workflows.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
 import { nameOf, ok, refresh, rotaSlot, rotaTeam, today, val } from '../../shared/dialog-helpers.jsx';
 import { need } from '../../shared/dialogs.jsx';
@@ -357,7 +358,14 @@ export function restorePerson(id) {
   );
 }
 
-export function personEdit(id) {
+export async function personEdit(id) {
+  if (!D.person(id)) return;
+  /* the person's stored facts (town, occupation) are read before the form shows them */
+  try {
+    if (await openPerson(id)) await hydrate();
+  } catch {
+    /* the form still opens with what is loaded */
+  }
   const p = D.person(id);
   if (!p) return;
   openDrawer({
@@ -375,6 +383,7 @@ export function personEdit(id) {
               {L('Status', 'الحالة')}
             </label>{' '}
             <Select defaultValue={p.status} id="e_st">
+              <option value="">{L('Not recorded', 'غير مسجّل')}</option>
               {[
                 ['member', 'Member', 'منتسب'],
                 ['visitor', 'Visitor', 'زائر'],

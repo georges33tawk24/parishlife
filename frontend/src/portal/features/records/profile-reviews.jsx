@@ -1,11 +1,12 @@
 /* Profile corrections: a member asks to correct what a parish holds about them, and the office
    approves the change before the record moves. */
 import { useEffect, useState } from 'react';
-import { api, session } from '../../model/api.js';
+import { api } from '../../model/api.js';
 import { hydrate } from '../../model/persist.js';
+import { person } from '../../model/data.js';
+import { correctionQueue, reviewCorrection } from '../../model/modules/people-workflows.js';
 import { t } from '../../../lib/i18n.js';
 import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
-import { Select } from '../../ui/components.jsx';
 import { AddressCascade, readAddressCascade } from '../../ui/geography.jsx';
 
 const fields = {
@@ -183,15 +184,34 @@ export function RecordCorrections() {
   );
 }
 
-/* ---------- the office's review ---------- */
-function Decide({ r, done }) {
+/* ---------- the office's review: GET profile-corrections lists the pending ones ---------- */
+const CORRECTED = {
+  GivenName: ['Given name', 'الاسم الأول'],
+  FamilyName: ['Family name', 'اسم العائلة'],
+  BirthDate: ['Date of birth', 'تاريخ الميلاد'],
+  Contact: ['Contact', 'جهة الاتصال']
+};
+const label = f => (CORRECTED[f] ? t(...CORRECTED[f]) : f);
+
+function Decide({ row, done }) {
   const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const decide = async value => {
+    [busy, setBusy] = useState(false),
+    [approve, setApprove] = useState(Object.fromEntries(row.value.fields.map(f => [f.field, true])));
+  const submit = async e => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
     setBusy(true);
     try {
-      await api('workspace/profile-reviews', 'POST', { parish: session.parishId, id: r.id, status: value });
+      await reviewCorrection(
+        row,
+        row.value.fields.map(f => ({
+          field: f.field,
+          approve: approve[f.field],
+          reason: form.get('reason-' + f.field)
+        }))
+      );
       closeOverlays();
+      toast(t('Review saved', 'حُفظت المراجعة'), '', 'success');
       await hydrate();
       done();
     } catch (err) {
@@ -200,52 +220,77 @@ function Decide({ r, done }) {
     }
   };
   return (
-    <>
-      <Changes data={r.data} />
+    <form onSubmit={submit}>
+      <div className="tablewrap">
+        <div className="tablescroll">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{t('Field', 'الحقل')}</th>
+                <th>{t('Current record', 'السجل الحالي')}</th>
+                <th>{t('Requested value', 'القيمة المطلوبة')}</th>
+                <th>{t('Decision', 'القرار')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {row.value.fields.map(f => (
+                <tr key={f.field}>
+                  <td>{label(f.field)}</td>
+                  <td>{f.oldValue || '—'}</td>
+                  <td>{f.newValue || '—'}</td>
+                  <td>
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked={approve[f.field]}
+                        onChange={e => setApprove({ ...approve, [f.field]: e.target.checked })}
+                      />
+                      <span>{t('Approve', 'موافقة')}</span>
+                    </label>
+                    {approve[f.field] ? null : (
+                      <input
+                        className="input"
+                        name={'reason-' + f.field}
+                        maxLength={1000}
+                        required
+                        placeholder={t('Reason for declining', 'سبب الرفض')}
+                      />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
       <p className="help">
         {t(
-          'Only the fields listed above will change. Sign-in details stay separate.',
-          'ستتغير الحقول المذكورة أعلاه فقط. تبقى معلومات تسجيل الدخول منفصلة.'
+          'Only the approved fields change. If the record changed since the request, decline that field with a reason so a fresh request can be made. Sign-in details stay separate.',
+          'تتغير الحقول المقبولة فقط. إذا تغيّر السجل بعد الطلب فارفض الحقل مع السبب ليُقدَّم طلب جديد. تبقى معلومات تسجيل الدخول منفصلة.'
         )}
       </p>
       <p role="alert" className="help-error">
         {error}
       </p>
-      {r.status === 'pending' ? (
-        <div className="account-actions">
-          <button
-            className="btn btn-primary"
-            data-decision="approved"
-            disabled={busy}
-            onClick={() => decide('approved')}
-          >
-            {t('Approve changes', 'الموافقة على التغييرات')}
-          </button>
-          <button
-            className="btn btn-secondary"
-            data-decision="declined"
-            disabled={busy}
-            onClick={() => decide('declined')}
-          >
-            {t('Decline', 'رفض')}
-          </button>
-        </div>
-      ) : null}
-    </>
+      <button className="btn btn-primary" disabled={busy}>
+        {t('Save review', 'حفظ المراجعة')}
+      </button>
+    </form>
   );
 }
 
 export function ProfileReviews() {
-  const [data, setData] = useState(null),
+  const [rows, setRows] = useState(null),
     [error, setError] = useState(''),
-    [round, setRound] = useState(0),
-    [shown, setShown] = useState('pending');
+    [round, setRound] = useState(0);
   useEffect(() => {
-    api('workspace/profile-reviews?parish=' + encodeURIComponent(session.parishId)).then(setData, e =>
-      setError(e.message)
-    );
+    correctionQueue().then(setRows, e => setError(e.message));
   }, [round]);
-  const review = r => openDrawer({ title: r.name, body: <Decide r={r} done={() => setRound(n => n + 1)} /> });
+  const review = row =>
+    openDrawer({
+      title: t('Profile correction', 'تصحيح الملف'),
+      body: <Decide row={row} done={() => setRound(n => n + 1)} />
+    });
   return (
     <>
       <PageHead
@@ -258,43 +303,32 @@ export function ProfileReviews() {
       <div data-profile-reviews="">
         {error ? (
           error
-        ) : !data ? (
+        ) : !rows ? (
           t('Loading…', 'جارٍ التحميل…')
         ) : (
           <>
             <a className="btn btn-secondary" href="#/requests">
               {t('All requests', 'كل الطلبات')}
             </a>
-            <div className="collection-toolbar">
-              <Select
-                data-status=""
-                aria-label={t('Status', 'الحالة')}
-                value={shown}
-                onChange={e => setShown(e.target.value)}
-              >
-                <option value="pending">{status('pending')}</option>
-                <option value="">{t('All statuses', 'كل الحالات')}</option>
-                <option value="approved">{status('approved')}</option>
-                <option value="declined">{status('declined')}</option>
-              </Select>
-            </div>
             <Paged className="account-parishes" data-paginate="">
-              {data.requests.length ? (
-                data.requests.map(r => (
-                  <article key={r.id} data-review-status={r.status} hidden={!!shown && r.status !== shown}>
+              {rows.length ? (
+                rows.map(row => (
+                  <article key={row.value.id} data-review-status="pending">
                     <div>
-                      <h3>{r.name}</h3>
+                      <h3>{person(row.value.personId)?.lat || t('A parishioner', 'مؤمن')}</h3>
                       <p>
-                        {status(r.status)} · {r.created_at.slice(0, 10)}
+                        {row.value.fields.map(f => label(f.field)).join(' · ')} ·{' '}
+                        {t('Waiting for office review', 'بانتظار مراجعة المكتب')} ·{' '}
+                        {String(row.value.submittedAt).slice(0, 10)}
                       </p>
                     </div>
-                    <button className="btn btn-secondary" data-review={r.id} onClick={() => review(r)}>
+                    <button className="btn btn-secondary" data-review={row.value.id} onClick={() => review(row)}>
                       {t('View changes', 'عرض التغييرات')}
                     </button>
                   </article>
                 ))
               ) : (
-                <p>{t('No profile corrections submitted.', 'لا تصحيحات مقدّمة.')}</p>
+                <p>{t('No profile corrections waiting for review.', 'لا تصحيحات بانتظار المراجعة.')}</p>
               )}
             </Paged>
           </>
