@@ -8,5 +8,6 @@
    A collection no module owns cannot be saved: a change to it is undone with a message.
    To connect a module, add its file here, one import and one entry. See docs/frontend-modules/. */
 import * as people from './people.js';
+import * as member from './member.js';
 
-export const MODULES = [people];
+export const MODULES = [people, member];

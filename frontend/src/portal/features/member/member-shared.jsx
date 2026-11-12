@@ -3,8 +3,6 @@
 import { Select } from '../../ui/components.jsx';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
 import { M, memberAction, loadMember } from '../../model/member-data.js';
-import { session } from '../../model/api.js';
-import { hydrate } from '../../model/persist.js';
 import { bus, S } from '../../model/store.js';
 import { openDrawer, closeOverlays, toast } from '../../ui/ui.jsx';
 
@@ -41,11 +39,9 @@ export const scheduleState = key => ((S.ui.memberSchedules ||= {})[key] ||= { mo
 export async function run(op, values, success = L('Saved', 'حُفظ')) {
   try {
     const result = await memberAction(op, values);
-    if (session.user?.role === 'member') await hydrate();
-    else await loadMember();
+    await loadMember();
     closeOverlays();
-    if (session.user?.role === 'member') bus.renderAll();
-    else bus.refresh();
+    bus.refresh();
     if (success) toast(success, '', 'success');
     return result;
   } catch (error) {
@@ -123,7 +119,6 @@ function meetingDrawer(m) {
         )}{' '}
         {m.rsvpEnabled && m.date >= todayKey() ? (
           <>
-            {area(L('Optional absence reason', 'سبب الغياب الاختياري'), 'absence-reason', m.rsvp?.reason || '')}
             <div className="member-actions">
               <button className="btn btn-primary" data-rsvp="yes">
                 {L('I will attend', 'سأحضر')}
@@ -145,9 +140,7 @@ function meetingDrawer(m) {
     ),
     onMount(el) {
       el.querySelectorAll('[data-rsvp]').forEach(b =>
-        b.addEventListener('click', () =>
-          run('rsvp', { meetingId: m.id, status: b.dataset.rsvp, reason: val(el, 'absence-reason') })
-        )
+        b.addEventListener('click', () => run('rsvp', { meetingId: m.id, status: b.dataset.rsvp }))
       );
     }
   });
@@ -172,32 +165,14 @@ export function noteDrawer(n = null) {
           </Select>
         </div>{' '}
         {field(L('Tags, comma separated', 'الوسوم، مفصولة بفواصل'), 'note-tags', n?.tags?.join(', ') || '')}{' '}
-        {field(L('Reminder', 'تذكير'), 'note-reminder', n?.reminder || '', 'date')}{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="note-meeting">
-            {L('Linked meeting (optional)', 'الاجتماع المرتبط (اختياري)')}
-          </label>
-          <Select defaultValue={n?.meetingId} id="note-meeting">
-            <option value="">—</option>
-            {M.meetings.map((m, i) => (
-              <option key={i} value={txt(m.id)}>
-                {txt(m.title)} · {date(m.date)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <label className="member-toggle">
-          <span>{L('Pin this note', 'تثبيت الملاحظة')}</span>
-          <input type="checkbox" id="note-pinned" defaultChecked={!!n?.pinned} />
-        </label>
       </>
     ),
     foot: footer(L('Save note', 'حفظ الملاحظة')),
     onMount(el) {
       el.querySelector('#member-save').addEventListener('click', () => {
         const title = val(el, 'note-title');
-        if (!title) {
-          el.querySelector('#note-title').focus();
+        if (!title || !val(el, 'note-body')) {
+          el.querySelector(!title ? '#note-title' : '#note-body').focus();
           return;
         }
         run('note', {
@@ -208,10 +183,7 @@ export function noteDrawer(n = null) {
           tags: val(el, 'note-tags')
             .split(',')
             .map(x => x.trim())
-            .filter(Boolean),
-          reminder: val(el, 'note-reminder'),
-          meetingId: val(el, 'note-meeting'),
-          pinned: el.querySelector('#note-pinned').checked
+            .filter(Boolean)
         });
       });
     }

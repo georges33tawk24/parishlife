@@ -89,12 +89,8 @@ const schedule = (key, items, emptyMessage) => {
 export function home() {
   const next = upcoming()[0],
     stats = attendance();
-  const unread = M.content.filter(
-    x => !x.read && !x.archived && ['message', 'announcement', 'discussion'].includes(x.kind)
-  ).length;
-  const commitments = Object.values(M.commitments).filter(x =>
-    ['confirmed', 'volunteer', 'interested'].includes(x.status)
-  ).length;
+  const unread = M.home.unreadNotifications;
+  const commitments = Object.values(M.commitments).filter(x => ['confirmed', 'volunteer'].includes(x.status)).length;
   const nextBody = next ? (
     <>
       <strong>{txt(next.title)}</strong>
@@ -147,10 +143,11 @@ export function home() {
           <>
             <h2>{L('Messages & commitments', 'الرسائل والالتزامات')}</h2>
             <p>
-              {unread} {L('unread communications', 'رسائل غير مقروءة')} · {commitments}{' '}
+              {unread} {L('unread notifications', 'إشعارات غير مقروءة')} · {commitments}{' '}
               {L('active commitments', 'التزامات حالية')}
             </p>
-            {link('mymessages', L('Messages', 'الرسائل'))} {link('mycommitments', L('Commitments', 'الالتزامات'))}
+            {link('membernotifications', L('Notifications', 'الإشعارات'))}{' '}
+            {link('mycommitments', L('Commitments', 'الالتزامات'))}
           </>
         )}{' '}
         {card(
@@ -212,6 +209,34 @@ export function home() {
           </>
         )}
       </Paged>
+      {card(
+        <>
+          <h2>{L('My parishes', 'رعاياي')}</h2>
+          {nodesOr(
+            M.home.parishes.map((p, i) => (
+              <div key={i} className="member-simple-row">
+                <span>
+                  <b>{txt(p.name)}</b>
+                  {p.locality ? <small> · {txt(p.locality)}</small> : ''}
+                </span>
+                <span>
+                  {p.primary ? status(L('Primary', 'الأساسية')) : ''}{' '}
+                  {status(
+                    p.member
+                      ? L('Member', 'عضو')
+                      : p.membershipPending
+                        ? L('Membership requested', 'طلب العضوية قيد المراجعة')
+                        : L('Following', 'متابَعة')
+                  )}{' '}
+                  {p.unreadNotifications ? status(`${p.unreadNotifications} ${L('new', 'جديد')}`) : ''}
+                </span>
+              </div>
+            )),
+            blank(L('You are not following a parish yet.', 'لا تتابع رعية بعد.'))
+          )}
+          {link('activity', L('Manage my parishes', 'إدارة رعاياي'))}
+        </>
+      )}{' '}
       <div className="member-actions">
         {link('myrequests', L('My requests', 'طلباتي'))}
         {link('mynotes', L('My Notes', 'ملاحظاتي'))}
@@ -345,7 +370,7 @@ export function calendar() {
       date: e.d,
       time: e.t,
       type: 'event',
-      source: e.kind === 'mass' ? 'Liturgy' : 'Parish',
+      source: e.source,
       subtitle: e.location
     })),
     ...M.meetings.map(m => ({ ...m, type: 'meeting', source: 'Meetings', subtitle: `${m.group} · ${m.location}` })),
@@ -378,8 +403,8 @@ export function calendar() {
       {title(
         L('My calendar', 'رزنامتي'),
         L(
-          'Ministry meetings, parish events and personal reminders.',
-          'اجتماعات الخدمة والمناسبات الرعوية والتذكيرات الشخصية.'
+          'Ministry meetings, your registrations, volunteering and sacraments, and your tasks.',
+          'اجتماعات الخدمة وتسجيلاتك وتطوعك وأسرارك ومهامك.'
         )
       )}{' '}
       <div className="member-toolbar">
@@ -387,8 +412,9 @@ export function calendar() {
           <option value="">{L('All activities', 'كل الأنشطة')}</option>
           {[
             ['Meetings', 'Meetings', 'الاجتماعات'],
-            ['Parish', 'Parish events', 'أنشطة الرعية'],
-            ['Liturgy', 'Liturgies', 'القداديس'],
+            ['Registration', 'Event registrations', 'تسجيلات المناسبات'],
+            ['Volunteering', 'Volunteering', 'التطوع'],
+            ['Sacrament', 'Sacraments', 'الأسرار'],
             ['Reminder', 'Reminders', 'التذكيرات'],
             ['Tasks', 'Tasks', 'المهام'],
             ['Formation', 'Formation', 'التنشئة']
@@ -676,7 +702,10 @@ export function commitments() {
     <div className="member-page">
       {title(
         L('Volunteer opportunities', 'فرص التطوع'),
-        L('Express interest; a leader can confirm the assignment.', 'أبدِ اهتمامك، ثم يؤكد المسؤول المهمة.')
+        L(
+          'Offer to help; the ministry coordinator confirms the assignment.',
+          'اعرض مساعدتك، ثم يؤكد منسّق الخدمة المهمة.'
+        )
       )}
       <Paged className="member-list">
         {nodesOr(
@@ -691,9 +720,6 @@ export function commitments() {
               <div className="member-actions">
                 <button className="btn btn-primary btn-dense" data-volunteer={txt(x.id)} data-status="volunteer">
                   {L('Volunteer', 'أتطوّع')}
-                </button>
-                <button className="btn btn-secondary btn-dense" data-volunteer={txt(x.id)} data-status="interested">
-                  {L("I'm interested", 'أنا مهتم')}
                 </button>
                 {M.commitments[x.id] ? (
                   <button className="btn btn-secondary btn-dense" data-volunteer={txt(x.id)} data-status="withdrawn">
@@ -898,45 +924,14 @@ export function profile() {
       )}{' '}
       {card(
         <>
-          <h2>{L('Signing in', 'تسجيل الدخول')}</h2>
-          <dl className="member-profile">
-            <dt>{L('You sign in with', 'تسجّل الدخول بـ')}</dt>
-            <dd>
-              <bdi dir="ltr">
-                {txt(
-                  /^\+\d+$/.test(session.user?.username || '')
-                    ? phoneShow(session.user.username)
-                    : session.user?.username || '—'
-                )}
-              </bdi>
-            </dd>
-          </dl>
-          <button className="btn btn-secondary" data-password-change="">
-            {L('Change my password', 'تغيير كلمة المرور')}
-          </button>
-        </>
-      )}{' '}
-      {card(
-        <>
-          <h2>{L('Notification preferences', 'تفضيلات الإشعارات')}</h2>
-          {[
-            ['email', 'Email notifications', 'إشعارات البريد'],
-            ['inSystem', 'In-system notifications', 'إشعارات النظام'],
-            ['meetings', 'Meeting updates and reminders', 'تحديثات وتذكيرات الاجتماعات'],
-            ['announcements', 'Announcements', 'الإعلانات'],
-            ['messages', 'Ministry messages', 'رسائل الخدمة']
-          ].map(([key, en, ar], i) => (
-            <label key={i} className="member-toggle">
-              <span>{L(en, ar)}</span>
-              <input type="checkbox" data-preference={key} defaultChecked={!!M.preferences[key]} />
-            </label>
-          ))}
+          <h2>{L('Signing in and notifications', 'تسجيل الدخول والإشعارات')}</h2>
           <p className="help">
             {L(
-              'Email delivery is not connected yet. Your email choice is saved for future use; in-system reminders appear when you open the portal.',
-              'لم يُربط إرسال البريد بعد. يُحفظ اختيارك للمستقبل؛ وتظهر التذكيرات داخل النظام عند فتح البوابة.'
+              'Your password, two-step sign-in and sessions are in your account. Choosing which notifications you receive is not connected to the new backend yet.',
+              'كلمة المرور والدخول بخطوتين والجلسات في حسابك. اختيار الإشعارات التي تصلك لم يُوصل بالخادم الجديد بعد.'
             )}
           </p>
+          {link('account', L('Open my account', 'فتح حسابي'))}
         </>
       )}{' '}
       {M.profileRequests.length
@@ -948,12 +943,90 @@ export function profile() {
                   <span>
                     {txt(x.field)} · {txt(x.requested_value)}
                   </span>
-                  {status(x.status)}
+                  <span>
+                    {status(x.status)}{' '}
+                    {x.status === 'Pending' ? (
+                      <button className="btn btn-secondary btn-dense" data-correction-withdraw={txt(x.id)}>
+                        {L('Withdraw', 'سحب')}
+                      </button>
+                    ) : (
+                      ''
+                    )}
+                  </span>
                 </div>
               ))}
             </>
           )
-        : ''}
+        : ''}{' '}
+      {card(
+        <>
+          <h2>{L('My consents', 'موافقاتي')}</h2>
+          {nodesOr(
+            M.consents.map((c, i) => (
+              <div key={i} className="member-simple-row">
+                <span>
+                  <b>{txt(c.kind)}</b> · {txt(c.purpose)}
+                  <small style={{ display: 'block' }}>
+                    {date(c.givenAt)} · {txt(c.policyVersion)}
+                    {c.withdrawnAt ? ` · ${L('withdrawn', 'سُحبت')} ${date(c.withdrawnAt)}` : ''}
+                  </small>
+                </span>
+                <span>
+                  {status(c.status)}{' '}
+                  {c.status === 'Active' ? (
+                    <button className="btn btn-secondary btn-dense" data-consent-withdraw={txt(c.id)}>
+                      {L('Withdraw', 'سحب')}
+                    </button>
+                  ) : (
+                    ''
+                  )}
+                </span>
+              </div>
+            )),
+            blank(L('No consent is recorded for you in this parish.', 'لا موافقات مسجّلة لك في هذه الرعية.'))
+          )}
+        </>
+      )}{' '}
+      {card(
+        <>
+          <h2>{L('My data', 'بياناتي')}</h2>
+          {M.ownData ? (
+            <>
+              <dl className="member-profile">
+                {Object.entries(M.ownData.records || {}).map(([kind, count], i) => (
+                  <Fragment key={i}>
+                    <dt>{txt(kind)}</dt>
+                    <dd>{txt(count)}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+              {M.closureRequests.map((x, i) => (
+                <div key={i} className="member-simple-row">
+                  <span>
+                    {L('Closure request', 'طلب إغلاق')} · {date(x.submittedAt)}
+                    {x.reason ? ` · ${txt(x.reason)}` : ''}
+                  </span>
+                  {status(x.status)}
+                </div>
+              ))}
+              {M.closureRequests.some(x => x.status === 'Pending') ? (
+                ''
+              ) : (
+                <button className="btn btn-secondary" data-closure-request="">
+                  {L('Ask the parish to close my data', 'طلب إغلاق بياناتي لدى الرعية')}
+                </button>
+              )}
+            </>
+          ) : (
+            blank(
+              L(
+                'Your data view is available once your account is linked to your record.',
+                'يظهر عرض بياناتك بعد ربط حسابك بسجلك.'
+              )
+            )
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -1077,105 +1150,10 @@ export function hub() {
       {title(
         L('Member communication', 'التواصل مع الأعضاء'),
         L(
-          'Publish to your ministries and review permitted member requests.',
-          'انشر لخدماتك وراجع طلبات الأعضاء المسموح بها.'
+          'Cases assigned to you as an independent concern reviewer.',
+          'الحالات المحالة إليك بصفتك مراجعاً مستقلاً للطلبات.'
         )
       )}
-      {session.user?.role !== 'member' ? (
-        <div className="member-actions">
-          <button className="btn btn-primary" data-publish="">
-            {L('Publish update', 'نشر مستجد')}
-          </button>
-        </div>
-      ) : (
-        ''
-      )}{' '}
-      {session.user?.role === 'leader'
-        ? card(
-            <>
-              <h2>{L('Complaints received', 'الشكاوى الواردة')}</h2>
-              <p className="help">
-                {L(
-                  'Related to your ministries; sensitive cases and cases involving you are handled by an independent reviewer.',
-                  'المرتبطة بخدماتك؛ الحالات الحساسة والحالات التي تتعلق بك يتولاها مراجع مستقل.'
-                )}
-              </p>
-              {nodesOr(
-                M.leaderConcerns.map((x, i) => (
-                  <div key={i} className="member-simple-row">
-                    <span>
-                      <b>{txt(x.subject)}</b>
-                      <small style={{ display: 'block' }}>
-                        {txt(groupName(x.group_id))} · {txt(x.reference)} · {txt(x.category)} · {txt(x.status)}
-                      </small>
-                      <span>{txt(x.description)}</span>
-                    </span>
-                  </div>
-                )),
-                blank(L('No complaints received for your groups.', 'لا شكاوى واردة لمجموعاتك.'))
-              )}
-            </>
-          )
-        : ''}{' '}
-      {card(
-        <>
-          <h2>{L('Member messages', 'رسائل الأعضاء')}</h2>
-          {nodesOr(
-            M.content
-              .filter(x => x.kind === 'message' && x.recipientId === session.user?.id)
-              .map((x, i) => (
-                <div key={i} className="member-simple-row">
-                  <span>
-                    {txt(groupName(x.groupId))} · {txt(x.body)}
-                  </span>
-                  <button className="btn btn-secondary btn-dense" data-reply-message={txt(x.id)}>
-                    {L('Reply', 'رد')}
-                  </button>
-                </div>
-              )),
-            blank(L('No member messages yet.', 'لا رسائل من الأعضاء بعد.'))
-          )}
-        </>
-      )}{' '}
-      {card(
-        <>
-          <h2>{L('Volunteer responses', 'ردود المتطوعين')}</h2>
-          {nodesOr(
-            M.volunteerReview.map((x, i) => (
-              <div key={i} className="member-simple-row">
-                <span>
-                  {txt(x.name)} · {txt(x.title)} · {txt(x.status)}
-                </span>
-                <button
-                  className="btn btn-secondary btn-dense"
-                  data-confirm-volunteer={txt(x.content_id)}
-                  data-user={txt(x.user_id)}
-                >
-                  {L('Confirm', 'تأكيد')}
-                </button>
-              </div>
-            )),
-            blank(L('No volunteer responses yet.', 'لا ردود تطوع بعد.'))
-          )}
-        </>
-      )}{' '}
-      {M.profileReview.length
-        ? card(
-            <>
-              <h2>{L('Profile update requests', 'طلبات تحديث الملفات')}</h2>
-              {M.profileReview.map((x, i) => (
-                <div key={i} className="member-simple-row">
-                  <span>
-                    {txt(x.name)} · {txt(x.field)}: {txt(x.requested_value)} · {txt(x.status)}
-                  </span>
-                  <button className="btn btn-secondary btn-dense" data-profile-review={txt(x.id)}>
-                    {L('Mark reviewed', 'تعليم كمراجَع')}
-                  </button>
-                </div>
-              ))}
-            </>
-          )
-        : ''}{' '}
       {M.complaintPermissions.includes('Review')
         ? card(
             <>
@@ -1202,31 +1180,12 @@ export function hub() {
               )}
             </>
           )
-        : ''}{' '}
-      {M.complaintPermissions.includes('ManageCategories')
-        ? card(
-            <>
-              <h2>{L('Concern categories', 'فئات الملاحظات')}</h2>
-              <button className="btn btn-secondary btn-dense" data-category-add="">
-                {L('Add category', 'إضافة فئة')}
-              </button>
-              {M.categories.map((x, i) => (
-                <div key={i} className="member-simple-row">
-                  <span>
-                    {txt(x.name)} {status(x.active ? L('Active', 'نشطة') : L('Hidden', 'مخفية'))}
-                  </span>
-                  <button
-                    className="btn btn-secondary btn-dense"
-                    data-category-toggle={txt(x.name)}
-                    data-active={!x.active}
-                  >
-                    {x.active ? L('Hide', 'إخفاء') : L('Activate', 'تفعيل')}
-                  </button>
-                </div>
-              ))}
-            </>
-          )
-        : ''}
+        : blank(
+            L(
+              'Concern review appears here when you are an appointed independent reviewer. Publishing, volunteer responses and profile reviews are on their own pages.',
+              'تظهر مراجعة الطلبات هنا عندما تكون مراجعاً مستقلاً معيّناً. النشر وردود المتطوعين ومراجعة الملفات في صفحاتها.'
+            )
+          )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { Select } from '../../ui/components.jsx';
 import { nodesOr } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
-import { M, memberAction } from '../../model/member-data.js';
+import { M } from '../../model/member-data.js';
 import { session } from '../../model/api.js';
 import { bus, S } from '../../model/store.js';
 import { openDrawer, openModal, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
@@ -26,25 +26,6 @@ import {
 
 const L = (en, ar) => t(en, ar);
 
-async function attachment(el) {
-  const file = el.querySelector('input[type=file]')?.files?.[0];
-  if (!file) return null;
-  if (file.size > 1_000_000)
-    throw new Error(L('Attachment must be under 1 MB.', 'يجب أن يكون المرفق أصغر من ١ ميغابايت.'));
-  if (!['application/pdf', 'image/png', 'image/jpeg', 'text/plain'].includes(file.type))
-    throw new Error(L('Choose a PDF, image or text file.', 'اختر ملف PDF أو صورة أو نصاً.'));
-  return {
-    name: file.name,
-    mime: file.type,
-    data: await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    })
-  };
-}
-
 function profileDrawer() {
   openDrawer({
     title: L('Request information update', 'طلب تحديث المعلومات'),
@@ -60,17 +41,13 @@ function profileDrawer() {
           </label>
           <Select id="profile-field">
             {[
-              'name',
-              'phone',
-              'email',
-              'address',
-              'emergency contact',
-              'date of birth',
-              'ministry memberships',
-              'profile picture'
-            ].map((x, i) => (
-              <option key={i} value={x}>
-                {x}
+              ['GivenName', 'Given name', 'الاسم الأول'],
+              ['FamilyName', 'Family name', 'اسم العائلة'],
+              ['BirthDate', 'Date of birth (YYYY-MM-DD)', 'تاريخ الميلاد (سنة-شهر-يوم)'],
+              ['Contact', 'Phone or email', 'الهاتف أو البريد الإلكتروني']
+            ].map(([value, en, ar], i) => (
+              <option key={i} value={value}>
+                {L(en, ar)}
               </option>
             ))}
           </Select>
@@ -86,112 +63,6 @@ function profileDrawer() {
           return;
         }
         run('profileRequest', { field: val(el, 'profile-field'), value: val(el, 'profile-value') });
-      });
-    }
-  });
-}
-
-/* A new password, after the current one; the parish office resets a forgotten one. */
-function passwordModal() {
-  const field = (id, label, autocomplete, help = '') => (
-    <div className="formrow">
-      <label className="label" htmlFor={id}>
-        {label}
-      </label>{' '}
-      <input
-        className="input"
-        id={id}
-        type="password"
-        autoComplete={autocomplete}
-        maxLength="200"
-        aria-describedby={`${help ? `${id}-help ` : ''}${id}-error`}
-      />{' '}
-      {help ? (
-        <span className="help" id={`${id}-help`}>
-          {help}
-        </span>
-      ) : (
-        ''
-      )}
-      <span className="help help-error" id={`${id}-error`} hidden />
-    </div>
-  );
-  openModal({
-    title: L('Change my password', 'تغيير كلمة المرور'),
-    body: (
-      <>
-        {field('pw-current', L('Current password', 'كلمة المرور الحالية'), 'current-password')}{' '}
-        {field(
-          'pw-new',
-          L('New password', 'كلمة المرور الجديدة'),
-          'new-password',
-          L(
-            'At least 8 characters. Write it down and keep it somewhere safe.',
-            '٨ أحرف على الأقل. دوّنها واحفظها في مكان آمن.'
-          )
-        )}{' '}
-        <label className="member-toggle pw-show">
-          <span>{L('Show the passwords', 'إظهار كلمات المرور')}</span>
-          <input type="checkbox" id="pw-show" />
-        </label>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>
-        <button className="btn btn-primary" id="pw-save">
-          {L('Change password', 'تغيير كلمة المرور')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      const say = (id, message) => {
-        const e = el.querySelector(`#${id}-error`),
-          f = el.querySelector('#' + id);
-        e.textContent = message;
-        e.hidden = !message;
-        message ? f.setAttribute('aria-invalid', 'true') : f.removeAttribute('aria-invalid');
-      };
-      el.querySelector('#pw-show').addEventListener('change', e =>
-        el.querySelectorAll('#pw-current,#pw-new').forEach(f => {
-          f.type = e.target.checked ? 'text' : 'password';
-        })
-      );
-      const save = el.querySelector('#pw-save');
-      save.addEventListener('click', async () => {
-        const current = el.querySelector('#pw-current').value,
-          password = el.querySelector('#pw-new').value;
-        say('pw-current', current ? '' : L('Enter your current password.', 'أدخل كلمة المرور الحالية.'));
-        say(
-          'pw-new',
-          password.length >= 8
-            ? ''
-            : L('Choose a password of at least 8 characters.', 'اختر كلمة مرور من ٨ أحرف على الأقل.')
-        );
-        if (!current || password.length < 8) return el.querySelector('[aria-invalid=true]').focus();
-        save.disabled = true;
-        save.setAttribute('aria-busy', 'true');
-        try {
-          await memberAction('changePassword', { current, password });
-          closeOverlays();
-          toast(
-            L('Password changed', 'تغيّرت كلمة المرور'),
-            L(
-              'Use your new password next time you sign in.',
-              'استخدم كلمة المرور الجديدة عند تسجيل الدخول في المرّة المقبلة.'
-            ),
-            'success'
-          );
-        } catch (error) {
-          save.disabled = false;
-          save.removeAttribute('aria-busy');
-          if (/current password/.test(error.message)) {
-            say('pw-current', L('Your current password is not correct.', 'كلمة المرور الحالية غير صحيحة.'));
-            el.querySelector('#pw-current').select();
-          } else toast(L('The password was not changed', 'لم تتغيّر كلمة المرور'), error.message, 'danger');
-        }
       });
     }
   });
@@ -255,42 +126,10 @@ function concernDrawer() {
               ))}
           </Select>
         </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="concern-group">
-            {L('Related ministry (optional)', 'الخدمة المرتبطة (اختياري)')}
-          </label>
-          <Select id="concern-group">
-            <option value="">—</option>
-            {M.groups.map((g, i) => (
-              <option key={i} value={txt(g.id)}>
-                {txt(g.name)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="concern-event">
-            {L('Related event or meeting (optional)', 'المناسبة أو الاجتماع المرتبط (اختياري)')}
-          </label>
-          <Select id="concern-event">
-            <option value="">—</option>
-            {[...M.events, ...M.meetings].map((x, i) => (
-              <option key={i} value={txt(x.id)}>
-                {txt(eventTitle(x))}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
         {field(L('Subject', 'الموضوع'), 'concern-subject')}
         {area(L('Description', 'الوصف'), 'concern-description')}{' '}
         {field(L('When did this happen? (optional)', 'متى حصل هذا؟ (اختياري)'), 'concern-when', '', 'datetime-local')}
         {field(L('People involved (optional)', 'الأشخاص المعنيون (اختياري)'), 'concern-people')}{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="concern-attachment">
-            {L('Attachment (optional, max 1 MB)', 'مرفق (اختياري، بحد أقصى ١ ميغابايت)')}
-          </label>
-          <input className="input" id="concern-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" />
-        </div>{' '}
         <fieldset>
           <legend>{L('Choose who may review this concern', 'اختر من يمكنه مراجعة هذه الشكوى')}</legend>
           {M.reviewers
@@ -301,7 +140,13 @@ function concernDrawer() {
                 <input type="checkbox" data-concern-reviewer="" defaultValue={txt(r.id)} />
               </label>
             ))}
-        </fieldset>{' '}
+        </fieldset>
+        <p className="help">
+          {L(
+            'If you choose no one, every eligible independent reviewer for this category receives it.',
+            'إذا لم تختر أحداً، يصل الطلب إلى كل مراجع مستقل مؤهل لهذه الفئة.'
+          )}
+        </p>{' '}
         <label className="member-toggle">
           <span>{L('Submit anonymously', 'إرسال دون إظهار الهوية')}</span>
           <input type="checkbox" id="concern-anonymous" />
@@ -312,17 +157,6 @@ function concernDrawer() {
             'لن يرى المراجعون هوية حسابك. يمكنك متابعة الحالة هنا بعد الإرسال.'
           )}
         </p>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="concern-follow">
-            {L('Preferred follow-up (identified submissions)', 'طريقة المتابعة للطلبات المعرّفة')}
-          </label>
-          <Select id="concern-follow">
-            <option value="system">{L('In-system message', 'رسالة في النظام')}</option>
-            <option value="email">{L('Email', 'البريد الإلكتروني')}</option>
-            <option value="phone">{L('Phone', 'الهاتف')}</option>
-            <option value="none">{L('No response required', 'لا حاجة للرد')}</option>
-          </Select>
-        </div>
       </>
     ),
     foot: footer(L('Submit concern', 'إرسال الملاحظة')),
@@ -335,16 +169,12 @@ function concernDrawer() {
         try {
           const values = {
             category: val(el, 'concern-category'),
-            groupId: val(el, 'concern-group') || null,
-            eventId: val(el, 'concern-event') || null,
             subject: val(el, 'concern-subject'),
             description: val(el, 'concern-description'),
             happenedAt: val(el, 'concern-when'),
             peopleInvolved: val(el, 'concern-people'),
             reviewers: [...el.querySelectorAll('[data-concern-reviewer]:checked')].map(x => x.value),
-            anonymous: el.querySelector('#concern-anonymous').checked,
-            followUp: val(el, 'concern-follow'),
-            attachment: await attachment(el)
+            anonymous: el.querySelector('#concern-anonymous').checked
           };
           const result = await run('concern', values, '');
           if (result?.id)
@@ -372,217 +202,82 @@ function concernDrawer() {
   });
 }
 
-function publishDrawer() {
-  openDrawer({
-    title: L('Publish to members', 'النشر للأعضاء'),
-    body: (
-      <>
-        <div className="formrow">
-          <label className="label" htmlFor="publish-kind">
-            {L('Type', 'النوع')}
-          </label>
-          <Select id="publish-kind">
-            {[
-              ['post', 'Post'],
-              ['announcement', 'Announcement'],
-              ['resource', 'Resource'],
-              ['opportunity', 'Volunteer opportunity'],
-              ['discussion', 'Group conversation']
-            ].map(([id, name], i) => (
-              <option key={i} value={id}>
-                {name}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="publish-group">
-            {L('Audience', 'الجمهور')}
-          </label>
-          <Select id="publish-group">
-            {session.user?.role === 'priest' || session.user?.role === 'secretary' ? (
-              <option value="">{L('Parish', 'الرعية')}</option>
-            ) : (
-              ''
-            )}
-            {M.groups
-              .filter(g => M.managedGroups.includes(g.id))
-              .map((g, i) => (
-                <option key={i} value={txt(g.id)}>
-                  {txt(g.name)}
-                </option>
-              ))}
-          </Select>
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="publish-meeting">
-            {L('Linked meeting (optional)', 'اجتماع مرتبط (اختياري)')}
-          </label>
-          <Select id="publish-meeting">
-            <option value="">—</option>
-            {M.meetings.map((m, i) => (
-              <option key={i} value={txt(m.id)} data-group={txt(m.groupId)}>
-                {txt(m.title)} · {date(m.date)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        {field(L('Title', 'العنوان'), 'publish-title')}
-        {area(L('Content', 'المحتوى'), 'publish-body')}
-        {field(L('Category or tags', 'الفئة أو الوسوم'), 'publish-category')}{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="publish-attachment">
-            {L('Attachment (optional, max 1 MB)', 'مرفق اختياري بحد ١ ميغابايت')}
-          </label>
-          <input className="input" id="publish-attachment" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" />
-        </div>
-        <label className="member-toggle">
-          <span>{L('Pin post', 'تثبيت المنشور')}</span>
-          <input type="checkbox" id="publish-pinned" />
-        </label>
-      </>
-    ),
-    foot: footer(L('Publish', 'نشر')),
-    onMount(el) {
-      const group = el.querySelector('#publish-group'),
-        meeting = el.querySelector('#publish-meeting');
-      const sync = () => {
-        meeting.value = '';
-        meeting.querySelectorAll('option[data-group]').forEach(option => {
-          option.hidden = option.dataset.group !== group.value;
-        });
-      };
-      group.addEventListener('change', sync);
-      sync();
-      el.querySelector('#member-save').addEventListener('click', async () => {
-        try {
-          await run('publish', {
-            kind: val(el, 'publish-kind'),
-            groupId: val(el, 'publish-group') || null,
-            title: val(el, 'publish-title'),
-            body: val(el, 'publish-body'),
-            category: val(el, 'publish-category'),
-            eventId: val(el, 'publish-meeting') || null,
-            pinned: el.querySelector('#publish-pinned').checked,
-            attachment: await attachment(el)
-          });
-        } catch (error) {
-          toast(L('Could not publish', 'تعذّر النشر'), error.message, 'danger');
-        }
-      });
-    }
-  });
-}
+/* What a reviewer can do next, by the case's status (the API's rules in ConcernService). */
+const NEXT = {
+  Submitted: [['accept', 'Accept the case', 'قبول الحالة']],
+  Reopened: [['accept', 'Accept the case', 'قبول الحالة']],
+  Accepted: [
+    ['start-review', 'Start review', 'بدء المراجعة'],
+    ['respond', 'Provide a response', 'تقديم رد']
+  ],
+  NeedsInformation: [['start-review', 'Resume review', 'استئناف المراجعة']],
+  UnderReview: [['respond', 'Provide a response', 'تقديم رد']],
+  ResponseProvided: []
+};
 
 function reviewDrawer(x) {
-  const canResolve = M.complaintPermissions.includes('Resolve');
-  const canRespond =
-    (M.complaintPermissions.includes('Respond') || canResolve) &&
-    (canResolve || !['Resolved', 'Closed'].includes(x.status));
-  const statuses = [
-    'Submitted',
-    'Under Review',
-    'Additional Information Requested',
-    'Referred',
-    ...(canResolve ? ['Resolved', 'Closed'] : [])
+  const actions = [
+    ...(NEXT[x.status] || []),
+    ...(x.status === 'Closed' ? [] : [['close', 'Close the case', 'إغلاق الحالة']])
   ];
   openDrawer({
     title: x.reference,
-    sub: `${x.status} · ${x.category}`,
+    sub: `${x.status} · ${x.category} · ${x.urgency}`,
     body: (
       <>
         <h3>{txt(x.subject)}</h3>
         <p>{txt(x.description)}</p>
         <p>
-          {L('People involved', 'الأشخاص المعنيون')}: {txt(x.people_involved || '—')}
-        </p>
-        {x.identity ? (
-          <p>
-            {L('Identity', 'الهوية')}: {txt(x.identity.name)} · {txt(x.identity.phone)}
-          </p>
-        ) : (
-          ''
-        )}
-        {x.attachment ? (
-          <a className="btn btn-secondary" download={txt(x.attachment.name)} href={txt(x.attachment.data)}>
-            {L('Download evidence', 'تنزيل المرفق')}
-          </a>
-        ) : (
-          ''
-        )}{' '}
+          {x.anonymous
+            ? L('The submitter chose to stay anonymous.', 'اختار صاحب الطلب أن يبقى مجهول الهوية.')
+            : L('The submitter is identified to reviewers.', 'صاحب الطلب معرّف للمراجعين.')}
+        </p>{' '}
         {x.updates.map((y, i) => (
           <p key={i}>
             {date(y.at)} · {txt(y.status)} · {txt(y.text)}
-            {y.internal ? (
-              <>
-                <br />
-                <small>
-                  {L('Internal note', 'ملاحظة داخلية')}: {txt(y.internal)}
-                </small>
-              </>
-            ) : (
-              ''
-            )}
           </p>
         ))}{' '}
-        {M.complaintPermissions.includes('Assign') ? (
-          <div className="formrow">
-            <label className="label" htmlFor="review-assignee">
-              {L('Assign to independent reviewer', 'تعيين مراجع مستقل')}
-            </label>
-            <Select defaultValue={x.assignedTo} id="review-assignee">
-              <option value="">{L('Choose reviewer', 'اختر مراجعاً')}</option>
-              {M.reviewers.map((r, i) => (
-                <option key={i} value={txt(r.id)}>
-                  {txt(r.name)}
-                </option>
-              ))}
-            </Select>
-            <button className="btn btn-secondary btn-dense" id="assign-reviewer">
-              {L('Assign', 'تعيين')}
-            </button>
-          </div>
-        ) : (
-          ''
-        )}{' '}
-        {canRespond ? (
+        {x.status !== 'Closed' ? (
           <>
             <div className="formrow">
-              <label className="label" htmlFor="review-status">
-                {L('Public status', 'الحالة العامة')}
+              <label className="label" htmlFor="review-action">
+                {L('Next step', 'الخطوة التالية')}
               </label>
-              <Select defaultValue={x.status} id="review-status">
-                {statuses.map((s, i) => (
-                  <option key={i}>{s}</option>
+              <Select id="review-action">
+                <option value="">{L('No change of status', 'دون تغيير الحالة')}</option>
+                {actions.map(([id, en, ar], i) => (
+                  <option key={i} value={id}>
+                    {L(en, ar)}
+                  </option>
                 ))}
               </Select>
             </div>
-            {area(L('Public response', 'الرد العام'), 'review-public')}
-            {area(L('Internal note', 'ملاحظة داخلية'), 'review-internal')}
+            {area(L('Ask the submitter for information', 'طلب معلومات من صاحب الطلب'), 'review-info')}
+            {area(L('Message to the submitter', 'رسالة إلى صاحب الطلب'), 'review-public')}
+            {area(L('Internal note (reviewers only)', 'ملاحظة داخلية (للمراجعين فقط)'), 'review-internal')}
           </>
         ) : (
           ''
         )}
       </>
     ),
-    foot: canRespond ? (
-      footer(L('Save update', 'حفظ التحديث'))
-    ) : (
-      <button className="btn btn-secondary" data-close="">
-        {L('Close', 'إغلاق')}
-      </button>
-    ),
+    foot:
+      x.status !== 'Closed' ? (
+        footer(L('Save update', 'حفظ التحديث'))
+      ) : (
+        <button className="btn btn-secondary" data-close="">
+          {L('Close', 'إغلاق')}
+        </button>
+      ),
     onMount(el) {
       el.querySelector('#member-save')?.addEventListener('click', () =>
         run('concernUpdate', {
           id: x.id,
-          status: val(el, 'review-status'),
+          action: val(el, 'review-action'),
+          infoRequest: val(el, 'review-info'),
           publicText: val(el, 'review-public'),
           internalText: val(el, 'review-internal')
         })
-      );
-      el.querySelector('#assign-reviewer')?.addEventListener('click', () =>
-        run('concernAssign', { id: x.id, reviewerId: val(el, 'review-assignee') })
       );
     }
   });
@@ -619,6 +314,23 @@ function discussionDrawer(x) {
   });
 }
 
+function closureDrawer() {
+  openDrawer({
+    title: L('Ask the parish to close my data', 'طلب إغلاق بياناتي لدى الرعية'),
+    sub: L(
+      'The parish office reviews the request. Records the parish must keep are not deleted.',
+      'يراجع مكتب الرعية الطلب. السجلات التي يجب على الرعية الاحتفاظ بها لا تُحذف.'
+    ),
+    body: area(L('Anything the office should know (optional)', 'ما يجب أن يعرفه المكتب (اختياري)'), 'closure-details'),
+    foot: footer(L('Send request', 'إرسال الطلب')),
+    onMount(el) {
+      el.querySelector('#member-save').addEventListener('click', () =>
+        run('closureRequest', { details: val(el, 'closure-details') })
+      );
+    }
+  });
+}
+
 export function mount(host) {
   host
     .querySelectorAll('[data-member-item]')
@@ -649,40 +361,8 @@ export function mount(host) {
     .querySelectorAll('[data-todo-toggle]')
     .forEach(b => b.addEventListener('change', () => run('todo', { id: b.dataset.todoToggle, done: b.checked }, '')));
   host.querySelector('[data-profile-request]')?.addEventListener('click', profileDrawer);
-  host.querySelector('[data-password-change]')?.addEventListener('click', passwordModal);
   host.querySelector('[data-member-compose]')?.addEventListener('click', messageDrawer);
   host.querySelector('[data-concern-new]')?.addEventListener('click', concernDrawer);
-  host.querySelector('[data-publish]')?.addEventListener('click', publishDrawer);
-  host.querySelectorAll('[data-preference]').forEach(b =>
-    b.addEventListener('change', () => {
-      const next = b.checked,
-        label = b.closest('label')?.querySelector('span')?.textContent || '';
-      b.checked = !next;
-      openModal({
-        title: L('Confirm preference change', 'تأكيد تغيير التفضيل'),
-        body: (
-          <p>
-            {next ? L('Turn on', 'تفعيل') : L('Turn off', 'إيقاف')} <b>{txt(label)}</b>?
-          </p>
-        ),
-        foot: (
-          <>
-            <button className="btn btn-secondary" data-close="">
-              {L('Cancel', 'إلغاء')}
-            </button>
-            <button className="btn btn-primary" data-confirm-preference="">
-              {L('Confirm', 'تأكيد')}
-            </button>
-          </>
-        ),
-        onMount(el) {
-          el.querySelector('[data-confirm-preference]').addEventListener('click', () =>
-            run('preference', { key: b.dataset.preference, value: next }, '')
-          );
-        }
-      });
-    })
-  );
   host
     .querySelectorAll('[data-member-read]')
     .forEach(b => b.addEventListener('click', () => run('read', { id: b.dataset.memberRead }, '')));
@@ -701,43 +381,22 @@ export function mount(host) {
     .forEach(b =>
       b.addEventListener('click', () => run('volunteer', { id: b.dataset.volunteer, status: b.dataset.status }))
     );
-  host
-    .querySelectorAll('[data-confirm-volunteer]')
-    .forEach(b =>
-      b.addEventListener('click', () =>
-        run('confirmVolunteer', { id: b.dataset.confirmVolunteer, userId: b.dataset.user, status: 'confirmed' })
-      )
-    );
-  host
-    .querySelectorAll('[data-profile-review]')
-    .forEach(b =>
-      b.addEventListener('click', () => run('profileReview', { id: b.dataset.profileReview, status: 'Reviewed' }))
-    );
   host.querySelectorAll('[data-review-concern]').forEach(b =>
     b.addEventListener('click', () => {
       const x = M.review.find(x => x.id === b.dataset.reviewConcern);
       if (x) reviewDrawer(x);
     })
   );
-  host.querySelector('[data-category-add]')?.addEventListener('click', () =>
-    openDrawer({
-      title: L('Add concern category', 'إضافة فئة للملاحظات'),
-      body: field(L('Category name', 'اسم الفئة'), 'category-name'),
-      foot: footer(L('Add category', 'إضافة فئة')),
-      onMount(el) {
-        el.querySelector('#member-save').addEventListener('click', () =>
-          run('categoryManage', { name: val(el, 'category-name'), active: true })
-        );
-      }
+  host
+    .querySelectorAll('[data-correction-withdraw]')
+    .forEach(b => b.addEventListener('click', () => run('profileWithdraw', { id: b.dataset.correctionWithdraw })));
+  host.querySelectorAll('[data-consent-withdraw]').forEach(b =>
+    b.addEventListener('click', () => {
+      if (confirm(L('Withdraw this consent?', 'سحب هذه الموافقة؟')))
+        run('consentWithdraw', { id: b.dataset.consentWithdraw });
     })
   );
-  host
-    .querySelectorAll('[data-category-toggle]')
-    .forEach(b =>
-      b.addEventListener('click', () =>
-        run('categoryManage', { name: b.dataset.categoryToggle, active: b.dataset.active === 'true' })
-      )
-    );
+  host.querySelector('[data-closure-request]')?.addEventListener('click', closureDrawer);
   host.querySelectorAll('[data-reply-message]').forEach(b =>
     b.addEventListener('click', () => {
       const x = M.content.find(x => x.id === b.dataset.replyMessage);
