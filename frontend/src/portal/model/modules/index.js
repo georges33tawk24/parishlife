@@ -15,5 +15,6 @@ import * as ministries from './ministries.js';
 import * as registrations from './registrations.js';
 import * as finance from './finance.js';
 import * as communications from './communications.js';
+import * as requests from './requests.js';
 
-export const MODULES = [people, sacraments, facilities, calendar, ministries, registrations, finance, communications];
+export const MODULES = [people, sacraments, facilities, calendar, ministries, registrations, finance, communications, requests];

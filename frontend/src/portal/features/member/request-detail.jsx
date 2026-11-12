@@ -1,6 +1,7 @@
 /* One of a member's requests: where it stands, what was sent, and what the office answered. */
 import { t } from '../../../lib/i18n.js';
-import { M } from '../../model/member-data.js';
+import { MY_REQUESTS } from '../../model/data.js';
+import { Follow } from './request-follow.jsx';
 import { S } from '../../model/store.js';
 import { Icon, Pill } from '../../ui/ui.jsx';
 import {
@@ -24,7 +25,6 @@ import {
   back,
   nameOf,
   otherName,
-  phoneLink,
   summaryList,
   summaryRows,
   titleOf,
@@ -61,7 +61,9 @@ const asDraft = r =>
       : {
           ...r.details,
           kind: r.kind,
-          subject: r.subject.new ? 'child' : r.subject.id,
+          subject: r.api.dto.relationship === 'Self' ? 'self' : r.details.child ? 'child' : 'other',
+          otherName: r.subject.lat,
+          relationship: r.api.dto.relationship,
           child: r.details.child || {},
           purpose: PURPOSES.some(x => x[0] === r.details.purpose)
             ? r.details.purpose
@@ -77,7 +79,7 @@ const asDraft = r =>
         };
 
 export function detailPage(id) {
-  const r = M.requests.find(x => x.id === id);
+  const r = MY_REQUESTS.find(x => x.id === id);
   if (!r)
     return (
       <div className="member-page mr-page">
@@ -95,7 +97,6 @@ export function detailPage(id) {
     [label, tone, mark] = stageInfo(r);
   const steps = stepsFor(r),
     done = stepsDone(r),
-    phone = M.requestOptions?.phone,
     times = stepTimes(r);
   /* under each step: when it happened, since when the current one has waited, or when the celebration is planned */
   const celebration = !['certificate', 'booking', 'custom'].includes(r.kind) && p.plannedDate ? 4 : -1;
@@ -145,8 +146,6 @@ export function detailPage(id) {
   const certificateFor =
     p.stage === 'completed' && ['baptism', 'communion', 'confirmation', 'marriage'].includes(r.kind);
   const details = summaryRows(asDraft(r)).filter(([k]) => k !== L('Request', 'الطلب') || r.kind === 'custom');
-  if (!OWN.has(r.kind) && !r.subject.new && !(M.requestOptions?.subjects || []).some(s => s.id === r.subject.id))
-    details.unshift([L('For', 'لـ'), nameOf(r.subject)]);
   const about = OWN.has(r.kind) ? aboutOf(r) : nameOf(r.subject),
     aboutOther = OWN.has(r.kind) ? '' : otherName(r.subject);
   return (
@@ -281,6 +280,7 @@ export function detailPage(id) {
           ) : (
             ''
           )}{' '}
+          <Follow r={r} />{' '}
           <section className="member-card mr-history" aria-labelledby="mr-history-title">
             <h2 id="mr-history-title">{L('History', 'السجلّ')}</h2>{' '}
             <ol className="mr-timeline">
@@ -310,7 +310,6 @@ export function detailPage(id) {
                 `اذكر الرقم ${r.reference} عند تواصلك مع مكتب الرعية.`
               )}
             </p>
-            {phone ? phoneLink(phone) : ''}{' '}
             {r.canWithdraw ? (
               <div className="mr-withdraw">
                 <p className="help">

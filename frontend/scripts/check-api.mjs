@@ -234,7 +234,7 @@ assert.deepEqual(
   [['e1', '2026-11-15', '09:00', 'mass']],
   "on the parish's own clock, without cancelled events"
 );
-assert.equal(x.publicRequests, false, 'no request buttons until the request form is connected');
+assert.equal(x.publicRequests, true, "the request buttons are on: the form posts to the API's request route");
 assert.deepEqual(x.ministries, [], "ministries load with a parish's own page");
 assert.deepEqual(
   (await loadParish(directory[0])).ministries.map(m => [m.name, m.description]),

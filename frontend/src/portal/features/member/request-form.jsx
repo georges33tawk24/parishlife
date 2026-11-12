@@ -6,6 +6,7 @@ import { htmlAttrs } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
 import { M } from '../../model/member-data.js';
 import { S } from '../../model/store.js';
+import { session } from '../../model/api.js';
 import { Icon } from '../../ui/ui.jsx';
 import {
   REQUEST_KINDS,
@@ -20,19 +21,7 @@ import {
   todayKey,
   phoneShow
 } from '../../model/sacrament-requests.js';
-import {
-  availability,
-  back,
-  kindGrid,
-  nameOf,
-  otherName,
-  phoneLink,
-  stepReview,
-  txt,
-  unlinked,
-  venueOf,
-  yearsAhead
-} from './requests-shared.jsx';
+import { availability, back, kindGrid, nameOf, otherName, stepReview, txt, yearsAhead } from './requests-shared.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -137,26 +126,17 @@ function draftFor(kind) {
     topic: '',
     subjectText: '',
     message: '',
+    otherName: '',
+    relationship: 'Parent',
+    authority: '',
     ...prefill
   });
 }
 
-/* Who a request can be for: the member and their household, with the reason any of them is not available. */
+/* Who a request can be for. The API links "yourself" to your own record; for anyone else the office matches
+   the person, so you describe them and say why you may ask. */
 function subjectChoices(kind) {
-  return (M.requestOptions?.subjects || [])
-    .filter(s => !(kind === 'funeral' && s.self))
-    .map(s => {
-      let blocked = '';
-      if (kind !== 'certificate') {
-        if (ONCE.has(kind) && s.onRecord.includes(kind))
-          blocked = L('Already recorded in the parish register', 'مدوَّن في سجلّ الرعية');
-        else if (s.inProgress.includes(kind))
-          blocked = L('Already being prepared with the parish', 'قيد التحضير مع الرعية');
-        else if (M.requests.some(r => r.status === 'submitted' && r.kind === kind && r.subject.id === s.id))
-          blocked = L('You have already sent this request', 'أرسلتَ هذا الطلب مسبقاً');
-      }
-      return { ...s, blocked };
-    });
+  return kind === 'funeral' ? [] : [{ id: 'self', self: true, lat: session.user?.name || '', ar: '', blocked: '' }];
 }
 
 const fieldError = id => <span className="mr-error" id={`${id}-error`} hidden />;
@@ -233,6 +213,33 @@ const pills = (name, items, value, otherLabel) => (
   </div>
 );
 
+const RELATIONS = [
+  ['Parent', 'Parent', 'أحد الوالدين'],
+  ['Guardian', 'Guardian', 'ولي الأمر'],
+  ['Spouse', 'Spouse', 'الزوج/الزوجة'],
+  ['Child', 'Son or daughter', 'ابن/ابنة'],
+  ['Relative', 'Relative', 'قريب'],
+  ['Representative', 'Representative', 'وكيل'],
+  ['Other', 'Other', 'آخر']
+];
+/* How the person asking is related to the one they ask for, and the basis of their authority. */
+const relationFields = (d, who) => (
+  <>
+    {select(
+      `mr-${who}-relation`,
+      L('You are their', 'صلتك به'),
+      d.relationship,
+      RELATIONS.map(([v, en, ar]) => [v, L(en, ar)]),
+      { req: true }
+    )}
+    {input(`mr-${who}-authority`, L('Why you may ask for them', 'لماذا يحق لك الطلب عنه'), d.authority, {
+      req: true,
+      attrs: 'maxlength="1000"',
+      help: L('For example: I am the mother, or I hold his power of attorney.', 'مثلاً: أنا والدته، أو لدي وكالة منه.')
+    })}
+  </>
+);
+
 function stepWho(d) {
   if (d.kind === 'booking') return stepPlace(d);
   if (d.kind === 'custom') return stepAsk(d);
@@ -252,7 +259,6 @@ function stepWho(d) {
       </span>
     </label>
   );
-  const phone = M.requestOptions?.phone;
   const childFields = (
     <div className="mr-child" id="mr-child" hidden={!(d.subject === 'child')}>
       <p className="mr-child-intro">
@@ -285,6 +291,22 @@ function stepWho(d) {
           attrs: 'maxlength="120"'
         })}
       </div>
+      {relationFields(d, 'child')}
+    </div>
+  );
+  const otherFields = (
+    <div className="mr-child" id="mr-other" hidden={!(d.subject === 'other')}>
+      <p className="mr-child-intro">
+        {L(
+          'The parish office matches this person to their record. Tell us who they are and why you may ask for them.',
+          'يربط مكتب الرعية هذا الشخص بسجله. أخبرنا من هو ولماذا يحق لك الطلب عنه.'
+        )}
+      </p>{' '}
+      {input('mr-other-name', L('Their full name', 'اسمه الكامل'), d.otherName, {
+        req: true,
+        attrs: 'maxlength="200"'
+      })}{' '}
+      {relationFields(d, 'other')}
     </div>
   );
   const people = choices.map((s, i) => (
@@ -295,7 +317,6 @@ function stepWho(d) {
       })}
     </Fragment>
   ));
-  const none = !choices.length && d.kind !== 'baptism';
   return (
     <>
       <fieldset className="mr-fieldset" id="mr-subject-group" aria-describedby="mr-subject-help mr-subject-error">
@@ -310,47 +331,40 @@ function stepWho(d) {
                 { checked: d.subject === 'child' }
               )
             : ''}
+          {option('other', L('Someone else', 'شخص آخر'), L('You describe them below', 'تصفه أدناه'), {
+            checked: d.subject === 'other'
+          })}
         </div>{' '}
         {fieldError('mr-subject')}{' '}
         <p className="help" id="mr-subject-help">
-          {none
-            ? L(
-                'There is no one in your household to choose. Please contact the parish office directly.',
-                'لا أحد في عائلتك يمكن اختياره. يُرجى التواصل مع مكتب الرعية مباشرة.'
-              )
+          {d.kind === 'funeral'
+            ? L('A funeral is requested for someone who has died.', 'يُطلب الجنّاز عن شخص متوفّى.')
             : L(
-                'You and the people registered in your household are listed. If someone is missing, ask the parish office to add them.',
-                'تظهر أنت والأشخاص المسجّلون في عائلتك. إذا كان أحدهم غير موجود، اطلب من مكتب الرعية إضافته.'
-              )}{' '}
-          {phone && (none || d.kind === 'funeral') ? phoneLink(phone) : ''}
+                'Ask for yourself, or for someone else if you are allowed to.',
+                'اطلب لنفسك، أو لشخص آخر إذا كان يحق لك ذلك.'
+              )}
         </p>
       </fieldset>
       {d.kind === 'baptism' ? childFields : ''}
+      {otherFields}
     </>
   );
 }
 
 /* A booking: which place, which day, from when until when, and what is already taken that day. */
 function stepPlace(d) {
-  const venues = M.requestOptions?.venues || [];
   return (
     <>
       <fieldset className="mr-fieldset" id="mr-venue-group" aria-describedby="mr-venue-error">
         <legend className="mr-legend">{L('Which place would you like?', 'أي مكان تريد؟')}</legend>{' '}
-        <div className="mr-choices mr-choices-2">
-          {venues.map((v, i) => (
-            <label key={i} className="mr-choice">
-              <input type="radio" name="mr-venue" defaultValue={txt(v.id)} defaultChecked={!!(d.venue === v.id)} />{' '}
-              <span className="mr-choice-body">
-                <b>{txt(t(v.name, v.ar || v.name))}</b>
-                <small>
-                  {txt(t(v.kind, v.kindAr || v.kind))} · {L(`Up to ${v.cap} people`, `حتى ${v.cap} شخصاً`)}
-                </small>
-              </span>
-            </label>
-          ))}
-        </div>{' '}
-        {fieldError('mr-venue')}
+        {input('mr-venue', L('Place or room', 'المكان أو القاعة'), d.venue, {
+          req: true,
+          attrs: 'maxlength="200"',
+          help: L(
+            'Name it as you know it, for example the parish hall. The office confirms it is free.',
+            'سمِّه كما تعرفه، مثل قاعة الرعية. يؤكد المكتب أنه متاح.'
+          )
+        })}
       </fieldset>{' '}
       <fieldset className="mr-fieldset">
         <legend className="mr-legend mr-legend-sm">{L('When?', 'متى؟')}</legend>{' '}
@@ -443,7 +457,12 @@ const phoneField = d =>
   });
 
 function stepDetails(d) {
-  const subject = (M.requestOptions?.subjects || []).find(s => s.id === d.subject);
+  const subject =
+    d.subject === 'self'
+      ? { self: true, lat: session.user?.name || '', ar: '' }
+      : d.subject === 'other'
+        ? { lat: d.otherName, ar: '' }
+        : null;
   if (d.kind === 'booking') {
     const v = venueOf(d.venue);
     return (
@@ -571,7 +590,6 @@ function stepDetails(d) {
 }
 
 function prepareAside(kind) {
-  const phone = M.requestOptions?.phone;
   const after =
     kind === 'booking'
       ? [
@@ -598,27 +616,17 @@ function prepareAside(kind) {
   if (kind === 'booking') {
     first = (
       <section className="member-card">
-        <h2>{L('Places you can book', 'الأماكن المتاحة للحجز')}</h2>
-        <ul className="mr-checklist">
-          {(M.requestOptions?.venues || []).map((v, i) => (
-            <li key={i}>
-              <Icon name="rooms" size={16} />
-              <span>{txt(t(v.name, v.ar || v.name))}</span>
-              <small>{L(`${v.cap} people`, `${v.cap} شخصاً`)}</small>
-            </li>
-          ))}
-        </ul>{' '}
-        <p className="help">
+        <h2>{L('Good to know', 'معلومات مفيدة')}</h2>
+        <p className="mr-aside-text">
           {L(
             'For the church or a chapel, please call the parish office.',
             'لحجز الكنيسة أو المصلّى، يُرجى الاتصال بمكتب الرعية.'
           )}
         </p>
-        {phone ? phoneLink(phone) : ''}
       </section>
     );
   } else {
-    const list = (M.requestOptions?.preparation || {})[kind] || [];
+    const list = [];
     const generic = {
       communion: [
         'The parish will tell you about the First Communion preparation classes and the date of the celebration.',
@@ -670,7 +678,6 @@ function prepareAside(kind) {
       <section className="member-card">
         <h2>{list.length ? L('What to prepare', 'ما يجب تحضيره') : L('Good to know', 'معلومات مفيدة')}</h2>
         {body}
-        {phone ? phoneLink(phone) : ''}
       </section>
     );
   }
@@ -698,16 +705,6 @@ export function newPage(kind) {
           <h1>{L('What would you like to ask for?', 'ماذا تودّ أن تطلب؟')}</h1>
         </header>
         {kindGrid(REQUEST_KINDS)}
-      </div>
-    );
-  if (!(M.requestOptions?.subjects || []).length)
-    return (
-      <div className="member-page mr-page">
-        {back()}
-        <header className="member-head">
-          <h1>{L(...HEADING[kind])}</h1>
-        </header>
-        {unlinked()}
       </div>
     );
   const d = draftFor(kind),

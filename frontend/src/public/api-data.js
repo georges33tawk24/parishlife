@@ -11,7 +11,7 @@
    /api/public/homepage (published platform content); GET /api/public/app/manifest and
    .../offline-policy; GET /api/public/document-verifications/{code}.
    What the API does not publish stays empty instead of being invented: Arabic names, rite, phone,
-   address, clergy, photos and news. Public requests stay off until the request form is connected. */
+   address, clergy, photos and news. Public requests are on: the request form posts to the anonymous request route. */
 import { api } from '../portal/model/api.js';
 
 async function json(url) {
@@ -128,7 +128,7 @@ async function parts(p, withMinistries) {
     clergy: [],
     gallery: [],
     parishPhoto: '',
-    publicRequests: false, // the request form still posts to the old server's route
+    publicRequests: true, // the request form posts to the API's anonymous request route
     visit: { latitude: p.latitude, longitude: p.longitude, livestream: '' }
   };
 }
