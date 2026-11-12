@@ -1,5 +1,5 @@
 // Purpose: Builds allowlisted, parameterized storage filters with a matching evaluator for isolated local tests.
-// Main functions: Matches, Sql, Eq, Lt, Lte, Gt, And, Or, Everything, Field, Type, All, Where, ToCosmos.
+// Main functions: Matches, Sql, Paths, Eq, Lt, Lte, Gt, And, Or, Everything, Field, Type, All, Where, ToCosmos.
 
 using System.Globalization;
 using System.Text.Json;
@@ -12,6 +12,8 @@ internal abstract record StorageFilter
 {
     internal abstract bool Matches(JsonElement document);
     internal abstract string Sql(List<object?> parameters);
+    // The document paths this filter reads, so the local provider can refuse filters live Cosmos would reject as unindexed.
+    internal abstract IEnumerable<string> Paths();
     internal static StorageFilter Eq(string path, object? value) => new Comparison(path, "=", value);
     internal static StorageFilter Lt(string path, object value) => new Comparison(path, "<", value);
     internal static StorageFilter Lte(string path, object value) => new Comparison(path, "<=", value);
@@ -30,6 +32,7 @@ internal abstract record StorageFilter
 
     private sealed record Comparison(string Path, string Operator, object? Value) : StorageFilter
     {
+        internal override IEnumerable<string> Paths() => [Path];
         internal override bool Matches(JsonElement document)
         {
             var actual = Field(document, Path);
@@ -74,12 +77,14 @@ internal abstract record StorageFilter
     {
         internal override bool Matches(JsonElement document) => true;
         internal override string Sql(List<object?> parameters) => "true";
+        internal override IEnumerable<string> Paths() => [];
     }
 
     private sealed record Junction(bool All, StorageFilter[] Filters) : StorageFilter
     {
         internal override bool Matches(JsonElement document) => All ? Filters.All(f => f.Matches(document)) : Filters.Any(f => f.Matches(document));
         internal override string Sql(List<object?> parameters) => "(" + string.Join(All ? " AND " : " OR ", Filters.Select(f => f.Sql(parameters))) + ")";
+        internal override IEnumerable<string> Paths() => Filters.SelectMany(f => f.Paths());
     }
 }
 
