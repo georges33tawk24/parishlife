@@ -11,5 +11,6 @@ import * as people from './people.js';
 import * as sacraments from './sacraments.js';
 import * as facilities from './facilities.js';
 import * as calendar from './calendar.js';
+import * as ministries from './ministries.js';
 
-export const MODULES = [people, sacraments, facilities, calendar];
+export const MODULES = [people, sacraments, facilities, calendar, ministries];

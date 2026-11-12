@@ -213,8 +213,10 @@ export function volunteers(tab = '') {
                     <Pill label={L('Valid', 'سارية')} tone="success" />
                   ) : v.clearance === 'expiring' ? (
                     <Pill label={L('Expiring', 'تنتهي قريباً')} tone="warning" mark="st-wait" />
-                  ) : (
+                  ) : v.clearance === 'missing' ? (
                     <Pill label={L('Missing', 'ناقصة')} tone="danger" />
+                  ) : (
+                    <span className="dimmer">—</span>
                   ),
                   <span className="num">{v.hours}</span>,
                   <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
@@ -758,6 +760,15 @@ function volDrawer(id) {
             body={L(
               `Expires ${fmtDate(v.until)}. Renew before the next rota.`,
               `تنتهي ${fmtDate(v.until)}. جدّدها قبل المناوبة التالية.`
+            )}
+          />
+        ) : !v.clearance ? (
+          <C.InlineAlert
+            tone="info"
+            title={L('Clearance is not recorded here', 'الإفادة غير مسجّلة هنا')}
+            body={L(
+              'ParishLife does not hold safeguarding clearances for volunteers yet.',
+              'لا تحتفظ حياة الرعية بإفادات الحماية للمتطوّعين بعد.'
             )}
           />
         ) : (
