@@ -1,11 +1,21 @@
 /* Sign in and sign up, beside the church window of the public site. Signing in takes one field (an
-   email, a phone number or a username) or a passkey; signing up keeps every check of the account
-   form on one screen, with the password rules shown before typing. */
+   email or a username) or a passkey, or Google or Microsoft where this deployment has them; signing up keeps
+   every check of the account form on one screen, with the password rules shown before typing.
+   An account whose email is not confirmed yet can confirm it here with a code, once the API has a delivery
+   provider (GET auth/capabilities). Passkeys, email codes and external providers appear only when the
+   capabilities report them. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { signIn, completeTwoFactor, register } from '../model/api.js';
+import { api, signIn, completeTwoFactor, register } from '../model/api.js';
 import { t, isAr } from '../../lib/i18n.js';
 import { applyTheme } from '../../lib/theme.js';
-import { signInWithPasskey, passkeyMessage } from '../model/passkeys.js';
+import { signInWithPasskey, passkeyMessage, passkeysSupported } from '../model/passkeys.js';
+import {
+  loadCapabilities,
+  featuresOf,
+  requestVerificationCode,
+  confirmVerificationCode,
+  externalSignInPath
+} from '../model/account.js';
 import { mountTurnstile } from '../../lib/turnstile.js';
 import { Sanctuary } from '../../public/components/Sanctuary.jsx';
 import { EasyReading } from '../../reading/EasyReading.jsx';
@@ -89,10 +99,21 @@ export function Auth({ enter, error = '', onLanguage }) {
   const [tab, setTab] = useState(state.tab);
   const [first] = useState(() => !state.shown);
   const [alert, setAlert] = useState(error);
-  const [busy, setBusy] = useState({ submit: false, passkey: false });
+  const [busy, setBusy] = useState({ submit: false, passkey: false, code: false });
   const [forgot, setForgot] = useState(false);
   const [challenge, setChallenge] = useState(null); // set when the API asks for an authenticator code
-  const [note, setNote] = useState('');
+  const [verify, setVerify] = useState(null); // set while confirming an email with a code
+  const [features, setFeatures] = useState(() => featuresOf(null));
+  const [note, setNote] = useState(() => {
+    /* A security change that ended every session leaves its explanation here for the next sign-in. */
+    try {
+      const saved = sessionStorage.getItem('pl-notice') || '';
+      sessionStorage.removeItem('pl-notice');
+      return saved;
+    } catch {
+      return '';
+    }
+  });
   const [pass, setPass] = useState({ password: '', again: '' });
   const form = useRef(null),
     tabs = useRef(null),
@@ -101,8 +122,15 @@ export function Auth({ enter, error = '', onLanguage }) {
     check = useRef(null);
   const up = tab === 'signup',
     v = state.values,
-    passkeys = false; // ParishLife.Api has no passkeys yet (card X01)
+    passkeys = features.passkeys && passkeysSupported();
   state.shown = true;
+  useEffect(() => {
+    let live = true;
+    loadCapabilities().then(c => live && setFeatures(featuresOf(c)));
+    return () => {
+      live = false;
+    };
+  }, []);
   useLayoutEffect(() => {
     applyTheme(null);
   }, []);
@@ -181,13 +209,57 @@ export function Auth({ enter, error = '', onLanguage }) {
     setAlert('');
     setBusy({ ...busy, passkey: true });
     try {
-      await signInWithPasskey();
+      const result = await signInWithPasskey(check.current?.token);
+      if (result.twoFactor) {
+        setChallenge(result.twoFactor);
+        return setBusy({ ...busy, passkey: false });
+      }
       leave();
       await enter();
     } catch (err) {
       setAlert(passkeyMessage(err, t));
       setBusy({ ...busy, passkey: false });
+      check.current?.reset();
     }
+  };
+  /* Google or Microsoft: the API answers a form post with a redirect to the provider, which a script cannot
+     follow, so the page posts a form (with the anti-forgery token as a form field) and the browser leaves. */
+  const signInWithProvider = async provider => {
+    setAlert('');
+    try {
+      const { token } = await api('auth/csrf');
+      const f = document.createElement('form');
+      f.method = 'POST';
+      f.action = externalSignInPath(provider);
+      const input = document.createElement('input');
+      Object.assign(input, { type: 'hidden', name: '__RequestVerificationToken', value: token });
+      f.append(input);
+      document.body.append(f);
+      f.submit();
+    } catch (err) {
+      setAlert(err.message);
+    }
+  };
+  /* Ask for an email code. The reply is the same whether or not the address belongs to an account waiting for one. */
+  const sendCode = async () => {
+    const email = String(new FormData(form.current).get('email') || '').trim();
+    if (!email) return setAlert(t('Enter the email address of your account.', 'أدخل البريد الإلكتروني لحسابك.'));
+    setBusy({ ...busy, code: true });
+    setAlert('');
+    try {
+      await requestVerificationCode(email, check.current?.token);
+      setVerify({ sent: true });
+      setNote(
+        t(
+          'If an account with this email is waiting to be verified, a code is on its way. It works for 15 minutes.',
+          'إن كان لهذا البريد حساب ينتظر التحقّق فقد أُرسل إليه رمز. يصلح الرمز ١٥ دقيقة.'
+        )
+      );
+    } catch (err) {
+      setAlert(err.message);
+    }
+    setBusy({ ...busy, code: false });
+    check.current?.reset();
   };
   const submit = async e => {
     e.preventDefault();
@@ -214,13 +286,35 @@ export function Auth({ enter, error = '', onLanguage }) {
           turnstile: check.current?.token
         });
         setBusy({ ...busy, submit: false });
+        check.current?.reset();
+        if (features.verification) {
+          /* the code is asked for on the next screen, with a fresh bot check: a check token works once */
+          setVerify({ sent: false });
+          setNote(
+            t(
+              'Your account is created. Press “Send code” to get a code by email, then enter it here to verify your email.',
+              'تم إنشاء حسابك. اضغط «إرسال الرمز» ليصلك رمز بالبريد، ثم أدخله هنا للتحقّق من بريدك.'
+            )
+          );
+        } else
+          setNote(
+            t(
+              'Thank you. Once this account is verified, sign in here with your email and password.',
+              'شكراً. بعد التحقّق من الحساب، ادخل هنا ببريدك وكلمة المرور.'
+            )
+          );
+        return switchTab('login');
+      }
+      if (verify) {
+        await confirmVerificationCode(q.email.trim(), q.code);
+        setVerify(null);
         setNote(
           t(
-            'Thank you. Once this account is verified, sign in here with your email and password.',
-            'شكراً. بعد التحقّق من الحساب، ادخل هنا ببريدك وكلمة المرور.'
+            'Your email is verified. Sign in with your email and password.',
+            'تم التحقّق من بريدك. ادخل ببريدك وكلمة المرور.'
           )
         );
-        return switchTab('login');
+        return setBusy({ ...busy, submit: false });
       }
       if (challenge) await completeTwoFactor(challenge, q.code);
       else {
@@ -355,7 +449,42 @@ export function Auth({ enter, error = '', onLanguage }) {
                 </>
               ) : (
                 <>
-                  {challenge ? (
+                  {verify ? (
+                    <>
+                      {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        required: true,
+                        autoComplete: 'email',
+                        maxLength: 254,
+                        dir: 'ltr',
+                        autoCapitalize: 'none',
+                        spellCheck: 'false'
+                      })}
+                      <p className="af-help">
+                        <button
+                          type="button"
+                          className="af-link"
+                          data-send-code
+                          disabled={busy.code}
+                          onClick={sendCode}
+                        >
+                          {verify.sent ? t('Send a new code', 'إرسال رمز جديد') : t('Send code', 'إرسال الرمز')}
+                        </button>
+                      </p>
+                      {field('code', t('Code from your email', 'الرمز الذي وصلك بالبريد'), 'text', {
+                        required: true,
+                        inputMode: 'numeric',
+                        autoComplete: 'one-time-code',
+                        minLength: 6,
+                        maxLength: 12,
+                        dir: 'ltr'
+                      })}
+                      <p className="af-help">
+                        <button type="button" className="af-link" onClick={() => setVerify(null)}>
+                          {t('Back to sign in', 'العودة إلى الدخول')}
+                        </button>
+                      </p>
+                    </>
+                  ) : challenge ? (
                     <>
                       {field('code', t('Authenticator code', 'رمز المصادقة'), 'text', {
                         required: true,
@@ -392,6 +521,23 @@ export function Auth({ enter, error = '', onLanguage }) {
                     </>
                   )}
                   <div className="af-forgot-row" style={{ '--i': n++ }}>
+                    {features.verification && !verify && !challenge ? (
+                      <button
+                        type="button"
+                        className="af-link"
+                        data-verify-email
+                        onClick={() => {
+                          remember();
+                          const id = String(state.values.username || '').trim();
+                          state.values = { ...state.values, email: id.includes('@') ? id : '' };
+                          setAlert('');
+                          setNote('');
+                          setVerify({ sent: false });
+                        }}
+                      >
+                        {t('Verify my email with a code', 'التحقّق من بريدي برمز')}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="af-link"
@@ -430,25 +576,57 @@ export function Auth({ enter, error = '', onLanguage }) {
                 {alert}
               </p>
               <button type="submit" className="auth-submit" style={{ '--i': n++ }} disabled={busy.submit}>
-                {up ? t('Create account', 'إنشاء الحساب') : t('Sign in', 'تسجيل الدخول')}
+                {up
+                  ? t('Create account', 'إنشاء الحساب')
+                  : verify
+                    ? t('Verify email', 'تحقّق من البريد')
+                    : t('Sign in', 'تسجيل الدخول')}
               </button>
             </form>
-            {!up && passkeys ? (
+            {!up && !verify && !challenge && (passkeys || features.external.length) ? (
               <>
                 <div className="auth-or" style={{ '--i': n++ }}>
                   <span>{t('or', 'أو')}</span>
                 </div>
-                <button
-                  type="button"
-                  className="auth-passkey"
-                  data-passkey
-                  style={{ '--i': n++ }}
-                  disabled={busy.passkey}
-                  onClick={signInWithKey}
-                >
-                  <Key />
-                  <span>{t('Sign in with a passkey', 'الدخول بمفتاح مرور')}</span>
-                </button>
+                {passkeys ? (
+                  <button
+                    type="button"
+                    className="auth-passkey"
+                    data-passkey
+                    style={{ '--i': n++ }}
+                    disabled={busy.passkey}
+                    onClick={signInWithKey}
+                  >
+                    <Key />
+                    <span>{t('Sign in with a passkey', 'الدخول بمفتاح مرور')}</span>
+                  </button>
+                ) : null}
+                {features.external.map(provider => (
+                  <button
+                    type="button"
+                    className="auth-passkey"
+                    data-external={provider}
+                    key={provider}
+                    style={{ '--i': n++ }}
+                    onClick={() => signInWithProvider(provider)}
+                  >
+                    <span>
+                      {provider === 'google'
+                        ? t('Continue with Google', 'المتابعة عبر Google')
+                        : provider === 'microsoft'
+                          ? t('Continue with Microsoft', 'المتابعة عبر Microsoft')
+                          : provider}
+                    </span>
+                  </button>
+                ))}
+                {features.external.length ? (
+                  <p className="af-help">
+                    {t(
+                      'Works for an account you have already linked to that provider.',
+                      'يعمل للحساب الذي ربطته سابقاً بهذه الخدمة.'
+                    )}
+                  </p>
+                ) : null}
               </>
             ) : null}
             <a className="auth-back" href="public.html">

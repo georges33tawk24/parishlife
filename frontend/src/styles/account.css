@@ -53,3 +53,8 @@ html[data-mode=dark] .sig-card,html[data-mode=dark] .sig-pad{filter:none}
 @media(max-width:760px){.sig-panel{grid-template-columns:minmax(0,1fr)}}
 /* The other review queues, under the Requests heading */
 .account-actions.request-queues{justify-content:flex-start;gap:10px;margin:0 0 20px}
+/* Two-factor and sessions in Sign-in and security */
+.account-mfa,.account-sessions{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.account-mfa h4,.account-sessions h4{margin:0 0 6px;font-size:16px}
+.recovery-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:14px 0;padding:14px 16px;list-style:none;border:1px solid var(--border);border-radius:8px;background:var(--muted)}
+.recovery-codes code{font-size:15px;letter-spacing:.04em}
