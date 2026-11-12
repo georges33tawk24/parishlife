@@ -1,107 +1,300 @@
-/* Writing to people: composing a message to a person, group or audience, reminders, broadcasts and
-   ready-made designs. */
+/* Writing to people: broadcast drafts and templates (saved through ParishLife.Api and kept in the app),
+   direct messages, reminders and ready-made posters.
+   Main functions: compose, broadcastForm, templateForm, designTemplate, useSubmit, reload, remind, broadcast.
+
+   Broadcasts are stored in the app for their recipients only; email, SMS and push have no provider, so
+   nothing here claims to send anything outside ParishLife. */
+import { useEffect, useState } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { paint } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
-import { Icon, toast, openDrawer, closeOverlays, Avatar } from '../../ui/ui.jsx';
+import { Icon, toast, openDrawer, closeOverlays } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
+import { session } from '../../model/api.js';
+import { bus, S } from '../../model/store.js';
+import { hydrate } from '../../model/persist.js';
+import { saveBroadcast, saveTemplate, listMinistries, LANGUAGES } from '../../model/modules/communications.js';
 import { download } from '../../shell/actions.jsx';
-import { memberAction } from '../../model/member-data.js';
-import { curGroup, ok, val } from '../../shared/dialog-helpers.jsx';
-import { need } from '../../shared/dialogs.jsx';
+import { ok, val } from '../../shared/dialog-helpers.jsx';
 import { pickPerson } from '../records/people-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
-export function compose(audience = 'all', { subject = '', body = '', bodyAr = '', title } = {}) {
+export const LANGUAGE_NAMES = { en: ['English', 'الإنكليزية'], fr: ['French', 'الفرنسية'], ar: ['Arabic', 'العربية'] };
+
+/* After a workflow call: show what the API now holds. */
+export async function reload() {
+  await hydrate();
+  bus.refresh();
+}
+
+/* Busy and error state for a form that calls the API. */
+export function useSubmit(run) {
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const submit = async e => {
+    e?.preventDefault?.();
+    setBusy(true);
+    setError('');
+    try {
+      await run(e?.currentTarget ? Object.fromEntries(new FormData(e.currentTarget)) : {});
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { error, busy, submit };
+}
+
+export function LanguageSelect({ name = 'language', defaultValue = 'en', disabled = false }) {
+  return (
+    <Select name={name} defaultValue={defaultValue} disabled={disabled}>
+      {LANGUAGES.map(l => (
+        <option key={l} value={l}>
+          {L(...LANGUAGE_NAMES[l])}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/* The ministries a broadcast or notice can be aimed at, read when the form opens. */
+export function useMinistries(parishId) {
+  const [list, setList] = useState(null);
+  useEffect(() => {
+    let live = true;
+    listMinistries(parishId).then(
+      r => live && setList(r),
+      () => live && setList([])
+    );
+    return () => {
+      live = false;
+    };
+  }, [parishId]);
+  return list;
+}
+
+/* A broadcast draft: all members, or the members of one ministry. Wording comes from an approved template
+   or is typed here. A different staff member approves the saved draft before it can be stored for recipients. */
+function BroadcastForm({ parish, broadcast, preset }) {
+  const ministries = useMinistries(parish.id),
+    templates = D.TEMPLATES.filter(x => x.status === 'approved');
+  const [audience, setAudience] = useState(broadcast?.audience || preset.audience || 'Members');
+  const [templateId, setTemplateId] = useState(broadcast?.templateId || preset.templateId || '');
+  const template = templates.find(x => x.id === templateId);
+  const { error, busy, submit } = useSubmit(async q => {
+    if (audience === 'Ministry' && !q.ministryId) throw new Error(L('Choose a ministry.', 'اختر الخدمة.'));
+    await saveBroadcast(parish.id, {
+      id: broadcast?.id,
+      version: broadcast?.version,
+      audience,
+      ministryId: q.ministryId,
+      templateId: templateId || null,
+      title: (q.title || '').trim(),
+      body: (q.body || '').trim(),
+      language: q.language
+    });
+    closeOverlays();
+    await reload();
+    ok(
+      L('Draft saved', 'حُفظت المسودة'),
+      L(
+        'Nothing has been delivered. A different staff member approves it, then it can be stored for its recipients.',
+        'لم يُرسل شيء. يوافق عليها موظف آخر، ثم يمكن حفظها لمستلميها.'
+      )
+    );
+  });
+  return (
+    <form onSubmit={submit}>
+      <label className="formrow">
+        <span className="label">{L('Audience', 'الجمهور')}</span>
+        <Select value={audience} onChange={e => setAudience(e.target.value)} disabled={!!broadcast}>
+          <option value="Members">{L('All members of the parish', 'كل أعضاء الرعية')}</option>
+          <option value="Ministry">{L('The members of a ministry', 'أعضاء خدمة')}</option>
+        </Select>
+      </label>
+      {audience === 'Ministry' ? (
+        <label className="formrow">
+          <span className="label">{L('Ministry', 'الخدمة')}</span>
+          <Select name="ministryId" defaultValue={broadcast?.ministryId || preset.ministryId || ''} required>
+            <option value="">
+              {ministries ? L('Choose a ministry', 'اختر الخدمة') : L('Loading…', 'جارٍ التحميل…')}
+            </option>
+            {(ministries || []).map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
+      {templates.length ? (
+        <label className="formrow">
+          <span className="label">{L('Approved template', 'قالب معتمد')}</span>
+          <Select value={templateId} onChange={e => setTemplateId(e.target.value)}>
+            <option value="">{L('Write it here', 'اكتبها هنا')}</option>
+            {templates.map(x => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
+      {template ? (
+        <div className="panel" style={{ marginBottom: '14px' }}>
+          <div className="panel-b">
+            <b>{template.title}</b>
+            <div style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }} dir="auto">
+              {template.body}
+            </div>
+            <p className="help">{L('The template’s wording is copied when you save.', 'يُنسخ نص القالب عند الحفظ.')}</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <label className="formrow">
+            <span className="label">{L('Language', 'اللغة')}</span>
+            <LanguageSelect defaultValue={broadcast?.language || preset.language || 'en'} />
+          </label>
+          <label className="formrow">
+            <span className="label">{L('Subject', 'الموضوع')}</span>
+            <input
+              className="input"
+              name="title"
+              required
+              maxLength="300"
+              defaultValue={broadcast?.subject || preset.subject || ''}
+            />
+          </label>
+          <label className="formrow">
+            <span className="label">{L('Message', 'الرسالة')}</span>
+            <textarea
+              className="textarea"
+              name="body"
+              required
+              maxLength="20000"
+              rows="8"
+              defaultValue={broadcast?.body || preset.body || ''}
+            />
+          </label>
+        </>
+      )}
+      <p className="help">
+        {L(
+          'Sending stores one copy in the app for each recipient. Email, SMS and push are not set up, so nothing leaves ParishLife.',
+          'يحفظ الإرسال نسخة داخل التطبيق لكل مستلم. البريد والرسائل القصيرة والإشعارات غير مفعّلة، فلا يخرج شيء من ParishLife.'
+        )}
+      </p>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {L('Save draft', 'حفظ المسودة')}
+      </button>
+    </form>
+  );
+}
+
+export function broadcastForm(broadcast = null, preset = {}) {
+  const parish = session.parishes.find(p => p.id === session.parishId);
+  if (!parish) return toast(L('No parish is selected', 'لم تُحدَّد رعية'), '', 'warning');
+  openDrawer({
+    title: broadcast ? L('Edit draft', 'تعديل المسودة') : L('New broadcast', 'بثّ جديد'),
+    sub: L('Stored in the app for the people in the audience.', 'يُحفظ داخل التطبيق لمن في الجمهور.'),
+    body: <BroadcastForm parish={parish} broadcast={broadcast} preset={preset} />
+  });
+}
+
+function TemplateForm({ parish, template }) {
+  const { error, busy, submit } = useSubmit(async q => {
+    await saveTemplate(parish.id, {
+      id: template?.id,
+      version: template?.version,
+      name: (q.name || '').trim(),
+      title: (q.title || '').trim(),
+      body: (q.body || '').trim(),
+      language: q.language
+    });
+    closeOverlays();
+    await reload();
+    ok(
+      L('Template saved as a draft', 'حُفظ القالب كمسودة'),
+      L('A different staff member approves it.', 'يوافق عليه موظف آخر.')
+    );
+  });
+  return (
+    <form onSubmit={submit}>
+      <label className="formrow">
+        <span className="label">{L('Template name', 'اسم القالب')}</span>
+        <input className="input" name="name" required maxLength="200" defaultValue={template?.name || ''} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Language', 'اللغة')}</span>
+        <LanguageSelect defaultValue={template?.language || 'en'} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Subject', 'الموضوع')}</span>
+        <input className="input" name="title" required maxLength="300" defaultValue={template?.title || ''} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Message', 'الرسالة')}</span>
+        <textarea
+          className="textarea"
+          name="body"
+          required
+          maxLength="20000"
+          rows="8"
+          defaultValue={template?.body || ''}
+        />
+      </label>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {L('Save draft', 'حفظ المسودة')}
+      </button>
+    </form>
+  );
+}
+
+export function templateForm(template = null) {
+  const parish = session.parishes.find(p => p.id === session.parishId);
+  if (!parish) return toast(L('No parish is selected', 'لم تُحدَّد رعية'), '', 'warning');
+  openDrawer({
+    title: template ? L('Edit template', 'تعديل القالب') : L('New template', 'قالب جديد'),
+    body: <TemplateForm parish={parish} template={template} />
+  });
+}
+
+/* Other screens call compose() with a person's id, 'all' or 'group'. A group or all members becomes a
+   broadcast draft. A direct message needs the person's account, which the people list does not carry. */
+export function compose(audience = 'all', { subject = '', body = '', bodyAr = '', template = null } = {}) {
   if (audience === 'eparchy')
     return toast(
       L('Eparchy delivery is not connected', 'خدمة الإرسال إلى الأبرشية غير موصولة'),
       L('Use the Eparchy contact outside this application.', 'تواصل مع الأبرشية خارج هذا التطبيق.'),
       'warning'
     );
-  const person = D.person(audience);
-  const groupAudience = audience === 'group';
-  const [aen, aar] = person
-    ? [person.lat, person.ar]
-    : groupAudience
-      ? [D.group(curGroup())?.name || 'Ministry', D.group(curGroup())?.ar || 'الخدمة']
-      : [L('All members', 'كل الأعضاء'), L('All members', 'كل الأعضاء')];
-  openDrawer({
-    large: true,
-    title: title || L('New message', 'رسالة جديدة'),
-    sub: L(
-      'Delivered inside ParishLife to accounts in this parish. External channels are not connected.',
-      'تصل داخل ParishLife إلى الحسابات في هذه الرعية. القنوات الخارجية غير موصولة.'
-    ),
-    body: (
-      <>
-        <div className="formrow">
-          <label className="label">{L('Send to', 'إرسال إلى')}</label>{' '}
-          {groupAudience ? (
-            <Select defaultValue={curGroup()} id="mgroup">
-              {D.GROUPS.map((g, i) => (
-                <option key={i} value={g.id}>
-                  {L(g.name, g.ar)}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <div className="chipfield" style={{ cursor: 'default' }}>
-              <span className="tag">
-                {person ? <Avatar p={person} cls="avatar-sm" /> : <Icon name="groups" size={14} />} {L(aen, aar)}
-              </span>
-            </div>
-          )}
-        </div>{' '}
-        <C.Field label={L('Subject', 'الموضوع')} value={subject} id="msubj" req={true} />{' '}
-        <C.Textarea label={L('Message — English', 'الرسالة — إنكليزي')} id="msgen" max={480} value={body} />{' '}
-        <C.Textarea label={L('Message — Arabic', 'الرسالة — عربي')} id="msgar" max={480} ar={true} value={bodyAr} />{' '}
-        <p className="help">
-          {L(
-            'Both versions appear together in the recipient’s in-app message or update.',
-            'تظهر النسختان معاً في رسالة المستلِم أو المستجد داخل التطبيق.'
-          )}
-        </p>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="msend" style={{ marginInlineStart: 'auto' }}>
-          <Icon name="msg" size={16} />
-          {L('Send in app', 'إرسال داخل التطبيق')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#msend').addEventListener('click', async () => {
-        const subject = val(el, '#msubj'),
-          english = val(el, '#msgen'),
-          arabic = val(el, '#msgar');
-        if (!need(el, '#msubj', L('Enter a subject', 'أدخل الموضوع')) || (!english && !arabic))
-          return toast(L('Enter a subject and message', 'أدخل الموضوع والرسالة'), '', 'warning');
-        const message = [english, arabic].filter(Boolean).join('\n\n');
-        try {
-          if (person)
-            await memberAction('staffMessage', { recipientPersonId: person.id, title: subject, body: message });
-          else
-            await memberAction('publish', {
-              kind: 'announcement',
-              groupId: groupAudience ? val(el, '#mgroup') : null,
-              title: subject,
-              body: message
-            });
-          closeOverlays();
-          ok(L('Delivered in ParishLife', 'أُرسلت داخل ParishLife'), L(aen, aar));
-        } catch (error) {
-          toast(L('Message was not delivered', 'لم تُرسَل الرسالة'), error.message, 'danger');
-        }
-      });
-    }
+  if (audience !== 'all' && audience !== 'group')
+    return toast(
+      L('Direct messages are not available from here', 'الرسائل المباشرة غير متاحة من هنا'),
+      L(
+        'A direct message goes to a parishioner’s linked account, and the people list does not show accounts. Nothing was sent.',
+        'تذهب الرسالة المباشرة إلى حساب مرتبط بالمؤمن، ولا تعرض لائحة الأشخاص الحسابات. لم يُرسل شيء.'
+      ),
+      'warning'
+    );
+  const group = audience === 'group' && S.route === 'groups' ? S.params[0] : '';
+  broadcastForm(null, {
+    audience: audience === 'group' ? 'Ministry' : 'Members',
+    ministryId: group || '',
+    templateId: template || '',
+    subject,
+    body: body || bodyAr,
+    language: !body && bodyAr ? 'ar' : 'en'
   });
 }
 
@@ -130,21 +323,24 @@ export function broadcast() {
 /** Ready-made parish design: fill date and place, then export the rendered design. */
 export function designTemplate(i) {
   const tp = D.TEMPLATES[+i] || D.TEMPLATES[0];
+  if (!tp)
+    return toast(
+      L('No template yet', 'لا قالب بعد'),
+      L('Create a template first; a poster is made from its subject.', 'أنشئ قالباً أولاً؛ يُصنع الملصق من موضوعه.'),
+      'warning'
+    );
   const svg = (date, place, width = '600', height = '800') => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width={width} height={height}>
       <rect width="600" height="800" fill="#233B32" />
       <rect x="28" y="28" width="544" height="744" fill="none" stroke="#EDF0E8" strokeOpacity=".45" />{' '}
       <text x="300" y="130" fill="#EDF0E8" fontFamily="Inter,Arial" fontSize="18" letterSpacing="4" textAnchor="middle">
-        {D.PARISH.name.toUpperCase()}
+        {String(D.PARISH.name || '').toUpperCase()}
       </text>{' '}
       <text x="300" y="170" fill="#EDF0E8" fillOpacity=".7" fontFamily="Arial" fontSize="22" textAnchor="middle">
         {D.PARISH.nameAr}
       </text>{' '}
       <text x="300" y="380" fill="#FFFFFF" fontFamily="Inter,Arial" fontSize="52" fontWeight="600" textAnchor="middle">
-        {tp.name}
-      </text>{' '}
-      <text x="300" y="440" fill="#FFFFFF" fillOpacity=".8" fontFamily="Arial" fontSize="34" textAnchor="middle">
-        {tp.ar}
+        {tp.title || tp.name}
       </text>{' '}
       <line x1="220" y1="500" x2="380" y2="500" stroke="#EDF0E8" />{' '}
       <text x="300" y="560" fill="#FFFFFF" fontFamily="Inter,Arial" fontSize="26" textAnchor="middle">
@@ -153,14 +349,11 @@ export function designTemplate(i) {
       <text x="300" y="600" fill="#FFFFFF" fillOpacity=".75" fontFamily="Inter,Arial" fontSize="20" textAnchor="middle">
         {place}
       </text>{' '}
-      <text x="300" y="720" fill="#EDF0E8" fillOpacity=".6" fontFamily="Inter,Arial" fontSize="14" textAnchor="middle">
-        Hadath · Maronite
-      </text>
     </svg>
   );
   openDrawer({
     large: true,
-    title: L(tp.name, tp.ar),
+    title: tp.name,
     sub: L(
       'The parish name is already on it. Fill in the date and place, then download.',
       'اسم الرعية موجود. املأ التاريخ والمكان ثم نزّل التصميم.'
@@ -168,16 +361,8 @@ export function designTemplate(i) {
     body: (
       <div className="grid g2" style={{ gap: '20px', alignItems: 'start' }}>
         <div>
-          <C.Field
-            label={L('Date and time', 'التاريخ والوقت')}
-            value={L('Thursday 24 December, 23:00', 'الخميس ٢٤ كانون الأول، ٢٣:٠٠')}
-            id="dgdate"
-          />{' '}
-          <C.Field
-            label={L('Place', 'المكان')}
-            value={L('Upper Church, Saint Elias', 'الكنيسة العليا، مار الياس')}
-            id="dgplace"
-          />{' '}
+          <C.Field label={L('Date and time', 'التاريخ والوقت')} value="" id="dgdate" />{' '}
+          <C.Field label={L('Place', 'المكان')} value="" id="dgplace" />{' '}
           <C.InlineAlert
             tone="info"
             title={L('Print or share', 'اطبع أو شارك')}

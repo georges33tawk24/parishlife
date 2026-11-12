@@ -1,12 +1,13 @@
-/* The parish's own public website: its sections and content, self-service settings and prayer
-   requests. */
-import { t, num, fmtDate } from '../../../lib/i18n.js';
-import { Icon, PageHead, Panel, Who, Status, Pill, Table, Empty, TabBar } from '../../ui/ui.jsx';
+/* The parish's own public website: its sections (written in three languages, reviewed and published
+   through ParishLife.Api), self-service settings and prayer intentions. */
+import { t, num, fmtDate, isAr } from '../../../lib/i18n.js';
+import { Icon, PageHead, Panel, Status, Pill, Table, Empty, TabBar } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import * as CR from '../../shared/record-editor.jsx';
-import { PRAYERS, PARISH, PORTAL_REQUESTS, CONTENT, person } from '../../model/data.js';
+import { PRAYERS, PARISH, PORTAL_REQUESTS, CONTENT } from '../../model/data.js';
 import { waitingOnline } from '../records/online-requests.jsx';
 import { session } from '../../model/api.js';
+import { LANGUAGES } from '../../model/modules/communications.js';
+import { decidePrayer } from './website-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -48,16 +49,32 @@ const portalSections = [
   ]
 ];
 
+/* Where a section stands: nothing yet, a draft, waiting for a priest, live, or taken down. */
+const stateOf = c =>
+  c?.pending?.status === 'AwaitingReview'
+    ? 'review'
+    : c?.pending
+      ? c.live
+        ? 'editing'
+        : 'draft'
+      : c?.live
+        ? 'published'
+        : c?.status === 'Unpublished'
+          ? 'unpublished'
+          : 'empty';
+const STATE_LABEL = {
+  published: ['Published', 'منشور'],
+  editing: ['Published · edit in progress', 'منشور · تعديل جارٍ'],
+  draft: ['Draft · private', 'مسودة · خاصة'],
+  review: ['Waiting for a priest', 'بانتظار كاهن'],
+  unpublished: ['Taken down', 'أُزيل'],
+  empty: ['Not started', 'لم يبدأ بعد']
+};
+
 function portalContent() {
-  const hasText = c => !!(c.en?.trim() || c.ar?.trim());
-  const published = portalSections.filter(([key]) => {
-    const c = CONTENT[key] || {};
-    return hasText(c) && c.published !== false;
-  }).length;
-  const drafts = portalSections.filter(([key]) => {
-    const c = CONTENT[key] || {};
-    return hasText(c) && c.published === false;
-  }).length;
+  const states = portalSections.map(([key]) => stateOf(CONTENT[key]));
+  const published = states.filter(x => x === 'published' || x === 'editing').length;
+  const drafts = states.filter(x => x === 'draft' || x === 'review').length;
   return (
     <div className="cms-content">
       <section className="cms-overview" aria-labelledby="cms-overview-title">
@@ -100,23 +117,23 @@ function portalContent() {
       </div>{' '}
       <div className="cms-section-grid">
         {portalSections.map(([key, en, ar, desc, descAr], index) => {
-          const c = CONTENT[key] || {},
-            filled = hasText(c),
-            state = !filled ? 'empty' : c.published === false ? 'draft' : 'published';
-          const preview = L(c.en || '', c.ar || '') || c.en || c.ar || '';
+          const c = CONTENT[key],
+            state = stateOf(c),
+            filled = state !== 'empty' && state !== 'unpublished';
+          const texts = c?.texts || {},
+            lang = isAr() ? 'ar' : 'en';
+          const preview = texts[lang]?.body || texts.en?.body || texts.fr?.body || texts.ar?.body || '';
           return (
             <article key={index} className="cms-section-card" aria-labelledby={`cms-${key}-title`}>
               <div className="cms-card-top">
                 <span className="cms-section-number" aria-hidden="true">
                   {String(index + 1).padStart(2, '0')}
                 </span>
-                <span className={`cms-state cms-state-${state}`}>
+                <span
+                  className={`cms-state cms-state-${state === 'published' ? 'published' : state === 'empty' ? 'empty' : 'draft'}`}
+                >
                   <span aria-hidden="true" />
-                  {state === 'published'
-                    ? L('Published', 'منشور')
-                    : state === 'draft'
-                      ? L('Draft · private', 'مسودة · خاصة')
-                      : L('Not started', 'لم يبدأ بعد')}
+                  {L(...STATE_LABEL[state])}
                 </span>
               </div>{' '}
               <h3 id={`cms-${key}-title`}>{L(en, ar)}</h3>
@@ -132,29 +149,24 @@ function portalContent() {
               </p>{' '}
               <div className="cms-card-footer">
                 <div className="cms-languages" aria-label={L('Content languages', 'لغات المحتوى')}>
-                  <span
-                    className={c.en?.trim() ? 'is-ready' : ''}
-                    title={
-                      c.en?.trim()
-                        ? L('English content ready', 'المحتوى الإنكليزي جاهز')
-                        : L('English content missing', 'المحتوى الإنكليزي غير مضاف')
-                    }
-                  >
-                    <Icon name={c.en?.trim() ? 'check' : 'plus'} size={12} />
-                    English
-                  </span>
-                  <span
-                    className={c.ar?.trim() ? 'is-ready' : ''}
-                    lang="ar"
-                    title={
-                      c.ar?.trim()
-                        ? L('Arabic content ready', 'المحتوى العربي جاهز')
-                        : L('Arabic content missing', 'المحتوى العربي غير مضاف')
-                    }
-                  >
-                    <Icon name={c.ar?.trim() ? 'check' : 'plus'} size={12} />
-                    العربية
-                  </span>
+                  {LANGUAGES.map(code => {
+                    const ready = !!texts[code]?.body?.trim();
+                    return (
+                      <span
+                        key={code}
+                        className={ready ? 'is-ready' : ''}
+                        lang={code}
+                        title={
+                          ready
+                            ? L('Content ready in this language', 'المحتوى جاهز بهذه اللغة')
+                            : L('Content missing in this language', 'المحتوى غير مضاف بهذه اللغة')
+                        }
+                      >
+                        <Icon name={ready ? 'check' : 'plus'} size={12} />
+                        {code === 'en' ? 'English' : code === 'fr' ? 'Français' : 'العربية'}
+                      </span>
+                    );
+                  })}
                 </div>{' '}
                 <button
                   className="cms-edit"
@@ -173,8 +185,8 @@ function portalContent() {
         <Icon name="info" size={18} />
         <p>
           {L(
-            'Save a draft while you work. A draft section stays off the public page until you publish it. Add both languages before publishing.',
-            'احفظ مسودة أثناء العمل. يبقى القسم المسودة خارج الصفحة العامة حتى تنشره. أضف اللغتين قبل النشر.'
+            'Save a draft while you work; the live text stays online. When English, French and Arabic are written, submit it, and a priest other than the author publishes it or sends it back.',
+            'احفظ مسودة أثناء العمل؛ يبقى النص المنشور على حاله. عند كتابة الإنكليزية والفرنسية والعربية أرسله، فينشره كاهن غير كاتبه أو يعيده.'
           )}
         </p>
       </aside>{' '}
@@ -403,8 +415,12 @@ export function portal(tab = '') {
               ]}
               rows={PRAYERS.map(p => ({
                 cells: [
-                  p.by ? <Who p={person(p.by)} /> : <span className="dim">{L('Anonymous', 'مجهول')}</span>,
-                  L(p.body, p.bodyAr),
+                  p.displayName ? (
+                    p.displayName
+                  ) : (
+                    <span className="dim">{L('Name not shared', 'الاسم غير معروض')}</span>
+                  ),
+                  <span dir="auto">{p.body}</span>,
                   p.vis === 'private' ? (
                     <Pill label={L('Private', 'خاصة')} tone="info" mark="lock" />
                   ) : (
@@ -416,14 +432,13 @@ export function portal(tab = '') {
                     <Status k={p.status} />
                   ),
                   <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                    {p.status === 'awaiting-approval' ? (
-                      <button className="btn btn-primary btn-dense" data-act={`prayer-publish:${p.id}`}>
-                        {L('Publish', 'نشر')}
+                    {p.status === 'awaiting-approval' && (session.user?.roles || []).includes('priest') ? (
+                      <button className="btn btn-primary btn-dense" onClick={() => decidePrayer(p)}>
+                        {L('Decide', 'قرار')}
                       </button>
                     ) : (
                       ''
                     )}
-                    {CR.recBtn('prayer', p.id)}
                   </span>
                 ]
               }))}

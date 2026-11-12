@@ -1,42 +1,63 @@
-/* Notices and the weekly bulletin: published notices, upcoming Masses and the bulletin built from
-   them. */
+/* Notices and the weekly bulletin: the parish's notices (announcements, drafted, published and withdrawn
+   through ParishLife.Api), upcoming Masses and a bulletin to print. The bulletin's introduction and Mass
+   intentions are typed for printing only: the API has nowhere to keep them, so they are not saved. */
 import { nodesOr, paint } from '../../ui/html.js';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
-import { Icon, PageHead, Panel, Pill, Empty, openDrawer, toast } from '../../ui/ui.jsx';
+import { Icon, PageHead, Panel, Pill, Empty, openDrawer } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import * as CR from '../../shared/record-editor.jsx';
-import { persist } from '../../model/persist.js';
+import { session } from '../../model/api.js';
 import { printSheet } from '../../shared/print.js';
-import { NOTICES, PARISH, EVENTS, CONTENT, person, venue } from '../../model/data.js';
+import { NOTICES, PARISH, EVENTS, venue } from '../../model/data.js';
+import { noticeForm, publishNotice, withdrawNotice } from './notices-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
 export function notices() {
+  const AUDIENCE = {
+    Public: ['Public page', 'الصفحة العامة'],
+    Members: ['Members', 'الأعضاء'],
+    Ministry: ['A ministry', 'خدمة']
+  };
   const rows = nodesOr(
-    NOTICES.map((n, i) => (
-      <div key={i} className="listrow" style={{ alignItems: 'flex-start' }}>
+    NOTICES.map(n => (
+      <div key={n.id} className="listrow" style={{ alignItems: 'flex-start' }}>
         <span className="grow">
-          <b>{L(n.title, n.ar)}</b>{' '}
+          <b dir="auto">{n.title}</b>{' '}
           <small>
-            {fmtDate(n.at)} · {person(n.by) ? (isAr() ? person(n.by).ar : person(n.by).lat) : '—'} ·{' '}
-            {L(n.audience, n.audienceAr)}
+            {n.at ? fmtDate(n.at) + ' · ' : ''}
+            {L(...AUDIENCE[n.visibility])}
+            {n.category ? ` · ${n.category}` : ''}
           </small>
         </span>{' '}
-        {n.pri === 'urgent' ? (
-          <Pill label={L('Urgent', 'عاجل')} tone="danger" mark="st-alert" />
+        {n.pinned ? <Pill label={L('Pinned', 'مثبّت')} tone="info" mark="st-open" /> : null}
+        {n.status === 'published' ? (
+          <Pill label={L('Published', 'منشور')} tone="success" mark="st-ok" />
+        ) : n.status === 'withdrawn' ? (
+          <Pill label={L('Withdrawn', 'مسحوب')} mark="st-pause" />
         ) : (
-          <Pill label={L('Normal', 'عادي')} />
-        )}{' '}
-        {CR.recBtn('notice', n.id)}
+          <Pill label={L('Draft', 'مسودة')} tone="info" mark="st-open" />
+        )}
+        {n.status === 'draft' ? (
+          <>
+            <button className="btn btn-secondary btn-dense" onClick={() => noticeForm(n)}>
+              {L('Edit', 'تعديل')}
+            </button>
+            <button className="btn btn-primary btn-dense" onClick={() => publishNotice(n)}>
+              {L('Publish', 'نشر')}
+            </button>
+          </>
+        ) : null}
+        {n.status === 'published' ? (
+          <button className="btn btn-ghost btn-dense" onClick={() => withdrawNotice(n)}>
+            {L('Withdraw', 'سحب')}
+          </button>
+        ) : null}
       </div>
     )),
     <Empty
       glyph="bell"
       title={L('No notices', 'لا إعلانات')}
-      body={L(
-        'Publish one and it appears on the board and in the bulletin.',
-        'انشر واحداً فيظهر على اللوحة وفي النشرة.'
-      )}
+      body={L('Draft one, then publish it to the people it is for.', 'اكتب مسودة ثم انشرها لمن تعنيهم.')}
     />
   );
   return (
@@ -54,7 +75,7 @@ export function notices() {
               <Icon name="doc" size={17} />
               {L('Build bulletin', 'بناء النشرة')}
             </button>{' '}
-            <button className="btn btn-primary" data-act="notice-add">
+            <button className="btn btn-primary" onClick={() => noticeForm()}>
               <Icon name="plus" size={17} />
               {L('New notice', 'إعلان جديد')}
             </button>
@@ -62,7 +83,7 @@ export function notices() {
         }
       />{' '}
       <div className="splitview">
-        <Panel title={L('Published notices', 'الإعلانات المنشورة')} tight={true}>
+        <Panel title={L('Notices', 'الإعلانات')} tight={true}>
           {rows}
         </Panel>{' '}
         <div className="sidecol">
@@ -94,7 +115,7 @@ export function notices() {
             <a
               className="btn btn-secondary"
               style={{ marginTop: '12px' }}
-              href={`public.html?parish=${encodeURIComponent(PARISH.id || '')}`}
+              href={`public.html?parish=${encodeURIComponent(session.parishId || '')}`}
               target="_blank"
               rel="noopener"
             >
@@ -114,8 +135,8 @@ notices.mount = host => {
       large: true,
       title: L('Weekly bulletin', 'النشرة الأسبوعية'),
       sub: L(
-        'Edit the welcome text and intentions; the current public Masses and parish notices are included automatically.',
-        'حرّر كلمة الترحيب والنوايا؛ تُضاف القداديس العامة وإعلانات الرعية الحالية تلقائياً.'
+        'Type the welcome text and intentions to print; the Masses this week and the published notices are included automatically. What you type here is not saved.',
+        'اكتب كلمة الترحيب والنوايا للطباعة؛ تُضاف قداديس هذا الأسبوع والإعلانات المنشورة تلقائياً. ما تكتبه هنا لا يُحفظ.'
       ),
       body: (
         <>
@@ -124,19 +145,13 @@ notices.mount = host => {
               <label className="label" htmlFor="bulletin-en">
                 {L('Introduction in English', 'المقدمة بالإنكليزية')}
               </label>
-              <textarea className="input" id="bulletin-en" rows="3" defaultValue={CONTENT.bulletin?.en || ''} />
+              <textarea className="input" id="bulletin-en" rows="3" />
             </div>{' '}
             <div className="formrow">
               <label className="label" htmlFor="bulletin-ar">
                 {L('Introduction in Arabic', 'المقدمة بالعربية')}
               </label>
-              <textarea
-                className="input"
-                id="bulletin-ar"
-                rows="3"
-                dir="rtl"
-                defaultValue={CONTENT.bulletin?.ar || ''}
-              />
+              <textarea className="input" id="bulletin-ar" rows="3" dir="rtl" />
             </div>
           </div>{' '}
           <div className="formgrid">
@@ -144,19 +159,13 @@ notices.mount = host => {
               <label className="label" htmlFor="intentions-en">
                 {L('Mass intentions in English, one per line', 'نوايا القداديس بالإنكليزية، سطر لكل نيّة')}
               </label>
-              <textarea className="input" id="intentions-en" rows="3" defaultValue={CONTENT.intentions?.en || ''} />
+              <textarea className="input" id="intentions-en" rows="3" />
             </div>{' '}
             <div className="formrow">
               <label className="label" htmlFor="intentions-ar">
                 {L('Mass intentions in Arabic, one per line', 'نوايا القداديس بالعربية، سطر لكل نيّة')}
               </label>
-              <textarea
-                className="input"
-                id="intentions-ar"
-                rows="3"
-                dir="rtl"
-                defaultValue={CONTENT.intentions?.ar || ''}
-              />
+              <textarea className="input" id="intentions-ar" rows="3" dir="rtl" />
             </div>
           </div>{' '}
           <div className="a4bar">
@@ -180,9 +189,6 @@ notices.mount = host => {
           <button className="btn btn-secondary" data-close="">
             {L('Close', 'إغلاق')}
           </button>
-          <button className="btn btn-secondary" id="bulletin-save">
-            {L('Save content', 'حفظ المحتوى')}
-          </button>{' '}
           <button className="btn btn-primary" id="bulletin-print" style={{ marginInlineStart: 'auto' }}>
             {L('Print', 'طباعة')}
           </button>
@@ -208,7 +214,9 @@ notices.mount = host => {
           const masses = EVENTS.filter(e => e.kind === 'mass' && e.d >= from && e.d <= through).sort((a, b) =>
             (a.d + a.t).localeCompare(b.d + b.t)
           );
-          const notices = NOTICES.filter(n => n.audience === 'Parish' && !n.groupId && n.at >= from && n.at <= through);
+          const notices = NOTICES.filter(
+            n => n.status === 'published' && n.visibility !== 'Ministry' && n.at >= from && n.at <= through
+          );
           paint(
             page,
             <>
@@ -247,7 +255,7 @@ notices.mount = host => {
               {nodesOr(
                 notices.map((n, i) => (
                   <div key={i} className="listrow">
-                    {L(n.title, n.ar)}
+                    {n.title}
                   </div>
                 )),
                 <p>{L('No parish notices this week.', 'لا إعلانات للرعية هذا الأسبوع.')}</p>
@@ -262,20 +270,6 @@ notices.mount = host => {
         el.querySelectorAll('.a4bar button').forEach((b, i) =>
           b.addEventListener('click', () => page.classList.toggle('phone', i === 1))
         );
-        el.querySelector('#bulletin-save').addEventListener('click', async () => {
-          CONTENT.bulletin = {
-            en: el.querySelector('#bulletin-en').value.trim(),
-            ar: el.querySelector('#bulletin-ar').value.trim(),
-            published: false
-          };
-          CONTENT.intentions = {
-            en: el.querySelector('#intentions-en').value.trim(),
-            ar: el.querySelector('#intentions-ar').value.trim(),
-            published: false
-          };
-          if (!(await persist())) return;
-          toast(L('Bulletin content saved', 'حُفظ محتوى النشرة'), '', 'success');
-        });
         el.querySelector('#bulletin-print').addEventListener('click', () =>
           printSheet({ title: L('Weekly bulletin', 'النشرة الأسبوعية'), body: page.innerHTML, margin: '12mm' })
         );
