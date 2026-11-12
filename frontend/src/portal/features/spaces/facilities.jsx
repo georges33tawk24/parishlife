@@ -1,52 +1,619 @@
-/* Facilities and resources: rooms, equipment, maintenance and issues, each room's availability and
-   blocking it for maintenance. */
-import { Fragment } from 'react';
+/* Facilities and resources: rooms and spaces, each room's buffered availability, taking a room out of
+   service, equipment and its loans, facility issues and external renters. Everything shown comes from
+   ParishLife.Api (model/modules/facilities.js); each action is one API call followed by a reload.
+   Main functions: facilities (the page and its tabs), availabilityDrawer, facilityForm, equipmentForm,
+   loansDrawer, issueForm, issueDrawer, rentalForm, renterForm. */
 import { css, paint } from '../../ui/html.js';
-import { t, usd, fmtDate, fmtLong, month, dayShort } from '../../../lib/i18n.js';
-import { bus, S, me } from '../../model/store.js';
-import {
-  Icon,
-  PageHead,
-  Who,
-  Status,
-  Pill,
-  Table,
-  Empty,
-  openDrawer,
-  openModal,
-  closeOverlays,
-  toast,
-  TabBar,
-  Paged
-} from '../../ui/ui.jsx';
+import { t, fmtDate, fmtLong, month, dayShort } from '../../../lib/i18n.js';
+import { S } from '../../model/store.js';
+import { Icon, PageHead, Pill, Table, Empty, openDrawer, toast, TabBar, Paged, Status } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
-import * as CR from '../../shared/record-editor.jsx';
-import { need } from '../../shared/dialogs.jsx';
-import {
-  VENUES,
-  EQUIPMENT,
-  RESERVATIONS,
-  MAINTENANCE,
-  ISSUES,
-  RENTALS,
-  EVENTS,
-  PEOPLE,
-  TODAY,
-  person,
-  venue,
-  resStatus
-} from '../../model/data.js';
+import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, venue } from '../../model/data.js';
+import * as API from '../../model/modules/facilities.js';
+import { ask, failure, money, Notice } from './forms.jsx';
+import { requestRoomForm } from './reservations.jsx';
 
 const L = (en, ar) => t(en, ar);
 
 const FTABS = () => [
   ['', 'Rooms', 'القاعات'],
   ['equipment', 'Equipment', 'التجهيزات'],
-  ['maintenance', 'Maintenance', 'الصيانة'],
+  ['maintenance', 'Out of service', 'خارج الخدمة'],
   ['issues', 'Issues', 'الأعطال', ISSUES.length],
   ['rentals', 'External renters', 'الإيجار الخارجي', RENTALS.length]
 ];
 
+const KINDS = () => [
+  ['Room', L('Room', 'غرفة')],
+  ['Space', L('Space (hall, church, outdoor)', 'مساحة (قاعة، كنيسة، خارجي)')]
+];
+
+const nameOf = id => {
+  const v = venue(id);
+  if (v) return L(v.name, v.ar);
+  const e = EQUIPMENT.find(x => x.id === id);
+  return e ? L(e.name, e.ar) : '—';
+};
+
+/* ---------------- rooms: add, edit, take out of service ---------------- */
+function facilityForm(v) {
+  ask({
+    title: v ? L('Edit room', 'تعديل القاعة') : L('Add a room or space', 'إضافة قاعة أو مساحة'),
+    sub: L(
+      'Changing capacity, set-up or clean-up time, or what excludes what, is refused while a room has current or future reservations.',
+      'يُرفض تغيير السعة أو وقت التجهيز أو التنظيف أو التعارضات ما دامت للقاعة حجوزات حالية أو مقبلة.'
+    ),
+    fields: [
+      { id: 'name', label: L('Name', 'الاسم'), req: true, value: v?.name, max: 500 },
+      { id: 'kind', label: L('Kind', 'النوع'), type: 'select', value: v?.kind || 'Room', options: KINDS() },
+      { id: 'capacity', label: L('Seats', 'السعة'), type: 'number', min: 1, req: true, value: v?.cap ?? 40 },
+      {
+        id: 'setupMinutes',
+        label: L('Set-up time before (minutes)', 'وقت التجهيز قبل (دقائق)'),
+        type: 'number',
+        min: 0,
+        max: 1440,
+        value: v?.setup ?? 0
+      },
+      {
+        id: 'cleanupMinutes',
+        label: L('Clean-up time after (minutes)', 'وقت التنظيف بعد (دقائق)'),
+        type: 'number',
+        min: 0,
+        max: 1440,
+        value: v?.cleanup ?? 0
+      },
+      {
+        id: 'publicDescription',
+        label: L('Public description', 'الوصف العام'),
+        type: 'textarea',
+        max: 500,
+        value: v?.desc
+      },
+      {
+        id: 'exclusionResourceIds',
+        label: L('Cannot be used at the same time as', 'لا تُستعمل في الوقت نفسه مع'),
+        type: 'checks',
+        value: v?.exclusions || [],
+        options: VENUES.filter(x => x.id !== v?.id).map(x => [x.id, L(x.name, x.ar)])
+      }
+    ],
+    confirm: v ? L('Save', 'حفظ') : L('Add', 'إضافة'),
+    run: f =>
+      API.saveFacility(
+        v?.id,
+        { ...f, capacity: f.capacity || 0, setupMinutes: f.setupMinutes || 0, cleanupMinutes: f.cleanupMinutes || 0 },
+        v?.version
+      ),
+    success: (r, f) => [v ? L('Room saved', 'حُفظت القاعة') : L('Room added', 'أُضيفت القاعة'), f.name]
+  });
+}
+
+/* The API takes a room out of service or back in, with a reason, and no dates. */
+function serviceForm(v, back) {
+  ask({
+    title: back
+      ? L(`Return ${v.name} to service`, `إعادة ${v.ar} إلى الخدمة`)
+      : L(`Take ${v.name} out of service`, `إخراج ${v.ar} من الخدمة`),
+    sub: back
+      ? L('Reservations can be requested for it again.', 'يمكن طلب الحجز فيها من جديد.')
+      : L(
+          'It is refused while the room has current or future reservations: cancel or move them first. The reason is recorded with the change.',
+          'يُرفض ذلك ما دامت للقاعة حجوزات حالية أو مقبلة: ألغها أو انقلها أولاً. يُسجَّل السبب مع التغيير.'
+        ),
+    fields: [{ id: 'reason', label: L('Reason', 'السبب'), type: 'textarea', req: true, max: 2000, value: '' }],
+    confirm: back ? L('Return to service', 'إعادة إلى الخدمة') : L('Take out of service', 'إخراج من الخدمة'),
+    tone: back ? 'primary' : 'danger',
+    run: f => API.setFacilityStatus(v.id, back ? 'Serviceable' : 'OutOfService', f.reason, v.version),
+    success: () => [back ? L('Back in service', 'عادت إلى الخدمة') : L('Out of service', 'خرجت من الخدمة'), v.name]
+  });
+}
+
+/* ---------------- equipment ---------------- */
+function equipmentForm(e) {
+  ask({
+    title: e ? L('Edit equipment', 'تعديل التجهيز') : L('New equipment', 'تجهيز جديد'),
+    sub: L(
+      'The count cannot drop below what active bookings hold.',
+      'لا يمكن أن ينقص العدد عمّا تحجزه الحجوزات الفعّالة.'
+    ),
+    fields: [
+      { id: 'name', label: L('Name', 'الاسم'), req: true, value: e?.name, max: 300 },
+      { id: 'quantity', label: L('How many', 'العدد'), type: 'number', min: 0, req: true, value: e?.qty ?? 1 },
+      { id: 'storage', label: L('Where it is kept', 'مكان الحفظ'), opt: true, value: e?.storage, max: 300 },
+      { id: 'condition', label: L('Condition note', 'ملاحظة عن الحالة'), opt: true, value: e?.note, max: 500 },
+      {
+        id: 'status',
+        label: L('Status', 'الحالة'),
+        type: 'select',
+        value: e?.status || 'Serviceable',
+        options: [
+          ['Serviceable', L('Serviceable', 'صالح')],
+          ['OutOfService', L('Out of service', 'خارج الخدمة')],
+          ['Retired', L('Retired', 'متقاعد')]
+        ]
+      }
+    ],
+    confirm: e ? L('Save', 'حفظ') : L('Add', 'إضافة'),
+    run: f => API.saveEquipment(e?.id, { ...f, quantity: f.quantity ?? 0 }, e?.version),
+    success: (r, f) => [e ? L('Equipment saved', 'حُفظ التجهيز') : L('Equipment added', 'أُضيف التجهيز'), f.name]
+  });
+}
+
+const BOOKING_STATE = () => ({
+  Booked: [L('Booked', 'محجوز'), 'info'],
+  Issued: [L('Out on loan', 'معار'), 'warning'],
+  Returned: [L('Returned', 'أُعيد'), 'success'],
+  Cancelled: [L('Cancelled', 'ملغى'), 'danger']
+});
+
+/* An item's bookings: the API lends equipment against a calendar event (book, issue, return, cancel). */
+function loansDrawer(eq) {
+  openDrawer({
+    large: true,
+    title: L(`Loans — ${eq.name}`, `الإعارة — ${eq.ar}`),
+    sub: L(`${eq.qty} in total, ${eq.out} out on loan`, `${eq.qty} في المجموع، ${eq.out} معارة`),
+    body: <div id="loans">{L('Loading…', 'جارٍ التحميل…')}</div>,
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Close', 'إغلاق')}
+        </button>{' '}
+        <button className="btn btn-primary" id="book-eq" style={{ marginInlineStart: 'auto' }}>
+          <Icon name="plus" size={16} />
+          {L('Book for an event', 'حجز لحدث')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      const act = (booking, title, fields, body, ok) =>
+        ask({
+          title,
+          fields,
+          confirm: title,
+          run: f => API.equipmentBookingAction(booking, body(f)),
+          success: () => [ok, eq.name]
+        });
+      el.querySelector('#book-eq').addEventListener('click', async () => {
+        let events;
+        try {
+          events = await API.upcomingEvents();
+        } catch (e) {
+          return failure(L('Could not load events', 'تعذّر تحميل الأحداث'), e);
+        }
+        if (!events.length)
+          return toast(
+            L('No upcoming events', 'لا أحداث مقبلة'),
+            L(
+              'Equipment is booked for a calendar event. Add the event in the calendar first.',
+              'يُحجز التجهيز لحدث في الرزنامة. أضف الحدث في الرزنامة أولاً.'
+            ),
+            'warning'
+          );
+        ask({
+          title: L('Book for an event', 'حجز لحدث'),
+          sub: L(`${eq.name} — ${eq.qty - eq.out} not out on loan`, `${eq.ar} — ${eq.qty - eq.out} غير معارة`),
+          fields: [
+            {
+              id: 'eventId',
+              label: L('Event', 'الحدث'),
+              type: 'select',
+              req: true,
+              options: events.map(e => [e.id, `${e.title} · ${fmtDate(e.startsAt.slice(0, 10))}`])
+            },
+            { id: 'quantity', label: L('How many', 'العدد'), type: 'number', min: 1, req: true, value: 1 }
+          ],
+          confirm: L('Book', 'حجز'),
+          run: f => API.bookEquipment(eq.id, f.eventId, f.quantity),
+          success: () => [L('Booked', 'تم الحجز'), eq.name]
+        });
+      });
+      API.equipmentBookings(eq.id).then(
+        rows => {
+          const list = rows
+            .map(r => ({ ...r.value, version: r.version }))
+            .sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1));
+          paint(
+            el.querySelector('#loans'),
+            list.length ? (
+              <ol className="avail-list">
+                {list.map(b => {
+                  const [label, tone] = BOOKING_STATE()[b.status] || [b.status, ''];
+                  return (
+                    <li key={b.id} className="held">
+                      <span className="tm mono">{fmtDate(b.startsAt.slice(0, 10))}</span>
+                      <span className="grow">
+                        <b>
+                          {b.quantity} × {eq.name}
+                        </b>
+                        <small>
+                          {b.issuedTo ? L(`Issued to ${b.issuedTo}`, `سُلّمت إلى ${b.issuedTo}`) : ''}
+                          {b.status === 'Returned'
+                            ? ` ${L(`${b.returnedQuantity} back, ${b.returnCondition}`, `${b.returnedQuantity} عادت، ${b.returnCondition}`)}`
+                            : ''}
+                          {b.reason ? ` ${b.reason}` : ''}
+                        </small>
+                        <span className="avail-state">
+                          <Pill label={label} tone={tone} />
+                        </span>
+                        <span className="row" style={{ gap: '6px', marginTop: '6px' }}>
+                          {b.status === 'Booked' ? (
+                            <>
+                              <button className="btn btn-secondary btn-dense" data-bk-issue={b.id}>
+                                {L('Issue', 'تسليم')}
+                              </button>
+                              <button className="btn btn-ghost btn-dense" data-bk-cancel={b.id}>
+                                {L('Cancel', 'إلغاء')}
+                              </button>
+                            </>
+                          ) : b.status === 'Issued' ? (
+                            <button className="btn btn-secondary btn-dense" data-bk-return={b.id}>
+                              {L('Record return', 'تسجيل الإعادة')}
+                            </button>
+                          ) : (
+                            ''
+                          )}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <Empty
+                glyph="rooms"
+                title={L('No bookings', 'لا حجوزات')}
+                body={L('Nothing is booked or out on loan.', 'لا شيء محجوز أو معار.')}
+              />
+            )
+          );
+          const byId = id => list.find(b => b.id === id);
+          el.querySelectorAll('[data-bk-issue]').forEach(btn =>
+            btn.addEventListener('click', () =>
+              act(
+                byId(btn.dataset.bkIssue),
+                L('Issue', 'تسليم'),
+                [{ id: 'to', label: L('Taken by', 'المستلم'), req: true, max: 300 }],
+                f => ({ action: 'issue', issuedTo: f.to }),
+                L('Issued', 'سُلّم')
+              )
+            )
+          );
+          el.querySelectorAll('[data-bk-cancel]').forEach(btn =>
+            btn.addEventListener('click', () =>
+              act(
+                byId(btn.dataset.bkCancel),
+                L('Cancel booking', 'إلغاء الحجز'),
+                [{ id: 'reason', label: L('Why', 'السبب'), type: 'textarea', req: true }],
+                f => ({ action: 'cancel', reason: f.reason }),
+                L('Booking cancelled', 'أُلغي الحجز')
+              )
+            )
+          );
+          el.querySelectorAll('[data-bk-return]').forEach(btn =>
+            btn.addEventListener('click', () => {
+              const b = byId(btn.dataset.bkReturn);
+              act(
+                b,
+                L('Record return', 'تسجيل الإعادة'),
+                [
+                  {
+                    id: 'back',
+                    label: L('Units returned', 'الوحدات المُعادة'),
+                    type: 'number',
+                    min: 0,
+                    req: true,
+                    value: b.quantity
+                  },
+                  {
+                    id: 'condition',
+                    label: L('Condition', 'الحالة'),
+                    type: 'select',
+                    value: 'Good',
+                    options: [
+                      ['Good', L('Good', 'جيدة')],
+                      ['Damaged', L('Damaged', 'متضررة')]
+                    ]
+                  },
+                  {
+                    id: 'evidence',
+                    label: L(
+                      'Evidence (needed if units are missing or damaged)',
+                      'إثبات (مطلوب عند فقدان أو تضرر وحدات)'
+                    ),
+                    opt: true,
+                    max: 1000
+                  }
+                ],
+                f => ({
+                  action: 'return',
+                  returnedQuantity: f.back ?? 0,
+                  condition: f.condition,
+                  evidence: f.evidence || null
+                }),
+                L('Return recorded', 'سُجّلت الإعادة')
+              );
+            })
+          );
+        },
+        e =>
+          paint(
+            el.querySelector('#loans'),
+            <C.InlineAlert tone="warning" title={L('Could not load', 'تعذّر التحميل')} body={e.message} />
+          )
+      );
+    }
+  });
+}
+
+/* ---------------- issues ---------------- */
+const URGENCY = () => ({
+  Low: [L('Low', 'منخفضة'), ''],
+  Normal: [L('Normal', 'عادية'), 'info'],
+  Urgent: [L('Urgent', 'عاجلة'), 'warning'],
+  Hazard: [L('Hazard', 'خطر'), 'danger']
+});
+const ISSUE_STATE = () => ({
+  Reported: [L('Reported', 'مبلَّغ عنه'), 'warning'],
+  Triaged: [L('Triaged', 'تم الفرز'), 'info'],
+  InRepair: [L('In repair', 'قيد الإصلاح'), 'info'],
+  Resolved: [L('Fixed', 'أُصلح'), 'success'],
+  Dismissed: [L('Dismissed', 'مُهمَل'), '']
+});
+
+function issueForm() {
+  const places = [
+    ...VENUES.map(v => [`Facility|${v.id}`, L(v.name, v.ar)]),
+    ...EQUIPMENT.map(e => [`Equipment|${e.id}`, L(`${e.name} (equipment)`, `${e.ar} (تجهيز)`)])
+  ];
+  ask({
+    title: L('Report an issue', 'الإبلاغ عن عطل'),
+    fields: [
+      { id: 'where', label: L('Where', 'أين'), type: 'select', req: true, options: places },
+      { id: 'description', label: L('What is wrong', 'ما العطل'), type: 'textarea', req: true, max: 4000 },
+      {
+        id: 'urgency',
+        label: L('How urgent', 'مدى الاستعجال'),
+        type: 'select',
+        value: 'Normal',
+        options: Object.entries(URGENCY()).map(([k, [label]]) => [k, label])
+      },
+      { id: 'evidence', label: L('Photo link or note', 'رابط صورة أو ملاحظة'), opt: true, max: 1000 }
+    ],
+    confirm: L('Report', 'إبلاغ'),
+    run: f => {
+      const [resourceKind, resourceId] = f.where.split('|');
+      return API.reportIssue({
+        resourceKind,
+        resourceId,
+        description: f.description,
+        urgency: f.urgency,
+        evidence: f.evidence || null
+      });
+    },
+    success: () => [L('Issue reported', 'تم الإبلاغ'), '']
+  });
+}
+
+function issueDrawer(i) {
+  const [label, tone] = ISSUE_STATE()[i.status] || [i.status, ''];
+  const step = (title, action, fields, body, ok, tn = 'primary') =>
+    ask({
+      title,
+      fields,
+      confirm: title,
+      tone: tn,
+      run: f => API.issueAction(i, { action, ...body(f) }),
+      success: () => [ok, nameOf(i.venue)]
+    });
+  const open = ['Reported', 'Triaged', 'InRepair'].includes(i.status);
+  openDrawer({
+    title: i.what,
+    sub: <>{nameOf(i.venue)}</>,
+    body: (
+      <>
+        <dl className="dl">
+          <dt>{L('Status', 'الحالة')}</dt>
+          <dd>
+            <Pill label={label} tone={tone} />
+          </dd>
+          <dt>{L('Urgency', 'الاستعجال')}</dt>
+          <dd>{(URGENCY()[i.urgency] || [i.urgency])[0]}</dd>
+          <dt>{L('Reported', 'تاريخ الإبلاغ')}</dt>
+          <dd className="mono">{i.at ? fmtDate(i.at) : '—'}</dd>
+          {i.evidence ? (
+            <>
+              <dt>{L('Evidence', 'إثبات')}</dt>
+              <dd>{i.evidence}</dd>
+            </>
+          ) : null}
+          {i.triageNote ? (
+            <>
+              <dt>{L('Note', 'ملاحظة')}</dt>
+              <dd>{i.triageNote}</dd>
+            </>
+          ) : null}
+          {i.resolutionEvidence ? (
+            <>
+              <dt>{L('Fixed — evidence', 'الإصلاح — الإثبات')}</dt>
+              <dd>{i.resolutionEvidence}</dd>
+            </>
+          ) : null}
+          {i.costNote ? (
+            <>
+              <dt>{L('Cost', 'الكلفة')}</dt>
+              <dd>{i.costNote}</dd>
+            </>
+          ) : null}
+        </dl>
+        {i.urgency === 'Urgent' || i.urgency === 'Hazard' ? (
+          <C.InlineAlert
+            tone="info"
+            title={L('Cleared by someone else', 'يُغلقه شخص آخر')}
+            body={L(
+              ' An urgent issue or hazard is fixed or dismissed by someone other than the person who reported it.',
+              ' يُصلح العطل العاجل أو الخطر أو يُهمل بواسطة شخص غير من أبلغ عنه.'
+            )}
+          />
+        ) : null}
+      </>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Close', 'إغلاق')}
+        </button>
+        {open ? (
+          <span className="row" style={{ gap: '6px', marginInlineStart: 'auto' }}>
+            {i.status !== 'InRepair' ? (
+              <button className="btn btn-danger-quiet" id="is-dismiss">
+                {L('Dismiss', 'إهمال')}
+              </button>
+            ) : null}
+            {i.status === 'Reported' ? (
+              <button className="btn btn-primary" id="is-triage">
+                {L('Triage', 'فرز')}
+              </button>
+            ) : null}
+            {i.status === 'Triaged' ? (
+              <button className="btn btn-secondary" id="is-start">
+                {L('Start repair', 'بدء الإصلاح')}
+              </button>
+            ) : null}
+            {i.status !== 'Reported' ? (
+              <button className="btn btn-primary" id="is-resolve">
+                {L('Mark fixed', 'تم الإصلاح')}
+              </button>
+            ) : null}
+          </span>
+        ) : null}
+      </>
+    ),
+    onMount(el) {
+      const on = (sel, fn) => el.querySelector(sel)?.addEventListener('click', fn);
+      on('#is-triage', () =>
+        step(
+          L('Triage', 'فرز'),
+          'triage',
+          [{ id: 'note', label: L('Note', 'ملاحظة'), type: 'textarea', max: 2000 }],
+          f => ({ note: f.note || null }),
+          L('Triaged', 'تم الفرز')
+        )
+      );
+      on('#is-start', () =>
+        step(L('Start repair', 'بدء الإصلاح'), 'start-repair', [], () => ({}), L('Repair started', 'بدأ الإصلاح'))
+      );
+      on('#is-resolve', () =>
+        step(
+          L('Mark fixed', 'تم الإصلاح'),
+          'resolve',
+          [
+            { id: 'evidence', label: L('What was done (evidence)', 'ما تم (إثبات)'), req: true, max: 1000 },
+            { id: 'cost', label: L('Cost note', 'ملاحظة عن الكلفة'), opt: true, max: 500 }
+          ],
+          f => ({ evidence: f.evidence, costNote: f.cost || null }),
+          L('Marked fixed', 'تم الإصلاح')
+        )
+      );
+      on('#is-dismiss', () =>
+        step(
+          L('Dismiss', 'إهمال'),
+          'dismiss',
+          [{ id: 'note', label: L('Why', 'السبب'), type: 'textarea', req: true, max: 2000 }],
+          f => ({ note: f.note }),
+          L('Dismissed', 'أُهمل'),
+          'danger'
+        )
+      );
+    }
+  });
+}
+
+/* ---------------- external renters ---------------- */
+function renterForm() {
+  ask({
+    title: L('Add an external renter', 'إضافة مستأجر خارجي'),
+    sub: L('A renter is kept apart from parish membership.', 'يُحفظ المستأجر منفصلاً عن عضوية الرعية.'),
+    fields: [
+      { id: 'name', label: L('Name', 'الاسم'), req: true, max: 200 },
+      { id: 'organization', label: L('Organisation', 'الجهة'), opt: true, max: 200 },
+      {
+        id: 'responsibleContact',
+        label: L('Responsible contact (phone or email)', 'جهة الاتصال المسؤولة'),
+        req: true,
+        max: 320
+      },
+      { id: 'verificationReference', label: L('Identity or reference checked', 'مرجع التحقق'), opt: true, max: 300 }
+    ],
+    confirm: L('Add renter', 'إضافة مستأجر'),
+    run: f =>
+      API.createRenter({
+        ...f,
+        organization: f.organization || null,
+        verificationReference: f.verificationReference || null
+      }),
+    success: (r, f) => [L('Renter added', 'أُضيف المستأجر'), f.name]
+  });
+}
+
+async function rentalForm() {
+  let renters;
+  try {
+    renters = (await API.rentalRenters()) || [];
+  } catch (e) {
+    return failure(L('Could not load renters', 'تعذّر تحميل المستأجرين'), e);
+  }
+  const free = RESERVATIONS.filter(r => r.status !== 'rejected' && !r.redacted && !RENTALS.some(x => x.id === r.id));
+  if (!free.length || !renters.length)
+    return toast(
+      !renters.length
+        ? L('Add a renter first', 'أضف مستأجراً أولاً')
+        : L('No reservation without terms', 'لا حجز بلا شروط'),
+      !renters.length
+        ? L('Terms are proposed for a renter and a reservation.', 'تُقترح الشروط لمستأجر ولحجز.')
+        : L('Every current reservation already has rental terms.', 'لكل حجز حالي شروط إيجار.'),
+      'warning'
+    );
+  ask({
+    title: L('Propose rental terms', 'اقتراح شروط الإيجار'),
+    sub: L(
+      'A finance approver other than you approves the terms before the renter accepts. Nothing is charged or received here.',
+      'يوافق على الشروط معتمد مالي غيرك قبل قبول المستأجر. لا يُحتسب أو يُستلم أي مبلغ هنا.'
+    ),
+    fields: [
+      {
+        id: 'reservation',
+        label: L('Reservation', 'الحجز'),
+        type: 'select',
+        req: true,
+        options: free.map(r => [r.id, `${r.title || r.ref} · ${nameOf(r.venue)} · ${fmtDate(r.date)}`])
+      },
+      {
+        id: 'renterId',
+        label: L('Renter', 'المستأجر'),
+        type: 'select',
+        req: true,
+        options: renters.map(r => [r.id, r.name])
+      },
+      { id: 'fee', label: L('Fee', 'البدل'), type: 'number', min: 0, value: 0 },
+      { id: 'deposit', label: L('Deposit', 'العربون'), type: 'number', min: 0, value: 0 },
+      { id: 'currency', label: L('Currency (3 letters)', 'العملة (3 أحرف)'), req: true, value: 'USD', max: 3 },
+      { id: 'terms', label: L('Terms', 'الشروط'), type: 'textarea', req: true, max: 4000 }
+    ],
+    confirm: L('Propose', 'اقتراح'),
+    run: f =>
+      API.proposeRental(f.reservation, {
+        renterId: f.renterId,
+        fee: f.fee ?? 0,
+        deposit: f.deposit ?? 0,
+        currency: f.currency.toUpperCase(),
+        terms: f.terms
+      }),
+    success: () => [L('Terms proposed', 'اقتُرحت الشروط'), '']
+  });
+}
+
+/* ---------------- the page ---------------- */
 export function facilities(tab = '') {
   const head = (
     <>
@@ -54,8 +621,8 @@ export function facilities(tab = '') {
         crumbs={[{ label: L('Spaces', 'المرافق') }, { label: L('Facilities', 'المرافق') }]}
         title={L('Facilities and resources', 'المرافق والموارد')}
         sub={L(
-          'Churches, halls, rooms, the kitchen, the courtyard and the field — with capacity, accessibility and usage policy.',
-          'كنائس وقاعات وغرف ومطبخ وساحة وملعب — مع السعة وإمكانية الوصول وقواعد الاستعمال.'
+          'Rooms and spaces with capacity, set-up time and what excludes what; equipment, issues and external renters.',
+          'قاعات ومساحات مع السعة ووقت التجهيز والتعارضات؛ والتجهيزات والأعطال والمستأجرون الخارجيون.'
         )}
         actions={
           <button className="btn btn-primary" id="newvenue">
@@ -70,7 +637,7 @@ export function facilities(tab = '') {
   if (tab === 'equipment') {
     /* narrow the list by name, and by whether it can go out today, is out, or needs attention */
     const f = S.ui.eqFilter || 'all',
-      attention = e => e.cond === 'needs service' || e.cond === 'fair';
+      attention = e => e.status !== 'Serviceable';
     const FILTERS = [
       ['all', L('All', 'الكل'), () => true],
       ['available', L('Available now', 'متاح الآن'), e => e.qty - e.out > 0],
@@ -82,6 +649,7 @@ export function facilities(tab = '') {
       <>
         {head}
         <div className="tabbody">
+          <Notice area="equipment" />
           <div className="toolbar eqbar" style={{ marginBottom: '14px' }}>
             <div className="grow">
               <C.SearchClear ph={L('Search equipment', 'ابحث في التجهيزات')} id="eqsearch" data-find="" />
@@ -113,20 +681,33 @@ export function facilities(tab = '') {
                 <span className="num">{e.out}</span>,
                 <span className="num">{e.qty - e.out}</span>,
                 <span className="dim">
-                  {e.out ? L('Choir · until 9 Oct', 'الجوقة · حتى ٩ ت١') : L('In store', 'في المستودع')}
+                  {e.custody.length
+                    ? e.custody
+                        .map(c => `${c.to || '—'} · ${L('until', 'حتى')} ${fmtDate(String(c.until).slice(0, 10))}`)
+                        .join('; ')
+                    : e.storage || '—'}
                 </span>,
-                e.cond === 'needs service' ? (
-                  <Pill label={L('Needs service', 'تحتاج صيانة')} tone="warning" />
-                ) : e.cond === 'fair' ? (
-                  <Pill label={L('Fair', 'مقبولة')} tone="warning" />
-                ) : (
-                  <Pill label={L('Good', 'جيدة')} tone="success" />
-                ),
+                <>
+                  {e.status === 'OutOfService' ? (
+                    <Pill label={L('Out of service', 'خارج الخدمة')} tone="warning" />
+                  ) : e.status === 'Retired' ? (
+                    <Pill label={L('Retired', 'متقاعد')} />
+                  ) : (
+                    <Pill label={L('Serviceable', 'صالح')} tone="success" />
+                  )}
+                  {e.note ? (
+                    <small className="t-caption dim" style={{ display: 'block' }}>
+                      {e.note}
+                    </small>
+                  ) : null}
+                </>,
                 <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-secondary btn-dense" id={`loan-${e.id}`} disabled={!(e.qty - e.out > 0)}>
-                    {L('Loan out', 'إعارة')}
+                  <button className="btn btn-secondary btn-dense" data-loans={e.id}>
+                    {L('Loans', 'الإعارة')}
                   </button>
-                  {CR.recBtn('equipment', e.id)}
+                  <button className="btn btn-secondary btn-dense" data-eq-edit={e.id}>
+                    {L('Edit', 'تعديل')}
+                  </button>
                 </span>
               ]
             }))}
@@ -161,10 +742,10 @@ export function facilities(tab = '') {
             <Empty
               glyph="search"
               title={L('No equipment matches', 'لا تجهيزات مطابقة')}
-              body={L('Try another name, in English or Arabic.', 'جرّب اسماً آخر، بالعربية أو بالإنكليزية.')}
+              body={L('Try another name.', 'جرّب اسماً آخر.')}
             />
           </div>{' '}
-          <button className="btn btn-secondary" style={{ marginTop: '16px' }} data-act="rec-new:equipment">
+          <button className="btn btn-secondary" style={{ marginTop: '16px' }} id="neweq">
             <Icon name="plus" size={17} />
             {L('Add equipment', 'إضافة تجهيز')}
           </button>
@@ -177,42 +758,39 @@ export function facilities(tab = '') {
       <>
         {head}
         <div className="tabbody">
+          <Notice area="facilities" />
           <Table
             cols={[
               { label: L('Room', 'القاعة') },
-              { label: L('From', 'من') },
-              { label: L('To', 'إلى') },
-              { label: L('Reason', 'السبب'), cls: 'hide-sm' },
+              { label: L('Status', 'الحالة'), cls: 'shrink' },
               { label: '', cls: 'shrink' }
             ]}
-            rows={MAINTENANCE.map((m, mi) => ({
+            rows={MAINTENANCE.map(m => ({
               cells: [
-                <b>{L(venue(m.venue).name, venue(m.venue).ar)}</b>,
-                <span className="mono dim">{fmtDate(m.from)}</span>,
-                <span className="mono dim">{fmtDate(m.to)}</span>,
-                <span className="dim">{L(m.why, m.whyAr)}</span>,
-                <button className="btn btn-secondary btn-dense" data-act={`block-cancel:${mi}`}>
-                  {L('Cancel block', 'إلغاء الإغلاق')}
+                <b>{nameOf(m.venue)}</b>,
+                <Pill label={L('Out of service', 'خارج الخدمة')} tone="danger" />,
+                <button className="btn btn-secondary btn-dense" data-return={m.venue}>
+                  {L('Return to service', 'إعادة إلى الخدمة')}
                 </button>
               ]
             }))}
             empty={
               <Empty
                 glyph="rooms"
-                title={L('No rooms are blocked', 'لا قاعات مُغلقة')}
+                title={L('Every room is in service', 'كل القاعات في الخدمة')}
                 body={L(
-                  'Block a room for works or cleaning with the button on its card in Rooms.',
-                  'أغلق قاعة للأشغال أو التنظيف من الزرّ على بطاقتها في القاعات.'
+                  'Take a room out of service with the button on its card in Rooms.',
+                  'أخرج قاعة من الخدمة بالزرّ على بطاقتها في القاعات.'
                 )}
               />
             }
           />{' '}
           <C.InlineAlert
             tone="info"
-            title={L('A block stops bookings; it does not close the room', 'الإغلاق يمنع الحجز ولا يقفل القاعة')}
+            title={L('Out of service has no dates', 'الإخراج من الخدمة بلا تواريخ')}
             body={L(
-              'Facility status and time-based availability are separate. A fully booked hall is still open; a blocked one refuses new requests and warns about approved ones inside the window.',
-              'حالة المرفق والتوفّر الزمني منفصلان. القاعة المحجوزة بالكامل تبقى مفتوحة؛ والمُغلقة ترفض الطلبات الجديدة وتنبّه على الموافَق عليها داخل المدة.'
+              ' A room is either in service or not, until someone returns it. The reason is recorded with the change but the API does not return it, so it is not shown here. A room with current or future reservations cannot be taken out of service.',
+              ' القاعة إما في الخدمة أو لا، حتى يعيدها أحد. يُسجَّل السبب مع التغيير لكن الواجهة البرمجية لا تعيده فلا يظهر هنا. لا يمكن إخراج قاعة لها حجوزات حالية أو مقبلة.'
             )}
           />
         </div>
@@ -223,42 +801,33 @@ export function facilities(tab = '') {
       <>
         {head}
         <div className="tabbody">
+          <Notice area="issues" />
           <Table
             cols={[
-              { label: L('Room', 'القاعة') },
+              { label: L('Where', 'أين') },
               { label: L('Reported', 'العطل') },
-              { label: L('By', 'بواسطة'), cls: 'hide-sm' },
+              { label: L('Urgency', 'الاستعجال'), cls: 'hide-sm' },
               { label: L('When', 'متى'), cls: 'hide-md' },
               { label: L('Status', 'الحالة'), cls: 'shrink' },
               { label: '', cls: 'shrink' }
             ]}
             rows={ISSUES.map(i => ({
               cells: [
-                <b>{venue(i.venue) ? L(venue(i.venue).name, venue(i.venue).ar) : '—'}</b>,
-                L(i.what, i.whatAr),
-                <Who p={person(i.by)} />,
-                <span className="mono dim">{fmtDate(i.at)}</span>,
-                <Status k={i.status} />,
-                <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                  {i.status === 'awaiting-approval' ? (
-                    <button className="btn btn-secondary btn-dense" data-act={`issue-assign:${i.id}`}>
-                      {L('Assign', 'إسناد')}
-                    </button>
-                  ) : (
-                    ''
-                  )}
-                  {CR.recBtn('issue', i.id)}
-                </span>
+                <b>{nameOf(i.venue)}</b>,
+                i.what,
+                <Pill label={(URGENCY()[i.urgency] || [i.urgency])[0]} tone={(URGENCY()[i.urgency] || [])[1]} />,
+                <span className="mono dim">{i.at ? fmtDate(i.at) : '—'}</span>,
+                <Pill label={(ISSUE_STATE()[i.status] || [i.status])[0]} tone={(ISSUE_STATE()[i.status] || [])[1]} />,
+                <button className="btn btn-secondary btn-dense" data-issue={i.id}>
+                  {L('Open', 'فتح')}
+                </button>
               ]
             }))}
             empty={
               <Empty
                 glyph="check"
                 title={L('Nothing reported', 'لا أعطال مبلَّغ عنها')}
-                body={L(
-                  'Anything broken in a room can be reported here, with a photo.',
-                  'أيّ عطل في قاعة يُبلَّغ عنه هنا، مع صورة.'
-                )}
+                body={L('Anything broken in a room can be reported here.', 'أيّ عطل في قاعة يُبلَّغ عنه هنا.')}
               />
             }
           />{' '}
@@ -274,6 +843,7 @@ export function facilities(tab = '') {
       <>
         {head}
         <div className="tabbody">
+          <Notice area="rentals" />
           <Table
             cols={[
               { label: L('Renter', 'المستأجر') },
@@ -286,96 +856,130 @@ export function facilities(tab = '') {
             ]}
             rows={RENTALS.map(r => ({
               cells: [
-                <b>{L(r.who, r.whoAr)}</b>,
-                <span className="dim">{L(venue(r.venue).name, venue(r.venue).ar)}</span>,
-                <span className="mono dim">{fmtDate(r.date)}</span>,
-                <span className="num">{usd(r.deposit)}</span>,
-                <span className="num">{usd(r.charge)}</span>,
-                <Status k={r.status} />,
+                <b>{r.who || '—'}</b>,
+                <span className="dim">{nameOf(r.venue)}</span>,
+                <span className="mono dim">{r.date ? fmtDate(r.date) : '—'}</span>,
+                <span className="num">{money(r.deposit, r.currency)}</span>,
+                <span className="num">{money(r.charge, r.currency)}</span>,
+                <Pill
+                  label={
+                    {
+                      Proposed: L('Proposed', 'مقترح'),
+                      Approved: L('Approved', 'موافَق عليه'),
+                      Accepted: L('Accepted', 'مقبول')
+                    }[r.status] || r.status
+                  }
+                  tone={r.status === 'Accepted' ? 'success' : 'warning'}
+                />,
                 <a className="btn btn-secondary btn-dense" href="#/finance">
                   {L('In Finance', 'في المالية')}
                 </a>
               ]
             }))}
+            empty={
+              <Empty
+                glyph="rooms"
+                title={L('No rental agreements', 'لا اتفاقات إيجار')}
+                body={L(
+                  'Propose terms for a reservation made by an outside renter.',
+                  'اقترح شروطاً لحجز قدّمه مستأجر من خارج الرعية.'
+                )}
+              />
+            }
           />{' '}
+          <div className="row" style={{ gap: '8px', marginTop: '16px' }}>
+            <button className="btn btn-secondary" id="newrental">
+              <Icon name="plus" size={17} />
+              {L('Propose rental terms', 'اقتراح شروط إيجار')}
+            </button>
+            <button className="btn btn-secondary" id="newrenter">
+              <Icon name="plus" size={17} />
+              {L('Add renter', 'إضافة مستأجر')}
+            </button>
+          </div>
           <p className="t-caption dim" style={{ marginTop: '16px' }}>
             {L(
-              'Agreements, deposits, charges, payments and refunds for an external renter all run through the finance module, so the hall never keeps its own cash book.',
-              'الاتفاقات والعرابين والبدلات والدفعات والاسترجاعات للمستأجر الخارجي تمرّ كلها عبر وحدة المالية، فلا تحتفظ القاعة بدفتر نقد خاص بها.'
+              'Approving terms, the renter’s acceptance, deposits, fees and refunds are recorded by finance staff; the hall never keeps its own cash book.',
+              'يسجّل موظفو المالية الموافقة على الشروط وقبول المستأجر والعرابين والبدلات والاسترجاعات، فلا تحتفظ القاعة بدفتر نقد خاص بها.'
             )}
           </p>
         </div>
       </>
     );
-  const cards = VENUES.map((v, i) => (
-    <section key={i} className="panel">
-      <div className="panel-b">
-        <div
-          style={{
-            height: '96px',
-            margin: '-24px -24px 16px',
-            background: 'linear-gradient(135deg,var(--primary-subtle),var(--muted))',
-            display: 'grid',
-            placeItems: 'center',
-            color: 'var(--primary)'
-          }}
-        >
-          <Icon name="rooms" size={30} />
-        </div>{' '}
-        <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{L(v.name, v.ar)}</b>{' '}
-            <small className="t-caption dim">
-              {L(v.kind, v.kindAr)} · {L('seats', 'يتّسع لـ')} <span className="tnum">{v.cap}</span>
-            </small>
+  const cards = VENUES.map((v, i) => {
+    const blocked = v.status !== 'Serviceable';
+    return (
+      <section key={i} className="panel">
+        <div className="panel-b">
+          <div
+            style={{
+              height: '96px',
+              margin: '-24px -24px 16px',
+              background: 'linear-gradient(135deg,var(--primary-subtle),var(--muted))',
+              display: 'grid',
+              placeItems: 'center',
+              color: 'var(--primary)'
+            }}
+          >
+            <Icon name="rooms" size={30} />
+          </div>{' '}
+          <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{L(v.name, v.ar)}</b>{' '}
+              <small className="t-caption dim">
+                {L(v.kind, v.kindAr)} · {L('seats', 'يتّسع لـ')} <span className="tnum">{v.cap}</span>
+              </small>
+            </div>
+            <button className="btn btn-ghost btn-dense" data-edit={v.id}>
+              {L('Edit', 'تعديل')}
+            </button>
+          </div>{' '}
+          <div className="row" style={{ gap: '6px', marginTop: '12px', flexWrap: 'wrap' }}>
+            {blocked ? <Pill label={L('Out of service', 'خارج الخدمة')} tone="danger" /> : null}
+            {v.setup ? <Pill label={L(`${v.setup} min set-up`, `${v.setup} د تجهيز`)} /> : null}
+            {v.cleanup ? <Pill label={L(`${v.cleanup} min clean-up`, `${v.cleanup} د تنظيف`)} /> : null}
           </div>
-          {CR.recBtn('venue', v.id)}
-        </div>{' '}
-        <div className="row" style={{ gap: '6px', marginTop: '12px', flexWrap: 'wrap' }}>
-          {v.access ? (
-            <Pill label={L('Step-free access', 'مدخل بلا درج')} tone="success" />
-          ) : (
-            <Pill label={L('Stairs only', 'درج فقط')} tone="warning" />
-          )}{' '}
-          {MAINTENANCE.filter(m => m.venue === v.id).map((m, i) => (
-            <Pill
-              key={i}
-              label={L(`Blocked ${fmtDate(m.from)} – ${fmtDate(m.to)}`, `مغلقة ${fmtDate(m.from)} – ${fmtDate(m.to)}`)}
-              tone="danger"
-            />
-          ))}
-        </div>{' '}
-        <div className="divider" />{' '}
-        <div className="row" style={{ gap: '6px' }}>
-          <button
-            className="btn btn-secondary"
-            style={{ flex: 1, minHeight: '34px', fontSize: '13px' }}
-            data-avail={v.id}
-          >
-            <Icon name="events" size={15} />
-            {L('Availability', 'التوفّر')}
-          </button>{' '}
-          <button
-            className="btn btn-secondary"
-            style={{ flex: 1, minHeight: '34px', fontSize: '13px' }}
-            data-act={`book-room:${v.id}`}
-          >
-            <Icon name="plus" size={15} />
-            {L('Book', 'حجز')}
+          {v.desc ? (
+            <p className="t-caption dim" style={{ marginTop: '10px' }}>
+              {v.desc}
+            </p>
+          ) : null}{' '}
+          <div className="divider" />{' '}
+          <div className="row" style={{ gap: '6px' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ flex: 1, minHeight: '34px', fontSize: '13px' }}
+              data-avail={v.id}
+            >
+              <Icon name="events" size={15} />
+              {L('Availability', 'التوفّر')}
+            </button>{' '}
+            <button
+              className="btn btn-secondary"
+              style={{ flex: 1, minHeight: '34px', fontSize: '13px' }}
+              data-request={v.id}
+              disabled={blocked}
+            >
+              <Icon name="plus" size={15} />
+              {L('Request', 'طلب')}
+            </button>
+          </div>{' '}
+          <button className="btn btn-ghost roomblock" data-block={v.id}>
+            <Icon name="warn" size={15} />
+            {blocked ? L('Return to service', 'إعادة إلى الخدمة') : L('Take out of service', 'إخراج من الخدمة')}
           </button>
-        </div>{' '}
-        <button className="btn btn-ghost roomblock" data-block={v.id}>
-          <Icon name="warn" size={15} />
-          {L('Block for maintenance', 'إغلاق للصيانة')}
-        </button>
-      </div>
-    </section>
-  ));
+        </div>
+      </section>
+    );
+  });
   return (
     <>
       {head}
+      <Notice area="facilities" />
       <Paged style={{ marginTop: '20px' }} className="gridcards">
-        {cards || (
+        {cards.length ? (
+          cards
+        ) : (
           <Empty
             glyph="rooms"
             title={L('No rooms yet', 'لا قاعات بعد')}
@@ -388,30 +992,20 @@ export function facilities(tab = '') {
       </Paged>{' '}
       <p className="t-caption dim" style={{ marginTop: '16px' }}>
         {L(
-          'Every room carries its capacity, accessibility, photos and usage policy, so a request does not need a phone call to answer.',
-          'تحمل كل قاعة سعتها وإمكانية الوصول والصور وقواعد الاستعمال، فلا يحتاج الطلب إلى مكالمة هاتفية.'
+          'Each room carries its capacity, set-up and clean-up time and what it excludes. Step-free access, photos and usage policy are not kept by the API yet.',
+          'تحمل كل قاعة سعتها ووقت التجهيز والتنظيف وما تستبعده. إمكانية الوصول والصور وقواعد الاستعمال لا تحفظها الواجهة البرمجية بعد.'
         )}
       </p>
     </>
   );
 }
 
-/* ---------- availability: pick any day, see what holds the room and what is still free ---------- */
-const mins = hm => {
-  const [h, m] = String(hm || '0:0')
-    .split(':')
-    .map(Number);
-  return h * 60 + (m || 0);
-};
-
+/* ---------- availability: pick any day, see what is busy (set-up and clean-up included) ---------- */
 const hhmm = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
-
 const isoD = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
 const OPEN = [7 * 60, 23 * 60]; /* the parish day the timeline shows */
-
-const blockOn = (vid, date) => MAINTENANCE.find(m => m.venue === vid && m.from <= date && date <= m.to);
+const DAY = 86400000;
 
 const length = n =>
   n >= 60
@@ -421,77 +1015,71 @@ const length = n =>
       )
     : L(`${n} min`, `${n} د`);
 
-/* what holds the room that day: room requests (with their set-up time) and calendar events; a
-   request and the event it was made for are the same thing and are listed once */
-function heldOn(vid, date) {
-  const res = RESERVATIONS.filter(r => r.venue === vid && r.date === date && r.status !== 'rejected');
-  const items = res.map(r => ({
-    from: mins(r.from),
-    to: mins(r.to),
-    buffer: +r.setup || 0,
-    title: L(r.title, r.titleAr || r.title),
-    state: resStatus(r),
-    ref: r.ref
-  }));
-  for (const e of EVENTS.filter(x => x.venue === vid && x.d === date && x.kind !== 'pending')) {
-    if (res.some(r => mins(r.from) === mins(e.t))) continue;
-    const len = e.to ? mins(e.to) - mins(e.t) : e.kind === 'mass' ? 60 : e.kind === 'sacr' ? 90 : 120;
-    items.push({
-      from: mins(e.t),
-      to: mins(e.t) + len,
-      buffer: 0,
-      title: L(e.title, e.titleAr || e.title),
-      state: e.kind === 'mass' ? 'mass' : 'event'
+/* The busy stretches of one calendar day, on the clock the reservations use. */
+function busyOn(busy, day, zone) {
+  const out = [];
+  for (const b of busy) {
+    const a = API.clock(b.startsAt, zone),
+      z = API.clock(b.endsAt, zone);
+    if (a.date > day || z.date < day) continue;
+    out.push({
+      from: a.date < day ? 0 : a.minutes,
+      to: z.date > day ? 1440 : z.minutes,
+      unavailable: b.status === 'Unavailable'
     });
   }
-  return items.sort((x, y) => x.from - y.from);
+  return out.filter(x => x.to > x.from).sort((x, y) => x.from - y.from);
 }
 
 function freeGaps(items) {
   const gaps = [];
   let at = OPEN[0];
-  for (const it of [...items].sort((x, y) => x.from - x.buffer - (y.from - y.buffer))) {
-    /* set-up time starts the hold */ const start = Math.max(OPEN[0], it.from - it.buffer);
-    if (start - at >= 30) gaps.push([at, start]);
+  for (const it of items) {
+    if (it.from - at >= 30) gaps.push([at, it.from]);
     at = Math.max(at, it.to);
   }
   if (OPEN[1] - at >= 30) gaps.push([at, OPEN[1]]);
   return gaps;
 }
 
-const STATE = () => ({
-  approved: [L('Approved', 'موافَق عليه'), 'success'],
-  pending: [L('Pending — holds the slot', 'معلّق — يحجز الوقت'), 'warning'],
-  conflict: [L('Clashes with another request', 'يتعارض مع طلب آخر'), 'danger'],
-  mass: [L('Mass', 'قدّاس'), 'info'],
-  event: [L('Calendar event', 'حدث في الرزنامة'), 'info']
-});
-
 function availabilityDrawer(vid) {
   const v = venue(vid);
   if (!v) return;
-  let day = S.ui.availDay || isoD(TODAY);
+  const zone = RESERVATIONS.find(r => r.zone)?.zone || '';
+  const now = new Date();
+  let day = S.ui.availDay || isoD(now);
   let shown = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, 1);
+  let busy = [],
+    loading = true,
+    failed = '';
+  /* what holds this room, from the reservations loaded: confirmed or being confirmed; requests hold nothing yet */
+  const holders = day =>
+    RESERVATIONS.filter(
+      r => (r.venue === vid || r.rooms.includes(vid)) && ['Confirmed', 'Allocating'].includes(r.api) && r.date === day
+    );
+  const waiting = day =>
+    RESERVATIONS.filter(
+      r => (r.venue === vid || r.rooms.includes(vid)) && ['Requested', 'Conflict'].includes(r.api) && r.date === day
+    );
   const render = () => {
     const y = shown.getFullYear(),
       m = shown.getMonth(),
       first = new Date(y, m, 1),
       n = new Date(y, m + 1, 0).getDate();
     const cells = [...Array(first.getDay()).fill(null), ...Array.from({ length: n }, (_, i) => new Date(y, m, i + 1))];
-    const block = blockOn(vid, day),
-      items = block ? [] : heldOn(vid, day),
-      gaps = block ? [] : freeGaps(items),
-      past = day < isoD(TODAY);
+    const items = busyOn(busy, day, zone),
+      out = items.some(i => i.unavailable),
+      gaps = out ? [] : freeGaps(items),
+      past = day < isoD(now);
     const pct = x =>
       `${(((Math.min(Math.max(x, OPEN[0]), OPEN[1]) - OPEN[0]) / (OPEN[1] - OPEN[0])) * 100).toFixed(2)}%`;
     const width = (a, b) =>
       `${(((Math.min(b, OPEN[1]) - Math.max(a, OPEN[0])) / (OPEN[1] - OPEN[0])) * 100).toFixed(2)}%`;
-    const rows = block
+    const rows = out
       ? []
-      : [...items.map(it => ({ at: it.from - it.buffer, it })), ...gaps.map(g => ({ at: g[0], g }))].sort(
-          (p, q) => p.at - q.at
-        );
-    const S2 = STATE();
+      : [...items.map(it => ({ at: it.from, it })), ...gaps.map(g => ({ at: g[0], g }))].sort((p, q) => p.at - q.at);
+    const named = holders(day),
+      asking = waiting(day);
     return (
       <div className="avail">
         <div className="avail-cal">
@@ -511,19 +1099,20 @@ function availabilityDrawer(vid) {
             {cells.map((d, i) => {
               if (!d) return <span key={i} />;
               const k = isoD(d),
-                bl = blockOn(vid, k),
-                busy = !bl && heldOn(vid, k).length;
+                list = busyOn(busy, k, zone),
+                bl = list.some(x => x.unavailable),
+                held = !bl && list.length;
               return (
                 <button
                   key={i}
                   type="button"
-                  className={`ad${k === day ? ' on' : ''}${k === isoD(TODAY) ? ' today' : ''}${k < isoD(TODAY) ? ' past' : ''}${bl ? ' blocked' : ''}`}
+                  className={`ad${k === day ? ' on' : ''}${k === isoD(now) ? ' today' : ''}${k < isoD(now) ? ' past' : ''}${bl ? ' blocked' : ''}`}
                   data-avday={k}
                   aria-pressed={k === day}
-                  aria-label={`${fmtLong(d)}${bl ? ' · ' + L('blocked', 'مغلقة') : busy ? ` · ${busy} ${L('booked', 'محجوز')}` : ''}`}
+                  aria-label={`${fmtLong(d)}${bl ? ' · ' + L('out of service', 'خارج الخدمة') : held ? ' · ' + L('busy', 'مشغولة') : ''}`}
                 >
                   {d.getDate()}
-                  {busy ? <i /> : ''}
+                  {held ? <i /> : ''}
                 </button>
               );
             })}
@@ -531,11 +1120,11 @@ function availabilityDrawer(vid) {
           <div className="avail-legend">
             <span>
               <i className="lg busy" />
-              {L('something booked', 'محجوز جزئياً')}
+              {L('busy', 'مشغولة')}
             </span>
             <span>
               <i className="lg blocked" />
-              {L('blocked', 'مغلقة')}
+              {L('out of service', 'خارج الخدمة')}
             </span>
           </div>{' '}
           <label className="avail-jump">
@@ -547,7 +1136,7 @@ function availabilityDrawer(vid) {
           <div className="avail-day-h">
             <div>
               <span className="overline">
-                {day === isoD(TODAY) ? L('Today', 'اليوم') : L('Selected day', 'اليوم المحدّد')}
+                {day === isoD(now) ? L('Today', 'اليوم') : L('Selected day', 'اليوم المحدّد')}
               </span>
               <h4>
                 {fmtLong(day)} {day.slice(0, 4)}
@@ -561,36 +1150,32 @@ function availabilityDrawer(vid) {
               <C.IconBtn ico="chevR" label={L('Next day', 'اليوم التالي')} data-avd="1" />
             </span>
           </div>{' '}
-          {block ? (
+          {failed ? (
             <C.InlineAlert
               tone="warning"
-              title={L('Blocked for maintenance', 'مغلقة للصيانة')}
+              title={L('Could not load availability', 'تعذّر تحميل التوفّر')}
+              body={failed}
+            />
+          ) : loading ? (
+            <p className="t-caption dim">{L('Loading…', 'جارٍ التحميل…')}</p>
+          ) : out ? (
+            <C.InlineAlert
+              tone="warning"
+              title={L('Out of service', 'خارج الخدمة')}
               body={L(
-                `${block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. No new requests are accepted on this day.`,
-                `${block.whyAr || block.why} · ${fmtDate(block.from)} – ${fmtDate(block.to)}. لا تُقبل طلبات جديدة في هذا اليوم.`
+                ' No reservations can be made for this room until it is returned to service.',
+                ' لا يمكن الحجز في هذه القاعة قبل إعادتها إلى الخدمة.'
               )}
             />
           ) : (
             <>
               <div className="avail-strip" aria-hidden="true">
                 {items.map((it, i) => (
-                  <Fragment key={i}>
-                    {it.buffer ? (
-                      <span
-                        className="seg buf"
-                        style={css(
-                          `inset-inline-start:${pct(it.from - it.buffer)};width:${width(it.from - it.buffer, it.from)}`
-                        )}
-                      />
-                    ) : (
-                      ''
-                    )}{' '}
-                    <span
-                      className={`seg ${it.state}`}
-                      style={css(`inset-inline-start:${pct(it.from)};width:${width(it.from, it.to)}`)}
-                      title={it.title}
-                    />
-                  </Fragment>
+                  <span
+                    key={i}
+                    className="seg approved"
+                    style={css(`inset-inline-start:${pct(it.from)};width:${width(it.from, it.to)}`)}
+                  />
                 ))}
               </div>{' '}
               <div className="avail-scale" aria-hidden="true">
@@ -598,22 +1183,11 @@ function availabilityDrawer(vid) {
                   <span key={i}>{String(h).padStart(2, '0')}:00</span>
                 ))}
               </div>{' '}
-              {past ? (
-                <p className="t-caption dim" style={{ margin: '10px 0 0' }}>
-                  <Icon name="info" size={14} />{' '}
-                  {L(
-                    'This day has passed — it is shown for reference and cannot be booked.',
-                    'مضى هذا اليوم — يُعرض للاطّلاع ولا يمكن الحجز فيه.'
-                  )}
-                </p>
-              ) : (
-                ''
-              )}{' '}
               <p className="t-caption dim" style={{ margin: '10px 0 8px' }}>
                 {items.length
                   ? L(
-                      `${items.length} booking${items.length === 1 ? '' : 's'} · ${gaps.length} free slot${gaps.length === 1 ? '' : 's'} between 07:00 and 23:00`,
-                      `${items.length} حجوزات · ${gaps.length} أوقات متاحة بين 07:00 و23:00`
+                      `${items.length} busy stretch${items.length === 1 ? '' : 'es'} · ${gaps.length} free slot${gaps.length === 1 ? '' : 's'} between 07:00 and 23:00. Busy includes the room’s ${v.setup} min set-up and ${v.cleanup} min clean-up.`,
+                      `${items.length} فترات مشغولة · ${gaps.length} أوقات متاحة بين 07:00 و23:00. تشمل المشغولة ${v.setup} د تجهيز و${v.cleanup} د تنظيف.`
                     )
                   : L('Free all day, 07:00 – 23:00.', 'متاحة طوال اليوم، 07:00 – 23:00.')}
               </p>{' '}
@@ -625,18 +1199,9 @@ function availabilityDrawer(vid) {
                         {hhmm(it.from)}–{hhmm(it.to)}
                       </span>
                       <span className="grow">
-                        <b>{it.title}</b>
-                        {it.buffer ? (
-                          <small>
-                            {L(`plus ${it.buffer} min to set up before`, `مع ${it.buffer} د للتجهيز قبلها`)}
-                          </small>
-                        ) : it.ref ? (
-                          <small className="mono">{it.ref}</small>
-                        ) : (
-                          ''
-                        )}
+                        <b>{L('Busy', 'مشغولة')}</b>
                         <span className="avail-state">
-                          <Pill label={S2[it.state][0]} tone={S2[it.state][1]} />
+                          <Pill label={L('Held', 'محجوزة')} tone="success" />
                         </span>
                       </span>
                     </li>
@@ -648,23 +1213,53 @@ function availabilityDrawer(vid) {
                       <span className="grow">
                         <b>{L('Free', 'متاحة')}</b>
                         <small>{length(g[1] - g[0])}</small>
-                      </span>{' '}
-                      {past ? (
-                        ''
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-dense"
-                          data-avbook={`${hhmm(g[0])}|${hhmm(Math.min(g[1], g[0] + 120))}`}
-                        >
-                          <Icon name="plus" size={14} />
-                          {L('Book', 'احجز')}
-                        </button>
-                      )}
+                      </span>
                     </li>
                   )
                 )}
               </ol>
+              {named.length ? (
+                <>
+                  <h4 className="t-ui" style={{ margin: '14px 0 6px' }}>
+                    {L('Reservations holding the room', 'الحجوزات التي تحجز القاعة')}
+                  </h4>
+                  <ul className="blocklist">
+                    {named.map(r => (
+                      <li key={r.id}>
+                        <span className="mono dim">
+                          {r.from}–{r.to}
+                        </span>
+                        <b>{r.title || r.ref}</b>
+                        <Status k={r.api === 'Confirmed' ? 'approved' : 'pending'} />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {asking.length ? (
+                <>
+                  <h4 className="t-ui" style={{ margin: '14px 0 6px' }}>
+                    {L('Requests waiting (they do not hold the room yet)', 'طلبات بانتظار القرار (لا تحجز القاعة بعد)')}
+                  </h4>
+                  <ul className="blocklist">
+                    {asking.map(r => (
+                      <li key={r.id}>
+                        <span className="mono dim">
+                          {r.from}–{r.to}
+                        </span>
+                        <b>{r.title || r.ref}</b>
+                        <Status k={r.api === 'Conflict' ? 'conflict' : 'pending'} />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {past ? (
+                <p className="t-caption dim" style={{ margin: '10px 0 0' }}>
+                  <Icon name="info" size={14} />{' '}
+                  {L('This day has passed — it is shown for reference.', 'مضى هذا اليوم — يُعرض للاطّلاع.')}
+                </p>
+              ) : null}
             </>
           )}
         </div>
@@ -674,7 +1269,7 @@ function availabilityDrawer(vid) {
   openDrawer({
     large: true,
     title: L(`Availability — ${v.name}`, `التوفّر — ${v.ar || v.name}`),
-    sub: `${L(v.kind, v.kindAr || v.kind)} · ${L('seats', 'يتّسع لـ')} ${v.cap}${v.access ? ' · ' + L('step-free access', 'مدخل بلا درج') : ''}`,
+    sub: `${L(v.kind, v.kindAr || v.kind)} · ${L('seats', 'يتّسع لـ')} ${v.cap}`,
     body: <div id="avbody">{render()}</div>,
     foot: (
       <>
@@ -683,259 +1278,95 @@ function availabilityDrawer(vid) {
         </button>{' '}
         <button className="btn btn-primary" id="av_book" style={{ marginInlineStart: 'auto' }}>
           <Icon name="plus" size={16} />
-          <span />
+          {L('Request this room', 'طلب هذه القاعة')}
         </button>
       </>
     ),
     onMount(el) {
-      const book = (from, to) => {
-        S.ui.availDay = day;
-        CR.create('reservation', { venue: vid, date: day, ...(from ? { from, to } : {}) });
+      /* two reads cover the month on any clock: the API lists at most 31 days at a time */
+      const fetchMonth = async () => {
+        const start = new Date(Date.UTC(shown.getFullYear(), shown.getMonth(), 1) - 14 * 3600000);
+        loading = true;
+        failed = '';
+        redraw();
+        try {
+          const a = await API.availability(vid, start, new Date(+start + 31 * DAY));
+          const b = await API.availability(vid, new Date(+start + 31 * DAY), new Date(+start + 62 * DAY));
+          busy = [...a, ...b];
+        } catch (e) {
+          busy = [];
+          failed = e.message;
+        }
+        loading = false;
+        redraw();
       };
       const redraw = () => {
         paint(el.querySelector('#avbody'), render());
-        const blocked = !!blockOn(vid, day),
-          foot = el.querySelector('#av_book');
-        foot.disabled = blocked || day < isoD(TODAY);
-        foot.querySelector('span').textContent = L(`Book on ${fmtDate(day)}`, `احجز في ${fmtDate(day)}`);
         const go = d => {
+          const month = d.slice(0, 7) !== `${shown.getFullYear()}-${String(shown.getMonth() + 1).padStart(2, '0')}`;
           day = d;
           shown = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, 1);
           S.ui.availDay = d;
-          redraw();
+          if (month) fetchMonth();
+          else redraw();
         };
         el.querySelectorAll('[data-avday]').forEach(b => b.addEventListener('click', () => go(b.dataset.avday)));
         el.querySelectorAll('[data-avm]').forEach(b =>
           b.addEventListener('click', () => {
             shown = new Date(shown.getFullYear(), shown.getMonth() + +b.dataset.avm, 1);
-            redraw();
+            fetchMonth();
           })
         );
         el.querySelectorAll('[data-avd]').forEach(b =>
           b.addEventListener('click', () => {
             const n = +b.dataset.avd,
               d = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + n);
-            go(n ? isoD(d) : isoD(TODAY));
+            go(n ? isoD(d) : isoD(new Date()));
           })
         );
         el.querySelector('#av_date')?.addEventListener('change', e => {
           if (e.target.value) go(e.target.value);
         });
-        el.querySelectorAll('[data-avbook]').forEach(b =>
-          b.addEventListener('click', () => {
-            const [f, t2] = b.dataset.avbook.split('|');
-            book(f, t2);
-          })
-        );
       };
-      el.querySelector('#av_book').addEventListener('click', () => book());
-      redraw();
-    }
-  });
-}
-
-/* Block one room: pick the dates and the reason; anything already booked inside them is listed,
-   because those people need to be told and moved. */
-function blockDrawer(vid) {
-  const v = venue(vid);
-  if (!v) return;
-  const start = isoD(TODAY),
-    end = isoD(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 2));
-  const inside = (from, to) =>
-    [
-      ...RESERVATIONS.filter(r => r.venue === vid && r.status !== 'rejected' && r.date >= from && r.date <= to).map(
-        r => ({ d: r.date, t: r.from, title: L(r.title, r.titleAr || r.title), state: r.status, who: person(r.by) })
-      ),
-      ...EVENTS.filter(
-        e =>
-          e.venue === vid &&
-          e.kind !== 'pending' &&
-          e.d >= from &&
-          e.d <= to &&
-          !RESERVATIONS.some(r => r.venue === vid && r.date === e.d && r.from === e.t)
-      ).map(e => ({
-        d: e.d,
-        t: e.t,
-        title: L(e.title, e.titleAr || e.title),
-        state: e.kind === 'mass' ? 'mass' : 'event'
-      }))
-    ].sort((x, y) => (x.d + x.t).localeCompare(y.d + y.t));
-  openDrawer({
-    title: L(`Block ${v.name} for maintenance`, `إغلاق ${v.ar || v.name} للصيانة`),
-    sub: L(
-      'New requests for this room are refused for those dates. Anything already booked inside them is listed below.',
-      'تُرفض طلبات هذه القاعة الجديدة في تلك الأيام، وتُعرض أدناه الحجوزات القائمة داخلها.'
-    ),
-    body: (
-      <>
-        <div className="formgrid">
-          <C.Field label={L('From', 'من')} type="date" value={start} id="bk_f" req={true} />{' '}
-          <C.Field label={L('To', 'إلى')} type="date" value={end} id="bk_t" req={true} />
-        </div>{' '}
-        <C.Field
-          label={L('Reason', 'السبب')}
-          id="bk_w"
-          ph={L('Damp treatment on the north wall', 'معالجة الرطوبة في الجدار الشمالي')}
-        />{' '}
-        <C.PersonPicker label={L('Responsible staff', 'المسؤول')} id="mstaff" /> <div id="bk_inside" />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
-        </button>{' '}
-        <button className="btn btn-primary" id="doblock" style={{ marginInlineStart: 'auto' }}>
-          <Icon name="warn" size={16} />
-          {L('Block the room', 'إغلاق القاعة')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      const f = () => el.querySelector('#bk_f').value,
-        t2 = () => el.querySelector('#bk_t').value;
-      const show = () => {
-        const list = f() && t2() && f() <= t2() ? inside(f(), t2()) : [];
-        paint(
-          el.querySelector('#bk_inside'),
-          !f() || !t2() ? (
-            ''
-          ) : f() > t2() ? (
-            <C.InlineAlert
-              tone="warning"
-              title={L('The block ends before it starts', 'ينتهي الإغلاق قبل أن يبدأ')}
-              body={L('Check the two dates.', 'تحقّق من التاريخين.')}
-            />
-          ) : !list.length ? (
-            <C.InlineAlert
-              tone="success"
-              title={L('Nothing is booked in those dates', 'لا حجوزات في تلك الأيام')}
-              body={L(`${v.name} is free to close.`, `يمكن إغلاق ${v.ar || v.name}.`)}
-            />
-          ) : (
-            <>
-              <C.InlineAlert
-                tone="warning"
-                title={
-                  list.length === 1
-                    ? L('One booking falls inside these dates', 'حجز واحد يقع داخل هذه الأيام')
-                    : L(`${list.length} bookings fall inside these dates`, `${list.length} حجوزات تقع داخل هذه الأيام`)
-                }
-                body={L(
-                  'Tell the people concerned and move them to another room or day.',
-                  'أبلغ المعنيّين وانقلهم إلى قاعة أو يوم آخر.'
-                )}
-              />
-              <ul className="blocklist">
-                {list.map((x, i) => (
-                  <li key={i}>
-                    <span className="mono dim">
-                      {fmtDate(x.d)} · {x.t}
-                    </span>
-                    <b>{x.title}</b>
-                    {x.who ? <small>{L(x.who.lat, x.who.ar)}</small> : ''}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )
-        );
-      };
-      ['#bk_f', '#bk_t'].forEach(q => el.querySelector(q).addEventListener('change', show));
-      show();
-      el.querySelector('#doblock').addEventListener('click', () => {
-        const typed = el.querySelector('#mstaff').value.trim(),
-          found = typed && PEOPLE.find(p => p.lat === typed || p.ar === typed);
-        if (
-          ![
-            need(el, '#bk_f', L('Choose the first day', 'اختر اليوم الأول')),
-            need(el, '#bk_t', L('Choose the last day', 'اختر اليوم الأخير')),
-            need(
-              el,
-              '#mstaff',
-              L('Choose someone from the list, or leave it empty', 'اختر شخصاً من اللائحة، أو اتركه فارغاً'),
-              () => !typed || !!found
-            )
-          ].every(Boolean)
-        )
-          return;
-        if (f() > t2()) return show();
-        const why = el.querySelector('#bk_w').value.trim() || L('Maintenance', 'صيانة');
-        const staff = found ? found.id : me().id;
-        const entry = { venue: vid, from: f(), to: t2(), why, whyAr: why, by: staff };
-        MAINTENANCE.unshift(entry);
-        closeOverlays();
-        bus.refresh();
-        toast(
-          L('Room blocked', 'أُغلقت القاعة'),
-          `${L(v.name, v.ar || v.name)} · ${fmtDate(f())} – ${fmtDate(t2())}`,
-          'success',
-          {
-            action: {
-              label: L('Undo', 'تراجع'),
-              fn: () => {
-                const i = MAINTENANCE.indexOf(entry);
-                if (i >= 0) MAINTENANCE.splice(i, 1);
-                bus.refresh();
-              }
-            }
-          }
-        );
-      });
+      el.querySelector('#av_book').addEventListener('click', () => requestRoomForm({ venue: vid }));
+      fetchMonth();
     }
   });
 }
 
 facilities.mount = host => {
-  host.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => blockDrawer(b.dataset.block)));
+  const byId = (list, id) => list.find(x => x.id === id);
   host
     .querySelectorAll('[data-avail]')
     .forEach(b => b.addEventListener('click', () => availabilityDrawer(b.dataset.avail)));
-  host.querySelector('#newvenue')?.addEventListener('click', () => CR.create('venue'));
-  host.querySelector('#newissue')?.addEventListener('click', () => CR.create('issue'));
-  host.querySelectorAll('[id^="loan-"]').forEach(b =>
-    b.addEventListener('click', () => {
-      const eq = EQUIPMENT.find(x => 'loan-' + x.id === b.id);
-      openModal({
-        title: L('Loan out equipment', 'إعارة تجهيزات'),
-        sub: L(eq.name, eq.ar) + ` · ${eq.qty - eq.out} ${L('available', 'متاح')}`,
-        body: (
-          <>
-            {<C.PersonPicker label={L('Taken by', 'المستلم')} id="loanp" />}{' '}
-            {<C.Stepper label={L('Quantity', 'العدد')} value={2} id="loanq" />}{' '}
-            {<C.Field label={L('Back by', 'الإعادة قبل')} type="date" value="2026-10-12" />}{' '}
-            {<C.CheckRow label={L('Condition checked on the way out', 'فُحصت الحالة عند الخروج')} checked={true} />}
-          </>
-        ),
-        foot: (
-          <>
-            <button className="btn btn-secondary" data-close="">
-              {L('Cancel', 'إلغاء')}
-            </button>{' '}
-            <button className="btn btn-primary" id="doloan">
-              {L('Record loan', 'تسجيل الإعارة')}
-            </button>
-          </>
-        ),
-        onMount(el) {
-          el.querySelector('#doloan').addEventListener('click', () => {
-            const q = Math.min(eq.qty - eq.out, parseInt(el.querySelector('#loanq').value, 10) || 1);
-            if (q <= 0) return toast(L('None left to lend', 'لا شيء متبقٍّ للإعارة'), '', 'warning');
-            eq.out += q;
-            closeOverlays();
-            bus.refresh();
-            toast(L('Loan recorded', 'سُجّلت الإعارة'), `${q} × ${L(eq.name, eq.ar)}`, 'success', {
-              action: {
-                label: L('Undo', 'تراجع'),
-                fn: () => {
-                  eq.out -= q;
-                  bus.refresh();
-                }
-              }
-            });
-          });
-        }
-      });
-    })
-  );
+  host
+    .querySelectorAll('[data-edit]')
+    .forEach(b => b.addEventListener('click', () => facilityForm(byId(VENUES, b.dataset.edit))));
+  host
+    .querySelectorAll('[data-request]')
+    .forEach(b => b.addEventListener('click', () => requestRoomForm({ venue: b.dataset.request })));
+  host
+    .querySelectorAll('[data-block]')
+    .forEach(b =>
+      b.addEventListener('click', () =>
+        serviceForm(byId(VENUES, b.dataset.block), byId(VENUES, b.dataset.block)?.status !== 'Serviceable')
+      )
+    );
+  host
+    .querySelectorAll('[data-return]')
+    .forEach(b => b.addEventListener('click', () => serviceForm(byId(VENUES, b.dataset.return), true)));
+  host.querySelector('#newvenue')?.addEventListener('click', () => facilityForm(null));
+  host.querySelector('#neweq')?.addEventListener('click', () => equipmentForm(null));
+  host
+    .querySelectorAll('[data-eq-edit]')
+    .forEach(b => b.addEventListener('click', () => equipmentForm(byId(EQUIPMENT, b.dataset.eqEdit))));
+  host
+    .querySelectorAll('[data-loans]')
+    .forEach(b => b.addEventListener('click', () => loansDrawer(byId(EQUIPMENT, b.dataset.loans))));
+  host.querySelector('#newissue')?.addEventListener('click', issueForm);
+  host
+    .querySelectorAll('[data-issue]')
+    .forEach(b => b.addEventListener('click', () => issueDrawer(byId(ISSUES, b.dataset.issue))));
+  host.querySelector('#newrental')?.addEventListener('click', rentalForm);
+  host.querySelector('#newrenter')?.addEventListener('click', renterForm);
 };
