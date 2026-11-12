@@ -1,12 +1,16 @@
-/* The printed schedules: the priest's schedule and the week sheet. */
+/* The member's own schedule and the priest's duty schedule, as the API builds them (GET /api/me/schedule and
+   GET /api/parishes/{id}/clergy/schedule): volunteering, registrations and scheduled sacraments for the
+   member; scheduled sacraments and assigned requests with a confirmed date for the priest. The priest's
+   schedule needs the authenticator session. Both can be printed or saved as an .ics file. */
 import { Select } from '../../ui/components.jsx';
 import { nodesOr, paint } from '../../ui/html.js';
 import { t, fmtDate, fmtLong } from '../../../lib/i18n.js';
-import { S, me } from '../../model/store.js';
+import { me } from '../../model/store.js';
 import { openModal, toast } from '../../ui/ui.jsx';
-import * as C from '../../ui/components.jsx';
 import { printSheet } from '../../shared/print.js';
-import { EVENTS, EVENT_DETAIL, RESERVATIONS, ROTA, FEASTS, PARISH, TODAY, person, venue } from '../../model/data.js';
+import { download } from '../../shell/actions.jsx';
+import { PARISH, FEASTS } from '../../model/data.js';
+import { defaultZone, downloadSchedule, loadSchedule, localParts } from '../../model/modules/calendar.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -18,31 +22,18 @@ const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 
 
 const nameOf = p => (p ? L(p.lat, p.ar || p.lat) : '');
 
-const placeOf = id => {
-  const v = venue(id);
-  return v ? L(v.name, v.ar || v.name) : '';
-};
-
-const weekOf = offset =>
-  addDays(TODAY, -TODAY.getDay() + offset * 7); /* weeks run Sunday to Saturday, like the calendar */
-
 const span = (a, b) =>
   a.getMonth() === b.getMonth()
     ? L(`${a.getDate()} – ${b.getDate()} ${fmtDate(b).split(' ').slice(1).join(' ')}`, `${a.getDate()} – ${fmtDate(b)}`)
     : `${fmtDate(a)} – ${fmtDate(b)}`;
 
-const priestsOf = e => (EVENT_DETAIL[e.id]?.priestIds || []).map(person).filter(Boolean);
-
 const KIND = () => ({
-  mass: L('Mass', 'قدّاس'),
-  sacr: L('Sacrament', 'سرّ'),
-  event: L('Event', 'حدث'),
-  group: L('Group', 'مجموعة'),
-  room: L('Room', 'قاعة'),
-  rota: L('Volunteers', 'متطوّعون')
+  Volunteering: L('Volunteering', 'تطوّع'),
+  Registration: L('Registration', 'تسجيل'),
+  Sacrament: L('Sacrament', 'سرّ'),
+  Request: L('Request', 'طلب')
 });
 
-/* the A4 look shared by both sheets */
 const SHEET_CSS = `
 .ps-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:10px;margin-bottom:14px;border-bottom:2px solid #233B32}
 .ps-over{font:600 9.5px/14px Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#607068}
@@ -67,168 +58,111 @@ td small{display:block;color:#607068;font-size:9.5px;line-height:14px;margin-top
 .warn{color:#607068;font-weight:700}
 .ps-foot{display:flex;justify-content:space-between;gap:12px;margin-top:14px;padding-top:6px;border-top:1px solid #EDF0E8;font-size:9px;color:#607068}`;
 
-/* ---------------- Print my schedule ---------------- */
-const WEEK_OPTS = () => [
-  ['masses', L('Masses and sacraments', 'القداديس والأسرار'), true],
-  ['events', L('Parish events', 'أحداث الرعية'), true],
-  ['rooms', L('Room bookings', 'حجوزات القاعات'), true],
-  ['volunteers', L('Volunteers on duty', 'المتطوّعون في الخدمة'), true],
-  ['groups', L('Group meetings, private ones included', 'اجتماعات المجموعات، والخاصة منها'), false]
-];
-
-function scheduleDays(start, end, o) {
-  const length = Math.floor((end - start) / 86400000) + 1;
-  return Array.from({ length: Math.max(0, Math.min(length, 31)) }, (_, i) => addDays(start, i)).map(d => {
-    const key = iso(d),
-      items = [];
-    for (const e of EVENTS.filter(x => x.d === key)) {
-      if (e.kind === 'pending') continue; /* a pending booking is listed with the rooms */
-      if (
-        ((e.kind === 'mass' || e.kind === 'sacr') && !o.masses) ||
-        (e.kind === 'event' && !o.events) ||
-        (e.kind === 'group' && !o.groups)
-      )
-        continue;
-      const pr = priestsOf(e);
-      items.push({
-        t: e.t,
-        to: e.to,
-        kind: e.kind,
-        what: L(e.title, e.titleAr || e.title),
-        where: placeOf(e.venue),
-        note:
-          e.kind === 'mass' ? (
-            pr.length ? (
-              pr.map(nameOf).join(', ')
-            ) : (
-              <span className="warn">{L('Priest not assigned', 'لم يُعيَّن كاهن')}</span>
-            )
-          ) : (
-            ''
-          )
-      });
-    }
-    if (o.rooms)
-      for (const r of RESERVATIONS.filter(x => x.date === key && x.status !== 'rejected'))
-        items.push({
-          t: r.from,
-          to: r.to,
-          kind: 'room',
-          what: L(r.title, r.titleAr || r.title),
-          where: placeOf(r.venue),
-          note:
-            r.status === 'pending'
-              ? L('Waiting for approval — holds the room', 'بانتظار الموافقة — تحجز القاعة')
-              : L('Booked', 'محجوز')
-        });
-    if (o.volunteers && ROTA.date === key && ROTA.teams?.length) {
-      const at = /(\d{1,2}:\d{2})/.exec(ROTA.service || '')?.[1] || '';
-      items.push({
-        t: at,
-        kind: 'rota',
-        what: L(`On duty for ${ROTA.service}`, `في الخدمة: ${ROTA.serviceAr || ROTA.service}`),
-        where: '',
-        note: ROTA.teams
-          .map(
-            tm =>
-              `${L(tm.team, tm.teamAr || tm.team)}: ${
-                tm.filled
-                  .filter(f => f.p && f.s !== 'declined')
-                  .map(f => nameOf(person(f.p)))
-                  .join(', ') || '—'
-              }`
-          )
-          .join(' · '),
-        raw: true
-      });
-    }
-    return { d, key, items: items.sort((a, b) => (a.t || '').localeCompare(b.t || '')) };
-  });
+/* ScheduleItemDto[] → days with their rows, on the clock of the item's own time zone (else the parish's). */
+function byDay(items) {
+  const days = new Map();
+  for (const item of items) {
+    const at = localParts(item.startsAt, item.timeZone || defaultZone()),
+      end = item.endsAt ? localParts(item.endsAt, item.timeZone || defaultZone()) : null;
+    days.set(at.d, [
+      ...(days.get(at.d) || []),
+      {
+        t: at.t,
+        to: end && end.d === at.d ? end.t : '',
+        kind: item.kind,
+        what: item.title,
+        where: item.location || '',
+        parish: item.parishName,
+        status: item.status
+      }
+    ]);
+  }
+  return [...days.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
-function scheduleSheet(start, end, o, layout = 'detailed') {
-  const days = scheduleDays(start, end, o),
-    K = KIND();
+function sheet(days, title, start, end, layout, note) {
+  const K = KIND();
   return (
     <>
       <header className="ps-head">
         <div>
-          <div className="ps-over">
-            {L(PARISH.name, PARISH.nameAr)} — {L(PARISH.town, PARISH.townAr)}
-          </div>{' '}
+          <div className="ps-over">{PARISH.name}</div>{' '}
           <h1>
-            {L('My schedule', 'جدولي')} · {span(start, end)}
+            {title} · {span(start, end)}
           </h1>
         </div>{' '}
         <div className="ps-meta">
-          {L('Prepared for', 'أُعدّ لـ')} {nameOf(me())}
+          {note || `${L('Prepared for', 'أُعدّ لـ')} ${nameOf(me())}`}
           <br />
           {L('Printed', 'طُبع في')} {fmtDate(new Date())}
         </div>
       </header>{' '}
-      {days
-        .filter(day => day.items.length || layout === 'detailed')
-        .map(({ d, key, items }, i) => (
+      {days.length ? (
+        days.map(([key, rows], i) => (
           <section key={i} className="ps-day">
             <h2>
-              <span>{fmtLong(d)}</span>
+              <span>{fmtLong(key)}</span>
               {FEASTS[key] ? <small>{L(...FEASTS[key])}</small> : ''}
             </h2>{' '}
-            {items.length ? (
-              <table>
-                {items.map((x, i) => (
-                  <tr key={i}>
-                    <td className="tm">
-                      {x.t || ''}
-                      {x.to ? `–${x.to}` : ''}
-                    </td>
-                    <td>
-                      <span className={`k k-${x.kind}`}>{K[x.kind] || x.kind}</span>
-                      <b>{x.what}</b>
-                      {layout === 'detailed' && x.note ? (
-                        <small>{x.raw || x.note.startsWith('<span') ? x.note : x.note}</small>
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    {layout === 'detailed' ? <td className="wh">{x.where}</td> : ''}
-                  </tr>
-                ))}
-              </table>
-            ) : (
-              <div className="none">{L('Nothing scheduled', 'لا شيء مجدول')}</div>
-            )}
+            <table>
+              {rows.map((x, i) => (
+                <tr key={i}>
+                  <td className="tm">
+                    {x.t}
+                    {x.to ? `–${x.to}` : ''}
+                  </td>
+                  <td>
+                    <span className="k">{K[x.kind] || x.kind}</span>
+                    <b>{x.what}</b>
+                    {layout === 'detailed' && x.status ? <small>{x.status}</small> : ''}
+                  </td>
+                  {layout === 'detailed' ? (
+                    <td className="wh">{[x.where, x.parish].filter(Boolean).join(' · ')}</td>
+                  ) : (
+                    ''
+                  )}
+                </tr>
+              ))}
+            </table>
           </section>
-        ))}{' '}
+        ))
+      ) : (
+        <div className="none">{L('Nothing scheduled', 'لا شيء مجدول')}</div>
+      )}{' '}
       <footer className="ps-foot">
         <span>ParishLife</span>
-        <span>
-          {WEEK_OPTS()
-            .filter(([k]) => o[k])
-            .map(([, lab]) => lab)
-            .join(' · ')}
-        </span>
+        <span>{note ? L('Not for public posting', 'لا يُعلَّق للعموم') : ''}</span>
       </footer>
     </>
   );
 }
 
-export function printWeekDialog() {
+/* One dialog for both schedules: the period, a layout, a preview from the API, then print or .ics. */
+function scheduleDialog({ priest }) {
   const now = new Date(),
     initial = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = initial,
-    end = addDays(initial, 6),
-    layout = 'detailed';
-  const o = Object.fromEntries(WEEK_OPTS().map(([k, , on]) => [k, on]));
-  const count = () => scheduleDays(start, end, o).reduce((n, d) => n + d.items.length, 0);
-  const valid = () => end >= start && end - start < 31 * 86400000;
+    end = addDays(initial, priest ? 27 : 6),
+    layout = 'detailed',
+    days = [],
+    failed = '',
+    loading = true,
+    asked = 0;
+  const range = () => [start, new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1)];
+  const valid = () => end >= start && end - start < 92 * 86400000;
+  const title = priest ? L('Priest schedule', 'جدول الكهنة') : L('My schedule', 'جدولي');
   openModal({
     wide: true,
-    title: L('Print my schedule', 'اطبع جدولي'),
-    sub: L(
-      'Choose a day through one month, preview the entries, then print in a compact or detailed layout.',
-      'اختر من يوم إلى شهر واحد، عاين البنود ثم اطبع بتنسيق مختصر أو مفصّل.'
-    ),
+    title,
+    sub: priest
+      ? L(
+          'Your scheduled sacraments and assigned requests with a confirmed date. For clergy only — not for the notice board.',
+          'أسرارك المجدولة وطلباتك المعيّنة ذات الموعد المثبّت. للإكليروس فقط — لا للوحة الإعلانات.'
+        )
+      : L(
+          'Your volunteering, registrations and scheduled sacraments across your parishes, for up to 92 days.',
+          'تطوّعك وتسجيلاتك وأسرارك المجدولة في رعاياك، حتى ٩٢ يوماً.'
+        ),
     body: (
       <>
         <div className="formgrid">
@@ -249,7 +183,8 @@ export function printWeekDialog() {
           {[
             ['day', L('Today', 'اليوم')],
             ['week', L('This week', 'هذا الأسبوع')],
-            ['month', L('This month', 'هذا الشهر')]
+            ['month', L('This month', 'هذا الشهر')],
+            ['next', L('Next 4 weeks', '٤ أسابيع مقبلة')]
           ].map(([key, name], i) => (
             <button key={i} type="button" data-pw-range={key}>
               {name}
@@ -261,17 +196,9 @@ export function printWeekDialog() {
             {L('Print layout', 'تنسيق الطباعة')}
           </label>
           <Select id="pw_layout">
-            <option value="detailed">{L('Detailed, with places and notes', 'مفصّل مع الأماكن والملاحظات')}</option>
-            <option value="compact">{L('Compact, scheduled days only', 'مختصر، أيام المواعيد فقط')}</option>
+            <option value="detailed">{L('Detailed, with places and status', 'مفصّل مع الأماكن والحالة')}</option>
+            <option value="compact">{L('Compact', 'مختصر')}</option>
           </Select>
-        </div>{' '}
-        <div className="overline" style={{ margin: '18px 0 10px' }}>
-          {L('Include', 'تضمين')}
-        </div>{' '}
-        <div className="stack" style={{ gap: '10px' }}>
-          {WEEK_OPTS().map(([k, lab, on], i) => (
-            <C.CheckRow key={i} label={lab} checked={on} id={'pw_' + k} />
-          ))}
         </div>{' '}
         <p className="t-caption dim" id="pw_count" style={{ marginTop: '16px' }} />
         <div id="pw_preview" className="panel" style={{ marginTop: '12px', maxHeight: '280px', overflow: 'auto' }} />
@@ -280,57 +207,82 @@ export function printWeekDialog() {
     foot: (
       <>
         <button className="btn btn-secondary" data-close="">
-          {L('Cancel', 'إلغاء')}
+          {L('Close', 'إغلاق')}
         </button>{' '}
-        <button className="btn btn-primary" id="pw_print" style={{ marginInlineStart: 'auto' }}>
+        <button className="btn btn-secondary" id="pw_ics" style={{ marginInlineStart: 'auto' }}>
+          {L('Download .ics', 'تنزيل .ics')}
+        </button>{' '}
+        <button className="btn btn-primary" id="pw_print">
           {L('Print', 'طباعة')}
         </button>
       </>
     ),
     onMount(el) {
-      const sync = () => {
-        el.querySelector('#pw_print').disabled = !valid();
-        if (!valid()) {
-          el.querySelector('#pw_count').textContent = L(
-            'Choose an end date no earlier than the start, within 31 days.',
-            'اختر تاريخ نهاية لا يسبق البداية وضمن ٣١ يوماً.'
-          );
-          paint(el.querySelector('#pw_preview'), null);
-          return;
-        }
-        const n = count();
-        el.querySelector('#pw_count').textContent = n
-          ? L(`${n} item${n === 1 ? '' : 's'} in the selected range`, `${n} بنداً في الفترة المختارة`)
-          : L('No entries in this range.', 'لا بنود في هذه الفترة.');
+      const draw = () => {
+        const count = days.reduce((n, [, rows]) => n + rows.length, 0);
+        el.querySelector('#pw_print').disabled = el.querySelector('#pw_ics').disabled = !valid() || loading || !!failed;
+        el.querySelector('#pw_count').textContent = !valid()
+          ? L(
+              'Choose an end date no earlier than the start, within 92 days.',
+              'اختر تاريخ نهاية لا يسبق البداية وضمن ٩٢ يوماً.'
+            )
+          : loading
+            ? L('Loading…', 'جارٍ التحميل…')
+            : failed ||
+              (count
+                ? L(`${count} item${count === 1 ? '' : 's'} in the selected range`, `${count} بنداً في الفترة المختارة`)
+                : L('No entries in this range.', 'لا بنود في هذه الفترة.'));
         paint(
           el.querySelector('#pw_preview'),
-          <div className="panel-b">
-            <b>
-              {L('Preview', 'معاينة')} · {span(start, end)}
-            </b>
-            {nodesOr(
-              scheduleDays(start, end, o)
-                .filter(d => d.items.length || layout === 'detailed')
-                .map((d, i) => (
+          valid() && !failed && !loading ? (
+            <div className="panel-b">
+              <b>
+                {L('Preview', 'معاينة')} · {span(start, end)}
+              </b>
+              {nodesOr(
+                days.map(([key, rows], i) => (
                   <div key={i} className="listrow" style={{ paddingInline: 0 }}>
-                    <span className="mono">{iso(d.d)}</span>
-                    <span className="grow">
-                      {d.items.length
-                        ? d.items.map(x => `${x.t} ${x.what}`).join(<br />)
-                        : L('Nothing scheduled', 'لا شيء مجدول')}
-                    </span>
+                    <span className="mono">{key}</span>
+                    <span className="grow">{rows.map(x => `${x.t} ${x.what}`).join(' · ')}</span>
                   </div>
                 )),
-              <p>{L('No entries', 'لا بنود')}</p>
-            )}
-          </div>
+                <p>{L('No entries', 'لا بنود')}</p>
+              )}
+            </div>
+          ) : null
         );
+      };
+      /* only the newest request may draw: a slow answer for an old period is dropped */
+      const sync = async () => {
+        const mine = ++asked;
+        if (!valid()) return draw();
+        loading = true;
+        failed = '';
+        draw();
+        try {
+          const items = await loadSchedule(...range(), { priest });
+          if (mine !== asked) return;
+          days = byDay(items);
+        } catch (error) {
+          if (mine !== asked) return;
+          days = [];
+          failed =
+            error.status === 403 && priest
+              ? L(
+                  'The priest schedule needs a priest appointment here and an authenticator sign-in.',
+                  'جدول الكهنة يحتاج تعييناً ككاهن هنا وتسجيل دخول بالمصادقة.'
+                )
+              : error.message;
+        }
+        loading = false;
+        draw();
       };
       for (const [id, set] of [
         ['pw_start', d => (start = d)],
         ['pw_end', d => (end = d)]
       ])
         el.querySelector('#' + id).addEventListener('change', e => {
+          if (!e.target.value) return;
           set(new Date(e.target.value + 'T12:00:00'));
           sync();
         });
@@ -348,7 +300,9 @@ export function printWeekDialog() {
               ? new Date(initial.getFullYear(), initial.getMonth() + 1, 0)
               : type === 'week'
                 ? addDays(start, 6)
-                : initial;
+                : type === 'next'
+                  ? addDays(initial, 27)
+                  : initial;
           el.querySelector('#pw_start').value = iso(start);
           el.querySelector('#pw_end').value = iso(end);
           sync();
@@ -356,241 +310,31 @@ export function printWeekDialog() {
       );
       el.querySelector('#pw_layout').addEventListener('change', e => {
         layout = e.target.value;
-        sync();
       });
-      WEEK_OPTS().forEach(([k]) =>
-        el.querySelector('#pw_' + k).addEventListener('change', e => {
-          o[k] = e.target.checked;
-          sync();
-        })
-      );
       el.querySelector('#pw_print').addEventListener('click', () => {
-        if (valid())
+        if (valid() && !loading && !failed)
           printSheet({
-            title: `${L('My schedule', 'جدولي')} ${span(start, end)}`,
-            body: scheduleSheet(start, end, o, layout),
+            title: `${title} ${span(start, end)}`,
+            body: sheet(days, title, start, end, layout, priest ? L('Clergy only', 'للإكليروس فقط') : ''),
             css: SHEET_CSS,
             margin: '12mm'
           });
       });
-      sync();
-    }
-  });
-}
-
-/* ---------------- the priests' Mass schedule (clergy only) ---------------- */
-const RANGES = () => [
-  ['week', L('This week', 'هذا الأسبوع')],
-  ['month', L('This month', 'هذا الشهر')],
-  ['next', L('Next 4 weeks', '4 أسابيع مقبلة')]
-];
-
-function rangeOf(r) {
-  if (r === 'week') {
-    const a = weekOf(0);
-    return [a, addDays(a, 6), span(a, addDays(a, 6))];
-  }
-  if (r === 'next') return [TODAY, addDays(TODAY, 27), span(TODAY, addDays(TODAY, 27))];
-  const m = new Date(2026, 9 + (S.ui.calOffset || 0), 1),
-    last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-  return [m, last, fmtDate(m).split(' ').slice(1).join(' ')];
-}
-
-const massesIn = r => {
-  const [a, b] = rangeOf(r);
-  return EVENTS.filter(e => e.kind === 'mass' && e.d >= iso(a) && e.d <= iso(b)).sort((x, y) =>
-    (x.d + x.t).localeCompare(y.d + y.t)
-  );
-};
-
-function priestRows(list, forPrint) {
-  const byDay = list.reduce((m, e) => ((m[e.d] = [...(m[e.d] || []), e]), m), {});
-  return Object.entries(byDay).map(([d, es], i) =>
-    forPrint ? (
-      <section key={i} className="ps-day">
-        <h2>
-          <span>{fmtLong(d)}</span>
-          {FEASTS[d] ? <small>{L(...FEASTS[d])}</small> : ''}
-        </h2>
-        <table>
-          {es.map((e, i) => {
-            const pr = priestsOf(e);
-            return (
-              <tr key={i}>
-                <td className="tm">
-                  {e.t}
-                  {e.to ? `–${e.to}` : ''}
-                </td>
-                <td>
-                  <b>{L(e.title, e.titleAr || e.title)}</b>
-                </td>
-                <td className="wh">{placeOf(e.venue)}</td>
-                <td style={{ width: '30%' }}>
-                  {pr.length ? (
-                    pr.map(nameOf).join(', ')
-                  ) : (
-                    <span className="warn">{L('Not assigned', 'لم يُعيَّن')}</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </table>
-      </section>
-    ) : (
-      es.map((e, i) => {
-        const pr = priestsOf(e);
-        return (
-          <tr key={i}>
-            <td className="ps-when">
-              <span className="mono">{fmtDate(d)}</span>
-              <small>
-                {e.t}
-                {e.to ? `–${e.to}` : ''}
-              </small>
-            </td>
-            <td>
-              <b>{L(e.title, e.titleAr || e.title)}</b>
-            </td>
-            <td className="dim hide-sm">{placeOf(e.venue)}</td>
-            <td>
-              {pr.length ? (
-                pr.map(nameOf).join(', ')
-              ) : (
-                <span className="pill pill-warning">
-                  <span className="dot" />
-                  {L('Not assigned', 'لم يُعيَّن')}
-                </span>
-              )}
-            </td>
-          </tr>
-        );
-      })
-    )
-  );
-}
-
-export function priestScheduleDialog() {
-  let r = 'month';
-  const body = () => {
-    const list = massesIn(r),
-      open = list.filter(e => !priestsOf(e).length).length;
-    return (
-      <>
-        <p className="t-caption dim" style={{ margin: '0 0 10px' }}>
-          {list.length
-            ? L(
-                `${list.length} Mass${list.length === 1 ? '' : 'es'}${open ? ` · ${open} without a priest` : ' · every one has a priest'}`,
-                `${list.length} قداديس${open ? ` · ${open} بلا كاهن` : ' · لكلّ منها كاهن'}`
-              )
-            : ''}
-        </p>{' '}
-        {list.length ? (
-          <div className="tablewrap">
-            <div className="tablescroll">
-              <table className="tbl ps-table">
-                <thead>
-                  <tr>
-                    <th>{L('When', 'الموعد')}</th>
-                    <th>{L('Mass', 'القدّاس')}</th>
-                    <th className="hide-sm">{L('Where', 'المكان')}</th>
-                    <th>{L('Priest', 'الكاهن')}</th>
-                  </tr>
-                </thead>
-                <tbody>{priestRows(list, false)}</tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <p className="t-caption dim">{L('No Masses in this period.', 'لا قداديس في هذه الفترة.')}</p>
-        )}
-      </>
-    );
-  };
-  openModal({
-    wide: true,
-    title: L('Priest schedule', 'جدول الكهنة'),
-    sub: L(
-      'Each Mass and the priest assigned to it. For clergy only — not for the notice board.',
-      'كل قدّاس والكاهن المعيّن له. للإكليروس فقط — لا للوحة الإعلانات.'
-    ),
-    body: (
-      <>
-        <div className="toolbar" style={{ marginBottom: '12px' }}>
-          <span className="seg" role="group" aria-label={L('Period', 'الفترة')}>
-            {RANGES().map(([k, lab], i) => (
-              <button key={i} type="button" data-range={k} aria-pressed={k === r}>
-                {lab}
-              </button>
-            ))}
-          </span>
-          <b id="ps_span" className="t-caption" />
-        </div>{' '}
-        <div id="ps_body" />
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {L('Close', 'إغلاق')}
-        </button>{' '}
-        <button className="btn btn-primary" id="ps_print" style={{ marginInlineStart: 'auto' }}>
-          {L('Print', 'طباعة')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      const sync = () => {
-        paint(el.querySelector('#ps_body'), body());
-        el.querySelector('#ps_span').textContent = rangeOf(r)[2];
-        el.querySelector('#ps_print').disabled = !massesIn(r).length;
-      };
-      el.querySelectorAll('[data-range]').forEach(b =>
-        b.addEventListener('click', () => {
-          r = b.dataset.range;
-          el.querySelectorAll('[data-range]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-          sync();
-        })
-      );
-      el.querySelector('#ps_print').addEventListener('click', () => {
-        const list = massesIn(r),
-          [, , period] = rangeOf(r);
-        if (!list.length)
-          return toast(
-            L('Nothing to print', 'لا شيء للطباعة'),
-            L('There are no Masses in this period.', 'لا قداديس في هذه الفترة.')
+      el.querySelector('#pw_ics').addEventListener('click', async () => {
+        try {
+          download(
+            priest ? 'priest-schedule.ics' : 'my-schedule.ics',
+            await downloadSchedule(...range(), { priest }),
+            'text/calendar;charset=utf-8'
           );
-        printSheet({
-          title: `${L('Priest schedule', 'جدول الكهنة')} — ${period}`,
-          css: SHEET_CSS,
-          margin: '12mm',
-          body: (
-            <>
-              <header className="ps-head">
-                <div>
-                  <div className="ps-over">
-                    {L(PARISH.name, PARISH.nameAr)} — {L(PARISH.town, PARISH.townAr)}
-                  </div>{' '}
-                  <h1>
-                    {L('Priest schedule', 'جدول الكهنة')} · {period}
-                  </h1>
-                </div>{' '}
-                <div className="ps-meta">
-                  {L('Clergy only', 'للإكليروس فقط')}
-                  <br />
-                  {L('Printed', 'طُبع في')} {fmtDate(new Date())}
-                </div>
-              </header>{' '}
-              {priestRows(list, true)}{' '}
-              <footer className="ps-foot">
-                <span>ParishLife</span>
-                <span>{L('Not for public posting', 'لا يُعلَّق للعموم')}</span>
-              </footer>
-            </>
-          )
-        });
+        } catch (error) {
+          toast(L('The schedule could not be downloaded', 'تعذّر تنزيل الجدول'), error.message, 'warning');
+        }
       });
       sync();
     }
   });
 }
+
+export const printWeekDialog = () => scheduleDialog({ priest: false });
+export const priestScheduleDialog = () => scheduleDialog({ priest: true });

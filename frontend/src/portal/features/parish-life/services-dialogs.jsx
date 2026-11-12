@@ -10,7 +10,8 @@ import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
 import { currentPlan, copyOrder, allPlans, normalizePlanOrder } from '../../model/planning.js';
 import { download } from '../../shell/actions.jsx';
-import { persist } from '../../model/persist.js';
+import { hydrate, persist } from '../../model/persist.js';
+import { planAction } from '../../model/modules/calendar.js';
 import { requestRequirements, RequestDocuments } from '../records/request-documents.jsx';
 import { nameOf, ok, refresh, val } from '../../shared/dialog-helpers.jsx';
 import { need } from '../../shared/dialogs.jsx';
@@ -31,7 +32,6 @@ export function slides() {
         {i + 1} / {plan.order.length}
       </div>{' '}
       <h2>{o.t}</h2>
-      <p className="ar">{o.ar}</p>
     </section>
   ));
   download(
@@ -42,8 +42,7 @@ export function slides() {
       color:#FFFFFF;border-bottom:1px solid #233B32;page-break-after:always;padding:0 8vw}
     .k{color:#EDF0E8;font:500 14px ui-monospace,monospace;letter-spacing:.1em}
     h2{font-size:5vw;margin:.4em 0 .2em;font-weight:600}.ar{font-size:4vw;color:#EDF0E8;margin:0}</style></head>
-    <body><section class="s"><div class="k">${D.PARISH.name.toUpperCase()}</div><h2>${L(plan.title, plan.titleAr)}</h2>
-    <p class="ar">${D.PARISH.nameAr}</p></section>${markup(deck)}</body></html>`,
+    <body><section class="s"><div class="k">${D.PARISH.name.toUpperCase()}</div><h2>${plan.title}</h2></section>${markup(deck)}</body></html>`,
     'text/html'
   );
   closeOverlays();
@@ -56,42 +55,66 @@ export function svcTemplateUse(i) {
   servicePlanNew(tpl.id);
 }
 
+/* A plan belongs to an event, so it is made for one of the calendar's upcoming events. */
 export function servicePlanNew(templateId = '') {
-  const first = D.SERVICE_TEMPLATES.find(x => x.id === templateId);
+  const today = new Date().toLocaleDateString('sv-SE');
+  const taken = new Set(allPlans().map(p => p.eventId));
+  const events = D.EVENTS.filter(e => !e.redacted && e.status !== 'Cancelled' && e.d >= today && !taken.has(e.id));
+  const templates = D.SERVICE_TEMPLATES.filter(x => x.apiStatus === 'Approved');
+  const first = templates.find(x => x.id === templateId);
+  if (!events.length)
+    return toast(
+      L('No event to plan', 'لا حدث للتخطيط'),
+      L(
+        'Create the event on the calendar first; a plan is made for one of its events.',
+        'أنشئ الحدث في الرزنامة أولاً؛ الخطة تُعدّ لأحد أحداثها.'
+      ),
+      'warning'
+    );
   openDrawer({
     title: L('New service plan', 'خطة خدمة جديدة'),
     sub: L(
-      'Choose a date and optional template. The new plan is independent of its template.',
-      'اختر التاريخ وقالباً اختيارياً. الخطة الجديدة مستقلة عن قالبها.'
+      'Choose the event and, if you like, an approved template. The new plan is independent of its template.',
+      'اختر الحدث وقالباً معتمداً إن شئت. الخطة الجديدة مستقلة عن قالبها.'
     ),
     body: (
       <>
-        <div className="formgrid">
-          <C.Field label={L('Service name', 'اسم الخدمة')} req={true} id="sp_name" value={first?.name || ''} />{' '}
-          <C.Field label={L('Arabic name', 'الاسم العربي')} id="sp_ar" value={first?.ar || ''} />
-        </div>{' '}
-        <div className="formgrid">
-          <C.Field
-            label={L('Date', 'التاريخ')}
-            type="date"
-            req={true}
-            id="sp_date"
-            value={new Date().toISOString().slice(0, 10)}
-          />{' '}
-          <C.Field label={L('Time', 'الوقت')} type="time" id="sp_time" value="10:30" />
-        </div>{' '}
         <div className="formrow">
-          <label className="label" htmlFor="sp_template">
-            {L('Start from template', 'ابدأ من قالب')}
-          </label>{' '}
-          <Select defaultValue={templateId} id="sp_template">
-            <option value="">{L('Blank plan', 'خطة فارغة')}</option>
-            {D.SERVICE_TEMPLATES.map((x, i) => (
-              <option key={i} value={x.id}>
-                {L(x.name, x.ar)} · {x.order.length} {L('items', 'بنود')}
+          <label className="label" htmlFor="sp_event">
+            {L('Event', 'الحدث')}
+          </label>
+          <Select id="sp_event">
+            {events.map((e, i) => (
+              <option key={i} value={e.id}>
+                {e.title} · {fmtDate(e.d)} {e.t}
               </option>
             ))}
           </Select>
+        </div>{' '}
+        <C.Field label={L('Service name', 'اسم الخدمة')} req={true} id="sp_name" value={events[0].title} />{' '}
+        <div className="formgrid">
+          <div className="formrow">
+            <label className="label" htmlFor="sp_type">
+              {L('Type', 'النوع')}
+            </label>
+            <Select id="sp_type">
+              <option value="Liturgy">{L('Liturgy', 'ليتورجيا')}</option>
+              <option value="Activity">{L('Activity', 'نشاط')}</option>
+            </Select>
+          </div>{' '}
+          <div className="formrow">
+            <label className="label" htmlFor="sp_template">
+              {L('Start from template', 'ابدأ من قالب')}
+            </label>{' '}
+            <Select defaultValue={first?.id || ''} id="sp_template">
+              <option value="">{L('Blank plan', 'خطة فارغة')}</option>
+              {templates.map((x, i) => (
+                <option key={i} value={x.id}>
+                  {x.name} · {x.order.length} {L('items', 'بنود')}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </>
     ),
@@ -106,40 +129,37 @@ export function servicePlanNew(templateId = '') {
       </>
     ),
     onMount(el) {
-      el.querySelector('#sp_template').addEventListener('change', () => {
-        const tpl = D.SERVICE_TEMPLATES.find(x => x.id === val(el, '#sp_template'));
-        if (tpl) {
-          el.querySelector('#sp_name').value = tpl.name;
-          el.querySelector('#sp_ar').value = tpl.ar;
-        }
+      el.querySelector('#sp_event').addEventListener('change', () => {
+        el.querySelector('#sp_name').value = events.find(e => e.id === val(el, '#sp_event'))?.title || '';
       });
-      el.querySelector('#sp_save').addEventListener('click', () => {
-        if (
-          !need(el, '#sp_name', L('Name the service', 'سمّ الخدمة')) ||
-          !need(el, '#sp_date', L('Choose a date', 'اختر التاريخ'))
-        )
-          return;
-        const tpl = D.SERVICE_TEMPLATES.find(x => x.id === val(el, '#sp_template'));
-        const name = val(el, '#sp_name');
+      el.querySelector('#sp_save').addEventListener('click', async () => {
+        if (!need(el, '#sp_name', L('Name the service', 'سمّ الخدمة'))) return;
+        const event = events.find(e => e.id === val(el, '#sp_event')),
+          name = val(el, '#sp_name');
         const plan = {
-          id: 'sp' + Date.now().toString(36),
+          id: 'new-' + Date.now().toString(36),
+          eventId: event.id,
           title: name,
-          titleAr: val(el, '#sp_ar') || name,
-          date: val(el, '#sp_date'),
-          time: val(el, '#sp_time') || '10:30',
-          venue: tpl?.venue || 'v1',
-          celebrant: tpl?.celebrant || 'p17',
-          coordinator: tpl?.coordinator || 'p4',
-          language: tpl?.language || 'Arabic & Syriac',
-          languageAr: tpl?.languageAr || 'عربي وسرياني',
+          titleAr: name,
+          date: event.d,
+          time: event.t,
+          planType: val(el, '#sp_type'),
+          templateId: val(el, '#sp_template') || null, // the API copies the template's items into a plan with none
+          celebrantAccountId: null,
           status: 'draft',
-          order: copyOrder(tpl?.order)
+          order: []
         };
         D.SERVICE_PLANS.push(plan);
+        el.querySelector('#sp_save').disabled = true;
+        if (!(await persist())) {
+          el.querySelector('#sp_save').disabled = false;
+          return;
+        }
         closeOverlays();
         refresh();
-        go(`services/plan/${plan.id}`);
-        ok(L('Plan created', 'أُنشئت الخطة'), `${name} · ${fmtDate(plan.date)}`);
+        const made = allPlans().find(p => p.eventId === event.id);
+        if (made) go(`services/plan/${made.id}`);
+        ok(L('Plan created', 'أُنشئت الخطة'), `${name} · ${fmtDate(event.d)}`);
       });
     }
   });
@@ -147,14 +167,11 @@ export function servicePlanNew(templateId = '') {
 
 /* One line of a template's order of service. Its fields keep their own text; Save reads them back. */
 function TemplateRow({ item, rowKey, onMove, onRemove }) {
-  const leaders = [...D.PEOPLE.map(p => [p.id, L(p.lat, p.ar)]), ...D.GROUPS.map(g => [g.id, L(g.name, g.ar)])];
   return (
     <div
       className="card card-flat"
       data-st-row=""
       data-st-key={rowKey}
-      data-note-ar={item.noteAr || ''}
-      data-original-note={item.note || ''}
       style={{ padding: '10px', marginBottom: '8px' }}
     >
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
@@ -173,33 +190,19 @@ function TemplateRow({ item, rowKey, onMove, onRemove }) {
           data-st-title=""
           defaultValue={item.t || ''}
           placeholder={L('Item name', 'اسم البند')}
-          aria-label={L('Item name in English', 'اسم البند بالإنكليزية')}
+          aria-label={L('Item name', 'اسم البند')}
           style={{ minWidth: '140px', flex: '1 1 140px' }}
         />{' '}
-        <input
-          className="input"
-          data-st-ar=""
-          defaultValue={item.ar || ''}
-          placeholder={L('Arabic name', 'الاسم العربي')}
-          dir="rtl"
-          aria-label={L('Item name in Arabic', 'اسم البند بالعربية')}
-          style={{ minWidth: '140px', flex: '1 1 140px' }}
-        />
       </div>{' '}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '7px', alignItems: 'center' }}>
-        <Select
-          defaultValue={item.who}
-          data-st-who=""
-          aria-label={L('Led by', 'يقوده')}
+        <input
+          className="input"
+          data-st-role=""
+          defaultValue={item.role || ''}
+          placeholder={L('Role (optional)', 'الدور (اختياري)')}
+          aria-label={L('Responsible role', 'الدور المسؤول')}
           style={{ minWidth: '140px', flex: '1 1 140px' }}
-        >
-          <option value="">{L('Unassigned', 'غير محدّد')}</option>
-          {leaders.map(([v, label], i) => (
-            <option key={i} value={v}>
-              {label}
-            </option>
-          ))}
-        </Select>{' '}
+        />{' '}
         <input
           className="input"
           data-st-note=""
@@ -273,6 +276,15 @@ function TemplateItems({ order }) {
 
 export function serviceTemplateEdit(id = '', fromPlan = false) {
   const source = fromPlan ? currentPlan() : D.SERVICE_TEMPLATES.find(x => x.id === id);
+  if (source && !fromPlan && source.apiStatus && !['Draft', 'Returned'].includes(source.apiStatus))
+    return toast(
+      L('This template can no longer be edited', 'لا يمكن تعديل هذا القالب بعد الآن'),
+      L(
+        'Only a draft or returned template can change. Start a new one instead.',
+        'يمكن تعديل المسودة أو المُعادة فقط. ابدأ قالباً جديداً.'
+      ),
+      'warning'
+    );
   openDrawer({
     large: true,
     title:
@@ -280,50 +292,17 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
         ? L('Edit service template', 'تعديل قالب الخدمة')
         : L('New service template', 'قالب خدمة جديد'),
     sub: L(
-      'Set the defaults and order once. Existing plans stay independent.',
-      'اضبط القيم والترتيب مرة واحدة. تبقى الخطط الموجودة مستقلة.'
+      'Set the order once, with no people or fixed times. A template is approved before plans can start from it.',
+      'اضبط الترتيب مرة واحدة، بلا أشخاص أو أوقات ثابتة. يُعتمد القالب قبل أن تبدأ الخطط منه.'
     ),
     body: (
       <>
-        <div className="formgrid">
-          <C.Field
-            label={L('Template name', 'اسم القالب')}
-            req={true}
-            id="st_name"
-            value={source?.name || source?.title || ''}
-          />{' '}
-          <C.Field label={L('Arabic name', 'الاسم العربي')} id="st_ar" value={source?.ar || source?.titleAr || ''} />
-        </div>{' '}
-        <div className="formgrid">
-          <div className="formrow">
-            <label className="label" htmlFor="st_venue">
-              {L('Default venue', 'المكان الافتراضي')}
-            </label>
-            <Select defaultValue={source?.venue || 'v1'} id="st_venue">
-              {D.VENUES.map((v, i) => (
-                <option key={i} value={v.id}>
-                  {L(v.name, v.ar)}
-                </option>
-              ))}
-            </Select>
-          </div>{' '}
-          <div className="formrow">
-            <label className="label" htmlFor="st_lang">
-              {L('Language', 'اللغة')}
-            </label>
-            <Select defaultValue={source?.language} id="st_lang">
-              {[
-                ['Arabic & Syriac', 'عربي وسرياني'],
-                ['Bilingual', 'ثنائي اللغة'],
-                ['English', 'إنكليزي']
-              ].map(([en, ar], i) => (
-                <option key={i} value={en}>
-                  {L(en, ar)}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>{' '}
+        <C.Field
+          label={L('Template name', 'اسم القالب')}
+          req={true}
+          id="st_name"
+          value={source?.name || source?.title || ''}
+        />{' '}
         <TemplateItems order={source?.order || []} />
       </>
     ),
@@ -339,43 +318,50 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
     ),
     onMount(el) {
       const items = el.querySelector('#st_items');
-      el.querySelector('#st_save').addEventListener('click', () => {
+      el.querySelector('#st_save').addEventListener('click', async () => {
         if (!need(el, '#st_name', L('Name the template', 'سمّ القالب'))) return;
         const order = [];
         for (const row of items.querySelectorAll('[data-st-row]')) {
           const dur = Number(row.querySelector('[data-st-dur]').value),
             t = row.querySelector('[data-st-title]').value.trim(),
-            ar = row.querySelector('[data-st-ar]').value.trim(),
-            who = row.querySelector('[data-st-who]').value,
+            role = row.querySelector('[data-st-role]').value.trim(),
             note = row.querySelector('[data-st-note]').value.trim();
           if (!t || !Number.isFinite(dur) || dur <= 0) {
             row.querySelector(!t ? '[data-st-title]' : '[data-st-dur]').focus();
             toast(L('Each item needs a name and minutes', 'كل بند يحتاج اسماً ودقائق'), '', 'warning');
             return;
           }
+          const kept = source?.order?.find(o => o.t === t);
           order.push({
+            key: kept?.key || '',
             dur: String(dur),
             t,
-            ar: ar || t,
-            who,
+            ar: '',
+            role,
             note,
-            noteAr: note === row.dataset.originalNote ? row.dataset.noteAr : note
+            noteAr: '',
+            who: null,
+            audience: kept?.audience || 'Clergy',
+            required: !!kept?.required,
+            musicId: kept?.musicId || null
           });
         }
-        const name = val(el, '#st_name'),
-          lang = val(el, '#st_lang');
-        const fields = {
-          name,
-          ar: val(el, '#st_ar') || name,
-          venue: val(el, '#st_venue'),
-          language: lang,
-          languageAr: { Bilingual: 'ثنائي اللغة', English: 'إنكليزي' }[lang] || 'عربي وسرياني',
-          celebrant: source?.celebrant || 'p17',
-          coordinator: source?.coordinator || 'p4',
-          order
-        };
-        if (source && !fromPlan) Object.assign(source, fields);
-        else D.SERVICE_TEMPLATES.push({ id: 'st' + Date.now().toString(36), ...fields });
+        const name = val(el, '#st_name');
+        if (source && !fromPlan) Object.assign(source, { name, ar: name, order });
+        else
+          D.SERVICE_TEMPLATES.push({
+            id: 'new-' + Date.now().toString(36),
+            name,
+            ar: name,
+            planType: 'Liturgy',
+            status: 'draft',
+            order
+          });
+        el.querySelector('#st_save').disabled = true;
+        if (!(await persist())) {
+          el.querySelector('#st_save').disabled = false;
+          return;
+        }
         closeOverlays();
         refresh();
         ok(L('Template saved', 'حُفظ القالب'));
@@ -384,38 +370,65 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
   });
 }
 
-export function serviceTemplateDelete(id) {
-  const tpl = D.SERVICE_TEMPLATES.find(x => x.id === id);
-  if (!tpl) return;
+/* A reason is asked for before a plan is returned or cancelled; the other steps need none. */
+function askReason(title, then) {
   openModal({
-    title: L('Delete template?', 'حذف القالب؟'),
-    body: (
-      <>
-        <p>{L(tpl.name, tpl.ar)}</p>
-        <p className="t-caption dim">
-          {L('Plans already created from it stay unchanged.', 'الخطط المنشأة منه تبقى بلا تغيير.')}
-        </p>
-      </>
-    ),
+    title,
+    body: <C.Textarea label={L('Reason', 'السبب')} id="pr_reason" max={400} />,
     foot: (
       <>
         <button className="btn btn-secondary" data-close="">
-          {L('Keep template', 'إبقاء القالب')}
+          {L('Back', 'رجوع')}
         </button>
-        <button className="btn btn-danger" id="std_go">
-          {L('Delete template', 'حذف القالب')}
+        <button className="btn btn-primary" id="pr_ok" style={{ marginInlineStart: 'auto' }}>
+          {L('Continue', 'متابعة')}
         </button>
       </>
     ),
     onMount(el) {
-      el.querySelector('#std_go').addEventListener('click', () => {
-        D.SERVICE_TEMPLATES.splice(D.SERVICE_TEMPLATES.indexOf(tpl), 1);
-        closeOverlays();
-        refresh();
-        ok(L('Template deleted', 'حُذف القالب'));
+      el.querySelector('#pr_ok').addEventListener('click', () => {
+        const reason = val(el, '#pr_reason');
+        if (!reason) return toast(L('Give a reason', 'اذكر السبب'), '', 'warning');
+        then(reason);
       });
     }
   });
+}
+
+async function runStep(plan, action, reason) {
+  try {
+    await planAction(plan, action, reason);
+    closeOverlays();
+    await hydrate();
+    refresh();
+    ok(L('Plan updated', 'حُدّثت الخطة'));
+  } catch (error) {
+    toast(L('That did not work', 'لم تنجح العملية'), error.message, 'warning');
+  }
+}
+
+/* submit, approve, return, complete or cancel: a call to the API and a reload, never an edit to the list. */
+export function planStep(plan, action) {
+  if (!plan) return;
+  if (action === 'return' || action === 'cancel')
+    return askReason(
+      action === 'return' ? L('Return this plan', 'إعادة الخطة') : L('Cancel this plan', 'إلغاء الخطة'),
+      reason => runStep(plan, action, reason)
+    );
+  runStep(plan, action);
+}
+export function templateStep(id, action) {
+  planStep(
+    D.SERVICE_TEMPLATES.find(x => x.id === id),
+    action
+  );
+}
+
+/* A template cannot be deleted in the API; it is cancelled, with the reason recorded. */
+export function serviceTemplateDelete(id) {
+  const tpl = D.SERVICE_TEMPLATES.find(x => x.id === id);
+  if (!tpl) return;
+  planStep(tpl, 'cancel');
 }
 
 export function addToService(mid) {
@@ -429,7 +442,9 @@ export function addToService(mid) {
           label: `${D.group(g.id)?.name || g.id} · ${meeting.d} ${meeting.t} · ${meeting.title || 'Meeting'}`
         }))
       )
-    : allPlans().map(plan => ({ id: plan.id, label: `${plan.title} · ${plan.date} ${plan.time || ''}` }));
+    : allPlans()
+        .filter(plan => ['Draft', 'Returned'].includes(plan.apiStatus))
+        .map(plan => ({ id: plan.id, label: `${plan.title} · ${plan.date} ${plan.time || ''}` }));
   if (!targets.length) return toast(L('Schedule a meeting first', 'جدول اجتماعاً أولاً'), '', 'warning');
   openModal({
     title: L('Choose where to add this hymn', 'اختر الخدمة لإضافة الترنيمة'),
@@ -460,7 +475,7 @@ export function addToService(mid) {
       </>
     ),
     onMount(el) {
-      el.querySelector('#music_add').addEventListener('click', () => {
+      el.querySelector('#music_add').addEventListener('click', async () => {
         const selected = el.querySelector('#music_target').value;
         if (!selected) return toast(L('Choose a service or meeting', 'اختر خدمة أو اجتماعاً'), '', 'warning');
         if (leader) {
@@ -474,16 +489,24 @@ export function addToService(mid) {
         } else {
           const plan = allPlans().find(x => x.id === selected);
           if (!plan) return;
+          if (plan.order.some(o => o.musicId === mid))
+            return toast(L('Hymn already added', 'الترنيمة مضافة مسبقاً'), '', 'warning');
           plan.order.push({
-            dur: '4',
             t: `Hymn — ${m.title}`,
-            ar: `لحن — ${m.ar}`,
+            ar: '',
+            dur: '4',
+            start: '',
             note: m.key ? `Key: ${m.key}` : '',
-            noteAr: m.key ? `المقام: ${m.key}` : '',
-            who: 'g1',
-            hymnId: mid
+            noteAr: '',
+            who: null,
+            assignedAccountId: null,
+            role: '',
+            audience: 'Team',
+            required: false,
+            musicId: mid
           });
           normalizePlanOrder(plan, 'reflow');
+          if (!(await persist())) return;
         }
         closeOverlays();
         refresh();

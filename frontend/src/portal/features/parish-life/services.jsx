@@ -27,7 +27,9 @@ import {
   serviceTemplateDelete,
   serviceTemplateEdit,
   slides,
-  svcRequestOpen
+  svcRequestOpen,
+  planStep,
+  templateStep
 } from './services-dialogs.jsx';
 import { meetingNew } from './groups-dialogs.jsx';
 import { need } from '../../shared/dialogs.jsx';
@@ -60,6 +62,26 @@ const STABS = () => [
   ['requests', 'Requests', 'الطلبات', SERVICE_REQUESTS.filter(r => r.status === 'pending').length],
   ['templates', 'Templates', 'القوالب']
 ];
+
+/* A plan moves by review steps, each a call to the API: [action, label, the API statuses it applies to]. */
+const STEPS = [
+  ['submit', 'Submit for review', 'إرسال للمراجعة', ['Draft', 'Returned']],
+  ['approve', 'Approve', 'اعتماد', ['ReadyForReview']],
+  ['return', 'Return', 'إعادة', ['ReadyForReview']],
+  ['complete', 'Mark completed', 'تم إنجازها', ['Approved']],
+  ['cancel', 'Cancel plan', 'إلغاء الخطة', ['Draft', 'Returned', 'ReadyForReview', 'Approved']]
+];
+const ISSUES = {
+  CelebrantRequired: ['A celebrant is needed.', 'يلزم محتفل.'],
+  Overtime: ['The items run past the end of the event.', 'البنود تتجاوز نهاية الحدث.'],
+  MusicUnavailable: ['A hymn in the plan is no longer available.', 'لحن في الخطة لم يعد متاحاً.'],
+  UnassignedRole: ['A required item has nobody assigned.', 'بند مطلوب بلا مكلّف.'],
+  FixedStartConflict: ['An item’s fixed start clashes with the items before it.', 'بدء ثابت لبند يتعارض مع ما قبله.']
+};
+const issueText = code => {
+  const [en, ar] = ISSUES[code.split(':')[0]] || [code, code];
+  return L(en, ar) + ' ';
+};
 
 /* the preparation states a request can be in, for requests saved without their Arabic */
 const PREP_AR = { 'documents missing': 'مستندات ناقصة', 'awaiting venue': 'بانتظار القاعة' };
@@ -150,8 +172,6 @@ export function services(tab = '', planId = '') {
     );
   const canEdit = is('priest', 'secretary');
   const plan = savedPlan ? (canEdit ? workingPlan(savedPlan.id) : savedPlan) : null;
-  const cel = person(plan?.celebrant),
-    coord = person(plan?.coordinator);
   const total = plan ? planTotalMinutes(plan) : 0;
   const head = (
     <>
@@ -167,8 +187,7 @@ export function services(tab = '', planId = '') {
                 'Choose a plan to open, or create one from a reusable template. Ceremonies are separate from official registers.',
                 'تُخطَّط الاحتفالات هنا؛ والسجل الرسمي يُنشأ منفصلاً في سجلات الأسرار'
               )
-            : `${fmtLong(new Date(plan.date))} · ${L(venue(plan.venue)?.name || '', venue(plan.venue)?.ar || '')} ·
-                ${L(plan.language, plan.languageAr)} · ${total} ${L('minutes', 'دقيقة')}`
+            : `${plan.date ? fmtLong(new Date(plan.date)) + ' · ' : ''}${total} ${L('minutes', 'دقيقة')}`
         }
         actions={
           plan ? (
@@ -217,12 +236,9 @@ export function services(tab = '', planId = '') {
     const plans = allPlans().filter(
       p =>
         (!f.status || p.status === f.status) &&
-        (!f.from || p.date >= f.from) &&
-        (!f.to || p.date <= f.to) &&
-        (!f.search ||
-          `${p.title} ${p.titleAr} ${venue(p.venue)?.name || ''}`
-            .toLocaleLowerCase()
-            .includes(f.search.toLocaleLowerCase()))
+        (!f.from || (p.date && p.date >= f.from)) &&
+        (!f.to || (p.date && p.date <= f.to)) &&
+        (!f.search || `${p.title} ${p.titleAr}`.toLocaleLowerCase().includes(f.search.toLocaleLowerCase()))
     );
     return (
       <>
@@ -235,7 +251,7 @@ export function services(tab = '', planId = '') {
                 className="input"
                 data-service-filter="search"
                 defaultValue={f.search || ''}
-                placeholder={L('Name or place', 'الاسم أو المكان')}
+                placeholder={L('Name', 'الاسم')}
               />
             </label>{' '}
             <label className="formrow" style={{ margin: 0 }}>
@@ -244,9 +260,10 @@ export function services(tab = '', planId = '') {
                 {[
                   ['', 'All statuses', 'كل الحالات'],
                   ['draft', 'Draft', 'مسودة'],
-                  ['scheduled', 'Scheduled', 'مجدول'],
-                  ['ready', 'Ready', 'جاهز'],
-                  ['completed', 'Completed', 'منجز']
+                  ['scheduled', 'In review', 'قيد المراجعة'],
+                  ['ready', 'Approved', 'معتمد'],
+                  ['completed', 'Completed', 'منجز'],
+                  ['cancelled', 'Cancelled', 'ملغى']
                 ].map(([v, en, ar], i) => (
                   <option key={i} value={v}>
                     {L(en, ar)}
@@ -270,20 +287,18 @@ export function services(tab = '', planId = '') {
             cols={[
               { label: L('Service', 'الخدمة') },
               { label: L('When', 'الموعد') },
-              { label: L('Type / room', 'النوع / المكان') },
+              { label: L('Type', 'النوع') },
               { label: L('Status', 'الحالة') },
               { label: '', cls: 'shrink' }
             ]}
             rows={plans
               .slice()
-              .sort((a, b) => a.date.localeCompare(b.date))
+              .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
               .map(p => ({
                 cells: [
                   <b>{L(p.title, p.titleAr)}</b>,
-                  <span className="mono">
-                    {fmtDate(p.date)} {p.time || ''}
-                  </span>,
-                  `${L(venue(p.venue)?.name || '', venue(p.venue)?.ar || '')} · ${L(p.language, p.languageAr)}`,
+                  <span className="mono">{p.date ? `${fmtDate(p.date)} ${p.time || ''}` : '—'}</span>,
+                  p.planType === 'Activity' ? L('Activity', 'نشاط') : L('Liturgy', 'ليتورجيا'),
                   <Status k={p.status || 'scheduled'} />,
                   <a className="btn btn-secondary btn-dense" href={`#/services/plan/${p.id}`}>
                     {L('Open plan', 'فتح الخطة')}
@@ -363,7 +378,10 @@ export function services(tab = '', planId = '') {
         <div className="tabbody">
           <div className="toolbar" style={{ marginBottom: '12px' }}>
             <span className="t-caption dim">
-              {L('Using a template creates an independent plan.', 'استعمال القالب ينشئ خطة مستقلة.')}
+              {L(
+                'A template is structure only, with no people or fixed times. It must be approved before plans can start from it.',
+                'القالب بنية فقط، بلا أشخاص أو أوقات ثابتة. يجب اعتماده قبل أن تبدأ الخطط منه.'
+              )}
             </span>{' '}
             {canEdit ? (
               <button className="btn btn-primary btn-dense" data-service-template-new="">
@@ -378,18 +396,34 @@ export function services(tab = '', planId = '') {
             cols={[
               { label: L('Template', 'القالب') },
               { label: L('Items', 'البنود'), cls: 'num' },
+              { label: L('Status', 'الحالة') },
               { label: '', cls: 'shrink' }
             ]}
             rows={SERVICE_TEMPLATES.map(tpl => ({
               cells: [
                 <b>{L(tpl.name, tpl.ar)}</b>,
                 <span className="num">{tpl.order?.length || 0}</span>,
+                <Status k={tpl.status || 'draft'} />,
                 <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                   {canEdit ? (
                     <>
-                      <button className="btn btn-secondary btn-dense" data-act={`svc-tpl:${tpl.id}`}>
-                        {L('Use', 'استعمال')}
-                      </button>{' '}
+                      {tpl.apiStatus === 'Approved' ? (
+                        <button className="btn btn-secondary btn-dense" data-act={`svc-tpl:${tpl.id}`}>
+                          {L('Use', 'استعمال')}
+                        </button>
+                      ) : (
+                        STEPS.filter(
+                          ([a, , , from]) => ['submit', 'approve'].includes(a) && from.includes(tpl.apiStatus)
+                        ).map(([action, en, ar], i) => (
+                          <button
+                            key={i}
+                            className="btn btn-secondary btn-dense"
+                            data-template-step={`${tpl.id}|${action}`}
+                          >
+                            {L(en, ar)}
+                          </button>
+                        ))
+                      )}{' '}
                       <C.IconBtn
                         ico="edit"
                         label={L('Edit template', 'تعديل القالب')}
@@ -412,8 +446,7 @@ export function services(tab = '', planId = '') {
       </>
     );
   const rows = plan.order.map((o, oi) => {
-    const a = o.who?.startsWith('g') ? group(o.who) : person(o.who);
-    const aLabel = !a ? '' : a.lat ? (isAr() ? a.ar : a.lat) : L(a.name, a.ar);
+    const hymn = o.musicId ? MUSIC.find(h => h.id === o.musicId) : null;
     return (
       <div
         key={oi}
@@ -427,12 +460,10 @@ export function services(tab = '', planId = '') {
         </span>{' '}
         <span className="body">
           <b>{o.t}</b>
-          <span className="ar">{o.ar}</span>{' '}
-          {o.note ? <span className="note">{L(o.note, o.noteAr || o.note)}</span> : ''}
+          {o.note ? <span className="note">{o.note}</span> : ''}
         </span>{' '}
         <span className="who-s">
-          {a && a.lat ? <Avatar p={a} cls="avatar-sm" /> : ''}
-          <span className="t-caption dim">{aLabel}</span>{' '}
+          <span className="t-caption dim">{[o.role, hymn ? hymn.title : ''].filter(Boolean).join(' · ')}</span>{' '}
           {canEdit ? (
             <>
               {
@@ -527,27 +558,60 @@ export function services(tab = '', planId = '') {
             <dl className="dl">
               <dt>{L('Date and time', 'التاريخ والوقت')}</dt>
               <dd>
-                {fmtDate(plan.date)} {plan.time || ''}
+                {plan.date
+                  ? `${fmtDate(plan.date)} ${plan.time || ''}`
+                  : L('Its event is outside the loaded months', 'حدثها خارج الأشهر المحمّلة')}
               </dd>
-              <dt>{L('Venue', 'المكان')}</dt>
-              <dd>{L(venue(plan.venue)?.name || '—', venue(plan.venue)?.ar || '—')}</dd>
+              <dt>{L('Type', 'النوع')}</dt>
+              <dd>{plan.planType === 'Activity' ? L('Activity', 'نشاط') : L('Liturgy', 'ليتورجيا')}</dd>
               <dt>{L('Celebrant', 'المحتفل')}</dt>
-              <dd>{cel ? (isAr() ? cel.ar : cel.lat) : '—'}</dd>
-              <dt>{L('Coordinator', 'المنسّقة')}</dt>
-              <dd>{coord ? (isAr() ? coord.ar : coord.lat) : '—'}</dd>
-              <dt>{L('Language', 'اللغة')}</dt>
-              <dd>{L(plan.language, plan.languageAr)}</dd>
+              <dd>{plan.celebrantAccountId ? L('Chosen', 'معيّن') : L('Not chosen', 'غير معيّن')}</dd>
               <dt>{L('Status', 'الحالة')}</dt>
               <dd>
                 <Status k={plan.status || 'scheduled'} />
               </dd>
+              {plan.returnReason ? (
+                <>
+                  <dt>{L('Returned because', 'أُعيدت لأن')}</dt>
+                  <dd>{plan.returnReason}</dd>
+                </>
+              ) : (
+                ''
+              )}
             </dl>
+            {plan.issues?.length ? (
+              <C.InlineAlert
+                tone="warning"
+                title={L('Needs attention before approval', 'تحتاج إلى معالجة قبل الاعتماد')}
+                body={plan.issues.map(issueText).join(' ')}
+              />
+            ) : (
+              ''
+            )}
+            {canEdit ? (
+              <div className="row" style={{ gap: '8px', flexWrap: 'wrap', padding: '0 16px 16px' }}>
+                {STEPS.filter(([, , , from]) => from.includes(plan.apiStatus)).map(([action, en, ar], i) => (
+                  <button
+                    key={i}
+                    className="btn btn-secondary btn-dense"
+                    data-plan-step={action}
+                    disabled={planDirty()}
+                  >
+                    {L(en, ar)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              ''
+            )}
           </Panel>
         </div>
       </div>
     </>
   );
 }
+
+const savedPlanNow = () => allPlans().find(p => p.id === S.params[1]);
 
 services.mount = host => {
   if (S.params[0] === 'requests' && S.params[1] && !is('leader')) svcRequestOpen(decodeURIComponent(S.params[1]));
@@ -638,6 +702,12 @@ services.mount = host => {
       );
     serviceTemplateEdit('', true);
   });
+  host
+    .querySelectorAll('[data-plan-step]')
+    .forEach(b => b.addEventListener('click', () => planStep(savedPlanNow(), b.dataset.planStep)));
+  host
+    .querySelectorAll('[data-template-step]')
+    .forEach(b => b.addEventListener('click', () => templateStep(...b.dataset.templateStep.split('|'))));
   host.querySelector('[data-service-template-new]')?.addEventListener('click', () => serviceTemplateEdit());
   host
     .querySelectorAll('[data-service-template-edit]')
@@ -698,43 +768,20 @@ function editPlanDetails(redraw) {
   if (!plan) return;
   openDrawer({
     title: L('Edit plan details', 'تعديل تفاصيل الخطة'),
+    sub: L(
+      'The date and time come from the plan’s event. Change them on the calendar.',
+      'التاريخ والوقت من حدث الخطة. غيّرهما في الرزنامة.'
+    ),
     body: (
       <>
-        <div className="formgrid">
-          <C.Field label={L('Service name', 'اسم الخدمة')} id="pd_title" req={true} value={plan.title} />{' '}
-          <C.Field label={L('Arabic name', 'الاسم العربي')} id="pd_ar" value={plan.titleAr} />
-        </div>{' '}
-        <div className="formgrid">
-          <C.Field label={L('Date', 'التاريخ')} id="pd_date" type="date" value={plan.date} />{' '}
-          <C.Field label={L('Start time', 'وقت البدء')} id="pd_time" type="time" value={plan.time || '09:00'} />
-        </div>{' '}
+        <C.Field label={L('Service name', 'اسم الخدمة')} id="pd_title" req={true} value={plan.title} />{' '}
         <div className="formrow">
-          <label className="label" htmlFor="pd_venue">
-            {L('Venue', 'المكان')}
+          <label className="label" htmlFor="pd_type">
+            {L('Type', 'النوع')}
           </label>
-          <Select defaultValue={plan.venue} id="pd_venue">
-            {VENUES.map((v, i) => (
-              <option key={i} value={v.id}>
-                {L(v.name, v.ar)}
-              </option>
-            ))}
-          </Select>
-        </div>{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="pd_status">
-            {L('Status', 'الحالة')}
-          </label>
-          <Select defaultValue={plan.status} id="pd_status">
-            {[
-              ['draft', 'Draft', 'مسودة'],
-              ['scheduled', 'Scheduled', 'مجدول'],
-              ['ready', 'Ready', 'جاهز'],
-              ['completed', 'Completed', 'منجز']
-            ].map(([v, en, ar], i) => (
-              <option key={i} value={v}>
-                {L(en, ar)}
-              </option>
-            ))}
+          <Select defaultValue={plan.planType || 'Liturgy'} id="pd_type">
+            <option value="Liturgy">{L('Liturgy (needs a celebrant)', 'ليتورجيا (تحتاج محتفلاً)')}</option>
+            <option value="Activity">{L('Activity', 'نشاط')}</option>
           </Select>
         </div>
       </>
@@ -751,21 +798,9 @@ function editPlanDetails(redraw) {
     ),
     onMount(el) {
       el.querySelector('#pd_stage').addEventListener('click', () => {
-        if (
-          !need(el, '#pd_title', L('Name the plan', 'سمّ الخطة')) ||
-          !need(el, '#pd_date', L('Choose a date', 'اختر التاريخ'))
-        )
-          return;
-        const oldTime = plan.time;
-        Object.assign(plan, {
-          title: el.querySelector('#pd_title').value.trim(),
-          titleAr: el.querySelector('#pd_ar').value.trim() || el.querySelector('#pd_title').value.trim(),
-          date: el.querySelector('#pd_date').value,
-          time: el.querySelector('#pd_time').value,
-          venue: el.querySelector('#pd_venue').value,
-          status: el.querySelector('#pd_status').value
-        });
-        if (plan.time !== oldTime) normalizePlanOrder(plan, 'reflow');
+        if (!need(el, '#pd_title', L('Name the plan', 'سمّ الخطة'))) return;
+        const title = el.querySelector('#pd_title').value.trim();
+        Object.assign(plan, { title, titleAr: title, planType: el.querySelector('#pd_type').value });
         closeOverlays();
         redraw();
       });
@@ -777,39 +812,50 @@ function editPlanItem(index, redraw) {
   const plan = workingPlan(S.params[1]);
   if (!plan) return;
   const item = index >= 0 ? plan.order[index] : null;
-  const last = plan.order.at(-1),
-    after = last ? addMin(last.start || plan.time || '09:00', Number(last.dur) || 1) : plan.time || '09:00';
   openDrawer({
     title: item ? L('Edit service item', 'تعديل بند الخدمة') : L('Add service item', 'إضافة بند للخدمة'),
+    sub: L(
+      'Items run one after another from the start of the event. People are assigned in the rota.',
+      'تتتابع البنود من بداية الحدث. يُكلَّف الأشخاص في المناوبات.'
+    ),
     body: (
       <>
         <div className="formgrid">
-          <C.Field label={L('English item', 'البند بالإنكليزية')} id="pi_title" req={true} value={item?.t || ''} />{' '}
-          <C.Field label={L('Arabic item', 'البند بالعربية')} id="pi_ar" value={item?.ar || ''} />
-        </div>{' '}
-        <div className="formgrid">
-          <C.Field
-            label={L('Scheduled time', 'الوقت المحدّد')}
-            id="pi_start"
-            type="time"
-            value={item?.start || after}
-          />{' '}
+          <C.Field label={L('Item', 'البند')} id="pi_title" req={true} value={item?.t || ''} />{' '}
           <C.Field label={L('Duration (minutes)', 'المدة (دقائق)')} id="pi_dur" type="number" value={item?.dur || 3} />
         </div>{' '}
+        <div className="formgrid">
+          <C.Field label={L('Responsible role', 'الدور المسؤول')} id="pi_role" value={item?.role || ''} />{' '}
+          <div className="formrow">
+            <label className="label" htmlFor="pi_audience">
+              {L('Who sees the instructions', 'من يرى التعليمات')}
+            </label>
+            <Select defaultValue={item?.audience || 'Clergy'} id="pi_audience">
+              <option value="Clergy">{L('Clergy', 'الإكليروس')}</option>
+              <option value="Team">{L('The team', 'الفريق')}</option>
+              <option value="Everyone">{L('Everyone', 'الجميع')}</option>
+            </Select>
+          </div>
+        </div>{' '}
         <div className="formrow">
-          <label className="label" htmlFor="pi_who">
-            {L('Led by', 'يقوده')}
+          <label className="label" htmlFor="pi_music">
+            {L('Hymn', 'اللحن')}
           </label>
-          <Select defaultValue={item?.who} id="pi_who">
-            <option value="">{L('Unassigned', 'غير محدّد')}</option>
-            {[...GROUPS.map(g => [g.id, L(g.name, g.ar)]), ...personOptions()].map(([id, name], i) => (
-              <option key={i} value={id}>
-                {name}
+          <Select defaultValue={item?.musicId || ''} id="pi_music">
+            <option value="">{L('None', 'بلا')}</option>
+            {MUSIC.map((h, i) => (
+              <option key={i} value={h.id}>
+                {h.title}
               </option>
             ))}
           </Select>
         </div>{' '}
-        <C.Field label={L('Instructions', 'تعليمات')} id="pi_note" value={item?.note || ''} />
+        <C.Field label={L('Instructions', 'تعليمات')} id="pi_note" value={item?.note || ''} />{' '}
+        <C.CheckRow
+          label={L('Required — someone must be assigned', 'مطلوب — يجب تكليف أحد')}
+          id="pi_required"
+          checked={!!item?.required}
+        />
       </>
     ),
     foot: (
@@ -836,33 +882,27 @@ function editPlanItem(index, redraw) {
           !need(el, '#pi_dur', L('Enter a positive duration', 'أدخل مدة موجبة'), v => Number(v) > 0)
         )
           return;
-        const t = el.querySelector('#pi_title').value.trim(),
-          note = el.querySelector('#pi_note').value.trim();
         const fields = {
-          t,
-          ar: el.querySelector('#pi_ar').value.trim() || t,
-          start: el.querySelector('#pi_start').value,
+          t: el.querySelector('#pi_title').value.trim(),
           dur: String(Number(el.querySelector('#pi_dur').value)),
-          who: el.querySelector('#pi_who').value,
-          note,
-          noteAr: item?.note === note ? item.noteAr || note : note
+          role: el.querySelector('#pi_role').value.trim(),
+          audience: el.querySelector('#pi_audience').value,
+          musicId: el.querySelector('#pi_music').value || null,
+          note: el.querySelector('#pi_note').value.trim(),
+          required: el.querySelector('#pi_required').checked
         };
         if (item) Object.assign(item, fields);
-        else plan.order.push(fields);
-        normalizePlanOrder(plan, 'sort');
+        else plan.order.push({ ar: '', noteAr: '', who: null, assignedAccountId: null, start: '', ...fields });
+        normalizePlanOrder(plan, 'reflow');
         closeOverlays();
         redraw();
       });
       el.querySelector('#pi_delete')?.addEventListener('click', () => {
         plan.order.splice(index, 1);
-        normalizePlanOrder(plan, 'sort');
+        normalizePlanOrder(plan, 'reflow');
         closeOverlays();
         redraw();
       });
     }
   });
-}
-
-function personOptions() {
-  return PEOPLE.filter(p => p.status !== 'visitor').map(p => [p.id, L(p.lat, p.ar)]);
 }

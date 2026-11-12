@@ -35,11 +35,10 @@ export function play(mid) {
 
 export function setlistOpen(id) {
   const s = D.SETLISTS.find(x => x.id === id) || D.SETLISTS[0];
+  if (!s) return;
   openDrawer({
     title: L(s.name, s.ar),
-    sub: s.service
-      ? L('Linked to Sunday Mass 10:30', 'مرتبطة بقدّاس الأحد ١٠:٣٠')
-      : L('Not linked to a service yet', 'غير مرتبطة بخدمة بعد'),
+    sub: s.service ? L('From the service plan', 'من خطة الخدمة') : '',
     body: s.items.map((mid, i) => {
       const m = D.MUSIC.find(x => x.id === mid);
       return m ? (
