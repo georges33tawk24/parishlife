@@ -12,6 +12,8 @@ export const KIND = {
   confirmation: ['Confirmation (Chrismation)', 'الميرون'],
   marriage: ['Marriage', 'إكليل'],
   funeral: ['Funeral', 'جنّاز'],
+  anointing: ['Anointing of the sick', 'مسحة المرضى'],
+  other: ['Other sacramental record', 'قيد آخر'],
   certificate: ['Certificate request', 'طلب شهادة']
 };
 
@@ -34,61 +36,72 @@ const OFFICE = () => L('Parish office', 'مكتب الرعية'),
 
 export const nameIn = p => (p ? L(p.lat || '', p.ar || p.lat || '') : '');
 
-export const nextStep = s =>
-  s.status === 'cancelled'
-    ? [L('Nothing more to do — the request was cancelled', 'لا شيء آخر — أُلغي الطلب'), '']
-    : s.status === 'rejected'
-      ? [L('Nothing more to do — the request was declined', 'لا شيء آخر — رُفض الطلب'), '']
-      : s.kind === 'certificate' && !s.sourceRecordId
-        ? [
-            s.requestedSacramentId
-              ? L('Wait until the sacrament is celebrated and approved', 'انتظار الاحتفال بالسرّ واعتماده')
-              : eligibleSources(s.person).length
-                ? L('Link the approved register entry', 'ربط القيد المعتمد')
-                : L(
-                    'Record the sacrament first — there is no approved entry yet',
-                    'سجّل السرّ أولاً — لا قيد معتمد بعد'
-                  ),
-            OFFICE()
-          ]
-        : {
-            requested: [
-              L('Accept or decline the request', 'قبول الطلب أو رفضه'),
-              L('Priest or parish office', 'الكاهن أو مكتب الرعية')
-            ],
-            'office-reviewed': [L('Accept or decline the request', 'قبول الطلب أو رفضه'), PRIEST()],
-            preparing: [
-              L('Finish the preparation checklist and set the date', 'إكمال لائحة التحضير وتحديد الموعد'),
-              OFFICE()
-            ],
-            draft: [
-              s.kind === 'certificate'
-                ? L('Send the request to the priest', 'إرسال الطلب إلى الكاهن')
-                : L(
-                    'Send the celebrated sacrament to the priest for approval',
-                    'إرسال السرّ المحتفل به إلى الكاهن للاعتماد'
-                  ),
-              OFFICE()
-            ],
-            scheduled: [
-              s.date > today()
-                ? L(`Wait for the celebration on ${celebrationText(s)}`, `انتظار الاحتفال في ${celebrationText(s)}`)
-                : L('Confirm it was celebrated and send it for approval', 'تأكيد الاحتفال وإرساله للاعتماد'),
-              OFFICE()
-            ],
-            'awaiting-signature': [
-              s.kind === 'certificate'
-                ? L('Check the request and approve it', 'مراجعة الطلب واعتماده')
-                : L('Check against the register book and approve', 'المطابقة مع دفتر السجل والاعتماد'),
-              PRIEST()
-            ],
-            approved: [L('Sign and issue the certificate', 'توقيع الشهادة وإصدارها'), PRIEST()],
-            registered: [
-              L('Done — request a certificate whenever one is needed', 'منجز — اطلب شهادة متى احتجت إليها'),
-              ''
-            ],
-            issued: [L('Done — the certificate was issued', 'منجز — صدرت الشهادة'), '']
-          }[s.status] || [L('Review the record', 'مراجعة القيد'), OFFICE()];
+const BISHOP = () => L('Bishop', 'المطران');
+
+/* The next step in the API's own states (modules/sacraments.js keeps the API status in apiStatus). */
+export const nextStep = s => {
+  if (s.status === 'cancelled')
+    return [L('Nothing more to do — the request was cancelled', 'لا شيء آخر — أُلغي الطلب'), ''];
+  if (s.status === 'rejected')
+    return [L('Nothing more to do — the request was declined', 'لا شيء آخر — رُفض الطلب'), ''];
+  if (s.kind === 'certificate')
+    return (
+      {
+        WaitingForSource: [
+          eligibleSources(s.person).length
+            ? L('Link the registered entry', 'ربط القيد المسجَّل')
+            : L(
+                'Record the sacrament first — there is no registered entry yet',
+                'سجّل السرّ أولاً — لا قيد مسجَّل بعد'
+              ),
+          OFFICE()
+        ],
+        Received: [
+          L('Prepare the certificate and send it to the priest', 'تحضير الشهادة وإرسالها إلى الكاهن'),
+          OFFICE()
+        ],
+        Prepared: [L('Send the certificate to the priest', 'إرسال الشهادة إلى الكاهن'), OFFICE()],
+        Returned: [
+          s.returnReason
+            ? L(`Returned: ${s.returnReason}. Prepare it again`, `أُعيدت: ${s.returnReason}. حضّرها من جديد`)
+            : L('Returned. Prepare it again', 'أُعيدت. حضّرها من جديد'),
+          OFFICE()
+        ],
+        AwaitingSignature: [L('Check the request and approve it', 'مراجعة الطلب واعتماده'), PRIEST()],
+        AwaitingBishop: [L('Waiting for the bishop’s acceptance', 'بانتظار قبول المطران'), BISHOP()],
+        AuthorizedForIssuance: [
+          L('Issue the certificate', 'إصدار الشهادة'),
+          L('Priest or parish office', 'الكاهن أو مكتب الرعية')
+        ],
+        Issued: [L('Hand it over and record who received it', 'تسليمها وتسجيل المستلم'), OFFICE()],
+        Released: [L('Done — the certificate was handed over', 'منجز — سُلّمت الشهادة'), ''],
+        Withdrawn: [L('Nothing more to do — the certificate was withdrawn', 'لا شيء آخر — سُحبت الشهادة'), '']
+      }[s.apiStatus] || [L('Review the request', 'مراجعة الطلب'), OFFICE()]
+    );
+  return (
+    {
+      requested: [L('Accept or decline the request', 'قبول الطلب أو رفضه'), PRIEST()],
+      preparing: [L('Set the date and the celebrant', 'تحديد الموعد والمحتفل'), OFFICE()],
+      scheduled: [
+        s.date > today()
+          ? L(`Wait for the celebration on ${celebrationText(s)}`, `انتظار الاحتفال في ${celebrationText(s)}`)
+          : L('Record that it was celebrated and send it for approval', 'تسجيل الاحتفال وإرساله للاعتماد'),
+        OFFICE()
+      ],
+      draft: [
+        s.returnReason
+          ? L(`Returned: ${s.returnReason}. Correct the details`, `أُعيد: ${s.returnReason}. صحّح التفاصيل`)
+          : L('Correct the details', 'تصحيح التفاصيل'),
+        OFFICE()
+      ],
+      'awaiting-signature': [
+        L('Check against the register book and register', 'المطابقة مع دفتر السجل والتسجيل'),
+        PRIEST()
+      ],
+      registered: [L('Done — request a certificate whenever one is needed', 'منجز — اطلب شهادة متى احتجت إليها'), '']
+    }[s.status] || [L('Review the record', 'مراجعة القيد'), OFFICE()]
+  );
+};
 
 /* The celebration as people say it: 25 Oct 2026 · 10:30 */
 export const celebrationText = s => (s?.date ? `${fmtDate(s.date)}${s.time ? ` · ${s.time}` : ''}` : '');

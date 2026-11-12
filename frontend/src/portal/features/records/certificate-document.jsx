@@ -5,7 +5,8 @@ import { t, fmtDateIn } from '../../../lib/i18n.js';
 import { Icon, openModal, openMenu, toast } from '../../ui/ui.jsx';
 import { printSheet, saveBlob, svgToPng, fileName } from '../../shared/print.js';
 import { PARISH, person } from '../../model/data.js';
-import { DOC_LANGS, KIND, kindLabel, nameIn, sourceFor, today, zoned } from './records-shared.jsx';
+import { docRecord, certificateSheet } from '../../model/modules/sacraments.js';
+import { DOC_LANGS, KIND, kindLabel, nameIn, today, zoned } from './records-shared.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -28,15 +29,13 @@ const hasArabic = v => /[؀-ۿ]/.test(String(v || ''));
 
 const docTitle = s => (s.kind === 'certificate' ? L('Certificate', 'الشهادة') : L('Register extract', 'خلاصة القيد'));
 
-const docIssued = s => s.kind === 'certificate' && s.status === 'issued';
+const docIssued = s => s.kind === 'certificate' && s.status === 'issued' && !!s.issuedAt;
 
 const docLangLabel = lang => (DOC_LANGS().find(([k]) => k === lang) || DOC_LANGS()[2])[1];
 
 export function certificateSVG(s, lang = 'bilingual') {
-  const source = s.kind === 'certificate' ? sourceFor(s) : s,
-    record = source || s;
-  const p = person(record.person) || { lat: '', ar: '' },
-    cel = person(record.celebrant);
+  const record = (s.kind === 'certificate' ? docRecord(s) : s) || s;
+  const p = person(s.person) || { lat: '', ar: '' };
   const ar = lang !== 'english',
     en = lang !== 'arabic',
     both = ar && en;
@@ -159,7 +158,7 @@ export function certificateSVG(s, lang = 'bilingual') {
       record.date > today() ? 'مجدول في' : 'تاريخ الاحتفال',
       fmtDateIn(record.date, dl)
     ],
-    ['Celebrant', 'المحتفل', (lang === 'arabic' ? cel?.ar : cel?.lat) || '—'],
+    ['Celebrant', 'المحتفل', record.celebrantName || '—'],
     ...[
       ['godparents', 'Godparents / witnesses', 'الإشبين / الشهود'],
       ['father', 'Father', 'الأب'],
@@ -197,8 +196,7 @@ export function certificateSVG(s, lang = 'bilingual') {
   const cap = (enL, arL) =>
     lang === 'arabic' ? arL : lang === 'english' ? enL.toUpperCase() : `${enL.toUpperCase()} · ${arL}`;
   [
-    [57, 26, cap('Book', 'الدفتر'), record.book || '—'],
-    [88, 26, cap('Page', 'الصفحة'), record.page || '—'],
+    [57, 57, cap('Book / page', 'الدفتر / الصفحة'), record.book || '—'],
     [119, 34, cap('Entry', 'القيد'), record.reg]
   ].forEach(([x, w, lbl, val]) => {
     out.push(
@@ -230,25 +228,10 @@ export function certificateSVG(s, lang = 'bilingual') {
       />
     </>
   );
-  /* A signed certificate carries the priest's own handwritten signature above the line, the
-     printed name under it, and the code that checks it (backend/signatures.py). */
-  const signed = docIssued(s) && s.signature?.drawing ? s.signature : null;
-  if (signed)
-    out.push(
-      <g transform={`translate(26 ${sigY - 22}) scale(.15)`}>
-        <path
-          d={String(signed.drawing).replace(/[^MLQCZmlqcz0-9 .,-]/g, '')}
-          fill="none"
-          stroke={INK}
-          strokeWidth="3.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </g>
-    );
-  else if (docIssued(s) && s.issuedBy) out.push(tx(56, sigY - 3, s.issuedBy, { size: 4, font: ANY_FONT }));
-  const roleY = signed ? sigY + 9.5 : sigY + 5;
-  if (signed) out.push(tx(56, sigY + 4.5, s.issuedBy || signed.name, { size: 3.6, font: ANY_FONT }));
+  /* The priest signs the paper by hand and the parish seals it; the API holds no drawing of a signature. Only an
+     electronic authorization is printed: its code, which anyone can check on the public verification page. */
+  const signed = docIssued(s) && s.authorizationCode ? { code: s.authorizationCode } : null;
+  const roleY = sigY + 5;
   if (en) out.push(tx(56, roleY, 'Parish priest', { size: 3.4, fill: SECONDARY }));
   if (ar) out.push(arT(56, roleY + (en ? 5 : 0), 'كاهن الرعية', { size: 3.8, fill: SECONDARY }));
   if (signed?.code)
@@ -256,10 +239,12 @@ export function certificateSVG(s, lang = 'bilingual') {
       tx(
         105,
         283.4,
-        `${en ? 'Digitally signed · check code' : 'موقّعة رقمياً · رمز التحقّق'} ${signed.code} · ${location.host}/public.html?verify=${signed.code}`,
+        `${en ? 'Electronically authorized · check code' : 'مفوَّضة إلكترونياً · رمز التحقّق'} ${signed.code} · ${location.host}/public.html?verify=${signed.code}`,
         { size: 2.7, fill: SECONDARY, font: ANY_FONT, rtl: !en }
       )
     );
+  if (docIssued(s) && s.copyStatement && en)
+    out.push(tx(105, signed?.code ? 274.4 : 278.6, s.copyStatement, { size: 2.4, fill: SECONDARY, font: ANY_FONT }));
   out.push(
     tx(160, sigY - 4, ar && !en ? 'الختم' : 'SEAL', {
       size: ar && !en ? 3.6 : 2.8,
@@ -305,8 +290,8 @@ export function certificateSVG(s, lang = 'bilingual') {
 
 /* the thumbnail card: small paper, click to see it full size, download in three forms */
 export function docCard(s, lang) {
-  const record = s.kind === 'certificate' ? sourceFor(s) : s,
-    p = person(record.person) || {};
+  const record = (s.kind === 'certificate' ? docRecord(s) : s) || s,
+    p = person(s.person) || {};
   return (
     <section className="panel doccard">
       <div className="panel-h">
@@ -389,7 +374,7 @@ export function docCard(s, lang) {
 }
 
 const docFile = (s, lang, ext) => {
-  const record = s.kind === 'certificate' ? sourceFor(s) : s;
+  const record = (s.kind === 'certificate' ? docRecord(s) : s) || s;
   return `${fileName(s.kind === 'certificate' ? 'certificate' : 'register-extract', KIND[record.kind]?.[0].split(' ')[0], person(record.person)?.lat, record.reg.replace(/\//g, '-'), lang)}.${ext}`;
 };
 
@@ -413,6 +398,23 @@ export function downloadMenu(anchor, s, lang) {
     anchor,
     [
       { label: L('PDF — print or save', 'PDF — طباعة أو حفظ'), icon: 'doc', fn: () => printDoc(s, lang(), true) },
+      ...(s.kind === 'certificate' && Object.keys(s.snapshot || {}).length
+        ? [
+            {
+              label: L('Parish sheet (approved wording)', 'ورقة الرعية (النص المعتمد)'),
+              icon: 'doc',
+              hint: 'HTML',
+              fn: async () => {
+                try {
+                  saveBlob(`${s.reg}.html`, await certificateSheet(s.id));
+                  toast(L('Sheet saved', 'حُفظت الورقة'), `${s.reg}.html`, 'success');
+                } catch (e) {
+                  toast(L('The sheet could not be made', 'تعذّر إنشاء الورقة'), e.message, 'danger');
+                }
+              }
+            }
+          ]
+        : []),
       {
         label: L('Image (PNG)', 'صورة (PNG)'),
         icon: 'export',
@@ -446,10 +448,10 @@ export function downloadMenu(anchor, s, lang) {
 /* full size, with its own language switch so the reader can compare without leaving */
 export function viewDoc(s, lang) {
   let cur = lang;
-  const record = s.kind === 'certificate' ? sourceFor(s) : s;
+  const record = (s.kind === 'certificate' ? docRecord(s) : s) || s;
   openModal({
     wide: true,
-    title: `${docTitle(s)} — ${nameIn(person(record.person))}`,
+    title: `${docTitle(s)} — ${nameIn(person(s.person))}`,
     sub: (
       <>
         A4 ·{' '}

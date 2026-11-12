@@ -847,45 +847,12 @@ export const SACRAMENTS = [
   }
 ];
 
-/* wedding anniversaries the system tracks and reminds on */
-export const ANNIVERSARIES = [
-  { couple: 'Georges & Nada Haddad', ar: 'جورج وندى حدّاد', years: 25, on: '2026-10-19' },
-  { couple: 'Joseph & the late Thérèse Sfeir', ar: 'جوزيف وتريز صفير', years: 50, on: '2026-10-27' },
-  { couple: 'Tony & Carla Gemayel', ar: 'طوني وكارلا الجميّل', years: 10, on: '2026-11-03' }
-];
+/* Sacramental anniversaries (card S11): only registered entries with a recorded celebration date, as
+   ParishLife.Api works them out (modules/sacraments.js). Nothing is derived or guessed here. */
+export const ANNIVERSARIES = [];
 
 export function anniversaryItems() {
-  const today = new Date(),
-    todayKey = today.toISOString().slice(0, 10);
-  const records = SACRAMENTS.filter(
-    s =>
-      ['baptism', 'confirmation', 'communion', 'marriage'].includes(s.kind) &&
-      ['registered', 'issued'].includes(s.status) &&
-      /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
-      s.date < todayKey
-  ).map(s => {
-    const originalYear = Number(s.date.slice(0, 4));
-    let year = today.getFullYear(),
-      on = `${year}${s.date.slice(4)}`;
-    if (on < todayKey) {
-      year += 1;
-      on = `${year}${s.date.slice(4)}`;
-    }
-    const p = person(s.person);
-    return {
-      couple: p?.lat || s.reg,
-      ar: p?.ar || s.reg,
-      years: year - originalYear,
-      on,
-      kind: s.kind,
-      reg: s.reg,
-      source: 'register',
-      person: s.person
-    };
-  });
-  return [...ANNIVERSARIES.map(a => ({ ...a, kind: 'marriage', source: 'legacy' })), ...records].sort((a, b) =>
-    a.on.localeCompare(b.on)
-  );
+  return [...ANNIVERSARIES].sort((a, b) => a.on.localeCompare(b.on));
 }
 
 /* ---------- volunteers & rota ---------- */
