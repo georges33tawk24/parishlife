@@ -35,7 +35,7 @@ import {
   eventCancel,
   eventDuplicate
 } from '../features/parish-life/calendar-dialogs.jsx';
-import { lineEdit, lineReverse, receipt, statement, statementsAll } from '../features/money/money-dialogs.jsx';
+import { lineEdit, lineReverse, statement, statementsAll } from '../features/money/money-dialogs.jsx';
 import {
   addToService,
   svcRequestNew,
@@ -282,66 +282,10 @@ export const VERBS = {
     );
   },
 
-  /* giving & finance -------------------------------------------- */
-  /* An envelope from the counting drawer: its number (or the next one), fund, giver unless anonymous,
-     and the amount as typed, in the currency the field shows; the drawer stays open for the next. */
-  'env-add': () => {
-    const el = document.querySelector('.drawer.open');
-    if (!el) return;
-    const amount = el.querySelector('#giveamt');
-    const typed = () => parseFloat(amount.value.replace(/,/g, ''));
-    if (!need(el, '#giveamt', L('Enter an amount above zero', 'أدخل مبلغاً أكبر من صفر'), () => typed() > 0)) return;
-    const envNo = el.querySelector('#envno').value.trim() || String(140 + D.BATCH.lines.length).padStart(4, '0');
-    const inLira = amount.closest('.field')?.querySelector('.prefix')?.textContent.trim() === 'L.L';
-    const usdAmount = inLira ? typed() / D.RATE.value : typed();
-    const keepLira = el.querySelector('#aslira').checked;
-    const line = {
-      env: envNo,
-      p: el.querySelector('#envanon').checked ? null : el.querySelector('#givep').dataset.pid || null,
-      fund: el.querySelector('#envfund').value || 'general'
-    };
-    if (keepLira)
-      Object.assign(line, {
-        lbp: Math.round(inLira ? typed() : typed() * D.RATE.value),
-        note: 'Given in lira',
-        noteAr: 'أُعطي بالليرة'
-      });
-    else line.usd = Math.round(usdAmount * 100) / 100;
-    D.BATCH.lines.push(line);
-    refresh();
-    ok(L('Envelope added', 'أُضيف المظروف'), `${envNo} · ${keepLira ? 'L.L ' + num(line.lbp) : usd(line.usd)}`);
-    /* ready for the next envelope */
-    for (const sel of ['#envno', '#givep']) setFieldValue(el.querySelector(sel), '');
-    delete el.querySelector('#givep').dataset.pid;
-    el.querySelector('#envno').focus();
-  },
-  'batch-close': () => {
-    D.BATCH.status = 'closed';
-    closeOverlays();
-    refresh();
-    ok(
-      L('Counting session 214 closed', 'أُقفلت جلسة العدّ ٢١٤'),
-      L(
-        'Posted to the fund balances. Corrections now need a reversing entry.',
-        'قُيّدت في أرصدة الصناديق. والتصحيح يحتاج قيداً عكسياً.'
-      )
-    );
-  },
-  'exp-approve': (btn, id) => {
-    const x = find(D.EXPENSES, id);
-    if (!x) return;
-    x.status = 'approved';
-    refresh();
-    ok(L('Expense approved', 'اعتُمد المصروف'), `${L(x.what, x.whatAr)} · ${usd(x.usd)}`);
-  },
+  /* giving & finance: counting, expense decisions and bank matching are in features/money/money-actions.jsx -- */
+  'exp-approve': (btn, id) => import('../features/money/money-actions.jsx').then(m => m.expenseDecision(id, 'approve')),
   'exp-add': () => CR.create('expense'),
-  'bank-match': (btn, id) => {
-    const b = find(D.BANKLINES, id);
-    if (!b) return;
-    b.matched = 'cs214';
-    refresh();
-    ok(L('Matched', 'تمّت المطابقة'), L('Reconciled against counting session 214.', 'طوبقت مع جلسة العدّ ٢١٤.'));
-  },
+  'bank-match': (btn, id) => import('../features/money/money-actions.jsx').then(m => m.bankMatchDialog(id)),
 
   'dup-merge': (btn, i) => {
     const [d] = D.DUPLICATES.splice(+i, 1);
@@ -604,10 +548,6 @@ export const VERBS = {
     share({ title: L('Certificate', 'شهادة'), text: L('Your certificate from Saint Elias', 'شهادتك من مار الياس') }),
   doc: (b, a) => previewDoc(a || 'Document'),
   ics: () => downloadICS(),
-  receipt: (b, a) => {
-    const [no, pid, amt] = (a || 'R-2026-0884|p1|50').split('|');
-    receipt(no, pid, +amt);
-  },
   statement: (b, a) => statement(a || 'p1'),
   'statements-all': () => statementsAll(),
   design: (b, a) => designTemplate(a || 0),
@@ -994,25 +934,6 @@ export const VERBS = {
         }
       }
     });
-  },
-  'recurring-toggle': (b, i) => {
-    const r = D.RECURRING[+i];
-    if (!r) return;
-    r.paused = !r.paused;
-    refresh();
-    ok(
-      r.paused ? L('Standing gift paused', 'أُوقف العطاء الدائم') : L('Standing gift resumed', 'استُؤنف العطاء الدائم'),
-      `${isAr() ? D.person(r.p).ar : D.person(r.p).lat} · ${usd(r.amount)}`,
-      {
-        action: {
-          label: L('Undo', 'تراجع'),
-          fn: () => {
-            r.paused = !r.paused;
-            refresh();
-          }
-        }
-      }
-    );
   }
 };
 

@@ -112,6 +112,15 @@ globalThis.fetch = async (url, options = {}) => {
     return json(200, {
       items: [{ id: 'm1', name: 'Choir', purpose: 'Sings at Sunday Mass', publicInformation: null }]
     });
+  // the finance lists (checked in checks/finance.mjs): empty for this parish
+  if (
+    method === 'GET' &&
+    /^parishes\/P\/(finance\/(funds|balances|campaigns|pledges|contributions|expenses|bank\/lines|bank\/reconciliations)|office-ledger\/entries)$/.test(
+      path
+    )
+  )
+    return json(200, []);
+  if (path === 'parishes/P/office-ledger/balances') return json(200, { period: '2026-11', totals: {} });
   return json(404); // a route the API does not have
 };
 
