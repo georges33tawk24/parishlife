@@ -154,7 +154,8 @@ export const recordArchdioceseCash = (a, id, body) =>
   api(`archdioceses/${e(a)}/billing/invoices/${e(id)}/cash-receipts`, 'POST', op(body));
 export const operatorInvoice = (parishId, id) => api(`administration/parishes/${e(parishId)}/invoices/${e(id)}`);
 export const payerSchedule = parishId => api(`parishes/${e(parishId)}/payer-schedule`);
-export const listPayerTransfers = parishId => api(`parishes/${e(parishId)}/payer-transfers`);
+export const listPayerTransfers = parishId => listAll(`parishes/${e(parishId)}/payer-transfers`);
+export const getPayerTransfer = (parishId, id) => api(`parishes/${e(parishId)}/payer-transfers/${e(id)}`);
 /* The parish offers to hand its billing to an archdiocese, or the archdiocese offers to take it. */
 export const proposeTransferToArchdiocese = (parishId, archdioceseId, body) =>
   api(`parishes/${e(parishId)}/payer-transfers/archdioceses/${e(archdioceseId)}`, 'POST', op(body));
