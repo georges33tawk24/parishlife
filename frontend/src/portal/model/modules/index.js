@@ -9,5 +9,6 @@
    To connect a module, add its file here, one import and one entry. See docs/frontend-modules/. */
 import * as people from './people.js';
 import * as sacraments from './sacraments.js';
+import * as facilities from './facilities.js';
 
-export const MODULES = [people, sacraments];
+export const MODULES = [people, sacraments, facilities];
