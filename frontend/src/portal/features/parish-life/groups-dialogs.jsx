@@ -6,7 +6,9 @@ import { S, go, me, is } from '../../model/store.js';
 import { toast, openDrawer, openModal, closeOverlays, Who, openMenu } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
-import { persist } from '../../model/persist.js';
+import { persist, hydrate } from '../../model/persist.js';
+import { session } from '../../model/api.js';
+import { ministryAction, applicationAction } from '../../model/modules/ministries.js';
 import { safeRichText } from '../../../lib/rich-text.js';
 import { curGroup, nameOf, ok, refresh, val } from '../../shared/dialog-helpers.jsx';
 import { need } from '../../shared/dialogs.jsx';
@@ -642,4 +644,137 @@ export function memberMenu(btn, pid) {
       }
     }
   ]);
+}
+
+/* A ministry's lifecycle: a priest approves a draft, then it can be published and open to applications. */
+const LIFECYCLE = {
+  approve: ['Approve this group', 'اعتماد هذه المجموعة', 'The group becomes active. Only a priest can approve.'],
+  publish: [
+    'Publish on the public site',
+    'نشر على الموقع العام',
+    'Its name, purpose and public information become visible to visitors.'
+  ],
+  unpublish: ['Remove from the public site', 'إزالة من الموقع العام', 'Visitors will no longer see this group.'],
+  'open-applications': [
+    'Open to applications',
+    'فتح باب الانتساب',
+    'Needs the eligibility policy reference recorded on the group.'
+  ],
+  'close-applications': ['Close applications', 'إغلاق باب الانتساب', 'People can no longer apply to join.']
+};
+export function lifecycleStep(gid, action) {
+  const [en, ar, note] = LIFECYCLE[action];
+  openDrawer({
+    title: L(en, ar),
+    body: (
+      <>
+        <p className="t-caption dim">{note}</p>
+        <div className="formrow">
+          <label className="label" htmlFor="lc_reason">
+            {L('Reason (kept in the group’s history)', 'السبب (يُحفظ في سجل المجموعة)')}
+          </label>
+          <textarea className="textarea" id="lc_reason" rows="3" maxLength="2000" />
+        </div>
+      </>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Cancel', 'إلغاء')}
+        </button>
+        <button className="btn btn-primary" id="lc_go">
+          {L('Confirm', 'تأكيد')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#lc_go').addEventListener('click', async () => {
+        try {
+          await ministryAction(gid, action, val(el, '#lc_reason'));
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
+        }
+        await hydrate();
+        closeOverlays();
+        refresh();
+        ok(L('Done', 'تمّ'));
+      });
+    }
+  });
+}
+
+/* A decision on a join application listed on the group's overview. */
+export function joinDecision(gid, pid, action) {
+  const request = D.groupInfo(gid).requests.find(r => r.p === pid);
+  if (!request) return;
+  const priest = !!session.parishes.find(p => p.id === session.parishId)?.roles?.includes('priest');
+  const approve = action === 'approve';
+  openDrawer({
+    title: approve ? L('Approve this request', 'قبول هذا الطلب') : L('Decline this request', 'رفض هذا الطلب'),
+    sub: D.person(pid)?.lat || '',
+    body: (
+      <>
+        <p className="t-caption dim">
+          {approve
+            ? priest
+              ? L(
+                  'Record the eligibility and consent review you actually did. The person becomes a member.',
+                  'سجّل مراجعة الأهلية والموافقة التي أجريتها فعلاً. يصبح الشخص عضواً.'
+                )
+              : L(
+                  'Your recommendation goes to the priest, who makes the final decision.',
+                  'تذهب توصيتك إلى الكاهن الذي يتخذ القرار.'
+                )
+            : priest
+              ? L('The applicant is told the reason you give.', 'يُبلَّغ مقدّم الطلب بالسبب الذي تذكره.')
+              : L(
+                  'The request goes back to the applicant with what they need to add.',
+                  'يعود الطلب إلى مقدّمه مع ما يحتاج إلى إضافته.'
+                )}
+        </p>
+        {approve && priest ? (
+          <C.Field
+            label={L('Eligibility and consent review reference', 'مرجع مراجعة الأهلية والموافقة')}
+            id="jd_ref"
+            req={true}
+          />
+        ) : (
+          <div className="formrow">
+            <label className="label" htmlFor="jd_reason">
+              {L('Reason', 'السبب')}
+            </label>
+            <textarea className="textarea" id="jd_reason" rows="3" maxLength="2000" />
+          </div>
+        )}
+      </>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Cancel', 'إلغاء')}
+        </button>
+        <button className="btn btn-primary" id="jd_go">
+          {L('Confirm', 'تأكيد')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#jd_go').addEventListener('click', async () => {
+        const reference = el.querySelector('#jd_ref')?.value || '',
+          reason = el.querySelector('#jd_reason')?.value || '';
+        if (approve && priest && !reference.trim())
+          return toast(L('Enter the review reference', 'أدخل مرجع المراجعة'), '', 'warning');
+        if (!approve && !reason.trim()) return toast(L('Give a reason', 'اذكر السبب'), '', 'warning');
+        try {
+          await applicationAction(gid, request, action, { reference, reason });
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
+        }
+        await hydrate();
+        closeOverlays();
+        refresh();
+        ok(L('Done', 'تمّ'));
+      });
+    }
+  });
 }

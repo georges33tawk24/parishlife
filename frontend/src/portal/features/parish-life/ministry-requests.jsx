@@ -2,14 +2,15 @@
    leave one, and review requests within one's role. */
 
 import { useEffect, useState } from 'react';
-import { api, session } from '../../model/api.js';
-import { GROUPS, PARISH } from '../../model/data.js';
+import { session } from '../../model/api.js';
+import { GROUPS, PARISH, PEOPLE } from '../../model/data.js';
+import { ministryRequests, requestDecision, requestMembership } from '../../model/modules/ministries.js';
 import { t } from '../../../lib/i18n.js';
 import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const L = t,
-  open = ['requested', 'awaiting-priest', 'withdrawal-requested', 'leave-requested'];
+  open = ['requested', 'awaiting-priest', 'withdrawal-requested', 'leave-requested', 'returned'];
 
 /* The server names groups and parishes in English; those of the open parish are shown in the
    reader's language from the parish's own records. */
@@ -25,6 +26,7 @@ const statuses = {
   'awaiting-priest': ['Awaiting priest', 'بانتظار الكاهن'],
   'withdrawal-requested': ['Withdrawal awaiting approval', 'سحب الطلب بانتظار الموافقة'],
   'leave-requested': ['Private departure review', 'مراجعة مغادرة خاصة'],
+  returned: ['Returned for more information', 'أُعيد لاستكمال المعلومات'],
   approved: ['Membership approved', 'تمّت الموافقة على العضوية'],
   ended: ['Membership ended', 'انتهت العضوية'],
   withdrawn: ['Request withdrawn', 'تمّ سحب الطلب'],
@@ -82,22 +84,52 @@ export function MinistryRequests() {
     [round, setRound] = useState(0);
   const [, redraw] = useState(0);
   useEffect(() => {
-    api('ministry-requests').then(setData, e => setError(e.message));
+    ministryRequests(Object.fromEntries(PEOPLE.map(p => [p.id, L(p.lat, p.ar)]))).then(setData, e =>
+      setError(e.message)
+    );
   }, [round]);
   const refresh = () => setRound(n => n + 1);
   const q = query.toLowerCase().trim();
-  const decide = (r, action, text) =>
-    submit(
+  const decide = (r, action, text) => {
+    const needsReference =
+      !r.own && action === 'approve' && r.kind === 'join' && r.priest && r.status !== 'withdrawal-requested';
+    const needsReason = !r.own && action === 'decline';
+    return submit(
       L('Confirm decision', 'تأكيد القرار'),
       <>
         <p>
           {groupLabel(r.group_id, r.parish_id, r.groupName)} · {r.name}
         </p>
         <p>{text}</p>
+        {needsReference ? (
+          <label className="formrow">
+            <span className="label">
+              {L('Eligibility and consent review reference', 'مرجع مراجعة الأهلية والموافقة')}
+            </span>
+            <input className="input" name="reference" maxLength="1000" required />
+          </label>
+        ) : null}
+        {r.own || action === 'approve' ? null : (
+          <label className="formrow">
+            <span className="label">
+              {r.priest
+                ? L('Reason shown to the applicant', 'السبب الظاهر لمقدّم الطلب')
+                : L('What the applicant needs to add', 'ما يحتاج مقدّم الطلب إلى إضافته')}
+            </span>
+            <textarea
+              className="textarea"
+              name="reason"
+              maxLength="2000"
+              rows="4"
+              required={needsReason || !r.priest}
+            />
+          </label>
+        )}
       </>,
-      () => api('ministry-requests', 'POST', { action, id: r.id, version: r.updated_at }),
+      values => requestDecision(r, action, values),
       refresh
     );
+  };
   const requestCard = r => {
     const withdraw = r.leader_at ? L('Request withdrawal', 'طلب سحب الطلب') : L('Withdraw request', 'سحب الطلب');
     const approve =
@@ -107,7 +139,7 @@ export function MinistryRequests() {
           ? L('Approve departure', 'الموافقة على المغادرة')
           : r.priest
             ? L('Approve membership', 'الموافقة على العضوية')
-            : L('Approve and send to priest', 'موافقة وإرسال للكاهن');
+            : L('Recommend to the priest', 'التوصية للكاهن');
     return (
       <article key={r.id} className="ministry-request">
         <div>
@@ -150,9 +182,15 @@ export function MinistryRequests() {
                 className="btn btn-secondary"
                 data-action="decline"
                 data-id={r.id}
-                onClick={() => decide(r, 'decline', L('Decline', 'رفض'))}
+                onClick={() =>
+                  decide(
+                    r,
+                    'decline',
+                    r.priest ? L('Decline', 'رفض') : L('Return for more information', 'إعادة لاستكمال المعلومات')
+                  )
+                }
               >
-                {L('Decline', 'رفض')}
+                {r.priest ? L('Decline', 'رفض') : L('Return', 'إعادة')}
               </button>
             </>
           ) : null}
@@ -180,18 +218,14 @@ export function MinistryRequests() {
                 'يراجع المسؤول طلبك ثم الكاهن. يستطيع الكاهن الموافقة مباشرة.'
               )}
         </p>
-        <label className="formrow">
-          <span className="label">{L('Optional note', 'ملاحظة اختيارية')}</span>
-          <textarea className="textarea" name="reason" maxLength="2000" rows="5" />
-        </label>
+        {g.member ? (
+          <label className="formrow">
+            <span className="label">{L('Optional note', 'ملاحظة اختيارية')}</span>
+            <textarea className="textarea" name="reason" maxLength="2000" rows="5" />
+          </label>
+        ) : null}
       </>,
-      values =>
-        api('ministry-requests', 'POST', {
-          ...values,
-          action: g.member ? 'leave' : 'join',
-          parish: g.parish,
-          group: g.id
-        }),
+      values => requestMembership(g, values),
       refresh
     );
   const rows = data

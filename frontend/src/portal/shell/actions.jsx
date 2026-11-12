@@ -43,7 +43,14 @@ import {
   svcTemplateUse
 } from '../features/parish-life/services-dialogs.jsx';
 import { noteEdit, noteNew } from '../features/records/notes.jsx';
-import { handover, meetingNew, memberAdd, memberMenu, postAdd } from '../features/parish-life/groups-dialogs.jsx';
+import {
+  handover,
+  joinDecision,
+  meetingNew,
+  memberAdd,
+  memberMenu,
+  postAdd
+} from '../features/parish-life/groups-dialogs.jsx';
 import {
   hymnRestore,
   hymnText,
@@ -382,31 +389,8 @@ export const VERBS = {
   restore: (btn, id) => restorePerson(id),
 
   /* groups ------------------------------------------------------ */
-  'join-approve': (btn, pid) => {
-    const gid = (S.route === 'groups' && S.params[0]) || 'g1',
-      g = D.groupInfo(gid);
-    g.requests = g.requests.filter(r => r.p !== pid);
-    if (!g.roster.some(r => r.p === pid)) {
-      g.roster.push({ p: pid, role: 'Member', roleAr: 'عضو', joined: '2026', att: 0 });
-      const grp = D.group(gid);
-      if (grp && S.role !== 'leader') grp.members += 1;
-    }
-    refresh();
-    ok(
-      L('Added to the group', 'أُضيف إلى المجموعة'),
-      L('They are on the roster and will be messaged.', 'أصبح على اللائحة وستصله الرسائل.')
-    );
-  },
-  'join-decline': (btn, pid) => {
-    const g = D.groupInfo((S.route === 'groups' && S.params[0]) || 'g1');
-    g.requests = g.requests.filter(r => r.p !== pid);
-    refresh();
-    toast(
-      L('Request declined', 'رُفض الطلب'),
-      L('Nothing is sent to them automatically.', 'لا يُرسَل إليه شيء تلقائياً.'),
-      'warning'
-    );
-  },
+  'join-approve': (btn, pid) => joinDecision((S.route === 'groups' && S.params[0]) || '', pid, 'approve'),
+  'join-decline': (btn, pid) => joinDecision((S.route === 'groups' && S.params[0]) || '', pid, 'decline'),
   'task-toggle': (btn, i) => {
     const tk = D.groupInfo((S.route === 'groups' && S.params[0]) || 'g1').tasks[+i];
     if (!tk) return;

@@ -27,7 +27,7 @@ import * as CR from '../../shared/record-editor.jsx';
 import { VERBS } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { safeRichText } from '../../../lib/rich-text.js';
-import { meetingEdit } from './groups-dialogs.jsx';
+import { meetingEdit, lifecycleStep } from './groups-dialogs.jsx';
 import { meetingId, attendanceCounts, attendanceValue } from '../../model/planning.js';
 import { GROUPS, groupInfo, TODAY, MUSIC, person, group } from '../../model/data.js';
 import {
@@ -187,7 +187,9 @@ function meetingCard(g, m) {
             </p>
           </div>{' '}
           <div className="meeting-heading-actions">
-            {m.done ? (
+            {m.status === 'Draft' ? (
+              <Pill label={L('Draft — not shown to members', 'مسودة — لا تظهر للأعضاء')} tone="warning" />
+            ) : m.done ? (
               <Status k="closed" />
             ) : upcoming ? (
               <Status k="scheduled" />
@@ -258,6 +260,13 @@ function meetingCard(g, m) {
           ''
         )}{' '}
         <div className="meeting-actions">
+          {m.status === 'Draft' && upcoming ? (
+            <button className="btn btn-primary btn-dense" data-meeting-confirm={meetingId(m)}>
+              {L('Confirm meeting', 'تثبيت الاجتماع')}
+            </button>
+          ) : (
+            ''
+          )}{' '}
           {upcoming ? (
             <button className="btn btn-secondary btn-dense" data-act="remind:group">
               {L('Send reminder', 'إرسال تذكير')}
@@ -305,7 +314,9 @@ function groupDetail(id, tab) {
               />
             </h1>{' '}
             <div className="meta">
-              {L(g.cat, g.catAr)} · {L(g.meets, g.meetsAr)} · {g.members} {L('members', 'عضواً')}
+              {L(g.cat, g.catAr)}
+              {g.meets ? ` · ${L(g.meets, g.meetsAr)}` : ''} · {g.members} {L('members', 'عضواً')}
+              {g.status && g.status !== 'Active' ? ` · ${g.status === 'Draft' ? L('Draft', 'مسودة') : g.status}` : ''}
             </div>
           </div>{' '}
           <div className="acts">
@@ -375,6 +386,40 @@ function groupDetail(id, tab) {
           </Panel>
         </div>{' '}
         <div className="sidecol">
+          {!is('leader') ? (
+            <Panel title={L('Status', 'الحالة')}>
+              <p className="t-caption dim">
+                {g.status === 'Draft'
+                  ? L(
+                      'A draft: members cannot see it until a priest approves it.',
+                      'مسودة: لا يراها الأعضاء قبل أن يعتمدها كاهن.'
+                    )
+                  : [
+                      g.publicListed ? L('Public', 'عام') : L('Not on the public site', 'غير ظاهرة على الموقع العام'),
+                      g.applicationsOpen
+                        ? L('open to applications', 'باب الانتساب مفتوح')
+                        : L('applications closed', 'باب الانتساب مغلق')
+                    ].join(' · ')}
+              </p>
+              <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                {(g.status === 'Draft'
+                  ? [['approve', 'Approve', 'اعتماد']]
+                  : [
+                      g.publicListed ? ['unpublish', 'Unpublish', 'إلغاء النشر'] : ['publish', 'Publish', 'نشر'],
+                      g.applicationsOpen
+                        ? ['close-applications', 'Close applications', 'إغلاق الانتساب']
+                        : ['open-applications', 'Open applications', 'فتح الانتساب']
+                    ]
+                ).map(([action, en, ar]) => (
+                  <button key={action} className="btn btn-secondary btn-dense" data-lifecycle={`${g.id}|${action}`}>
+                    {L(en, ar)}
+                  </button>
+                ))}
+              </div>
+            </Panel>
+          ) : (
+            ''
+          )}{' '}
           {!is('leader') ? (
             <Panel title={L('Leadership handover', 'تسليم المسؤولية')}>
               <p className="t-caption dim">
@@ -1375,6 +1420,17 @@ groups.mount = host => {
   host
     .querySelectorAll('[data-meeting-edit]')
     .forEach(b => b.addEventListener('click', () => meetingEdit(b.dataset.meetingEdit)));
+  host.querySelectorAll('[data-meeting-confirm]').forEach(b =>
+    b.addEventListener('click', async () => {
+      const meeting = groupInfo(S.params[0]).meetings.find(m => meetingId(m) === b.dataset.meetingConfirm);
+      if (!meeting) return;
+      meeting.status = 'Confirmed';
+      if (await persist()) bus.refresh();
+    })
+  );
+  host
+    .querySelectorAll('[data-lifecycle]')
+    .forEach(b => b.addEventListener('click', () => lifecycleStep(...b.dataset.lifecycle.split('|'))));
   host
     .querySelectorAll('[data-task]')
     .forEach(c => c.addEventListener('change', () => VERBS['task-toggle'](c, c.dataset.task)));

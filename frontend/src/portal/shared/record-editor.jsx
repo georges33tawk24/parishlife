@@ -309,52 +309,51 @@ export const ENT = {
     name: g => L(g.name, g.ar),
     nw: ['New group', 'مجموعة جديدة'],
     ed: ['Edit group', 'تعديل المجموعة'],
-    del: ['Delete this group?', 'حذف هذه المجموعة؟'],
+    del: ['Archive this group?', 'أرشفة هذه المجموعة؟'],
     fields: () => [
-      ...pair('name', 'ar', 'Name (English)', 'الاسم (إنكليزي)', 'Name (Arabic)', 'الاسم (عربي)'),
+      { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
       {
         k: 'cat',
-        label: L('Category', 'الفئة'),
+        label: L('Kind', 'النوع'),
         type: 'select',
         options: () => [
-          ['Worship', 'Worship', 'العبادة'],
-          ['Formation', 'Formation', 'التنشئة'],
-          ['Devotion', 'Devotion', 'التقوى'],
-          ['Service', 'Service', 'الخدمة']
+          ['Ministry', 'Ministry', 'خدمة'],
+          ['Choir', 'Choir', 'جوقة'],
+          ['Class', 'Class', 'صف'],
+          ['Committee', 'Committee', 'لجنة'],
+          ['Team', 'Team', 'فريق']
         ],
         set: (x, v) => {
           x.cat = v;
-          x.catAr = { Worship: 'العبادة', Formation: 'التنشئة', Devotion: 'التقوى', Service: 'الخدمة' }[v];
+          x.catAr = { Ministry: 'خدمة', Choir: 'جوقة', Class: 'صف', Committee: 'لجنة', Team: 'فريق' }[v];
         }
       },
+      { k: 'purpose', label: L('Purpose', 'الغاية'), type: 'textarea', req: true, full: true },
+      { k: 'publicInformation', label: L('Public information', 'معلومات عامة'), type: 'textarea', full: true },
       {
-        k: 'vis',
-        label: L('Visibility', 'الظهور'),
-        type: 'select',
-        options: () => [
-          ['public', 'Public', 'عام'],
-          ['private', 'Private', 'خاص'],
-          ['confidential', 'Confidential', 'سرّي']
-        ]
-      },
-      { k: 'leader', label: L('Leader', 'المسؤول'), type: 'select', options: people },
-      ...pair('meets', 'meetsAr', 'Meets', 'يجتمع', 'Meets (Arabic)', 'يجتمع (عربي)', { req: false })
+        k: 'eligibilityPolicyReference',
+        label: L('Eligibility policy reference', 'مرجع سياسة الأهلية'),
+        full: true,
+        req: false
+      }
     ],
     blank: () => ({
       id: uid('g'),
       name: '',
       ar: '',
-      cat: 'Worship',
-      catAr: 'العبادة',
-      leader: 'p3',
-      members: 1,
+      cat: 'Ministry',
+      catAr: 'خدمة',
+      purpose: '',
+      publicInformation: '',
+      eligibilityPolicyReference: '',
+      members: 0,
       meets: '',
       meetsAr: '',
-      vis: 'public'
+      vis: 'private'
     }),
     delNote: [
-      'Members keep their records. The group’s posts and meetings go with it.',
-      'يحتفظ الأعضاء بسجلاتهم. وتُحذف منشورات المجموعة واجتماعاتها معها.'
+      'Members keep their records. The group is archived, not erased.',
+      'يحتفظ الأعضاء بسجلاتهم. تُؤرشف المجموعة ولا تُمحى.'
     ],
     onDelete: g => {
       const d = D.GROUP_DETAIL[g.id];
