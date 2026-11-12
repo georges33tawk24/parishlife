@@ -17,4 +17,14 @@ import * as finance from './finance.js';
 import * as communications from './communications.js';
 import * as requests from './requests.js';
 
-export const MODULES = [people, sacraments, facilities, calendar, ministries, registrations, finance, communications, requests];
+export const MODULES = [
+  people,
+  sacraments,
+  facilities,
+  calendar,
+  ministries,
+  registrations,
+  finance,
+  communications,
+  requests
+];
