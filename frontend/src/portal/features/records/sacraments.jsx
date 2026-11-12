@@ -24,13 +24,12 @@ import {
 import * as C from '../../ui/components.jsx';
 import { download } from '../../shell/actions.jsx';
 import { need, needAll } from '../../shared/dialogs.jsx';
-import { workflow as serverWorkflow } from '../../model/persist.js';
+import * as API from '../../model/modules/sacraments.js';
 import { fileName } from '../../shared/print.js';
 import {
   SACRAMENTS,
   anniversaryItems,
   PARISH,
-  PREP_REQUIREMENTS,
   PEOPLE,
   person,
   RESERVATIONS,
@@ -57,28 +56,11 @@ import {
 
 const L = (en, ar) => t(en, ar);
 
-const pendingSacraments = personId =>
-  SACRAMENTS.filter(
-    s =>
-      s.kind !== 'certificate' &&
-      ['requested', 'office-reviewed', 'preparing', 'draft', 'scheduled', 'awaiting-signature'].includes(s.status) &&
-      (!personId || s.person === personId)
-  );
-
 /* Official entries are reached from the person's record and from Requests; there is no separate register page. */
 const STABS = () => [
   ['', 'Preparation', 'التحضير'],
   ['anniversaries', 'Anniversaries', 'الذكريات', anniversaryItems().length]
 ];
-
-const prepProgress = s => {
-  const requirements = PREP_REQUIREMENTS[s.kind] || [];
-  const required = requirements.map((item, index) => (item[2] ? index : -1)).filter(index => index >= 0);
-  const complete = Array.isArray(s.preparation) ? required.filter(index => s.preparation[index]).length : 0;
-  return required.length
-    ? `${complete} / ${required.length} ${L('required', 'مطلوب')}`
-    : L('No required checklist', 'لا متطلبات إلزامية');
-};
 
 /* The approved register as a spreadsheet: one row per official entry, both names, Western digits. */
 function exportRegister() {
@@ -90,23 +72,20 @@ function exportRegister() {
     'Arabic name',
     'Date',
     'Celebrant',
-    'Book',
-    'Page',
+    'Book / page',
     'Godparents / witnesses',
     'Status'
   ];
   const rows = SACRAMENTS.filter(official).map(s => {
-    const p = person(s.person),
-      c = person(s.celebrant);
+    const p = person(s.person);
     return [
       s.reg,
       KIND[s.kind]?.[0] || s.kind,
       p?.lat,
       p?.ar,
       String(s.date || '').slice(0, 10),
-      c?.lat || '',
+      s.celebrantName || '',
       s.book,
-      s.page,
       s.godparents,
       s.status
     ];
@@ -188,8 +167,8 @@ export function sacraments(tab = '', below = null) {
         title: `${kindLabel(s.kind)} · ${s.reg}`,
         who: person(s.person),
         state: s.status,
-        waitingSource: !sourceFor(s) && !['cancelled', 'rejected'].includes(s.status),
-        open: !['issued', 'rejected', 'cancelled'].includes(s.status),
+        waitingSource: s.apiStatus === 'WaitingForSource',
+        open: !['issued', 'rejected', 'cancelled', 'withdrawn'].includes(s.status),
         date: s.date,
         priority: s.priority || '',
         owner: nextStep(s)[1],
@@ -309,7 +288,7 @@ export function sacraments(tab = '', below = null) {
       date = S.ui.requestDate || '',
       priority = S.ui.requestPriority || '',
       state = S.ui.requestStatus || '';
-    const needsAction = x => x.open && !x.waitingSource && !(x.category === 'certificate' && x.state === 'draft');
+    const needsAction = x => x.open && !x.waitingSource;
     const shown = items.filter(
       x =>
         (f === 'all' ||
@@ -545,10 +524,7 @@ export function sacraments(tab = '', below = null) {
         rows={rows.map(a => ({
           cells: [
             <b>{isAr() ? a.ar : a.couple}</b>,
-            <span>
-              {kindLabel(a.kind)}
-              {a.source === 'legacy' ? <small className="dim">{L('legacy', 'قديم')}</small> : ''}
-            </span>,
+            <span>{kindLabel(a.kind)}</span>,
             <span className="num">{a.years}</span>,
             <span className="mono dim">{fmtDate(a.on)}</span>,
             <button className="btn btn-secondary btn-dense" data-act={`greet:${a.index}`}>
@@ -590,8 +566,8 @@ export function sacraments(tab = '', below = null) {
               ))}{' '}
           <p className="t-caption dim" style={{ marginTop: '16px' }}>
             {L(
-              'Baptism, chrismation, first Communion, and marriage anniversaries are derived from their registers. Earlier marriage reminders are labeled as legacy entries until linked to a register.',
-              'تُستخرج ذكريات المعمودية والميرون والمناولة الأولى والإكليل من سجلاتها. وتبقى ذكريات الإكليل السابقة قيوداً قديمة حتى ربطها بسجل.'
+              'Baptism, chrismation, first Communion and marriage anniversaries come only from registered entries with a recorded celebration date, for the next 92 days. A person recorded as deceased gets none.',
+              'تُؤخذ ذكريات المعمودية والميرون والمناولة الأولى والإكليل من القيود المسجَّلة التي لها تاريخ احتفال مدوَّن فقط، للأيام الـ92 القادمة. ولا ذكرى لمن سُجّل أنه متوفّى.'
             )}
           </p>
         </div>
@@ -624,7 +600,7 @@ export function sacraments(tab = '', below = null) {
             { label: L('Person', 'الشخص') },
             { label: L('Sacrament', 'السرّ') },
             { label: L('Celebration date', 'تاريخ الاحتفال') },
-            { label: L('Preparation', 'التحضير') },
+            { label: L('Celebrant', 'المحتفل') },
             { label: L('Status', 'الحالة') },
             { label: '', cls: 'shrink' }
           ]}
@@ -634,7 +610,7 @@ export function sacraments(tab = '', below = null) {
               <Who p={person(s.person)} />,
               kindLabel(s.kind),
               s.date ? celebrationText(s) : L('Set date', 'حدّد التاريخ'),
-              prepProgress(s),
+              s.celebrantName || L('To be assigned', 'يُحدَّد لاحقاً'),
               <Status k={s.status} />,
               <span className="row" style={{ gap: '6px' }}>
                 <a className="btn btn-secondary btn-dense" href={`#/certificate/${s.id}`}>
@@ -663,21 +639,6 @@ export function sacraments(tab = '', below = null) {
             />
           }
         />{' '}
-        <details style={{ marginTop: '20px' }}>
-          <summary>{L('Preparation requirements by sacrament', 'متطلبات التحضير بحسب السرّ')}</summary>
-          <div className="grid g2" style={{ marginTop: '16px' }}>
-            {Object.entries(PREP_REQUIREMENTS).map(([k, reqs], i) => (
-              <Panel key={i} title={kindLabel(k)}>
-                {reqs.map(([en, ar], i) => (
-                  <div key={i} className="listrow">
-                    <Icon name="check" size={15} />
-                    {L(en, ar)}
-                  </div>
-                ))}
-              </Panel>
-            ))}
-          </div>
-        </details>
       </div>
     </>
   );
@@ -732,16 +693,15 @@ sacraments.mount = host => {
     })
   );
   host.querySelector('#newcertreq')?.addEventListener('click', () => {
-    const sources = eligibleSources(),
-      pending = pendingSacraments();
+    const sources = eligibleSources();
     const selected = S.ui.newCertificateSource || '';
     S.ui.newCertificateSource = '';
     const initial = sources.find(s => s.id === selected) || null;
     openDrawer({
       title: L('New certificate request', 'طلب شهادة جديد'),
       sub: L(
-        'Choose a person and, if available, an existing entry. A future sacrament may be requested now; the certificate waits for an approved register.',
-        'اختر الشخص وقيداً قائماً إن توفر. يمكن الطلب قبل موعد السرّ، وتنتظر الشهادة اعتماد السجل.'
+        'Choose a person and the registered entry the certificate is taken from. Without a registered entry the request waits until one is linked.',
+        'اختر الشخص والقيد المسجَّل الذي تؤخذ منه الشهادة. من دون قيد مسجَّل ينتظر الطلب حتى يُربط به قيد.'
       ),
       body: (
         <>
@@ -760,27 +720,43 @@ sacraments.mount = host => {
           </div>{' '}
           <div className="formrow">
             <label className="label" htmlFor="req_source">
-              {L('Related sacrament', 'السرّ المرتبط')}
+              {L('Registered entry', 'القيد المسجَّل')}
             </label>
             <Select defaultValue={selected} id="req_source">
               <option value="">{L('No entry yet — request will wait', 'لا قيد بعد — الطلب سينتظر')}</option>
               {sources.map((s, i) => (
-                <option key={i} value={`official:${s.id}`}>
-                  {s.reg} · {nameIn(person(s.person))} · {kindLabel(s.kind)} ({L('official', 'رسمي')})
-                </option>
-              ))}
-              {pending.map((s, i) => (
-                <option key={i} value={`pending:${s.id}`}>
-                  {s.reg} · {nameIn(person(s.person))} · {kindLabel(s.kind)} ({L('pending', 'قيد الانتظار')})
+                <option key={i} value={s.id}>
+                  {s.reg} · {nameIn(person(s.person))} · {kindLabel(s.kind)}
                 </option>
               ))}
             </Select>
-            <span className="help" id="req_source_help">
-              {L(
-                'An official entry can be reviewed immediately. A future or pending entry links automatically after registration.',
-                'يمكن مراجعة القيد الرسمي فوراً. يرتبط القيد المقبل أو المعلّق آلياً بعد اعتماده.'
-              )}
-            </span>
+          </div>{' '}
+          <div className="formrow" id="req_kind_row">
+            <label className="label" htmlFor="req_kind">
+              {L('Certificate of', 'شهادة')}
+            </label>
+            <Select id="req_kind">
+              {Object.entries(KIND)
+                .filter(([k]) => k !== 'certificate')
+                .map(([k, v], i) => (
+                  <option key={i} value={k}>
+                    {L(v[0], v[1])}
+                  </option>
+                ))}
+            </Select>
+          </div>{' '}
+          <div className="formgrid">
+            <div className="formrow">
+              <label className="label" htmlFor="req_language">
+                {L('Language of the wording', 'لغة النص')}
+              </label>
+              <Select defaultValue={isAr() ? 'ar' : 'en'} id="req_language">
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="ar">العربية</option>
+              </Select>
+            </div>
+            <C.Field label={L('Copies', 'عدد النسخ')} id="req_quantity" type="number" value="1" />
           </div>{' '}
           <C.Field label={L('Purpose of request', 'غاية الطلب')} id="req_purpose" req={true} />
         </>
@@ -791,53 +767,52 @@ sacraments.mount = host => {
             {L('Cancel', 'إلغاء')}
           </button>
           <button className="btn btn-primary" id="req_save">
-            {initial ? L('Create and submit', 'إنشاء وإرسال') : L('Create request', 'إنشاء الطلب')}
+            {L('Create request', 'إنشاء الطلب')}
           </button>
         </>
       ),
       onMount(el) {
         const related = el.querySelector('#req_source'),
-          personSelect = el.querySelector('#req_person');
-        const refreshAction = () => {
-          el.querySelector('#req_save').textContent = related.value.startsWith('official:')
-            ? L('Create and submit', 'إنشاء وإرسال')
-            : L('Create request', 'إنشاء الطلب');
+          personSelect = el.querySelector('#req_person'),
+          kindRow = el.querySelector('#req_kind_row');
+        const refresh = () => {
+          const entry = SACRAMENTS.find(s => s.id === related.value);
+          kindRow.hidden = !!entry;
+          if (entry) el.querySelector('#req_kind').value = entry.kind;
         };
         related.addEventListener('change', () => {
-          const selectedRecord = SACRAMENTS.find(s => s.id === related.value.split(':')[1]);
-          if (selectedRecord) personSelect.value = selectedRecord.person;
-          refreshAction();
+          const entry = SACRAMENTS.find(s => s.id === related.value);
+          if (entry) personSelect.value = entry.person;
+          refresh();
         });
         personSelect.addEventListener('change', () => {
-          const selectedRecord = SACRAMENTS.find(s => s.id === related.value.split(':')[1]);
-          if (selectedRecord && selectedRecord.person !== personSelect.value) related.value = '';
-          refreshAction();
+          const entry = SACRAMENTS.find(s => s.id === related.value);
+          if (entry && entry.person !== personSelect.value) related.value = '';
+          refresh();
         });
+        refresh();
         el.querySelector('#req_save')?.addEventListener('click', async () => {
           if (!need(el, '#req_purpose', L('Enter the purpose', 'أدخل غاية الطلب'))) return;
           const saveButton = el.querySelector('#req_save');
           saveButton.disabled = true;
-          const [recordType, recordId] = related.value.split(':');
-          const id = 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+          const entry = SACRAMENTS.find(s => s.id === related.value);
           try {
-            await serverWorkflow('create-certificate-request', id, {
-              requestId: id,
+            const created = await API.createCertificate({
+              kind: entry ? entry.kind : el.querySelector('#req_kind').value,
               person: personSelect.value,
-              purpose: el.querySelector('#req_purpose').value.trim(),
-              sourceRecordId: recordType === 'official' ? recordId : null,
-              requestedSacramentId: recordType === 'pending' ? recordId : null
+              sourceRecordId: entry?.id,
+              language: el.querySelector('#req_language').value,
+              quantity: Number(el.querySelector('#req_quantity').value) || 1,
+              purpose: el.querySelector('#req_purpose').value.trim()
             });
             closeOverlays();
-            location.hash = `#/certificate/${id}`;
+            location.hash = `#/certificate/${created.id}`;
             bus.refresh();
             toast(
               L('Request created', 'أُنشئ الطلب'),
-              recordType === 'official'
-                ? L('Submitted for clergy review.', 'أُرسل لمراجعة الإكليروس.')
-                : L(
-                    'It will wait for an official register entry before approval.',
-                    'سينتظر قيداً رسمياً قبل الاعتماد.'
-                  ),
+              entry
+                ? L('Prepare it and send it to the priest.', 'حضّرها وأرسلها إلى الكاهن.')
+                : L('It waits for a registered entry to be linked.', 'ينتظر ربط قيد مسجَّل.'),
               'success'
             );
           } catch (e) {
@@ -895,7 +870,6 @@ sacraments.mount = host => {
               id="srq-child-lat"
               req={true}
             />{' '}
-            <C.Field label={L('Child’s full name (Arabic)', 'اسم الطفل الكامل (عربي)')} id="srq-child-ar" req={true} />{' '}
             <C.Field label={L('Child’s birth date', 'تاريخ ميلاد الطفل')} id="srq-child-born" type="date" req={true} />{' '}
             <div className="formgrid">
               <C.Field label={L('Father’s name (optional)', 'اسم الأب (اختياري)')} id="srq-child-father" />
@@ -903,8 +877,8 @@ sacraments.mount = host => {
             </div>{' '}
             <p className="help">
               {L(
-                'Submitting creates a linked child record without a login account. If the child is already listed, select that person instead.',
-                'يُنشئ التقديم سجل طفل مرتبطاً دون حساب دخول. إذا كان الطفل مسجّلاً، اختر سجله بدلاً من ذلك.'
+                'Submitting creates a linked child record without a login account (the API keeps the name in one script, so no Arabic spelling is stored). If the child is already listed, select that person instead.',
+                'يُنشئ التقديم سجل طفل مرتبطاً دون حساب دخول (يحفظ النظام الاسم بكتابة واحدة فلا يُخزَّن تهجئة عربية). إذا كان الطفل مسجّلاً، اختر سجله بدلاً من ذلك.'
               )}
             </p>
           </div>{' '}
@@ -942,7 +916,6 @@ sacraments.mount = host => {
           const child = manual
             ? {
                 lat: el.querySelector('#srq-child-lat').value.trim(),
-                ar: el.querySelector('#srq-child-ar').value.trim(),
                 born: el.querySelector('#srq-child-born').value,
                 father: el.querySelector('#srq-child-father').value.trim(),
                 mother: el.querySelector('#srq-child-mother').value.trim()
@@ -952,31 +925,39 @@ sacraments.mount = host => {
             manual &&
             !needAll(el, [
               ['#srq-child-lat', L('Enter the child’s English name', 'أدخل اسم الطفل بالإنكليزية')],
-              ['#srq-child-ar', L('Enter the child’s Arabic name', 'أدخل اسم الطفل بالعربية')],
               ['#srq-child-born', L('Enter the birth date', 'أدخل تاريخ الولادة')]
             ])
           )
             return;
-          const id = 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
           const btn = el.querySelector('#srq_save');
           btn.disabled = true;
+          const requestedDate = el.querySelector('#srq_date').value,
+            requestNotes = el.querySelector('#srq_notes').value.trim();
           try {
-            await serverWorkflow('create-sacrament-request', id, {
-              kind: el.querySelector('#srq_kind').value,
-              person: manual ? undefined : personId,
-              child: child || undefined,
-              date: el.querySelector('#srq_date').value,
-              notes: el.querySelector('#srq_notes').value.trim()
-            });
+            if (child) {
+              const words = child.lat.split(/\s+/);
+              await API.createChildAndSacrament({
+                given: words[0],
+                family: words.slice(1).join(' '),
+                born: child.born,
+                father: child.father,
+                mother: child.mother,
+                requestedDate,
+                requestNotes
+              });
+            } else
+              await API.createSacrament({
+                kind: el.querySelector('#srq_kind').value,
+                person: personId,
+                requestedDate,
+                facts: { requestNotes }
+              });
             closeOverlays();
             location.hash = '#/requests';
             bus.refresh();
             toast(
               L('Request submitted', 'قُدّم الطلب'),
-              L(
-                'It is ready for office review or a direct priest decision.',
-                'الطلب جاهز لمراجعة المكتب أو لقرار الكاهن المباشر.'
-              ),
+              L('It waits for the priest to accept or decline it.', 'ينتظر الطلب قبول الكاهن أو رفضه.'),
               'success'
             );
           } catch (e) {
@@ -987,16 +968,19 @@ sacraments.mount = host => {
       }
     })
   );
+  /* The celebration date and the celebrant. The API calls this "scheduling": it is what ends preparation. */
   host.querySelectorAll('[data-prep-edit]').forEach(btn =>
     btn.addEventListener('click', () => {
       const record = SACRAMENTS.find(s => s.id === btn.dataset.prepEdit);
       if (!record) return;
-      const requirements = PREP_REQUIREMENTS[record.kind] || [];
+      const scheduled = record.apiStatus === 'Scheduled';
       openDrawer({
-        title: L('Edit preparation', 'تعديل التحضير'),
+        title: scheduled
+          ? L('Change the celebration date', 'تغيير موعد الاحتفال')
+          : L('Set the celebration', 'تحديد الاحتفال'),
         sub: L(
-          'Record the planned date and requirements. Complete preparation before celebration.',
-          'سجّل الموعد والمتطلبات. أكمل التحضير قبل الاحتفال.'
+          'The date must be in the future and a celebrant must be named. Changing a confirmed date needs a reason, which stays in the history.',
+          'يجب أن يكون الموعد في المستقبل وأن يُذكر المحتفل. تغيير موعد مؤكَّد يحتاج سبباً يبقى في السجل.'
         ),
         body: (
           <>
@@ -1009,24 +993,21 @@ sacraments.mount = host => {
                 id="prep_date"
                 type="date"
                 value={record.date || ''}
+                req={true}
               />
               {timeSelect('prep_time', record.time || '')}
             </div>
-            <div className="stack" style={{ gap: '10px', marginTop: '16px' }}>
-              {requirements.map(([en, ar, required], i) => (
-                <label key={i} className="check">
-                  <input
-                    type="checkbox"
-                    data-prep-item={i}
-                    defaultChecked={!!(Array.isArray(record.preparation) && record.preparation[i])}
-                  />
-                  <span>
-                    {L(en, ar)}
-                    {required ? '' : <small className="dim">({L('optional', 'اختياري')})</small>}
-                  </span>
-                </label>
-              ))}
-            </div>
+            <C.Field
+              label={L('Celebrant', 'المحتفل')}
+              id="prep_celebrant"
+              value={record.celebrantName || ''}
+              req={true}
+            />
+            {scheduled ? (
+              <C.Textarea label={L('Reason for the change', 'سبب التغيير')} id="prep_reason" max={500} />
+            ) : (
+              ''
+            )}
           </>
         ),
         foot: (
@@ -1035,48 +1016,34 @@ sacraments.mount = host => {
               {L('Close', 'إغلاق')}
             </button>
             <button className="btn btn-primary" id="prep_save">
-              {L('Save preparation', 'حفظ التحضير')}
+              {scheduled ? L('Change the date', 'تغيير الموعد') : L('Confirm the date', 'تأكيد الموعد')}
             </button>
-            {record.status === 'preparing' ? (
-              <button className="btn btn-secondary" id="prep_complete">
-                {L('Complete preparation', 'إكمال التحضير')}
-              </button>
-            ) : (
-              ''
-            )}
           </>
         ),
         onMount(el) {
-          const save = async () => {
-            await serverWorkflow('update-preparation', record.id, {
-              date: el.querySelector('#prep_date').value,
-              time: el.querySelector('#prep_date').value ? el.querySelector('#prep_time').value : '',
-              checklist: [...el.querySelectorAll('[data-prep-item]')].map(x => x.checked)
-            });
-          };
           el.querySelector('#prep_save').addEventListener('click', async () => {
+            if (
+              !needAll(el, [
+                ['#prep_date', L('Enter a date', 'أدخل التاريخ')],
+                ['#prep_celebrant', L('Name the celebrant', 'اذكر المحتفل')],
+                ...(scheduled ? [['#prep_reason', L('Enter a reason', 'أدخل السبب')]] : [])
+              ])
+            )
+              return;
             try {
-              await save();
+              if (scheduled)
+                await API.sacramentAction(record.id, 'reschedule', {
+                  reason: el.querySelector('#prep_reason').value.trim()
+                });
+              await API.sacramentAction(record.id, 'schedule', {
+                scheduledAt: API.toUtc(el.querySelector('#prep_date').value, el.querySelector('#prep_time').value),
+                celebrantName: el.querySelector('#prep_celebrant').value.trim()
+              });
               closeOverlays();
               bus.refresh();
-              toast(L('Preparation saved', 'حُفظ التحضير'), '', 'success');
+              toast(L('Celebration confirmed', 'تأكّد الاحتفال'), '', 'success');
             } catch (e) {
-              toast(L('Could not save preparation', 'تعذّر حفظ التحضير'), e.message, 'danger');
-            }
-          });
-          el.querySelector('#prep_complete')?.addEventListener('click', async () => {
-            try {
-              await save();
-              await serverWorkflow('complete-preparation', record.id);
-              closeOverlays();
-              bus.refresh();
-              toast(
-                L('Preparation completed', 'اكتمل التحضير'),
-                L('Record the celebration on or after its date.', 'سجّل الاحتفال في موعده أو بعده.'),
-                'success'
-              );
-            } catch (e) {
-              toast(L('Could not complete preparation', 'تعذّر إكمال التحضير'), e.message, 'danger');
+              toast(L('Could not save the date', 'تعذّر حفظ الموعد'), e.message, 'danger');
             }
           });
         }
@@ -1108,7 +1075,7 @@ sacraments.mount = host => {
           el.querySelector('#prep_cancel_confirm').addEventListener('click', async () => {
             if (!need(el, '#prep_reason', L('Enter a reason', 'أدخل السبب'))) return;
             try {
-              await serverWorkflow('cancel-preparation', btn.dataset.prepCancel, {
+              await API.sacramentAction(btn.dataset.prepCancel, 'cancel', {
                 reason: el.querySelector('#prep_reason').value.trim()
               });
               closeOverlays();
