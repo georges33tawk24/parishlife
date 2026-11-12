@@ -38,6 +38,7 @@ import {
 } from '../../model/data.js';
 import { hh, label, occupationField, onlineNew, phoneText, relLabel, riteLabel, unverified } from './people-shared.jsx';
 import { familyTree } from './family-tree.jsx';
+import { PersonLoader, ConsentPanel, MedicalPanel, RelationshipPanel } from './person-records.jsx';
 import { personMenu } from './people.jsx';
 import { exportHouseholds } from './households.jsx';
 
@@ -161,6 +162,7 @@ export function personView(id, tab = '') {
   );
   const head = (
     <>
+      <PersonLoader id={id} />
       <div className="pagehead">
         <div className="entityhead" style={{ width: '100%' }}>
           <span style={{ marginTop: '22px', display: 'flex' }}>
@@ -256,22 +258,27 @@ export function personView(id, tab = '') {
               <dt>{t('Line of work', 'المهنة')}</dt>
               <dd>{x.occupation || '—'}</dd>
               <dt>{t('Language', 'اللغة')}</dt>
-              <dd>{x.lang === 'ar' ? t('Arabic', 'العربية') : t('English', 'الإنكليزية')}</dd>
-              <dt>{t('Reach them on', 'التواصل عبر')}</dt>
               <dd>
-                {{ whatsapp: 'WhatsApp', sms: 'SMS', email: t('Email', 'بريد إلكتروني') }[x.channel] || 'WhatsApp'}
+                {{ ar: t('Arabic', 'العربية'), en: t('English', 'الإنكليزية'), fr: t('French', 'الفرنسية') }[x.lang] ||
+                  '—'}
               </dd>
               <dt>{t('Blood type', 'زمرة الدم')}</dt>
               <dd className="mono">{x.blood || '—'}</dd>
               <dt>{t('Directory', 'الدليل')}</dt>
-              <dd>{x.directory ? t('Listed, by consent', 'مدرَج بموافقته') : t('Not listed', 'غير مدرَج')}</dd>
+              <dd>
+                {x.directory === undefined
+                  ? '—'
+                  : x.directory
+                    ? t('Listed, by consent', 'مدرَج بموافقته')
+                    : t('Not listed', 'غير مدرَج')}
+              </dd>
             </dl>
           </Panel>{' '}
           <Panel title={t('Skills and important dates', 'المهارات والتواريخ المهمّة')}>
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary btn-dense" id="edit-profile-extra">
                 <Icon name="edit" size={15} />
-                {t('Edit skills and dates', 'تعديل المهارات والتواريخ')}
+                {t('Edit skills and occupation', 'تعديل المهارات والمهنة')}
               </button>
             </div>{' '}
             <h4 className="t-ui">{t('Skills', 'المهارات')}</h4>{' '}
@@ -314,7 +321,8 @@ export function personView(id, tab = '') {
             ) : (
               ''
             )}
-          </Panel>
+          </Panel>{' '}
+          <RelationshipPanel id={p.id} />
         </div>{' '}
         <div className="sidecol">
           {accountPanel(p)}{' '}
@@ -752,53 +760,9 @@ export function personView(id, tab = '') {
       </div>
     ),
     consent: () => (
-      <div style={{ maxWidth: '720px' }}>
-        <Panel title={t('Consent', 'الموافقات')}>
-          <div className="stack" style={{ gap: '12px' }}>
-            <C.SwitchRow
-              label={t('Parish announcements on WhatsApp', 'إعلانات الرعية على واتساب')}
-              checked={x.consent?.[0]?.[2] ?? false}
-              pref={`consent.${p.id}.0`}
-            />{' '}
-            <label className="switch">
-              <input type="checkbox" id="directory-consent" defaultChecked={!!x.directory} />
-              <span>{t('Printed parish people directory', 'دليل مؤمني الرعية المطبوع')}</span>
-            </label>{' '}
-            <p className="help">
-              {t(
-                'Includes names in English and Arabic, household, town, and phone only. Changes affect the next printed directory.',
-                'يشمل الاسمين الإنكليزي والعربي والعائلة والبلدة والهاتف فقط. تسري التغييرات على الدليل المطبوع التالي.'
-              )}
-            </p>{' '}
-            <C.SwitchRow
-              label={t('Photos in parish media', 'الصور في وسائل الرعية')}
-              checked={x.consent?.[2]?.[2] ?? false}
-              pref={`consent.${p.id}.2`}
-            />
-          </div>{' '}
-          <div className="divider" />{' '}
-          <div className="ac-group" style={{ paddingInline: 0 }}>
-            {t('Consent history', 'سجل الموافقات')}
-          </div>{' '}
-          <div className="timeline">
-            <div className="tl-item">
-              <div className="when">30 Mar 2026</div>
-              <div className="what">
-                {t('Signed the 2026 consent form in the office.', 'وقّع استمارة موافقة ٢٠٢٦ في المكتب.')}
-              </div>
-            </div>{' '}
-            <div className="tl-item">
-              <div className="when">14 Jan 2025</div>
-              <div className="what">{t('Withdrew consent for photos.', 'سحب الموافقة على الصور.')}</div>
-            </div>
-          </div>{' '}
-          <p className="t-caption dim" style={{ marginTop: '12px' }}>
-            {t(
-              'Every change of consent is kept with its date, so the parish can always show what was agreed and when.',
-              'كل تغيير في الموافقة يُحفظ بتاريخه، فتستطيع الرعية دائماً أن تُظهر ما اتُّفق عليه ومتى.'
-            )}
-          </p>
-        </Panel>
+      <div className="stack" style={{ maxWidth: '720px', gap: '16px' }}>
+        <ConsentPanel id={p.id} />
+        <MedicalPanel id={p.id} />
       </div>
     )
   };
@@ -996,13 +960,6 @@ personView.mount = (host, id) => {
   host.querySelector('[data-pkebab]')?.addEventListener('click', e => personMenu(e.currentTarget, id));
   host.querySelector('#edit-person-groups')?.addEventListener('click', () => editPersonGroups(id));
   host.querySelector('#edit-profile-extra')?.addEventListener('click', () => editProfileExtra(id));
-  host.querySelector('#directory-consent')?.addEventListener('change', async e => {
-    const x = (PERSON_EXTRA[id] ||= {});
-    x.directory = e.target.checked;
-    if (x.consent?.[1]) x.consent[1][2] = x.directory;
-    if (await persist()) toast(t('Directory preference saved', 'حُفظ خيار الدليل'), '', 'success');
-    else e.target.checked = !!PERSON_EXTRA[id]?.directory;
-  });
 };
 
 function editPersonGroups(id) {
@@ -1115,26 +1072,12 @@ function editPersonGroups(id) {
 
 function editProfileExtra(id) {
   const x = PERSON_EXTRA[id] || {};
-  const dates = x.dates || [];
   openModal({
-    title: t('Skills and important dates', 'المهارات والتواريخ المهمّة'),
+    title: t('Skills and occupation', 'المهارات والمهنة'),
     body: (
       <>
         {skillPicker(x.skills || [])}
         {occupationField('extra-occupation', x.occupation || '')}{' '}
-        <div className="stack" id="extra-dates">
-          {[...dates, ['', '', '']].map(([en, ar, d], i) => (
-            <div key={i} className="formgrid" data-date-row="">
-              <C.Field
-                label={t('Date label (English)', 'تسمية التاريخ (إنكليزي)')}
-                value={en || ''}
-                id={`extra-en-${i}`}
-              />{' '}
-              <C.Field label={t('Date label (Arabic)', 'تسمية التاريخ (عربي)')} value={ar || ''} id={`extra-ar-${i}`} />{' '}
-              <C.Field label={t('Date', 'التاريخ')} type="date" value={d || ''} id={`extra-date-${i}`} />
-            </div>
-          ))}
-        </div>
       </>
     ),
     foot: (
@@ -1152,12 +1095,7 @@ function editProfileExtra(id) {
       el.querySelector('#extra-save').addEventListener('click', async () => {
         const skills = selectedSkills(el);
         const occupation = el.querySelector('#extra-occupation').value.trim();
-        const nextDates = [...el.querySelectorAll('[data-date-row]')]
-          .map(row => [...row.querySelectorAll('input')].map(i => i.value.trim()))
-          .filter(([en, ar, d]) => en || ar || d);
-        if (nextDates.some(([en, ar, d]) => !en || !d))
-          return toast(t('Complete each date label and date', 'أكمل تسمية كل تاريخ وتاريخه'), '', 'warning');
-        PERSON_EXTRA[id] = { ...x, skills, occupation, dates: nextDates };
+        PERSON_EXTRA[id] = { ...x, skills, occupation };
         if (!(await persist())) return;
         closeOverlays();
         bus.refresh();

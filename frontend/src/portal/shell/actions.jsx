@@ -27,6 +27,7 @@ import {
   designTemplate,
   remind
 } from '../features/communicate/messaging-dialogs.jsx';
+import { dupDismiss, dupMerge } from '../features/records/people-duplicates.jsx';
 import { rotaRemove, rotaSwap } from '../features/parish-life/rota-dialogs.jsx';
 import {
   calDay,
@@ -343,42 +344,8 @@ export const VERBS = {
     ok(L('Matched', 'تمّت المطابقة'), L('Reconciled against counting session 214.', 'طوبقت مع جلسة العدّ ٢١٤.'));
   },
 
-  'dup-merge': (btn, i) => {
-    const [d] = D.DUPLICATES.splice(+i, 1);
-    if (!d) return;
-    refresh();
-    ok(
-      L('Records merged', 'دُمج السجلّان'),
-      L('The kept record now carries both envelope histories.', 'السجل المحتفَظ به يحمل تاريخ المظروفين.'),
-      {
-        action: {
-          label: L('Undo', 'تراجع'),
-          fn: () => {
-            D.DUPLICATES.splice(+i, 0, d);
-            refresh();
-          }
-        }
-      }
-    );
-  },
-  'dup-dismiss': (btn, i) => {
-    const [d] = D.DUPLICATES.splice(+i, 1);
-    if (!d) return;
-    refresh();
-    ok(
-      L('Marked as not a duplicate', 'عُلّم كغير مكرّر'),
-      L('They will not be suggested again.', 'لن يُقترحا مجدداً.'),
-      {
-        action: {
-          label: L('Undo', 'تراجع'),
-          fn: () => {
-            D.DUPLICATES.splice(+i, 0, d);
-            refresh();
-          }
-        }
-      }
-    );
-  },
+  'dup-merge': (btn, i) => dupMerge(i),
+  'dup-dismiss': (btn, i) => dupDismiss(i),
   restore: (btn, id) => restorePerson(id),
 
   /* groups ------------------------------------------------------ */
