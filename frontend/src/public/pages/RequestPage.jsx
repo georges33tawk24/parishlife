@@ -2,7 +2,7 @@
    describe the request, and keep the private link that follows it. */
 import { useEffect, useRef, useState } from 'react';
 import { mountTurnstile } from '../../lib/turnstile.js';
-import { trackAction } from '../../lib/beacon.js';
+import { guestSubmit, publicKind, trackingLink } from '../../portal/model/guest-requests.js';
 import { useSite, digits, still } from '../site.jsx';
 import { Icon, Glyph } from '../components/icons.jsx';
 import { Bring, ParishSub, Thumb, facts } from './parish-parts.jsx';
@@ -30,7 +30,7 @@ export function RequestPage({ p, d, kind }) {
     ],
     [
       L('You collect what you asked for', 'تستلم ما طلبته'),
-      L('At the parish, or as a secure download when it is offered.', 'من الرعية، أو بتنزيل آمن عند توفّره.')
+      L('Ask the parish office how to collect it.', 'اسأل مكتب الرعية عن طريقة الاستلام.')
     ]
   ];
   return (
@@ -88,6 +88,7 @@ function RequestForm({ p, all, chosen, ministry }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [link, setLink] = useState('');
+  const [behalf, setBehalf] = useState('');
   useEffect(() => {
     let live = true;
     mountTurnstile(turnstile.current, c.lang === 'ar' ? 'ar' : 'en').then(state => {
@@ -106,23 +107,37 @@ function RequestForm({ p, all, chosen, ministry }) {
     setSending(true);
     setError('');
     try {
-      const q = {
-        ...Object.fromEntries(new FormData(form)),
-        parish: p.id,
-        responsibleAdult: form.elements.responsibleAdult.checked,
-        ...(check.current ? { turnstile: check.current.token } : {})
-      };
-      const response = await fetch('/api/public/guest-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(q)
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Could not send request.');
-      trackAction('request-sent', p.id);
-      const url = new URL('public.html', location.href);
-      url.hash = 'track=' + data.trackingToken;
-      setLink(url.href);
+      const el = form.elements,
+        value = name => String(el[name]?.value || '').trim();
+      if (!value('email') && !value('phone'))
+        throw new Error(L('Give an email address or a phone number.', 'أدخل بريداً إلكترونياً أو رقم هاتف.'));
+      if (check.current && !check.current.token) throw new Error(L('Complete the check first.', 'أكمل التحقّق أولاً.'));
+      const [kind, label] = publicKind(value('kind')),
+        onBehalf = value('behalf'),
+        description = value('description');
+      const receipt = await guestSubmit(
+        p.id,
+        {
+          kind,
+          summary: `${label}: ${description}`.slice(0, 300),
+          details: {
+            requestKind: value('kind'),
+            description,
+            ...(kind === 'SacramentInquiry' ? { sacrament: value('kind') } : {}),
+            ...(value('email') ? { email: value('email') } : {}),
+            ...(value('phone') ? { phone: value('phone') } : {}),
+            ...(onBehalf ? { behalf: onBehalf } : {}),
+            ...(ministry ? { ministry } : {})
+          },
+          requesterName: value('name'),
+          requesterContact: [value('email'), value('phone')].filter(Boolean).join(' · '),
+          subjectDescription: onBehalf || value('name'),
+          relationship: onBehalf ? value('relationship') || 'Other' : 'Self',
+          authorityBasis: onBehalf ? value('authority') : null
+        },
+        check.current?.token
+      );
+      setLink(trackingLink(receipt, p.id));
     } catch (err) {
       setError(err.message);
       setSending(false);
@@ -170,8 +185,34 @@ function RequestForm({ p, all, chosen, ministry }) {
               <span>
                 {L('On behalf of', 'بالنيابة عن')} <small>{L('optional', 'اختياري')}</small>
               </span>
-              <input name="behalf" maxLength="120" />
+              <input name="behalf" maxLength="120" value={behalf} onChange={e => setBehalf(e.target.value)} />
             </label>
+            {behalf.trim() ? (
+              <>
+                <label className="rq-field">
+                  <span>{L('You are their', 'صلتك به')}</span>
+                  <select name="relationship" defaultValue="Parent">
+                    {[
+                      ['Parent', 'Parent', 'أحد الوالدين'],
+                      ['Guardian', 'Guardian', 'ولي الأمر'],
+                      ['Spouse', 'Spouse', 'الزوج/الزوجة'],
+                      ['Child', 'Son or daughter', 'ابن/ابنة'],
+                      ['Relative', 'Relative', 'قريب'],
+                      ['Representative', 'Representative', 'وكيل'],
+                      ['Other', 'Other', 'آخر']
+                    ].map(([v, en, ar]) => (
+                      <option key={v} value={v}>
+                        {L(en, ar)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="rq-field">
+                  <span>{L('Why you may ask for them', 'لماذا يحق لك الطلب عنه')}</span>
+                  <input name="authority" required maxLength="1000" />
+                </label>
+              </>
+            ) : null}
             <label className="rq-field">
               <span>{L('Email', 'البريد الإلكتروني')}</span>
               <input type="email" name="email" autoComplete="email" maxLength="120" dir="ltr" />
@@ -201,7 +242,7 @@ function RequestForm({ p, all, chosen, ministry }) {
               name="description"
               required
               minLength="5"
-              maxLength="4000"
+              maxLength="2000"
               rows="5"
               placeholder={L(
                 'Names, dates and anything the office should know.',
@@ -212,25 +253,6 @@ function RequestForm({ p, all, chosen, ministry }) {
               }
             />
           </label>
-          <div className="rq-delivery" role="radiogroup" aria-labelledby="rq-delivery-label">
-            <span className="rq-label" id="rq-delivery-label">
-              {L('If there is a document, how would you like it?', 'إن كان هناك مستند، كيف تودّ استلامه؟')}
-            </span>
-            <label className="rq-opt">
-              <input type="radio" name="delivery" value="collection" defaultChecked />
-              <span>
-                <b>{L('Collect from the parish', 'الاستلام من الرعية')}</b>
-                <small>{L('The office tells you when it is ready.', 'يُعلمك المكتب عندما يصبح جاهزاً.')}</small>
-              </span>
-            </label>
-            <label className="rq-opt">
-              <input type="radio" name="delivery" value="secure-download" />
-              <span>
-                <b>{L('Secure download, when available', 'تنزيل آمن عند توفّره')}</b>
-                <small>{L('From your private tracking link.', 'من رابط المتابعة الخاص بك.')}</small>
-              </span>
-            </label>
-          </div>
         </fieldset>
         <label className="rq-check" data-reveal>
           <input name="responsibleAdult" type="checkbox" required />

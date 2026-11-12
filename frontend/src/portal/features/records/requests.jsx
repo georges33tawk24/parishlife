@@ -2,7 +2,7 @@
    under its heading. */
 import { t } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
-import { session, api } from '../../model/api.js';
+import { MEMBER_REQUESTS } from '../../model/data.js';
 import { openOnlineRequest } from './online-requests.jsx';
 import { sacraments } from './sacraments.jsx';
 
@@ -26,14 +26,12 @@ export const requests = () =>
 
 /* #/requests/online/<id> opens that online request over the list; the address then settles back on Requests. */
 requests.mount = (host, first, second) => {
-  api('workspace/request-counts?parish=' + encodeURIComponent(session.parishId))
-    .then(counts => {
-      if (host.isConnected)
-        host.querySelectorAll('[data-queue-count]').forEach(el => {
-          el.textContent = counts[el.dataset.queueCount] ? String(counts[el.dataset.queueCount]) : '';
-        });
-    })
-    .catch(() => {});
+  /* Only the guest queue is counted here (from the loaded cases); the membership and profile queues
+     belong to the People module and show no count until it provides one. */
+  const waiting = MEMBER_REQUESTS.filter(r => r.origin === 'Guest' && r.status === 'submitted').length;
+  host.querySelectorAll('[data-queue-count="guestrequests"]').forEach(el => {
+    el.textContent = waiting ? String(waiting) : '';
+  });
   sacraments.mount(host);
   if (first === 'online' && second) {
     S.params = [];

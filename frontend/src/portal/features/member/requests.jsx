@@ -3,7 +3,8 @@
 import { Fragment } from 'react';
 
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { M, memberAction } from '../../model/member-data.js';
+import { MY_REQUESTS } from '../../model/data.js';
+import { act } from '../../model/modules/requests.js';
 import { session } from '../../model/api.js';
 import { bus, go, S } from '../../model/store.js';
 import { Icon, Pill, openModal, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
@@ -20,7 +21,7 @@ import {
   stepsDone,
   nextText
 } from '../../model/sacrament-requests.js';
-import { OWN, aboutOf, kindGrid, reload, titleOf, txt, unlinked } from './requests-shared.jsx';
+import { OWN, aboutOf, kindGrid, reload, titleOf, txt } from './requests-shared.jsx';
 import { newPage } from './request-form.jsx';
 import { detailPage } from './request-detail.jsx';
 import { mountForm } from './request-form-checks.jsx';
@@ -126,9 +127,8 @@ const current = r =>
   isActive(r) || (r.kind === 'booking' && r.progress.stage === 'confirmed' && r.details.date >= todayKey());
 
 function listPage() {
-  const active = M.requests.filter(current),
-    earlier = M.requests.filter(r => !current(r));
-  const linked = (M.requestOptions?.subjects || []).length > 0;
+  const active = MY_REQUESTS.filter(current),
+    earlier = MY_REQUESTS.filter(r => !current(r));
   const section = (id, title, body, extra = '') => (
     <section className="mr-section" aria-labelledby={`mr-${id}`}>
       <div className="member-section-head">
@@ -149,7 +149,6 @@ function listPage() {
           )}
         </p>
       </header>{' '}
-      {linked ? '' : unlinked()}{' '}
       {active.length
         ? section(
             'active',
@@ -174,7 +173,7 @@ function listPage() {
           ' mr-kinds-2'
         )
       )}{' '}
-      {M.requests.length ? '' : howItWorks()}{' '}
+      {MY_REQUESTS.length ? '' : howItWorks()}{' '}
       {earlier.length
         ? section(
             'earlier',
@@ -201,7 +200,7 @@ requestsPage.mount = host => {
   mountForm(host);
   host.querySelectorAll('[data-mr-withdraw]').forEach(b =>
     b.addEventListener('click', () => {
-      const r = M.requests.find(x => x.id === b.dataset.mrWithdraw);
+      const r = MY_REQUESTS.find(x => x.id === b.dataset.mrWithdraw);
       if (!r) return;
       const about = aboutOf(r);
       openModal({
@@ -246,7 +245,7 @@ requestsPage.mount = host => {
             yes.disabled = true;
             yes.setAttribute('aria-busy', 'true');
             try {
-              await memberAction('requestWithdraw', { id: r.id });
+              await act(r.id, r.api.version, 'withdraw');
               await reload();
               closeOverlays();
               redraw();
@@ -263,7 +262,7 @@ requestsPage.mount = host => {
   );
   host.querySelectorAll('[data-mr-certificate]').forEach(b =>
     b.addEventListener('click', () => {
-      const r = M.requests.find(x => location.hash.endsWith(x.id));
+      const r = MY_REQUESTS.find(x => location.hash.endsWith(x.id));
       S.ui.mrDraft = null;
       S.ui.mrPrefill = {
         kind: 'certificate',
@@ -281,7 +280,7 @@ requestsPage.mount = host => {
 
 /* The home page's view of requests: what is moving, or how to start. */
 export function homeCard() {
-  const active = M.requests.filter(current);
+  const active = MY_REQUESTS.filter(current);
   if (active.length)
     return (
       <section className="member-card mr-home">

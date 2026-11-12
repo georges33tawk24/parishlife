@@ -169,177 +169,104 @@ export const todayKey = () => {
 };
 
 /* ---- where a request stands ---------------------------------------------- */
+/* The API's case has one status and separate facts (accepted, approved by a priest, date confirmed,
+   completed); the member sees those and nothing else. */
 const STAGES = {
   received: ['Sent to the parish office', 'أُرسل إلى مكتب الرعية', 'info', 'st-sent'],
-  review: ['With the priest', 'لدى الكاهن', 'warning', 'st-review'],
-  preparing: ['In preparation', 'قيد التحضير', 'info', 'st-wait'],
+  needsinfo: ['The parish needs more information', 'تحتاج الرعية إلى معلومات إضافية', 'warning', 'st-review'],
+  inprogress: ['Accepted by the parish', 'قبلته الرعية', 'info', 'st-wait'],
   scheduled: ['Date confirmed', 'الموعد مؤكَّد', 'success', 'st-ok'],
-  celebrated: ['Being recorded', 'قيد التدوين', 'info', 'st-wait'],
+  cancelreq: ['Cancellation requested', 'طُلب الإلغاء', 'warning', 'st-review'],
   completed: ['Completed', 'مكتمل', 'success', 'st-ok'],
-  signing: ['Being signed', 'قيد التوقيع', 'info', 'st-wait'],
-  ready: ['Ready to collect', 'جاهزة للاستلام', 'success', 'st-ok'],
-  confirmed: ['Booking confirmed', 'الحجز مؤكَّد', 'success', 'st-ok'],
-  inprogress: ['Being taken care of', 'قيد المتابعة', 'info', 'st-wait'],
   declined: ['Not accepted', 'لم يُقبل', 'danger', 'st-no'],
   cancelled: ['Cancelled', 'أُلغي', 'danger', 'st-no'],
   withdrawn: ['Withdrawn', 'مسحوب', '', 'st-pause']
 };
-const CERTIFICATE_REVIEW = ['Being checked', 'قيد التدقيق', 'warning', 'st-review'];
-const BOOKING_REVIEW = ['With the priest', 'لدى الكاهن', 'warning', 'st-review'];
-const DONE = ['Done', 'منجز', 'success', 'st-ok'];
 /* [label, tone, status icon] for the stage pill */
 export const stageInfo = r => {
-  const stage = r.progress.stage;
-  const s =
-    r.kind === 'certificate' && stage === 'review'
-      ? CERTIFICATE_REVIEW
-      : r.kind === 'booking' && stage === 'review'
-        ? BOOKING_REVIEW
-        : r.kind === 'custom' && stage === 'completed'
-          ? DONE
-          : STAGES[stage] || STAGES.received;
+  const s = STAGES[r.progress.stage] || STAGES.received;
   return [t(s[0], s[1]), s[2], s[3]];
 };
 export const CLOSED = new Set(['declined', 'cancelled', 'withdrawn']);
-export const isActive = r =>
-  !CLOSED.has(r.progress.stage) && !['completed', 'ready', 'confirmed'].includes(r.progress.stage);
+export const isActive = r => !CLOSED.has(r.progress.stage) && r.progress.stage !== 'completed';
 
-/* The steps a parishioner sees, and how many are behind them. */
+/* The steps a parishioner sees, and how many are behind them. A sacrament also waits for the priest. */
+const SACRAMENT = new Set(['baptism', 'communion', 'confirmation', 'marriage', 'funeral']);
 export const stepsFor = r =>
-  r.kind === 'certificate'
+  SACRAMENT.has(r.kind)
     ? [
         t('Request sent', 'أُرسل الطلب'),
-        t('Register checked', 'التحقّق من السجل'),
-        t('Signed by the priest', 'توقيع الكاهن'),
-        t('Ready to collect', 'جاهزة للاستلام')
+        t('Accepted by the parish', 'قبلته الرعية'),
+        t('Approved by the priest', 'وافق الكاهن'),
+        t('Date confirmed', 'تأكيد الموعد'),
+        t('Completed', 'اكتمل')
       ]
-    : r.kind === 'booking'
-      ? [
-          t('Request sent', 'أُرسل الطلب'),
-          t('Parish office', 'مكتب الرعية'),
-          t('Priest’s approval', 'موافقة الكاهن'),
-          t('Confirmed', 'مؤكَّد')
-        ]
-      : r.kind === 'custom'
-        ? [t('Request sent', 'أُرسل الطلب'), t('Accepted', 'مقبول'), t('Done', 'منجز')]
-        : [
-            t('Request sent', 'أُرسل الطلب'),
-            t('Parish office', 'مكتب الرعية'),
-            t('Priest’s decision', 'قرار الكاهن'),
-            t('Preparation', 'التحضير'),
-            t('Celebration', 'الاحتفال'),
-            t('Parish register', 'سجلّ الرعية')
-          ];
-const DONE_STEPS = {
-  certificate: { received: 1, review: 1, signing: 2, ready: 4 },
-  booking: { received: 1, review: 2, confirmed: 4 },
-  custom: { received: 1, inprogress: 2, completed: 3 },
-  sacrament: { received: 1, review: 2, preparing: 3, scheduled: 4, celebrated: 5, completed: 6 }
-};
-const REACHED = {
-  certificate: { submitted: 1, approved: 2 },
-  booking: { submitted: 1, accepted: 2 },
-  custom: { submitted: 1, accepted: 2 },
-  sacrament: { submitted: 1, accepted: 2, 'priest-accepted': 3, prepared: 4, celebrated: 5 }
-};
-const family = r => (['certificate', 'booking', 'custom'].includes(r.kind) ? r.kind : 'sacrament');
-/* Which steps each recorded event completes, so every step can say when it happened. */
-const STEP_EVENTS = {
-  certificate: { submitted: [0], approved: [1], issued: [2, 3] },
-  booking: { submitted: [0], accepted: [1], confirmed: [2, 3] },
-  custom: { submitted: [0], accepted: [1], completed: [2] },
-  sacrament: { submitted: [0], accepted: [1], 'priest-accepted': [2], prepared: [3], celebrated: [4], registered: [5] }
-};
+    : [t('Request sent', 'أُرسل الطلب'), t('Accepted by the parish', 'قبلته الرعية'), t('Completed', 'اكتمل')];
+/* The moments the API recorded for each step; a step with no recorded moment stays empty. */
 export const stepTimes = r => {
-  const times = stepsFor(r).map(() => '');
-  for (const e of r.progress.events) for (const i of STEP_EVENTS[family(r)][e.key] || []) if (e.at) times[i] = e.at;
+  const dto = r.api?.dto || {},
+    times = stepsFor(r).map(() => '');
+  times[0] = dto.receivedAt || '';
+  times[1] = dto.acceptedAt || '';
+  if (SACRAMENT.has(r.kind)) times[2] = dto.clergyApprovedAt || '';
+  times[times.length - 1] = dto.completedAt || '';
   return times;
 };
 /* How many steps are complete; for a closed request, how far it got before it closed. */
 export const stepsDone = r => {
-  if (!CLOSED.has(r.progress.stage)) return DONE_STEPS[family(r)][r.progress.stage] ?? 1;
-  const reached = r.progress.events.map(e => REACHED[family(r)][e.key] || 0);
-  return Math.min(Math.max(1, ...reached), stepsFor(r).length - 1);
+  const dto = r.api?.dto || {},
+    total = stepsFor(r).length;
+  if (r.progress.stage === 'completed') return total;
+  let done = 1;
+  if (dto.acceptedAt) done++;
+  if (SACRAMENT.has(r.kind)) {
+    if (dto.clergyApprovedAt) done++;
+    if (dto.confirmedDate) done++;
+  }
+  return Math.min(done, total - 1);
 };
 
 /* What happens next, in one or two sentences, for the parishioner. */
 export function nextText(r) {
   const p = r.progress,
-    date = p.plannedDate || p.preferredDate;
+    date = p.plannedDate;
   switch (p.stage) {
     case 'received':
       return t(
         'The parish office will review your request and contact you if anything is missing.',
         'سيراجع مكتب الرعية طلبك ويتواصل معك إذا نقص أي شيء.'
       );
-    case 'review':
-      return r.kind === 'certificate'
-        ? t(
-            'The parish office is finding the entry in the parish register.',
-            'يبحث مكتب الرعية عن القيد في سجلّ الرعية.'
-          )
-        : r.kind === 'booking'
-          ? t(
-              'The parish office has checked the date. The priest will now confirm the booking.',
-              'تحقّق مكتب الرعية من الموعد، وسيؤكّد الكاهن الحجز الآن.'
-            )
-          : t(
-              'The parish office has reviewed your request. The priest will now decide.',
-              'راجع مكتب الرعية طلبك، وسيقرّر الكاهن الآن.'
-            );
-    case 'confirmed':
+    case 'needsinfo':
       return t(
-        `Your booking is confirmed for ${fmtDay(r.details.date)}, ${r.details.from}–${r.details.to}. Please collect the keys from the parish office.`,
-        `حجزك مؤكَّد في ${fmtDay(r.details.date)}، من ${r.details.from} إلى ${r.details.to}. يُرجى استلام المفاتيح من مكتب الرعية.`
+        'The parish asked for more information. Answer below; the request is not declined.',
+        'طلبت الرعية معلومات إضافية. أجب أدناه؛ لم يُرفض الطلب.'
       );
     case 'inprogress':
-      return t(
-        'The parish has accepted your request and will contact you to arrange it.',
-        'قبلت الرعية طلبك وستتواصل معك لترتيبه.'
-      );
-    case 'preparing':
-      return t(
-        'The priest accepted your request. Work through the preparation below; the parish office will confirm the date.',
-        'قبل الكاهن طلبك. أكمِل التحضير أدناه، وسيؤكّد مكتب الرعية الموعد.'
-      );
-    case 'scheduled':
-      return p.plannedTime
+      return p.approved
         ? t(
-            `Everything is ready. The celebration is planned for ${fmtDay(date)} at ${p.plannedTime}.`,
-            `كل شيء جاهز. الاحتفال مقرّر في ${fmtDay(date)} الساعة ${p.plannedTime}.`
+            'The priest approved your request. No date is confirmed yet; the parish will contact you.',
+            'وافق الكاهن على طلبك. لم يُؤكَّد موعد بعد، وستتواصل معك الرعية.'
           )
         : t(
-            `Everything is ready. The celebration is planned for ${fmtDay(date)}.`,
-            `كل شيء جاهز. الاحتفال مقرّر في ${fmtDay(date)}.`
+            'The parish accepted your request for processing and will contact you to arrange it.',
+            'قبلت الرعية طلبك للمعالجة وستتواصل معك لترتيبه.'
           );
-    case 'celebrated':
+    case 'scheduled':
       return t(
-        'The celebration took place. The parish office is entering it in the register.',
-        'تمّ الاحتفال، ويدوّنه مكتب الرعية الآن في السجل.'
+        `The date is confirmed for ${fmtDay(date)}${p.plannedTime ? ` at ${p.plannedTime}` : ''}.`,
+        `الموعد مؤكَّد في ${fmtDay(date)}${p.plannedTime ? ` الساعة ${p.plannedTime}` : ''}.`
+      );
+    case 'cancelreq':
+      return t(
+        'You asked to cancel this request. The parish will review it.',
+        'طلبتَ إلغاء هذا الطلب، وستراجعه الرعية.'
       );
     case 'completed':
-      return r.kind === 'custom'
-        ? t('Your request has been taken care of.', 'تمّت تلبية طلبك.')
-        : t(
-            `Recorded in the parish register as ${p.register}. You can ask for a certificate at any time.`,
-            `دُوّن في سجلّ الرعية برقم ${p.register}. يمكنك طلب شهادة في أي وقت.`
-          );
-    case 'signing':
-      return t('Approved by the priest. Your certificate is being signed.', 'وافق الكاهن، والشهادة قيد التوقيع.');
-    case 'ready':
-      return t(
-        'Your certificate is signed and ready. Collect it from the parish office.',
-        'شهادتك موقّعة وجاهزة. استلمها من مكتب الرعية.'
-      );
+      return t('The parish has completed your request.', 'أنجزت الرعية طلبك.');
     case 'declined':
       return t('The parish could not accept this request.', 'تعذّر على الرعية قبول هذا الطلب.');
     case 'cancelled':
-      return r.kind === 'booking'
-        ? t(
-            'This booking was cancelled. Please contact the parish office if you still need the place.',
-            'أُلغي هذا الحجز. يُرجى التواصل مع مكتب الرعية إذا كنت لا تزال بحاجة إلى المكان.'
-          )
-        : t('This request was cancelled.', 'أُلغي هذا الطلب.');
+      return t('This request was cancelled.', 'أُلغي هذا الطلب.');
     case 'withdrawn':
       return t(
         'You withdrew this request. You can send a new one at any time.',
@@ -353,18 +280,12 @@ export function nextText(r) {
 /* The request's history, one line per step that happened. */
 const EVENTS = {
   submitted: ['Request sent', 'أُرسل الطلب'],
-  accepted: ['Reviewed by the parish office', 'راجعه مكتب الرعية'],
-  'priest-accepted': ['Accepted by the priest', 'قبله الكاهن'],
-  prepared: ['Preparation completed', 'اكتمل التحضير'],
-  celebrated: ['Celebrated', 'تمّ الاحتفال'],
-  registered: ['Recorded in the parish register', 'دُوّن في سجلّ الرعية'],
+  accepted: ['Accepted by the parish', 'قبلته الرعية'],
   approved: ['Approved by the priest', 'وافق عليه الكاهن'],
-  issued: ['Signed and ready to collect', 'وُقّعت وهي جاهزة للاستلام'],
+  completed: ['Completed', 'اكتمل'],
   declined: ['Not accepted', 'لم يُقبل'],
   cancelled: ['Cancelled', 'أُلغي'],
-  withdrawn: ['You withdrew the request', 'سحبتَ الطلب'],
-  confirmed: ['Booking confirmed', 'أُكّد الحجز'],
-  completed: ['Done', 'أُنجز']
+  withdrawn: ['You withdrew the request', 'سحبتَ الطلب']
 };
 export const eventLabel = key => (EVENTS[key] ? t(...EVENTS[key]) : key);
 

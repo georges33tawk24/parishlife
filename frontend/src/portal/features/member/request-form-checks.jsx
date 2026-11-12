@@ -1,21 +1,11 @@
 /* The request form once drawn: reading it, checking each step, showing problems, and sending it. */
 import { paint } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
-import { memberAction } from '../../model/member-data.js';
+import { submitOwn } from '../../model/modules/requests.js';
 import { go, S } from '../../model/store.js';
 import { toast } from '../../ui/ui.jsx';
 import { TOPICS, todayKey } from '../../model/sacrament-requests.js';
-import {
-  availability,
-  fieldOf,
-  overlapping,
-  reload,
-  showProblems,
-  showStep,
-  venueOf,
-  wireReview,
-  yearsAhead
-} from './requests-shared.jsx';
+import { availability, fieldOf, reload, showProblems, showStep, wireReview, yearsAhead } from './requests-shared.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -30,7 +20,7 @@ function collect(host, d) {
   const radio = name => host.querySelector(`input[name="${name}"]:checked`)?.value || '';
   if (host.querySelector('[data-step="1"]:not([hidden])')) {
     if (d.kind === 'booking') {
-      d.venue = radio('mr-venue');
+      d.venue = read(host, 'mr-venue');
       d.date = read(host, 'mr-bdate');
       d.from = read(host, 'mr-from');
       d.to = read(host, 'mr-to');
@@ -40,6 +30,12 @@ function collect(host, d) {
       d.message = host.querySelector('#mr-message')?.value.trim() ?? d.message;
     } else {
       d.subject = radio('mr-subject') || d.subject;
+      const who = d.subject === 'child' ? 'child' : d.subject === 'other' ? 'other' : '';
+      if (who) {
+        d.relationship = read(host, `mr-${who}-relation`) || d.relationship;
+        d.authority = read(host, `mr-${who}-authority`);
+      }
+      if (d.subject === 'other') d.otherName = read(host, 'mr-other-name');
       if (d.kind === 'baptism')
         d.child = {
           lat: read(host, 'mr-child-lat'),
@@ -75,7 +71,7 @@ function collect(host, d) {
 function problems(d, step) {
   const out = [];
   if (step === 1 && d.kind === 'booking') {
-    if (!d.venue) out.push(['mr-venue', L('Choose the place you would like to book.', 'اختر المكان الذي تريد حجزه.')]);
+    if (!d.venue) out.push(['mr-venue', L('Say which place you would like to book.', 'اذكر المكان الذي تريد حجزه.')]);
     if (!d.date) out.push(['mr-bdate', L('Choose the date.', 'اختر التاريخ.')]);
     else if (d.date < todayKey() || d.date > yearsAhead(2))
       out.push(['mr-bdate', L('Choose a date from today onwards.', 'اختر تاريخاً ابتداءً من اليوم.')]);
@@ -83,14 +79,6 @@ function problems(d, step) {
     if (!d.to) out.push(['mr-to', L('Choose when it ends.', 'اختر وقت الانتهاء.')]);
     else if (d.from && d.to <= d.from)
       out.push(['mr-to', L('The end time must be after the start time.', 'يجب أن يكون وقت الانتهاء بعد وقت البدء.')]);
-    else if (overlapping(d).some(b => b.status === 'approved'))
-      out.push([
-        'mr-from',
-        L(
-          'This place is already booked at that time. Choose another time or place.',
-          'هذا المكان محجوز في ذلك الوقت. اختر وقتاً أو مكاناً آخر.'
-        )
-      ]);
   } else if (step === 1 && d.kind === 'custom') {
     if (d.subjectText.length < 2)
       out.push(['mr-subject-text', L('Say in a few words what you are asking for.', 'قل بكلمات قليلة ما الذي تطلبه.')]);
@@ -101,6 +89,16 @@ function problems(d, step) {
       ]);
   } else if (step === 1) {
     if (!d.subject) out.push(['mr-subject', L('Choose who the request is for.', 'اختر لمن الطلب.')]);
+    if (d.subject === 'child' || d.subject === 'other') {
+      const who = d.subject === 'child' ? 'child' : 'other';
+      if (!d.authority)
+        out.push([
+          `mr-${who}-authority`,
+          L('Say why you may ask for this person.', 'اذكر لماذا يحق لك الطلب عن هذا الشخص.')
+        ]);
+    }
+    if (d.subject === 'other' && !d.otherName)
+      out.push(['mr-other-name', L('Enter their full name.', 'أدخل اسمه الكامل.')]);
     if (d.subject === 'child') {
       if (!d.child.lat)
         out.push(['mr-child-lat', L('Enter the child’s full name in English.', 'أدخل اسم الطفل الكامل بالإنكليزية.')]);
@@ -122,18 +120,12 @@ function problems(d, step) {
       else if (d.purpose === 'other' && !d.purposeOther)
         out.push(['mr-purpose-other', L('Describe what the certificate is for.', 'صِف غرض الشهادة.')]);
     } else if (d.kind === 'booking') {
-      const cap = venueOf(d.venue)?.cap || 0,
-        guests = Number(d.guests);
+      const guests = Number(d.guests);
       if (!d.occasion) out.push(['mr-occasion', L('Choose what the booking is for.', 'اختر المناسبة.')]);
       else if (d.occasion === 'other' && d.occasionOther.length < 2)
         out.push(['mr-occasion-other', L('Describe the occasion.', 'صِف المناسبة.')]);
       if (!d.guests || !Number.isInteger(guests) || guests < 1)
         out.push(['mr-guests', L('Enter how many people you expect.', 'أدخل عدد الأشخاص المتوقَّع.')]);
-      else if (cap && guests > cap)
-        out.push([
-          'mr-guests',
-          L(`This place holds up to ${cap} people.`, `هذا المكان يتّسع لـ ${cap} شخصاً كحدّ أقصى.`)
-        ]);
     } else {
       if (d.date && d.date < todayKey())
         out.push(['mr-date', L('Choose a date from today onwards.', 'اختر تاريخاً ابتداءً من اليوم.')]);
@@ -199,7 +191,24 @@ function payload(d) {
     kind: d.kind,
     notes: d.notes,
     phone: d.phone,
-    ...(d.subject === 'child' ? { child: d.child } : { personId: d.subject }),
+    ...(d.subject === 'child'
+      ? {
+          child: d.child,
+          relationship: d.relationship,
+          authorityBasis: d.authority,
+          subjectDescription: [
+            d.child.lat,
+            d.child.ar,
+            `born ${d.child.born}`,
+            d.child.father && `father ${d.child.father}`,
+            d.child.mother && `mother ${d.child.mother}`
+          ]
+            .filter(Boolean)
+            .join(', ')
+        }
+      : d.subject === 'other'
+        ? { relationship: d.relationship, authorityBasis: d.authority, subjectDescription: d.otherName }
+        : { relationship: 'Self' }),
     ...(d.kind === 'certificate'
       ? {
           certificateOf: d.certificateOf,
@@ -216,7 +225,10 @@ export function mountForm(host) {
   const d = S.ui.mrDraft;
   const toggleChild = () => {
     const child = host.querySelector('#mr-child');
-    if (child) child.hidden = host.querySelector('input[name="mr-subject"]:checked')?.value !== 'child';
+    const chosen = host.querySelector('input[name="mr-subject"]:checked')?.value,
+      other = host.querySelector('#mr-other');
+    if (child) child.hidden = chosen !== 'child';
+    if (other) other.hidden = chosen !== 'other';
   };
   host.querySelectorAll('input[name="mr-subject"]').forEach(r =>
     r.addEventListener('change', () => {
@@ -284,7 +296,7 @@ export function mountForm(host) {
     send.disabled = true;
     send.setAttribute('aria-busy', 'true');
     try {
-      const result = await memberAction('sacramentRequest', payload(d));
+      const result = await submitOwn(payload(d));
       S.ui.mrDraft = null;
       S.ui.mrJustSent = result.id;
       await reload();

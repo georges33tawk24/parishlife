@@ -2,7 +2,6 @@
 import { Fragment } from 'react';
 import { paint } from '../../ui/html.js';
 import { t, isAr } from '../../../lib/i18n.js';
-import { M, loadMember } from '../../model/member-data.js';
 import { session } from '../../model/api.js';
 import { hydrate } from '../../model/persist.js';
 import { Icon } from '../../ui/ui.jsx';
@@ -30,7 +29,8 @@ export const otherName = x => {
 
 export const OWN = new Set(['booking', 'custom']); // asked by the member for themselves
 
-export const venueOf = id => (M.requestOptions?.venues || []).find(v => v.id === id);
+/* The API has no list of places for members: a place is the words the member typed. */
+export const venueOf = () => null;
 
 export const venueName = id => {
   const v = venueOf(id);
@@ -71,14 +71,10 @@ export const back = () => (
   </a>
 );
 
-export async function reload() {
-  if (session.user?.role === 'member') await hydrate();
-  else await loadMember();
-}
+/* The requests come from ParishLife.Api with the rest of the parish. */
+export const reload = () => hydrate();
 
 export const yearsAhead = n => `${Number(todayKey().slice(0, 4)) + n}-12-31`;
-
-const minutes = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 
 /* ---- the list -------------------------------------------------------------- */
 export function kindGrid(kinds, cls = '') {
@@ -100,119 +96,43 @@ export function kindGrid(kinds, cls = '') {
   );
 }
 
-export const unlinked = () => (
-  <div className="alert alert-info mr-alert">
-    <Icon name="info" size={18} />
-    <span>
-      <b>{L('Your account is not linked to a parishioner record yet.', 'حسابك غير مرتبط بسجل أحد المؤمنين بعد.')}</b>
-      {L(
-        ' Ask the parish office to link it, then you can send requests here.',
-        ' اطلب من مكتب الرعية ربطه، ثم يمكنك إرسال الطلبات من هنا.'
-      )}
-    </span>
-  </div>
-);
+/* The API has no room bookings to compare with, so nothing overlaps here. */
+export const overlapping = () => [];
 
-export const overlapping = d =>
-  (M.requestOptions?.busy || []).filter(
-    b =>
-      b.venue === d.venue &&
-      b.date === d.date &&
-      d.from &&
-      d.to &&
-      minutes(b.from) < minutes(d.to) &&
-      minutes(d.from) < minutes(b.to)
-  );
-
-export function availability(d) {
-  if (!d.venue || !d.date)
-    return (
-      <p className="mr-avail mr-avail-hint">
-        <Icon name="info" size={16} />
-        <span>
-          {L('Choose a place and a date to see when it is free.', 'اختر مكاناً وتاريخاً لترى متى يكون متاحاً.')}
-        </span>
-      </p>
-    );
-  const taken = (M.requestOptions?.busy || []).filter(b => b.venue === d.venue && b.date === d.date);
-  const where = `${venueName(d.venue)}, ${fmtDay(d.date)}`,
-    chosen = d.from && d.to && d.from < d.to;
-  const list = items => (
-    <ul>
-      {items.map((b, i) => (
-        <li key={i}>
-          <bdi dir="ltr">
-            {txt(b.from)}–{txt(b.to)}
-          </bdi>{' '}
-          · {b.status === 'approved' ? L('confirmed', 'مؤكَّد') : L('someone else has asked for it', 'طلبه شخص آخر')}
-        </li>
-      ))}
-    </ul>
-  );
-  if (!taken.length)
-    return (
-      <p className="mr-avail mr-avail-free">
-        <Icon name="check" size={16} />
-        <span>{L(`Free all day — ${where}.`, `متاح طوال اليوم — ${where}.`)}</span>
-      </p>
-    );
-  const overlap = chosen ? overlapping(d) : [];
-  /* a confirmed booking at that time cannot be asked for; one only asked for can, and the office decides */
-  if (overlap.some(b => b.status === 'approved'))
-    return (
-      <div className="mr-avail mr-avail-clash">
-        <Icon name="warn" size={16} />
-        <div>
-          <b>
-            {L(
-              'Your time overlaps a confirmed booking. Please choose another time.',
-              'يتعارض وقتك مع حجز مؤكَّد. يُرجى اختيار وقت آخر.'
-            )}
-          </b>
-          {list(taken)}
-        </div>
-      </div>
-    );
-  if (overlap.length)
-    return (
-      <div className="mr-avail mr-avail-busy">
-        <Icon name="clock" size={16} />
-        <div>
-          <b>{L('Someone else has asked for this time.', 'طلب شخص آخر هذا الوقت.')}</b>{' '}
-          {L(
-            'You can still send your request; the parish office will decide.',
-            'يمكنك إرسال طلبك؛ وسيقرّر مكتب الرعية.'
-          )}
-          {list(taken)}
-        </div>
-      </div>
-    );
-  if (chosen)
-    return (
-      <div className="mr-avail mr-avail-free">
-        <Icon name="check" size={16} />
-        <div>
-          <b>{L('Free at that time.', 'متاح في هذا الوقت.')}</b>{' '}
-          {L('Also taken that day:', 'محجوز أيضاً في ذلك اليوم:')}
-          {list(taken)}
-        </div>
-      </div>
-    );
+/* The API has no room availability for members, so nothing here claims a place is free or taken. */
+export function availability() {
   return (
-    <div className="mr-avail mr-avail-busy">
-      <Icon name="clock" size={16} />
-      <div>
-        <b>{L(`Already taken on ${fmtDay(d.date)}:`, `محجوز في ${fmtDay(d.date)}:`)}</b>
-        {list(taken)}
-      </div>
-    </div>
+    <p className="mr-avail mr-avail-hint">
+      <Icon name="info" size={16} />
+      <span>
+        {L(
+          'The parish office checks whether the place is free and confirms with you.',
+          'يتحقّق مكتب الرعية من توفّر المكان ويؤكّد لك.'
+        )}
+      </span>
+    </p>
   );
 }
+
+export const RELATION = {
+  Parent: ['Parent', 'أحد الوالدين'],
+  Guardian: ['Guardian', 'ولي الأمر'],
+  Spouse: ['Spouse', 'الزوج/الزوجة'],
+  Child: ['Son or daughter', 'ابن/ابنة'],
+  Relative: ['Relative', 'قريب'],
+  Representative: ['Representative', 'وكيل'],
+  Other: ['Other', 'آخر']
+};
 
 const occasionOf = d => (d.occasion === 'other' ? d.occasionOther : occasionText(d.occasion));
 
 export function summaryRows(d) {
-  const subject = (M.requestOptions?.subjects || []).find(s => s.id === d.subject);
+  const subject =
+    d.subject === 'self'
+      ? { self: true, lat: session.user?.name || '' }
+      : d.subject === 'other'
+        ? { lat: d.otherName }
+        : null;
   if (d.kind === 'booking')
     return [
       [L('Request', 'الطلب'), L('Booking', 'حجز')],
@@ -242,6 +162,8 @@ export function summaryRows(d) {
       rows.push([L('Parents', 'الوالدان'), [d.child.father, d.child.mother].filter(Boolean).join(' · ')]);
   } else if (subject)
     rows.push([L('For', 'لـ'), subject.self ? `${L('You', 'أنت')} — ${nameOf(subject)}` : nameOf(subject)]);
+  if (d.subject === 'other' || d.subject === 'child')
+    rows.push([L('You are their', 'صلتك به'), L(...(RELATION[d.relationship || 'Parent'] || RELATION.Other))]);
   if (d.kind === 'certificate')
     rows.push(
       [L('Purpose', 'الغرض'), d.purpose === 'other' ? d.purposeOther : purposeText(d.purpose)],

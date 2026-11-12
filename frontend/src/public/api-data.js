@@ -5,7 +5,7 @@
    Routes: GET /api/public/parishes (the directory), and for one parish .../website (published
    sections), .../calendar (public events in a date range) and .../ministries.
    What the API does not publish stays empty instead of being invented: Arabic names, rite, phone,
-   address, clergy, photos and news. Public requests stay off until the request form is connected. */
+   address, clergy, photos and news. Public requests are on: the request form posts to the anonymous request route. */
 
 async function json(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
@@ -114,7 +114,7 @@ async function parts(p, withMinistries) {
     clergy: [],
     gallery: [],
     parishPhoto: '',
-    publicRequests: false, // the request form still posts to the old server's route
+    publicRequests: true, // the request form posts to the API's anonymous request route
     visit: { latitude: p.latitude, longitude: p.longitude, livestream: '' }
   };
 }

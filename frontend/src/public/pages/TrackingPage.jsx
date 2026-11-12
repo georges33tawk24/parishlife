@@ -1,36 +1,83 @@
-/* Following a request with its private link: where it stands, what the office answered, and the
-   letter or document once it is released. */
-import { useEffect, useRef, useState } from 'react';
-import { useSite } from '../site.jsx';
+/* Following a request with its private link: where it stands, what the parish office answered, and a way
+   to write back. The link is `public.html#track=<parishId>.<requestId>.<token>`; the token goes to the API in
+   a header, never in an address the server sees (model/guest-requests.js).
 
-const REQUEST_STATUS = {
-  submitted: ['Sent to the parish office', 'أُرسل إلى مكتب الرعية'],
-  'office-review': ['The parish office is reviewing it', 'قيد المراجعة لدى مكتب الرعية'],
-  'missing-documents': ['Documents are missing', 'مستندات ناقصة'],
-  'ready-for-collection': ['Ready to collect from the parish', 'جاهز للاستلام من الرعية'],
-  'ready-for-download': ['Ready to download', 'جاهز للتنزيل'],
-  closed: ['Closed', 'مُغلق']
+   What the API shows a guest is the case's status, the office's message for the applicant and the
+   messages exchanged. Files and signed letters are not shown to guests: the API keeps files private to the
+   office and signed-in applicants. */
+import { useEffect, useState } from 'react';
+import { useSite } from '../site.jsx';
+import { parseTracking, guestCase, guestMessages, guestPostMessage } from '../../portal/model/guest-requests.js';
+
+/* [headline, what it means for the applicant] */
+const STATUS = {
+  Received: [
+    ['Sent to the parish office', 'أُرسل إلى مكتب الرعية'],
+    ['The office has it and has not accepted it yet.', 'وصل الطلب إلى المكتب ولم يُقبل بعد.']
+  ],
+  NeedsInformation: [
+    ['The parish needs more information', 'تحتاج الرعية إلى معلومات إضافية'],
+    ['Write to the office below. The request is not declined.', 'اكتب إلى المكتب أدناه. لم يُرفض الطلب.']
+  ],
+  AcceptedForProcessing: [
+    ['Accepted by the parish office', 'قبله مكتب الرعية'],
+    ['The office is working on it.', 'يعمل المكتب على الطلب.']
+  ],
+  CancellationRequested: [
+    ['Cancellation requested', 'طُلب الإلغاء'],
+    ['The office will review the cancellation.', 'سيراجع المكتب طلب الإلغاء.']
+  ],
+  Completed: [
+    ['Completed', 'مكتمل'],
+    ['The parish has completed this request.', 'أنجزت الرعية هذا الطلب.']
+  ],
+  Declined: [
+    ['Not accepted', 'لم يُقبل'],
+    ['The parish could not accept this request.', 'تعذّر على الرعية قبول هذا الطلب.']
+  ],
+  Withdrawn: [
+    ['Withdrawn', 'مسحوب'],
+    ['This request was withdrawn.', 'سُحب هذا الطلب.']
+  ],
+  Cancelled: [
+    ['Cancelled', 'أُلغي'],
+    ['This request was cancelled.', 'أُلغي هذا الطلب.']
+  ]
 };
 
 const TRACK_STEPS = [
-  ['submitted', 'Sent', 'أُرسل'],
-  ['office-review', 'Under review', 'قيد المراجعة'],
-  ['ready', 'Ready', 'جاهز'],
-  ['closed', 'Closed', 'مُغلق']
+  ['sent', 'Sent', 'أُرسل'],
+  ['accepted', 'Accepted', 'قُبل'],
+  ['date', 'Date confirmed', 'الموعد مؤكَّد'],
+  ['done', 'Closed', 'مُغلق']
 ];
+const stepOf = d =>
+  ['Completed', 'Declined', 'Withdrawn', 'Cancelled'].includes(d.status)
+    ? 3
+    : d.status === 'AcceptedForProcessing'
+      ? d.confirmedDate
+        ? 2
+        : 1
+      : d.status === 'Received'
+        ? 0
+        : 1;
 
-/* The private tracking page: where the request stands, as four steps, and any documents. */
+/* The private tracking page: where the request stands, as four steps, and the messages. */
 export function TrackingPage({ token }) {
   const { L, lang } = useSite();
+  const link = parseTracking(token);
   const [state, setState] = useState({ loading: true });
+  const [text, setText] = useState(''),
+    [sending, setSending] = useState(false),
+    [problem, setProblem] = useState(''),
+    [round, setRound] = useState(0);
   useEffect(() => {
     let live = true;
     (async () => {
+      if (!link) return setState({ error: L('This tracking link is not valid.', 'رابط المتابعة هذا غير صالح.') });
       try {
-        const r = await fetch('/api/public/track/' + encodeURIComponent(token)),
-          d = await r.json();
-        if (!r.ok) throw new Error(d.error);
-        if (live) setState({ data: d });
+        const [data, messages] = await Promise.all([guestCase(link), guestMessages(link)]);
+        if (live) setState({ data, messages });
       } catch (e) {
         if (live) setState({ error: e.message });
       }
@@ -38,7 +85,7 @@ export function TrackingPage({ token }) {
     return () => {
       live = false;
     };
-  }, [token]);
+  }, [token, round]);
   const d = state.data;
   if (!d)
     return (
@@ -50,15 +97,40 @@ export function TrackingPage({ token }) {
         </div>
       </section>
     );
-  const updated = new Date(d.updated_at),
-    status = String(d.status || 'submitted');
-  const at = status === 'closed' ? 3 : /^ready/.test(status) ? 2 : status === 'submitted' ? 0 : 1,
-    warn = status === 'missing-documents';
+  const updated = new Date(d.updatedAt),
+    [headline, meaning] = STATUS[d.status] || [
+      [d.status, d.status],
+      ['', '']
+    ],
+    at = stepOf(d),
+    warn = d.status === 'NeedsInformation';
+  const stamp = v =>
+    new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'long', timeStyle: 'short' }).format(
+      new Date(v)
+    );
+  const closed = ['Completed', 'Declined', 'Withdrawn', 'Cancelled'].includes(d.status);
+  const send = async e => {
+    e.preventDefault();
+    setSending(true);
+    setProblem('');
+    try {
+      await guestPostMessage(link, text.trim());
+      setText('');
+      setRound(n => n + 1);
+    } catch (err) {
+      setProblem(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <section className="track site-wrap">
       <div className="track-card">
         <span className="track-lamp" aria-hidden="true"></span>
         <h1>{L('Your request', 'طلبك')}</h1>
+        <p>
+          <bdi dir="ltr">{d.reference}</bdi>
+        </p>
         <ol className="track-steps">
           {TRACK_STEPS.map(([k, en, ar], i) => (
             <li
@@ -71,32 +143,15 @@ export function TrackingPage({ token }) {
             </li>
           ))}
         </ol>
-        <h2>{L(...(REQUEST_STATUS[status] || [status.replaceAll('-', ' '), status.replaceAll('-', ' ')]))}</h2>
-        <p dir="auto">{d.response || L('The parish office has received your request.', 'استلم مكتب الرعية طلبك.')}</p>
-        {Number.isNaN(updated.valueOf()) ? null : (
-          <small>
-            {L('Updated ', 'آخر تحديث: ') +
-              new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en-GB', {
-                dateStyle: 'long',
-                timeStyle: 'short'
-              }).format(updated)}
-          </small>
-        )}
-        {(d.files || []).length ? (
-          <div className="track-files">
-            {d.files.map(f => (
-              <a
-                key={f.id}
-                className="btn btn-gilt"
-                referrerPolicy="no-referrer"
-                href={`/api/public/guest-files/${encodeURIComponent(token)}/${encodeURIComponent(f.id)}`}
-                download
-              >
-                {L('Download', 'تنزيل')}: {f.name}
-              </a>
-            ))}
-          </div>
+        <h2>{L(...headline)}</h2>
+        <p dir="auto">{d.applicantExplanation || L(...meaning)}</p>
+        {d.confirmedDate ? (
+          <p>
+            {L('Date confirmed: ', 'الموعد المؤكَّد: ')}
+            {stamp(d.confirmedDate)}
+          </p>
         ) : null}
+        {Number.isNaN(updated.valueOf()) ? null : <small>{L('Updated ', 'آخر تحديث: ') + stamp(updated)}</small>}
         <p className="track-note">
           {L(
             'Keep this page’s link private: anyone who has it can see this request.',
@@ -104,90 +159,37 @@ export function TrackingPage({ token }) {
           )}
         </p>
       </div>
-      {(d.letters || []).map(l => (
-        <Letter key={l.code} l={l} />
-      ))}
-    </section>
-  );
-}
-
-/* A letter from the parish office, with the writer's own signature and the code that checks it. */
-const drawingPath = path => String(path || '').replace(/[^MLQCZmlqcz0-9 .,-]/g, '');
-
-function Letter({ l }) {
-  const { L, lang } = useSite(),
-    sheet = useRef(null);
-  const longDate = v => {
-    const d = new Date(v);
-    return Number.isNaN(d.valueOf())
-      ? ''
-      : new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'long' }).format(d);
-  };
-  const printLetter = () => {
-    document.body.classList.add('is-printing-letter');
-    sheet.current.classList.add('is-printing');
-    print();
-    setTimeout(() => {
-      document.body.classList.remove('is-printing-letter');
-      sheet.current?.classList.remove('is-printing');
-    }, 500);
-  };
-  return (
-    <article className="letter" aria-labelledby={`letter-${l.code}`} ref={sheet}>
-      <header>
-        <span className="letter-mark" aria-hidden="true">
-          <svg viewBox="0 0 28 34" fill="none" focusable="false">
-            <path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="currentColor" strokeWidth="1.6" />
-            <path d="M1 32.5h26" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="14" cy="20" r="3.2" fill="#D7A548" />
-          </svg>
-        </span>
-        {l.parish?.name ? (
-          <span className="letter-from">
-            <b>{lang === 'ar' && l.parish.ar ? l.parish.ar : l.parish.name}</b>
-            {l.parish.town ? <small>{l.parish.town}</small> : null}
-          </span>
-        ) : null}
-        <time>{longDate(l.createdAt)}</time>
-      </header>
-      <h2 id={`letter-${l.code}`} dir="auto">
-        {l.title}
-      </h2>
-      <div className="letter-body" dir="auto">
-        {String(l.body ?? '')
-          .split('\n')
-          .map((line, i) => (i ? [<br key={i} />, line] : line))}
+      <div className="track-card">
+        <h2>{L('Messages with the parish office', 'الرسائل مع مكتب الرعية')}</h2>
+        {state.messages.length ? (
+          state.messages.map(m => (
+            <blockquote key={m.id} className="letter-body" dir="auto">
+              <small>
+                {m.authorKind === 'Office' ? L('Parish office', 'مكتب الرعية') : L('You', 'أنت')} · {stamp(m.at)}
+              </small>
+              <p>{m.body}</p>
+            </blockquote>
+          ))
+        ) : (
+          <p>{L('No messages yet.', 'لا رسائل بعد.')}</p>
+        )}
+        {closed ? (
+          <p>{L('This request is closed. Contact the parish office.', 'هذا الطلب مغلق. تواصل مع مكتب الرعية.')}</p>
+        ) : (
+          <form onSubmit={send}>
+            <label className="rq-field">
+              <span>{L('Write to the office', 'اكتب إلى المكتب')}</span>
+              <textarea required maxLength="4000" rows="4" value={text} onChange={e => setText(e.target.value)} />
+            </label>
+            <p className="rq-error" role="alert">
+              {problem}
+            </p>
+            <button className="btn btn-gilt" type="submit" disabled={sending || !text.trim()}>
+              {L('Send', 'إرسال')}
+            </button>
+          </form>
+        )}
       </div>
-      <footer>
-        <div className="letter-signed">
-          {l.drawing ? (
-            <svg className="letter-sign" viewBox="0 0 400 140" aria-hidden="true" focusable="false">
-              <path
-                d={drawingPath(l.drawing)}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          ) : null}
-          <b>{l.name}</b>
-          {l.role ? <span>{l.role}</span> : null}
-        </div>
-        <div className="letter-check">
-          <span>{L('Digitally signed', 'موقّعة رقمياً')}</span>
-          <a href={`public.html?verify=${encodeURIComponent(l.code)}`}>
-            <bdi>{l.code}</bdi>
-          </a>
-          <small>
-            {L('Anyone can check this code on ParishLife.', 'يمكن لأي شخص التحقّق من هذا الرمز على ParishLife.')}
-          </small>
-        </div>
-      </footer>
-      <button type="button" className="btn btn-ink-line btn-small letter-print" data-print-letter onClick={printLetter}>
-        {L('Print or save as PDF', 'طباعة أو حفظ كـPDF')}
-      </button>
-    </article>
+    </section>
   );
 }
