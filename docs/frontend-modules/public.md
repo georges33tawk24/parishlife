@@ -59,7 +59,7 @@ A code is 32 hexadecimal characters, with or without hyphens or spaces; an unkno
 - A story's image: the API's story has none, so each shows the built-in crest picture.
 - A calendar feed (`.ics`) for a parish: none, so "subscribe in my calendar" stays out.
 - The homepage `join` block's link and the section order (`Order`): the page's section order is fixed, so only presence matters.
-- Request buttons stay hidden until the requests module connects the request form (`publicRequests: false`).
+- Request buttons are shown: the requests module connected the request form to the anonymous request route (`publicRequests: true`).
 
 ## Not changed
 
