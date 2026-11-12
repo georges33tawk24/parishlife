@@ -4,7 +4,7 @@ import { SERVICE, SERVICE_PLANS } from './data.js';
 import { persist } from './persist.js';
 
 export const copyOrder = order => (order || []).map(item => ({ ...item }));
-export const allPlans = () => [SERVICE, ...SERVICE_PLANS];
+export const allPlans = () => [SERVICE, ...SERVICE_PLANS].filter(plan => plan?.id);
 export const planById = id => allPlans().find(plan => plan.id === id);
 export const currentPlan = () =>
   planById(S.route === 'services' && S.params[0] === 'plan' ? S.params[1] : '') || SERVICE;

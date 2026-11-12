@@ -119,6 +119,10 @@ globalThis.fetch = async (url, options = {}) => {
     return json(200, {
       items: [{ id: 'm1', name: 'Choir', purpose: 'Sings at Sunday Mass', publicInformation: null }]
     });
+  // the Calendar module's lists (its own check, checks/calendar.mjs, covers them): nothing scheduled
+  if (/^parishes\/P\/(calendar\/events|plans|music)\?/.test(path))
+    return json(200, { items: [], continuationToken: null });
+  if (path.startsWith('public/parishes/P/liturgical-calendar?')) return json(200, { status: 'NotPublished', days: [] });
   return json(404); // a route the API does not have
 };
 

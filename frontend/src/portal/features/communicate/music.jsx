@@ -354,16 +354,6 @@ function hymn(id, tab) {
           ) : (
             ''
           )}{' '}
-          <Panel title={L('Personal annotations', 'ملاحظات شخصية')}>
-            {d.annotations.map(([p, en, ar], i) => (
-              <div key={i} className="listrow" style={{ paddingInline: 0, alignItems: 'flex-start' }}>
-                <Avatar p={person(p)} cls="avatar-sm" />
-                <span className="grow t-caption">{L(en, ar)}</span>
-              </div>
-            ))}
-            <div className="divider" />
-            <C.Textarea label={L('Add your own', 'أضف ملاحظتك')} id="hann" max={200} />
-          </Panel>
         </div>
       </div>
     ),
@@ -617,8 +607,8 @@ music.mount = host => {
     openDrawer({
       title: L('Setlists', 'لوائح الألحان'),
       sub: L(
-        'A setlist links to a service plan, so the order of service and the choir folder never drift apart.',
-        'ترتبط اللائحة بخطة الخدمة، فلا يفترق ترتيب الخدمة عن ملف الجوقة.'
+        'Setlists come from the hymns in each service plan. To change one, change the plan.',
+        'تأتي اللوائح من الألحان في كل خطة خدمة. لتغييرها غيّر الخطة.'
       ),
       body: nodesOr(
         SETLISTS.map((s, i) => (
@@ -633,7 +623,6 @@ music.mount = host => {
             <button className="btn btn-secondary btn-dense" data-act={`setlist-open:${s.id}`}>
               {L('Open', 'فتح')}
             </button>
-            {CR.recBtn('setlist', s.id)}
           </div>
         )),
         <Empty
@@ -647,9 +636,6 @@ music.mount = host => {
           <button className="btn btn-secondary" data-close="">
             {L('Close', 'إغلاق')}
           </button>{' '}
-          <button className="btn btn-primary" data-act="setlist-new" style={{ marginInlineStart: 'auto' }}>
-            {L('New setlist', 'لائحة جديدة')}
-          </button>
         </>
       )
     })

@@ -10,7 +10,8 @@ import { Icon, toast, openDrawer, closeOverlays, openMenu } from '../ui/ui.jsx';
 import * as C from '../ui/components.jsx';
 import * as D from '../model/data.js';
 import { confirmAction, need } from './dialogs.jsx';
-import { persist } from '../model/persist.js';
+import { hydrate, persist } from '../model/persist.js';
+import { withdrawMusic } from '../model/modules/calendar.js';
 import { eligibleEvents, eventById } from '../model/event-workflows.js';
 
 const L = (en, ar) => t(en, ar);
@@ -583,7 +584,9 @@ export const ENT = {
     name: m => L(m.title, m.ar),
     nw: ['New hymn', 'ترنيمة جديدة'],
     ed: ['Edit hymn', 'تعديل الترنيمة'],
-    del: ['Delete this hymn?', 'حذف هذه الترنيمة؟'],
+    del: ['Withdraw this hymn?', 'سحب هذه الترنيمة؟'],
+    removed: ['Hymn withdrawn', 'سُحبت الترنيمة'],
+    remove: m => withdrawMusic(m.id, 'Removed from the library by the parish team'),
     fields: () => [
       ...pair('title', 'ar', 'Title (English)', 'العنوان (إنكليزي)', 'Title (Arabic)', 'العنوان (عربي)'),
       ...pair('occasion', 'occasionAr', 'Occasion', 'المناسبة', 'Occasion (Arabic)', 'المناسبة (عربي)', { req: false }),
@@ -594,6 +597,13 @@ export const ENT = {
         options: () => ['Entrance', 'Trisagion', 'Offertory', 'Communion', 'Veneration', 'Recessional'].map(x => [x, x])
       },
       { k: 'key', label: L('Key', 'المقام'), ph: 'D minor', dir: 'ltr' },
+      {
+        k: 'rights',
+        label: L('Rights — why the parish may use it', 'الحقوق — أساس استعمال الرعية له'),
+        req: true,
+        full: true,
+        ph: L('Public domain, or permission from the composer', 'ملك عام، أو إذن من الملحّن')
+      },
       {
         k: 'linkType',
         label: L('Add a link', 'إضافة رابط'),
@@ -667,6 +677,7 @@ export const ENT = {
       youtubeUrl: '',
       anghamiUrl: '',
       otherUrl: '',
+      rights: '',
       sheet: false,
       audio: false
     }),
@@ -693,7 +704,10 @@ export const ENT = {
         }
       return null;
     },
-    delNote: ['It is taken out of every setlist too.', 'وتُزال من كل لائحة ترانيم أيضاً.'],
+    delNote: [
+      'It leaves the library and plans stop offering it. The record is kept.',
+      'تخرج من المكتبة وتتوقف الخطط عن عرضها. ويبقى السجل محفوظاً.'
+    ],
     home: 'music',
     onDelete: m => {
       const had = D.SETLISTS.filter(s => s.items.includes(m.id)).map(s => [s, s.items.indexOf(m.id)]);
@@ -1442,7 +1456,20 @@ export function remove(kind, id) {
     danger: true,
     cta: L('Delete', 'حذف'),
     body: `${ent.name(x)}. ${ent.delNote ? L(...ent.delNote) : L('You can undo this straight after.', 'يمكنك التراجع فوراً بعد الحذف.')}`,
-    then: () => {
+    then: async () => {
+      if (ent.remove) {
+        // a record the API cannot delete (a hymn is withdrawn) is changed by its own call, then reloaded
+        try {
+          await ent.remove(x);
+          await hydrate();
+          go(ent.home && S.route === ent.home ? ent.home : S.route);
+          refresh();
+          toast(L(...ent.removed), ent.name(x), 'success');
+        } catch (error) {
+          toast(L('That did not work', 'لم تنجح العملية'), error.message, 'warning');
+        }
+        return;
+      }
       const arr = ent.list(),
         i = arr.indexOf(x);
       if (i < 0) return;

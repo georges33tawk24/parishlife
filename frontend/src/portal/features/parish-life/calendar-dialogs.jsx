@@ -1,51 +1,35 @@
-/* Calendar actions: moving through months and days, duplicating or cancelling an event, and saving
-   events as .ics. */
-import { t, fmtDate } from '../../../lib/i18n.js';
+/* Calendar actions: moving through months and days, duplicating an event, moving an event through its
+   lifecycle (confirm, publish, unpublish, cancel) and saving the member's schedule as .ics. Lifecycle steps
+   are calls to the API followed by a reload, not edits to the list. */
+import { t } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
-import { closeOverlays } from '../../ui/ui.jsx';
+import { closeOverlays, openModal, toast } from '../../ui/ui.jsx';
+import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
 import { download } from '../../shell/actions.jsx';
-import { ok, refresh, today } from '../../shared/dialog-helpers.jsx';
+import { ok, refresh, today, val } from '../../shared/dialog-helpers.jsx';
+import { hydrate, persist } from '../../model/persist.js';
+import { downloadSchedule, eventAction } from '../../model/modules/calendar.js';
 
 const L = (en, ar) => t(en, ar);
 
-const ics = s => s.replace(/[,;\\]/g, m => '\\' + m);
-
-export function downloadICS() {
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//ParishLife//Saint Elias//EN',
-    'CALSCALE:GREGORIAN',
-    `X-WR-CALNAME:${ics(D.PARISH.name)} — ParishLife`,
-    'X-WR-TIMEZONE:Asia/Beirut'
-  ];
-  D.EVENTS.forEach(e => {
-    const [h, m] = e.t.split(':').map(Number);
-    const d = e.d.replace(/-/g, ''),
-      start = `${d}T${String(h).padStart(2, '0')}${String(m).padStart(2, '0')}00`;
-    const end = `${d}T${String(h + 1).padStart(2, '0')}${String(m).padStart(2, '0')}00`;
-    const v = D.venue(e.venue);
-    lines.push(
-      'BEGIN:VEVENT',
-      `UID:${e.id}@saint-elias.parishlife`,
-      `DTSTAMP:20261004T190000Z`,
-      `DTSTART;TZID=Asia/Beirut:${start}`,
-      `DTEND;TZID=Asia/Beirut:${end}`,
-      `SUMMARY:${ics(L(e.title, e.titleAr))}`,
-      `LOCATION:${ics(v ? v.name : '')}, Saint Elias, Hadath`,
-      'END:VEVENT'
+/* The member's own schedule across their parishes, as an iCalendar file the API builds (volunteering,
+   registrations and scheduled sacraments). The API has no feed of the whole parish calendar. */
+export async function downloadICS() {
+  const from = new Date(),
+    to = new Date(+from + 90 * 86400000);
+  try {
+    download('my-schedule.ics', await downloadSchedule(from, to), 'text/calendar;charset=utf-8');
+    ok(
+      L('Schedule downloaded', 'نُزّل الجدول'),
+      L(
+        'The next 90 days of your own schedule. Open the file to add it to Google, Outlook or Apple Calendar.',
+        'جدولك الخاص للأيام التسعين القادمة. افتح الملف لإضافته إلى غوغل أو أوتلوك أو آبل.'
+      )
     );
-  });
-  lines.push('END:VCALENDAR');
-  download('saint-elias-calendar.ics', lines.join('\r\n'), 'text/calendar;charset=utf-8');
-  ok(
-    L('Calendar downloaded', 'نُزّلت الرزنامة'),
-    L(
-      `${D.EVENTS.length} events · open the file to add them to Google, Outlook or Apple Calendar.`,
-      `${D.EVENTS.length} حدثاً · افتح الملف لإضافتها إلى غوغل أو أوتلوك أو آبل.`
-    )
-  );
+  } catch (error) {
+    toast(L('The schedule could not be downloaded', 'تعذّر تنزيل الجدول'), error.message, 'warning');
+  }
 }
 
 export function calShift(n) {
@@ -60,45 +44,94 @@ export function calDay(n) {
   refresh();
 }
 
-export function eventDuplicate(id) {
-  const e = D.EVENTS.find(x => x.id === id) || D.EVENTS[9];
-  const d = new Date(e.d);
-  d.setDate(d.getDate() + 7);
-  const copy = { ...e, id: 'ev' + Date.now(), d: d.toISOString().slice(0, 10) };
+/* A copy a week later, saved as a new draft. */
+export async function eventDuplicate(id) {
+  const e = D.EVENTS.find(x => x.id === id);
+  if (!e || e.redacted) return;
+  const shift = key => {
+    const d = new Date(key + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d.toISOString().slice(0, 10);
+  };
+  const copy = {
+    ...e,
+    id: 'copy-' + Date.now(),
+    d: shift(e.d),
+    endsOn: e.endsOn && e.endsOn > e.d ? shift(e.endsOn) : e.d,
+    status: 'Draft',
+    published: false,
+    seriesId: null,
+    reason: '',
+    version: ''
+  };
   D.EVENTS.push(copy);
   closeOverlays();
-  refresh();
-  ok(L('Event duplicated', 'نُسخ الحدث'), `${L(e.title, e.titleAr)} · ${fmtDate(copy.d)}`, {
-    action: {
-      label: L('Undo', 'تراجع'),
-      fn: () => {
-        D.EVENTS.splice(D.EVENTS.indexOf(copy), 1);
-        refresh();
-      }
+  if (await persist()) ok(L('Event duplicated', 'نُسخ الحدث'), `${e.title} · ${copy.d}`);
+  else refresh();
+}
+
+const DONE = {
+  confirm: ['Event confirmed', 'ثُبّت الحدث'],
+  publish: ['Event published', 'نُشر الحدث'],
+  unpublish: ['Event unpublished', 'أُلغي نشر الحدث'],
+  cancel: ['Event cancelled', 'أُلغي الحدث']
+};
+
+async function step(e, action, reason) {
+  try {
+    await eventAction(e, action, reason);
+    closeOverlays();
+    await hydrate();
+    refresh();
+    ok(
+      L(...DONE[action]),
+      action === 'cancel'
+        ? L(
+            'Nothing is sent automatically, so let those who said yes know.',
+            'لا يُرسَل شيء تلقائياً، فأبلِغ من أكّدوا حضورهم.'
+          )
+        : e.title
+    );
+  } catch (error) {
+    toast(L('That did not work', 'لم تنجح العملية'), error.message, 'warning');
+  }
+}
+
+/* Confirm and publish need nothing more; unpublishing and cancelling ask for the reason the API records. */
+export function eventStep(id, action) {
+  const e = D.EVENTS.find(x => x.id === id);
+  if (!e || e.redacted) return;
+  if (action === 'confirm' || action === 'publish') return step(e, action);
+  openModal({
+    title:
+      action === 'cancel'
+        ? L('Cancel this event?', 'إلغاء هذا الحدث؟')
+        : L('Unpublish this event?', 'إلغاء نشر هذا الحدث؟'),
+    body: (
+      <>
+        <p>{e.title}</p>
+        <C.Textarea label={L('Reason', 'السبب')} id="ev_reason" max={400} />
+      </>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Keep it', 'إبقاؤه')}
+        </button>
+        <button className="btn btn-danger" id="ev_reason_ok">
+          {action === 'cancel' ? L('Cancel event', 'إلغاء الحدث') : L('Unpublish', 'إلغاء النشر')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#ev_reason_ok').addEventListener('click', () => {
+        const reason = val(el, '#ev_reason');
+        if (!reason) return toast(L('Give a reason', 'اذكر السبب'), '', 'warning');
+        step(e, action, reason);
+      });
     }
   });
 }
 
-export function eventCancel(id) {
-  const i = D.EVENTS.findIndex(x => x.id === id);
-  if (i < 0) return;
-  const [e] = D.EVENTS.splice(i, 1);
-  closeOverlays();
-  refresh();
-  ok(
-    L('Event cancelled', 'أُلغي الحدث'),
-    L(
-      'Nothing is sent automatically, so let those who said yes know.',
-      'لا يُرسَل شيء تلقائياً، فأبلِغ من أكّدوا حضورهم.'
-    ),
-    {
-      action: {
-        label: L('Undo', 'تراجع'),
-        fn: () => {
-          D.EVENTS.splice(i, 0, e);
-          refresh();
-        }
-      }
-    }
-  );
-}
+/* Cancelling keeps the event on the calendar, marked cancelled; nothing is deleted. */
+export const eventCancel = id => eventStep(id, 'cancel');
