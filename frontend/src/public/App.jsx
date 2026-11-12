@@ -14,7 +14,7 @@ import { TrackingPage } from './pages/TrackingPage.jsx';
 import { VerifyPage } from './pages/VerifyPage.jsx';
 import { BundlesPage } from './pages/BundlesPage.jsx';
 import { LostPage } from './pages/LostPage.jsx';
-import { loadDirectory, loadParish } from './api-data.js';
+import { loadDirectory, loadParish, loadHomepage, loadHomeLiturgy, loadAppInfo } from './api-data.js';
 
 const params = new URLSearchParams(location.search);
 const selected = params.get('parish');
@@ -50,6 +50,7 @@ export function PublicApp({ initialLang }) {
     directory: [],
     details: new Map(),
     site: null,
+    liturgy: null,
     failed: [],
     loadFailure: false
   });
@@ -57,6 +58,7 @@ export function PublicApp({ initialLang }) {
     diocese: '',
     rite: '',
     location: null,
+    distances: null,
     q: params.get('q') || '',
     town: params.get('town') || '',
     sort: params.get('sort') === 'town' ? 'town' : 'name'
@@ -70,7 +72,16 @@ export function PublicApp({ initialLang }) {
     return () => removeEventListener('hashchange', follow);
   }, []);
   const c = useMemo(
-    () => makeSite({ lang, directory: data.directory, details: data.details, site: data.site, filters, setFilters }),
+    () =>
+      makeSite({
+        lang,
+        directory: data.directory,
+        details: data.details,
+        site: data.site,
+        liturgy: data.liturgy,
+        filters,
+        setFilters
+      }),
     [lang, data, filters]
   );
   const { L } = c;
@@ -79,15 +90,18 @@ export function PublicApp({ initialLang }) {
     setData(d => ({ ...d, loading: true, loadFailure: false }));
     try {
       // The directory from ParishLife.Api, with each parish's website and calendar (public/api-data.js).
-      // The homepage editor's content is not connected yet, so the page keeps its built-in wording.
       const { directory, details } = await loadDirectory(),
-        siteContent = null,
         failed = [];
+      // The homepage reads the platform's published content and the approved liturgical calendar; with
+      // none published it keeps its built-in wording and shows no observances.
+      const [siteContent, liturgy] = selected
+        ? [null, null]
+        : await Promise.all([loadHomepage(), loadHomeLiturgy(directory)]);
       // A parish's own page also needs its ministries.
       const chosen = selected && directory.find(p => p.id === selected);
       if (chosen) details.set(selected, await loadParish(chosen));
       if (filters.town && !directory.some(p => p.town === filters.town)) setFilters(f => ({ ...f, town: '' }));
-      setData({ loading: false, directory, details, site: siteContent, failed, loadFailure: false });
+      setData({ loading: false, directory, details, site: siteContent, liturgy, failed, loadFailure: false });
     } catch (error) {
       /* 404: ParishLife.Api has no public parish directory yet, which is not the visitor's connection */
       setData(d => ({ ...d, loading: false, loadFailure: error?.status === 404 ? 'missing' : true }));
@@ -96,6 +110,18 @@ export function PublicApp({ initialLang }) {
   useEffect(() => {
     load();
   }, [load]);
+  /* The deployment's install manifest, when it has one: the app is installed from it, in place of the
+     built-in /site.webmanifest. Its name and colour also set the browser bar and the app's title. */
+  useEffect(() => {
+    loadAppInfo().then(({ manifest }) => {
+      if (!manifest) return;
+      document.querySelector('link[rel="manifest"]')?.setAttribute('href', '/api/public/app/manifest');
+      if (manifest.theme_color)
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', manifest.theme_color);
+      if (manifest.short_name)
+        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', manifest.short_name);
+    });
+  }, []);
   /* Back online after a failure (or with an offline notice showing): load again. */
   useEffect(() => {
     const up = () => {

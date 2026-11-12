@@ -3,7 +3,7 @@
    everything coming up. Search narrows both. Any event can be saved to the visitor's own
    calendar as an .ics file. */
 import { useState } from 'react';
-import { feastOn } from '../../lib/liturgy.js';
+import { observanceOn } from '../api-data.js';
 import { Glyph } from './icons.jsx';
 
 const pad = n => String(n).padStart(2, '0');
@@ -133,8 +133,9 @@ export function beirutNow() {
 }
 
 /* The month and its agenda. events: [{id, d, t, title, titleAr, kind}]; place: the parish name and
-   town for saved events; link: an event's own page, when it has one. */
-export function ParishCalendar({ L, lang, events, place = '', link = null }) {
+   town for saved events; link: an event's own page, when it has one; liturgy: the parish's approved
+   observances (api-data.js toLiturgy), which mark the feasts. */
+export function ParishCalendar({ L, lang, events, place = '', link = null, liturgy = null }) {
   const loc = lang === 'ar' ? 'ar-LB' : 'en-GB',
     digits = new Intl.NumberFormat(loc);
   const all = events
@@ -253,7 +254,7 @@ export function ParishCalendar({ L, lang, events, place = '', link = null }) {
               k = dayKey(d),
               evs = byDay.get(k) || [],
               out = d.getMonth() !== m - 1;
-            const feast = feastOn(k);
+            const feast = observanceOn(liturgy, k);
             const label = `${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d)}${feast ? ', ' + L(feast.en, feast.ar) : ''}${evs.length ? ', ' + L(`${evs.length} ${evs.length === 1 ? 'event' : 'events'}`, `${digits.format(evs.length)} ${evs.length === 1 ? 'حدث' : evs.length === 2 ? 'حدثان' : evs.length <= 10 ? 'أحداث' : 'حدثاً'}`) : ''}`;
             return (
               <button
@@ -291,7 +292,7 @@ export function ParishCalendar({ L, lang, events, place = '', link = null }) {
     const inMonth = list.filter(e => e.d.startsWith(state.month));
     if (state.picked) {
       const day = list.filter(e => e.d === state.picked),
-        feast = feastOn(state.picked);
+        feast = observanceOn(liturgy, state.picked);
       agenda = (
         <>
           {feast ? <p className="pcal-feast-note">{L(feast.en, feast.ar)}</p> : null}

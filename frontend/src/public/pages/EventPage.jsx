@@ -1,8 +1,8 @@
 /* One event a parish published: when and where, what it is, how to share it or save it to a
    calendar. */
-import { season, feastOn } from '../../lib/liturgy.js';
+import { observanceOn, seasonOn } from '../api-data.js';
 import { kindName, icsHref, icsName, googleHref } from '../components/ParishCalendar.jsx';
-import { useSite, digits } from '../site.jsx';
+import { useSite, digits, yearLabel } from '../site.jsx';
 import { Glyph } from '../components/icons.jsx';
 import {
   ParishSub,
@@ -55,9 +55,9 @@ export function EventPage({ p, d, id }) {
     soon = e.d >= f.today ? relative(c, e) : '',
     more = f.upcoming.filter(x => x !== e).slice(0, 4);
   const fmt = o => new Intl.DateTimeFormat(loc(c), o).format(date);
-  // where the day stands in the Church's year, and its feast if it has one
-  const year = season(e.d),
-    feastDay = feastOn(e.d);
+  // where the day stands in the Church's year, and its feast, as the parish's approved calendar says
+  const year = seasonOn(d.liturgy, e.d),
+    feastDay = observanceOn(d.liturgy, e.d);
   const rows = [
     [
       'clock',
@@ -84,14 +84,18 @@ export function EventPage({ p, d, id }) {
       </>
     ],
     ['cross', L('What', 'ماذا'), kindName(L, e.kind)],
-    [
-      'star',
-      L('In the Maronite year', 'في السنة المارونية'),
-      <>
-        {L(year.en, year.ar)}
-        {feastDay ? <small className="ev-feast">{L(feastDay.en, feastDay.ar)}</small> : null}
-      </>
-    ]
+    ...(year || feastDay
+      ? [
+          [
+            'star',
+            yearLabel(L, (year || feastDay).rite),
+            <>
+              {year ? <span dir="auto">{year.text}</span> : null}
+              {feastDay ? <small className="ev-feast">{L(feastDay.en, feastDay.ar)}</small> : null}
+            </>
+          ]
+        ]
+      : [])
   ];
   return (
     <ParishSub

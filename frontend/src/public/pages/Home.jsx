@@ -4,13 +4,13 @@
    parish office can publish, rather than filling the page with placeholders. */
 import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Sanctuary, RoseOutline, mosaicTexture } from '../components/Sanctuary.jsx';
-import { LebanonMap, locate, projection } from '../components/LebanonMap.jsx';
+import { LebanonMap, locate } from '../components/LebanonMap.jsx';
 import { animateHome, stopHomeMotion, scrollToTarget } from '../motion.js';
 import { icsHref, icsName, kindName, beirutNow } from '../components/ParishCalendar.jsx';
 import { find } from '../../lib/search.js';
 import { trackAction } from '../../lib/beacon.js';
 import { HOME_DEFAULTS } from '../../lib/site-defaults.js';
-import { season, feastOn } from '../../lib/liturgy.js';
+import { observanceOn, seasonOn, nearbyParishes } from '../api-data.js';
 import {
   useSite,
   Lines,
@@ -25,7 +25,8 @@ import {
   plain,
   clip,
   Monogram,
-  still
+  still,
+  yearLabel
 } from '../site.jsx';
 import { Icon, Glyph, MaroniteCross, Bell } from '../components/icons.jsx';
 import { useHeroWatch } from '../components/Chrome.jsx';
@@ -173,8 +174,9 @@ function Hero({ heroRef, directory, places }) {
   const [tip, setTip] = useState(null);
   const note = site?.announcement,
     text = note && either(c, note.text),
+    detail = note && either(c, note.detail),
     label = note && either(c, note.linkLabel);
-  const feast = feastOn(c.localToday());
+  const feast = observanceOn(c.liturgy, c.localToday());
   const candles = useMemo(
     () => c.directory.map(p => ({ id: p.id, name: c.parishName(p), town: c.townName(p) })),
     [c.directory, c.lang]
@@ -207,6 +209,7 @@ function Hero({ heroRef, directory, places }) {
           <p className="hero-note" data-hero-rise>
             <span className="note-mark" aria-hidden="true"></span>
             <span {...text.attrs}>{text.text}</span>
+            {detail ? <span {...detail.attrs}>{clip(detail.text, 240)}</span> : null}
             {note.link ? (
               <>
                 {' '}
@@ -469,7 +472,7 @@ function Week() {
   const list = useRef(null),
     first = useRef(true);
   const date = d => new Date(d + 'T12:00:00');
-  const now = season(days[0]);
+  const now = seasonOn(c.liturgy, days[0]);
   /* the cards of a newly chosen day settle into place */
   useEffect(() => {
     if (first.current) {
@@ -497,11 +500,13 @@ function Week() {
           )}
         </p>
       </header>
-      <p className="wk-season" data-reveal>
-        <MaroniteCross />
-        <span>{L('In the Maronite year', 'في السنة الطقسية المارونية')}</span>
-        <b>{L(now.en, now.ar)}</b>
-      </p>
+      {now ? (
+        <p className="wk-season" data-reveal>
+          <MaroniteCross />
+          <span>{yearLabel(L, now.rite)}</span>
+          <b dir="auto">{now.text}</b>
+        </p>
+      ) : null}
     </>
   );
   const Tag = inWeek.length ? 'button' : 'span'; // with nothing to filter, the ribbon is only a picture of the week
@@ -509,7 +514,7 @@ function Week() {
     <ol className="wk-days" aria-label={L('The next seven days', 'الأيام السبعة المقبلة')}>
       {days.map((d, i) => {
         const n = inWeek.filter(e => e.d === d).length,
-          feast = feastOn(d);
+          feast = observanceOn(c.liturgy, d);
         const props =
           Tag === 'button'
             ? { type: 'button', 'aria-pressed': day === d, onClick: () => setDay(day === d ? '' : d) }
@@ -636,29 +641,17 @@ function Tonight({ all }) {
 }
 
 /* ---------- directory ---------- */
-function km(c, item) {
-  if (!c.filters.location || !item) return null;
-  const { kx, ky, lon0, lat1 } = projection,
-    lat = lat1 - item.y / ky,
-    lon = lon0 + item.x / kx;
-  const [la, lo] = c.filters.location,
-    rad = v => (v * Math.PI) / 180,
-    a = rad(lat - la),
-    b = rad(lon - lo);
-  const h = Math.sin(a / 2) ** 2 + Math.cos(rad(la)) * Math.cos(rad(lat)) * Math.sin(b / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
-function filtered(c, places, filters = c.filters) {
+/* Near me: the API measures from the visitor's point (POST /api/public/parishes/nearby) and the
+   distances arrive in filters.distances, by parish id. */
+function filtered(c, filters = c.filters) {
   const chosen = c.directory.filter(
     p =>
       (!filters.town || p.town === filters.town) &&
       (!filters.diocese || p.diocese === filters.diocese) &&
       (!filters.rite || c.details.get(p.id)?.parish?.rite === filters.rite)
   );
-  const near = { ...c, filters };
   return find(filters.q, chosen, p => [p.name, p.ar, p.town, p.townAr, p.diocese].join(' '), c.normalize)
-    .map(p => ({ p, d: km(near, places.get(p.id)) }))
+    .map(p => ({ p, d: filters.distances?.[p.id] ?? null }))
     .sort((a, b) =>
       filters.location
         ? (a.d ?? Infinity) - (b.d ?? Infinity) || c.parishName(a.p).localeCompare(c.parishName(b.p), c.lang)
@@ -704,7 +697,7 @@ function Directory({ controller, places }) {
   const [note, setNote] = useState('');
   const [chosen, setChosen] = useState(null);
   const uniq = values => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, c.lang));
-  const rows = filtered(c, places);
+  const rows = filtered(c);
   const items = useMemo(
     () =>
       c.directory
@@ -731,7 +724,7 @@ function Directory({ controller, places }) {
     /* The hero's search: narrow the list, zoom the map to what is left, and go there. */
     go(change) {
       const next = update(change),
-        ids = filtered(c, new Map(), next).map(r => r.p.id);
+        ids = filtered(c, next).map(r => r.p.id);
       if (ids.length && ids.length < c.directory.length) map.current?.focus(ids);
       scrollToTarget(section.current);
     }
@@ -744,7 +737,7 @@ function Directory({ controller, places }) {
   }, [chosen]);
   const near = () => {
     if (filters.location) {
-      setFilters({ ...filters, location: null });
+      setFilters({ ...filters, location: null, distances: null });
       setNote('');
       return;
     }
@@ -754,9 +747,26 @@ function Directory({ controller, places }) {
     }
     setNote(L('Finding your location…', 'جارٍ تحديد موقعك…'));
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        setFilters(f => ({ ...f, location: [pos.coords.latitude, pos.coords.longitude] }));
-        setNote(L('Nearest parishes first. Distances are approximate.', 'الرعايا الأقرب أولاً. المسافات تقريبية.'));
+      async pos => {
+        try {
+          const distances = await nearbyParishes([pos.coords.latitude, pos.coords.longitude]);
+          setFilters(f => ({ ...f, location: [pos.coords.latitude, pos.coords.longitude], distances }));
+          setNote(
+            Object.keys(distances).length
+              ? L('Nearest parishes first. Distances are approximate.', 'الرعايا الأقرب أولاً. المسافات تقريبية.')
+              : L(
+                  'No parish has a recorded location yet, so none can be sorted by distance.',
+                  'لا موقع مسجّلًا لأي رعية بعد، فلا يمكن ترتيبها حسب المسافة.'
+                )
+          );
+        } catch {
+          setNote(
+            L(
+              'Distances could not be worked out just now. Every parish is still listed.',
+              'تعذّر حساب المسافات الآن. ما زالت كل الرعايا معروضة.'
+            )
+          );
+        }
       },
       () =>
         setNote(
@@ -840,7 +850,7 @@ function Directory({ controller, places }) {
             onSubmit={e => e.preventDefault()}
             onReset={e => {
               e.preventDefault();
-              update({ q: '', town: '', diocese: '', rite: '', sort: 'name', location: null });
+              update({ q: '', town: '', diocese: '', rite: '', sort: 'name', location: null, distances: null });
               map.current?.reset();
             }}
           >
@@ -1270,7 +1280,9 @@ function News() {
 function Stories() {
   const c = useSite(),
     { L } = c,
-    list = (c.site?.stories || []).map(s => ({ ...s, t: either(c, s.title), b: either(c, s.body) })).filter(s => s.t);
+    list = (c.site?.stories || [])
+      .map(s => ({ ...s, t: either(c, s.title), b: either(c, s.body), more: either(c, s.linkLabel) }))
+      .filter(s => s.t);
   const track = useRef(null);
   const [fits, setFits] = useState(false);
   useEffect(() => {
@@ -1332,7 +1344,7 @@ function Stories() {
             {s.b ? <p {...s.b.attrs}>{s.b.text}</p> : null}
             {s.link ? (
               <a className="story-link" href={s.link}>
-                {L('Read more', 'اقرأ المزيد')}
+                <span {...(s.more?.attrs || {})}>{s.more?.text || L('Read more', 'اقرأ المزيد')}</span>
                 <span className="sr-only">: {s.t.text}</span>
               </a>
             ) : null}

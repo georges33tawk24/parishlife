@@ -567,6 +567,7 @@ html[dir=rtl] .ph-other{text-align:right}
 .verify-state{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;font-weight:700;font-size:calc(17px * var(--fs,1))}
 .verify-state svg{width:22px;height:22px;flex:none}
 .verify-state.is-good{background:rgb(12 163 12 / .08);color:#0A6B0A;border:1px solid rgb(12 163 12 / .3)}
+.verify-state.is-note{background:rgb(215 165 72 / .1);color:#6B4A0B;border:1px solid rgb(215 165 72 / .4)}
 .verify-state.is-critical{background:rgb(208 59 59 / .07);color:#A32727;border:1px solid rgb(208 59 59 / .3)}
 .verify-facts{display:grid;margin:18px 0 0}
 .verify-facts div{display:grid;grid-template-columns:minmax(110px,.35fr) minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--hair)}
