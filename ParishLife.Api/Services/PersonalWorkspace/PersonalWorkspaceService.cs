@@ -1,5 +1,6 @@
 // Purpose: owns account-private notes/tasks, protected content/history, current personal authorization and atomic conditional writes.
 // Main functions: SaveAsync, ActAsync, GetAsync, ListAsync and HistoryAsync; private command records validate retries without text in audit/receipts.
+// Pin, reminder date and linked meeting stay inside the protected content; a newly linked meeting must be one the account can currently read.
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -12,11 +13,12 @@ using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Ministries;
 
 namespace ParishLife.Api.Services.PersonalWorkspace;
 
 public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAccess proof, UserManager<ParishUser> users,
-    ICurrentActor actor, IDataProtectionProvider protection, TimeProvider clock)
+    ICurrentActor actor, IDataProtectionProvider protection, TimeProvider clock, MinistryMeetingService meetings)
 {
     private static readonly HashSet<string> TaskStatuses = new(StringComparer.Ordinal)
         { "Draft", "Open", "InProgress", "Waiting", "Completed", "Cancelled", "Archived" };
@@ -38,6 +40,10 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
             throw Invalid("A new personal item has no previous version.");
         var content = Content(request);
         var previous = itemId is null ? null : await ReadAsync(account.Id, id, ct);
+        var priorContent = previous is null ? null : ReadContent(previous.Value);
+        if (content.MeetingId is not null && (priorContent?.MeetingId != content.MeetingId
+            || priorContent.MeetingMinistryId != content.MeetingMinistryId || priorContent.MeetingParishId != content.MeetingParishId))
+            await RequireReadableMeetingAsync(content, ct);
         if (previous is not null && (previous.Value.Kind != request.Kind
             || previous.Value.Status is "Completed" or "Cancelled" or "Archived"
             || request.SaveAsDraft && previous.Value.Status != "Draft"))
@@ -265,6 +271,11 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
             throw Invalid("Choose Routine, TimeSensitive or High; High requires its reason.");
         if (request.DueAt is { } due)
             Guard.Utc(due);
+        if (request.ReminderAt is { } reminder && (reminder == default || reminder.Offset != TimeSpan.Zero))
+            throw Invalid("A private reminder date must be an explicit UTC instant.");
+        var linked = new[] { request.MeetingParishId, request.MeetingMinistryId, request.MeetingId };
+        if (linked.Any(x => x is not null) && linked.Any(x => x is null || x == Guid.Empty))
+            throw Invalid("Link a meeting with its parish, ministry and meeting identifiers together, or leave all three empty.");
         return new()
         {
             Title = Optional(request.Title, "Title", 500),
@@ -273,8 +284,22 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
             Tags = tags,
             Priority = priority,
             PriorityReason = reason,
-            DueAt = request.DueAt
+            DueAt = request.DueAt,
+            Pinned = request.Pinned,
+            ReminderAt = request.ReminderAt,
+            MeetingParishId = request.MeetingParishId?.ToString("N"),
+            MeetingMinistryId = request.MeetingMinistryId?.ToString("N"),
+            MeetingId = request.MeetingId?.ToString("N")
         };
+    }
+
+    // A new or changed link must name a meeting the account can read now; an unchanged link survives a later departure.
+    private async Task RequireReadableMeetingAsync(PersonalWorkspaceContent content, CancellationToken ct)
+    {
+        try
+        { await meetings.GetAsync(content.MeetingParishId!, content.MeetingMinistryId!, content.MeetingId!, ct); }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden or FailureKind.Conflict)
+        { throw Invalid("Link a meeting you can currently see."); }
     }
 
     private PersonalWorkspaceContent ReadContent(PersonalWorkspaceItem value)
@@ -304,6 +329,11 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
             Priority = content.Priority,
             PriorityReason = content.PriorityReason,
             DueAt = content.DueAt,
+            Pinned = content.Pinned,
+            ReminderAt = content.ReminderAt,
+            MeetingParishId = content.MeetingParishId,
+            MeetingMinistryId = content.MeetingMinistryId,
+            MeetingId = content.MeetingId,
             CreatedAt = value.CreatedAt,
             UpdatedAt = value.UpdatedAt,
             CompletedAt = value.CompletedAt,
