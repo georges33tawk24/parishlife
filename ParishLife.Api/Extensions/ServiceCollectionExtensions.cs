@@ -132,6 +132,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OfficeLedgerService>();
         services.AddScoped<PersonalWorkspaceService>();
         services.AddScoped<AccountProfileService>();
+        services.AddScoped<AccountSignatureService>();
+        services.AddScoped<AccountRecordsService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
         services.AddScoped<MinistryAccess>();
         services.AddScoped<MinistryService>();
