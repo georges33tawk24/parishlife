@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "node scripts/run-checks.mjs",
+    "check:routes": "node scripts/check-routes.mjs --strict",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{js,jsx}\" vite.config.js scripts",
     "format:check": "prettier --check \"src/**/*.{js,jsx}\" vite.config.js scripts"

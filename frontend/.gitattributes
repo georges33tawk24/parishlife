@@ -1,0 +1,2 @@
+# Purpose: keeps frontend sources LF on every platform so Prettier checks pass on Windows checkouts with core.autocrlf.
+* text=auto eol=lf

@@ -65,5 +65,10 @@ Both commands need a real terminal on purpose: they refuse piped input.
 ```bash
 npm run format:check   # Prettier, two-space style (.prettierrc.json, .editorconfig)
 npm run check          # the API layer against an in-memory stand-in for the routes it uses
+npm run check:routes   # every route the frontend calls exists in ParishLife.Api (see below)
 npm run build          # writes frontend/dist
 ```
+
+`npm run check:routes` keeps the stand-ins honest. It reruns the checks while recording each request, adds the literal paths passed to `api()`, `parishAPI()` and `allPages()` in `src/`, and matches them by method and path against the `[Route]`/`[Http*]` attributes in `ParishLife.Api/Controllers`. A request no route answers fails the check unless `scripts/route-gaps.json` lists it with the reason it is still open. When a route is added to the API, the check says which gap is closed so it can be removed from that list. It reads the C# source; it does not prove request or response shapes.
+
+On Windows, `frontend/.gitattributes` keeps these files LF so `format:check` passes even with `core.autocrlf=true`.

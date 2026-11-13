@@ -1,0 +1,22 @@
+[
+  {
+    "route": "GET /api/parishes/{}/account-names",
+    "reason": "the shared name lookup (CONVENTIONS.md section 2) is not in the API yet; names stay empty"
+  },
+  {
+    "route": "GET /api/workspace/plan",
+    "reason": "deliberate: check-api.mjs asserts that an old-server route reports not connected"
+  },
+  { "route": "GET /api/account/signature", "reason": "old server: the signature image on My account" },
+  { "route": "POST /api/account/signature", "reason": "old server: the signature image on My account" },
+  { "route": "POST /api/account/signature/remove", "reason": "old server: the signature image on My account" },
+  { "route": "GET /api/account/records", "reason": "old server: My parish records on My account" },
+  { "route": "POST /api/account/records", "reason": "old server: My parish records on My account" },
+  { "route": "PUT /api/workspace/public-profile", "reason": "old server: the parish public-profile editor" },
+  { "route": "POST /api/workspace/suspension", "reason": "old server: suspending an account from the people list" },
+  { "route": "POST /api/parishes/{}/attendance-preview", "reason": "old server: the attendance import preview" },
+  { "route": "POST /api/sign/options", "reason": "old server: signing letters" },
+  { "route": "GET /api/parishes/{}/files", "reason": "old server: the generic file-upload component" },
+  { "route": "POST /api/parishes/{}/files", "reason": "old server: the generic file-upload component" },
+  { "route": "DELETE /api/parishes/{}/files/{}", "reason": "old server: the generic file-upload component" }
+]
