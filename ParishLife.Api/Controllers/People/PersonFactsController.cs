@@ -1,5 +1,5 @@
 // Purpose: exposes optional person facts, designated-staff medical declarations and consents (office and own) over HTTP.
-// Main functions: SaveFacts, Facts, SaveMedical, Medical, RecordConsent, Consents, WithdrawConsent, RecordOwnConsent, OwnConsents and
+// Main functions: SaveFacts, Facts, FactsList, SaveMedical, Medical, RecordConsent, Consents, ParishConsents, WithdrawConsent, RecordOwnConsent, OwnConsents and
 // WithdrawOwnConsent delegate rules to PersonFactsService.
 
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +21,10 @@ public class PersonFactsController(PersonFactsService service) : ControllerBase
     public async Task<ActionResult<Versioned<PersonFactsDto>>> Facts(Guid parishId, Guid personId, CancellationToken ct)
         => Ok(await service.GetFactsAsync(Guard.Id(parishId), Guard.Id(personId), ct));
 
+    [HttpGet("people/facts")]
+    public async Task<ActionResult<Page<Versioned<PersonFactsDto>>>> FactsList(Guid parishId, CancellationToken ct, int size = 100, string? cursor = null)
+        => Ok(await service.ListFactsAsync(Guard.Id(parishId), size, cursor, ct));
+
     [HttpPut("people/{personId:guid}/medical")]
     public async Task<ActionResult<MedicalDto>> SaveMedical(Guid parishId, Guid personId, SaveMedicalDto request, CancellationToken ct)
         => Ok(await service.SaveMedicalAsync(Guard.Id(parishId), Guard.Id(personId), request, ct));
@@ -36,6 +40,10 @@ public class PersonFactsController(PersonFactsService service) : ControllerBase
     [HttpGet("people/{personId:guid}/consents")]
     public async Task<ActionResult<IReadOnlyList<Versioned<ConsentDto>>>> Consents(Guid parishId, Guid personId, CancellationToken ct)
         => Ok(await service.ConsentsAsync(Guard.Id(parishId), Guard.Id(personId), ct));
+
+    [HttpGet("consents")]
+    public async Task<ActionResult<Page<Versioned<ConsentDto>>>> ParishConsents(Guid parishId, string kind, CancellationToken ct, bool includeWithdrawn = false, int size = 100, string? cursor = null)
+        => Ok(await service.ParishConsentsAsync(Guard.Id(parishId), kind, includeWithdrawn, size, cursor, ct));
 
     [HttpPost("consents/{consentId:guid}/withdraw")]
     public async Task<ActionResult<ConsentDto>> WithdrawConsent(Guid parishId, Guid consentId, WithdrawConsentDto request, CancellationToken ct)

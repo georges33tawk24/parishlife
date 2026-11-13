@@ -5,7 +5,7 @@
 // RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, ProposeAssociationAsync,
 // GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, PublishAsync, CreateInvoiceAsync,
 // GetInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync, GetActivationStatusAsync, FindDueActivationsAsync,
-// TryLeaseAsync, CompleteActivationAsync, GetPayerScheduleAsync, ListInvoicesAsync, CreateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
+// TryLeaseAsync, CompleteActivationAsync, GetPayerScheduleAsync, ListInvoicesAsync, CreateAsync, UpdateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
 
 using ParishLife.Api.Interfaces.Repositories.Billing;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -406,6 +406,15 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
         }
     }
 
+    public Task<Person> UpdateAsync(Person person, string expected, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + person.ParishId, op, () =>
+    {
+        var key = K(person.ParishId, person.Id);
+        var row = people.GetValueOrDefault(key) ?? throw Missing();
+        Match(row, expected);
+        people[key] = Row(person);
+        return person;
+    }));
+
     public Task<Person> SetArchiveAsync(string parishId, string id, string expected, bool archived, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + parishId, op, () =>
     {
         var key = K(parishId, id);
@@ -417,10 +426,16 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             ParishId = row.Value.ParishId,
             GivenName = row.Value.GivenName,
             FamilyName = row.Value.FamilyName,
+            GivenNameAr = row.Value.GivenNameAr,
+            FamilyNameAr = row.Value.FamilyNameAr,
             BirthDate = row.Value.BirthDate,
             Contact = row.Value.Contact,
+            Rite = row.Value.Rite,
+            RegisterStatus = row.Value.RegisterStatus,
             CreatedBy = row.Value.CreatedBy,
             CreatedAt = row.Value.CreatedAt,
+            UpdatedBy = row.Value.UpdatedBy,
+            UpdatedAt = row.Value.UpdatedAt,
             Archived = archived
         };
         people[key] = Row(result);

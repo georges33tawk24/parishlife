@@ -1,0 +1,42 @@
+// Purpose: office edit of a person's core record; every field is replaced as sent and Version must match the stored record.
+// Main members: OperationId, Version, GivenName, FamilyName, GivenNameAr, FamilyNameAr, BirthDate, Contact, Rite and RegisterStatus.
+
+using System.ComponentModel.DataAnnotations;
+using ParishLife.Api.Validation;
+
+namespace ParishLife.Api.DTOs.People;
+
+public class UpdatePersonDto
+{
+    [NotEmptyGuid]
+    public Guid OperationId { get; set; }
+
+    [Required]
+    [StringLength(1024)]
+    public string Version { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(500)]
+    public string GivenName { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(500)]
+    public string FamilyName { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? GivenNameAr { get; set; } = null;
+
+    [StringLength(500)]
+    public string? FamilyNameAr { get; set; } = null;
+
+    public DateOnly? BirthDate { get; set; }
+
+    [StringLength(320)]
+    public string? Contact { get; set; }
+
+    [StringLength(100)]
+    public string? Rite { get; set; } = null;
+
+    [RegularExpression("^(Member|Visitor)$")]
+    public string? RegisterStatus { get; set; } = null;
+}

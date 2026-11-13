@@ -1,5 +1,5 @@
 // Purpose: optional office-maintained facts about a person beyond the core record: structured locality, occupation, skills, language and deceased status.
-// Main members: PersonId, ParishId, Country, Region, District, Town, AddressDetail, LocalityNotListed, Occupation, Skills, PreferredLanguage,
+// Main members: PersonId, ParishId, Country, Region, District, Town, TownAr, AddressDetail, LocalityNotListed, Occupation, Skills, PreferredLanguage,
 // DeceasedOn, DeceasedPrecision, DeceasedEvidence, UpdatedBy and UpdatedAt.
 
 namespace ParishLife.Api.Models;
@@ -17,6 +17,9 @@ public class PersonFacts
     public string? District { get; set; }
 
     public string? Town { get; set; }
+
+    // Arabic spelling of the town as typed; never derived from Town. Older records hold null.
+    public string? TownAr { get; set; } = null;
 
     public string? AddressDetail { get; set; }
 

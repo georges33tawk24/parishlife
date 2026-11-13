@@ -1,5 +1,5 @@
 // Purpose: manages households (shared contact/residence units) and person-to-person relationships without conferring authority.
-// Main functions: SaveAsync, MemberAsync, GetAsync, ListAsync, HistoryAsync, AddRelationshipAsync, EndRelationshipAsync and
+// Main functions: SaveAsync, MemberAsync, GetAsync, ListAsync (with members), HistoryAsync, AddRelationshipAsync, EndRelationshipAsync and
 // RelationshipsAsync; helpers enforce one primary household per person, unique envelope identifiers, mirrored relationship pairs
 // and acyclic parentage. Household membership never grants guardianship, giving, message or certificate access.
 
@@ -47,6 +47,8 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             return await ProjectAsync(parish, (await ReadAsync(parish, prior.Id, ct)).Value, ct);
         var envelope = string.IsNullOrWhiteSpace(request.EnvelopeId) ? null : Guard.Text(request.EnvelopeId, "Envelope identifier", 40);
         var address = string.IsNullOrWhiteSpace(request.Address) ? null : Guard.Text(request.Address, "Address", 1000);
+        var town = Optional(request.Town, "Town", 100);
+        var townAr = Optional(request.TownAr, "Arabic town", 100);
         var changes = new List<RecordChange> { Fence(root) };
         Household item;
         if (id is null)
@@ -64,6 +66,8 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
                 throw State("Only an active household can be edited.");
             if (item.Address != address)
                 changes.Add(History(item.Id, null, "address", item.Address, op));
+            if (item.Town != town || item.TownAr != townAr)
+                changes.Add(History(item.Id, null, "town", item.Town ?? item.TownAr, op));
             changes.Add(RecordChange.Replace(HouseholdKey(item.Id), "household", item, Versions.Require(request.Version)));
         }
         if (!string.Equals(item.EnvelopeId, envelope, StringComparison.OrdinalIgnoreCase))
@@ -81,7 +85,10 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
                 changes.Add(History(item.Id, null, "envelope", item.EnvelopeId, op));
         }
         item.Name = Guard.Text(request.Name, "Household name", 200);
+        item.NameAr = Optional(request.NameAr, "Arabic household name", 200);
         item.Address = address;
+        item.Town = town;
+        item.TownAr = townAr;
         item.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : Guard.Text(request.Phone, "Phone", 50);
         item.EnvelopeId = envelope;
         item.UpdatedBy = actor.AccountId;
@@ -165,11 +172,11 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         await AuthorizeAsync(parish, Permissions.PeopleRead, ct);
         var page = await records.PageAsync<Household>(Scope(parish), "household", size, cursor, ct);
-        return new Page<Versioned<HouseholdDto>>
-        {
-            Items = page.Items.Select(row => new Versioned<HouseholdDto> { Version = row.Version, Value = Summary(row.Value) }).ToArray(),
-            ContinuationToken = page.ContinuationToken
-        };
+        // Members come with each household so a list needs no read per household (one member query per household on the server).
+        var items = new List<Versioned<HouseholdDto>>();
+        foreach (var row in page.Items.Where(r => r.Value.ParishId == parish))
+            items.Add(new Versioned<HouseholdDto> { Version = row.Version, Value = await ProjectAsync(parish, row.Value, ct) });
+        return new Page<Versioned<HouseholdDto>> { Items = [.. items], ContinuationToken = page.ContinuationToken };
     }
 
     public async Task<Page<HouseholdChangeDto>> HistoryAsync(string parish, string id, int size, string? cursor, CancellationToken ct)
@@ -314,12 +321,20 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         return row;
     }
 
-    private async Task<string> NameAsync(string parish, string person, CancellationToken ct)
-        => (await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is { } row ? row.GivenName + " " + row.FamilyName : "";
+    // The Latin display name, and the Arabic one only when an Arabic spelling is recorded (never copied from the Latin name).
+    private async Task<(string Name, string? NameAr)> NameAsync(string parish, string person, CancellationToken ct)
+    {
+        if ((await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is not { } row)
+            return ("", null);
+        var arabic = string.Join(' ', new[] { row.GivenNameAr, row.FamilyNameAr }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        return (row.GivenName + " " + row.FamilyName, arabic.Length == 0 ? null : arabic);
+    }
+
+    private static string? Optional(string? value, string name, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, max);
 
     private static HouseholdDto Summary(Household x) => new()
     {
-        Id = x.Id, Name = x.Name, Address = x.Address, Phone = x.Phone, ContactPersonId = x.ContactPersonId, EnvelopeId = x.EnvelopeId,
+        Id = x.Id, Name = x.Name, NameAr = x.NameAr, Address = x.Address, Town = x.Town, TownAr = x.TownAr, Phone = x.Phone, ContactPersonId = x.ContactPersonId, EnvelopeId = x.EnvelopeId,
         Status = x.Status, UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt
     };
 
@@ -329,19 +344,26 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         var members = await records.CollectAsync<HouseholdMember>(Scope(parish), "householdMember", ct, 200, Equal("householdId", item.Id));
         var list = new List<HouseholdMemberDto>();
         foreach (var member in members.Select(m => m.Value))
+        {
+            var (name, nameAr) = await NameAsync(parish, member.PersonId, ct);
             list.Add(new HouseholdMemberDto
             {
-                PersonId = member.PersonId, DisplayName = await NameAsync(parish, member.PersonId, ct), InheritsAddress = member.InheritsAddress,
+                PersonId = member.PersonId, DisplayName = name, DisplayNameAr = nameAr, InheritsAddress = member.InheritsAddress,
                 EffectiveAddress = member.InheritsAddress ? item.Address : member.OwnAddress, IsContact = item.ContactPersonId == member.PersonId
             });
+        }
         result.Members = [.. list];
         return result;
     }
 
-    private async Task<RelationshipDto> ProjectAsync(string parish, PersonRelationship x, CancellationToken ct) => new()
+    private async Task<RelationshipDto> ProjectAsync(string parish, PersonRelationship x, CancellationToken ct)
     {
-        Id = x.Id, PersonId = x.PersonId, RelatedPersonId = x.RelatedPersonId, RelatedName = await NameAsync(parish, x.RelatedPersonId, ct),
-        Kind = x.Kind, Source = x.Source, EvidenceReference = x.EvidenceReference, Status = x.Status, CreatedBy = x.CreatedBy,
-        CreatedAt = x.CreatedAt, EndedAt = x.EndedAt, EndReason = x.EndReason
-    };
+        var (name, nameAr) = await NameAsync(parish, x.RelatedPersonId, ct);
+        return new RelationshipDto
+        {
+            Id = x.Id, PersonId = x.PersonId, RelatedPersonId = x.RelatedPersonId, RelatedName = name, RelatedNameAr = nameAr,
+            Kind = x.Kind, Source = x.Source, EvidenceReference = x.EvidenceReference, Status = x.Status, CreatedBy = x.CreatedBy,
+            CreatedAt = x.CreatedAt, EndedAt = x.EndedAt, EndReason = x.EndReason
+        };
+    }
 }

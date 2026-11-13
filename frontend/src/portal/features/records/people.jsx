@@ -32,7 +32,7 @@ import { download } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { createdId } from '../../model/modules/people.js';
 import { MergeHistory } from './people-duplicates.jsx';
-import { consentsOf, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
+import { directoryConsents, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
 import { api, session, newOperationId } from '../../model/api.js';
@@ -1020,11 +1020,10 @@ function importView() {
 }
 
 async function printPeopleDirectory() {
-  /* the API has no parish-wide consent list, so each person's consents are read now */
-  const consents = await consentsOf(PEOPLE.map(p => p.id)).catch(() => new Map());
-  const listed = PEOPLE.filter(p =>
-    (consents.get(p.id) || []).some(r => r.value.kind === 'Directory' && r.value.status === 'Given')
-  ).sort((a, b) => a.lat.localeCompare(b.lat));
+  /* the parish's given Directory consents are read now; each person shows only the fields they agreed to */
+  const consents = await directoryConsents().catch(() => new Map());
+  const listed = PEOPLE.filter(p => consents.get(p.id)?.has('Name')).sort((a, b) => a.lat.localeCompare(b.lat));
+  const shows = (p, field) => consents.get(p.id)?.has(field);
   if (!listed.length)
     return toast(
       t('Nobody to print yet', 'لا أحد للطباعة بعد'),
@@ -1063,9 +1062,9 @@ async function printPeopleDirectory() {
                 <tr key={i}>
                   <td dir="auto">{p.lat}</td>
                   <td dir="auto">{p.ar}</td>
-                  <td>{h ? t(h.name, h.ar || h.name) : ''}</td>
-                  <td>{t(p.town || '', p.townAr || p.town || '')}</td>
-                  <td dir="ltr">{p.phone === '—' ? '' : p.phone}</td>
+                  <td>{h && shows(p, 'Household') ? t(h.name, h.ar || h.name) : ''}</td>
+                  <td>{shows(p, 'Address') ? t(p.town || '', p.townAr || p.town || '') : ''}</td>
+                  <td dir="ltr">{shows(p, 'Phone') && p.phone !== '—' ? p.phone : ''}</td>
                 </tr>
               );
             })}

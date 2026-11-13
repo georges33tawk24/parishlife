@@ -15,7 +15,7 @@ namespace ParishLife.Api.Services.People;
 
 public class DuplicateService(IRecordTransactions records, IParishAccess access, IClergyAuthority clergy, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static readonly string[] Fields = ["GivenName", "FamilyName", "BirthDate", "Contact"];
+    private static readonly string[] Fields = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Rite", "RegisterStatus"];
     // Records that keep pointing at the merged-away person; they stay individually traceable and are listed, never rewritten.
     private static readonly string[] DependentTypes = ["sacramentRecord", "registration", "volunteerAssignment", "householdMember", "personConsent"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -190,7 +190,11 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     {
         "GivenName" => p.GivenName,
         "FamilyName" => p.FamilyName,
+        "GivenNameAr" => p.GivenNameAr,
+        "FamilyNameAr" => p.FamilyNameAr,
         "BirthDate" => p.BirthDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        "Rite" => p.Rite,
+        "RegisterStatus" => p.RegisterStatus,
         _ => p.Contact
     };
 
@@ -200,15 +204,20 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
         {
             case "GivenName": target.GivenName = from.GivenName; break;
             case "FamilyName": target.FamilyName = from.FamilyName; break;
+            case "GivenNameAr": target.GivenNameAr = from.GivenNameAr; break;
+            case "FamilyNameAr": target.FamilyNameAr = from.FamilyNameAr; break;
             case "BirthDate": target.BirthDate = from.BirthDate; break;
             case "Contact": target.Contact = from.Contact; break;
+            case "Rite": target.Rite = from.Rite; break;
+            case "RegisterStatus": target.RegisterStatus = from.RegisterStatus; break;
         }
     }
 
     private static Person Copy(Person p) => new()
     {
-        Id = p.Id, ParishId = p.ParishId, GivenName = p.GivenName, FamilyName = p.FamilyName, BirthDate = p.BirthDate, Contact = p.Contact,
-        CreatedBy = p.CreatedBy, CreatedAt = p.CreatedAt, Archived = p.Archived
+        Id = p.Id, ParishId = p.ParishId, GivenName = p.GivenName, FamilyName = p.FamilyName, GivenNameAr = p.GivenNameAr, FamilyNameAr = p.FamilyNameAr,
+        BirthDate = p.BirthDate, Contact = p.Contact, Rite = p.Rite, RegisterStatus = p.RegisterStatus, CreatedBy = p.CreatedBy, CreatedAt = p.CreatedAt,
+        UpdatedBy = p.UpdatedBy, UpdatedAt = p.UpdatedAt, Archived = p.Archived
     };
 
     private static PersonMergeDto Project(Versioned<PersonMerge> row) => new()

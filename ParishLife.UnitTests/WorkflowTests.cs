@@ -43,7 +43,8 @@ public sealed class WorkflowTests
             Access = new(Store, Actor, Clock, new LegacyOnlyStaffAccess());
             Parishes = new(Store, Access, Actor, Platform, Store, Clock);
             Billing = new(Store, Store, Store, Access, Actor, Platform, Clock);
-            People = new(Store, Access, Actor, Clock);
+            // The authenticator check is used only by the office edit, which the integration tests cover with real accounts.
+            People = new(Store, Access, Actor, null!, Clock);
         }
 
         internal async Task<string> Parish(bool verified = true)

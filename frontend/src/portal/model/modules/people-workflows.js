@@ -2,8 +2,8 @@
    of a list: a person's facts, medical declaration, consents and relationships; duplicate decisions and
    merges; people search and CSV export; the membership-request queue and profile corrections; household
    history. The screens call these, then hydrate() so they show what the API stored.
-   Main members: state (what the module has loaded: facts, details, households), openPerson, saveFacts,
-   recordConsent, withdrawConsent, saveMedical, addRelationship, endRelationship, searchPeople,
+   Main members: state (what the module has loaded: facts, details, households, directory consents),
+   openPerson, saveFacts, recordConsent, withdrawConsent, directoryFields, directoryConsents, saveMedical, addRelationship, endRelationship, searchPeople,
    previewExport, exportPeople, duplicateDecision, previewMerge, mergePeople, unmerge, listMerges,
    membershipQueue, decideMembership, correctionQueue, reviewCorrection, householdHistory.
 
@@ -15,7 +15,8 @@ export const state = {
   parishId: '',
   facts: new Map(), // personId → { version, value: PersonFactsDto }
   details: new Map(), // personId → { consents, medical, relationships, loaded }
-  households: new Map() // householdId → { version, value: HouseholdDto with members }
+  households: new Map(), // householdId → { version, value: HouseholdDto with members }
+  directory: null // personId → the fields their given Directory consents disclose; null until loaded
 };
 
 /* The caches belong to one parish: switching parish starts them again. */
@@ -25,6 +26,7 @@ export function forParish(id) {
   state.facts.clear();
   state.details.clear();
   state.households.clear();
+  state.directory = null;
 }
 
 const enc = encodeURIComponent;
@@ -70,8 +72,9 @@ export async function saveFacts(id, patch) {
     region: f.region || null,
     district: f.district || null,
     town: f.town || null,
+    townAr: f.townAr || null,
     addressDetail: f.addressDetail || null,
-    localityNotListed: f.town ? null : f.localityNotListed || null,
+    localityNotListed: f.town || f.townAr ? null : f.localityNotListed || null,
     occupation: f.occupation || null,
     skills: f.skills || [],
     preferredLanguage: f.preferredLanguage || null,
@@ -115,19 +118,28 @@ export const withdrawConsent = (row, reason) =>
     reason: reason || null
   });
 
-/* Consents of many people, a few at a time (there is no parish-wide consent list). */
-export async function consentsOf(ids, width = 6) {
-  const out = new Map(),
-    queue = [...ids];
-  await Promise.all(
-    Array.from({ length: Math.min(width, queue.length) }, async () => {
-      while (queue.length) {
-        const id = queue.shift();
-        out.set(id, await soft(parishAPI(`people/${enc(id)}/consents`), []));
-      }
-    })
-  );
+/* Given Directory consents (rows of ConsentDto) → personId → the set of fields they disclose. */
+export function directoryFields(rows) {
+  const out = new Map();
+  for (const { value } of rows) {
+    if (value.kind !== 'Directory' || value.status !== 'Given') continue;
+    const fields = out.get(value.personId) || new Set();
+    (value.fields || []).forEach(f => fields.add(f));
+    out.set(value.personId, fields);
+  }
   return out;
+}
+
+/* Every given Directory consent of the parish, read now (the printed directory), as directoryFields. */
+export async function directoryConsents() {
+  const rows = [];
+  let cursor = '';
+  do {
+    const page = await parishAPI(`consents?kind=Directory&size=100${cursor ? `&cursor=${enc(cursor)}` : ''}`);
+    rows.push(...(page?.items || []));
+    cursor = page?.continuationToken || '';
+  } while (cursor && rows.length < 20000);
+  return directoryFields(rows);
 }
 
 /* ---------- relationships ---------- */

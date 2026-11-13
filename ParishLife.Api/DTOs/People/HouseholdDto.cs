@@ -1,5 +1,5 @@
 // Purpose: returns a household with its members and effective addresses.
-// Main members: Id, Name, Address, Phone, ContactPersonId, EnvelopeId, Status, Members, UpdatedBy and UpdatedAt.
+// Main members: Id, Name, NameAr, Address, Town, TownAr, Phone, ContactPersonId, EnvelopeId, Status, Members, UpdatedBy and UpdatedAt.
 
 namespace ParishLife.Api.DTOs.People;
 
@@ -9,7 +9,13 @@ public class HouseholdDto
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; } = null;
+
     public string? Address { get; set; } = null;
+
+    public string? Town { get; set; } = null;
+
+    public string? TownAr { get; set; } = null;
 
     public string? Phone { get; set; } = null;
 

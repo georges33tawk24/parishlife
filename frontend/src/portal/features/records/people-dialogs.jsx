@@ -386,8 +386,7 @@ export async function personEdit(id) {
               <option value="">{L('Not recorded', 'غير مسجّل')}</option>
               {[
                 ['member', 'Member', 'منتسب'],
-                ['visitor', 'Visitor', 'زائر'],
-                ['clergy', 'Clergy', 'إكليروس']
+                ['visitor', 'Visitor', 'زائر']
               ].map(([v, en, ar], i) => (
                 <option key={i} value={v}>
                   {L(en, ar)}
@@ -417,16 +416,13 @@ export async function personEdit(id) {
     ),
     onMount(el) {
       el.querySelector('#e_save').addEventListener('click', async e => {
-        if (
-          !need(el, '#e_lat', L('Enter the English name', 'أدخل الاسم الإنكليزي')) ||
-          !need(el, '#e_ar', L('Enter the Arabic name', 'أدخل الاسم العربي'))
-        )
-          return;
+        // The Arabic name is optional: an empty one is saved as not recorded, never filled from the English.
+        if (!need(el, '#e_lat', L('Enter the English name', 'أدخل الاسم الإنكليزي'))) return;
         e.currentTarget.disabled = true;
         const target = D.person(id),
           address = readAddressCascade(el);
         Object.assign(target, {
-          ar: val(el, '#e_ar'),
+          ar: val(el, '#e_ar') || (target.arStored ? '' : target.ar),
           lat: val(el, '#e_lat'),
           born: val(el, '#e_born'),
           status: el.querySelector('#e_st').value,
