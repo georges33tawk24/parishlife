@@ -1,9 +1,5 @@
 [
   {
-    "route": "GET /api/parishes/{}/account-names",
-    "reason": "the shared name lookup (CONVENTIONS.md section 2) is not in the API yet; names stay empty"
-  },
-  {
     "route": "GET /api/workspace/plan",
     "reason": "deliberate: check-api.mjs asserts that an old-server route reports not connected"
   },

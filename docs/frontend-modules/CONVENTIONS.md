@@ -37,7 +37,7 @@ Many records name their actor by account id: who sent, recorded, approved or req
   - an account holding a current capacity in that parish (priest, office grant, ministry leader), to any signed-in account related to the parish
   - any other account, only when the caller has `people.read` in the parish and the account is linked to a person of that parish
 - Ids it may not reveal are left out, not reported as errors.
-- The **names** session builds this route.
+- Built on `fullstack-integration` (`AccountNamesController`, `AccountNamesService`); details and limits in `docs/operations/account-names.md`.
 
 **Frontend:** `frontend/src/portal/model/names.js` already exists:
 - `await loadNames(parishId, ids)` fetches what is missing, in chunks of 100. A failure leaves names empty and never fails a module's load.

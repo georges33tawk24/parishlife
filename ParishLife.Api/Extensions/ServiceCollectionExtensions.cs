@@ -107,6 +107,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MembershipService>();
         services.AddScoped<PersonInvitationService>();
         services.AddScoped<PeopleDirectoryService>();
+        services.AddScoped<AccountNamesService>();
         services.AddScoped<PersonFactsService>();
         services.AddScoped<DuplicateService>();
         services.AddScoped<PeopleImportService>();
