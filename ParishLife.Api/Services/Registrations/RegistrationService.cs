@@ -6,7 +6,9 @@
 // CashierListAsync, CashierRegistrationAsync, ApplicantFormAsync, PresenceAsync, PresentAsync and authorized notification-outcome projections.
 // Decision notices are committed with the registration only for a proven self-applicant; office recorders never become guessed recipients.
 // Every staff path requires current MFA, and registration changes fence the parish root and the event policy,
-// so concurrent seat allocation and stale authority fail instead of committing.
+// so concurrent seat allocation and stale authority fail instead of committing. Submissions respect the policy deadline (ClosesAt);
+// balances subtract an applied discount; receipts record the payment method; a checkout of a participant with an issued pickup code
+// must present that code, which is removed before the operation fingerprint is built and never stored.
 
 using ParishLife.Api.DTOs.Registrations;
 using ParishLife.Api.DTOs.Communications;
@@ -62,6 +64,16 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             throw new DomainException("event_not_eligible", "Registration is available for parish or public manual parish activities only.", FailureKind.Conflict);
     }
 
+    // A passed deadline gets its own code so the screens can say so; otherwise the policy is closed or the event has started.
+    internal void RequireAcceptingSubmissions(RegistrationPolicy policy, CalendarEvent occurrence)
+    {
+        var now = clock.GetUtcNow();
+        if (policy.Status == "Open" && occurrence.StartsAt > now && policy.ClosesAt <= now)
+            throw new DomainException("registration_deadline_passed", "The registration deadline for this event has passed.", FailureKind.Conflict);
+        if (!RegistrationRules.AcceptsSubmissions(policy, occurrence, now))
+            throw Invalid("Registration is closed for this event.");
+    }
+
     private async Task<RegistrationForm> ViewedFormAsync(string parish, RegistrationPolicy policy, Guid viewedFormId, CancellationToken ct)
     {
         if (Guard.Id(viewedFormId) != policy.FormVersionId)
@@ -88,9 +100,14 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var occurrence = await Event(parish, eventId, ct);
         // Registration applies to manual parish activities; source-owned meetings use RSVP and appointments/blocks are private.
         RequireEligibleEvent(occurrence.Value);
-        if (request.Capacity is < 1 or > 4000 || request.TransportCapacity < 0 || request.TransportCapacity > request.Capacity || request.MinimumAge is < 0 or > 120 || request.MaximumAge is < 0 or > 120 || request.MaximumAge < request.MinimumAge || request.ChildAgeThreshold is < 1 or > 25 || request.Fields is null || request.DoorAccountIds is null || request.DoorAccountIds.Length > 40)
+        if (request.Fields is null || request.DoorAccountIds is null)
             throw new DomainException("invalid_registration_policy", "Use bounded capacity, explicit age/guardian policy and bounded form/operator lists.");
+        RegistrationTermRules.Validate(request.Capacity, request.TransportCapacity, request.MinimumAge, request.MaximumAge, request.ChildAgeThreshold, request.DoorAccountIds.Length);
         RegistrationRules.Money(request.Fee, Guard.Text(request.Currency, "Currency", 3), request.Precision);
+        var closesAt = RegistrationTermRules.Deadline(request.ClosesAt, occurrence.Value);
+        var discounts = RegistrationTermRules.Discounts(request.Discounts, request.Fee, request.Currency, request.Precision);
+        var instalments = RegistrationTermRules.Instalments(request.Instalments, request.Fee, request.Currency, request.Precision, RegistrationTermRules.EventDate(occurrence.Value));
+        var methods = RegistrationTermRules.Methods(request.PaymentMethods);
         RegistrationRules.ValidateFields(request.Fields);
         if (request.ConsentRequired)
             Guard.Text(request.ConsentText, "Consent wording", 10000);
@@ -117,7 +134,13 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             ConsentText = request.ConsentText,
             DoorAccountIds = request.DoorAccountIds.Select(Guard.Id).Distinct().ToArray(),
             CreatedAt = op.At,
-            CreatedBy = actor.AccountId
+            CreatedBy = actor.AccountId,
+            ClosesAt = closesAt,
+            Discounts = discounts,
+            Instalments = instalments,
+            PaymentMethods = methods,
+            MusterPoint = RegistrationTermRules.OptionalText(request.MusterPoint, "Muster point", 300),
+            MusterPointAr = RegistrationTermRules.OptionalText(request.MusterPointAr, "Arabic muster point", 300)
         };
         var form = new RegistrationForm
         {
@@ -161,7 +184,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             "close" => "Closed",
             _ => throw Invalid("Opening requires a future confirmed event; use open or close.")
         };
-        var result = new RegistrationPolicy
+        var result = RegistrationCopy.Carry(new RegistrationPolicy
         {
             Id = row.Value.Id,
             ParishId = row.Value.ParishId,
@@ -182,7 +205,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             DoorAccountIds = row.Value.DoorAccountIds,
             CreatedAt = row.Value.CreatedAt,
             CreatedBy = row.Value.CreatedBy
-        };
+        }, row.Value);
         return await records.CommitAsync(Scope(parish), op, "registration." + request.Action, eventId, [Fence(root), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", result, Versions.Require(request.Version)), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], result, ct);
     }
 
@@ -196,7 +219,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         if (request.Fields is null)
             throw new DomainException("fields_required", "Form fields are required.");
         RegistrationRules.ValidateFields(request.Fields);
-        var result = new RegistrationPolicy
+        var result = RegistrationCopy.Carry(new RegistrationPolicy
         {
             Id = row.Value.Id,
             ParishId = row.Value.ParishId,
@@ -217,7 +240,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             DoorAccountIds = row.Value.DoorAccountIds,
             CreatedAt = row.Value.CreatedAt,
             CreatedBy = row.Value.CreatedBy
-        };
+        }, row.Value);
         return await records.CommitAsync(Scope(parish), op, "registration.revise_form", eventId, [Fence(root), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", result, Versions.Require(request.Version)), RecordChange.Create("registrationForm:" + op.Id, "registrationForm", new RegistrationForm { Id = op.Id, EventId = eventId, Fields = request.Fields, CreatedAt = op.At, CreatedBy = actor.AccountId })], result, ct);
     }
 
@@ -230,8 +253,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
         RequireEligibleEvent(occurrence.Value);
-        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
-            throw Invalid("Registration is closed for this event.");
+        RequireAcceptingSubmissions(policy.Value, occurrence.Value);
         var person = await Get<Person>(parish, "person:" + Guard.Id(request.PersonId), ct);
         if (person.Value.Archived)
             throw Invalid("Restore or review the archived person before registering.");
@@ -303,7 +325,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         {
             if (item.Presence == "Present")
                 throw Invalid("Check the participant out before cancelling registration.");
-            item = new EventRegistration
+            item = RegistrationCopy.Carry(new EventRegistration
             {
                 Id = item.Id,
                 Origin = item.Origin,
@@ -328,7 +350,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 OfferUntil = null,
                 Presence = item.Presence,
                 LastPresenceAt = item.LastPresenceAt
-            };
+            }, item);
         }
         else
         {
@@ -341,7 +363,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 ValidateEligibility(item, policy.Value, person.Value, occurrence.Value);
             var status = RegistrationRules.EffectiveStatus(item, clock.GetUtcNow());
             if (request.Action == "reinstate" && status == "Cancelled")
-                item = new EventRegistration
+                item = RegistrationCopy.Carry(new EventRegistration
                 {
                     Id = item.Id,
                     Origin = item.Origin,
@@ -366,7 +388,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                     OfferUntil = null,
                     Presence = "NotArrived",
                     LastPresenceAt = item.LastPresenceAt
-                };
+                }, item);
             else if (request.Action is "reserve" or "confirm" or "offer")
             {
                 if (request.Action == "offer" && status is not ("Waitlisted" or "OfferExpired") || request.Action == "reserve" && status != "Submitted" || request.Action == "confirm" && status is not ("Submitted" or "Reserved"))
@@ -375,7 +397,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 {
                     if (!policy.Value.WaitlistAllowed || request.Action == "offer")
                         throw Invalid("Participant or transport capacity is full.");
-                    item = new EventRegistration
+                    item = RegistrationCopy.Carry(new EventRegistration
                     {
                         Id = item.Id,
                         Origin = item.Origin,
@@ -400,7 +422,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                         OfferUntil = null,
                         Presence = item.Presence,
                         LastPresenceAt = item.LastPresenceAt
-                    };
+                    }, item);
                 }
                 else
                 {
@@ -414,7 +436,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
 
                     if (request.Action != "confirm" && (request.OfferUntil is null || Guard.Utc(request.OfferUntil.Value) <= clock.GetUtcNow() || request.OfferUntil >= occurrence.Value.StartsAt))
                         throw new DomainException("offer_deadline_required", "Set an explicit future offer deadline before the event.");
-                    item = new EventRegistration
+                    item = RegistrationCopy.Carry(new EventRegistration
                     {
                         Id = item.Id,
                         Origin = item.Origin,
@@ -439,7 +461,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                         OfferUntil = request.Action == "confirm" ? null : request.OfferUntil,
                         Presence = item.Presence,
                         LastPresenceAt = item.LastPresenceAt
-                    };
+                    }, item);
                 }
             }
             else
@@ -505,7 +527,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         RegistrationRules.ValidateAnswers(form.Value.Fields, request.Answers);
         ValidateCollectors(request.Collectors);
         Guard.Text(request.Reason, "Amendment reason", 2000);
-        var item = new EventRegistration
+        var item = RegistrationCopy.Carry(new EventRegistration
         {
             Id = row.Value.Id,
             Origin = row.Value.Origin,
@@ -530,7 +552,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             OfferUntil = row.Value.OfferUntil,
             Presence = row.Value.Presence,
             LastPresenceAt = row.Value.LastPresenceAt
-        };
+        }, row.Value);
         if (RegistrationRules.ConsumesSeat(item, clock.GetUtcNow()))
         {
             ValidateEligibility(item, policy.Value, person.Value, occurrence.Value);
@@ -578,8 +600,12 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var row = await Registration(parish, eventId, id, ct);
         var item = row.Value;
         RegistrationRules.Money(request.Amount, Guard.Text(request.Currency, "Currency", 3), item.Precision);
-        if (item.Status == "Cancelled" || request.Amount <= 0 || request.Currency != item.Currency || request.Amount > item.Fee - item.Received + item.Refunded)
+        if (item.Status == "Cancelled" || request.Amount <= 0 || request.Currency != item.Currency || request.Amount > RegistrationRules.Outstanding(item))
             throw new DomainException("invalid_event_receipt", "Record a positive actual payment in the fee currency, no greater than the outstanding balance, for an active registration.");
+        var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
+        var method = request.Method ?? "Cash";
+        if (!RegistrationRules.AcceptedMethods(policy.Value).Contains(method, StringComparer.Ordinal))
+            throw new DomainException("payment_method_not_accepted", "Record the payment with a method this event accepts.");
         if (Guard.Utc(request.OccurredAt) > clock.GetUtcNow())
             throw new DomainException("future_receipt", "An actual payment cannot occur in the future.");
         var receipt = new RegistrationMovement
@@ -587,7 +613,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             Id = op.Id,
             RegistrationId = id,
             EventId = eventId,
-            Kind = "CashReceived",
+            Kind = method == "Cash" ? "CashReceived" : "PaymentReceived",
+            Method = method,
             Amount = request.Amount,
             Currency = item.Currency,
             Precision = item.Precision,
@@ -597,7 +624,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             RecordedBy = actor.AccountId,
             ApprovedBy = null
         };
-        return await records.CommitAsync(Scope(parish), op, "registration.cash_received", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", new EventRegistration { Id = item.Id, Origin = item.Origin, ParishId = item.ParishId, EventId = item.EventId, PersonId = item.PersonId, FormVersionId = item.FormVersionId, Status = item.Status, Transport = item.Transport, Answers = item.Answers, ConsentEvidence = item.ConsentEvidence, GuardianAuthorityEvidence = item.GuardianAuthorityEvidence, Collectors = item.Collectors, IndependentDeparture = item.IndependentDeparture, Fee = item.Fee, Currency = item.Currency, Precision = item.Precision, Received = item.Received + request.Amount, Refunded = item.Refunded, CreatedAt = item.CreatedAt, CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds, OfferUntil = item.OfferUntil, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt }, Versions.Require(request.Version)), RecordChange.Create("registrationMovement:" + op.Id, "registrationMovement", receipt)], receipt, ct);
+        return await records.CommitAsync(Scope(parish), op, "registration.cash_received", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", RegistrationCopy.Carry(new EventRegistration { Id = item.Id, Origin = item.Origin, ParishId = item.ParishId, EventId = item.EventId, PersonId = item.PersonId, FormVersionId = item.FormVersionId, Status = item.Status, Transport = item.Transport, Answers = item.Answers, ConsentEvidence = item.ConsentEvidence, GuardianAuthorityEvidence = item.GuardianAuthorityEvidence, Collectors = item.Collectors, IndependentDeparture = item.IndependentDeparture, Fee = item.Fee, Currency = item.Currency, Precision = item.Precision, Received = item.Received + request.Amount, Refunded = item.Refunded, CreatedAt = item.CreatedAt, CreatedBy = item.CreatedBy, NotificationWorkIds = item.NotificationWorkIds, OfferUntil = item.OfferUntil, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt }, item), Versions.Require(request.Version)), RecordChange.Create("registrationMovement:" + op.Id, "registrationMovement", receipt)], receipt, ct);
     }
 
     public async Task<RegistrationRefund> RequestRefundAsync(string parish, string eventId, string id, RequestEventRefundDto request, CancellationToken ct)
@@ -697,7 +724,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         }
         else
             throw new DomainException("invalid_refund_action", "Use approve, reject or record.");
-        changes.Add(RecordChange.Replace(RowKey(id), "registration", request.Action == "record" ? new EventRegistration { Id = registration.Value.Id, Origin = registration.Value.Origin, ParishId = registration.Value.ParishId, EventId = registration.Value.EventId, PersonId = registration.Value.PersonId, FormVersionId = registration.Value.FormVersionId, Status = registration.Value.Status, Transport = registration.Value.Transport, Answers = registration.Value.Answers, ConsentEvidence = registration.Value.ConsentEvidence, GuardianAuthorityEvidence = registration.Value.GuardianAuthorityEvidence, Collectors = registration.Value.Collectors, IndependentDeparture = registration.Value.IndependentDeparture, Fee = registration.Value.Fee, Currency = registration.Value.Currency, Precision = registration.Value.Precision, Received = registration.Value.Received, Refunded = registration.Value.Refunded + item.Amount, CreatedAt = registration.Value.CreatedAt, CreatedBy = registration.Value.CreatedBy, NotificationWorkIds = registration.Value.NotificationWorkIds, OfferUntil = registration.Value.OfferUntil, Presence = registration.Value.Presence, LastPresenceAt = registration.Value.LastPresenceAt } : registration.Value, registration.Version));
+        changes.Add(RecordChange.Replace(RowKey(id), "registration", request.Action == "record" ? RegistrationCopy.Carry(new EventRegistration { Id = registration.Value.Id, Origin = registration.Value.Origin, ParishId = registration.Value.ParishId, EventId = registration.Value.EventId, PersonId = registration.Value.PersonId, FormVersionId = registration.Value.FormVersionId, Status = registration.Value.Status, Transport = registration.Value.Transport, Answers = registration.Value.Answers, ConsentEvidence = registration.Value.ConsentEvidence, GuardianAuthorityEvidence = registration.Value.GuardianAuthorityEvidence, Collectors = registration.Value.Collectors, IndependentDeparture = registration.Value.IndependentDeparture, Fee = registration.Value.Fee, Currency = registration.Value.Currency, Precision = registration.Value.Precision, Received = registration.Value.Received, Refunded = registration.Value.Refunded + item.Amount, CreatedAt = registration.Value.CreatedAt, CreatedBy = registration.Value.CreatedBy, NotificationWorkIds = registration.Value.NotificationWorkIds, OfferUntil = registration.Value.OfferUntil, Presence = registration.Value.Presence, LastPresenceAt = registration.Value.LastPresenceAt }, registration.Value) : registration.Value, registration.Version));
         changes.Add(RecordChange.Replace("registrationRefund:" + refundId, "registrationRefund", item, Versions.Require(request.Version)));
         return await records.CommitAsync(Scope(parish), op, "registration.refund_" + request.Action, id, changes, item, ct, request.Reason);
     }
@@ -755,7 +782,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         {
             Id = item.Id, EventId = item.EventId, DisplayName = person.Value.GivenName + " " + person.Value.FamilyName,
             Status = item.Status, Presence = item.Presence, LastPresenceAt = item.LastPresenceAt, IndependentDeparture = item.IndependentDeparture,
-            Collectors = item.Collectors.Select(x => new DoorCollectorDto { Id = x.Id, Name = x.Name }).ToArray()
+            Collectors = item.Collectors.Select(x => new DoorCollectorDto { Id = x.Id, Name = x.Name }).ToArray(),
+            PickupCodeRequired = item.PickupCodeHash is not null
         };
     }
 
@@ -765,9 +793,10 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         await access.RequireModuleAsync(parish, "finance", ct);
         var page = await records.PageAsync<EventRegistration>(Scope(parish), "registration", size, cursor, ct,
             new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
+        var terms = await CashierTermsAsync(parish, eventId, ct);
         var items = new List<Versioned<CashierRegistrationDto>>();
         foreach (var row in page.Items)
-            items.Add(new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, ct) });
+            items.Add(new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, terms, ct) });
         return new Page<Versioned<CashierRegistrationDto>> { Items = items.ToArray(), ContinuationToken = page.ContinuationToken };
     }
 
@@ -776,24 +805,42 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         await Authorize(parish, Permissions.FinanceEnter, ct);
         await access.RequireModuleAsync(parish, "finance", ct);
         var row = await Registration(parish, eventId, id, ct);
-        return new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, ct) };
+        return new Versioned<CashierRegistrationDto> { Version = row.Version, Value = await CashierViewAsync(parish, row.Value, await CashierTermsAsync(parish, eventId, ct), ct) };
     }
 
-    private async Task<CashierRegistrationDto> CashierViewAsync(string parish, EventRegistration item, CancellationToken ct)
+    // The instalment schedule, accepted methods and the event's local date, for the cashier's due-now figure.
+    private async Task<(RegistrationPolicy Policy, DateOnly Today)> CashierTermsAsync(string parish, string eventId, CancellationToken ct)
+    {
+        var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
+        var occurrence = await Get<CalendarEvent>(parish, "event:" + eventId, ct);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(occurrence.Value.TimeZone);
+        return (policy.Value, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime));
+    }
+
+    private async Task<CashierRegistrationDto> CashierViewAsync(string parish, EventRegistration item, (RegistrationPolicy Policy, DateOnly Today) terms, CancellationToken ct)
     {
         var person = await Get<Person>(parish, "person:" + item.PersonId, ct);
+        var due = RegistrationRules.Due(item);
         return new CashierRegistrationDto
         {
             Id = item.Id, EventId = item.EventId, DisplayName = person.Value.GivenName + " " + person.Value.FamilyName,
             Status = RegistrationRules.EffectiveStatus(item, clock.GetUtcNow()), Fee = item.Fee, Currency = item.Currency, Precision = item.Precision,
-            Received = item.Received, Refunded = item.Refunded, Outstanding = item.Fee - item.Received + item.Refunded
+            Received = item.Received, Refunded = item.Refunded, Outstanding = RegistrationRules.Outstanding(item),
+            DiscountName = item.DiscountName, DiscountNameAr = item.DiscountNameAr, DiscountAmount = item.DiscountAmount, Due = due,
+            DueNow = item.Status == "Cancelled" ? 0 : RegistrationRules.ScheduledBy(terms.Policy.Instalments, due, terms.Today),
+            PaymentMethods = RegistrationRules.AcceptedMethods(terms.Policy)
         };
     }
 
     public async Task<PresenceChange> PresenceAsync(string parish, string eventId, string id, RecordPresenceDto request, CancellationToken ct)
     {
         var (root, policy) = await Door(parish, eventId, ct);
-        var op = Op(request.OperationId, request, "event-presence:" + id);
+        // The pickup code is a secret: it never enters the operation fingerprint, the receipt or the audit.
+        var op = Op(request.OperationId, new RecordPresenceDto
+        {
+            OperationId = request.OperationId, Version = request.Version, Action = request.Action, OccurredAt = request.OccurredAt,
+            CollectorId = request.CollectorId, VerificationEvidence = request.VerificationEvidence, PaperReason = request.PaperReason
+        }, "event-presence:" + id);
         if (await records.ReplayAsync<PresenceChange>(Scope(parish), op, ct) is { } replay)
             return replay;
         var row = await Registration(parish, eventId, id, ct);
@@ -809,8 +856,9 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             throw new DomainException("invalid_presence_time", "The actual time must follow the previous presence record and fall within the event operating window.");
         if (clock.GetUtcNow() - request.OccurredAt > TimeSpan.FromMinutes(15))
             Guard.Text(request.PaperReason, "Paper entry reason", 2000);
+        var codeChecked = false;
         if (request.Action == "arrive" && item.Presence == "NotArrived" || request.Action == "reenter" && item.Presence == "Departed")
-            item = new EventRegistration
+            item = RegistrationCopy.Carry(new EventRegistration
             {
                 Id = item.Id,
                 Origin = item.Origin,
@@ -835,7 +883,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 OfferUntil = item.OfferUntil,
                 Presence = "Present",
                 LastPresenceAt = request.OccurredAt
-            };
+            }, item);
         else if (request.Action == "checkout" && item.Presence == "Present")
         {
             if (!item.IndependentDeparture)
@@ -843,9 +891,15 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 if (request.CollectorId is null || !item.Collectors.Any(x => x.Id == request.CollectorId))
                     throw new DomainException("collector_not_authorized", "The collector must have verified recorded authority; no administrator override is available.", FailureKind.Forbidden);
                 Guard.Text(request.VerificationEvidence, "Real-world collector verification evidence", 2000);
+                if (item.PickupCodeHash is not null)
+                {
+                    if (!PickupCodes.Matches(item, request.PickupCode))
+                        throw new DomainException("pickup_code_mismatch", "The pickup code does not match the code issued for this participant.", FailureKind.Forbidden);
+                    codeChecked = true;
+                }
             }
 
-            item = new EventRegistration
+            item = RegistrationCopy.Carry(new EventRegistration
             {
                 Id = item.Id,
                 Origin = item.Origin,
@@ -870,7 +924,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
                 OfferUntil = item.OfferUntil,
                 Presence = "Departed",
                 LastPresenceAt = request.OccurredAt
-            };
+            }, item);
         }
         else
             throw Invalid("Use arrive for a first arrival, reenter after departure, or checkout for a present participant.");
@@ -885,7 +939,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             RecordedBy = actor.AccountId,
             CollectorId = request.CollectorId,
             VerificationEvidence = Optional(request.VerificationEvidence),
-            PaperReason = Optional(request.PaperReason)
+            PaperReason = Optional(request.PaperReason),
+            PickupCodeChecked = codeChecked
         };
         return await records.CommitAsync(Scope(parish), op, "registration.presence_" + request.Action, id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Create("presence:" + op.Id, "presence", change), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], change, ct);
     }
@@ -917,8 +972,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
         RequireEligibleEvent(occurrence.Value);
-        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
-            throw Invalid("Registration is closed for this event.");
+        RequireAcceptingSubmissions(policy.Value, occurrence.Value);
         var form = await Get<RegistrationForm>(parish, "registrationForm:" + policy.Value.FormVersionId, ct);
         if (form.Value.EventId != eventId)
             throw Invalid("This form belongs to a different event.");
@@ -926,7 +980,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         {
             EventId = eventId, FormVersionId = form.Value.Id, Fields = form.Value.Fields, Fee = policy.Value.Fee,
             Currency = policy.Value.Currency, Precision = policy.Value.Precision, MinimumAge = policy.Value.MinimumAge,
-            MaximumAge = policy.Value.MaximumAge, ConsentRequired = policy.Value.ConsentRequired, ConsentText = policy.Value.ConsentText
+            MaximumAge = policy.Value.MaximumAge, ConsentRequired = policy.Value.ConsentRequired, ConsentText = policy.Value.ConsentText,
+            ClosesAt = policy.Value.ClosesAt, Instalments = policy.Value.Instalments, PaymentMethods = RegistrationRules.AcceptedMethods(policy.Value)
         };
     }
 
@@ -941,8 +996,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
         var occurrence = await Event(parish, eventId, ct);
         RequireEligibleEvent(occurrence.Value);
-        if (policy.Value.Status != "Open" || occurrence.Value.StartsAt <= clock.GetUtcNow())
-            throw Invalid("Registration is closed for this event.");
+        RequireAcceptingSubmissions(policy.Value, occurrence.Value);
         var person = await Get<Person>(parish, "person:" + link.Value.PersonId, ct);
         if (person.Value.Archived)
             throw Invalid("Ask the parish office to review your record before registering.");
@@ -1030,7 +1084,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         Id = x.Id, EventId = x.EventId, FormVersionId = x.FormVersionId, Status = x.Status, Capacity = x.Capacity, TransportCapacity = x.TransportCapacity,
         Fee = x.Fee, Currency = x.Currency, Precision = x.Precision, WaitlistAllowed = x.WaitlistAllowed, MinimumAge = x.MinimumAge, MaximumAge = x.MaximumAge,
         ChildAgeThreshold = x.ChildAgeThreshold, ConsentRequired = x.ConsentRequired, ConsentText = x.ConsentText, DoorAccountIds = [.. x.DoorAccountIds],
-        CreatedAt = x.CreatedAt, CreatedBy = x.CreatedBy
+        CreatedAt = x.CreatedAt, CreatedBy = x.CreatedBy, ClosesAt = x.ClosesAt, Discounts = x.Discounts, Instalments = x.Instalments,
+        PaymentMethods = RegistrationRules.AcceptedMethods(x), MusterPoint = x.MusterPoint, MusterPointAr = x.MusterPointAr, UpdatedAt = x.UpdatedAt, UpdatedBy = x.UpdatedBy
     };
 
     internal static RegistrationFormDto ToDto(RegistrationForm x) => new() { Id = x.Id, EventId = x.EventId, Fields = x.Fields, CreatedAt = x.CreatedAt };
@@ -1042,13 +1097,16 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         Transport = x.Transport, Answers = new(x.Answers), ConsentEvidence = staff ? x.ConsentEvidence : null,
         GuardianAuthorityEvidence = staff ? x.GuardianAuthorityEvidence : null, Collectors = staff ? x.Collectors : null,
         IndependentDeparture = x.IndependentDeparture, Fee = x.Fee, Currency = x.Currency, Received = x.Received, Refunded = x.Refunded,
-        CreatedAt = x.CreatedAt, CreatedBy = staff ? x.CreatedBy : null, OfferUntil = x.OfferUntil, Presence = x.Presence, LastPresenceAt = x.LastPresenceAt
+        CreatedAt = x.CreatedAt, CreatedBy = staff ? x.CreatedBy : null, OfferUntil = x.OfferUntil, Presence = x.Presence, LastPresenceAt = x.LastPresenceAt,
+        HouseholdId = x.HouseholdId, DiscountKey = x.DiscountKey, DiscountName = x.DiscountName, DiscountNameAr = x.DiscountNameAr, DiscountAmount = x.DiscountAmount,
+        Due = RegistrationRules.Due(x), PickupCodeIssued = staff ? x.PickupCodeHash is not null : null, PickupCodeIssuedAt = staff ? x.PickupCodeIssuedAt : null
     };
 
     internal static RegistrationMovementDto ToDto(RegistrationMovement x) => new()
     {
         Id = x.Id, RegistrationId = x.RegistrationId, Kind = x.Kind, Amount = x.Amount, Currency = x.Currency, EvidenceReference = x.EvidenceReference,
-        OccurredAt = x.OccurredAt, RecordedAt = x.RecordedAt, RecordedBy = x.RecordedBy, ApprovedBy = x.ApprovedBy, RefundRequestId = x.RefundRequestId
+        OccurredAt = x.OccurredAt, RecordedAt = x.RecordedAt, RecordedBy = x.RecordedBy, ApprovedBy = x.ApprovedBy, RefundRequestId = x.RefundRequestId,
+        Method = x.Method
     };
 
     internal static RegistrationRefundDto ToDto(RegistrationRefund x) => new()
@@ -1060,7 +1118,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
     internal static PresenceChangeDto ToDto(PresenceChange x) => new()
     {
         Id = x.Id, RegistrationId = x.RegistrationId, Action = x.Action, OccurredAt = x.OccurredAt, RecordedAt = x.RecordedAt, RecordedBy = x.RecordedBy,
-        CollectorId = x.CollectorId, VerificationEvidence = x.VerificationEvidence, PaperReason = x.PaperReason
+        CollectorId = x.CollectorId, VerificationEvidence = x.VerificationEvidence, PaperReason = x.PaperReason, PickupCodeChecked = x.PickupCodeChecked
     };
 
     internal static PresentRosterDto ToDto(PresentRoster x) => new()

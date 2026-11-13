@@ -30,4 +30,7 @@ public class RegistrationMovement
     public string? ApprovedBy { get; set; }
 
     public string? RefundRequestId { get; set; } = null;
+
+    // Cash, BankTransfer, MoneyTransfer, Cheque or Other, as recorded by the cashier; it records a payment, it does not take one.
+    public string Method { get; set; } = "Cash";
 }

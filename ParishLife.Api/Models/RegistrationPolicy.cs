@@ -1,5 +1,6 @@
 // Purpose: represents registration policy business state and rules.
-// Main members: Id, ParishId, EventId, FormVersionId, Status, Capacity, TransportCapacity, and related workflow details.
+// Main members: Id, ParishId, EventId, FormVersionId, Status, Capacity, TransportCapacity, fee terms, ClosesAt (submission deadline),
+// Discounts, Instalments, PaymentMethods, MusterPoint/MusterPointAr and the last terms edit (UpdatedAt/UpdatedBy).
 
 namespace ParishLife.Api.Models;
 
@@ -42,4 +43,22 @@ public class RegistrationPolicy
     public DateTimeOffset CreatedAt { get; set; }
 
     public string CreatedBy { get; set; } = string.Empty;
+
+    // Null means no deadline: submissions are accepted until the event starts.
+    public DateTimeOffset? ClosesAt { get; set; } = null;
+
+    public RegistrationDiscount[] Discounts { get; set; } = Array.Empty<RegistrationDiscount>();
+
+    public RegistrationInstalment[] Instalments { get; set; } = Array.Empty<RegistrationInstalment>();
+
+    // Empty means the policy predates payment methods: only Cash is accepted, as before.
+    public string[] PaymentMethods { get; set; } = Array.Empty<string>();
+
+    public string? MusterPoint { get; set; } = null;
+
+    public string? MusterPointAr { get; set; } = null;
+
+    public DateTimeOffset? UpdatedAt { get; set; } = null;
+
+    public string? UpdatedBy { get; set; } = null;
 }

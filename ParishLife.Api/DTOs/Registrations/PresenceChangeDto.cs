@@ -1,5 +1,5 @@
 // Purpose: returns one recorded arrival, checkout or reentry at an event door.
-// Main members: Id, RegistrationId, Action, OccurredAt, RecordedAt, RecordedBy, CollectorId, VerificationEvidence and PaperReason.
+// Main members: Id, RegistrationId, Action, OccurredAt, RecordedAt, RecordedBy, CollectorId, VerificationEvidence, PaperReason and PickupCodeChecked.
 
 namespace ParishLife.Api.DTOs.Registrations;
 
@@ -22,4 +22,6 @@ public class PresenceChangeDto
     public string? VerificationEvidence { get; set; } = null;
 
     public string? PaperReason { get; set; } = null;
+
+    public bool PickupCodeChecked { get; set; }
 }

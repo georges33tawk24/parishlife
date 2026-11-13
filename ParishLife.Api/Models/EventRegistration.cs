@@ -1,5 +1,6 @@
 // Purpose: represents event registration business state and rules.
-// Main members: Id, ParishId, EventId, PersonId, FormVersionId, Status, Transport, arrangements and the latest tracked notification-work batch.
+// Main members: Id, ParishId, EventId, PersonId, FormVersionId, Status, Transport, arrangements, the latest tracked notification-work batch,
+// HouseholdId (household registration), the applied discount snapshot and the pickup-code hash (never the plain code).
 
 namespace ParishLife.Api.Models;
 
@@ -54,4 +55,23 @@ public class EventRegistration
 
     // Null means legacy/untracked; an empty list means the latest tracked transition required no account notice.
     public List<string>? NotificationWorkIds { get; set; } = null;
+
+    // Set when the office registered this participant as part of a household.
+    public string? HouseholdId { get; set; } = null;
+
+    // The discount applied by the office, copied from the policy when applied; later policy edits do not change it.
+    public string? DiscountKey { get; set; } = null;
+
+    public string? DiscountName { get; set; } = null;
+
+    public string? DiscountNameAr { get; set; } = null;
+
+    public decimal DiscountAmount { get; set; }
+
+    // Salted SHA-256 of the pickup code; the plain code is shown once when issued and never stored.
+    public string? PickupCodeHash { get; set; } = null;
+
+    public string? PickupCodeSalt { get; set; } = null;
+
+    public DateTimeOffset? PickupCodeIssuedAt { get; set; } = null;
 }
