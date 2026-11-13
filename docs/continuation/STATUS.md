@@ -11,6 +11,12 @@ Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before actin
 - `origin` remains Colin's different repository (`https://github.com/ColinSleiman/ParishLife.git`). The latest owner instruction explicitly selects Georges's remote and backend branch; do not publish to `origin` by assumption.
 - Earlier continuation branch `dev/colin/claude-handover-20261110` and `dev/colin-following` WIP at `c81a30de2431933c2efe7dfad016f622325d24c5` remain preserved. The latter's eleven unwired following DTO/models must not overwrite the newer membership implementation.
 
+## Azure connection checkpoint (11/11 evening, owner's Windows machine)
+
+- With the owner's approval: Cosmos index policy aligned to the manifest (all five containers match; all were empty); App Service settings set (12 names, `BackgroundJobs__Enabled=false`), Always On on; **API `190b2c2` deployed** to `app-parishlife`.
+- Verified live: `/health/live` and `/health/ready` 200, `/api/auth/capabilities` 200; Key Vault-wrapped key ring written to private Blob by the managed identity and **unwrapped after restart** (Key Vault `UnwrapKey` 200); Application Insights ingestion; App Service health check `/health/ready` 200; background jobs on and querying Cosmos successfully.
+- **Bootstrap, sign-in and restart-persistence are all verified (13 November 2026):** both `colinsleiman` and `georgestawk` are configured Super Admins with working password + MFA; a live sign-in through the deployed API survived an app restart using the same session cookie. Firewall cleanup (removing the owner's maintenance IP) follows immediately after. Details and exact commands: [AZURE-CONNECTION.md](AZURE-CONNECTION.md).
+
 ## Verified checkpoint (11/11, Linux cloud session, ponytail working style)
 
 - `backend` pushed to Georges's repo (in the cloud checkout the remote is `origin` = `georges33tawk24/parishlife`), fast-forward only, no force. Work was done by parallel card agents on isolated worktrees and integrated/verified here one card group at a time.
