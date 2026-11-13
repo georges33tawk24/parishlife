@@ -1,5 +1,5 @@
 // Purpose: represents save facility input/output data.
-// Main members: OperationId, Version, Name, Kind, Capacity, SetupMinutes, CleanupMinutes, and related workflow details.
+// Main members: OperationId, Version, Name, NameAr, Kind, Capacity, SetupMinutes, CleanupMinutes, and related workflow details.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -17,6 +17,9 @@ public class SaveFacilityDto
     [Required]
     [StringLength(500)]
     public string Name { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? NameAr { get; set; } = null;
 
     [Required]
     [StringLength(500)]
@@ -36,4 +39,7 @@ public class SaveFacilityDto
 
     [StringLength(500)]
     public string? PublicDescription { get; set; } = null;
+
+    [StringLength(500)]
+    public string? PublicDescriptionAr { get; set; } = null;
 }

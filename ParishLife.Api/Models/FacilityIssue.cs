@@ -1,5 +1,5 @@
 // Purpose: represents a reported facility or equipment problem through triage, repair and qualified resolution.
-// Main members: Id, ParishId, ResourceId, ResourceKind, Description, Urgency, Evidence, Status, assignment, resolution and actor facts.
+// Main members: Id, ParishId, ResourceId, ResourceKind, Description, DescriptionAr, Urgency, Evidence, Status, assignment, resolution and actor facts.
 
 namespace ParishLife.Api.Models;
 
@@ -15,6 +15,8 @@ public class FacilityIssue
     public string ResourceKind { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    public string? DescriptionAr { get; set; } = null;
 
     // Low, Normal, Urgent or Hazard.
     public string Urgency { get; set; } = "Normal";

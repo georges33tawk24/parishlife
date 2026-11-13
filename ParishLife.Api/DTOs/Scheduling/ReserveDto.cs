@@ -1,5 +1,5 @@
 // Purpose: represents reserve input/output data.
-// Main members: OperationId, ResourceId, EventId, StartsAt, EndsAt, AdditionalResourceIds, CustomerId, and related workflow details.
+// Main members: OperationId, ResourceId, EventId, StartsAt, EndsAt, AdditionalResourceIds, CustomerId, TermsSnapshot and the optional Purpose, PurposeAr, ExpectedAttendance, ContactPhone and Notes.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -26,4 +26,19 @@ public class ReserveDto
 
     [StringLength(10000)]
     public string? TermsSnapshot { get; set; } = null;
+
+    [StringLength(500)]
+    public string? Purpose { get; set; } = null;
+
+    [StringLength(500)]
+    public string? PurposeAr { get; set; } = null;
+
+    [Range(0, 100000)]
+    public int? ExpectedAttendance { get; set; } = null;
+
+    [StringLength(50)]
+    public string? ContactPhone { get; set; } = null;
+
+    [StringLength(2000)]
+    public string? Notes { get; set; } = null;
 }

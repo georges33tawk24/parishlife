@@ -1,5 +1,5 @@
 // Purpose: tracks a facility reservation and its recoverable resource-allocation attempt.
-// Main members: Id, ParishId, ResourceId, EventId, RequestedBy, StartsAt, EndsAt, and related workflow details.
+// Main members: Id, ParishId, ResourceId, EventId, RequestedBy, StartsAt, EndsAt, purpose, attendance, contact, notes, checklist and decision history.
 
 namespace ParishLife.Api.Models;
 
@@ -32,4 +32,18 @@ public class Reservation
     public string? CurrentWorkId { get; set; } = null;
 
     public string? LastActionReason { get; set; }
+
+    public string? Purpose { get; set; } = null;
+
+    public string? PurposeAr { get; set; } = null;
+
+    public int? ExpectedAttendance { get; set; } = null;
+
+    public string? ContactPhone { get; set; } = null;
+
+    public string? Notes { get; set; } = null;
+
+    public ReservationChecklistItem[] Checklist { get; set; } = Array.Empty<ReservationChecklistItem>();
+
+    public ReservationDecision[] Decisions { get; set; } = Array.Empty<ReservationDecision>();
 }

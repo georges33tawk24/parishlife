@@ -1,5 +1,6 @@
 // Purpose: exposes office booking intake, actual reservation state and asynchronous confirmation/cancellation actions.
 // Main functions: Create, Get, List, Act return 202 only while durable work is pending; no endpoint invokes privileged worker internals.
+// Details replaces the descriptive details (purpose, attendance, contact, notes, checklist) without touching the allocation.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,4 +28,7 @@ public class ReservationsController(ReservationService service) : ControllerBase
         var value = await service.ActAsync(Guard.Id(parishId), Guard.Id(reservationId), request, ct);
         return value.Status is "Allocating" or "Cancelling" ? Accepted(value) : Ok(value);
     }
+    [HttpPut("{reservationId:guid}/details")]
+    public async Task<ActionResult<ReservationDto>> Details(Guid parishId, Guid reservationId, SaveReservationDetailsDto request, CancellationToken ct)
+        => Ok(await service.DetailsAsync(Guard.Id(parishId), Guard.Id(reservationId), request, ct));
 }

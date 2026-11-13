@@ -53,7 +53,9 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
         var item = new FacilityIssue
         {
             Id = op.Id, ParishId = parish, ResourceId = resource, ResourceKind = request.ResourceKind,
-            Description = Guard.Text(request.Description, "Description", 4000), Urgency = request.Urgency,
+            Description = Guard.Text(request.Description, "Description", 4000),
+            DescriptionAr = string.IsNullOrWhiteSpace(request.DescriptionAr) ? null : Guard.Text(request.DescriptionAr, "Arabic description", 4000),
+            Urgency = request.Urgency,
             Evidence = string.IsNullOrWhiteSpace(request.Evidence) ? null : Guard.Text(request.Evidence, "Evidence", 1000),
             ReportedBy = actor.AccountId, ReportedAt = op.At
         };
@@ -143,7 +145,7 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
 
     private static FacilityIssueDto Project(FacilityIssue x) => new()
     {
-        Id = x.Id, ResourceId = x.ResourceId, ResourceKind = x.ResourceKind, Description = x.Description, Urgency = x.Urgency, Evidence = x.Evidence,
+        Id = x.Id, ResourceId = x.ResourceId, ResourceKind = x.ResourceKind, Description = x.Description, DescriptionAr = x.DescriptionAr, Urgency = x.Urgency, Evidence = x.Evidence,
         Status = x.Status, ReportedBy = x.ReportedBy, ReportedAt = x.ReportedAt, TriagedBy = x.TriagedBy, AssignedTo = x.AssignedTo,
         TriageNote = x.TriageNote, ResolvedBy = x.ResolvedBy, ResolvedAt = x.ResolvedAt, ResolutionEvidence = x.ResolutionEvidence, CostNote = x.CostNote
     };

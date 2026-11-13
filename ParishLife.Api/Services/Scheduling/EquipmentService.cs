@@ -35,8 +35,9 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
         var op = actor.CreateOperation(request.OperationId, request, clock, "equipment:v1:" + (id ?? "new"));
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
-        if (request.Quantity is < 0 or > 100000 || request.Status is not ("Serviceable" or "OutOfService" or "Retired"))
-            throw new DomainException("invalid_input", "Use a quantity of 0–100000 and Serviceable, OutOfService or Retired.");
+        if (request.Quantity is < 0 or > 100000 || request.Status is not ("Serviceable" or "OutOfService" or "Retired")
+            || request.ConditionGrade is not (null or "Good" or "Fair" or "NeedsService"))
+            throw new DomainException("invalid_input", "Use a quantity of 0–100000, Serviceable, OutOfService or Retired, and a Good, Fair or NeedsService grade if any.");
         FacilityEquipment item;
         RecordChange change;
         if (id is null)
@@ -56,9 +57,11 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
             change = RecordChange.Replace(Key(item.Id), "equipment", item, Versions.Require(request.Version));
         }
         item.Name = Guard.Text(request.Name, "Name", 300);
+        item.NameAr = string.IsNullOrWhiteSpace(request.NameAr) ? null : Guard.Text(request.NameAr, "Arabic name", 300);
         item.Quantity = request.Quantity;
         item.Storage = string.IsNullOrWhiteSpace(request.Storage) ? null : Guard.Text(request.Storage, "Storage", 300);
         item.Condition = string.IsNullOrWhiteSpace(request.Condition) ? null : Guard.Text(request.Condition, "Condition", 500);
+        item.ConditionGrade = request.ConditionGrade;
         item.Status = request.Status;
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
@@ -196,7 +199,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
 
     private static EquipmentDto Project(FacilityEquipment x) => new()
     {
-        Id = x.Id, Name = x.Name, Quantity = x.Quantity, Storage = x.Storage, Condition = x.Condition, Status = x.Status,
+        Id = x.Id, Name = x.Name, NameAr = x.NameAr, Quantity = x.Quantity, Storage = x.Storage, Condition = x.Condition, ConditionGrade = x.ConditionGrade, Status = x.Status,
         UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt
     };
 

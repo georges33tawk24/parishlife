@@ -1,5 +1,5 @@
 // Purpose: reports a problem with a facility or equipment item.
-// Main members: OperationId, ResourceId, ResourceKind, Description, Urgency and Evidence.
+// Main members: OperationId, ResourceId, ResourceKind, Description, DescriptionAr, Urgency and Evidence.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -21,6 +21,9 @@ public class ReportIssueDto
     [Required]
     [StringLength(4000)]
     public string Description { get; set; } = string.Empty;
+
+    [StringLength(4000)]
+    public string? DescriptionAr { get; set; } = null;
 
     [Required]
     [RegularExpression("^(Low|Normal|Urgent|Hazard)$")]
