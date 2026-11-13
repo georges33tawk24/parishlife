@@ -126,6 +126,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<InboxService>();
         services.AddScoped<MessageReviewService>();
         services.AddScoped<BroadcastService>();
+        services.AddScoped<BroadcastAudience>();
+        services.AddScoped<BroadcastAutomationService>();
+        services.AddScoped<BroadcastScheduleProcessor>();
         services.AddScoped<GivingService>();
         services.AddScoped<ExpenseService>();
         services.AddScoped<BankReconciliationService>();
@@ -189,6 +192,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<ReservationWorker>();
             services.AddHostedService<NotificationWorker>();
             services.AddHostedService<ReportScheduleWorker>();
+            services.AddHostedService<BroadcastScheduleWorker>();
         }
         else
         {

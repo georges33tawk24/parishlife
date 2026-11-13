@@ -1,5 +1,6 @@
-// Purpose: creates or edits a draft broadcast; a TemplateId copies an approved template's wording, otherwise Title/Body/Language are required.
-// Main members: OperationId, Version, Audience, MinistryId, TemplateId, Title, Body and Language.
+// Purpose: creates or edits a draft broadcast; a TemplateId copies an approved template's wording (with its Arabic version), otherwise
+// Title/Body/Language are required and TitleAr/BodyAr may add an Arabic version to a non-Arabic main text.
+// Main members: OperationId, Version, Audience, MinistryId, TemplateId, Title, Body, Language, TitleAr and BodyAr.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -31,4 +32,10 @@ public class SaveBroadcastDto
 
     [RegularExpression("^(en|fr|ar)$")]
     public string? Language { get; set; } = null;
+
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
+
+    [StringLength(20000)]
+    public string? BodyAr { get; set; } = null;
 }

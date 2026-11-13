@@ -59,6 +59,8 @@ public class CommunicationsService(IRecordTransactions records, IParishAccess ac
         item.Body = Guard.Text(request.Body, "Body", 20000);
         item.Category = string.IsNullOrWhiteSpace(request.Category) ? null : Guard.Text(request.Category, "Category", 100);
         item.Language = request.Language is "en" or "fr" or "ar" ? request.Language : throw new DomainException("invalid_input", "Use en, fr or ar.");
+        (item.TitleAr, item.BodyAr) = ArabicVersion.Pair(request.TitleAr, request.BodyAr, item.Language, 20000);
+        item.Priority = request.Priority is null or "Normal" ? "Normal" : request.Priority == "Urgent" ? "Urgent" : throw new DomainException("invalid_input", "Use Normal or Urgent.");
         item.Pinned = request.Pinned;
         item.ExpiresAt = request.ExpiresAt is { } expiry ? Guard.Utc(expiry) : null;
         await records.CommitAsync(Scope(parish), op, "communications.announcement_save", item.Id,
@@ -195,7 +197,7 @@ public class CommunicationsService(IRecordTransactions records, IParishAccess ac
         var now = clock.GetUtcNow();
         return (await records.CollectAsync<Announcement>(Scope(parish), "announcement", ct, 2000, Equal("status", "Published")))
             .Select(r => r.Value).Where(a => (a.ExpiresAt is null || a.ExpiresAt > now) && audience(a))
-            .OrderByDescending(a => a.Pinned).ThenByDescending(a => a.PublishedAt).Select(a => Project(a, false)).ToArray();
+            .OrderByDescending(a => a.Priority == "Urgent").ThenByDescending(a => a.Pinned).ThenByDescending(a => a.PublishedAt).Select(a => Project(a, false)).ToArray();
     }
 
     private async Task<Versioned<Announcement>> ReadAnnouncementAsync(string parish, string id, CancellationToken ct)
@@ -217,7 +219,9 @@ public class CommunicationsService(IRecordTransactions records, IParishAccess ac
     private static AnnouncementDto Project(Announcement x, bool staff) => new()
     {
         Id = x.Id, Visibility = x.Visibility, MinistryId = x.MinistryId, Title = x.Title, Body = x.Body, Category = x.Category, Language = x.Language,
-        Pinned = x.Pinned, ExpiresAt = x.ExpiresAt, Status = x.Status, PublishedAt = x.PublishedAt, PublishedBy = staff ? x.PublishedBy : null
+        TitleAr = x.TitleAr, BodyAr = x.BodyAr, Priority = string.IsNullOrEmpty(x.Priority) ? "Normal" : x.Priority,
+        Pinned = x.Pinned, ExpiresAt = x.ExpiresAt, Status = x.Status, PublishedAt = x.PublishedAt, PublishedBy = staff ? x.PublishedBy : null,
+        AuthorAccountId = staff ? x.CreatedBy : null
     };
 
     private static PrayerIntentionDto ProjectIntention(PrayerIntention x, bool full) => new()

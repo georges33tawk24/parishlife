@@ -1,5 +1,6 @@
-// Purpose: starts a conversation: with the parish office (members), or directly with a linked parishioner (office staff).
-// Main members: OperationId, Subject, Body and RecipientAccountId.
+// Purpose: starts a conversation: with the parish office (members), or directly with a linked parishioner (office staff), named either by the
+// parishioner's account id or by the person record the office sees in its people list.
+// Main members: OperationId, Subject, Body, RecipientAccountId and RecipientPersonId (at most one of the two).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -21,4 +22,7 @@ public class StartConversationDto
 
     [NotEmptyGuid]
     public Guid? RecipientAccountId { get; set; } = null;
+
+    [NotEmptyGuid]
+    public Guid? RecipientPersonId { get; set; } = null;
 }

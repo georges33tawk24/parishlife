@@ -1,6 +1,6 @@
 // Purpose: shows a broadcast to communications staff with counts and per-channel state, never the recipient list.
-// Main members: Id, Audience, MinistryId, Title, Body, Language, TemplateId, Status, editor/approver/sender facts, CancelReason,
-// RecipientCount, SkippedByPreferenceCount and Channels.
+// Main members: Id, Audience, MinistryId, Title, Body, Language, TitleAr, BodyAr, TemplateId, AutomationId, Status, editor/approver/scheduler/sender
+// facts, ScheduledFor, ScheduleNote, CancelReason, RecipientCount, SkippedByPreferenceCount and Channels.
 
 namespace ParishLife.Api.DTOs.Communications;
 
@@ -18,7 +18,13 @@ public class BroadcastDto
 
     public string Language { get; set; } = "en";
 
+    public string? TitleAr { get; set; } = null;
+
+    public string? BodyAr { get; set; } = null;
+
     public string? TemplateId { get; set; } = null;
+
+    public string? AutomationId { get; set; } = null;
 
     public string Status { get; set; } = "Draft";
 
@@ -27,6 +33,12 @@ public class BroadcastDto
     public string? ApprovedBy { get; set; } = null;
 
     public DateTimeOffset? ApprovedAt { get; set; } = null;
+
+    public DateTimeOffset? ScheduledFor { get; set; } = null;
+
+    public string? ScheduledBy { get; set; } = null;
+
+    public string? ScheduleNote { get; set; } = null;
 
     public string? SentBy { get; set; } = null;
 
