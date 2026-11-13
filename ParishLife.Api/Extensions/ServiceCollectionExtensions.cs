@@ -113,6 +113,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PeopleImportService>();
         services.AddScoped<PersonDataService>();
         services.AddScoped<RequestService>();
+        services.AddScoped<RequestClaimService>();
+        services.AddScoped<RequestRecordService>();
         services.AddScoped<SacramentService>();
         services.AddScoped<CertificateService>();
         services.AddScoped<PastoralNoteService>();

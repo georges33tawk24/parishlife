@@ -1,6 +1,6 @@
 // Purpose: metadata for one private evidence file attached to a request case; content lives write-once in the evidence store.
 // Main members: Id, ParishId, RequestId, FileName, ContentType, Size, Sha256, StoragePath, UploadedBy, UploaderRole, UploadedAt,
-// Status, ReplacesId, ReplacedById and Reason.
+// Status, ReplacesId, ReplacedById, Reason and ChecklistKey.
 
 namespace ParishLife.Api.Models;
 
@@ -25,7 +25,7 @@ public class EvidenceFile
 
     public string UploadedBy { get; set; } = string.Empty;
 
-    // Applicant or Office.
+    // Applicant, Office or Guest (a tracking-token upload, UploadedBy "guest:{request}").
     public string UploaderRole { get; set; } = string.Empty;
 
     public DateTimeOffset UploadedAt { get; set; }
@@ -38,4 +38,7 @@ public class EvidenceFile
     public string? ReplacedById { get; set; }
 
     public string? Reason { get; set; }
+
+    // The checklist item this file answers, when the uploader named one; the office still decides whether the item is received.
+    public string? ChecklistKey { get; set; }
 }
