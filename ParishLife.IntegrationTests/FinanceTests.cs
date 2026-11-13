@@ -19,7 +19,7 @@ using Xunit;
 
 namespace ParishLife.IntegrationTests;
 
-public class FinanceTests
+public partial class FinanceTests
 {
     private sealed record Setup(LocalBackendFixture F, StaffAppointmentScenario Staff, string Appointment, string Treasurer, string Counter, string Verifier, string Poster)
     {

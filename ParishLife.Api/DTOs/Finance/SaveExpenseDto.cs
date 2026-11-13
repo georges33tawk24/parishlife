@@ -1,5 +1,5 @@
 // Purpose: creates or edits a draft/returned expense; Version is required when editing.
-// Main members: OperationId, Version, Description, FundId, Payee, IncurredOn, Amount, Currency, EvidenceReference and MissingEvidenceReason.
+// Main members: OperationId, Version, Description, DescriptionAr, FundId, Payee, IncurredOn, Amount, Currency, EvidenceReference and MissingEvidenceReason.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -17,6 +17,9 @@ public class SaveExpenseDto
     [Required]
     [StringLength(1000)]
     public string Description { get; set; } = string.Empty;
+
+    [StringLength(1000)]
+    public string? DescriptionAr { get; set; } = null;
 
     [NotEmptyGuid]
     public Guid FundId { get; set; }

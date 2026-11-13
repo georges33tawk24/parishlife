@@ -1,5 +1,5 @@
 // Purpose: returns an expense with its evidence status and actors.
-// Main members: Id, Description, FundId, Payee, IncurredOn, Amount, Currency, EvidenceReference, MissingEvidenceReason, MissingEvidenceApproved, Status, Reason, actors and payment facts.
+// Main members: Id, Description, DescriptionAr, FundId, Payee, IncurredOn, Amount, Currency, EvidenceReference, MissingEvidenceReason, MissingEvidenceApproved, Status, Reason, actors and payment facts.
 
 namespace ParishLife.Api.DTOs.Finance;
 
@@ -8,6 +8,8 @@ public class ExpenseDto
     public string Id { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    public string? DescriptionAr { get; set; } = null;
 
     public string FundId { get; set; } = string.Empty;
 

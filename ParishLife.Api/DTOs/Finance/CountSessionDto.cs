@@ -1,5 +1,5 @@
 // Purpose: returns a counting session with its lines and totals by currency and method.
-// Main members: Id, Reference, Source, CollectedOn, Status, Revision, Lines, Totals, VerifiedBy, VerifiedRevision, VarianceObserved, VarianceNote, PostedBy and PostedAt.
+// Main members: Id, Reference, Source, CollectedOn, Status, Revision, CountedBy, Lines, Totals, VerifiedBy, VerifiedRevision, VarianceObserved, VarianceNote, PostedBy and PostedAt.
 
 namespace ParishLife.Api.DTOs.Finance;
 
@@ -16,6 +16,9 @@ public class CountSessionDto
     public string Status { get; set; } = string.Empty;
 
     public int Revision { get; set; }
+
+    // Accounts that opened or edited the count; the frontend resolves names through the account-names lookup.
+    public string[] CountedBy { get; set; } = Array.Empty<string>();
 
     public GiftLineDto[] Lines { get; set; } = Array.Empty<GiftLineDto>();
 

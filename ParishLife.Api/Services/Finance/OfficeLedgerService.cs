@@ -1,7 +1,7 @@
 // Purpose: keeps the office's own cash ledger apart from parish Finance: one opening balance per currency, allowances (linked to the Finance
 // record that moved the cash) and purchases, editable or removable only while their month is open, then reviewed monthly closes with
 // carried-forward balances; closed months change only through reversal entries. Negative balances are flagged, never topped up.
-// Main functions: OpenAsync, SaveAsync, ActAsync, EntriesAsync, CloseMonthAsync, MonthsAsync and BalancesAsync.
+// Main functions: OpenAsync, OpeningsAsync, SaveAsync, ActAsync, EntriesAsync, CloseMonthAsync, MonthsAsync and BalancesAsync.
 
 using System.Globalization;
 using ParishLife.Api.DTOs.Finance;
@@ -63,7 +63,8 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         var item = new OfficeLedgerEntry
         {
             Id = id ?? op.Id, ParishId = parish, Kind = request.Kind, OccurredOn = request.OccurredOn, Amount = request.Amount, Currency = request.Currency,
-            Description = Guard.Text(request.Description, "Description", 300), CreatedBy = old?.Value.CreatedBy ?? actor.AccountId, UpdatedAt = op.At
+            Description = Guard.Text(request.Description, "Description", 300), DescriptionAr = GivingService.Optional(request.DescriptionAr, "Arabic description", 300),
+            Category = GivingService.Optional(request.Category, "Category", 100), CreatedBy = old?.Value.CreatedBy ?? actor.AccountId, UpdatedAt = op.At
         };
         if (item.Kind == "Purchase")
         {
@@ -157,6 +158,16 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         return Project(item);
     }
 
+    // The recorded opening balance per currency, with who entered it, when, and its provenance.
+    public async Task<IReadOnlyList<OfficeOpeningRecordDto>> OpeningsAsync(string parish, CancellationToken ct)
+    {
+        await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
+        return (await records.CollectAsync<OfficeOpening>(Scope(parish), "officeOpening", ct, 50)).Select(r => r.Value).Where(o => o.ParishId == parish)
+            .OrderBy(o => o.Currency, StringComparer.Ordinal)
+            .Select(o => new OfficeOpeningRecordDto { Currency = o.Currency, Amount = o.Amount, EffectiveOn = o.EffectiveOn, Provenance = o.Provenance, EnteredBy = o.By, EnteredAt = o.At })
+            .ToArray();
+    }
+
     public async Task<IReadOnlyList<OfficeMonthDto>> MonthsAsync(string parish, CancellationToken ct)
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
@@ -212,7 +223,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     private static OfficeEntryDto Project(Versioned<OfficeLedgerEntry> row, bool closed) => new()
     {
         Id = row.Value.Id, Version = row.Version, Kind = row.Value.Kind, OccurredOn = row.Value.OccurredOn, Amount = row.Value.Amount, Currency = row.Value.Currency,
-        Description = row.Value.Description, Supplier = row.Value.Supplier, EvidenceReference = row.Value.EvidenceReference,
+        Description = row.Value.Description, DescriptionAr = row.Value.DescriptionAr, Category = row.Value.Category, Supplier = row.Value.Supplier, EvidenceReference = row.Value.EvidenceReference,
         MissingEvidenceReason = row.Value.MissingEvidenceReason, FinanceReference = row.Value.FinanceReference, ReversalOf = row.Value.ReversalOf,
         Status = row.Value.Status, DeleteReason = row.Value.DeleteReason, CreatedBy = row.Value.CreatedBy, MonthClosed = closed
     };

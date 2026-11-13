@@ -1,5 +1,5 @@
 // Purpose: represents a giving appeal with a purpose, fund, dates and optional genuine targets per currency.
-// Main members: Id, ParishId, Name, Purpose, FundId, StartsOn, EndsOn, Targets, Status and creation facts.
+// Main members: Id, ParishId, Name, NameAr, Purpose, PurposeAr, FundId, StartsOn, EndsOn, Targets, Status and creation facts.
 
 namespace ParishLife.Api.Models;
 
@@ -11,7 +11,12 @@ public class Campaign
 
     public string Name { get; set; } = string.Empty;
 
+    // Optional Arabic twin, typed by the office; never translated from Name.
+    public string? NameAr { get; set; } = null;
+
     public string Purpose { get; set; } = string.Empty;
+
+    public string? PurposeAr { get; set; } = null;
 
     public string FundId { get; set; } = string.Empty;
 

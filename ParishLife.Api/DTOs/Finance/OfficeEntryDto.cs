@@ -1,5 +1,5 @@
 // Purpose: shows an office ledger entry and whether its month is closed.
-// Main members: Id, Version, Kind, OccurredOn, Amount, Currency, Description, Supplier, EvidenceReference, MissingEvidenceReason,
+// Main members: Id, Version, Kind, OccurredOn, Amount, Currency, Description, DescriptionAr, Category, Supplier, EvidenceReference, MissingEvidenceReason,
 // FinanceReference, ReversalOf, Status, DeleteReason, CreatedBy and MonthClosed.
 
 namespace ParishLife.Api.DTOs.Finance;
@@ -19,6 +19,10 @@ public class OfficeEntryDto
     public string Currency { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    public string? DescriptionAr { get; set; } = null;
+
+    public string? Category { get; set; } = null;
 
     public string? Supplier { get; set; }
 

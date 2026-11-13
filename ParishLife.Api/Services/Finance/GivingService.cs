@@ -1,7 +1,7 @@
 // Purpose: records parish giving: funds, campaigns, counting sessions with independent verification and single posting, posted gifts with
 // reversal/reclassification, pledges with receipt allocations, and giving statements. Amounts stay in their actual currency; nothing converts.
-// Main functions: CreateFundAsync, FundsAsync, CreateCampaignAsync, CampaignsAsync, OpenSessionAsync, SaveLinesAsync, VerifyAsync, PostAsync,
-// SessionAsync, ContributionsAsync, CorrectAsync, CreatePledgeAsync, AllocateAsync, PledgesAsync, StatementAsync and OwnGivingAsync.
+// Main functions: CreateFundAsync, UpdateFundAsync, FundsAsync, CreateCampaignAsync, UpdateCampaignAsync, CampaignsAsync, SessionsAsync, OpenSessionAsync,
+// SaveLinesAsync, VerifyAsync, PostAsync, SessionAsync, ContributionsAsync, CorrectAsync, CreatePledgeAsync, AllocateAsync, PledgesAsync, StatementAsync and OwnGivingAsync.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -39,23 +39,48 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
             throw new DomainException("invalid_money", "Use a positive exact amount with at most two decimals and a three-letter currency code.");
     }
 
+    // An optional Arabic (or other) twin: trimmed and length-checked, never derived from the Latin field.
+    internal static string? Optional(string? value, string name, int maximum) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, maximum);
+
     public async Task<FundDto> CreateFundAsync(string parish, SaveFundDto request, CancellationToken ct)
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "fund:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await ReadAsync<Fund>(parish, "fund:" + prior.Id, ct)).Value);
+            return Project(await ReadAsync<Fund>(parish, "fund:" + prior.Id, ct));
         var item = new Fund { Id = op.Id, ParishId = parish, Name = Guard.Text(request.Name, "Name", 200), Purpose = Guard.Text(request.Purpose, "Purpose", 1000),
+            NameAr = Optional(request.NameAr, "Arabic name", 200), PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000),
             Restricted = request.Restricted, CreatedBy = actor.AccountId, CreatedAt = op.At };
         await records.CommitAsync(Scope(parish), op, "finance.fund_create", item.Id, [Fence(root), RecordChange.Create("fund:" + item.Id, "fund", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
-        return Project(item);
+        return Project(await ReadAsync<Fund>(parish, "fund:" + item.Id, ct));
+    }
+
+    // Names and purpose (in either language) can be corrected; whether money is restricted never changes after creation.
+    public async Task<FundDto> UpdateFundAsync(string parish, string id, SaveFundDto request, CancellationToken ct)
+    {
+        var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "fund-edit:v1:" + id);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+            return Project(await ReadAsync<Fund>(parish, "fund:" + id, ct));
+        var item = (await ReadAsync<Fund>(parish, "fund:" + id, ct)).Value;
+        if (item.ParishId != parish)
+            throw Missing();
+        if (item.Restricted != request.Restricted)
+            throw State("A fund's restriction is fixed when it is created; create a separate fund instead.");
+        item.Name = Guard.Text(request.Name, "Name", 200);
+        item.NameAr = Optional(request.NameAr, "Arabic name", 200);
+        item.Purpose = Guard.Text(request.Purpose, "Purpose", 1000);
+        item.PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000);
+        await records.CommitAsync(Scope(parish), op, "finance.fund_edit", id,
+            [Fence(root), RecordChange.Replace("fund:" + id, "fund", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
+        return Project(await ReadAsync<Fund>(parish, "fund:" + id, ct));
     }
 
     public async Task<IReadOnlyList<FundDto>> FundsAsync(string parish, CancellationToken ct)
     {
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        return (await records.CollectAsync<Fund>(Scope(parish), "fund", ct, 500)).Select(r => Project(r.Value)).ToArray();
+        return (await records.CollectAsync<Fund>(Scope(parish), "fund", ct, 500)).Select(Project).ToArray();
     }
 
     public async Task<CampaignDto> CreateCampaignAsync(string parish, SaveCampaignDto request, CancellationToken ct)
@@ -63,20 +88,51 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "campaign:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return await ProjectAsync(parish, (await ReadAsync<Campaign>(parish, "campaign:" + prior.Id, ct)).Value, ct);
+            return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + prior.Id, ct), ct);
         var fund = await ActiveFundAsync(parish, Guard.Id(request.FundId), ct);
-        if (request.Targets is null || request.Targets.Count > 10 || request.EndsOn < request.StartsOn)
-            throw new DomainException("invalid_input", "Use up to ten currency targets and an end on or after the start.");
-        foreach (var (currency, amount) in request.Targets)
-            Money(amount, currency);
+        CampaignRules(request);
         var item = new Campaign
         {
             Id = op.Id, ParishId = parish, Name = Guard.Text(request.Name, "Name", 200), Purpose = Guard.Text(request.Purpose, "Purpose", 1000), FundId = fund.Id,
+            NameAr = Optional(request.NameAr, "Arabic name", 200), PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000),
             StartsOn = request.StartsOn, EndsOn = request.EndsOn, Targets = new(request.Targets), CreatedBy = actor.AccountId, CreatedAt = op.At
         };
         await records.CommitAsync(Scope(parish), op, "finance.campaign_create", item.Id, [Fence(root), RecordChange.Create("campaign:" + item.Id, "campaign", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
-        return await ProjectAsync(parish, item, ct);
+        return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + item.Id, ct), ct);
+    }
+
+    // Names, purpose, dates and genuine targets can be corrected; the fund stays fixed because posted gifts already name it.
+    public async Task<CampaignDto> UpdateCampaignAsync(string parish, string id, SaveCampaignDto request, CancellationToken ct)
+    {
+        var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "campaign-edit:v1:" + id);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+            return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + id, ct), ct);
+        var item = (await ReadAsync<Campaign>(parish, "campaign:" + id, ct)).Value;
+        if (item.ParishId != parish)
+            throw Missing();
+        if (Guard.Id(request.FundId) != item.FundId)
+            throw State("A campaign's fund is fixed once created; start a separate campaign instead.");
+        CampaignRules(request);
+        item.Name = Guard.Text(request.Name, "Name", 200);
+        item.NameAr = Optional(request.NameAr, "Arabic name", 200);
+        item.Purpose = Guard.Text(request.Purpose, "Purpose", 1000);
+        item.PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000);
+        item.StartsOn = request.StartsOn;
+        item.EndsOn = request.EndsOn;
+        item.Targets = new(request.Targets);
+        await records.CommitAsync(Scope(parish), op, "finance.campaign_edit", id,
+            [Fence(root), RecordChange.Replace("campaign:" + id, "campaign", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
+        return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + id, ct), ct);
+    }
+
+    private static void CampaignRules(SaveCampaignDto request)
+    {
+        if (request.Targets is null || request.Targets.Count > 10 || request.EndsOn < request.StartsOn)
+            throw new DomainException("invalid_input", "Use up to ten currency targets and an end on or after the start.");
+        foreach (var (currency, amount) in request.Targets)
+            Money(amount, currency);
     }
 
     public async Task<IReadOnlyList<CampaignDto>> CampaignsAsync(string parish, CancellationToken ct)
@@ -84,8 +140,18 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var result = new List<CampaignDto>();
         foreach (var row in await records.CollectAsync<Campaign>(Scope(parish), "campaign", ct, 500))
-            result.Add(await ProjectAsync(parish, row.Value, ct));
+            result.Add(await ProjectAsync(parish, row, ct));
         return result;
+    }
+
+    // Lists counting sessions, newest collection first, so a second counter can find the one to verify without being given its id.
+    public async Task<IReadOnlyList<Versioned<CountSessionDto>>> SessionsAsync(string parish, string? status, CancellationToken ct)
+    {
+        await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
+        return (await records.CollectAsync<CountSession>(Scope(parish), "countSession", ct, 2000))
+            .Where(r => status is null || string.Equals(r.Value.Status, status, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(r => r.Value.CollectedOn).ThenByDescending(r => r.Value.CreatedAt)
+            .Select(r => new Versioned<CountSessionDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
     public async Task<CountSessionDto> OpenSessionAsync(string parish, OpenSessionDto request, CancellationToken ct)
@@ -370,7 +436,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         return row;
     }
 
-    private async Task<string> PersonAsync(string parish, string person, CancellationToken ct)
+    internal async Task<string> PersonAsync(string parish, string person, CancellationToken ct)
         => (await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is { } row && row.ParishId == parish ? row.Id : throw Missing();
 
     // ponytail: giving reads scan up to 5000 contribution rows per parish; add per-fund/period summaries if a parish outgrows that.
@@ -390,15 +456,20 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         .Select(g => new CurrencyTotal { Currency = g.Key.Currency, Method = g.Key.Method, Amount = g.Sum(l => l.Amount) })
         .OrderBy(t => t.Currency, StringComparer.Ordinal).ThenBy(t => t.Method, StringComparer.Ordinal).ToArray();
 
-    private static FundDto Project(Fund x) => new() { Id = x.Id, Name = x.Name, Purpose = x.Purpose, Restricted = x.Restricted, Status = x.Status };
-
-    private async Task<CampaignDto> ProjectAsync(string parish, Campaign x, CancellationToken ct)
+    private static FundDto Project(Versioned<Fund> row) => new()
     {
+        Id = row.Value.Id, Version = row.Version, Name = row.Value.Name, NameAr = row.Value.NameAr, Purpose = row.Value.Purpose, PurposeAr = row.Value.PurposeAr,
+        Restricted = row.Value.Restricted, Status = row.Value.Status
+    };
+
+    private async Task<CampaignDto> ProjectAsync(string parish, Versioned<Campaign> row, CancellationToken ct)
+    {
+        var x = row.Value;
         var gifts = (await AllContributionsAsync(parish, ct)).Select(r => r.Value).Where(c => c.CampaignId == x.Id);
         var pledges = (await records.CollectAsync<Pledge>(Scope(parish), "pledge", ct, 2000)).Select(r => r.Value).Where(p => p.CampaignId == x.Id && p.Status != "Cancelled");
         return new CampaignDto
         {
-            Id = x.Id, Name = x.Name, Purpose = x.Purpose, FundId = x.FundId, StartsOn = x.StartsOn, EndsOn = x.EndsOn, Targets = new(x.Targets), Status = x.Status,
+            Id = x.Id, Version = row.Version, Name = x.Name, NameAr = x.NameAr, Purpose = x.Purpose, PurposeAr = x.PurposeAr, FundId = x.FundId, StartsOn = x.StartsOn, EndsOn = x.EndsOn, Targets = new(x.Targets), Status = x.Status,
             Received = gifts.GroupBy(c => c.Currency).ToDictionary(g => g.Key, g => g.Sum(c => c.Amount), StringComparer.Ordinal),
             Pledged = pledges.GroupBy(p => p.Currency).ToDictionary(g => g.Key, g => g.Sum(p => p.Amount), StringComparer.Ordinal)
         };
@@ -414,6 +485,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     private static CountSessionDto Project(CountSession x) => new()
     {
         Id = x.Id, Reference = x.Reference, Source = x.Source, CollectedOn = x.CollectedOn, Status = x.Status, Revision = x.Revision,
+        CountedBy = [.. x.EditorAccountIds],
         Lines = x.Lines.Select(l => new GiftLineDto
         {
             Key = l.Key, Amount = l.Amount, Currency = l.Currency, Method = l.Method, FundId = Guid.Parse(l.FundId), CampaignId = l.CampaignId is null ? null : Guid.Parse(l.CampaignId),

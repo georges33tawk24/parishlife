@@ -1,5 +1,5 @@
 // Purpose: exposes parish funds, campaigns, counting sessions, posted gifts, pledges, statements, expenses and fund balances over HTTP.
-// Main functions: CreateFund, Funds, CreateCampaign, Campaigns, OpenSession, SaveLines, Verify, Post, Session, Contributions, Correct,
+// Main functions: CreateFund, UpdateFund, Funds, CreateCampaign, UpdateCampaign, Campaigns, Sessions, OpenSession, SaveLines, Verify, Post, Session, Contributions, Correct,
 // CreatePledge, Allocate, Pledges, Statement, MyGiving, SaveExpense, UpdateExpense, ExpenseAction, Expenses and Balances.
 
 using Microsoft.AspNetCore.Authorization;
@@ -16,14 +16,26 @@ public class FinanceController(GivingService giving, ExpenseService expenses) : 
     [HttpPost("funds")]
     public async Task<ActionResult<FundDto>> CreateFund(Guid parishId, SaveFundDto request, CancellationToken ct) => Ok(await giving.CreateFundAsync(Guard.Id(parishId), request, ct));
 
+    [HttpPut("funds/{fundId:guid}")]
+    public async Task<ActionResult<FundDto>> UpdateFund(Guid parishId, Guid fundId, SaveFundDto request, CancellationToken ct)
+        => Ok(await giving.UpdateFundAsync(Guard.Id(parishId), Guard.Id(fundId), request, ct));
+
     [HttpGet("funds")]
     public async Task<ActionResult<IReadOnlyList<FundDto>>> Funds(Guid parishId, CancellationToken ct) => Ok(await giving.FundsAsync(Guard.Id(parishId), ct));
 
     [HttpPost("campaigns")]
     public async Task<ActionResult<CampaignDto>> CreateCampaign(Guid parishId, SaveCampaignDto request, CancellationToken ct) => Ok(await giving.CreateCampaignAsync(Guard.Id(parishId), request, ct));
 
+    [HttpPut("campaigns/{campaignId:guid}")]
+    public async Task<ActionResult<CampaignDto>> UpdateCampaign(Guid parishId, Guid campaignId, SaveCampaignDto request, CancellationToken ct)
+        => Ok(await giving.UpdateCampaignAsync(Guard.Id(parishId), Guard.Id(campaignId), request, ct));
+
     [HttpGet("campaigns")]
     public async Task<ActionResult<IReadOnlyList<CampaignDto>>> Campaigns(Guid parishId, CancellationToken ct) => Ok(await giving.CampaignsAsync(Guard.Id(parishId), ct));
+
+    [HttpGet("sessions")]
+    public async Task<ActionResult<IReadOnlyList<Versioned<CountSessionDto>>>> Sessions(Guid parishId, CancellationToken ct, string? status = null)
+        => Ok(await giving.SessionsAsync(Guard.Id(parishId), status, ct));
 
     [HttpPost("sessions")]
     public async Task<ActionResult<CountSessionDto>> OpenSession(Guid parishId, OpenSessionDto request, CancellationToken ct) => Ok(await giving.OpenSessionAsync(Guard.Id(parishId), request, ct));

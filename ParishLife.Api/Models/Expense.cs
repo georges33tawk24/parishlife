@@ -1,5 +1,5 @@
 // Purpose: represents an expense claim or payable from draft through independent approval to actual payment.
-// Main members: Id, ParishId, Description, FundId, Payee, IncurredOn, Amount, Currency, evidence facts, Status and actors.
+// Main members: Id, ParishId, Description, DescriptionAr, FundId, Payee, IncurredOn, Amount, Currency, evidence facts, Status and actors.
 
 namespace ParishLife.Api.Models;
 
@@ -10,6 +10,9 @@ public class Expense
     public string ParishId { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    // Optional Arabic twin, typed by the office; never translated from Description.
+    public string? DescriptionAr { get; set; } = null;
 
     public string FundId { get; set; } = string.Empty;
 

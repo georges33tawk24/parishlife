@@ -1,5 +1,5 @@
 // Purpose: one office cash entry: an allowance received from parish Finance, an office purchase, or a reversal of an earlier entry.
-// Main members: Id, ParishId, Kind, OccurredOn, Amount, Currency, Description, Supplier, EvidenceReference, MissingEvidenceReason,
+// Main members: Id, ParishId, Kind, OccurredOn, Amount, Currency, Description, DescriptionAr, Category, Supplier, EvidenceReference, MissingEvidenceReason,
 // FinanceReference, ReversalOf, Status, DeleteReason, CreatedBy and UpdatedAt.
 
 namespace ParishLife.Api.Models;
@@ -21,6 +21,12 @@ public class OfficeLedgerEntry
     public string Currency { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    // Optional Arabic twin, typed by the office; never translated from Description.
+    public string? DescriptionAr { get; set; } = null;
+
+    // Optional free-text category typed by the office; no category list is assumed.
+    public string? Category { get; set; } = null;
 
     public string? Supplier { get; set; }
 
