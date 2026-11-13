@@ -1,5 +1,5 @@
 // Purpose: Reads and saves parish-owned people with scoped paging, ETags, and operation history.
-// Main functions: P, GetAsync, CreateAsync, ListAsync, SetArchiveAsync, InvalidCursor.
+// Main functions: P, GetAsync, CreateAsync, ListAsync, UpdateAsync, SetArchiveAsync, ReplaceAsync, InvalidCursor.
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -69,27 +69,31 @@ internal sealed class PeopleRepository(PartitionDocuments documents, IDataProtec
         };
     }
 
+    // The office edit replaces the stored record only when its version still matches; an operation id replays its first result.
+    public async Task<Person> UpdateAsync(Person person, string version, Operation operation, CancellationToken ct)
+    {
+        var key = P(person.ParishId);
+        if (await documents.ReplayAsync<Person>(C, key, operation, ct) is { } prior)
+            return prior;
+        return await ReplaceAsync(key, person, version, operation, "person.update", ct);
+    }
+
     public async Task<Person> SetArchiveAsync(string parishId, string personId, string version, bool archived, Operation operation, CancellationToken ct)
     {
         var key = P(parishId);
         if (await documents.ReplayAsync<Person>(C, key, operation, ct) is { } prior)
             return prior;
-        var current = await GetAsync(parishId, personId, ct) ?? throw new DomainException("person_not_found", "The person does not exist.", FailureKind.NotFound);
-        var result = new Person
-        {
-            Id = current.Value.Id,
-            ParishId = current.Value.ParishId,
-            GivenName = current.Value.GivenName,
-            FamilyName = current.Value.FamilyName,
-            BirthDate = current.Value.BirthDate,
-            Contact = current.Value.Contact,
-            CreatedBy = current.Value.CreatedBy,
-            CreatedAt = current.Value.CreatedAt,
-            Archived = archived
-        };
+        var result = (await GetAsync(parishId, personId, ct) ?? throw new DomainException("person_not_found", "The person does not exist.", FailureKind.NotFound)).Value;
+        result.Archived = archived;
+        return await ReplaceAsync(key, result, version, operation, "person.set_archive", ct);
+    }
+
+    private async Task<Person> ReplaceAsync(string key, Person result, string version, Operation operation, string action, CancellationToken ct)
+    {
+        var id = "person:" + result.Id;
         try
         {
-            await documents.CommitAsync(documents.Batch(C, key).ReplaceItem("person:" + personId, Row("person:" + personId, key, "person", result), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, result)).CreateItem(Audit(key, operation, "person.set_archive", personId)), ct);
+            await documents.CommitAsync(documents.Batch(C, key).ReplaceItem(id, Row(id, key, "person", result), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, result)).CreateItem(Audit(key, operation, action, result.Id)), ct);
             return result;
         }
         catch (DomainException ex) when (ex.Code == "write_conflict")

@@ -1,5 +1,5 @@
 // Purpose: returns one relationship from a person's point of view.
-// Main members: Id, PersonId, RelatedPersonId, RelatedName, Kind, Source, EvidenceReference, Status, CreatedBy, CreatedAt, EndedAt and EndReason.
+// Main members: Id, PersonId, RelatedPersonId, RelatedName, RelatedNameAr, Kind, Source, EvidenceReference, Status, CreatedBy, CreatedAt, EndedAt and EndReason.
 
 namespace ParishLife.Api.DTOs.People;
 
@@ -12,6 +12,8 @@ public class RelationshipDto
     public string RelatedPersonId { get; set; } = string.Empty;
 
     public string RelatedName { get; set; } = string.Empty;
+
+    public string? RelatedNameAr { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 

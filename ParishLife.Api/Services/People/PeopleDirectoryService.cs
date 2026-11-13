@@ -1,4 +1,4 @@
-// Purpose: office people search with case- and mark-insensitive matching (official spellings are never rewritten), and audited CSV
+// Purpose: office people search with case- and mark-insensitive matching over Latin and Arabic names (official spellings are never rewritten), and audited CSV
 // exports with an explicit purpose and a preview of count, columns and exclusions.
 // Main functions: SearchAsync, PreviewExportAsync and ExportAsync.
 
@@ -16,7 +16,7 @@ namespace ParishLife.Api.Services.People;
 
 public class PeopleDirectoryService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static readonly string[] Allowed = ["GivenName", "FamilyName", "BirthDate", "Contact", "Archived"];
+    private static readonly string[] Allowed = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Rite", "RegisterStatus", "Archived"];
     private static readonly string[] AlwaysExcluded = ["account links", "credentials and tokens", "pastoral notes and concerns", "sacramental register entries", "household and guardian details"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
 
@@ -27,10 +27,14 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
         await access.RequireModuleAsync(parish, "office", ct);
         var terms = Normalize(Guard.Text(query, "Search", 200)).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return (await PeopleAsync(parish, includeArchived, ct))
-            .Where(p => terms.All(t => Normalize(p.GivenName + " " + p.FamilyName + " " + p.Contact).Contains(t, StringComparison.Ordinal)))
+            .Where(p => terms.All(t => Normalize(p.GivenName + " " + p.FamilyName + " " + p.GivenNameAr + " " + p.FamilyNameAr + " " + p.Contact).Contains(t, StringComparison.Ordinal)))
             .OrderBy(p => p.FamilyName, StringComparer.CurrentCultureIgnoreCase).ThenBy(p => p.GivenName, StringComparer.CurrentCultureIgnoreCase)
             .Take(Math.Clamp(size, 1, 100))
-            .Select(p => new PersonSearchResultDto { Id = p.Id, GivenName = p.GivenName, FamilyName = p.FamilyName, BirthDate = p.BirthDate, Archived = p.Archived }).ToArray();
+            .Select(p => new PersonSearchResultDto
+            {
+                Id = p.Id, GivenName = p.GivenName, FamilyName = p.FamilyName, GivenNameAr = p.GivenNameAr, FamilyNameAr = p.FamilyNameAr, BirthDate = p.BirthDate,
+                Archived = p.Archived
+            }).ToArray();
     }
 
     public async Task<PeopleExportPreviewDto> PreviewExportAsync(string parish, string[] columns, bool includeArchived, CancellationToken ct)
@@ -63,6 +67,10 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
             {
                 "GivenName" => p.GivenName,
                 "FamilyName" => p.FamilyName,
+                "GivenNameAr" => p.GivenNameAr,
+                "FamilyNameAr" => p.FamilyNameAr,
+                "Rite" => p.Rite,
+                "RegisterStatus" => p.RegisterStatus,
                 "BirthDate" => p.BirthDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 "Contact" => p.Contact,
                 _ => p.Archived ? "yes" : "no"
@@ -86,7 +94,7 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
     private static string[] Columns(string[]? columns)
     {
         if (columns is null || columns.Length == 0 || columns.Any(c => !Allowed.Contains(c)) || columns.Distinct().Count() != columns.Length)
-            throw new DomainException("invalid_input", "Choose columns from GivenName, FamilyName, BirthDate, Contact and Archived.");
+            throw new DomainException("invalid_input", "Choose columns from " + string.Join(", ", Allowed) + ".");
         return columns;
     }
 

@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for people workflows; delegates work to backend services.
-// Main functions: Create, List, Get, Archive.
+// Main functions: Create, List, Get, Update (office edit of the core record), Archive.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +25,13 @@ public sealed class PeopleController(PeopleService service) : ControllerBase
     public async Task<IActionResult> Get(Guid parishId, Guid personId, CancellationToken ct)
     {
         var row = await service.GetAsync(Guard.Id(parishId), Guard.Id(personId), ct);
+        return Ok(new Versioned<PersonDto> { Value = PersonDto.From(row.Value), Version = row.Version });
+    }
+
+    [HttpPut("{personId:guid}")]
+    public async Task<IActionResult> Update(Guid parishId, Guid personId, UpdatePersonDto request, CancellationToken ct)
+    {
+        var row = await service.UpdateAsync(Guard.Id(parishId), Guard.Id(personId), request, ct);
         return Ok(new Versioned<PersonDto> { Value = PersonDto.From(row.Value), Version = row.Version });
     }
 

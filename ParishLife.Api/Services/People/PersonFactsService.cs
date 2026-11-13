@@ -1,7 +1,7 @@
 // Purpose: keeps optional person facts (structured locality, occupation/skills, language, deceased status), purpose-limited medical
 // declarations protected at rest for designated staff only, and separate consents with source, giver and recorded withdrawal.
-// Main functions: SaveFactsAsync, GetFactsAsync, SaveMedicalAsync, GetMedicalAsync, RecordConsentAsync, RecordOwnConsentAsync,
-// WithdrawConsentAsync, WithdrawOwnConsentAsync, ConsentsAsync and OwnConsentsAsync.
+// Main functions: SaveFactsAsync, GetFactsAsync, ListFactsAsync (parish-wide page for lists), SaveMedicalAsync, GetMedicalAsync, RecordConsentAsync, RecordOwnConsentAsync,
+// WithdrawConsentAsync, WithdrawOwnConsentAsync, ConsentsAsync, ParishConsentsAsync (parish-wide, e.g. the printed directory) and OwnConsentsAsync.
 
 using System.Globalization;
 using System.Text.Json;
@@ -20,6 +20,7 @@ namespace ParishLife.Api.Services.People;
 public class PersonFactsService(IRecordTransactions records, IParishAccess access, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof,
     IDataProtectionProvider protection, TimeProvider clock)
 {
+    private static readonly string[] Kinds = ["Directory", "Photo", "Communications", "Event", "Representation"];
     private static readonly string[] DirectoryFields = ["Name", "Phone", "Email", "Address", "Photo", "Household"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested person information is unavailable.", FailureKind.NotFound);
@@ -62,12 +63,12 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         var item = new PersonFacts
         {
             PersonId = person, ParishId = parish, Country = Optional(request.Country, "Country", 100), Region = Optional(request.Region, "Region", 100),
-            District = Optional(request.District, "District", 100), Town = Optional(request.Town, "Town", 100),
+            District = Optional(request.District, "District", 100), Town = Optional(request.Town, "Town", 100), TownAr = Optional(request.TownAr, "Arabic town", 100),
             AddressDetail = Optional(request.AddressDetail, "Address detail", 300), LocalityNotListed = Optional(request.LocalityNotListed, "Locality not listed", 300),
             Occupation = Optional(request.Occupation, "Occupation", 200), Skills = skills, PreferredLanguage = request.PreferredLanguage,
             DeceasedOn = on, DeceasedPrecision = precision, DeceasedEvidence = evidence, UpdatedBy = actor.AccountId, UpdatedAt = op.At
         };
-        if (item.LocalityNotListed is not null && item.Town is not null)
+        if (item.LocalityNotListed is not null && (item.Town is not null || item.TownAr is not null))
             throw new DomainException("invalid_input", "Choose a listed town or describe the locality that is not listed, not both.");
         await records.CommitAsync(Scope(parish), op, "person.facts", person,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), old is null
@@ -85,6 +86,19 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         return row is null
             ? new Versioned<PersonFactsDto> { Version = "", Value = Project(new PersonFacts { PersonId = person, ParishId = parish }) }
             : new Versioned<PersonFactsDto> { Version = row.Version, Value = Project(row.Value) };
+    }
+
+    // Every stored facts record of the parish, one page at a time, so lists can show town without reading each person.
+    // Same office, permission and authenticator rules as reading one person's facts.
+    public async Task<Page<Versioned<PersonFactsDto>>> ListFactsAsync(string parish, int size, string? cursor, CancellationToken ct)
+    {
+        await OfficeAsync(parish, Permissions.PeopleRead, ct);
+        var page = await records.PageAsync<PersonFacts>(Scope(parish), "personFacts", size, cursor, ct);
+        return new Page<Versioned<PersonFactsDto>>
+        {
+            Items = page.Items.Where(r => r.Value.ParishId == parish).Select(r => new Versioned<PersonFactsDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
+            ContinuationToken = page.ContinuationToken
+        };
     }
 
     public async Task<MedicalDto> SaveMedicalAsync(string parish, string person, SaveMedicalDto request, CancellationToken ct)
@@ -154,6 +168,24 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         return await ConsentRowsAsync(parish, person, ct);
     }
 
+    // Parish-wide consents of one kind (for example every Directory consent for the printed directory); withdrawn ones are
+    // included only when asked for, and each row keeps its exact fields, source and giver.
+    public async Task<Page<Versioned<ConsentDto>>> ParishConsentsAsync(string parish, string kind, bool includeWithdrawn, int size, string? cursor, CancellationToken ct)
+    {
+        await OfficeAsync(parish, Permissions.PeopleRead, ct);
+        if (!Kinds.Contains(kind))
+            throw new DomainException("invalid_input", "Choose a consent kind: " + string.Join(", ", Kinds) + ".");
+        var conditions = new List<RecordCondition> { new() { Path = "kind", Comparison = "eq", Value = kind } };
+        if (!includeWithdrawn)
+            conditions.Add(new RecordCondition { Path = "status", Comparison = "eq", Value = "Given" });
+        var page = await records.PageAsync<PersonConsent>(Scope(parish), "personConsent", size, cursor, ct, [.. conditions]);
+        return new Page<Versioned<ConsentDto>>
+        {
+            Items = page.Items.Where(r => r.Value.ParishId == parish).Select(r => new Versioned<ConsentDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
+            ContinuationToken = page.ContinuationToken
+        };
+    }
+
     public async Task<IReadOnlyList<Versioned<ConsentDto>>> OwnConsentsAsync(string parish, CancellationToken ct)
         => await ConsentRowsAsync(parish, (await own.OwnLinkAsync(parish, ct)).Value.PersonId, ct);
 
@@ -203,9 +235,9 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
 
     internal static PersonFactsDto Project(PersonFacts x) => new()
     {
-        PersonId = x.PersonId, Country = x.Country, Region = x.Region, District = x.District, Town = x.Town, AddressDetail = x.AddressDetail,
+        PersonId = x.PersonId, Country = x.Country, Region = x.Region, District = x.District, Town = x.Town, TownAr = x.TownAr, AddressDetail = x.AddressDetail,
         LocalityNotListed = x.LocalityNotListed,
-        LocalityStatus = x.LocalityNotListed is not null ? "PendingReview" : x.Town is not null ? "Listed" : "NotRecorded",
+        LocalityStatus = x.LocalityNotListed is not null ? "PendingReview" : x.Town is not null || x.TownAr is not null ? "Listed" : "NotRecorded",
         Occupation = x.Occupation, Skills = x.Skills, PreferredLanguage = x.PreferredLanguage, Deceased = x.DeceasedPrecision is not null,
         DeceasedOn = x.DeceasedOn, DeceasedPrecision = x.DeceasedPrecision, DeceasedEvidence = x.DeceasedEvidence, UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt
     };
