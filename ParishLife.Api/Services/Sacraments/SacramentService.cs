@@ -1,7 +1,11 @@
 // Purpose: runs sacramental cases from priest acceptance through preparation, scheduling and actual celebration to official registration,
 // with priest-approved numbering, secretary-recorded prior priest instructions and amendment-only corrections of registered entries.
-// Main functions: CreateAsync, ActAsync, SetPolicyAsync, ProposeCorrectionAsync, DecideCorrectionAsync, GetAsync, RegisterAsync (search)
-// PendingCorrectionsAsync, AnniversariesAsync and MyAnniversariesAsync; helpers check priest authority, numbering, duplicates and project current (amended) facts.
+// The office may record a review of a received request (informative only), keep the case's checklist of the parish's own preparation
+// requirements, and propose changes to an accepted request that apply only when a priest approves them. Arabic twins of the celebrant,
+// place and witnesses, a celebrant person record and the register page are kept as typed.
+// Main functions: CreateAsync, ActAsync, SetPolicyAsync, RequirementSetsAsync, SaveRequirementSetAsync, ProposeCorrectionAsync,
+// DecideCorrectionAsync, GetAsync, SearchAsync, PendingCorrectionsAsync, AnniversariesAsync and MyAnniversariesAsync; helpers check priest
+// authority, numbering, duplicates and requirements, and project current (amended) facts.
 
 using ParishLife.Api.DTOs.Sacraments;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -20,7 +24,10 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
 {
     private static readonly string[] Celebrated = ["Baptism", "FirstCommunion", "Confirmation", "Marriage"];
     private static readonly string[] OnceOnly = ["Baptism", "FirstCommunion", "Confirmation"];
-    private static readonly string[] CoreFields = ["place", "celebrantName", "witnesses", "bookReference", "celebratedAt"];
+    private static readonly string[] Kinds = ["Baptism", "FirstCommunion", "Confirmation", "Marriage", "Funeral", "Anointing", "Other"];
+    private static readonly string[] CoreFields = ["place", "placeAr", "celebrantName", "celebrantNameAr", "witnesses", "witnessesAr", "bookReference", "registerPage", "celebratedAt"];
+    private static string RequirementsKey(string sacrament) => "sacramentRequirements:" + sacrament;
+    private static string? Optional(string? value, string name, int maximum) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, maximum);
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "sacrament:" + id;
     private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
@@ -78,7 +85,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var decision = request.Action is "accept" or "decline" or "cancel" or "reschedule";
         Versioned<Parish> root;
         SacramentStep? instruction = null;
-        if (request.Action is "return-entry" or "register")
+        if (request.Action is "return-entry" or "register" or "approve-amendment" or "reject-amendment")
             root = await PriestAsync(parish, ct);
         else if (decision && await IsPriestAsync(parish, actor.AccountId, ct))
             root = await PriestAsync(parish, ct);
@@ -106,10 +113,65 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             case "accept" when item.Status == "Received":
                 // Acceptance starts preparation; it verifies no evidence, reserves no date and proves no celebration.
                 item.Status = "Preparation";
+                await ApplyRequirementsAsync(parish, item, ct);
+                break;
+            case "office-review" when item.Status == "Received" && item.OfficeReviewedAt is null:
+                // Informative only: the priest may accept or decline with or without it.
+                item.OfficeReviewedBy = actor.AccountId;
+                item.OfficeReviewedAt = op.At;
+                item.OfficeReviewNote = note = Optional(request.Reason, "Review note", 2000);
+                break;
+            case "requirement" when item.Status is "Preparation" or "Scheduled":
+                var requirement = item.Requirements.FirstOrDefault(r => r.Key == request.RequirementKey)
+                    ?? throw new DomainException("invalid_input", "Choose a requirement on this case's checklist.");
+                requirement.Met = request.RequirementMet ?? throw new DomainException("invalid_input", "Say whether the requirement is met.");
+                requirement.RecordedBy = actor.AccountId;
+                requirement.RecordedAt = op.At;
+                requirement.Note = Optional(request.Reason, "Note", 2000);
+                note = requirement.Key + (requirement.Met ? ": met" : ": not met");
+                break;
+            case "sync-requirements" when item.Status is "Preparation" or "Scheduled":
+                await ApplyRequirementsAsync(parish, item, ct);
+                break;
+            case "propose-amendment" when item.Status is "Preparation" or "Scheduled":
+                if (item.RequestAmendments.Any(a => a.Status == "Pending"))
+                    throw State("A change to this request is already waiting for a priest.");
+                if (item.RequestAmendments.Length >= 50)
+                    throw State("This case has reached its limit of request changes; contact support.");
+                var date = Optional(request.TentativeDate, "Requested date", 200);
+                var factChanges = request.Facts is null ? new Dictionary<string, string>(StringComparer.Ordinal) : Facts(request.Facts);
+                if (date is null && factChanges.Count == 0)
+                    throw new DomainException("invalid_input", "Propose a new requested date or changed details.");
+                var amendment = new SacramentRequestAmendment
+                {
+                    Id = op.Id, TentativeDate = date, Facts = factChanges, PreviousTentativeDate = date is null ? null : item.TentativeDate,
+                    PreviousFacts = factChanges.Keys.Where(item.Facts.ContainsKey).ToDictionary(k => k, k => item.Facts[k], StringComparer.Ordinal),
+                    Reason = note = Guard.Text(request.Reason, "Reason for the change", 2000), ProposedBy = actor.AccountId, ProposedAt = op.At
+                };
+                item.RequestAmendments = [.. item.RequestAmendments, amendment];
+                break;
+            case "approve-amendment" or "reject-amendment" when item.Status is "Preparation" or "Scheduled" && item.RequestAmendments.Any(a => a.Status == "Pending"):
+                // The accepted request changes only now, with the priest's decision kept beside the proposal.
+                var pending = item.RequestAmendments.Last(a => a.Status == "Pending");
+                var approve = request.Action == "approve-amendment";
+                pending.DecisionNote = note = approve ? Optional(request.Reason, "Decision note", 2000) : Guard.Text(request.Reason, "Reason for rejecting", 2000);
+                pending.Status = approve ? "Approved" : "Rejected";
+                pending.DecidedBy = actor.AccountId;
+                pending.DecidedAt = op.At;
+                if (approve)
+                {
+                    if (pending.TentativeDate is not null) item.TentativeDate = pending.TentativeDate;
+                    var facts = new Dictionary<string, string>(item.Facts, StringComparer.Ordinal);
+                    foreach (var (key, value) in pending.Facts)
+                        if (value.Length == 0) facts.Remove(key); else facts[key] = value;
+                    item.Facts = Facts(facts);
+                }
                 break;
             case "schedule" when item.Status == "Preparation":
                 if (request.ScheduledAt is not { } at || Guard.Utc(at) <= op.At)
                     throw new DomainException("invalid_input", "A confirmed date must be a future UTC instant.");
+                if (item.RequirementsBlockScheduling && item.Requirements.Any(r => !r.Met))
+                    throw State("The parish asks for every preparation requirement to be met before a date is confirmed.");
                 await CelebrantAsync(item, request, ct);
                 item.ScheduledAt = at;
                 item.Status = "Scheduled";
@@ -130,15 +192,25 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
                     throw new DomainException("invalid_input", "Record the actual celebration time; it cannot be in the future.");
                 await CelebrantAsync(item, request, ct);
                 item.CelebratedAt = celebrated;
-                item.Place = Guard.Text(request.Place, "Place", 300);
-                item.Witnesses = string.IsNullOrWhiteSpace(request.Witnesses) ? null : Guard.Text(request.Witnesses, "Witnesses", 1000);
+                // Either spelling of the place satisfies the rule; neither is filled from the other.
+                item.Place = Optional(request.Place, "Place", 300);
+                item.PlaceAr = Optional(request.PlaceAr, "Arabic place", 300);
+                if (item.Place is null && item.PlaceAr is null)
+                    throw new DomainException("invalid_input", "Place is required and must not exceed 300 characters.");
+                item.Witnesses = Optional(request.Witnesses, "Witnesses", 1000);
+                item.WitnessesAr = Optional(request.WitnessesAr, "Arabic witnesses", 1000);
                 if (request.Facts is not null) item.Facts = Facts(request.Facts);
                 item.Status = "Celebrated";
                 break;
             case "amend-facts" when item.Status is not ("Registered" or "Declined" or "Cancelled"):
                 if (request.Facts is not null) item.Facts = Facts(request.Facts);
                 if (!string.IsNullOrWhiteSpace(request.Place)) item.Place = Guard.Text(request.Place, "Place", 300);
+                if (!string.IsNullOrWhiteSpace(request.PlaceAr)) item.PlaceAr = Guard.Text(request.PlaceAr, "Arabic place", 300);
                 if (!string.IsNullOrWhiteSpace(request.Witnesses)) item.Witnesses = Guard.Text(request.Witnesses, "Witnesses", 1000);
+                if (!string.IsNullOrWhiteSpace(request.WitnessesAr)) item.WitnessesAr = Guard.Text(request.WitnessesAr, "Arabic witnesses", 1000);
+                if (request.CelebrantAccountId is not null || request.CelebrantPersonId is not null || !string.IsNullOrWhiteSpace(request.CelebrantName)
+                    || !string.IsNullOrWhiteSpace(request.CelebrantNameAr))
+                    await CelebrantAsync(item, request, ct);
                 item.ReturnReason = null;
                 break;
             case "return-entry" when item.Status == "Celebrated":
@@ -159,7 +231,8 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
                     : RecordChange.Replace(scope, "sacramentCounter", new SacramentCounter { Scope = scope, Next = number + 1 }, counter.Version));
                 item.OfficialNumber = policy.Format.Replace("{year}", year, StringComparison.Ordinal)
                     .Replace("{n}", number.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
-                item.BookReference = string.IsNullOrWhiteSpace(request.BookReference) ? null : Guard.Text(request.BookReference, "Book reference", 200);
+                item.BookReference = Optional(request.BookReference, "Book reference", 200);
+                item.RegisterPage = Optional(request.RegisterPage, "Register page", 50);
                 item.RegisteredBy = actor.AccountId;
                 item.RegisteredAt = op.At;
                 item.Status = "Registered";
@@ -198,6 +271,48 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         return Project(policy);
     }
 
+    // The parish's own preparation lists, one per sacrament that has one; there is no built-in list.
+    public async Task<IReadOnlyList<RequirementSetDto>> RequirementSetsAsync(string parish, CancellationToken ct)
+    {
+        await OfficeOrPriestAsync(parish, ct);
+        var result = new List<RequirementSetDto>();
+        foreach (var kind in Kinds)
+            if (await records.ReadAsync<SacramentRequirementSet>(Scope(parish), RequirementsKey(kind), ct) is { } row)
+                result.Add(Project(row));
+        return result;
+    }
+
+    public async Task<RequirementSetDto> SaveRequirementSetAsync(string parish, SaveRequirementSetDto request, CancellationToken ct)
+    {
+        var root = await PriestAsync(parish, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-requirements:v1:" + request.Sacrament);
+        var key = RequirementsKey(request.Sacrament);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct))!);
+        if (request.Items is null || request.Items.Count > 30)
+            throw new DomainException("invalid_input", "List up to 30 requirements.");
+        var items = request.Items.Select(i => new SacramentRequirement
+        {
+            Key = i.Key is { Length: >= 1 and <= 60 } k && k.All(c => char.IsAsciiLetterOrDigit(c) || c == '_')
+                ? k : throw new DomainException("invalid_input", "Each requirement needs a short alphanumeric key."),
+            Label = Optional(i.Label, "Requirement", 200), LabelAr = Optional(i.LabelAr, "Arabic requirement", 200)
+        }).ToArray();
+        if (items.Any(i => i.Label is null && i.LabelAr is null))
+            throw new DomainException("invalid_input", "Name each requirement in English or Arabic.");
+        if (items.Select(i => i.Key).Distinct(StringComparer.Ordinal).Count() != items.Length)
+            throw new DomainException("invalid_input", "Each requirement needs its own key.");
+        var existing = await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct);
+        var set = new SacramentRequirementSet
+        {
+            Sacrament = request.Sacrament, Items = items, BlockSchedulingUntilMet = request.BlockSchedulingUntilMet, SavedBy = actor.AccountId, SavedAt = op.At
+        };
+        // Saving changes later cases only; a case keeps its checklist until the office synchronizes it.
+        await records.CommitAsync(Scope(parish), op, "sacrament.requirements", request.Sacrament,
+            [Fence(root), existing is null ? RecordChange.Create(key, "sacramentRequirements", set) : RecordChange.Replace(key, "sacramentRequirements", set, Versions.Require(request.Version))],
+            new CommandResult { Id = request.Sacrament, Status = "Saved" }, ct);
+        return Project((await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct))!);
+    }
+
     public async Task<SacramentCorrectionDto> ProposeCorrectionAsync(string parish, string id, ProposeCorrectionDto request, CancellationToken ct)
     {
         var root = await OfficeAsync(parish, ct);
@@ -209,7 +324,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             throw State("Official corrections apply to registered entries; amend facts before registration instead.");
         var field = Guard.Text(request.Field, "Field", 80);
         if (!CoreFields.Contains(field) && !(field.StartsWith("facts.", StringComparison.Ordinal) && field.Length > 6))
-            throw new DomainException("invalid_input", "Correct place, celebrantName, witnesses, bookReference, celebratedAt or facts.<key>.");
+            throw new DomainException("invalid_input", "Correct " + string.Join(", ", CoreFields) + " or facts.<key>.");
         if (field == "celebratedAt" && !DateTimeOffset.TryParse(request.NewValue, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out _))
             throw new DomainException("invalid_input", "A corrected celebration time must be an ISO date/time.");
         var correction = new SacramentCorrection
@@ -356,10 +471,31 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             if (!await accounts.IsActiveVerifiedAsync(item.CelebrantAccountId, ct))
                 throw new DomainException("invalid_input", "The celebrant account must be active and verified.");
         }
+        if (request.CelebrantPersonId is { } celebrantPerson)
+        {
+            // A parish person record for the celebrant; the name texts are kept as typed and never derived from it.
+            var id = Guard.Id(celebrantPerson);
+            if ((await records.ReadAsync<Person>(Scope(item.ParishId), "person:" + id, ct))?.Value is not { Archived: false } person || person.ParishId != item.ParishId)
+                throw new DomainException("invalid_input", "The celebrant must be a current person record of this parish.");
+            item.CelebrantPersonId = id;
+        }
         if (!string.IsNullOrWhiteSpace(request.CelebrantName))
             item.CelebrantName = Guard.Text(request.CelebrantName, "Celebrant", 200);
-        if (item.CelebrantAccountId is null && item.CelebrantName is null)
+        if (!string.IsNullOrWhiteSpace(request.CelebrantNameAr))
+            item.CelebrantNameAr = Guard.Text(request.CelebrantNameAr, "Arabic celebrant name", 200);
+        if (item.CelebrantAccountId is null && item.CelebrantPersonId is null && item.CelebrantName is null && item.CelebrantNameAr is null)
             throw new DomainException("invalid_input", "Name the celebrant.");
+    }
+
+    // Copies the parish's current list onto the case, keeping what was already recorded for items that remain.
+    private async Task ApplyRequirementsAsync(string parish, SacramentRecord item, CancellationToken ct)
+    {
+        var set = (await records.ReadAsync<SacramentRequirementSet>(Scope(parish), RequirementsKey(item.Kind), ct))?.Value;
+        var before = item.Requirements.ToDictionary(r => r.Key, StringComparer.Ordinal);
+        item.Requirements = (set?.Items ?? []).Select(i => before.TryGetValue(i.Key, out var kept)
+            ? new SacramentRequirementState { Key = i.Key, Label = i.Label, LabelAr = i.LabelAr, Met = kept.Met, RecordedBy = kept.RecordedBy, RecordedAt = kept.RecordedAt, Note = kept.Note }
+            : new SacramentRequirementState { Key = i.Key, Label = i.Label, LabelAr = i.LabelAr }).ToArray();
+        item.RequirementsBlockScheduling = set?.BlockSchedulingUntilMet ?? false;
     }
 
     private async Task<List<SacramentRecord>> CasesAsync(string parish, string person, CancellationToken ct)
@@ -390,9 +526,13 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var current = new Dictionary<string, string>(x.Facts, StringComparer.Ordinal);
         void Set(string key, string? value) { if (value is not null) current[key] = value; }
         Set("place", x.Place);
+        Set("placeAr", x.PlaceAr);
         Set("celebrantName", x.CelebrantName);
+        Set("celebrantNameAr", x.CelebrantNameAr);
         Set("witnesses", x.Witnesses);
+        Set("witnessesAr", x.WitnessesAr);
         Set("bookReference", x.BookReference);
+        Set("registerPage", x.RegisterPage);
         Set("celebratedAt", x.CelebratedAt?.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         foreach (var amendment in x.Amendments)
             current[amendment.Field.Replace("facts.", "", StringComparison.Ordinal)] = amendment.NewValue;
@@ -410,9 +550,19 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     private static SacramentRecordDto Project(SacramentRecord x) => new()
     {
         Id = x.Id, Sacrament = x.Kind, SubjectPersonId = x.PersonId, RequestId = x.RequestId, Facts = new(x.Facts), CurrentFacts = Current(x), Status = x.Status,
-        TentativeDate = x.TentativeDate, ScheduledAt = x.ScheduledAt, CelebrantAccountId = x.CelebrantAccountId, CelebrantName = x.CelebrantName,
-        CelebratedAt = x.CelebratedAt, Place = x.Place, Witnesses = x.Witnesses, ReturnReason = x.ReturnReason, OfficialNumber = x.OfficialNumber,
-        BookReference = x.BookReference, RegisteredBy = x.RegisteredBy, RegisteredAt = x.RegisteredAt, Amendments = [.. x.Amendments], Timeline = [.. x.Timeline]
+        TentativeDate = x.TentativeDate, ScheduledAt = x.ScheduledAt, CelebrantAccountId = x.CelebrantAccountId, CelebrantPersonId = x.CelebrantPersonId,
+        CelebrantName = x.CelebrantName, CelebrantNameAr = x.CelebrantNameAr, CelebratedAt = x.CelebratedAt, Place = x.Place, PlaceAr = x.PlaceAr,
+        Witnesses = x.Witnesses, WitnessesAr = x.WitnessesAr, ReturnReason = x.ReturnReason, OfficialNumber = x.OfficialNumber,
+        BookReference = x.BookReference, RegisterPage = x.RegisterPage, RegisteredBy = x.RegisteredBy, RegisteredAt = x.RegisteredAt,
+        OfficeReviewedBy = x.OfficeReviewedBy, OfficeReviewedAt = x.OfficeReviewedAt, OfficeReviewNote = x.OfficeReviewNote,
+        Requirements = [.. x.Requirements ?? []], RequirementsBlockScheduling = x.RequirementsBlockScheduling, RequestAmendments = [.. x.RequestAmendments ?? []],
+        Amendments = [.. x.Amendments], Timeline = [.. x.Timeline], CreatedBy = x.CreatedBy, CreatedAt = x.CreatedAt
+    };
+
+    private static RequirementSetDto Project(Versioned<SacramentRequirementSet> row) => new()
+    {
+        Sacrament = row.Value.Sacrament, Version = row.Version, Items = [.. row.Value.Items], BlockSchedulingUntilMet = row.Value.BlockSchedulingUntilMet,
+        SavedBy = row.Value.SavedBy, SavedAt = row.Value.SavedAt
     };
 
     private static SacramentPolicyDto Project(SacramentNumberingPolicy x) => new()

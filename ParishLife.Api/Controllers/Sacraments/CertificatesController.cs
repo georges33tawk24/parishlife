@@ -1,5 +1,6 @@
 // Purpose: exposes certificate requests, their preparation/signing/acceptance/issue/release actions, and the bishop's certificate policy.
-// Main functions: Create, Act, Get, List, NotificationOutcome and SetPolicy delegate authority and transitions to CertificateService.
+// Main functions: Create, Act, Get, List, NotificationOutcome, SignatureImage (the picture attached at signing) and SetPolicy delegate
+// authority and transitions to CertificateService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,6 +29,14 @@ public class CertificatesController(CertificateService service) : ControllerBase
     [HttpGet("api/parishes/{parishId:guid}/certificates/{certificateId:guid}/notification-outcome")]
     public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid certificateId, CancellationToken ct)
         => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(certificateId), ct));
+
+    [HttpGet("api/parishes/{parishId:guid}/certificates/{certificateId:guid}/signature-image")]
+    public async Task<IActionResult> SignatureImage(Guid parishId, Guid certificateId, CancellationToken ct)
+    {
+        var (content, type) = await service.SignatureImageAsync(Guard.Id(parishId), Guard.Id(certificateId), ct);
+        Response.Headers.CacheControl = "private, no-store";
+        return File(content, type);
+    }
 
     [HttpGet("api/parishes/{parishId:guid}/certificates")]
     public async Task<ActionResult<IReadOnlyList<Versioned<CertificateDto>>>> List(Guid parishId, CancellationToken ct, string? status = null)

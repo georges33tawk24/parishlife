@@ -1,6 +1,6 @@
-// Purpose: exposes sacramental cases, the register search, numbering policies and official corrections over HTTP.
-// Main functions: Create, Act, Get, Search, SetPolicy, ProposeCorrection, DecideCorrection, PendingCorrections, Anniversaries and MyAnniversaries
-// delegate rules to SacramentService.
+// Purpose: exposes sacramental cases, the register search, numbering policies, preparation requirement lists and official corrections over HTTP.
+// Main functions: Create, Act, Get, Search, SetPolicy, RequirementSets, SaveRequirementSet, ProposeCorrection, DecideCorrection,
+// PendingCorrections, Anniversaries and MyAnniversaries delegate rules to SacramentService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,6 +33,14 @@ public class SacramentsController(SacramentService service) : ControllerBase
     [HttpPut("numbering")]
     public async Task<ActionResult<SacramentPolicyDto>> SetPolicy(Guid parishId, NumberingPolicyDto request, CancellationToken ct)
         => Ok(await service.SetPolicyAsync(Guard.Id(parishId), request, ct));
+
+    [HttpGet("requirements")]
+    public async Task<ActionResult<IReadOnlyList<RequirementSetDto>>> RequirementSets(Guid parishId, CancellationToken ct)
+        => Ok(await service.RequirementSetsAsync(Guard.Id(parishId), ct));
+
+    [HttpPut("requirements")]
+    public async Task<ActionResult<RequirementSetDto>> SaveRequirementSet(Guid parishId, SaveRequirementSetDto request, CancellationToken ct)
+        => Ok(await service.SaveRequirementSetAsync(Guard.Id(parishId), request, ct));
 
     [HttpPost("{recordId:guid}/corrections")]
     public async Task<ActionResult<SacramentCorrectionDto>> ProposeCorrection(Guid parishId, Guid recordId, ProposeCorrectionDto request, CancellationToken ct)

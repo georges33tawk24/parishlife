@@ -5,6 +5,8 @@
 // Release/withdrawal notices require a matching linked request applicant; source changes and safe outcome reads preserve existing authority gates.
 // AuthorizationPreviewAsync and AuthorizeAsync (X03) let the priest who recorded signing electronically authorize the exact prepared content
 // under bishop-approved wording; a return clears the authorization and issuing a reissue marks the replaced certificate superseded.
+// Signing attaches the signing priest's current signature image (a picture for the paper, not an electronic signature); a return clears it,
+// and SignatureImageAsync serves the attached image only to certificate readers.
 
 using ParishLife.Api.DTOs.Sacraments;
 using ParishLife.Api.DTOs.Communications;
@@ -23,7 +25,7 @@ namespace ParishLife.Api.Services.Sacraments;
 
 public class CertificateService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, IClergyAuthority clergy,
     IArchdioceseAuthority bishops, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications,
-    NotificationOutcomeReader outcomes, DocumentSignatureService signatures, TimeProvider clock)
+    NotificationOutcomeReader outcomes, DocumentSignatureService signatures, ClergySignatureImageService signatureImages, TimeProvider clock)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "certificate:" + id;
@@ -155,6 +157,10 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
                 // Records that the priest approved and signed the paper; no electronic signature is claimed.
                 item.SignedBy = actor.AccountId;
                 item.SignedAt = op.At;
+                // The picture for the printed paper, as it is now; a later replacement never changes a signed certificate.
+                var image = await signatureImages.CurrentAsync(parish, actor.AccountId, ct);
+                item.SignatureImageId = image?.Id;
+                item.SignatureImageSha256 = image?.Sha256;
                 item.BishopReviewRequired = await BishopReviewRequiredAsync(parish, ct);
                 item.Status = item.BishopReviewRequired ? "AwaitingBishop" : "AuthorizedForIssuance";
                 break;
@@ -168,6 +174,8 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
                 item.ReturnReason = Guard.Text(request.Reason, "Return reason", 2000);
                 item.SignedBy = null;
                 item.SignedAt = null;
+                item.SignatureImageId = null;
+                item.SignatureImageSha256 = null;
                 item.AcceptedBy = null;
                 item.AcceptedAt = null;
                 // Returned content is no longer the authorized version; the signature record itself is kept.
@@ -304,6 +312,16 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         return new Versioned<CertificateDto> { Version = row.Version, Value = await ProjectAsync(row.Value, ct) };
     }
 
+    // The signature image attached when the priest signed, for printing; readable by the certificate's readers only.
+    public async Task<(byte[] Content, string ContentType)> SignatureImageAsync(string parish, string id, CancellationToken ct)
+    {
+        await ReaderAsync(parish, ct);
+        var item = (await ReadAsync(parish, id, ct)).Value;
+        if (item.SignatureImageId is null)
+            throw new DomainException("resource_not_found", "No signature image is attached to this certificate.", FailureKind.NotFound);
+        return await signatureImages.ContentAsync(parish, item.SignatureImageId, item.SignatureImageSha256, ct);
+    }
+
     public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string id, CancellationToken ct)
     {
         await ReaderAsync(parish, ct);
@@ -386,7 +404,8 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         Id = x.Id, Reference = x.Reference, Version = x.Version, ReplacesId = x.ReplacesId, SubjectPersonId = x.PersonId, Sacrament = x.Kind,
         SourceRecordId = x.SourceRecordId, RequestId = x.RequestId, Language = x.Language, Quantity = x.Quantity, Purpose = x.Purpose, Status = x.Status,
         Snapshot = new(x.Snapshot), OfficialNumber = x.OfficialNumber, BishopReviewRequired = x.BishopReviewRequired, PreparedBy = x.PreparedBy,
-        SignedBy = x.SignedBy, SignedAt = x.SignedAt, AcceptedBy = x.AcceptedBy, AcceptedAt = x.AcceptedAt, ReturnReason = x.ReturnReason,
+        SignedBy = x.SignedBy, SignedAt = x.SignedAt, HasSignatureImage = x.SignatureImageId is not null, CreatedBy = x.CreatedBy, CreatedAt = x.CreatedAt,
+        AcceptedBy = x.AcceptedBy, AcceptedAt = x.AcceptedAt, ReturnReason = x.ReturnReason,
         IssuedBy = x.IssuedBy, IssuedAt = x.IssuedAt, ReleasedBy = x.ReleasedBy, ReleasedAt = x.ReleasedAt, RecipientName = x.RecipientName,
         RecipientRelationship = x.RecipientRelationship, VerificationMethod = x.VerificationMethod, WithdrawalReason = x.WithdrawalReason,
         AuthorizationCode = x.AuthorizationCode, AuthorizationCodes = [.. x.AuthorizationCodes], SupersededById = x.SupersededById
