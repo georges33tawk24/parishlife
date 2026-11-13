@@ -2,13 +2,15 @@
    (transposable), lyrics, sheets, recordings and rights. */
 import { joinNodes, nodesOr } from '../../ui/html.js';
 import { Select } from '../../ui/components.jsx';
-import { t, isAr, fmtDate } from '../../../lib/i18n.js';
+import { t, fmtDate } from '../../../lib/i18n.js';
 import { S, bus } from '../../model/store.js';
 import { Icon, PageHead, Panel, Table, Empty, openDrawer, openModal, toast, TabBar, Avatar } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as CR from '../../shared/record-editor.jsx';
 import { printSheet } from '../../shared/print.js';
-import { MUSIC, SETLISTS, musicInfo, person } from '../../model/data.js';
+import { MUSIC, SETLISTS, musicInfo } from '../../model/data.js';
+import { nameOf } from '../../model/names.js';
+import { session } from '../../model/api.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -433,13 +435,21 @@ function hymn(id, tab) {
             </p>
           )}
           <div className="timeline">
-            {d.versions.map(([en, ar, when, by], i) => (
+            {d.versions.map(([en, ar, when, by, , status], i) => (
               <div key={i} className={`tl-item ${i === 0 ? 'accent' : ''}`}>
                 <div className="when">
-                  {fmtDate(when)} · {isAr() ? person(by).ar : person(by).lat}
+                  {fmtDate(when)} · {nameOf(session.parishId, by) || '—'}
                 </div>{' '}
                 <div className="what">
                   {L(en, ar)}
+                  {status === 'Withdrawn' ? (
+                    <span className="pill">
+                      <span className="dot" />
+                      {L('withdrawn', 'مسحوب')}
+                    </span>
+                  ) : (
+                    ''
+                  )}
                   {i === 0 ? (
                     <span className="pill pill-success">
                       <span className="dot" />
@@ -449,7 +459,7 @@ function hymn(id, tab) {
                     ''
                   )}
                 </div>{' '}
-                {i ? (
+                {i && status !== 'Withdrawn' ? (
                   <button
                     className="btn btn-secondary btn-dense"
                     style={{ marginTop: '8px' }}

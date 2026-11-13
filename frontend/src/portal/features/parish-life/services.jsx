@@ -54,6 +54,8 @@ import {
   group
 } from '../../model/data.js';
 import { addMin, meetingKind } from './parish-life-shared.jsx';
+import { planCelebrants } from '../../model/modules/calendar.js';
+import { session } from '../../model/api.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -459,11 +461,13 @@ export function services(tab = '', planId = '') {
           {oi + 1}. {o.start || '—'} · {o.dur}'
         </span>{' '}
         <span className="body">
-          <b>{o.t}</b>
-          {o.note ? <span className="note">{o.note}</span> : ''}
+          <b>{L(o.t, o.ar)}</b>
+          {o.note || o.noteAr ? <span className="note">{L(o.note || o.noteAr, o.noteAr || o.note)}</span> : ''}
         </span>{' '}
         <span className="who-s">
-          <span className="t-caption dim">{[o.role, hymn ? hymn.title : ''].filter(Boolean).join(' · ')}</span>{' '}
+          <span className="t-caption dim">
+            {[o.role, hymn ? L(hymn.title, hymn.ar) : '', o.whoName].filter(Boolean).join(' · ')}
+          </span>{' '}
           {canEdit ? (
             <>
               {
@@ -565,7 +569,13 @@ export function services(tab = '', planId = '') {
               <dt>{L('Type', 'النوع')}</dt>
               <dd>{plan.planType === 'Activity' ? L('Activity', 'نشاط') : L('Liturgy', 'ليتورجيا')}</dd>
               <dt>{L('Celebrant', 'المحتفل')}</dt>
-              <dd>{plan.celebrantAccountId ? L('Chosen', 'معيّن') : L('Not chosen', 'غير معيّن')}</dd>
+              <dd>
+                {plan.celebrantAccountId ? plan.celebrantName || L('Chosen', 'معيّن') : L('Not chosen', 'غير معيّن')}
+              </dd>
+              <dt>{L('Coordinator', 'المنسّق')}</dt>
+              <dd>{plan.coordinatorName || '—'}</dd>
+              <dt>{L('Language', 'اللغة')}</dt>
+              <dd>{plan.language || '—'}</dd>
               <dt>{L('Status', 'الحالة')}</dt>
               <dd>
                 <Status k={plan.status || 'scheduled'} />
@@ -775,15 +785,45 @@ function editPlanDetails(redraw) {
     body: (
       <>
         <C.Field label={L('Service name', 'اسم الخدمة')} id="pd_title" req={true} value={plan.title} />{' '}
-        <div className="formrow">
-          <label className="label" htmlFor="pd_type">
-            {L('Type', 'النوع')}
-          </label>
-          <Select defaultValue={plan.planType || 'Liturgy'} id="pd_type">
-            <option value="Liturgy">{L('Liturgy (needs a celebrant)', 'ليتورجيا (تحتاج محتفلاً)')}</option>
-            <option value="Activity">{L('Activity', 'نشاط')}</option>
-          </Select>
-        </div>
+        <C.Field label={L('Arabic name', 'الاسم بالعربية')} id="pd_title_ar" ar={true} value={plan.titleAr || ''} />{' '}
+        <div className="formgrid">
+          <div className="formrow">
+            <label className="label" htmlFor="pd_type">
+              {L('Type', 'النوع')}
+            </label>
+            <Select defaultValue={plan.planType || 'Liturgy'} id="pd_type">
+              <option value="Liturgy">{L('Liturgy (needs a celebrant)', 'ليتورجيا (تحتاج محتفلاً)')}</option>
+              <option value="Activity">{L('Activity', 'نشاط')}</option>
+            </Select>
+          </div>{' '}
+          <C.Field
+            label={L('Language', 'اللغة')}
+            id="pd_language"
+            value={plan.language || ''}
+            ph="ar"
+            help={L('A short code, for example ar or syr.', 'رمز قصير، مثل ar أو syr.')}
+          />
+        </div>{' '}
+        {plan.eventId ? (
+          <div className="formrow">
+            <label className="label" htmlFor="pd_celebrant">
+              {L('Celebrant', 'المحتفل')}
+            </label>
+            <Select defaultValue={plan.celebrantAccountId || ''} id="pd_celebrant">
+              <option value="">{L('Not chosen', 'غير معيّن')}</option>
+              {plan.celebrantAccountId ? (
+                <option value={plan.celebrantAccountId}>{plan.celebrantName || L('Chosen', 'معيّن')}</option>
+              ) : (
+                ''
+              )}
+            </Select>
+            <span className="help" id="pd_celebrant_help">
+              {L('Loading the parish’s current priests…', 'جارٍ تحميل كهنة الرعية الحاليين…')}
+            </span>
+          </div>
+        ) : (
+          ''
+        )}
       </>
     ),
     foot: (
@@ -797,10 +837,38 @@ function editPlanDetails(redraw) {
       </>
     ),
     onMount(el) {
+      const choose = el.querySelector('#pd_celebrant');
+      if (choose)
+        // the current priests come from the API; their names from the shared lookup
+        planCelebrants(session.parishId)
+          .then(rows => {
+            for (const r of rows)
+              if (r.accountId !== plan.celebrantAccountId) {
+                const option = document.createElement('option');
+                option.value = r.accountId;
+                option.textContent = r.name || L('A current priest', 'كاهن حالي');
+                choose.append(option);
+              }
+            el.querySelector('#pd_celebrant_help').textContent = rows.length
+              ? ''
+              : L('No current priest of this parish is available.', 'لا كاهن حالياً في هذه الرعية.');
+          })
+          .catch(error => {
+            el.querySelector('#pd_celebrant_help').textContent = error.message;
+          });
       el.querySelector('#pd_stage').addEventListener('click', () => {
         if (!need(el, '#pd_title', L('Name the plan', 'سمّ الخطة'))) return;
         const title = el.querySelector('#pd_title').value.trim();
-        Object.assign(plan, { title, titleAr: title, planType: el.querySelector('#pd_type').value });
+        Object.assign(plan, {
+          title,
+          titleAr: el.querySelector('#pd_title_ar').value.trim() || null,
+          language: el.querySelector('#pd_language').value.trim(),
+          planType: el.querySelector('#pd_type').value
+        });
+        if (choose) {
+          plan.celebrantAccountId = choose.value || null;
+          plan.celebrantName = choose.value ? choose.selectedOptions[0]?.textContent || '' : '';
+        }
         closeOverlays();
         redraw();
       });
@@ -822,8 +890,14 @@ function editPlanItem(index, redraw) {
       <>
         <div className="formgrid">
           <C.Field label={L('Item', 'البند')} id="pi_title" req={true} value={item?.t || ''} />{' '}
-          <C.Field label={L('Duration (minutes)', 'المدة (دقائق)')} id="pi_dur" type="number" value={item?.dur || 3} />
+          <C.Field
+            label={L('Arabic item name', 'اسم البند بالعربية')}
+            id="pi_title_ar"
+            ar={true}
+            value={item?.ar || ''}
+          />
         </div>{' '}
+        <C.Field label={L('Duration (minutes)', 'المدة (دقائق)')} id="pi_dur" type="number" value={item?.dur || 3} />{' '}
         <div className="formgrid">
           <C.Field label={L('Responsible role', 'الدور المسؤول')} id="pi_role" value={item?.role || ''} />{' '}
           <div className="formrow">
@@ -845,12 +919,18 @@ function editPlanItem(index, redraw) {
             <option value="">{L('None', 'بلا')}</option>
             {MUSIC.map((h, i) => (
               <option key={i} value={h.id}>
-                {h.title}
+                {L(h.title, h.ar)}
               </option>
             ))}
           </Select>
         </div>{' '}
         <C.Field label={L('Instructions', 'تعليمات')} id="pi_note" value={item?.note || ''} />{' '}
+        <C.Field
+          label={L('Arabic instructions', 'التعليمات بالعربية')}
+          id="pi_note_ar"
+          ar={true}
+          value={item?.noteAr || ''}
+        />{' '}
         <C.CheckRow
           label={L('Required — someone must be assigned', 'مطلوب — يجب تكليف أحد')}
           id="pi_required"
@@ -884,6 +964,8 @@ function editPlanItem(index, redraw) {
           return;
         const fields = {
           t: el.querySelector('#pi_title').value.trim(),
+          ar: el.querySelector('#pi_title_ar').value.trim() || null,
+          noteAr: el.querySelector('#pi_note_ar').value.trim() || null,
           dur: String(Number(el.querySelector('#pi_dur').value)),
           role: el.querySelector('#pi_role').value.trim(),
           audience: el.querySelector('#pi_audience').value,
@@ -892,7 +974,7 @@ function editPlanItem(index, redraw) {
           required: el.querySelector('#pi_required').checked
         };
         if (item) Object.assign(item, fields);
-        else plan.order.push({ ar: '', noteAr: '', who: null, assignedAccountId: null, start: '', ...fields });
+        else plan.order.push({ who: null, assignedAccountId: null, start: '', ...fields });
         normalizePlanOrder(plan, 'reflow');
         closeOverlays();
         redraw();

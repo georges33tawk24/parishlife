@@ -3,14 +3,18 @@
    the music library, and the member's and priest's schedules.
    Main members: keys (the view-model collections this module owns), routes (the portal pages it feeds),
    load (fills those collections), save (sends what changed), and the direct calls the screens make for
-   workflows a snapshot diff cannot express: eventAction, planAction, withdrawMusic, loadSchedule,
-   downloadSchedule, wantMonth, zonedInstant, localParts.
+   workflows a snapshot diff cannot express: eventAction, planAction, planCelebrants, withdrawMusic,
+   restoreMusicVersion, loadSchedule, downloadSchedule, wantMonth, zonedInstant, localParts.
+
+   Arabic twins (titleAr, descriptionAr, nameAr, ar, noteAr, occasionAr) are stored as typed and are null
+   when absent, so t() falls back to the other language for display. People on plans are accounts; their
+   names come from the shared account-names lookup (names.js).
 
    What the API does not have stays empty or unsaved, and is listed in docs/frontend-modules/calendar.md:
-   rooms on events, RSVP counts, capacity, tasks, event templates, the volunteer rota and swaps, setlists
-   of their own, personal annotations on hymns, the history of a hymn's versions, and a person for an
-   account (plans name accounts, the portal names people). */
+   rooms on events, RSVP counts, capacity, tasks, the volunteer rota and swaps, setlists of their own,
+   personal annotations on hymns, and choosing plan coordinators or item assignees. */
 import { api, parishAPI, newOperationId, session } from '../api.js';
+import { loadNames, nameOf } from '../names.js';
 
 export const keys = [
   'EVENTS',
@@ -120,7 +124,8 @@ function toEvent(row) {
     to: end.t,
     endsOn: end.d,
     title: e.title,
-    titleAr: e.title,
+    // the Arabic twin as stored; null when none, so t() shows the other language
+    titleAr: e.titleAr || null,
     kind: kindOf(e.kind),
     apiKind: e.kind,
     venue: null,
@@ -129,6 +134,7 @@ function toEvent(row) {
     visibility: AUDIENCE[e.visibility] || 'private',
     tz: e.timeZone,
     description: e.description || '',
+    descriptionAr: e.descriptionAr || null,
     seriesId: e.seriesId || null,
     redacted: !!e.redacted,
     reason: e.lastActionReason || '',
@@ -144,7 +150,7 @@ function eventDetail(e) {
     catAr: e.apiKind === 'Appointment' ? 'موعد' : 'حياة الرعية',
     tags: [],
     desc: e.description,
-    descAr: e.description,
+    descAr: e.descriptionAr,
     bring: [],
     tasks: [],
     files: [],
@@ -205,6 +211,81 @@ async function loadEvents(parish) {
   const byId = new Map();
   for (const row of chunks.flat().filter(Boolean)) byId.set(row.value.id, row);
   return [...byId.values()].map(toEvent).sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
+}
+
+/* ---------- event templates ---------- */
+
+/* Versioned<EventTemplateDto> → the portal's event template. A template only prefills the new-event
+   drawer; it never creates or changes an event by itself. Archived templates are not listed. */
+function toEventTemplate(row) {
+  const x = row.value;
+  return {
+    id: x.id,
+    name: x.name,
+    nameAr: x.nameAr || null,
+    icon: 'events',
+    kind: 'event',
+    apiKind: x.kind,
+    visibility: AUDIENCE[x.visibility] || 'private',
+    startTime: x.startTime || '',
+    duration: x.durationMinutes,
+    description: x.description || '',
+    descriptionAr: x.descriptionAr || null,
+    venue: null,
+    capacity: 0,
+    version: row.version
+  };
+}
+
+const templateFields = x => [
+  x.name,
+  x.nameAr || '',
+  x.apiKind,
+  x.visibility,
+  x.startTime || '',
+  Number(x.duration) || 0,
+  x.description || '',
+  x.descriptionAr || ''
+];
+
+const templateBody = (x, version) => ({
+  operationId: newOperationId(),
+  version: version || null,
+  name: String(x.name || '').trim(),
+  nameAr: twin(x.nameAr),
+  kind: x.apiKind || 'ParishActivity',
+  visibility: x.apiKind && x.apiKind !== 'ParishActivity' ? 'Private' : AUDIENCE_OUT[x.visibility] || 'Parish',
+  startTime: x.startTime || null,
+  durationMinutes: Math.max(1, Math.min(44640, Math.round(Number(x.duration) || 60))),
+  description: twin(x.description),
+  descriptionAr: twin(x.descriptionAr)
+});
+
+/* New templates are created, changed ones saved with their version, removed ones archived (kept, restorable). */
+async function saveEventTemplates(before, now) {
+  const was = byId(before.EVENT_TEMPLATES),
+    is = byId(now.EVENT_TEMPLATES);
+  let saved = false;
+  for (const x of now.EVENT_TEMPLATES || []) {
+    const old = was.get(x.id);
+    if (!old) {
+      await parishAPI('calendar/templates', 'POST', templateBody(x));
+      saved = true;
+    } else if (!same(templateFields(x), templateFields(old))) {
+      await parishAPI(`calendar/templates/${enc(x.id)}`, 'PUT', templateBody(x, old.version));
+      saved = true;
+    }
+  }
+  for (const [id, old] of was)
+    if (!is.has(id)) {
+      await parishAPI(`calendar/templates/${enc(id)}/actions`, 'POST', {
+        operationId: newOperationId(),
+        version: old.version,
+        action: 'archive'
+      });
+      saved = true;
+    }
+  return { saved, unsupported: false };
 }
 
 /* ---------- liturgical calendar and feasts ---------- */
@@ -269,7 +350,7 @@ function toPlan(row, event) {
     kind: p.kind,
     eventId: p.eventId || null,
     title: p.title,
-    titleAr: p.title,
+    titleAr: p.titleAr || null,
     date: event?.d || '',
     time: event?.t || '',
     venue: null,
@@ -277,8 +358,9 @@ function toPlan(row, event) {
     coordinator: null,
     celebrantAccountId: p.celebrantAccountId || null,
     coordinatorAccountId: p.coordinatorAccountId,
-    language: '',
-    languageAr: '',
+    approvedBy: p.approvedBy || null,
+    language: p.language || '',
+    languageAr: null,
     planType: p.planType,
     status: PLAN_STATUS[p.status] || 'draft',
     apiStatus: p.status,
@@ -290,11 +372,11 @@ function toPlan(row, event) {
     order: (p.items || []).map(i => ({
       key: i.key,
       t: i.title,
-      ar: '',
+      ar: i.titleAr || null,
       dur: String(i.minutes),
       start: i.startsAt ? localParts(i.startsAt, zone).t : '',
       note: i.instructions || '',
-      noteAr: '',
+      noteAr: i.instructionsAr || null,
       who: null,
       role: i.responsibleRole || '',
       required: !!i.required,
@@ -311,10 +393,10 @@ const toTemplate = row => {
   return {
     id: plan.id,
     name: plan.title,
-    ar: plan.title,
+    ar: plan.titleAr,
     venue: null,
-    language: '',
-    languageAr: '',
+    language: plan.language,
+    languageAr: null,
     celebrant: null,
     coordinator: null,
     planType: plan.planType,
@@ -375,10 +457,11 @@ function toHymn(m) {
     id: m.id,
     workId: m.workId,
     title: m.title,
-    ar: (m.alternateTitles || []).find(x => ARABIC.test(x)) || '',
+    // the Arabic twin; versions saved before it existed kept their Arabic title among the alternate titles
+    ar: m.titleAr || (m.alternateTitles || []).find(x => ARABIC.test(x)) || null,
     alternateTitles: m.alternateTitles || [],
     occasion: m.season || '',
-    occasionAr: '',
+    occasionAr: m.seasonAr || null,
     part: m.category || '',
     key: m.musicalKey || '',
     lang: LANG_NAME[m.language] || m.language,
@@ -424,15 +507,83 @@ function toHymn(m) {
   return { hymn, detail };
 }
 
+/* Every version the API keeps (active, superseded and withdrawn), by id, for the history and for restoring. */
+const musicVersions = new Map();
+
+/* One version in a hymn's history: [title, Arabic title, date, account id, version id, status]. */
+const historyRow = m => [
+  m.title,
+  m.titleAr || null,
+  String(m.createdAt || '').slice(0, 10),
+  m.createdBy,
+  m.id,
+  m.status
+];
+
+/* The library lists the active version of each work; its history is every version of that work, newest first. */
 async function loadMusic(parish) {
   const found = [];
   for (let offset = 0; offset < 2000; offset += 100) {
-    const page = await api(`parishes/${enc(parish.id)}/music?size=100&offset=${offset}`).catch(allowed);
+    const page = await api(`parishes/${enc(parish.id)}/music?size=100&offset=${offset}&includeInactive=true`).catch(
+      allowed
+    );
     if (!page) return null;
     found.push(...(page.items || []));
     if ((page.items || []).length < 100) break;
   }
-  return found.map(toHymn);
+  musicVersions.clear();
+  for (const m of found) musicVersions.set(m.id, m);
+  await loadNames(parish.id, [...new Set(found.map(m => m.createdBy))]);
+  const byWork = new Map();
+  for (const m of found) byWork.set(m.workId, [...(byWork.get(m.workId) || []), m]);
+  return found
+    .filter(m => m.status === 'Active')
+    .map(m => {
+      const x = toHymn(m);
+      x.detail.versions = (byWork.get(m.workId) || [])
+        .slice()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .map(historyRow);
+      return x;
+    });
+}
+
+/* Restoring an earlier version publishes its content again as a new revision of the current version, so the
+   history is never rewritten. A withdrawn version's materials are gone, so it cannot be restored. */
+export async function restoreMusicVersion(currentId, versionId) {
+  const old = musicVersions.get(versionId);
+  if (!old) throw new Error('That version is not loaded.');
+  if (old.status === 'Withdrawn')
+    throw new Error('A withdrawn version cannot be restored: its materials were removed.');
+  const keep = [
+    'title',
+    'titleAr',
+    'alternateTitles',
+    'language',
+    'rite',
+    'season',
+    'seasonAr',
+    'composer',
+    'musicalKey',
+    'instrumentation',
+    'category',
+    'lyrics',
+    'chords',
+    'notes',
+    'mediaLinks',
+    'rightsBasis',
+    'attribution',
+    'downloadAllowed',
+    'printAllowed',
+    'projectionAllowed'
+  ];
+  return parishAPI('music', 'POST', {
+    operationId: newOperationId(),
+    supersedesId: currentId,
+    ...Object.fromEntries(keep.map(k => [k, old[k] ?? null])),
+    alternateTitles: old.alternateTitles || [],
+    mediaLinks: old.mediaLinks || []
+  });
 }
 
 /* The setlists are the hymns a service plan's items name, in running order. They belong to the plan. */
@@ -441,7 +592,7 @@ const setlistsOf = plans =>
     .map(p => ({
       id: p.id,
       name: p.title,
-      ar: p.title,
+      ar: p.titleAr,
       items: p.order.map(i => i.musicId).filter(Boolean),
       service: p.id
     }))
@@ -473,7 +624,25 @@ export async function load(parish, d) {
   const events = await loadEvents(parish);
   d.EVENTS = events;
   d.EVENT_DETAIL = Object.fromEntries(events.map(e => [e.id, eventDetail(e)]));
+  d.EVENT_TEMPLATES = (
+    (await pages(`parishes/${enc(parish.id)}/calendar/templates?size=100`).catch(allowed)) || []
+  ).map(toEventTemplate);
   const { plans, templates } = await loadPlans(parish, events);
+  // people on plans are accounts: their names come from the shared lookup
+  await loadNames(
+    parish.id,
+    plans.flatMap(p => [
+      p.coordinatorAccountId,
+      p.celebrantAccountId,
+      p.approvedBy,
+      ...p.order.map(i => i.assignedAccountId)
+    ])
+  );
+  for (const p of plans) {
+    p.celebrantName = nameOf(parish.id, p.celebrantAccountId);
+    p.coordinatorName = nameOf(parish.id, p.coordinatorAccountId);
+    for (const i of p.order) i.whoName = nameOf(parish.id, i.assignedAccountId);
+  }
   const [first, ...rest] = plans.filter(p => p.apiStatus !== 'Cancelled' || true);
   if (first) d.SERVICE = first;
   d.SERVICE_PLANS = rest;
@@ -492,7 +661,20 @@ const byId = list => new Map((list || []).map(x => [x.id, x]));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /* The fields of an event the API stores; everything else on the object is display. */
-const eventFields = e => [e.title, e.apiKind, e.d, e.t, e.to, e.tz, e.visibility, e.description || ''];
+const eventFields = e => [
+  e.title,
+  e.titleAr || '',
+  e.apiKind,
+  e.d,
+  e.t,
+  e.to,
+  e.tz,
+  e.visibility,
+  e.description || '',
+  e.descriptionAr || ''
+];
+/* An optional twin: trimmed, or null. One language is never filled from the other. */
+const twin = value => String(value ?? '').trim() || null;
 const AUDIENCE_OUT = { public: 'Public', parish: 'Parish', private: 'Private' };
 
 function eventBody(e, zone) {
@@ -500,12 +682,14 @@ function eventBody(e, zone) {
     endDate = e.endsOn && e.endsOn > e.d ? e.endsOn : e.d;
   return {
     title: String(e.title || '').trim(),
+    titleAr: twin(e.titleAr),
     kind: e.apiKind || 'ParishActivity',
     startsAt: zonedInstant(e.d, e.t, tz),
     endsAt: zonedInstant(endDate, e.to || e.t, tz),
     timeZone: tz,
     visibility: AUDIENCE_OUT[e.visibility] || 'Private',
-    description: (e.description ?? '').trim() || null
+    description: (e.description ?? '').trim() || null,
+    descriptionAr: twin(e.descriptionAr)
   };
 }
 
@@ -520,10 +704,15 @@ async function saveEvents(before, now) {
     if (!old) {
       const { repeat } = e;
       if (repeat?.count > 1) {
-        const { title, kind, startsAt, endsAt, timeZone, visibility, description } = eventBody(e, zone);
+        const { title, titleAr, kind, startsAt, endsAt, timeZone, visibility, description, descriptionAr } = eventBody(
+          e,
+          zone
+        );
         await parishAPI('calendar/series', 'POST', {
           operationId: newOperationId(),
           title,
+          titleAr,
+          descriptionAr,
           kind,
           startsAt,
           endsAt,
@@ -565,8 +754,23 @@ export function eventAction(event, action, reason) {
 /* A plan's order and header. Only drafts and returned plans can change; the API says so otherwise. */
 const planFields = p => [
   p.title,
+  p.titleAr || '',
+  p.language || '',
   p.planType,
-  p.order.map(i => [i.key, i.t, i.dur, i.note, i.role, i.required, i.audience, i.musicId, i.assignedAccountId])
+  p.celebrantAccountId || null,
+  p.order.map(i => [
+    i.key,
+    i.t,
+    i.ar || '',
+    i.dur,
+    i.note,
+    i.noteAr || '',
+    i.role,
+    i.required,
+    i.audience,
+    i.musicId,
+    i.assignedAccountId
+  ])
 ];
 /* New items have no key yet; one that no other item of the plan uses (set by itemsOf). */
 let usedKeys = new Set();
@@ -583,12 +787,14 @@ const itemsOf = order => {
 const itemBody = (i, n) => ({
   key: i.key || freshKey(n),
   title: String(i.t || '').trim(),
+  titleAr: twin(i.ar),
   minutes: Math.max(0, Math.min(1440, Number(i.dur) || 0)),
   fixedStart: i.fixedStart || null,
   responsibleRole: i.role || null,
   required: !!i.required,
   assignedAccountId: i.assignedAccountId || null,
   instructions: (i.note || '').trim() || null,
+  instructionsAr: twin(i.noteAr),
   instructionAudience: i.audience || 'Clergy',
   musicVersionId: i.musicId || null
 });
@@ -599,6 +805,8 @@ function planBody(p, version) {
     eventId: p.eventId || null,
     templateId: p.templateId && !p.order.length ? p.templateId : null,
     title: String(p.title || '').trim(),
+    titleAr: twin(p.titleAr),
+    language: twin(p.language),
     planType: p.planType || 'Liturgy',
     coordinatorAccountId: p.coordinatorAccountId || session.accountUser?.id,
     celebrantAccountId: p.celebrantAccountId || null,
@@ -616,6 +824,17 @@ export const planAction = (plan, action, reason) =>
 
 /* A plan's printable outputs by audience (clergy, team, everyone, ...), as the API serves them. */
 export const planOutput = (plan, audience) => parishAPI(`plans/${enc(plan.id)}/outputs/${enc(audience)}`);
+
+/* The accounts that may be chosen as a Liturgy's celebrant (the parish's current priests), with their names
+   from the shared lookup. Needs schedule management and the authenticator session. */
+export async function planCelebrants(parishId) {
+  const rows = (await parishAPI('plans/celebrants')) || [];
+  await loadNames(
+    parishId,
+    rows.map(r => r.accountId)
+  );
+  return rows.map(r => ({ accountId: r.accountId, name: nameOf(parishId, r.accountId) }));
+}
 
 async function savePlans(before, now) {
   const all = x => [x.SERVICE, ...(x.SERVICE_PLANS || [])].filter(p => p?.id),
@@ -641,7 +860,13 @@ async function savePlans(before, now) {
     const old = wasT.get(tpl.id),
       body = {
         ...planBody(
-          { ...tpl, title: tpl.name, order: tpl.order.map(i => ({ ...i, assignedAccountId: null, fixedStart: null })) },
+          {
+            ...tpl,
+            title: tpl.name,
+            titleAr: tpl.ar,
+            celebrantAccountId: null,
+            order: tpl.order.map(i => ({ ...i, assignedAccountId: null, fixedStart: null }))
+          },
           old?.version
         ),
         eventId: null
@@ -649,7 +874,12 @@ async function savePlans(before, now) {
     if (!old) {
       await parishAPI('plans', 'POST', body);
       saved = true;
-    } else if (!same([tpl.name, tpl.order], [old.name, old.order])) {
+    } else if (
+      !same(
+        [tpl.name, tpl.ar || '', tpl.language || '', tpl.order],
+        [old.name, old.ar || '', old.language || '', old.order]
+      )
+    ) {
       await parishAPI(`plans/${enc(tpl.id)}`, 'PUT', body);
       saved = true;
     }
@@ -662,8 +892,9 @@ async function savePlans(before, now) {
 const linksOf = h => [h.youtubeUrl, h.anghamiUrl, h.otherUrl].filter(Boolean);
 const hymnFields = (h, d) => [
   h.title,
-  h.ar,
+  h.ar || '',
   h.occasion,
+  h.occasionAr || '',
   h.part,
   h.key,
   h.lang,
@@ -683,7 +914,9 @@ function musicBody(h, d, supersedes) {
     operationId: newOperationId(),
     supersedesId: supersedes || null,
     title: String(h.title || '').trim(),
-    alternateTitles: [h.ar, ...(h.alternateTitles || []).filter(x => !ARABIC.test(x))]
+    titleAr: twin(h.ar),
+    // other titles are kept as they were; the Arabic title is its own field now
+    alternateTitles: (h.alternateTitles || [])
       .map(x => (x || '').trim())
       .filter(Boolean)
       .slice(0, 10),
@@ -694,6 +927,7 @@ function musicBody(h, d, supersedes) {
         .slice(0, 10),
     rite: h.rite || null,
     season: (h.occasion || '').trim() || null,
+    seasonAr: twin(h.occasionAr),
     composer: (d?.composer || '').trim() || null,
     musicalKey: (h.key || '').trim() || null,
     instrumentation: (d?.instrumentation || '').trim() || null,
@@ -747,11 +981,12 @@ export async function save(before, now, parish) {
   const parts = [];
   const changed = k => !same(before[k], now[k]);
   if (changed('EVENTS')) parts.push(await saveEvents(before, now, parish));
+  if (changed('EVENT_TEMPLATES')) parts.push(await saveEventTemplates(before, now));
   if (['SERVICE', 'SERVICE_PLANS', 'SERVICE_TEMPLATES'].some(changed)) parts.push(await savePlans(before, now, parish));
   if (changed('MUSIC') || changed('MUSIC_DETAIL')) parts.push(await saveMusic(before, now, parish));
   // these have no API route (see docs/frontend-modules/calendar.md)
   const unsupported =
-    ['EVENT_TEMPLATES', 'ROTA', 'SETLISTS', 'FEASTS'].some(changed) ||
+    ['ROTA', 'SETLISTS', 'FEASTS'].some(changed) ||
     (changed('EVENT_DETAIL') && !changed('EVENTS') && detailChangedBeyondDescription(before, now)) ||
     parts.some(p => p.unsupported);
   return { unsupported, saved: parts.some(p => p.saved) };

@@ -140,7 +140,8 @@ export function servicePlanNew(templateId = '') {
           id: 'new-' + Date.now().toString(36),
           eventId: event.id,
           title: name,
-          titleAr: name,
+          // the event's own Arabic title, only when the plan keeps the event's name
+          titleAr: name === event.title ? event.titleAr || null : null,
           date: event.d,
           time: event.t,
           planType: val(el, '#sp_type'),
@@ -303,6 +304,12 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
           id="st_name"
           value={source?.name || source?.title || ''}
         />{' '}
+        <C.Field
+          label={L('Arabic template name', 'اسم القالب بالعربية')}
+          id="st_name_ar"
+          ar={true}
+          value={(fromPlan ? source?.titleAr : source?.ar) || ''}
+        />{' '}
         <TemplateItems order={source?.order || []} />
       </>
     ),
@@ -336,23 +343,25 @@ export function serviceTemplateEdit(id = '', fromPlan = false) {
             key: kept?.key || '',
             dur: String(dur),
             t,
-            ar: '',
+            // the Arabic twins of an item that is kept stay as they were; new items start without them
+            ar: kept?.ar || null,
             role,
             note,
-            noteAr: '',
+            noteAr: kept && kept.note === note ? kept.noteAr || null : null,
             who: null,
             audience: kept?.audience || 'Clergy',
             required: !!kept?.required,
             musicId: kept?.musicId || null
           });
         }
-        const name = val(el, '#st_name');
-        if (source && !fromPlan) Object.assign(source, { name, ar: name, order });
+        const name = val(el, '#st_name'),
+          ar = val(el, '#st_name_ar') || null;
+        if (source && !fromPlan) Object.assign(source, { name, ar, order });
         else
           D.SERVICE_TEMPLATES.push({
             id: 'new-' + Date.now().toString(36),
             name,
-            ar: name,
+            ar,
             planType: 'Liturgy',
             status: 'draft',
             order
