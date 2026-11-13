@@ -49,6 +49,10 @@ Working handover for finishing the connection of `backend` to the existing Azure
 - **Session survives a restart:** with the signed-in cookie session kept open, `az webapp restart` was run, the app came back `Healthy`, and the *same* cookie's `GET /api/auth/me` immediately succeeded again (same PowerShell session, not a new sign-in). This is the full Data Protection round trip under real use, not just the key-ring write/unwrap probe from the first deploy.
 - Note for next time: a `.ps1` script's variables (including `-SessionVariable`) do not persist into the parent shell when run normally; dot-source it (`. script.ps1`) to keep `$session` usable for a follow-up check in the same window.
 
+## Closed out (13 November 2026)
+
+Cosmos and Storage firewalls both have **zero IP exceptions** now (`az cosmosdb update --ip-range-filter=""` — note the plain `""` form errors with "expected at least one argument" under this CLI/PowerShell combination; `"--ip-range-filter="` works). Only the `snet-app-parishlife` VNet rule remains on each, so only the app itself reaches them; any future maintenance from a laptop needs its current IP added again first (`Invoke-RestMethod https://api.ipify.org`, add to both, remove when done). Live app confirmed `Healthy` after the change. The Azure connection task is complete: deployed, bootstrapped, signed-in, restart-tested, firewalls locked back down, docs committed and pushed (`d1fadbd`).
+
 ## Owner commands for the three production changes (run in your own PowerShell after `az login`)
 
 ```powershell
