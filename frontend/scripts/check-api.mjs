@@ -201,11 +201,11 @@ assert.ok(D.ARCHIVED.some(p => p.id === 'a1'));
 
 // what the API cannot save yet is undone on screen and reported, never left looking saved
 const writes = sent.length;
-D.PEOPLE.find(p => p.id === 'a3').lat = 'Someone Else';
+D.PEOPLE.find(p => p.id === 'a3').tags = ['choir']; // tags have no API field (names now have an edit route)
 D.SACRAMENTS.push({ id: 's1', kind: 'baptism' });
 assert.equal(await persist(), false);
 assert.equal(sent.length, writes, 'nothing was sent for unsupported changes');
-assert.equal(D.PEOPLE.find(p => p.id === 'a3').lat, 'Maya Abou Jaoude');
+assert.deepEqual(D.PEOPLE.find(p => p.id === 'a3').tags, []);
 assert.equal(D.SACRAMENTS.length, 0);
 assert.equal(events.at(-1).detail, notConnected);
 

@@ -1,7 +1,9 @@
 /* Purpose: checks the People module (model/modules/people.js and people-workflows.js) against an in-memory
    stand-in for ParishLife.Api's People routes: what load fills (people, facts, households, duplicates),
    what save sends for each kind of change (and what it refuses), and the direct workflow calls
-   (consents, medical, relationships, duplicates and merges, search, export, the office queues).
+   (consents, medical, relationships, duplicates and merges, search, export, the office queues). It also
+   checks the parish-wide reads (facts, Directory consents, households with members), Arabic name twins,
+   rite and status, and the office edit of the core record (PUT people/{id}).
    Run with `npm run check` from frontend/. */
 import assert from 'node:assert/strict';
 import { json, mockApi, signedIn } from '../mock-api.mjs';
@@ -14,8 +16,12 @@ const people = [
     parishId: 'P',
     givenName: 'Georges',
     familyName: 'Haddad',
+    givenNameAr: 'جورج',
+    familyNameAr: 'حداد',
     birthDate: '1968-03-14',
     contact: '03 421 887',
+    rite: 'Maronite',
+    registerStatus: 'Member',
     archived: false
   },
   { id: B, parishId: 'P', givenName: 'Nada', familyName: 'Haddad', birthDate: null, contact: null, archived: false },
@@ -39,6 +45,7 @@ const facts = {
       region: 'Mount Lebanon',
       district: 'Baabda',
       town: 'Hadath',
+      townAr: 'الحدث',
       addressDetail: 'Behind the municipality',
       occupation: 'Accountant',
       skills: ['Driving'],
@@ -54,7 +61,10 @@ const households = {
     value: {
       id: H1,
       name: 'Haddad',
+      nameAr: 'حداد',
       address: 'Imm. Sfeir',
+      town: 'Hadath',
+      townAr: null,
       phone: null,
       contactPersonId: A,
       envelopeId: '0142',
@@ -102,10 +112,12 @@ let corrections = [
 ];
 let version = 100;
 const detailCalls = [];
+const reads = [];
 let denyHouseholds = false;
 
 const { sent, events } = mockApi(async (method, path, body, options) => {
   const m = re => path.match(re);
+  if (method === 'GET') reads.push(path);
   // people
   let x;
   if (path === 'parishes/P/people/duplicates')
@@ -152,6 +164,17 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
     });
   if (path === 'parishes/P/people/export' && method === 'POST')
     return new Response('GivenName\r\nGeorges\r\n', { status: 200, headers: { 'Content-Type': 'text/csv' } });
+  // the parish-wide reads
+  if (path === 'parishes/P/people/facts?size=100')
+    return json(200, {
+      items: Object.values(facts).map(f => ({ version: f.version, value: f.value })),
+      continuationToken: null
+    });
+  if (path === 'parishes/P/consents?kind=Directory&size=100')
+    return json(200, {
+      items: consents.filter(c => c.value.kind === 'Directory' && c.value.status === 'Given'),
+      continuationToken: null
+    });
   if ((x = m(/^parishes\/P\/people\?pageSize=100&?(?:continuation=(\w+))?$/)) && method === 'GET')
     return x[1]
       ? json(200, { items: people.slice(2), continuationToken: null })
@@ -163,11 +186,25 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
       archived: false,
       givenName: body.givenName,
       familyName: body.familyName,
+      givenNameAr: body.givenNameAr,
+      familyNameAr: body.familyNameAr,
       birthDate: body.birthDate,
-      contact: body.contact
+      contact: body.contact,
+      rite: body.rite,
+      registerStatus: body.registerStatus
     };
     people.push(p);
     return json(200, p);
+  }
+  if ((x = m(/^parishes\/P\/people\/([\w-]+)$/)) && method === 'PUT') {
+    const p = people.find(q => q.id === x[1]);
+    assert.equal(body.version, `v-${p.id}`, 'the office edit carries the current version');
+    assert.match(body.operationId, /^[0-9a-f-]{36}$/);
+    const core = { ...body };
+    delete core.operationId;
+    delete core.version;
+    Object.assign(p, core);
+    return json(200, { value: p, version: `v-${p.id}` });
   }
   if ((x = m(/^parishes\/P\/people\/([\w-]+)\/archive$/))) {
     const p = people.find(q => q.id === x[1]);
@@ -265,7 +302,7 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
     return json(403, { title: 'mfa_required', detail: 'Sign in with your authenticator.' });
   if ((x = m(/^parishes\/P\/households\?size=100(?:&cursor=(\w+))?$/)))
     return json(200, {
-      items: Object.values(households).map(h => ({ version: h.version, value: { ...h.value, members: [] } })),
+      items: Object.values(households).map(h => ({ version: h.version, value: h.value })),
       continuationToken: null
     });
   if (path === 'parishes/P/households' && method === 'POST') {
@@ -274,7 +311,10 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
       value: {
         id: uid(80 + Object.keys(households).length),
         name: body.name,
+        nameAr: body.nameAr,
         address: body.address,
+        town: body.town,
+        townAr: body.townAr,
         phone: body.phone,
         contactPersonId: null,
         envelopeId: body.envelopeId,
@@ -313,7 +353,15 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
     const h = households[x[1]];
     if (method === 'GET') return json(200, { version: h.version, value: h.value });
     assert.equal(body.version, h.version);
-    Object.assign(h.value, { name: body.name, address: body.address, phone: body.phone, envelopeId: body.envelopeId });
+    Object.assign(h.value, {
+      name: body.name,
+      nameAr: body.nameAr,
+      address: body.address,
+      town: body.town,
+      townAr: body.townAr,
+      phone: body.phone,
+      envelopeId: body.envelopeId
+    });
     h.version = `h${++version}`;
     return json(200, h.value);
   }
@@ -359,12 +407,27 @@ assert.deepEqual(
   D.ARCHIVED.map(p => p.id),
   [C]
 );
-assert.equal(fresh().town, '', 'facts are not read in bulk, so a person nobody opened has no town');
-assert.equal(D.PERSON_EXTRA[A], undefined);
 assert.deepEqual(
-  D.HOUSEHOLDS.map(h => [h.id, h.name, h.head, h.members, h.envelope, h.address]),
-  [[H1, 'Haddad', A, [A, B], '0142', 'Imm. Sfeir']]
+  [fresh().town, fresh().townAr, D.PERSON_EXTRA[A].address.town],
+  ['Hadath', 'الحدث', 'Hadath'],
+  'facts are read for the whole parish, so the list shows the town'
 );
+assert.deepEqual(
+  [fresh().lat, fresh().ar, fresh().rite, fresh().status],
+  ['Georges Haddad', 'جورج حداد', 'Maronite', 'member']
+);
+const nada = D.PEOPLE.find(p => p.id === B);
+assert.deepEqual(
+  [nada.ar, nada.arStored, nada.rite, nada.status],
+  ['Nada Haddad', '', '', ''],
+  'no Arabic name is invented'
+);
+assert.equal(D.PERSON_EXTRA[A].directory, false, 'the directory flag comes from the parish-wide consents');
+assert.deepEqual(
+  D.HOUSEHOLDS.map(h => [h.id, h.name, h.ar, h.town, h.head, h.members, h.envelope, h.address]),
+  [[H1, 'Haddad', 'حداد', 'Hadath', A, [A, B], '0142', 'Imm. Sfeir']]
+);
+assert.ok(!reads.some(p => /households\/[\w-]+$/.test(p)), 'the household list carries members, so none is read alone');
 assert.equal(fresh().hh, H1, "a person's household comes from the household's members");
 assert.equal(D.PEOPLE.find(p => p.id === D1).hh, null);
 assert.deepEqual(
@@ -375,9 +438,8 @@ assert.equal(D.DUPLICATES[0].score, undefined, 'no similarity score is invented'
 assert.equal(D.RATE.value, 0);
 
 // ---------- opening a person loads facts, consents, medical, relationships ----------
-assert.equal(await W.openPerson(A), true, 'the first open tells the caller to reload the lists');
+assert.equal(await W.openPerson(A), false, 'facts already came with the parish-wide read');
 assert.equal(W.detail(A).medical.value.bloodType, 'O+');
-assert.equal(await W.openPerson(A), false);
 await W.openPerson(B); // no facts, no medical (404), still fine
 assert.equal(W.detail(B).medical, null);
 await hydrate();
@@ -396,7 +458,7 @@ assert.deepEqual(
     skills: ['Driving'],
     lang: 'ar',
     blood: 'O+',
-    address: { governorate: 'Mount Lebanon', district: 'Baabda', town: 'Hadath', sector: '' },
+    address: { governorate: 'Mount Lebanon', district: 'Baabda', town: 'Hadath', townAr: 'الحدث', sector: '' },
     directory: false
   }
 );
@@ -438,15 +500,56 @@ assert.equal(body.version, undefined);
 assert.deepEqual([body.region, body.district, body.town, body.skills], ['Mount Lebanon', 'Baabda', 'Baabda', []]);
 assert.equal(D.PEOPLE.find(p => p.id === B).town, 'Baabda');
 
+// ---------- the office edit of the core record ----------
+fresh().lat = 'Georges Haddad Jr';
+fresh().born = '1970-01-01';
+fresh().phone = '03 999 000';
+fresh().status = 'visitor';
+assert.equal(await persist(), true);
+[method, path, body] = lastWrite();
+assert.equal(`${method} ${path}`, `PUT parishes/P/people/${A}`);
+assert.deepEqual(
+  [
+    body.givenName,
+    body.familyName,
+    body.givenNameAr,
+    body.familyNameAr,
+    body.birthDate,
+    body.contact,
+    body.rite,
+    body.registerStatus
+  ],
+  ['Georges', 'Haddad Jr', 'جورج', 'حداد', '1970-01-01', '03 999 000', 'Maronite', 'Visitor'],
+  'an untouched Arabic name keeps its stored parts'
+);
+assert.deepEqual([fresh().lat, fresh().born, fresh().status], ['Georges Haddad Jr', '1970-01-01', 'visitor']);
+// an Arabic name typed for someone who had none is sent as typed; the Latin one is never copied into it
+Object.assign(
+  D.PEOPLE.find(p => p.id === B),
+  { ar: 'ندى حداد', rite: 'Melkite' }
+);
+assert.equal(await persist(), true);
+[method, path, body] = lastWrite();
+assert.deepEqual(
+  [path, body.givenName, body.familyName, body.givenNameAr, body.familyNameAr, body.rite, body.registerStatus],
+  [`parishes/P/people/${B}`, 'Nada', 'Haddad', 'ندى', 'حداد', 'Melkite', null]
+);
+// clearing a stored Arabic name sends it as not recorded; the screen falls back to the Latin name
+D.PEOPLE.find(p => p.id === B).ar = '';
+assert.equal(await persist(), true);
+assert.deepEqual([lastWrite()[2].givenNameAr, lastWrite()[2].familyNameAr], [null, null]);
+assert.equal(D.PEOPLE.find(p => p.id === B).ar, 'Nada Haddad');
+
 // ---------- what has no route is undone and reported, nothing is sent ----------
 let writes = sent.length;
-fresh().lat = 'Someone Else';
-assert.equal(await persist(), false);
+fresh().status = 'clergy';
+assert.equal(await persist(), false, 'a clergy status comes from appointments, not the person record');
+assert.equal(fresh().status, 'visitor');
+fresh().lat = 'Georges';
+assert.equal(await persist(), false, 'the API needs a given and a family name');
+fresh().tags = ['choir'];
+assert.equal(await persist(), false, 'tags have no API field');
 assert.equal(sent.length, writes);
-assert.equal(fresh().lat, 'Georges Haddad');
-fresh().born = '1970-01-01';
-assert.equal(await persist(), false);
-assert.equal(fresh().born, '1968-03-14', 'the birth date has no update route');
 D.PERSON_EXTRA[A].blood = 'A+';
 assert.equal(await persist(), false);
 D.PEOPLE.splice(
@@ -483,11 +586,15 @@ assert.deepEqual(
   [post[2].givenName, post[2].familyName, post[2].birthDate, post[2].contact],
   ['Maya', 'Abou Jaoude', '1990-05-01', '76 220 415']
 );
+assert.deepEqual(
+  [post[2].givenNameAr, post[2].familyNameAr, post[2].rite, post[2].registerStatus],
+  ['مايا', 'أبو جودة', 'Maronite', 'Member']
+);
 const maya = people.find(p => p.givenName === 'Maya');
 [method, path, body] = sent.find(([mth, p]) => mth === 'PUT' && p === `parishes/P/people/${maya.id}/facts`);
 assert.deepEqual([body.occupation, body.town, body.preferredLanguage], ['Nurse', 'Hadath', 'fr']);
 assert.ok(D.PEOPLE.some(p => p.id === maya.id && p.town === 'Hadath'));
-assert.match(events.at(-1).detail, /Arabic name.*rite.*status|rite.*Arabic/s, 'what could not be kept is named');
+assert.equal(events.length, 0, 'the Arabic name, rite and status are all kept, so nothing is reported');
 const { createdId } = await import('../../src/portal/model/modules/people.js');
 assert.equal(createdId('draft'), maya.id);
 
@@ -509,7 +616,11 @@ D.HOUSEHOLDS[0].address = 'Imm. Sfeir, 3rd floor';
 assert.equal(await persist(), true);
 [method, path, body] = lastWrite();
 assert.equal(`${method} ${path}`, `PUT parishes/P/households/${H1}`);
-assert.deepEqual([body.name, body.envelopeId, body.address], ['Haddad', '0150', 'Imm. Sfeir, 3rd floor']);
+assert.deepEqual(
+  [body.name, body.nameAr, body.envelopeId, body.address, body.town, body.townAr],
+  ['Haddad', 'حداد', '0150', 'Imm. Sfeir, 3rd floor', 'Hadath', null],
+  'the Arabic name is kept; the Latin town is not copied into the Arabic one'
+);
 
 D.HOUSEHOLDS.unshift({
   id: 'hnew',
@@ -529,7 +640,9 @@ assert.equal(await persist(), true);
 const newHousehold = Object.values(households).find(h => h.value.name === 'Karam').value;
 assert.deepEqual(newHousehold.members.map(q => q.personId).sort(), [D1, maya.id].sort());
 assert.equal(newHousehold.contactPersonId, D1, 'the head becomes the household contact');
-assert.match(events.at(-1).detail, /Arabic household name/);
+const karam = sent.find(([mth, p, bd]) => mth === 'POST' && p === 'parishes/P/households' && bd.name === 'Karam')[2];
+assert.deepEqual([karam.nameAr, karam.town, karam.townAr], ['كرم', 'Hadath', null]);
+assert.equal(events.length, 0, 'the household Arabic name and town are kept');
 assert.equal(D.PEOPLE.find(p => p.id === D1).hh, newHousehold.id);
 
 // move a member: leave first, then join
@@ -577,7 +690,19 @@ await hydrate();
 assert.equal(D.PERSON_EXTRA[A].directory, true, 'the directory flag comes from a given Directory consent');
 await W.withdrawConsent(W.detail(A).consents[0], 'Asked to be removed');
 assert.equal(sent.at(-1)[2].version, W.detail(A).consents[0].version);
-assert.equal((await W.consentsOf([A, B])).get(A).length, 2);
+await W.recordConsent(B, {
+  kind: 'Directory',
+  purpose: 'Printed directory',
+  policyVersion: '2026-1',
+  fields: ['Name'],
+  givenBy: 'Nada Haddad'
+});
+const listed = await W.directoryConsents();
+assert.deepEqual(
+  [listed.has(A), [...listed.get(B)]],
+  [false, ['Name']],
+  'only given Directory consents, with their fields'
+);
 await W.saveMedical(A, { bloodType: 'O+', allergies: 'Penicillin', purpose: 'Camp safety' });
 assert.deepEqual([sent.at(-1)[2].version, sent.at(-1)[2].purpose], ['md1', 'Camp safety']);
 await W.addRelationship(A, { relatedPersonId: B, kind: 'Spouse' });

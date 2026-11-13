@@ -192,8 +192,8 @@ export function wireImport(host) {
         born: r.born || '',
         town: r.town || '',
         townAr: '',
-        rite: r.rite || 'Maronite',
-        status: 'member',
+        rite: r.rite || '',
+        status: '',
         hh: null,
         tags: []
       });
