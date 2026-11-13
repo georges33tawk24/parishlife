@@ -1,5 +1,5 @@
 // Purpose: manages service/activity plans linked to calendar events, reusable templates, review/approval and audience-specific outputs.
-// Main functions: SaveAsync, ActAsync, GetAsync, ListAsync, OutputAsync; helpers compute the running-order timeline and blocking issues
+// Main functions: SaveAsync, ActAsync, GetAsync, ListAsync, OutputAsync, CelebrantsAsync; helpers compute the running-order timeline and blocking issues
 // (overtime, fixed-start conflicts, unassigned required roles, missing celebrant) and project safe DTOs.
 // A plan is the operational running order of an event; it never changes the event's booked times or resources.
 
@@ -60,6 +60,9 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         var item = old?.Value ?? new ServicePlan { Id = op.Id, ParishId = parish, Kind = kind, CreatedBy = actor.AccountId, CreatedAt = op.At };
         item.EventId = occurrence?.Id;
         item.Title = Guard.Text(request.Title, "Title", 300);
+        // Arabic twins are stored as typed; one language is never filled from the other.
+        item.TitleAr = Optional(request.TitleAr, "Arabic title", 300);
+        item.Language = Optional(request.Language, "Language", 10);
         item.PlanType = request.PlanType is "Liturgy" or "Activity" ? request.PlanType : throw new DomainException("invalid_input", "Use Liturgy or Activity.");
         item.CoordinatorAccountId = coordinator;
         // People are event-specific: templates never carry a celebrant or assignees.
@@ -179,15 +182,17 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
             var printable = music is { Status: not "Withdrawn", PrintAllowed: true };
             output.Add(new PlanOutputItemDto
             {
-                Title = entry.Title, StartsAt = start, EndsAt = end, ResponsibleRole = entry.ResponsibleRole,
+                Title = entry.Title, TitleAr = entry.TitleAr, StartsAt = start, EndsAt = end, ResponsibleRole = entry.ResponsibleRole,
                 AssignedAccountId = audience is "clergy" or "team" ? entry.AssignedAccountId : null,
                 Instructions = visible ? entry.Instructions : null,
+                InstructionsAr = visible ? entry.InstructionsAr : null,
                 MusicTitle = music?.Status == "Withdrawn" ? null : music?.Title,
+                MusicTitleAr = music?.Status == "Withdrawn" ? null : music?.TitleAr,
                 MusicText = audience == "musicians" && printable ? string.Join("\n\n", new[] { music!.Lyrics, music.Chords }.Where(x => x is not null)) : null,
                 Attribution = printable ? music!.Attribution : null
             });
         }
-        return new PlanOutputDto { PlanId = item.Id, Audience = audience, Title = item.Title, Items = [.. output] };
+        return new PlanOutputDto { PlanId = item.Id, Audience = audience, Title = item.Title, TitleAr = item.TitleAr, Items = [.. output] };
     }
 
     private async Task<ServicePlanItem[]> ItemsAsync(PlanItemDto[]? input, string kind, CancellationToken ct)
@@ -210,11 +215,13 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
             }
             result.Add(new ServicePlanItem
             {
-                Key = Guard.Text(entry.Key, "Item key", 40), Title = Guard.Text(entry.Title, "Item title", 300), Minutes = entry.Minutes,
+                Key = Guard.Text(entry.Key, "Item key", 40), Title = Guard.Text(entry.Title, "Item title", 300),
+                TitleAr = Optional(entry.TitleAr, "Arabic item title", 300), Minutes = entry.Minutes,
                 FixedStart = entry.FixedStart is { } fixedStart ? Guard.Utc(fixedStart) : null,
                 ResponsibleRole = string.IsNullOrWhiteSpace(entry.ResponsibleRole) ? null : Guard.Text(entry.ResponsibleRole, "Role", 100),
                 Required = entry.Required, AssignedAccountId = assigned,
                 Instructions = string.IsNullOrWhiteSpace(entry.Instructions) ? null : Guard.Text(entry.Instructions, "Instructions", 2000),
+                InstructionsAr = Optional(entry.InstructionsAr, "Arabic instructions", 2000),
                 InstructionAudience = entry.InstructionAudience, MusicVersionId = entry.MusicVersionId is { } music ? Guard.Id(music) : null
             });
         }
@@ -229,8 +236,8 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         // Structure, durations, instructions and music references are copied; people and times are reviewed per event.
         return source.Items.Select(x => new ServicePlanItem
         {
-            Key = x.Key, Title = x.Title, Minutes = x.Minutes, ResponsibleRole = x.ResponsibleRole, Required = x.Required,
-            Instructions = x.Instructions, InstructionAudience = x.InstructionAudience, MusicVersionId = x.MusicVersionId
+            Key = x.Key, Title = x.Title, TitleAr = x.TitleAr, Minutes = x.Minutes, ResponsibleRole = x.ResponsibleRole, Required = x.Required,
+            Instructions = x.Instructions, InstructionsAr = x.InstructionsAr, InstructionAudience = x.InstructionAudience, MusicVersionId = x.MusicVersionId
         }).ToArray();
     }
 
@@ -283,6 +290,30 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         }
     }
 
+    // The accounts that could be chosen as a Liturgy's celebrant: current priests of this parish, each re-checked through the same
+    // clergy authority the approval uses, so ended, denied or unverified appointments never appear. Names come from the account-names lookup.
+    public async Task<IReadOnlyList<PlanCelebrantDto>> CelebrantsAsync(string parish, CancellationToken ct)
+    {
+        await AuthorizeAsync(parish, Permissions.ScheduleManage, ct);
+        var now = clock.GetUtcNow();
+        var rows = await records.CollectAsync<StaffAppointment>(Scope(parish), "staffAppointment", ct, 500);
+        var result = new List<PlanCelebrantDto>();
+        foreach (var account in rows.Select(row => row.Value)
+            .Where(value => value.ParishId == parish && value.Role == StaffAppointmentRole.Priest && value.IsEffective(now))
+            .Select(value => value.AccountId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            try
+            {
+                await clergy.RequireAsync(parish, account, "Priest", ct);
+                result.Add(new PlanCelebrantDto { AccountId = account });
+            }
+            catch (DomainException) { }
+        }
+        return result;
+    }
+
+    private static string? Optional(string? value, string field, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, field, max);
+
     private async Task<Versioned<ServicePlan>> ReadAsync(string parish, string id, CancellationToken ct)
     {
         var row = await records.ReadAsync<ServicePlan>(Scope(parish), Key(id), ct) ?? throw Missing();
@@ -298,12 +329,12 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
             : [];
         return new ServicePlanDto
         {
-            Id = item.Id, Kind = item.Kind, EventId = item.EventId, Title = item.Title, PlanType = item.PlanType,
+            Id = item.Id, Kind = item.Kind, EventId = item.EventId, Title = item.Title, TitleAr = item.TitleAr, Language = item.Language, PlanType = item.PlanType,
             CoordinatorAccountId = item.CoordinatorAccountId, CelebrantAccountId = item.CelebrantAccountId, Status = item.Status,
             Items = item.Items.Select(x => new PlanItemDto
             {
-                Key = x.Key, Title = x.Title, Minutes = x.Minutes, FixedStart = x.FixedStart, ResponsibleRole = x.ResponsibleRole, Required = x.Required,
-                AssignedAccountId = x.AssignedAccountId is null ? null : Guid.Parse(x.AssignedAccountId), Instructions = x.Instructions,
+                Key = x.Key, Title = x.Title, TitleAr = x.TitleAr, Minutes = x.Minutes, FixedStart = x.FixedStart, ResponsibleRole = x.ResponsibleRole, Required = x.Required,
+                AssignedAccountId = x.AssignedAccountId is null ? null : Guid.Parse(x.AssignedAccountId), Instructions = x.Instructions, InstructionsAr = x.InstructionsAr,
                 InstructionAudience = x.InstructionAudience, MusicVersionId = x.MusicVersionId is null ? null : Guid.Parse(x.MusicVersionId),
                 StartsAt = times.TryGetValue(x.Key, out var at) ? at.Start : null, EndsAt = times.TryGetValue(x.Key, out var until) ? until.End : null
             }).ToArray(),

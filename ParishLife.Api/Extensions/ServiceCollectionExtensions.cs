@@ -148,6 +148,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RegistrationService>();
         services.AddScoped<ReservationMeetingAccess>();
         services.AddScoped<CalendarService>();
+        services.AddScoped<EventTemplateService>();
         services.AddScoped<ScheduleService>();
         services.AddScoped<RentalService>();
         services.AddScoped<WebsiteService>();

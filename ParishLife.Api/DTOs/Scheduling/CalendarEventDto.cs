@@ -1,5 +1,5 @@
 // Purpose: returns an authorized calendar occurrence or a redacted busy interval.
-// Main members: Id, ParishId, Title, Kind, StartsAt, EndsAt, TimeZone and related workflow values.
+// Main members: Id, ParishId, Title, Kind, StartsAt, EndsAt, TimeZone and related workflow values; optional Arabic twins TitleAr and DescriptionAr.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -12,6 +12,8 @@ public class CalendarEventDto
     public string ParishId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 
@@ -34,4 +36,6 @@ public class CalendarEventDto
     public string? SeriesId { get; set; }
 
     public string? Description { get; set; }
+
+    public string? DescriptionAr { get; set; } = null;
 }

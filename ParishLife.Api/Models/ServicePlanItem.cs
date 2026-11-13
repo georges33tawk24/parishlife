@@ -1,5 +1,5 @@
 // Purpose: represents one running-order item of a service plan or template.
-// Main members: Key, Title, Minutes, FixedStart, ResponsibleRole, Required, AssignedAccountId, Instructions, InstructionAudience and MusicVersionId.
+// Main members: Key, Title, Minutes, FixedStart, ResponsibleRole, Required, AssignedAccountId, Instructions, InstructionAudience and MusicVersionId; optional Arabic twins TitleAr and InstructionsAr.
 
 namespace ParishLife.Api.Models;
 
@@ -8,6 +8,8 @@ public class ServicePlanItem
     public string Key { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public int Minutes { get; set; }
 
@@ -22,6 +24,8 @@ public class ServicePlanItem
     public string? AssignedAccountId { get; set; } = null;
 
     public string? Instructions { get; set; } = null;
+
+    public string? InstructionsAr { get; set; } = null;
 
     // Clergy, Team or Everyone; outputs include instructions only for their audience.
     public string InstructionAudience { get; set; } = "Clergy";

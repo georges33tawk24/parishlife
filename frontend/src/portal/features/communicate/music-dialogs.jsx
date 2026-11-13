@@ -1,10 +1,10 @@
 /* Music dialogs: playing a recording, setlists, sheet music, and editing a hymn's text. */
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { me } from '../../model/store.js';
 import { Icon, toast, openDrawer, openModal, closeOverlays } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
-import { persist } from '../../model/persist.js';
+import { hydrate, persist } from '../../model/persist.js';
+import { restoreMusicVersion } from '../../model/modules/calendar.js';
 import { ok, refresh, val } from '../../shared/dialog-helpers.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -225,20 +225,18 @@ export function hymnText(mid, what) {
   });
 }
 
-/** Restoring an old version adds it as the new current one, so the history is never rewritten. */
-export function hymnRestore(mid, i) {
+/** Restoring an old version publishes its content again as a new revision of the current version, so the
+    history is never rewritten. The hymn's id changes to the new version's. */
+export async function hymnRestore(mid, i) {
   const d = D.musicInfo(D.MUSIC.find(m => m.id === mid) || { id: mid }),
     v = d.versions[+i];
   if (!v) return;
-  d.versions.unshift([`Restored — ${v[0]}`, `استرجاع — ${v[1]}`, D.TODAY.toISOString().slice(0, 10), me()?.id || v[3]]);
-  refresh();
-  ok(L('Version restored', 'استُرجع الإصدار'), L(v[0], v[1]), {
-    action: {
-      label: L('Undo', 'تراجع'),
-      fn: () => {
-        d.versions.shift();
-        refresh();
-      }
-    }
-  });
+  try {
+    await restoreMusicVersion(mid, v[4]);
+    await hydrate();
+    refresh();
+    ok(L('Version restored', 'استُرجع الإصدار'), L(v[0], v[1]));
+  } catch (error) {
+    toast(L('That did not work', 'لم تنجح العملية'), error.message, 'warning');
+  }
 }

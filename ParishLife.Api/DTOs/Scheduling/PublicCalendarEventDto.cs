@@ -1,5 +1,5 @@
 // Purpose: returns only explicitly published public occurrence fields without account or private source identifiers.
-// Main members: Status, Id, ParishId, Title, Kind, StartsAt, EndsAt and safe public description/time-zone values.
+// Main members: Status, Id, ParishId, Title, Kind, StartsAt, EndsAt and safe public description/time-zone values; optional Arabic twins TitleAr and DescriptionAr.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -13,6 +13,8 @@ public class PublicCalendarEventDto
 
     public string Title { get; set; } = string.Empty;
 
+    public string? TitleAr { get; set; } = null;
+
     public string Kind { get; set; } = string.Empty;
 
     public DateTimeOffset StartsAt { get; set; }
@@ -22,4 +24,6 @@ public class PublicCalendarEventDto
     public string TimeZone { get; set; } = string.Empty;
 
     public string? Description { get; set; }
+
+    public string? DescriptionAr { get; set; } = null;
 }

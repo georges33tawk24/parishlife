@@ -1,5 +1,5 @@
 // Purpose: creates or edits a service plan (with EventId) or template (without), optionally copying a template.
-// Main members: OperationId, Version, EventId, TemplateId, Title, PlanType, CoordinatorAccountId, CelebrantAccountId and Items.
+// Main members: OperationId, Version, EventId, TemplateId, Title, PlanType, CoordinatorAccountId, CelebrantAccountId and Items; optional TitleAr (Arabic twin) and Language.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -23,6 +23,12 @@ public class SavePlanDto
     [Required]
     [StringLength(300)]
     public string Title { get; set; } = string.Empty;
+
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
+
+    [StringLength(10)]
+    public string? Language { get; set; } = null;
 
     [Required]
     [RegularExpression("^(Liturgy|Activity)$")]

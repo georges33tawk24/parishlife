@@ -40,6 +40,7 @@ const events = [
       id: 'e1',
       parishId: 'P',
       title: 'Sunday Mass',
+      titleAr: 'قداس الأحد',
       kind: 'ParishActivity',
       startsAt: iso(mass),
       endsAt: iso(new Date(+mass + 3600000)),
@@ -48,7 +49,8 @@ const events = [
       status: 'Confirmed',
       published: true,
       redacted: false,
-      description: 'Arabic and Syriac'
+      description: 'Arabic and Syriac',
+      descriptionAr: 'بالعربية والسريانية'
     },
     version: 'v-e1'
   },
@@ -90,18 +92,22 @@ const plan = {
   kind: 'Plan',
   eventId: 'e1',
   title: 'Sunday Mass plan',
+  titleAr: 'خطة قداس الأحد',
+  language: 'ar',
   planType: 'Liturgy',
   coordinatorAccountId: 'acct-1',
-  celebrantAccountId: null,
+  celebrantAccountId: 'acct-2',
   status: 'Draft',
   issues: ['CelebrantRequired'],
   items: [
     {
       key: 'entrance',
       title: 'Entrance hymn',
+      titleAr: 'ترنيمة الدخول',
       minutes: 5,
       startsAt: iso(mass),
       instructions: 'Organ only',
+      instructionsAr: 'الأرغن فقط',
       instructionAudience: 'Team',
       required: true,
       musicVersionId: 'm1'
@@ -120,6 +126,7 @@ const template = {
   kind: 'Template',
   eventId: null,
   title: 'Wedding',
+  titleAr: 'إكليل',
   planType: 'Liturgy',
   coordinatorAccountId: 'acct-1',
   status: 'Approved',
@@ -144,7 +151,56 @@ const music = [
     printAllowed: true,
     projectionAllowed: true,
     downloadAllowed: false,
-    status: 'Active'
+    status: 'Active',
+    supersedesId: 'm0',
+    createdBy: 'acct-1',
+    createdAt: iso(day(-2))
+  },
+  // the earlier version of the same work: in the history, not in the library
+  {
+    id: 'm0',
+    workId: 'w1',
+    title: 'Qadishat',
+    titleAr: 'قديشات',
+    alternateTitles: [],
+    language: 'syr',
+    rightsBasis: 'Public domain',
+    lyrics: 'old',
+    mediaLinks: [],
+    status: 'Superseded',
+    createdBy: 'acct-2',
+    createdAt: iso(day(-30))
+  },
+  {
+    id: 'm2',
+    workId: 'w2',
+    title: 'Ya Oum Allah',
+    titleAr: 'يا أمّ الله',
+    alternateTitles: [],
+    language: 'ar',
+    season: 'Marian',
+    seasonAr: 'مريمي',
+    rightsBasis: 'Composer permission',
+    mediaLinks: [],
+    status: 'Active',
+    createdBy: 'acct-1',
+    createdAt: iso(day(-1))
+  }
+];
+const eventTemplates = [
+  {
+    value: {
+      id: 'et1',
+      name: 'Youth night',
+      nameAr: 'سهرة الشبيبة',
+      kind: 'ParishActivity',
+      visibility: 'Parish',
+      startTime: '19:00',
+      durationMinutes: 120,
+      description: 'Games',
+      status: 'Active'
+    },
+    version: 'v-et1'
   }
 ];
 
@@ -166,6 +222,7 @@ const liturgical = lang => ({
 });
 
 let denyMusic = false;
+const NAMES = { 'acct-1': 'Test Account', 'acct-2': 'Fr. Test Priest' };
 const { sent } = mockApi((method, path, body) => {
   const [route, query = ''] = path.split('?');
   const q = new URLSearchParams(query);
@@ -183,6 +240,21 @@ const { sent } = mockApi((method, path, body) => {
   if (/^parishes\/P\/calendar\/events\/\w+$/.test(route) && method === 'PUT') return json(200, body);
   if (route === 'parishes/P/calendar/series') return json(200, []);
   if (/^parishes\/P\/calendar\/events\/\w+\/actions$/.test(route)) return json(200, {});
+  if (route === 'parishes/P/account-names')
+    return json(
+      200,
+      q
+        .get('ids')
+        .split(',')
+        .filter(id => NAMES[id])
+        .map(id => ({ accountId: id, displayName: NAMES[id] }))
+    );
+  if (route === 'parishes/P/calendar/templates' && method === 'GET')
+    return json(200, { items: eventTemplates, continuationToken: null });
+  if (route === 'parishes/P/calendar/templates') return json(200, { value: { ...body, id: 'et9' }, version: 'v-et9' });
+  if (/^parishes\/P\/calendar\/templates\/[\w-]+(\/actions)?$/.test(route))
+    return json(200, { value: body, version: 'v2' });
+  if (route === 'parishes/P/plans/celebrants') return json(200, [{ accountId: 'acct-2' }]);
   if (route === 'public/parishes/P/liturgical-calendar') return json(200, liturgical(q.get('lang')));
   if (route === 'parishes/P/plans' && method === 'GET')
     return json(200, {
@@ -203,7 +275,12 @@ const { sent } = mockApi((method, path, body) => {
           title: 'mfa_required',
           detail: 'Sign in with your authenticator before performing this action.'
         })
-      : json(200, { items: Number(q.get('offset')) ? [] : music, continuationToken: null });
+      : json(200, {
+          items: Number(q.get('offset'))
+            ? []
+            : music.filter(m => q.get('includeInactive') === 'true' || m.status === 'Active'),
+          continuationToken: null
+        });
   if (route === 'parishes/P/music') return json(200, {});
   if (route === 'parishes/P/music/m1') return json(200, { value: music[0], version: 'v-m1' });
   if (route === 'parishes/P/music/m1/withdraw') return json(200, {});
@@ -250,7 +327,16 @@ assert.deepEqual(
 );
 assert.equal(D.EVENTS[0].venue, null, 'the API has no room for an event');
 assert.equal(D.EVENT_DETAIL.e1.desc, 'Arabic and Syriac');
-assert.deepEqual(D.EVENT_TEMPLATES, [], 'event templates have no API route');
+assert.deepEqual(
+  [D.EVENTS[0].titleAr, D.EVENTS[0].descriptionAr, D.EVENT_DETAIL.e1.descAr],
+  ['قداس الأحد', 'بالعربية والسريانية', 'بالعربية والسريانية'],
+  'the Arabic twins come from the API'
+);
+assert.equal(D.EVENTS[1].titleAr, null, 'no Arabic title: null, so the screens show the English one; never a copy');
+assert.deepEqual(
+  D.EVENT_TEMPLATES.map(x => [x.id, x.name, x.nameAr, x.apiKind, x.visibility, x.startTime, x.duration, x.version]),
+  [['et1', 'Youth night', 'سهرة الشبيبة', 'ParishActivity', 'parish', '19:00', 120, 'v-et1']]
+);
 assert.deepEqual(D.ROTA, { date: '', service: '', serviceAr: '', teams: [] }, 'the rota has no API route');
 assert.deepEqual(D.FEASTS[ymd(day(4))], ['Our Lady of the Rosary', 'سيدة الورديّة']);
 assert.deepEqual(
@@ -268,13 +354,37 @@ assert.deepEqual(
 );
 assert.equal(D.SERVICE.celebrant, null, 'an account is not a person; no celebrant is invented');
 assert.deepEqual(
+  [D.SERVICE.titleAr, D.SERVICE.language, D.SERVICE.order[0].ar, D.SERVICE.order[0].noteAr, D.SERVICE.order[1].ar],
+  ['خطة قداس الأحد', 'ar', 'ترنيمة الدخول', 'الأرغن فقط', null]
+);
+assert.deepEqual(
+  [D.SERVICE.celebrantName, D.SERVICE.coordinatorName],
+  ['Fr. Test Priest', 'Test Account'],
+  'names of plan accounts come from the account-names lookup'
+);
+assert.deepEqual(
   D.SERVICE_TEMPLATES.map(t => [t.id, t.name, t.order.length]),
   [['tp1', 'Wedding', 1]]
 );
+assert.equal(D.SERVICE_TEMPLATES[0].ar, 'إكليل');
 assert.deepEqual(
   D.SETLISTS.map(s => [s.id, s.items]),
   [['pl1', ['m1']]]
 );
+assert.deepEqual(
+  D.MUSIC.map(m => m.id),
+  ['m1', 'm2'],
+  'the library lists active versions only'
+);
+assert.deepEqual(
+  D.MUSIC_DETAIL.m1.versions.map(v => [v[0], v[2], v[3], v[4], v[5]]),
+  [
+    ['Qadishat Aloho', ymd(day(-2)), 'acct-1', 'm1', 'Active'],
+    ['Qadishat', ymd(day(-30)), 'acct-2', 'm0', 'Superseded']
+  ],
+  "a hymn's history is every version of its work, newest first"
+);
+assert.deepEqual([D.MUSIC[1].ar, D.MUSIC[1].occasionAr], ['يا أمّ الله', 'مريمي']);
 const hymn = D.MUSIC[0];
 assert.deepEqual(
   [hymn.title, hymn.ar, hymn.occasion, hymn.part, hymn.key, hymn.lang, hymn.youtubeUrl, hymn.otherUrl, hymn.rights],
@@ -313,6 +423,7 @@ D.EVENTS.push({
   to: '21:00',
   tz: zone,
   visibility: 'parish',
+  titleAr: ' سهرة الشبيبة ',
   description: 'Bring a friend'
 });
 assert.equal(await persist(), true);
@@ -323,6 +434,7 @@ assert.deepEqual(
   [body.title, body.kind, body.timeZone, body.visibility, body.description],
   ['Youth night', 'ParishActivity', zone, 'Parish', 'Bring a friend']
 );
+assert.deepEqual([body.titleAr, body.descriptionAr], ['سهرة الشبيبة', null], 'twins trimmed; none is never a copy');
 assert.equal(body.startsAt, M.zonedInstant(when, '19:00', zone));
 assert.equal(body.endsAt, M.zonedInstant(when, '21:00', zone));
 assert.ok(!D.EVENTS.some(e => e.id === 'draft'), 'the screen shows what the API stored');
@@ -338,12 +450,13 @@ D.EVENTS.push({
   to: '20:00',
   tz: zone,
   visibility: 'public',
+  titleAr: 'الجوقة',
   repeat: { count: 4, intervalDays: 7 }
 });
 assert.equal(await persist(), true);
 [method, path, body] = sent.at(-1);
 assert.equal(`${method} ${path}`, 'POST parishes/P/calendar/series');
-assert.deepEqual([body.count, body.intervalDays, body.visibility], [4, 7, 'Public']);
+assert.deepEqual([body.count, body.intervalDays, body.visibility, body.titleAr], [4, 7, 'Public', 'الجوقة']);
 
 // ---- editing a draft sends its version; the lifecycle goes through the action route
 D.EVENTS.find(e => e.id === 'e2').title = 'Parish lunch (moved)';
@@ -371,9 +484,36 @@ assert.ok(
   D.EVENTS.some(e => e.id === 'e2'),
   'a removed event comes back: events are cancelled, not deleted'
 );
-D.EVENT_TEMPLATES.push({ id: 'et', name: 'x' });
-assert.equal(await persist(), false);
-assert.equal(D.EVENT_TEMPLATES.length, 0);
+// ---- event templates: created, edited with their version, archived when removed
+D.EVENT_TEMPLATES.push({
+  id: 'tpl-new',
+  name: 'Choir practice',
+  nameAr: 'تمرين الجوقة',
+  apiKind: 'ParishActivity',
+  visibility: 'public',
+  startTime: '18:00',
+  duration: 90,
+  description: ''
+});
+assert.equal(await persist(), true);
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'POST parishes/P/calendar/templates');
+assert.deepEqual(
+  [body.name, body.nameAr, body.kind, body.visibility, body.startTime, body.durationMinutes, body.description],
+  ['Choir practice', 'تمرين الجوقة', 'ParishActivity', 'Public', '18:00', 90, null]
+);
+assert.match(body.operationId, /^[0-9a-f-]{36}$/);
+D.EVENT_TEMPLATES[0].nameAr = '';
+D.EVENT_TEMPLATES[0].apiKind = 'Appointment';
+assert.equal(await persist(), true);
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'PUT parishes/P/calendar/templates/et1');
+assert.deepEqual([body.version, body.nameAr, body.visibility], ['v-et1', null, 'Private'], 'appointments stay private');
+D.EVENT_TEMPLATES.splice(0, 1);
+assert.equal(await persist(), true);
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'POST parishes/P/calendar/templates/et1/actions');
+assert.deepEqual([body.action, body.version], ['archive', 'v-et1']);
 
 // ---- a plan: its items go with its version
 const planNow = D.SERVICE;
@@ -383,6 +523,17 @@ assert.equal(await persist(), true);
 assert.equal(`${method} ${path}`, 'PUT parishes/P/plans/pl1');
 assert.equal(body.version, 'v-pl1');
 assert.equal(body.coordinatorAccountId, 'acct-1');
+assert.deepEqual(
+  [
+    body.titleAr,
+    body.language,
+    body.celebrantAccountId,
+    body.items[0].titleAr,
+    body.items[0].instructionsAr,
+    body.items[2].titleAr
+  ],
+  ['خطة قداس الأحد', 'ar', 'acct-2', 'ترنيمة الدخول', 'الأرغن فقط', null]
+);
 assert.deepEqual(
   body.items.map(i => [i.key, i.title, i.minutes, i.instructionAudience, i.musicVersionId]),
   [
@@ -409,7 +560,7 @@ D.MUSIC.push({
   rights: ''
 });
 assert.equal(await persist(), false, 'no rights, no save');
-assert.equal(D.MUSIC.length, 1);
+assert.equal(D.MUSIC.length, 2);
 D.MUSIC[0].key = 'A minor';
 D.MUSIC_DETAIL.m1.lyrics.push(['third', '', '']);
 assert.equal(await persist(), true);
@@ -429,6 +580,7 @@ assert.deepEqual(
   ['syr', 'A minor', 'Trisagion', 'Entrance', 'Public domain', true, false]
 );
 assert.deepEqual(body.alternateTitles, ['قاديشات آلوهو']);
+assert.equal(body.titleAr, 'قاديشات آلوهو', 'an older Arabic alternate title becomes the Arabic title');
 assert.deepEqual(body.mediaLinks, ['https://www.youtube.com/watch?v=abc', 'https://example.org/rec']);
 assert.equal(body.lyrics, 'ܩܰܕܺܝܫܰܬ | قاديشات | Holy\nline two | سطر\nthird');
 assert.equal(body.notes, 'Organ: pedal only');
@@ -439,13 +591,25 @@ D.MUSIC.push({
   lang: 'Arabic',
   part: 'Offertory',
   key: '',
-  occasion: '',
-  rights: 'Composer permission, 2026'
+  occasion: 'Marian',
+  occasionAr: 'مريمي',
+  rights: 'Composer permission, 2026',
+  ar: 'يا أمّ الإله'
 });
 assert.equal(await persist(), true);
 [method, path, body] = sent.at(-1);
 assert.equal(body.supersedesId, null);
 assert.equal(body.language, 'ar');
+assert.deepEqual([body.titleAr, body.seasonAr, body.alternateTitles], ['يا أمّ الإله', 'مريمي', []]);
+await M.restoreMusicVersion('m1', 'm0');
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'POST parishes/P/music');
+assert.deepEqual([body.supersedesId, body.title, body.titleAr, body.lyrics], ['m1', 'Qadishat', 'قديشات', 'old']);
+assert.deepEqual(
+  await M.planCelebrants('P'),
+  [{ accountId: 'acct-2', name: 'Fr. Test Priest' }],
+  'celebrant choices are the current priests from the API, named by the shared lookup'
+);
 await M.withdrawMusic('m1', 'Rights lapsed');
 [method, path, body] = sent.at(-1);
 assert.equal(`${method} ${path}`, 'POST parishes/P/music/m1/withdraw');
