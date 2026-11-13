@@ -6,6 +6,18 @@ Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before actin
 
 At the owner's request, branch `fullstack` adds the React frontend from `frontend-new2` in `frontend/` and connects its foundation to this API: CSRF, sign-in with the authenticator step and the optional Turnstile token, sign-up, session with roles from `GET /api/me/capacities`, and People list, add and archive. Every other module is marked "not connected" on screen. Status, gaps and owner decisions: `docs/frontend-integration.md`. No backend code changed on that branch.
 
+### Front/back continuation checkpoint (13 November 2026, owner's Windows machine)
+
+The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This checkpoint is on local branch `fullstack-integration`, cut from `upstream/fullstack` at `520cdb8`, in the separate worktree `C:\Users\User\source\repos\ParishLife-fullstack` so the Azure-connection session's uncommitted edits in the main folder stay untouched. Not pushed: pushing to Georges's repository is authorized only for `backend`.
+
+- **Pinned SDK:** this PC's `Program Files\dotnet\sdk\10.0.401` was an empty stub. With the owner's approval, SDK 10.0.401 was installed user-locally in `%LOCALAPPDATA%\Microsoft\dotnet` (Program Files untouched). Use it with `DOTNET_ROOT` and `PATH` pointing there.
+- **Backend on `fullstack` (520cdb8), SDK 10.0.401:** `restore --locked-mode` OK; **454 tests passed (57 unit / 397 integration), 0 failed.** The AppHost project fails restore with NU1903 (warning as error): advisory GHSA-f7vh-h5g3-7jrh against Aspire 13.6.4. The Azure session's uncommitted change bumps it to 13.6.5; it is not duplicated here.
+- **Frontend:** `npm ci`, `npm run check` (all 15 checks) and `npm run build` pass. `format:check` failed on Windows (190 files) only because `core.autocrlf=true` checks out CRLF; `frontend/.gitattributes` now keeps the sources LF, and it passes.
+- **New `npm run check:routes`:** records every request the checks send and the literal `api()`/`parishAPI()`/`allPages()` paths in `src/`, and matches them against the 546 routes in `ParishLife.Api/Controllers`. 502 distinct requests, 487 matched, 15 unmatched, all listed with a reason in `frontend/scripts/route-gaps.json`: `parishes/{id}/account-names` (not built yet), the deliberate `workspace/plan` negative check, and the old-server screens (`account/signature`, `account/records`, `workspace/public-profile`, `workspace/suspension`, `attendance-preview`, `sign/options`, `parishes/{id}/files`).
+- **Local smoke test against the real API** (Release, local documents in a scratch folder, Vite proxy): public directory 200, offline policy 200, manifest/homepage 404 (nothing published, as documented), site metrics 202, CSRF 200, `POST /api/auth/register` 202, and sign-in of the unverified account 401 with a readable message. Signed-in screens were not exercised: that needs the interactive `verify-identity` operator command.
+- **Not done:** none of Georges's 15 `fullstack2-*` sessions had pushed a branch when checked (`git ls-remote upstream 'refs/heads/fullstack2*'` was empty), so step 1 of `REMAINING-WORK.md` cannot start. Implementing those areas here would collide with them if they land; which way to go is the owner's (and Georges's) decision.
+- **Next:** if the sessions land, merge them one at a time and rerun `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx`; remove each closed gap from `route-gaps.json`. If they will not land, start with the `account-names` lookup (CONVENTIONS.md section 2), which every module's names depend on.
+
 ## Repository and preserved work
 
 - Working folder: `C:\Users\User\source\repos\ParishLife`.

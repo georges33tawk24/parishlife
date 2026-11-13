@@ -38,8 +38,10 @@ You need Node 20 or later and the .NET SDK pinned in `../global.json`.
 3. **Start the API with local documents** (from the repository root; the data goes to `.parishlife-data/`, which is git-ignored):
 
    ```bash
-   Backend__UseAzure=false dotnet run --project ParishLife.Api --launch-profile https
+   dotnet run --project ParishLife.Api --launch-profile https
    ```
+
+   The `https` profile runs in Development, whose settings (`appsettings.Development.json`) select `Storage:Provider=Local`. `Backend__UseAzure` is read only by the Aspire AppHost, not by the API. Do not use a profile that sets `Storage__Provider=Cosmos` for frontend work: it talks to the real Azure database.
 
    It listens on `https://localhost:7243`. To use another address, set `PARISHLIFE_API` before starting Vite.
 
