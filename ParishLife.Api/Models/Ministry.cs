@@ -1,5 +1,5 @@
 // Purpose: stores parish-owned ministry lifecycle facts; approval, publication and application intake remain distinct.
-// Main members: Id, ParishId, Name, Kind, Purpose, PublicInformation, ApplicationsOpen, Status, PublicListed, EligibilityPolicyReference, PolicyRevision, CreatedBy, CreatedAt, ApprovedBy, ApprovedAt, PublishedBy, PublishedAt.
+// Main members: Id, ParishId, Name/NameAr, Kind, Purpose/PurposeAr, PublicInformation/PublicInformationAr, MeetingTimes/MeetingTimesAr, ApplicationsOpen, Status, PublicListed, EligibilityPolicyReference, PolicyRevision, CreatedBy, CreatedAt, ApprovedBy, ApprovedAt, PublishedBy, PublishedAt.
 
 namespace ParishLife.Api.Models;
 
@@ -11,11 +11,23 @@ public class Ministry
 
     public string Name { get; set; } = string.Empty;
 
+    // Optional Arabic twin typed by the parish; never translated from Name.
+    public string? NameAr { get; set; }
+
     public string Kind { get; set; } = string.Empty;
 
     public string Purpose { get; set; } = string.Empty;
 
+    public string? PurposeAr { get; set; }
+
     public string? PublicInformation { get; set; }
+
+    public string? PublicInformationAr { get; set; }
+
+    // Free-text description of when the group usually meets; operational, not part of the approved description.
+    public string? MeetingTimes { get; set; }
+
+    public string? MeetingTimesAr { get; set; }
 
     public bool ApplicationsOpen { get; set; }
 

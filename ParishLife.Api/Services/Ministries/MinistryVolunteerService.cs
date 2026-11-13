@@ -39,6 +39,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
         var item = new VolunteerOpportunity
         {
             Id = op.Id, ParishId = parish, MinistryId = ministry, Title = Guard.Text(request.Title, "Title", 300),
+            TitleAr = MinistryAccess.Optional(request.TitleAr, "Arabic title", 300),
             Position = Guard.Text(request.Position, "Position", 200),
             Requirements = string.IsNullOrWhiteSpace(request.Requirements) ? null : Guard.Text(request.Requirements, "Requirements", 2000),
             Location = string.IsNullOrWhiteSpace(request.Location) ? null : Guard.Text(request.Location, "Location", 300),
@@ -401,7 +402,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
 
     private static VolunteerOpportunityDto Project(VolunteerOpportunity x) => new()
     {
-        Id = x.Id, MinistryId = x.MinistryId, Title = x.Title, Position = x.Position, Requirements = x.Requirements, Location = x.Location,
+        Id = x.Id, MinistryId = x.MinistryId, Title = x.Title, TitleAr = x.TitleAr, Position = x.Position, Requirements = x.Requirements, Location = x.Location,
         StartsAt = x.StartsAt, EndsAt = x.EndsAt, Capacity = x.Capacity, Remaining = Math.Max(0, x.Capacity - x.Confirmed), Status = x.Status,
         SelfSignup = x.SelfSignup
     };

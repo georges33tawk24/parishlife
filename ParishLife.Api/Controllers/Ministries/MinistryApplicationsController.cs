@@ -1,5 +1,5 @@
 // Purpose: exposes typed ministry application, review, evidence, history and neutral membership endpoints.
-// Main functions: Apply, Get, List, Mine, Act, History, Evidence, Roster and Membership delegate consequential rules to the service.
+// Main functions: Apply, Get, List, Mine, Act, History, Evidence, Roster, EndMembership and Membership delegate consequential rules to the service.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +37,9 @@ public class MinistryApplicationsController(MinistryApplicationService service) 
     [HttpGet("roster")]
     public async Task<ActionResult<Page<MinistryMembershipDto>>> Roster(Guid parishId, Guid ministryId, CancellationToken ct, int size = 25, string? cursor = null)
         => Ok(await service.RosterAsync(Guard.Id(parishId), Guard.Id(ministryId), size, cursor, ct));
+    [HttpPost("roster/{personId:guid}/end")]
+    public async Task<ActionResult<MinistryMembershipDto>> EndMembership(Guid parishId, Guid ministryId, Guid personId, EndMembershipDto request, CancellationToken ct)
+        => Ok(await service.EndMembershipAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(personId), request, ct));
     [HttpGet("membership/mine")]
     public async Task<ActionResult<MinistryMembershipDto>> Membership(Guid parishId, Guid ministryId, CancellationToken ct)
         => Ok(await service.OwnMembershipAsync(Guard.Id(parishId), Guard.Id(ministryId), ct));

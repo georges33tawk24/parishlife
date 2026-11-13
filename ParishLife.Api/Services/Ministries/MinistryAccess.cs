@@ -22,6 +22,9 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
     internal static DomainException Missing() => new("resource_not_found", "The requested ministry resource is unavailable.", FailureKind.NotFound);
     internal static DomainException State(string message) => new("invalid_ministry_state", message, FailureKind.Conflict);
     internal Task ModuleAsync(string parish, CancellationToken ct) => access.RequireModuleAsync(parish, "ministries", ct);
+    // An optional bilingual or descriptive field: trimmed, bounded, null when empty; no script check, since names mix scripts.
+    internal static string? Optional(string? value, string field, int max)
+        => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, field, max);
 
     internal async Task<Versioned<Parish>> RootAsync(string parish, CancellationToken ct)
     {

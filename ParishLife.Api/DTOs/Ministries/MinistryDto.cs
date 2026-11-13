@@ -1,5 +1,5 @@
 // Purpose: returns authorized ministry setup and lifecycle state without persistence envelopes.
-// Main members: Id, ParishId, Name, Kind, Purpose, PublicInformation, ApplicationsOpen, Status, PublicListed, EligibilityPolicyReference, PolicyRevision.
+// Main members: Id, ParishId, Name/NameAr, Kind, Purpose/PurposeAr, PublicInformation/PublicInformationAr, MeetingTimes/MeetingTimesAr, ApplicationsOpen, Status, PublicListed, EligibilityPolicyReference, PolicyRevision.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -11,11 +11,21 @@ public class MinistryDto
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; }
+
     public string Kind { get; set; } = string.Empty;
 
     public string Purpose { get; set; } = string.Empty;
 
+    public string? PurposeAr { get; set; }
+
     public string? PublicInformation { get; set; }
+
+    public string? PublicInformationAr { get; set; }
+
+    public string? MeetingTimes { get; set; }
+
+    public string? MeetingTimesAr { get; set; }
 
     public bool ApplicationsOpen { get; set; }
 

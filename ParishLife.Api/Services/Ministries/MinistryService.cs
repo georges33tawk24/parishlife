@@ -1,5 +1,5 @@
 // Purpose: manages parish ministry drafts, explicit approval/publication and intake with safe public projections.
-// Main functions: SaveAsync, ActAsync, GetAsync, MemberInfoAsync, ListAsync, PublicAsync; explicit projections isolate office, member and public facts.
+// Main functions: SaveAsync, SaveMeetingTimesAsync, ActAsync, GetAsync, MemberInfoAsync, ListAsync, PublicAsync; explicit projections isolate office, member and public facts.
 
 using ParishLife.Api.DTOs.Ministries;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -29,7 +29,11 @@ public class MinistryService(IRecordTransactions records, MinistryAccess authori
         var value = new Ministry
         {
             Id = id ?? op.Id, ParishId = parish, Name = Guard.Text(request.Name, "Name", 200), Kind = request.Kind,
+            NameAr = Optional(request.NameAr, "Arabic name", 200),
             Purpose = Guard.Text(request.Purpose, "Purpose", 4000), Status = "Draft", CreatedAt = old?.Value.CreatedAt ?? op.At,
+            PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 4000),
+            PublicInformationAr = Optional(request.PublicInformationAr, "Arabic public information", 4000),
+            MeetingTimes = old?.Value.MeetingTimes, MeetingTimesAr = old?.Value.MeetingTimesAr,
             CreatedBy = old?.Value.CreatedBy ?? actor.AccountId,
             EligibilityPolicyReference = string.IsNullOrWhiteSpace(request.EligibilityPolicyReference) ? null : Guard.Text(request.EligibilityPolicyReference, "Eligibility policy reference", 1000),
             PublicInformation = string.IsNullOrWhiteSpace(request.PublicInformation) ? null : Guard.Text(request.PublicInformation, "Public information", 4000),
@@ -40,6 +44,32 @@ public class MinistryService(IRecordTransactions records, MinistryAccess authori
                 : RecordChange.Replace("ministry:" + value.Id, "ministry", value, Versions.Require(request.Version))],
             new CommandResult { Id = value.Id, Status = value.Status }, ct);
         return View((await authorization.ReadAsync(parish, value.Id, ct)).Value);
+    }
+
+    // Usual meeting times are operational facts the office keeps current on a draft or active ministry; they do not reopen the approved description.
+    public async Task<MinistryDto> SaveMeetingTimesAsync(string parish, string ministry, SaveMeetingTimesDto request, CancellationToken ct)
+    {
+        var root = await authorization.OfficeAsync(parish, ct);
+        var scope = MinistryAccess.Scope(parish);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-meeting-times:v1:" + ministry);
+        if (await records.ReplayAsync<CommandResult>(scope, op, ct) is not null)
+            return View((await authorization.ReadAsync(parish, ministry, ct)).Value);
+        var row = await authorization.ReadAsync(parish, ministry, ct);
+        var value = row.Value;
+        if (value.Status is not ("Draft" or "Active"))
+            throw MinistryAccess.State("Meeting times are kept for a draft or active ministry.");
+        value.MeetingTimes = Optional(request.MeetingTimes, "Meeting times", 300);
+        value.MeetingTimesAr = Optional(request.MeetingTimesAr, "Arabic meeting times", 300);
+        var history = new MinistryLifecycleHistory
+        {
+            Id = op.Id, MinistryId = ministry, Action = "meeting-times", Status = value.Status,
+            ActorId = actor.AccountId, ActingAppointmentId = actor.ActingAppointmentId, At = op.At, Reason = string.Empty
+        };
+        await records.CommitAsync(scope, op, "ministry.meeting_times", ministry,
+            [MinistryAccess.Fence(root), RecordChange.Replace("ministry:" + ministry, "ministry", value, Versions.Require(request.Version)),
+                RecordChange.Create("ministryLifecycleHistory:" + op.Id, "ministryLifecycleHistory", history)],
+            new CommandResult { Id = ministry, Status = value.Status }, ct);
+        return View((await authorization.ReadAsync(parish, ministry, ct)).Value);
     }
 
     public async Task<MinistryDto> ActAsync(string parish, string ministry, MinistryActionDto request, CancellationToken ct)
@@ -115,9 +145,14 @@ public class MinistryService(IRecordTransactions records, MinistryAccess authori
             Id = group.Value.Id,
             ParishId = group.Value.ParishId,
             Name = group.Value.Name,
+            NameAr = group.Value.NameAr,
             Kind = group.Value.Kind,
             Purpose = group.Value.Purpose,
+            PurposeAr = group.Value.PurposeAr,
             PublicInformation = group.Value.PublicInformation,
+            PublicInformationAr = group.Value.PublicInformationAr,
+            MeetingTimes = group.Value.MeetingTimes,
+            MeetingTimesAr = group.Value.MeetingTimesAr,
             Status = group.Value.Status
         };
     }
@@ -146,11 +181,18 @@ public class MinistryService(IRecordTransactions records, MinistryAccess authori
     {
         Id = value.Id, ParishId = value.ParishId, Name = value.Name, Kind = value.Kind, Purpose = value.Purpose,
         Status = value.Status, PublicListed = value.PublicListed, ApplicationsOpen = value.ApplicationsOpen,
-        EligibilityPolicyReference = value.EligibilityPolicyReference, PublicInformation = value.PublicInformation, PolicyRevision = value.PolicyRevision
+        EligibilityPolicyReference = value.EligibilityPolicyReference, PublicInformation = value.PublicInformation, PolicyRevision = value.PolicyRevision,
+        NameAr = value.NameAr, PurposeAr = value.PurposeAr, PublicInformationAr = value.PublicInformationAr,
+        MeetingTimes = value.MeetingTimes, MeetingTimesAr = value.MeetingTimesAr
     };
     private static PublicMinistryDto PublicView(Ministry value, bool available) => new()
     {
         Id = value.Id, ParishId = value.ParishId, Name = value.Name, Kind = value.Kind,
-        Purpose = value.Purpose, PublicInformation = value.PublicInformation, ApplicationsOpen = value.ApplicationsOpen && available
+        Purpose = value.Purpose, PublicInformation = value.PublicInformation, ApplicationsOpen = value.ApplicationsOpen && available,
+        NameAr = value.NameAr, PurposeAr = value.PurposeAr, PublicInformationAr = value.PublicInformationAr
     };
+
+    // An optional bilingual field: trimmed, bounded, and stored as null when empty. No script check, since names mix scripts.
+    private static string? Optional(string? value, string field, int max)
+        => MinistryAccess.Optional(value, field, max);
 }

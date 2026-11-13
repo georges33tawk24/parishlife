@@ -1,5 +1,5 @@
 // Purpose: exposes reviewed identity matching and the authenticated person's own link without matching evidence.
-// Main functions: Link, Mine and Get use the person-link service and current permissions.
+// Main functions: Link, Mine, Get and ByPerson use the person-link service and current permissions.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +18,9 @@ public class MinistryPersonLinksController(MinistryPersonLinkService service) : 
     [HttpGet("mine")]
     public async Task<ActionResult<Versioned<PersonAccountLinkDto>>> Mine(Guid parishId, CancellationToken ct)
         => Ok(await service.GetOwnAsync(Guard.Id(parishId), ct));
+    [HttpGet("by-person/{personId:guid}")]
+    public async Task<ActionResult<Versioned<PersonAccountLinkDto>>> ByPerson(Guid parishId, Guid personId, CancellationToken ct)
+        => Ok(await service.GetByPersonAsync(Guard.Id(parishId), Guard.Id(personId), ct));
     [HttpGet("{accountId:guid}")]
     public async Task<ActionResult<Versioned<PersonAccountLinkDto>>> Get(Guid parishId, Guid accountId, CancellationToken ct)
         => Ok(await service.GetAsync(Guard.Id(parishId), Guard.Id(accountId), ct));

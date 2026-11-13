@@ -1,5 +1,5 @@
 // Purpose: exposes ministry formation programs, enrollments, milestone progress, own progress and protected history over HTTP.
-// Main functions: CreateProgram, ActProgram, GetProgram, ListPrograms, Enroll, Progress, EnrollmentAction, GetEnrollment, ListEnrollments,
+// Main functions: CreateProgram, UpdateProgram, ActProgram, GetProgram, ListPrograms, Enroll, Progress, EnrollmentAction, GetEnrollment, ListEnrollments,
 // Mine and History delegate authorization, validation and state transitions to MinistryFormationService.
 
 using Microsoft.AspNetCore.Authorization;
@@ -25,6 +25,10 @@ public class MinistryFormationController(MinistryFormationService service) : Con
     [HttpGet("programs/{programId:guid}")]
     public async Task<ActionResult<Versioned<FormationProgramDto>>> GetProgram(Guid parishId, Guid ministryId, Guid programId, CancellationToken ct)
         => Ok(await service.GetProgramAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(programId), ct));
+
+    [HttpPut("programs/{programId:guid}")]
+    public async Task<ActionResult<FormationProgramDto>> UpdateProgram(Guid parishId, Guid ministryId, Guid programId, UpdateFormationDto request, CancellationToken ct)
+        => Ok(await service.UpdateProgramAsync(Guard.Id(parishId), Guard.Id(ministryId), Guard.Id(programId), request, ct));
 
     [HttpPost("programs/{programId:guid}/actions")]
     public async Task<ActionResult<FormationProgramDto>> ActProgram(Guid parishId, Guid ministryId, Guid programId, FormationProgramActionDto request, CancellationToken ct)

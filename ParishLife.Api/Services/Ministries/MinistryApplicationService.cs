@@ -1,5 +1,5 @@
 // Purpose: coordinates evidenced ministry applications, independent review, confidential departure and effective membership.
-// Main functions: ApplyAsync, ActAsync, GetAsync, ListAsync, OwnAsync, HistoryAsync, EvidenceAsync, RosterAsync and OwnMembershipAsync;
+// Main functions: ApplyAsync, ActAsync, GetAsync, ListAsync, OwnAsync, HistoryAsync, EvidenceAsync, RosterAsync, EndMembershipAsync and OwnMembershipAsync;
 // helpers reauthorize every request and commit the application, roster, history and conditional authority fences together.
 
 using System.Security.Cryptography;
@@ -303,6 +303,68 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
         return new() { Items = page.Items.Select(row => MemberView(row.Value)).ToArray(), ContinuationToken = page.ContinuationToken };
     }
 
+    // A priest's explicit roster removal: ends the pinned current interval, keeps its history and ends linked leadership, as an approved departure does.
+    public async Task<MinistryMembershipDto> EndMembershipAsync(string parish, string ministry, string person, EndMembershipDto request, CancellationToken ct)
+    {
+        var root = await access.RootAsync(parish, ct);
+        await access.PriestAsync(parish, ct, requireModule: false);
+        var scope = MinistryAccess.Scope(parish);
+        var key = MinistryAccess.MemberKey(ministry, person);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-membership-end:v1:" + ministry + ":" + person);
+        if (await records.ReplayAsync<CommandResult>(scope, op, ct) is not null)
+            return MemberView((await records.ReadAsync<MinistryMembership>(scope, key, ct) ?? throw MinistryAccess.Missing()).Value);
+        var group = await access.ReadAsync(parish, ministry, ct);
+        if (group.Value.Status is not ("Active" or "Archived"))
+            throw MinistryAccess.State("Membership can be ended only in an active or archived ministry.");
+        var reason = Guard.Text(request.Reason, "Removal reason", 2000);
+        var joined = Guard.Utc(request.JoinedAt);
+        var membership = await records.ReadAsync<MinistryMembership>(scope, key, ct) ?? throw MinistryAccess.Missing();
+        var value = membership.Value;
+        if (value.MinistryId != ministry || value.PersonId != person)
+            throw MinistryAccess.Missing();
+        if (!value.Current(op.At) || value.JoinedAt != joined)
+            throw MinistryAccess.State("The membership changed; review the current roster before ending it.");
+        var pending = await records.ReadAsync<CommandResult>(scope, GuardKey(ministry, person), ct);
+        if (pending?.Value.Status == "Pending")
+            throw MinistryAccess.State("Resolve the person's pending membership application first.");
+        var claim = await records.ReadAsync<CommandResult>(scope, "personAccountClaim:" + person, ct);
+        var linkedAccount = claim?.Value.Status == "Linked" ? claim.Value.Id : null;
+        if (linkedAccount == actor.AccountId)
+            throw MinistryAccess.State("A different eligible reviewer must end this membership.");
+        var row = await records.ReadAsync<Person>(scope, "person:" + person, ct);
+        if (row is null || row.Value.Id != person || row.Value.ParishId != parish)
+            throw MinistryAccess.Missing();
+        var period = string.IsNullOrEmpty(value.PeriodId) ? null : await records.ReadAsync<MinistryMembershipPeriod>(scope, "ministryMembershipPeriod:" + value.PeriodId, ct);
+        if (period is null || period.Value.MinistryId != ministry || period.Value.PersonId != person
+            || period.Value.JoinedAt != value.JoinedAt || period.Value.LeftAt is not null)
+            throw MinistryAccess.State("Review the recorded membership interval before ending this legacy or inconsistent membership.");
+        var removal = new MinistryMembershipRemoval
+        {
+            Id = op.Id, MinistryId = ministry, PersonId = person, PeriodId = period.Value.Id, RemovedBy = actor.AccountId,
+            ActingAppointmentId = actor.ActingAppointmentId, RemovedAt = op.At, ProtectedReason = Protect(parish, op.Id, "removal-reason", reason)
+        };
+        period.Value.LeftAt = op.At;
+        period.Value.EndedBy = actor.AccountId;
+        period.Value.RemovalId = removal.Id;
+        value.LeftAt = op.At;
+        value.ApprovedBy = actor.AccountId;
+        value.ApplicationId = removal.Id;
+        var changes = new List<RecordChange>
+        {
+            MinistryAccess.Fence(root), GroupFence(group), PersonFence(row),
+            RecordChange.Replace("ministryMembershipPeriod:" + period.Value.Id, "ministryMembershipPeriod", period.Value, period.Version),
+            RecordChange.Replace(key, "ministryMembership", value, membership.Version),
+            RecordChange.Create("ministryMembershipHistory:" + op.Id, "ministryMembershipHistory", value),
+            RecordChange.Create("ministryMembershipRemoval:" + removal.Id, "ministryMembershipRemoval", removal)
+        };
+        if (claim is not null)
+            changes.Add(RecordChange.Replace("personAccountClaim:" + person, "personAccountClaim", claim.Value, claim.Version));
+        await EndLeadershipAsync(scope, ministry, linkedAccount is null ? [] : [linkedAccount], op, changes, ct);
+        await access.PriestAsync(parish, ct, requireModule: false);
+        await records.CommitAsync(scope, op, "ministry.membership_end", ministry, changes, new CommandResult { Id = person, Status = "Ended" }, ct);
+        return MemberView(value);
+    }
+
     public async Task<MinistryMembershipDto> OwnMembershipAsync(string parish, string ministry, CancellationToken ct)
     {
         await access.PersonalAsync(ct);
@@ -409,29 +471,35 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
             var claim = await records.ReadAsync<CommandResult>(scope, "personAccountClaim:" + item.PersonId, ct);
             var accountIds = new[] { item.ApplicantAccountId, claim?.Value.Status == "Linked" ? claim.Value.Id : null }
                 .Where(account => account is not null).Select(account => account!).Distinct(StringComparer.Ordinal);
-            foreach (var linkedAccount in accountIds)
-            {
-                var leaderKey = "ministryLeader:" + item.MinistryId + ":" + linkedAccount;
-                var leader = await records.ReadAsync<MinistryLeader>(scope, leaderKey, ct);
-                if (leader is not null && !leader.Value.Revoked && leader.Value.EndedAt is null)
-                {
-                    leader.Value.Revoked = true;
-                    if (leader.Value.StartsAt <= op.At && (leader.Value.EndsAt is null || leader.Value.EndsAt > op.At))
-                        leader.Value.EndsAt = op.At;
-                    leader.Value.EndedAt = op.At;
-                    leader.Value.EndedBy = actor.AccountId;
-                    leader.Value.EndReason = null;
-                    changes.Add(RecordChange.Replace(leaderKey, "ministryLeader", leader.Value, leader.Version));
-                    changes.Add(RecordChange.Create("ministryLeadershipChange:" + op.Id + ":end:" + linkedAccount, "ministryLeadershipChange", new MinistryLeadershipHistory
-                    {
-                        Id = op.Id + ":end:" + linkedAccount, MinistryId = item.MinistryId, AccountId = linkedAccount, Action = "Ended",
-                        RecordedBy = actor.AccountId, RecordedAt = op.At, Appointment = leader.Value
-                    }));
-                }
-            }
+            await EndLeadershipAsync(scope, item.MinistryId, accountIds, op, changes, ct);
         }
         changes.Add(previous is null ? RecordChange.Create(key, "ministryMembership", value) : RecordChange.Replace(key, "ministryMembership", value, previous.Version));
         changes.Add(RecordChange.Create("ministryMembershipHistory:" + op.Id, "ministryMembershipHistory", value));
+    }
+
+    // Ending membership also ends any open leadership appointment of the person's linked account(s).
+    private async Task EndLeadershipAsync(RecordScope scope, string ministry, IEnumerable<string> accountIds, Operation op, List<RecordChange> changes, CancellationToken ct)
+    {
+        foreach (var linkedAccount in accountIds)
+        {
+            var leaderKey = "ministryLeader:" + ministry + ":" + linkedAccount;
+            var leader = await records.ReadAsync<MinistryLeader>(scope, leaderKey, ct);
+            if (leader is not null && !leader.Value.Revoked && leader.Value.EndedAt is null)
+            {
+                leader.Value.Revoked = true;
+                if (leader.Value.StartsAt <= op.At && (leader.Value.EndsAt is null || leader.Value.EndsAt > op.At))
+                    leader.Value.EndsAt = op.At;
+                leader.Value.EndedAt = op.At;
+                leader.Value.EndedBy = actor.AccountId;
+                leader.Value.EndReason = null;
+                changes.Add(RecordChange.Replace(leaderKey, "ministryLeader", leader.Value, leader.Version));
+                changes.Add(RecordChange.Create("ministryLeadershipChange:" + op.Id + ":end:" + linkedAccount, "ministryLeadershipChange", new MinistryLeadershipHistory
+                {
+                    Id = op.Id + ":end:" + linkedAccount, MinistryId = ministry, AccountId = linkedAccount, Action = "Ended",
+                    RecordedBy = actor.AccountId, RecordedAt = op.At, Appointment = leader.Value
+                }));
+            }
+        }
     }
 
     private MinistryApplicationDto View(string parish, MinistryApplication value) => new()

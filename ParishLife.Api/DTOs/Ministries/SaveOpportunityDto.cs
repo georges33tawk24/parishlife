@@ -1,5 +1,5 @@
 // Purpose: requests a draft volunteer opportunity for a ministry.
-// Main members: OperationId, Title, Position, Requirements, Location, StartsAt, EndsAt, Capacity and SelfSignup.
+// Main members: OperationId, Title/TitleAr, Position, Requirements, Location, StartsAt, EndsAt, Capacity and SelfSignup.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -14,6 +14,9 @@ public class SaveOpportunityDto
     [Required]
     [StringLength(300)]
     public string Title { get; set; } = string.Empty;
+
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
 
     [Required]
     [StringLength(200)]

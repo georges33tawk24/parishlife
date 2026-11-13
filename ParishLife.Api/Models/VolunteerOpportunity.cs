@@ -1,5 +1,5 @@
 // Purpose: represents one ministry volunteer position on a dated slot with real capacity.
-// Main members: Id, ParishId, MinistryId, Title, Position, Requirements, Location, StartsAt, EndsAt, Capacity, Confirmed, Status, SelfSignup and creation facts.
+// Main members: Id, ParishId, MinistryId, Title/TitleAr, Position, Requirements, Location, StartsAt, EndsAt, Capacity, Confirmed, Status, SelfSignup and creation facts.
 
 namespace ParishLife.Api.Models;
 
@@ -12,6 +12,8 @@ public class VolunteerOpportunity
     public string MinistryId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public string Position { get; set; } = string.Empty;
 

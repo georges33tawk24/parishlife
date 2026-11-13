@@ -1,5 +1,5 @@
 // Purpose: returns one loan; custodian projections include evidence and actors, own projections omit them.
-// Main members: Id, MinistryId, StockId, StockName, PersonId, Quantity, Status, Overdue, Purpose, dates, condition, follow-up and actors.
+// Main members: Id, MinistryId, StockId, StockName/StockNameAr, PersonId, Quantity, Status, Overdue, Purpose, dates, condition, follow-up and actors.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -12,6 +12,8 @@ public class MinistryLoanDto
     public string StockId { get; set; } = string.Empty;
 
     public string StockName { get; set; } = string.Empty;
+
+    public string? StockNameAr { get; set; } = null;
 
     public string PersonId { get; set; } = string.Empty;
 

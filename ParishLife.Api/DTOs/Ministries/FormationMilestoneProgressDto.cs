@@ -1,5 +1,5 @@
 // Purpose: returns one milestone's progress; staff projections include evidence and actors, own projections omit them.
-// Main members: Key, Title, ClergyApproval, Status, ResumeStatus, evidence/source facts, AchievedOn, actors and ApplicantExplanation.
+// Main members: Key, Title/TitleAr, ClergyApproval, Status, ResumeStatus, evidence/source facts, AchievedOn, actors and ApplicantExplanation.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -8,6 +8,8 @@ public class FormationMilestoneProgressDto
     public string Key { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public bool ClergyApproval { get; set; }
 

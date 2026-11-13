@@ -1,5 +1,5 @@
 // Purpose: manages priest-approved ministry formation programs, member enrollments, milestone evidence/review/completion and append-only history.
-// Main functions: CreateProgramAsync, ActProgramAsync, GetProgramAsync, ListProgramsAsync, EnrollAsync, ProgressAsync, EnrollmentActionAsync,
+// Main functions: CreateProgramAsync, UpdateProgramAsync, ActProgramAsync, GetProgramAsync, ListProgramsAsync, EnrollAsync, ProgressAsync, EnrollmentActionAsync,
 // GetEnrollmentAsync, ListEnrollmentsAsync, OwnEnrollmentsAsync and HistoryAsync; helpers enforce duties, separation of duties and safe projections.
 // Completion is an explicitly recorded, reviewed result. Attendance is never converted into completion or sacramental eligibility.
 
@@ -32,6 +32,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
         var item = new FormationProgram
         {
             Id = op.Id, ParishId = parish, MinistryId = ministry, Title = Guard.Text(request.Title, "Program title", 500),
+            TitleAr = MinistryAccess.Optional(request.TitleAr, "Arabic program title", 500),
             Milestones = Milestones(request.Milestones), CreatedBy = actor.AccountId, CreatedAt = op.At
         };
         if (request.SupersedesProgramId is { } supersedes)
@@ -44,6 +45,30 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
         }
         await records.CommitAsync(scope, op, "ministry.formation_program_create", ministry,
             [MinistryAccess.Fence(root), RecordChange.Create(ProgramKey(item.Id), "formationProgram", item)],
+            new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        return Project(item);
+    }
+
+    // A draft is edited in place until a priest approves it; an approved revision stays immutable and is revised by a new draft.
+    public async Task<FormationProgramDto> UpdateProgramAsync(string parish, string ministry, string program, UpdateFormationDto request, CancellationToken ct)
+    {
+        var group = await access.RequireFormationAsync(parish, ministry, ct);
+        var root = await access.RootAsync(parish, ct);
+        var scope = MinistryAccess.Scope(parish);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "formation-program-update:v1:" + program);
+        if (await records.ReplayAsync<CommandResult>(scope, op, ct) is not null)
+            return Project((await ReadProgramAsync(parish, ministry, program, ct)).Value);
+        if (group.Value.Status != "Active")
+            throw State("Formation programs belong to an active ministry.");
+        var row = await ReadProgramAsync(parish, ministry, program, ct);
+        var item = row.Value;
+        if (item.Status != "Draft")
+            throw State("Only a draft program can be edited; revise an approved program with a new draft revision.");
+        item.Title = Guard.Text(request.Title, "Program title", 500);
+        item.TitleAr = MinistryAccess.Optional(request.TitleAr, "Arabic program title", 500);
+        item.Milestones = Milestones(request.Milestones);
+        await records.CommitAsync(scope, op, "ministry.formation_program_update", ministry,
+            [MinistryAccess.Fence(root), RecordChange.Replace(ProgramKey(item.Id), "formationProgram", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -431,6 +456,9 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
             result.Add(new FormationMilestone
             {
                 Key = key, Title = Guard.Text(milestone.Title, "Milestone title", 300),
+                TitleAr = MinistryAccess.Optional(milestone.TitleAr, "Arabic milestone title", 300),
+                Description = MinistryAccess.Optional(milestone.Description, "Milestone description", 1000),
+                DescriptionAr = MinistryAccess.Optional(milestone.DescriptionAr, "Arabic milestone description", 1000),
                 PrerequisiteKeys = [.. prerequisites], ClergyApproval = milestone.ClergyApproval
             });
         }
@@ -501,11 +529,12 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
 
     private static FormationProgramDto Project(FormationProgram item) => new()
     {
-        Id = item.Id, MinistryId = item.MinistryId, Title = item.Title, Revision = item.Revision,
+        Id = item.Id, MinistryId = item.MinistryId, Title = item.Title, TitleAr = item.TitleAr, Revision = item.Revision,
         SupersedesProgramId = item.SupersedesProgramId, Status = item.Status,
         Milestones = item.Milestones.Select(m => new FormationMilestoneDto
         {
-            Key = m.Key, Title = m.Title, PrerequisiteKeys = [.. m.PrerequisiteKeys], ClergyApproval = m.ClergyApproval
+            Key = m.Key, Title = m.Title, TitleAr = m.TitleAr, Description = m.Description, DescriptionAr = m.DescriptionAr,
+            PrerequisiteKeys = [.. m.PrerequisiteKeys], ClergyApproval = m.ClergyApproval
         }).ToArray(),
         CreatedBy = item.CreatedBy, CreatedAt = item.CreatedAt, ApprovedBy = item.ApprovedBy, ApprovedAt = item.ApprovedAt,
         ApprovalReference = item.ApprovalReference, RetiredAt = item.RetiredAt, RetirementReason = item.RetirementReason
@@ -513,7 +542,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
 
     private static FormationEnrollmentDto Project(FormationEnrollment item, FormationProgram program, bool privileged) => new()
     {
-        Id = item.Id, MinistryId = item.MinistryId, ProgramId = item.ProgramId, ProgramTitle = program.Title,
+        Id = item.Id, MinistryId = item.MinistryId, ProgramId = item.ProgramId, ProgramTitle = program.Title, ProgramTitleAr = program.TitleAr,
         ProgramRevision = item.ProgramRevision, PersonId = item.PersonId, Status = item.Status, EnrolledAt = item.EnrolledAt,
         EnrolledBy = privileged ? item.EnrolledBy : null, CompletedAt = item.CompletedAt, WithdrawnAt = item.WithdrawnAt,
         WithdrawalReason = privileged ? item.WithdrawalReason : null,
@@ -523,7 +552,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
     // Own projections show progress and applicant explanations only; evidence, provenance, reviewers and review references stay staff-only.
     private static FormationMilestoneProgressDto Project(FormationMilestoneProgress item, FormationMilestone definition, bool privileged) => new()
     {
-        Key = item.Key, Title = definition.Title, ClergyApproval = definition.ClergyApproval, Status = item.Status,
+        Key = item.Key, Title = definition.Title, TitleAr = definition.TitleAr, ClergyApproval = definition.ClergyApproval, Status = item.Status,
         ResumeStatus = item.ResumeStatus, Source = item.Source, AchievedOn = item.AchievedOn, CompletedAt = item.CompletedAt,
         ApplicantExplanation = item.ApplicantExplanation,
         EvidenceReference = privileged ? item.EvidenceReference : null,
