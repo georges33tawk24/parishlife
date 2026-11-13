@@ -1,5 +1,5 @@
 // Purpose: represents one reviewed version of a music work with its metadata, materials and per-use rights.
-// Main members: Id, ParishId, WorkId, Title, metadata, Lyrics, Chords, Notes, MediaLinks, RightsBasis, Attribution, use permissions, Status, SupersedesId and creation facts.
+// Main members: Id, ParishId, WorkId, Title, metadata, Lyrics, Chords, Notes, MediaLinks, RightsBasis, Attribution, use permissions, Status, SupersedesId and creation facts; optional Arabic twins TitleAr and SeasonAr.
 
 namespace ParishLife.Api.Models;
 
@@ -14,6 +14,8 @@ public class MusicVersion
 
     public string Title { get; set; } = string.Empty;
 
+    public string? TitleAr { get; set; } = null;
+
     public string[] AlternateTitles { get; set; } = Array.Empty<string>();
 
     public string Language { get; set; } = string.Empty;
@@ -21,6 +23,8 @@ public class MusicVersion
     public string? Rite { get; set; } = null;
 
     public string? Season { get; set; } = null;
+
+    public string? SeasonAr { get; set; } = null;
 
     public string? Composer { get; set; } = null;
 

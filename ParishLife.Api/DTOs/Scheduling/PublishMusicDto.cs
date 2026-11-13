@@ -1,5 +1,5 @@
 // Purpose: publishes a new music work version, or a revision superseding an active version.
-// Main members: OperationId, SupersedesId, Title, metadata, materials, RightsBasis, Attribution and per-use permissions.
+// Main members: OperationId, SupersedesId, Title, metadata, materials, RightsBasis, Attribution and per-use permissions; optional Arabic twins TitleAr and SeasonAr.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -18,6 +18,9 @@ public class PublishMusicDto
     [StringLength(300)]
     public string Title { get; set; } = string.Empty;
 
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
+
     [MaxLength(10)]
     public string[] AlternateTitles { get; set; } = Array.Empty<string>();
 
@@ -30,6 +33,9 @@ public class PublishMusicDto
 
     [StringLength(100)]
     public string? Season { get; set; } = null;
+
+    [StringLength(100)]
+    public string? SeasonAr { get; set; } = null;
 
     [StringLength(200)]
     public string? Composer { get; set; } = null;

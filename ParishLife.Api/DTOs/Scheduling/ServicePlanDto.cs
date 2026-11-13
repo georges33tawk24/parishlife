@@ -1,5 +1,5 @@
 // Purpose: returns a plan or template with its computed timeline and blocking issues.
-// Main members: Id, Kind, EventId, Title, PlanType, coordinator/celebrant, Status, Items, Issues, TotalMinutes, template source and review facts.
+// Main members: Id, Kind, EventId, Title, PlanType, coordinator/celebrant, Status, Items, Issues, TotalMinutes, template source and review facts; optional TitleAr (Arabic twin) and Language.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -12,6 +12,10 @@ public class ServicePlanDto
     public string? EventId { get; set; } = null;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
+
+    public string? Language { get; set; } = null;
 
     public string PlanType { get; set; } = string.Empty;
 

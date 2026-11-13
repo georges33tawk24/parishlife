@@ -1,5 +1,5 @@
 // Purpose: exposes service plans/templates, their review actions and audience outputs, and the parish music library over HTTP.
-// Main functions: Create, Update, Act, Get, List, Output, PublishMusic, WithdrawMusic, GetMusic and SearchMusic delegate rules to the services.
+// Main functions: Create, Update, Act, Get, List, Celebrants, Output, PublishMusic, WithdrawMusic, GetMusic and SearchMusic delegate rules to the services.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -32,6 +32,11 @@ public class ServicePlansController(ServicePlanService plans, MusicLibraryServic
     [HttpGet("plans")]
     public async Task<ActionResult<Page<Versioned<ServicePlanDto>>>> List(Guid parishId, CancellationToken ct, Guid? eventId = null, int size = 25, string? cursor = null)
         => Ok(await plans.ListAsync(Guard.Id(parishId), eventId is { } id ? Guard.Id(id) : null, size, cursor, ct));
+
+    // The current priests who may be chosen as a Liturgy's celebrant.
+    [HttpGet("plans/celebrants")]
+    public async Task<ActionResult<IReadOnlyList<PlanCelebrantDto>>> Celebrants(Guid parishId, CancellationToken ct)
+        => Ok(await plans.CelebrantsAsync(Guard.Id(parishId), ct));
 
     [HttpGet("plans/{planId:guid}/outputs/{audience}")]
     public async Task<ActionResult<PlanOutputDto>> Output(Guid parishId, Guid planId, string audience, CancellationToken ct)

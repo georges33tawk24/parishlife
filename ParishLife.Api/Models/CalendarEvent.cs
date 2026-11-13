@@ -1,5 +1,5 @@
 // Purpose: stores a calendar occurrence, audience, source, publication state, and resource times.
-// Main members: Id, ParishId, Title, Kind, StartsAt, EndsAt, TimeZone, and related workflow details.
+// Main members: Id, ParishId, Title, Kind, StartsAt, EndsAt, TimeZone, and related workflow details; optional Arabic twins TitleAr and DescriptionAr.
 
 namespace ParishLife.Api.Models;
 
@@ -10,6 +10,8 @@ public class CalendarEvent
     public string ParishId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 
@@ -36,6 +38,8 @@ public class CalendarEvent
     public bool Published { get; set; } = false;
 
     public string? Description { get; set; } = null;
+
+    public string? DescriptionAr { get; set; } = null;
 
     public string[]? ClergyAccountIds { get; set; } = null;
 

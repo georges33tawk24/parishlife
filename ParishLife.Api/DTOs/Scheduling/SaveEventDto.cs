@@ -1,5 +1,5 @@
 // Purpose: represents save event input/output data.
-// Main members: OperationId, Version, Title, Kind, StartsAt, EndsAt, TimeZone, and related workflow details.
+// Main members: OperationId, Version, Title, Kind, StartsAt, EndsAt, TimeZone, and related workflow details; optional Arabic twins TitleAr and DescriptionAr.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -17,6 +17,9 @@ public class SaveEventDto
     [Required]
     [StringLength(500)]
     public string Title { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? TitleAr { get; set; } = null;
 
     [Required]
     [StringLength(500)]
@@ -38,6 +41,9 @@ public class SaveEventDto
 
     [StringLength(10000)]
     public string? Description { get; set; }
+
+    [StringLength(10000)]
+    public string? DescriptionAr { get; set; } = null;
 
     public Guid[]? ClergyAccountIds { get; set; } = null;
 

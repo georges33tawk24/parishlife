@@ -168,6 +168,99 @@ public class ServicePlanTests
         Assert.Equal(3, (await x.Music.SearchAsync(x.Parish, null, null, null, null, true, 25, 0, default)).Items.Count);
     }
 
+    [Fact]
+    public async Task Arabic_twins_travel_through_plans_templates_outputs_and_music_as_typed()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        x.S.Use();
+        var hymnRequest = Music("Isolated hymn", true);
+        hymnRequest.TitleAr = "ترنيمة";
+        hymnRequest.Season = "Isolated season";
+        hymnRequest.SeasonAr = "زمن";
+        var hymn = await x.Music.PublishAsync(x.Parish, hymnRequest, default);
+        Assert.Equal(("ترنيمة", "زمن"), (hymn.TitleAr, hymn.SeasonAr));
+        Assert.Equal(hymn.Id, Assert.Single((await x.Music.SearchAsync(x.Parish, "ترنيمة", null, null, null, false, 25, 0, default)).Items).Id);
+        Assert.Single((await x.Music.SearchAsync(x.Parish, null, null, "زمن", null, false, 25, 0, default)).Items);
+        Assert.Null((await PublishAsync(x, "Isolated English hymn", print: true)).TitleAr);
+
+        f.As(x.Planner);
+        var template = Request(x, [ArabicItem("entrance", music: hymn.Id, audience: "Team")]);
+        template.EventId = null;
+        template.PlanType = "Activity";
+        template.TitleAr = "قالب";
+        var savedTemplate = await x.Plans.SaveAsync(x.Parish, null, template, default);
+        Assert.Equal("قالب", savedTemplate.TitleAr);
+        await ActAsync(x, savedTemplate.Id, "submit");
+        x.S.Use();
+        await ActAsync(x, savedTemplate.Id, "approve");
+
+        f.As(x.Planner);
+        var copyRequest = Request(x, []);
+        copyRequest.TemplateId = Guid.Parse(savedTemplate.Id);
+        copyRequest.Title = "Isolated plan";
+        copyRequest.TitleAr = "خطة";
+        copyRequest.Language = "ar";
+        copyRequest.CelebrantAccountId = Guid.Parse(f.Other);
+        var plan = await x.Plans.SaveAsync(x.Parish, null, copyRequest, default);
+        Assert.Equal(("خطة", "ar"), (plan.TitleAr, plan.Language));
+        var copied = Assert.Single(plan.Items);
+        Assert.Equal(("الدخول", "تعليمات"), (copied.TitleAr, copied.InstructionsAr));
+
+        var edit = Request(x, [ArabicItem("entrance", music: hymn.Id, audience: "Team", assigned: f.Other)], celebrant: f.Other);
+        edit.Version = await VersionAsync(x, plan.Id);
+        edit.Title = "Isolated plan";
+        edit.TitleAr = "  ";
+        Assert.Null((await x.Plans.SaveAsync(x.Parish, plan.Id, edit, default)).TitleAr);
+        edit.Version = await VersionAsync(x, plan.Id);
+        edit.OperationId = Guid.NewGuid();
+        edit.TitleAr = "خطة";
+        await x.Plans.SaveAsync(x.Parish, plan.Id, edit, default);
+        await ActAsync(x, plan.Id, "submit");
+        x.S.Use();
+        await ActAsync(x, plan.Id, "approve");
+
+        var team = await x.Plans.OutputAsync(x.Parish, plan.Id, "team", default);
+        Assert.Equal("خطة", team.TitleAr);
+        var line = Assert.Single(team.Items);
+        Assert.Equal(("الدخول", "تعليمات", "ترنيمة"), (line.TitleAr, line.InstructionsAr, line.MusicTitleAr));
+        // Instructions in either language stay with their audience.
+        var participants = Assert.Single((await x.Plans.OutputAsync(x.Parish, plan.Id, "participants", default)).Items);
+        Assert.Null(participants.Instructions);
+        Assert.Null(participants.InstructionsAr);
+    }
+
+    [Fact]
+    public async Task Celebrant_choices_are_current_priests_and_need_schedule_management()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        f.As(x.Planner);
+        Assert.Equal([f.Other], (await x.Plans.CelebrantsAsync(x.Parish, default)).Select(c => c.AccountId));
+        var reader = await f.CreateVerifiedStaffAsync();
+        f.As(f.FirstAdmin);
+        await f.Services.GetRequiredService<ParishService>().GrantAsync(x.Parish, new GrantAccessDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await x.S.Staff.Parishes.GetAsync(x.Parish, default))!.Version,
+            AccountId = Guid.Parse(reader), Allows = [Permissions.ScheduleRead], StartsAt = f.Clock.Now
+        }, default);
+        f.As(reader);
+        await Assert.ThrowsAsync<DomainException>(() => x.Plans.CelebrantsAsync(x.Parish, default));
+        // Without an authenticator session the list is refused even to a planner.
+        f.As(x.Planner, mfa: false);
+        await Assert.ThrowsAnyAsync<Exception>(() => x.Plans.CelebrantsAsync(x.Parish, default));
+    }
+
+    private static PlanItemDto ArabicItem(string key, string? music = null, string audience = "Clergy", string? assigned = null)
+    {
+        var item = Item(key, 5, music: music, instructions: "Isolated instructions", audience: audience, assigned: assigned);
+        item.TitleAr = "الدخول";
+        item.InstructionsAr = "تعليمات";
+        return item;
+    }
+
     private static Task PublishAgain(Setup x, string superseded)
     {
         var again = Music("Second revision of the old version", true);

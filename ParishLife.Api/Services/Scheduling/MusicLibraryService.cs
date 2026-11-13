@@ -37,6 +37,8 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
         var item = new MusicVersion
         {
             Id = op.Id, ParishId = parish, WorkId = op.Id, Title = Guard.Text(request.Title, "Title", 300),
+            // Arabic twins are stored as typed; one language is never filled from the other.
+            TitleAr = Optional(request.TitleAr, 300), SeasonAr = Optional(request.SeasonAr, 100),
             AlternateTitles = request.AlternateTitles.Select(x => Guard.Text(x, "Alternate title", 300)).ToArray(),
             Language = Guard.Text(request.Language, "Language", 10), Rite = Optional(request.Rite, 100), Season = Optional(request.Season, 100),
             Composer = Optional(request.Composer, 200), MusicalKey = Optional(request.MusicalKey, 20), Instrumentation = Optional(request.Instrumentation, 200),
@@ -98,10 +100,12 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
         var matches = rows.Select(r => r.Value)
             .Where(x => includeInactive || x.Status == "Active")
             .Where(x => string.IsNullOrWhiteSpace(text) || x.Title.Contains(text, StringComparison.OrdinalIgnoreCase)
+                || (x.TitleAr?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false)
                 || x.AlternateTitles.Any(a => a.Contains(text, StringComparison.OrdinalIgnoreCase))
                 || (x.Composer?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false))
             .Where(x => language is null || string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase))
-            .Where(x => season is null || string.Equals(x.Season, season, StringComparison.OrdinalIgnoreCase))
+            .Where(x => season is null || string.Equals(x.Season, season, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(x.SeasonAr, season, StringComparison.OrdinalIgnoreCase))
             .Where(x => rite is null || string.Equals(x.Rite, rite, StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Title, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Id, StringComparer.Ordinal).ToList();
         return new Page<MusicVersionDto>
@@ -123,7 +127,8 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
 
     private static MusicVersionDto Project(MusicVersion x) => new()
     {
-        Id = x.Id, WorkId = x.WorkId, Title = x.Title, AlternateTitles = [.. x.AlternateTitles], Language = x.Language, Rite = x.Rite, Season = x.Season,
+        Id = x.Id, WorkId = x.WorkId, Title = x.Title, TitleAr = x.TitleAr, AlternateTitles = [.. x.AlternateTitles], Language = x.Language, Rite = x.Rite,
+        Season = x.Season, SeasonAr = x.SeasonAr,
         Composer = x.Composer, MusicalKey = x.MusicalKey, Instrumentation = x.Instrumentation, Category = x.Category,
         // Withdrawn versions keep their metadata for pinned history but no longer offer their materials.
         Lyrics = x.Status == "Withdrawn" ? null : x.Lyrics, Chords = x.Status == "Withdrawn" ? null : x.Chords, Notes = x.Notes,

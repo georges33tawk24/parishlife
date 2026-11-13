@@ -1,5 +1,5 @@
 // Purpose: carries one running-order item in plan saves and responses, with computed start/end in responses.
-// Main members: Key, Title, Minutes, FixedStart, ResponsibleRole, Required, AssignedAccountId, Instructions, InstructionAudience, MusicVersionId, StartsAt and EndsAt.
+// Main members: Key, Title, Minutes, FixedStart, ResponsibleRole, Required, AssignedAccountId, Instructions, InstructionAudience, MusicVersionId, StartsAt and EndsAt; optional Arabic twins TitleAr and InstructionsAr.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -16,6 +16,9 @@ public class PlanItemDto
     [StringLength(300)]
     public string Title { get; set; } = string.Empty;
 
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
+
     [Range(0, 1440)]
     public int Minutes { get; set; }
 
@@ -31,6 +34,9 @@ public class PlanItemDto
 
     [StringLength(2000)]
     public string? Instructions { get; set; } = null;
+
+    [StringLength(2000)]
+    public string? InstructionsAr { get; set; } = null;
 
     [Required]
     [RegularExpression("^(Clergy|Team|Everyone)$")]

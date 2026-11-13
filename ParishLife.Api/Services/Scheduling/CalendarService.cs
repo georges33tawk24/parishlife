@@ -130,11 +130,13 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
                 Id = row.Value.Id,
                 ParishId = parish,
                 Title = row.Value.Title,
+                TitleAr = row.Value.TitleAr,
                 Kind = row.Value.Kind,
                 StartsAt = row.Value.StartsAt,
                 EndsAt = row.Value.EndsAt,
                 TimeZone = row.Value.TimeZone,
                 Description = row.Value.Description,
+                DescriptionAr = row.Value.DescriptionAr,
                 Status = row.Value.Status
             }).ToArray(),
             ContinuationToken = page.ContinuationToken
@@ -168,7 +170,7 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
             }
             catch (ArgumentOutOfRangeException) { throw new DomainException("invalid_series", "The recurrence exceeds the supported date range."); }
             var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(op.Id + ":" + i)).AsSpan(0, 16)).ToString("N");
-            var value = Draft(parish, id, new SaveEventDto { Title = request.Title, Kind = request.Kind, StartsAt = start, EndsAt = end, TimeZone = request.TimeZone, Visibility = request.Visibility, Description = request.Description });
+            var value = Draft(parish, id, new SaveEventDto { Title = request.Title, TitleAr = request.TitleAr, Kind = request.Kind, StartsAt = start, EndsAt = end, TimeZone = request.TimeZone, Visibility = request.Visibility, Description = request.Description, DescriptionAr = request.DescriptionAr });
             value.SeriesId = op.Id;
             events.Add(value);
         }
@@ -193,6 +195,8 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
             Id = id,
             ParishId = parish,
             Title = Guard.Text(request.Title, "Title", 500),
+            // The Arabic twin is stored as typed; neither language is filled from the other.
+            TitleAr = Optional(request.TitleAr, "Arabic title", 500),
             Kind = request.Kind,
             StartsAt = request.StartsAt,
             EndsAt = request.EndsAt,
@@ -201,9 +205,11 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
             Status = "Draft",
             CreatedBy = actor.AccountId,
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : Guard.Text(request.Description, "Description", 10000),
+            DescriptionAr = Optional(request.DescriptionAr, "Arabic description", 10000),
             ClergyAccountIds = []
         };
     }
+    private static string? Optional(string? value, string field, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, field, max);
     private CalendarEventDto View(CalendarEvent value)
     {
         var hidden = value.Visibility == "Private" && value.CreatedBy != actor.AccountId || value.Visibility == "Ministry";
@@ -212,6 +218,7 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
             Id = value.Id,
             ParishId = value.ParishId,
             Title = hidden ? "Busy" : value.Title,
+            TitleAr = hidden ? null : value.TitleAr,
             Kind = hidden ? "Busy" : value.Kind,
             StartsAt = value.StartsAt,
             EndsAt = value.EndsAt,
@@ -223,6 +230,7 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
             CreatedBy = hidden ? null : value.CreatedBy,
             SeriesId = hidden ? null : value.SeriesId,
             Description = hidden ? null : value.Description,
+            DescriptionAr = hidden ? null : value.DescriptionAr,
             LastActionReason = hidden ? null : value.LastActionReason
         };
     }

@@ -1,5 +1,5 @@
 // Purpose: returns one music version with metadata, permitted materials and rights.
-// Main members: Id, WorkId, Title, metadata, Lyrics, Chords, Notes, MediaLinks, RightsBasis, Attribution, use permissions, Status, SupersedesId and creation facts.
+// Main members: Id, WorkId, Title, metadata, Lyrics, Chords, Notes, MediaLinks, RightsBasis, Attribution, use permissions, Status, SupersedesId and creation facts; optional Arabic twins TitleAr and SeasonAr.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -11,6 +11,8 @@ public class MusicVersionDto
 
     public string Title { get; set; } = string.Empty;
 
+    public string? TitleAr { get; set; } = null;
+
     public string[] AlternateTitles { get; set; } = Array.Empty<string>();
 
     public string Language { get; set; } = string.Empty;
@@ -18,6 +20,8 @@ public class MusicVersionDto
     public string? Rite { get; set; } = null;
 
     public string? Season { get; set; } = null;
+
+    public string? SeasonAr { get; set; } = null;
 
     public string? Composer { get; set; } = null;
 
