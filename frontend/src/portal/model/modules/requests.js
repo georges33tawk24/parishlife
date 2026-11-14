@@ -3,14 +3,16 @@
    files, account links and replaced tracking links).
    Main members: keys, routes, load, save (the module contract), plus the calls the screens make:
    getCase, act, submitOwn, getMessages, postMessage, getHistory, setChecklist, listFiles, uploadFile,
-   removeFile, fileURL, decideAssociation, rotateTracking, claimGuest.
+   removeFile, fileURL, decideAssociation, rotateTracking, claimGuest, openRecord, myClaims, the request
+   letters (listLetters, myLetters, createLetter, reviseLetter, letterPreview, signLetter, releaseLetter,
+   withdrawLetter) and the signer profile (getSignerProfile, saveSignerProfile).
 
    The API's request is a case with a status (Received, NeedsInformation, AcceptedForProcessing,
    CancellationRequested, Completed, Declined, Withdrawn, Cancelled) and separate facts: accepted,
    approved by a priest, date confirmed, completed. The screens were written for member requests that
-   created a sacrament entry or a booking when accepted; the API does not do that (it only records the
-   case, and its links to records), so those side effects are gone and the screens show the API's own
-   facts. The office queue becomes MEMBER_REQUESTS (every case, guest cases included, kept apart by
+   created a sacrament entry or a booking when accepted; the API keeps acceptance a separate step: once
+   accepted, the office opens the sacramental case or certificate explicitly (openRecord), through the
+   sacrament services' own authority, and the case links it. The office queue becomes MEMBER_REQUESTS (every case, guest cases included, kept apart by
    `origin`), and the person's own cases become MY_REQUESTS. Both are read-only on screen: every change is
    an action sent straight to the API, after which the portal reloads. */
 import { api, parishAPI, session, newOperationId } from '../api.js';
@@ -242,7 +244,8 @@ export const postMessage = (id, audience, body) =>
   parishAPI(base(id) + '/messages', 'POST', { operationId: newOperationId(), audience, body });
 /* What happened to a case, newest last (office only). */
 export const getHistory = id => parishAPI(base(id) + '/history');
-/* The checklist is replaced as a whole: items are { key, label, required, status, paperReference }. */
+/* The checklist is replaced as a whole: items are { key, label, required, status, paperReference,
+   evidenceFileId } (a received item names its paper reference, an active file of the case, or both). */
 export const setChecklist = (id, version, items) =>
   parishAPI(base(id) + '/checklist', 'PUT', {
     operationId: newOperationId(),
@@ -252,7 +255,8 @@ export const setChecklist = (id, version, items) =>
       label: i.label,
       required: !!i.required,
       status: i.status,
-      paperReference: i.paperReference || null
+      paperReference: i.paperReference || null,
+      evidenceFileId: i.evidenceFileId || null
     }))
   });
 
@@ -260,7 +264,11 @@ export const setChecklist = (id, version, items) =>
 export const listFiles = id => parishAPI(base(id) + '/files');
 export const fileURL = (id, fileId) =>
   `/api/parishes/${encodeURIComponent(session.parishId)}/${base(id)}/files/${encodeURIComponent(fileId)}`;
-export async function uploadFile(id, file, { replacesId, reason } = {}) {
+/* checklistKey names the checklist item the file answers; the office still decides whether it is received. */
+export const uploadFile = (id, file, options = {}) =>
+  multipart(`/api/parishes/${encodeURIComponent(session.parishId)}/${base(id)}/files`, file, options);
+/* A multipart upload with the anti-forgery token (and any extra headers, such as a guest's tracking token). */
+export async function multipart(url, file, { replacesId, reason, checklistKey } = {}, headers = {}) {
   const { token } = await api('auth/csrf');
   const form = new FormData();
   form.append('operationId', newOperationId());
@@ -269,12 +277,13 @@ export async function uploadFile(id, file, { replacesId, reason } = {}) {
     form.append('replacesId', replacesId);
     form.append('reason', reason || '');
   }
+  if (checklistKey) form.append('checklistKey', checklistKey);
   let response;
   try {
-    response = await fetch(`/api/parishes/${encodeURIComponent(session.parishId)}/${base(id)}/files`, {
+    response = await fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token, ...headers },
       body: form
     });
   } catch {
@@ -306,3 +315,46 @@ export const decideAssociation = (id, version, approve, text) =>
   });
 export const rotateTracking = (id, version, reason) =>
   parishAPI(base(id) + '/rotate-tracking', 'POST', { operationId: newOperationId(), version, reason });
+
+/* Once accepted, the office opens the record the case needs, through the sacrament services' own rules:
+   kind 'SacramentalCase' (a sacrament inquiry) or 'Certificate'. fields: { sacrament, facts, tentativeDate,
+   sourceRecordId, language, quantity, purpose }. A retry with the same operationId opens nothing twice. */
+export const openRecord = (id, version, recordKind, fields = {}, operationId = newOperationId()) =>
+  parishAPI(base(id) + '/records', 'POST', { operationId, version, recordKind, ...clean(fields) });
+
+/* The guest requests this account asked to link: [{ parishId, parishName, requestId, reference, claimedAt,
+   state: 'Pending' | 'Linked' | 'NotPending' }]. */
+export const myClaims = () => api('me/request-claims');
+
+/* ---- request letters (priest-signed; reference only until an approved signature arrangement) ---- */
+const letters = id => base(id) + '/letters';
+const letter = id => `letters/${encodeURIComponent(id)}`;
+export const listLetters = id => parishAPI(letters(id));
+export const myLetters = id => parishAPI(letters(id) + '/mine');
+/* fields: { title, body, language, addresseeName, replacesLetterId, replaceReason } */
+export const createLetter = (id, fields) =>
+  parishAPI(letters(id), 'POST', { operationId: newOperationId(), ...clean(fields) });
+export const reviseLetter = (letterId, version, fields) =>
+  parishAPI(letter(letterId), 'PUT', { operationId: newOperationId(), version, ...clean(fields) });
+/* The canonical content and its hash, which the priest signs. */
+export const letterPreview = letterId => parishAPI(letter(letterId) + '/authorization-preview');
+/* The authenticator code is a credential for this one act: it is sent once and never kept. */
+export const signLetter = (letterId, version, expectedContentHash, authenticatorCode) =>
+  parishAPI(letter(letterId) + '/authorization', 'POST', {
+    operationId: newOperationId(),
+    version,
+    expectedContentHash,
+    authenticatorCode
+  });
+/* fields: { method: 'InPerson' | 'VerifiedAccount', confirmRequestReference, confirmAddresseeName,
+   confirmContentHash, verificationEvidence } */
+export const releaseLetter = (letterId, version, fields) =>
+  parishAPI(letter(letterId) + '/release', 'POST', { operationId: newOperationId(), version, ...clean(fields) });
+export const withdrawLetter = (letterId, version, reason) =>
+  parishAPI(letter(letterId) + '/withdraw', 'POST', { operationId: newOperationId(), version, reason });
+
+/* The printed name a priest signs with ({ printedName, updatedAt, version }); null when none is set up. */
+export const getSignerProfile = () =>
+  api('me/signer-profile').catch(e => (e.status === 404 ? null : Promise.reject(e)));
+export const saveSignerProfile = (printedName, version) =>
+  api('me/signer-profile', 'PUT', { operationId: newOperationId(), version: version || null, printedName });

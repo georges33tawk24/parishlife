@@ -24,6 +24,13 @@ Files: `frontend/src/portal/model/modules/requests.js` (load and every call), `m
 | Private files: list, multipart upload/replace, download, remove | `.../requests/{id}/files`, `.../files/{fileId}`, `.../files/{fileId}/remove` |
 | A13: claim, decide, replace a leaked link | `POST .../requests/{id}/claim` (header `X-ParishLife-Tracking`), `.../association`, `.../rotate-tracking` |
 | Guest: send, follow, message | `POST /api/public/parishes/{p}/requests`, `GET .../requests/{id}`, `GET/POST .../requests/{id}/messages` (header `X-ParishLife-Tracking`; `X-Turnstile-Token` on submit when set) |
+| Open the record an accepted case needs (sacramental case or certificate) | `POST .../requests/{id}/records` (operation id, version, record kind, sacrament; certificate language, copies, purpose) |
+| Files named for a checklist item; a received item names a case file | multipart field `checklistKey`; checklist item `evidenceFileId` |
+| Letters: draft, revise, preview, priest signature, release, withdraw; the applicant's released letters | `GET/POST .../requests/{id}/letters`, `PUT .../letters/{l}`, `GET .../letters/{l}/authorization-preview`, `POST .../letters/{l}/authorization`, `.../release`, `.../withdraw`, `GET .../requests/{id}/letters/mine` |
+| Printed name for electronic authorization | `GET/PUT /api/me/signer-profile` (GET now returns the version a replacement sends) |
+| The account's guest-request claims | `GET /api/me/request-claims` |
+| Guest: letters (title and status only), own files and uploads | `GET /api/public/parishes/{p}/requests/{id}/letters`, `GET/POST .../requests/{id}/files` (header `X-ParishLife-Tracking`, CSRF on upload) |
+| Names of assignee, message authors and history actors | `GET /api/parishes/{p}/account-names` through `model/names.js` |
 
 ## How the old screens map
 
@@ -33,25 +40,35 @@ Files: `frontend/src/portal/model/modules/requests.js` (load and every call), `m
 - The tracking link is `public.html#track=<parishId>.<requestId>.<token>`: the API needs the parish and request as well as the token, and the fragment never reaches a server.
 - `request.start` visits: already counted by `lib/beacon.js` when the request page is shown (no change needed). `publicRequests` is now `true`.
 
+## Now connected (fullstack2-requests)
+
+- **Accepting, then opening the record.** Acceptance stays its own decision. On an accepted sacrament inquiry or certificate request, the case view (`features/records/request-record.jsx`) opens a sacramental case or a certificate through `SacramentService`/`CertificateService`, which keep their own rules: sacraments.record with MFA, sacraments coverage, a matched person (`match-subject` first), the once-only duplicate check. Request access alone opens nothing. A sacramental case starts at Received: nothing is written in the register until a priest registers it. A certificate without a chosen register entry waits for its source. The case links the record; the same operation id (kept on screen until success) never opens or links twice. Linked records are listed by kind.
+- **File checklists.** An upload may name the checklist item it answers (applicant, office and guest); a replacement keeps its item. The office marks an item received with a paper reference, an active file of the case, or both; naming an item never marks it received. Applicants see the checklist (status only) and choose the item when uploading.
+- **Guest documents.** On the tracking page a guest sees the checklist, sends PDF/JPEG/PNG files (up to 10 MB, the case's 20-file limit) naming an item, and sees the names of the files they sent. Nothing downloads through the bearer link (S15.11), and the office sees these files as "guest, through the tracking link". After the case joins an account the link stops uploading.
+- **Letters.** The case view (`features/records/request-letters.jsx`) drafts, revises, replaces, signs (priest: preview hash and a fresh authenticator code, never kept), releases (re-entered reference and addressee, the signed hash; account or in person with identity evidence) and withdraws letters. Members see released letters on their request (`features/member/request-letters-mine.jsx`), with text, signer and code only when released to their account. Guests see title, reference, status and the API's statement, never the text or code. Every view shows the U05 statement: reference only unless the archdiocese approved an electronic-signature arrangement.
+- **Signer setup.** `features/account/signer-profile.jsx` (on My account for priests, and inline before a first signature) saves the printed name. The old passkey signing (`model/signing.js`, `POST /api/sign/options`) is removed; the drawn-signature panel on My account (`account/signature`) still calls the old server and belongs with the sacraments/account work.
+- **Pending claims.** My account lists the account's claims (reference, parish, waiting / linked / no longer waiting) from an account-partition pointer written when the claim is made.
+- **The generic upload component** (`ui/components.jsx` `Dropzone`) no longer calls `parishes/{id}/files`: scope `request` stores private case files through the evidence routes. A person's or a group's files (`person.jsx`, `groups.jsx`) have no API file store; their drop area says "not connected" and sends nothing. Those stores belong to the people and ministries areas.
+- Names: assignee, message authors and history actors use the shared lookup; ids it may not reveal show the previous neutral labels.
+
 ## Fields and features with no API equivalent
 
-- **Accepting no longer creates anything.** The old accept made a sacrament entry or a booking; the API only records the case (and `link` actions to record ids). The office enters the sacrament or booking in its own page. The case view lists links but offers no UI to add one (needs a record picker).
-- Matching a child to People, choosing the register entry for a certificate, room availability and capacity, the list of rooms, and "who in my household" for members: none are in the Requests API. Members describe the place and any other person in words; the office matches the person (`match-subject`).
-- Files are not tied to a checklist item; a received item carries a typed paper or file reference.
-- **Guest files and signed letters:** a guest sees status, the office's message and messages only. Releasing a document to the tracking link and signed letters on the tracking page were removed. Documents on sacrament entries, service requests and office expenses have no file route; their uploads say "not connected".
-- Delivery choice ("secure download") on the public form was removed, since nothing delivers files to guests.
-- The account page cannot list pending claims (no route), so it shows only the result of the claim just sent.
-- Names shown for assignee and authors: the API returns account ids only, so the case view says "You" or "Another office member".
+- Reservations from a booking request: a reservation needs an exact draft event and rooms (`ReservationService`), so the office still creates it in the calendar; the case's `link` action can record it, but there is no record picker on screen.
+- Matching a child to People, choosing the register entry for a certificate on screen, room availability and capacity, the list of rooms, and "who in my household" for members: none are in the Requests API. Members describe the place and any other person in words; the office matches the person (`match-subject`).
+- Documents on sacrament entries, service requests and office expenses, and person or group files, have no file route; their uploads say "not connected".
+- Delivery choice ("secure download") on the public form stays removed: nothing delivers files to guests.
 - The portal's phone for a parish, prefilled `M.person.phone` and the member nav gate on `person_id` belong to the member module.
 
 ## Open owner decisions
 
-1. **Guests cannot withdraw or answer.** `RequestActionDto.Version` is required, but `GET /api/public/parishes/{p}/requests/{id}` returns no version or ETag. Guests can only message the office. The API should return the version (or accept guest actions without it).
-2. **Guest file delivery.** Should an office-reviewed document reach a guest's tracking link, and how? Signed letters likewise.
-3. **Accept side effects.** Should accepting a booking or a sacrament request create the reservation or entry (as the old server did), or stay a manual step with a link?
-4. **Turnstile.** The anonymous request routes are rate-limited but not `[TurnstileProtected]`; the form sends the token when Turnstile is on, and blocks the send until the check is solved.
-5. **Member nav.** The member menu is empty without `person_id`, which hides `myrequests` for accounts not linked to a person, although the API allows them to ask.
+1. **Guests cannot withdraw or answer.** `RequestActionDto.Version` is required, but `GET /api/public/parishes/{p}/requests/{id}` returns no version or ETag. Guests can message the office and send files. The API should return the version (or accept guest actions without it).
+2. **Guest file delivery.** Should an office-reviewed document or a signed letter reach a guest's tracking link, and how (S15.11 says a bearer link is not download identity; U10 contact challenges are not built)? Today guests collect in person or link an account.
+3. **Accept side effects.** Opening the record is a separate, explicit office step after acceptance. Should acceptance open it automatically, and should a booking request create its reservation?
+4. **Guest uploads.** Implemented as a neutral mechanism (token header, rate limit, CSRF, 10 MB, 20 active files per case, no download, no malware scanning). Confirm that guests may send files at all, and whether a retention period applies.
+5. **Electronic signatures (U05).** Signed letters stay "reference only" until the archdiocese records an approved arrangement; the validity of electronic signatures is an owner question.
+6. **Turnstile.** The anonymous request routes, guest uploads included, are rate-limited but not `[TurnstileProtected]`.
+7. **Member nav.** The member menu is empty without `person_id`, which hides `myrequests` for accounts not linked to a person, although the API allows them to ask.
 
 ## Verified
 
-`npm ci`, `npm run format:check`, `npm run check` (incl. `scripts/checks/requests.mjs`) and `npm run build` pass. Not verified against a live API: it needs a verified account with `requests.manage` and MFA. Screens were not rendered in a browser here.
+`npm ci`, `npm run format:check`, `npm run check` (incl. `scripts/checks/requests.mjs`), `npm run check:routes` and `npm run build` pass; backend tests in `ParishLife.IntegrationTests/RequestCompletionTests.cs` cover the new routes and rules. Not verified against a live API: it needs a verified account with `requests.manage` and MFA. Screens were not rendered in a browser here.

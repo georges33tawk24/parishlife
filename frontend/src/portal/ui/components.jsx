@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './icons.jsx';
 import { t, isAr, num, usd, month, dayShort, matches } from '../../lib/i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from '../model/data.js';
-import { parishAPI, session } from '../model/api.js';
+import { listFiles, uploadFile, fileURL } from '../model/modules/requests.js';
 import { Avatar, toast, openPopover, closeMenu } from './ui.jsx';
 import { useVersion } from '../shell/version.js';
 export { AddressCascade } from './geography.jsx';
@@ -682,17 +682,22 @@ export function DateRange() {
 }
 
 /* ---------------- uploads ---------------- */
-/* Files appear above the drop area immediately; success comes from the server. */
+/* Files appear above the drop area immediately; success comes from the server. Only request cases keep files
+   in ParishLife.Api (private evidence files: .../requests/{id}/files, list, multipart upload, download), so
+   scope 'request' (or 'guest-request') with the case id as ownerId stores them there. Other scopes (a
+   person's or a group's files) have no API file store yet: their drop area says so and sends nothing.
+   Removing a case file needs a reason and is done in the case's documents section. */
+const onCase = scope => scope === 'request' || scope === 'guest-request';
 export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false }) {
   const [files, setFiles] = useState(null),
     [pending, setPending] = useState([]),
     [error, setError] = useState('');
   const [over, setOver] = useState(false);
+  const stored = onCase(scope) && !!ownerId;
   const load = async () => {
-    if (!scope) return;
+    if (!stored) return;
     try {
-      const data = await parishAPI(`files?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(ownerId)}`);
-      setFiles(data.files);
+      setFiles((await listFiles(ownerId)).filter(f => f.status === 'Active'));
       setError('');
     } catch (e) {
       setError(e.message);
@@ -714,31 +719,22 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
           ? t('File is larger than 10 MB', 'الملف أكبر من ١٠ ميغابايت')
           : !supported
             ? t('Use JPG, PNG or PDF', 'استخدم JPG أو PNG أو PDF')
-            : scope
+            : stored
               ? t('Uploading…', 'جارٍ الرفع…')
-              : t('Selected for preview only', 'مختار للمعاينة فقط')
+              : scope
+                ? t('Files for this record are not connected yet', 'ملفات هذا السجل غير متّصلة بعد')
+                : t('Selected for preview only', 'مختار للمعاينة فقط')
       };
       setPending(p => [row, ...p]);
-      if (!supported || large || !scope) continue;
-      const bytes = new Uint8Array(await f.arrayBuffer());
-      let binary = '';
-      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      if (!supported || large || !stored) continue;
       try {
-        await parishAPI('files', 'POST', { scope, id: ownerId, name: f.name, data: btoa(binary) });
+        await uploadFile(ownerId, f);
         setPending(p => p.filter(x => x.key !== key));
         await load();
         toast(t('File uploaded', 'رُفع الملف'), f.name, 'success');
       } catch (e) {
         setPending(p => p.map(x => (x.key === key ? { ...x, err: true, note: e.message } : x)));
       }
-    }
-  };
-  const remove = async fileId => {
-    try {
-      await parishAPI(`files/${encodeURIComponent(fileId)}`, 'DELETE', {});
-      await load();
-    } catch (e) {
-      toast(t('Could not delete file', 'تعذّر حذف الملف'), e.message, 'danger');
     }
   };
   return (
@@ -761,35 +757,27 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
         ))}
         {error ? (
           <p className="help help-error">{error}</p>
+        ) : !stored && scope ? (
+          <p className="help">
+            {t(
+              'Files for this kind of record are not connected to ParishLife yet; only request cases keep files.',
+              'ملفات هذا النوع من السجلات غير متّصلة بـParishLife بعد؛ الطلبات وحدها تحفظ الملفات.'
+            )}
+          </p>
         ) : files ? (
           files.length ? (
             files.map(f => (
               <div key={f.id} className="filerow">
                 <Icon name="doc" size={18} cls="dimmer" />
                 <span className="grow">
-                  <b>{f.name}</b>
+                  <b>{f.fileName}</b>
                   <small>
-                    {(f.size / 1048576).toFixed(1)} MB · {f.created_at.slice(0, 10)}
+                    {(f.size / 1048576).toFixed(1)} MB · {String(f.uploadedAt).slice(0, 10)}
                   </small>
                 </span>
-                <a
-                  className="btn btn-secondary btn-dense"
-                  href={`/api/parishes/${encodeURIComponent(session.parishId)}/files/${encodeURIComponent(f.id)}`}
-                  target="_blank"
-                  rel="noopener"
-                >
+                <a className="btn btn-secondary btn-dense" href={fileURL(ownerId, f.id)} target="_blank" rel="noopener">
                   {t('Open', 'فتح')}
                 </a>
-                {readOnly ? null : (
-                  <button
-                    className="btn-icon"
-                    data-delete-file={f.id}
-                    aria-label={t('Delete file', 'حذف الملف')}
-                    onClick={() => remove(f.id)}
-                  >
-                    <Icon name="trash" size={16} />
-                  </button>
-                )}
               </div>
             ))
           ) : (
@@ -797,7 +785,7 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
           )
         ) : null}
       </div>
-      {readOnly ? null : (
+      {readOnly || (scope && !stored) ? null : (
         <div
           className={'drop' + (over ? ' over' : '')}
           data-drop={id}
@@ -838,10 +826,10 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
             </label>
           </b>
           <span className="hint">
-            {scope
+            {stored
               ? t(
-                  'JPG, PNG or PDF up to 10 MB. Files are saved to this parish.',
-                  'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات في هذه الرعية.'
+                  'JPG, PNG or PDF up to 10 MB. Files are kept privately with this request.',
+                  'JPG أو PNG أو PDF حتى ١٠ ميغابايت. تُحفظ الملفات بشكل خاص مع هذا الطلب.'
                 )
               : t('Select a file to preview this control.', 'اختر ملفاً لمعاينة هذا العنصر.')}
           </span>

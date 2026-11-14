@@ -28,7 +28,7 @@ import {
 import { toParish } from '../../../public/api-data.js';
 import { t } from '../../../lib/i18n.js';
 import { passkeysSupported, passkeyMessage } from '../../model/passkeys.js';
-import { sign } from '../../model/signing.js';
+import { SignerProfilePanel } from './signer-profile.jsx';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
@@ -362,6 +362,7 @@ export function AccountPage() {
         </Panel>
         <div data-signature="">
           <MySignature key={signature} />
+          <SignerProfilePanel />
         </div>
         <div data-record-corrections="">
           <RecordCorrections />
@@ -542,11 +543,7 @@ function SignatureForm({ me, done }) {
     setError('');
     try {
       const drawing = pad.current.path();
-      await api('account/signature', 'POST', {
-        drawing,
-        title: e.currentTarget.elements.title.value,
-        signature: await sign({ type: 'setup', drawing })
-      });
+      await api('account/signature', 'POST', { drawing, title: e.currentTarget.elements.title.value });
       closeOverlays();
       toast(
         t('Signature saved', 'حُفظ التوقيع'),
