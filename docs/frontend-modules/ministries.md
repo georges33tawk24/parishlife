@@ -16,14 +16,14 @@ The API pages with `?size=&cursor=` (not `continuation`), and answers **404** (n
 
 | Area | Routes |
 | --- | --- |
-| Lifecycle | `GET/POST ministries`, `GET/PUT ministries/{id}`, `POST ministries/{id}/actions` (approve, publish, unpublish, open/close-applications, archive) |
+| Lifecycle | `GET/POST ministries`, `GET/PUT ministries/{id}`, `PUT ministries/{id}/meeting-times`, `POST ministries/{id}/actions` (approve, publish, unpublish, open/close-applications, archive) |
 | Public catalogue | `GET /api/public/parishes/{id}/ministries` |
-| Roster, leadership | `GET .../roster`, `GET .../leadership`, `GET person-account-links/{accountId}` (leader account → person) |
+| Roster, leadership | `GET .../roster`, `POST .../roster/{personId}/end`, `GET/POST .../leadership`, `POST .../leadership/{accountId}/end`, `GET person-account-links/{accountId}` (leader account → person), `GET person-account-links/by-person/{personId}` (member → account, to appoint), `GET account-names` (leader names) |
 | Applications | `GET .../applications?kind=Join\|Leave`, `GET .../applications/mine`, `POST .../applications`, `POST .../applications/{id}/actions`, `GET .../membership/mine`, `PUT .../applications/{id}/private-reason` |
 | Meetings | `GET/POST .../meetings`, `GET/PUT .../meetings/{id}`, `POST .../meetings/{id}/actions` (confirm, cancel), `GET .../meetings/{id}/rsvps` |
 | Attendance | `GET/POST .../attendance`, `POST .../attendance/snapshot`, `GET .../attendance/rows`, `POST .../attendance/records` |
-| Formation (read) | `GET .../formation/programs`, `GET .../formation/enrollments` |
-| Belongings | `GET/POST/PUT .../stock`, `GET .../loans` |
+| Formation | `GET/POST .../formation/programs`, `PUT .../formation/programs/{id}` (draft), `POST .../programs/{id}/actions` (approve), `POST .../programs/{id}/enrollments`, `GET .../formation/enrollments[/{id}]`, `POST .../enrollments/{id}/milestones` |
+| Belongings | `GET/POST/PUT .../stock`, `GET/POST .../loans`, `GET .../loans/{id}`, `POST .../loans/{id}/actions` |
 | Volunteers | `GET .../volunteering/opportunities`, `.../opportunities/{id}/assignments`, `.../people/{personId}/hours`, `POST .../opportunities/{id}/actions` (cancel) |
 
 ## What works
@@ -36,14 +36,33 @@ The API pages with `?size=&cursor=` (not `continuation`), and answers **404** (n
 - **Ministry requests page:** the published ministries of each followed parish, own applications (withdraw), applications to review in the open parish (leaders: joins; priests: also departures), ask to join or leave. A leaving note goes to the private-reason route.
 - **Sign-up sheets:** loaded from volunteer opportunities; deleting one cancels it.
 
+## Added in fullstack2-ministries
+
+Backend (all in `ParishLife.Api`, tests in `ParishLife.IntegrationTests/MinistryCompletionTests.cs`):
+- **Arabic twins** (optional, saved as typed, `null` on older records, never copied): ministry `NameAr`, `PurposeAr`, `PublicInformationAr` (also in the public and member projections); meeting `TitleAr`; stock `NameAr`, `StorageAr` (storage stays hidden from members); loan `StockNameAr`; volunteer opportunity `TitleAr`; formation program `TitleAr`, milestone `TitleAr`, `Description`, `DescriptionAr`.
+- **Meeting times:** `MeetingTimes`/`MeetingTimesAr` free text on the ministry, changed only through `PUT ministries/{id}/meeting-times` (office, `ministries.manage`, MFA; draft or active ministry; versioned; lifecycle history entry). They are operational and do not reopen the approved description; not in the public projection.
+- **Roster removal:** `POST ministries/{id}/roster/{personId}/end` (priest only, reason stored data-protected, `JoinedAt` pins the interval on screen). Refused while the person has a pending application; ends linked leadership exactly as an approved departure does; the person can rejoin through a new application.
+- **Adding members** uses the existing assisted join application (preparer with `people.write`; a different priest approves with the eligibility review).
+- **Person → account:** `GET person-account-links/by-person/{personId}` (`people.write`, MFA), to appoint a roster member.
+- **Formation draft editing:** `PUT formation/programs/{id}` edits a draft in place (formation recording duty); approved revisions stay immutable and are revised by a new draft.
+- Leadership handover, appointment and ending already existed and are unchanged (priest, evidence, eligibility, grant deny of `ministries.manage`).
+
+Screens:
+- Group form: Arabic name, purpose and public information, usual meeting times (both languages).
+- Overview: leaders by name (account-names lookup), **End** appointment (priest). Handover: evidence and duties, immediate replacement.
+- Roster menu: make leader / make assistant (evidence, duties), remove from group (priest, reason). Add member: creates assisted join requests with the recorded evidence.
+- Belongings: Arabic name and storage saved; lend to a current member (request, approve, issue with due date and condition); each loan shows its status and the next steps (approve/decline, issue, return or report missing, condition check, close).
+- Formation: milestones edited as the draft program (Arabic name, descriptions, clergy completion); priest approves the draft with a reference; "Record evidence" enrolls if needed and submits evidence with a date; a different reviewer reviews and completes; a priest reopens a completion.
+
 ## Fields with no API equivalent (left empty or not saved)
 
-- Group: Arabic name (copied from the name), "meets" text, visibility (shown as public when published, else private), budget, posts, files, tasks, history, automations and messaging rules, signup QR.
-- Roster: adding or removing a member, assigning roles, leadership handover and assistants from the screens. Membership comes only from approved applications; leaders are appointed with `POST .../leadership` (priest, with evidence reference and eligibility), not wired.
-- Leaders appear by person only when the account is linked to a person you may read (`people.write`); otherwise the role row shows a dash.
+- Group: visibility (shown as public when published, else private), budget, posts, files, tasks, history, automations and messaging rules, signup QR.
+- Arabic name, purpose and public information can only be saved while the group is a draft (the API refuses edits to an approved description); see owner question 6.
+- Meeting Arabic title: the API field exists, but the meeting dialogs do not have an Arabic title input yet.
+- Belongings: inventory code, condition and description have no API field (not saved).
 - Meetings for chosen people or "committee only" (no participant field); Late attendance shows as present; attendance import from a workbook (old route); guests (need an identity review reference).
-- Formation is **read-only**: milestones and completions load from the approved program and enrollments. Creating programs, enrolling and recording progress need review references the screens do not ask for.
-- Resource loans are read-only (the API's request → approve → issue → return flow differs from the screen's free-text borrower).
+- Formation: external prior learning, returning evidence for more information and enrollment withdrawal are not on screen (the API supports them).
+- Loans: members requesting their own loans ("My resources") belong to the member area; the backend routes (`stock/available`, `loans/mine`) already exist.
 - Volunteers: skills, availability, training, safeguarding clearance (shown as "not recorded here") and the rota. Hours are the verified hours the API holds. Creating or editing a sign-up sheet (needs a ministry and a position).
 - Hours review, RSVP replies and the private RSVP reason, other attendance corrections.
 
@@ -54,6 +73,11 @@ The API pages with `?size=&cursor=` (not `continuation`), and answers **404** (n
 3. **Attendance closing:** which reporting reference and reason should the screen collect to close a sheet?
 4. **Leader list route:** leaders cannot list ministries; their ministries come from capacities. A "my ministries" route would be simpler.
 5. **Sign-up sheets and volunteers:** which ministry and position a sheet belongs to; whether volunteer skills and clearance belong in ParishLife.
+
+6. **Arabic names for approved groups:** an active group's description cannot be edited, so existing groups cannot get Arabic names without a reviewed revision path. Allow Arabic twins (or a reviewed revision) on active groups?
+7. **Meeting times editors:** only the office (`ministries.manage`) can change them. Should current leaders also be allowed?
+8. **Roster removal:** only a priest can end a membership, with a reason. Confirm, and whether the removed person should be told.
+9. **Single-priest parishes:** an assisted join prepared by the priest needs a different priest to approve (existing separation rule). Confirm or define the exception.
 
 ## Not verified live
 

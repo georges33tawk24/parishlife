@@ -1,7 +1,8 @@
 /* Purpose: checks the Ministries module (src/portal/model/modules/ministries.js) against an in-memory
    stand-in for the Ministries routes: what load puts in GROUPS, GROUP_DETAIL, SIGNUP_SHEETS, VOLUNTEERS
    and ATTENDANCE_SERIES, and what save and the direct workflows send (paging with size and cursor,
-   operation ids, versions, the meeting and attendance flow, join decisions, ministry requests).
+   operation ids, versions, the meeting and attendance flow, join decisions, ministry requests, Arabic
+   twins and meeting times, roster removal, leadership handover, formation drafts and evidence, loans).
    Run with `npm run check` from frontend/. */
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
@@ -35,6 +36,7 @@ const ministry = (id, name, extra = {}) => ({
   policyRevision: 1,
   ...extra
 });
+const ARABIC = { nameAr: 'جوقة مار الياس', meetingTimes: 'Fridays 19:00', meetingTimesAr: 'الجمعة ١٩:٠٠' };
 const meeting = (id, startsAt, status, extra = {}) => ({
   id,
   ministryId: M1,
@@ -74,6 +76,16 @@ const { sent } = mockApi((method, path, body) => {
   const q = url.searchParams;
   if (route === 'parishes/P/people') return page([]); // the People module loads too
   requested.push(route);
+  const seat = `parishes/P/ministries/${M1}`;
+  if (route === 'parishes/P/account-names') return json(200, [{ accountId: ACCOUNT, displayName: 'Rita Leader' }]);
+  if (route === `parishes/P/person-account-links/by-person/${PERSON_B}`)
+    return json(200, v({ personId: PERSON_B, accountId: 'acc-b', active: true }, 'lk'));
+  if (route === `${seat}/loans` && method === 'POST') return json(200, { id: 'ln2', status: 'Requested' });
+  if (route === `${seat}/loans/ln2` && method === 'GET') return json(200, v({ id: 'ln2' }, 'ln2v'));
+  if (route === `${seat}/loans/ln1` && method === 'GET') return json(200, v({ id: 'ln1' }, 'ln1v'));
+  if (route === `${seat}/formation/programs/pg1` && method === 'GET') return json(200, v({ id: 'pg1' }, 'pg1v'));
+  if (route === `${seat}/formation/enrollments/en2` && method === 'GET')
+    return json(200, v({ id: 'en2', milestones: [{ key: 'level-1', status: 'InProgress' }] }, 'en2v'));
   if (route === 'me/capacities')
     return json(
       200,
@@ -90,9 +102,9 @@ const { sent } = mockApi((method, path, body) => {
   if (route === 'parishes/P/ministries' && method === 'GET')
     return q.get('cursor') // two pages: the first ends with a cursor
       ? page([v(ministry(M2, 'Archived choir', { status: 'Archived' }), 'v9')])
-      : page([v(ministry(M1, 'Saint Elias Choir'), 'm1v')], 'next');
+      : page([v(ministry(M1, 'Saint Elias Choir', ARABIC), 'm1v')], 'next');
   if (route === `parishes/P/ministries/${M1}` && method === 'GET')
-    return json(200, v(ministry(M1, 'Saint Elias Choir'), 'm1v'));
+    return json(200, v(ministry(M1, 'Saint Elias Choir', ARABIC), 'm1v'));
   if (route === `parishes/P/ministries/${M1}/leadership`)
     return page([
       v(
@@ -232,6 +244,7 @@ const { sent } = mockApi((method, path, body) => {
           id: 's1',
           ministryId: M1,
           name: 'Choir folders',
+          nameAr: 'ملفات الجوقة',
           storage: 'Sacristy',
           total: 30,
           onLoan: 2,
@@ -351,6 +364,11 @@ assert.deepEqual(
   [[M1, 'Saint Elias Choir', 'Choir', 2, 'public', PERSON_A]]
 );
 assert.equal(D.GROUPS[0].version, 'm1v');
+assert.deepEqual(
+  [D.GROUPS[0].ar, D.GROUPS[0].meets, D.GROUPS[0].meetsAr, D.GROUPS[0].purposeAr],
+  ['جوقة مار الياس', 'Fridays 19:00', 'الجمعة ١٩:٠٠', ''],
+  'Arabic twins come from the API and are never copied from the Latin name'
+);
 const detail = D.GROUP_DETAIL[M1];
 assert.deepEqual(
   detail.roster.map(r => [r.p, r.role, r.joined]),
@@ -361,6 +379,12 @@ assert.deepEqual(
   'former members are not on the roster; the leader account shows as its person'
 );
 assert.deepEqual(detail.roles, [[PERSON_A, 'Leader', 'مسؤول']]);
+assert.deepEqual(
+  detail.leaders.map(l => [l.accountId, l.personId, l.name, l.role, l.version]),
+  [[ACCOUNT, PERSON_A, 'Rita Leader', 'Leader', 'lv']],
+  'leader names come from the shared account-names lookup'
+);
+assert.equal(detail.roster[0].joinedAt, '2023-05-01T00:00:00Z');
 assert.deepEqual(
   detail.requests.map(r => [r.id, r.status]),
   [['ap1', 'Submitted']],
@@ -394,16 +418,27 @@ assert.equal(
 assert.deepEqual(D.ATTENDANCE_SERIES, [1]);
 // formation, belongings, loans
 assert.deepEqual(
-  detail.milestones.map(m => [m.name, m.completions]),
-  [['Level 1', { [PERSON_A]: '2025-06-01' }]]
+  detail.milestones.map(m => [m.name, m.completions, m.progress, m.approved]),
+  [
+    [
+      'Level 1',
+      { [PERSON_A]: { date: '2025-06-01', notes: '' } },
+      { [PERSON_B]: { status: 'InProgress', explanation: '' } },
+      true
+    ]
+  ]
 );
 assert.deepEqual(
-  detail.belongings.map(b => [b.id, b.name, b.qty, b.location]),
-  [['s1', 'Choir folders', 30, 'Sacristy']]
+  [detail.formation.approved.id, detail.formation.draft, detail.formation.enrollments[PERSON_B].id],
+  ['pg1', null, 'en2']
 );
 assert.deepEqual(
-  detail.resourceLoans.map(l => [l.resourceId, l.qty, l.due, l.returnedAt]),
-  [['s1', 2, '2026-12-01', '']]
+  detail.belongings.map(b => [b.id, b.name, b.ar, b.qty, b.lent, b.location, b.locationAr]),
+  [['s1', 'Choir folders', 'ملفات الجوقة', 30, 2, 'Sacristy', '']]
+);
+assert.deepEqual(
+  detail.resourceLoans.map(l => [l.resourceId, l.qty, l.due, l.returnedAt, l.status, l.personId]),
+  [['s1', 2, '2026-12-01', '', 'Issued', PERSON_B]]
 );
 // nothing the API does not hold is invented
 assert.deepEqual([detail.posts, detail.files, detail.tasks, detail.history], [[], [], [], []]);
@@ -454,8 +489,18 @@ const writes = () => sent.splice(0);
   assert.deepEqual([method, path], ['POST', 'parishes/P/ministries']);
   assert.match(body.operationId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(
-    [body.name, body.kind, body.purpose, body.publicInformation, body.eligibilityPolicyReference],
-    ['Youth', 'Team', 'Fellowship', null, null]
+    [body.name, body.nameAr, body.kind, body.purpose, body.publicInformation, body.eligibilityPolicyReference],
+    ['Youth', null, 'Team', 'Fellowship', null, null]
+  );
+}
+{
+  // usual meeting times go to their own route with a fresh version; the Arabic twin is saved as typed
+  D.GROUPS[0].meetsAr = 'الجمعة مساءً';
+  assert.equal(await persist(), true);
+  const [[method, path, body]] = writes();
+  assert.deepEqual(
+    [method, path, body.version, body.meetingTimes, body.meetingTimesAr],
+    ['PUT', `parishes/P/ministries/${M1}/meeting-times`, 'm1v', 'Fridays 19:00', 'الجمعة مساءً']
   );
 }
 {
@@ -599,6 +644,93 @@ await hydrate();
   [[, p1, b1]] = writes();
   assert.deepEqual([b1.action, b1.reason], ['return', 'Needs consent form']);
   signedIn(session, { roles: ['priest'] });
+}
+
+// roster, leadership, formation and loans
+{
+  const g = D.groupInfo(M1);
+  await ministries.endMembership(M1, g.roster[1], 'Moved away');
+  let [[, path, body]] = writes();
+  assert.deepEqual(
+    [path, body.joinedAt, body.reason],
+    [`parishes/P/ministries/${M1}/roster/${PERSON_B}/end`, '2024-02-01T00:00:00Z', 'Moved away']
+  );
+  await ministries.addMembers(M1, [PERSON_B], 'Signed form 3 Nov');
+  [[, path, body]] = writes();
+  assert.deepEqual([body.kind, body.personId, body.representationEvidence], ['Join', PERSON_B, 'Signed form 3 Nov']);
+  // a handover appoints the incoming account found through the reviewed link and ends the outgoing one at once
+  await ministries.appointLeader(M1, PERSON_B, {
+    duties: ['attendance.record'],
+    evidence: 'Council minute 12',
+    replace: g.leaders[0]
+  });
+  [[, path, body]] = writes();
+  assert.deepEqual(
+    [
+      path,
+      body.accountId,
+      body.role,
+      body.ministryVersion,
+      body.replaceAccountId,
+      body.replaceVersion,
+      body.evidenceReference
+    ],
+    [`parishes/P/ministries/${M1}/leadership`, 'acc-b', 'Leader', 'm1v', ACCOUNT, 'lv', 'Council minute 12']
+  );
+  await ministries.endLeader(M1, g.leaders[0], 'Term ended');
+  [[, path, body]] = writes();
+  assert.deepEqual([path.endsWith(`/leadership/${ACCOUNT}/end`), body.version], [true, 'lv']);
+  // editing milestones starts a draft revising the approved program
+  await ministries.saveFormation(M1, g.formation, [
+    ...g.milestones,
+    { key: 'level-2', name: 'Level 2', ar: 'المستوى ٢', prerequisiteKeys: ['level-1', 'gone'] }
+  ]);
+  [[, path, body]] = writes();
+  assert.deepEqual(
+    [path, body.supersedesProgramId, body.title, body.milestones.map(m => [m.key, m.titleAr, m.prerequisiteKeys])],
+    [
+      `parishes/P/ministries/${M1}/formation/programs`,
+      'pg1',
+      'Liturgical singing',
+      [
+        ['level-1', null, []],
+        ['level-2', 'المستوى ٢', ['level-1']]
+      ]
+    ]
+  );
+  // recording evidence for an in-progress milestone submits it with the enrollment's version
+  await ministries.recordCompletion(M1, g.formation, 'level-1', [PERSON_B], {
+    date: '2026-11-01',
+    evidence: 'Sheet 4'
+  });
+  [[, path, body]] = writes();
+  assert.deepEqual(
+    [
+      path.endsWith('/formation/enrollments/en2/milestones'),
+      body.action,
+      body.version,
+      body.evidenceReference,
+      body.achievedOn
+    ],
+    [true, 'submit-evidence', 'en2v', 'Sheet 4', '2026-11-01']
+  );
+  // lending: request for the member, approve, issue with the due date and condition
+  const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  await ministries.lendItem(M1, 's1', PERSON_B, { qty: 1, due, condition: 'Good' });
+  const lend = writes();
+  assert.deepEqual(
+    lend.map(([, p, b]) => [p.split(`${M1}/`)[1], b.action || b.personId, b.version || null]),
+    [
+      ['loans', PERSON_B, null],
+      ['loans/ln2/actions', 'approve', 'ln2v'],
+      ['loans/ln2/actions', 'issue', 'ln2v']
+    ]
+  );
+  assert.equal(lend[2][2].condition, 'Good');
+  assert.ok(lend[2][2].dueAt.endsWith('Z'));
+  await ministries.loanAction(M1, g.resourceLoans[0], 'return', { condition: 'Fine' });
+  [[, path, body]] = writes();
+  assert.deepEqual([path.endsWith('/loans/ln1/actions'), body.action, body.version], [true, 'return', 'ln1v']);
 }
 
 // ministry requests: the published catalogue, own applications, and what the account may review
