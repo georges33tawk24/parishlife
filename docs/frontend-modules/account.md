@@ -23,6 +23,32 @@ Files: `frontend/src/portal/shell/Auth.jsx`, `features/account/*` (`account.jsx`
 
 After any change that signs every session out, the page stores a notice and reloads, so the person lands on sign-in with the reason.
 
+## Added on fullstack2-account (14 November 2026)
+
+This supersedes the matching items under "Fields with no API equivalent" below.
+
+| Area | Routes | Notes |
+| --- | --- | --- |
+| Profile details | `GET`/`PUT /api/auth/profile` | Optional first/last name and town with Arabic twins, address, occupation, about. Private to the holder; they never change a Person. Every save sends all details (blank clears one); appearance reset keeps them. |
+| My signature | `GET`/`POST /api/account/signature`, `POST …/remove` | The holder's own signature image (an SVG path of M/L/Q segments, a title and an Arabic title). Versioned, idempotent, absent from receipts and audit. An image only: it signs nothing, and no passkey is involved. |
+| My parish records | `GET /api/account/records`; corrections `POST /api/parishes/{id}/profile-corrections` | Only the account's own active link in each followed parish (given and family name, birth date, contact) with its own corrections. Corrections use the existing office review (four fields; names and birth date need evidence). |
+| Membership request | `POST /api/parishes/{id}/membership-requests` (`…/mine` in the model) | "Request membership" in My parishes opens the form: given and family name required; birth date, contact, town and note optional. |
+| External sign-in | `POST …/{provider}/sign-in` with `returnTo=portal` and `turnstileToken` form fields; `GET …/complete?return=portal`; `POST …/pending-challenge`; `POST …/{provider}/link/ticket`, then a form post to `…/link/redirect` | A portal round trip ends on `/index.html?external=` plus one word: `signed-in`, `two-factor`, `linked`, `not-linked`, `in-use` or `failed`. Nothing secret is in the address. The MFA challenge is held in a protected HttpOnly Strict cookie and handed over once. Linking checks the password (and code) over JSON first; a two-minute ticket, bound to the account, session, security stamp and provider, then starts the redirect. Unconfigured providers still answer `external_provider_unavailable`. |
+
+### Still not connected
+
+- **Link and unlink buttons in My account.** The API routes exist and are tested (`link/ticket`, `link/redirect`, `unlink`, `GET auth/external`), but the My account panel for them was not built in this pass.
+- **QR code for the authenticator key.** Not built: the frontend has no QR library, and adding a dependency or a hand-written encoder needs a decision and review. The key and the `otpauth://` link remain.
+- **Earlier requests.** The tracking-link claim (`POST …/requests/{id}/claim`) is unchanged: the proof is the private tracking token, followed by office approval. A list of the account's pending claims is not built here, because it overlaps the requests area's "pending claims". Matching by a typed email is deliberately not offered.
+- **Arabic twins on the membership request** (`GivenNameAr`, `FamilyNameAr`, `LocalityAr`). Not added: `MembershipService` belongs to the people area.
+- **Records without a follow.** Records list only the parishes the account follows, as My parishes does, so a link created without a follow is not found.
+
+### Owner questions (account)
+
+1. U05: may a stored signature image ever appear on certificates or letters? Who may keep one? For now, any normal personal sign-in may.
+2. Should parish offices ever see the self-described profile details? For now, never.
+3. Should pending tracking-link claims be listed on My account, and with what detail?
+
 ## Fields with no API equivalent
 
 - First name, last name, town, address, occupation and "about me" on the old profile form: the API profile is a display name, a preferred language (`en`, `fr`, `ar`) and the colours. Those fields are not shown.

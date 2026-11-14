@@ -25,6 +25,7 @@ const profile = {
     displayName: 'Test Account',
     preferredLanguage: 'ar',
     appearance: { mode: 'dark', scheme: 'custom', primaryColor: '#123456' },
+    givenNameAr: 'يوسف',
     isConfigured: true,
     updatedAt: '2026-11-01T00:00:00Z'
   }
@@ -115,6 +116,20 @@ const { sent } = mockApi((method, path, body, options) => {
     });
   if (path === 'auth/passkeys/registration') return json(200, { id: 'cred2', name: body.name });
   if (path === 'auth/passkeys/cred1/remove') return json(200, { status: 'Applied', requiresSignIn: true });
+  if (path === 'auth/external/pending-challenge')
+    return json(200, { accountId: 'u', challenge: 'held', expiresAt: '2026-11-11T10:00:00Z' });
+  if (path === 'account/signature' && method === 'GET')
+    return json(200, { eligible: true, version: null, signature: null });
+  if (path === 'account/signature')
+    return json(200, { eligible: true, version: 's1', signature: { ...body, updatedAt: '2026-11-11T10:00:00Z' } });
+  if (path === 'account/signature/remove') return json(200, { eligible: true, version: null, signature: null });
+  if (path === 'account/records')
+    return json(200, [
+      { parishId: 'P', parishName: 'Saint Test', personId: 'p1', givenName: 'A', familyName: 'B', corrections: [] }
+    ]);
+  if (path === 'parishes/P/profile-corrections') return json(200, { id: 'c1', status: 'Pending', fields: body.fields });
+  if (path === 'parishes/P/membership-requests') return json(200, { id: 'm1', status: 'Submitted' });
+  if (path === 'parishes/P/membership-requests/mine') return json(200, [{ id: 'm1', status: 'Submitted' }]);
 });
 
 // a fake browser: no built-in WebAuthn JSON helpers, so the module's own converters are used
@@ -169,8 +184,8 @@ let f = account.featuresOf(await account.loadCapabilities());
 assert.deepEqual(f, { passkeys: true, verification: true, turnstile: false, external: ['google'] });
 assert.deepEqual(
   account.featuresOf({ ...capabilities, turnstile: { enabled: true }, contactVerificationDelivery: 'NotConfigured' }),
-  { passkeys: true, verification: false, turnstile: true, external: [] },
-  'with the bot check on, external sign-in (a form post) is not offered; with no provider, no email codes'
+  { passkeys: true, verification: false, turnstile: true, external: ['google'] },
+  'with the bot check on, external sign-in is still offered (its token rides in the form); with no provider, no email codes'
 );
 assert.deepEqual(account.featuresOf(null), { passkeys: false, verification: false, turnstile: false, external: [] });
 
@@ -194,12 +209,33 @@ let saved = await account.saveProfile(loaded, {
   appearance: account.appearanceOf({ scheme: 'navy', mode: 'light' })
 });
 assert.deepEqual(Object.keys(last()[2]).sort(), [
+  'about',
+  'address',
   'appearance',
   'displayName',
+  'familyName',
+  'familyNameAr',
+  'givenName',
+  'givenNameAr',
+  'occupation',
   'operationId',
   'preferredLanguage',
+  'town',
+  'townAr',
   'version'
 ]);
+assert.equal(last()[2].givenNameAr, 'يوسف', 'the stored details travel with a name-only save');
+assert.equal(last()[2].town, null, 'an empty detail is sent as null, never copied from the other language');
+await account.saveProfile(loaded, {
+  displayName: 'New Name',
+  preferredLanguage: '',
+  appearance: account.appearanceOf({ scheme: 'navy', mode: 'light' }),
+  details: { givenName: ' Youssef ', givenNameAr: '', about: 'line one\nline two' }
+});
+assert.deepEqual(
+  [last()[2].givenName, last()[2].givenNameAr, last()[2].about, last()[2].familyName],
+  ['Youssef', null, 'line one\nline two', null]
+);
 assert.match(last()[2].operationId, uuid);
 assert.equal(last()[2].version, 'v1');
 assert.equal(last()[2].preferredLanguage, null);
@@ -308,4 +344,48 @@ try {
   assert.match(error.message, /did not sign you in/);
 }
 
-console.log('account: capabilities, email codes, profile and appearance, security changes, passkeys, sessions ok');
+// a provider round trip back to the portal: the held authenticator step is fetched once, as a POST
+assert.equal((await account.pendingExternalChallenge()).challenge, 'held');
+assert.deepEqual(last(), ['POST', 'auth/external/pending-challenge', undefined]);
+
+// my own signature image: first save without a version, removal with it; nothing about passkeys or signing
+assert.equal((await account.loadSignature()).signature, null);
+const sig = await account.saveSignature(null, { drawing: 'M1 2L3 4', title: ' Priest ', titleAr: '' });
+assert.deepEqual(Object.keys(last()[2]).sort(), ['drawing', 'operationId', 'title', 'titleAr', 'version']);
+assert.deepEqual([last()[2].version, last()[2].title, last()[2].titleAr], [null, 'Priest', null]);
+await account.removeSignature(sig.version);
+assert.deepEqual([last()[1], last()[2].version], ['account/signature/remove', 's1']);
+assert.match(last()[2].operationId, uuid);
+
+// my parish records, and corrections through the parish's own office review
+assert.equal((await account.loadRecords())[0].personId, 'p1');
+await account.proposeCorrection('P', [{ field: 'Contact', newValue: 'x@y.org', evidence: null }]);
+assert.deepEqual(Object.keys(last()[2]).sort(), ['fields', 'operationId']);
+assert.equal(last()[1], 'parishes/P/profile-corrections');
+
+// the membership request form
+await account.requestMembership('P', {
+  givenName: ' Rita ',
+  familyName: 'Haddad',
+  birthDate: '',
+  contact: '',
+  note: 'Hi'
+});
+assert.deepEqual(last(), [
+  'POST',
+  'parishes/P/membership-requests',
+  {
+    operationId: last()[2].operationId,
+    givenName: 'Rita',
+    familyName: 'Haddad',
+    birthDate: null,
+    contact: null,
+    locality: null,
+    note: 'Hi'
+  }
+]);
+assert.equal((await account.myMembershipRequests('P'))[0].status, 'Submitted');
+
+console.log(
+  'account: capabilities, email codes, profile and details, security changes, passkeys, sessions, signature image, parish records, membership requests ok'
+);

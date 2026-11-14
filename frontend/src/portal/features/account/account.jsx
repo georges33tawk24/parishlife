@@ -1,11 +1,12 @@
-/* My account: the profile and appearance, how the account signs in (password, email, two-factor, passkeys,
-   sessions), the parishes someone follows, and the parts other modules own (their signature, record
-   corrections and guest requests, which stay hidden until their routes are connected).
+/* My account: the profile (display name, language and the optional personal details) and appearance, how the
+   account signs in (password, email, two-factor, passkeys, sessions), my own signature image, my parish records
+   (with corrections for office review), requests made before signing in, and the parishes someone follows, with
+   the membership request form.
    Routes: GET and PUT auth/profile, POST auth/profile/appearance/preview and /reset, GET auth/me,
-   GET auth/mfa/status, GET auth/capabilities; the parishes use GET me/parishes, POST and DELETE
-   parishes/{id}/follow, PUT parishes/{id}/primary and the public directory.
-   The API's profile is a display name, a language and the colours; the old form's first and last name, town,
-   address, occupation and "about me" have no API field, so they are not shown. */
+   GET auth/mfa/status, GET auth/capabilities, GET/POST account/signature and POST account/signature/remove;
+   the parishes use GET me/parishes, POST and DELETE parishes/{id}/follow, PUT parishes/{id}/primary,
+   POST parishes/{id}/membership-requests and the public directory.
+   The personal details are the account holder's own and visible only to them; they never change a parish record. */
 import { useEffect, useRef, useState } from 'react';
 import { changeAccountPassword, changeAccountEmail } from './account-security.jsx';
 import { Mfa } from './account-mfa.jsx';
@@ -23,18 +24,32 @@ import {
   resetAppearance,
   mfaStatus,
   themeOf,
-  appearanceOf
+  appearanceOf,
+  DETAILS,
+  loadSignature,
+  saveSignature,
+  removeSignature,
+  requestMembership
 } from '../../model/account.js';
 import { toParish } from '../../../public/api-data.js';
 import { t } from '../../../lib/i18n.js';
-import { passkeysSupported, passkeyMessage } from '../../model/passkeys.js';
-import { sign } from '../../model/signing.js';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { SCHEMES, schemeOf, applyTheme } from '../../../lib/theme.js';
 
 const RELATIONSHIP = () => ({ Following: t('Following', 'متابَعة'), Member: t('Member', 'عضو') });
+/* The optional personal details shown on the profile form: [field, English label, Arabic label, maximum, direction] */
+const DETAIL_FIELDS = [
+  ['givenName', 'First name', 'الاسم', 100],
+  ['givenNameAr', 'First name in Arabic', 'الاسم بالعربية', 100, 'rtl'],
+  ['familyName', 'Last name', 'الشهرة', 100],
+  ['familyNameAr', 'Last name in Arabic', 'الشهرة بالعربية', 100, 'rtl'],
+  ['town', 'Town', 'البلدة', 200],
+  ['townAr', 'Town in Arabic', 'البلدة بالعربية', 200, 'rtl'],
+  ['address', 'Address', 'العنوان', 300],
+  ['occupation', 'Occupation', 'المهنة', 200]
+];
 
 /* The profile as stored changes what the rest of the portal shows: the name, the colours. */
 function applyProfile(profile) {
@@ -149,7 +164,8 @@ export function AccountPage() {
       const result = await saveProfile(profile, {
         displayName: String(data.get('displayName') || '').trim(),
         preferredLanguage: String(data.get('preferredLanguage') || ''),
-        appearance: profile.appearance
+        appearance: profile.appearance,
+        details: Object.fromEntries(DETAILS.map(k => [k, data.get(k)]))
       });
       store(result.profile);
       settled(result, t('Saved', 'حُفظ'));
@@ -250,7 +266,23 @@ export function AccountPage() {
                     <option value="fr">Français</option>
                   </Select>
                 </label>
+                {DETAIL_FIELDS.map(([k, en, ar, max, dir]) => (
+                  <label className="formrow" key={k}>
+                    <span className="label">{t(en, ar)}</span>
+                    <input className="input" name={k} maxLength={max} dir={dir} defaultValue={profile.details[k]} />
+                  </label>
+                ))}
               </div>
+              <label className="formrow">
+                <span className="label">{t('About me', 'نبذة عني')}</span>
+                <textarea className="textarea" name="about" maxLength="1000" defaultValue={profile.details.about} />
+              </label>
+              <p className="help">
+                {t(
+                  'These details are visible only to you. They do not change what any parish holds about you.',
+                  'هذه المعلومات تظهر لك وحدك ولا تغيّر ما تسجّله أي رعية عنك.'
+                )}
+              </p>
               <button className="btn btn-primary">{t('Save profile', 'حفظ الملف')}</button>
             </form>
           </Panel>
@@ -372,8 +404,8 @@ export function AccountPage() {
         <Panel title={t('My parishes', 'رعاياي')}>
           <p className="help">
             {t(
-              'Follow parishes for updates and choose your primary parish. Asking to become a member is not connected to the new backend yet.',
-              'تابع الرعايا واختر رعيتك الأساسية. طلب العضوية غير مربوط بالخادم الجديد بعد.'
+              'Follow parishes for updates and choose your primary parish. To become a member, send a request: the parish office checks your identity first.',
+              'تابع الرعايا واختر رعيتك الأساسية. لتصبح عضواً أرسل طلباً: يتحقق مكتب الرعية من هويتك أولاً.'
             )}
           </p>
           <input
@@ -426,6 +458,21 @@ export function AccountPage() {
                     >
                       {t('Make primary', 'اختيار كأساسية')}
                     </button>
+                    {a?.relationship === 'Member' ? null : (
+                      <button
+                        className="btn btn-primary"
+                        data-parish={p.id}
+                        data-affiliation="request"
+                        onClick={() =>
+                          openDrawer({
+                            title: t('Request membership', 'طلب العضوية') + ' · ' + p.name,
+                            body: <MembershipForm parish={p} done={() => api('me/parishes').then(setMine, () => {})} />
+                          })
+                        }
+                      >
+                        {t('Request membership', 'طلب العضوية')}
+                      </button>
+                    )}
                   </div>
                 </article>
               );
@@ -437,22 +484,22 @@ export function AccountPage() {
   );
 }
 
-/* My signature (parish staff): drawn once, kept with one of my passkeys, and used only when I
-   unlock that passkey to sign a certificate or a letter. */
+/* My signature: an image of my handwritten signature, kept privately with my account. It is only an image: it
+   signs nothing, and whether it may appear on certificates or letters is still an open decision. */
 function MySignature() {
   const [data, setData] = useState(null),
     [round, setRound] = useState(0),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    api('account/signature').then(setData, () => {});
+    loadSignature().then(setData, () => setData(null));
   }, [round]);
   if (!data?.eligible) return null;
-  const me = data.signer,
+  const me = data.signature,
     again = () => setRound(n => n + 1);
   const remove = async () => {
     setBusy(true);
     try {
-      await api('account/signature/remove', 'POST', {});
+      await removeSignature(data.version);
       toast(t('Signature removed', 'أُزيل التوقيع'), '', 'success');
       again();
     } catch (err) {
@@ -460,7 +507,11 @@ function MySignature() {
     }
     setBusy(false);
   };
-  const edit = () => openDrawer({ title: t('My signature', 'توقيعي'), body: <SignatureForm me={me} done={again} /> });
+  const edit = () =>
+    openDrawer({
+      title: t('My signature', 'توقيعي'),
+      body: <SignatureForm version={data.version} me={me} done={again} />
+    });
   return (
     <Panel title={t('My signature', 'توقيعي')}>
       <div className="sig-panel">
@@ -469,23 +520,16 @@ function MySignature() {
             <figure className="sig-card">
               <Drawing path={me.drawing} />
               <figcaption>
-                <b>{session.user.name}</b>
-                {me.title ? <span>{me.title}</span> : null}
+                <b>{session.user?.name}</b>
+                {me.title || me.titleAr ? <span>{t(me.title || me.titleAr, me.titleAr || me.title)}</span> : null}
               </figcaption>
             </figure>
             <div className="sig-facts">
               <p>
                 <Icon name="lock" size={16} />
-                {t('Kept with your passkey', 'محفوظ مع مفتاح المرور')} <b>{me.passkey}</b>.{' '}
                 {t(
-                  'Nothing is signed unless you unlock it with your face, fingerprint or PIN, over the exact document being signed.',
-                  'لا يُوقَّع شيء إلا إذا فتحته بوجهك أو بصمتك أو رمزك، على الوثيقة نفسها التي تُوقَّع.'
-                )}
-              </p>
-              <p className="help">
-                {t(
-                  'Each signed document carries a code anyone can check on ParishLife: who signed, when, and whether it was changed since.',
-                  'تحمل كل وثيقة موقّعة رمزاً يمكن لأي شخص التحقّق منه على ParishLife: من وقّع، ومتى، وهل عُدّلت بعد ذلك.'
+                  'Kept privately with your account. It is an image only and does not sign anything by itself.',
+                  'محفوظ بخصوصية مع حسابك. إنه صورة فقط ولا يوقّع شيئاً بنفسه.'
                 )}
               </p>
               <div className="account-actions">
@@ -502,26 +546,11 @@ function MySignature() {
           <div className="sig-facts">
             <p>
               {t(
-                'Sign certificates and letters with your own handwritten signature. It is kept with one of your passkeys, so only you can use it: each signature needs your face, fingerprint or PIN.',
-                'وقّع الشهادات والرسائل بتوقيعك اليدوي. يُحفظ مع أحد مفاتيح المرور الخاصة بك فلا يستعمله أحد غيرك: كل توقيع يحتاج إلى وجهك أو بصمتك أو رمزك.'
+                'Draw your handwritten signature once and keep it with your account. Only you can see it here.',
+                'ارسم توقيعك اليدوي مرة واحدة واحفظه مع حسابك. لا يراه هنا أحد غيرك.'
               )}
             </p>
-            {data.passkeys ? null : (
-              <p className="help">
-                <Icon name="info" size={15} />
-                {t(
-                  'First add a passkey on this device under Sign-in and security.',
-                  'أضف أولاً مفتاح مرور على هذا الجهاز ضمن «الدخول والأمان».'
-                )}
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-sig-edit=""
-              disabled={!(data.passkeys && passkeysSupported())}
-              onClick={edit}
-            >
+            <button type="button" className="btn btn-primary" data-sig-edit="" onClick={edit}>
               {t('Set up my signature', 'إعداد توقيعي')}
             </button>
           </div>
@@ -531,7 +560,7 @@ function MySignature() {
   );
 }
 
-function SignatureForm({ me, done }) {
+function SignatureForm({ version, me, done }) {
   const pad = useRef(null),
     [empty, setEmpty] = useState(true),
     [busy, setBusy] = useState(false),
@@ -540,22 +569,18 @@ function SignatureForm({ me, done }) {
     e.preventDefault();
     setBusy(true);
     setError('');
+    const form = e.currentTarget.elements;
     try {
-      const drawing = pad.current.path();
-      await api('account/signature', 'POST', {
-        drawing,
-        title: e.currentTarget.elements.title.value,
-        signature: await sign({ type: 'setup', drawing })
+      await saveSignature(version, {
+        drawing: pad.current.path(),
+        title: form.title.value,
+        titleAr: form.titleAr.value
       });
       closeOverlays();
-      toast(
-        t('Signature saved', 'حُفظ التوقيع'),
-        t('You can now sign certificates and letters.', 'يمكنك الآن توقيع الشهادات والرسائل.'),
-        'success'
-      );
+      toast(t('Signature saved', 'حُفظ التوقيع'), '', 'success');
       done();
     } catch (err) {
-      setError(passkeyMessage(err, t));
+      setError(err.message);
       setBusy(false);
     }
   };
@@ -583,26 +608,74 @@ function SignatureForm({ me, done }) {
       </div>
       <label className="formrow">
         <span className="label">{t('Title under your name', 'الصفة تحت اسمك')}</span>
-        <input
-          className="input"
-          name="title"
-          maxLength="80"
-          defaultValue={me?.title || ''}
-          placeholder={t('Parish priest', 'كاهن الرعية')}
-        />
+        <input className="input" name="title" maxLength="80" defaultValue={me?.title || ''} />
       </label>
-      <p className="help">
-        <Icon name="lock" size={15} />
-        {t(
-          'Saving asks for your face, fingerprint or PIN: the signature is then kept with that passkey.',
-          'يطلب الحفظ وجهك أو بصمتك أو رمزك: ثم يُحفظ التوقيع مع مفتاح المرور هذا.'
-        )}
-      </p>
+      <label className="formrow">
+        <span className="label">{t('Title in Arabic', 'الصفة بالعربية')}</span>
+        <input className="input" name="titleAr" dir="rtl" maxLength="80" defaultValue={me?.titleAr || ''} />
+      </label>
       <p className="help-error" role="alert">
         {error}
       </p>
       <button className="btn btn-primary" disabled={empty || busy}>
         {t('Save my signature', 'حفظ توقيعي')}
+      </button>
+    </form>
+  );
+}
+
+/* Asking a parish office for membership: the office checks identity and links the account to the right person.
+   Following stays a separate preference. */
+function MembershipForm({ parish, done }) {
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const submit = async e => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await requestMembership(parish.id, Object.fromEntries(new FormData(e.currentTarget)));
+      closeOverlays();
+      toast(
+        t('Membership request sent', 'أُرسل طلب العضوية'),
+        t('The parish office will review it.', 'سيراجعه مكتب الرعية.'),
+        'success'
+      );
+      done();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+  const field = (name, en, ar, props = {}) => (
+    <label className="formrow">
+      <span className="label">{t(en, ar)}</span>
+      <input className="input" name={name} {...props} />
+    </label>
+  );
+  return (
+    <form data-membership-form="" onSubmit={submit}>
+      <div className="formgrid">
+        {field('givenName', 'Given name', 'الاسم', { required: true, maxLength: 100 })}
+        {field('familyName', 'Family name', 'الشهرة', { required: true, maxLength: 100 })}
+        {field('birthDate', 'Date of birth', 'تاريخ الميلاد', { type: 'date' })}
+        {field('contact', 'Phone or email', 'الهاتف أو البريد', { maxLength: 300 })}
+        {field('locality', 'Town', 'البلدة', { maxLength: 200 })}
+      </div>
+      <label className="formrow">
+        <span className="label">{t('Note for the office', 'ملاحظة للمكتب')}</span>
+        <textarea className="textarea" name="note" maxLength="1000" />
+      </label>
+      <p className="help">
+        {t(
+          'The office checks your identity before linking your account to your parish record.',
+          'يتحقق المكتب من هويتك قبل ربط حسابك بسجلك في الرعية.'
+        )}
+      </p>
+      <p role="alert" className="help-error">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {t('Send request', 'إرسال الطلب')}
       </button>
     </form>
   );

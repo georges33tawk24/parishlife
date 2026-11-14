@@ -1,75 +1,43 @@
-/* Profile corrections: a member asks to correct what a parish holds about them, and the office
-   approves the change before the record moves. */
+/* Profile corrections: a member asks to correct what a parish holds about them, and the office approves the change
+   before the record moves.
+   On My account, RecordCorrections shows "My parish records": GET account/records returns only the account's own linked
+   person in each parish (and that person's own corrections); a correction goes to POST
+   parishes/{id}/profile-corrections, the existing office review. ProfileReviews is the office's queue. */
 import { useEffect, useState } from 'react';
-import { api } from '../../model/api.js';
 import { hydrate } from '../../model/persist.js';
 import { person } from '../../model/data.js';
 import { correctionQueue, reviewCorrection } from '../../model/modules/people-workflows.js';
+import { loadRecords, proposeCorrection } from '../../model/account.js';
 import { t } from '../../../lib/i18n.js';
 import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
-import { AddressCascade, readAddressCascade } from '../../ui/geography.jsx';
 
-const fields = {
-  name: ['Full name', 'الاسم الكامل'],
-  nameAr: ['Arabic name', 'الاسم بالعربية'],
-  birthDate: ['Date of birth', 'تاريخ الميلاد'],
-  phone: ['Phone', 'الهاتف'],
-  email: ['Email', 'البريد الإلكتروني'],
-  occupation: ['Occupation', 'المهنة'],
-  language: ['Preferred language', 'اللغة المفضلة'],
-  governorate: ['Governorate', 'المحافظة'],
-  district: ['District', 'القضاء'],
-  town: ['Town', 'البلدة'],
-  townAr: ['Town in Arabic', 'البلدة بالعربية'],
-  sector: ['Sector', 'الحيّ']
-};
-
-const status = s =>
-  ({
-    pending: t('Waiting for office review', 'بانتظار مراجعة المكتب'),
-    approved: t('Approved', 'مقبول'),
-    declined: t('Declined', 'مرفوض')
-  })[s] || s;
-
-const Changes = ({ data }) => (
-  <div className="tablewrap">
-    <div className="tablescroll">
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>{t('Field', 'الحقل')}</th>
-            <th>{t('Current record at submission', 'السجل وقت التقديم')}</th>
-            <th>{t('Requested value', 'القيمة المطلوبة')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(data.changes).map(([k, v]) => (
-            <tr key={k}>
-              <td>{fields[k] ? t(...fields[k]) : k}</td>
-              <td>{data.before[k] || '—'}</td>
-              <td>{v || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
+const STATUS = () => ({
+  Pending: t('Waiting for office review', 'بانتظار مراجعة المكتب'),
+  Reviewed: t('Reviewed', 'تمت المراجعة'),
+  Withdrawn: t('Withdrawn', 'مسحوب')
+});
+const DECISION = () => ({ Approved: t('Approved', 'مقبول'), Declined: t('Declined', 'مرفوض') });
+const current = (r, field) =>
+  ({ GivenName: r.givenName, FamilyName: r.familyName, BirthDate: r.birthDate || '', Contact: r.contact || '' })[field];
 
 /* ---------- on My account: what each parish holds about me ---------- */
 function CorrectionForm({ record, pending, done }) {
   const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    p = record.profile;
+    [busy, setBusy] = useState(false);
   const submit = async e => {
     e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const changes = Object.keys(CORRECTED)
+      .filter(f => String(data.get(f) || '').trim() !== String(current(record, f) || ''))
+      .map(f => ({
+        field: f,
+        newValue: String(data.get(f) || '').trim(),
+        evidence: String(data.get('evidence') || '').trim() || null
+      }));
+    if (!changes.length) return setError(t('Change at least one field.', 'غيّر حقلاً واحداً على الأقل.'));
     setBusy(true);
-    const form = e.currentTarget;
     try {
-      await api('account/records', 'POST', {
-        parish: record.parish,
-        profile: { ...Object.fromEntries(new FormData(form)), ...readAddressCascade(form, 'profile-address') }
-      });
+      await proposeCorrection(record.parishId, changes);
       closeOverlays();
       done();
       toast(t('Sent for office review', 'أُرسلت للمراجعة'), '', 'success');
@@ -79,29 +47,32 @@ function CorrectionForm({ record, pending, done }) {
     }
   };
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} data-correction-form="">
       <div className="formgrid">
-        {['name', 'nameAr', 'birthDate', 'phone', 'email', 'occupation', 'language'].map(k => (
-          <label key={k} className="formrow">
-            <span className="label">{t(...fields[k])}</span>
+        {Object.keys(CORRECTED).map(f => (
+          <label key={f} className="formrow">
+            <span className="label">{label(f)}</span>
             <input
               className="input"
-              name={k}
-              type={k === 'birthDate' ? 'date' : k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text'}
-              defaultValue={p[k] || ''}
-              maxLength={['name', 'nameAr'].includes(k) ? 120 : 500}
-              required={k === 'name'}
+              name={f}
+              type={f === 'BirthDate' ? 'date' : 'text'}
+              defaultValue={current(record, f)}
+              maxLength={300}
+              required={f === 'GivenName' || f === 'FamilyName'}
             />
           </label>
         ))}
       </div>
-      <AddressCascade value={p} prefix="profile-address" />
+      <label className="formrow">
+        <span className="label">{t('Supporting evidence', 'المستند الداعم')}</span>
+        <input className="input" name="evidence" maxLength={1000} />
+      </label>
       <p className="help">
         {pending
           ? t('Your previous changes are still awaiting review.', 'تغييراتك السابقة ما زالت بانتظار المراجعة.')
           : t(
-              'The office will review changes before updating this record.',
-              'سيراجع المكتب التغييرات قبل تحديث هذا السجل.'
+              'Name and birth-date changes need supporting evidence. The office reviews every change before the record moves.',
+              'تحتاج تغييرات الاسم وتاريخ الميلاد إلى مستند داعم. يراجع المكتب كل تغيير قبل تعديل السجل.'
             )}
       </p>
       <p role="alert" className="help-error">
@@ -115,19 +86,19 @@ function CorrectionForm({ record, pending, done }) {
 }
 
 export function RecordCorrections() {
-  const [data, setData] = useState(null),
+  const [records, setRecords] = useState(null),
     [round, setRound] = useState(0);
   useEffect(() => {
-    api('account/records').then(setData, () => {});
+    loadRecords().then(setRecords, () => setRecords(null));
   }, [round]);
-  if (!data) return null;
+  if (!records) return null;
   const correct = record =>
     openDrawer({
       title: record.parishName,
       body: (
         <CorrectionForm
           record={record}
-          pending={data.requests.some(r => r.parish_id === record.parish && r.status === 'pending')}
+          pending={record.corrections.some(c => c.value.status === 'Pending')}
           done={() => setRound(r => r + 1)}
         />
       )
@@ -136,21 +107,37 @@ export function RecordCorrections() {
     <Panel title={t('My parish records', 'سجلاتي الرعوية')}>
       <p className="help">
         {t(
-          'Review the information already held by each parish. Submit corrections for office approval. Changes here do not replace your sign-in email or phone.',
-          'راجع المعلومات المسجّلة في كل رعية وأرسل التصحيحات لموافقة المكتب. لا تغيّر هذه التصحيحات بريد أو هاتف تسجيل الدخول.'
+          'The information each parish holds about you. Submit corrections for office approval. Changes here do not replace your sign-in email.',
+          'المعلومات التي تسجّلها كل رعية عنك. أرسل التصحيحات لموافقة المكتب. لا تغيّر هذه التصحيحات بريد تسجيل الدخول.'
         )}
       </p>
       <Paged className="account-parishes" data-paginate="">
-        {data.records.length ? (
-          data.records.map(r => (
-            <article key={r.parish}>
+        {records.length ? (
+          records.map(r => (
+            <article key={r.parishId} data-record={r.parishId}>
               <div>
                 <h3>{r.parishName}</h3>
                 <p>
-                  {r.profile.name} · {r.profile.phone || '—'}
+                  {r.givenName} {r.familyName} · {r.birthDate || '—'} · {r.contact || '—'}
                 </p>
+                {r.corrections.map(({ value: c }) => (
+                  <details key={c.id}>
+                    <summary>
+                      {STATUS()[c.status] || c.status} · {String(c.submittedAt).slice(0, 10)}
+                    </summary>
+                    <ul>
+                      {c.fields.map(f => (
+                        <li key={f.field}>
+                          {label(f.field)}: {f.oldValue || '—'} → {f.newValue}
+                          {f.decision ? ` · ${DECISION()[f.decision] || f.decision}` : ''}
+                          {f.reason ? ` (${f.reason})` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ))}
               </div>
-              <button className="btn btn-secondary" data-correct={r.parish} onClick={() => correct(r)}>
+              <button className="btn btn-secondary" data-correct={r.parishId} onClick={() => correct(r)}>
                 {t('Review my information', 'مراجعة معلوماتي')}
               </button>
             </article>
@@ -158,27 +145,11 @@ export function RecordCorrections() {
         ) : (
           <p>
             {t(
-              'Once the office links your membership, your parish records will appear here. You can request membership below.',
-              'تظهر سجلاتك هنا بعد ربط عضويتك من المكتب. يمكنك طلب العضوية أدناه.'
+              'Once a parish office links your membership, your parish records will appear here. You can request membership under My parishes.',
+              'تظهر سجلاتك هنا بعد أن يربط مكتب الرعية عضويتك. يمكنك طلب العضوية في «رعاياي».'
             )}
           </p>
         )}
-      </Paged>
-      <Paged className="account-parishes" data-paginate="">
-        {data.requests.map((r, i) => (
-          <article key={i}>
-            <div>
-              <h3>{data.records.find(p => p.parish === r.parish_id)?.parishName || r.parish_id}</h3>
-              <p>
-                {status(r.status)} · {r.created_at.slice(0, 10)}
-              </p>
-              <details>
-                <summary>{t('View proposed changes', 'عرض التغييرات المقترحة')}</summary>
-                <Changes data={r.data} />
-              </details>
-            </div>
-          </article>
-        ))}
       </Paged>
     </Panel>
   );
