@@ -12,7 +12,7 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
 | --- | --- |
 | **`fullstack-integration`** | **Start here.** Your `fullstack` (`520cdb8`) plus the latest `backend` (Colin's Azure-connection commits up to `b2aaf92`), plus the work listed below. Every area gets merged into this branch. |
 | `fullstack2-<area>` (13 branches) | One per area, all cut from `fullstack-integration`: people, sacraments, calendar and finance from `9c1c291`; communications and requests from `f5a9a0a`; the other 7 from `6951bcd`. Committed work only. |
-| `wip/20261114-1224/<area>` | **Snapshots of uncommitted edits**, each a single commit on top of that area's `fullstack2-<area>` head. Not reviewed, not tested; they may not even build. Five areas have one: finance, communications, requests, ministries, registrations. |
+| `wip/20261114-1224/<area>` | **Snapshots of uncommitted edits**, each a single commit on top of that area's `fullstack2-<area>` head. Not reviewed, not tested; they may not even build. Three areas still need one: requests, ministries, registrations (the finance and communications snapshots are now committed on their branches). |
 | `wip/20261114-1224/azure-connection-main-folder` | Colin's *other* session (the Azure connection), saved on top of `backend` `b2aaf92`. Its uncommitted edits: the Aspire 13.6.5 bump, an "Azure" launch profile, request-letter changes, `coverage.json`, docs. Not tested. That session owns it; it is not part of the area work. |
 | `wip/20261114-0623/*`, `wip/20261114-1158/*` | Earlier snapshots. **Superseded** by `20261114-1224`; ignore them, or delete them once you are happy. |
 | `fullstack`, `backend`, `frontend-new2`, `fullstack-<module>` | Untouched by this work. |
@@ -92,8 +92,8 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 
 | Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1224/<area>` | Where it stopped |
 | --- | --- | --- | --- |
-| finance | `cb6cee5`: Arabic twins, name edits, exchange rates, budgets, recurring gifts, numbered receipts (backend + tests) | 8 frontend files (finance screens, `checks/finance.mjs`) | Adding the new dialogs in `money-actions.jsx` |
-| communications | `dd6aa1e`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests) | `inbox.jsx`, `modules/communications.js` | Editing `communications.js` |
+| finance | `29098d7`: Arabic twins, name edits, exchange rates, budgets, recurring gifts, numbered receipts (backend + tests), then the finance screens and `checks/finance.mjs` | none | Final full test run and report |
+| communications | `8c2e1fb`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests), then the inbox and module wiring | none | Final test run and report; check new notification topics against `NotificationTopicCatalog` |
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
 | registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
