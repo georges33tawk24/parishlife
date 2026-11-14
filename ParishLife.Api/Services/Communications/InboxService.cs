@@ -1,5 +1,5 @@
 // Purpose: runs inbox conversations: members with the parish office, and office staff directly with linked parishioners.
-// Main functions: StartAsync, ListAsync, MessagesAsync, PostAsync, ArchiveAsync, NotificationOutcomeAsync, MessageNotificationOutcomeAsync and internal AccessibleAsync; helpers check participation or office capacity,
+// Main functions: StartAsync (office, or direct by account or by a person the office may read), ListAsync, MessagesAsync, PostAsync, ArchiveAsync, NotificationOutcomeAsync, MessageNotificationOutcomeAsync and internal AccessibleAsync; helpers check participation or office capacity,
 // keep per-participant read/archive state and stage required recipient notices with each message. There is no searchable person directory,
 // and sent messages are final; notice dispatch happens independently after the source commit.
 
@@ -38,7 +38,9 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     {
         string[] participants;
         string kind;
-        if (request.RecipientAccountId is null)
+        if (request.RecipientAccountId is not null && request.RecipientPersonId is not null)
+            throw new DomainException("invalid_input", "Name the recipient by account or by person, not both.");
+        if (request.RecipientAccountId is null && request.RecipientPersonId is null)
         {
             // Members write to the parish office; they never pick arbitrary people from a directory.
             await own.PersonalAsync(ct);
@@ -50,7 +52,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         {
             if (!await IsOfficeAsync(parish, ct))
                 throw Missing();
-            var recipient = Guard.Id(request.RecipientAccountId.Value);
+            var recipient = request.RecipientAccountId is { } account ? Guard.Id(account) : await PersonAccountAsync(parish, Guard.Id(request.RecipientPersonId!.Value), ct);
             var link = await records.ReadAsync<PersonAccountLink>(Scope(parish), "personAccountLink:" + recipient, ct);
             if (link?.Value.Active != true || link.Value.ParishId != parish || recipient == actor.AccountId)
                 throw new DomainException("invalid_input", "Direct conversations are with a linked parishioner of this parish.");
@@ -81,6 +83,26 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var result = await ProjectAsync(parish, item, ct);
         result.NotificationOutcome = await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
         return result;
+    }
+
+    // Office staff who may read the people list write to a person they see there: the person's one active linked account in this parish.
+    // Without people.read the person route is unavailable, so it reveals nothing about who holds an account.
+    private async Task<string> PersonAccountAsync(string parish, string person, CancellationToken ct)
+    {
+        try
+        {
+            await access.RequireAsync(parish, Permissions.PeopleRead, ct);
+            await access.RequireModuleAsync(parish, "office", ct);
+        }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { throw Missing(); }
+        var links = (await records.CollectAsync<PersonAccountLink>(Scope(parish), "personAccountLink", ct, 20, Equal("personId", person)))
+            .Select(r => r.Value).Where(l => l.Active && l.ParishId == parish && l.PersonId == person).Select(l => l.AccountId).Distinct(StringComparer.Ordinal).ToArray();
+        return links.Length switch
+        {
+            1 => links[0],
+            0 => throw new DomainException("invalid_input", "This person has no linked account in this parish, so nothing was sent."),
+            _ => throw new DomainException("invalid_input", "This person has more than one linked account; nothing was sent. Resolve the links first.")
+        };
     }
 
     public async Task<IReadOnlyList<ConversationDto>> ListAsync(string parish, CancellationToken ct)
@@ -231,7 +253,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         var member = (await records.ReadAsync<ConversationMember>(Scope(parish), MemberKey(x.Id, actor.AccountId), ct))?.Value;
         return new ConversationDto
         {
-            Id = x.Id, Kind = x.Kind, Subject = x.Subject, ParticipantAccountIds = [.. x.ParticipantAccountIds], LastMessageAt = x.LastMessageAt,
+            Id = x.Id, Kind = x.Kind, Subject = x.Subject, ParticipantAccountIds = [.. x.ParticipantAccountIds], CreatedBy = x.CreatedBy, LastMessageAt = x.LastMessageAt,
             Unread = member?.LastReadAt is not { } read || read < x.LastMessageAt, Archived = member?.Archived == true
         };
     }

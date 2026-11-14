@@ -1,5 +1,6 @@
 // Purpose: represents a parish announcement with an explicit audience; published announcements are not edited in place.
-// Main members: Id, ParishId, Visibility (audience), MinistryId, Title, Body, Category, Language, Pinned, ExpiresAt, Status and authoring/publishing facts.
+// Main members: Id, ParishId, Visibility (audience), MinistryId, Title, Body, optional Arabic version (TitleAr, BodyAr), Category, Language,
+// Priority, Pinned, ExpiresAt, Status and authoring/publishing facts.
 
 namespace ParishLife.Api.Models;
 
@@ -18,10 +19,18 @@ public class Announcement
 
     public string Body { get; set; } = string.Empty;
 
+    // Optional Arabic version stored with a non-Arabic main text; records saved before it existed return null.
+    public string? TitleAr { get; set; } = null;
+
+    public string? BodyAr { get; set; } = null;
+
     public string? Category { get; set; } = null;
 
-    // en, fr or ar; translations are separate announcements.
+    // en, fr or ar; other translations are separate announcements.
     public string Language { get; set; } = "en";
+
+    // Normal or Urgent; urgent notices are listed first. Nothing is sent outside the app because of it.
+    public string Priority { get; set; } = "Normal";
 
     public bool Pinned { get; set; }
 

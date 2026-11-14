@@ -1,5 +1,5 @@
-// Purpose: creates or edits a draft broadcast template; Version is required when editing.
-// Main members: OperationId, Version, Name, Title, Body and Language.
+// Purpose: creates or edits a draft broadcast template; Version is required when editing. TitleAr/BodyAr optionally add an Arabic version.
+// Main members: OperationId, Version, Name, Title, Body, Language, TitleAr and BodyAr.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -25,4 +25,10 @@ public class SaveBroadcastTemplateDto
 
     [Required, RegularExpression("^(en|fr|ar)$")]
     public string Language { get; set; } = "en";
+
+    [StringLength(300)]
+    public string? TitleAr { get; set; } = null;
+
+    [StringLength(20000)]
+    public string? BodyAr { get; set; } = null;
 }

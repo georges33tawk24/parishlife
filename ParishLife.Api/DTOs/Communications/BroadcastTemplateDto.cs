@@ -1,5 +1,5 @@
 // Purpose: shows a broadcast template to communications staff.
-// Main members: Id, Name, Title, Body, Language, Status, UpdatedBy, UpdatedAt, ApprovedBy and ApprovedAt.
+// Main members: Id, Name, Title, Body, Language, TitleAr, BodyAr, Status, UpdatedBy, UpdatedAt, ApprovedBy and ApprovedAt.
 
 namespace ParishLife.Api.DTOs.Communications;
 
@@ -14,6 +14,10 @@ public class BroadcastTemplateDto
     public string Body { get; set; } = string.Empty;
 
     public string Language { get; set; } = "en";
+
+    public string? TitleAr { get; set; } = null;
+
+    public string? BodyAr { get; set; } = null;
 
     public string Status { get; set; } = "Draft";
 

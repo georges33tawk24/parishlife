@@ -1,5 +1,5 @@
 // Purpose: a recipient's own copy of a sent parish broadcast, without other recipients or the sending staff account.
-// Main members: Id, Title, Body, Language and SentAt.
+// Main members: Id, Title, Body, Language, TitleAr, BodyAr and SentAt.
 
 namespace ParishLife.Api.DTOs.Communications;
 
@@ -12,6 +12,10 @@ public class ReceivedBroadcastDto
     public string Body { get; set; } = string.Empty;
 
     public string Language { get; set; } = "en";
+
+    public string? TitleAr { get; set; } = null;
+
+    public string? BodyAr { get; set; } = null;
 
     public DateTimeOffset? SentAt { get; set; } = null;
 }
