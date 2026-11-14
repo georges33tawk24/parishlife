@@ -4,7 +4,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account and public are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **495 tests pass**. The **other 6 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1158/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account and public are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **495 tests pass**. The **other 6 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
 
 ## The branches
 
@@ -12,9 +12,9 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
 | --- | --- |
 | **`fullstack-integration`** | **Start here.** Your `fullstack` (`520cdb8`) plus the latest `backend` (Colin's Azure-connection commits up to `b2aaf92`), plus the work listed below. Every area gets merged into this branch. |
 | `fullstack2-<area>` (13 branches) | One per area, all cut from `fullstack-integration`: people, sacraments, calendar and finance from `9c1c291`; communications and requests from `f5a9a0a`; the other 7 from `6951bcd`. Committed work only. |
-| `wip/20261114-1158/<area>` | **Snapshots of uncommitted edits**, each a single commit on top of that area's `fullstack2-<area>` head. Not reviewed, not tested; they may not even build. Six areas have one: finance, communications, requests, ministries, registrations, administration. |
-| `wip/20261114-1158/azure-connection-main-folder` | Colin's *other* session (the Azure connection), saved on top of `backend` `b2aaf92`. Its uncommitted edits: the Aspire 13.6.5 bump, an "Azure" launch profile, request-letter changes, `coverage.json`, docs. Not tested. That session owns it; it is not part of the area work. |
-| `wip/20261114-0623/*` | An earlier set of snapshots. **Superseded** by `20261114-1158`; ignore them, or delete them once you are happy. |
+| `wip/20261114-1224/<area>` | **Snapshots of uncommitted edits**, each a single commit on top of that area's `fullstack2-<area>` head. Not reviewed, not tested; they may not even build. Five areas have one: finance, communications, requests, ministries, registrations. |
+| `wip/20261114-1224/azure-connection-main-folder` | Colin's *other* session (the Azure connection), saved on top of `backend` `b2aaf92`. Its uncommitted edits: the Aspire 13.6.5 bump, an "Azure" launch profile, request-letter changes, `coverage.json`, docs. Not tested. That session owns it; it is not part of the area work. |
+| `wip/20261114-0623/*`, `wip/20261114-1158/*` | Earlier snapshots. **Superseded** by `20261114-1224`; ignore them, or delete them once you are happy. |
 | `fullstack`, `backend`, `frontend-new2`, `fullstack-<module>` | Untouched by this work. |
 
 ## What is merged and verified (`fullstack-integration`)
@@ -83,14 +83,14 @@ All of this ran on local storage only, which is not Cosmos acceptance.
 
 Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
 
-| Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1158/<area>` | Where it stopped |
+| Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1224/<area>` | Where it stopped |
 | --- | --- | --- | --- |
 | finance | `cb6cee5`: Arabic twins, name edits, exchange rates, budgets, recurring gifts, numbered receipts (backend + tests) | 8 frontend files (finance screens, `checks/finance.mjs`) | Adding the new dialogs in `money-actions.jsx` |
 | communications | `dd6aa1e`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests) | `inbox.jsx`, `modules/communications.js` | Editing `communications.js` |
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
 | registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
-| administration | `7573aae`: operator platform lists, account suspension, clergy titles, parish audit trail (backend) | 8 frontend files (audit, workspace, people suspension) | Extending `checks/administration.mjs` |
+| administration | `8eb36c2`: operator platform lists, account suspension, clergy titles, parish audit trail (backend), then the frontend wiring (audit, workspace, people suspension) | none | Being finished: frontend checks and the final report |
 
 ## How to continue
 
@@ -103,7 +103,7 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 ```bash
 git fetch origin
 git switch fullstack2-<area>                     # or: git switch -c fullstack2-<area> origin/fullstack2-<area>
-git merge --ff-only origin/wip/20261114-1158/<area>   # only for the six areas that have a snapshot; it is a fast-forward
+git merge --ff-only origin/wip/20261114-1224/<area>   # only for the six areas that have a snapshot; it is a fast-forward
 ```
 
 Then finish what the table says.
