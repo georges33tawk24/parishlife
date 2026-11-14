@@ -1,12 +1,16 @@
 /* Purpose: the browser's side of requests made without an account: sending one to a parish, following it
    with its private tracking link, and the link itself.
-   Main functions: guestSubmit, guestCase, guestMessages, guestPostMessage, trackingLink, parseTracking,
-   publicKind.
+   Main functions: guestSubmit, guestCase, guestMessages, guestPostMessage, guestLetters, guestFiles,
+   guestUpload, trackingLink, parseTracking, publicKind.
 
    Routes (ParishLife.Api, anonymous and rate-limited):
      POST /api/public/parishes/{parishId}/requests                    send a request; answers its tracking token once
      GET  /api/public/parishes/{parishId}/requests/{requestId}        status, with the token in X-ParishLife-Tracking
      GET/POST .../{requestId}/messages                                 messages the office shows the applicant, and replies
+     GET  .../{requestId}/letters                                      released or withdrawn letters: title and status only,
+                                                                       never the text or code (collect in person or link an account)
+     GET/POST .../{requestId}/files                                    the guest's own uploads (metadata only; nothing downloads
+                                                                       through the bearer link), multipart with the CSRF token
      (POST .../{requestId}/actions, to respond or withdraw, needs the record's version, which the guest route
       does not return, so a guest can message the office but not withdraw: see docs/frontend-modules/requests.md)
    The token never goes in a URL the server sees: the private link keeps it after the # (which browsers do
@@ -14,6 +18,7 @@
    as well as the token, so the link carries all three. When the platform has Turnstile on, the bot-check
    token goes in X-Turnstile-Token. */
 import { api, newOperationId } from './api.js';
+import { multipart } from './modules/requests.js';
 
 const TRACKING = 'X-ParishLife-Tracking';
 const path = (parishId, requestId = '') =>
@@ -74,3 +79,11 @@ export const guestPostMessage = ({ parishId, requestId, token }, body) =>
     { operationId: newOperationId(), audience: 'Applicant', body },
     tracking(token)
   );
+
+export const guestLetters = ({ parishId, requestId, token }) =>
+  api(path(parishId, requestId) + '/letters', 'GET', undefined, tracking(token));
+export const guestFiles = ({ parishId, requestId, token }) =>
+  api(path(parishId, requestId) + '/files', 'GET', undefined, tracking(token));
+/* options: { checklistKey, replacesId, reason } */
+export const guestUpload = ({ parishId, requestId, token }, file, options = {}) =>
+  multipart('/api/' + path(parishId, requestId) + '/files', file, options, tracking(token));

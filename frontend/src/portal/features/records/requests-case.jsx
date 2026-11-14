@@ -1,7 +1,9 @@
 /* Purpose: the parish office's view of one request case, for online and guest requests alike: who asked
    and for whom, what they said, the decision buttons, the checklist and private files, the messages and
-   the history, and (for a guest request) the account-link review and the replacement of a leaked tracking
-   link.
+   the history, (once accepted) opening the sacramental case or certificate it needs, the office's letters,
+   and (for a guest request) the account-link review and the replacement of a leaked tracking link.
+   People are named through the shared account-name lookup (model/names.js); an id it may not reveal shows
+   a neutral label.
    Main functions: RequestCase (the drawer's content), openRequestCase, caseStatus.
 
    Every button is one API action on ParishLife.Api (docs/frontend-modules/requests.md): the screen
@@ -12,6 +14,7 @@ import { Select } from '../../ui/components.jsx';
 import { Pill, openDrawer, closeOverlays, toast } from '../../ui/ui.jsx';
 import { is } from '../../model/store.js';
 import { session } from '../../model/api.js';
+import { loadNames, nameOf } from '../../model/names.js';
 import { PEOPLE, person } from '../../model/data.js';
 import { hydrate } from '../../model/persist.js';
 import { trackingLink } from '../../model/guest-requests.js';
@@ -35,6 +38,8 @@ import {
   occasionText
 } from '../../model/sacrament-requests.js';
 import { RequestDocuments } from './request-documents.jsx';
+import { OpenRecord, LinkedRecords } from './request-record.jsx';
+import { RequestLetters } from './request-letters.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -189,6 +194,12 @@ export function RequestCase({ id, onChange }) {
     (async () => {
       try {
         const [c, messages, history] = await Promise.all([getCase(id), getMessages(id), getHistory(id)]);
+        await loadNames(session.parishId, [
+          c.value.assignedTo,
+          c.value.claimantAccountId,
+          ...messages.map(m => m.authorAccountId),
+          ...history.map(h => h.actorAccountId)
+        ]);
         if (live) setState({ c, messages, history });
       } catch (error) {
         if (live) setState({ error: error.message });
@@ -373,7 +384,7 @@ export function RequestCase({ id, onChange }) {
                 L('Assigned to', 'مُسنَد إلى'),
                 dto.assignedTo === session.accountUser?.id
                   ? L('You', 'أنت')
-                  : L('Another office member', 'عضو آخر في المكتب')
+                  : nameOf(session.parishId, dto.assignedTo) || L('Another office member', 'عضو آخر في المكتب')
               )
             : null}
         </dl>
@@ -433,13 +444,16 @@ export function RequestCase({ id, onChange }) {
           {row(L('Preferred dates', 'التواريخ المفضّلة'), dto.preferredDates)}
         </dl>
         {dto.links?.length ? (
-          <p className="help">
-            {L('Linked records', 'سجلات مرتبطة')}: {dto.links.map(l => l.kind).join(', ')}
-          </p>
+          <>
+            <p className="help">{L('Linked records', 'سجلات مرتبطة')}</p>
+            <LinkedRecords links={dto.links} />
+          </>
         ) : null}
       </section>
 
       {decisions}
+
+      {canAct ? <OpenRecord dto={dto} version={version} run={run} busy={busy} /> : null}
 
       {canAct && open ? <Triage run={run} id={id} version={version} busy={busy} dto={dto} /> : null}
 
@@ -448,6 +462,8 @@ export function RequestCase({ id, onChange }) {
         scope="request"
         onChange={() => setRound(n => n + 1)}
       />
+
+      {canAct ? <RequestLetters dto={dto} /> : null}
 
       <Messages id={id} messages={state.messages} canAct={canAct} run={run} busy={busy} />
 
@@ -462,6 +478,9 @@ export function RequestCase({ id, onChange }) {
             {state.history.map(h => (
               <li key={h.id}>
                 {fmtStamp(h.at)} · {ACTION[h.action] ? L(...ACTION[h.action]) : h.action}
+                {h.actorAccountId && nameOf(session.parishId, h.actorAccountId)
+                  ? ` · ${nameOf(session.parishId, h.actorAccountId)}`
+                  : ''}
                 {h.fromStatus && h.toStatus && h.fromStatus !== h.toStatus
                   ? ` (${caseStatus(h.fromStatus)} → ${caseStatus(h.toStatus)})`
                   : ''}
@@ -687,7 +706,7 @@ function Messages({ id, messages, canAct, run, busy }) {
               {m.audience === 'Internal'
                 ? L('Office note, not shown to the applicant', 'ملاحظة للمكتب، لا يراها مقدّم الطلب')
                 : L('Visible to the applicant', 'يراها مقدّم الطلب')}{' '}
-              · {m.authorKind} · {fmtStamp(m.at)}
+              · {(m.authorAccountId && nameOf(session.parishId, m.authorAccountId)) || m.authorKind} · {fmtStamp(m.at)}
             </span>
             <p>
               <bdi>{m.body}</bdi>

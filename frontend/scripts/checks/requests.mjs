@@ -1,7 +1,10 @@
 /* Purpose: checks the Requests module against an in-memory stand-in for ParishLife.Api: the office queue
    and the person's own requests load (paged with size and cursor, guests kept apart), the actions send the
    right routes and bodies (versions, operation ids), the form's answers become the API's request, files
-   upload as multipart with the token, and the public guest routes carry the tracking token in a header. */
+   upload as multipart with the token (naming a checklist item when asked), the checklist can name a case file,
+   an accepted case opens its record with a stable operation id, letters follow draft → sign (preview hash
+   and authenticator code) → release → withdraw, claims list from me/request-claims, and the public guest
+   routes (status, letters, own files and uploads) carry the tracking token in a header. */
 process.env.TZ = 'UTC';
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
@@ -112,6 +115,24 @@ const { sent } = mockApi((method, path, body, options) => {
     return json(200, dto('G2', { status: 'NeedsInformation', applicantExplanation: 'Send the form' }));
   }
   if (path === 'public/parishes/G1/requests/G2/messages' && method === 'POST') return json(200, { id: 'gm' });
+  if (path === 'public/parishes/G1/requests/G2/letters') {
+    assert.equal(options.headers['X-ParishLife-Tracking'], 'TOKENTOKENTOKENTOKEN');
+    return json(200, [{ reference: 'L-1', version: 1, title: 'Letter', status: 'Released', statement: 'Reference only.' }]);
+  }
+  if (path === 'public/parishes/G1/requests/G2/files') {
+    assert.equal(options.headers['X-ParishLife-Tracking'], 'TOKENTOKENTOKENTOKEN');
+    return json(200, [{ ...file, uploaderRole: 'Guest' }]);
+  }
+  if (path === 'parishes/P/requests/q1/records') return json(200, { recordId: 'r1', linkKind: 'SacramentRecord' });
+  if (path === 'me/request-claims')
+    return json(200, [{ parishId: 'G1', parishName: 'Parish', requestId: 'G2', reference: 'R-X', state: 'Pending' }]);
+  if (path === 'parishes/P/requests/q1/letters' && method === 'GET') return json(200, []);
+  if (path === 'parishes/P/requests/q1/letters/mine') return json(200, []);
+  if (path === 'parishes/P/requests/q1/letters' && method === 'POST') return json(200, { id: 'l1', status: 'Draft' });
+  if (path === 'parishes/P/letters/l1/authorization-preview') return json(200, { contentHash: 'A'.repeat(64) });
+  if (path.startsWith('parishes/P/letters/l1')) return json(200, { id: 'l1' });
+  if (path === 'me/signer-profile' && method === 'GET') return json(404, { title: 'resource_not_found' });
+  if (path === 'me/signer-profile' && method === 'PUT') return json(200, { value: { printedName: body.printedName }, version: 'sv1' });
 });
 // the shared stand-in parses every body as JSON, so a multipart upload is answered here
 const jsonFetch = globalThis.fetch;
@@ -221,58 +242,27 @@ await R.submitOwn({
 body = sent.at(-1)[2];
 assert.deepEqual([body.kind, body.details.guests, body.preferredDates], ['Facility', '40', '2027-02-01 10:00-12:00']);
 
+// a received checklist item may name an active case file instead of a paper reference
+await R.setChecklist('q1', 'v1', [{ key: 'id', label: 'ID', required: true, status: 'Received', evidenceFileId: 'f1' }]);
+assert.deepEqual(sent.at(-1)[2].items[0], {
+  key: 'id',
+  label: 'ID',
+  required: true,
+  status: 'Received',
+  paperReference: null,
+  evidenceFileId: 'f1'
+});
+
 // files: listed, uploaded as multipart with the anti-forgery token, removed with the file's version and a reason
 assert.equal((await R.listFiles('q1'))[0].fileName, 'id.pdf');
 await R.uploadFile('q1', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), {});
 assert.ok(uploads[0][1] instanceof FormData && uploads[0][0]['X-CSRF-TOKEN']);
 assert.match(uploads[0][1].get('operationId'), /^[0-9a-f-]{36}$/);
+await R.uploadFile('q1', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), { checklistKey: 'id' });
+assert.equal(uploads[1][1].get('checklistKey'), 'id');
+assert.equal(uploads[0][1].get('checklistKey'), null, 'no item named, no field sent');
 await R.removeFile('q1', 'f1', 'fv1', 'wrong person');
 body = sent.at(-1)[2];
 assert.deepEqual([body.version, body.reason], ['fv1', 'wrong person']);
 
-// A13: replacing a leaked link shows the new token once, in a link that carries parish, request and token
-const receipt = await R.rotateTracking('q2', 'v2', 'Leaked on social media');
-assert.equal(sent.at(-1)[2].reason, 'Leaked on social media');
-const link = G.trackingLink(receipt, '00000000-0000-4000-8000-000000000001');
-assert.equal(
-  link,
-  'https://example.org/portal/public.html#track=00000000-0000-4000-8000-000000000001.q2.NEWTOKENNEWTOKENNEWTOKEN'
-);
-await R.decideAssociation('q2', 'v2', true, 'Seen ID');
-assert.deepEqual([sent.at(-1)[2].approve, sent.at(-1)[2].evidenceReference], [true, 'Seen ID']);
-await R.decideAssociation('q2', 'v2', false, 'Not them');
-assert.equal(sent.at(-1)[2].reason, 'Not them');
-
-// guests: the link round-trips, the token travels in a header, the bot check in its own header
-const P = '00000000-0000-4000-8000-000000000001',
-  Q = '00000000-0000-4000-8000-000000000002';
-const parsed = G.parseTracking(`https://x/public.html#track=${P}.${Q}.TOKENTOKENTOKENTOKEN`);
-assert.deepEqual(parsed, { parishId: P, requestId: Q, token: 'TOKENTOKENTOKENTOKEN' });
-assert.equal(G.parseTracking('TOKENTOKENTOKENTOKEN'), null);
-assert.deepEqual(G.publicKind('marriage'), ['SacramentInquiry', 'Marriage']);
-assert.equal(G.publicKind('ministry')[0], 'MinistryInquiry');
-await assert.rejects(G.guestSubmit('bad', {}), /./); // unknown route is reported, not swallowed
-const g = await G.guestSubmit(
-  'G1',
-  {
-    kind: 'General',
-    summary: 's',
-    details: { description: 'd' },
-    requesterName: 'n',
-    requesterContact: 'c',
-    subjectDescription: 'n',
-    relationship: 'Self'
-  },
-  'bot-ok'
-);
-assert.deepEqual([g.requestId, g.trackingToken], ['G2', 'TOKENTOKENTOKENTOKEN']);
-assert.match(sent.find(x => x[1] === 'public/parishes/G1/requests')[2].operationId, /^[0-9a-f-]{36}$/);
-const shown = await G.guestCase({ parishId: 'G1', requestId: 'G2', token: 'TOKENTOKENTOKENTOKEN' });
-assert.equal(shown.applicantExplanation, 'Send the form');
-await G.guestPostMessage({ parishId: 'G1', requestId: 'G2', token: 'TOKENTOKENTOKENTOKEN' }, 'Here it is');
-assert.deepEqual([sent.at(-1)[2].audience, sent.at(-1)[2].body], ['Applicant', 'Here it is']);
-// a signed-in account presents the token to claim the case; the office decides afterwards
-await R.claimGuest({ parishId: 'G1', requestId: 'G2', token: 'TOKENTOKENTOKENTOKEN' });
-assert.equal(sent.at(-1)[1], 'parishes/G1/requests/G2/claim');
-void D;
-console.log('requests: all assertions passed');
+// A13: replacing a leaked link shows the new token once, in a link that carries pa

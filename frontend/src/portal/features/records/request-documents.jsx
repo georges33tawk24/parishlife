@@ -6,8 +6,9 @@
 
    Routes: GET/PUT .../requests/{id}/checklist, and .../requests/{id}/files (list, upload, download, remove)
    on ParishLife.Api. Files exist only on request cases: sacrament entries, service requests and office
-   expenses have no file route yet, so their uploads say so. The API does not tie a file to a checklist
-   item; a received item carries a paper or file reference the office types. */
+   expenses have no file route yet, so their uploads say so. A file may name the checklist item it answers
+   (checklistKey), and the office marks an item received with a paper reference, one of the case's active
+   files, or both. Naming an item never marks it received. */
 import { useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { PREP_REQUIREMENTS } from '../../model/data.js';
@@ -39,7 +40,11 @@ const onCase = scope => scope === 'request' || scope === 'guest-request';
 export async function uploadFile(scope, id, file, requirement = '', replaceId = null) {
   if (!onCase(scope)) throw new Error(notConnected);
   if (!TYPES.test(file.name) || !file.size || file.size > 10_000_000) throw new Error(tooBig);
-  return sendFile(id, file, { replacesId: replaceId, reason: replaceId ? 'Replaced by the office' : '' });
+  return sendFile(id, file, {
+    replacesId: replaceId,
+    reason: replaceId ? 'Replaced by the office' : '',
+    checklistKey: requirement || undefined
+  });
 }
 
 const STATUS = [
@@ -60,13 +65,17 @@ const slug = (label, taken) => {
   return key;
 };
 
-function Checklist({ dto, version, editable, run, id }) {
+function Checklist({ dto, version, editable, run, id, files }) {
   const [items, setItems] = useState(dto.checklist),
     [label, setLabel] = useState(''),
     [required, setRequired] = useState(true);
   useEffect(() => setItems(dto.checklist), [version]);
   const change = (key, patch) => setItems(list => list.map(i => (i.key === key ? { ...i, ...patch } : i)));
-  const problem = items.find(i => i.status === 'Received' && !String(i.paperReference || '').trim());
+  const problem = items.find(
+    i => i.status === 'Received' && !String(i.paperReference || '').trim() && !i.evidenceFileId
+  );
+  const active = files.filter(f => f.status === 'Active');
+  const fileName = fileId => files.find(f => f.id === fileId)?.fileName || L('a case file', 'ملف في الطلب');
   return (
     <>
       <h4>{L('Checklist', 'قائمة المتطلبات')}</h4>
@@ -90,7 +99,12 @@ function Checklist({ dto, version, editable, run, id }) {
             <div className="formgrid">
               <Select
                 value={i.status}
-                onChange={e => change(i.key, { status: e.target.value })}
+                onChange={e =>
+                  change(i.key, {
+                    status: e.target.value,
+                    ...(e.target.value === 'Received' ? {} : { evidenceFileId: null })
+                  })
+                }
                 aria-label={L('Status', 'الحالة')}
               >
                 {STATUS.map(([v, en, ar]) => (
@@ -106,6 +120,24 @@ function Checklist({ dto, version, editable, run, id }) {
                 value={i.paperReference || ''}
                 onChange={e => change(i.key, { paperReference: e.target.value })}
               />
+              {i.status === 'Received' ? (
+                <Select
+                  value={i.evidenceFileId || ''}
+                  onChange={e => change(i.key, { evidenceFileId: e.target.value || null })}
+                  aria-label={L('Case file received for this item', 'ملف الطلب المستلم لهذا البند')}
+                  data-checklist-file={i.key}
+                >
+                  <option value="">{L('No case file', 'دون ملف')}</option>
+                  {i.evidenceFileId && !active.some(f => f.id === i.evidenceFileId) ? (
+                    <option value={i.evidenceFileId}>{fileName(i.evidenceFileId)}</option>
+                  ) : null}
+                  {active.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.fileName}
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
               <button
                 className="btn btn-danger-quiet btn-dense"
                 onClick={() => setItems(list => list.filter(x => x.key !== i.key))}
@@ -113,9 +145,12 @@ function Checklist({ dto, version, editable, run, id }) {
                 {L('Remove item', 'إزالة البند')}
               </button>
             </div>
-          ) : i.paperReference ? (
-            <small> · {i.paperReference}</small>
-          ) : null}
+          ) : (
+            <>
+              {i.paperReference ? <small> · {i.paperReference}</small> : null}
+              {i.evidenceFileId ? <small> · {fileName(i.evidenceFileId)}</small> : null}
+            </>
+          )}
         </div>
       ))}
       {editable ? (
@@ -154,7 +189,10 @@ function Checklist({ dto, version, editable, run, id }) {
           </div>
           {problem ? (
             <p className="help help-error">
-              {L('A received item needs its paper or file reference: ', 'البند المستلم يحتاج مرجع الورقة أو الملف: ')}
+              {L(
+                'A received item needs its paper reference or a case file: ',
+                'البند المستلم يحتاج مرجع الورقة أو ملفاً من الطلب: '
+              )}
               {problem.label}
             </p>
           ) : null}
@@ -171,8 +209,10 @@ function Checklist({ dto, version, editable, run, id }) {
   );
 }
 
-function Files({ id, files, canRemove, canChange, run, version }) {
-  const [pending, setPending] = useState(null); // { kind: 'replace' | 'remove', file, reason }
+function Files({ id, files, canRemove, canChange, run, checklist }) {
+  const [pending, setPending] = useState(null), // { kind: 'replace' | 'remove', file, reason }
+    [item, setItem] = useState('');
+  const label = key => checklist.find(c => c.key === key)?.label || key;
   const shown = files.filter(f => f.status === 'Active' || canRemove);
   return (
     <>
@@ -184,7 +224,12 @@ function Files({ id, files, canRemove, canChange, run, version }) {
             <b>{f.fileName}</b>
             <small>
               {(f.size / 1048576).toFixed(1)} MB · {String(f.uploadedAt).slice(0, 10)} ·{' '}
-              {f.uploaderRole === 'Office' ? L('office', 'المكتب') : L('applicant', 'مقدّم الطلب')}
+              {f.uploaderRole === 'Office'
+                ? L('office', 'المكتب')
+                : f.uploaderRole === 'Guest'
+                  ? L('guest, through the tracking link', 'زائر، عبر رابط المتابعة')
+                  : L('applicant', 'مقدّم الطلب')}
+              {f.checklistKey ? ` · ${label(f.checklistKey)}` : ''}
               {f.status !== 'Active'
                 ? ` · ${f.status === 'Replaced' ? L('replaced', 'استُبدل') : L('removed', 'أُزيل')}${f.reason ? `: ${f.reason}` : ''}`
                 : ''}
@@ -257,6 +302,21 @@ function Files({ id, files, canRemove, canChange, run, version }) {
           </button>
         </div>
       ) : null}
+      {canChange && checklist.length ? (
+        <Select
+          value={item}
+          onChange={e => setItem(e.target.value)}
+          aria-label={L('The checklist item this file answers', 'بند القائمة الذي يجيب عنه هذا الملف')}
+          data-upload-item=""
+        >
+          <option value="">{L('No particular item', 'لا بند محدّد')}</option>
+          {checklist.map(c => (
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
+          ))}
+        </Select>
+      ) : null}
       {canChange ? (
         <label className="btn btn-secondary btn-dense">
           {L('Add document', 'إضافة مستند')}
@@ -269,7 +329,7 @@ function Files({ id, files, canRemove, canChange, run, version }) {
               e.target.value = '';
               if (!file) return;
               if (!TYPES.test(file.name) || !file.size || file.size > 10_000_000) return toast(tooBig, '', 'warning');
-              run(() => sendFile(id, file));
+              run(() => sendFile(id, file, { checklistKey: item || undefined }));
             }}
           />
         </label>
@@ -291,7 +351,7 @@ export function RequestDocuments({ record, scope = 'request', onChange, applican
     let live = true;
     (async () => {
       try {
-        const [c, files] = await Promise.all([applicant ? null : getCase(record.id), listFiles(record.id)]);
+        const [c, files] = await Promise.all([getCase(record.id), listFiles(record.id)]);
         if (live) setState({ c, files });
       } catch (e) {
         if (live) setError(e.message);
@@ -327,7 +387,7 @@ export function RequestDocuments({ record, scope = 'request', onChange, applican
     }
   };
   const dto = state?.c?.value,
-    open = applicant ? record.open !== false : dto && !TERMINAL.includes(dto.status),
+    open = dto ? !TERMINAL.includes(dto.status) : applicant && record.open !== false,
     office = !applicant && is('priest', 'secretary');
   return (
     <section className="request-documents" data-request-documents="" data-document-owner={record.id} aria-busy={busy}>
@@ -345,9 +405,23 @@ export function RequestDocuments({ record, scope = 'request', onChange, applican
       ) : (
         <>
           {dto ? (
-            <Checklist dto={dto} version={state.c.version} editable={office && open} run={run} id={record.id} />
+            <Checklist
+              dto={dto}
+              version={state.c.version}
+              editable={office && open}
+              run={run}
+              id={record.id}
+              files={state.files}
+            />
           ) : null}
-          <Files id={record.id} files={state.files} canRemove={office && open} canChange={open} run={run} />
+          <Files
+            id={record.id}
+            files={state.files}
+            canRemove={office && open}
+            canChange={open}
+            run={run}
+            checklist={dto?.checklist || []}
+          />
         </>
       )}
       <p className="help">
