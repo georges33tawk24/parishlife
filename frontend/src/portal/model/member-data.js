@@ -5,9 +5,11 @@
 
    What is connected: the person linked to this account, ministries the parish lists publicly where the
    member belongs, their meetings, RSVP and attendance, formation, volunteering, announcements,
-   schedule, notifications, concerns, profile corrections, consents, own data and closure requests, and the
-   account-private notes and tasks. What the API has no route for stays empty (M.content resources,
-   messages, preferences); see docs/frontend-modules/member.md.
+   schedule, notifications, concerns, profile corrections, consents, own data and closure requests, the
+   account-private notes (with pin, reminder date and meeting link) and tasks, the private RSVP reason,
+   "My resources" (ministry stock shared with the member's current ministries) and the notification
+   mutes for optional topics (M.preferences). What the API has no route for stays empty (messages,
+   document attachments); see docs/frontend-modules/member.md.
    Fields owned by the requests module (M.requests, M.requestOptions) are left alone here. */
 import { api, newOperationId, session, notConnected } from './api.js';
 
@@ -174,10 +176,28 @@ async function meetingsOf(groups) {
         ])
     )
   );
+  /* The private reason exists only beside a recorded reply; only its author and a designated reader see it. */
+  const reasons = new Map(
+    await Promise.all(
+      [...replies]
+        .filter(([, reply]) => reply?.value?.recorded)
+        .map(async ([id]) => {
+          const m = upcoming.find(x => x.id === id);
+          const path = `ministries/${enc(m.ministryId)}/meetings/${enc(m.id)}/rsvp-private-reason`;
+          return [id, await soft(api(inParish(path)), null)];
+        })
+    )
+  );
   return meetings.map(m => {
     const when = clock(m.startsAt, m.timeZone);
     const done = Date.parse(m.startsAt) < now;
     const reply = replies.get(m.id);
+    const reason = reasons.get(m.id);
+    const reasonFields = {
+      reason: reason?.value && !reason.value.cleared ? reason.value.reason || '' : '',
+      reasonVersion: reason?.version || null,
+      reasonEditable: !!reason?.value?.canEdit || !reason
+    };
     return {
       id: m.id,
       groupId: m.ministryId,
@@ -191,9 +211,9 @@ async function meetingsOf(groups) {
       attendance: done ? ATTENDANCE[attendance.get(m.id)?.status] || 'unrecorded' : 'upcoming',
       rsvpEnabled: !!m.rsvpOpen && !done && reply?.value?.canChange !== false,
       rsvp: reply?.value?.recorded
-        ? { status: reply.value.response, reason: '', version: reply.version }
+        ? { status: reply.value.response, version: reply.version, ...reasonFields }
         : reply
-          ? { status: '', reason: '', version: reply.version }
+          ? { status: '', reason: '', version: reply.version, reasonVersion: null, reasonEditable: true }
           : null,
       resources: []
     };
@@ -285,9 +305,11 @@ const note = x => ({
   body: x.body,
   category: x.category || '',
   tags: x.tags || [],
-  reminder: '',
-  meetingId: '',
-  pinned: false,
+  reminder: x.reminderAt ? x.reminderAt.slice(0, 10) : '',
+  meetingId: x.meetingId || '',
+  meetingMinistryId: x.meetingMinistryId || '',
+  meetingParishId: x.meetingParishId || '',
+  pinned: !!x.pinned,
   updatedAt: x.updatedAt,
   status: x.status,
   version: x.version
@@ -354,7 +376,19 @@ export async function loadMember() {
     ]);
   const personId = link?.value?.personId || '';
   const groups = await ministries(personId);
-  const [meetings, volunteer, formation, events, workspaceItems, concerns, reviewers, assigned] = await Promise.all([
+  const [
+    meetings,
+    volunteer,
+    formation,
+    events,
+    workspaceItems,
+    concerns,
+    reviewers,
+    assigned,
+    resources,
+    preferences,
+    topics
+  ] = await Promise.all([
     meetingsOf(groups),
     volunteering(groups),
     formationOf(groups),
@@ -362,7 +396,10 @@ export async function loadMember() {
     workspace(),
     concernsFrom('concerns/mine'),
     soft(api(inParish('concerns/reviewers')), []),
-    concernsFrom('concerns/assigned')
+    concernsFrom('concerns/assigned'),
+    personId ? soft(api(inParish('me/ministry-resources')), null) : null,
+    soft(api('notifications/preferences'), null),
+    soft(api('me/notification-topics'), [])
   ]);
   const named = ownData ? name(ownData) : session.user?.name || '';
   const contact = ownData?.contact || '';
@@ -397,8 +434,29 @@ export async function loadMember() {
         read: true,
         archived: false
       })),
-      ...volunteer.content
+      ...volunteer.content,
+      ...(resources?.items || []).map(r => ({
+        id: r.id,
+        kind: 'resource',
+        groupId: r.ministryId,
+        groupName: r.ministryName,
+        title: r.name,
+        body: '',
+        category: '',
+        available: r.available,
+        total: r.total,
+        at: r.updatedAt,
+        read: true
+      }))
     ],
+    resourcesTruncated: !!resources?.truncated,
+    preferences: {
+      loaded: !!preferences,
+      topics: topics || [],
+      muted: preferences?.mutedTopics || [],
+      language: preferences?.language || 'en',
+      digestOptional: !!preferences?.digestOptional
+    },
     commitments: volunteer.commitments,
     formation,
     notes: workspaceItems.notes,
@@ -444,6 +502,18 @@ export async function loadMember() {
 const act = (path, action, item, extra = {}) =>
   api(path, 'POST', { operationId: newOperationId(), version: item.version, action, ...extra });
 
+/* The note's meeting link: an unchanged link keeps its stored ids (the meeting may have left the list);
+   a new one must be a meeting on the member's list in the open parish. */
+function meetingLink(meetingId, old) {
+  const none = { meetingParishId: null, meetingMinistryId: null, meetingId: null };
+  if (!meetingId) return none;
+  if (old?.meetingId === meetingId && old.meetingMinistryId && old.meetingParishId)
+    return { meetingParishId: old.meetingParishId, meetingMinistryId: old.meetingMinistryId, meetingId };
+  const m = M.meetings.find(x => x.id === meetingId);
+  if (!m) throw new Error('That meeting is no longer on your list.');
+  return { meetingParishId: pid(), meetingMinistryId: m.groupId, meetingId: m.id };
+}
+
 async function saveNote(v) {
   const old = v.id ? M.notes.find(x => x.id === v.id) : null;
   if (v.delete) return act(`me/personal-workspace/${enc(v.id)}/actions`, 'archive', old);
@@ -454,7 +524,10 @@ async function saveNote(v) {
     title: v.title || null,
     body: v.body,
     category: v.category || null,
-    tags: v.tags || []
+    tags: v.tags || [],
+    pinned: !!v.pinned,
+    reminderAt: v.reminder ? `${v.reminder}T00:00:00Z` : null,
+    ...meetingLink(v.meetingId, old)
   };
   return old
     ? api(`me/personal-workspace/${enc(old.id)}`, 'PUT', { ...body, version: old.version })
@@ -482,11 +555,25 @@ async function saveTodo(v) {
 async function rsvp(v) {
   const m = M.meetings.find(x => x.id === v.meetingId);
   if (!m) throw new Error('That meeting is no longer on your list.');
-  return api(inParish(`ministries/${enc(m.groupId)}/meetings/${enc(m.id)}/rsvp`), 'PUT', {
+  const base = `ministries/${enc(m.groupId)}/meetings/${enc(m.id)}`;
+  const reply = await api(inParish(`${base}/rsvp`), 'PUT', {
     operationId: newOperationId(),
     version: m.rsvp?.version || null,
     response: v.status === 'yes' ? 'Yes' : 'No'
   });
+  /* The optional private reason is saved after the reply it belongs to: set or replace when typed, clear when
+     emptied. Only the member and a designated reader of the ministry can read it. */
+  if (v.reason === undefined) return reply;
+  const reason = String(v.reason || '').trim();
+  const before = m.rsvp?.reason || '';
+  if (reason === before) return reply;
+  return api(
+    inParish(`${base}/rsvp-private-reason`),
+    'PUT',
+    reason
+      ? { operationId: newOperationId(), version: m.rsvp?.reasonVersion || null, reason }
+      : { operationId: newOperationId(), version: m.rsvp?.reasonVersion || null, clear: true }
+  );
 }
 
 async function volunteer(v) {
@@ -585,6 +672,22 @@ export async function memberAction(op, v = {}) {
       return concernAction(v);
     case 'notificationRead':
       return api(`notifications/${enc(v.id)}/state`, 'POST', { status: 'Read' });
+    case 'preferences': {
+      /* Only optional topics are switches; required notices are stored whatever is muted, so a mute on
+         one is dropped. Mutes the catalog does not list are kept as they were. */
+      const p = M.preferences;
+      const mutable = p.topics.filter(x => x.mutable && !x.required).map(x => x.topic);
+      const required = p.topics.filter(x => x.required).map(x => x.topic);
+      const muted = [
+        ...p.muted.filter(x => !mutable.includes(x) && !required.includes(x)),
+        ...(v.muted || []).filter(x => mutable.includes(x))
+      ];
+      return api('notifications/preferences', 'PUT', {
+        mutedTopics: [...new Set(muted)],
+        language: p.language,
+        digestOptional: p.digestOptional
+      });
+    }
     case 'notificationReadAll':
       for (const n of M.notifications.filter(x => !x.read))
         await api(`notifications/${enc(n.id)}/state`, 'POST', { status: 'Read' });

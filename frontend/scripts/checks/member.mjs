@@ -1,7 +1,8 @@
 /* Purpose: checks the Member module against an in-memory stand-in for the routes it calls: the linked
    person, the member view model (ministries, meetings, RSVP, attendance, formation, volunteering,
    announcements, schedule, notifications, concerns, corrections, consents, own data, personal notes and
-   tasks), each action's request, the cross-parish "My parish life" calls, and the clergy's Notes & Tasks.
+   tasks with pin, reminder and meeting link, the private RSVP reason, My resources and notification
+   mutes), each action's request, the cross-parish "My parish life" calls, and the clergy's Notes & Tasks.
    Run with `npm run check` from frontend/. */
 import assert from 'node:assert/strict';
 import { json, mockApi, signedIn } from '../mock-api.mjs';
@@ -149,7 +150,39 @@ const { sent } = mockApi((method, path, body) => {
   if (get('parishes/P/ministries/G1/meetings/m0/attendance/mine'))
     return json(200, { meetingId: 'm0', status: 'Present' });
   if (get('parishes/P/ministries/G1/meetings/m1/rsvp'))
-    return json(200, dto({ meetingId: 'm1', recorded: false, canChange: true }, 'rv1'));
+    return json(200, dto({ meetingId: 'm1', recorded: true, response: 'No', canChange: true }, 'rv1'));
+  if (get('parishes/P/ministries/G1/meetings/m1/rsvp-private-reason'))
+    return json(
+      200,
+      dto({ meetingId: 'm1', personId: 'person-1', reason: 'Travelling', cleared: false, canEdit: true }, 'rr1')
+    );
+  if (method === 'PUT' && route === 'parishes/P/ministries/G1/meetings/m1/rsvp-private-reason')
+    return json(200, { meetingId: 'm1', reason: body.reason || null, cleared: !!body.clear });
+  if (get('parishes/P/me/ministry-resources'))
+    return json(200, {
+      items: [
+        {
+          id: 'st1',
+          ministryId: 'G9',
+          ministryName: 'Hidden group',
+          name: 'Hymnals',
+          total: 4,
+          onLoan: 1,
+          available: 3,
+          updatedAt: '2026-11-01T00:00:00Z'
+        }
+      ],
+      truncated: false
+    });
+  if (get('notifications/preferences'))
+    return json(200, { mutedTopics: ['community.news', 'request.update'], language: 'ar', digestOptional: true });
+  if (method === 'PUT' && route === 'notifications/preferences') return json(200, body);
+  if (get('me/notification-topics'))
+    return json(200, [
+      { topic: 'parish.broadcast', required: false, mutable: true },
+      { topic: 'reports', required: false, mutable: true },
+      { topic: 'request.update', required: true, mutable: false }
+    ]);
   if (method === 'PUT' && route === 'parishes/P/ministries/G1/meetings/m1/rsvp')
     return json(200, { response: body.response });
   if (get('parishes/P/ministries/G1/formation/enrollments/mine'))
@@ -196,6 +229,11 @@ const { sent } = mockApi((method, path, body) => {
             body: 'Bring a book',
             category: 'Spiritual',
             tags: ['a'],
+            pinned: true,
+            reminderAt: '2026-12-24T00:00:00Z',
+            meetingParishId: 'P',
+            meetingMinistryId: 'G1',
+            meetingId: 'mGone',
             updatedAt: '2026-11-01T00:00:00Z'
           },
           'pv1'
@@ -382,6 +420,18 @@ assert.equal(M.home.unreadNotifications, 2);
 assert.equal(M.ownData.records.Sacraments, 2);
 assert.deepEqual(M.requests, [], 'the requests module owns M.requests');
 assert.equal(M.preferences.email, undefined, 'no preference is invented');
+assert.deepEqual([M.notes[0].pinned, M.notes[0].reminder, M.notes[0].meetingId], [true, '2026-12-24', 'mGone']);
+assert.deepEqual([next.rsvp.status, next.rsvp.reason, next.rsvp.reasonVersion], ['No', 'Travelling', 'rr1']);
+const resource = M.content.find(x => x.kind === 'resource');
+assert.deepEqual(
+  [resource.title, resource.groupId, resource.groupName, resource.available, resource.total],
+  ['Hymnals', 'G9', 'Hidden group', 3, 4],
+  'resources of a ministry the parish does not list publicly still show'
+);
+assert.deepEqual(
+  [M.preferences.loaded, M.preferences.muted, M.preferences.topics.length],
+  [true, ['community.news', 'request.update'], 3]
+);
 
 // actions
 const last = () => sent[sent.length - 1];
@@ -390,9 +440,52 @@ assert.deepEqual(last().slice(0, 2), ['PUT', 'parishes/P/ministries/G1/meetings/
 assert.equal(last()[2].response, 'Yes');
 assert.equal(last()[2].version, 'rv1');
 assert.ok(last()[2].operationId);
+await memberAction('rsvp', { meetingId: 'm1', status: 'no', reason: '  Away for work  ' });
+assert.deepEqual(
+  sent.slice(-2).map(s => [s[0], s[1]]),
+  [
+    ['PUT', 'parishes/P/ministries/G1/meetings/m1/rsvp'],
+    ['PUT', 'parishes/P/ministries/G1/meetings/m1/rsvp-private-reason']
+  ]
+);
+assert.deepEqual([last()[2].reason, last()[2].version, !!last()[2].operationId], ['Away for work', 'rr1', true]);
+await memberAction('rsvp', { meetingId: 'm1', status: 'yes', reason: '' });
+assert.deepEqual(
+  [last()[1].endsWith('rsvp-private-reason'), last()[2].clear, last()[2].reason],
+  [true, true, undefined]
+);
+let count = sent.length;
+await memberAction('rsvp', { meetingId: 'm1', status: 'no', reason: 'Travelling' });
+assert.equal(sent.length - count, 1, 'an unchanged reason is not sent again');
+await memberAction('preferences', { muted: ['reports', 'request.update'] });
+assert.deepEqual(last().slice(0, 2), ['PUT', 'notifications/preferences']);
+assert.deepEqual(
+  last()[2],
+  { mutedTopics: ['community.news', 'reports'], language: 'ar', digestOptional: true },
+  'only optional topics are muted; a mute on a required topic is dropped; others are kept'
+);
 await memberAction('note', { title: 'T', body: 'B', category: 'Ideas', tags: ['x'] });
 assert.deepEqual(last().slice(0, 2), ['POST', 'me/personal-workspace']);
 assert.equal(last()[2].kind, 'Note');
+assert.deepEqual(
+  [last()[2].pinned, last()[2].reminderAt, last()[2].meetingId, last()[2].meetingMinistryId],
+  [false, null, null, null]
+);
+await memberAction('note', { title: 'T', body: 'B', tags: [], pinned: true, reminder: '2026-12-01', meetingId: 'm1' });
+assert.deepEqual(
+  [last()[2].pinned, last()[2].reminderAt, last()[2].meetingParishId, last()[2].meetingMinistryId, last()[2].meetingId],
+  [true, '2026-12-01T00:00:00Z', 'P', 'G1', 'm1']
+);
+await assert.rejects(
+  memberAction('note', { title: 'T', body: 'B', tags: [], meetingId: 'nope' }),
+  /no longer on your list/
+);
+await memberAction('note', { id: 'pn1', title: 'T', body: 'B', tags: [], pinned: true, meetingId: 'mGone' });
+assert.deepEqual(
+  [last()[2].meetingParishId, last()[2].meetingMinistryId, last()[2].meetingId],
+  ['P', 'G1', 'mGone'],
+  'an unchanged link keeps its stored ids'
+);
 await memberAction('note', { id: 'pn1', title: 'T2', body: 'B2', category: '', tags: [] });
 assert.deepEqual(last().slice(0, 2), ['PUT', 'me/personal-workspace/pn1']);
 assert.equal(last()[2].version, 'pv1');

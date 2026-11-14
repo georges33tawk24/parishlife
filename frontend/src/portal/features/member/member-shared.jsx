@@ -97,6 +97,14 @@ function meetingDrawer(m) {
           <dd>{txt(m.attendance)}</dd>
           <dt>{L('My reply', 'ردّي')}</dt>
           <dd>{txt(m.rsvp?.status || '—')}</dd>
+          {m.rsvp?.reason ? (
+            <>
+              <dt>{L('My private reason', 'سببي الخاص')}</dt>
+              <dd>{txt(m.rsvp.reason)}</dd>
+            </>
+          ) : (
+            ''
+          )}
         </dl>{' '}
         {m.resources?.length ? (
           <>
@@ -119,6 +127,19 @@ function meetingDrawer(m) {
         )}{' '}
         {m.rsvpEnabled && m.date >= todayKey() ? (
           <>
+            {m.rsvp?.reasonEditable !== false ? (
+              <>
+                {area(L('Private reason (optional)', 'سبب خاص (اختياري)'), 'rsvp-reason', m.rsvp?.reason || '')}
+                <p className="help">
+                  {L(
+                    'Only you and a reader the ministry designates can see this reason. Leave it empty to remove it.',
+                    'لا يرى هذا السبب إلا أنت وقارئ تعيّنه الخدمة. اتركه فارغاً لحذفه.'
+                  )}
+                </p>
+              </>
+            ) : (
+              ''
+            )}
             <div className="member-actions">
               <button className="btn btn-primary" data-rsvp="yes">
                 {L('I will attend', 'سأحضر')}
@@ -140,7 +161,13 @@ function meetingDrawer(m) {
     ),
     onMount(el) {
       el.querySelectorAll('[data-rsvp]').forEach(b =>
-        b.addEventListener('click', () => run('rsvp', { meetingId: m.id, status: b.dataset.rsvp }))
+        b.addEventListener('click', () =>
+          run('rsvp', {
+            meetingId: m.id,
+            status: b.dataset.rsvp,
+            ...(el.querySelector('#rsvp-reason') ? { reason: val(el, 'rsvp-reason') } : {})
+          })
+        )
       );
     }
   });
@@ -165,6 +192,37 @@ export function noteDrawer(n = null) {
           </Select>
         </div>{' '}
         {field(L('Tags, comma separated', 'الوسوم، مفصولة بفواصل'), 'note-tags', n?.tags?.join(', ') || '')}{' '}
+        {field(L('Reminder date (optional)', 'تاريخ التذكير (اختياري)'), 'note-reminder', n?.reminder || '', 'date')}
+        <p className="help">
+          {L(
+            'The reminder shows on your notes calendar; no message is sent.',
+            'يظهر التذكير في رزنامة ملاحظاتك؛ لا تُرسل أي رسالة.'
+          )}
+        </p>
+        <div className="formrow">
+          <label className="label" htmlFor="note-meeting">
+            {L('Linked meeting (optional)', 'اجتماع مرتبط (اختياري)')}
+          </label>
+          <Select defaultValue={n?.meetingId || ''} id="note-meeting">
+            <option value="">{L('None', 'لا شيء')}</option>
+            {n?.meetingId && !M.meetings.some(m => m.id === n.meetingId) ? (
+              <option value={txt(n.meetingId)}>
+                {L('A meeting no longer on your list', 'اجتماع لم يعد في قائمتك')}
+              </option>
+            ) : (
+              ''
+            )}
+            {M.meetings.map((m, i) => (
+              <option key={i} value={txt(m.id)}>
+                {txt(`${m.title} · ${m.group} · ${m.date}`)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <label className="member-toggle">
+          <span>{L('Pin to the top', 'تثبيت في الأعلى')}</span>
+          <input type="checkbox" id="note-pinned" defaultChecked={!!n?.pinned} />
+        </label>
       </>
     ),
     foot: footer(L('Save note', 'حفظ الملاحظة')),
@@ -183,7 +241,10 @@ export function noteDrawer(n = null) {
           tags: val(el, 'note-tags')
             .split(',')
             .map(x => x.trim())
-            .filter(Boolean)
+            .filter(Boolean),
+          reminder: val(el, 'note-reminder'),
+          meetingId: val(el, 'note-meeting'),
+          pinned: !!el.querySelector('#note-pinned')?.checked
         });
       });
     }

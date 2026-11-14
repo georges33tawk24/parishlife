@@ -397,6 +397,16 @@ export function mount(host) {
     })
   );
   host.querySelector('[data-closure-request]')?.addEventListener('click', closureDrawer);
+  /* A checked switch means "show it": the unchecked optional topics are the ones muted. */
+  host
+    .querySelector('[data-preferences-save]')
+    ?.addEventListener('click', () =>
+      run('preferences', {
+        muted: [...host.querySelectorAll('[data-preference-topic]')]
+          .filter(x => !x.checked)
+          .map(x => x.dataset.preferenceTopic)
+      })
+    );
   host.querySelectorAll('[data-reply-message]').forEach(b =>
     b.addEventListener('click', () => {
       const x = M.content.find(x => x.id === b.dataset.replyMessage);
