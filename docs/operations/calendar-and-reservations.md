@@ -105,3 +105,10 @@ Source basis: S23.09–S23.10, S23.15 (proposed). Routes under `/api/parishes/{p
 - `GET /reservations/{reservation}/rental` shows the deposit state (NotRequired, Due, PartlyReceived, Held, Settled), the deposit held and the fee outstanding, all derived only from recorded payments. Nothing simulates an electronic payment.
 
 Not implemented: linking rental receipts into the Finance ledger and bank matching, rescheduling/cancellation fee rules, a renter-facing application and tracking page, insurance/permission evidence, renter-to-account association, and frontend.
+
+## Reservation details and decision history (fullstack2-facilities, November 2026)
+
+- `POST /reservations` also takes optional `Purpose`, `PurposeAr`, `ExpectedAttendance`, `ContactPhone` and `Notes`.
+- `PUT /reservations/{id}/details` (facilities.manage, current version) replaces those details and a typed opening/closing checklist (at most 40 steps, each with an optional `labelAr`). A newly ticked step records the account and instant; a step that stays ticked keeps them. It never changes the period, rooms or allocation state, and is refused for declined or cancelled reservations and for private bookings the caller cannot see.
+- Reservations now carry a decision history (newest 50): the request, each confirm/decline/cancel with its reason, and the allocation outcome (`confirmed`, `conflict`, `cancelled`) as actor `system`. Views also return `EventTitle` and `MinistryId`. Redacted views omit all of these.
+- Dated maintenance blocks hold rooms through the same allocator; see `equipment-and-facility-issues.md`.
