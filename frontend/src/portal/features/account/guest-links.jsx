@@ -1,22 +1,41 @@
-/* Purpose: on My account, link a request made as a guest (before signing in) to the signed-in account.
+/* Purpose: on My account, link a request made as a guest (before signing in) to the signed-in account, and
+   list the links already asked for.
    Main function: GuestLinks.
 
    A13: the account holder pastes the guest's private tracking link; the API records that this account asks
    to join the case (POST .../requests/{id}/claim, the token in X-ParishLife-Tracking). Nothing changes for
    the case until a different, authorized office reviewer verifies identity and approves (the review is in
    the office's request view). Once approved, the request appears under My requests and the tracking link
-   stops working. The API does not list pending claims for the account, so this panel shows only the
-   result of the claim just sent. */
-import { useState } from 'react';
+   stops working. GET /api/me/request-claims lists this account's claims by reference and parish with their
+   state (waiting for review, linked, or no longer waiting: declined, replaced or closed), never the case. */
+import { useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { Panel } from '../../ui/ui.jsx';
 import { parseTracking } from '../../model/guest-requests.js';
-import { claimGuest } from '../../model/modules/requests.js';
+import { claimGuest, myClaims } from '../../model/modules/requests.js';
+
+const STATE = {
+  Pending: ['Waiting for office review', 'بانتظار مراجعة المكتب'],
+  Linked: ['Linked: see My requests', 'مربوط: راجع «طلباتي»'],
+  NotPending: ['No longer waiting: contact the parish office', 'لم يعد بانتظار المراجعة: تواصل مع مكتب الرعية']
+};
 
 export function GuestLinks() {
   const [error, setError] = useState(''),
     [sent, setSent] = useState(''),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [claims, setClaims] = useState([]),
+    [round, setRound] = useState(0);
+  useEffect(() => {
+    let live = true;
+    myClaims().then(
+      rows => live && setClaims(rows || []),
+      () => live && setClaims([])
+    );
+    return () => {
+      live = false;
+    };
+  }, [round]);
   const submit = async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -29,6 +48,7 @@ export function GuestLinks() {
       setError('');
       setSent(request.reference);
       form.reset();
+      setRound(n => n + 1);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -43,6 +63,22 @@ export function GuestLinks() {
           'الصق رابط المتابعة الخاص بطلب قدّمته كزائر. يتحقق المكتب من هويتك قبل ربطه بحسابك. لا يمنحك ذلك عضوية في الرعية.'
         )}
       </p>
+      {claims.length ? (
+        <ul className="help" data-request-claims="">
+          {claims.map(c => (
+            <li key={c.parishId + c.requestId} data-claim-state={c.state}>
+              <bdi dir="ltr">{c.reference}</bdi>
+              {c.parishName ? (
+                <>
+                  {' '}
+                  · <bdi>{c.parishName}</bdi>
+                </>
+              ) : null}{' '}
+              · {t(...(STATE[c.state] || [c.state, c.state]))}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <form data-link-request="" onSubmit={submit}>
         <label className="formrow">
           <span className="label">{t('Private tracking link', 'رابط المتابعة الخاص')}</span>
