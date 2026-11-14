@@ -1,12 +1,15 @@
-/* Finance: funds and their balances, expenses (draft, approval, payment) and bank reconciliation.
-   Amounts are in the currency they were recorded in; ParishLife.Api has no exchange rate and no
-   budgets, so neither is shown. */
+/* Finance: funds with their balances and this year's budgets, expenses (draft, approval, payment), bank
+   reconciliation, and the exchange rates the office recorded. Amounts stay in the currency they were
+   recorded in: a recorded rate is shown for reference with its date and source and is never used to
+   convert or add amounts. */
 import { css } from '../../ui/html.js';
 import { t, fmtDate } from '../../../lib/i18n.js';
 import { Icon, PageHead, Panel, Pill, Table, Empty, Stat, TabBar } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import * as CR from '../../shared/record-editor.jsx';
-import { FUNDS, EXPENSES, BANKLINES } from '../../model/data.js';
+import { FUNDS, EXPENSES, BANKLINES, RATES } from '../../model/data.js';
+import { nameOf } from '../../model/names.js';
+import { session } from '../../model/api.js';
 import { applyFinanceAccess, fundName, fmt, amounts, can, State } from './money-shared.jsx';
 import * as A from './money-actions.jsx';
 
@@ -26,6 +29,7 @@ const sum = (key, fn = f => f) => {
 };
 
 export function finance(tab = '') {
+  const year = new Date().getFullYear();
   const waiting = EXPENSES.filter(x => x.apiStatus === 'Submitted');
   const unmatched = BANKLINES.filter(b => b.status === 'Unmatched');
   const head = (
@@ -75,6 +79,14 @@ export function finance(tab = '') {
                   <dl className="dl">
                     <dt>{L('Paid to', 'المدفوع له')}</dt>
                     <dd>{x.payee || '—'}</dd>
+                    <dt>{L('Entered by', 'أدخله')}</dt>
+                    <dd>{nameOf(session.parishId, x.createdBy) || '—'}</dd>
+                    {x.approvedBy ? (
+                      <>
+                        <dt>{L('Approved by', 'اعتمده')}</dt>
+                        <dd>{nameOf(session.parishId, x.approvedBy) || '—'}</dd>
+                      </>
+                    ) : null}
                     <dt>{L('Receipt', 'الإيصال')}</dt>
                     <dd>
                       {x.evidence
@@ -106,7 +118,7 @@ export function finance(tab = '') {
                 <span className="mono dim">{fmtDate(x.d)}</span>,
                 <span className="row" style={{ gap: '6px' }}>
                   <C.IconBtn ico="chevR" label={L('Expand', 'توسيع')} data-expand="" aria-expanded="false" />{' '}
-                  <b style={{ font: '500 14px/20px var(--sans)' }}>{x.what}</b>
+                  <b style={{ font: '500 14px/20px var(--sans)' }}>{L(x.what, x.whatAr)}</b>
                 </span>,
                 <span className="dim">{fundName(x.fund)}</span>,
                 <span className="num">{fmt(x.amount, x.currency)}</span>,
@@ -343,16 +355,18 @@ export function finance(tab = '') {
             { label: L('Type', 'النوع'), cls: 'shrink hide-sm' },
             { label: L('Received', 'المقبوض'), cls: 'num hide-sm' },
             { label: L('Spent', 'المصروف'), cls: 'num' },
-            { label: L('Balance', 'الرصيد'), cls: 'num' }
+            { label: L('Balance', 'الرصيد'), cls: 'num' },
+            { label: L(`Budget ${year}`, `موازنة ${year}`), cls: 'num hide-md' },
+            { label: '', cls: 'shrink' }
           ]}
           rows={FUNDS.map(f => ({
-            detail: f.purpose ? <p className="t-caption dim">{f.purpose}</p> : null,
+            detail: f.purpose ? <p className="t-caption dim">{L(f.purpose, f.purposeAr || f.purpose)}</p> : null,
             cells: [
               <span className="row" style={{ gap: '6px' }}>
                 {f.purpose ? (
                   <C.IconBtn ico="chevR" label={L('Expand', 'توسيع')} data-expand="" aria-expanded="false" />
                 ) : null}
-                <b>{f.name}</b>
+                <b>{L(f.name, f.ar)}</b>
                 {f.status && f.status !== 'Active' ? <Pill label={f.status} /> : null}
               </span>,
               f.restricted ? (
@@ -362,7 +376,30 @@ export function finance(tab = '') {
               ),
               <span className="num">{amounts(Object.fromEntries(f.balances.map(b => [b.currency, b.received])))}</span>,
               <span className="num">{amounts(Object.fromEntries(f.balances.map(b => [b.currency, b.paid])))}</span>,
-              <span className="num">{amounts(Object.fromEntries(f.balances.map(b => [b.currency, b.balance])))}</span>
+              <span className="num">{amounts(Object.fromEntries(f.balances.map(b => [b.currency, b.balance])))}</span>,
+              f.budgets.length ? (
+                <span className="num">
+                  {f.budgets.map(b => (
+                    <span key={b.currency} style={{ display: 'block' }}>
+                      {fmt(b.spent, b.currency)} / {fmt(b.amount, b.currency)}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="dimmer">—</span>
+              ),
+              can('finance.approve') ? (
+                <span className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn-ghost btn-dense" data-money={`fund-edit:${f.id}`}>
+                    {L('Edit names', 'تعديل الاسم')}
+                  </button>
+                  <button className="btn btn-secondary btn-dense" data-money={`budget:${f.id}`}>
+                    {L('Budget', 'الموازنة')}
+                  </button>
+                </span>
+              ) : (
+                ''
+              )
             ]
           }))}
           empty={
@@ -384,10 +421,52 @@ export function finance(tab = '') {
         ) : null}
         <p className="t-caption dim" style={{ marginTop: '12px' }}>
           {L(
-            'Budgets are not stored by ParishLife yet, so there is no budget column. A fund cannot be edited after it is created.',
-            'لا يحفظ «حياة الرعية» الموازنات بعد، فلا عمود موازنة. ولا يُعدَّل الصندوق بعد إنشائه.'
+            'Budget shows what was paid this year against the budget, in each currency. A fund keeps its restriction once created; its names can be corrected.',
+            'تُظهر الموازنة ما دُفع هذه السنة مقابلها، بكل عملة. ويحتفظ الصندوق بتقييده بعد إنشائه؛ ويمكن تصحيح اسمه.'
           )}
         </p>
+        <div style={{ marginTop: '24px' }}>
+          <Panel
+            title={L('Exchange rates recorded by the office', 'أسعار الصرف التي سجّلها المكتب')}
+            more={
+              can('finance.approve') ? (
+                <button className="btn btn-secondary btn-dense" data-money="rate">
+                  <Icon name="plus" size={15} />
+                  {L('Record a rate', 'تسجيل سعر')}
+                </button>
+              ) : null
+            }
+          >
+            {RATES.length ? (
+              <Table
+                cols={[
+                  { label: L('Applied on', 'تاريخ السريان') },
+                  { label: L('Rate', 'السعر'), cls: 'num' },
+                  { label: L('Source', 'المصدر') },
+                  { label: L('Recorded by', 'سجّله'), cls: 'hide-sm' }
+                ]}
+                rows={RATES.slice(0, 12).map(r => ({
+                  cells: [
+                    <span className="mono dim">{fmtDate(r.on)}</span>,
+                    <span className="num">
+                      1 {r.base} = {fmt(r.rate, r.quote)}
+                    </span>,
+                    <span className="dim">{r.source}</span>,
+                    <span className="dim">{nameOf(session.parishId, r.recordedBy) || '—'}</span>
+                  ]
+                }))}
+              />
+            ) : (
+              <p className="t-caption dim">{L('No rate recorded yet.', 'لم يُسجَّل سعر بعد.')}</p>
+            )}
+            <p className="t-caption dim" style={{ marginTop: '10px' }}>
+              {L(
+                'A rate is what the office read from the named source on that date. ParishLife never fetches one, never converts an amount with it and never adds currencies together.',
+                'السعر هو ما قرأه المكتب من المصدر المذكور في ذلك التاريخ. لا يجلب «حياة الرعية» سعراً، ولا يحوّل به أي مبلغ، ولا يجمع العملات معاً.'
+              )}
+            </p>
+          </Panel>
+        </div>
       </div>
     </>
   );
@@ -406,6 +485,9 @@ finance.mount = host => {
       const [what, a, c] = b.dataset.money.split(':');
       if (what === 'exp') A.expenseDecision(c, a);
       else if (what === 'exp-edit') CR.edit('expense', a);
+      else if (what === 'fund-edit') CR.edit('fund', a);
+      else if (what === 'budget') A.budgetDialog(a);
+      else if (what === 'rate') A.rateDialog();
       else if (what === 'bank-import') A.bankImportDialog();
       else if (what === 'bank-unmatch') A.bankUnmatchDialog(a);
       else if (what === 'reconcile' || what === 'reopen') A.reconcileDialog(...a.split('|'), what === 'reopen');

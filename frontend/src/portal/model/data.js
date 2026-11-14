@@ -2192,6 +2192,11 @@ export const RECURRING = [
 ];
 /* Gifts posted from closed counting sessions, with their reversals (ParishLife.Api finance/contributions). */
 export const CONTRIBUTIONS = [];
+/* Exchange rates the parish office recorded (date and source), fund budgets per year and currency, and the
+   counting sessions (ParishLife.Api finance/exchange-rates, finance/budgets, finance/sessions). */
+export const RATES = [];
+export const BUDGETS = [];
+export const COUNT_SESSIONS = [];
 export const RECEIPTS = [
   { id: 'rc1', no: 'R-2026-0884', p: 'p1', amount: 50, at: '2026-10-04', sent: 'whatsapp' },
   { id: 'rc2', no: 'R-2026-0883', p: 'p4', amount: 120, at: '2026-10-04', sent: 'email' },
