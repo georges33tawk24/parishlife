@@ -26,13 +26,13 @@ namespace ParishLife.Api.Services.Registrations;
 public sealed class RegistrationService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, IAccountDirectory accounts,
     MfaAccountAccess proof, MinistryAccess own, NotificationService notifications, NotificationOutcomeReader outcomes, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new RecordScope
+    internal static RecordScope Scope(string parish) => new RecordScope
     {
         Area = RecordArea.Parish,
         OwnerId = parish
     };
-    private Operation Op(Guid id, object request, string target) => actor.CreateOperation(id, request, clock, target);
-    private async Task<Versioned<Parish>> Authorize(string parish, string permission, CancellationToken ct)
+    internal Operation Op(Guid id, object request, string target) => actor.CreateOperation(id, request, clock, target);
+    internal async Task<Versioned<Parish>> Authorize(string parish, string permission, CancellationToken ct)
     {
         await proof.RequireMfaAsync(ct);
         var root = await access.RequireAsync(parish, permission, ct);
@@ -40,16 +40,16 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return root;
     }
 
-    private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
+    internal static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
 
-    private async Task<Versioned<T>> Get<T>(string parish, string id, CancellationToken ct) => await records.ReadAsync<T>(Scope(parish), id, ct) ?? throw new DomainException("registration_resource_unavailable", "The requested event registration resource is unavailable.", FailureKind.NotFound);
-    private static DomainException Invalid(string message) => new("registration_state", message, FailureKind.Conflict);
-    private static string PolicyKey(string eventId) => "registrationPolicy:" + eventId;
-    private static string RowKey(string id) => "registration:" + id;
+    internal async Task<Versioned<T>> Get<T>(string parish, string id, CancellationToken ct) => await records.ReadAsync<T>(Scope(parish), id, ct) ?? throw new DomainException("registration_resource_unavailable", "The requested event registration resource is unavailable.", FailureKind.NotFound);
+    internal static DomainException Invalid(string message) => new("registration_state", message, FailureKind.Conflict);
+    internal static string PolicyKey(string eventId) => "registrationPolicy:" + eventId;
+    internal static string RowKey(string id) => "registration:" + id;
     // One deterministic registration per person and event, shared by office and self-service paths.
-    private static string RegistrationId(string eventId, string person)
+    internal static string RegistrationId(string eventId, string person)
         => new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(eventId + ":" + person)).AsSpan(0, 16)).ToString("N");
-    private async Task<Versioned<CalendarEvent>> Event(string parish, string id, CancellationToken ct)
+    internal async Task<Versioned<CalendarEvent>> Event(string parish, string id, CancellationToken ct)
     {
         var item = await Get<CalendarEvent>(parish, "event:" + id, ct);
         if (item.Value.Status == "Cancelled")
@@ -57,7 +57,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return item;
     }
 
-    private static void RequireEligibleEvent(CalendarEvent item)
+    internal static void RequireEligibleEvent(CalendarEvent item)
     {
         if (item.Kind != "ParishActivity" || item.Visibility is not ("Parish" or "Public")
             || item.SourceType is not null || item.SourceId is not null || item.MinistryId is not null || item.ClergyAccountIds?.Length > 0)
@@ -74,7 +74,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
             throw Invalid("Registration is closed for this event.");
     }
 
-    private async Task<RegistrationForm> ViewedFormAsync(string parish, RegistrationPolicy policy, Guid viewedFormId, CancellationToken ct)
+    internal async Task<RegistrationForm> ViewedFormAsync(string parish, RegistrationPolicy policy, Guid viewedFormId, CancellationToken ct)
     {
         if (Guard.Id(viewedFormId) != policy.FormVersionId)
             throw new DomainException("registration_form_changed", "The registration form has changed. Read the current form and review its questions before submitting again.", FailureKind.Conflict);
@@ -84,7 +84,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return form.Value;
     }
 
-    private async Task<IReadOnlyList<Versioned<EventRegistration>>> Participants(string parish, string eventId, CancellationToken ct) => await records.CollectAsync<EventRegistration>(Scope(parish), "registration", ct, 5000, new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
+    internal async Task<IReadOnlyList<Versioned<EventRegistration>>> Participants(string parish, string eventId, CancellationToken ct) => await records.CollectAsync<EventRegistration>(Scope(parish), "registration", ct, 5000, new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
     private async Task<bool> CapacityAvailable(string parish, RegistrationPolicy policy, bool transport, string? except, CancellationToken ct)
     {
         var active = (await Participants(parish, policy.EventId, ct)).Select(x => x.Value).Where(x => x.Id != except && RegistrationRules.ConsumesSeat(x, clock.GetUtcNow())).ToArray();
@@ -296,7 +296,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return await Registration(parish, eventId, id, ct);
     }
 
-    private async Task<Versioned<EventRegistration>> Registration(string parish, string eventId, string id, CancellationToken ct)
+    internal async Task<Versioned<EventRegistration>> Registration(string parish, string eventId, string id, CancellationToken ct)
     {
         var row = await Get<EventRegistration>(parish, RowKey(id), ct);
         if (row.Value.EventId != eventId)
@@ -563,8 +563,8 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return await records.CommitAsync(Scope(parish), op, "registration.amend", id, [Fence(root), RecordChange.Replace(RowKey(id), "registration", item, Versions.Require(request.Version)), RecordChange.Replace(PolicyKey(eventId), "registrationPolicy", policy.Value, policy.Version), RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version), RecordChange.Replace("event:" + eventId, "event", occurrence.Value, occurrence.Version)], item, ct, request.Reason);
     }
 
-    private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, "Evidence", 2000);
-    private static void ValidateCollectors(AuthorizedCollector[] collectors)
+    internal static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, "Evidence", 2000);
+    internal static void ValidateCollectors(AuthorizedCollector[] collectors)
     {
         if (collectors.Length > 10 || collectors.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != collectors.Length)
             throw new DomainException("invalid_collectors", "Use up to ten distinct authorized collectors.");
@@ -745,7 +745,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         return await records.PageAsync<RegistrationRefund>(Scope(parish), "registrationRefund", size, cursor, ct, new RecordCondition { Path = "registrationId", Comparison = "eq", Value = id });
     }
 
-    private async Task<(Versioned<Parish> Root, Versioned<RegistrationPolicy> Policy)> Door(string parish, string eventId, CancellationToken ct)
+    internal async Task<(Versioned<Parish> Root, Versioned<RegistrationPolicy> Policy)> Door(string parish, string eventId, CancellationToken ct)
     {
         var root = await Authorize(parish, Permissions.CheckIn, ct);
         var policy = await Get<RegistrationPolicy>(parish, PolicyKey(eventId), ct);
