@@ -4,7 +4,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments and member are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **478 tests pass**. The **other 9 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1158/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account and public are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **495 tests pass**. The **other 6 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1158/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
 
 ## The branches
 
@@ -46,20 +46,40 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
    - RSVP private reasons wired.
    - `GET parishes/{id}/me/ministry-resources` ("My resources"): stock of the member's current ministries. There is no record for shared documents yet.
    - `GET me/notification-topics`: only `parish.broadcast` and `reports` can be muted; required topics never. Merge note: if communications adds topics, update `NotificationTopicCatalog`, or its test fails.
-6. **Tooling:**
+6. **Facilities** (`fullstack2-facilities`, `346209b`):
+   - Arabic twins for rooms, equipment, issues and renters; an equipment condition grade.
+   - Dated maintenance blocks (`maintenance-blocks`) that take part in reservation conflict checks.
+   - Reservation details: purpose, people expected, contact, notes, a checklist, and a decision history (`PUT reservations/{id}/details`).
+   - Names come through the account-name lookup.
+   - Still open: an assignee picker for issues (no staff list route), photos and access fields. See `docs/frontend-modules/facilities.md`.
+7. **Account** (`fullstack2-account`, `51a74b0`):
+   - Private profile details with Arabic twins.
+   - The holder's own signature image (`account/signature`, image only, signs nothing).
+   - My parish records (`account/records`: only the account's own linked person; corrections go through the existing review).
+   - A membership request form.
+   - External sign-in and linking that finish in the portal (still `external_provider_unavailable` until providers are configured).
+   - Still open: a link/unlink panel, a QR code, and a list of earlier-request claims. See `docs/frontend-modules/account.md`.
+8. **Public** (`fullstack2-public`, `08b4120`):
+   - The parish public profile, as a draft with publish/unpublish (`parishes/{id}/profile`), editable in both languages.
+   - Private photo uploads with an explicit publish step.
+   - Clergy only from current priest appointments, and only when the parish chooses to show them.
+   - The public copy (`public/parishes/{id}/profile`) and an `.ics` feed (`public/parishes/{id}/calendar.ics`, public events only, bounded, rate-limited).
+   - Arabic rank and season on liturgical entries.
+   - Owner questions are in `docs/operations/public.md`.
+9. **Tooling:**
    - `npm run check:routes` matches every frontend API call against the real controller routes. Known gaps are listed in `frontend/scripts/route-gaps.json`.
    - `frontend/.gitattributes` keeps the frontend LF, so `format:check` passes on Windows.
    - Aspire AppHost was bumped 13.6.4 → 13.6.5 for advisory GHSA-f7vh-h5g3-7jrh, so `dotnet test ParishLife.slnx` runs again.
 
-**Checks after merging sacraments and member** (SDK 10.0.401, Windows):
+**Checks after merging facilities, account and public** (SDK 10.0.401, Windows):
 - `dotnet restore --locked-mode` OK; Release build 0 warnings.
-- **57 unit + 421 integration tests passed, 0 failed.**
+- **57 unit + 438 integration tests passed, 0 failed.**
 - Frontend: `format:check`, `check` (all modules) and `build` pass.
-- `check:routes`: 565 routes, 539 requests, 13 known gaps, 0 new.
+- `check:routes`: 586 routes, 558 requests, 7 known gaps (the deliberate `workspace/plan` check, suspension, attendance import, letter signing, generic file upload), 0 new.
 
 All of this ran on local storage only, which is not Cosmos acceptance.
 
-## The 9 unfinished areas
+## The 6 unfinished areas
 
 Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
 
@@ -70,10 +90,7 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
 | registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
-| facilities | `d0ca13f`: Arabic names, condition grade, reservation details, maintenance-block conflicts (backend + tests) | none | Probably the frontend wiring and the report; check `docs/frontend-modules/facilities.md` |
 | administration | `7573aae`: operator platform lists, account suspension, clergy titles, parish audit trail (backend) | 8 frontend files (audit, workspace, people suspension) | Extending `checks/administration.mjs` |
-| account | `fb0c1f9`: profile details, own signature image, My parish records, external sign-in finishing in the portal | none | Fixing a type and building; then the frontend checks and report |
-| public | `ab454af`: parish public profile, photos, public calendar feed, Arabic liturgical rank/season | none | Continuing the liturgical Arabic twins; then the profile editor screen |
 
 ## How to continue
 
@@ -106,7 +123,7 @@ git push origin fullstack-integration
 **Expected conflicts** (take the union): `ParishLife.Api/Extensions/ServiceCollectionExtensions.cs` (one registration line per service), `docs/cosmos/containers.json` (index paths), `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `frontend/scripts/route-gaps.json` (remove a gap once its route exists).
 
 **Overlaps to watch while merging:**
-- `PublicCalendarEventDto`/`CalendarService.PublicAsync`: calendar (merged) and public both touched them.
+- `PublicCalendarEventDto`/`CalendarService.PublicAsync`: calendar and public both touched them; both are merged now, with no conflict.
 - `record-editor.jsx`: finance and ministries.
 - The request-letter code: requests and the Azure session's snapshot.
 - Finance areas started before the names route existed, so they may still show account ids where `loadNames`/`nameOf` would now work.
@@ -120,7 +137,7 @@ git push origin fullstack-integration
 - recovery-session restrictions kept;
 - tests for every route.
 
-## After the 9 areas
+## After the 6 areas
 
 1. **Signed-in end-to-end tests** in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
