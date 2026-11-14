@@ -1,7 +1,7 @@
 <!-- Purpose: launches and observes the backend locally through Aspire; does not provision Azure.
      Main contents: Aspire AppHost SDK and the single API project resource. -->
 <Project Sdk="Microsoft.NET.Sdk">
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.4" />
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.5" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsAspireHost>true</IsAspireHost>
@@ -9,7 +9,7 @@
     <UserSecretsId>ParishLife.AppHost.Development</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.6.4" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.6.5" />
     <ProjectReference Include="../ParishLife.Api/ParishLife.Api.csproj" />
     <None Update="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
