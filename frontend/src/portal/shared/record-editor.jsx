@@ -488,7 +488,9 @@ export const ENT = {
     del: ['Delete this fund?', 'حذف هذا الصندوق؟'],
     fields: () => [
       { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
+      { k: 'nameAr', label: L('Name (Arabic)', 'الاسم (عربي)'), dir: 'rtl', ar: true, opt: true, full: true },
       { k: 'purpose', label: L('What it is for', 'الغرض منه'), req: true, full: true },
+      { k: 'purposeAr', label: L('What it is for (Arabic)', 'الغرض منه (عربي)'), dir: 'rtl', ar: true, opt: true, full: true },
       {
         k: 'restricted',
         label: L('Restricted', 'مقيّد'),
@@ -502,16 +504,19 @@ export const ENT = {
       id: uid('f'),
       name: '',
       ar: '',
+      nameAr: '',
       purpose: '',
+      purposeAr: '',
       restricted: false,
       budget: 0,
       actual: 0,
+      budgets: [],
       balances: []
     }),
     canDelete: () =>
       L(
-        'A fund cannot be deleted or edited once created; money is recorded against it.',
-        'لا يُحذف الصندوق ولا يُعدَّل بعد إنشائه؛ فالأموال تُسجَّل عليه.'
+        'A fund cannot be deleted, and its restriction cannot change; money is recorded against it. Its names can be corrected.',
+        'لا يُحذف الصندوق ولا يتغيّر تقييده؛ فالأموال تُسجَّل عليه. ويمكن تصحيح اسمه.'
       )
   },
   expense: {
@@ -522,6 +527,8 @@ export const ENT = {
     del: ['Delete this expense?', 'حذف هذا المصروف؟'],
     fields: () => [
       { k: 'what', label: L('What was bought', 'ما الذي اشتُري'), req: true, full: true },
+      { k: 'descriptionAr', label: L('What was bought (Arabic)', 'ما الذي اشتُري (عربي)'), dir: 'rtl', ar: true, opt: true, full: true },
+
       { k: 'payee', label: L('Paid to', 'المدفوع له'), req: true },
       { k: 'amount', label: L('Amount', 'المبلغ'), type: 'number', min: 0.01, req: true },
       {
@@ -549,6 +556,7 @@ export const ENT = {
       id: uid('x'),
       d: new Date().toLocaleDateString('sv-SE'),
       what: '',
+      descriptionAr: '',
       payee: '',
       fund: D.FUNDS[0]?.id || '',
       amount: '',
@@ -611,7 +619,10 @@ export const ENT = {
     del: ['Delete this appeal?', 'حذف هذه الحملة؟'],
     fields: () => [
       { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
+      { k: 'nameAr', label: L('Name (Arabic)', 'الاسم (عربي)'), dir: 'rtl', ar: true, opt: true, full: true },
       { k: 'purpose', label: L('What it is for', 'الغرض منها'), req: true, full: true },
+      { k: 'purposeAr', label: L('What it is for (Arabic)', 'الغرض منها (عربي)'), dir: 'rtl', ar: true, opt: true, full: true },
+
       { k: 'fund', label: L('Fund', 'الصندوق'), type: 'select', options: funds },
       {
         k: 'currency',
@@ -641,7 +652,9 @@ export const ENT = {
       id: uid('ca'),
       name: '',
       ar: '',
+      nameAr: '',
       purpose: '',
+      purposeAr: '',
       fund: D.FUNDS[0]?.id || '',
       currency: 'USD',
       starts: new Date().toLocaleDateString('sv-SE'),
@@ -651,7 +664,10 @@ export const ENT = {
       pledged: {}
     }),
     canDelete: () =>
-      L('An appeal cannot be deleted or edited once created.', 'لا تُحذف الحملة ولا تُعدَّل بعد إنشائها.')
+      L(
+        'An appeal cannot be deleted. Its names, dates and goal can be corrected; its fund cannot change.',
+        'لا تُحذف الحملة. ويمكن تصحيح اسمها وتواريخها وهدفها؛ ولا يتغيّر صندوقها.'
+      )
   },
   hymn: {
     list: () => D.MUSIC,

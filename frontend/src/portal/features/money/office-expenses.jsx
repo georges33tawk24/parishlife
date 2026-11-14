@@ -1,7 +1,7 @@
 /* Office expenses: the monthly allowance, office purchases with receipt references, and the running
    balance in each currency, from ParishLife.Api's office ledger. USD and LBP are kept apart.
-   An entry is a receipt reference (or the reason there is none); the API stores no category and no
-   receipt file. A removed or reversed entry stays in the ledger's history with its reason. */
+   An entry is a receipt reference (or the reason there is none), with an optional free-text category
+   and Arabic description; the API stores no receipt file. A removed or reversed entry stays in the ledger's history with its reason. */
 import { Select } from '../../ui/components.jsx';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
 import { S, is, bus } from '../../model/store.js';
@@ -61,7 +61,7 @@ export function officeExpenses() {
     rows = monthRows(month, currency).filter(
       row =>
         (filter === 'all' || row.kind === filter) &&
-        `${row.description} ${row.payee} ${row.reference} ${row.category}`.toLocaleLowerCase().includes(query)
+        `${row.description} ${row.descriptionAr || ""} ${row.payee} ${row.reference} ${row.category}`.toLocaleLowerCase().includes(query)
     );
   return (
     <>
@@ -177,7 +177,8 @@ export function officeExpenses() {
               <span style={{ whiteSpace: 'nowrap' }}>{fmtDate(row.date)}</span>,
               <Pill label={typeLabel(row.kind)} tone={row.kind === 'expense' ? 'warning' : 'info'} />,
               <>
-                <b>{row.description}</b>
+                <b>{t(row.description, row.descriptionAr || row.description)}</b>
+                {row.category ? <small className="dim"> · {row.category}</small> : null}
                 <small>{row.monthClosed ? L('Month closed', 'الشهر مقفل') : ''}</small>
               </>,
               <>
@@ -269,6 +270,28 @@ function entryForm(record = null, kind = 'expense') {
             max={300}
           />
         ) : null}{' '}
+        {kind !== 'opening' ? (
+          <div className="formrow">
+            <label className="label" htmlFor="oe-descriptionAr">
+              {L('Description in Arabic (optional)', 'الوصف بالعربية (اختياري)')}
+            </label>
+            <input
+              className="input"
+              id="oe-descriptionAr"
+              dir="rtl"
+              maxLength="300"
+              defaultValue={record?.descriptionAr || ''}
+            />
+          </div>
+        ) : null}{' '}
+        {kind !== 'opening' ? (
+          <C.Field
+            label={L('Category (optional)', 'الفئة (اختياري)')}
+            id="oe-category"
+            value={record?.category || ''}
+            max={100}
+          />
+        ) : null}{' '}
         {kind === 'expense' ? (
           <C.Field label={label[0]} id="oe-payee" value={record?.payee || ''} req={true} max={200} />
         ) : null}{' '}
@@ -299,8 +322,8 @@ function entryForm(record = null, kind = 'expense') {
         ) : (
           <p className="help">
             {L(
-              'Receipts are kept as a reference to the document. The ledger stores no category and no receipt file.',
-              'تُحفظ الإيصالات كمرجع للمستند. ولا يحفظ الدفتر فئة ولا ملف إيصال.'
+              'Receipts are kept as a reference to the document; the ledger stores no receipt file. A category is free text you choose.',
+              'تُحفظ الإيصالات كمرجع للمستند؛ ولا يحفظ الدفتر ملف الإيصال. والفئة نص حرّ تختاره.'
             )}
           </p>
         )}
@@ -354,7 +377,8 @@ function entryForm(record = null, kind = 'expense') {
           currency,
           amount,
           description: value('description'),
-          category: '',
+          descriptionAr: value('descriptionAr'),
+          category: value('category'),
           payee: value('payee'),
           reference: value('reference'),
           notes: value('notes')
@@ -555,8 +579,4 @@ officeExpenses.mount = host => {
         })
     )
   );
-  host.querySelector('[data-office-print-month]')?.addEventListener('click', printMonth);
-  host
-    .querySelector('[data-office-close]')
-    ?.addEventListener('click', () => A.officeCloseMonth(S.ui.officeMonth || today().slice(0, 7)));
-};
+  host.querySelector('[data-office-print

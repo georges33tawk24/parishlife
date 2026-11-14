@@ -1,6 +1,6 @@
 /* Giving: the counting session (numbered envelopes, unattributed cash, the second count, closing),
-   posted contributions, pledges, campaigns, recurring gifts and receipts. Amounts are shown in the
-   currency they were counted in; ParishLife.Api keeps no exchange rate. */
+   posted contributions, pledges, campaigns, recurring gifts (stored schedules, never charged) and
+   numbered receipts. Amounts are shown in the currency they were counted in and never converted. */
 import { Select } from '../../ui/components.jsx';
 import { css } from '../../ui/html.js';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
@@ -19,9 +19,12 @@ import {
   GIVING_SERIES,
   PAYMENT_MIX,
   HOUSEHOLDS,
+  SESSIONS,
   person
 } from '../../model/data.js';
 import { applyFinanceAccess, fundName, fmt, amounts, byCurrency, can, State } from './money-shared.jsx';
+import { nameOf } from '../../model/names.js';
+import { session } from '../../model/api.js';
 import * as A from './money-actions.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -32,7 +35,7 @@ const GTABS = () => [
   ['', 'Counting session', 'جلسة العدّ'],
   ['contributions', 'Contributions', 'المساهمات'],
   ['pledges', 'Pledges', 'التعهّدات', PLEDGES.length],
-  ['recurring', 'Recurring', 'الدائمة'],
+  ['recurring', 'Recurring', 'الدائمة', RECURRING.filter(r => r.status === 'Active').length],
   ['campaigns', 'Campaigns', 'الحملات', CAMPAIGNS.length],
   ['receipts', 'Receipts & statements', 'الإيصالات والكشوفات']
 ];
@@ -52,6 +55,9 @@ const giverName = l => {
     );
   return <span className="dim">{l.ref || L('Unattributed cash', 'نقد غير مسمّى')}</span>;
 };
+
+/* The receipt issued for a posted gift (a gift has at most one). */
+const receiptOf = id => RECEIPTS.find(r => r.contribution === id);
 
 export function giving(tab = '') {
   const open = sessionOpen();
@@ -85,6 +91,11 @@ export function giving(tab = '') {
               <button className="btn btn-secondary" data-act="print">
                 <Icon name="print" size={17} />
                 {L('Print sheet', 'طباعة الورقة')}
+              </button>
+            ) : null}{' '}
+            {!tab && BATCH.id && SESSIONS.length > 1 ? (
+              <button className="btn btn-secondary" data-money="session-view">
+                {L('Other sessions', 'جلسات أخرى')}
               </button>
             ) : null}{' '}
             {!tab && (!BATCH.id || BATCH.apiStatus === 'Posted') && can('finance.enter') ? (
@@ -159,13 +170,22 @@ export function giving(tab = '') {
                       ? ` · ${L('reversal', 'قيد عكسي')}`
                       : ''}
                 </span>,
-                c.status === 'Posted' && can('finance.approve') ? (
-                  <button className="btn btn-secondary btn-dense" data-money={`gift-correct:${c.id}`}>
-                    {L('Correct', 'تصحيح')}
-                  </button>
-                ) : (
-                  ''
-                )
+                <span className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {receiptOf(c.id) ? (
+                    <span className="chip mono">
+                      {L('No.', 'رقم')} {receiptOf(c.id).no}
+                    </span>
+                  ) : c.status === 'Posted' && !c.anonymous && (c.p || c.hh) && can('finance.post') ? (
+                    <button className="btn btn-secondary btn-dense" data-money={`receipt-issue:${c.id}`}>
+                      {L('Receipt', 'إيصال')}
+                    </button>
+                  ) : null}
+                  {c.status === 'Posted' && can('finance.approve') ? (
+                    <button className="btn btn-secondary btn-dense" data-money={`gift-correct:${c.id}`}>
+                      {L('Correct', 'تصحيح')}
+                    </button>
+                  ) : null}
+                </span>
               ]
             }))}
             empty={
@@ -254,28 +274,89 @@ export function giving(tab = '') {
         <div className="tabbody">
           <Table
             cols={[
-              { label: L('Donor', 'المتبرّع') },
+              { label: L('Giver', 'المتبرّع') },
               { label: L('Amount', 'المبلغ'), cls: 'num' },
               { label: L('Every', 'كل') },
               { label: L('Fund', 'الصندوق'), cls: 'hide-sm' },
-              { label: L('Next', 'التالي') }
+              { label: L('Next expected', 'الموعد المتوقَّع') },
+              { label: L('Status', 'الحالة'), cls: 'shrink' },
+              { label: '', cls: 'shrink' }
             ]}
-            rows={RECURRING.map(() => ({ cells: [] }))}
+            rows={RECURRING.map(r => ({
+              detail:
+                r.note || r.reason ? (
+                  <dl className="dl">
+                    {r.note ? (
+                      <>
+                        <dt>{L('Note', 'ملاحظة')}</dt>
+                        <dd>{r.note}</dd>
+                      </>
+                    ) : null}
+                    {r.reason ? (
+                      <>
+                        <dt>{L('Reason given', 'السبب المذكور')}</dt>
+                        <dd>{r.reason}</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                ) : null,
+              cells: [
+                giverName(r),
+                <span className="num">{fmt(r.amount, r.currency)}</span>,
+                <span className="dim">{A.frequencyLabel(r.frequency)}</span>,
+                <span className="dim">{fundName(r.fund)}</span>,
+                r.next ? <span className="mono dim">{fmtDate(r.next)}</span> : <span className="dimmer">—</span>,
+                <Pill
+                  label={
+                    r.status === 'Active'
+                      ? L('Active', 'جارٍ')
+                      : r.status === 'Paused'
+                        ? L('Paused', 'موقوف مؤقتاً')
+                        : L('Ended', 'منتهٍ')
+                  }
+                  tone={r.status === 'Active' ? 'success' : r.status === 'Paused' ? 'warning' : undefined}
+                />,
+                can('finance.enter') && r.status !== 'Ended' ? (
+                  <span className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary btn-dense" data-money={`recurring-edit:${r.id}`}>
+                      {L('Edit', 'تعديل')}
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-dense"
+                      data-money={`recurring:${r.id}|${r.status === 'Active' ? 'pause' : 'resume'}`}
+                    >
+                      {r.status === 'Active' ? L('Pause', 'إيقاف مؤقت') : L('Resume', 'استئناف')}
+                    </button>
+                    <button className="btn btn-ghost btn-dense" data-money={`recurring:${r.id}|end`}>
+                      {L('End', 'إنهاء')}
+                    </button>
+                  </span>
+                ) : (
+                  ''
+                )
+              ]
+            }))}
             empty={
               <Empty
                 glyph="give"
-                title={L('Recurring gifts are not connected yet', 'العطاء الدائم غير موصول بعد')}
+                title={L('No recurring gifts recorded', 'لا عطاء دائم مسجّل')}
                 body={L(
-                  'ParishLife does not store standing gifts yet. Each envelope is recorded when it arrives, in a counting session; a pledge can carry its schedule as a note.',
-                  'لا يحفظ «حياة الرعية» العطاء الدائم بعد. يُسجَّل كل مظروف عند وصوله في جلسة عدّ؛ ويمكن أن يحمل التعهّد جدوله كملاحظة.'
+                  'Record what a giver intends to give regularly. Each gift is still counted when it arrives, in a counting session.',
+                  'سجّل ما ينوي المتبرّع إعطاءه بانتظام. وتُعدّ كل تقدمة عند وصولها في جلسة عدّ.'
                 )}
               />
             }
           />{' '}
+          {can('finance.enter') ? (
+            <button className="btn btn-secondary" style={{ marginTop: '16px' }} data-money="recurring-new">
+              <Icon name="plus" size={17} />
+              {L('New recurring gift', 'عطاء دائم جديد')}
+            </button>
+          ) : null}
           <p className="t-caption dim" style={{ marginTop: '16px' }}>
             {L(
-              'Nothing is taken from anyone without a person recording it.',
-              'ولا يُؤخذ شيء من أحد من دون أن يسجّله إنسان.'
+              'A recurring gift is a record of intention. ParishLife never charges anyone: nothing is taken from anyone without a person recording it, and an expected date is not a debt.',
+              'العطاء الدائم سجلّ نيّة. لا يقتطع «حياة الرعية» من أحد: لا يُؤخذ شيء من دون أن يسجّله إنسان، والموعد المتوقَّع ليس ديناً.'
             )}
           </p>
         </div>
@@ -316,7 +397,12 @@ export function giving(tab = '') {
                 <section key={i} className="panel">
                   <div className="panel-b">
                     <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
-                      <b style={{ font: '600 16px/22px var(--sans)', flex: 1, minWidth: 0 }}>{c.name}</b>
+                      <b style={{ font: '600 16px/22px var(--sans)', flex: 1, minWidth: 0 }}>{L(c.name, c.ar)}</b>
+                      {can('finance.approve') ? (
+                        <button className="btn btn-ghost btn-dense" data-money={`campaign-edit:${c.id}`}>
+                          {L('Edit', 'تعديل')}
+                        </button>
+                      ) : null}
                     </div>{' '}
                     <p className="t-caption dim">{fundName(c.fund)}</p>
                     <div className="amount" style={{ marginTop: '10px' }} dir="ltr">
@@ -365,17 +451,48 @@ export function giving(tab = '') {
               <Table
                 cols={[
                   { label: L('No.', 'الرقم'), cls: 'shrink' },
-                  { label: L('Donor', 'المتبرّع') },
-                  { label: L('Amount', 'المبلغ'), cls: 'num' }
+                  { label: L('Giver', 'المتبرّع') },
+                  { label: L('Date', 'التاريخ'), cls: 'hide-sm' },
+                  { label: L('Amount', 'المبلغ'), cls: 'num' },
+                  { label: L('Issued by', 'أصدره'), cls: 'hide-md' },
+                  { label: '', cls: 'shrink' }
                 ]}
-                rows={RECEIPTS.map(() => ({ cells: [] }))}
+                rows={RECEIPTS.map(r => ({
+                  cells: [
+                    <span className="mono">{r.no}</span>,
+                    giverName(r),
+                    <span className="mono dim">{fmtDate(r.date)}</span>,
+                    <span className="num">
+                      {fmt(r.amount, r.currency)}
+                      {r.status === 'Voided' ? ` · ${L('void', 'ملغى')}` : ''}
+                    </span>,
+                    <span className="dim">{nameOf(session.parishId, r.issuedBy) || '—'}</span>,
+                    r.status === 'Issued' && can('finance.approve') ? (
+                      <button
+                        className={'btn btn-dense ' + (r.giftStatus === 'Reversed' ? 'btn-secondary' : 'btn-ghost')}
+                        data-money={`receipt-void:${r.id}`}
+                        title={
+                          r.giftStatus === 'Reversed'
+                            ? L('The gift was reversed', 'عُكست التقدمة')
+                            : L('Void this receipt', 'إلغاء هذا الإيصال')
+                        }
+                      >
+                        {L('Void', 'إلغاء')}
+                      </button>
+                    ) : r.status === 'Voided' ? (
+                      <Pill label={L('Voided', 'ملغى')} />
+                    ) : (
+                      ''
+                    )
+                  ]
+                }))}
                 empty={
                   <Empty
                     glyph="doc"
-                    title={L('Numbered receipts are not connected yet', 'الإيصالات المرقّمة غير موصولة بعد')}
+                    title={L('No receipts issued yet', 'لا إيصالات صادرة بعد')}
                     body={L(
-                      'ParishLife does not issue numbered receipts yet. A giver’s yearly statement lists every gift, and you can open any single gift from Contributions.',
-                      'لا يُصدر «حياة الرعية» إيصالات مرقّمة بعد. يسرد كشف المتبرّع السنوي كل تقدماته، ويمكنك فتح أي تقدمة من «المساهمات».'
+                      'Issue a numbered receipt from a posted gift in Contributions. Numbers follow each other with no gap; a voided receipt keeps its number.',
+                      'أصدر إيصالاً مرقّماً من تقدمة مقيّدة في «المساهمات». تتتابع الأرقام بلا فجوة؛ والإيصال الملغى يحتفظ برقمه.'
                     )}
                   />
                 }
@@ -433,13 +550,15 @@ export function giving(tab = '') {
             glyph="give"
             title={L('No counting session in view', 'لا جلسة عدّ معروضة')}
             body={L(
-              'Open a session for the collection you are counting. If someone else opened it, open it by its id: ParishLife cannot list sessions yet.',
-              'افتح جلسة للجمع الذي تعدّه. وإن فتحها شخص آخر فافتحها برقمها: لا يعرض «حياة الرعية» قائمة الجلسات بعد.'
+              'Open a session for the collection you are counting, or choose one someone else opened.',
+              'افتح جلسة للجمع الذي تعدّه، أو اختر جلسة فتحها شخص آخر.'
             )}
             action={
-              <button className="btn btn-secondary btn-dense" data-money="session-view">
-                {L('Open by id', 'فتح برقمها')}
-              </button>
+              SESSIONS.length ? (
+                <button className="btn btn-secondary btn-dense" data-money="session-view">
+                  {L('Choose a session', 'اختيار جلسة')}
+                </button>
+              ) : null
             }
           />
         </div>
@@ -465,8 +584,12 @@ export function giving(tab = '') {
   return (
     <>
       {head}
-      <p className="t-caption dim mono" style={{ marginTop: '8px' }}>
-        {L('Session id', 'رقم الجلسة')}: {BATCH.id}
+      <p className="t-caption dim" style={{ marginTop: '8px' }}>
+        {L('Counted by', 'عدّها')}: {BATCH.counters.map(id => nameOf(session.parishId, id) || '—').join(', ') || '—'}
+        {BATCH.verifiedBy
+          ? ` · ${L('verified by', 'تحقّق منها')} ${nameOf(session.parishId, BATCH.verifiedBy) || '—'}`
+          : ''}
+        {BATCH.postedBy ? ` · ${L('posted by', 'قيّدها')} ${nameOf(session.parishId, BATCH.postedBy) || '—'}` : ''}
       </p>
       <div className="grid g2" style={{ margin: '20px 0 24px', alignItems: 'start' }}>
         <Panel title={L('Counted so far', 'المعدود حتى الآن')}>
@@ -595,6 +718,12 @@ giving.mount = host => {
       else if (what === 'session-close') A.closeSessionDialog();
       else if (what === 'gift-correct') A.correctGiftDialog(arg);
       else if (what === 'pledge-allocate') A.allocateDialog(arg);
+      else if (what === 'receipt-issue') A.issueReceiptDialog(arg);
+      else if (what === 'receipt-void') A.voidReceiptDialog(arg);
+      else if (what === 'recurring-new') A.recurringDialog();
+      else if (what === 'recurring-edit') A.recurringDialog(arg);
+      else if (what === 'recurring') A.recurringActionDialog(...arg.split('|'));
+      else if (what === 'campaign-edit') CR.edit('campaign', arg);
       else if (what === 'statement') (await import('./money-dialogs.jsx')).statementFromPage(host);
     })
   );
