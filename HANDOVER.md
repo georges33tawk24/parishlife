@@ -103,7 +103,7 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 ```bash
 git fetch origin
 git switch fullstack2-<area>                     # or: git switch -c fullstack2-<area> origin/fullstack2-<area>
-git merge --ff-only origin/wip/20261114-1224/<area>   # only for the six areas that have a snapshot; it is a fast-forward
+git merge --ff-only origin/wip/20261114-1224/<area>   # only for the areas that have a snapshot; it is a fast-forward
 ```
 
 Then finish what the table says.
