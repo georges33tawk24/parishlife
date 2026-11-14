@@ -3,8 +3,9 @@
    Main members: InboxPage, Conversation, Compose.
 
    The API keeps conversations per parish; a member writes to the parish office, and office staff reply in
-   it. Names of other accounts are not available, so a message shows "You", "Parish office" or
-   "Parishioner". A notice that a message arrived is stored in the app only; email, SMS and push are not
+   it. Staff may also write directly to a linked parishioner. Senders are named through the shared
+   account-name lookup (model/names.js) when the API lets this account see the name; otherwise a message
+   shows "Parish office" or "Parishioner". A notice that a message arrived is stored in the app only; email, SMS and push are not
    set up, and the notice status says so in the API's own words. */
 import { useEffect, useState } from 'react';
 import { session } from '../../model/api.js';
@@ -24,6 +25,7 @@ import {
   reportMessage
 } from '../../model/modules/communications.js';
 import { useSubmit } from './messaging-dialogs.jsx';
+import { loadNames, nameOf } from '../../model/names.js';
 
 const filters = { box: 'open', query: '', parish: '' };
 
@@ -90,7 +92,11 @@ function Conversation({ c, onChange }) {
   const me = session.accountUser?.id;
   const load = () =>
     loadMessages(c.parishId, c.id).then(
-      m => {
+      async m => {
+        await loadNames(
+          c.parishId,
+          m.map(x => x.authorAccountId)
+        );
         setList(m);
         onChange();
       },
@@ -113,12 +119,12 @@ function Conversation({ c, onChange }) {
       setNotes(n => ({ ...n, [m.id]: e.message }));
     }
   };
-  const author = m =>
-    m.authorAccountId === me
-      ? L('You', 'أنت')
-      : m.capacity === 'Office'
-        ? L('Parish office', 'مكتب الرعية')
-        : L('Parishioner', 'مؤمن');
+  const author = m => {
+    if (m.authorAccountId === me) return L('You', 'أنت');
+    const name = nameOf(c.parishId, m.authorAccountId),
+      role = m.capacity === 'Office' ? L('Parish office', 'مكتب الرعية') : L('Parishioner', 'مؤمن');
+    return name ? `${name} · ${role}` : role;
+  };
   const report = m =>
     openDrawer({
       title: L('Report this message', 'الإبلاغ عن هذه الرسالة'),
@@ -225,10 +231,16 @@ export function InboxPage() {
     const parishes = session.parishes.map(p => p.id);
     Promise.all(
       parishes.map(id =>
-        Promise.all([conversations(id), receivedBroadcasts(id)]).then(([c, b]) => ({
-          conversations: c.map(x => ({ ...x, parishId: id })),
-          broadcasts: b.map(x => ({ ...x, parishId: id }))
-        }))
+        Promise.all([conversations(id), receivedBroadcasts(id)]).then(async ([c, b]) => {
+          await loadNames(
+            id,
+            c.flatMap(x => [x.createdBy, ...(x.participantAccountIds || [])])
+          );
+          return {
+            conversations: c.map(x => ({ ...x, parishId: id })),
+            broadcasts: b.map(x => ({ ...x, parishId: id }))
+          };
+        })
       )
     ).then(
       all => {
@@ -261,9 +273,22 @@ export function InboxPage() {
         </div>
       </>
     );
+  const me = session.accountUser?.id;
+  const inBox = c =>
+    filters.box === 'archived'
+      ? c.archived
+      : !c.archived &&
+        (filters.box === 'unread' ? c.unread : filters.box === 'sent' ? !!me && c.createdBy === me : true);
+  /* who the conversation is with, as far as this account may see names */
+  const withWhom = c => {
+    if (c.createdBy && c.createdBy !== me)
+      return nameOf(c.parishId, c.createdBy) || (c.kind === 'Direct' ? L('Parish office', 'مكتب الرعية') : '');
+    const other = (c.participantAccountIds || []).find(id => id !== me);
+    return other ? nameOf(c.parishId, other) : '';
+  };
   const shown = rows.filter(
     c =>
-      (filters.box === 'archived' ? c.archived : !c.archived && (filters.box !== 'unread' || c.unread)) &&
+      inBox(c) &&
       (!filters.parish || c.parishId === filters.parish) &&
       c.subject.toLowerCase().includes(filters.query.toLowerCase().trim())
   );
@@ -311,6 +336,7 @@ export function InboxPage() {
             {[
               ['open', L('Open', 'المفتوحة')],
               ['unread', L('Unread', 'غير المقروءة')],
+              ['sent', L('Started by me', 'بدأتها أنا')],
               ['archived', L('Archived', 'المؤرشفة')]
             ].map(([v, s]) => (
               <option key={v} value={v}>
@@ -364,7 +390,10 @@ export function InboxPage() {
                     {c.subject}
                   </button>
                 </h2>
-                <p>{kindLabel(c.kind)}</p>
+                <p>
+                  {kindLabel(c.kind)}
+                  {withWhom(c) ? ` · ${c.createdBy === me ? L('to', 'إلى') : L('from', 'من')} ${withWhom(c)}` : ''}
+                </p>
                 <small>{fmtDate(String(c.lastMessageAt).slice(0, 10))}</small>
                 <div className="account-actions">
                   <button className="btn btn-ghost btn-dense" onClick={() => status(c)}>
@@ -404,9 +433,9 @@ export function InboxPage() {
                   <small>
                     {parishName(b.parishId)} · {b.sentAt ? fmtDate(b.sentAt.slice(0, 10)) : ''}
                   </small>
-                  <h2>{b.title}</h2>
+                  <h2 dir="auto">{L(b.title, b.titleAr || b.title)}</h2>
                   <p className="inbox-preview" dir="auto" style={{ whiteSpace: 'pre-wrap' }}>
-                    {b.body}
+                    {L(b.body, b.bodyAr || b.body)}
                   </p>
                 </article>
               ))}

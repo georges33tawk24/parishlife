@@ -11,7 +11,7 @@ import { session } from '../../model/api.js';
 import { saveNotice, noticeAction } from '../../model/modules/communications.js';
 import { confirmAction } from '../../shared/dialogs.jsx';
 import { ok } from '../../shared/dialog-helpers.jsx';
-import { LanguageSelect, useMinistries, useSubmit, reload } from './messaging-dialogs.jsx';
+import { LanguageSelect, useMinistries, useSubmit, reload, ArabicFields } from './messaging-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -29,6 +29,9 @@ function NoticeForm({ notice }) {
       body: q.body.trim(),
       category: (q.category || '').trim(),
       language: q.language,
+      titleAr: (q.titleAr || '').trim(),
+      bodyAr: (q.bodyAr || '').trim(),
+      priority: q.priority,
       pinned: q.pinned === 'on',
       expiresAt: q.expiresAt ? new Date(q.expiresAt + 'T23:59:59').toISOString() : null
     });
@@ -83,6 +86,20 @@ function NoticeForm({ notice }) {
           defaultValue={notice?.body || ''}
         />
       </label>
+      <ArabicFields title={notice?.titleAr || ''} body={notice?.arabicBody || ''} />
+      <label className="formrow">
+        <span className="label">{L('Priority', 'الأولوية')}</span>
+        <Select name="priority" defaultValue={notice?.priority || 'Normal'}>
+          <option value="Normal">{L('Normal', 'عادية')}</option>
+          <option value="Urgent">{L('Urgent: listed first', 'عاجلة: تُعرض أولاً')}</option>
+        </Select>
+      </label>
+      <p className="help">
+        {L(
+          'Urgent only changes the order in the app. It does not send email, SMS or push.',
+          'العاجلة تغيّر الترتيب داخل التطبيق فقط. لا ترسل بريداً ولا رسائل قصيرة ولا إشعارات.'
+        )}
+      </p>
       <label className="formrow">
         <span className="label">{L('Category (optional)', 'الفئة (اختياري)')}</span>
         <input className="input" name="category" maxLength="100" defaultValue={notice?.category || ''} />

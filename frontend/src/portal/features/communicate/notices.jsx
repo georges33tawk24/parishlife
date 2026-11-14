@@ -9,6 +9,7 @@ import { session } from '../../model/api.js';
 import { printSheet } from '../../shared/print.js';
 import { NOTICES, PARISH, EVENTS, venue } from '../../model/data.js';
 import { noticeForm, publishNotice, withdrawNotice } from './notices-dialogs.jsx';
+import { nameOf } from '../../model/names.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -22,13 +23,15 @@ export function notices() {
     NOTICES.map(n => (
       <div key={n.id} className="listrow" style={{ alignItems: 'flex-start' }}>
         <span className="grow">
-          <b dir="auto">{n.title}</b>{' '}
+          <b dir="auto">{L(n.title, n.ar)}</b>{' '}
           <small>
             {n.at ? fmtDate(n.at) + ' · ' : ''}
             {L(...AUDIENCE[n.visibility])}
             {n.category ? ` · ${n.category}` : ''}
+            {n.authorId ? ` · ${L('by', 'بقلم')} ${nameOf(session.parishId, n.authorId) || '—'}` : ''}
           </small>
         </span>{' '}
+        {n.urgent ? <Pill label={L('Urgent', 'عاجل')} tone="danger" mark="st-no" /> : null}
         {n.pinned ? <Pill label={L('Pinned', 'مثبّت')} tone="info" mark="st-open" /> : null}
         {n.status === 'published' ? (
           <Pill label={L('Published', 'منشور')} tone="success" mark="st-ok" />

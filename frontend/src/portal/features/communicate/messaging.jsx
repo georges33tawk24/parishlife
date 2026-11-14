@@ -1,5 +1,8 @@
-/* The communication centre: messages, automations, ready-made designs and delivery rules. */
-import { useState } from 'react';
+/* The communication centre: broadcasts (drafted, approved, stored now or at a scheduled time), the parish's
+   bounded broadcast automations (staff), group automations (leaders), ready-made designs and delivery rules.
+   Main members: messaging (the page), AutomationsTab, BroadcastStatus. People are named through
+   model/names.js; nothing here says that anything was sent outside the app. */
+import { useEffect, useState } from 'react';
 import { Select } from '../../ui/components.jsx';
 import { t, num, fmtDate } from '../../../lib/i18n.js';
 import { is, bus } from '../../model/store.js';
@@ -22,9 +25,26 @@ import { persist } from '../../model/persist.js';
 import { session } from '../../model/api.js';
 import { confirmAction } from '../../shared/dialogs.jsx';
 import { ok } from '../../shared/dialog-helpers.jsx';
-import { compose, broadcastForm, templateForm, designTemplate, reload, LANGUAGE_NAMES } from './messaging-dialogs.jsx';
+import {
+  compose,
+  broadcastForm,
+  templateForm,
+  designTemplate,
+  reload,
+  LANGUAGE_NAMES,
+  scheduleForm,
+  automationForm
+} from './messaging-dialogs.jsx';
+import { nameOf } from '../../model/names.js';
 import { ReviewsTab } from './messaging-reviews.jsx';
-import { can, audiencePreview, broadcastAction, templateAction } from '../../model/modules/communications.js';
+import {
+  can,
+  audiencePreview,
+  broadcastAction,
+  templateAction,
+  automations as loadAutomations,
+  automationAction
+} from '../../model/modules/communications.js';
 import { MESSAGES, TEMPLATES, PARISH, GROUPS, groupInfo } from '../../model/data.js';
 
 const L = (en, ar) => t(en, ar);
@@ -45,7 +65,8 @@ const CHANNEL_STATE = {
 const operator = () => session.accountUser?.role === 'super_admin';
 const MTABS = () => [
   ['', 'Broadcasts', 'البثّ'],
-  ...(is('leader')
+  ...(can(currentParish(), 'communications.manage') ? [['automations', 'Automations', 'الأتمتة']] : []),
+  ...(is('leader') && !can(currentParish(), 'communications.manage')
     ? [
         [
           'automations',
@@ -61,6 +82,127 @@ const MTABS = () => [
 ];
 
 const currentParish = () => session.parishes.find(p => p.id === session.parishId);
+
+/* The parish's broadcast automations: each run saves one draft from an approved template; nothing is sent. */
+function AutomationsTab() {
+  const [rows, setRows] = useState(null),
+    [error, setError] = useState('');
+  const refresh = () =>
+    loadAutomations(session.parishId).then(
+      r => setRows(r),
+      e => setError(e.message)
+    );
+  useEffect(() => {
+    refresh();
+  }, []);
+  const act = async (r, action) => {
+    try {
+      await automationAction(session.parishId, r.value.id, r.version, action);
+      await refresh();
+    } catch (e) {
+      toast(L('Not done', 'لم يتم'), e.message, 'danger');
+    }
+  };
+  const STATUS = { Active: ['Active', 'مفعّلة'], Paused: ['Paused', 'متوقّفة'], Ended: ['Ended', 'منتهية'] };
+  if (error) return <p className="help-error">{error}</p>;
+  if (!rows) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  return (
+    <>
+      <div className="toolbar ministry-section-heading">
+        <h2>{L('Broadcast automations', 'أتمتة البثّ')}</h2>
+        <button
+          className="btn btn-primary btn-dense"
+          data-automation-new=""
+          onClick={() => automationForm(null, refresh)}
+        >
+          <Icon name="plus" size={15} />
+          {L('New automation', 'أتمتة جديدة')}
+        </button>
+      </div>
+      <Table
+        cols={[
+          { label: L('Automation', 'الأتمتة') },
+          { label: L('Next run', 'التشغيل التالي'), cls: 'hide-sm' },
+          { label: L('Runs', 'المرات'), cls: 'num' },
+          { label: L('Status', 'الحالة'), cls: 'shrink' },
+          { label: '', cls: 'shrink' }
+        ]}
+        rows={rows.map(r => {
+          const a = r.value;
+          return {
+            key: a.id,
+            cells: [
+              <span>
+                <b>{L(a.name, a.nameAr || a.name)}</b>
+                <small style={{ display: 'block' }} className="dim">
+                  {(TEMPLATES.find(x => x.id === a.templateId)?.name || L('A template', 'قالب')) +
+                    ' · ' +
+                    (a.recurrence === 'Monthly' ? L('every month', 'كل شهر') : L('every week', 'كل أسبوع'))}
+                  {a.lastOutcome === 'Skipped'
+                    ? L(
+                        ' · last run skipped: the previous draft was still waiting',
+                        ' · تخطّي آخر تشغيل: المسودة السابقة ما زالت تنتظر'
+                      )
+                    : ''}
+                </small>
+                {a.statusReason ? <small style={{ display: 'block' }}>{a.statusReason}</small> : null}
+              </span>,
+              <span className="dim mono" dir="ltr">
+                {a.status === 'Active' ? new Date(a.nextRunAt).toLocaleString() : '—'}
+              </span>,
+              <span className="num">{a.runCount + ' / ' + a.maxRuns}</span>,
+              <Pill
+                label={L(...(STATUS[a.status] || [a.status, a.status]))}
+                tone={a.status === 'Active' ? 'success' : 'warning'}
+              />,
+              <span className="row" style={{ gap: '6px' }}>
+                {a.status !== 'Ended' ? (
+                  <button
+                    className="btn btn-secondary btn-dense"
+                    onClick={() => automationForm({ ...a, version: r.version }, refresh)}
+                  >
+                    {L('Edit', 'تعديل')}
+                  </button>
+                ) : null}
+                {a.status === 'Active' ? (
+                  <button className="btn btn-ghost btn-dense" onClick={() => act(r, 'pause')}>
+                    {L('Pause', 'إيقاف مؤقت')}
+                  </button>
+                ) : null}
+                {a.status === 'Paused' ? (
+                  <button className="btn btn-ghost btn-dense" onClick={() => act(r, 'resume')}>
+                    {L('Resume', 'استئناف')}
+                  </button>
+                ) : null}
+                {a.status !== 'Ended' ? (
+                  <button className="btn btn-ghost btn-dense" onClick={() => act(r, 'end')}>
+                    {L('End', 'إنهاء')}
+                  </button>
+                ) : null}
+              </span>
+            ]
+          };
+        })}
+        empty={
+          <Empty
+            glyph="msg"
+            title={L('No automations', 'لا أتمتة')}
+            body={L(
+              'An automation saves one draft from an approved template each week or month, a set number of times.',
+              'تحفظ الأتمتة مسودة واحدة من قالب معتمد كل أسبوع أو شهر، لعدد محدّد من المرات.'
+            )}
+          />
+        }
+      />
+      <p className="help">
+        {L(
+          'Automations never approve or send. A different staff member approves each draft, then someone stores or schedules it. Missed runs are not made up.',
+          'لا تعتمد الأتمتة ولا ترسل. يعتمد موظف آخر كل مسودة، ثم يحفظها أحدهم أو يجدولها. لا تُعوَّض المرات الفائتة.'
+        )}
+      </p>
+    </>
+  );
+}
 
 export function messaging(tab = '') {
   const head = (
@@ -89,6 +231,15 @@ export function messaging(tab = '') {
       <TabBar base="messaging" items={MTABS()} active={tab} />
     </>
   );
+  if (tab === 'automations' && can(currentParish(), 'communications.manage'))
+    return (
+      <>
+        {head}
+        <div className="tabbody">
+          <AutomationsTab />
+        </div>
+      </>
+    );
   if (is('leader') && (tab === 'automations' || tab === 'preferences')) {
     const automation = tab === 'automations',
       key = automation ? 'automations' : 'messagingRules';
@@ -332,12 +483,22 @@ export function messaging(tab = '') {
             {L('Approve', 'اعتماد')}
           </button>
         ) : null}
-        {m.status === 'approved' ? (
+        {m.status === 'approved' || m.status === 'scheduled' ? (
           <button className="btn btn-primary btn-dense" onClick={() => step(m, 'send')}>
-            {L('Store in the app', 'حفظ داخل التطبيق')}
+            {L('Store in the app now', 'حفظ داخل التطبيق الآن')}
           </button>
         ) : null}
-        {m.status === 'draft' || m.status === 'approved' ? (
+        {m.status === 'approved' ? (
+          <button className="btn btn-secondary btn-dense" onClick={() => scheduleForm(m)}>
+            {L('Schedule', 'جدولة')}
+          </button>
+        ) : null}
+        {m.status === 'scheduled' ? (
+          <button className="btn btn-ghost btn-dense" onClick={() => unschedule(m)}>
+            {L('Unschedule', 'إلغاء الجدولة')}
+          </button>
+        ) : null}
+        {m.status === 'draft' || m.status === 'approved' || m.status === 'scheduled' ? (
           <button className="btn btn-ghost btn-dense" onClick={() => cancelBroadcast(m)}>
             {L('Cancel', 'إلغاء')}
           </button>
@@ -349,6 +510,32 @@ export function messaging(tab = '') {
         <div style={{ whiteSpace: 'pre-wrap' }} dir="auto">
           {m.body}
         </div>
+        {m.titleAr ? (
+          <div style={{ whiteSpace: 'pre-wrap' }} dir="rtl">
+            <b>{m.titleAr}</b>
+            {'\n'}
+            {m.arabicBody}
+          </div>
+        ) : null}
+        <small className="dim">
+          {[
+            [L('Written by', 'كتبه'), m.updatedBy],
+            [L('Approved by', 'اعتمده'), m.approvedBy],
+            [L('Scheduled by', 'جدوله'), m.scheduledBy],
+            [L('Stored by', 'حفظه'), m.sentBy]
+          ]
+            .filter(([, id]) => id)
+            .map(([label, id]) => `${label}: ${nameOf(session.parishId, id) || '—'}`)
+            .join(' · ')}
+          {m.automationId ? L(' · drafted by an automation', ' · مسودة من أتمتة') : ''}
+        </small>
+        {m.status === 'scheduled' && m.scheduledFor ? (
+          <small className="dim">
+            {L('To be stored in the app at ', 'يُحفظ داخل التطبيق في ')}
+            {new Date(m.scheduledFor).toLocaleString()}
+          </small>
+        ) : null}
+        {m.scheduleNote ? <small>{m.scheduleNote}</small> : null}
         <small className="dim">
           {(m.channels || [])
             .map(
@@ -422,6 +609,8 @@ export function messaging(tab = '') {
 function BroadcastStatus({ m }) {
   return m.status === 'sent' ? (
     <Pill label={L('Stored in the app', 'محفوظ داخل التطبيق')} tone="success" mark="st-sent" />
+  ) : m.status === 'scheduled' ? (
+    <Pill label={L('Scheduled', 'مجدول')} tone="info" mark="st-open" />
   ) : m.status === 'approved' ? (
     <Pill label={L('Approved', 'معتمد')} tone="success" mark="st-ok" />
   ) : m.status === 'cancelled' ? (
@@ -468,6 +657,19 @@ function step(m, action) {
       }
     }
   });
+}
+
+async function unschedule(m) {
+  try {
+    await broadcastAction(session.parishId, m.id, m.version, 'unschedule');
+    await reload();
+    ok(
+      L('No longer scheduled', 'أُلغيت الجدولة'),
+      L('It is approved and can be stored or scheduled again.', 'هو معتمد ويمكن حفظه أو جدولته من جديد.')
+    );
+  } catch (error) {
+    toast(L('Not done', 'لم يتم'), error.message, 'danger');
+  }
 }
 
 function cancelBroadcast(m) {

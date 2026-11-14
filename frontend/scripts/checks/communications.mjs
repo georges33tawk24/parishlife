@@ -9,6 +9,11 @@ const { sent, events } = mockApi((method, path, body) => {
   const P = 'parishes/P/';
   if (method === 'GET') {
     if (path.startsWith(P + 'people?')) return json(200, { items: [], continuationToken: null }); // the People module loads too
+    if (path.startsWith(P + 'account-names?'))
+      return json(200, [
+        { accountId: 'a1', displayName: 'Office writer' },
+        { accountId: 'a2', displayName: 'Office reviewer' }
+      ]);
     if (path === P + 'broadcasts')
       return json(200, [
         {
@@ -19,8 +24,11 @@ const { sent, events } = mockApi((method, path, body) => {
             title: 'Parish lunch',
             body: 'Sunday',
             language: 'en',
+            titleAr: 'غداء الرعية',
+            bodyAr: 'الأحد',
             status: 'Sent',
             updatedBy: 'a1',
+            approvedBy: 'a2',
             sentAt: '2026-11-01T10:00:00Z',
             recipientCount: 12,
             skippedByPreferenceCount: 2,
@@ -58,7 +66,9 @@ const { sent, events } = mockApi((method, path, body) => {
             body: 'Saturday',
             language: 'en',
             status: 'Draft',
-            pinned: true
+            pinned: true,
+            priority: 'Urgent',
+            authorAccountId: 'a1'
           }
         },
         {
@@ -174,6 +184,11 @@ assert.equal(
   'email is never reported as sent'
 );
 assert.deepEqual([D.TEMPLATES[0].status, D.TEMPLATES[0].language], ['approved', 'fr']);
+assert.deepEqual([D.MESSAGES[0].subjectAr, D.MESSAGES[0].titleAr], ['غداء الرعية', 'غداء الرعية']);
+assert.deepEqual([D.NOTICES[0].urgent, D.NOTICES[0].authorId, D.NOTICES[1].urgent], [true, 'a1', false]);
+assert.equal(D.NOTICES[1].ar, 'Old', 'without an Arabic version the display falls back to the title');
+const N = await import('../../src/portal/model/names.js');
+assert.deepEqual([N.nameOf('P', 'a1'), N.nameOf('P', 'a2')], ['Office writer', 'Office reviewer']);
 assert.deepEqual(
   D.NOTICES.map(n => [n.status, n.visibility]),
   [
@@ -239,6 +254,36 @@ assert.deepEqual(sent.at(-1).slice(0, 2), ['POST', 'parishes/P/website/sections/
 assert.equal(sent.at(-1)[2].reason, 'needs French');
 await C.startConversation('P', 'Hello', 'Hi');
 assert.equal(sent.at(-1)[2].recipientAccountId, null, 'a member writes to the office');
+await C.startConversation('P', 'Hello', 'Hi', { personId: 'person1' });
+assert.deepEqual(
+  [sent.at(-1)[2].recipientAccountId, sent.at(-1)[2].recipientPersonId],
+  [null, 'person1'],
+  'staff write to a person from the people list'
+);
+await C.scheduleBroadcast('P', 'b1', 'v9', '2026-12-01T09:00:00Z');
+assert.deepEqual(
+  [sent.at(-1)[1], sent.at(-1)[2].action, sent.at(-1)[2].scheduledFor],
+  ['parishes/P/broadcasts/b1/actions', 'schedule', '2026-12-01T09:00:00.000Z']
+);
+await C.saveBroadcast('P', { audience: 'Members', title: 'T', body: 'B', language: 'en', titleAr: 'ع', bodyAr: 'ن' });
+assert.deepEqual([sent.at(-1)[2].titleAr, sent.at(-1)[2].bodyAr], ['ع', 'ن']);
+await C.saveNotice('P', { visibility: 'Members', title: 'T', body: 'B', language: 'en', priority: 'Urgent' });
+assert.deepEqual([sent.at(-1)[2].priority, sent.at(-1)[2].titleAr], ['Urgent', null]);
+await C.saveAutomation('P', {
+  name: 'Weekly',
+  templateId: 't1',
+  audience: 'Members',
+  recurrence: 'Weekly',
+  firstRunAt: '2026-12-01T09:00:00Z',
+  maxRuns: '4'
+});
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.templateId, body.maxRuns, body.ministryId],
+  ['POST', 'parishes/P/broadcast-automations', 't1', 4, null]
+);
+await C.automationAction('P', 'au1', 'av1', 'pause');
+assert.deepEqual(sent.at(-1).slice(0, 2), ['POST', 'parishes/P/broadcast-automations/au1/actions']);
 await C.archiveConversation('P', 'c1', false);
 assert.equal(sent.at(-1)[1], 'parishes/P/inbox/c1/archive?archived=false');
 assert.deepEqual(await C.listMinistries('P'), [{ id: 'm1', name: 'Choir' }]);
