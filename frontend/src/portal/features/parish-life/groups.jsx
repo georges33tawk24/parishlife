@@ -57,7 +57,8 @@ import {
   resourceLoanEdit
 } from './group-resources.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 export function groups(id, tab) {
   if (id) return groupDetail(id, tab || '');

@@ -14,7 +14,8 @@ import { curGroup, nameOf, ok, refresh, val } from '../../shared/dialog-helpers.
 import { need } from '../../shared/dialogs.jsx';
 import { compose } from '../communicate/messaging-dialogs.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 const gd = () => D.groupInfo(curGroup());
 
