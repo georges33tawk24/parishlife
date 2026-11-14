@@ -1,6 +1,7 @@
-// Purpose: the anonymous all-parish directory (X09/D01): verified parishes only, their public name/locality/diocese, coordinates only when a parish
-// manager actually recorded them (ParishLocation), approximate server-side distance from a caller-supplied point, and links to existing public reads
-// and the existing follow action. Nothing is geocoded, guessed, ranked or stored about the visitor.
+// Purpose: the anonymous all-parish directory (X09/D01): verified parishes only, their public name/locality/diocese (plus the Arabic name and
+// locality only as published in the parish profile), coordinates only when a parish manager actually recorded them (ParishLocation),
+// approximate server-side distance from a caller-supplied point, and links to existing public reads and the existing follow action.
+// Nothing is geocoded, guessed, ranked or stored about the visitor.
 // Main functions: BrowseAsync (name order, optional text query), NearbyAsync (distance order, optional radius, unknown locations kept apart) and
 // DistanceKm (haversine, no external service).
 
@@ -13,7 +14,7 @@ using ParishLife.Api.Services.Organizations;
 
 namespace ParishLife.Api.Services.Publishing;
 
-public class PublicDirectoryService(IParishDirectory directory, IParishRepository parishes, IRecordTransactions records)
+public class PublicDirectoryService(IParishDirectory directory, IParishRepository parishes, IRecordTransactions records, ParishProfileService profiles)
 {
     private const double EarthRadiusKm = 6371.0088;
 
@@ -56,11 +57,12 @@ public class PublicDirectoryService(IParishDirectory directory, IParishRepositor
         if (text.Length > 100)
             throw new DomainException("invalid_input", "Search with at most 100 characters.");
         return text.Length == 0 ? cards : cards.Where(c => c.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || c.Locality.Contains(text, StringComparison.OrdinalIgnoreCase) || c.DioceseName?.Contains(text, StringComparison.OrdinalIgnoreCase) == true);
+            || c.Locality.Contains(text, StringComparison.OrdinalIgnoreCase) || c.NameAr?.Contains(text, StringComparison.OrdinalIgnoreCase) == true
+            || c.LocalityAr?.Contains(text, StringComparison.OrdinalIgnoreCase) == true || c.DioceseName?.Contains(text, StringComparison.OrdinalIgnoreCase) == true);
     }
 
-    // ponytail: one location point read per verified parish and one read per diocese (bounded by ParishDirectory.Maximum); materialize a public
-    // directory projection when parish counts make this slow.
+    // ponytail: one location point read and one published-profile read per verified parish and one read per diocese (bounded by
+    // ParishDirectory.Maximum); materialize a public directory projection when parish counts make this slow.
     private async Task<List<PublicParishDto>> CardsAsync(CancellationToken ct)
     {
         var dioceses = new Dictionary<string, string?>(StringComparer.Ordinal);
@@ -74,14 +76,16 @@ public class PublicDirectoryService(IParishDirectory directory, IParishRepositor
                 dioceses[id] = diocese = (await parishes.GetArchdioceseAsync(id, ct))?.Value is { Verified: true } org ? org.Name : null;
             var location = (await records.ReadAsync<ParishLocation>(new RecordScope { Area = RecordArea.Parish, OwnerId = parish.Id }, ParishLocationService.Key, ct))?.Value;
             var recorded = location is not null && location.ParishId == parish.Id && location.IsRecorded();
+            var published = await profiles.PublishedAsync(parish.Id, ct);
             cards.Add(new PublicParishDto
             {
-                ParishId = parish.Id, Name = parish.Name, Locality = parish.Locality, DioceseName = diocese,
+                ParishId = parish.Id, Name = parish.Name, NameAr = published?.NameAr, Locality = parish.Locality, LocalityAr = published?.LocalityAr, DioceseName = diocese,
                 Latitude = recorded ? location!.Latitude : null, Longitude = recorded ? location!.Longitude : null,
                 Links = new PublicParishLinksDto
                 {
                     Website = "/api/public/parishes/" + parish.Id + "/website", Calendar = "/api/public/parishes/" + parish.Id + "/calendar",
-                    Ministries = "/api/public/parishes/" + parish.Id + "/ministries", LiturgicalCalendar = "/api/public/parishes/" + parish.Id + "/liturgical-calendar",
+                    Ministries = "/api/public/parishes/" + parish.Id + "/ministries", Profile = "/api/public/parishes/" + parish.Id + "/profile",
+                    CalendarFeed = ParishProfileService.FeedUrl(parish.Id), LiturgicalCalendar = "/api/public/parishes/" + parish.Id + "/liturgical-calendar",
                     Requests = "/api/public/parishes/" + parish.Id + "/requests", Follow = "/api/parishes/" + parish.Id + "/follow"
                 }
             });

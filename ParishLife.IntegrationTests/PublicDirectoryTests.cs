@@ -63,7 +63,7 @@ public class PublicDirectoryTests
         Assert.Equal("/api/parishes/" + staff.Parish + "/follow", located.Links.Follow);
         Assert.Equal("/api/public/parishes/" + staff.Parish + "/website", located.Links.Website);
         // Only these public members exist: no contact, owner, verification evidence or location source.
-        Assert.Equal(["DioceseName", "DistanceKm", "Latitude", "Links", "Locality", "Longitude", "Name", "ParishId"],
+        Assert.Equal(["DioceseName", "DistanceKm", "Latitude", "Links", "Locality", "LocalityAr", "Longitude", "Name", "NameAr", "ParishId"],
             typeof(PublicParishDto).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal([beta], (await directory.BrowseAsync("harbour", default)).Items.Select(p => p.ParishId).ToArray());
         Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => directory.BrowseAsync(new string('x', 101), default))).Code);
@@ -122,7 +122,8 @@ public class PublicDirectoryTests
         var policy = await client.GetFromJsonAsync<OfflinePolicyDto>("/api/public/app/offline-policy");
         Assert.Equal(("no-store", "NotSupported"), (policy!.DefaultPolicy, policy.OfflineWrites));
         Assert.Equal(["/api/public/app/manifest", "/api/public/app/offline-policy", "/api/public/homepage", "/api/public/parishes",
-            "/api/public/parishes/{parishId:guid}/liturgical-calendar", "/api/public/parishes/{parishId:guid}/website"],
+            "/api/public/parishes/{parishId:guid}/liturgical-calendar", "/api/public/parishes/{parishId:guid}/profile",
+            "/api/public/parishes/{parishId:guid}/website"],
             policy.CacheableReads.Select(r => r.Template).ToArray());
     }
 
