@@ -61,6 +61,13 @@ const attendance = () => {
 
 const status = value => <span className="member-badge">{txt(value)}</span>;
 
+/* Names for the optional notification topics the API reports (GET me/notification-topics). */
+const TOPIC_LABELS = {
+  'parish.broadcast': ['Parish broadcasts', 'رسائل الرعية العامة'],
+  reports: ['Scheduled reports', 'التقارير المجدولة']
+};
+const topicLabel = topic => (TOPIC_LABELS[topic] ? L(...TOPIC_LABELS[topic]) : topic);
+
 const contentRows = (kind, filter = () => true) => M.content.filter(x => x.kind === kind && filter(x));
 
 const scheduleItems = new Map();
@@ -604,18 +611,25 @@ export function feed() {
 
 export function resources() {
   const rows = contentRows('resource');
+  /* Resources come from every ministry the member currently belongs to, including ones the parish does
+     not list publicly, so the filter is built from the rows as well as the known ministries. */
+  const ministries = new Map(M.groups.map(g => [g.id, g.name]));
+  for (const x of rows) if (!ministries.has(x.groupId)) ministries.set(x.groupId, x.groupName || '');
   return (
     <div className="member-page">
       {title(
         L('Resources', 'الموارد'),
-        L('Documents and materials shared with your ministries.', 'ملفات ومواد مشتركة مع خدماتك.')
+        L(
+          'Belongings your ministries keep for their members, with what is available now.',
+          'ما تحتفظ به خدماتك لأعضائها، مع المتاح حالياً.'
+        )
       )}
       <div className="member-toolbar">
         <Select data-filter="group">
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
-          {M.groups.map((g, i) => (
-            <option key={i} value={txt(g.id)}>
-              {txt(g.name)}
+          {[...ministries].map(([id, name], i) => (
+            <option key={i} value={txt(id)}>
+              {txt(name)}
             </option>
           ))}
         </Select>
@@ -634,29 +648,30 @@ export function resources() {
               key={i}
               className="member-card member-filter-row member-search-row"
               data-group={txt(x.groupId)}
-              data-search={txt(x.title + ' ' + x.body + ' ' + x.category)}
+              data-search={txt(x.title + ' ' + (x.groupName || groupName(x.groupId)))}
             >
               <h2>{txt(x.title)}</h2>
               <p>
-                {txt(groupName(x.groupId))} · {txt(x.category)} · {date(x.at)}
+                {txt(x.groupName || groupName(x.groupId))} · {L('Updated', 'آخر تحديث')} {date(x.at)}
               </p>
-              <p>{txt(x.body)}</p>
-              {x.attachment ? (
-                <a
-                  className="btn btn-secondary btn-dense"
-                  download={txt(x.attachment.name)}
-                  href={txt(x.attachment.data)}
-                >
-                  {L('Download', 'تنزيل')}
-                </a>
-              ) : (
-                ''
-              )}
+              <p>
+                {L('Available', 'متاح')}: {txt(x.available)} / {txt(x.total)}
+              </p>
             </div>
           )),
           blank(L('No resources have been shared yet.', 'لا موارد مشتركة حالياً.'))
         )}
       </Paged>
+      {M.resourcesTruncated ? (
+        <p className="help">
+          {L(
+            'The list is long, so not every item is shown. Ask your ministry for the full list.',
+            'القائمة طويلة، لذا لا تظهر كل المواد. اطلب القائمة الكاملة من خدمتك.'
+          )}
+        </p>
+      ) : (
+        ''
+      )}
     </div>
   );
 }
@@ -865,6 +880,19 @@ export function notes() {
                     {txt(n.category)} {n.tags.map(tag => `#${txt(tag)}`).join(' ')}{' '}
                     {n.reminder ? '· ' + date(n.reminder) : ''}
                   </p>
+                  {n.meetingId ? (
+                    <p className="dim">
+                      {L('Meeting', 'الاجتماع')}:{' '}
+                      {(() => {
+                        const m = M.meetings.find(x => x.id === n.meetingId);
+                        return m
+                          ? txt(`${m.title} · ${date(m.date)}`)
+                          : L('no longer on your list', 'لم يعد في قائمتك');
+                      })()}
+                    </p>
+                  ) : (
+                    ''
+                  )}
                   <button className="btn btn-secondary btn-dense" data-note-edit={txt(n.id)}>
                     {L('Edit', 'تعديل')}
                   </button>
@@ -924,11 +952,39 @@ export function profile() {
       )}{' '}
       {card(
         <>
-          <h2>{L('Signing in and notifications', 'تسجيل الدخول والإشعارات')}</h2>
+          <h2>{L('Notification preferences', 'تفضيلات الإشعارات')}</h2>
+          {M.preferences.loaded && M.preferences.topics.some(x => x.mutable && !x.required) ? (
+            <>
+              {M.preferences.topics
+                .filter(x => x.mutable && !x.required)
+                .map((x, i) => (
+                  <label key={i} className="member-toggle">
+                    <span>{topicLabel(x.topic)}</span>
+                    <input
+                      type="checkbox"
+                      data-preference-topic={txt(x.topic)}
+                      defaultChecked={!M.preferences.muted.includes(x.topic)}
+                    />
+                  </label>
+                ))}
+              <button className="btn btn-secondary btn-dense" data-preferences-save="">
+                {L('Save preferences', 'حفظ التفضيلات')}
+              </button>
+            </>
+          ) : (
+            <p className="help">{L('Your preferences could not be loaded.', 'تعذّر تحميل تفضيلاتك.')}</p>
+          )}
           <p className="help">
             {L(
-              'Your password, two-step sign-in and sessions are in your account. Choosing which notifications you receive is not connected to the new backend yet.',
-              'كلمة المرور والدخول بخطوتين والجلسات في حسابك. اختيار الإشعارات التي تصلك لم يُوصل بالخادم الجديد بعد.'
+              'Updates about your own requests, cases, registrations, certificates, membership and messages always appear here and cannot be turned off. Notices appear in the portal only; email and text delivery are not connected.',
+              'تظهر دائماً هنا مستجدات طلباتك وحالاتك وتسجيلاتك وشهاداتك وعضويتك ورسائلك ولا يمكن إيقافها. تظهر الإشعارات داخل البوابة فقط؛ الإرسال بالبريد والرسائل النصية غير موصول.'
+            )}
+          </p>
+          <h2>{L('Signing in', 'تسجيل الدخول')}</h2>
+          <p className="help">
+            {L(
+              'Your password, two-step sign-in and sessions are in your account.',
+              'كلمة المرور والدخول بخطوتين والجلسات في حسابك.'
             )}
           </p>
           {link('account', L('Open my account', 'فتح حسابي'))}

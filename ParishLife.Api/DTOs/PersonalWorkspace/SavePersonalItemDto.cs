@@ -1,5 +1,6 @@
 // Purpose: validates bounded personal draft/save input; ownership and audience are derived from the personal session.
-// Main members: OperationId, Version, Kind, SaveAsDraft, Title, Body, Category, Tags, Priority, PriorityReason and DueAt.
+// Main members: OperationId, Version, Kind, SaveAsDraft, Title, Body, Category, Tags, Priority, PriorityReason, DueAt,
+// Pinned, ReminderAt (a private date shown in My notes; nothing is sent) and the linked meeting ids (all three or none).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -28,4 +29,9 @@ public class SavePersonalItemDto
     [StringLength(2000)]
     public string? PriorityReason { get; set; }
     public DateTimeOffset? DueAt { get; set; }
+    public bool Pinned { get; set; }
+    public DateTimeOffset? ReminderAt { get; set; }
+    public Guid? MeetingParishId { get; set; }
+    public Guid? MeetingMinistryId { get; set; }
+    public Guid? MeetingId { get; set; }
 }
