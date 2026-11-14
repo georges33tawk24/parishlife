@@ -3,7 +3,6 @@
     "route": "GET /api/workspace/plan",
     "reason": "deliberate: check-api.mjs asserts that an old-server route reports not connected"
   },
-  { "route": "POST /api/workspace/suspension", "reason": "old server: suspending an account from the people list" },
   { "route": "POST /api/parishes/{}/attendance-preview", "reason": "old server: the attendance import preview" },
   { "route": "POST /api/sign/options", "reason": "old server: signing letters" },
   { "route": "GET /api/parishes/{}/files", "reason": "old server: the generic file-upload component" },
