@@ -4,7 +4,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account and public are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **495 tests pass**. The **other 6 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account, public and administration are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **500 tests pass**. The **other 5 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
 
 ## The branches
 
@@ -66,20 +66,27 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
    - The public copy (`public/parishes/{id}/profile`) and an `.ics` feed (`public/parishes/{id}/calendar.ics`, public events only, bounded, rate-limited).
    - Arabic rank and season on liturgical entries.
    - Owner questions are in `docs/operations/public.md`.
-9. **Tooling:**
+9. **Administration** (`fullstack2-administration`, `8eb36c2`):
+   - Platform lists for operators only (MFA, each read audited): `administration/parishes`, `archdioceses` and `accounts`, plus a safe account view.
+   - Account suspend and reinstate with a reason and a status history. Suspending ends every session; no data is deleted. Operators cannot suspend themselves or another operator.
+   - Clergy titles (`clergy-titles`): the list starts empty, with nothing seeded.
+   - A read-only parish audit trail (`parishes/{id}/audit`, needs `audit.read`, 100 per page).
+   - A Platform tab in the workspace. The people-list suspend item replaces the old `workspace/suspension` route; it shows only once the people module fills `ACCOUNTS[personId]`, which nothing does yet.
+   - Owner questions (parish settings, eparchy/bishop view, which clergy titles exist) are in `docs/frontend-modules/administration.md`.
+10. **Tooling:**
    - `npm run check:routes` matches every frontend API call against the real controller routes. Known gaps are listed in `frontend/scripts/route-gaps.json`.
    - `frontend/.gitattributes` keeps the frontend LF, so `format:check` passes on Windows.
    - Aspire AppHost was bumped 13.6.4 → 13.6.5 for advisory GHSA-f7vh-h5g3-7jrh, so `dotnet test ParishLife.slnx` runs again.
 
-**Checks after merging facilities, account and public** (SDK 10.0.401, Windows):
+**Checks after merging administration** (SDK 10.0.401, Windows):
 - `dotnet restore --locked-mode` OK; Release build 0 warnings.
-- **57 unit + 438 integration tests passed, 0 failed.**
+- **57 unit + 443 integration tests passed, 0 failed.**
 - Frontend: `format:check`, `check` (all modules) and `build` pass.
-- `check:routes`: 586 routes, 558 requests, 7 known gaps (the deliberate `workspace/plan` check, suspension, attendance import, letter signing, generic file upload), 0 new.
+- `check:routes`: 599 routes, 571 requests, 6 known gaps (the deliberate `workspace/plan` check, attendance import, letter signing, generic file upload), 0 new.
 
 All of this ran on local storage only, which is not Cosmos acceptance.
 
-## The 6 unfinished areas
+## The 5 unfinished areas
 
 Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
 
@@ -90,7 +97,6 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
 | registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
-| administration | `8eb36c2`: operator platform lists, account suspension, clergy titles, parish audit trail (backend), then the frontend wiring (audit, workspace, people suspension) | none | Being finished: frontend checks and the final report |
 
 ## How to continue
 
@@ -137,7 +143,7 @@ git push origin fullstack-integration
 - recovery-session restrictions kept;
 - tests for every route.
 
-## After the 6 areas
+## After the 5 areas
 
 1. **Signed-in end-to-end tests** in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
