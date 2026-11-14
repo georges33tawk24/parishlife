@@ -41,6 +41,9 @@ public partial class FinanceTests
         Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => rates.RecordAsync(x.Parish, Rate(1.1234567m, new DateOnly(2026, 11, 1)), default))).Code);
         var first = await rates.RecordAsync(x.Parish, Rate(89500m, new DateOnly(2026, 11, 1)), default);
         Assert.Equal((x.Treasurer, "Isolated published rate"), (first.RecordedBy, first.Source));
+        // The fixture clock is frozen; a correction is recorded later, so move time on. Otherwise both rows share RecordedAt and the
+        // tie-break falls to the random id, which made this test pass only about half the time.
+        f.Clock.Now = f.Clock.Now.AddMinutes(1);
         var correction = await rates.RecordAsync(x.Parish, Rate(89700m, new DateOnly(2026, 11, 1), "Isolated corrected rate"), default);
         await rates.RecordAsync(x.Parish, Rate(0.92m, new DateOnly(2026, 11, 2), quote: "EUR"), default);
 
