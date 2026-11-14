@@ -17,69 +17,88 @@ in `shell/actions.jsx` and `shared/record-editor.jsx`) is no longer used by thes
 | Screen | Route |
 | --- | --- |
 | Rooms list | `GET facilities` (size/cursor paging, 100 a page) |
-| Add / edit room | `POST facilities`, `PUT facilities/{id}` (`version`) |
+| Add / edit room | `POST facilities`, `PUT facilities/{id}` (`version`; `nameAr`, `publicDescriptionAr`) |
 | Out of service / back | `POST facilities/{id}/status` (`Serviceable`/`OutOfService`, reason required, `version`) |
-| Availability drawer | `GET facilities/{id}/availability?start&end` (busy intervals, set-up and clean-up included; `Unavailable` when out of service) |
+| Planned maintenance | `GET maintenance-blocks?start&end` (two 31-day windows around today), `POST maintenance-blocks`, `POST maintenance-blocks/{id}/actions` (`cancel`, reason, `version`) |
+| Availability drawer | `GET facilities/{id}/availability?start&end` (busy intervals; set-up, clean-up and maintenance blocks included; `Unavailable` when out of service) |
 | Reservations list | `GET reservations?start&end` (31-day windows: the 31 days before and after today) |
-| Titles and clocks | `GET calendar/events?start&end` (read only, for the title and time zone) |
-| Request a room | `POST reservations` (exact period of a draft event), draft events from `GET calendar/events` |
+| Titles and clocks | `GET calendar/events?start&end` (read only, for the clock; the title also comes with the reservation as `eventTitle`) |
+| Request a room | `POST reservations` (exact period of a draft event; optional purpose, `purposeAr`, people expected, contact phone) |
+| Reservation details | `PUT reservations/{id}/details` (purpose, `purposeAr`, people expected, phone, notes, opening/closing checklist; `version`) |
 | Decide | `POST reservations/{id}/actions` (`confirm`, `decline`, `cancel`; reason required; `version`) |
-| Equipment | `GET/POST equipment`, `PUT equipment/{id}`, `GET equipment/{id}/bookings` |
+| Equipment | `GET/POST equipment`, `PUT equipment/{id}` (`nameAr`, `conditionGrade`), `GET equipment/{id}/bookings` |
 | Loans | `POST equipment/{id}/bookings`, `POST equipment-bookings/{id}/actions` (`issue`, `return`, `cancel`) |
-| Issues | `GET facility-issues`, `POST facility-issues`, `POST facility-issues/{id}/actions` (`triage`, `start-repair`, `resolve`, `dismiss`) |
-| Rentals | `GET renters`, `POST renters`, `GET reservations/{id}/rental` (404 = none), `PUT reservations/{id}/rental` |
+| Issues | `GET facility-issues`, `POST facility-issues` (`descriptionAr`), `POST facility-issues/{id}/actions` (`triage`, `start-repair`, `resolve`, `dismiss`) |
+| Rentals | `GET renters`, `POST renters` (`nameAr`, `organizationAr`), `GET reservations/{id}/rental` (404 = none), `PUT reservations/{id}/rental` |
+| People's names | `GET account-names?ids=` through `model/names.js`: requesters, deciders, checklist ticks, issue reporters and assignees, block authors |
 
 Equipment, issues and rentals need an authenticator sign-in and `facilities.manage`; a 403 leaves the area
-empty and the page says so. The rest needs `schedule.read` / `facilities.manage`.
+empty and the page says so. Rooms, availability and maintenance-block reads need `schedule.read`;
+reservations and every room or block write need `facilities.manage`.
+
+## What is connected now (fullstack2-facilities)
+
+- **Arabic names.** Rooms (`nameAr`, `publicDescriptionAr`), equipment (`nameAr`), issues (`descriptionAr`),
+  renters (`nameAr`, `organizationAr`), reservation purpose (`purposeAr`), checklist steps (`labelAr`) and
+  maintenance reasons (`reasonAr`) are optional API twins. Forms show both fields and send each as typed;
+  display falls back to the other language only when the twin is empty. Older records return `null`.
+- **Maintenance blocks with dates.** A block (room, from, to, reason, Arabic reason, who is in charge) takes
+  the same room and exclusion-pair resource guards as a reservation, through the allocator. It is refused
+  (409 `maintenance_conflict`) while a confirmed or allocating reservation holds the room, and a reservation
+  confirmed for a blocked period ends in `Conflict` (`resource_conflict`). Cancelling releases the room.
+  Blocks last at most 31 days and have no set-up or clean-up of their own; a room that excludes the blocked
+  room is blocked too. A failed attempt stays listed as `Conflict` (the screen hides it).
+- **Reservation details.** Purpose in both languages, people expected, contact phone, notes, a typed opening
+  and closing checklist that records who ticked each step and when, the requester's name, the group
+  (`ministryId` of a ministry-meeting event) and a decision history (the request, each decision with its
+  reason, and the allocation outcome shown as "Allocation"). All of these are hidden on a redacted booking.
+- **Equipment condition.** An optional grade `Good`, `Fair` or `NeedsService` beside the free-text note.
+- **Issues.** Reporter and assignee shown by name, and an Arabic description.
 
 ## How the API differs from the old screens
 
 - **One decision step.** The API has no secretary-then-priest chain. Anyone with `facilities.manage`
   confirms, declines or cancels, with a required reason. Confirming is queued (`Allocating`, 202): the room
   is held once the API has allocated it (`Confirmed`), or the request becomes `Conflict`. A request waiting
-  for a decision does **not** hold the room. The stage bar is now Requested → Being confirmed → Confirmed.
+  for a decision does **not** hold the room. The stage bar is Requested → Being confirmed → Confirmed.
 - **A reservation needs a draft calendar event** with the exact same period. "Request a room" lists draft
   events from the next 62 days; creating the event is the calendar module's job.
-- **Maintenance blocks have no dates.** The API only takes a room out of service (with a reason it records
-  but does not return) until someone returns it. `MaintenanceDto` exists but no route uses it. The tab is
-  now "Out of service" with no From/To/Reason.
+- **Out of service** stays separate from planned maintenance: it has no dates, and its reason is recorded
+  but not returned.
 - **Loans** are bookings against a calendar event, then issued and returned; "on loan" is the units on
   `Issued` bookings (one read per item).
-- **Rentals** exist per reservation. The list reads each current reservation's agreement (one read each,
-  404 where none). Approval, acceptance, deposits and refunds belong to finance (`finance.approve`/`post`)
-  and have no UI here yet.
+- **Rentals** exist per reservation. Approval, acceptance, deposits and refunds belong to finance
+  (`finance.approve`/`post`) and have no UI here yet.
 
-## Fields with no API equivalent (left empty or removed, never invented)
+## Still not connected, and why
 
-- Room: Arabic name (shown as the one name), step-free access, photos, usage policy.
-- Reservation: group, requester as a person (the API gives an account id), phone, people expected, hold
-  expiry, opening/closing checklist, decision history (only the last reason), the old "hall utilisation"
-  and "average decision time" figures.
-- Maintenance block: dates, reason, staff in charge.
-- Issue: who reported it (account id, not a person), photos (only a text evidence note), assignee picker
-  (an account id is needed).
-- Equipment: Arabic name, a condition scale (the API has a free-text note and a status).
-- Reference numbers are `RES-` plus the first 8 characters of the id.
-
-## Not in the UI (routes exist)
-
-- Additional rooms on a reservation (`additionalResourceIds`) and linking a customer person.
-- Rental approval, acceptance and payments (`rental/actions`).
-- Reservations beyond ±31 days of today, and events not in the next 62 days for requests.
+- Room step-free access, photos and usage policy: no API fields (owner decision 4).
+- Reservation hold expiry: holds are managed by the allocation worker only.
+- Issue photos (a text evidence note only) and an assignee picker: the API needs an account id and no route
+  lists assignable staff, so the triage form does not assign.
+- Additional rooms on a reservation (`additionalResourceIds`) and linking a customer person (routes exist).
+- Rental approval, acceptance and payments (`rental/actions`), and any rental fee rules.
+- Reservations and blocks beyond ±31 days of today, and events outside the next 62 days for requests.
+- The checklist is edited as lines (`English | Arabic`) in a plain form; there is no checklist template.
 
 ## Open decisions for the owner
 
-1. The parish has no time zone in the API. Times show on the clock of the reservation's calendar event
-   (the viewer's clock if the event cannot be read). Should the parish carry a time zone?
-2. Should the API return the out-of-service reason and a date range, or have a maintenance-window route
-   (`MaintenanceDto` is unused)?
-3. Should reservation DTOs carry the event title, requester as a person, and a conflict detail?
-4. Should the secretary/priest two-step approval exist as policy, or is `facilities.manage` enough?
-5. Step-free access, photos and usage policy for rooms: new fields?
+1. The parish has no time zone in the API. Reservation times show on the clock of the reservation's calendar
+   event, and maintenance blocks on the viewer's clock. Should the parish carry a time zone?
+2. Should each room have a default opening/closing checklist? The API stores only what the office types.
+3. Should the secretary/priest two-step approval exist as policy, or is `facilities.manage` enough?
+4. Step-free access, photos and usage policy for rooms: new fields?
+5. Rental fees, deposits and cancellation charges: the API records agreed amounts and actual payments only;
+   no rate card or fee rule is implemented (neutral mechanism).
+6. Equipment condition scale: `Good`/`Fair`/`NeedsService` follows the old screens. Confirm or replace it.
+7. Should out-of-service reasons be returned to readers, and who may see reservation contact phones
+   (currently `facilities.manage` only)?
 
 ## Verified
 
-`npm run check` (`checks/facilities.mjs`) covers load (rooms, blocks, reservations with titles and set-up
-buffers, equipment on loan, issues, rentals incl. 404), a refused area staying empty, paging with `size`,
-the exact body of each write, and an on-screen edit being undone. Not run: the screens in a browser, or
-against a live API (needs a verified account with an appointment).
+`npm run check` (`checks/facilities.mjs`) covers load (rooms with Arabic twins and fallback, dated blocks in
+two windows plus rooms out of service, reservations with purpose, checklist and history, names through
+account-names, the equipment grade, Arabic issue text, rentals including 404), a refused area staying empty,
+paging with `size`, the exact body of each write (including maintenance, details and Arabic fields), and an
+on-screen edit being undone. Backend: `FacilitiesCompletionTests` (5 integration tests, including HTTP).
+Not run: the screens in a browser, or against a live API.

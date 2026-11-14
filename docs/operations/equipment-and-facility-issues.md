@@ -16,3 +16,12 @@ Updated 10 November 2026. Source basis: S23.01, S23.13 and S23.14 (proposed). Ro
 - Taking a room out of service remains the existing facility status/maintenance action, which resolves affected bookings; an issue records the decision but does not change serviceability by itself.
 
 Not implemented: booking a room and equipment in one combined transaction (rooms use the queued reservation worker; equipment bookings are separate), serial-numbered units, member/borrower equipment requests, notifications and repair-cost finance posting.
+
+## Arabic names, condition grade and maintenance blocks (fullstack2-facilities, November 2026)
+
+- Equipment takes an optional `nameAr` and `conditionGrade` (`Good`, `Fair` or `NeedsService`; null when ungraded) beside the free-text condition note. Issues take an optional `descriptionAr`; renters `nameAr` and `organizationAr`; rooms `nameAr` and `publicDescriptionAr`. Twins are trimmed, never translated, and older records return null.
+- `POST /maintenance-blocks` (facilities.manage, facilities module) schedules a dated block (at most 31 days, ending in the future) on one room with a reason, optional `reasonAr` and who is in charge. The block is recorded as `Allocating`, then holds and confirms the room's guard and its exclusion-pair guards through the reservation allocator, and becomes `Active`. A held period is refused with 409 `maintenance_conflict` and the attempt is kept as `Conflict` after releasing every guard. A temporary failure leaves `Allocating`; replaying the same `OperationId` resumes it.
+- `POST /maintenance-blocks/{id}/actions` with `cancel`, a reason and the current version records the cancellation, then releases every guard (a replay re-runs the idempotent releases). `GET /maintenance-blocks?start&end` and `GET /maintenance-blocks/{id}` need schedule.read.
+- A reservation confirmed for a blocked period ends in `Conflict` (`resource_conflict`) through the existing allocation worker. A room's exclusions cannot change while a current or future block holds one of the affected rooms.
+
+Not implemented: recurring maintenance, linking a block to a facility issue, notifications, and an atomic cross-partition guarantee (the block's guards are separate resource partitions, as for reservations).

@@ -182,6 +182,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<FacilityService>();
         services.AddScoped<EquipmentService>();
         services.AddScoped<FacilityIssueService>();
+        services.AddScoped<MaintenanceService>();
         services.AddScoped<ReservationService>();
         services.AddScoped<ReservationWorkAuthorization>();
         services.AddScoped<ReservationProcessor>();

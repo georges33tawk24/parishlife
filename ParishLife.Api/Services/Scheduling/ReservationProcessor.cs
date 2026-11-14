@@ -1,5 +1,6 @@
 // Purpose: resumes leased reservation allocation and compensation across exact resource partitions, publishing success only after all holds confirm.
 // Main functions: ProcessPageAsync bounds a worker pass; ProcessOneAsync, CheckAsync, SaveAsync and FinishAsync enforce ownership, live authority, cancellation fencing and recoverable failure.
+// Each final outcome (confirmed, conflict or cancelled) is appended to the reservation decision history as a "system" entry.
 
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -113,6 +114,8 @@ public class ReservationProcessor(IRecordTransactions records, IResourceAllocato
         latest.Value.LeaseOwner = null;
         latest.Value.LeaseUntil = null;
         row.Value.Status = status;
+        row.Value.Decisions = ReservationService.Append(row.Value.Decisions, new ReservationDecision
+        { Action = status.ToLowerInvariant(), ActorId = "system", At = clock.GetUtcNow(), Reason = status == "Confirmed" ? null : work.ErrorCode });
         await records.CommitAsync(scope, Operation.Create(Guid.NewGuid(), "system:reservations", new { work.Id, status }, clock), "reservation." + status.ToLowerInvariant(), work.ReservationId,
             [SchedulingScope.Fence(root), RecordChange.Replace("reservationWork:" + work.Id, "reservationWork", latest.Value, latest.Version),
              RecordChange.Replace("reservation:" + work.ReservationId, "reservation", row.Value, row.Version)], new CommandResult { Id = work.ReservationId, Status = status }, ct);

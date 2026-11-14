@@ -2,7 +2,8 @@
    service, equipment and its loans, facility issues and external renters. Everything shown comes from
    ParishLife.Api (model/modules/facilities.js); each action is one API call followed by a reload.
    Main functions: facilities (the page and its tabs), availabilityDrawer, facilityForm, equipmentForm,
-   loansDrawer, issueForm, issueDrawer, rentalForm, renterForm. */
+   loansDrawer, issueForm, issueDrawer, rentalForm, renterForm, maintenanceForm and cancelBlockForm (dated
+   maintenance blocks that hold a room). */
 import { css, paint } from '../../ui/html.js';
 import { t, fmtDate, fmtLong, month, dayShort } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
@@ -10,6 +11,8 @@ import { Icon, PageHead, Pill, Table, Empty, openDrawer, toast, TabBar, Paged, S
 import * as C from '../../ui/components.jsx';
 import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, venue } from '../../model/data.js';
 import * as API from '../../model/modules/facilities.js';
+import { nameOf as accountName } from '../../model/names.js';
+import { session } from '../../model/api.js';
 import { ask, failure, money, Notice } from './forms.jsx';
 import { requestRoomForm } from './reservations.jsx';
 
@@ -28,6 +31,11 @@ const KINDS = () => [
   ['Space', L('Space (hall, church, outdoor)', 'مساحة (قاعة، كنيسة، خارجي)')]
 ];
 
+/* A person named by account id, through the shared lookup. */
+const person = id => (id ? accountName(session.parishId, id) || '—' : '—');
+/* A moment as a date and time on the viewer's clock. */
+const at = iso => `${fmtDate(iso)} ${API.clock(iso, '').time}`;
+
 const nameOf = id => {
   const v = venue(id);
   if (v) return L(v.name, v.ar);
@@ -45,6 +53,7 @@ function facilityForm(v) {
     ),
     fields: [
       { id: 'name', label: L('Name', 'الاسم'), req: true, value: v?.name, max: 500 },
+      { id: 'nameAr', label: L('Arabic name', 'الاسم بالعربية'), opt: true, value: v?.nameAr, max: 500 },
       { id: 'kind', label: L('Kind', 'النوع'), type: 'select', value: v?.kind || 'Room', options: KINDS() },
       { id: 'capacity', label: L('Seats', 'السعة'), type: 'number', min: 1, req: true, value: v?.cap ?? 40 },
       {
@@ -69,6 +78,13 @@ function facilityForm(v) {
         type: 'textarea',
         max: 500,
         value: v?.desc
+      },
+      {
+        id: 'publicDescriptionAr',
+        label: L('Public description in Arabic', 'الوصف العام بالعربية'),
+        type: 'textarea',
+        max: 500,
+        value: v?.descAr
       },
       {
         id: 'exclusionResourceIds',
@@ -109,6 +125,51 @@ function serviceForm(v, back) {
   });
 }
 
+/* A dated maintenance block: start and end on the viewer's clock, at most 31 days apart. */
+function maintenanceForm() {
+  ask({
+    title: L('Plan maintenance', 'تقرير صيانة'),
+    sub: L(
+      'The room is held for the whole period, like a confirmed reservation. It is refused if a reservation already holds the room then.',
+      'تُحجز القاعة طوال الفترة كحجز مؤكَّد. يُرفض ذلك إذا كان حجز يشغل القاعة حينها.'
+    ),
+    fields: [
+      {
+        id: 'venue',
+        label: L('Room', 'القاعة'),
+        type: 'select',
+        req: true,
+        options: VENUES.map(v => [v.id, L(v.name, v.ar)])
+      },
+      { id: 'startsAt', label: L('From', 'من'), type: 'datetime-local', req: true },
+      { id: 'endsAt', label: L('To', 'إلى'), type: 'datetime-local', req: true },
+      { id: 'reason', label: L('Reason', 'السبب'), type: 'textarea', req: true, max: 2000 },
+      { id: 'reasonAr', label: L('Reason in Arabic', 'السبب بالعربية'), type: 'textarea', max: 2000 },
+      { id: 'inCharge', label: L('Who is in charge', 'المسؤول'), opt: true, max: 200 }
+    ],
+    confirm: L('Plan', 'تقرير'),
+    run: f =>
+      API.scheduleMaintenance({
+        ...f,
+        startsAt: new Date(f.startsAt).toISOString(),
+        endsAt: new Date(f.endsAt).toISOString()
+      }),
+    success: (r, f) => [L('Maintenance planned', 'تقرّرت الصيانة'), nameOf(f.venue)]
+  });
+}
+
+function cancelBlockForm(m) {
+  ask({
+    title: L('Cancel maintenance', 'إلغاء الصيانة'),
+    sub: `${nameOf(m.venue)} · ${at(m.startsAt)} → ${at(m.endsAt)}`,
+    fields: [{ id: 'reason', label: L('Why', 'السبب'), type: 'textarea', req: true, max: 2000 }],
+    confirm: L('Cancel maintenance', 'إلغاء الصيانة'),
+    tone: 'danger',
+    run: f => API.cancelMaintenance(m, f.reason),
+    success: () => [L('Maintenance cancelled', 'أُلغيت الصيانة'), L('The room is free again.', 'القاعة متاحة من جديد.')]
+  });
+}
+
 /* ---------------- equipment ---------------- */
 function equipmentForm(e) {
   ask({
@@ -119,8 +180,21 @@ function equipmentForm(e) {
     ),
     fields: [
       { id: 'name', label: L('Name', 'الاسم'), req: true, value: e?.name, max: 300 },
+      { id: 'nameAr', label: L('Arabic name', 'الاسم بالعربية'), opt: true, value: e?.nameAr, max: 300 },
       { id: 'quantity', label: L('How many', 'العدد'), type: 'number', min: 0, req: true, value: e?.qty ?? 1 },
       { id: 'storage', label: L('Where it is kept', 'مكان الحفظ'), opt: true, value: e?.storage, max: 300 },
+      {
+        id: 'conditionGrade',
+        label: L('Condition', 'الحالة'),
+        type: 'select',
+        value: e?.grade || '',
+        options: [
+          ['', L('Not graded', 'غير مقيّمة')],
+          ['Good', L('Good', 'جيدة')],
+          ['Fair', L('Fair', 'مقبولة')],
+          ['NeedsService', L('Needs service', 'تحتاج صيانة')]
+        ]
+      },
       { id: 'condition', label: L('Condition note', 'ملاحظة عن الحالة'), opt: true, value: e?.note, max: 500 },
       {
         id: 'status',
@@ -371,6 +445,7 @@ function issueForm() {
     fields: [
       { id: 'where', label: L('Where', 'أين'), type: 'select', req: true, options: places },
       { id: 'description', label: L('What is wrong', 'ما العطل'), type: 'textarea', req: true, max: 4000 },
+      { id: 'descriptionAr', label: L('What is wrong, in Arabic', 'ما العطل بالعربية'), type: 'textarea', max: 4000 },
       {
         id: 'urgency',
         label: L('How urgent', 'مدى الاستعجال'),
@@ -387,6 +462,7 @@ function issueForm() {
         resourceKind,
         resourceId,
         description: f.description,
+        descriptionAr: f.descriptionAr || null,
         urgency: f.urgency,
         evidence: f.evidence || null
       });
@@ -408,7 +484,7 @@ function issueDrawer(i) {
     });
   const open = ['Reported', 'Triaged', 'InRepair'].includes(i.status);
   openDrawer({
-    title: i.what,
+    title: L(i.what, i.whatAr),
     sub: <>{nameOf(i.venue)}</>,
     body: (
       <>
@@ -421,6 +497,14 @@ function issueDrawer(i) {
           <dd>{(URGENCY()[i.urgency] || [i.urgency])[0]}</dd>
           <dt>{L('Reported', 'تاريخ الإبلاغ')}</dt>
           <dd className="mono">{i.at ? fmtDate(i.at) : '—'}</dd>
+          <dt>{L('Reported by', 'أبلغ عنه')}</dt>
+          <dd>{person(i.reportedBy)}</dd>
+          {i.assignedTo ? (
+            <>
+              <dt>{L('Assigned to', 'مُسند إلى')}</dt>
+              <dd>{person(i.assignedTo)}</dd>
+            </>
+          ) : null}
           {i.evidence ? (
             <>
               <dt>{L('Evidence', 'إثبات')}</dt>
@@ -536,7 +620,9 @@ function renterForm() {
     sub: L('A renter is kept apart from parish membership.', 'يُحفظ المستأجر منفصلاً عن عضوية الرعية.'),
     fields: [
       { id: 'name', label: L('Name', 'الاسم'), req: true, max: 200 },
+      { id: 'nameAr', label: L('Arabic name', 'الاسم بالعربية'), opt: true, max: 200 },
       { id: 'organization', label: L('Organisation', 'الجهة'), opt: true, max: 200 },
+      { id: 'organizationAr', label: L('Organisation in Arabic', 'الجهة بالعربية'), opt: true, max: 200 },
       {
         id: 'responsibleContact',
         label: L('Responsible contact (phone or email)', 'جهة الاتصال المسؤولة'),
@@ -550,6 +636,8 @@ function renterForm() {
       API.createRenter({
         ...f,
         organization: f.organization || null,
+        nameAr: f.nameAr || null,
+        organizationAr: f.organizationAr || null,
         verificationReference: f.verificationReference || null
       }),
     success: (r, f) => [L('Renter added', 'أُضيف المستأجر'), f.name]
@@ -695,6 +783,17 @@ export function facilities(tab = '') {
                   ) : (
                     <Pill label={L('Serviceable', 'صالح')} tone="success" />
                   )}
+                  {e.grade ? (
+                    <small className="t-caption" style={{ display: 'block' }}>
+                      {
+                        {
+                          Good: L('Good', 'جيدة'),
+                          Fair: L('Fair', 'مقبولة'),
+                          NeedsService: L('Needs service', 'تحتاج صيانة')
+                        }[e.grade]
+                      }
+                    </small>
+                  ) : null}
                   {e.note ? (
                     <small className="t-caption dim" style={{ display: 'block' }}>
                       {e.note}
@@ -759,13 +858,81 @@ export function facilities(tab = '') {
         {head}
         <div className="tabbody">
           <Notice area="facilities" />
+          <h3 className="t-ui" style={{ margin: '4px 0 10px' }}>
+            {L('Planned maintenance', 'الصيانة المقرّرة')}
+          </h3>
+          <Table
+            cols={[
+              { label: L('Room', 'القاعة') },
+              { label: L('When', 'متى') },
+              { label: L('Reason', 'السبب'), cls: 'hide-sm' },
+              { label: L('In charge', 'المسؤول'), cls: 'hide-md' },
+              { label: L('Status', 'الحالة'), cls: 'shrink' },
+              { label: '', cls: 'shrink' }
+            ]}
+            rows={MAINTENANCE.filter(m => m.kind === 'block' && m.status !== 'Conflict').map(m => ({
+              cells: [
+                <b>{nameOf(m.venue)}</b>,
+                <span className="mono dim" dir="ltr">
+                  {at(m.startsAt)} → {at(m.endsAt)}
+                </span>,
+                <span>
+                  {L(m.why, m.whyAr)}
+                  {m.cancelReason ? (
+                    <small className="t-caption dim" style={{ display: 'block' }}>
+                      {L('Cancelled: ', 'أُلغيت: ')}
+                      {m.cancelReason}
+                    </small>
+                  ) : null}
+                </span>,
+                <span className="dim">
+                  {m.inCharge || '—'}
+                  <small className="t-caption" style={{ display: 'block' }}>
+                    {L('Recorded by ', 'سجّلها ')}
+                    {person(m.by)}
+                  </small>
+                </span>,
+                m.status === 'Cancelled' ? (
+                  <Pill label={L('Cancelled', 'ملغاة')} />
+                ) : m.status === 'Allocating' ? (
+                  <Pill label={L('Being held', 'قيد الحجز')} tone="info" />
+                ) : Date.parse(m.endsAt) <= Date.now() ? (
+                  <Pill label={L('Ended', 'انتهت')} />
+                ) : (
+                  <Pill label={L('Room held', 'القاعة محجوزة')} tone="warning" />
+                ),
+                ['Active', 'Allocating'].includes(m.status) && Date.parse(m.endsAt) > Date.now() ? (
+                  <button className="btn btn-secondary btn-dense" data-mcancel={m.id}>
+                    {L('Cancel…', 'إلغاء…')}
+                  </button>
+                ) : null
+              ]
+            }))}
+            empty={
+              <Empty
+                glyph="rooms"
+                title={L('No maintenance planned', 'لا صيانة مقرّرة')}
+                body={L(
+                  'A dated block holds a room for repairs; reservations cannot take it meanwhile.',
+                  'تحجز الفترة المؤرَّخة القاعة للإصلاح؛ ولا يمكن حجزها خلالها.'
+                )}
+              />
+            }
+          />{' '}
+          <button className="btn btn-secondary" style={{ margin: '16px 0 24px' }} id="newblock">
+            <Icon name="plus" size={17} />
+            {L('Plan maintenance', 'تقرير صيانة')}
+          </button>
+          <h3 className="t-ui" style={{ margin: '4px 0 10px' }}>
+            {L('Out of service', 'خارج الخدمة')}
+          </h3>
           <Table
             cols={[
               { label: L('Room', 'القاعة') },
               { label: L('Status', 'الحالة'), cls: 'shrink' },
               { label: '', cls: 'shrink' }
             ]}
-            rows={MAINTENANCE.map(m => ({
+            rows={MAINTENANCE.filter(m => m.kind === 'out').map(m => ({
               cells: [
                 <b>{nameOf(m.venue)}</b>,
                 <Pill label={L('Out of service', 'خارج الخدمة')} tone="danger" />,
@@ -787,10 +954,10 @@ export function facilities(tab = '') {
           />{' '}
           <C.InlineAlert
             tone="info"
-            title={L('Out of service has no dates', 'الإخراج من الخدمة بلا تواريخ')}
+            title={L('Planned maintenance or out of service', 'صيانة مقرّرة أو خارج الخدمة')}
             body={L(
-              ' A room is either in service or not, until someone returns it. The reason is recorded with the change but the API does not return it, so it is not shown here. A room with current or future reservations cannot be taken out of service.',
-              ' القاعة إما في الخدمة أو لا، حتى يعيدها أحد. يُسجَّل السبب مع التغيير لكن الواجهة البرمجية لا تعيده فلا يظهر هنا. لا يمكن إخراج قاعة لها حجوزات حالية أو مقبلة.'
+              ' Planned maintenance has dates (up to 31 days) and holds the room like a confirmed reservation: it is refused while a reservation holds the room, and later requests for that time come back as a conflict. Out of service has no dates: the room stays out until someone returns it, and the reason is recorded but not returned. Shown: blocks in the 31 days before and after today.',
+              ' للصيانة المقرّرة تواريخ (حتى ٣١ يوماً) وتحجز القاعة كحجز مؤكَّد: تُرفض ما دام حجز يشغل القاعة، وتعود الطلبات اللاحقة لذلك الوقت كتعارض. أما الإخراج من الخدمة فبلا تواريخ: تبقى القاعة خارجها حتى يعيدها أحد، ويُسجَّل السبب ولا يُعاد. المعروض: الفترات خلال ٣١ يوماً قبل اليوم وبعده.'
             )}
           />
         </div>
@@ -814,7 +981,7 @@ export function facilities(tab = '') {
             rows={ISSUES.map(i => ({
               cells: [
                 <b>{nameOf(i.venue)}</b>,
-                i.what,
+                L(i.what, i.whatAr),
                 <Pill label={(URGENCY()[i.urgency] || [i.urgency])[0]} tone={(URGENCY()[i.urgency] || [])[1]} />,
                 <span className="mono dim">{i.at ? fmtDate(i.at) : '—'}</span>,
                 <Pill label={(ISSUE_STATE()[i.status] || [i.status])[0]} tone={(ISSUE_STATE()[i.status] || [])[1]} />,
@@ -856,7 +1023,7 @@ export function facilities(tab = '') {
             ]}
             rows={RENTALS.map(r => ({
               cells: [
-                <b>{r.who || '—'}</b>,
+                <b>{L(r.who, r.whoAr) || '—'}</b>,
                 <span className="dim">{nameOf(r.venue)}</span>,
                 <span className="mono dim">{r.date ? fmtDate(r.date) : '—'}</span>,
                 <span className="num">{money(r.deposit, r.currency)}</span>,
@@ -941,7 +1108,7 @@ export function facilities(tab = '') {
           </div>
           {v.desc ? (
             <p className="t-caption dim" style={{ marginTop: '10px' }}>
-              {v.desc}
+              {L(v.desc, v.descAr || v.desc)}
             </p>
           ) : null}{' '}
           <div className="divider" />{' '}
@@ -1363,6 +1530,10 @@ facilities.mount = host => {
   host
     .querySelectorAll('[data-loans]')
     .forEach(b => b.addEventListener('click', () => loansDrawer(byId(EQUIPMENT, b.dataset.loans))));
+  host.querySelector('#newblock')?.addEventListener('click', maintenanceForm);
+  host
+    .querySelectorAll('[data-mcancel]')
+    .forEach(b => b.addEventListener('click', () => cancelBlockForm(byId(MAINTENANCE, b.dataset.mcancel))));
   host.querySelector('#newissue')?.addEventListener('click', issueForm);
   host
     .querySelectorAll('[data-issue]')

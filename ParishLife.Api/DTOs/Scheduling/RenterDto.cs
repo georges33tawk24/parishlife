@@ -1,5 +1,5 @@
 // Purpose: shows an external renter to facilities/finance staff.
-// Main members: Id, Name, Organization, ResponsibleContact, VerificationReference and CreatedAt.
+// Main members: Id, Name, NameAr, Organization, OrganizationAr, ResponsibleContact, VerificationReference and CreatedAt.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -9,7 +9,11 @@ public class RenterDto
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; } = null;
+
     public string? Organization { get; set; }
+
+    public string? OrganizationAr { get; set; } = null;
 
     public string ResponsibleContact { get; set; } = string.Empty;
 

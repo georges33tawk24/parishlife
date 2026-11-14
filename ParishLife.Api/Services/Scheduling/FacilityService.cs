@@ -1,5 +1,6 @@
 // Purpose: manages parish rooms/spaces, dependency-safe configuration and privacy-safe busy intervals using actual resource allocations.
 // Main functions: SaveAsync, SetStatusAsync, GetAsync, ListAsync, AvailabilityAsync and BuildSpecsAsync; pairwise exclusion keys avoid overblocking independent rooms.
+// Rooms carry optional Arabic name and description twins; BuildSpecsAsync also builds the exact-period guards a maintenance block holds.
 
 using ParishLife.Api.DTOs.Scheduling;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -41,12 +42,17 @@ public class FacilityService(IRecordTransactions records, IParishAccess access, 
         {
             var affected = exclusions.Concat(old?.Value.ExclusionResourceIds ?? []).Append(target).ToHashSet(StringComparer.Ordinal);
             await RequireNoFutureBookings(parish, affected, ct);
+            // A maintenance block holds the exclusion-pair guards of its room, so the pairs cannot change under it.
+            if (old is not null && !old.Value.ExclusionResourceIds.Order(StringComparer.Ordinal).SequenceEqual(exclusions))
+                await RequireNoActiveMaintenance(parish, affected, ct);
         }
         var value = new Facility
         {
             Id = target,
             ParishId = parish,
             Name = Guard.Text(request.Name, "Name", 500),
+            NameAr = string.IsNullOrWhiteSpace(request.NameAr) ? null : Guard.Text(request.NameAr, "Arabic name", 500),
+            PublicDescriptionAr = string.IsNullOrWhiteSpace(request.PublicDescriptionAr) ? null : Guard.Text(request.PublicDescriptionAr, "Arabic description", 500),
             Kind = request.Kind,
             Capacity = request.Capacity,
             SetupMinutes = request.SetupMinutes,
@@ -111,7 +117,9 @@ public class FacilityService(IRecordTransactions records, IParishAccess access, 
         }
         return merged;
     }
-    internal async Task<AllocationSpec[]> BuildSpecsAsync(string parish, string[] selected, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+    // A maintenance block occupies exactly its own period (no set-up or clean-up) and may be planned while a room is out of service;
+    // it uses the same room and exclusion-pair guards as a reservation, so the two conflict through the allocator.
+    internal async Task<AllocationSpec[]> BuildSpecsAsync(string parish, string[] selected, DateTimeOffset start, DateTimeOffset end, CancellationToken ct, bool maintenance = false)
     {
         var all = (await records.CollectAsync<Facility>(SchedulingScope.For(parish), "facility", ct)).Select(row => row.Value).ToDictionary(value => value.Id, StringComparer.Ordinal);
         var specs = new List<AllocationSpec>();
@@ -121,11 +129,11 @@ public class FacilityService(IRecordTransactions records, IParishAccess access, 
                 throw SchedulingScope.Missing();
             if (facility.ExclusionResourceIds.Any(excluded => !all.ContainsKey(excluded)))
                 throw new DomainException("facility_graph_requires_review", "A configured exclusion lacks its actual parish facility; review the resource graph.", FailureKind.Conflict);
-            if (facility.Status != "Serviceable")
+            if (facility.Status != "Serviceable" && !maintenance)
                 throw new DomainException("facility_unavailable", "A selected facility is out of service.", FailureKind.Conflict);
             DateTimeOffset a, b;
             try
-            { a = start.AddMinutes(-facility.SetupMinutes); b = end.AddMinutes(facility.CleanupMinutes); }
+            { a = maintenance ? start : start.AddMinutes(-facility.SetupMinutes); b = maintenance ? end : end.AddMinutes(facility.CleanupMinutes); }
             catch (ArgumentOutOfRangeException) { throw new DomainException("invalid_period", "Setup or cleanup exceeds the supported date range."); }
             specs.Add(new() { ResourceId = FacilityKey(parish, id), StartsAt = a, EndsAt = b, Quantity = 1, Capacity = 1 });
             foreach (var other in all.Values.Where(other => other.Id != id && (facility.ExclusionResourceIds.Contains(other.Id) || other.ExclusionResourceIds.Contains(id))))
@@ -152,18 +160,27 @@ public class FacilityService(IRecordTransactions records, IParishAccess access, 
                 ? Math.Clamp(facility.CleanupMinutes, 0, 1440) : 1440).DefaultIfEmpty(0).Max())))
             throw new DomainException("facility_dependencies_active", "Resolve affected current/future reservations before changing resource structure or serviceability.", FailureKind.Conflict);
     }
+    private async Task RequireNoActiveMaintenance(string parish, HashSet<string> affected, CancellationToken ct)
+    {
+        var rows = await records.CollectAsync<MaintenanceBlock>(SchedulingScope.For(parish), "maintenanceBlock", ct, 5000,
+            new RecordCondition { Path = "endsAt", Comparison = "gt", Value = clock.GetUtcNow() });
+        if (rows.Any(row => row.Value.Status is "Allocating" or "Active" && affected.Contains(row.Value.FacilityId)))
+            throw new DomainException("facility_dependencies_active", "Cancel affected current/future maintenance blocks before changing what excludes what.", FailureKind.Conflict);
+    }
     internal static string FacilityKey(string parish, string id) => "facility:" + parish + ":" + id;
     private static FacilityDto View(Facility value) => new()
     {
         Id = value.Id,
         ParishId = value.ParishId,
         Name = value.Name,
+        NameAr = value.NameAr,
         Kind = value.Kind,
         Capacity = value.Capacity,
         SetupMinutes = value.SetupMinutes,
         CleanupMinutes = value.CleanupMinutes,
         Status = value.Status,
         ExclusionResourceIds = [.. value.ExclusionResourceIds],
-        PublicDescription = value.PublicDescription
+        PublicDescription = value.PublicDescription,
+        PublicDescriptionAr = value.PublicDescriptionAr
     };
 }

@@ -1,5 +1,5 @@
 // Purpose: returns one facility issue with its triage and resolution facts.
-// Main members: Id, ResourceId, ResourceKind, Description, Urgency, Evidence, Status, actors, notes, resolution evidence and cost note.
+// Main members: Id, ResourceId, ResourceKind, Description, DescriptionAr, Urgency, Evidence, Status, actors, notes, resolution evidence and cost note.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -12,6 +12,8 @@ public class FacilityIssueDto
     public string ResourceKind { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+
+    public string? DescriptionAr { get; set; } = null;
 
     public string Urgency { get; set; } = string.Empty;
 

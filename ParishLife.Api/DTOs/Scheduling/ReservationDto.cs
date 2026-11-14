@@ -1,5 +1,5 @@
 // Purpose: returns the actual reservation state and attempt without reporting queued allocation as confirmation.
-// Main members: Id, ParishId, ResourceId, EventId, RequestedBy, StartsAt, EndsAt and related workflow values.
+// Main members: Id, ParishId, ResourceId, EventId, RequestedBy, StartsAt, EndsAt event title, purpose, attendance, contact, notes, checklist and decision history (all hidden when redacted).
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -34,4 +34,22 @@ public class ReservationDto
     public string? ErrorCode { get; set; }
 
     public bool Redacted { get; set; }
+
+    public string? EventTitle { get; set; } = null;
+
+    public string? MinistryId { get; set; } = null;
+
+    public string? Purpose { get; set; } = null;
+
+    public string? PurposeAr { get; set; } = null;
+
+    public int? ExpectedAttendance { get; set; } = null;
+
+    public string? ContactPhone { get; set; } = null;
+
+    public string? Notes { get; set; } = null;
+
+    public ReservationChecklistItemDto[] Checklist { get; set; } = Array.Empty<ReservationChecklistItemDto>();
+
+    public ReservationDecisionDto[] Decisions { get; set; } = Array.Empty<ReservationDecisionDto>();
 }

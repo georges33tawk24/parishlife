@@ -1,5 +1,5 @@
 // Purpose: an external renter (person or organization) kept separate from parish membership, visible only to facilities/finance staff.
-// Main members: Id, ParishId, Name, Organization, ResponsibleContact, VerificationReference, CreatedBy and CreatedAt.
+// Main members: Id, ParishId, Name, NameAr, Organization, OrganizationAr, ResponsibleContact, VerificationReference, CreatedBy and CreatedAt.
 
 namespace ParishLife.Api.Models;
 
@@ -11,7 +11,11 @@ public class Renter
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; } = null;
+
     public string? Organization { get; set; }
+
+    public string? OrganizationAr { get; set; } = null;
 
     public string ResponsibleContact { get; set; } = string.Empty;
 

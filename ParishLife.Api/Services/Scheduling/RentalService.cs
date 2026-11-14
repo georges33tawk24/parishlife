@@ -36,7 +36,9 @@ public class RentalService(IRecordTransactions records, IParishAccess access, IC
         var item = new Renter
         {
             Id = op.Id, ParishId = parish, Name = Guard.Text(request.Name, "Name", 200),
+            NameAr = Optional(request.NameAr, "Arabic name", 200),
             Organization = string.IsNullOrWhiteSpace(request.Organization) ? null : Guard.Text(request.Organization, "Organization", 200),
+            OrganizationAr = Optional(request.OrganizationAr, "Arabic organization", 200),
             ResponsibleContact = Guard.Text(request.ResponsibleContact, "Responsible contact", 320),
             VerificationReference = string.IsNullOrWhiteSpace(request.VerificationReference) ? null : Guard.Text(request.VerificationReference, "Verification", 300),
             CreatedBy = actor.AccountId, CreatedAt = op.At
@@ -168,8 +170,10 @@ public class RentalService(IRecordTransactions records, IParishAccess access, IC
 
     private static decimal Outstanding(RentalAgreement x) => x.Fee - x.Payments.Where(p => p.Kind is "FeeReceived" or "FeeWaived").Sum(p => p.Amount);
 
+    private static string? Optional(string? value, string name, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, max);
+
     private static RenterDto Project(Renter x) => new()
     {
-        Id = x.Id, Name = x.Name, Organization = x.Organization, ResponsibleContact = x.ResponsibleContact, VerificationReference = x.VerificationReference, CreatedAt = x.CreatedAt
+        Id = x.Id, Name = x.Name, NameAr = x.NameAr, Organization = x.Organization, OrganizationAr = x.OrganizationAr, ResponsibleContact = x.ResponsibleContact, VerificationReference = x.VerificationReference, CreatedAt = x.CreatedAt
     };
 }

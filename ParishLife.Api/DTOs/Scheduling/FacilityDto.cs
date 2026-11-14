@@ -1,5 +1,5 @@
 // Purpose: returns scoped room or space metadata and actual serviceability.
-// Main members: Id, ParishId, Name, Kind, Capacity, SetupMinutes, CleanupMinutes and related workflow values.
+// Main members: Id, ParishId, Name, NameAr, Kind, Capacity, SetupMinutes, CleanupMinutes and related workflow values.
 
 namespace ParishLife.Api.DTOs.Scheduling;
 
@@ -11,6 +11,8 @@ public class FacilityDto
     public string ParishId { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
+
+    public string? NameAr { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 
@@ -25,4 +27,6 @@ public class FacilityDto
     public string[] ExclusionResourceIds { get; set; } = Array.Empty<string>();
 
     public string? PublicDescription { get; set; }
+
+    public string? PublicDescriptionAr { get; set; } = null;
 }

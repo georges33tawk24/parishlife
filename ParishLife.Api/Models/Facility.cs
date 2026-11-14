@@ -1,5 +1,5 @@
 // Purpose: represents facility business state and rules.
-// Main members: Id, ParishId, Name, Kind, Capacity, SetupMinutes, CleanupMinutes, and related workflow details.
+// Main members: Id, ParishId, Name, NameAr, Kind, Capacity, SetupMinutes, CleanupMinutes, and related workflow details.
 
 namespace ParishLife.Api.Models;
 
@@ -10,6 +10,8 @@ public class Facility
     public string ParishId { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
+
+    public string? NameAr { get; set; } = null;
 
     public string Kind { get; set; } = string.Empty;
 
@@ -24,4 +26,6 @@ public class Facility
     public string[] ExclusionResourceIds { get; set; } = Array.Empty<string>();
 
     public string? PublicDescription { get; set; } = null;
+
+    public string? PublicDescriptionAr { get; set; } = null;
 }

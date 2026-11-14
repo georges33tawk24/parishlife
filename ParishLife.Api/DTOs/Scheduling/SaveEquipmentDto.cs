@@ -1,5 +1,5 @@
 // Purpose: creates or updates counted equipment; Version is required when updating.
-// Main members: OperationId, Version, Name, Quantity, Storage, Condition and Status.
+// Main members: OperationId, Version, Name, NameAr, Quantity, Storage, Condition, ConditionGrade and Status.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -18,6 +18,9 @@ public class SaveEquipmentDto
     [StringLength(300)]
     public string Name { get; set; } = string.Empty;
 
+    [StringLength(300)]
+    public string? NameAr { get; set; } = null;
+
     [Range(0, 100000)]
     public int Quantity { get; set; }
 
@@ -26,6 +29,9 @@ public class SaveEquipmentDto
 
     [StringLength(500)]
     public string? Condition { get; set; } = null;
+
+    [RegularExpression("^(Good|Fair|NeedsService)$")]
+    public string? ConditionGrade { get; set; } = null;
 
     [Required]
     [RegularExpression("^(Serviceable|OutOfService|Retired)$")]

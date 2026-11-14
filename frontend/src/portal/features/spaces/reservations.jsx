@@ -1,7 +1,8 @@
 /* Reservations: room requests for calendar events, their state, clashes, and the decision on each
    (confirm, decline, cancel). Everything comes from ParishLife.Api (model/modules/facilities.js).
-   Main functions: reservations (the list), resDrawer (one request and its decisions), requestRoomForm
-   (ask for a room for a draft calendar event).
+   Main functions: reservations (the list), resDrawer (one request, its details, checklist and decision history),
+   detailsForm (edit purpose, attendance, contact, notes and checklist), requestRoomForm (ask for a room for a
+   draft calendar event).
 
    The API has one decision step, by someone with facility permission, not a secretary-then-priest chain.
    Confirming queues the allocation: the room is held once the API has allocated it (Confirmed), or the
@@ -14,6 +15,8 @@ import * as C from '../../ui/components.jsx';
 import { RESERVATIONS, venue, resClash, resStatus } from '../../model/data.js';
 import * as API from '../../model/modules/facilities.js';
 import { ask, failure, Notice } from './forms.jsx';
+import { nameOf as accountName } from '../../model/names.js';
+import { session } from '../../model/api.js';
 
 const L = (en, ar) => t(en, ar);
 
@@ -44,6 +47,10 @@ function State({ r }) {
     />
   );
 }
+
+/* A person named by account id; "system" is the allocation step. */
+const person = id =>
+  id === 'system' ? L('Allocation', 'التخصيص') : id ? accountName(session.parishId, id) || '—' : '—';
 
 const roomName = id => {
   const v = venue(id);
@@ -277,6 +284,10 @@ export async function requestRoomForm({ venue: room }) {
         value: room || rooms[0]?.id,
         options: rooms.map(v => [v.id, L(v.name, v.ar)])
       },
+      { id: 'purpose', label: L('Purpose', 'الغاية'), opt: true, max: 500 },
+      { id: 'purposeAr', label: L('Purpose in Arabic', 'الغاية بالعربية'), opt: true, max: 500 },
+      { id: 'people', label: L('People expected', 'العدد المتوقّع'), type: 'number', min: 0 },
+      { id: 'phone', label: L('Contact phone', 'هاتف التواصل'), opt: true, max: 50 },
       {
         id: 'terms',
         label: L('Terms agreed (for an outside renter)', 'الشروط المتفق عليها (لمستأجر خارجي)'),
@@ -286,7 +297,16 @@ export async function requestRoomForm({ venue: room }) {
       }
     ],
     confirm: L('Request', 'طلب'),
-    run: f => API.requestRoom({ event: events.find(e => e.id === f.event), venue: f.room, terms: f.terms }),
+    run: f =>
+      API.requestRoom({
+        event: events.find(e => e.id === f.event),
+        venue: f.room,
+        terms: f.terms,
+        purpose: f.purpose,
+        purposeAr: f.purposeAr,
+        people: f.people,
+        phone: f.phone
+      }),
     success: () => [L('Room requested', 'طُلبت القاعة'), L('It waits for a decision.', 'بانتظار القرار.')]
   });
 }
@@ -321,8 +341,77 @@ const ERRORS = {
   facility_unavailable: [
     'A room was out of service when allocation was tried.',
     'كانت قاعة خارج الخدمة عند محاولة التخصيص.'
+  ],
+  resource_conflict: [
+    'Another booking or a planned maintenance block holds the room at that time.',
+    'حجز آخر أو صيانة مقرّرة تشغل القاعة في ذلك الوقت.'
   ]
 };
+
+const DECISION = {
+  request: ['Requested', 'طُلب'],
+  confirm: ['Confirm asked', 'طُلب التأكيد'],
+  decline: ['Declined', 'رُفض'],
+  cancel: ['Cancel asked', 'طُلب الإلغاء'],
+  confirmed: ['Room allocated', 'خُصّصت القاعة'],
+  conflict: ['Could not be allocated', 'تعذّر التخصيص'],
+  cancelled: ['Room released', 'حُرّرت القاعة']
+};
+
+/* The checklist is edited as lines, "English | Arabic" (the Arabic part optional); ticks are kept by step. */
+const toLines = (r, phase) =>
+  r.checklist
+    .filter(c => c.phase === phase)
+    .map(c => (c.labelAr ? `${c.label} | ${c.labelAr}` : c.label))
+    .join('\n');
+const fromLines = (text, phase, done) =>
+  String(text || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [label, labelAr] = line.split(' | ').map(s => s.trim());
+      return { phase, label, labelAr: labelAr || null, done: done.includes(`${phase}|${label}`) };
+    });
+
+function detailsForm(r) {
+  ask({
+    title: L('Reservation details', 'تفاصيل الحجز'),
+    sub: `${r.ref} · ${roomName(r.venue)} · ${fmtDate(r.date)}`,
+    fields: [
+      { id: 'purpose', label: L('Purpose', 'الغاية'), opt: true, max: 500, value: r.purpose },
+      { id: 'purposeAr', label: L('Purpose in Arabic', 'الغاية بالعربية'), opt: true, max: 500, value: r.purposeAr },
+      { id: 'people', label: L('People expected', 'العدد المتوقّع'), type: 'number', min: 0, value: r.people ?? '' },
+      { id: 'phone', label: L('Contact phone', 'هاتف التواصل'), opt: true, max: 50, value: r.phone },
+      { id: 'notes', label: L('Notes', 'ملاحظات'), type: 'textarea', max: 2000, value: r.notes },
+      {
+        id: 'opening',
+        label: L('Opening checklist', 'قائمة الفتح'),
+        type: 'textarea',
+        value: toLines(r, 'Opening'),
+        help: L(
+          'One step per line; add " | " and the Arabic if wanted.',
+          'خطوة في كل سطر؛ أضف " | " ثم النص العربي إن شئت.'
+        )
+      },
+      { id: 'closing', label: L('Closing checklist', 'قائمة الإغلاق'), type: 'textarea', value: toLines(r, 'Closing') },
+      {
+        id: 'done',
+        label: L('Done', 'أُنجز'),
+        type: 'checks',
+        value: r.checklist.filter(c => c.done).map(c => `${c.phase}|${c.label}`),
+        options: r.checklist.map(c => [`${c.phase}|${c.label}`, L(c.label, c.labelAr || c.label)])
+      }
+    ],
+    confirm: L('Save', 'حفظ'),
+    run: f =>
+      API.saveReservationDetails(r, {
+        ...f,
+        checklist: [...fromLines(f.opening, 'Opening', f.done), ...fromLines(f.closing, 'Closing', f.done)]
+      }),
+    success: () => [L('Details saved', 'حُفظت التفاصيل'), r.ref]
+  });
+}
 
 function decide(r, action) {
   const text = {
@@ -386,7 +475,10 @@ function resDrawer(id) {
               ' ' +
               (ERRORS[r.errorCode]
                 ? L(...ERRORS[r.errorCode])
-                : L('Another booking holds the room at that time.', 'حجز آخر يشغل القاعة في ذلك الوقت.')) +
+                : L(
+                    'Another booking or a planned maintenance block holds the room at that time.',
+                    'حجز آخر أو صيانة مقرّرة تشغل القاعة في ذلك الوقت.'
+                  )) +
               ' ' +
               L('Decline it, or ask for another room.', 'ارفضه أو اطلب قاعة أخرى.')
             }
@@ -434,7 +526,62 @@ function resDrawer(id) {
           <dd>
             <State r={r} />
           </dd>
+          {!r.redacted ? (
+            <>
+              <dt>{L('Requested by', 'طلبه')}</dt>
+              <dd>{person(r.requestedBy)}</dd>
+            </>
+          ) : null}
+          {r.purpose || r.purposeAr ? (
+            <>
+              <dt>{L('Purpose', 'الغاية')}</dt>
+              <dd>{L(r.purpose || r.purposeAr, r.purposeAr || r.purpose)}</dd>
+            </>
+          ) : null}
+          {r.people != null ? (
+            <>
+              <dt>{L('People expected', 'العدد المتوقّع')}</dt>
+              <dd className="tnum">{r.people}</dd>
+            </>
+          ) : null}
+          {r.phone ? (
+            <>
+              <dt>{L('Contact phone', 'هاتف التواصل')}</dt>
+              <dd dir="ltr">{r.phone}</dd>
+            </>
+          ) : null}
+          {r.notes ? (
+            <>
+              <dt>{L('Notes', 'ملاحظات')}</dt>
+              <dd>
+                <bdi>{r.notes}</bdi>
+              </dd>
+            </>
+          ) : null}
         </dl>{' '}
+        {r.checklist.length ? (
+          <>
+            <div className="divider" />
+            <h4 className="t-ui" style={{ marginBottom: '10px' }}>
+              {L('Checklist', 'قائمة التحقق')}
+            </h4>
+            <ul className="blocklist">
+              {r.checklist.map((c, i) => (
+                <li key={i}>
+                  {c.done ? '✓ ' : '○ '}
+                  {c.phase === 'Opening' ? L('Opening: ', 'الفتح: ') : L('Closing: ', 'الإغلاق: ')}
+                  {L(c.label, c.labelAr || c.label)}
+                  {c.done ? (
+                    <small className="t-caption dim">
+                      {' '}
+                      · {person(c.doneBy)} · {fmtDate(c.doneAt)}
+                    </small>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}{' '}
         {r.terms ? (
           <blockquote className="or-quote">
             <span>{L('Terms agreed', 'الشروط المتفق عليها')}</span>
@@ -453,6 +600,27 @@ function resDrawer(id) {
               <bdi>{r.reason}</bdi>
             </p>
           </>
+        ) : null}{' '}
+        {r.decisions.length ? (
+          <>
+            <div className="divider" />
+            <h4 className="t-ui" style={{ marginBottom: '10px' }}>
+              {L('History', 'السجلّ')}
+            </h4>
+            <ul className="blocklist">
+              {r.decisions.map((x, i) => (
+                <li key={i}>
+                  <b>{DECISION[x.action] ? L(...DECISION[x.action]) : x.action}</b> · {person(x.actorId)} ·{' '}
+                  <span className="mono dim">{fmtDate(x.at)}</span>
+                  {x.reason ? (
+                    <small className="t-caption dim" style={{ display: 'block' }}>
+                      <bdi>{x.reason}</bdi>
+                    </small>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </>
         ) : null}
       </>
     ),
@@ -462,6 +630,11 @@ function resDrawer(id) {
           {L('Close', 'إغلاق')}
         </button>
         <span className="row" style={{ gap: '6px', marginInlineStart: 'auto' }}>
+          {!r.redacted && !['Declined', 'Cancelled'].includes(r.api) ? (
+            <button className="btn btn-secondary" id="res-details">
+              {L('Details…', 'التفاصيل…')}
+            </button>
+          ) : null}
           {canDecline ? (
             <button className="btn btn-danger-quiet" id="res-decline">
               {L('Decline', 'رفض')}
@@ -481,6 +654,7 @@ function resDrawer(id) {
       </>
     ),
     onMount(el) {
+      el.querySelector('#res-details')?.addEventListener('click', () => detailsForm(r));
       el.querySelector('#res-confirm')?.addEventListener('click', () => decide(r, 'confirm'));
       el.querySelector('#res-decline')?.addEventListener('click', () => decide(r, 'decline'));
       el.querySelector('#res-cancel')?.addEventListener('click', () => decide(r, 'cancel'));
