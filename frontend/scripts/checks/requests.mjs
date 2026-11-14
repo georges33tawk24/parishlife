@@ -1,7 +1,10 @@
 /* Purpose: checks the Requests module against an in-memory stand-in for ParishLife.Api: the office queue
    and the person's own requests load (paged with size and cursor, guests kept apart), the actions send the
    right routes and bodies (versions, operation ids), the form's answers become the API's request, files
-   upload as multipart with the token, and the public guest routes carry the tracking token in a header. */
+   upload as multipart with the token (naming a checklist item when asked), the checklist can name a case file,
+   an accepted case opens its record with a stable operation id, letters follow draft → sign (preview hash
+   and authenticator code) → release → withdraw, claims list from me/request-claims, and the public guest
+   routes (status, letters, own files and uploads) carry the tracking token in a header. */
 process.env.TZ = 'UTC';
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
@@ -112,6 +115,27 @@ const { sent } = mockApi((method, path, body, options) => {
     return json(200, dto('G2', { status: 'NeedsInformation', applicantExplanation: 'Send the form' }));
   }
   if (path === 'public/parishes/G1/requests/G2/messages' && method === 'POST') return json(200, { id: 'gm' });
+  if (path === 'public/parishes/G1/requests/G2/letters') {
+    assert.equal(options.headers['X-ParishLife-Tracking'], 'TOKENTOKENTOKENTOKEN');
+    return json(200, [
+      { reference: 'L-1', version: 1, title: 'Letter', status: 'Released', statement: 'Reference only.' }
+    ]);
+  }
+  if (path === 'public/parishes/G1/requests/G2/files') {
+    assert.equal(options.headers['X-ParishLife-Tracking'], 'TOKENTOKENTOKENTOKEN');
+    return json(200, [{ ...file, uploaderRole: 'Guest' }]);
+  }
+  if (path === 'parishes/P/requests/q1/records') return json(200, { recordId: 'r1', linkKind: 'SacramentRecord' });
+  if (path === 'me/request-claims')
+    return json(200, [{ parishId: 'G1', parishName: 'Parish', requestId: 'G2', reference: 'R-X', state: 'Pending' }]);
+  if (path === 'parishes/P/requests/q1/letters' && method === 'GET') return json(200, []);
+  if (path === 'parishes/P/requests/q1/letters/mine') return json(200, []);
+  if (path === 'parishes/P/requests/q1/letters' && method === 'POST') return json(200, { id: 'l1', status: 'Draft' });
+  if (path === 'parishes/P/letters/l1/authorization-preview') return json(200, { contentHash: 'A'.repeat(64) });
+  if (path.startsWith('parishes/P/letters/l1')) return json(200, { id: 'l1' });
+  if (path === 'me/signer-profile' && method === 'GET') return json(404, { title: 'resource_not_found' });
+  if (path === 'me/signer-profile' && method === 'PUT')
+    return json(200, { value: { printedName: body.printedName }, version: 'sv1' });
 });
 // the shared stand-in parses every body as JSON, so a multipart upload is answered here
 const jsonFetch = globalThis.fetch;
@@ -180,7 +204,9 @@ await R.setChecklist('q1', 'v1', [
   { key: 'id', label: 'ID', required: true, status: 'Received', paperReference: 'p. 3', extra: 1 }
 ]);
 body = sent.at(-1)[2];
-assert.deepEqual(body.items, [{ key: 'id', label: 'ID', required: true, status: 'Received', paperReference: 'p. 3' }]);
+assert.deepEqual(body.items, [
+  { key: 'id', label: 'ID', required: true, status: 'Received', paperReference: 'p. 3', evidenceFileId: null }
+]);
 await R.postMessage('q1', 'Internal', 'note');
 assert.deepEqual([sent.at(-1)[2].audience, sent.at(-1)[2].body], ['Internal', 'note']);
 
@@ -221,11 +247,27 @@ await R.submitOwn({
 body = sent.at(-1)[2];
 assert.deepEqual([body.kind, body.details.guests, body.preferredDates], ['Facility', '40', '2027-02-01 10:00-12:00']);
 
+// a received checklist item may name an active case file instead of a paper reference
+await R.setChecklist('q1', 'v1', [
+  { key: 'id', label: 'ID', required: true, status: 'Received', evidenceFileId: 'f1' }
+]);
+assert.deepEqual(sent.at(-1)[2].items[0], {
+  key: 'id',
+  label: 'ID',
+  required: true,
+  status: 'Received',
+  paperReference: null,
+  evidenceFileId: 'f1'
+});
+
 // files: listed, uploaded as multipart with the anti-forgery token, removed with the file's version and a reason
 assert.equal((await R.listFiles('q1'))[0].fileName, 'id.pdf');
 await R.uploadFile('q1', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), {});
 assert.ok(uploads[0][1] instanceof FormData && uploads[0][0]['X-CSRF-TOKEN']);
 assert.match(uploads[0][1].get('operationId'), /^[0-9a-f-]{36}$/);
+await R.uploadFile('q1', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), { checklistKey: 'id' });
+assert.equal(uploads[1][1].get('checklistKey'), 'id');
+assert.equal(uploads[0][1].get('checklistKey'), null, 'no item named, no field sent');
 await R.removeFile('q1', 'f1', 'fv1', 'wrong person');
 body = sent.at(-1)[2];
 assert.deepEqual([body.version, body.reason], ['fv1', 'wrong person']);
@@ -274,5 +316,50 @@ assert.deepEqual([sent.at(-1)[2].audience, sent.at(-1)[2].body], ['Applicant', '
 // a signed-in account presents the token to claim the case; the office decides afterwards
 await R.claimGuest({ parishId: 'G1', requestId: 'G2', token: 'TOKENTOKENTOKENTOKEN' });
 assert.equal(sent.at(-1)[1], 'parishes/G1/requests/G2/claim');
+// an accepted case opens its record; a retry keeps the same operation id
+await R.openRecord('q1', 'v1', 'SacramentalCase', { sacrament: 'Baptism', tentativeDate: '' }, 'op-1');
+body = sent.at(-1)[2];
+assert.equal(sent.at(-1)[1], 'parishes/P/requests/q1/records');
+assert.deepEqual(body, { operationId: 'op-1', version: 'v1', recordKind: 'SacramentalCase', sacrament: 'Baptism' });
+
+// letters: drafted on the case, signed with the preview hash and a code that is sent once, released with re-entered facts
+await R.createLetter('q1', { title: 'T', body: 'B', language: 'ar', addresseeName: 'A', replacesLetterId: null });
+assert.deepEqual(
+  { ...sent.at(-1)[2], operationId: 0 },
+  { operationId: 0, title: 'T', body: 'B', language: 'ar', addresseeName: 'A' }
+);
+const preview = await R.letterPreview('l1');
+await R.signLetter('l1', 'lv1', preview.contentHash, '123456');
+assert.equal(sent.at(-1)[1], 'parishes/P/letters/l1/authorization');
+assert.deepEqual(
+  [sent.at(-1)[2].version, sent.at(-1)[2].expectedContentHash, sent.at(-1)[2].authenticatorCode],
+  ['lv1', 'A'.repeat(64), '123456']
+);
+await R.releaseLetter('l1', 'lv2', {
+  method: 'InPerson',
+  confirmRequestReference: 'R-q1',
+  confirmAddresseeName: 'A',
+  confirmContentHash: preview.contentHash,
+  verificationEvidence: 'ID card seen'
+});
+assert.equal(sent.at(-1)[1], 'parishes/P/letters/l1/release');
+assert.equal(sent.at(-1)[2].confirmRequestReference, 'R-q1');
+await R.withdrawLetter('l1', 'lv3', 'Wrong addressee');
+assert.deepEqual([sent.at(-1)[1], sent.at(-1)[2].reason], ['parishes/P/letters/l1/withdraw', 'Wrong addressee']);
+assert.deepEqual(await R.myLetters('q1'), []);
+// no signer profile yet answers null, not a failure; saving sends the version it has
+assert.equal(await R.getSignerProfile(), null);
+await R.saveSignerProfile('Fr. Test', 'sv0');
+assert.deepEqual([sent.at(-1)[2].printedName, sent.at(-1)[2].version], ['Fr. Test', 'sv0']);
+
+// the account's claims, and the guest's letters and own files with the token in a header
+assert.equal((await R.myClaims())[0].state, 'Pending');
+const tracked = { parishId: 'G1', requestId: 'G2', token: 'TOKENTOKENTOKENTOKEN' };
+assert.equal((await G.guestLetters(tracked))[0].body, undefined, 'a guest never receives the letter text');
+assert.equal((await G.guestFiles(tracked))[0].uploaderRole, 'Guest');
+await G.guestUpload(tracked, new Blob(['%PDF-1.4'], { type: 'application/pdf' }), { checklistKey: 'id' });
+assert.equal(uploads.at(-1)[0]['X-ParishLife-Tracking'], 'TOKENTOKENTOKENTOKEN');
+assert.ok(uploads.at(-1)[0]['X-CSRF-TOKEN']);
+assert.equal(uploads.at(-1)[1].get('checklistKey'), 'id');
 void D;
 console.log('requests: all assertions passed');

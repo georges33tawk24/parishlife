@@ -3,9 +3,5 @@
     "route": "GET /api/workspace/plan",
     "reason": "deliberate: check-api.mjs asserts that an old-server route reports not connected"
   },
-  { "route": "POST /api/parishes/{}/attendance-preview", "reason": "old server: the attendance import preview" },
-  { "route": "POST /api/sign/options", "reason": "old server: signing letters" },
-  { "route": "GET /api/parishes/{}/files", "reason": "old server: the generic file-upload component" },
-  { "route": "POST /api/parishes/{}/files", "reason": "old server: the generic file-upload component" },
-  { "route": "DELETE /api/parishes/{}/files/{}", "reason": "old server: the generic file-upload component" }
+  { "route": "POST /api/parishes/{}/attendance-preview", "reason": "old server: the attendance import preview" }
 ]

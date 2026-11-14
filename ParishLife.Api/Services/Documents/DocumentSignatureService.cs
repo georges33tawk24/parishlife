@@ -39,7 +39,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
         await PersonalAsync(ct);
         var row = await records.ReadAsync<SignerProfile>(AccountScope(actor.AccountId), "signerProfile", ct)
             ?? throw new DomainException("resource_not_found", "No signer profile is set up.", FailureKind.NotFound);
-        return new SignerProfileDto { PrintedName = row.Value.PrintedName, UpdatedAt = row.Value.UpdatedAt };
+        return new SignerProfileDto { PrintedName = row.Value.PrintedName, UpdatedAt = row.Value.UpdatedAt, Version = row.Version };
     }
 
     public async Task<Versioned<SignerProfileDto>> SaveProfileAsync(SaveSignerProfileDto request, CancellationToken ct)
@@ -56,7 +56,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
                 new CommandResult { Id = actor.AccountId, Status = "Saved" }, ct);
         }
         var row = (await records.ReadAsync<SignerProfile>(scope, "signerProfile", ct))!;
-        return new Versioned<SignerProfileDto> { Version = row.Version, Value = new SignerProfileDto { PrintedName = row.Value.PrintedName, UpdatedAt = row.Value.UpdatedAt } };
+        return new Versioned<SignerProfileDto> { Version = row.Version, Value = new SignerProfileDto { PrintedName = row.Value.PrintedName, UpdatedAt = row.Value.UpdatedAt, Version = row.Version } };
     }
 
     public async Task<SignatureArrangementStateDto> ArrangementAsync(string archdiocese, CancellationToken ct)

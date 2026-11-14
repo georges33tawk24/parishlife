@@ -1,5 +1,5 @@
 // Purpose: exposes private evidence files on request cases over HTTP: multipart upload/replace, list, download and audited removal.
-// Main functions: Upload, List, Download and Remove delegate rules to EvidenceService.
+// Main functions: Upload, List, Download and Remove delegate rules to EvidenceService. Upload may name the checklist item the file answers.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,14 +14,14 @@ public class EvidenceController(EvidenceService service) : ControllerBase
 {
     [HttpPost, RequestSizeLimit(EvidenceService.MaximumBytes + 64 * 1024)]
     public async Task<ActionResult<EvidenceFileDto>> Upload(Guid parishId, Guid requestId, [FromForm] Guid operationId, IFormFile file, CancellationToken ct,
-        [FromForm] Guid? replacesId = null, [FromForm] string? reason = null)
+        [FromForm] Guid? replacesId = null, [FromForm] string? reason = null, [FromForm] string? checklistKey = null)
     {
         if (file.Length > EvidenceService.MaximumBytes)
             throw new DomainException("invalid_file", "Files must be between 1 byte and 10 MB.");
         using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, ct);
         return Ok(await service.UploadAsync(Guard.Id(parishId), Guard.Id(requestId), operationId, file.FileName, file.ContentType, buffer.ToArray(),
-            replacesId is { } r ? Guard.Id(r) : null, reason, ct));
+            replacesId is { } r ? Guard.Id(r) : null, reason, ct, EvidenceKeys.Checklist(checklistKey)));
     }
 
     [HttpGet]

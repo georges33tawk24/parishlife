@@ -1,7 +1,8 @@
 // Purpose: private evidence files on request cases. The applicant and request office staff upload PDF/JPEG/PNG files (checked by content,
 // up to 10 MB, 20 active files per case) and replace them with the earlier version kept; the applicant sees only their own uploads; office
 // staff remove files with a reason. Content is written once and never deleted here; closed cases are read-only.
-// Main functions: UploadAsync, ListAsync, DownloadAsync and RemoveAsync; CaseAsync preserves original parish/case versions,
+// A file may name the checklist item it answers. Guests holding the private tracking token upload and list only their own uploads (no download).
+// Main functions: UploadAsync, GuestUploadAsync, GuestListAsync, ListAsync, DownloadAsync and RemoveAsync; StoreAsync is the shared upload core; CaseAsync preserves original parish/case versions,
 // replay validation binds legacy receipts to immutable content, and download checks the committed size/hash.
 
 using System.Security.Cryptography;
@@ -18,8 +19,10 @@ using ParishLife.Api.Services.Requests;
 namespace ParishLife.Api.Services.Files;
 
 public class EvidenceService(IRecordTransactions records, IEvidenceStore store, IParishAccess access, MinistryAccess own, ICurrentActor actor,
-    MfaAccountAccess proof, TimeProvider clock)
+    MfaAccountAccess proof, TimeProvider clock, RequestService requests)
 {
+    private sealed record Uploader(string Id, string Role, bool Office);
+
     internal const long MaximumBytes = 10 * 1024 * 1024;
     private const int MaximumActive = 20;
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -50,12 +53,52 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
     }
 
     public async Task<EvidenceFileDto> UploadAsync(string parish, string request, Guid operationId, string fileName, string declaredType, byte[] content,
-        string? replaces, string? reason, CancellationToken ct)
+        string? replaces, string? reason, CancellationToken ct, string? checklistKey = null)
     {
         var (item, root, office) = await CaseAsync(parish, request, ct);
         // Keep the v1 fingerprint unchanged: existing successful receipts must remain retryable.
         // Their file metadata and create-or-match storage bind the bytes, including interrupted staged attempts.
-        var op = actor.CreateOperation(operationId, new { request, fileName, declaredType, size = content.Length, replaces, reason }, clock, "evidence:v1:" + request);
+        // A checklist key is part of the input only when supplied, so uploads without one keep the original fingerprint.
+        var op = checklistKey is null
+            ? actor.CreateOperation(operationId, new { request, fileName, declaredType, size = content.Length, replaces, reason }, clock, "evidence:v1:" + request)
+            : actor.CreateOperation(operationId, new { request, fileName, declaredType, size = content.Length, replaces, reason, checklistKey }, clock, "evidence:v1:" + request);
+        var uploader = new Uploader(actor.AccountId, office ? "Office" : "Applicant", office);
+        return await StoreAsync(parish, request, item, root, uploader, op, fileName, declaredType, content, replaces, reason, checklistKey,
+            async () => { await CaseAsync(parish, request, ct); }, ct);
+    }
+
+    // Guest uploads with the private tracking token (header): the guest adds or replaces only guest uploads, sees their metadata only
+    // and never downloads anything through the bearer link. The office sees them as Guest uploads.
+    public async Task<EvidenceFileDto> GuestUploadAsync(string parish, string request, string? token, Guid operationId, string fileName, string declaredType,
+        byte[] content, string? replaces, string? reason, string? checklistKey, CancellationToken ct)
+    {
+        var (item, root) = await GuestCaseAsync(parish, request, token, ct);
+        var uploader = new Uploader("guest:" + request, "Guest", false);
+        var op = Operation.Create(operationId, uploader.Id, new { request, fileName, declaredType, size = content.Length, replaces, reason, checklistKey }, clock,
+            "evidence-guest:v1:" + request);
+        return await StoreAsync(parish, request, item, root, uploader, op, fileName, declaredType, content, replaces, reason, checklistKey,
+            async () => { await GuestCaseAsync(parish, request, token, ct); }, ct);
+    }
+
+    public async Task<IReadOnlyList<EvidenceFileDto>> GuestListAsync(string parish, string request, string? token, CancellationToken ct)
+    {
+        await GuestCaseAsync(parish, request, token, ct);
+        return (await FilesAsync(parish, request, ct)).Where(f => f.Value.UploaderRole == "Guest" && f.Value.UploadedBy == "guest:" + request)
+            .OrderBy(f => f.Value.UploadedAt).Select(Project).ToArray();
+    }
+
+    private async Task<(Versioned<ParishRequest> Case, Versioned<Parish> Root)> GuestCaseAsync(string parish, string request, string? token, CancellationToken ct)
+    {
+        var item = await requests.GuestCaseAsync(parish, request, token, ct);
+        var root = await own.RootAsync(parish, ct);
+        await access.RequireModuleAsync(parish, "requests", ct);
+        return (item, root);
+    }
+
+    private async Task<EvidenceFileDto> StoreAsync(string parish, string request, Versioned<ParishRequest> item, Versioned<Parish> root, Uploader uploader,
+        Operation op, string fileName, string declaredType, byte[] content, string? replaces, string? reason, string? checklistKey, Func<Task> recheck,
+        CancellationToken ct)
+    {
         if (content.Length == 0 || content.Length > MaximumBytes)
             throw new DomainException("invalid_file", "Files must be between 1 byte and 10 MB.");
         var type = Detect(content);
@@ -65,7 +108,8 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
         {
             var saved = await ReadAsync(parish, prior.Id, ct);
-            RequireAudience(saved.Value, request, office);
+            if (saved.Value.RequestId != request || !uploader.Office && saved.Value.UploadedBy != uploader.Id)
+                throw Missing();
             if (!Matches(saved.Value, content.Length, digest, type))
                 throw new DomainException("operation_reused", "This upload operation already belongs to different file content.", FailureKind.Conflict);
             return Project(saved);
@@ -79,17 +123,21 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         if (replaces is not null)
         {
             old = active.FirstOrDefault(f => f.Value.Id == replaces) ?? throw Missing();
-            if (!office && old.Value.UploadedBy != actor.AccountId)
+            if (!uploader.Office && old.Value.UploadedBy != uploader.Id)
                 throw Missing();
         }
         else if (active.Count >= MaximumActive)
             throw State("A case holds up to 20 active files; replace or remove one first.");
+        // A file may name the checklist item it answers; the office still decides whether the item is received.
+        var key = checklistKey ?? old?.Value.ChecklistKey;
+        if (key is not null && !item.Value.Checklist.Any(c => c.Key == key))
+            throw new DomainException("invalid_input", "Choose an item of this case's checklist.");
         var file = new EvidenceFile
         {
             Id = op.Id, ParishId = parish, RequestId = request, FileName = name, ContentType = type, Size = content.Length,
-            Sha256 = digest, StoragePath = parish + "/" + op.Id, UploadedBy = actor.AccountId,
-            UploaderRole = office ? "Office" : "Applicant", UploadedAt = op.At, ReplacesId = old?.Value.Id,
-            Reason = old is null ? null : Guard.Text(reason, "Reason for replacing", 500)
+            Sha256 = digest, StoragePath = parish + "/" + op.Id, UploadedBy = uploader.Id,
+            UploaderRole = uploader.Role, UploadedAt = op.At, ReplacesId = old?.Value.Id,
+            Reason = old is null ? null : Guard.Text(reason, "Reason for replacing", 500), ChecklistKey = key
         };
         if (old is not null)
         {
@@ -104,7 +152,7 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         // retries may reuse it only after the store proves it matches. No retained evidence is overwritten or deleted.
         await store.PutAsync(file.StoragePath, content, type, ct);
         // Recheck current authority after I/O, retaining the original conditional versions rather than refreshing stale values.
-        await CaseAsync(parish, request, ct);
+        await recheck();
         await records.CommitAsync(Scope(parish), op, "evidence.upload", file.Id, changes, new CommandResult { Id = file.Id, Status = file.Status }, ct);
         return Project(await ReadAsync(parish, file.Id, ct));
     }
@@ -180,6 +228,6 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
     {
         Id = row.Value.Id, Version = row.Version, FileName = row.Value.FileName, ContentType = row.Value.ContentType, Size = row.Value.Size, Sha256 = row.Value.Sha256,
         UploaderRole = row.Value.UploaderRole, UploadedAt = row.Value.UploadedAt, Status = row.Value.Status, ReplacesId = row.Value.ReplacesId,
-        ReplacedById = row.Value.ReplacedById, Reason = row.Value.Reason
+        ReplacedById = row.Value.ReplacedById, Reason = row.Value.Reason, ChecklistKey = row.Value.ChecklistKey
     };
 }

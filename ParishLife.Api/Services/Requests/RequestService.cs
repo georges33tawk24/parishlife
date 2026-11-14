@@ -1,6 +1,6 @@
 // Purpose: runs parish request cases from member, office (phone/paper/in person) or guest intake to closure with one stable reference.
 // Main functions: SubmitAsync, GuestSubmitAsync, GuestGetAsync, GuestActAsync, ActAsync, SetChecklistAsync, PostMessageAsync, MessagesAsync,
-// ClaimGuestAsync, DecideAssociationAsync, RotateTrackingAsync, HandoverAsync, GetAsync, OwnAsync, QueueAsync and HistoryAsync; helpers keep requester/subject/relationship/authority separate, keep distinct
+// ClaimGuestAsync, DecideAssociationAsync, RotateTrackingAsync, HandoverAsync, GetAsync, OwnAsync, QueueAsync, HistoryAsync and LinkOpenedRecordAsync; helpers keep requester/subject/relationship/authority separate, keep distinct
 // Received/Accepted/Approved-by-priest/Date-confirmed/Completed facts, and separate applicant-visible explanations from internal notes.
 // Required applicant notices are staged with the source transition and dispatched independently after commit.
 // NotificationOutcomeAsync and WithOutcomeAsync expose only this authorized case's latest tracked notice outcome, without recipient/work identifiers.
@@ -22,7 +22,7 @@ namespace ParishLife.Api.Services.Requests;
 
 public class RequestService(IRecordTransactions records, IParishAccess access, IClergyAuthority clergy, IAccountDirectory accounts,
     MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications, TimeProvider clock,
-    NotificationOutcomeReader outcomes)
+    NotificationOutcomeReader outcomes, RequestClaimService claims)
 {
     internal static readonly string[] Terminal = ["Completed", "Declined", "Withdrawn", "Cancelled"];
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -249,24 +249,38 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             throw State("Set up to 40 distinct checklist items on an open case.");
         var previous = Copy(item);
         var old = item.Checklist.ToDictionary(c => c.Key, StringComparer.Ordinal);
+        // A newly referenced evidence file must be an active file of this case; it is fenced at its version with the checklist change.
+        var files = (await records.CollectAsync<EvidenceFile>(Scope(parish), "evidenceFile", ct, 500, Equal("requestId", id))).ToDictionary(f => f.Value.Id, StringComparer.Ordinal);
+        var fenced = new Dictionary<string, Versioned<EvidenceFile>>(StringComparer.Ordinal);
         item.Checklist = request.Items.Select(i =>
         {
             if (i.Status is not ("Missing" or "Received" or "NotApplicable"))
                 throw new DomainException("invalid_input", "Use Missing, Received or NotApplicable.");
             var reference = string.IsNullOrWhiteSpace(i.PaperReference) ? null : Guard.Text(i.PaperReference, "Paper reference", 500);
-            if (i.Status == "Received" && reference is null)
-                throw new DomainException("invalid_input", "Received evidence needs its paper or file reference.");
-            var unchanged = old.TryGetValue(i.Key, out var before) && before.Status == i.Status && before.PaperReference == reference;
+            var file = string.IsNullOrWhiteSpace(i.EvidenceFileId) ? null : i.EvidenceFileId;
+            if (i.Status == "Received" && reference is null && file is null)
+                throw new DomainException("invalid_input", "Received evidence needs its paper reference or an attached case file.");
+            if (i.Status != "Received" && file is not null)
+                throw new DomainException("invalid_input", "Only a received item references a case file.");
+            var unchanged = old.TryGetValue(i.Key, out var before) && before.Status == i.Status && before.PaperReference == reference && before.EvidenceFileId == file;
+            if (file is not null && before?.EvidenceFileId != file)
+            {
+                if (!files.TryGetValue(file, out var row) || row.Value.Status != "Active" || row.Value.ParishId != parish)
+                    throw new DomainException("invalid_input", "Reference an active file of this case.");
+                fenced[file] = row;
+            }
             return new RequestChecklistItem
             {
-                Key = Guard.Text(i.Key, "Key", 40), Label = Guard.Text(i.Label, "Label", 300), Required = i.Required, Status = i.Status, PaperReference = reference,
+                Key = Guard.Text(i.Key, "Key", 40), Label = Guard.Text(i.Label, "Label", 300), Required = i.Required, Status = i.Status, PaperReference = reference, EvidenceFileId = file,
                 VerifiedBy = i.Status == "Missing" ? null : unchanged ? before!.VerifiedBy : actor.AccountId,
                 VerifiedAt = i.Status == "Missing" ? null : unchanged ? before!.VerifiedAt : op.At
             };
         }).ToArray();
         item.UpdatedAt = op.At;
+        var changes = new List<RecordChange> { Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)), History(item, "checklist", previous.Status, previous, op, actor.AccountId) };
+        changes.AddRange(fenced.Values.Select(f => RecordChange.Replace("evidenceFile:" + f.Value.Id, "evidenceFile", f.Value, f.Version)));
         await records.CommitAsync(Scope(parish), op, "request.checklist", id,
-            [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)), History(item, "checklist", previous.Status, previous, op, actor.AccountId)],
+            changes,
             new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item, true);
     }
@@ -331,6 +345,8 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             return Project(item, false);
         if (item.ClaimantAccountId is not null)
             throw State("Another association is waiting for office review; contact the parish office.");
+        // The account-side pointer lets the claimant list pending claims; an orphan pointer resolves to NotPending.
+        await claims.RecordPointerAsync(parish, item, ct);
         var previous = Copy(item);
         item.ClaimantAccountId = actor.AccountId;
         item.UpdatedAt = clock.GetUtcNow();
@@ -429,6 +445,29 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         await records.CommitAsync(Scope(parish), op, "request.handover", from, changes,
             new CommandResult { Id = from, Status = batch.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) }, ct);
         return new OfficeHandoverResultDto { Moved = batch.Count, Remaining = open.Count - batch.Count };
+    }
+
+    // Links a record that RequestRecordService opened for this case. Idempotent: a committed operation or an existing identical link
+    // returns without a second change. It reads the case's current version itself, because opening a certificate fences the case.
+    internal async Task<bool> LinkOpenedRecordAsync(string parish, string id, string kind, string recordId, Guid operationId, CancellationToken ct)
+    {
+        var root = await OfficeAsync(parish, ct);
+        var op = actor.CreateOperation(operationId, new { id, kind, recordId }, clock, "request-record-link:v1:" + id);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+            return true;
+        var row = await ReadAsync(parish, id, ct);
+        var item = row.Value;
+        if (item.Links.Any(l => l.Kind == kind && l.RecordId == recordId))
+            return true;
+        if (item.Links.Length >= 20)
+            throw State("A case links at most 20 records.");
+        var previous = Copy(item);
+        item.Links = [.. item.Links, new RequestLink { Kind = kind, RecordId = recordId }];
+        item.UpdatedAt = op.At;
+        await records.CommitAsync(Scope(parish), op, "request.link", id,
+            [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, row.Version), History(item, "link", previous.Status, previous, op, actor.AccountId)],
+            new CommandResult { Id = id, Status = item.Status }, ct);
+        return true;
     }
 
     internal async Task<int> OpenCountAsync(string parish, string account, CancellationToken ct)
@@ -660,7 +699,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             Overdue = office && x.Deadline < now && !Terminal.Contains(x.Status),
             Checklist = x.Checklist.Select(c => new ChecklistItemDto
             {
-                Key = c.Key, Label = c.Label, Required = c.Required, Status = c.Status, PaperReference = office ? c.PaperReference : null,
+                Key = c.Key, Label = c.Label, Required = c.Required, Status = c.Status, PaperReference = office ? c.PaperReference : null, EvidenceFileId = office ? c.EvidenceFileId : null,
                 VerifiedBy = office ? c.VerifiedBy : null, VerifiedAt = c.VerifiedAt
             }).ToArray(),
             Links = [.. x.Links], CreatedBy = office ? x.CreatedBy : null, ReceivedAt = x.ReceivedAt, UpdatedAt = x.UpdatedAt

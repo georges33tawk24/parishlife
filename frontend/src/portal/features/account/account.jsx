@@ -33,6 +33,7 @@ import {
 } from '../../model/account.js';
 import { toParish } from '../../../public/api-data.js';
 import { t } from '../../../lib/i18n.js';
+import { SignerProfilePanel } from './signer-profile.jsx';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
@@ -394,6 +395,7 @@ export function AccountPage() {
         </Panel>
         <div data-signature="">
           <MySignature key={signature} />
+          <SignerProfilePanel />
         </div>
         <div data-record-corrections="">
           <RecordCorrections />

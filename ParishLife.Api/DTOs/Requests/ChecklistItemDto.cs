@@ -1,5 +1,5 @@
 // Purpose: carries one checklist item when the office sets a checklist and in request responses.
-// Main members: Key, Label, Required, Status, PaperReference, VerifiedBy and VerifiedAt.
+// Main members: Key, Label, Required, Status, PaperReference, EvidenceFileId, VerifiedBy and VerifiedAt.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -24,6 +24,10 @@ public class ChecklistItemDto
 
     [StringLength(500)]
     public string? PaperReference { get; set; } = null;
+
+    // Office only: an active evidence file of this case that satisfies the item.
+    [RegularExpression("^[0-9a-f]{32}$")]
+    public string? EvidenceFileId { get; set; } = null;
 
     public string? VerifiedBy { get; set; } = null;
 
