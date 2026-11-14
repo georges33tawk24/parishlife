@@ -4,7 +4,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People and calendar are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **467 tests pass**. The **other 11 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1158/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments and member are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **478 tests pass**. The **other 9 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1158/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
 
 ## The branches
 
@@ -35,33 +35,42 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
    - Event templates (create, edit, use, archive).
    - A celebrant picker that lists only current priests.
    - Hymn version restore.
-4. **Tooling:**
+4. **Sacraments** (`fullstack2-sacraments`, `64f32db`):
+   - New case actions: office review (informative only), preparation requirements, and request amendments that take effect only when a priest approves.
+   - The parish's own requirement lists (`GET/PUT sacraments/requirements`; no built-in list).
+   - Arabic twins for celebrant, place and witnesses; celebrant person; register book and page.
+   - The priest's own signature image (`clergy-signature-image`): private, versioned, MFA, attached to the certificate he signs. It is not an electronic signature (U05 is still open).
+   - Owner questions 8–12 are in `docs/frontend-modules/sacraments.md`.
+5. **Member** (`fullstack2-member`, `5427453`):
+   - Notes gain pin, a reminder date and a meeting link, all inside the encrypted personal content. Reminders show on the calendar only; nothing is sent.
+   - RSVP private reasons wired.
+   - `GET parishes/{id}/me/ministry-resources` ("My resources"): stock of the member's current ministries. There is no record for shared documents yet.
+   - `GET me/notification-topics`: only `parish.broadcast` and `reports` can be muted; required topics never. Merge note: if communications adds topics, update `NotificationTopicCatalog`, or its test fails.
+6. **Tooling:**
    - `npm run check:routes` matches every frontend API call against the real controller routes. Known gaps are listed in `frontend/scripts/route-gaps.json`.
    - `frontend/.gitattributes` keeps the frontend LF, so `format:check` passes on Windows.
    - Aspire AppHost was bumped 13.6.4 → 13.6.5 for advisory GHSA-f7vh-h5g3-7jrh, so `dotnet test ParishLife.slnx` runs again.
 
-**Checks at `db27922`** (SDK 10.0.401, Windows):
+**Checks after merging sacraments and member** (SDK 10.0.401, Windows):
 - `dotnet restore --locked-mode` OK; Release build 0 warnings.
-- **57 unit + 410 integration tests passed, 0 failed.**
+- **57 unit + 421 integration tests passed, 0 failed.**
 - Frontend: `format:check`, `check` (all modules) and `build` pass.
-- `check:routes`: 556 routes, 521 requests, 13 known gaps, 0 new.
+- `check:routes`: 565 routes, 539 requests, 13 known gaps, 0 new.
 
 All of this ran on local storage only, which is not Cosmos acceptance.
 
-## The 11 unfinished areas
+## The 9 unfinished areas
 
 Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
 
 | Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1158/<area>` | Where it stopped |
 | --- | --- | --- | --- |
-| sacraments | `64f32db`: backend and screens (office review, preparation requirements, amendments, Arabic spellings, book/page, priest's signature image) | none | Updating the unit test project; then the full suite, then the report |
 | finance | `cb6cee5`: Arabic twins, name edits, exchange rates, budgets, recurring gifts, numbered receipts (backend + tests) | 8 frontend files (finance screens, `checks/finance.mjs`) | Adding the new dialogs in `money-actions.jsx` |
 | communications | `dd6aa1e`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests) | `inbox.jsx`, `modules/communications.js` | Editing `communications.js` |
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
 | registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
 | facilities | `d0ca13f`: Arabic names, condition grade, reservation details, maintenance-block conflicts (backend + tests) | none | Probably the frontend wiring and the report; check `docs/frontend-modules/facilities.md` |
-| member | `5427453`: notes (pin, reminder, meeting link), RSVP reasons, My resources, notification topics, wired and documented | none | Likely done except the final full-suite run and report; verify |
 | administration | `7573aae`: operator platform lists, account suspension, clergy titles, parish audit trail (backend) | 8 frontend files (audit, workspace, people suspension) | Extending `checks/administration.mjs` |
 | account | `fb0c1f9`: profile details, own signature image, My parish records, external sign-in finishing in the portal | none | Fixing a type and building; then the frontend checks and report |
 | public | `ab454af`: parish public profile, photos, public calendar feed, Arabic liturgical rank/season | none | Continuing the liturgical Arabic twins; then the profile editor screen |
@@ -111,7 +120,7 @@ git push origin fullstack-integration
 - recovery-session restrictions kept;
 - tests for every route.
 
-## After the 11 areas
+## After the 9 areas
 
 1. **Signed-in end-to-end tests** in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
