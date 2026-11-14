@@ -56,7 +56,7 @@ export function EventPage({ p, d, id }) {
     more = f.upcoming.filter(x => x !== e).slice(0, 4);
   const fmt = o => new Intl.DateTimeFormat(loc(c), o).format(date);
   // where the day stands in the Church's year, and its feast, as the parish's approved calendar says
-  const year = seasonOn(d.liturgy, e.d),
+  const year = seasonOn(d.liturgy, e.d, c.lang),
     feastDay = observanceOn(d.liturgy, e.d);
   const rows = [
     [
@@ -90,7 +90,11 @@ export function EventPage({ p, d, id }) {
             'star',
             yearLabel(L, (year || feastDay).rite),
             <>
-              {year ? <span dir="auto">{year.text}</span> : null}
+              {year ? (
+                <span dir="auto" lang={year.lang}>
+                  {year.text}
+                </span>
+              ) : null}
               {feastDay ? <small className="ev-feast">{L(feastDay.en, feastDay.ar)}</small> : null}
             </>
           ]

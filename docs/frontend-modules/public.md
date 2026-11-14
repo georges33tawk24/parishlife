@@ -52,14 +52,24 @@ With nothing published (the API answers 404) or on any failure, the page keeps i
 
 A code is 32 hexadecimal characters, with or without hyphens or spaces; an unknown or malformed code is a 404 with "No authorized document has this code". The route is rate limited (20 a minute per address); the API's own 429 message is shown.
 
-## Fields with no API equivalent (left empty, not invented)
+## Parish profile, photos, news, calendar feed (connected on fullstack2-public)
 
-- Arabic parish name, Arabic town, rite, phone, address, clergy, photos, news posts, WhatsApp, livestream (the public parish has name, locality, diocese, coordinates, links).
-- Arabic text for the liturgical `season` and `rank`: they are single free-text fields. A season written in English shows in English on the Arabic page.
-- A story's image: the API's story has none, so each shows the built-in crest picture.
-- A calendar feed (`.ics`) for a parish: none, so "subscribe in my calendar" stays out.
-- The homepage `join` block's link and the section order (`Order`): the page's section order is fixed, so only presence matters.
-- Request buttons are shown: the requests module connected the request form to the anonymous request route (`publicRequests: true`).
+- `loadParish`/`loadDirectory` read `GET .../parishes/{id}/profile` (404 until published: everything stays empty) and, on a parish page, `.../announcements` (public news). `toProfile` maps the Arabic name and town, rite, phone, address, office/confession hours, visitor notes, feast, livestream and WhatsApp, published photos and clergy; each text keeps its Arabic twin and `facts()` picks the visitor's language (display fallback only).
+- Mass times from a website section win; otherwise the profile's.
+- News shows posts in the visitor's language when there are any, otherwise all.
+- Clergy show "Parish priest"/"Priest" from the API's role; names come from appointments, never typed.
+- `feedURL` points at `.../calendar.ics` (`webcal:` for subscribing), so "Subscribe in my calendar" now shows.
+- Photos: `parishPhotos` accepts the API's `/api/public/parishes/{id}/profile/photos/{photoId}` addresses.
+- Liturgical season: `seasonOn(liturgy, iso, lang)` gives the authority's Arabic label on the Arabic page when it supplied one, otherwise the label as written with `lang="en"`.
+- Portal: Settings > Parish shows the public profile panel (`features/communicate/public-profile.jsx`): edit the draft (both languages side by side), Publish/Unpublish, upload photos (private) and publish/unpublish/remove each. The `PUT workspace/public-profile` gap is closed.
+- Backend details and owner questions: `docs/operations/public.md`.
+
+## Still not available
+
+- A story's image on the homepage, and the homepage `join` link/section order (unchanged).
+- Arabic names for clergy (the account has one display name).
+- The liturgical-calendar editor screen (calendar module) does not yet have inputs for `rankAr`/`seasonAr`; the API accepts them.
+- Homepage news across parishes still shows nothing: announcements are read only on a parish's own page, to keep the homepage to one profile read per listed parish.
 
 ## Not changed
 

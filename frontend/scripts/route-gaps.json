@@ -8,7 +8,6 @@
   { "route": "POST /api/account/signature/remove", "reason": "old server: the signature image on My account" },
   { "route": "GET /api/account/records", "reason": "old server: My parish records on My account" },
   { "route": "POST /api/account/records", "reason": "old server: My parish records on My account" },
-  { "route": "PUT /api/workspace/public-profile", "reason": "old server: the parish public-profile editor" },
   { "route": "POST /api/workspace/suspension", "reason": "old server: suspending an account from the people list" },
   { "route": "POST /api/parishes/{}/attendance-preview", "reason": "old server: the attendance import preview" },
   { "route": "POST /api/sign/options", "reason": "old server: signing letters" },

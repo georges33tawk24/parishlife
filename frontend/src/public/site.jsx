@@ -2,6 +2,7 @@
    the small helpers that turn them into words. One object (the page's "c"), shared through
    SiteContext so a section can ask for it wherever it sits. */
 import { createContext, useContext } from 'react';
+import { feedURL } from './api-data.js';
 
 export const SiteContext = createContext(null);
 export const useSite = () => useContext(SiteContext);
@@ -57,7 +58,11 @@ export const OTHER_REQUESTS = [
 export const DEFAULT_PHOTOS = ['assets/images/church-light.jpg', 'assets/images/church-interior.jpg'];
 export const parishPhotos = d =>
   [d?.parishPhoto, ...(Array.isArray(d?.gallery) ? d.gallery : [])].filter(
-    src => typeof src === 'string' && /^(https:\/\/|\/?assets\/images\/|data:image\/(png|jpeg|webp);base64,)/i.test(src)
+    src =>
+      typeof src === 'string' &&
+      /^(https:\/\/|\/?assets\/images\/|\/api\/public\/parishes\/[\w-]+\/profile\/photos\/[\w-]+$|data:image\/(png|jpeg|webp);base64,)/i.test(
+        src
+      )
   );
 
 export const localToday = () => {
@@ -115,9 +120,8 @@ export function makeSite({
     /* Visitors can request without an account; the office owns subsequent processing. */
     requestURL: (id, kind) => 'public.html?parish=' + encodeURIComponent(id) + '&request=' + encodeURIComponent(kind),
     calendarURL: id => 'public.html?parish=' + encodeURIComponent(id) + '&view=calendar',
-    /* The calendar feed of a parish, for calendars to subscribe to. ParishLife.Api has no public
-       calendar feed (.ics) yet, so there is no address and the parish page leaves the offer out. */
-    feedURL: () => '',
+    /* The public calendar feed (.ics) of a parish, for calendars to subscribe to (webcal: on request). */
+    feedURL,
     /* A link to share: absolute, and in the language the visitor is reading. */
     shareURL: path =>
       new URL(path + (lang === 'ar' ? (path.includes('?') ? '&' : '?') + 'lang=ar' : ''), location.href).href,

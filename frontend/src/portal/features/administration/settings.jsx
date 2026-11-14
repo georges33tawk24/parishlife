@@ -1,7 +1,9 @@
 /* Parish settings, from what ParishLife.Api holds: the parish profile (name, locality, contact, the
    archdiocese it declared, operating status, recorded location) from GET /api/parishes/{id} and
    .../location, and which product modules the parish has through its billing coverage
-   (GET /api/parishes/{id}/billing/coverage). The API has no route to edit the profile or to switch a
+   (GET /api/parishes/{id}/billing/coverage), and the parish's public profile (draft, publish and
+   photos; features/communicate/public-profile.jsx). The API has no route to edit the registration
+   details or to switch a
    module on or off: modules follow the plan the parish pays for (Administration > Access and billing).
    Colours, currency, languages, roles, security, retention and webhooks have no parish API yet.
    Main member: settings. */
@@ -11,6 +13,7 @@ import { PARISH } from '../../model/data.js';
 import { session } from '../../model/api.js';
 import * as A from '../../model/modules/administration-api.js';
 import { useLoad } from './use-load.js';
+import { PublicProfilePanel } from '../communicate/public-profile.jsx';
 import { L, shortDay } from './workspace-forms.jsx';
 
 const MODULES = [
@@ -56,8 +59,8 @@ const Profile = () => {
       </dl>
       <p className="help">
         {L(
-          'The profile is read-only here: ParishLife.Api has no route to edit it yet. The public page’s wording is edited under Member portal.',
-          'الملف للقراءة فقط هنا: ليست في الواجهة طريقة لتعديله بعد. يُعدَّل نص الصفحة العامة من بوابة المؤمنين.'
+          'These registration details are read-only here. What visitors see is the public profile below, published only when you choose.',
+          'تفاصيل التسجيل هذه للقراءة فقط هنا. ما يراه الزوار هو الملف العام أدناه، ولا يُنشر إلا عندما تختار.'
         )}
       </p>
     </Panel>
@@ -137,7 +140,10 @@ export function settings(tab = '') {
       ) : tab === 'other' ? (
         <NotConnected />
       ) : (
-        <Profile />
+        <>
+          <Profile />
+          <PublicProfilePanel parish={session.parishId} />
+        </>
       )}
     </>
   );

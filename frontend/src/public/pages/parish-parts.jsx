@@ -12,7 +12,19 @@ import { useHeroWatch } from '../components/Chrome.jsx';
 /* Everything the page says about the parish, read once. */
 export function facts(c, p, d) {
   const parish = d.parish || {},
-    visit = d.visit || {};
+    raw = d.visit || {},
+    visit = { ...raw };
+  for (const k of [
+    'officeHours',
+    'confessionTimes',
+    'expect',
+    'languages',
+    'parking',
+    'accessibility',
+    'sacramentNotes',
+    'feastName'
+  ])
+    visit[k] = c.pair(raw, k, k + 'Ar');
   const name = c.pair(parish, 'name', 'nameAr') || c.parishName(p);
   const other = c.lang === 'ar' ? parish.name || p.name : parish.nameAr || p.ar;
   const town = c.pair(parish, 'town', 'townAr') || c.townName(p);

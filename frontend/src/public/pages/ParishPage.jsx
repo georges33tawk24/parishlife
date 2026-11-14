@@ -785,7 +785,13 @@ function Ministries({ p, d }) {
                 </span>
                 <span>
                   <b>{m.name}</b>
-                  <small>{m.title || ''}</small>
+                  <small>
+                    {m.role === 'ParishPriest'
+                      ? L('Parish priest', 'كاهن الرعية')
+                      : m.role === 'Priest'
+                        ? L('Priest', 'كاهن')
+                        : m.title || ''}
+                  </small>
                 </span>
               </li>
             ))}
@@ -881,7 +887,9 @@ function Requests({ p, f }) {
 function News({ d }) {
   const c = useSite(),
     { L } = c,
-    posts = (d.posts || []).filter(x => x.title || x.body).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    all = (d.posts || []).filter(x => x.title || x.body),
+    mine = all.filter(x => !x.lang || x.lang === c.lang),
+    posts = (mine.length ? mine : all).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   /* a post written in the editor keeps its formatting, made safe; plain text keeps its lines */
   const body = text =>
     /<[a-z][\s\S]*>/i.test(text || '') ? (
