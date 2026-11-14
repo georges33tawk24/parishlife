@@ -115,11 +115,17 @@ public class RequestLetterTests
         var hash = (await x.Letters.PreviewAsync(x.Parish, letter.Id, default)).ContentHash;
         await ReleaseAsync(x, letter.Id, hash, r => { r.Method = "VerifiedAccount"; r.ConfirmAddresseeName = "Isolated member"; r.VerificationEvidence = null; });
 
+        f.As(x.Releaser);
+        var letterOutcome = await x.Letters.NotificationOutcomeAsync(x.Parish, letter.Id, default);
+        Assert.Equal("Stored", letterOutcome.Status);
+        Assert.DoesNotContain(member, JsonSerializer.Serialize(letterOutcome));
+
         f.As(member, mfa: false);
         var mine = Assert.Single(await x.Letters.MineAsync(x.Parish, submitted.Id, default));
         Assert.Equal(("Released", "Corrected letter body", first.SignatureCode, "Fr. Isolated Priest"), (mine.Status, mine.Body, mine.VerificationCode, mine.SignerName));
         Assert.Contains("wet-signed and sealed paper", mine.Statement);
         await Assert.ThrowsAsync<DomainException>(() => x.Letters.ListAsync(x.Parish, submitted.Id, default));
+        await Assert.ThrowsAsync<DomainException>(() => x.Letters.NotificationOutcomeAsync(x.Parish, letter.Id, default));
         f.As(await f.CreateVerifiedMemberAsync(), mfa: false);
         await Assert.ThrowsAsync<DomainException>(() => x.Letters.MineAsync(x.Parish, submitted.Id, default));
 

@@ -1,11 +1,12 @@
 // Purpose: exposes office letters for request cases to parish staff and the applicant account, and the guest tracking list.
-// Main functions: Create, Revise, Preview, Sign, Release, Withdraw, List and Mine delegate to RequestLetterService;
+// Main functions: Create, Revise, Preview, Sign, Release, Withdraw, List, NotificationOutcome and Mine delegate to RequestLetterService;
 // GuestRequestLettersController.Guest lists released letters for a tracking token sent in a header.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ParishLife.Api.DTOs.Documents;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Documents;
 
@@ -21,6 +22,10 @@ public class RequestLettersController(RequestLetterService service) : Controller
     [HttpGet("requests/{requestId:guid}/letters")]
     public async Task<ActionResult<IReadOnlyList<Versioned<LetterDto>>>> List(Guid parishId, Guid requestId, CancellationToken ct)
         => Ok(await service.ListAsync(Guard.Id(parishId), Guard.Id(requestId), ct));
+
+    [HttpGet("letters/{letterId:guid}/notification-outcome")]
+    public async Task<ActionResult<NotificationOutcomeDto>> NotificationOutcome(Guid parishId, Guid letterId, CancellationToken ct)
+        => Ok(await service.NotificationOutcomeAsync(Guard.Id(parishId), Guard.Id(letterId), ct));
 
     [HttpGet("requests/{requestId:guid}/letters/mine")]
     public async Task<ActionResult<IReadOnlyList<ApplicantLetterDto>>> Mine(Guid parishId, Guid requestId, CancellationToken ct)
