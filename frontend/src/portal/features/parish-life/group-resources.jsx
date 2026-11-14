@@ -10,7 +10,8 @@ import { need } from '../../shared/dialogs.jsx';
 import { groupInfo, person } from '../../model/data.js';
 import { iso } from './parish-life-shared.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 export function resourceForm(id = '') {
   const d = groupInfo(S.params[0]),
