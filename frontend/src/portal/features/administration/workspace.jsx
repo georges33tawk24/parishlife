@@ -1,10 +1,11 @@
 /* Administration workspace for platform operators, bishops and archdiocese administrators, on
    ParishLife.Api. Tabs: Organizations (archdioceses and parishes: register, verify, operating status,
    location, association, jurisdiction, ownership claims, homepage), Appointments (workspace-appointments.jsx),
-   Access and billing (workspace-billing.jsx).
-   The API has no list of every parish, archdiocese or account. What shows is what the account reaches
-   through its capacities (GET /api/me/capacities), plus any parish or archdiocese opened by its reference
-   (kept for this browser session). Main member: WorkspacePage. */
+   Access and billing (workspace-billing.jsx), and for platform operators Platform (workspace-platform.jsx:
+   every parish, archdiocese and account, account status, clergy titles).
+   Organizations shows what the account reaches through its capacities (GET /api/me/capacities), plus any
+   parish or archdiocese opened by its reference or from the Platform lists (kept for this browser
+   session). Main member: WorkspacePage. */
 import { useState } from 'react';
 import { PageHead, TabBar, Pill, Empty, openDrawer, toast } from '../../ui/ui.jsx';
 import { S } from '../../model/store.js';
@@ -14,6 +15,7 @@ import { useLoad } from './use-load.js';
 import { L, Row, Section, ReferenceBox, openForm, shortDay } from './workspace-forms.jsx';
 import { Appointments } from './workspace-appointments.jsx';
 import { AccessAndBilling } from './workspace-billing.jsx';
+import { Platform } from './workspace-platform.jsx';
 
 /* References opened by hand, kept for this browser session only. */
 const opened = (() => {
@@ -560,15 +562,24 @@ function Identity() {
   );
 }
 
-const TABS = () => [
+const TABS = operator => [
   ['', 'Organizations', 'المؤسسات'],
   ['appointments', 'Appointments', 'التعيينات'],
-  ['access', 'Access and billing', 'الصلاحيات والاشتراك']
+  ['access', 'Access and billing', 'الصلاحيات والاشتراك'],
+  ...(operator ? [['platform', 'Platform', 'المنصة']] : [])
 ];
+
+/* Open a parish or archdiocese from the Platform lists: it then shows, with its actions, under Organizations. */
+const openFromPlatform = reload => async (kind, id) => {
+  (kind === 'parish' ? opened.parishes : opened.archdioceses).add(id);
+  remember();
+  await reload();
+  toast(L('Opened', 'فُتح'), L('It now shows under Organizations.', 'يظهر الآن في المؤسسات.'), 'success');
+};
 
 export function WorkspacePage({ params: [tab = ''] = [] }) {
   if (S.route === 'assignments') tab = 'appointments';
-  tab = ['appointments', 'access'].includes(tab) ? tab : '';
+  tab = ['appointments', 'access', 'platform'].includes(tab) ? tab : '';
   const orgs = useLoad(loadOrganizations, []);
   return (
     <>
@@ -579,7 +590,7 @@ export function WorkspacePage({ params: [tab = ''] = [] }) {
           'الرعايا والأبرشيات والتعيينات والصلاحيات والاشتراك ضمن الصلاحيات التي تملكها.'
         )}
       />
-      <TabBar base="workspace" items={TABS()} active={tab} />
+      <TabBar base="workspace" items={TABS(orgs.data?.scopes.operator)} active={tab} />
       <div data-workspace="" aria-live="polite">
         {orgs.error ? <p className="alert alert-danger">{orgs.error}</p> : null}
         {!orgs.data && !orgs.error ? <p role="status">{L('Loading administration…', 'جارٍ تحميل الإدارة…')}</p> : null}
@@ -588,6 +599,8 @@ export function WorkspacePage({ params: [tab = ''] = [] }) {
             <Appointments data={orgs.data} reload={orgs.reload} />
           ) : tab === 'access' ? (
             <AccessAndBilling data={orgs.data} reload={orgs.reload} />
+          ) : tab === 'platform' ? (
+            <Platform data={orgs.data} open={openFromPlatform(orgs.reload)} />
           ) : (
             <Organizations data={orgs.data} reload={orgs.reload} />
           )
@@ -596,10 +609,4 @@ export function WorkspacePage({ params: [tab = ''] = [] }) {
           <Empty
             glyph="shield"
             title={L('Nothing in reach yet', 'لا شيء في النطاق بعد')}
-            body={L('Register a parish or open one by its reference.', 'سجّل رعية أو افتح واحدة بمرجعها.')}
-          />
-        ) : null}
-      </div>
-    </>
-  );
-}
+            body={L('Register a parish or open one 
