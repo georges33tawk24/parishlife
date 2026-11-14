@@ -1,12 +1,17 @@
 // Purpose: optional external sign-in (A06). Providers exist only when configured; linking needs an MFA-authenticated account with
 // fresh proofs; sign-in only resolves an explicitly linked subject and never creates an account, Person or membership, and never
 // merges by a claimed email. An external login is one factor: MFA accounts still complete their authenticator challenge.
-// Main functions: AvailableAsync, ListAsync, ChallengeProperties (sign-in/link), CompleteAsync, UnlinkAsync.
+// Main functions: AvailableAsync, ListAsync, SignInPropertiesAsync and LinkPropertiesAsync (provider challenges), LinkTicketAsync and
+// LinkFromTicketAsync (proof over JSON, then a credential-free browser form post), HoldPendingChallenge/TakePendingChallenge (the MFA
+// challenge of a portal round trip, via a protected HttpOnly cookie), CompleteAsync and UnlinkAsync.
 
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Configuration;
 using ParishLife.Api.DTOs.Accounts;
@@ -19,9 +24,13 @@ namespace ParishLife.Api.Services.Accounts;
 
 public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess proof, ParishUserManager users,
     IUserStore<ParishUser> store, IAuthenticationSchemeProvider schemes, IHttpContextAccessor context,
-    AccountSessionService sessions, TimeProvider clock)
+    AccountSessionService sessions, TimeProvider clock, IDataProtectionProvider protection)
 {
     public const string CompletePath = "/api/auth/external/complete";
+    public const string ChallengeCookie = "__Host-ParishLife.ExternalMfa";
+    private const string TicketPurpose = "ParishLife.ExternalLinkTicket.v1";
+    private const string ChallengePurpose = "ParishLife.ExternalMfaChallenge.v1";
+    private static readonly TimeSpan TicketLifetime = TimeSpan.FromMinutes(2);
     private CosmosIdentityStore Store => (CosmosIdentityStore)store;
     private HttpContext Http => context.HttpContext ?? throw new InvalidOperationException("External sign-in requires an HTTP request.");
 
@@ -38,13 +47,82 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
         return user.ExternalLogins.Select(login => new ExternalLoginDto { Provider = login.Provider, LinkedAt = login.LinkedAt }).ToList();
     }
 
-    public async Task<AuthenticationProperties> SignInPropertiesAsync(string provider)
+    public async Task<AuthenticationProperties> SignInPropertiesAsync(string provider, bool portal = false)
     {
         await RequireProviderAsync(provider);
-        return Properties(provider, "sign-in");
+        return Properties(provider, "sign-in", portal);
     }
 
     public async Task<AuthenticationProperties> LinkPropertiesAsync(string provider, LinkExternalLoginDto request, CancellationToken ct)
+    {
+        var user = await LinkProofAsync(provider, request, ct);
+        return LinkProperties(provider, user, Http.User.FindFirstValue("sid"), false);
+    }
+
+    // Checks the same fresh proof as LinkPropertiesAsync over JSON, then hands back a two-minute ticket bound to this account, this
+    // session, its security stamp and the provider, so the browser can start the provider redirect with a credential-free form post.
+    public async Task<ExternalLinkTicketDto> LinkTicketAsync(string provider, LinkExternalLoginDto request, CancellationToken ct)
+    {
+        var user = await LinkProofAsync(provider, request, ct);
+        var expires = clock.GetUtcNow().Add(TicketLifetime);
+        var payload = string.Join('\n', user.Id, Http.User.FindFirstValue("sid") ?? string.Empty, HashText(user.SecurityStamp!), provider,
+            expires.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+        var ticket = protection.CreateProtector(TicketPurpose).Protect(payload);
+        return new ExternalLinkTicketDto { Ticket = ticket, ExpiresAt = expires };
+    }
+
+    // The form post that follows LinkTicketAsync: the ticket must still be valid for the same account, session, stamp and provider.
+    public async Task<AuthenticationProperties> LinkFromTicketAsync(string provider, StartExternalLinkDto request, CancellationToken ct)
+    {
+        await RequireProviderAsync(provider);
+        if (proof.RecoverySession)
+            throw Capacity();
+        var user = await proof.RequireMfaAsync(ct);
+        string payload;
+        try
+        {
+            payload = protection.CreateProtector(TicketPurpose).Unprotect(request.Ticket);
+        }
+        catch (CryptographicException)
+        { throw TicketInvalid(); }
+        var sid = Http.User.FindFirstValue("sid");
+        var parts = payload.Split('\n');
+        if (parts.Length != 5 || !long.TryParse(parts[4], NumberStyles.None, CultureInfo.InvariantCulture, out var until)
+            || DateTimeOffset.FromUnixTimeSeconds(until) < clock.GetUtcNow() || parts[0] != user.Id || parts[1] != (sid ?? string.Empty) || parts[2] != HashText(user.SecurityStamp!) || parts[3] != provider)
+            throw TicketInvalid();
+        if (!user.TwoFactorEnabled)
+            throw new DomainException("mfa_required", "Enroll an authenticator before linking an external sign-in provider.", FailureKind.Forbidden);
+        if (user.ExternalLogins.Any(login => login.Provider == provider))
+            throw new DomainException("external_login_exists", "Unlink the existing account for this provider first.", FailureKind.Conflict);
+        return LinkProperties(provider, user, sid, request.ReturnTo == "portal");
+    }
+
+    // A two-factor challenge from a provider round trip that returns to the portal: kept in a protected, HttpOnly, Strict cookie and
+    // handed to the portal's own script once (TakePendingChallenge), so the challenge never appears in an address.
+    public void HoldPendingChallenge(MfaLoginChallengeDto challenge)
+    {
+        var expires = challenge.ExpiresAt < clock.GetUtcNow().AddMinutes(10) ? challenge.ExpiresAt : clock.GetUtcNow().AddMinutes(10);
+        var value = protection.CreateProtector(ChallengePurpose).Protect(JsonSerializer.Serialize(challenge));
+        Http.Response.Cookies.Append(ChallengeCookie, value, new CookieOptions
+        { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, Path = "/", MaxAge = expires - clock.GetUtcNow(), IsEssential = true });
+    }
+
+    public MfaLoginChallengeDto? TakePendingChallenge()
+    {
+        if (!Http.Request.Cookies.TryGetValue(ChallengeCookie, out var value) || string.IsNullOrEmpty(value))
+            return null;
+        Http.Response.Cookies.Delete(ChallengeCookie, new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, Path = "/" });
+        try
+        {
+            // The challenge carries its own expiry; login/mfa rechecks it, its account binding and its one-time use.
+            var held = JsonSerializer.Deserialize<MfaLoginChallengeDto>(protection.CreateProtector(ChallengePurpose).Unprotect(value));
+            return held is null || held.ExpiresAt <= clock.GetUtcNow() ? null : held;
+        }
+        catch (Exception error) when (error is CryptographicException or JsonException)
+        { return null; }
+    }
+
+    private async Task<ParishUser> LinkProofAsync(string provider, LinkExternalLoginDto request, CancellationToken ct)
     {
         await RequireProviderAsync(provider);
         var user = await proof.FreshPersonalProofAsync(request.CurrentPassword, request.CurrentCode, ct);
@@ -52,9 +130,14 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
             throw new DomainException("mfa_required", "Enroll an authenticator before linking an external sign-in provider.", FailureKind.Forbidden);
         if (user.ExternalLogins.Any(login => login.Provider == provider))
             throw new DomainException("external_login_exists", "Unlink the existing account for this provider first.", FailureKind.Conflict);
-        var properties = Properties(provider, "link");
+        return user;
+    }
+
+    private static AuthenticationProperties LinkProperties(string provider, ParishUser user, string? sid, bool portal)
+    {
+        var properties = Properties(provider, "link", portal);
         properties.Items["account"] = user.Id;
-        properties.Items["sid"] = Http.User.FindFirstValue("sid");
+        properties.Items["sid"] = sid;
         properties.Items["stamp"] = HashText(user.SecurityStamp!);
         return properties;
     }
@@ -148,9 +231,10 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
             throw new DomainException("external_provider_unavailable", "This sign-in provider is not configured.", FailureKind.NotFound);
     }
 
-    private static AuthenticationProperties Properties(string provider, string mode)
+    private static AuthenticationProperties Properties(string provider, string mode, bool portal)
     {
-        var properties = new AuthenticationProperties { RedirectUri = CompletePath };
+        // The portal flag only chooses how Complete answers (a redirect to the fixed portal page, never a caller-chosen address).
+        var properties = new AuthenticationProperties { RedirectUri = portal ? CompletePath + "?return=portal" : CompletePath };
         properties.Items["provider"] = provider;
         properties.Items["mode"] = mode;
         properties.Items["nonce"] = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -161,6 +245,9 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
 
     private static AccountSecurityChangeDto Change(string operation, string status, string id) => new()
     { OperationId = operation, Status = status, ResourceId = id, RequiresSignIn = true };
+
+    private static DomainException TicketInvalid() =>
+        new("external_link_ticket_invalid", "The link request expired or belongs to another sign-in. Confirm your password again.");
 
     private static DomainException Capacity() => new("personal_security_capacity_required", "Use a normal personal sign-in.", FailureKind.Forbidden);
 }

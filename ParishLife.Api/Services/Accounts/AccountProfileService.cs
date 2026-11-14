@@ -1,6 +1,7 @@
-// Purpose: maintains the eligible holder's personal display and appearance in one conditional account-partition transaction.
+// Purpose: maintains the eligible holder's personal display, appearance and self-described details in one conditional account-partition transaction.
 // Main functions: GetAsync reads coherent safe state; UpdateAsync and ResetAppearanceAsync commit/replay; PreviewAsync validates readable colors without saving.
 // Eligibility is rechecked before every read/retry; official Person facts, login aliases and security credentials are never editable here.
+// The personal details (names, town, address, occupation, about) are the holder's own text, visible only to them, never copied into a Person.
 
 using System.Globalization;
 using ParishLife.Api.DTOs.Accounts.Profile;
@@ -77,21 +78,22 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
         if (language is not (null or "en" or "fr" or "ar"))
             throw new DomainException("invalid_profile", "Choose English, French or Arabic, or leave the preference unset.");
         var appearance = Normalize(request.Appearance);
+        var details = Details(request);
         var version = Versions.Require(request.Version);
         var operation = Operation.Create(request.OperationId, user.Id,
-            new { Kind = "profile.update", Version = version, DisplayName = displayName, PreferredLanguage = language, Appearance = appearance },
+            new { Kind = "profile.update", Version = version, DisplayName = displayName, PreferredLanguage = language, Appearance = appearance, Details = details },
             clock, "account-profile:v1");
         var scope = MfaRecoveryService.Scope(user.Id);
         if (await records.ReplayAsync<AccountProfileCommit>(scope, operation, ct) is { } prior)
-            return await ResultAsync(operation, prior, true, displayName, language, appearance, false, ct);
+            return await ResultAsync(operation, prior, true, displayName, language, appearance, details, ct);
         RequireCurrentVersion(user, version);
         var previous = await ReadProfileAsync(user.Id, ct);
-        var profile = CreateProfile(user.Id, language, appearance, operation.At);
+        var profile = CreateProfile(user.Id, language, appearance, details, operation.At);
         user.DisplayName = displayName;
         var changes = Changes(user, previous, profile);
         var candidate = new AccountProfileCommit { CommitId = Guid.NewGuid().ToString("N"), AppliedAt = operation.At };
         var outcome = await records.CommitAsync(scope, operation, "account.profile_updated", user.Id, changes, candidate, ct);
-        return await ResultAsync(operation, outcome, outcome.CommitId != candidate.CommitId, displayName, language, appearance, false, ct);
+        return await ResultAsync(operation, outcome, outcome.CommitId != candidate.CommitId, displayName, language, appearance, details, ct);
     }
 
     public async Task<AccountProfileResultDto> ResetAppearanceAsync(ResetAccountAppearanceDto request, CancellationToken ct)
@@ -102,13 +104,14 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
         var scope = MfaRecoveryService.Scope(user.Id);
         var appearance = Normalize(new AccountAppearanceDto());
         if (await records.ReplayAsync<AccountProfileCommit>(scope, operation, ct) is { } prior)
-            return await ResultAsync(operation, prior, true, null, null, appearance, true, ct);
+            return await ResultAsync(operation, prior, true, null, null, appearance, null, ct);
         RequireCurrentVersion(user, version);
         var previous = await ReadProfileAsync(user.Id, ct);
-        var profile = CreateProfile(user.Id, previous?.Value.PreferredLanguage, appearance, operation.At);
+        // Resetting the colours keeps the language and the personal details exactly as stored.
+        var profile = CreateProfile(user.Id, previous?.Value.PreferredLanguage, appearance, previous?.Value, operation.At);
         var candidate = new AccountProfileCommit { CommitId = Guid.NewGuid().ToString("N"), AppliedAt = operation.At };
         var outcome = await records.CommitAsync(scope, operation, "account.appearance_reset", user.Id, Changes(user, previous, profile), candidate, ct);
-        return await ResultAsync(operation, outcome, outcome.CommitId != candidate.CommitId, null, null, appearance, true, ct);
+        return await ResultAsync(operation, outcome, outcome.CommitId != candidate.CommitId, null, null, appearance, null, ct);
     }
 
     private async Task<ParishUser> EligibleAsync(CancellationToken ct)
@@ -135,15 +138,53 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
         return profile;
     }
 
-    private static AccountProfile CreateProfile(string owner, string? language, AccountAppearanceDto appearance, DateTimeOffset at) => new()
+    private static AccountProfile CreateProfile(string owner, string? language, AccountAppearanceDto appearance, AccountProfile? details, DateTimeOffset at) => new()
     {
         AccountId = owner,
         PreferredLanguage = language,
         Mode = appearance.Mode,
         Scheme = appearance.Scheme,
         PrimaryColor = appearance.PrimaryColor!,
+        GivenName = details?.GivenName,
+        GivenNameAr = details?.GivenNameAr,
+        FamilyName = details?.FamilyName,
+        FamilyNameAr = details?.FamilyNameAr,
+        Town = details?.Town,
+        TownAr = details?.TownAr,
+        Address = details?.Address,
+        Occupation = details?.Occupation,
+        About = details?.About,
         UpdatedAt = at
     };
+
+    // The optional personal details, trimmed; blank clears a field. Only "about" may span lines. Each language is kept as typed.
+    private static AccountProfile Details(UpdateAccountProfileDto request) => new()
+    {
+        GivenName = Optional(request.GivenName, "Given name", 100),
+        GivenNameAr = Optional(request.GivenNameAr, "Arabic given name", 100),
+        FamilyName = Optional(request.FamilyName, "Family name", 100),
+        FamilyNameAr = Optional(request.FamilyNameAr, "Arabic family name", 100),
+        Town = Optional(request.Town, "Town", 200),
+        TownAr = Optional(request.TownAr, "Arabic town", 200),
+        Address = Optional(request.Address, "Address", 300),
+        Occupation = Optional(request.Occupation, "Occupation", 200),
+        About = Optional(request.About, "About", 1000, true)
+    };
+
+    private static string? Optional(string? value, string name, int maximum, bool multiline = false)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var text = Guard.Text(value, name, maximum);
+        if (text.Any(c => char.IsControl(c) && !(multiline && c is '\n' or '\r' or '\t')))
+            throw new DomainException("invalid_profile", name + " must be plain text.");
+        return text;
+    }
+
+    private static bool SameDetails(AccountProfileDto current, AccountProfile details) =>
+        current.GivenName == details.GivenName && current.GivenNameAr == details.GivenNameAr && current.FamilyName == details.FamilyName
+        && current.FamilyNameAr == details.FamilyNameAr && current.Town == details.Town && current.TownAr == details.TownAr
+        && current.Address == details.Address && current.Occupation == details.Occupation && current.About == details.About;
 
     private static List<RecordChange> Changes(ParishUser user, Versioned<AccountProfile>? previous, AccountProfile profile) =>
     [
@@ -153,8 +194,9 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
     ];
 
     private async Task<AccountProfileResultDto> ResultAsync(Operation operation, AccountProfileCommit outcome, bool replay,
-        string? name, string? language, AccountAppearanceDto appearance, bool appearanceOnly, CancellationToken ct)
+        string? name, string? language, AccountAppearanceDto appearance, AccountProfile? details, CancellationToken ct)
     {
+        // details is null for an appearance-only reset, which says nothing about the name, language or details.
         var current = await GetAsync(ct);
         return new AccountProfileResultDto
         {
@@ -162,7 +204,7 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
             Status = replay ? "AlreadyApplied" : "Saved",
             AppliedAt = outcome.AppliedAt,
             RequestedValuesAreCurrent = SameAppearance(current.Value.Appearance, appearance)
-                && (appearanceOnly || (current.Value.DisplayName == name && current.Value.PreferredLanguage == language)),
+                && (details is null || (current.Value.DisplayName == name && current.Value.PreferredLanguage == language && SameDetails(current.Value, details))),
             Current = current
         };
     }
@@ -181,6 +223,15 @@ public class AccountProfileService(IRecordTransactions records, MfaAccountAccess
                 PreferredLanguage = profile?.PreferredLanguage,
                 Appearance = Normalize(profile is null ? new AccountAppearanceDto() : new AccountAppearanceDto
                 { Mode = profile.Mode, Scheme = profile.Scheme, PrimaryColor = profile.PrimaryColor }),
+                GivenName = profile?.GivenName,
+                GivenNameAr = profile?.GivenNameAr,
+                FamilyName = profile?.FamilyName,
+                FamilyNameAr = profile?.FamilyNameAr,
+                Town = profile?.Town,
+                TownAr = profile?.TownAr,
+                Address = profile?.Address,
+                Occupation = profile?.Occupation,
+                About = profile?.About,
                 IsConfigured = profile is not null,
                 UpdatedAt = profile?.UpdatedAt
             }

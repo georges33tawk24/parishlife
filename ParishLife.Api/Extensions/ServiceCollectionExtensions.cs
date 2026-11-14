@@ -135,6 +135,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MemberMinistryResourceService>();
         services.AddSingleton<NotificationTopicCatalog>();
         services.AddScoped<AccountProfileService>();
+        services.AddScoped<AccountSignatureService>();
+        services.AddScoped<AccountRecordsService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
         services.AddScoped<MinistryAccess>();
         services.AddScoped<MinistryService>();

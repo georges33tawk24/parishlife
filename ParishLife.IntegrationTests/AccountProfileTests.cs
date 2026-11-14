@@ -304,6 +304,61 @@ public class AccountProfileTests
             new ResetAccountAppearanceDto { OperationId = Guid.NewGuid(), Version = "not-used" })).StatusCode);
     }
 
+    [Fact]
+    public async Task Personal_details_keep_both_languages_as_typed_stay_out_of_receipts_survive_reset_and_clear_when_blank()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var member = await f.CreateVerifiedMemberAsync();
+        f.As(member, false);
+        var records = f.Services.GetRequiredService<IRecordTransactions>();
+        var service = Service(f);
+        var before = await service.GetAsync(default);
+        Assert.Null(before.Value.GivenName);
+        Assert.Null(before.Value.GivenNameAr);
+        var request = Request(before.Version);
+        request.GivenName = "  DetailGiven ";
+        request.GivenNameAr = "يوسف";
+        request.FamilyName = "DetailFamily";
+        request.Town = "DetailTown";
+        request.TownAr = "زحلة";
+        request.Address = "DetailAddress 12";
+        request.Occupation = "DetailOccupation";
+        request.About = "DetailAbout line one\nline two";
+        var saved = await service.UpdateAsync(request, default);
+        Assert.True(saved.RequestedValuesAreCurrent);
+        var value = saved.Current.Value;
+        Assert.Equal("DetailGiven", value.GivenName);
+        Assert.Equal("يوسف", value.GivenNameAr);
+        Assert.Equal("DetailFamily", value.FamilyName);
+        Assert.Null(value.FamilyNameAr); // never derived from the Latin text
+        Assert.Equal("زحلة", value.TownAr);
+        Assert.Equal("DetailAbout line one\nline two", value.About);
+        var metadata = JsonSerializer.Serialize(new
+        {
+            Receipts = await records.PageAsync<JsonElement>(Scope(member), "operation", 100, null, default),
+            Audit = await records.PageAsync<JsonElement>(Scope(member), "audit", 100, null, default)
+        });
+        foreach (var text in new[] { "DetailGiven", "يوسف", "DetailTown", "DetailAddress", "DetailOccupation", "DetailAbout" })
+            Assert.DoesNotContain(text, metadata);
+
+        var reset = await service.ResetAppearanceAsync(new ResetAccountAppearanceDto { OperationId = Guid.NewGuid(), Version = saved.Current.Version }, default);
+        Assert.Equal("forest", reset.Current.Value.Appearance.Scheme);
+        Assert.Equal("DetailGiven", reset.Current.Value.GivenName);
+        Assert.Equal("DetailAddress 12", reset.Current.Value.Address);
+
+        var invalid = Request(reset.Current.Version);
+        invalid.Occupation = "two\nlines";
+        Assert.Equal("invalid_profile", (await Assert.ThrowsAsync<DomainException>(() => service.UpdateAsync(invalid, default))).Code);
+        var cleared = Request(reset.Current.Version);
+        cleared.GivenName = "   ";
+        var after = await service.UpdateAsync(cleared, default);
+        Assert.True(after.RequestedValuesAreCurrent);
+        Assert.Null(after.Current.Value.GivenName);
+        Assert.Null(after.Current.Value.Address);
+        Assert.Null(after.Current.Value.About);
+    }
+
     private static AccountProfileService Service(LocalBackendFixture fixture) => ActivatorUtilities.CreateInstance<AccountProfileService>(fixture.Services);
 
     private static RecordScope Scope(string account) => new() { Area = ParishLife.Api.Models.Enums.RecordArea.Account, OwnerId = account };

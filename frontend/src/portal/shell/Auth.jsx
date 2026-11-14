@@ -14,7 +14,8 @@ import {
   featuresOf,
   requestVerificationCode,
   confirmVerificationCode,
-  externalSignInPath
+  externalSignInPath,
+  pendingExternalChallenge
 } from '../model/account.js';
 import { mountTurnstile } from '../../lib/turnstile.js';
 import { Sanctuary } from '../../public/components/Sanctuary.jsx';
@@ -127,6 +128,30 @@ export function Auth({ enter, error = '', onLanguage }) {
   useEffect(() => {
     let live = true;
     loadCapabilities().then(c => live && setFeatures(featuresOf(c)));
+    /* back from Google or Microsoft: the API put a status word in the address (never a secret) */
+    const back = new URLSearchParams(location.search).get('external');
+    if (back) {
+      const url = new URL(location.href);
+      url.searchParams.delete('external');
+      history.replaceState(null, '', url);
+      if (back === 'two-factor')
+        pendingExternalChallenge().then(
+          c => live && setChallenge(c),
+          () => live && setAlert(t('Sign in again.', 'سجّل الدخول مجدداً.'))
+        );
+      else if (back !== 'signed-in' && back !== 'linked')
+        setAlert(
+          back === 'not-linked'
+            ? t(
+                'That account is not linked to ParishLife. Sign in another way, then link it under My account.',
+                'هذا الحساب غير مربوط بـ ParishLife. سجّل الدخول بطريقة أخرى ثم اربطه من «حسابي».'
+              )
+            : t(
+                'Signing in with that provider did not work. Try again.',
+                'لم ينجح الدخول عبر هذا المزوّد. حاول مجدداً.'
+              )
+        );
+    }
     return () => {
       live = false;
     };
@@ -231,9 +256,16 @@ export function Auth({ enter, error = '', onLanguage }) {
       const f = document.createElement('form');
       f.method = 'POST';
       f.action = externalSignInPath(provider);
-      const input = document.createElement('input');
-      Object.assign(input, { type: 'hidden', name: '__RequestVerificationToken', value: token });
-      f.append(input);
+      /* the provider sends the person back to this page (?external=...); the bot-check token rides in the form */
+      for (const [name, value] of [
+        ['__RequestVerificationToken', token],
+        ['returnTo', 'portal'],
+        ...(check.current?.token ? [['turnstileToken', check.current.token]] : [])
+      ]) {
+        const input = document.createElement('input');
+        Object.assign(input, { type: 'hidden', name, value });
+        f.append(input);
+      }
       document.body.append(f);
       f.submit();
     } catch (err) {

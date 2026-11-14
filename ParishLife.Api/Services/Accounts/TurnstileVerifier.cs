@@ -1,5 +1,5 @@
 // Purpose: verifies a client Turnstile token server-side with the configured secret; a no-op when Turnstile is not configured.
-// Main function: VerifyAsync returns Passed, Failed or Unavailable; the secret and token are never logged or stored.
+// Main function: VerifyAsync returns Passed, Failed or Unavailable; the secret and token are never logged or stored. Header and FormField name where a token travels.
 
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -11,6 +11,8 @@ public class TurnstileVerifier(IHttpClientFactory clients, IOptionsMonitor<Turns
 {
     public const string ClientName = "Turnstile";
     public const string Header = "X-Turnstile-Token";
+
+    public const string FormField = "turnstileToken";
 
     public bool Enabled => options.CurrentValue.Enabled;
 
