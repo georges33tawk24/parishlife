@@ -2,6 +2,14 @@
 
 Updated **11 November 2026**, owner timezone Asia/Beirut. Read this before acting on **continue**, then verify actual Git state. The owner currently wants implementation to continue here; a Claude switch is deferred.
 
+## Current continuation attempt (13 November 2026)
+
+- Actual checkout remains `backend` tracking `upstream/backend` (`https://github.com/georges33tawk24/parishlife.git`), HEAD `b2aaf92` (`Record Cosmos/Storage firewalls closed back to zero IP exceptions`). No fetch, merge, commit or push was performed in this attempt.
+- The user's pre-existing unrelated working changes were present in `ParishLife.Api/Properties/launchSettings.json`, `ParishLife.AppHost/ParishLife.AppHost.csproj`, and `ParishLife.AppHost/packages.lock.json`; they were preserved untouched.
+- Implemented an X04 backend slice: `GET /api/parishes/{parishId}/letters/{letterId}/notification-outcome` uses the existing MFA staff/priest reader gate, validates the exact letter and owning request, and returns only the safe notification outcome projection. Added a regression for a verified-account release returning `Stored` and applicant denial. Updated the document-signature runbook and X04 `remaining` entry. Files: `ParishLife.Api/Controllers/Documents/RequestLettersController.cs`, `ParishLife.Api/Services/Documents/RequestLetterService.cs`, `ParishLife.IntegrationTests/RequestLetterTests.cs`, `docs/operations/document-signatures.md`, and `docs/features/coverage.json`.
+- Verification attempted: `dotnet test ParishLife.IntegrationTests/ParishLife.IntegrationTests.csproj -c Release --filter FullyQualifiedName~RequestLetterTests --no-restore` — did not start because `global.json` requires SDK `10.0.401`, absent here; installed SDKs are `8.0.403`, `9.0.300`, `10.0.102`, and `11.0.100`. Do not bypass the repository pin. `git diff --check` passed. Test/build status remains unverified.
+- Work remains uncommitted and unpublished. Next executable step: run the focused `RequestLetterTests` and then the full required build/test set under SDK 10.0.401; fix any failures, then continue with workflow transition notifications/return-for-information or broadcast notification integration. The external reviewed requirements archive referenced in `SOURCES.md` was not present at its indexed path on this machine; continue to distinguish runbook proposals from owner-approved policy.
+
 ## Repository and preserved work
 
 - Working folder: `C:\Users\User\source\repos\ParishLife`.
