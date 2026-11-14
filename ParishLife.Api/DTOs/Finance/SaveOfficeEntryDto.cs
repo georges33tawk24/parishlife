@@ -1,5 +1,5 @@
 // Purpose: adds or edits an office allowance or purchase while its month is open.
-// Main members: OperationId, Version, Kind, OccurredOn, Amount, Currency, Description, Supplier, EvidenceReference, MissingEvidenceReason and FinanceReference.
+// Main members: OperationId, Version, Kind, OccurredOn, Amount, Currency, Description, DescriptionAr, Category, Supplier, EvidenceReference, MissingEvidenceReason and FinanceReference.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -29,6 +29,12 @@ public class SaveOfficeEntryDto
     [Required]
     [StringLength(300)]
     public string Description { get; set; } = string.Empty;
+
+    [StringLength(300)]
+    public string? DescriptionAr { get; set; } = null;
+
+    [StringLength(100)]
+    public string? Category { get; set; } = null;
 
     [StringLength(200)]
     public string? Supplier { get; set; } = null;

@@ -1,5 +1,5 @@
 // Purpose: exposes the office cash ledger (openings, allowances, purchases, reversals, monthly closes and balances) over HTTP.
-// Main functions: Open, Create, Update, Act, Entries, Close, Months and Balances delegate rules to OfficeLedgerService.
+// Main functions: Open, Openings, Create, Update, Act, Entries, Close, Months and Balances delegate rules to OfficeLedgerService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +15,10 @@ public class OfficeLedgerController(OfficeLedgerService service) : ControllerBas
     [HttpPost("openings")]
     public async Task<ActionResult<OfficeOpeningDto>> Open(Guid parishId, OfficeOpeningDto request, CancellationToken ct)
         => Ok(await service.OpenAsync(Guard.Id(parishId), request, ct));
+
+    [HttpGet("openings")]
+    public async Task<ActionResult<IReadOnlyList<OfficeOpeningRecordDto>>> Openings(Guid parishId, CancellationToken ct)
+        => Ok(await service.OpeningsAsync(Guard.Id(parishId), ct));
 
     [HttpPost("entries")]
     public async Task<ActionResult<OfficeEntryDto>> Create(Guid parishId, SaveOfficeEntryDto request, CancellationToken ct)

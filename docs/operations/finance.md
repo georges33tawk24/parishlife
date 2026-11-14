@@ -66,3 +66,16 @@ Source basis: S25.11–S25.13 (proposed). The office ledger is the office's own 
 - `GET /entries?period=`, `GET /months` and `GET /balances` show entries, closed months and the current month's running balances.
 
 Not implemented: vouchers and printable monthly summaries in EN/FR/AR, a mapping to Finance reporting categories, reopening a closed month, attachment handling and frontend. The owner still has to approve the delete-versus-reversal rule.
+
+## Rates, budgets, recurring gifts, receipts and name corrections (full-stack round)
+
+Routes under `/api/parishes/{parish}/finance` (current MFA and the finance module required):
+
+- `POST /exchange-rates` (finance.approve) records a rate with base/quote currency, rate (up to six decimals), effective date (not in the future) and source; `GET /exchange-rates` and `GET /exchange-rates/current?baseCurrency&quoteCurrency&on` (finance.read). Append-only; never fetched; never applied to stored amounts.
+- `PUT /budgets` (finance.approve) sets a budget per fund, calendar year and currency (version required to replace); `GET /budgets?year` reports spent = paid expenses of that fund and currency paid in that year.
+- `POST /recurring-gifts`, `PUT /recurring-gifts/{id}`, `POST /recurring-gifts/{id}/actions` (pause, resume, end with a reason) (finance.enter); `GET /recurring-gifts` (finance.read). A stored schedule only; nothing is charged or posted.
+- `POST /receipts` (finance.post) issues the next per-parish number for a posted, attributed, non-anonymous gift; `POST /receipts/{id}/void` (finance.approve) with a reason keeps the number; `GET /receipts` shows each receipt with its gift's current status. Counter, claim and receipt commit atomically with the parish fence and retry on conflict: unique and gap-free on the local store; Cosmos unverified.
+- `PUT /funds/{id}` and `PUT /campaigns/{id}` (finance.approve) correct names and purpose (Arabic twins `NameAr`, `PurposeAr`); a fund's restriction and a campaign's fund never change. Expenses and office entries take `DescriptionAr`; office entries an optional free-text `Category`.
+- `GET /sessions?status` lists counting sessions with `CountedBy`; `GET /api/parishes/{parish}/office-ledger/openings` lists the recorded openings.
+
+Not decided: receipt number format/reset, converted figures, fees and refunds (owner questions in `docs/frontend-modules/finance.md`).

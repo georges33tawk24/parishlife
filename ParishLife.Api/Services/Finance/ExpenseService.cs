@@ -32,6 +32,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
             throw new DomainException("invalid_input", "Give the invoice/receipt reference, or the reason it is missing (not both).");
         var item = old?.Value ?? new Expense { Id = op.Id, ParishId = parish, CreatedBy = actor.AccountId };
         item.Description = Guard.Text(request.Description, "Description", 1000);
+        item.DescriptionAr = GivingService.Optional(request.DescriptionAr, "Arabic description", 1000);
         item.FundId = (await giving.ActiveFundAsync(parish, Guard.Id(request.FundId), ct)).Id;
         item.Payee = Guard.Text(request.Payee, "Payee", 300);
         item.IncurredOn = request.IncurredOn;
@@ -137,7 +138,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
 
     private static ExpenseDto Project(Expense x) => new()
     {
-        Id = x.Id, Description = x.Description, FundId = x.FundId, Payee = x.Payee, IncurredOn = x.IncurredOn, Amount = x.Amount, Currency = x.Currency,
+        Id = x.Id, Description = x.Description, DescriptionAr = x.DescriptionAr, FundId = x.FundId, Payee = x.Payee, IncurredOn = x.IncurredOn, Amount = x.Amount, Currency = x.Currency,
         EvidenceReference = x.EvidenceReference, MissingEvidenceReason = x.MissingEvidenceReason, MissingEvidenceApproved = x.MissingEvidenceApproved,
         Status = x.Status, Reason = x.Reason, CreatedBy = x.CreatedBy, SubmittedBy = x.SubmittedBy, ApprovedBy = x.ApprovedBy, PaidBy = x.PaidBy,
         PaidOn = x.PaidOn, PaymentReference = x.PaymentReference

@@ -131,6 +131,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ExpenseService>();
         services.AddScoped<BankReconciliationService>();
         services.AddScoped<OfficeLedgerService>();
+        services.AddScoped<ExchangeRateService>();
+        services.AddScoped<FundBudgetService>();
+        services.AddScoped<RecurringGiftService>();
+        services.AddScoped<GiftReceiptService>();
         services.AddScoped<PersonalWorkspaceService>();
         services.AddScoped<MemberMinistryResourceService>();
         services.AddSingleton<NotificationTopicCatalog>();

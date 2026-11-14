@@ -1,10 +1,11 @@
 /* Purpose: the finance steps that are decisions rather than edits, each one a call to ParishLife.Api
    followed by a reload: opening, verifying and closing a counting session; expense decisions;
    matching and reconciling bank lines; pledge allocations; correcting a posted gift; office entry
-   removal and month close.
+   removal and month close; recording an exchange rate, setting a budget, recurring gifts and receipts.
    Main functions: openSessionDialog, viewSessionDialog, verifyDialog, closeSessionDialog,
    expenseDecision, bankMatchDialog, bankImportDialog, reconcileDialog, allocateDialog,
-   correctGiftDialog, officeDeleteDialog, officeCloseMonth. Each shows a small form and reports
+   correctGiftDialog, officeDeleteDialog, officeCloseMonth, rateDialog, budgetDialog, recurringDialog,
+   recurringActionDialog, issueReceiptDialog and voidReceiptDialog. Each shows a small form and reports
    the API's own message when it refuses (for example, the same person cannot verify their own count). */
 import { Select } from '../../ui/components.jsx';
 import { t, fmtDate } from '../../../lib/i18n.js';
@@ -127,13 +128,23 @@ export function openSessionDialog() {
   });
 }
 export function viewSessionDialog() {
+  const sessions = D.COUNT_SESSIONS;
   form({
-    title: L('Open a session counted by someone else', 'فتح جلسة عدّها شخص آخر'),
+    title: L('Choose a counting session', 'اختيار جلسة عدّ'),
     sub: L(
-      'ParishLife cannot list counting sessions yet. Ask the person who opened it for its id (shown under its title).',
-      'لا يعرض «حياة الرعية» قائمة جلسات العدّ بعد. اطلب رقم الجلسة ممّن فتحها (يظهر تحت عنوانها).'
+      'Every session of this parish, newest collection first. Open the one you are counting or verifying.',
+      'كل جلسات هذه الرعية، الأحدث أولاً. افتح التي تعدّها أو تتحقّق منها.'
     ),
-    fields: [{ id: 'id', label: L('Session id', 'رقم الجلسة'), req: true }],
+    fields: [
+      {
+        id: 'id',
+        label: L('Session', 'الجلسة'),
+        type: 'select',
+        value: D.BATCH.id || sessions[0]?.id,
+        options: sessions.map(s => [s.id, `${s.ref} · ${fmtDate(s.date)} · ${s.source} · ${s.apiStatus}`]),
+        req: true
+      }
+    ],
     cta: L('Open', 'فتح'),
     onSubmit: v => F.viewSession(parish(), v.id)
   });
@@ -518,5 +529,218 @@ export function officeCloseMonth(period) {
     cta: L('Close month', 'إقفال الشهر'),
     onSubmit: () => F.closeOfficeMonth(parish(), period),
     done: [L('Month closed', 'أُقفل الشهر'), period]
+  });
+}
+
+/* ---------- exchange rates, budgets, recurring gifts and receipts ---------- */
+const CURRENCIES = [
+  ['USD', 'USD'],
+  ['LBP', 'LBP'],
+  ['EUR', 'EUR']
+];
+
+/* The office records a rate it read from a named source for a date. ParishLife never fetches one and
+   never converts amounts with it. */
+export function rateDialog() {
+  form({
+    title: L('Record an exchange rate', 'تسجيل سعر صرف'),
+    sub: L(
+      'Enter the rate as you read it, with the date it applied and where it came from. Amounts are never converted with it.',
+      'أدخل السعر كما قرأته، مع تاريخ سريانه ومصدره. ولا تُحوَّل المبالغ به.'
+    ),
+    fields: [
+      { id: 'base', label: L('One unit of', 'وحدة واحدة من'), type: 'select', value: 'USD', options: CURRENCIES },
+      { id: 'quote', label: L('Is worth, in', 'تساوي، بعملة'), type: 'select', value: 'LBP', options: CURRENCIES },
+      { id: 'rate', label: L('Rate', 'السعر'), type: 'number', req: true },
+      { id: 'on', label: L('Applied on', 'تاريخ السريان'), type: 'date', value: today(), req: true },
+      {
+        id: 'source',
+        label: L('Source', 'المصدر'),
+        req: true,
+        help: L('For example: the published bank rate that morning.', 'مثلاً: سعر المصرف المعلن صباح ذلك اليوم.')
+      },
+      { id: 'note', label: L('Note (optional)', 'ملاحظة (اختياري)'), type: 'textarea' }
+    ],
+    cta: L('Record rate', 'تسجيل السعر'),
+    onSubmit: v => F.recordRate(parish(), v),
+    done: [L('Exchange rate recorded', 'سُجّل سعر الصرف')]
+  });
+}
+
+/* A fund budget for a year and currency. */
+export function budgetDialog(fundId) {
+  const fund = D.FUNDS.find(f => f.id === fundId);
+  if (!fund) return;
+  const year = new Date().getFullYear();
+  form({
+    title: L('Set a budget', 'تحديد موازنة'),
+    sub: fundName(fund.id),
+    fields: [
+      { id: 'year', label: L('Year', 'السنة'), type: 'number', value: year, req: true },
+      { id: 'currency', label: L('Currency', 'العملة'), type: 'select', value: 'USD', options: CURRENCIES },
+      { id: 'amount', label: L('Budget', 'الموازنة'), type: 'number', req: true },
+      { id: 'note', label: L('Note (optional)', 'ملاحظة (اختياري)'), type: 'textarea' }
+    ],
+    cta: L('Save budget', 'حفظ الموازنة'),
+    onSubmit: v => {
+      const existing = D.BUDGETS.find(
+        b => b.fund === fund.id && b.year === Number(v.year) && b.currency === v.currency
+      );
+      return F.saveBudget(parish(), { fund: fund.id, ...v }, existing);
+    },
+    done: [L('Budget saved', 'حُفظت الموازنة')]
+  });
+}
+
+const FREQUENCIES = () => [
+  ['Weekly', L('Every week', 'كل أسبوع')],
+  ['Monthly', L('Every month', 'كل شهر')],
+  ['Quarterly', L('Every three months', 'كل ثلاثة أشهر')],
+  ['Yearly', L('Every year', 'كل سنة')]
+];
+const METHODS = () => [
+  ['Cash', L('Cash', 'نقداً')],
+  ['Bank', L('Bank transfer', 'تحويل مصرفي')],
+  ['Cheque', L('Cheque', 'شيك')],
+  ['Card', L('Card', 'بطاقة')],
+  ['Other', L('Other', 'أخرى')]
+];
+export const frequencyLabel = f => (FREQUENCIES().find(([k]) => k === f) || [f, f])[1];
+
+/* A standing intention to give, for a person or a household. Saving it charges no one. */
+export function recurringDialog(id) {
+  const gift = id ? D.RECURRING.find(r => r.id === id) : null;
+  const people = (D.PEOPLE || []).map(p => [p.id, L(p.lat || p.id, p.ar || p.lat || p.id)]);
+  const households = (D.HOUSEHOLDS || []).map(h => [h.id, L(h.name, h.ar || h.name)]);
+  form({
+    title: gift ? L('Edit recurring gift', 'تعديل العطاء الدائم') : L('New recurring gift', 'عطاء دائم جديد'),
+    sub: L(
+      'A record of what a giver intends to give. Nothing is charged; each gift counts once it is received and posted.',
+      'سجلّ لما ينوي المتبرّع إعطاءه. لا يُقتطع شيء؛ وتُحتسب كل تقدمة عند استلامها وقيدها.'
+    ),
+    fields: [
+      {
+        id: 'p',
+        label: L('Person', 'الشخص'),
+        type: 'select',
+        value: gift?.p || '',
+        options: [['', L('None', 'لا أحد')], ...people]
+      },
+      {
+        id: 'hh',
+        label: L('Or household', 'أو العائلة'),
+        type: 'select',
+        value: gift?.hh || '',
+        options: [['', L('None', 'لا أحد')], ...households]
+      },
+      {
+        id: 'fund',
+        label: L('Fund', 'الصندوق'),
+        type: 'select',
+        value: gift?.fund || D.FUNDS[0]?.id,
+        options: D.FUNDS.map(f => [f.id, L(f.name, f.ar)])
+      },
+      { id: 'amount', label: L('Amount', 'المبلغ'), type: 'number', value: gift?.amount ?? '', req: true },
+      {
+        id: 'currency',
+        label: L('Currency', 'العملة'),
+        type: 'select',
+        value: gift?.currency || 'USD',
+        options: CURRENCIES
+      },
+      {
+        id: 'frequency',
+        label: L('How often', 'كم مرة'),
+        type: 'select',
+        value: gift?.frequency || 'Monthly',
+        options: FREQUENCIES()
+      },
+      {
+        id: 'method',
+        label: L('How they give', 'طريقة العطاء'),
+        type: 'select',
+        value: gift?.method || 'Cash',
+        options: METHODS()
+      },
+      { id: 'starts', label: L('Starts', 'يبدأ'), type: 'date', value: gift?.starts || today(), req: true },
+      { id: 'ends', label: L('Ends (optional)', 'ينتهي (اختياري)'), type: 'date', value: gift?.ends || '' },
+      { id: 'note', label: L('Note (optional)', 'ملاحظة (اختياري)'), type: 'textarea', value: gift?.note || '' }
+    ],
+    cta: L('Save', 'حفظ'),
+    onSubmit: v => {
+      if (!v.p && !v.hh) throw new Error(L('Choose a person or a household.', 'اختر شخصاً أو عائلة.'));
+      return F.saveRecurring(parish(), v, gift);
+    },
+    done: [L('Recurring gift saved', 'حُفظ العطاء الدائم'), L('Nothing was charged.', 'لم يُقتطع شيء.')]
+  });
+}
+
+const RECURRING_ACTIONS = {
+  pause: ['Pause this recurring gift', 'إيقاف هذا العطاء مؤقتاً', false],
+  resume: ['Resume this recurring gift', 'استئناف هذا العطاء', false],
+  end: ['End this recurring gift', 'إنهاء هذا العطاء', true]
+};
+export function recurringActionDialog(id, action) {
+  const gift = D.RECURRING.find(r => r.id === id);
+  const [en, ar, needsReason] = RECURRING_ACTIONS[action] || [];
+  if (!gift || !en) return;
+  form({
+    title: L(en, ar),
+    sub: `${fmt(gift.amount, gift.currency)} · ${frequencyLabel(gift.frequency)} · ${fundName(gift.fund)}`,
+    fields:
+      action === 'resume'
+        ? []
+        : [
+            {
+              id: 'reason',
+              label: needsReason ? L('Reason', 'السبب') : L('Reason (optional)', 'السبب (اختياري)'),
+              type: 'textarea',
+              req: needsReason
+            }
+          ],
+    cta: L(en, ar),
+    danger: action === 'end',
+    onSubmit: v => F.recurringAction(parish(), gift, action, v.reason),
+    done: [L('Saved', 'حُفظ')]
+  });
+}
+
+/* Issues the next receipt number for a posted gift with a named giver. */
+export function issueReceiptDialog(contributionId) {
+  const gift = D.CONTRIBUTIONS.find(c => c.id === contributionId);
+  if (!gift) return;
+  form({
+    title: L('Issue a numbered receipt?', 'إصدار إيصال مرقّم؟'),
+    sub: `${fmt(gift.amount, gift.currency)} · ${fundName(gift.fund)} · ${fmtDate(gift.date)}`,
+    intro: (
+      <p className="help" style={{ marginBottom: '12px' }}>
+        {L(
+          'The receipt takes the next parish number. A gift gets one receipt; a voided receipt keeps its number. It records a gift received and is not a tax document.',
+          'يأخذ الإيصال الرقم التالي للرعية. لكل تقدمة إيصال واحد؛ والإيصال الملغى يحتفظ برقمه. وهو سجلّ تقدمة مستلمة وليس مستنداً ضريبياً.'
+        )}
+      </p>
+    ),
+    cta: L('Issue receipt', 'إصدار الإيصال'),
+    onSubmit: () =>
+      F.issueReceipt(parish(), gift.id).then(r =>
+        toast(L(`Receipt No. ${r.number} issued`, `صدر الإيصال رقم ${r.number}`), '', 'success')
+      )
+  });
+}
+
+export function voidReceiptDialog(id) {
+  const receipt = D.RECEIPTS.find(r => r.id === id);
+  if (!receipt) return;
+  form({
+    title: L(`Void receipt No. ${receipt.no}?`, `إلغاء الإيصال رقم ${receipt.no}؟`),
+    sub: `${fmt(receipt.amount, receipt.currency)} · ${fmtDate(receipt.date)}`,
+    fields: [{ id: 'reason', label: L('Reason', 'السبب'), type: 'textarea', req: true }],
+    cta: L('Void receipt', 'إلغاء الإيصال'),
+    danger: true,
+    onSubmit: v => F.voidReceipt(parish(), receipt, v.reason),
+    done: [
+      L('Receipt voided', 'أُلغي الإيصال'),
+      L('Its number stays used and is not reissued.', 'يبقى رقمه مستعملاً ولا يُعاد إصداره.')
+    ]
   });
 }
