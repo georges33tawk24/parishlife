@@ -4,7 +4,8 @@
    (applicantForm, ownRegistration, registerOwn, cancelOwn) for the member screens.
    Main members: keys, routes, load, save, the action functions (configureRegistration, setRegistrationOpen,
    reviseRegistrationForm, registerParticipant, decideRegistration, amendRegistration, recordReceipt,
-   requestRefund, decideRefund, recordPresence), act (runs one action, then reloads), availableEvents.
+   requestRefund, decideRefund, recordPresence, reviseTerms, applyDiscount, registerHousehold, pickupCode,
+   startEvacuation, evacuationAction, recordIncident), act (runs one action, then reloads), availableEvents.
 
    Event registration is per calendar event (ParishLife.Api: /calendar/events/{event}/registration...). The API
    has no list of policies, so load reads the parish's manual calendar activities (31-day windows) and asks each
@@ -13,8 +14,11 @@
    registrations.manage (full), finance.enter (cashier balances) and registrations.checkin plus an explicit
    door assignment (door list and present roster). A 403 only leaves that part empty.
 
-   Nothing the API does not return is shown: deadlines, discounts, instalments, bus fees, the Arabic names,
-   pickup reference codes, restricted-pickup entries, the muster point and venues are left empty. The screens
+   The policy's deadline (closesAt), discounts, instalment schedule, accepted payment methods and muster point
+   come from the API and can be edited after creation (reviseTerms). Registrations carry the applied discount,
+   the amount due and whether a pickup code is issued (the code itself is shown once, by pickupCode). Door
+   events also load their evacuation roll calls, and incident handlers the event's incidents. Bus fees,
+   restricted-pickup entries, venues and Arabic event titles are still not in the API and stay empty. The screens
    change nothing locally: every change calls the API through an action below and then reloads, so save()
    only undoes a local edit to these collections. */
 import { parishAPI, newOperationId } from '../api.js';
@@ -92,9 +96,31 @@ const can = parish => {
     manage: has('registrations.manage'),
     door: has('registrations.checkin'),
     enter: has('finance.enter'),
-    finance: has('finance.read')
+    finance: has('finance.read'),
+    incidents: has('incidents.manage')
   };
 };
+
+/* An evacuation roll call as the check-in screen shows it. */
+const rollCallRow = ({ value: x, version }) => ({
+  id: x.id,
+  version,
+  kind: x.kind,
+  status: x.status,
+  startedAt: x.startedAt,
+  startedBy: x.startedBy,
+  closedAt: x.closedAt || '',
+  note: x.note || '',
+  total: x.total,
+  accounted: x.accounted,
+  entries: (x.entries || []).map(e => ({
+    id: e.registrationId,
+    p: e.personId,
+    name: e.displayName,
+    accountedAt: e.accountedAt || '',
+    accountedBy: e.accountedBy || ''
+  }))
+});
 
 /* The parish's manual calendar activities that are not cancelled, soonest first. */
 async function calendarActivities() {
@@ -141,6 +167,16 @@ const emptyRegistrant = (eventId, id) => ({
   lastPresenceAt: '',
   formVersionId: '',
   consent: false,
+  householdId: '',
+  discountKey: '',
+  discountName: '',
+  discountNameAr: '',
+  discountAmount: 0,
+  due: 0,
+  dueNow: null,
+  paymentMethods: [],
+  pickupCodeIssued: false,
+  pickupCodeRequired: false,
   payments: [],
   full: false // the registration-management view (answers and evidence) was readable
 });
@@ -164,7 +200,15 @@ const fromStaff = (eventId, { value: r, version }) =>
     received: r.received,
     refunded: r.refunded,
     paid: r.received,
-    outstanding: Math.max(0, r.fee - r.received + r.refunded),
+    due: r.due ?? r.fee,
+    outstanding: Math.max(0, (r.due ?? r.fee) - r.received + r.refunded),
+    householdId: r.householdId || '',
+    discountKey: r.discountKey || '',
+    discountName: r.discountName || '',
+    discountNameAr: r.discountNameAr || '',
+    discountAmount: r.discountAmount || 0,
+    pickupCodeIssued: !!r.pickupCodeIssued,
+    pickupCodeRequired: !!r.pickupCodeIssued,
     createdAt: r.createdAt,
     offerUntil: r.offerUntil || '',
     presence: r.presence,
@@ -173,10 +217,12 @@ const fromStaff = (eventId, { value: r, version }) =>
     full: true
   });
 
-/* The registrant's row from the cashier or door view when the management view is not readable. */
-function mergeNarrow(rows, eventId, { value: r, version }, patch) {
+/* The registrant's row from the cashier or door view when the management view is not readable. Fields only
+   those views carry (amount due by now, accepted methods, the door's pickup-code flag) are always taken. */
+function mergeNarrow(rows, eventId, { value: r, version }, patch, always = () => ({})) {
   const row = rows.get(r.id) || emptyRegistrant(eventId, r.id);
   row.name = r.displayName || row.name;
+  Object.assign(row, always(r));
   if (!row.full) {
     row.version = version;
     row.status = r.status;
@@ -266,30 +312,48 @@ export async function load(parish, d) {
     for (const r of staff) rows.set(r.value.id, fromStaff(event.id, r));
     if (rights.enter)
       for (const r of await soft(() => pages(`${path}/registrations/cashier`), []))
-        mergeNarrow(rows, event.id, r, c => ({
-          fee: c.fee,
-          currency: c.currency,
-          precision: c.precision,
-          received: c.received,
-          refunded: c.refunded,
-          paid: c.received,
-          outstanding: c.outstanding
-        }));
+        mergeNarrow(
+          rows,
+          event.id,
+          r,
+          c => ({
+            fee: c.fee,
+            currency: c.currency,
+            precision: c.precision,
+            received: c.received,
+            refunded: c.refunded,
+            paid: c.received,
+            outstanding: c.outstanding,
+            due: c.due ?? c.fee,
+            discountName: c.discountName || '',
+            discountNameAr: c.discountNameAr || '',
+            discountAmount: c.discountAmount || 0
+          }),
+          c => ({ dueNow: c.dueNow ?? null, paymentMethods: c.paymentMethods || [] })
+        );
     const door = rights.door ? await soft(() => pages(`${path}/registrations/door`), null) : null;
     if (door)
       for (const r of door)
-        mergeNarrow(rows, event.id, r, x => ({
-          presence: x.presence,
-          lastPresenceAt: x.lastPresenceAt || '',
-          independentDeparture: x.independentDeparture,
-          collectors: x.collectors.map(c => ({ id: c.id, name: c.name }))
-        }));
+        mergeNarrow(
+          rows,
+          event.id,
+          r,
+          x => ({
+            presence: x.presence,
+            lastPresenceAt: x.lastPresenceAt || '',
+            independentDeparture: x.independentDeparture,
+            collectors: x.collectors.map(c => ({ id: c.id, name: c.name }))
+          }),
+          x => ({ pickupCodeRequired: !!x.pickupCodeRequired })
+        );
     const present = door ? await soft(() => parishAPI(`${path}/present`), null) : null;
+    const rollCalls = door ? await soft(() => parishAPI(`${path}/evacuations`), []) : [];
+    const incidents = rights.incidents ? await soft(() => parishAPI(`incidents?eventId=${enc(event.id)}`), []) : [];
     const form = policy
       ? await soft(() => parishAPI(`${path}/registration/forms/${enc(policy.value.formVersionId)}`), null)
       : null;
     if (!policy && !rows.size && !door) continue; // nothing here this account may see
-    bundles.push({ event, policy, form, rows: [...rows.values()], door, present, path });
+    bundles.push({ event, policy, form, rows: [...rows.values()], door, present, path, rollCalls, incidents });
   }
 
   /* money movements and refunds, for registrations that took money, if this account may read them */
@@ -342,7 +406,14 @@ export async function load(parish, d) {
       consentText: p?.consentText || '',
       doorAccountIds: p?.doorAccountIds || [],
       fields: form?.fields || [],
-      deadline: '' // the API has no registration deadline
+      deadline: p?.closesAt || '',
+      discounts: p?.discounts || [],
+      installments: p?.instalments || [],
+      paymentMethods: p?.paymentMethods || ['Cash'],
+      musterPoint: p?.musterPoint || '',
+      musterPointAr: p?.musterPointAr || '',
+      updatedAt: p?.updatedAt || '',
+      updatedBy: p?.updatedBy || ''
     });
     for (const r of rows) {
       const { refundRows, ...row } = r;
@@ -367,9 +438,25 @@ export async function load(parish, d) {
         awaitingGuardian: 0,
         room: null,
         asOf: b.present?.asOf || '',
-        coverage: b.present?.coverage || ''
+        coverage: b.present?.coverage || '',
+        incidents: (b.incidents || []).map(({ value: i, version }) => ({
+          id: i.id,
+          version,
+          occurredAt: i.occurredAt,
+          recordedBy: i.recordedBy,
+          status: i.status,
+          urgent: !!i.urgent,
+          location: i.location || '',
+          description: i.description || ''
+        }))
       };
-      d.EVACUATION.events[event.id] = { asOf: b.present?.asOf || '', coverage: b.present?.coverage || '' };
+      d.EVACUATION.events[event.id] = {
+        asOf: b.present?.asOf || '',
+        coverage: b.present?.coverage || '',
+        muster: p?.musterPoint || '',
+        musterAr: p?.musterPointAr || '',
+        rollCalls: (b.rollCalls || []).map(rollCallRow)
+      };
     }
     for (const r of rows.filter(x => x.status === 'Confirmed' || x.full || x.collectors.length)) {
       d.PICKUP[r.id] = {
@@ -503,7 +590,8 @@ export const recordReceipt = (r, s) =>
     amount: s.amount,
     currency: r.currency,
     evidenceReference: s.evidenceReference,
-    occurredAt: s.occurredAt
+    occurredAt: s.occurredAt,
+    method: s.method || 'Cash'
   });
 
 export const requestRefund = (r, s) =>
@@ -534,7 +622,92 @@ export const recordPresence = (r, action, s = {}) =>
     occurredAt: s.occurredAt || new Date().toISOString(),
     collectorId: s.collectorId || null,
     verificationEvidence: s.verificationEvidence || null,
-    paperReason: s.paperReason || null
+    paperReason: s.paperReason || null,
+    ...(s.pickupCode ? { pickupCode: s.pickupCode } : {})
+  });
+
+/* Edits the policy's terms after creation; capacity cannot drop below current seats and the currency is fixed
+   once anyone is registered (the API decides). */
+export const reviseTerms = (form, s) =>
+  parishAPI(`${eventPath(form.eventId)}/registration/terms`, 'POST', {
+    ...op(),
+    version: form.version,
+    capacity: s.capacity,
+    transportCapacity: s.transportCapacity ?? 0,
+    fee: s.fee ?? 0,
+    currency: s.currency,
+    precision: s.precision ?? 2,
+    waitlistAllowed: !!s.waitlistAllowed,
+    minimumAge: s.minimumAge ?? null,
+    maximumAge: s.maximumAge ?? null,
+    childAgeThreshold: s.childAgeThreshold,
+    consentRequired: !!s.consentRequired,
+    consentText: s.consentText || '',
+    doorAccountIds: s.doorAccountIds || [],
+    closesAt: s.closesAt || null,
+    discounts: s.discounts || [],
+    instalments: s.instalments || [],
+    paymentMethods: s.paymentMethods || [],
+    musterPoint: s.musterPoint || null,
+    musterPointAr: s.musterPointAr || null,
+    reason: s.reason
+  });
+
+/* Applies one of the policy's discounts (key) or removes the applied one (key null). */
+export const applyDiscount = (r, key, reason) =>
+  parishAPI(`${regPath(r.eventId, r.id)}/discount`, 'POST', {
+    ...op(),
+    version: r.version,
+    discountKey: key || null,
+    reason
+  });
+
+/* Registers current members of one household together; every member answers the same viewed form version. */
+export const registerHousehold = (form, householdId, members) =>
+  parishAPI(`${eventPath(form.eventId)}/registrations/household`, 'POST', {
+    ...op(),
+    householdId,
+    formVersionId: form.formVersionId,
+    members: members.map(m => ({
+      personId: m.personId,
+      transport: !!m.transport,
+      answers: m.answers || {},
+      consentEvidence: m.consentEvidence || null,
+      guardianAuthorityEvidence: m.guardianAuthorityEvidence || null,
+      collectors: m.collectors || [],
+      independentDeparture: !!m.independentDeparture
+    }))
+  });
+
+/* issue or revoke; an issue response carries the plain code once and it is never stored by the portal. */
+export const pickupCode = (r, action, reason) =>
+  parishAPI(`${regPath(r.eventId, r.id)}/pickup-code`, 'POST', { ...op(), version: r.version, action, reason });
+
+export const startEvacuation = (eventId, kind, note) =>
+  parishAPI(`${eventPath(eventId)}/evacuations`, 'POST', { ...op(), kind, note: note || null });
+
+/* account, unaccount (registrationId) or close (note) */
+export const evacuationAction = (eventId, rollCall, action, registrationId, note) =>
+  parishAPI(`${eventPath(eventId)}/evacuations/${enc(rollCall.id)}/actions`, 'POST', {
+    ...op(),
+    version: rollCall.version,
+    action,
+    registrationId: registrationId || null,
+    note: note || null
+  });
+
+/* A restricted incident report linked to this event (incidents.record); only incident handlers read it back. */
+export const recordIncident = (eventId, s) =>
+  parishAPI('incidents', 'POST', {
+    ...op(),
+    occurredAt: s.occurredAt,
+    eventId,
+    location: s.location || null,
+    personIds: s.personIds || [],
+    description: s.description,
+    immediateActions: s.immediateActions || null,
+    witnesses: s.witnesses || null,
+    urgent: !!s.urgent
   });
 
 /* ---------- a member's own registration (for the member screens) ---------- */

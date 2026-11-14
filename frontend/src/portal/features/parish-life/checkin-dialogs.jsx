@@ -1,5 +1,7 @@
 /* Check-in dialogs: arrival, checkout with a verified collector, re-entry, and the authorised collectors
-   of a registration. Main members: presenceDialog, arriveNow, collectorsDialog, removeCollector.
+   of a registration, evacuation roll calls and incident reports. Main members: presenceDialog, arriveNow, collectorsDialog,
+   removeCollector, startRollCall, markRollCall, closeRollCall, incidentDialog. A checkout of a participant with an issued
+   pickup code also needs that code (typed, sent once, never kept). Incident reports go to the restricted incidents area.
    Arrival and departure are recorded by ParishLife.Api for an account that holds the check-in permission
    and is a door operator of the event; a checkout without independent departure needs one of the
    registration's authorised collectors and a note of how their identity was checked. Collectors change
@@ -9,7 +11,14 @@ import { bus } from '../../model/store.js';
 import { toast } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { Select } from '../../ui/components.jsx';
-import { act, recordPresence, amendRegistration } from '../../model/modules/registrations.js';
+import {
+  act,
+  recordPresence,
+  amendRegistration,
+  startEvacuation,
+  evacuationAction,
+  recordIncident
+} from '../../model/modules/registrations.js';
 import { ask, collectorsText, parseCollectors, registrantName } from './registration-forms.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -59,6 +68,15 @@ export function presenceDialog(row, action) {
           req={true}
         />
       ) : null,
+      needsCollector && row.pickupCodeRequired ? (
+        <C.Field
+          key="code"
+          label={L('Pickup code given by the collector', 'رمز الاستلام من المستلِم')}
+          id="pr-code"
+          max={32}
+          req={true}
+        />
+      ) : null,
       checkout && row.independentDeparture ? (
         <p key="i" className="help">
           {L('This participant may leave on their own.', 'يمكن لهذا المشترك المغادرة بمفرده.')}
@@ -82,6 +100,9 @@ export function presenceDialog(row, action) {
         when = get(el, '#pr-time');
       if (needsCollector && (!collectorId || !verify))
         return (warn(L('Name the collector and how they were checked', 'سمِّ المستلِم وكيف تحقّقت منه')), false);
+      const code = get(el, '#pr-code');
+      if (needsCollector && row.pickupCodeRequired && !code)
+        return (warn(L('Enter the pickup code', 'أدخل رمز الاستلام')), false);
       if (!when) return (warn(L('Say when it happened', 'اذكر متى حدث')), false);
       return done(
         checkout ? L('Checked out', 'سُجّل الخروج') : L('Re-entry recorded', 'سُجّلت إعادة الدخول'),
@@ -90,7 +111,106 @@ export function presenceDialog(row, action) {
             occurredAt: new Date(when).toISOString(),
             collectorId: collectorId || null,
             verificationEvidence: verify || null,
-            paperReason: get(el, '#pr-paper') || null
+            paperReason: get(el, '#pr-paper') || null,
+            pickupCode: code || null
+          })
+        )
+      );
+    }
+  });
+}
+
+/* Start a roll call from the participants recorded present (drill or emergency). */
+export function startRollCall(eventId) {
+  ask({
+    title: L('Start a roll call', 'بدء تفقّد الحضور'),
+    sub: L('Lists everyone recorded present now', 'يضمّ كل من سُجّل حضوره الآن'),
+    cta: L('Start', 'ابدأ'),
+    rows: [
+      <div className="formrow" key="k">
+        <label className="label" htmlFor="ev-kind">
+          {L('Kind', 'النوع')}
+        </label>
+        <Select id="ev-kind">
+          <option value="Drill">{L('Drill', 'تمرين')}</option>
+          <option value="Emergency">{L('Emergency', 'طارئ')}</option>
+        </Select>
+      </div>,
+      <C.Field key="n" label={L('Note', 'ملاحظة')} id="ev-note" max={2000} opt={true} />
+    ],
+    async onGo(el) {
+      return done(
+        L('Roll call started', 'بدأ التفقّد'),
+        await act(() => startEvacuation(eventId, get(el, '#ev-kind'), get(el, '#ev-note')))
+      );
+    }
+  });
+}
+
+export const markRollCall = async (eventId, rollCall, registrationId, accounted) =>
+  act(() => evacuationAction(eventId, rollCall, accounted ? 'account' : 'unaccount', registrationId)).then(() =>
+    bus.refresh()
+  );
+
+export function closeRollCall(eventId, rollCall) {
+  ask({
+    title: L('Close the roll call', 'إنهاء التفقّد'),
+    sub: `${rollCall.accounted} / ${rollCall.total}`,
+    cta: L('Close', 'أنهِ'),
+    rows: [<C.Field key="n" label={L('Note', 'ملاحظة')} id="ev-close-note" max={2000} opt={true} />],
+    async onGo(el) {
+      return done(
+        L('Roll call closed', 'انتهى التفقّد'),
+        await act(() => evacuationAction(eventId, rollCall, 'close', null, get(el, '#ev-close-note')))
+      );
+    }
+  });
+}
+
+/* A factual incident report linked to this event; it is protected and only incident handlers can read it. */
+export function incidentDialog(eventId, people) {
+  const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  ask({
+    title: L('Report an incident', 'الإبلاغ عن حادث'),
+    sub: L('Restricted: only incident handlers can read it', 'مقيّد: لا يقرؤه إلا المكلّفون بالحوادث'),
+    cta: L('Record', 'سجّل'),
+    rows: [
+      <C.Field key="t" label={L('When it happened', 'متى حدث')} id="in-time" type="datetime-local" value={local} />,
+      <C.Field key="l" label={L('Where', 'أين')} id="in-where" max={300} opt={true} />,
+      <div className="formrow" key="p">
+        <label className="label" htmlFor="in-person">
+          {L('Participant involved (optional)', 'المشترك المعني (اختياري)')}
+        </label>
+        <Select id="in-person">
+          <option value="">—</option>
+          {people.map(r => (
+            <option key={r.id} value={r.p}>
+              {registrantName(r)?.lat || r.name || '—'}
+            </option>
+          ))}
+        </Select>
+      </div>,
+      <C.Textarea key="d" label={L('What happened (facts only)', 'ماذا حدث (الوقائع فقط)')} id="in-what" max={8000} />,
+      <C.Textarea key="a" label={L('Immediate actions taken', 'الإجراءات الفورية')} id="in-actions" max={4000} />,
+      <C.Field key="w" label={L('Witnesses', 'الشهود')} id="in-witnesses" max={2000} opt={true} />,
+      <C.CheckRow key="u" label={L('Urgent', 'عاجل')} id="in-urgent" />
+    ],
+    async onGo(el) {
+      const description = get(el, '#in-what'),
+        when = get(el, '#in-time');
+      if (!description || !when) return (warn(L('Say what happened and when', 'اذكر ما حدث ومتى')), false);
+      const person = get(el, '#in-person');
+      return done(
+        L('Incident recorded', 'سُجّل الحادث'),
+        await act(() =>
+          recordIncident(eventId, {
+            occurredAt: new Date(when).toISOString(),
+            location: get(el, '#in-where'),
+            personIds: person ? [person] : [],
+            description,
+            immediateActions: get(el, '#in-actions'),
+            witnesses: get(el, '#in-witnesses'),
+            urgent: el.querySelector('#in-urgent').checked
           })
         )
       );

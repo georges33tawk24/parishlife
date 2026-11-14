@@ -2,7 +2,8 @@
    stand-in for the event registration routes: what load() fills for an office account and for a door-only
    account, no demo text left over, cursor paging, that every action sends the body the API's DTOs expect
    (operation id, version, form version), that a local edit is undone and reported, and the member's own
-   registration calls. */
+   registration calls, plus the later options: deadline, discounts, instalments, payment methods, terms edits,
+   household registration, pickup codes, evacuation roll calls and incident reports. */
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
 
@@ -43,7 +44,13 @@ const policy = status => ({
     childAgeThreshold: 12,
     consentRequired: true,
     consentText: 'I consent.',
-    doorAccountIds: ['door']
+    doorAccountIds: ['door'],
+    closesAt: '2026-12-01T09:00:00Z',
+    discounts: [{ key: 'sibling', name: 'Sibling', nameAr: 'إخوة', amount: 3 }],
+    instalments: [{ dueOn: '2026-11-20', amount: 20 }],
+    paymentMethods: ['Cash', 'BankTransfer'],
+    musterPoint: 'Front yard',
+    musterPointAr: 'الباحة'
   },
   version: 'pv1'
 });
@@ -74,7 +81,16 @@ const reg = (id, status, extra = {}) => ({
   version: 'rv-' + id.slice(0, 2)
 });
 const regs = [
-  reg(R1, 'Confirmed', { received: 20, presence: 'Present', lastPresenceAt: '2026-12-05T15:05:00Z' }),
+  reg(R1, 'Confirmed', {
+    received: 17,
+    presence: 'Present',
+    lastPresenceAt: '2026-12-05T15:05:00Z',
+    due: 17,
+    discountKey: 'sibling',
+    discountName: 'Sibling',
+    discountAmount: 3,
+    pickupCodeIssued: true
+  }),
   reg(R2, 'Waitlisted')
 ];
 const door = r => ({
@@ -86,7 +102,8 @@ const door = r => ({
     presence: r.value.presence,
     lastPresenceAt: r.value.lastPresenceAt,
     independentDeparture: false,
-    collectors: [{ id: 'k1', name: 'Nada' }]
+    collectors: [{ id: 'k1', name: 'Nada' }],
+    pickupCodeRequired: r.value.id === R1
   },
   version: r.version
 });
@@ -148,6 +165,23 @@ const handler = (method, path, body) => {
           detail: 'An explicit assignment to this event is required.'
         })
       : json(200, { items: regs.filter(r => r.value.status === 'Confirmed').map(door), continuationToken: null });
+  if (route === `${base}/evacuations` && method === 'GET')
+    return json(200, [
+      {
+        value: {
+          id: REF,
+          eventId: E1,
+          kind: 'Drill',
+          status: 'Open',
+          startedAt: '2026-12-05T15:20:00Z',
+          startedBy: 'door',
+          total: 1,
+          accounted: 0,
+          entries: [{ registrationId: R1, personId: 'p-aa', displayName: 'Georges Haddad', accountedAt: null }]
+        },
+        version: 'evv'
+      }
+    ]);
   if (route === `${base}/present`)
     return json(200, {
       eventId: E1,
@@ -232,7 +266,12 @@ assert.deepEqual(
 assert.equal(f.taken, 1, 'one confirmed seat');
 assert.equal(f.waiting, 1, 'one waiting');
 assert.equal(f.fields[0].key, 'diet', 'the pinned form’s questions');
-assert.equal(f.deadline, '', 'the API has no deadline, so none is shown');
+assert.equal(f.deadline, '2026-12-01T09:00:00Z', 'the registration deadline');
+assert.deepEqual(
+  [f.discounts[0].key, f.installments[0].amount, f.paymentMethods, f.musterPoint],
+  ['sibling', 20, ['Cash', 'BankTransfer'], 'Front yard'],
+  'discounts, instalments, methods and muster point'
+);
 assert.deepEqual(
   M.availableEvents.map(e => e.id),
   [E2],
@@ -242,7 +281,7 @@ assert.equal(D.REGISTRANTS.length, 2, 'both pages of registrations are read (pag
 const r1 = D.REGISTRANTS.find(r => r.id === R1);
 assert.deepEqual(
   [r1.status, r1.paid, r1.outstanding, r1.presence, r1.version],
-  ['Confirmed', 20, 0, 'Present', 'rv-aa'],
+  ['Confirmed', 17, 0, 'Present', 'rv-aa'],
   'seat, money, presence and version'
 );
 assert.equal(r1.name, 'Georges Haddad', 'the door view supplies the name');
@@ -268,6 +307,16 @@ assert.ok(
 
 /* ---- writes ---- */
 const lastWrite = () => sent[sent.length - 1];
+assert.deepEqual(
+  [r1.due, r1.discountName, r1.outstanding, r1.pickupCodeIssued, r1.pickupCodeRequired],
+  [17, 'Sibling', 0, true, true],
+  'discount, balance and pickup-code flags'
+);
+assert.deepEqual(
+  [D.EVACUATION.events[E1].muster, D.EVACUATION.events[E1].rollCalls[0].entries[0].name],
+  ['Front yard', 'Georges Haddad'],
+  'roll call and muster point'
+);
 await M.configureRegistration(E2, {
   capacity: 10,
   currency: 'USD',
@@ -383,6 +432,57 @@ D.REGISTRANTS[0].status = 'Cancelled';
 assert.equal(await persist(), false);
 assert.equal(sent.length, writes, 'no write for a local edit');
 assert.equal(D.REGISTRANTS.find(r => r.id === R1).status, 'Confirmed', 'the screen shows what the API holds');
+
+/* ---- later options ---- */
+await M.recordReceipt(r1, {
+  amount: 1,
+  evidenceReference: 'transfer 9',
+  occurredAt: '2026-11-10T00:00:00.000Z',
+  method: 'BankTransfer'
+});
+assert.equal(lastWrite()[2].method, 'BankTransfer', 'receipt method');
+await M.reviseTerms(f, {
+  capacity: 3,
+  currency: 'USD',
+  childAgeThreshold: 12,
+  doorAccountIds: ['door'],
+  closesAt: null,
+  reason: 'More room'
+});
+[, p, b] = lastWrite();
+assert.deepEqual(
+  [p.endsWith('/registration/terms'), b.version, b.capacity, b.reason],
+  [true, 'pv1', 3, 'More room'],
+  'terms edit'
+);
+await M.applyDiscount(r1, null, 'Removed');
+[, p, b] = lastWrite();
+assert.deepEqual(
+  [p.endsWith(`/registrations/${R1}/discount`), b.discountKey, b.version],
+  [true, null, 'rv-aa'],
+  'discount'
+);
+await M.registerHousehold(f, 'h1', [{ personId: 'p1', answers: { diet: 'none' } }]);
+[, p, b] = lastWrite();
+assert.deepEqual(
+  [p.endsWith('/registrations/household'), b.householdId, b.formVersionId, b.members.length],
+  [true, 'h1', F1, 1]
+);
+await M.pickupCode(r1, 'issue', 'Guardian asked');
+[, p, b] = lastWrite();
+assert.deepEqual([p.endsWith(`/registrations/${R1}/pickup-code`), b.action, 'code' in b], [true, 'issue', false]);
+await M.recordPresence(r1, 'checkout', { collectorId: 'k1', verificationEvidence: 'ID', pickupCode: 'ABCD2345' });
+assert.equal(lastWrite()[2].pickupCode, 'ABCD2345', 'checkout sends the typed code');
+await M.recordPresence(r1, 'arrive');
+assert.ok(!('pickupCode' in lastWrite()[2]), 'no code field when none was typed');
+await M.startEvacuation(E1, 'Drill');
+assert.deepEqual([lastWrite()[1].endsWith('/evacuations'), lastWrite()[2].kind], [true, 'Drill']);
+await M.evacuationAction(E1, D.EVACUATION.events[E1].rollCalls[0], 'account', R1);
+[, p, b] = lastWrite();
+assert.deepEqual([p.endsWith(`/evacuations/${REF}/actions`), b.version, b.registrationId], [true, 'evv', R1]);
+await M.recordIncident(E1, { occurredAt: '2026-12-05T16:00:00Z', description: 'A fall', personIds: ['p-aa'] });
+[, p, b] = lastWrite();
+assert.deepEqual([p, b.eventId, b.description], ['parishes/P/incidents', E1, 'A fall'], 'incident report');
 
 /* ---- a member's own registration ---- */
 await M.applicantForm(E1);

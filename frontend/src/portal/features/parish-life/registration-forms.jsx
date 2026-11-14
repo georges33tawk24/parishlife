@@ -1,10 +1,11 @@
 /* What a registration records about a participant, and the dialogs that act on it through ParishLife.Api:
    register someone, decide the seat (reserve, offer, confirm, cancel, reinstate), amend answers and
-   collectors, record cash received and request a refund.
+   collectors, record a payment received (with its method) and request a refund, apply a policy discount, and
+   issue or revoke a pickup code (shown once).
    Main members: registrationMoney, statusLabel/statusPill, consentPill, paymentPill, canCheckIn, registrantName,
    fieldInputs/readAnswers (the form's typed questions), collectorsText/parseCollectors, participantForm
    (register), registrantDrawer (manage one registration), receiptDialog, refundDialog, ask (a small
-   reason/amount dialog). Every change calls the API (model/modules/registrations.js) and then reloads. */
+   reason/amount dialog), discountDialog, pickupCodeDialog, METHOD_LABELS. Every change calls the API (model/modules/registrations.js) and then reloads. */
 import { Select } from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
@@ -18,7 +19,9 @@ import {
   decideRegistration,
   amendRegistration,
   recordReceipt,
-  requestRefund
+  requestRefund,
+  applyDiscount,
+  pickupCode
 } from '../../model/modules/registrations.js';
 
 const L = (en, ar) => t(en, ar);
@@ -271,9 +274,24 @@ export function decideDialog(row, action, form) {
   });
 }
 
+/* How a recorded payment was made; recording it moves no money. */
+export const METHOD_LABELS = {
+  Cash: ['Cash', 'نقداً'],
+  BankTransfer: ['Bank transfer', 'تحويل مصرفي'],
+  MoneyTransfer: ['Money transfer service', 'خدمة تحويل أموال'],
+  Cheque: ['Cheque', 'شيك'],
+  Other: ['Other', 'أخرى']
+};
+const methodLabel = m => (METHOD_LABELS[m] ? L(...METHOD_LABELS[m]) : m);
+
 export function receiptDialog(row, form) {
+  const methods = row.paymentMethods?.length
+    ? row.paymentMethods
+    : form?.paymentMethods?.length
+      ? form.paymentMethods
+      : ['Cash'];
   ask({
-    title: L('Record cash received', 'تسجيل مبلغ مستلم'),
+    title: L('Record a payment received', 'تسجيل دفعة مستلمة'),
     sub: `${registrantName(row)?.lat || ''} · ${L('balance', 'المتبقّي')} ${registrationMoney(row.outstanding, row)}`,
     cta: L('Record', 'سجّل'),
     rows: [
@@ -301,10 +319,22 @@ export function receiptDialog(row, form) {
         value={today()}
         max={today()}
       />,
+      <div className="formrow" key="m">
+        <label className="label" htmlFor="rc-method">
+          {L('Paid by', 'طريقة الدفع')}
+        </label>
+        <Select id="rc-method">
+          {methods.map(m => (
+            <option key={m} value={m}>
+              {methodLabel(m)}
+            </option>
+          ))}
+        </Select>
+      </div>,
       <p key="n" className="help">
         {L(
-          'Only cash actually received, in the fee currency, up to the balance.',
-          'النقد المستلم فعلاً فقط، بعملة الرسم، وبحدّ الرصيد المتبقّي.'
+          'Only money actually received, in the fee currency, up to the balance. Recording it charges no one.',
+          'المال المستلم فعلاً فقط، بعملة الرسم، وبحدّ الرصيد المتبقّي. التسجيل لا يقتطع من أحد.'
         )}
       </p>
     ],
@@ -317,7 +347,8 @@ export function receiptDialog(row, form) {
         recordReceipt(row, {
           amount: Number(amount.toFixed(row.precision)),
           evidenceReference: reference,
-          occurredAt: instant(get(el, '#rc-date'))
+          occurredAt: instant(get(el, '#rc-date')),
+          method: get(el, '#rc-method') || 'Cash'
         })
       ).then(ok => {
         if (ok) toast(L('Payment recorded', 'سُجّلت الدفعة'), '', 'success');
@@ -325,6 +356,101 @@ export function receiptDialog(row, form) {
       });
     }
   });
+}
+
+/* Apply one of the policy's discounts, or remove the applied one; the API refuses a discount below money received. */
+export function discountDialog(row, form) {
+  ask({
+    title: L('Discount', 'الحسم'),
+    sub: registrantName(row)?.lat || '',
+    cta: L('Save', 'احفظ'),
+    rows: [
+      <div className="formrow" key="k">
+        <label className="label" htmlFor="ds-key">
+          {L('Discount', 'الحسم')}
+        </label>
+        <Select id="ds-key" defaultValue={row.discountKey || ''}>
+          <option value="">{L('No discount', 'بلا حسم')}</option>
+          {(form.discounts || []).map(x => (
+            <option key={x.key} value={x.key}>
+              {L(x.name, x.nameAr || x.name)} · {registrationMoney(x.amount, row)}
+            </option>
+          ))}
+        </Select>
+      </div>,
+      <C.Textarea key="w" label={L('Reason', 'السبب')} id="ds-why" max={2000} />
+    ],
+    async onGo(el) {
+      const key = get(el, '#ds-key'),
+        reason = get(el, '#ds-why');
+      if (!reason) return (warn(L('Give a reason', 'اذكر السبب')), false);
+      if ((key || '') === (row.discountKey || '')) return (warn(L('Nothing changed', 'لم يتغيّر شيء')), false);
+      return act(() => applyDiscount(row, key || null, reason));
+    }
+  });
+}
+
+/* Issue (or replace) a pickup code and show it once, or revoke it. The portal never keeps the code. */
+export function pickupCodeDialog(row) {
+  ask({
+    title: L('Pickup code', 'رمز الاستلام'),
+    sub: registrantName(row)?.lat || '',
+    cta: row.pickupCodeIssued ? L('Issue a new code', 'أصدر رمزاً جديداً') : L('Issue code', 'أصدر الرمز'),
+    rows: [
+      <p key="n" className="help">
+        {L(
+          'The code is shown once, here, to give to the guardian. It is not stored and cannot be shown again; the door enters it at checkout together with the identity check.',
+          'يُعرض الرمز مرة واحدة هنا لتسليمه إلى وليّ الأمر. لا يُحفظ ولا يمكن عرضه مجدداً؛ يُدخله الباب عند الخروج مع التحقّق من الهوية.'
+        )}
+      </p>,
+      <C.Textarea key="w" label={L('Reason', 'السبب')} id="pc-why" max={2000} />,
+      row.pickupCodeIssued ? (
+        <button key="r" className="btn btn-secondary btn-dense" id="pc-revoke">
+          {L('Revoke the code', 'ألغِ الرمز')}
+        </button>
+      ) : null
+    ],
+    async onGo(el) {
+      const reason = get(el, '#pc-why');
+      if (!reason) return (warn(L('Give a reason', 'اذكر السبب')), false);
+      let result = null;
+      const ok = await act(async () => {
+        result = await pickupCode(row, 'issue', reason);
+      });
+      if (ok && result?.code) showCode(result.code);
+      return ok;
+    }
+  });
+  setTimeout(() =>
+    document.querySelector('#pc-revoke')?.addEventListener('click', async () => {
+      const reason = (document.querySelector('#pc-why')?.value || '').trim();
+      if (!reason) return warn(L('Give a reason', 'اذكر السبب'));
+      if (await act(() => pickupCode(row, 'revoke', reason))) {
+        closeOverlays();
+        bus.refresh();
+        toast(L('Pickup code revoked', 'أُلغي رمز الاستلام'), '', 'success');
+      }
+    })
+  );
+}
+
+function showCode(code) {
+  setTimeout(() =>
+    openModal({
+      title: L('Pickup code', 'رمز الاستلام'),
+      sub: L('Shown once — give it to the guardian now', 'يُعرض مرة واحدة — سلّمه إلى وليّ الأمر الآن'),
+      body: (
+        <p className="mono" style={{ fontSize: '28px', letterSpacing: '4px', textAlign: 'center' }}>
+          {code.slice(0, 4)}-{code.slice(4)}
+        </p>
+      ),
+      foot: (
+        <button className="btn btn-primary" data-close="" style={{ marginInlineStart: 'auto' }}>
+          {L('Done', 'تم')}
+        </button>
+      )
+    })
+  );
 }
 
 export function refundDialog(row) {
@@ -498,8 +624,41 @@ export function registrantDrawer(row, form) {
           <dd>{registrationMoney(row.received, row)}</dd>
           <dt>{L('Refunded', 'المسترجع')}</dt>
           <dd>{registrationMoney(row.refunded, row)}</dd>
+          {row.discountAmount ? (
+            <>
+              <dt>{L('Discount', 'الحسم')}</dt>
+              <dd>
+                {L(row.discountName, row.discountNameAr || row.discountName)} · −
+                {registrationMoney(row.discountAmount, row)}
+              </dd>
+            </>
+          ) : null}
+          <dt>{L('Due', 'المستحق')}</dt>
+          <dd>{registrationMoney(row.due ?? row.fee, row)}</dd>
           <dt>{L('Balance', 'المتبقّي')}</dt>
           <dd>{registrationMoney(row.outstanding, row)}</dd>
+          {row.dueNow != null ? (
+            <>
+              <dt>{L('Due by today (instalments)', 'المستحق حتى اليوم (الأقساط)')}</dt>
+              <dd>{registrationMoney(row.dueNow, row)}</dd>
+            </>
+          ) : null}
+          {row.householdId ? (
+            <>
+              <dt>{L('Registered with household', 'مسجَّل مع العائلة')}</dt>
+              <dd>{D.HOUSEHOLDS.find(h => h.id === row.householdId)?.name || '—'}</dd>
+            </>
+          ) : null}
+          {row.full ? (
+            <>
+              <dt>{L('Pickup code', 'رمز الاستلام')}</dt>
+              <dd>
+                {row.pickupCodeIssued
+                  ? L('Issued (needed at checkout)', 'صادر (مطلوب عند الخروج)')
+                  : L('None', 'لا يوجد')}
+              </dd>
+            </>
+          ) : null}
           {row.offerUntil ? (
             <>
               <dt>{L('Offer open until', 'العرض مفتوح حتى')}</dt>
@@ -562,6 +721,16 @@ export function registrantDrawer(row, form) {
           </button>
         ))}
         <span style={{ marginInlineStart: 'auto' }} />
+        {row.full && row.status !== 'Cancelled' && (form.discounts?.length || row.discountKey) ? (
+          <button className="btn btn-secondary" id="rd-discount">
+            {L('Discount', 'الحسم')}
+          </button>
+        ) : null}
+        {row.full && row.status !== 'Cancelled' && (!row.independentDeparture || row.pickupCodeIssued) ? (
+          <button className="btn btn-secondary" id="rd-pickup">
+            {row.pickupCodeIssued ? L('Pickup code', 'رمز الاستلام') : L('Issue pickup code', 'أصدر رمز استلام')}
+          </button>
+        ) : null}
         {row.full && row.status !== 'Cancelled' && Number(row.outstanding) > 0 ? (
           <button className="btn btn-secondary" id="rd-receipt">
             {L('Record payment', 'سجّل دفعة')}
@@ -585,6 +754,8 @@ export function registrantDrawer(row, form) {
       );
       el.querySelector('#rd-receipt')?.addEventListener('click', () => receiptDialog(row, form));
       el.querySelector('#rd-refund')?.addEventListener('click', () => refundDialog(row));
+      el.querySelector('#rd-discount')?.addEventListener('click', () => discountDialog(row, form));
+      el.querySelector('#rd-pickup')?.addEventListener('click', () => pickupCodeDialog(row));
       const save = el.querySelector('#am-save');
       if (save)
         save.onclick = async () => {

@@ -20,6 +20,7 @@ import {
   ask
 } from './registration-forms.jsx';
 import { registerParticipant, toggleOpen } from './registrations-dialogs.jsx';
+import { termsDialog, householdDialog } from './registration-terms.jsx';
 import {
   selectedRegistration,
   selectRegistration,
@@ -233,15 +234,33 @@ export function registrations(tab = '') {
               )}
             </Panel>{' '}
             <Panel title={L('Registration', 'التسجيل')}>
+              <dl className="dl">
+                <dt>{L('Closes', 'يُغلق')}</dt>
+                <dd>
+                  {selected.deadline
+                    ? new Date(selected.deadline).toLocaleString()
+                    : L('When the event starts', 'عند بدء الحدث')}
+                </dd>
+                <dt>{L('Discounts', 'الحسومات')}</dt>
+                <dd>{(selected.discounts || []).map(x => L(x.name, x.nameAr || x.name)).join(', ') || '—'}</dd>
+                <dt>{L('Instalments', 'الأقساط')}</dt>
+                <dd>{(selected.installments || []).map(x => `${fmtDate(x.dueOn)}: ${x.amount}`).join(' · ') || '—'}</dd>
+                <dt>{L('Payment methods', 'طرق الدفع')}</dt>
+                <dd>{(selected.paymentMethods || []).join(', ') || '—'}</dd>
+                <dt>{L('Muster point', 'نقطة التجمّع')}</dt>
+                <dd>{L(selected.musterPoint, selected.musterPointAr || selected.musterPoint) || '—'}</dd>
+              </dl>
               <p className="t-body dim">
-                {L(
-                  'The terms were set when the form was created and cannot be edited. Confirmation messages to participants are not connected.',
-                  'ضُبطت الشروط عند إنشاء الاستمارة ولا يمكن تعديلها. رسائل التأكيد للمشتركين غير موصولة.'
-                )}
+                {L('Confirmation messages to participants are not connected.', 'رسائل التأكيد للمشتركين غير موصولة.')}
               </p>
               <button className="btn btn-secondary btn-dense" data-toggle-open={selected.id}>
                 {selected.open ? L('Close registration', 'إغلاق التسجيل') : L('Open registration', 'فتح التسجيل')}
-              </button>
+              </button>{' '}
+              {selected.known ? (
+                <button className="btn btn-secondary btn-dense" data-edit-terms={selected.id}>
+                  {L('Edit terms', 'تعديل الشروط')}
+                </button>
+              ) : null}
             </Panel>
           </div>
         </div>
@@ -256,6 +275,9 @@ export function registrations(tab = '') {
             <button className="btn btn-primary" data-register-participant="" disabled={!selected.open}>
               <Icon name="plus" size={16} />
               {L('Register participant', 'تسجيل مشترك')}
+            </button>{' '}
+            <button className="btn btn-secondary" data-register-household="" disabled={!selected.open}>
+              {L('Register household', 'تسجيل عائلة')}
             </button>{' '}
             <button className="btn btn-secondary" data-select-checkin={chosenEvent?.id}>
               {L('Open event check-in', 'فتح تسجيل الوصول للحدث')}
@@ -588,6 +610,14 @@ function refundDecision(id, action) {
 registrations.mount = host => {
   const row = id => REGISTRANTS.find(r => r.id === id);
   host.querySelector('[data-register-participant]')?.addEventListener('click', () => registerParticipant());
+  host
+    .querySelector('[data-register-household]')
+    ?.addEventListener('click', () => householdDialog(selectedRegistration()));
+  host
+    .querySelectorAll('[data-edit-terms]')
+    .forEach(b =>
+      b.addEventListener('click', () => termsDialog(REGISTRATIONS.find(f => f.id === b.dataset.editTerms)))
+    );
   host.querySelectorAll('[data-registration-review]').forEach(button =>
     button.addEventListener('click', () => {
       const r = row(button.dataset.registrationReview);
