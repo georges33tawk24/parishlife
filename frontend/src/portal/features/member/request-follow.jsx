@@ -13,6 +13,7 @@ import { toast } from '../../ui/ui.jsx';
 import { act, getMessages, postMessage } from '../../model/modules/requests.js';
 import { fmtStamp } from '../../model/sacrament-requests.js';
 import { RequestDocuments } from '../records/request-documents.jsx';
+import { MyRequestLetters } from './request-letters-mine.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -121,6 +122,7 @@ export function Follow({ r }) {
         </div>
       ) : null}
       <RequestDocuments applicant record={{ id: r.id, open }} scope="request" onChange={() => redraw()} />
+      <MyRequestLetters id={r.id} />
     </section>
   );
 }

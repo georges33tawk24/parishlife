@@ -2,12 +2,24 @@
    to write back. The link is `public.html#track=<parishId>.<requestId>.<token>`; the token goes to the API in
    a header, never in an address the server sees (model/guest-requests.js).
 
-   What the API shows a guest is the case's status, the office's message for the applicant and the
-   messages exchanged. Files and signed letters are not shown to guests: the API keeps files private to the
-   office and signed-in applicants. */
+   What the API shows a guest is the case's status, the office's message for the applicant, the messages
+   exchanged, the checklist of what the office needs, the files the guest added (names only: nothing
+   downloads through the bearer link) and the office's released letters by title and status. A letter's
+   text and code are never shown here: the guest collects it in person or links the request to an account.
+   Main functions: TrackingPage, GuestDocuments, GuestLetters. */
 import { useEffect, useState } from 'react';
 import { useSite } from '../site.jsx';
-import { parseTracking, guestCase, guestMessages, guestPostMessage } from '../../portal/model/guest-requests.js';
+import {
+  parseTracking,
+  guestCase,
+  guestMessages,
+  guestPostMessage,
+  guestFiles,
+  guestUpload,
+  guestLetters
+} from '../../portal/model/guest-requests.js';
+
+const TYPES = /\.(pdf|png|jpe?g)$/i;
 
 /* [headline, what it means for the applicant] */
 const STATUS = {
@@ -76,8 +88,13 @@ export function TrackingPage({ token }) {
     (async () => {
       if (!link) return setState({ error: L('This tracking link is not valid.', 'رابط المتابعة هذا غير صالح.') });
       try {
-        const [data, messages] = await Promise.all([guestCase(link), guestMessages(link)]);
-        if (live) setState({ data, messages });
+        const [data, messages, files, letters] = await Promise.all([
+          guestCase(link),
+          guestMessages(link),
+          guestFiles(link).catch(() => []),
+          guestLetters(link).catch(() => [])
+        ]);
+        if (live) setState({ data, messages, files, letters });
       } catch (e) {
         if (live) setState({ error: e.message });
       }
@@ -190,6 +207,155 @@ export function TrackingPage({ token }) {
           </form>
         )}
       </div>
+      <GuestDocuments
+        link={link}
+        checklist={d.checklist || []}
+        files={state.files}
+        closed={closed}
+        stamp={stamp}
+        done={() => setRound(n => n + 1)}
+      />
+      <GuestLetters letters={state.letters} stamp={stamp} />
     </section>
+  );
+}
+
+/* What the office asked for, and the files the guest added. A file may name the item it answers; the office
+   still decides whether the item is received. */
+function GuestDocuments({ link, checklist, files, closed, stamp, done }) {
+  const { L } = useSite();
+  const [item, setItem] = useState(''),
+    [busy, setBusy] = useState(false),
+    [problem, setProblem] = useState('');
+  const label = key => checklist.find(c => c.key === key)?.label || '';
+  const take = async file => {
+    if (!file) return;
+    if (!TYPES.test(file.name) || !file.size || file.size > 10_000_000)
+      return setProblem(L('Choose a PDF, JPG or PNG up to 10 MB.', 'اختر PDF أو JPG أو PNG حتى ١٠ ميغابايت.'));
+    setBusy(true);
+    setProblem('');
+    try {
+      await guestUpload(link, file, { checklistKey: item });
+      done();
+    } catch (err) {
+      setProblem(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!checklist.length && !files.length && closed) return null;
+  const state = c =>
+    c.status === 'Received'
+      ? L('received', 'مستلم')
+      : c.status === 'NotApplicable'
+        ? L('not needed', 'غير مطلوب')
+        : c.required
+          ? L('still needed', 'ما زال مطلوباً')
+          : L('optional', 'اختياري');
+  const fileState = f =>
+    f.status === 'Active' ? '' : ' · ' + (f.status === 'Replaced' ? L('replaced', 'استُبدل') : L('removed', 'أُزيل'));
+  return (
+    <div className="track-card" data-guest-documents="">
+      <h2>{L('Documents', 'المستندات')}</h2>
+      {checklist.length ? (
+        <ul>
+          {checklist.map(c => (
+            <li key={c.key}>
+              <bdi>{c.label}</bdi> · {state(c)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>{L('The office has not listed any documents.', 'لم يحدّد المكتب أي مستندات.')}</p>
+      )}
+      {files.length ? (
+        <>
+          <h3>{L('Files you sent', 'الملفات التي أرسلتها')}</h3>
+          <ul>
+            {files.map(f => (
+              <li key={f.id}>
+                <bdi>{f.fileName}</bdi> · {stamp(f.uploadedAt)}
+                {f.checklistKey ? (
+                  <>
+                    {' '}
+                    · <bdi>{label(f.checklistKey)}</bdi>
+                  </>
+                ) : null}
+                {fileState(f)}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {closed ? null : (
+        <>
+          {checklist.length ? (
+            <label className="rq-field">
+              <span>{L('This file is for', 'هذا الملف لـ')}</span>
+              <select value={item} onChange={e => setItem(e.target.value)}>
+                <option value="">{L('No particular item', 'لا بند محدّد')}</option>
+                {checklist.map(c => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="btn btn-gilt">
+            {busy ? L('Sending…', 'جارٍ الإرسال…') : L('Send a file to the office', 'أرسل ملفاً إلى المكتب')}
+            <input
+              type="file"
+              hidden
+              disabled={busy}
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                take(file);
+              }}
+            />
+          </label>
+          <p className="rq-error" role="alert">
+            {problem}
+          </p>
+          <small>
+            {L(
+              'PDF, JPG or PNG up to 10 MB. Only the parish office can open what you send; this page lists the names.',
+              'PDF أو JPG أو PNG حتى ١٠ ميغابايت. لا يفتح ما ترسله إلا مكتب الرعية؛ تعرض هذه الصفحة الأسماء فقط.'
+            )}
+          </small>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* Letters the office released for this request: title and status only. */
+function GuestLetters({ letters, stamp }) {
+  const { L } = useSite();
+  if (!letters.length) return null;
+  return (
+    <div className="track-card" data-guest-letters="">
+      <h2>{L('Letters from the parish', 'رسائل من الرعية')}</h2>
+      <ul>
+        {letters.map(l => (
+          <li key={l.reference + '.' + l.version}>
+            <bdi>{l.title}</bdi> · <bdi dir="ltr">{l.reference}</bdi> ·{' '}
+            {l.status === 'Withdrawn' ? L('withdrawn', 'مسحوبة') : L('released', 'صادرة')}
+            {l.releasedAt ? ' · ' + stamp(l.releasedAt) : ''}
+            {l.releaseMethod === 'InPerson' ? ' · ' + L('collect in person', 'تُستلم شخصياً') : ''}
+            <br />
+            <small dir="auto">{l.statement}</small>
+          </li>
+        ))}
+      </ul>
+      <p>
+        {L(
+          'The letter itself is not shown through this link. Collect it from the parish office, or link this request to an account.',
+          'لا تظهر الرسالة نفسها عبر هذا الرابط. استلمها من مكتب الرعية، أو اربط هذا الطلب بحساب.'
+        )}
+      </p>
+    </div>
   );
 }
