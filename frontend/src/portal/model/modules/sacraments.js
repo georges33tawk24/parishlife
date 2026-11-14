@@ -16,9 +16,15 @@
                 AwaitingBishop awaiting-approval · AuthorizedForIssuance approved · Issued, Released issued ·
                 Withdrawn withdrawn · Cancelled cancelled
    The API stores instants in UTC and has no parish time zone, so dates and times are read and written on
-   the office browser's clock. */
+   the office browser's clock.
+   Also: the office review of a received request (status office-reviewed while the API status stays Received),
+   the parish's own preparation requirement lists (requirementSets) and each case's checklist, request
+   amendments decided by a priest, Arabic spellings kept beside the Latin ones (never copied across), book and
+   page apart, the request date, actor names through names.js, and the priest's signature image (a picture for
+   the printed paper; never an electronic signature). */
 import { api, parishAPI, session, newOperationId } from '../api.js';
 import { hydrate } from '../persist.js';
+import { loadNames, nameOf } from '../names.js';
 import * as D from '../data.js';
 
 export const keys = ['SACRAMENTS', 'ANNIVERSARIES'];
@@ -76,12 +82,25 @@ export const toUtc = (date, time = '') =>
 const isoDay = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : '');
 
 /* ---------- API → the portal's records ---------- */
+let namesParish = '';
+const named = id => (id && namesParish ? nameOf(namesParish, id) : '');
+/* The parish's own preparation lists, one per sacrament that has one (there is no built-in list). */
+let requirementSets = [];
+export const requirementSetFor = kind => requirementSets.find(s => s.kind === kind) || null;
 function toSacrament(row) {
   const x = row.value,
     facts = { ...x.facts, ...x.currentFacts },
     at = instant(x.celebratedAt) || instant(x.scheduledAt),
     kind = toKind(x.sacrament),
-    timeline = x.timeline || [];
+    timeline = x.timeline || [],
+    amendments = x.requestAmendments || [],
+    pending = amendments.find(a => a.status === 'Pending');
+  const status =
+    x.status === 'Celebrated' && x.returnReason
+      ? 'draft'
+      : x.status === 'Received' && x.officeReviewedAt
+        ? 'office-reviewed'
+        : SACRAMENT_STATUS[x.status] || 'requested';
   return {
     id: x.id,
     kind,
@@ -95,18 +114,61 @@ function toSacrament(row) {
     time: at ? localTime(at) : '',
     requestedDate: isoDay(x.tentativeDate),
     requestNotes: facts.requestNotes || '',
-    requestedAt: timeline.find(step => step.action === 'open')?.at || '',
-    celebrant: null,
+    requestedAt: x.createdAt || timeline.find(step => step.action === 'open')?.at || '',
+    requestedBy: named(x.createdBy),
+    celebrant: x.celebrantPersonId || null,
+    celebrantAccountId: x.celebrantAccountId || '',
     celebrantName: x.celebrantName || '',
-    status: x.status === 'Celebrated' && x.returnReason ? 'draft' : SACRAMENT_STATUS[x.status] || 'requested',
+    celebrantNameAr: x.celebrantNameAr || '',
+    status,
     apiStatus: x.status,
     returnReason: x.returnReason || '',
     godparents: x.witnesses || facts.godparents || '',
+    godparentsAr: x.witnessesAr || '',
     father: facts.father || '',
+    fatherAr: facts.fatherAr || '',
     mother: facts.mother || '',
+    motherAr: facts.motherAr || '',
     place: x.place || '',
+    placeAr: x.placeAr || '',
     book: x.bookReference || '',
-    page: '',
+    page: x.registerPage || '',
+    officeReviewedAt: x.officeReviewedAt || '',
+    officeReviewedBy: named(x.officeReviewedBy),
+    officeReviewNote: x.officeReviewNote || '',
+    requirements: (x.requirements || []).map(r => ({
+      key: r.key,
+      label: r.label || '',
+      labelAr: r.labelAr || '',
+      met: !!r.met,
+      note: r.note || '',
+      recordedAt: r.recordedAt || '',
+      recordedBy: named(r.recordedBy)
+    })),
+    requirementsBlockScheduling: !!x.requirementsBlockScheduling,
+    pendingAmendment: pending
+      ? {
+          date: pending.tentativeDate || '',
+          facts: pending.facts || {},
+          notes: pending.facts?.requestNotes ?? '',
+          reason: pending.reason,
+          proposedAt: pending.proposedAt,
+          proposedBy: named(pending.proposedBy)
+        }
+      : null,
+    requestAmendments: amendments.map(a => ({
+      status: a.status,
+      date: a.tentativeDate || '',
+      previousDate: a.previousTentativeDate || '',
+      facts: a.facts || {},
+      previousFacts: a.previousFacts || {},
+      reason: a.reason,
+      decisionNote: a.decisionNote || '',
+      proposedAt: a.proposedAt,
+      proposedBy: named(a.proposedBy),
+      decidedAt: a.decidedAt || '',
+      decidedBy: named(a.decidedBy)
+    })),
     externalParish: facts.externalParish || '',
     externalReference: facts.externalReference || '',
     partner: facts.partner || '',
@@ -122,7 +184,12 @@ function toSacrament(row) {
       to: a.newValue,
       reason: a.reason
     })),
-    history: timeline.map(step => ({ action: step.action, at: step.at, reason: step.note || '' })),
+    history: timeline.map(step => ({
+      action: step.action,
+      at: step.at,
+      reason: step.note || '',
+      by: named(step.actorAccountId)
+    })),
     pendingCorrections: [],
     facts: x.facts || {},
     version: row.version
@@ -133,14 +200,16 @@ function toCertificate(row) {
   const x = row.value,
     kind = toKind(x.sacrament),
     snapshot = x.snapshot || {},
+    requested = instant(x.createdAt),
     history = [
-      ['sign', x.signedAt],
-      ['accept', x.acceptedAt],
-      ['issue', x.issuedAt],
-      ['release', x.releasedAt]
+      ['open', x.createdAt, x.createdBy],
+      ['sign', x.signedAt, x.signedBy],
+      ['accept', x.acceptedAt, x.acceptedBy],
+      ['issue', x.issuedAt, x.issuedBy],
+      ['release', x.releasedAt, x.releasedBy]
     ]
       .filter(([, at]) => at)
-      .map(([action, at]) => ({ action, at, reason: '' }));
+      .map(([action, at, by]) => ({ action, at, reason: '', by: named(by) }));
   return {
     id: x.id,
     kind: 'certificate',
@@ -150,7 +219,9 @@ function toCertificate(row) {
     person: x.subjectPersonId,
     requestId: x.requestId || '',
     sourceRecordId: x.sourceRecordId || '',
-    date: '', // the API does not return when a request was made
+    date: requested ? localDate(requested) : '',
+    requestedAt: x.createdAt || '',
+    requestedBy: named(x.createdBy),
     celebrant: null,
     status: CERTIFICATE_STATUS[x.status] || 'draft',
     apiStatus: x.status,
@@ -168,7 +239,12 @@ function toCertificate(row) {
     returnReason: x.returnReason || '',
     withdrawalReason: x.withdrawalReason || '',
     signedBy: x.signedBy || '',
+    signedByName: named(x.signedBy),
     signedAt: x.signedAt || '',
+    hasSignatureImage: !!x.hasSignatureImage,
+    issuedByName: named(x.issuedBy),
+    releasedByName: named(x.releasedBy),
+    acceptedByName: named(x.acceptedBy),
     approvedAt: x.signedAt || '',
     acceptedAt: x.acceptedAt || '',
     issuedAt: x.issuedAt || '',
@@ -200,16 +276,35 @@ async function everything(path, limit = 5000) {
 const allowed = error => (error.status === 403 || error.status === 404 ? [] : Promise.reject(error));
 
 export async function load(parish, d) {
+  requirementSets = [];
   if (!parish.roles?.includes('priest') && !parish.capabilities?.includes('sacraments.record')) return;
   const base = `parishes/${encodeURIComponent(parish.id)}`;
   const today = localDate(new Date());
-  const [registers, certificates, corrections, anniversaries] = await Promise.all([
+  namesParish = parish.id;
+  const [registers, certificates, corrections, anniversaries, sets] = await Promise.all([
     Promise.all(KINDS.map(([name]) => everything(`${base}/sacraments?sacrament=${name}&size=100`).catch(allowed))),
     api(`${base}/certificates`).catch(allowed),
     api(`${base}/sacraments/corrections`).catch(allowed),
     // the API's longest window is 92 days
-    api(`${base}/sacraments/anniversaries?from=${today}&days=92`).catch(allowed)
+    api(`${base}/sacraments/anniversaries?from=${today}&days=92`).catch(allowed),
+    api(`${base}/sacraments/requirements`).catch(allowed)
   ]);
+  requirementSets = (sets || []).map(set => ({
+    kind: toKind(set.sacrament),
+    version: set.version,
+    items: (set.items || []).map(i => ({ key: i.key, label: i.label || '', labelAr: i.labelAr || '' })),
+    blockScheduling: !!set.blockSchedulingUntilMet
+  }));
+  // who did what: names for the account ids the screens show (a failure leaves them empty)
+  const actors = [];
+  for (const { value: x } of registers.flat()) {
+    actors.push(x.createdBy, x.officeReviewedBy, x.registeredBy, ...(x.timeline || []).map(s => s.actorAccountId));
+    for (const a of x.requestAmendments || []) actors.push(a.proposedBy, a.decidedBy);
+    for (const r of x.requirements || []) actors.push(r.recordedBy);
+  }
+  for (const { value: x } of certificates || [])
+    actors.push(x.createdBy, x.signedBy, x.acceptedBy, x.issuedBy, x.releasedBy);
+  await loadNames(parish.id, actors.filter(Boolean));
   const records = registers.flat().map(toSacrament);
   for (const c of corrections || []) {
     const record = records.find(r => r.id === c.value.recordId);
@@ -262,11 +357,17 @@ export function docRecord(s) {
     time: at ? localTime(at) : '',
     celebrant: null,
     celebrantName: f.celebrantName || '',
+    celebrantNameAr: f.celebrantNameAr || '',
     place: f.place || '',
+    placeAr: f.placeAr || '',
     godparents: f.witnesses || f.godparents || '',
+    godparentsAr: f.witnessesAr || '',
     father: f.father || '',
+    fatherAr: f.fatherAr || '',
     mother: f.mother || '',
-    book: f.bookReference || ''
+    motherAr: f.motherAr || '',
+    book: f.bookReference || '',
+    page: f.registerPage || ''
   };
 }
 
@@ -279,12 +380,18 @@ export function mergedFacts(record, changes) {
    bookReference, celebratedAt or facts.<key>). */
 export const CORRECTABLE = [
   ['place', 'Place', 'المكان'],
+  ['placeAr', 'Place (Arabic)', 'المكان (بالعربية)'],
   ['celebrantName', 'Celebrant', 'المحتفل'],
+  ['celebrantNameAr', 'Celebrant (Arabic)', 'المحتفل (بالعربية)'],
   ['witnesses', 'Godparents / witnesses', 'الإشبين / الشهود'],
-  ['bookReference', 'Book / page', 'الدفتر / الصفحة'],
+  ['witnessesAr', 'Godparents / witnesses (Arabic)', 'الإشبين / الشهود (بالعربية)'],
+  ['bookReference', 'Book', 'الدفتر'],
+  ['registerPage', 'Page', 'الصفحة'],
   ['celebratedAt', 'Celebration date and time (YYYY-MM-DD)', 'تاريخ الاحتفال (YYYY-MM-DD)'],
   ['facts.father', 'Father', 'الأب'],
-  ['facts.mother', 'Mother', 'الأم']
+  ['facts.fatherAr', 'Father (Arabic)', 'الأب (بالعربية)'],
+  ['facts.mother', 'Mother', 'الأم'],
+  ['facts.motherAr', 'Mother (Arabic)', 'الأم (بالعربية)']
 ];
 
 /* ---------- actions: one API step each, then the screens reload ---------- */
@@ -431,4 +538,95 @@ export async function certificateSheet(id) {
     throw new Error(problem?.detail || 'The sheet could not be made.');
   }
   return response.blob();
+}
+
+/* ---------- office review, preparation requirements and request amendments ---------- */
+/* The office's review of a received request: informative, the priest may decide without it. */
+export const officeReview = (id, note) => sacramentAction(id, 'office-review', { reason: note });
+/* One item of the case's checklist met or not, with an optional note. */
+export const setRequirement = (id, key, met, note) =>
+  sacramentAction(id, 'requirement', { requirementKey: key, requirementMet: !!met, reason: note });
+/* Brings a case's checklist up to the parish's current list, keeping what was recorded for items that remain. */
+export const syncRequirements = id => sacramentAction(id, 'sync-requirements');
+/* A change to an accepted request: a new requested date and/or changed details (an empty value removes one). */
+export function proposeAmendment(id, { date, facts = {}, reason }) {
+  const changed = Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined && v !== null));
+  return sacramentAction(id, 'propose-amendment', {
+    tentativeDate: date || undefined,
+    facts: Object.keys(changed).length ? changed : undefined,
+    reason
+  });
+}
+export const decideAmendment = (id, approve, reason) =>
+  sacramentAction(id, approve ? 'approve-amendment' : 'reject-amendment', { reason });
+
+/* The priest saves the parish's own list for one sacrament; the labels are typed by the parish, in either language. */
+export async function saveRequirementSet(kind, items, blockScheduling) {
+  return done(
+    await parishAPI('sacraments/requirements', 'PUT', {
+      operationId: newOperationId(),
+      version: requirementSetFor(kind)?.version || null,
+      sacrament: apiKind(kind),
+      items: items.map(i => ({ key: i.key, label: i.label || null, labelAr: i.labelAr || null })),
+      blockSchedulingUntilMet: !!blockScheduling
+    })
+  );
+}
+
+/* ---------- the priest's signature image (a picture for the printed paper, not an electronic signature) ---------- */
+const imageBase = () => `/api/parishes/${encodeURIComponent(session.parishId)}`;
+/* A data URL, so the image travels with a printed or downloaded sheet; only PNG and JPEG are accepted. */
+async function asDataUrl(blob) {
+  const type = (blob.type || '').split(';')[0];
+  if (!['image/png', 'image/jpeg'].includes(type)) return '';
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${type};base64,${btoa(text)}`;
+}
+async function imageFrom(path) {
+  let response;
+  try {
+    response = await fetch(imageBase() + path, { credentials: 'same-origin', cache: 'no-store' });
+  } catch {
+    return '';
+  }
+  return response.ok ? asDataUrl(await response.blob()) : '';
+}
+export const mySignatureImage = () => parishAPI('clergy-signature-image');
+export const mySignatureImageData = () => imageFrom('/clergy-signature-image/content');
+export async function uploadSignatureImage(file) {
+  const { token } = await api('auth/csrf');
+  const form = new FormData();
+  form.append('operationId', newOperationId());
+  form.append('file', file, file.name || 'signature');
+  let response;
+  try {
+    response = await fetch(imageBase() + '/clergy-signature-image', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+      body: form
+    });
+  } catch {
+    throw new Error('ParishLife cannot reach its API. Try again in a moment.');
+  }
+  const data = await response.json().catch(() => null);
+  if (response.ok) return data;
+  const errors = data?.errors && Object.values(data.errors).flat().filter(Boolean);
+  throw new Error(errors?.length ? errors.join(' ') : data?.detail || 'The image was not uploaded.');
+}
+export const removeSignatureImage = version =>
+  parishAPI('clergy-signature-image/remove', 'POST', { operationId: newOperationId(), version });
+
+/* The image attached when the priest signed a certificate, as a data URL for printing (cached per certificate). */
+const certificateImages = new Map();
+const imageKey = c => `${c?.id}:${c?.signedAt}`;
+export const certificateImage = certificate => certificateImages.get(imageKey(certificate)) || '';
+export async function loadCertificateImage(certificate) {
+  if (!certificate?.hasSignatureImage || certificateImages.has(imageKey(certificate)))
+    return certificateImage(certificate);
+  const data = await imageFrom(`/certificates/${encodeURIComponent(certificate.id)}/signature-image`);
+  certificateImages.set(imageKey(certificate), data);
+  return data;
 }

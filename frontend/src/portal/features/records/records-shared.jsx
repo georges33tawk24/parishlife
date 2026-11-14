@@ -81,7 +81,15 @@ export const nextStep = s => {
   return (
     {
       requested: [L('Accept or decline the request', 'قبول الطلب أو رفضه'), PRIEST()],
-      preparing: [L('Set the date and the celebrant', 'تحديد الموعد والمحتفل'), OFFICE()],
+      'office-reviewed': [
+        L('Reviewed by the office — accept or decline the request', 'راجعه المكتب — قبول الطلب أو رفضه'),
+        PRIEST()
+      ],
+      preparing: s.pendingAmendment
+        ? [L('Decide the proposed change to the request', 'البتّ في التعديل المقترح على الطلب'), PRIEST()]
+        : (s.requirements || []).some(r => !r.met)
+          ? [L('Complete the preparation checklist and set the date', 'إكمال لائحة التحضير وتحديد الموعد'), OFFICE()]
+          : [L('Set the date and the celebrant', 'تحديد الموعد والمحتفل'), OFFICE()],
       scheduled: [
         s.date > today()
           ? L(`Wait for the celebration on ${celebrationText(s)}`, `انتظار الاحتفال في ${celebrationText(s)}`)

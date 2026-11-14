@@ -1,11 +1,14 @@
-/* The certificate itself: drawn as SVG in English or Arabic, previewed, printed and downloaded. */
+/* The certificate itself: drawn as SVG in English or Arabic, previewed, printed and downloaded. Each fact uses the
+   spelling typed for the document's language (the other when only one was typed); book and page print apart; the
+   signing priest's signature image, when one was attached at signing, is drawn on the signature line for the paper
+   (it is a picture, not an electronic signature). */
 import { Fragment } from 'react';
 import { paint, markup } from '../../ui/html.js';
 import { t, fmtDateIn } from '../../../lib/i18n.js';
 import { Icon, openModal, openMenu, toast } from '../../ui/ui.jsx';
 import { printSheet, saveBlob, svgToPng, fileName } from '../../shared/print.js';
 import { PARISH, person } from '../../model/data.js';
-import { docRecord, certificateSheet } from '../../model/modules/sacraments.js';
+import { docRecord, certificateSheet, certificateImage } from '../../model/modules/sacraments.js';
 import { DOC_LANGS, KIND, kindLabel, nameIn, today, zoned } from './records-shared.jsx';
 
 const L = (en, ar) => t(en, ar);
@@ -40,6 +43,14 @@ export function certificateSVG(s, lang = 'bilingual') {
     en = lang !== 'arabic',
     both = ar && en;
   const dl = lang === 'arabic' ? 'ar' : lang === 'english' ? 'en' : '';
+  /* the spelling for this document's language; the bilingual sheet shows both when they differ */
+  const spelled = k => {
+    const lat = record[k] || '',
+      arab = record[`${k}Ar`] || '';
+    if (lang === 'arabic') return arab || lat;
+    if (lang === 'english') return lat || arab;
+    return lat && arab && lat !== arab ? `${lat} · ${arab}` : lat || arab;
+  };
   const tx = (x, y, str, o = {}) =>
     str ? (
       <text
@@ -158,15 +169,15 @@ export function certificateSVG(s, lang = 'bilingual') {
       record.date > today() ? 'مجدول في' : 'تاريخ الاحتفال',
       fmtDateIn(record.date, dl)
     ],
-    ['Celebrant', 'المحتفل', record.celebrantName || '—'],
+    ['Celebrant', 'المحتفل', spelled('celebrantName') || '—'],
     ...[
       ['godparents', 'Godparents / witnesses', 'الإشبين / الشهود'],
       ['father', 'Father', 'الأب'],
       ['mother', 'Mother', 'الأم'],
       ['place', 'Place', 'المكان']
     ]
-      .filter(([k]) => record[k])
-      .map(([k, enL, arL]) => [enL, arL, record[k]])
+      .filter(([k]) => spelled(k))
+      .map(([k, enL, arL]) => [enL, arL, spelled(k)])
   ];
   const step = rows.length > 4 ? 9 : 10.5;
   y += 10;
@@ -196,7 +207,7 @@ export function certificateSVG(s, lang = 'bilingual') {
   const cap = (enL, arL) =>
     lang === 'arabic' ? arL : lang === 'english' ? enL.toUpperCase() : `${enL.toUpperCase()} · ${arL}`;
   [
-    [57, 57, cap('Book / page', 'الدفتر / الصفحة'), record.book || '—'],
+    [57, 57, cap('Book / page', 'الدفتر / الصفحة'), `${record.book || '—'} / ${record.page || '—'}`],
     [119, 34, cap('Entry', 'القيد'), record.reg]
   ].forEach(([x, w, lbl, val]) => {
     out.push(
@@ -228,8 +239,13 @@ export function certificateSVG(s, lang = 'bilingual') {
       />
     </>
   );
-  /* The priest signs the paper by hand and the parish seals it; the API holds no drawing of a signature. Only an
-     electronic authorization is printed: its code, which anyone can check on the public verification page. */
+  /* The priest's signature image, when he kept one and it was attached when he approved this certificate: drawn on the
+     signature line for the paper. It is a picture, not an electronic signature, and proves nothing on its own. */
+  const sigImage = s.kind === 'certificate' ? certificateImage(s) : '';
+  if (sigImage)
+    out.push(<image href={sigImage} x="26" y={sigY - 21} width="60" height="20" preserveAspectRatio="xMidYMax meet" />);
+  /* The only electronic mark printed is an electronic authorization: its code, which anyone can check on the
+     public verification page. */
   const signed = docIssued(s) && s.authorizationCode ? { code: s.authorizationCode } : null;
   const roleY = sigY + 5;
   if (en) out.push(tx(56, roleY, 'Parish priest', { size: 3.4, fill: SECONDARY }));

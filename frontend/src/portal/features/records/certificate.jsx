@@ -21,7 +21,7 @@ import {
 import * as C from '../../ui/components.jsx';
 import { need, needAll } from '../../shared/dialogs.jsx';
 import * as API from '../../model/modules/sacraments.js';
-import { SACRAMENTS, person } from '../../model/data.js';
+import { SACRAMENTS, PEOPLE, person } from '../../model/data.js';
 import { onlineMark, sharedNote } from './online-requests.jsx';
 import { certificateName, languageName } from '../../model/sacrament-requests.js';
 import {
@@ -39,6 +39,45 @@ import {
 import { certificateSVG, docCard, downloadMenu, printDoc, viewDoc } from './certificate-document.jsx';
 
 const L = (en, ar) => t(en, ar);
+/* Both spellings as typed: the one present first, the Arabic under the Latin when there are two. Never copied across. */
+const twin = (lat, ar) =>
+  lat || ar ? (
+    <>
+      {lat || ar}
+      {lat && ar ? (
+        <small className="dim" dir="rtl" style={{ display: 'block', fontFamily: 'var(--arabic)' }}>
+          {ar}
+        </small>
+      ) : (
+        ''
+      )}
+    </>
+  ) : null;
+/* A checklist label in the reader's language, the other one when that is all the parish typed. */
+const labelOf = r => L(r.label || r.labelAr, r.labelAr || r.label);
+/* A Latin field and its Arabic twin side by side; ids are `${id}` and `${id}Ar`. */
+const twinFields = (id, label, lat, ar) => (
+  <div className="formgrid">
+    <C.Field label={label} id={id} value={lat || ''} />
+    <C.Field label={`${label} · ${L('Arabic', 'بالعربية')}`} id={`${id}Ar`} value={ar || ''} ar={true} dir="rtl" />
+  </div>
+);
+/* Optionally links the celebrant to a person record of this parish; the names above stay as typed. */
+const celebrantPick = (id, value) => (
+  <div className="formrow">
+    <label className="label" htmlFor={id}>
+      {L('Celebrant in People (optional)', 'المحتفل في سجل المؤمنين (اختياري)')}
+    </label>
+    <Select id={id} defaultValue={value || ''}>
+      <option value="">{L('Not linked', 'غير مرتبط')}</option>
+      {PEOPLE.map((p, i) => (
+        <option key={i} value={p.id}>
+          {nameIn(p)}
+        </option>
+      ))}
+    </Select>
+  </div>
+);
 
 const sacramentStatus = s =>
   s.apiStatus === 'WaitingForSource' ? (
@@ -197,7 +236,13 @@ const HIST = {
   cancelled: ['Cancelled', 'أُلغي'],
   'source linked': ['Register entry linked', 'رُبط القيد'],
   correction: ['Corrected', 'صُحّح'],
-  'documents updated': ['Documents updated', 'حُدّثت المستندات']
+  'documents updated': ['Documents updated', 'حُدّثت المستندات'],
+  'office-review': ['Reviewed by the office', 'راجعه المكتب'],
+  requirement: ['Preparation checklist updated', 'حُدّثت لائحة التحضير'],
+  'sync-requirements': ['Checklist updated to the parish list', 'حُدّثت اللائحة وفق لائحة الرعية'],
+  'propose-amendment': ['Change to the request proposed', 'اقتُرح تعديل على الطلب'],
+  'approve-amendment': ['Change to the request approved', 'اعتُمد تعديل الطلب'],
+  'reject-amendment': ['Change to the request rejected', 'رُفض تعديل الطلب']
 };
 
 const histReason = h => h.reason;
@@ -309,6 +354,20 @@ export function certificate(id, lang = '') {
               {s.reg}
             </span>
           ],
+          s.requestedAt
+            ? [L('Requested', 'تاريخ الطلب'), `${when(s.requestedAt)}${s.requestedBy ? ` · ${s.requestedBy}` : ''}`]
+            : null,
+          s.signedAt
+            ? [
+                L('Priest’s signature image', 'صورة توقيع الكاهن'),
+                s.hasSignatureImage
+                  ? L(
+                      'Attached at approval, for the printed paper only (not an electronic signature)',
+                      'أُرفقت عند الاعتماد للورقة المطبوعة فقط (ليست توقيعاً إلكترونياً)'
+                    )
+                  : L('None — the priest signs the paper by hand', 'لا صورة — يوقّع الكاهن الورقة بيده')
+              ]
+            : null,
           source
             ? [
                 L('Register entry', 'القيد'),
@@ -340,9 +399,46 @@ export function certificate(id, lang = '') {
             record.date > today() ? L('Planned for', 'الموعد المقرّر') : L('Date', 'التاريخ'),
             record.date ? celebrationText(record) : L('Not set yet', 'لم يُحدَّد بعد')
           ],
-          [L('Celebrant', 'المحتفل'), record.celebrantName || L('To be assigned', 'يُحدَّد لاحقاً')],
-          record.godparents ? [L('Godparents / witnesses', 'الإشبين / الشهود'), record.godparents] : null,
-          [L('Book / page', 'الدفتر / الصفحة'), record.book || '—'],
+          [
+            L('Celebrant', 'المحتفل'),
+            <>
+              {twin(record.celebrantName, record.celebrantNameAr) || L('To be assigned', 'يُحدَّد لاحقاً')}
+              {record.celebrant && person(record.celebrant) ? (
+                <small className="dim" style={{ display: 'block' }}>
+                  <a href={`#/person/${record.celebrant}`}>{nameIn(person(record.celebrant))}</a>
+                </small>
+              ) : (
+                ''
+              )}
+            </>
+          ],
+          record.place || record.placeAr ? [L('Place', 'المكان'), twin(record.place, record.placeAr)] : null,
+          record.godparents || record.godparentsAr
+            ? [L('Godparents / witnesses', 'الإشبين / الشهود'), twin(record.godparents, record.godparentsAr)]
+            : null,
+          record.father || record.fatherAr ? [L('Father', 'الأب'), twin(record.father, record.fatherAr)] : null,
+          record.mother || record.motherAr ? [L('Mother', 'الأم'), twin(record.mother, record.motherAr)] : null,
+          [L('Book', 'الدفتر'), record.book || '—'],
+          [L('Page', 'الصفحة'), record.page || '—'],
+          s.requestedAt
+            ? [L('Requested', 'تاريخ الطلب'), `${when(s.requestedAt)}${s.requestedBy ? ` · ${s.requestedBy}` : ''}`]
+            : null,
+          s.officeReviewedAt
+            ? [
+                L('Reviewed by the office', 'راجعه المكتب'),
+                <>
+                  {when(s.officeReviewedAt)}
+                  {s.officeReviewedBy ? ` · ${s.officeReviewedBy}` : ''}
+                  {s.officeReviewNote ? (
+                    <small className="dim" style={{ display: 'block' }}>
+                      {s.officeReviewNote}
+                    </small>
+                  ) : (
+                    ''
+                  )}
+                </>
+              ]
+            : null,
           [
             official(s) ? L('Register entry', 'رقم القيد') : L('Reference', 'المرجع'),
             <span className="mono" dir="ltr">
@@ -420,6 +516,59 @@ export function certificate(id, lang = '') {
       ) : (
         ''
       )}{' '}
+      {s.pendingAmendment ? (
+        <div className="alert alert-warning" style={{ marginTop: '14px' }}>
+          <b>{L('Change to the request awaiting the priest', 'تعديل على الطلب بانتظار الكاهن')}</b>
+          <br />
+          {s.pendingAmendment.reason}
+          {s.pendingAmendment.proposedBy ? ` · ${s.pendingAmendment.proposedBy}` : ''}
+          <br />
+          {s.pendingAmendment.date ? (
+            <>
+              {L('Requested date', 'التاريخ المطلوب')}: {s.requestedDate || '—'} → {s.pendingAmendment.date}
+              <br />
+            </>
+          ) : (
+            ''
+          )}
+          {Object.entries(s.pendingAmendment.facts).map(([k, v], i) => (
+            <span key={i} style={{ display: 'block' }}>
+              {k}: {s.facts?.[k] || '—'} → {v || L('(removed)', '(حُذف)')}
+            </span>
+          ))}
+          {is('priest') ? (
+            <span className="row" style={{ gap: '6px', marginTop: '8px' }}>
+              <button className="btn btn-primary btn-dense" id="amend_approve">
+                {L('Approve change', 'اعتماد التعديل')}
+              </button>
+              <button className="btn btn-secondary btn-dense" id="amend_reject">
+                {L('Reject change', 'رفض التعديل')}
+              </button>
+            </span>
+          ) : (
+            ''
+          )}
+        </div>
+      ) : (
+        ''
+      )}{' '}
+      {(s.requestAmendments || []).filter(a => a.status !== 'Pending').length ? (
+        <div style={{ marginTop: '14px' }}>
+          <b className="t-caption">{L('Changes to the request', 'تعديلات الطلب')}</b>
+          {s.requestAmendments
+            .filter(a => a.status !== 'Pending')
+            .map((a, i) => (
+              <p key={i} className="t-caption dim">
+                {a.status === 'Approved' ? L('Approved', 'اعتُمد') : L('Rejected', 'رُفض')} · {when(a.decidedAt)}
+                {a.decidedBy ? ` · ${a.decidedBy}` : ''} · {a.reason}
+                {a.date ? ` · ${a.previousDate || '—'} → ${a.date}` : ''}
+                {a.decisionNote ? ` · ${a.decisionNote}` : ''}
+              </p>
+            ))}
+        </div>
+      ) : (
+        ''
+      )}{' '}
       {(s.pendingCorrections || []).map((c, i) => (
         <div key={i} className="alert alert-warning" style={{ marginTop: '14px' }}>
           <b>{L('Correction awaiting the priest', 'تصحيح بانتظار الكاهن')}</b>
@@ -443,13 +592,67 @@ export function certificate(id, lang = '') {
       ))}
     </Panel>
   );
-  // the API names the account that acted by id only, so what is shown is what happened and when
+  /* The case's preparation checklist: the parish's own list as copied onto this case; the office ticks each item. */
+  const parishList = !isCertificate ? API.requirementSetFor(s.kind) : null;
+  const checklistOpen = !isCertificate && ['preparing', 'scheduled'].includes(s.status);
+  const listChanged =
+    checklistOpen &&
+    !!parishList &&
+    parishList.items.map(i => `${i.key}|${i.label}|${i.labelAr}`).join('\n') !==
+      (s.requirements || []).map(r => `${r.key}|${r.label}|${r.labelAr}`).join('\n');
+  const checklist =
+    !isCertificate && ((s.requirements || []).length > 0 || listChanged) ? (
+      <Panel title={L('Preparation checklist', 'لائحة التحضير')}>
+        {(s.requirements || []).map((r, i) => (
+          <label key={i} className="check" style={{ display: 'flex', marginBottom: '8px' }}>
+            <input
+              type="checkbox"
+              data-req-key={r.key}
+              defaultChecked={r.met}
+              disabled={!checklistOpen || !is('secretary', 'priest')}
+            />{' '}
+            <span>
+              {labelOf(r)}
+              {r.recordedAt ? (
+                <small className="dim" style={{ display: 'block' }}>
+                  {r.met ? L('Met', 'مستوفى') : L('Not met', 'غير مستوفى')} · {when(r.recordedAt)}
+                  {r.recordedBy ? ` · ${r.recordedBy}` : ''}
+                  {r.note ? ` · ${r.note}` : ''}
+                </small>
+              ) : (
+                ''
+              )}
+            </span>
+          </label>
+        ))}
+        {s.requirementsBlockScheduling ? (
+          <p className="t-caption dim">
+            {L(
+              'The parish confirms a date only when every item is met.',
+              'لا تؤكّد الرعية الموعد إلا بعد استيفاء كل البنود.'
+            )}
+          </p>
+        ) : (
+          ''
+        )}
+        {listChanged && is('secretary', 'priest') ? (
+          <button className="btn btn-secondary btn-dense" id="reqsync">
+            {L('Update to the parish’s current list', 'التحديث إلى لائحة الرعية الحالية')}
+          </button>
+        ) : (
+          ''
+        )}
+      </Panel>
+    ) : (
+      ''
+    );
+  // what happened, when, and who did it (names come from the account-names lookup; empty when not revealed)
   const people = (
     s.kind === 'certificate'
       ? [
-          [L('Approved by the priest', 'اعتمده الكاهن'), '', s.signedAt],
-          [L('Accepted by the bishop', 'قبله المطران'), '', s.acceptedAt],
-          [L('Issued', 'صدرت'), '', s.issuedAt],
+          [L('Approved by the priest', 'اعتمده الكاهن'), s.signedByName, s.signedAt],
+          [L('Accepted by the bishop', 'قبله المطران'), s.acceptedByName, s.acceptedAt],
+          [L('Issued', 'صدرت'), s.issuedByName, s.issuedAt],
           [
             L('Handed over to', 'سُلّمت إلى'),
             [s.recipientName, s.recipientRelationship].filter(Boolean).join(' · '),
@@ -457,8 +660,12 @@ export function certificate(id, lang = '') {
           ]
         ]
       : [
-          [L('Request accepted', 'قُبل الطلب'), '', s.requestApprovedAt],
-          [L('Registered', 'سُجّل'), '', s.registeredAt]
+          [
+            L('Request accepted', 'قُبل الطلب'),
+            s.history?.find(h => h.action === 'accept')?.by || '',
+            s.requestApprovedAt
+          ],
+          [L('Registered', 'سُجّل'), s.history?.find(h => h.action === 'register')?.by || '', s.registeredAt]
         ]
   ).filter(([, , at]) => at);
   const activity = (
@@ -661,7 +868,7 @@ export function certificate(id, lang = '') {
               </>
             ) : (
               <>
-                {s.status === 'requested' && is('priest') ? (
+                {['requested', 'office-reviewed'].includes(s.status) && is('priest') ? (
                   <>
                     <button className="btn btn-primary" id="acceptrequest">
                       <Icon name="check" size={17} />
@@ -671,6 +878,11 @@ export function certificate(id, lang = '') {
                       {L('Decline', 'رفض')}
                     </button>
                   </>
+                ) : s.status === 'requested' && is('secretary') ? (
+                  <button className="btn btn-primary" id="officereview">
+                    <Icon name="check" size={17} />
+                    {L('Mark reviewed by the office', 'تأشير مراجعة المكتب')}
+                  </button>
                 ) : s.status === 'preparing' ? (
                   <a className="btn btn-primary" href="#/sacraments">
                     {L('Continue preparation', 'متابعة التحضير')}
@@ -704,6 +916,13 @@ export function certificate(id, lang = '') {
                       ''
                     )}
                   </>
+                ) : (
+                  ''
+                )}
+                {['preparing', 'scheduled'].includes(s.status) && !s.pendingAmendment && is('secretary', 'priest') ? (
+                  <button className="btn btn-ghost" id="proposeamend">
+                    {L('Propose a change to the request', 'اقتراح تعديل على الطلب')}
+                  </button>
                 ) : (
                   ''
                 )}
@@ -793,7 +1012,7 @@ export function certificate(id, lang = '') {
               </div>
             </Panel>
           )}{' '}
-          {details} <RequestDocuments record={s} scope="sacrament-request" onChange={() => bus.refresh()} />
+          {details} {checklist} <RequestDocuments record={s} scope="sacrament-request" onChange={() => bus.refresh()} />
         </div>{' '}
         <aside className="sidecol">{activity}</aside>
       </div>
@@ -805,6 +1024,11 @@ certificate.mount = (host, id, lang = '') => {
   const doc = SACRAMENTS.find(x => x.id === id);
   lang = docLang(doc, lang);
   const isCertificate = doc?.kind === 'certificate';
+  // the signature image attached at signing is fetched once, then the document is drawn again with it
+  if (isCertificate && doc.hasSignatureImage && !API.certificateImage(doc))
+    API.loadCertificateImage(doc).then(data => {
+      if (data) bus.refresh();
+    });
   host.querySelectorAll('[data-docview]').forEach(b => b.addEventListener('click', () => viewDoc(doc, lang)));
   host.querySelector('[data-docdl]')?.addEventListener('click', e => downloadMenu(e.currentTarget, doc, () => lang));
   host.querySelector('[data-docprint]')?.addEventListener('click', () => printDoc(doc, lang));
@@ -887,6 +1111,126 @@ certificate.mount = (host, id, lang = '') => {
     failed: L('Could not decline request', 'تعذّر رفض الطلب'),
     step: reason => API.sacramentAction(id, 'decline', { reason })
   });
+  withReason('#officereview', {
+    title: L('Mark this request reviewed by the office?', 'تأشير مراجعة المكتب لهذا الطلب؟'),
+    sub: L(
+      'The priest sees the review and your note; he may accept or decline with or without it.',
+      'يرى الكاهن المراجعة وملاحظتك؛ ويمكنه القبول أو الرفض معها أو بدونها.'
+    ),
+    confirm: L('Mark reviewed', 'تأشير المراجعة'),
+    keep: L('Back', 'رجوع'),
+    failed: L('Could not record the review', 'تعذّر تسجيل المراجعة'),
+    done: [L('Reviewed by the office', 'راجعه المكتب')],
+    optional: true,
+    step: note => API.officeReview(id, note)
+  });
+  withReason('#amend_reject', {
+    title: L('Reject this change to the request?', 'رفض هذا التعديل على الطلب؟'),
+    sub: L('The request stays as it was; the reason is kept.', 'يبقى الطلب كما كان؛ ويُحفظ السبب.'),
+    confirm: L('Reject change', 'رفض التعديل'),
+    keep: L('Back', 'رجوع'),
+    failed: L('Could not save the decision', 'تعذّر حفظ القرار'),
+    done: [L('Change rejected', 'رُفض التعديل')],
+    step: reason => API.decideAmendment(id, false, reason)
+  });
+  withReason('#amend_approve', {
+    title: L('Approve this change to the request?', 'اعتماد هذا التعديل على الطلب؟'),
+    sub: L(
+      'The request takes the new values now; the old ones stay in its history.',
+      'يأخذ الطلب القيم الجديدة الآن؛ وتبقى القديمة في سجله.'
+    ),
+    confirm: L('Approve change', 'اعتماد التعديل'),
+    keep: L('Back', 'رجوع'),
+    failed: L('Could not save the decision', 'تعذّر حفظ القرار'),
+    done: [L('Change approved', 'اعتُمد التعديل')],
+    optional: true,
+    step: note => API.decideAmendment(id, true, note)
+  });
+  host.querySelectorAll('[data-req-key]').forEach(box =>
+    box.addEventListener('change', () =>
+      run(
+        () => API.setRequirement(id, box.dataset.reqKey, box.checked),
+        [box.checked ? L('Marked as met', 'أُشّر كمستوفى') : L('Marked as not met', 'أُشّر كغير مستوفى')],
+        L('Could not update the checklist', 'تعذّر تحديث اللائحة'),
+        false
+      ).then(ok => {
+        if (!ok) box.checked = !box.checked;
+      })
+    )
+  );
+  host
+    .querySelector('#reqsync')
+    ?.addEventListener('click', () =>
+      run(
+        () => API.syncRequirements(id),
+        [L('Checklist updated', 'حُدّثت اللائحة')],
+        L('Could not update the checklist', 'تعذّر تحديث اللائحة'),
+        false
+      )
+    );
+  /* A change to an accepted request: it applies only when a priest approves it. */
+  host.querySelector('#proposeamend')?.addEventListener('click', () => {
+    const record = SACRAMENTS.find(x => x.id === id);
+    if (!record) return;
+    openDrawer({
+      title: L('Propose a change to the request', 'اقتراح تعديل على الطلب'),
+      sub: L(
+        'The accepted request stays unchanged until a priest approves this change. The reason and the decision stay in its history.',
+        'يبقى الطلب المقبول دون تغيير حتى يعتمد الكاهن هذا التعديل. ويبقى السبب والقرار في سجله.'
+      ),
+      body: (
+        <>
+          <C.Field
+            label={L('New requested date (optional)', 'التاريخ المطلوب الجديد (اختياري)')}
+            id="amend_date"
+            type="date"
+            value={record.requestedDate || ''}
+          />
+          <C.Textarea
+            label={L('Family request / notes', 'طلب العائلة / ملاحظات')}
+            id="amend_notes"
+            max={500}
+            value={record.requestNotes || ''}
+          />
+          <C.Textarea label={L('Reason for the change', 'سبب التعديل')} id="amend_reason" max={500} />
+        </>
+      ),
+      foot: (
+        <>
+          <button className="btn btn-secondary" data-close="">
+            {L('Cancel', 'إلغاء')}
+          </button>
+          <button className="btn btn-primary" id="amend_save">
+            {L('Send to the priest', 'إرسال إلى الكاهن')}
+          </button>
+        </>
+      ),
+      onMount(el) {
+        el.querySelector('#amend_save').addEventListener('click', async () => {
+          if (!need(el, '#amend_reason', L('Enter a reason', 'أدخل السبب'))) return;
+          const date = el.querySelector('#amend_date').value,
+            notes = el.querySelector('#amend_notes').value.trim();
+          const facts = notes !== (record.requestNotes || '') ? { requestNotes: notes } : {};
+          if (date === (record.requestedDate || '') && !Object.keys(facts).length)
+            return toast(
+              L('Nothing changed', 'لا تغيير'),
+              L('Change the date or the notes.', 'غيّر التاريخ أو الملاحظات.'),
+              'warning'
+            );
+          await run(
+            () =>
+              API.proposeAmendment(id, {
+                date: date !== (record.requestedDate || '') ? date : '',
+                facts,
+                reason: el.querySelector('#amend_reason').value.trim()
+              }),
+            [L('Change proposed', 'اقتُرح التعديل'), L('It waits for the priest.', 'ينتظر الكاهن.')],
+            L('Could not propose the change', 'تعذّر اقتراح التعديل')
+          );
+        });
+      }
+    });
+  });
   host.querySelector('#startcertreq')?.addEventListener('click', () => {
     S.ui.newCertificateSource = id;
     location.hash = '#/requests';
@@ -904,16 +1248,17 @@ certificate.mount = (host, id, lang = '') => {
       ),
       body: (
         <>
-          <C.Field label={L('Place', 'المكان')} id="edit_place" value={record.place || ''} />{' '}
-          <C.Field
-            label={L('Godparents / witnesses', 'الإشبين / الشهود')}
-            id="edit_godparents"
-            value={record.godparents || ''}
-          />{' '}
-          <div className="formgrid">
-            <C.Field label={L('Father', 'الأب')} id="edit_father" value={record.father || ''} />
-            <C.Field label={L('Mother', 'الأم')} id="edit_mother" value={record.mother || ''} />
-          </div>{' '}
+          {twinFields('edit_place', L('Place', 'المكان'), record.place, record.placeAr)}
+          {twinFields(
+            'edit_godparents',
+            L('Godparents / witnesses', 'الإشبين / الشهود'),
+            record.godparents,
+            record.godparentsAr
+          )}
+          {twinFields('edit_celebrant', L('Celebrant', 'المحتفل'), record.celebrantName, record.celebrantNameAr)}
+          {celebrantPick('edit_celebrant_person', record.celebrant)}
+          {twinFields('edit_father', L('Father', 'الأب'), record.father, record.fatherAr)}
+          {twinFields('edit_mother', L('Mother', 'الأم'), record.mother, record.motherAr)}
           <div className="formgrid">
             <C.Field
               label={L('External parish', 'الرعية الخارجية')}
@@ -946,12 +1291,19 @@ certificate.mount = (host, id, lang = '') => {
               API.sacramentAction(id, 'amend-facts', {
                 facts: API.mergedFacts(record, {
                   father: value('father'),
+                  fatherAr: value('fatherAr'),
                   mother: value('mother'),
+                  motherAr: value('motherAr'),
                   externalParish: value('externalParish'),
                   externalReference: value('externalReference')
                 }),
                 place: value('place'),
-                witnesses: value('godparents')
+                placeAr: value('placeAr'),
+                witnesses: value('godparents'),
+                witnessesAr: value('godparentsAr'),
+                celebrantName: value('celebrant'),
+                celebrantNameAr: value('celebrantAr'),
+                celebrantPersonId: value('celebrant_person')
               }),
             [L('Details updated', 'حُدّثت التفاصيل'), L('The history was updated.', 'حُدّث السجل.')],
             L('Could not update entry', 'تعذّر تعديل القيد')
@@ -1048,13 +1400,21 @@ certificate.mount = (host, id, lang = '') => {
             />
             {timeSelect('cel_time', record.time || '')}
           </div>
-          <C.Field label={L('Place', 'المكان')} id="cel_place" value={record.place || ''} req={true} />
-          <C.Field label={L('Celebrant', 'المحتفل')} id="cel_celebrant" value={record.celebrantName || ''} req={true} />
-          <C.Field
-            label={L('Godparents / witnesses', 'الإشبين / الشهود')}
-            id="cel_witnesses"
-            value={record.godparents || ''}
-          />
+          {twinFields('cel_place', L('Place', 'المكان'), record.place, record.placeAr)}
+          {twinFields('cel_celebrant', L('Celebrant', 'المحتفل'), record.celebrantName, record.celebrantNameAr)}
+          {celebrantPick('cel_celebrant_person', record.celebrant)}
+          {twinFields(
+            'cel_witnesses',
+            L('Godparents / witnesses', 'الإشبين / الشهود'),
+            record.godparents,
+            record.godparentsAr
+          )}
+          <p className="help">
+            {L(
+              'Type each spelling as written in the register; one of the two is enough. Neither is filled in from the other.',
+              'اكتب كل تهجئة كما في السجل؛ تكفي واحدة منهما. ولا تُملأ إحداهما من الأخرى.'
+            )}
+          </p>
         </>
       ),
       foot: (
@@ -1069,21 +1429,28 @@ certificate.mount = (host, id, lang = '') => {
       ),
       onMount(el) {
         el.querySelector('#cel_save').addEventListener('click', async () => {
+          const v = k => el.querySelector('#' + k)?.value.trim() || '';
+          if (!needAll(el, [['#cel_date', L('Enter the date', 'أدخل التاريخ')]])) return;
+          if (!v('cel_place') && !v('cel_placeAr') && !need(el, '#cel_place', L('Enter the place', 'أدخل المكان')))
+            return;
           if (
-            !needAll(el, [
-              ['#cel_date', L('Enter the date', 'أدخل التاريخ')],
-              ['#cel_place', L('Enter the place', 'أدخل المكان')],
-              ['#cel_celebrant', L('Name the celebrant', 'اذكر المحتفل')]
-            ])
+            !v('cel_celebrant') &&
+            !v('cel_celebrantAr') &&
+            !v('cel_celebrant_person') &&
+            !need(el, '#cel_celebrant', L('Name the celebrant', 'اذكر المحتفل'))
           )
             return;
           await run(
             () =>
               API.sacramentAction(id, 'record-celebration', {
                 celebratedAt: API.toUtc(el.querySelector('#cel_date').value, el.querySelector('#cel_time').value),
-                place: el.querySelector('#cel_place').value.trim(),
-                celebrantName: el.querySelector('#cel_celebrant').value.trim(),
-                witnesses: el.querySelector('#cel_witnesses').value.trim()
+                place: v('cel_place'),
+                placeAr: v('cel_placeAr'),
+                celebrantName: v('cel_celebrant'),
+                celebrantNameAr: v('cel_celebrantAr'),
+                celebrantPersonId: v('cel_celebrant_person'),
+                witnesses: v('cel_witnesses'),
+                witnessesAr: v('cel_witnessesAr')
               }),
             [
               L('Celebration recorded', 'سُجّل الاحتفال'),
@@ -1109,13 +1476,17 @@ certificate.mount = (host, id, lang = '') => {
       body: (
         <>
           {isCertificate ? (
-            ''
+            <p className="help">
+              {L(
+                'If you keep a signature image under Sacraments, it is attached for printing the paper; it is not an electronic signature.',
+                'إن كانت لديك صورة توقيع في صفحة الأسرار فتُرفق لطباعة الورقة؛ وليست توقيعاً إلكترونياً.'
+              )}
+            </p>
           ) : (
-            <C.Field
-              label={L('Book and page (optional)', 'الدفتر والصفحة (اختياري)')}
-              id="reg_book"
-              value={doc.book || ''}
-            />
+            <div className="formgrid">
+              <C.Field label={L('Book (optional)', 'الدفتر (اختياري)')} id="reg_book" value={doc.book || ''} />
+              <C.Field label={L('Page (optional)', 'الصفحة (اختياري)')} id="reg_page" value={doc.page || ''} />
+            </div>
           )}
           <label className="check">
             <input type="checkbox" id="ack" />{' '}
@@ -1144,7 +1515,10 @@ certificate.mount = (host, id, lang = '') => {
             () =>
               isCertificate
                 ? API.certificateAction(id, 'sign')
-                : API.sacramentAction(id, 'register', { bookReference: el.querySelector('#reg_book')?.value.trim() }),
+                : API.sacramentAction(id, 'register', {
+                    bookReference: el.querySelector('#reg_book')?.value.trim(),
+                    registerPage: el.querySelector('#reg_page')?.value.trim()
+                  }),
             isCertificate
               ? [
                   L('Request approved', 'اعتُمد الطلب'),
