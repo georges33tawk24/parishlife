@@ -63,6 +63,9 @@ internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProv
     {
         if (string.IsNullOrWhiteSpace(user.NormalizedUserName))
             return IdentityResult.Failed(new IdentityError { Code = "InvalidUserName", Description = "A normalized username is required." });
+        // A suspended account is inactive on purpose; resuming a registration must never reactivate it.
+        if (user.Suspended)
+            return IdentityResult.Failed(new IdentityError { Code = "AccountSuspended", Description = "This registration operation is unavailable." });
         var aliases = new List<(string Key, string Normalized, string Kind)>
         {
             (UsernameKey(user.NormalizedUserName), user.NormalizedUserName, "username")

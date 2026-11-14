@@ -152,6 +152,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RentalService>();
         services.AddScoped<WebsiteService>();
         services.AddScoped<ParishCrmService>();
+        services.AddScoped<ParishLife.Api.Interfaces.Repositories.Administration.IPlatformDirectory, ParishLife.Api.Repositories.Administration.PlatformDirectory>();
+        services.AddScoped<PlatformDirectoryService>();
+        services.AddScoped<AccountStatusService>();
+        services.AddScoped<ParishAuditService>();
+        services.AddScoped<ClergyTitleService>();
         services.AddScoped<HomepageService>();
         services.AddScoped<PublicDirectoryService>();
         services.AddScoped<PublicAppService>();
