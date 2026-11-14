@@ -32,6 +32,7 @@ import { download } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { createdId } from '../../model/modules/people.js';
 import { MergeHistory } from './people-duplicates.jsx';
+import { accountStatus } from '../administration/workspace-platform.jsx';
 import { consentsOf, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
@@ -418,12 +419,12 @@ export function personMenu(anchor, pid) {
       ...(!D.ACCOUNTS[pid]?.id && is('priest', 'secretary', 'super_admin', 'parish_admin', 'diocesan_admin')
         ? [{ label: t('Invite to complete account', 'دعوة لإكمال الحساب'), icon: 'mail', fn: () => inviteAccount(p) }]
         : []),
-      ...(D.ACCOUNTS[pid]?.id && is('priest', 'super_admin', 'bishop', 'parish_admin', 'diocesan_admin')
+      ...(D.ACCOUNTS[pid]?.id && is('super_admin')
         ? [
             {
               label: D.ACCOUNTS[pid].inactive
-                ? t('Reactivate parish access', 'إعادة تفعيل الوصول للرعية')
-                : t('Deactivate parish access', 'تعطيل الوصول للرعية'),
+                ? t('Reinstate the account', 'إعادة تفعيل الحساب')
+                : t('Suspend the account', 'تعليق الحساب'),
               icon: 'shield',
               fn: () => accountAccess(p)
             }
@@ -482,58 +483,15 @@ async function inviteAccount(p) {
   }
 }
 
+/* Suspending or reinstating the person's sign-in account is a platform-operator action (MFA) on
+   ParishLife.Api: it keeps every record and applies in every parish. The form reads the account's
+   current status and version first (features/administration/workspace-platform.jsx). */
 function accountAccess(p) {
   const account = D.ACCOUNTS[p.id];
-  openModal({
-    title: account.inactive
-      ? t('Reactivate parish access', 'إعادة تفعيل الوصول')
-      : t('Deactivate parish access', 'تعطيل الوصول'),
-    body: (
-      <>
-        <p>
-          {t(
-            'All records and activity will be preserved. Access to other parishes is unchanged.',
-            'تبقى جميع السجلات والأنشطة محفوظة. لا يتأثر الوصول إلى الرعايا الأخرى.'
-          )}
-        </p>
-        <label className="label">
-          {t('Reason', 'السبب')}
-          <textarea className="textarea" id="account-access-reason" maxLength="500" />
-        </label>
-      </>
-    ),
-    foot: (
-      <>
-        <button className="btn btn-secondary" data-close="">
-          {t('Cancel', 'إلغاء')}
-        </button>
-        <button className="btn btn-primary" id="account-access-save">
-          {t('Confirm', 'تأكيد')}
-        </button>
-      </>
-    ),
-    onMount(el) {
-      el.querySelector('#account-access-save').onclick = async e => {
-        const b = e.currentTarget;
-        b.disabled = true;
-        try {
-          await api('workspace/suspension', 'POST', {
-            parish: session.parishId,
-            userId: account.id,
-            scope: 'parish',
-            active: !account.inactive,
-            reason: el.querySelector('#account-access-reason').value
-          });
-          account.inactive = !account.inactive;
-          closeOverlays();
-          bus.refresh();
-        } catch (err) {
-          b.disabled = false;
-          toast(t('Could not update access', 'تعذّر تعديل الوصول'), err.message, 'danger');
-        }
-      };
-    }
-  });
+  accountStatus(account.id, () => {
+    account.inactive = !account.inactive;
+    bus.refresh();
+  }).catch(err => toast(t('Could not update access', 'تعذّر تعديل الوصول'), err.message, 'danger'));
 }
 
 /* Destructive — typed confirmation, exactly as sheet 04 draws it. */

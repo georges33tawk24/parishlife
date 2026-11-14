@@ -1,5 +1,6 @@
 /* Purpose: the Administration module's connection to ParishLife.Api: the parish's custom workflows
-   (forms) and their runs, the activity the API records for the parish, and the parish profile.
+   (forms) and their runs, the activity the API records for the parish (the general audit trail when the
+   account holds audit.read, otherwise status changes and workflow history), and the parish profile.
    Main members: keys (the view-model collections this module owns), routes (the portal pages it
    feeds), load (fills the collections from the API), save (reports edits as unsupported: workflow
    and form edits go to the API directly from their screens, then reload).
@@ -15,8 +16,10 @@ import {
   runWorklist,
   runHistory,
   parishStatusHistory,
+  parishAudit,
   orEmpty
 } from './administration-api.js';
+import { loadNames, nameOf } from '../names.js';
 
 export const keys = [
   'WORKFLOWS',
@@ -107,11 +110,13 @@ const kindOf = action =>
 
 export async function load(parish, d) {
   const id = parish.id;
-  const [detail, defs, runs, statusChanges] = await Promise.all([
+  const [detail, defs, runs, statusChanges, trail] = await Promise.all([
     getParish(id).catch(() => null),
     orEmpty(listWorkflows(id)),
     orEmpty(listRuns(id).catch(error => (error.status === 403 ? runWorklist(id) : Promise.reject(error)))),
-    orEmpty(parishStatusHistory(id))
+    orEmpty(parishStatusHistory(id)),
+    /* the general trail needs audit.read; a refusal (403, or 404 for no grant) leaves it null */
+    parishAudit(id).catch(() => null)
   ]);
   /* the parish profile: only what the API holds (name, locality, contact, the archdiocese it declared) */
   if (detail?.value) {
@@ -148,6 +153,28 @@ export async function load(parish, d) {
     })
   );
   d.RUN_LOG = entries.sort((a, b) => String(b.at).localeCompare(String(a.at))).map(e => [e.at, e.text, e.text, e.kind]);
+  /* With audit.read the parish's general trail (GET /api/parishes/{id}/audit) replaces the partial one:
+     every recorded action, who did it and when (no reasons). Actors are shown by name when visible. */
+  if (trail) {
+    await loadNames(
+      id,
+      trail.map(e => e.actorId)
+    );
+    d.AUDIT = trail
+      .map(e => {
+        const what = `${e.action.replace(/[._]/g, ' ')} · ${e.resourceId}`;
+        return {
+          at: e.at,
+          who: '',
+          actorName: nameOf(id, e.actorId) || '—',
+          what,
+          whatAr: what,
+          kind: kindOf(e.action)
+        };
+      })
+      .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return;
+  }
   d.AUDIT = [
     ...entries.map(e => ({ at: e.at, who: '', actorName: '', what: e.text, whatAr: e.text, kind: kindOf(e.action) })),
     ...statusChanges.map(c => ({

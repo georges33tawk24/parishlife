@@ -1,7 +1,8 @@
-/* The record of what happened in this parish, as far as ParishLife.Api lets it be read: the parish's
-   operating-status changes and the history of its open workflow runs (model/modules/administration.js).
-   The API has no general audit trail to read yet, so file opens, approvals and exports are not listed.
-   Main member: audit. */
+/* The record of what happened in this parish, read from ParishLife.Api (model/modules/administration.js).
+   With audit.read it is the parish's general audit trail: every recorded action, who did it (by name when
+   the account-names lookup reveals it) and when, without free-text reasons. Without it, only the parish's
+   operating-status changes and the history of its open workflow runs. Finance and private-case records are
+   not part of this trail. Main member: audit. */
 import { t } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
 import { PageHead, Pill, Table, Empty } from '../../ui/ui.jsx';
@@ -32,10 +33,10 @@ export function audit() {
       />
       <C.InlineAlert
         tone="info"
-        title={L('Only part of the trail can be read yet', 'يمكن قراءة جزء من السجل فقط حالياً')}
+        title={L('Read only', 'للقراءة فقط')}
         body={L(
-          'ParishLife records more than this, but the API only lets the parish read its operating-status changes and workflow activity. Opened files, approvals elsewhere and exports are not listed.',
-          'تسجّل «حياة الرعية» أكثر من ذلك، لكن الواجهة لا تتيح للرعية إلا قراءة تغييرات حالتها التشغيلية ونشاط مسارات العمل. الملفات المفتوحة والموافقات الأخرى والتصديرات غير مدرجة.'
+          'Accounts with the audit permission see every recorded action in this parish; others see status changes and workflow activity only. Reasons, finance and private cases are not shown here.',
+          'يرى أصحاب صلاحية التدقيق كل إجراء مسجّل في هذه الرعية؛ ويرى الآخرون تغييرات الحالة ونشاط مسارات العمل فقط. الأسباب والمالية والحالات الخاصة لا تظهر هنا.'
         )}
       />{' '}
       <div className="toolbar">
@@ -51,6 +52,7 @@ export function audit() {
       <Table
         cols={[
           { label: L('When', 'الوقت'), cls: 'hide-sm', sort: true },
+          { label: L('Who', 'من') },
           { label: L('What', 'ماذا') },
           { label: L('Kind', 'النوع'), cls: 'shrink' }
         ]}
@@ -60,6 +62,7 @@ export function audit() {
             <span className="mono dim" dir="ltr">
               {auditTime(a.at)}
             </span>,
+            a.actorName || '—',
             a.what,
             <Pill label={KINDS[a.kind][0]} tone={KINDS[a.kind][1]} />
           ]

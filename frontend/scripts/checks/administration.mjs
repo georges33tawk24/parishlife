@@ -1,7 +1,9 @@
 /* Purpose: checks the Administration module against an in-memory stand-in for the routes it calls:
    what load puts in the workflow, task, activity and parish collections (and that a 403 leaves them
    empty), that edits to collections with no API are undone and reported, paging with size and cursor,
-   and the exact routes and bodies the workspace, bishop, reporting, workflow and homepage calls send. */
+   and the exact routes and bodies the workspace, bishop, reporting, workflow and homepage calls send;
+   the general audit trail (with audit.read) replacing the partial one, with actor names from the
+   account-names lookup; and the platform lists, account suspension and clergy-title calls. */
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
 
@@ -9,7 +11,9 @@ const P = '11111111-1111-4111-8111-111111111111',
   A = '22222222-2222-4222-8222-222222222222',
   W = '33333333-3333-4333-8333-333333333333',
   R = '44444444-4444-4444-8444-444444444444';
-let forbidWorkflows = false;
+const U = '55555555-5555-4555-8555-555555555555';
+let forbidWorkflows = false,
+  auditTrail = false;
 const steps = [
   {
     key: 'review',
@@ -53,7 +57,9 @@ const run = {
   ],
   startedAt: '2026-11-02T10:00:00Z'
 };
+const gets = [];
 const { sent } = mockApi((method, path, body) => {
+  if (method === 'GET') gets.push(path);
   if (path === `parishes/${P}`)
     return json(200, {
       value: {
@@ -97,6 +103,26 @@ const { sent } = mockApi((method, path, body) => {
         at: '2026-11-03T08:00:00Z'
       }
     ]);
+  if (path.startsWith(`parishes/${P}/audit?`))
+    return auditTrail
+      ? json(200, {
+          items: [
+            { operationId: 'o1', actorId: U, action: 'grant.create', resourceId: 'g1', at: '2026-11-04T09:00:00Z' },
+            { operationId: 'o2', actorId: 'hidden', action: 'workflow.started', resourceId: R, at: '2026-11-05T09:00:00Z' }
+          ],
+          continuationToken: null
+        })
+      : json(403, { status: 403, title: 'forbidden', detail: 'No.' });
+  if (path.startsWith(`parishes/${P}/account-names?`)) return json(200, [{ accountId: U, displayName: 'Office Writer' }]);
+  if (path.startsWith('administration/accounts?'))
+    return json(200, {
+      items: [{ value: { accountId: U, userName: 'writer', status: 'Active', platformOperator: false }, version: 'a1' }],
+      continuationToken: null
+    });
+  if (path.startsWith('administration/parishes?'))
+    return path.includes('cursor=100')
+      ? json(200, { items: [{ id: 'p2', name: 'Second' }], continuationToken: null })
+      : json(200, { items: [{ id: P, name: 'Saint Test' }], continuationToken: '100' });
   if (path.startsWith(`parishes/${P}/people?`)) return json(200, { items: [], continuationToken: null });
   if (path === 'me/capacities')
     return json(200, [
@@ -197,5 +223,45 @@ assert.equal(last()[1], `parishes/${P}/payer-transfers/archdioceses/${A}`);
 const scopes = await X.myScopes();
 assert.deepEqual([scopes.operator, scopes.bishop, scopes.archdioceses.map(a => a.id)], [true, true, [A]]);
 assert.equal((await X.bishopOverview(A, '2026-10-01T00:00:00Z', '2026-11-01T23:59:59Z')).archdioceseId, A);
+
+// with audit.read the general trail replaces the partial one; visible actors are named, others show '—'
+auditTrail = true;
+await hydrate();
+assert.deepEqual(
+  D.AUDIT.map(a => [a.actorName, a.kind]),
+  [
+    ['—', 'create'],
+    ['Office Writer', 'create']
+  ],
+  'general audit trail, newest first, with names'
+);
+assert.ok(gets.some(p => p.startsWith(`parishes/${P}/account-names?ids=`)));
+assert.ok(!JSON.stringify(D.AUDIT).includes('reason'), 'the trail carries no reasons');
+auditTrail = false;
+
+// platform lists (operators): every page is read; filters go in the query
+const parishes = await X.platformParishes({ q: 'saint', status: 'Verified' });
+assert.deepEqual(
+  parishes.map(p => p.id),
+  [P, 'p2']
+);
+assert.ok(gets.some(p => p.startsWith('administration/parishes?q=saint&status=Verified&size=100')));
+assert.equal((await X.platformAccounts({ status: 'Active' }))[0].value.accountId, U);
+
+// account status and clergy titles: exact routes and bodies, with no credential sent
+await X.suspendAccount(U, 'a1', 'Isolated reason');
+assert.equal(`${last()[0]} ${last()[1]}`, `POST administration/accounts/${U}/suspend`);
+assert.deepEqual([last()[2].version, last()[2].reason], ['a1', 'Isolated reason']);
+assert.match(last()[2].operationId, /^[0-9a-f-]{36}$/);
+assert.ok(!('currentPassword' in last()[2]));
+await X.reinstateAccount(U, 'a2', 'Back');
+assert.equal(last()[1], `administration/accounts/${U}/reinstate`);
+await X.createClergyTitle({ title: null, titleAr: 'لقب', retired: false });
+assert.deepEqual([last()[0], last()[1], last()[2].titleAr, last()[2].title], ['POST', 'clergy-titles', 'لقب', null]);
+await X.assignClergyTitle(U, '', 't1');
+assert.deepEqual(
+  [last()[0], last()[1], last()[2].version, last()[2].clergyTitleId],
+  ['PUT', `administration/accounts/${U}/clergy-title`, null, 't1']
+);
 
 console.log('administration: ok');

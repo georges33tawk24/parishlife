@@ -2,13 +2,14 @@
    screens in features/administration and features/oversight never build a URL themselves.
    Main members: listAll (every page of a list that pages with size and cursor), myScopes (the
    organizations and parishes the signed-in account has a capacity in), organization and parish calls,
-   appointments, billing, reporting, workflows and the platform homepage.
+   appointments, billing, reporting, workflows, the platform homepage, platform lists and account status,
+   clergy titles and the parish audit trail.
 
    Routes, DTOs and permissions are those of ParishLife.Api/Controllers (Organizations, Administration,
    Billing, Reporting, Workflows, Publishing/HomepageController). Property names are camelCase and enums
    are strings. Creates carry an operationId; a versioned write sends the version the API returned.
-   The API has no list of all parishes, archdioceses or accounts: what is shown is what the account can
-   reach through its capacities (GET /api/me/capacities), or what it opens by reference. */
+   Only platform operators get the lists of every parish, archdiocese and account; everyone else sees
+   what the account reaches through its capacities (GET /api/me/capacities), or opens by reference. */
 import { api, newOperationId, notConnected } from '../api.js';
 
 const e = encodeURIComponent;
@@ -212,3 +213,31 @@ export const getMfaRecoveryRequest = (accountId, id) =>
   api(`administration/accounts/${e(accountId)}/mfa-recovery-requests/${e(id)}`);
 export const reviewMfaRecovery = (accountId, id, body) =>
   api(`administration/accounts/${e(accountId)}/mfa-recovery-requests/${e(id)}/review`, 'POST', op(body));
+
+/* ---- Platform lists and account status (platform operators with MFA; every read is audited) ---- */
+/* q searches names, places, usernames and e-mail; status filters (parish: PendingVerification, Verified,
+   Closed, Suspended; account: Active, Suspended, Pending). The cursor is the offset the API returned. */
+export const platformParishes = (params = {}) => listAll('administration/parishes', { params, limit: 2000, size: 100 });
+export const platformArchdioceses = (params = {}) =>
+  listAll('administration/archdioceses', { params, limit: 2000, size: 100 });
+export const platformAccounts = (params = {}) => listAll('administration/accounts', { params, limit: 2000, size: 100 });
+export const platformAccount = accountId => api(`administration/accounts/${e(accountId)}`); // Versioned<PlatformAccountDto>
+/* Suspension keeps every record; it ends the account's sessions and stops sign-in until reinstated. */
+export const suspendAccount = (accountId, version, reason) =>
+  api(`administration/accounts/${e(accountId)}/suspend`, 'POST', op({ version, reason }));
+export const reinstateAccount = (accountId, version, reason) =>
+  api(`administration/accounts/${e(accountId)}/reinstate`, 'POST', op({ version, reason }));
+export const accountStatusHistory = accountId =>
+  listAll(`administration/accounts/${e(accountId)}/status-history`, { limit: 200, size: 25 });
+
+/* ---- Clergy titles: an operator-kept list (empty until an operator types titles in) ---- */
+export const listClergyTitles = (includeRetired = false) => api(withQuery('clergy-titles', { includeRetired }));
+export const createClergyTitle = body => api('clergy-titles', 'POST', op(body));
+export const updateClergyTitle = (id, body) => api(`clergy-titles/${e(id)}`, 'PUT', op(body));
+export const clergyTitleOf = accountId => api(`clergy-titles/accounts/${e(accountId)}`);
+/* clergyTitleId null removes the title; version is the assignment's ('' before the first one). */
+export const assignClergyTitle = (accountId, version, clergyTitleId) =>
+  api(`administration/accounts/${e(accountId)}/clergy-title`, 'PUT', op({ version: version || null, clergyTitleId }));
+
+/* ---- The parish audit trail (audit.read): who did which recorded action, when; no reasons ---- */
+export const parishAudit = (parishId, limit = 200) => listAll(`parishes/${e(parishId)}/audit`, { limit, size: 100 });
