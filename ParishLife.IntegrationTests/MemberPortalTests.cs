@@ -164,9 +164,10 @@ public class MemberPortalTests
         Assert.NotEmpty(staged);
         Assert.Equal(staged.Order(StringComparer.Ordinal), NotificationTopicCatalog.RequiredTopics.Order(StringComparer.Ordinal));
         Assert.Empty(NotificationTopicCatalog.OptionalTopics.Intersect(NotificationTopicCatalog.RequiredTopics));
-        // Every service that consults MutedTopics declares the topic it checks in the optional list.
+        // Every service file that checks a mute against its own topic constant (Topic, or a qualified X.Topic such as
+        // BroadcastService.Topic in BroadcastAudience) declares that topic in the optional list.
         var muting = Directory.EnumerateFiles(Path.Combine(root.FullName, "ParishLife.Api", "Services"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => File.ReadAllText(path).Contains("MutedTopics.Contains(Topic", StringComparison.Ordinal)).Count();
+            .Where(path => Regex.IsMatch(File.ReadAllText(path), @"MutedTopics\.Contains\((\w+\.)?Topic\b")).Count();
         Assert.Equal(NotificationTopicCatalog.OptionalTopics.Length, muting);
     }
 
