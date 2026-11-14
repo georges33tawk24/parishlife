@@ -472,7 +472,7 @@ function Week() {
   const list = useRef(null),
     first = useRef(true);
   const date = d => new Date(d + 'T12:00:00');
-  const now = seasonOn(c.liturgy, days[0]);
+  const now = seasonOn(c.liturgy, days[0], c.lang);
   /* the cards of a newly chosen day settle into place */
   useEffect(() => {
     if (first.current) {
@@ -504,7 +504,9 @@ function Week() {
         <p className="wk-season" data-reveal>
           <MaroniteCross />
           <span>{yearLabel(L, now.rite)}</span>
-          <b dir="auto">{now.text}</b>
+          <b dir="auto" lang={now.lang}>
+            {now.text}
+          </b>
         </p>
       ) : null}
     </>

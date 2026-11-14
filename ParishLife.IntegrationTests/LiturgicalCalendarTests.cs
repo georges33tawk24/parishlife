@@ -23,7 +23,7 @@ public class LiturgicalCalendarTests
         CorrectsCalendarId = corrects is null ? null : Guid.Parse(corrects), CorrectionReason = corrects is null ? null : "Isolated reviewed correction",
         Entries = entries.Length > 0 ? entries :
         [
-            new() { Date = new DateOnly(2027, 1, 6), Titles = new() { ["en"] = "Entry one", ["fr"] = "Entrée un", ["ar"] = "البند الأول" }, Rank = "Supplied rank", DisplayColor = "#ffffff" },
+            new() { Date = new DateOnly(2027, 1, 6), Titles = new() { ["en"] = "Entry one", ["fr"] = "Entrée un", ["ar"] = "البند الأول" }, Rank = "Supplied rank", RankAr = "رتبة مزوّدة", DisplayColor = "#ffffff" },
             new() { Date = new DateOnly(2027, 2, 2), Titles = new() { ["en"] = "Entry two" } }
         ]
     };
@@ -80,6 +80,10 @@ public class LiturgicalCalendarTests
         Assert.Equal([("Entrée un", "fr"), ("Entry two", "en")], french.Days.Select(d => (d.Title, d.Language)).ToArray());
         Assert.Equal(("Supplied rite label", "Isolated authority source reference", "v1", "#FFFFFF", false),
             (french.Days[0].Rite, french.Days[0].Source, french.Days[0].CalendarVersion, french.Days[0].DisplayColor, french.Days[0].ParishException));
+        // Arabic rank/season labels are the authority's own; a label it supplied only in Latin script has no Arabic twin.
+        Assert.Equal(("Supplied rank", "رتبة مزوّدة", (string?)null), (french.Days[0].Rank, french.Days[0].RankAr, french.Days[0].SeasonAr));
+        Assert.Null(french.Days[1].RankAr);
+        Assert.Equal("رتبة مزوّدة", (await l.GetAsync(s.Organization, id, default)).Value.Entries[0].RankAr);
         Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => l.PublicAsync(s.Parish, Jan1, Jan1.AddDays(400), "en", default))).Code);
 
         // A second, unrelated version for the same rite and year cannot also become current.

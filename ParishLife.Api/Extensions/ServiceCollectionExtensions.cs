@@ -160,6 +160,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ParishCrmService>();
         services.AddScoped<HomepageService>();
         services.AddScoped<PublicDirectoryService>();
+        services.AddScoped<ParishProfileService>();
+        services.AddScoped<ParishCalendarFeedService>();
         services.AddScoped<PublicAppService>();
         services.AddScoped<LiturgicalCalendarService>();
         services.AddScoped<CombinedHomeService>();

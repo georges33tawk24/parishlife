@@ -93,13 +93,50 @@ const { sent } = mockApi((method, path, body) => {
       to,
       status: 'Published',
       days: [
-        day(iso(0), ar ? 'اليوم' : 'Today feast', { language: lang, season: 'Season of the Cross', rank: 'Feast' }),
+        day(iso(0), ar ? 'اليوم' : 'Today feast', {
+          language: lang,
+          season: 'Season of the Cross',
+          seasonAr: 'زمن الصليب',
+          rank: 'Feast'
+        }),
         day(iso(1), ar ? 'عيد الرعية' : 'Parish patron', { language: lang, parishException: true }),
         // a title that exists in English only, whichever language was asked
         day(iso(2), 'English only')
       ]
     });
   }
+  const profile = path.match(/^public\/parishes\/(\w+)\/profile$/);
+  if (profile) {
+    if (profile[1] !== 'A') return json(404, { status: 404, title: 'resource_not_found', detail: 'unavailable' });
+    return json(200, {
+      parishId: 'A',
+      name: 'Saint A',
+      locality: 'A',
+      profile: {
+        nameAr: 'مار أ',
+        localityAr: 'أ',
+        rite: 'Maronite',
+        riteAr: null,
+        phone: '+961 1 000 000',
+        massTimes: 'Sunday 10:00',
+        massTimesAr: null,
+        officeHours: 'Mon-Fri 9-12',
+        officeHoursAr: 'الإثنين-الجمعة ٩-١٢',
+        livestreamUrl: 'https://video.example/live',
+        whatsAppUrl: 'https://chat.whatsapp.com/x',
+        showClergy: true
+      },
+      photos: [{ id: 'p1', url: '/api/public/parishes/A/profile/photos/p1', caption: null, captionAr: null }],
+      clergy: [{ name: 'Fr. Test', role: 'ParishPriest' }],
+      calendarFeed: '/api/public/parishes/A/calendar.ics',
+      publishedAt: '2026-11-01T00:00:00Z'
+    });
+  }
+  if (/^public\/parishes\/\w+\/announcements$/.test(path))
+    return json(200, [
+      { id: 'n1', title: 'Feast', body: 'Come', language: 'en', publishedAt: '2026-11-02T00:00:00Z' },
+      { id: 'n2', title: 'عيد', body: 'تعالوا', language: 'ar', publishedAt: '2026-11-02T00:00:00Z' }
+    ]);
   if (path === 'public/parishes' && method === 'GET')
     return json(200, {
       items: ['A', 'B', 'C'].map(id => ({ parishId: id, name: 'Saint ' + id, locality: id, dioceseName: 'D' })),
@@ -197,7 +234,12 @@ assert.deepEqual(
   ['English only', 'English only'],
   'a title served in one language is shown in the other as it is, not translated'
 );
-assert.deepEqual(A.seasonOn(home, iso(0)), { text: 'Season of the Cross', rite: 'Maronite' });
+assert.deepEqual(A.seasonOn(home, iso(0)), { text: 'Season of the Cross', lang: 'en', rite: 'Maronite' });
+assert.deepEqual(
+  A.seasonOn(home, iso(0), 'ar'),
+  { text: 'زمن الصليب', lang: 'ar', rite: 'Maronite' },
+  "the Arabic page shows the authority's own Arabic season label"
+);
 assert.equal(A.seasonOn(home, iso(2)), null, 'a season is only what the calendar attaches to that day');
 calendarFor = new Set();
 const none = await A.loadHomeLiturgy(directory);
@@ -208,6 +250,44 @@ assert.equal(A.observanceOn(none, iso(0)), null);
 calendarFor = new Set(['A']);
 const parish = await A.loadParish({ id: 'A', name: 'Saint A', town: 'A' });
 assert.equal(A.observanceOn(parish.liturgy, iso(1)).en, 'Parish patron');
+
+// the published profile: Arabic twins as typed (never filled from English), photos, clergy, news, links
+assert.deepEqual(
+  [parish.parish.nameAr, parish.parish.townAr, parish.parish.rite, parish.parish.riteAr, parish.parish.phone],
+  ['مار أ', 'أ', 'Maronite', '', '+961 1 000 000']
+);
+assert.deepEqual(
+  parish.content.massTimes,
+  { en: 'Sunday 10:00', ar: '' },
+  'profile Mass times when no website section'
+);
+assert.deepEqual([parish.visit.officeHours, parish.visit.officeHoursAr], ['Mon-Fri 9-12', 'الإثنين-الجمعة ٩-١٢']);
+assert.deepEqual(
+  [parish.visit.livestream, parish.visit.whatsapp],
+  ['https://video.example/live', 'https://chat.whatsapp.com/x']
+);
+assert.deepEqual(parish.gallery, ['/api/public/parishes/A/profile/photos/p1']);
+assert.deepEqual(parish.clergy, [{ name: 'Fr. Test', role: 'ParishPriest' }]);
+assert.deepEqual(
+  parish.posts.map(p => [p.id, p.lang]),
+  [
+    ['n1', 'en'],
+    ['n2', 'ar']
+  ]
+);
+const unpublished = await A.loadParish({ id: 'C', name: 'Saint C', town: 'C' });
+assert.deepEqual(
+  [unpublished.parish.phone, unpublished.parish.rite, unpublished.gallery.length, unpublished.clergy.length],
+  ['', '', 0, 0],
+  'nothing shows before a parish publishes its profile'
+);
+assert.deepEqual(
+  A.toParish({ parishId: 'A', name: 'Saint A', nameAr: 'مار أ', locality: 'A', localityAr: null }).ar,
+  'مار أ'
+);
+globalThis.location = { href: 'https://site.test/public.html' };
+assert.equal(A.feedURL('A'), 'https://site.test/api/public/parishes/A/calendar.ics');
+assert.equal(A.feedURL('A', 'webcal:'), 'webcal://site.test/api/public/parishes/A/calendar.ics');
 const listing = await A.loadDirectory();
 assert.equal(listing.details.get('A').liturgy.published, false, 'the homepage does not load every parish calendar');
 

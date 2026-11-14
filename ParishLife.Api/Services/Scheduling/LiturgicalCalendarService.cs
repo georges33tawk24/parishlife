@@ -207,7 +207,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
         var days = new List<PublicLiturgicalDayDto>();
         foreach (var calendar in calendars.Values)
             foreach (var entry in calendar.Entries.Where(e => e.Date >= start && e.Date <= end))
-                days.Add(Day(calendar, entry.Date, entry.Titles, lang, entry.Rank, entry.Season, entry.DisplayColor, false));
+                days.Add(Day(calendar, entry.Date, entry.Titles, lang, entry.Rank, entry.Season, entry.DisplayColor, false, entry.RankAr, entry.SeasonAr));
         foreach (var exception in (await records.CollectAsync<LiturgicalException>(Parish(parish), "liturgicalException", ct, 500, Status("Active"))).Select(r => r.Value))
             if (exception.ParishId == parish && exception.Status == "Active" && calendars.TryGetValue(exception.CalendarId, out var calendar))
                 for (var day = exception.EffectiveFrom < start ? start : exception.EffectiveFrom; day <= exception.EffectiveTo && day <= end; day = day.AddDays(1))
@@ -218,12 +218,12 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
     }
 
     private static PublicLiturgicalDayDto Day(LiturgicalCalendar calendar, DateOnly date, Dictionary<string, string> titles, string lang,
-        string? rank, string? season, string? color, bool parishException)
+        string? rank, string? season, string? color, bool parishException, string? rankAr = null, string? seasonAr = null)
     {
         var served = titles.ContainsKey(lang) ? lang : titles.ContainsKey("en") ? "en" : titles.Keys.Order(StringComparer.Ordinal).First();
         return new PublicLiturgicalDayDto
         {
-            Date = date, Title = titles[served], Language = served, Rank = rank, Season = season, DisplayColor = color, Rite = calendar.Rite,
+            Date = date, Title = titles[served], Language = served, Rank = rank, Season = season, RankAr = rankAr, SeasonAr = seasonAr, DisplayColor = color, Rite = calendar.Rite,
             Source = calendar.Source, CalendarVersion = calendar.VersionLabel, CalendarId = calendar.Id, ParishException = parishException
         };
     }
@@ -255,7 +255,8 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
             Entries = request.Entries.Select(e => new LiturgicalEntry
             {
                 Date = e.Date is { } date && date >= from && date <= to ? date : throw Invalid("Every entry needs a date inside the calendar's period."),
-                Titles = Titles(e.Titles), Rank = Optional(e.Rank, "Rank"), Season = Optional(e.Season, "Season"), DisplayColor = Color(e.DisplayColor)
+                Titles = Titles(e.Titles), Rank = Optional(e.Rank, "Rank"), Season = Optional(e.Season, "Season"),
+                RankAr = Optional(e.RankAr, "Arabic rank"), SeasonAr = Optional(e.SeasonAr, "Arabic season"), DisplayColor = Color(e.DisplayColor)
             }).OrderBy(e => e.Date).ToList()
         };
         if (request.CorrectsCalendarId is { } corrects)
@@ -312,7 +313,8 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
         ApprovedAt = x.ApprovedAt, ApprovalNote = x.ApprovalNote, WithdrawnReason = x.WithdrawnReason,
         Entries = [.. x.Entries.Select(e => new LiturgicalEntryDto
         {
-            Date = e.Date, Titles = new Dictionary<string, string>(e.Titles), Rank = e.Rank, Season = e.Season, DisplayColor = e.DisplayColor
+            Date = e.Date, Titles = new Dictionary<string, string>(e.Titles), Rank = e.Rank, Season = e.Season, RankAr = e.RankAr, SeasonAr = e.SeasonAr,
+            DisplayColor = e.DisplayColor
         })]
     };
 

@@ -10,8 +10,11 @@
    date range), .../ministries and .../liturgical-calendar (approved observances); GET
    /api/public/homepage (published platform content); GET /api/public/app/manifest and
    .../offline-policy; GET /api/public/document-verifications/{code}.
-   What the API does not publish stays empty instead of being invented: Arabic names, rite, phone,
-   address, clergy, photos and news. Public requests are on: the request form posts to the anonymous request route. */
+   Also .../profile (what the parish published: contacts, Arabic name, rite, times, links, photos,
+   clergy; 404 until it publishes), .../announcements (public news) and .../calendar.ics (the feed).
+   What a parish has not published stays empty instead of being invented. Public requests are on: the
+   request form posts to the anonymous request route.
+   Also exported: toProfile, toPost, feedURL. */
 import { api } from '../portal/model/api.js';
 
 async function json(url) {
@@ -24,9 +27,9 @@ async function json(url) {
 export const toParish = p => ({
   id: p.parishId,
   name: p.name || '',
-  ar: '',
+  ar: p.nameAr || '',
   town: p.locality || '',
-  townAr: '',
+  townAr: p.localityAr || '',
   diocese: p.dioceseName || '',
   latitude: p.latitude ?? '',
   longitude: p.longitude ?? ''
@@ -92,6 +95,60 @@ export const toMinistry = m => ({
   responsible: ''
 });
 
+/* PublicParishProfileDto (or null when nothing is published) → the parish's facts, visit details,
+   photographs and clergy. Each text keeps its Arabic twin (…Ar) exactly as typed; the page picks the
+   visitor's language and falls back to the other one for display only. */
+const VISIT_TEXTS = [
+  'officeHours',
+  'confessionTimes',
+  'expect',
+  'languages',
+  'parking',
+  'accessibility',
+  'sacramentNotes',
+  'feastName'
+];
+export function toProfile(dto) {
+  const pr = dto?.profile || {};
+  const visit = { email: pr.email || '', website: pr.website || '', feastDate: pr.feastDate || '' };
+  for (const k of VISIT_TEXTS) {
+    visit[k] = pr[k] || '';
+    visit[k + 'Ar'] = pr[k + 'Ar'] || '';
+  }
+  return {
+    parish: {
+      nameAr: pr.nameAr || '',
+      ar: pr.nameAr || '',
+      townAr: pr.localityAr || '',
+      rite: pr.rite || '',
+      riteAr: pr.riteAr || '',
+      phone: pr.phone || '',
+      address: pr.address || '',
+      addressAr: pr.addressAr || ''
+    },
+    massTimes: { en: pr.massTimes || '', ar: pr.massTimesAr || '' },
+    visit: { ...visit, livestream: pr.livestreamUrl || '', whatsapp: pr.whatsAppUrl || '' },
+    gallery: (dto?.photos || []).map(x => x.url).filter(Boolean),
+    clergy: (dto?.clergy || []).map(m => ({ name: m.name || '', role: m.role || '' }))
+  };
+}
+
+/* AnnouncementDto (public) → a news post; translations are separate announcements, each keeps its language. */
+export const toPost = a => ({
+  id: a.id,
+  at: a.publishedAt || '',
+  title: a.title || '',
+  body: a.body || '',
+  lang: String(a.language || '').slice(0, 2)
+});
+
+/* The public calendar feed of a parish, absolute, for calendar apps (webcal: when asked). */
+export const feedURL = (parishId, scheme = '') => {
+  if (!parishId) return '';
+  const url = new URL('/api/public/parishes/' + encodeURIComponent(parishId) + '/calendar.ics', location.href).href;
+  return scheme ? url.replace(/^https?:/, scheme) : url;
+};
+
 const days = n => new Date(Date.now() + n * 86400000).toISOString();
 const dateOnly = n => {
   const d = new Date(Date.now() + n * 86400000);
@@ -99,37 +156,33 @@ const dateOnly = n => {
 };
 async function parts(p, withMinistries) {
   const base = '/api/public/parishes/' + encodeURIComponent(p.id);
-  const [sections, calendar, ministries, liturgy] = await Promise.all([
+  const [sections, calendar, ministries, liturgy, profile, news] = await Promise.all([
     json(base + '/website').catch(() => []),
     json(`${base}/calendar?start=${encodeURIComponent(days(-7))}&end=${encodeURIComponent(days(120))}&size=50`).catch(
       () => ({ items: [] })
     ),
     withMinistries ? json(base + '/ministries?size=50').catch(() => ({ items: [] })) : { items: [] },
     // approved observances for the same window as the calendar; the parish's own exceptions are its own
-    withMinistries ? liturgyPages(p.id, dateOnly(-7), dateOnly(120)) : null
+    withMinistries ? liturgyPages(p.id, dateOnly(-7), dateOnly(120)) : null,
+    json(base + '/profile').catch(() => null), // 404 until the parish publishes its profile
+    withMinistries ? json(base + '/announcements').catch(() => []) : []
   ]);
+  const shaped = toProfile(profile),
+    content = toContent(sections);
+  // Mass times written in the website's own section win; otherwise the profile's
+  if (!content.massTimes && (shaped.massTimes.en || shaped.massTimes.ar)) content.massTimes = shaped.massTimes;
   return {
-    parish: {
-      name: p.name,
-      nameAr: '',
-      ar: '',
-      town: p.town,
-      townAr: '',
-      rite: '',
-      riteAr: '',
-      phone: '',
-      address: ''
-    },
-    content: toContent(sections),
+    parish: { ...shaped.parish, name: p.name, town: p.town, ar: shaped.parish.ar || p.ar || '' },
+    content,
     events: (calendar.items || []).filter(e => e.status !== 'Cancelled').map(toEvent),
     ministries: (ministries.items || []).map(toMinistry),
     liturgy: toLiturgy(liturgy || [], true),
-    posts: [],
-    clergy: [],
-    gallery: [],
+    posts: (Array.isArray(news) ? news : []).map(toPost),
+    clergy: shaped.clergy,
+    gallery: shaped.gallery,
     parishPhoto: '',
     publicRequests: true, // the request form posts to the API's anonymous request route
-    visit: { latitude: p.latitude, longitude: p.longitude, livestream: '' }
+    visit: { ...shaped.visit, latitude: p.latitude, longitude: p.longitude }
   };
 }
 
@@ -186,6 +239,8 @@ export function toLiturgy(pages, withExceptions = false) {
             title: { en: '', ar: '', other: '' },
             rank: day.rank || '',
             season: day.season || '',
+            seasonAr: day.seasonAr || '',
+            rankAr: day.rankAr || '',
             color: day.displayColor || '',
             rite: day.rite || '',
             source: day.source || '',
@@ -221,9 +276,13 @@ export function observanceOn(liturgy, iso) {
 
 /* The season the approved calendar attaches to a day, as { text, rite }, or null. The API's season is
    free text from the authority and a day without one has none: it is not worked out from other days. */
-export function seasonOn(liturgy, iso) {
-  const e = (liturgy?.byDate?.[iso] || []).find(x => x.season);
-  return e ? { text: e.season, rite: e.rite } : null;
+/* On the Arabic page (lang 'ar') it is the authority's Arabic label when it supplied one; otherwise the
+   label as written, with lang saying which script it is in. Never translated here. → { text, lang, rite } */
+export function seasonOn(liturgy, iso, lang = 'en') {
+  const e = (liturgy?.byDate?.[iso] || []).find(x => x.season || x.seasonAr);
+  if (!e) return null;
+  if ((lang === 'ar' && e.seasonAr) || !e.season) return { text: e.seasonAr, lang: 'ar', rite: e.rite };
+  return { text: e.season, lang: 'en', rite: e.rite };
 }
 
 /* The homepage has no parish of its own, so it reads the next seven days of the first listed parishes
