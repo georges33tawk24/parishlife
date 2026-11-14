@@ -4,7 +4,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account, public and administration are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **500 tests pass**. The **other 5 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account, public, administration and finance are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **508 tests pass**. The **other 4 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
 
 ## The branches
 
@@ -73,26 +73,32 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
    - A read-only parish audit trail (`parishes/{id}/audit`, needs `audit.read`, 100 per page).
    - A Platform tab in the workspace. The people-list suspend item replaces the old `workspace/suspension` route; it shows only once the people module fills `ACCOUNTS[personId]`, which nothing does yet.
    - Owner questions (parish settings, eparchy/bishop view, which clergy titles exist) are in `docs/frontend-modules/administration.md`.
-10. **Tooling:**
+10. **Finance** (`fullstack2-finance`, `29098d7`):
+    - Exchange rates (`finance/exchange-rates`): recorded by an office with `finance.approve`, with date and source. Append-only, never fetched, never used to convert amounts.
+    - Fund budgets (`finance/budgets`, compared with paid expenses).
+    - Recurring gifts (`finance/recurring-gifts`): stored schedules only; nothing is charged.
+    - Numbered receipts (`finance/receipts`, void keeps the number): one counter per parish, saved in the same transaction as the receipt. Gap-free and unique on the local store (5 concurrent receipts gave 1–5); **not verified on Cosmos**.
+    - Arabic names for funds, campaigns, expenses and office entries; fund and campaign name corrections; lists of counting sessions and opening balances.
+    - Owner questions (converted amounts, receipt number format and yearly reset, fees and refunds) are in `docs/frontend-modules/finance.md`.
+11. **Tooling:**
    - `npm run check:routes` matches every frontend API call against the real controller routes. Known gaps are listed in `frontend/scripts/route-gaps.json`.
    - `frontend/.gitattributes` keeps the frontend LF, so `format:check` passes on Windows.
    - Aspire AppHost was bumped 13.6.4 → 13.6.5 for advisory GHSA-f7vh-h5g3-7jrh, so `dotnet test ParishLife.slnx` runs again.
 
-**Checks after merging administration** (SDK 10.0.401, Windows):
+**Checks after merging finance** (SDK 10.0.401, Windows):
 - `dotnet restore --locked-mode` OK; Release build 0 warnings.
-- **57 unit + 443 integration tests passed, 0 failed.**
+- **57 unit + 451 integration tests passed, 0 failed.**
 - Frontend: `format:check`, `check` (all modules) and `build` pass.
-- `check:routes`: 599 routes, 571 requests, 6 known gaps (the deliberate `workspace/plan` check, attendance import, letter signing, generic file upload), 0 new.
+- `check:routes`: 615 routes, 591 requests, 6 known gaps (the deliberate `workspace/plan` check, attendance import, letter signing, generic file upload), 0 new.
 
 All of this ran on local storage only, which is not Cosmos acceptance.
 
-## The 5 unfinished areas
+## The 4 unfinished areas
 
 Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
 
 | Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1224/<area>` | Where it stopped |
 | --- | --- | --- | --- |
-| finance | `29098d7`: Arabic twins, name edits, exchange rates, budgets, recurring gifts, numbered receipts (backend + tests), then the finance screens and `checks/finance.mjs` | none | Final full test run and report |
 | communications | `8c2e1fb`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests), then the inbox and module wiring | none | Final test run and report; check new notification topics against `NotificationTopicCatalog` |
 | requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
 | ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
@@ -143,7 +149,7 @@ git push origin fullstack-integration
 - recovery-session restrictions kept;
 - tests for every route.
 
-## After the 5 areas
+## After the 4 areas
 
 1. **Signed-in end-to-end tests** in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
