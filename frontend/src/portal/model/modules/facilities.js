@@ -4,14 +4,17 @@
    functions below, so a direct edit of the view model is reported as not saved), and the writes the screens
    call: saveFacility, setFacilityStatus, availability, requestRoom, decideReservation, requestableEvents,
    saveEquipment, equipmentBookings, bookEquipment, equipmentBookingAction, reportIssue, issueAction,
-   rentalRenters, createRenter, proposeRental. Routes and shapes: docs/frontend-modules/facilities.md.
+   rentalRenters, createRenter, proposeRental, scheduleMaintenance, cancelMaintenance, saveReservationDetails.
+   Routes and shapes: docs/frontend-modules/facilities.md.
 
-   Facts the API does not have are left empty, never invented: a room's Arabic name, step-free access and
-   photos; a maintenance block's dates and reason (the API takes a room out of service, with a reason it
-   records but does not return); who reported an issue (an account, not a person); a reservation's group,
-   hold expiry and checklist. The parish has no time zone in the API, so times show on the clock of the
-   calendar event the reservation belongs to (the viewer's own clock where there is none). */
+   Arabic names come from the API's Arabic twins (nameAr, descriptionAr, purposeAr, reasonAr); screens fall back
+   to the other language for display only. People are named through the shared account-names lookup
+   (model/names.js). Facts the API does not have are left empty, never invented: a room's step-free access and
+   photos, the reason a room was taken out of service, and a reservation's hold expiry. The parish has no time
+   zone in the API, so times show on the clock of the calendar event the reservation belongs to (the viewer's
+   own clock where there is none). */
 import { api, parishAPI, newOperationId, session } from '../api.js';
+import { loadNames } from '../names.js';
 
 export const keys = ['VENUES', 'EQUIPMENT', 'RESERVATIONS', 'MAINTENANCE', 'ISSUES', 'RENTALS'];
 export const routes = ['facilities', 'reservations'];
@@ -97,7 +100,8 @@ export function clock(iso, zone) {
 const toVenue = ({ value: f, version }) => ({
   id: f.id,
   name: f.name,
-  ar: f.name,
+  ar: f.nameAr || f.name,
+  nameAr: f.nameAr || '',
   cap: f.capacity,
   kind: f.kind,
   kindAr: KIND_AR[f.kind] || f.kind,
@@ -106,21 +110,53 @@ const toVenue = ({ value: f, version }) => ({
   status: f.status,
   exclusions: f.exclusionResourceIds || [],
   desc: f.publicDescription || '',
+  descAr: f.publicDescriptionAr || '',
   version
 });
 
-/* A room that is not serviceable is the portal's "blocked" room. */
-const toBlock = v => ({ id: v.id, venue: v.id, from: '', to: '', why: '', by: null, status: v.status });
+/* A room that is not serviceable has no dates: the API records the reason but does not return it. */
+const toOutOfService = v => ({
+  id: v.id,
+  kind: 'out',
+  venue: v.id,
+  from: '',
+  to: '',
+  why: '',
+  by: null,
+  status: v.status
+});
+/* A dated maintenance block: it holds the room like a confirmed reservation. */
+const toBlock = ({ value: b, version }) => ({
+  id: b.id,
+  kind: 'block',
+  venue: b.facilityId,
+  startsAt: b.startsAt,
+  endsAt: b.endsAt,
+  from: String(b.startsAt || '').slice(0, 10),
+  to: String(b.endsAt || '').slice(0, 10),
+  why: b.reason,
+  whyAr: b.reasonAr || b.reason,
+  inCharge: b.inCharge || '',
+  by: b.createdBy,
+  status: b.status,
+  errorCode: b.errorCode || '',
+  cancelledBy: b.cancelledBy || '',
+  cancelReason: b.cancelReason || '',
+  version
+});
 
+const GRADE = { Good: 'good', Fair: 'fair', NeedsService: 'needs service' };
 const condition = status =>
   status === 'Serviceable' ? 'good' : status === 'OutOfService' ? 'needs service' : 'retired';
 const toEquipment = ({ value: e, version }) => ({
   id: e.id,
   name: e.name,
-  ar: e.name,
+  ar: e.nameAr || e.name,
+  nameAr: e.nameAr || '',
   qty: e.quantity,
   out: 0,
-  cond: condition(e.status),
+  cond: e.status === 'Serviceable' && GRADE[e.conditionGrade] ? GRADE[e.conditionGrade] : condition(e.status),
+  grade: e.conditionGrade || '',
   status: e.status,
   note: e.condition || '',
   storage: e.storage || '',
@@ -134,7 +170,8 @@ const toIssue = ({ value: i, version }) => ({
   venue: i.resourceId,
   kind: i.resourceKind,
   what: i.description,
-  whatAr: i.description,
+  whatAr: i.descriptionAr || i.description,
+  descriptionAr: i.descriptionAr || '',
   urgency: i.urgency,
   evidence: i.evidence || '',
   status: i.status,
@@ -143,6 +180,8 @@ const toIssue = ({ value: i, version }) => ({
   at: String(i.reportedAt || '').slice(0, 10),
   reportedAt: i.reportedAt,
   assignedTo: i.assignedTo || '',
+  triagedBy: i.triagedBy || '',
+  resolvedBy: i.resolvedBy || '',
   triageNote: i.triageNote || '',
   resolvedAt: i.resolvedAt || '',
   resolutionEvidence: i.resolutionEvidence || '',
@@ -171,9 +210,18 @@ function toReservation({ value: r, version }, venues, events) {
     rooms: r.allocationResourceIds || [],
     by: null,
     requestedBy: r.requestedBy || '',
-    group: null,
-    title: r.redacted ? '' : event && !event.redacted ? event.title : '',
-    titleAr: r.redacted ? '' : event && !event.redacted ? event.title : '',
+    group: r.ministryId || null,
+    title: r.redacted ? '' : r.eventTitle || (event && !event.redacted ? event.title : ''),
+    titleAr: r.redacted
+      ? ''
+      : (event && !event.redacted && event.titleAr) || r.eventTitle || (event && !event.redacted ? event.title : ''),
+    purpose: r.purpose || '',
+    purposeAr: r.purposeAr || '',
+    people: r.expectedAttendance ?? null,
+    phone: r.contactPhone || '',
+    notes: r.notes || '',
+    checklist: r.checklist || [],
+    decisions: r.decisions || [],
     eventId: r.eventId || '',
     zone,
     date: from.date,
@@ -199,12 +247,15 @@ function toReservation({ value: r, version }, venues, events) {
 const toRental = (agreement, renters, reservation) => {
   const renter = renters.get(agreement.renterId);
   const who = renter ? [renter.name, renter.organization].filter(Boolean).join(' · ') : '';
+  const whoAr = renter
+    ? [renter.nameAr || renter.name, renter.organizationAr || renter.organization].filter(Boolean).join(' · ')
+    : '';
   return {
     id: reservation.id,
     reservation: reservation.id,
     renterId: agreement.renterId,
     who,
-    whoAr: who,
+    whoAr,
     venue: reservation.venue,
     date: reservation.date,
     deposit: agreement.deposit,
@@ -231,7 +282,16 @@ export async function load(parish, d) {
   const base = here(parish);
   const facilities = await tolerant('facilities', () => pages(base + 'facilities'));
   d.VENUES = facilities.map(toVenue);
-  d.MAINTENANCE = d.VENUES.filter(v => v.status !== 'Serviceable').map(toBlock);
+  /* dated maintenance blocks in the 62 days around today, then rooms out of service (no dates) */
+  const blocks = new Map();
+  await tolerant('maintenance', async () => {
+    for (const w of windows())
+      for (const row of await pages(`${base}maintenance-blocks?${query(w)}`)) blocks.set(row.value.id, row);
+  });
+  d.MAINTENANCE = [
+    ...[...blocks.values()].map(toBlock).sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1)),
+    ...d.VENUES.filter(v => v.status !== 'Serviceable').map(toOutOfService)
+  ];
   const venues = new Map(d.VENUES.map(v => [v.id, v]));
 
   /* reservations in the 62 days around today, with their event's title and clock */
@@ -288,6 +348,17 @@ export async function load(parish, d) {
     );
     d.RENTALS = found.filter(Boolean);
   }
+
+  /* the people these records name by account id */
+  await loadNames(parish.id, [
+    ...d.RESERVATIONS.flatMap(r => [
+      r.requestedBy,
+      ...r.decisions.map(x => x.actorId).filter(id => id !== 'system'),
+      ...r.checklist.map(x => x.doneBy)
+    ]),
+    ...d.ISSUES.flatMap(i => [i.reportedBy, i.assignedTo, i.triagedBy, i.resolvedBy]),
+    ...d.MAINTENANCE.flatMap(m => [m.kind === 'block' ? m.by : null, m.cancelledBy])
+  ]);
 }
 
 /* A change made to these collections on screen cannot be sent as a diff: each write has its own call. */
@@ -307,12 +378,47 @@ export const saveFacility = (id, form, version) =>
     ...op(),
     ...(id ? { version } : {}),
     name: form.name,
+    nameAr: form.nameAr || null,
     kind: form.kind,
     capacity: form.capacity,
     setupMinutes: form.setupMinutes,
     cleanupMinutes: form.cleanupMinutes,
     exclusionResourceIds: form.exclusionResourceIds || [],
-    publicDescription: form.publicDescription || null
+    publicDescription: form.publicDescription || null,
+    publicDescriptionAr: form.publicDescriptionAr || null
+  });
+
+/* A dated maintenance block (at most 31 days); it is refused when a reservation or another block holds the room. */
+export const scheduleMaintenance = form =>
+  parishAPI('maintenance-blocks', 'POST', {
+    ...op(),
+    resourceId: form.venue,
+    startsAt: form.startsAt,
+    endsAt: form.endsAt,
+    reason: form.reason,
+    reasonAr: form.reasonAr || null,
+    inCharge: form.inCharge || null
+  });
+/* Cancel (or end early) a block, releasing the room; a reason is required. */
+export const cancelMaintenance = (block, reason) =>
+  parishAPI(`maintenance-blocks/${encodeURIComponent(block.id)}/actions`, 'POST', {
+    ...op(),
+    version: block.version,
+    action: 'cancel',
+    reason
+  });
+
+/* Replace a reservation's details and checklist (each step: phase, label, labelAr, done). */
+export const saveReservationDetails = (r, form) =>
+  parishAPI(`reservations/${encodeURIComponent(r.id)}/details`, 'PUT', {
+    ...op(),
+    version: r.version,
+    purpose: form.purpose || null,
+    purposeAr: form.purposeAr || null,
+    expectedAttendance: form.people ?? null,
+    contactPhone: form.phone || null,
+    notes: form.notes || null,
+    checklist: form.checklist || []
   });
 
 /* Out of service (the portal's "blocked") or back in service; the API requires a reason. */
@@ -346,7 +452,7 @@ export async function requestableEvents(taken = []) {
 }
 
 /* Ask for a room for the exact period of a draft event. */
-export const requestRoom = ({ event, venue, more = [], customerId, terms }) =>
+export const requestRoom = ({ event, venue, more = [], customerId, terms, purpose, purposeAr, people, phone }) =>
   parishAPI('reservations', 'POST', {
     ...op(),
     resourceId: venue,
@@ -355,7 +461,11 @@ export const requestRoom = ({ event, venue, more = [], customerId, terms }) =>
     endsAt: event.endsAt,
     additionalResourceIds: more,
     customerId: customerId || null,
-    termsSnapshot: terms || null
+    termsSnapshot: terms || null,
+    purpose: purpose || null,
+    purposeAr: purposeAr || null,
+    expectedAttendance: people ?? null,
+    contactPhone: phone || null
   });
 
 /* confirm (queued: the room is allocated by a worker, so the answer may be "Allocating"), decline or cancel; a reason is required */
@@ -367,9 +477,11 @@ export const saveEquipment = (id, form, version) =>
     ...op(),
     ...(id ? { version } : {}),
     name: form.name,
+    nameAr: form.nameAr || null,
     quantity: form.quantity,
     storage: form.storage || null,
     condition: form.condition || null,
+    conditionGrade: form.conditionGrade || null,
     status: form.status
   });
 export const equipmentBookings = id => pages(`${mine()}equipment/${enc(id)}/bookings`);

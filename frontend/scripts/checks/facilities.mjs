@@ -16,13 +16,14 @@ const F1 = '11111111-1111-4111-8111-111111111111',
   I1 = 'cccccccc-0000-4000-8000-000000000001';
 
 const soon = n => new Date(Date.now() + n * 86400000).toISOString();
-const state = { denyEquipment: false, pagesSeen: [] };
+const state = { denyEquipment: false, pagesSeen: [], blockPages: [] };
 
 const facility = (id, name, status = 'Serviceable') => ({
   value: {
     id,
     parishId: 'P',
     name,
+    nameAr: name === 'Parish Hall' ? 'قاعة الرعية' : null,
     kind: 'Room',
     capacity: 40,
     setupMinutes: 30,
@@ -44,7 +45,13 @@ const reservation = (id, resourceId, eventId, status, days) => ({
     endsAt: soon(days + 0.1),
     status,
     allocationResourceIds: [resourceId],
-    redacted: false
+    redacted: false,
+    eventTitle: null,
+    purpose: 'Rehearsal',
+    purposeAr: 'تمرين',
+    expectedAttendance: 30,
+    checklist: [{ phase: 'Opening', label: 'Unlock', labelAr: null, done: true, doneBy: 'acct2', doneAt: soon(-1) }],
+    decisions: [{ action: 'request', actorId: 'acct1', at: soon(-1), reason: null }]
   },
   version: `rv-${id.slice(-1)}`
 });
@@ -92,6 +99,36 @@ const { sent } = mockApi((method, path, body) => {
       items: [facility(F1, 'Parish Hall'), facility(F2, 'Crypt', 'OutOfService')],
       continuationToken: null
     });
+  if (route === 'parishes/P/account-names')
+    return json(200, [
+      { accountId: 'acct1', displayName: 'Rita Haddad' },
+      { accountId: 'acct2', displayName: 'Elie Khoury' }
+    ]);
+  if (route === 'parishes/P/maintenance-blocks' && method === 'GET') {
+    state.blockPages.push(search);
+    const [, start, end] = search.match(/start=([^&]+)&end=([^&]+)/);
+    const block = {
+      value: {
+        id: 'mb1',
+        facilityId: F1,
+        startsAt: soon(5),
+        endsAt: soon(5.2),
+        reason: 'Repainting',
+        reasonAr: 'دهان',
+        inCharge: 'Works team',
+        status: 'Active',
+        createdBy: 'acct2'
+      },
+      version: 'mb-v1'
+    };
+    return json(200, {
+      items:
+        decodeURIComponent(start) <= block.value.startsAt && block.value.startsAt < decodeURIComponent(end)
+          ? [block]
+          : [],
+      continuationToken: null
+    });
+  }
   if (route === 'parishes/P/reservations' && method === 'GET') {
     state.pagesSeen.push(search);
     return json(200, {
@@ -129,6 +166,8 @@ const { sent } = mockApi((method, path, body) => {
                 quantity: 6,
                 storage: 'Sacristy',
                 condition: 'fair',
+                conditionGrade: 'Fair',
+                nameAr: 'ميكروفونات',
                 status: 'Serviceable',
                 updatedAt: soon(-1)
               },
@@ -157,6 +196,7 @@ const { sent } = mockApi((method, path, body) => {
             resourceId: F1,
             resourceKind: 'Facility',
             description: 'Two lights out',
+            descriptionAr: 'مصباحان معطلان',
             urgency: 'Normal',
             status: 'Reported',
             reportedBy: 'acct1',
@@ -216,11 +256,24 @@ assert.deepEqual(
 );
 assert.equal(D.VENUES[0].access, undefined, 'step-free access has no API field, so it is not claimed');
 assert.deepEqual(
-  D.MAINTENANCE.map(m => m.venue),
-  [F2],
-  'a room out of service is a blocked room'
+  D.MAINTENANCE.map(m => [m.kind, m.venue]),
+  [
+    ['block', F1],
+    ['out', F2]
+  ],
+  'dated blocks from GET maintenance-blocks, then rooms out of service'
 );
-assert.equal(D.MAINTENANCE[0].from, '', 'a block has no dates in the API');
+assert.deepEqual(
+  [D.MAINTENANCE[0].why, D.MAINTENANCE[0].whyAr, D.MAINTENANCE[0].inCharge, D.MAINTENANCE[0].version],
+  ['Repainting', 'دهان', 'Works team', 'mb-v1']
+);
+assert.equal(D.MAINTENANCE[1].from, '', 'out of service has no dates in the API');
+assert.ok(
+  state.blockPages.length === 2 && state.blockPages.every(s => /size=100/.test(s)),
+  'blocks are read in two 31-day windows'
+);
+assert.equal(D.VENUES[0].ar, 'قاعة الرعية', 'the Arabic name is the API twin');
+assert.equal(D.VENUES[1].ar, 'Crypt', 'and falls back to the other language for display');
 assert.equal(D.RESERVATIONS.length, 2, 'reservations from both 31-day windows');
 const first = D.RESERVATIONS.find(r => r.id === R1);
 assert.equal(first.title, 'Choir rehearsal', 'the title is the calendar event title');
@@ -230,6 +283,14 @@ assert.match(first.from, /^\d\d:\d\d$/);
 assert.equal(first.setup, 30, 'the set-up buffer is the room’s');
 assert.equal(D.RESERVATIONS.find(r => r.id === R2).status, 'approved', 'Confirmed is approved');
 assert.equal(D.EQUIPMENT[0].out, 2, 'on loan = units on issued bookings');
+assert.deepEqual([D.EQUIPMENT[0].ar, D.EQUIPMENT[0].grade, D.EQUIPMENT[0].cond], ['ميكروفونات', 'Fair', 'fair']);
+assert.equal(D.ISSUES[0].whatAr, 'مصباحان معطلان');
+assert.deepEqual([first.purpose, first.purposeAr, first.people], ['Rehearsal', 'تمرين', 30]);
+assert.equal(first.checklist[0].doneBy, 'acct2');
+assert.equal(first.decisions[0].action, 'request');
+const { nameOf } = await import('../../src/portal/model/names.js');
+assert.equal(nameOf('P', 'acct1'), 'Rita Haddad', 'requesters and reporters are named through account-names');
+assert.equal(nameOf('P', 'acct2'), 'Elie Khoury', 'and so are block authors and checklist ticks');
 assert.equal(D.EQUIPMENT[0].custody[0].to, 'Choir');
 assert.equal(D.ISSUES[0].what, 'Two lights out');
 assert.equal(D.ISSUES[0].by, null, 'the reporter is an account, not a person');
@@ -323,6 +384,54 @@ assert.deepEqual(
 await M.proposeRental(R1, { renterId: 'rt1', fee: 450, deposit: 200, currency: 'USD', terms: 'Clean up' });
 [method, path, body] = sent.at(-1);
 assert.deepEqual([method, path, body.renterId], ['PUT', `parishes/P/reservations/${R1}/rental`, 'rt1']);
+
+await M.scheduleMaintenance({
+  venue: F1,
+  startsAt: soon(6),
+  endsAt: soon(6.1),
+  reason: 'Roof',
+  reasonAr: '',
+  inCharge: ''
+});
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.resourceId, body.reason, body.reasonAr, body.inCharge],
+  ['POST', 'parishes/P/maintenance-blocks', F1, 'Roof', null, null]
+);
+assert.match(body.operationId, /^[0-9a-f-]{36}$/);
+
+await M.cancelMaintenance(D.MAINTENANCE[0], 'Postponed');
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.action, body.reason, body.version],
+  ['POST', 'parishes/P/maintenance-blocks/mb1/actions', 'cancel', 'Postponed', 'mb-v1']
+);
+
+await M.saveReservationDetails(first, {
+  purpose: 'Choir',
+  purposeAr: 'جوقة',
+  people: 12,
+  phone: '',
+  notes: '',
+  checklist: [{ phase: 'Closing', label: 'Lock up', labelAr: null, done: false }]
+});
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.version, body.purposeAr, body.expectedAttendance, body.contactPhone, body.checklist.length],
+  ['PUT', `parishes/P/reservations/${R1}/details`, 'rv-1', 'جوقة', 12, null, 1]
+);
+
+await M.saveFacility(null, {
+  name: 'Annex',
+  nameAr: 'الملحق',
+  kind: 'Room',
+  capacity: 5,
+  setupMinutes: 0,
+  cleanupMinutes: 0
+});
+assert.equal(sent.at(-1)[2].nameAr, 'الملحق', 'the Arabic name is sent as typed');
+await M.saveEquipment(null, { name: 'Chairs', quantity: 3, status: 'Serviceable', conditionGrade: 'Good' });
+assert.deepEqual([sent.at(-1)[2].conditionGrade, sent.at(-1)[2].nameAr], ['Good', null]);
 
 /* ---- a direct edit of these collections is undone and reported ---- */
 const writes = sent.length;
