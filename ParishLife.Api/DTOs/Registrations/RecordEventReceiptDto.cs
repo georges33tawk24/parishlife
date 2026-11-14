@@ -1,5 +1,6 @@
 // Purpose: represents record event receipt input/output data.
-// Main members: OperationId, Version, Amount, Currency, EvidenceReference, OccurredAt.
+// Main members: OperationId, Version, Amount, Currency, EvidenceReference, OccurredAt and Method (omitted means Cash; omitted from JSON when null
+// so older request fingerprints stay identical).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -26,4 +27,8 @@ public class RecordEventReceiptDto
     public string EvidenceReference { get; set; } = string.Empty;
 
     public DateTimeOffset OccurredAt { get; set; }
+
+    [StringLength(20)]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Method { get; set; } = null;
 }

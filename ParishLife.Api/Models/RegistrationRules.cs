@@ -1,5 +1,6 @@
 // Purpose: registration rules plus the shared versioned-form rules used by event registration and custom workflow forms.
-// Main functions: ConsumesSeat, EffectiveStatus, AgeOn, Money, ValidateFields, ValidateCondition, ValidateAnswers and Applies;
+// Main functions: ConsumesSeat, EffectiveStatus, AgeOn, Money, Due, Outstanding, PaymentMethodNames, AcceptedMethods, AcceptsSubmissions, ScheduledBy,
+// ValidateFields, ValidateCondition, ValidateAnswers and Applies;
 // conditional show/require rules are evaluated server-side against the pinned form version.
 
 namespace ParishLife.Api.Models;
@@ -8,6 +9,22 @@ public static class RegistrationRules
 {
     public static bool ConsumesSeat(EventRegistration item, DateTimeOffset now) => item.Status == "Confirmed" || item.Status == "Reserved" && item.OfferUntil > now;
     public static string EffectiveStatus(EventRegistration item, DateTimeOffset now) => item.Status == "Reserved" && item.OfferUntil <= now ? "OfferExpired" : item.Status;
+    // What the participant owes: the fee copied at submission less any discount the office applied.
+    public static decimal Due(EventRegistration item) => item.Fee - item.DiscountAmount;
+    public static decimal Outstanding(EventRegistration item) => Due(item) - item.Received + item.Refunded;
+
+    // How a recorded payment was made. These record money handled outside the system; none of them charges anyone.
+    public static readonly string[] PaymentMethodNames = ["Cash", "BankTransfer", "MoneyTransfer", "Cheque", "Other"];
+    public static string[] AcceptedMethods(RegistrationPolicy policy) => policy.PaymentMethods.Length == 0 ? ["Cash"] : policy.PaymentMethods;
+
+    // Submissions need an open policy, a future event and, when the parish set one, a deadline that has not passed.
+    public static bool AcceptsSubmissions(RegistrationPolicy policy, CalendarEvent occurrence, DateTimeOffset now)
+        => policy.Status == "Open" && occurrence.StartsAt > now && (policy.ClosesAt is null || policy.ClosesAt > now);
+
+    // The part of the instalment schedule due on or before a date, never more than the participant owes after a discount.
+    public static decimal ScheduledBy(RegistrationInstalment[] schedule, decimal due, DateOnly date)
+        => schedule.Length == 0 ? due : Math.Min(due, schedule.Where(x => x.DueOn <= date).Sum(x => x.Amount));
+
     public static int AgeOn(DateOnly birth, DateOnly date) => date.Year - birth.Year - (birth.AddYears(date.Year - birth.Year) > date ? 1 : 0);
     public static void Money(decimal amount, string currency, int precision)
     {

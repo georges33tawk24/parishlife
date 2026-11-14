@@ -1,5 +1,5 @@
 // Purpose: returns one actual event money movement (cash received or refunded).
-// Main members: Id, RegistrationId, Kind, Amount, Currency, EvidenceReference, OccurredAt, RecordedAt, RecordedBy, ApprovedBy and RefundRequestId.
+// Main members: Id, RegistrationId, Kind, Amount, Currency, EvidenceReference, OccurredAt, RecordedAt, RecordedBy, ApprovedBy, RefundRequestId and Method.
 
 namespace ParishLife.Api.DTOs.Registrations;
 
@@ -26,4 +26,6 @@ public class RegistrationMovementDto
     public string? ApprovedBy { get; set; } = null;
 
     public string? RefundRequestId { get; set; } = null;
+
+    public string Method { get; set; } = "Cash";
 }

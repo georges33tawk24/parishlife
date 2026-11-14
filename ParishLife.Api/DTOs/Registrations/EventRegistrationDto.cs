@@ -1,5 +1,6 @@
 // Purpose: returns one participant registration; staff projections include evidence and collectors, own projections omit them.
-// Main members: Id, EventId, PersonId, FormVersionId, Origin, effective Status, answers, evidence, balance, presence and safe notification outcome.
+// Main members: Id, EventId, PersonId, FormVersionId, Origin, effective Status, answers, evidence, balance, presence and safe notification outcome,
+// HouseholdId, the applied discount (DiscountKey/Name/NameAr/Amount), Due, and for staff whether a pickup code is issued (never the code).
 
 using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
@@ -52,4 +53,22 @@ public class EventRegistrationDto
 
     // Loaded for authorized single/command views; list views leave this null and expose no work IDs or recipient counts.
     public NotificationOutcomeDto? NotificationOutcome { get; set; } = null;
+
+    public string? HouseholdId { get; set; } = null;
+
+    public string? DiscountKey { get; set; } = null;
+
+    public string? DiscountName { get; set; } = null;
+
+    public string? DiscountNameAr { get; set; } = null;
+
+    public decimal DiscountAmount { get; set; }
+
+    // Fee less the applied discount.
+    public decimal Due { get; set; }
+
+    // Staff views only; the member's own view leaves these null.
+    public bool? PickupCodeIssued { get; set; } = null;
+
+    public DateTimeOffset? PickupCodeIssuedAt { get; set; } = null;
 }

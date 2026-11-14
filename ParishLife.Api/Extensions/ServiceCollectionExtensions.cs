@@ -160,6 +160,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MinistryResourceService>();
         services.AddScoped<MinistryVolunteerService>();
         services.AddScoped<RegistrationService>();
+        services.AddScoped<RegistrationTermsService>();
+        services.AddScoped<EvacuationService>();
         services.AddScoped<ReservationMeetingAccess>();
         services.AddScoped<CalendarService>();
         services.AddScoped<EventTemplateService>();

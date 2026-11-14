@@ -1,5 +1,6 @@
 // Purpose: returns the current applicant-visible form and supplied event terms to a member with a reviewed person link.
-// Main members: EventId, FormVersionId, Fields, fee/currency/precision, age range and consent wording; staff assignments are excluded.
+// Main members: EventId, FormVersionId, Fields, fee/currency/precision, age range, consent wording, ClosesAt,
+// Instalments and PaymentMethods; staff assignments and discounts are excluded.
 
 using ParishLife.Api.Models;
 
@@ -26,4 +27,10 @@ public class RegistrationApplicantFormDto
     public bool ConsentRequired { get; set; }
 
     public string ConsentText { get; set; } = string.Empty;
+
+    public DateTimeOffset? ClosesAt { get; set; } = null;
+
+    public RegistrationInstalment[] Instalments { get; set; } = Array.Empty<RegistrationInstalment>();
+
+    public string[] PaymentMethods { get; set; } = Array.Empty<string>();
 }

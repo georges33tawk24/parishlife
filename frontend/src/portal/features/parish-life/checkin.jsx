@@ -1,6 +1,7 @@
 /* Check-in at the door for an event: who is expected and present, authorised pickup, and the present
    roster for an evacuation. Arrival, checkout and re-entry are recorded by ParishLife.Api; the door list
-   only shows to an account assigned to the event. */
+   only shows to an account assigned to the event. Pickup shows who must give a pickup code; Incidents records
+   restricted reports (and lists them for incident handlers); Evacuation runs roll calls with the muster point. */
 import { Select } from '../../ui/components.jsx';
 import { t, fmtDate } from '../../../lib/i18n.js';
 import { S, bus } from '../../model/store.js';
@@ -12,9 +13,18 @@ import {
   selectedCheckin,
   eventVenue
 } from '../../model/event-workflows.js';
-import { REGISTRANTS, PICKUP, CHECKIN } from '../../model/data.js';
+import { REGISTRANTS, PICKUP, CHECKIN, EVACUATION } from '../../model/data.js';
 import { registrantName, statusLabel } from './registration-forms.jsx';
-import { arriveNow, presenceDialog, collectorsDialog, removeCollector } from './checkin-dialogs.jsx';
+import {
+  arriveNow,
+  presenceDialog,
+  collectorsDialog,
+  removeCollector,
+  startRollCall,
+  markRollCall,
+  closeRollCall,
+  incidentDialog
+} from './checkin-dialogs.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -127,6 +137,9 @@ export function checkin(tab = '') {
                     <div className="panel-h">
                       <Who p={registrantName(r)} />
                       <span style={{ marginInlineStart: 'auto' }} />{' '}
+                      {r.pickupCodeRequired ? (
+                        <Pill label={L('Pickup code required', 'رمز الاستلام مطلوب')} tone="info" />
+                      ) : null}{' '}
                       {v.independent ? (
                         <Pill label={L('May leave alone', 'يغادر بمفرده')} tone="success" />
                       ) : v.approved.length ? (
@@ -176,8 +189,8 @@ export function checkin(tab = '') {
           </div>{' '}
           <p className="t-caption dim" style={{ marginTop: '14px' }}>
             {L(
-              'The API has no do-not-release entries and no pickup codes, so none are shown.',
-              'لا يوفّر الخادم قيوداً بعدم التسليم ولا رموز استلام، لذلك لا تُعرض.'
+              'Pickup codes are issued by the office and entered at checkout; the door never sees them. The API has no do-not-release entries, so none are shown.',
+              'يُصدر المكتب رموز الاستلام وتُدخل عند الخروج؛ لا يراها الباب. لا يوفّر الخادم قيوداً بعدم التسليم، لذلك لا تُعرض.'
             )}
           </p>
         </div>
@@ -190,15 +203,35 @@ export function checkin(tab = '') {
         <div className="tabbody">
           <C.InlineAlert
             tone="info"
-            title={L('Incident reports are not connected', 'تقارير الحوادث غير موصولة')}
+            title={L('Incident reports are restricted', 'تقارير الحوادث مقيّدة')}
             body={L(
-              'Incident records are a separate restricted area of the API and this page does not read or write them yet. Nothing is saved here.',
-              'سجلات الحوادث منطقة مقيّدة منفصلة في الخادم ولا تقرأها هذه الصفحة ولا تكتب فيها بعد. لا يُحفظ شيء هنا.'
+              'A report needs the incident-recording permission. Once saved, only incident handlers can read it; this list shows only to them.',
+              'يتطلّب التقرير صلاحية تسجيل الحوادث. بعد الحفظ لا يقرؤه إلا المكلّفون بالحوادث، ولهم وحدهم تظهر هذه اللائحة.'
             )}
-          />
+          />{' '}
+          <button className="btn btn-primary" style={{ marginTop: '14px' }} data-incident="">
+            {L('Report an incident', 'الإبلاغ عن حادث')}
+          </button>
+          {(session.incidents || []).length ? (
+            <div style={{ marginTop: '16px' }}>
+              <Panel title={L('Incidents at this event', 'حوادث هذا الحدث')} tight={true}>
+                {session.incidents.map(i => (
+                  <div key={i.id} className="listrow">
+                    <span className="grow">
+                      <b>{new Date(i.occurredAt).toLocaleString()}</b>
+                      <small>{i.description}</small>
+                    </span>{' '}
+                    {i.urgent ? <Pill label={L('Urgent', 'عاجل')} tone="danger" /> : null} <Pill label={i.status} />
+                  </div>
+                ))}
+              </Panel>
+            </div>
+          ) : null}
         </div>
       </>
     );
+  const evac = EVACUATION.events?.[chosenEvent.id] || {};
+  const openCall = (evac.rollCalls || []).find(c => c.status === 'Open');
   if (tab === 'evacuation')
     return (
       <>
@@ -225,7 +258,48 @@ export function checkin(tab = '') {
           </div>
           <p className="t-caption dim" style={{ marginTop: '12px' }}>
             {session.asOf ? `${L('As of', 'حتى')} ${new Date(session.asOf).toLocaleTimeString()} · ` : ''}
-            {L('The muster point and emergency messages are not connected.', 'نقطة التجمّع ورسائل الطوارئ غير موصولة.')}
+            {L('Muster point', 'نقطة التجمّع')}: {L(evac.muster, evac.musterAr || evac.muster) || '—'} ·{' '}
+            {L('Emergency messages are not connected.', 'رسائل الطوارئ غير موصولة.')}
+          </p>
+          {openCall ? (
+            <div style={{ marginTop: '16px' }}>
+              <Panel
+                title={`${L('Roll call', 'التفقّد')} · ${openCall.accounted} / ${openCall.total} ${L('accounted for', 'تمّ تفقّدهم')}`}
+                tight={true}
+              >
+                {openCall.entries.map(e => (
+                  <div key={e.id} className="listrow">
+                    <Who p={registrantName(e)} />
+                    <span className="grow" />
+                    {e.accountedAt ? (
+                      <button className="btn btn-secondary btn-dense" data-unaccount={e.id}>
+                        {L('Accounted for', 'تمّ تفقّده')} ✓
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary btn-dense" data-account={e.id}>
+                        {L('Mark accounted for', 'علّم كمتفقَّد')}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </Panel>
+              <button className="btn btn-secondary" style={{ marginTop: '12px' }} data-close-rollcall="">
+                {L('Close roll call', 'إنهاء التفقّد')}
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-primary" style={{ marginTop: '14px' }} data-start-rollcall="">
+              {L('Start roll call', 'بدء التفقّد')}
+            </button>
+          )}{' '}
+          <p className="t-caption dim" style={{ marginTop: '8px' }}>
+            {L(
+              'A roll call lists participants recorded present when it starts and what operators marked; it is not a census of the building.',
+              'يضمّ التفقّد المشتركين المسجَّل حضورهم عند بدئه وما علّمه المشغّلون؛ ليس إحصاءً للمبنى.'
+            )}
+            {(evac.rollCalls || []).filter(c => c.status === 'Closed').length
+              ? ` ${L('Closed roll calls', 'تفقّدات منتهية')}: ${evac.rollCalls.filter(c => c.status === 'Closed').length}`
+              : ''}
           </p>
           <button className="btn btn-secondary" style={{ marginTop: '14px' }} data-act="print">
             <Icon name="print" size={17} />
@@ -309,6 +383,22 @@ checkin.mount = host => {
       const [id, action] = b.dataset.presence.split('|');
       presenceDialog(row(id), action);
     })
+  );
+  const eventId = S.ui.checkinEventId;
+  const openCall = () => (EVACUATION.events?.[eventId]?.rollCalls || []).find(c => c.status === 'Open');
+  host.querySelector('[data-start-rollcall]')?.addEventListener('click', () => startRollCall(eventId));
+  host.querySelector('[data-close-rollcall]')?.addEventListener('click', () => closeRollCall(eventId, openCall()));
+  host
+    .querySelectorAll('[data-account]')
+    .forEach(b => b.addEventListener('click', () => markRollCall(eventId, openCall(), b.dataset.account, true)));
+  host
+    .querySelectorAll('[data-unaccount]')
+    .forEach(b => b.addEventListener('click', () => markRollCall(eventId, openCall(), b.dataset.unaccount, false)));
+  host.querySelector('[data-incident]')?.addEventListener('click', () =>
+    incidentDialog(
+      eventId,
+      REGISTRANTS.filter(r => r.eventId === eventId && r.status === 'Confirmed')
+    )
   );
   host
     .querySelectorAll('[data-collectors]')

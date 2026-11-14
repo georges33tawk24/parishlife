@@ -1,5 +1,5 @@
 // Purpose: represents presence change business state and rules.
-// Main members: Id, RegistrationId, EventId, Action, OccurredAt, RecordedAt, RecordedBy, and related workflow details.
+// Main members: Id, RegistrationId, EventId, Action, OccurredAt, RecordedAt, RecordedBy, collector checks and PickupCodeChecked.
 
 namespace ParishLife.Api.Models;
 
@@ -24,4 +24,7 @@ public class PresenceChange
     public string? VerificationEvidence { get; set; }
 
     public string? PaperReason { get; set; }
+
+    // True when a checkout matched the registration's issued pickup code; the code itself is never stored.
+    public bool PickupCodeChecked { get; set; }
 }

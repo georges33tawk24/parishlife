@@ -6,6 +6,17 @@ The registration service existed in the repository without routes, registration 
 
 Routes are under `/api/parishes/{parish}/calendar/events/{event}`.
 
+## Later options (added 14 November 2026)
+
+- `POST /registration/terms` (registrations.manage, versioned, reason required) edits capacity, transport, fee/currency/precision, waitlist, ages, child threshold, consent, door operators, `ClosesAt`, `Discounts`, `Instalments`, `PaymentMethods` and `MusterPoint`/`MusterPointAr`. Capacity cannot go below seat-holding participants (`capacity_below_current`); currency/precision are locked once any registration exists (`registration_currency_locked`). Existing registrations keep their copied fee. `POST /registration` accepts the same optional terms (omitted from the fingerprint JSON when null).
+- Deadline: office, household and self submissions and the applicant form refuse after `ClosesAt` (`registration_deadline_passed`); office seat decisions on existing registrations are unaffected.
+- `POST /registrations/{id}/discount` applies a policy discount (snapshot on the registration) or removes it; the amount due (`Due = Fee - DiscountAmount`) never drops below net money received (`discount_below_received`). Cashier views add `Due`, `DueNow` (instalments due by the event-zone date, capped at `Due`) and accepted methods.
+- Receipts take `Method` (default Cash, must be accepted by the policy, `payment_method_not_accepted`); non-cash receipts are `PaymentReceived` movements. These record money handled outside the system; nothing charges anyone. Finance models are untouched.
+- `POST /registrations/household` registers 1–12 current members of one active household atomically (membership, persons, household, policy and event fenced; `not_household_member`).
+- `POST /registrations/{id}/pickup-code` (issue|revoke): the plain code is returned once; only a salted SHA-256 is stored; the operation receipt is a plain `CommandResult` and replays return no code. Checkout of a non-independent participant with an issued code must include `PickupCode` (`pickup_code_mismatch`, 403); the presence fingerprint is built without it and `PresenceChange` records only `PickupCodeChecked`. A test scans the whole local store for the plain code.
+- Evacuation roll calls (door operators only: registrations.checkin + assignment): `POST /evacuations` (Drill|Emergency) snapshots participants recorded present; `POST /evacuations/{id}/actions` account|unaccount|close; one open per event. Names and marks only; not a census; no message is sent.
+- `RegistrationCopy` carries the new fields through every existing transition so older code paths cannot drop them.
+
 ## Policy and forms (registrations.manage)
 
 - `POST /registration` configures a draft policy for one event: capacity, transport capacity, fee/currency/precision, waitlist, age range, child age threshold, consent requirement and wording, explicit door operator accounts and a form of up to 40 typed fields (Text, Choice, Boolean, Number, Date, with conditional visibility).

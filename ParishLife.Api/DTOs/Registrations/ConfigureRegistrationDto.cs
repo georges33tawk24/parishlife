@@ -1,7 +1,9 @@
 // Purpose: represents configure registration input/output data.
-// Main members: OperationId, Capacity, TransportCapacity, Fee, Currency, Precision, WaitlistAllowed, and related workflow details.
+// Main members: OperationId, Capacity, TransportCapacity, Fee, Currency, Precision, WaitlistAllowed, ages, consent, door operators, Fields and the optional
+// ClosesAt, Discounts, Instalments, PaymentMethods and MusterPoint/MusterPointAr (omitted from JSON when null so older request fingerprints stay identical).
 
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ParishLife.Api.Models;
 using ParishLife.Api.Validation;
 
@@ -41,4 +43,27 @@ public class ConfigureRegistrationDto
     public Guid[] DoorAccountIds { get; set; } = Array.Empty<Guid>();
     [Required]
     public RegistrationField[] Fields { get; set; } = Array.Empty<RegistrationField>();
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? ClosesAt { get; set; } = null;
+
+    [MaxLength(20)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegistrationDiscount[]? Discounts { get; set; } = null;
+
+    [MaxLength(12)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegistrationInstalment[]? Instalments { get; set; } = null;
+
+    [MaxLength(5)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? PaymentMethods { get; set; } = null;
+
+    [StringLength(300)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MusterPoint { get; set; } = null;
+
+    [StringLength(300)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MusterPointAr { get; set; } = null;
 }
