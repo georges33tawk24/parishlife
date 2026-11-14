@@ -30,6 +30,8 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
             throw State("Belongings are managed for an active ministry.");
         var name = Guard.Text(request.Name, "Item name", 500);
         var storage = string.IsNullOrWhiteSpace(request.Storage) ? null : Guard.Text(request.Storage, "Storage", 500);
+        var nameAr = MinistryAccess.Optional(request.NameAr, "Arabic item name", 500);
+        var storageAr = MinistryAccess.Optional(request.StorageAr, "Arabic storage", 500);
         if (request.Total is < 0 or > 100000 || request.Status is not ("Active" or "Retired"))
             throw new DomainException("invalid_input", "Use a total of 0–100000 and Active or Retired.");
         RecordChange change;
@@ -52,6 +54,8 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
         }
         item.Name = name;
         item.Storage = storage;
+        item.NameAr = nameAr;
+        item.StorageAr = storageAr;
         item.Total = request.Total;
         item.Status = request.Status;
         item.UpdatedBy = actor.AccountId;
@@ -78,7 +82,10 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
             Equal("ministryId", ministry), Equal("status", "Active"));
         var result = StockPage(page);
         foreach (var row in result.Items)
+        {
             row.Value.Storage = null;
+            row.Value.StorageAr = null;
+        }
         return result;
     }
 
@@ -341,14 +348,14 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
 
     private static MinistryStockDto Project(MinistryStock x) => new()
     {
-        Id = x.Id, MinistryId = x.MinistryId, Name = x.Name, Storage = x.Storage, Total = x.Total, OnLoan = x.OnLoan,
+        Id = x.Id, MinistryId = x.MinistryId, Name = x.Name, NameAr = x.NameAr, Storage = x.Storage, StorageAr = x.StorageAr, Total = x.Total, OnLoan = x.OnLoan,
         Available = Math.Max(0, x.Total - x.OnLoan), Status = x.Status, UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt
     };
 
     // Own projections show the borrower's loan, dates and outcome; actors, evidence and condition notes stay with custodians.
     private static MinistryLoanDto Project(MinistryLoan x, MinistryStock stock, bool privileged, DateTimeOffset now) => new()
     {
-        Id = x.Id, MinistryId = x.MinistryId, StockId = x.StockId, StockName = stock.Name, PersonId = x.PersonId, Quantity = x.Quantity,
+        Id = x.Id, MinistryId = x.MinistryId, StockId = x.StockId, StockName = stock.Name, StockNameAr = stock.NameAr, PersonId = x.PersonId, Quantity = x.Quantity,
         Status = x.Status, Overdue = x.Status == "Issued" && x.DueAt < now, Purpose = x.Purpose, RequestedAt = x.RequestedAt,
         IssuedAt = x.IssuedAt, DueAt = x.DueAt, ReturnedAt = x.ReturnedAt, Outcome = x.Outcome, FollowUpRequired = x.FollowUpRequired, Reason = x.Reason,
         RequestedBy = privileged ? x.RequestedBy : null, DecidedBy = privileged ? x.DecidedBy : null, IssuedBy = privileged ? x.IssuedBy : null,

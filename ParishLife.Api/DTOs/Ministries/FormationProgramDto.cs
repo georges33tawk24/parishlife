@@ -1,5 +1,5 @@
 // Purpose: returns a formation program revision without private approval references unless the reader is privileged.
-// Main members: Id, MinistryId, Title, Revision, SupersedesProgramId, Status, Milestones and creation/approval/retirement facts.
+// Main members: Id, MinistryId, Title/TitleAr, Revision, SupersedesProgramId, Status, Milestones and creation/approval/retirement facts.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -10,6 +10,8 @@ public class FormationProgramDto
     public string MinistryId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public int Revision { get; set; }
 

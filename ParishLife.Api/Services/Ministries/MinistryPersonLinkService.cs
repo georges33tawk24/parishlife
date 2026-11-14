@@ -1,5 +1,5 @@
 // Purpose: records reviewed, unique person/account identity matches without granting ministry membership or staff authority.
-// Main functions: LinkAsync atomically claims the person and writes the reviewed link; GetOwnAsync and GetAsync return safe current projections.
+// Main functions: LinkAsync atomically claims the person and writes the reviewed link; GetOwnAsync, GetAsync and GetByPersonAsync return safe current projections.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Identity;
@@ -65,6 +65,18 @@ public class MinistryPersonLinkService(IRecordTransactions records, MinistryAcce
         await proof.RequireMfaAsync(ct);
         await access.RequireAsync(parish, Permissions.PeopleWrite, ct);
         var row = await records.ReadAsync<PersonAccountLink>(MinistryAccess.Scope(parish), "personAccountLink:" + account, ct) ?? throw MinistryAccess.Missing();
+        return new() { Value = View(row.Value), Version = row.Version };
+    }
+    // The reverse lookup (person to account) needed to appoint a roster member as a leader; same people.write boundary as GetAsync.
+    public async Task<Versioned<PersonAccountLinkDto>> GetByPersonAsync(string parish, string person, CancellationToken ct)
+    {
+        await proof.RequireMfaAsync(ct);
+        await access.RequireAsync(parish, Permissions.PeopleWrite, ct);
+        var scope = MinistryAccess.Scope(parish);
+        var claim = await records.ReadAsync<CommandResult>(scope, "personAccountClaim:" + person, ct);
+        if (claim?.Value.Status != "Linked") throw MinistryAccess.Missing();
+        var row = await records.ReadAsync<PersonAccountLink>(scope, "personAccountLink:" + claim.Value.Id, ct);
+        if (row?.Value.Active != true || row.Value.PersonId != person || row.Value.ParishId != parish) throw MinistryAccess.Missing();
         return new() { Value = View(row.Value), Version = row.Version };
     }
     private static PersonAccountLinkDto View(PersonAccountLink value) => new()

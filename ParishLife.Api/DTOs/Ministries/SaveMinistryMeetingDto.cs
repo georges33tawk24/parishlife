@@ -1,5 +1,5 @@
 // Purpose: validates a source-owned meeting draft and the actual group RSVP rules without accepting an arbitrary calendar source.
-// Main members: OperationId, Version, title/dates/time zone, optional agenda/location and explicit RSVP policy/cutoff.
+// Main members: OperationId, Version, title/Arabic title/dates/time zone, optional agenda/location and explicit RSVP policy/cutoff.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -16,6 +16,9 @@ public class SaveMinistryMeetingDto
 
     [Required, StringLength(500)]
     public string Title { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? TitleAr { get; set; }
 
     public DateTimeOffset StartsAt { get; set; }
     public DateTimeOffset EndsAt { get; set; }

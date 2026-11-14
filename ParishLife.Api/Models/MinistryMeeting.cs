@@ -1,5 +1,5 @@
 // Purpose: stores a ministry-owned meeting and its exact linked calendar occurrence, group audience and RSVP policy.
-// Main members: source identity, dates, draft/confirmation/cancellation state, agenda, location and actual RSVP cutoff;
+// Main members: source identity, Title/TitleAr, dates, draft/confirmation/cancellation state, agenda, location and actual RSVP cutoff;
 // ExpectedPersonIds remains empty until a separate attendance workflow records an evidenced occurrence-date snapshot.
 
 namespace ParishLife.Api.Models;
@@ -15,6 +15,9 @@ public class MinistryMeeting
     public string EventId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    // Optional Arabic twin of Title; kept on the ministry meeting only (the linked calendar occurrence keeps Title).
+    public string? TitleAr { get; set; }
 
     public DateTimeOffset StartsAt { get; set; }
 

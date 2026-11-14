@@ -1,5 +1,5 @@
 // Purpose: creates or updates one counted ministry stock item; Version is required when updating.
-// Main members: OperationId, Version, Name, Storage, Total and Status (Active or Retired).
+// Main members: OperationId, Version, Name/NameAr, Storage/StorageAr, Total and Status (Active or Retired).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -19,7 +19,13 @@ public class SaveStockDto
     public string Name { get; set; } = string.Empty;
 
     [StringLength(500)]
+    public string? NameAr { get; set; } = null;
+
+    [StringLength(500)]
     public string? Storage { get; set; } = null;
+
+    [StringLength(500)]
+    public string? StorageAr { get; set; } = null;
 
     [Range(0, 100000)]
     public int Total { get; set; }

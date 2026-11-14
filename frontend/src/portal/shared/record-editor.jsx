@@ -307,12 +307,13 @@ export const ENT = {
   },
   group: {
     list: () => D.GROUPS,
-    name: g => L(g.name, g.ar),
+    name: g => L(g.name, g.ar || g.name),
     nw: ['New group', 'مجموعة جديدة'],
     ed: ['Edit group', 'تعديل المجموعة'],
     del: ['Archive this group?', 'أرشفة هذه المجموعة؟'],
     fields: () => [
       { k: 'name', label: L('Name', 'الاسم'), req: true, full: true },
+      { k: 'ar', label: L('Arabic name', 'الاسم العربي'), full: true },
       {
         k: 'cat',
         label: L('Kind', 'النوع'),
@@ -330,7 +331,16 @@ export const ENT = {
         }
       },
       { k: 'purpose', label: L('Purpose', 'الغاية'), type: 'textarea', req: true, full: true },
+      { k: 'purposeAr', label: L('Purpose (Arabic)', 'الغاية بالعربية'), type: 'textarea', full: true },
       { k: 'publicInformation', label: L('Public information', 'معلومات عامة'), type: 'textarea', full: true },
+      {
+        k: 'publicInformationAr',
+        label: L('Public information (Arabic)', 'معلومات عامة بالعربية'),
+        type: 'textarea',
+        full: true
+      },
+      { k: 'meets', label: L('Usual meeting times', 'مواعيد الاجتماع المعتادة'), full: true },
+      { k: 'meetsAr', label: L('Usual meeting times (Arabic)', 'مواعيد الاجتماع بالعربية'), full: true },
       {
         k: 'eligibilityPolicyReference',
         label: L('Eligibility policy reference', 'مرجع سياسة الأهلية'),
@@ -345,7 +355,9 @@ export const ENT = {
       cat: 'Ministry',
       catAr: 'خدمة',
       purpose: '',
+      purposeAr: '',
       publicInformation: '',
+      publicInformationAr: '',
       eligibilityPolicyReference: '',
       members: 0,
       meets: '',

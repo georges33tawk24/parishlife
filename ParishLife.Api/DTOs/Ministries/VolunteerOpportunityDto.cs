@@ -1,5 +1,5 @@
 // Purpose: returns a volunteer opportunity with its remaining places and no volunteer identities.
-// Main members: Id, MinistryId, Title, Position, Requirements, Location, StartsAt, EndsAt, Capacity, Remaining, Status and SelfSignup.
+// Main members: Id, MinistryId, Title/TitleAr, Position, Requirements, Location, StartsAt, EndsAt, Capacity, Remaining, Status and SelfSignup.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -10,6 +10,8 @@ public class VolunteerOpportunityDto
     public string MinistryId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public string Position { get; set; } = string.Empty;
 

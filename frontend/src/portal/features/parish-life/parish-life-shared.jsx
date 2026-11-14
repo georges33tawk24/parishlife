@@ -41,7 +41,7 @@ export function groupCards(items, tab = '') {
             </span>{' '}
             <div style={{ flex: 1, minWidth: 0 }}>
               <a className="stretch" href={`#/groups/${g.id}${tab ? `/${tab}` : ''}`}>
-                <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{L(g.name, g.ar)}</b>
+                <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{L(g.name, g.ar || g.name)}</b>
               </a>{' '}
               <small className="t-caption dim">
                 {L(g.cat, g.catAr)}

@@ -2,15 +2,18 @@
    members, join applications, meetings, attendance, formation, belongings and volunteer sign-up sheets,
    and the member-facing ministry requests.
    Main members: keys, routes, load (fills GROUPS, GROUP_DETAIL, VOLUNTEERS, SIGNUP_SHEETS and
-   ATTENDANCE_SERIES), save (sends changes to groups, meetings, attendance and belongings), and the
-   workflows a diff cannot express: ministryAction, applicationAction, ministryRequests, requestDecision,
-   requestMembership. Details, routes and gaps: docs/frontend-modules/ministries.md.
+   ATTENDANCE_SERIES), save (sends changes to groups, meeting times, meetings, attendance and belongings),
+   and the workflows a diff cannot express: ministryAction, applicationAction, ministryRequests,
+   requestDecision, requestMembership, addMembers, endMembership, appointLeader, endLeader, saveFormation,
+   approveFormation, recordCompletion, reviewCompletion, reopenCompletion, lendItem and loanAction.
+   Details, routes and gaps: docs/frontend-modules/ministries.md.
 
    The API pages with ?size=&cursor= (not ?continuation=), answers 404 (not 403) when an account lacks the
    duty for a read, and hides most ministry data behind a duty: office (ministries.manage), leader, or one
    of the leader's duties (attendance, formation, resources, volunteers). So every per-ministry read is
    optional: a refused read leaves that part empty instead of failing the load. */
 import { api, newOperationId, session } from '../api.js';
+import { loadNames, nameOf } from '../names.js';
 
 export const keys = ['GROUPS', 'GROUP_DETAIL', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'ATTENDANCE_SERIES'];
 export const routes = ['groups', 'ministryrequests', 'attendance', 'volunteers'];
@@ -156,13 +159,14 @@ export async function load(parish, d) {
         m => loadSheet(root, id, m),
         3
       );
-      for (const l of leaders) accountPerson.set(l.value.accountId, null);
+      for (const l of leaders) if (l.value.effective) accountPerson.set(l.value.accountId, null);
       return { m, version, leaders, roster, applications, programs, enrollments, stock, loans, team, meetings };
     },
     3
   );
 
-  /* leader account → person, where the account may read the link (people.write) */
+  /* leader names through the shared lookup; leader account → person where the account may read the link (people.write) */
+  await loadNames(parish.id, [...accountPerson.keys()]);
   await pool(
     [...accountPerson.keys()],
     async account => {
@@ -185,8 +189,17 @@ export async function load(parish, d) {
         role: 'Member',
         roleAr: 'عضو',
         joined: String(new Date(r.joinedAt).getFullYear()),
+        joinedAt: r.joinedAt,
         att: 0
       }));
+    const leaders = led.map(l => ({
+      accountId: l.value.accountId,
+      personId: accountPerson.get(l.value.accountId) || null,
+      name: nameOf(parish.id, l.value.accountId),
+      role: l.value.role,
+      duties: l.value.duties || [],
+      version: l.version
+    }));
     const roles = led.map(l => {
       const leader = l.value.role === 'Leader';
       return [
@@ -205,40 +218,67 @@ export async function load(parish, d) {
     d.GROUPS.push({
       id: m.id,
       name: m.name,
-      ar: m.name,
+      ar: m.nameAr || '',
       cat: m.kind,
       catAr: KINDS[m.kind] || m.kind,
       leader: leaderPerson,
       ...(assistantPerson ? { assistant: assistantPerson } : {}),
       members: roster.length,
-      meets: '',
-      meetsAr: '',
+      meets: m.meetingTimes || '',
+      meetsAr: m.meetingTimesAr || '',
       vis: m.publicListed ? 'public' : 'private',
       status: m.status,
       purpose: m.purpose,
+      purposeAr: m.purposeAr || '',
       publicInformation: m.publicInformation || '',
+      publicInformationAr: m.publicInformationAr || '',
       eligibilityPolicyReference: m.eligibilityPolicyReference || '',
       applicationsOpen: !!m.applicationsOpen,
       publicListed: !!m.publicListed,
       version: x.version
     });
 
-    const program = x.programs.map(p => p.value).find(p => p.status === 'Approved');
-    const milestones = (program?.milestones || []).map(ms => ({
-      id: `${program.id}:${ms.key}`,
+    /* formation: the approved program revision holds enrollments; a draft (new or revising it) is what editing changes */
+    const programOf = row =>
+      row && {
+        id: row.value.id,
+        version: row.version,
+        title: row.value.title,
+        titleAr: row.value.titleAr || '',
+        status: row.value.status
+      };
+    const approvedRow = x.programs.find(p => p.value.status === 'Approved'),
+      draftRow = x.programs.find(p => p.value.status === 'Draft');
+    const program = approvedRow?.value;
+    const enrolled = x.enrollments.filter(e => program && e.value.programId === program.id);
+    const enrollments = Object.fromEntries(
+      enrolled.map(e => [e.value.personId, { id: e.value.id, version: e.version, status: e.value.status }])
+    );
+    const shown = (draftRow || approvedRow)?.value;
+    const milestones = (shown?.milestones || []).map(ms => ({
+      id: ms.key,
+      key: ms.key,
       name: ms.title,
-      ar: ms.title,
-      description: '',
+      ar: ms.titleAr || '',
+      description: ms.description || '',
+      descriptionAr: ms.descriptionAr || '',
+      prerequisiteKeys: ms.prerequisiteKeys || [],
+      clergyApproval: !!ms.clergyApproval,
+      approved: !!program?.milestones?.some(a => a.key === ms.key),
       legacyCount: 0,
       completions: Object.fromEntries(
-        x.enrollments
-          .map(e => e.value)
-          .filter(e => e.programId === program.id)
-          .flatMap(e =>
-            e.milestones
-              .filter(p => p.key === ms.key && p.status === 'Completed')
-              .map(p => [e.personId, p.achievedOn || day(p.completedAt)])
-          )
+        enrolled.flatMap(e =>
+          e.value.milestones
+            .filter(p => p.key === ms.key && p.status === 'Completed')
+            .map(p => [e.value.personId, { date: p.achievedOn || day(p.completedAt), notes: '' }])
+        )
+      ),
+      progress: Object.fromEntries(
+        enrolled.flatMap(e =>
+          e.value.milestones
+            .filter(p => p.key === ms.key && p.status !== 'Completed')
+            .map(p => [e.value.personId, { status: p.status, explanation: p.applicantExplanation || '' }])
+        )
       )
     }));
 
@@ -247,19 +287,25 @@ export async function load(parish, d) {
       .map(s => ({
         id: s.value.id,
         name: s.value.name,
-        ar: s.value.name,
+        ar: s.value.nameAr || '',
         qty: s.value.total,
+        lent: s.value.onLoan || 0,
         location: s.value.storage || '',
-        locationAr: s.value.storage || '',
+        locationAr: s.value.storageAr || '',
         version: s.version
       }));
     const resourceLoans = x.loans.map(l => ({
       id: l.value.id,
+      version: l.version,
       resourceId: l.value.stockId,
       borrower: personName(d, l.value.personId)?.lat || '',
       personId: l.value.personId,
       qty: l.value.quantity,
       status: l.value.status,
+      purpose: l.value.purpose || '',
+      overdue: !!l.value.overdue,
+      outcome: l.value.outcome || '',
+      followUp: !!l.value.followUpRequired,
       checkedOutAt: day(l.value.issuedAt),
       due: day(l.value.dueAt),
       returnedAt: day(l.value.returnedAt)
@@ -268,6 +314,8 @@ export async function load(parish, d) {
     d.GROUP_DETAIL[m.id] = {
       assistant: assistantPerson,
       roles,
+      leaders,
+      formation: { approved: programOf(approvedRow) || null, draft: programOf(draftRow) || null, enrollments },
       requests: x.applications
         .filter(a => OPEN_JOIN.includes(a.value.status))
         .map(a => ({
@@ -304,7 +352,7 @@ export async function load(parish, d) {
         id: o.id,
         ministryId: m.id,
         what: o.title,
-        whatAr: o.title,
+        whatAr: o.titleAr || '',
         position: o.position,
         slots: o.capacity,
         taken: o.capacity - o.remaining,
@@ -386,6 +434,7 @@ async function loadMeetings(root, ministryId) {
         t: from.t,
         end: to.d === from.d ? to.t : '',
         title: m.title,
+        titleAr: m.titleAr || '',
         place: m.locationDescription || '',
         description: m.agenda || '',
         kind: 'group',
@@ -434,11 +483,22 @@ const byId = list => new Map((list || []).map(x => [x.id, x]));
 const reasonNote = 'Done in the parish portal.';
 
 /* What the API stores of a group; the portal's other group fields are derived or have no API field. */
-const GROUP_FIELDS = ['name', 'cat', 'purpose', 'publicInformation', 'eligibilityPolicyReference'];
-const MEETING_FIELDS = ['d', 't', 'end', 'title', 'place', 'description'];
+const GROUP_FIELDS = [
+  'name',
+  'ar',
+  'cat',
+  'purpose',
+  'purposeAr',
+  'publicInformation',
+  'publicInformationAr',
+  'eligibilityPolicyReference'
+];
+const MEETING_FIELDS = ['d', 't', 'end', 'title', 'titleAr', 'place', 'description'];
 /* Group detail the API has no equivalent for yet: a change to any of these is reported, not saved. */
 const DETAIL_UNSUPPORTED = [
   'roles',
+  'leaders',
+  'formation',
   'requests',
   'roster',
   'posts',
@@ -458,12 +518,25 @@ const ministryBody = g => {
   if (!KINDS[g.cat]) throw new Error('Choose what kind of group this is: Ministry, Choir, Class, Committee or Team.');
   return {
     name: String(g.name || '').trim(),
+    nameAr: String(g.ar || '').trim() || null,
     kind: g.cat,
     purpose: String(g.purpose || '').trim(),
+    purposeAr: String(g.purposeAr || '').trim() || null,
     eligibilityPolicyReference: String(g.eligibilityPolicyReference || '').trim() || null,
-    publicInformation: String(g.publicInformation || '').trim() || null
+    publicInformation: String(g.publicInformation || '').trim() || null,
+    publicInformationAr: String(g.publicInformationAr || '').trim() || null
   };
 };
+/* The usual meeting times are kept apart from the approved description, so they can change on an active group. */
+async function saveMeetingTimes(root, id, g) {
+  const row = await api(`${root}/ministries/${enc(id)}`);
+  await api(`${root}/ministries/${enc(id)}/meeting-times`, 'PUT', {
+    operationId: newOperationId(),
+    version: row.version,
+    meetingTimes: String(g.meets || '').trim() || null,
+    meetingTimesAr: String(g.meetsAr || '').trim() || null
+  });
+}
 
 export async function save(before, now, parish) {
   const root = base(parish.id);
@@ -476,7 +549,8 @@ export async function save(before, now, parish) {
   for (const g of is.values()) {
     const old = was.get(g.id);
     if (!old) {
-      await api(`${root}/ministries`, 'POST', { operationId: newOperationId(), ...ministryBody(g) });
+      const created = await api(`${root}/ministries`, 'POST', { operationId: newOperationId(), ...ministryBody(g) });
+      if ((g.meets || g.meetsAr) && created?.id) await saveMeetingTimes(root, created.id, g);
       saved = true;
       continue;
     }
@@ -489,7 +563,11 @@ export async function save(before, now, parish) {
       });
       saved = true;
     }
-    if (['vis', 'leader', 'assistant', 'meets', 'meetsAr'].some(k => !same(g[k], old[k]))) unsupported = true;
+    if (['meets', 'meetsAr'].some(k => (g[k] || '') !== (old[k] || ''))) {
+      await saveMeetingTimes(root, g.id, g);
+      saved = true;
+    }
+    if (['vis', 'leader', 'assistant'].some(k => !same(g[k], old[k]))) unsupported = true;
   }
   for (const old of was.values())
     if (!is.has(old.id)) {
@@ -519,11 +597,13 @@ export async function save(before, now, parish) {
       stockNow = byId(n.belongings);
     for (const s of stockNow.values()) {
       const old = stockBefore.get(s.id);
-      if (old && ['name', 'qty', 'location'].every(k => same(old[k], s[k]))) continue;
+      if (old && ['name', 'ar', 'qty', 'location', 'locationAr'].every(k => same(old[k], s[k]))) continue;
       const body = {
         operationId: newOperationId(),
         name: String(s.name || '').trim(),
+        nameAr: String(s.ar || '').trim() || null,
         storage: String(s.location || '').trim() || null,
+        storageAr: String(s.locationAr || '').trim() || null,
         total: Number(s.qty) || 0,
         status: 'Active'
       };
@@ -537,7 +617,9 @@ export async function save(before, now, parish) {
           operationId: newOperationId(),
           version: old.version,
           name: old.name,
+          nameAr: old.ar || null,
           storage: old.location || null,
+          storageAr: old.locationAr || null,
           total: Number(old.qty) || 0,
           status: 'Retired'
         });
@@ -631,6 +713,7 @@ function meetingBody(m, zone) {
   return {
     operationId: newOperationId(),
     title: String(m.title || '').trim() || 'Group meeting',
+    titleAr: String(m.titleAr || '').trim() || null,
     startsAt: startsAt.toISOString(),
     endsAt: endsAt.toISOString(),
     timeZone: zone,
@@ -864,4 +947,191 @@ export async function requestMembership(g, { reason = '' } = {}) {
       reason: note
     });
   return application;
+}
+
+/* ---------- roster, leadership, formation and loans (called from the group screens, then hydrate) ---------- */
+
+const seatOf = ministryId => `${base(session.parishId)}/ministries/${enc(ministryId)}`;
+const fresh = async path => (await api(path)).version;
+
+/* Adds existing parish people: each becomes an assisted join application with the actual instruction or
+   consent evidence the preparer records; a different priest then approves it with the eligibility review. */
+export async function addMembers(ministryId, personIds, evidence) {
+  for (const personId of personIds)
+    await api(`${seatOf(ministryId)}/applications`, 'POST', {
+      operationId: newOperationId(),
+      kind: 'Join',
+      personId,
+      representationEvidence: String(evidence || '').trim()
+    });
+}
+
+/* A priest ends a current membership (roster removal), pinning the interval shown on screen. */
+export function endMembership(ministryId, row, reason) {
+  return api(`${seatOf(ministryId)}/roster/${enc(row.p)}/end`, 'POST', {
+    operationId: newOperationId(),
+    joinedAt: row.joinedAt,
+    reason: String(reason || '').trim()
+  });
+}
+
+/* A priest appoints a roster member's reviewed account as Leader or Assistant, with evidence and the duties
+   granted; `replace` (an outgoing leader from GROUP_DETAIL.leaders) makes it an immediate handover. */
+export async function appointLeader(
+  ministryId,
+  personId,
+  { role = 'Leader', duties = [], evidence = '', replace = null } = {}
+) {
+  const root = base(session.parishId);
+  const link = await api(`${root}/person-account-links/by-person/${enc(personId)}`).catch(e => {
+    if (e.status === 404 || e.status === 403)
+      throw new Error('This person has no reviewed account link the office can see, so they cannot be appointed.');
+    throw e;
+  });
+  return api(`${seatOf(ministryId)}/leadership`, 'POST', {
+    operationId: newOperationId(),
+    ministryVersion: await fresh(seatOf(ministryId)),
+    accountId: link.value.accountId,
+    role,
+    duties,
+    startsAt: new Date(Date.now() - 5000).toISOString(),
+    endsAt: null,
+    evidenceReference: String(evidence || '').trim(),
+    replaceAccountId: replace?.accountId || null,
+    replaceVersion: replace?.version || null
+  });
+}
+
+/* A priest ends a leader's or assistant's appointment. */
+export function endLeader(ministryId, leader, reason) {
+  return api(`${seatOf(ministryId)}/leadership/${enc(leader.accountId)}/end`, 'POST', {
+    operationId: newOperationId(),
+    version: leader.version,
+    reason: String(reason || '').trim()
+  });
+}
+
+/* Saves the milestone list as the formation draft: edits the open draft, or starts one (revising the approved
+   program when there is one). Prerequisites that name removed or later milestones are dropped. */
+export async function saveFormation(ministryId, formation, milestones, title = {}) {
+  const seat = `${seatOf(ministryId)}/formation/programs`;
+  const keys = [];
+  const body = milestones.map(m => {
+    const item = {
+      key: m.key,
+      title: String(m.name || '').trim(),
+      titleAr: String(m.ar || '').trim() || null,
+      description: String(m.description || '').trim() || null,
+      descriptionAr: String(m.descriptionAr || '').trim() || null,
+      prerequisiteKeys: (m.prerequisiteKeys || []).filter(k => keys.includes(k)),
+      clergyApproval: !!m.clergyApproval
+    };
+    keys.push(m.key);
+    return item;
+  });
+  const current = formation?.draft || formation?.approved;
+  const head = {
+    title: String(title.title || current?.title || '').trim() || 'Formation',
+    titleAr: String(title.titleAr ?? current?.titleAr ?? '').trim() || null,
+    milestones: body
+  };
+  if (formation?.draft)
+    return api(`${seat}/${enc(formation.draft.id)}`, 'PUT', {
+      operationId: newOperationId(),
+      version: await fresh(`${seat}/${enc(formation.draft.id)}`),
+      ...head
+    });
+  return api(seat, 'POST', {
+    operationId: newOperationId(),
+    supersedesProgramId: formation?.approved?.id || null,
+    ...head
+  });
+}
+
+/* A priest approves the formation draft with the reference of the review actually done. */
+export async function approveFormation(ministryId, program, reference) {
+  const seat = `${seatOf(ministryId)}/formation/programs/${enc(program.id)}`;
+  return api(`${seat}/actions`, 'POST', {
+    operationId: newOperationId(),
+    version: await fresh(seat),
+    action: 'approve',
+    approvalReference: String(reference || '').trim()
+  });
+}
+
+/* One milestone step on an enrollment, with the enrollment's current version. */
+async function step(ministryId, enrollmentId, body) {
+  const seat = `${seatOf(ministryId)}/formation/enrollments/${enc(enrollmentId)}`;
+  return api(`${seat}/milestones`, 'POST', { operationId: newOperationId(), version: await fresh(seat), ...body });
+}
+
+/* Records evidence that members reached a milestone of the approved program: enrolls them if needed, starts the
+   milestone and submits the evidence reference with the date. A different reviewer then completes it. */
+export async function recordCompletion(ministryId, formation, key, personIds, { date, evidence }) {
+  const program = formation?.approved;
+  if (!program) throw new Error('A priest must approve the formation program before completions are recorded.');
+  for (const personId of personIds) {
+    let enrollment = formation.enrollments?.[personId];
+    if (!enrollment) {
+      const seat = `${seatOf(ministryId)}/formation/programs/${enc(program.id)}`;
+      enrollment = await api(`${seat}/enrollments`, 'POST', {
+        operationId: newOperationId(),
+        personId,
+        programVersion: await fresh(seat)
+      });
+    }
+    const current = (await api(`${seatOf(ministryId)}/formation/enrollments/${enc(enrollment.id)}`)).value;
+    const status = current.milestones.find(m => m.key === key)?.status;
+    const evidenceBody = { milestoneKey: key, evidenceReference: evidence, achievedOn: date, source: 'Course' };
+    if (status === 'Enrolled') await step(ministryId, enrollment.id, { milestoneKey: key, action: 'start' });
+    if (status === 'Enrolled' || status === 'InProgress')
+      await step(ministryId, enrollment.id, { ...evidenceBody, action: 'submit-evidence' });
+    else if (status === 'NeedsInformation')
+      await step(ministryId, enrollment.id, { ...evidenceBody, action: 'resubmit' });
+  }
+}
+
+/* A reviewer (not the recorder) reviews the submitted evidence and completes the milestone. */
+export async function reviewCompletion(ministryId, formation, key, personId, reference) {
+  const enrollment = formation?.enrollments?.[personId];
+  if (!enrollment) return;
+  const current = (await api(`${seatOf(ministryId)}/formation/enrollments/${enc(enrollment.id)}`)).value;
+  if (current.milestones.find(m => m.key === key)?.status === 'EvidenceSubmitted')
+    await step(ministryId, enrollment.id, { milestoneKey: key, action: 'review', reviewReference: reference });
+  await step(ministryId, enrollment.id, { milestoneKey: key, action: 'complete' });
+}
+
+/* A priest reopens a completed milestone for review (the screen's "remove completion"). */
+export function reopenCompletion(ministryId, formation, key, personId, reason) {
+  const enrollment = formation?.enrollments?.[personId];
+  if (!enrollment) return Promise.resolve();
+  return step(ministryId, enrollment.id, { milestoneKey: key, action: 'reopen', reason: String(reason || '').trim() });
+}
+
+/* A custodian lends an item to a current member: request on the member's behalf, approve, and issue it with
+   the due date and the condition at issue. */
+export async function lendItem(ministryId, stockId, personId, { qty, due, condition, purpose = '' }) {
+  const loan = await api(`${seatOf(ministryId)}/loans`, 'POST', {
+    operationId: newOperationId(),
+    stockId,
+    quantity: qty,
+    purpose: String(purpose || '').trim() || null,
+    personId
+  });
+  await loanAction(ministryId, loan, 'approve');
+  return loanAction(ministryId, loan, 'issue', {
+    dueAt: zonedInstant(due, '23:59', browserZone()).toISOString(),
+    condition
+  });
+}
+
+/* One loan step (approve, decline, cancel, issue, return, check, report-missing, close) with the loan's current version. */
+export async function loanAction(ministryId, loan, action, fields = {}) {
+  const seat = `${seatOf(ministryId)}/loans/${enc(loan.id)}`;
+  return api(`${seat}/actions`, 'POST', {
+    operationId: newOperationId(),
+    version: await fresh(seat),
+    action,
+    ...fields
+  });
 }

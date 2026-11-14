@@ -1,5 +1,5 @@
 // Purpose: requests a draft formation program, or a draft revision of an approved program, for one ministry.
-// Main members: OperationId, Title, optional SupersedesProgramId and ordered Milestones whose prerequisites refer to earlier keys.
+// Main members: OperationId, Title/TitleAr, optional SupersedesProgramId and ordered Milestones whose prerequisites refer to earlier keys.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -14,6 +14,9 @@ public class CreateFormationDto
     [Required]
     [StringLength(500)]
     public string Title { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? TitleAr { get; set; } = null;
 
     [NotEmptyGuid]
     public Guid? SupersedesProgramId { get; set; } = null;

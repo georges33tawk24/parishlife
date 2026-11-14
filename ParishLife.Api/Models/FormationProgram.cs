@@ -1,5 +1,5 @@
 // Purpose: represents one immutable-once-approved revision of a ministry formation program that enrollments pin.
-// Main members: Id, ParishId, MinistryId, Title, Revision, SupersedesProgramId, Milestones, Status and creation/approval/retirement facts.
+// Main members: Id, ParishId, MinistryId, Title/TitleAr, Revision, SupersedesProgramId, Milestones, Status and creation/approval/retirement facts.
 
 namespace ParishLife.Api.Models;
 
@@ -12,6 +12,8 @@ public class FormationProgram
     public string MinistryId { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;
+
+    public string? TitleAr { get; set; } = null;
 
     public int Revision { get; set; } = 1;
 

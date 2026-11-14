@@ -1,5 +1,5 @@
 // Purpose: returns a formation enrollment with its pinned program revision, milestone progress and a fixed output label.
-// Main members: Id, MinistryId, ProgramId, ProgramTitle, ProgramRevision, PersonId, Status, dates, Milestones and OutputLabel.
+// Main members: Id, MinistryId, ProgramId, ProgramTitle/ProgramTitleAr, ProgramRevision, PersonId, Status, dates, Milestones and OutputLabel.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -12,6 +12,8 @@ public class FormationEnrollmentDto
     public string ProgramId { get; set; } = string.Empty;
 
     public string ProgramTitle { get; set; } = string.Empty;
+
+    public string? ProgramTitleAr { get; set; } = null;
 
     public int ProgramRevision { get; set; }
 

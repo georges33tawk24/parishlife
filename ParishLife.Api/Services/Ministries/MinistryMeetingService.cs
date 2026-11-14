@@ -287,7 +287,8 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
         return new()
         {
             Id = id, ParishId = parish, MinistryId = ministry, EventId = old?.EventId ?? id,
-            Title = Guard.Text(request.Title, "Title", 500), StartsAt = request.StartsAt, EndsAt = request.EndsAt,
+            Title = Guard.Text(request.Title, "Title", 500), TitleAr = MinistryAccess.Optional(request.TitleAr, "Arabic title", 500),
+            StartsAt = request.StartsAt, EndsAt = request.EndsAt,
             TimeZone = zone, Visibility = "Ministry", Status = "Draft", Agenda = string.IsNullOrWhiteSpace(request.Agenda) ? string.Empty : Guard.Text(request.Agenda, "Agenda", 10000),
             LocationDescription = string.IsNullOrWhiteSpace(request.LocationDescription) ? null : Guard.Text(request.LocationDescription, "Location description", 1000),
             CreatedBy = old?.CreatedBy ?? actor.AccountId, CreatedAt = old?.CreatedAt ?? op.At,
@@ -311,7 +312,7 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
 
     private MinistryMeetingDto View(MinistryMeeting value, bool privileged, bool available) => new()
     {
-        Id = value.Id, MinistryId = value.MinistryId, EventId = value.EventId, Title = value.Title, StartsAt = value.StartsAt,
+        Id = value.Id, MinistryId = value.MinistryId, EventId = value.EventId, Title = value.Title, TitleAr = value.TitleAr, StartsAt = value.StartsAt,
         EndsAt = value.EndsAt, TimeZone = value.TimeZone, Visibility = value.Visibility, Agenda = value.Agenda,
         LocationDescription = value.LocationDescription, Status = value.Status, RsvpMode = value.RsvpMode,
         RsvpDeadline = value.RsvpDeadline, RsvpPolicyReference = privileged ? value.RsvpPolicyReference : null, RsvpOpen = RsvpOpen(value) && available

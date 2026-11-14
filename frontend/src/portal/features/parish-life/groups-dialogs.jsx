@@ -8,13 +8,21 @@ import * as C from '../../ui/components.jsx';
 import * as D from '../../model/data.js';
 import { persist, hydrate } from '../../model/persist.js';
 import { session } from '../../model/api.js';
-import { ministryAction, applicationAction } from '../../model/modules/ministries.js';
+import {
+  ministryAction,
+  applicationAction,
+  addMembers,
+  endMembership,
+  appointLeader,
+  endLeader
+} from '../../model/modules/ministries.js';
 import { safeRichText } from '../../../lib/rich-text.js';
 import { curGroup, nameOf, ok, refresh, val } from '../../shared/dialog-helpers.jsx';
 import { need } from '../../shared/dialogs.jsx';
 import { compose } from '../communicate/messaging-dialogs.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 const gd = () => D.groupInfo(curGroup());
 
@@ -24,8 +32,8 @@ export function memberAdd(gid = curGroup()) {
   openDrawer({
     title: L('Add existing people', 'إضافة أشخاص مسجّلين'),
     sub: L(
-      'Search and select several people. Existing members are excluded.',
-      'ابحث واختر عدة أشخاص. الأعضاء الحاليون مستبعدون.'
+      'Each person gets a join request on their behalf; a priest then approves it. Existing members are excluded.',
+      'يُقدَّم طلب انتساب باسم كل شخص، ثم يعتمده كاهن. الأعضاء الحاليون مستبعدون.'
     ),
     body: (
       <>
@@ -34,6 +42,11 @@ export function memberAdd(gid = curGroup()) {
           type="search"
           id="group-member-search"
           placeholder={L('Search names', 'البحث عن أسماء')}
+        />{' '}
+        <C.Field
+          label={L('Their instruction or consent (evidence)', 'تعليماتهم أو موافقتهم (إثبات)')}
+          id="group-member-evidence"
+          req={true}
         />{' '}
         <div className="choice-grid" style={{ marginTop: '12px' }} id="group-member-choices">
           {candidates.map((p, i) => (
@@ -64,23 +77,19 @@ export function memberAdd(gid = curGroup()) {
       });
       el.querySelector('#group-members-add').addEventListener('click', async () => {
         const selected = [...el.querySelectorAll('[data-member-choice]:checked')].map(c => c.value);
+        const evidence = val(el, '#group-member-evidence');
         if (!selected.length)
           return toast(L('Select at least one person', 'اختر شخصاً واحداً على الأقل'), '', 'warning');
-        for (const pid of selected)
-          if (!d.roster.some(r => r.p === pid))
-            d.roster.push({
-              p: pid,
-              role: 'Member',
-              roleAr: 'عضو',
-              joined: new Date().getFullYear().toString(),
-              att: 0
-            });
-        const g = D.group(gid);
-        if (g && S.role !== 'leader') g.members = (Number(g.members) || 0) + selected.length;
-        if (!(await persist())) return;
+        if (!evidence) return toast(L('Record the evidence', 'سجّل الإثبات'), '', 'warning');
+        try {
+          await addMembers(gid, selected, evidence);
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
+        }
+        await hydrate();
         closeOverlays();
         refresh();
-        ok(L('Members added', 'أُضيف الأعضاء'), `${selected.length}`);
+        ok(L('Join requests created', 'أُنشئت طلبات الانتساب'), `${selected.length}`);
       });
     }
   });
@@ -492,7 +501,8 @@ export function handover() {
   const group = D.GROUPS.find(x => x.id === curGroup()),
     detail = group && D.groupInfo(group.id);
   if (!group || !detail || is('leader')) return;
-  const outgoing = group.leader,
+  const current = (detail.leaders || []).find(l => l.role === 'Leader') || null;
+  const outgoing = current?.personId || group.leader,
     people = detail.roster
       .filter(row => row.p !== outgoing)
       .map(row => D.person(row.p))
@@ -506,7 +516,7 @@ export function handover() {
       <>
         <div className="formrow">
           <label className="label">{L('Current leader', 'المسؤول الحالي')}</label>
-          <Who p={D.person(outgoing)} />
+          {D.person(outgoing) ? <Who p={D.person(outgoing)} /> : <b>{current?.name || '—'}</b>}
         </div>{' '}
         <div className="formrow">
           <label className="label" htmlFor="ho_to">
@@ -521,18 +531,14 @@ export function handover() {
             ))}
           </Select>
         </div>{' '}
-        <p className="help">{L('This change takes effect immediately.', 'يسري هذا التغيير فوراً.')}</p>{' '}
-        <C.InlineAlert
-          tone="info"
-          title={L(
-            `${detail.tasks.filter(x => !x.done && x.who === outgoing).length} open tasks will move`,
-            `${detail.tasks.filter(x => !x.done && x.who === outgoing).length} مهام مفتوحة ستنتقل`
+        <C.Field label={L('Appointment evidence', 'إثبات التعيين')} id="ho_evidence" req={true} />{' '}
+        {dutyChoices('ho', current?.duties || [])}
+        <p className="help">
+          {L(
+            'This change takes effect immediately. The new leader needs a reviewed account link.',
+            'يسري هذا التغيير فوراً. يحتاج المسؤول الجديد إلى حساب مرتبط ومراجَع.'
           )}
-          body={L(
-            'The member record and attendance history stay with each person.',
-            'يبقى سجل العضوية والحضور مرتبطاً بكل شخص.'
-          )}
-        />
+        </p>
       </>
     ),
     foot: (
@@ -548,33 +554,22 @@ export function handover() {
     onMount(el) {
       el.querySelector('#ho_go').addEventListener('click', async () => {
         const to = val(el, '#ho_to'),
-          next = D.person(to);
+          next = D.person(to),
+          evidence = val(el, '#ho_evidence');
         if (!next || !detail.roster.some(row => row.p === to))
           return toast(L('Choose a group member', 'اختر عضواً في المجموعة'), '', 'warning');
-        group.leader = to;
-        if (group.assistant === to) {
-          group.assistant = null;
-          detail.assistant = null;
+        if (!evidence) return toast(L('Record the appointment evidence', 'سجّل إثبات التعيين'), '', 'warning');
+        try {
+          await appointLeader(group.id, to, {
+            role: 'Leader',
+            duties: chosenDuties(el, 'ho'),
+            evidence,
+            replace: current
+          });
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
         }
-        for (const row of detail.roster) {
-          if (row.p === outgoing && row.role === 'Leader') {
-            row.role = 'Member';
-            row.roleAr = 'عضو';
-          }
-          if (row.p === to) {
-            row.role = 'Leader';
-            row.roleAr = 'مسؤول';
-          }
-        }
-        detail.roles = detail.roles.filter(([pid, role]) => pid !== to && !(pid === outgoing && role === 'Leader'));
-        detail.roles.unshift([to, 'Leader', 'مسؤول']);
-        for (const task of detail.tasks) if (!task.done && task.who === outgoing) task.who = to;
-        detail.history.unshift([
-          `Leadership transferred from ${D.person(outgoing)?.lat || outgoing} to ${next.lat}`,
-          `انتقلت المسؤولية من ${D.person(outgoing)?.ar || outgoing} إلى ${next.ar || next.lat}`,
-          due
-        ]);
-        if (!(await persist())) return;
+        await hydrate();
         closeOverlays();
         refresh();
         ok(L('Handover completed', 'اكتمل التسليم'), nameOf(next));
@@ -597,24 +592,12 @@ export function memberMenu(btn, pid) {
           {
             label: L('Make assistant', 'تعيين مساعداً'),
             icon: 'check',
-            fn: async () => {
-              if (g.assistant && g.assistant !== pid) {
-                const previous = d.roster.find(row => row.p === g.assistant);
-                if (previous) {
-                  previous.role = 'Member';
-                  previous.roleAr = 'عضو';
-                }
-              }
-              g.assistant = pid;
-              d.assistant = pid;
-              r.role = 'Assistant';
-              r.roleAr = 'مساعد';
-              d.roles = d.roles.filter(([personId, role]) => personId !== pid && role !== 'Assistant');
-              d.roles.push([pid, 'Assistant', 'مساعد']);
-              if (!(await persist())) return;
-              refresh();
-              ok(L('Assistant updated', 'حُدّث المساعد'), nameOf(D.person(pid)));
-            }
+            fn: () => appointDialog(curGroup(), pid, 'Assistant')
+          },
+          {
+            label: L('Make leader', 'تعيين مسؤولاً'),
+            icon: 'check',
+            fn: () => appointDialog(curGroup(), pid, 'Leader')
           }
         ]
       : []),
@@ -623,27 +606,128 @@ export function memberMenu(btn, pid) {
       label: L('Remove from group', 'إزالة من المجموعة'),
       icon: 'trash',
       danger: true,
-      fn: async () => {
-        if (pid === g?.leader) return toast(L('Hand over leadership first', 'سلّم المسؤولية أولاً'), '', 'warning');
-        if (pid === g?.assistant && is('leader'))
-          return toast(
-            L('Ask the parish office to change the assistant', 'اطلب من مكتب الرعية تغيير المساعد'),
-            '',
-            'warning'
-          );
-        d.roster.splice(i, 1);
-        if (g && S.role !== 'leader') g.members = Math.max(0, Number(g.members || 0) - 1);
-        if (pid === g?.assistant) {
-          g.assistant = null;
-          d.assistant = null;
-          d.roles = d.roles.filter(([personId]) => personId !== pid);
-        }
-        if (!(await persist())) return;
-        refresh();
-        ok(L('Removed from the group', 'أُزيل من المجموعة'), nameOf(D.person(pid)));
+      fn: () => {
+        if (!is('priest'))
+          return toast(L('Only a priest ends a membership', 'الكاهن وحده ينهي العضوية'), '', 'warning');
+        reasonDialog(L('Remove from group', 'إزالة من المجموعة'), nameOf(D.person(pid)), reason =>
+          endMembership(curGroup(), r, reason)
+        );
       }
     }
   ]);
+}
+
+/* The leader duties a priest may grant (each needs the matching parish permission). */
+const DUTIES = [
+  ['attendance.record', 'Record attendance', 'تسجيل الحضور'],
+  ['attendance.review', 'Review attendance', 'مراجعة الحضور'],
+  ['rsvp.private.read', 'Read private RSVP reasons', 'قراءة أسباب الرد الخاصة'],
+  ['formation.record', 'Record formation', 'تسجيل التنشئة'],
+  ['formation.review', 'Review formation', 'مراجعة التنشئة'],
+  ['resources.custody', 'Look after belongings', 'العناية بالممتلكات'],
+  ['volunteers.coordinate', 'Coordinate volunteers', 'تنسيق المتطوعين']
+];
+function dutyChoices(prefix, checked = []) {
+  return (
+    <fieldset className="formrow">
+      <legend className="label">{L('Duties granted', 'المهام الممنوحة')}</legend>
+      <div className="choice-grid">
+        {DUTIES.map(([key, en, ar]) => (
+          <label key={key} className="check">
+            <input type="checkbox" name={`${prefix}_duty`} defaultValue={key} defaultChecked={checked.includes(key)} />
+            <span>{L(en, ar)}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+const chosenDuties = (el, prefix) => [...el.querySelectorAll(`[name="${prefix}_duty"]:checked`)].map(b => b.value);
+
+/* A short drawer asking for a reason, then running the call and reloading from the API. */
+function reasonDialog(title, sub, call) {
+  openDrawer({
+    title,
+    sub,
+    body: (
+      <div className="formrow">
+        <label className="label" htmlFor="rd_reason">
+          {L('Reason (kept in the record)', 'السبب (يُحفظ في السجل)')}
+        </label>
+        <textarea className="textarea" id="rd_reason" rows="3" maxLength="2000" />
+      </div>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Cancel', 'إلغاء')}
+        </button>
+        <button className="btn btn-danger" id="rd_go">
+          {L('Confirm', 'تأكيد')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#rd_go').addEventListener('click', async () => {
+        const reason = val(el, '#rd_reason');
+        if (!reason) return toast(L('Give a reason', 'اذكر السبب'), '', 'warning');
+        try {
+          await call(reason);
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
+        }
+        await hydrate();
+        closeOverlays();
+        refresh();
+        ok(L('Done', 'تمّ'));
+      });
+    }
+  });
+}
+
+/* A priest appoints a member as Leader or Assistant, with the appointment evidence and duties. */
+export function appointDialog(gid, pid, role) {
+  openDrawer({
+    title: role === 'Leader' ? L('Make leader', 'تعيين مسؤولاً') : L('Make assistant', 'تعيين مساعداً'),
+    sub: nameOf(D.person(pid)),
+    body: (
+      <>
+        <C.Field label={L('Appointment evidence', 'إثبات التعيين')} id="ap_evidence" req={true} /> {dutyChoices('ap')}
+      </>
+    ),
+    foot: (
+      <>
+        <button className="btn btn-secondary" data-close="">
+          {L('Cancel', 'إلغاء')}
+        </button>
+        <button className="btn btn-primary" id="ap_go">
+          {L('Appoint', 'تعيين')}
+        </button>
+      </>
+    ),
+    onMount(el) {
+      el.querySelector('#ap_go').addEventListener('click', async () => {
+        const evidence = val(el, '#ap_evidence');
+        if (!evidence) return toast(L('Record the appointment evidence', 'سجّل إثبات التعيين'), '', 'warning');
+        try {
+          await appointLeader(gid, pid, { role, duties: chosenDuties(el, 'ap'), evidence });
+        } catch (error) {
+          return toast(L('Not done', 'لم يتم'), error.message, 'danger');
+        }
+        await hydrate();
+        closeOverlays();
+        refresh();
+        ok(L('Appointed', 'تمّ التعيين'));
+      });
+    }
+  });
+}
+
+/* A priest ends a leader's or assistant's appointment. */
+export function leaderEnd(gid, accountId) {
+  const leader = (D.groupInfo(gid).leaders || []).find(l => l.accountId === accountId);
+  if (leader)
+    reasonDialog(L('End appointment', 'إنهاء التعيين'), leader.name || '', reason => endLeader(gid, leader, reason));
 }
 
 /* A ministry's lifecycle: a priest approves a draft, then it can be published and open to applications. */

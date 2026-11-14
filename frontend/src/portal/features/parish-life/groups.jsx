@@ -27,7 +27,7 @@ import * as CR from '../../shared/record-editor.jsx';
 import { VERBS } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { safeRichText } from '../../../lib/rich-text.js';
-import { meetingEdit, lifecycleStep } from './groups-dialogs.jsx';
+import { meetingEdit, lifecycleStep, leaderEnd } from './groups-dialogs.jsx';
 import { meetingId, attendanceCounts, attendanceValue } from '../../model/planning.js';
 import { GROUPS, groupInfo, TODAY, MUSIC, person, group } from '../../model/data.js';
 import {
@@ -54,10 +54,14 @@ import {
   resourceDelete,
   resourceForm,
   resourceLend,
-  resourceLoanEdit
+  resourceLoanEdit,
+  loanSteps,
+  formationApprove,
+  formationReview
 } from './group-resources.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 export function groups(id, tab) {
   if (id) return groupDetail(id, tab || '');
@@ -352,11 +356,18 @@ function groupDetail(id, tab) {
       <div className="splitview">
         <div className="stack" style={{ gap: '16px' }}>
           <Panel title={L('Leadership', 'المسؤوليات')} tight={true}>
-            {d.roles.map(([p, en, ar], i) => (
+            {(d.leaders || []).map((l, i) => (
               <div key={i} className="listrow">
-                <Who p={person(p)} />
+                {person(l.personId) ? <Who p={person(l.personId)} /> : <b>{l.name || '—'}</b>}
                 <span className="grow" />
-                <span className="chip">{L(en, ar)}</span>
+                <span className="chip">{l.role === 'Leader' ? L('Leader', 'مسؤول') : L('Assistant', 'مساعد')}</span>
+                {!is('leader') ? (
+                  <button className="btn btn-secondary btn-dense" data-leader-end={l.accountId}>
+                    {L('End', 'إنهاء')}
+                  </button>
+                ) : (
+                  ''
+                )}
               </div>
             ))}
           </Panel>{' '}
@@ -804,9 +815,7 @@ function groupDetail(id, tab) {
             d.belongings
               .filter(r => {
                 const q = (S.ui.resourceQuery || '').toLocaleLowerCase(),
-                  lent = d.resourceLoans
-                    .filter(l => l.resourceId === r.id && !l.returnedAt)
-                    .reduce((n, l) => n + l.qty, 0),
+                  lent = r.lent || 0,
                   filter = S.ui.resourceFilter || 'all';
                 return (
                   `${r.name} ${r.ar} ${r.location} ${r.locationAr} ${r.code || ''} ${r.description || ''}`
@@ -816,9 +825,7 @@ function groupDetail(id, tab) {
                 );
               })
               .map((r, i) => {
-                const lent = d.resourceLoans
-                  .filter(l => l.resourceId === r.id && !l.returnedAt)
-                  .reduce((n, l) => n + l.qty, 0);
+                const lent = r.lent || 0;
                 return (
                   <section key={i} className="panel">
                     <div className="panel-b">
@@ -891,28 +898,24 @@ function groupDetail(id, tab) {
                   d.belongings.find(r => r.id === l.resourceId)?.name || '—',
                   d.belongings.find(r => r.id === l.resourceId)?.ar || '—'
                 ),
-                l.borrower,
+                L(person(l.personId)?.lat || '—', person(l.personId)?.ar || person(l.personId)?.lat || '—'),
                 String(l.qty),
-                fmtDate(l.due),
-                l.returnedAt ? (
-                  <Pill label={L('Returned', 'أُعيد')} tone="success" />
-                ) : l.due < iso(new Date()) ? (
-                  <Pill label={L('Overdue', 'متأخر')} tone="danger" />
-                ) : (
-                  <Pill label={L('On loan', 'مُعار')} tone="warning" />
-                ),
-                l.returnedAt ? (
-                  ''
-                ) : (
-                  <span className="row" style={{ gap: '6px' }}>
-                    <button className="btn btn-secondary btn-dense" data-resource-loan-edit={l.id}>
-                      {L('Edit', 'تعديل')}
+                l.due ? fmtDate(l.due) : '—',
+                <Pill
+                  label={
+                    l.overdue
+                      ? L('Overdue', 'متأخر')
+                      : L(LOAN_STATUS[l.status]?.[0] || l.status, LOAN_STATUS[l.status]?.[1] || l.status)
+                  }
+                  tone={l.overdue || l.followUp ? 'danger' : l.status === 'Issued' ? 'warning' : ''}
+                />,
+                <span className="row" style={{ gap: '6px' }}>
+                  {loanSteps(l).map(([action, en, ar]) => (
+                    <button key={action} className="btn btn-secondary btn-dense" data-loan-step={`${l.id}|${action}`}>
+                      {L(en, ar)}
                     </button>
-                    <button className="btn btn-secondary btn-dense" data-resource-return={l.id}>
-                      {L('Mark returned', 'تسجيل الإرجاع')}
-                    </button>
-                  </span>
-                )
+                  ))}
+                </span>
               ]
             }))}
         />
@@ -1009,10 +1012,29 @@ function groupDetail(id, tab) {
             'سجّل تاريخ إنجاز كل عضو وملاحظاته. تبقى المجاميع القديمة غير المرتبطة بأسماء موسومة كتاريخية.'
           )}
         />{' '}
+        {d.formation?.draft ? (
+          <C.InlineAlert
+            tone="warning"
+            title={L('Draft program', 'مسودة برنامج')}
+            body={L(
+              'These milestones are a draft. New evidence uses the approved program until a priest approves the draft.',
+              'هذه المحطات مسودة. يُستخدم البرنامج المعتمد للإثباتات الجديدة إلى أن يعتمد الكاهن المسودة.'
+            )}
+          />
+        ) : (
+          ''
+        )}
         <div className="toolbar" style={{ margin: '16px 0' }}>
           <span className="t-caption dim">
             {d.milestones.length} {L('milestones', 'محطات')}
           </span>{' '}
+          {d.formation?.draft && is('priest') ? (
+            <button className="btn btn-secondary btn-dense" data-formation-approve="">
+              {L('Approve program', 'اعتماد البرنامج')}
+            </button>
+          ) : (
+            ''
+          )}{' '}
           <button className="btn btn-primary btn-dense" data-formation-new="">
             <Icon name="plus" size={15} />
             {L('Add milestone', 'إضافة محطة')}
@@ -1079,7 +1101,28 @@ function groupDetail(id, tab) {
                       </>
                     }
                   >
-                    <p className="t-caption dim">{m.description || ''}</p>{' '}
+                    <p className="t-caption dim">{L(m.description, m.descriptionAr)}</p>{' '}
+                    {Object.entries(m.progress || {})
+                      .filter(([, x]) => ['EvidenceSubmitted', 'Reviewed', 'NeedsInformation'].includes(x.status))
+                      .map(([pid, x], i) => (
+                        <div key={'p' + i} className="listrow" style={{ paddingInline: 0 }}>
+                          <span className="grow">
+                            <b>{L(person(pid)?.lat || '—', person(pid)?.ar || person(pid)?.lat || '—')}</b>{' '}
+                            <small>
+                              {x.status === 'NeedsInformation'
+                                ? L('Needs information', 'بحاجة إلى معلومات')
+                                : L('Awaiting review', 'بانتظار المراجعة')}
+                            </small>
+                          </span>
+                          {x.status !== 'NeedsInformation' ? (
+                            <button className="btn btn-secondary btn-dense" data-formation-review={`${m.id}|${pid}`}>
+                              {L('Review', 'مراجعة')}
+                            </button>
+                          ) : (
+                            ''
+                          )}
+                        </div>
+                      ))}
                     <div className="row" style={{ gap: '8px', flexWrap: 'wrap', margin: '10px 0' }}>
                       <Pill label={`${names.length} ${L('named completions', 'إنجازات بالأسماء')}`} tone="success" />{' '}
                       {m.legacyCount ? (
@@ -1102,16 +1145,15 @@ function groupDetail(id, tab) {
                               {record.notes ? ` · ${record.notes}` : ''}
                             </small>
                           </span>{' '}
-                          <C.IconBtn
-                            ico="edit"
-                            label={L('Edit completion', 'تعديل الإنجاز')}
-                            data-formation-record={`${m.id}|${pid}`}
-                          />{' '}
-                          <C.IconBtn
-                            ico="trash"
-                            label={L('Remove completion', 'حذف الإنجاز')}
-                            data-formation-remove={`${m.id}|${pid}`}
-                          />
+                          {is('priest') ? (
+                            <C.IconBtn
+                              ico="trash"
+                              label={L('Reopen completion', 'إعادة فتح الإنجاز')}
+                              data-formation-remove={`${m.id}|${pid}`}
+                            />
+                          ) : (
+                            ''
+                          )}
                         </div>
                       )) +
                       '</details>'
@@ -1121,7 +1163,7 @@ function groupDetail(id, tab) {
                     <div className="formation-card-actions">
                       <button className="btn btn-secondary btn-dense" data-formation-record={m.id}>
                         <Icon name="plus" size={15} />
-                        {L('Record completion', 'تسجيل إنجاز')}
+                        {L('Record evidence', 'تسجيل إثبات')}
                       </button>
                     </div>
                   </Panel>
@@ -1306,17 +1348,16 @@ groups.mount = host => {
   host
     .querySelectorAll('[data-resource-loan-edit]')
     .forEach(b => b.addEventListener('click', () => resourceLoanEdit(b.dataset.resourceLoanEdit)));
-  host.querySelectorAll('[data-resource-return]').forEach(b =>
-    b.addEventListener('click', async () => {
-      const loan = groupInfo(S.params[0]).resourceLoans.find(l => l.id === b.dataset.resourceReturn);
-      if (loan) {
-        loan.returnedAt = iso(new Date());
-        if (!(await persist())) return;
-        bus.refresh();
-        toast(L('Item returned', 'أُعيد الصنف'), '', 'success');
-      }
-    })
-  );
+  host
+    .querySelectorAll('[data-loan-step]')
+    .forEach(b => b.addEventListener('click', () => resourceLoanEdit(...b.dataset.loanStep.split('|'))));
+  host.querySelector('[data-formation-approve]')?.addEventListener('click', () => formationApprove());
+  host
+    .querySelectorAll('[data-formation-review]')
+    .forEach(b => b.addEventListener('click', () => formationReview(...b.dataset.formationReview.split('|'))));
+  host
+    .querySelectorAll('[data-leader-end]')
+    .forEach(b => b.addEventListener('click', () => leaderEnd(S.params[0], b.dataset.leaderEnd)));
   host.querySelector('[data-formation-new]')?.addEventListener('click', () => formationForm());
   host
     .querySelectorAll('[data-formation-edit]')
@@ -1331,15 +1372,9 @@ groups.mount = host => {
     })
   );
   host.querySelectorAll('[data-formation-remove]').forEach(b =>
-    b.addEventListener('click', async () => {
-      const [mid, pid] = b.dataset.formationRemove.split('|'),
-        m = groupInfo(S.params[0]).milestones.find(x => x.id === mid);
-      if (m?.completions?.[pid]) {
-        delete m.completions[pid];
-        if (!(await persist())) return;
-        bus.refresh();
-        toast(L('Completion removed', 'حُذف الإنجاز'), '', 'success');
-      }
+    b.addEventListener('click', () => {
+      const [mid, pid] = b.dataset.formationRemove.split('|');
+      formationReview(mid, pid, true);
     })
   );
   host.querySelectorAll('[data-attendance-shift]').forEach(b =>
@@ -1491,6 +1526,17 @@ groups.mount = host => {
       onMount(el) {}
     })
   );
+};
+
+const LOAN_STATUS = {
+  Requested: ['Requested', 'مطلوب'],
+  Approved: ['Approved', 'موافق عليه'],
+  Declined: ['Declined', 'مرفوض'],
+  Cancelled: ['Cancelled', 'ملغى'],
+  Issued: ['On loan', 'مُعار'],
+  Returned: ['Returned', 'أُعيد'],
+  ConditionChecked: ['Checked', 'تم الفحص'],
+  Closed: ['Closed', 'مغلق']
 };
 
 function groupTaskForm(index = -1) {

@@ -1,5 +1,5 @@
 // Purpose: returns one ministry stock item with its available quantity.
-// Main members: Id, MinistryId, Name, Storage, Total, OnLoan, Available, Status, UpdatedBy and UpdatedAt.
+// Main members: Id, MinistryId, Name/NameAr, Storage/StorageAr, Total, OnLoan, Available, Status, UpdatedBy and UpdatedAt.
 
 namespace ParishLife.Api.DTOs.Ministries;
 
@@ -11,7 +11,11 @@ public class MinistryStockDto
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; } = null;
+
     public string? Storage { get; set; } = null;
+
+    public string? StorageAr { get; set; } = null;
 
     public int Total { get; set; }
 

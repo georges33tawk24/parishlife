@@ -1,5 +1,5 @@
 // Purpose: represents one counted kind of physical belonging owned by a ministry, reconciled with its loans.
-// Main members: Id, ParishId, MinistryId, Name, Storage, Total, OnLoan, Status and last change facts.
+// Main members: Id, ParishId, MinistryId, Name/NameAr, Storage/StorageAr, Total, OnLoan, Status and last change facts.
 
 namespace ParishLife.Api.Models;
 
@@ -13,7 +13,11 @@ public class MinistryStock
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NameAr { get; set; } = null;
+
     public string? Storage { get; set; } = null;
+
+    public string? StorageAr { get; set; } = null;
 
     public int Total { get; set; }
 

@@ -27,7 +27,8 @@ import { rotaDrop } from './rota-dialogs.jsx';
 import { GROUPS, groupInfo, ROTA, VOLUNTEERS, SIGNUP_SHEETS, person, group } from '../../model/data.js';
 import { memberAttendancePct } from './parish-life-shared.jsx';
 
-const L = (en, ar) => t(en, ar);
+/* Display only: an empty twin falls back to the other language (never when saving). */
+const L = (en, ar) => t(en || ar, ar || en);
 
 const MINISTRY_ROLES = [
   ['President', 'رئيس'],
