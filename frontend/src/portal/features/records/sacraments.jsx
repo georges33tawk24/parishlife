@@ -1,8 +1,10 @@
 /* Sacrament preparation and the parish's requests list: what each request needs next, preparation
-   progress, anniversaries and the register export. */
+   progress (with each case's checklist count), anniversaries and the register export; the priest's settings
+   (preparation requirement lists, his signature image) open from the preparation tab. */
 import { Select } from '../../ui/components.jsx';
 import { t, isAr, fmtDate } from '../../../lib/i18n.js';
-import { bus, S, save } from '../../model/store.js';
+import { bus, S, save, is } from '../../model/store.js';
+import { openRequirementLists, openSignatureImage } from './sacrament-settings.jsx';
 import { session } from '../../model/api.js';
 import {
   Icon,
@@ -72,8 +74,11 @@ function exportRegister() {
     'Arabic name',
     'Date',
     'Celebrant',
-    'Book / page',
+    'Celebrant (Arabic)',
+    'Book',
+    'Page',
     'Godparents / witnesses',
+    'Godparents / witnesses (Arabic)',
     'Status'
   ];
   const rows = SACRAMENTS.filter(official).map(s => {
@@ -85,8 +90,11 @@ function exportRegister() {
       p?.ar,
       String(s.date || '').slice(0, 10),
       s.celebrantName || '',
+      s.celebrantNameAr || '',
       s.book,
+      s.page,
       s.godparents,
+      s.godparentsAr,
       s.status
     ];
   });
@@ -594,6 +602,20 @@ export function sacraments(tab = '', below = null) {
             <Icon name="plus" size={16} />
             {L('New sacrament request', 'طلب سرّ جديد')}
           </button>
+          {is('priest', 'secretary') ? (
+            <button className="btn btn-secondary" id="reqlists">
+              {L('Preparation requirements', 'متطلبات التحضير')}
+            </button>
+          ) : (
+            ''
+          )}
+          {is('priest') ? (
+            <button className="btn btn-ghost" id="mysigimage">
+              {L('My signature image', 'صورة توقيعي')}
+            </button>
+          ) : (
+            ''
+          )}
         </div>{' '}
         <Table
           cols={[
@@ -610,8 +632,25 @@ export function sacraments(tab = '', below = null) {
               <Who p={person(s.person)} />,
               kindLabel(s.kind),
               s.date ? celebrationText(s) : L('Set date', 'حدّد التاريخ'),
-              s.celebrantName || L('To be assigned', 'يُحدَّد لاحقاً'),
-              <Status k={s.status} />,
+              L(s.celebrantName || s.celebrantNameAr, s.celebrantNameAr || s.celebrantName) ||
+                L('To be assigned', 'يُحدَّد لاحقاً'),
+              <>
+                <Status k={s.status} />
+                {(s.requirements || []).length ? (
+                  <small className="dim" style={{ display: 'block' }}>
+                    {L('Checklist', 'اللائحة')} {s.requirements.filter(r => r.met).length}/{s.requirements.length}
+                  </small>
+                ) : (
+                  ''
+                )}
+                {s.pendingAmendment ? (
+                  <small className="dim" style={{ display: 'block' }}>
+                    {L('Change awaiting the priest', 'تعديل بانتظار الكاهن')}
+                  </small>
+                ) : (
+                  ''
+                )}
+              </>,
               <span className="row" style={{ gap: '6px' }}>
                 <a className="btn btn-secondary btn-dense" href={`#/certificate/${s.id}`}>
                   {L('View', 'عرض')}
@@ -670,6 +709,8 @@ sacraments.mount = host => {
     bus.refresh();
   });
   host.querySelector('#sacexport')?.addEventListener('click', exportRegister);
+  host.querySelector('#reqlists')?.addEventListener('click', openRequirementLists);
+  host.querySelector('#mysigimage')?.addEventListener('click', openSignatureImage);
   host.querySelectorAll('[data-request-history]').forEach(button =>
     button.addEventListener('click', () => {
       const item = REQUEST_HISTORY.find(r => r.id === button.dataset.requestHistory);
@@ -997,12 +1038,26 @@ sacraments.mount = host => {
               />
               {timeSelect('prep_time', record.time || '')}
             </div>
-            <C.Field
-              label={L('Celebrant', 'المحتفل')}
-              id="prep_celebrant"
-              value={record.celebrantName || ''}
-              req={true}
-            />
+            <div className="formgrid">
+              <C.Field label={L('Celebrant', 'المحتفل')} id="prep_celebrant" value={record.celebrantName || ''} />
+              <C.Field
+                label={L('Celebrant · Arabic', 'المحتفل · بالعربية')}
+                id="prep_celebrantAr"
+                value={record.celebrantNameAr || ''}
+                ar={true}
+                dir="rtl"
+              />
+            </div>
+            {(record.requirements || []).some(r => !r.met) && record.requirementsBlockScheduling ? (
+              <p className="help-error">
+                {L(
+                  'The parish confirms a date only when every preparation requirement is met.',
+                  'لا تؤكّد الرعية الموعد إلا بعد استيفاء كل متطلبات التحضير.'
+                )}
+              </p>
+            ) : (
+              ''
+            )}
             {scheduled ? (
               <C.Textarea label={L('Reason for the change', 'سبب التغيير')} id="prep_reason" max={500} />
             ) : (
@@ -1025,9 +1080,14 @@ sacraments.mount = host => {
             if (
               !needAll(el, [
                 ['#prep_date', L('Enter a date', 'أدخل التاريخ')],
-                ['#prep_celebrant', L('Name the celebrant', 'اذكر المحتفل')],
                 ...(scheduled ? [['#prep_reason', L('Enter a reason', 'أدخل السبب')]] : [])
               ])
+            )
+              return;
+            // either spelling names the celebrant; neither is filled in from the other
+            if (
+              !el.querySelector('#prep_celebrantAr').value.trim() &&
+              !need(el, '#prep_celebrant', L('Name the celebrant', 'اذكر المحتفل'))
             )
               return;
             try {
@@ -1037,7 +1097,8 @@ sacraments.mount = host => {
                 });
               await API.sacramentAction(record.id, 'schedule', {
                 scheduledAt: API.toUtc(el.querySelector('#prep_date').value, el.querySelector('#prep_time').value),
-                celebrantName: el.querySelector('#prep_celebrant').value.trim()
+                celebrantName: el.querySelector('#prep_celebrant').value.trim(),
+                celebrantNameAr: el.querySelector('#prep_celebrantAr').value.trim()
               });
               closeOverlays();
               bus.refresh();

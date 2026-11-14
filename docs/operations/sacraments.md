@@ -81,3 +81,28 @@ Source basis: S14.09–S14.10, S30.19 (proposed). The system never writes or tra
   - Every sheet carries a banner: **DRAFT** until issued, then **COPY**. The official document remains the signed and sealed paper until an approved electronic signature and verification arrangement exists.
 
 Electronic authorization, the printed priest-name block for authorized certificates and code verification are described in [document-signatures.md](document-signatures.md). Not implemented: PDF generation, QR images, bilingual layouts, and register-page and other sheets (rosters, vouchers, receipts).
+
+## Additions (fullstack2-sacraments, November 2026)
+
+New case actions on `POST /sacraments/{id}/actions`:
+
+| Action | When | Who |
+| --- | --- | --- |
+| office-review | Received, once; optional note (`reason`) | Office. Informative only; does not gate the priest |
+| requirement | Preparation/Scheduled: `requirementKey`, `requirementMet`, optional note | Office |
+| sync-requirements | Preparation/Scheduled: copy the parish's current list, keeping recorded items | Office |
+| propose-amendment | Preparation/Scheduled, none pending: `tentativeDate` and/or changed `facts` (empty value removes), `reason` | Office |
+| approve-amendment / reject-amendment | A pending amendment (rejection needs `reason`) | *Priest* |
+
+`accept` copies the parish's list onto the case. `schedule` is refused while items are open only when the priest chose `blockSchedulingUntilMet`. `GET/PUT /sacraments/requirements` read (office or priest) and save (*priest*, with the current `version` once a list exists) the parish's lists; labels are typed in English and/or Arabic and no list exists by default.
+
+Case fields: `celebrantNameAr`, `placeAr`, `witnessesAr` (saved as typed; either spelling satisfies the place and celebrant rules), `celebrantPersonId` (a current person of the parish), `registerPage` (at `register`), office review fields, `requirements`, `requirementsBlockScheduling`, `requestAmendments`, `createdBy`, `createdAt`. Corrections also accept `placeAr`, `celebrantNameAr`, `witnessesAr` and `registerPage`. Certificates return `createdBy`, `createdAt` and `hasSignatureImage`.
+
+### Priest's signature image
+
+- Records (parish partition): `clergySignature:{accountId}` points to the current image; `signatureImage:{id}` holds one version with top-level `storagePath`, `contentType`, size and SHA-256, so data snapshots copy the images with the other evidence. Read by key only; `docs/cosmos/containers.json` is unchanged.
+- Bytes go to the existing private evidence store (`IEvidenceStore`: the local folder in development, the private Blob container with managed identity when hosted) at `{parishId}/signature-images/{id}`, written once and never overwritten or deleted; replaced and removed versions stay.
+- Routes: `GET /clergy-signature-image` (metadata), `GET /clergy-signature-image/content`, `POST /clergy-signature-image` (multipart `operationId`, `file`; PNG or JPEG checked by content, up to 1 MB), `POST /clergy-signature-image/remove` (`version`) — a current priest of the parish, own image only, MFA, sacraments module on. `GET /certificates/{id}/signature-image` — the certificate's readers (office, priests, bishop; MFA).
+- `sign` attaches the signer's image current at that moment by id and hash; a later replacement never changes it, and `return` clears it. Reads verify size and hash and answer `Cache-Control: private, no-store`; a mismatch is `evidence_integrity_unavailable`.
+- The image is a picture for the printed paper. It is not an electronic signature, is not part of the electronic authorization content and proves no approval (U05 remains an owner question). The parish sheet does not embed it.
+- Local tests are not Azure acceptance: Blob writes and reads of these images have not been exercised against the hosted container.

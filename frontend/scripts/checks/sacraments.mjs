@@ -1,7 +1,10 @@
 /* Purpose: checks the Sacraments module (src/portal/model/modules/sacraments.js) against an in-memory stand-in
    for the sacrament, certificate and anniversary routes: what load fills (statuses, dates, anniversaries from
    registered dates only), what each action sends (operation id, version, UTC instants), the two-step
-   certificate send, and that direct edits of the lists are undone and reported.
+   certificate send, and that direct edits of the lists are undone and reported. Also: Arabic twins, book and
+   page, the office review, the parish's requirement lists and a case's checklist, request amendments, request
+   dates, actor names (account-names mocked), and the priest's signature image (metadata, multipart upload,
+   removal, and the copy attached to a signed certificate as a data URL).
    Run with `npm run check` from frontend/. */
 import assert from 'node:assert/strict';
 import { mockApi, json, signedIn } from '../mock-api.mjs';
@@ -9,7 +12,11 @@ import { mockApi, json, signedIn } from '../mock-api.mjs';
 const PERSON = 'a'.repeat(32),
   CASE = 'b'.repeat(32),
   REG = 'c'.repeat(32),
-  CERT = 'd'.repeat(32);
+  CERT = 'd'.repeat(32),
+  REVIEWED = 'e'.repeat(32),
+  PREP = 'f'.repeat(32),
+  PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+const png = () => new Response(PNG, { status: 200, headers: { 'Content-Type': 'image/png' } });
 const record = (id, sacrament, status, extra = {}) => ({
   version: `v-${id}`,
   value: {
@@ -51,14 +58,65 @@ let cases = [
     officialNumber: 'B/2016/9',
     celebratedAt: '2016-06-12T09:00:00Z',
     celebrantName: 'Fr. A',
+    celebrantNameAr: 'الأب أ',
     place: 'Saint Test',
-    bookReference: 'Book 4, p. 12'
+    placeAr: 'مار تست',
+    witnessesAr: 'العرّاب',
+    bookReference: 'Book 4',
+    registerPage: '12',
+    createdAt: '2016-05-01T08:00:00Z',
+    createdBy: 'acc1',
+    timeline: [{ action: 'open', at: '2016-05-01T08:00:00Z', actorAccountId: 'acc1' }]
+  }),
+  record(REVIEWED, 'Confirmation', 'Received', {
+    officeReviewedAt: '2026-11-02T08:00:00Z',
+    officeReviewedBy: 'acc1',
+    officeReviewNote: 'Papers seen'
+  }),
+  record(PREP, 'FirstCommunion', 'Preparation', {
+    requirements: [
+      { key: 'k1', label: 'Class', labelAr: null, met: true, recordedBy: 'acc1', recordedAt: '2026-11-03T08:00:00Z' },
+      { key: 'k2', label: null, labelAr: 'اعتراف', met: false }
+    ],
+    requirementsBlockScheduling: true,
+    requestAmendments: [
+      {
+        id: 'am',
+        status: 'Pending',
+        tentativeDate: '2026-12-27',
+        facts: { requestNotes: 'Later' },
+        reason: 'Family travel',
+        proposedBy: 'acc1',
+        proposedAt: '2026-11-04T08:00:00Z'
+      }
+    ]
   })
 ];
 let certs = [certificate('Received')];
+let signature = { hasImage: false, version: null };
 const lastKind = [];
 const { sent, events } = mockApi((method, path, body) => {
   let m;
+  if (path.startsWith('parishes/P/account-names?ids='))
+    return json(200, path.includes('acc1') ? [{ accountId: 'acc1', displayName: 'Rita Office' }] : []);
+  if (path === 'parishes/P/sacraments/requirements' && method === 'GET')
+    return json(200, [
+      {
+        sacrament: 'Baptism',
+        version: 'rv1',
+        items: [{ key: 'k1', label: 'Class', labelAr: null }],
+        blockSchedulingUntilMet: true
+      }
+    ]);
+  if (path === 'parishes/P/sacraments/requirements' && method === 'PUT')
+    return json(200, { sacrament: body.sacrament, version: 'rv2', items: body.items });
+  if (path === 'parishes/P/clergy-signature-image' && method === 'GET') return json(200, signature);
+  if (path === 'parishes/P/clergy-signature-image/content') return png();
+  if (path === 'parishes/P/clergy-signature-image/remove' && method === 'POST') {
+    signature = { hasImage: false, version: 'sv2' };
+    return json(200, signature);
+  }
+  if (path === `parishes/P/certificates/${CERT}/signature-image`) return png();
   if ((m = path.match(/^parishes\/P\/sacraments\?sacrament=(\w+)&size=100(?:&cursor=(.+))?$/))) {
     lastKind.push(m[1]);
     const rows = cases.filter(c => c.value.sacrament === m[1]);
@@ -112,6 +170,18 @@ const { sent, events } = mockApi((method, path, body) => {
   if (path === 'parishes/P/sacraments' && method === 'POST') return json(200, { id: 'newcase' });
 });
 
+// the multipart upload carries FormData, which the shared stand-in does not parse; it is answered here
+const uploads = [];
+const answer = globalThis.fetch;
+globalThis.fetch = async (url, options = {}) => {
+  if (String(url) === '/api/parishes/P/clergy-signature-image' && options.method === 'POST') {
+    uploads.push({ form: options.body, csrf: options.headers?.['X-CSRF-TOKEN'] });
+    signature = { hasImage: true, id: 'img', version: 'sv1', contentType: 'image/png' };
+    return json(200, signature);
+  }
+  return answer(url, options);
+};
+
 const { session } = await import('../../src/portal/model/api.js');
 const D = await import('../../src/portal/model/data.js');
 const { hydrate, persist } = await import('../../src/portal/model/persist.js');
@@ -135,8 +205,44 @@ assert.match(marriage.reg, /^SRQ\/BBBBBBBB$/, 'an open case has no official numb
 const baptism = D.SACRAMENTS.find(s => s.id === REG);
 assert.deepEqual(
   [baptism.status, baptism.reg, baptism.book, baptism.celebrantName],
-  ['registered', 'B/2016/9', 'Book 4, p. 12', 'Fr. A']
+  ['registered', 'B/2016/9', 'Book 4', 'Fr. A']
 );
+// Arabic twins come only from their own fields, book and page apart, the request date and who made it
+assert.deepEqual(
+  [baptism.celebrantNameAr, baptism.placeAr, baptism.godparentsAr, baptism.page, baptism.fatherAr],
+  ['الأب أ', 'مار تست', 'العرّاب', '12', '']
+);
+assert.deepEqual([baptism.requestedAt, baptism.requestedBy], ['2016-05-01T08:00:00Z', 'Rita Office']);
+assert.equal(baptism.history[0].by, 'Rita Office', 'actor names come from the account-names lookup');
+assert.equal(D.SACRAMENTS.find(s => s.id === CASE).requestedBy, '', 'an id the lookup does not reveal stays empty');
+// the office review shows as its own status while the API status stays Received
+const reviewed = D.SACRAMENTS.find(s => s.id === REVIEWED);
+assert.deepEqual(
+  [reviewed.status, reviewed.apiStatus, reviewed.officeReviewedBy, reviewed.officeReviewNote],
+  ['office-reviewed', 'Received', 'Rita Office', 'Papers seen']
+);
+// the checklist and the change awaiting the priest
+const prep = D.SACRAMENTS.find(s => s.id === PREP);
+assert.deepEqual(
+  prep.requirements.map(r => [r.key, r.label, r.labelAr, r.met, r.recordedBy]),
+  [
+    ['k1', 'Class', '', true, 'Rita Office'],
+    ['k2', '', 'اعتراف', false, '']
+  ]
+);
+assert.equal(prep.requirementsBlockScheduling, true);
+assert.deepEqual(
+  [
+    prep.pendingAmendment.date,
+    prep.pendingAmendment.notes,
+    prep.pendingAmendment.reason,
+    prep.pendingAmendment.proposedBy
+  ],
+  ['2026-12-27', 'Later', 'Family travel', 'Rita Office']
+);
+// the parish's own lists; a sacrament without one has none
+assert.deepEqual(S.requirementSetFor('baptism').items, [{ key: 'k1', label: 'Class', labelAr: '' }]);
+assert.equal(S.requirementSetFor('marriage'), null);
 assert.equal(baptism.pendingCorrections[0].to, 'Saint Elias');
 const cert = D.SACRAMENTS.find(s => s.id === CERT);
 assert.deepEqual(
@@ -218,6 +324,65 @@ assert.equal(D.SACRAMENTS.find(s => s.id === CERT).status, 'awaiting-signature')
 await S.authorizeCertificate(CERT, '123 456');
 body = sent.at(-1)[2];
 assert.deepEqual([body.expectedContentHash, body.authenticatorCode, body.version], ['AB'.repeat(32), '123456', 'cv3']);
+
+// office review, checklist, sync and request amendments are one action each, with the record's version
+await S.officeReview(CASE, 'Seen');
+body = sent.at(-1)[2];
+assert.deepEqual([body.action, body.reason], ['office-review', 'Seen']);
+await S.setRequirement(PREP, 'k2', false);
+body = sent.at(-1)[2];
+assert.deepEqual(
+  [body.action, body.requirementKey, body.requirementMet, body.version],
+  ['requirement', 'k2', false, `v-${PREP}`]
+);
+await S.syncRequirements(PREP);
+assert.equal(sent.at(-1)[2].action, 'sync-requirements');
+await S.proposeAmendment(PREP, { date: '', facts: { requestNotes: '' }, reason: 'Clear the notes' });
+body = sent.at(-1)[2];
+assert.deepEqual(
+  [body.action, body.tentativeDate, body.facts, body.reason],
+  ['propose-amendment', undefined, { requestNotes: '' }, 'Clear the notes'],
+  'an empty value asks the priest to remove that detail'
+);
+await S.decideAmendment(PREP, true);
+assert.deepEqual([sent.at(-1)[2].action, sent.at(-1)[2].reason], ['approve-amendment', undefined]);
+await S.decideAmendment(PREP, false, 'No');
+assert.deepEqual([sent.at(-1)[2].action, sent.at(-1)[2].reason], ['reject-amendment', 'No']);
+// Arabic spellings and the page are sent as typed, never copied from the Latin fields
+await S.sacramentAction(CASE, 'register', { bookReference: 'Book 5', registerPage: '7' });
+body = sent.at(-1)[2];
+assert.deepEqual([body.bookReference, body.registerPage], ['Book 5', '7']);
+await S.sacramentAction(CASE, 'record-celebration', { placeAr: 'الكنيسة', place: '', celebrantNameAr: 'الأب' });
+body = sent.at(-1)[2];
+assert.deepEqual([body.placeAr, 'place' in body, body.celebrantNameAr], ['الكنيسة', false, 'الأب']);
+
+// the priest saves the parish's own list with its current version
+await S.saveRequirementSet('baptism', [{ key: 'k1', label: 'Class', labelAr: 'صف' }], false);
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'PUT parishes/P/sacraments/requirements');
+assert.deepEqual(
+  [body.sacrament, body.version, body.items, body.blockSchedulingUntilMet],
+  ['Baptism', 'rv1', [{ key: 'k1', label: 'Class', labelAr: 'صف' }], false]
+);
+
+// the signature image: metadata, a multipart upload with a CSRF token, removal by version, never JSON bytes
+assert.equal((await S.mySignatureImage()).hasImage, false);
+const saved = await S.uploadSignatureImage(new File([PNG], 'sig.png', { type: 'image/png' }));
+assert.equal(saved.hasImage, true);
+assert.match(uploads[0].csrf, /^t\d+$/);
+assert.match(uploads[0].form.get('operationId'), /^[0-9a-f-]{36}$/);
+assert.equal(uploads[0].form.get('file').type, 'image/png');
+assert.match(await S.mySignatureImageData(), /^data:image\/png;base64,/);
+await S.removeSignatureImage('sv1');
+[method, path, body] = sent.at(-1);
+assert.equal(`${method} ${path}`, 'POST parishes/P/clergy-signature-image/remove');
+assert.equal(body.version, 'sv1');
+// a signed certificate's attached image is fetched once and kept for printing
+const signedCert = { id: CERT, hasSignatureImage: true, signedAt: '2026-11-05T08:00:00Z' };
+assert.equal(S.certificateImage(signedCert), '');
+assert.match(await S.loadCertificateImage(signedCert), /^data:image\/png;base64,iVBORw0KGgo/);
+assert.equal(S.certificateImage(signedCert), await S.loadCertificateImage(signedCert));
+assert.equal(await S.loadCertificateImage({ id: CERT, hasSignatureImage: false }), '');
 
 // a refusal from the API is shown as its own words
 await assert.rejects(S.sacramentAction('missing', 'accept'), /no longer in the list/);

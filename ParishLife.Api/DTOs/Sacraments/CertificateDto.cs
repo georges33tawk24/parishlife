@@ -1,5 +1,6 @@
 // Purpose: returns a certificate with its source snapshot, gates, release record and a plain statement of what the digital copy is.
-// Main members: identity/source/request, prepared snapshot, gate/release facts, electronic authorization code, replacement, CopyStatement and safe notification outcome.
+// Main members: identity/source/request, request date (CreatedAt) and creator, prepared snapshot, gate/release facts, whether a signature image
+// was attached at signing, electronic authorization code, replacement, CopyStatement and safe notification outcome.
 
 using ParishLife.Api.DTOs.Communications;
 
@@ -42,6 +43,15 @@ public class CertificateDto
     public string? SignedBy { get; set; } = null;
 
     public DateTimeOffset? SignedAt { get; set; } = null;
+
+    // True when the signing priest had a signature image at signing; read it from certificates/{id}/signature-image. It is a picture for
+    // the printed paper, not an electronic signature.
+    public bool HasSignatureImage { get; set; }
+
+    public string CreatedBy { get; set; } = string.Empty;
+
+    // When the certificate was requested.
+    public DateTimeOffset CreatedAt { get; set; }
 
     public string? AcceptedBy { get; set; } = null;
 

@@ -1,6 +1,7 @@
 // Purpose: represents one certificate/extract from a registered sacramental entry through preparation, priest signing, optional bishop acceptance, issue and release.
 // Main members: identity/source/request, issued snapshot, signature/release gates, current electronic authorization and its history,
-// the replacing certificate once a reissue is issued, and the latest tracked required-notification batch.
+// the replacing certificate once a reissue is issued, the signing priest's signature image attached at signing (a picture, not an
+// electronic signature), and the latest tracked required-notification batch.
 
 namespace ParishLife.Api.Models;
 
@@ -51,6 +52,11 @@ public class Certificate
     public string? SignedBy { get; set; } = null;
 
     public DateTimeOffset? SignedAt { get; set; } = null;
+
+    // The signing priest's current signature image when they signed, by id and content hash; cleared when the certificate is returned.
+    public string? SignatureImageId { get; set; } = null;
+
+    public string? SignatureImageSha256 { get; set; } = null;
 
     public string? AcceptedBy { get; set; } = null;
 
