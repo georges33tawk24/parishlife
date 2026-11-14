@@ -1,8 +1,11 @@
 /* Purpose: checks the Finance module against a stand-in for ParishLife.Api's finance routes: what load
-   fills (funds with per-currency balances, gifts, expenses, bank lines, the office ledger, the open counting
-   session), what save sends (a new fund, expense, pledge, session lines, office entries), what is refused
-   as unsupported (the exchange rate, recurring gifts), and the workflow calls (verify, post, expense
-   decisions, bank match). Run with `npm run check`. */
+   fills (funds with Arabic twins, per-currency balances and budgets, gifts, expenses, bank lines, the
+   office ledger and its recorded openings, the counting sessions, recorded exchange rates, recurring
+   gifts, numbered receipts, people's names for actor ids), what save sends (a new fund, fund and campaign
+   name corrections, expense, pledge, session lines, office entries with category), what is refused as
+   unsupported (changing a recorded rate, a recurring gift or a fund's restriction through the diff), and
+   the workflow calls (verify, expense decisions, bank match, record a rate, set a budget, recurring gifts,
+   issue and void a receipt). Run with `npm run check`. */
 import assert from 'node:assert/strict';
 import { json, mockApi, signedIn } from '../mock-api.mjs';
 
@@ -61,7 +64,98 @@ const { sent } = mockApi((method, path, body) => {
     if (p.startsWith('people')) return json(200, { items: [], continuationToken: null });
     if (p === 'finance/funds')
       return json(200, [
-        { id: F1, name: 'General fund', purpose: 'Running costs', restricted: false, status: 'Active' }
+        {
+          id: F1,
+          version: 'v-f1',
+          name: 'General fund',
+          nameAr: 'الصندوق العام',
+          purpose: 'Running costs',
+          purposeAr: null,
+          restricted: false,
+          status: 'Active'
+        }
+      ]);
+    if (p === 'finance/exchange-rates')
+      return json(200, [
+        {
+          id: 'r2',
+          baseCurrency: 'USD',
+          quoteCurrency: 'LBP',
+          rate: 89700,
+          effectiveOn: '2026-11-02',
+          source: 'Bank board',
+          recordedBy: 'a2',
+          recordedAt: '2026-11-02T08:00:00Z'
+        },
+        {
+          id: 'r1',
+          baseCurrency: 'USD',
+          quoteCurrency: 'LBP',
+          rate: 89500,
+          effectiveOn: '2026-11-01',
+          source: 'Bank board',
+          recordedBy: 'a2',
+          recordedAt: '2026-11-01T08:00:00Z'
+        }
+      ]);
+    if (p === 'finance/budgets')
+      return json(200, [
+        {
+          id: 'b-usd',
+          version: 'v-bu',
+          fundId: F1,
+          year: new Date().getFullYear(),
+          currency: 'USD',
+          amount: 1000,
+          spent: 180,
+          remaining: 820,
+          setBy: 'a2'
+        }
+      ]);
+    if (p === 'finance/recurring-gifts')
+      return json(200, [
+        {
+          id: 'rg1',
+          version: 'v-rg1',
+          personId: P1,
+          fundId: F1,
+          amount: 50,
+          currency: 'USD',
+          frequency: 'Monthly',
+          method: 'Bank',
+          startsOn: '2026-10-15',
+          endsOn: null,
+          nextExpectedOn: '2026-11-15',
+          status: 'Active'
+        }
+      ]);
+    if (p === 'finance/receipts')
+      return json(200, [
+        {
+          id: 'rc1',
+          version: 'v-rc1',
+          number: 1,
+          contributionId: 'g1',
+          personId: P1,
+          fundId: F1,
+          amount: 100,
+          currency: 'USD',
+          receivedOn: '2026-11-01',
+          status: 'Issued',
+          giftStatus: 'Posted',
+          issuedBy: 'a3'
+        }
+      ]);
+    if (p === 'finance/sessions')
+      return json(200, [{ value: { ...store.session.value, countedBy: ['a1'] }, version: 'v-s1' }]);
+    if (p === 'office-ledger/openings')
+      return json(200, [
+        { currency: 'USD', amount: 1000, effectiveOn: '2026-10-01', provenance: 'Cash count', enteredBy: 'a2' }
+      ]);
+    if (p.startsWith('account-names'))
+      return json(200, [
+        { accountId: 'a1', displayName: 'First Counter' },
+        { accountId: 'a2', displayName: 'Treasurer' }
       ]);
     if (p === 'finance/balances')
       return json(200, [
@@ -195,10 +289,11 @@ const { sent } = mockApi((method, path, body) => {
 
 const { session } = await import('../../src/portal/model/api.js');
 signedIn(session, { roles: ['priest'] });
-localStorage_set(S1);
+localStorage_set('');
 const D = await import('../../src/portal/model/data.js');
 const { hydrate, persist } = await import('../../src/portal/model/persist.js');
 const F = await import('../../src/portal/model/modules/finance.js');
+const { nameOf } = await import('../../src/portal/model/names.js');
 
 function localStorage_set(id) {
   const mem = new Map([['pl-finance-session:P', id]]);
@@ -210,12 +305,30 @@ function localStorage_set(id) {
 }
 
 await hydrate();
-// funds carry per-currency balances; no budget and no rate are invented
+// funds carry Arabic twins, per-currency balances and this year's budgets
 assert.equal(D.FUNDS[0].balances.length, 2);
-assert.equal(D.FUNDS[0].budget, 0);
-assert.equal(D.RATE.value, 0);
-assert.deepEqual(D.RECURRING, []);
-assert.deepEqual(D.RECEIPTS, []);
+assert.deepEqual([D.FUNDS[0].ar, D.FUNDS[0].nameAr, D.FUNDS[0].purposeAr], ['الصندوق العام', 'الصندوق العام', '']);
+assert.deepEqual([D.FUNDS[0].budget, D.FUNDS[0].actual, D.FUNDS[0].budgets.length], [1000, 180, 1]);
+// the rate is the latest one the office recorded, with its date and source; nothing is converted
+assert.deepEqual([D.RATE.value, D.RATE.setOn, D.RATE.source], [89700, '2026-11-02', 'Bank board']);
+assert.equal(D.RATES.length, 2);
+assert.deepEqual(
+  D.RECURRING.map(r => [r.id, r.p, r.amount, r.frequency, r.next, r.status]),
+  [['rg1', P1, 50, 'Monthly', '2026-11-15', 'Active']]
+);
+assert.deepEqual(
+  D.RECEIPTS.map(r => [r.no, r.contribution, r.status]),
+  [[1, 'g1', 'Issued']]
+);
+// with nothing remembered, the newest open session is brought into view; counters are named
+assert.equal(D.SESSIONS.length, 1);
+assert.deepEqual(D.BATCH.counters, ['a1']);
+assert.equal(nameOf('P', 'a1'), 'First Counter');
+assert.equal(nameOf('P', 'a2'), 'Treasurer');
+assert.ok(
+  sent.some(([m, p]) => m === 'GET' && p.startsWith('parishes/P/account-names?ids=')),
+  'actor names are looked up'
+);
 // the counting session: amounts stay in their own currency
 assert.equal(D.BATCH.id, S1);
 assert.equal(D.BATCH.status, 'open');
@@ -246,8 +359,11 @@ assert.deepEqual(
 // the dollar series and mix come from posted dollar gifts only
 assert.equal(D.GIVING_SERIES.at(-1), 100);
 assert.ok(D.PAYMENT_MIX.every(m => m.v > 0));
-// the office opening is worked out from the month's balances: 1200 - 200 (October allowance)
-assert.equal(D.OFFICE_LEDGER.find(r => r.kind === 'opening').amount, 1000);
+// the office opening comes from the recorded openings, with its provenance
+assert.deepEqual(
+  ['amount', 'notes', 'effectiveOn'].map(k => D.OFFICE_LEDGER.find(r => r.kind === 'opening')[k]),
+  [1000, 'Cash count', '2026-10-01']
+);
 assert.deepEqual(
   D.OFFICE_LEDGER.filter(r => r.kind !== 'opening').map(r => [r.id, r.kind, r.effect]),
   [
@@ -257,12 +373,35 @@ assert.deepEqual(
 );
 
 // a new fund and an expense go to their routes, with operation ids
-D.FUNDS.push({ id: 'draft-f', name: 'Charity', purpose: 'Food parcels', restricted: true, balances: [] });
+D.FUNDS.push({
+  id: 'draft-f',
+  name: 'Charity',
+  nameAr: 'المحبة',
+  purpose: 'Food parcels',
+  purposeAr: '',
+  restricted: true,
+  balances: []
+});
 assert.equal(await persist(), true);
 let [method, path, body] = sent.find(s => s[1] === 'parishes/P/finance/funds');
 assert.equal(method, 'POST');
 assert.match(body.operationId, /^[0-9a-f-]{36}$/);
-assert.deepEqual([body.name, body.purpose, body.restricted], ['Charity', 'Food parcels', true]);
+assert.deepEqual(
+  [body.name, body.nameAr, body.purpose, body.purposeAr, body.restricted],
+  ['Charity', 'المحبة', 'Food parcels', null, true]
+);
+
+// a fund's names are corrected with its version; each language is sent as typed
+D.FUNDS[0].nameAr = 'صندوق الرعية';
+assert.equal(await persist(), true);
+[method, path, body] = sent.find(s => s[1] === `parishes/P/finance/funds/${F1}`);
+assert.deepEqual([method, body.version, body.name, body.nameAr], ['PUT', 'v-f1', 'General fund', 'صندوق الرعية']);
+
+// a campaign is corrected with its version
+D.CAMPAIGNS[0].nameAr = 'السقف';
+assert.equal(await persist(), true);
+[method, path, body] = sent.find(s => s[1] === 'parishes/P/finance/campaigns/c1');
+assert.deepEqual([method, body.nameAr, body.fundId], ['PUT', 'السقف', F1]);
 
 D.EXPENSES.unshift({
   id: 'draft-x',
@@ -272,14 +411,15 @@ D.EXPENSES.unshift({
   currency: 'USD',
   fund: F1,
   d: '2026-11-10',
+  descriptionAr: 'شموع',
   evidence: '',
   missingEvidence: 'No receipt given'
 });
 assert.equal(await persist(), true);
 [, , body] = sent.find(s => s[1] === 'parishes/P/finance/expenses');
 assert.deepEqual(
-  [body.description, body.fundId, body.amount, body.evidenceReference, body.missingEvidenceReason],
-  ['Candles', F1, 40, null, 'No receipt given']
+  [body.description, body.descriptionAr, body.fundId, body.amount, body.evidenceReference, body.missingEvidenceReason],
+  ['Candles', 'شموع', F1, 40, null, 'No receipt given']
 );
 
 // counting-session lines are replaced with the session version
@@ -315,6 +455,8 @@ D.OFFICE_LEDGER.push({
   currency: 'USD',
   amount: 12,
   description: 'Stamps',
+  descriptionAr: 'طوابع',
+  category: 'Postage',
   payee: 'Post',
   reference: 'R-1',
   notes: ''
@@ -322,21 +464,21 @@ D.OFFICE_LEDGER.push({
 assert.equal(await persist(), true);
 [, , body] = sent.find(s => s[1] === 'parishes/P/office-ledger/entries');
 assert.deepEqual(
-  [body.kind, body.supplier, body.evidenceReference, body.financeReference],
-  ['Purchase', 'Post', 'R-1', null]
+  [body.kind, body.supplier, body.evidenceReference, body.financeReference, body.descriptionAr, body.category],
+  ['Purchase', 'Post', 'R-1', null, 'طوابع', 'Postage']
 );
 
 // what the API cannot hold is undone and reported, never left looking saved
 const writes = sent.length;
-D.RATE.value = 89500;
+D.RATE.value = 1;
 assert.equal(await persist(), false);
-assert.equal(D.RATE.value, 0);
+assert.equal(D.RATE.value, 89700);
 D.RECURRING.push({ p: P1, amount: 5 });
 assert.equal(await persist(), false);
-assert.deepEqual(D.RECURRING, []);
-D.FUNDS[0].name = 'Renamed';
+assert.equal(D.RECURRING.length, 1);
+D.FUNDS[0].restricted = true;
 assert.equal(await persist(), false);
-assert.equal(D.FUNDS[0].name, 'General fund');
+assert.equal(D.FUNDS[0].restricted, false);
 assert.equal(sent.length, writes, 'nothing was sent for unsupported changes');
 
 // workflow calls
@@ -360,4 +502,43 @@ await F.bankLineAction(
 );
 [, path, body] = sent.at(-1);
 assert.deepEqual([path, body.action, body.version], ['parishes/P/finance/bank/lines/b1/actions', 'match', 'v-b1']);
+
+// a rate is recorded as typed with its date and source; a budget, recurring gift and receipt use their routes
+await F.recordRate(parish, {
+  base: 'USD',
+  quote: 'LBP',
+  rate: '89600',
+  on: '2026-11-03',
+  source: 'Bank board',
+  note: ''
+});
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.baseCurrency, body.quoteCurrency, body.rate, body.effectiveOn, body.source, body.note],
+  ['POST', 'parishes/P/finance/exchange-rates', 'USD', 'LBP', 89600, '2026-11-03', 'Bank board', null]
+);
+await F.saveBudget(parish, { fund: F1, year: '2026', currency: 'USD', amount: '1200' }, D.BUDGETS[0]);
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.version, body.year, body.amount],
+  ['PUT', 'parishes/P/finance/budgets', 'v-bu', 2026, 1200]
+);
+await F.saveRecurring(parish, { ...D.RECURRING[0], amount: '60' }, D.RECURRING[0]);
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.version, body.amount, body.frequency, body.personId],
+  ['PUT', 'parishes/P/finance/recurring-gifts/rg1', 'v-rg1', 60, 'Monthly', P1]
+);
+await F.recurringAction(parish, D.RECURRING[0], 'end', 'Moved away');
+[, path, body] = sent.at(-1);
+assert.deepEqual(
+  [path, body.action, body.reason],
+  ['parishes/P/finance/recurring-gifts/rg1/actions', 'end', 'Moved away']
+);
+await F.issueReceipt(parish, 'g1');
+[method, path, body] = sent.at(-1);
+assert.deepEqual([method, path, body.contributionId], ['POST', 'parishes/P/finance/receipts', 'g1']);
+await F.voidReceipt(parish, D.RECEIPTS[0], 'Gift reversed');
+[, path, body] = sent.at(-1);
+assert.deepEqual([path, body.version, body.reason], ['parishes/P/finance/receipts/rc1/void', 'v-rc1', 'Gift reversed']);
 console.log('finance: ok');

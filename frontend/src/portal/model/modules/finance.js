@@ -3,18 +3,24 @@
    Main members: keys (the view-model collections this module owns), routes (the pages it feeds), load (fills
    them from the API), save (sends what changed), and the helpers the money screens call for the
    workflows a plain diff cannot express (counting-session steps, expense decisions, bank matching,
-   office months): openSession, verifySession, postSession, expenseAction, matchBankLine, and so on.
+   office months, rates, budgets, recurring gifts, receipts): openSession, verifySession, postSession,
+   expenseAction, recordRate, saveBudget, saveRecurring, issueReceipt, voidReceipt, and so on.
 
-   The API keeps every amount in the currency it was given in and never converts: it has no exchange
-   rate, no recurring gifts, no numbered receipts, no budgets and no list of counting sessions. Those
-   stay empty (RATE.value 0, RECURRING and RECEIPTS empty, FUNDS[].budget 0) and are listed in
-   docs/frontend-modules/finance.md. Finance needs the priest or a grant with finance.read; each
-   action also needs its own capability (finance.enter, finance.post, finance.approve), which the
-   API checks. A 403 leaves a collection empty. */
+   The API keeps every amount in the currency it was given in and never converts. An exchange rate is
+   what the parish office recorded, with its date and source (RATE is the latest USD→LBP one, RATES all
+   of them); it is shown for reference and never used to convert or add amounts. A recurring gift is a
+   stored schedule: nothing is charged. A receipt carries the parish's sequential number. Finance needs
+   the priest or a grant with finance.read; each action also needs its own capability (finance.enter,
+   finance.post, finance.approve), which the API checks. A 403 leaves a collection empty. Actor ids are
+   shown as names through model/names.js. */
 import { api, newOperationId } from '../api.js';
+import { loadNames } from '../names.js';
 
 export const keys = [
   'RATE',
+  'RATES',
+  'BUDGETS',
+  'SESSIONS',
   'BATCH',
   'FUNDS',
   'EXPENSES',
@@ -37,8 +43,8 @@ const canRead = parish =>
 const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
 const encode = encodeURIComponent;
 
-/* The counting session in view. The API can fetch a session by id but has no list of sessions, so the
-   id is remembered in this browser (a convenience only) and a session can also be opened by its id. */
+/* The counting session in view: the one last chosen in this browser (a convenience only), otherwise the
+   newest session that is still open, has a variance or awaits posting (GET finance/sessions). */
 const memory = parish => `pl-finance-session:${parish.id}`;
 export const rememberedSession = parish => {
   try {
@@ -119,6 +125,7 @@ export const toBatch = (versioned, id) => {
     apiStatus: s.status,
     version: versioned.version,
     revision: s.revision,
+    counters: s.countedBy || [],
     lines: (s.lines || []).map(toLine),
     totals: s.totals || [],
     verifiedBy: s.verifiedBy || null,
@@ -143,17 +150,26 @@ export const toGiftLine = l => ({
   reference: l.ref || null
 });
 
-const toFund = (f, balances) => {
+/* A fund: nameAr/purposeAr are the Arabic twins as typed (empty when none); ar is for display only and
+   falls back to the English name. budget/actual are this year's dollar budget and dollars paid, for the
+   screens that show one figure; budgets lists every currency's budget for this year. */
+const toFund = (f, balances, budgets = []) => {
   const mine = balances.filter(b => b.fundId === f.id).map(b => ({ ...b, fundId: undefined }));
+  const year = new Date().getFullYear();
+  const thisYear = budgets.filter(b => b.fund === f.id && b.year === year);
   return {
     id: f.id,
+    version: f.version || '',
     name: f.name,
-    ar: f.name,
+    ar: f.nameAr || f.name,
+    nameAr: f.nameAr || '',
     purpose: f.purpose,
+    purposeAr: f.purposeAr || '',
     restricted: !!f.restricted,
     status: f.status,
-    budget: 0, // the API has no budget
-    actual: mine.find(b => b.currency === 'USD')?.paid || 0,
+    budget: thisYear.find(b => b.currency === 'USD')?.amount || 0,
+    actual: thisYear.find(b => b.currency === 'USD')?.spent || 0,
+    budgets: thisYear,
     balances: mine
   };
 };
@@ -162,7 +178,8 @@ const toExpense = ({ value: x, version }) => ({
   version,
   d: x.incurredOn,
   what: x.description,
-  whatAr: x.description,
+  whatAr: x.descriptionAr || x.description, // display only
+  descriptionAr: x.descriptionAr || '',
   fund: x.fundId,
   payee: x.payee,
   amount: x.amount,
@@ -174,7 +191,7 @@ const toExpense = ({ value: x, version }) => ({
   missingEvidence: x.missingEvidenceReason || '',
   missingEvidenceApproved: !!x.missingEvidenceApproved,
   reason: x.reason || '',
-  by: null, // the API names the entering account, not a person
+  by: null, // an account id, shown through nameOf(createdBy)
   createdBy: x.createdBy,
   submittedBy: x.submittedBy || null,
   approvedBy: x.approvedBy || null,
@@ -197,9 +214,12 @@ const toPledge = x => ({
 });
 const toCampaign = x => ({
   id: x.id,
+  version: x.version || '',
   name: x.name,
-  ar: x.name,
+  ar: x.nameAr || x.name, // display only
+  nameAr: x.nameAr || '',
   purpose: x.purpose,
+  purposeAr: x.purposeAr || '',
   fund: x.fundId,
   starts: x.startsOn,
   ends: x.endsOn || '',
@@ -252,7 +272,7 @@ const officeEffect = (e, byId) =>
         ? -officeEffect(byId.get(e.reversalOf), byId)
         : 0;
 const OFFICE_KIND = { Allowance: 'allowance', Purchase: 'expense', Reversal: 'reversal' };
-function toOffice(entries, balances) {
+function toOffice(entries, balances, openings) {
   const active = entries.filter(e => e.status === 'Active');
   const byId = new Map(entries.map(e => [e.id, e]));
   const rows = entries.map(e => ({
@@ -264,7 +284,8 @@ function toOffice(entries, balances) {
     amount: e.amount,
     effect: e.status === 'Active' ? officeEffect(e, byId) : 0,
     description: e.description,
-    category: '', // the API has no category
+    descriptionAr: e.descriptionAr || '',
+    category: e.category || '',
     payee: e.supplier || '',
     reference: e.evidenceReference || e.financeReference || '',
     notes: e.missingEvidenceReason || '',
@@ -273,9 +294,29 @@ function toOffice(entries, balances) {
     deleteReason: e.deleteReason || '',
     monthClosed: !!e.monthClosed
   }));
-  /* The opening balance has no list route. The current month's balances carry it forward, so what was
-     opened is that opening less everything dated before the month. It has no date, so it counts
-     toward every month. */
+  /* The recorded openings (GET office-ledger/openings) with their provenance. An opening row has no
+     date, so it counts toward every month. When the openings route is refused, the opening is derived
+     from the current month's balances less everything dated before the month. */
+  if (openings) {
+    for (const o of openings)
+      rows.push({
+        id: `opening-${o.currency}`,
+        kind: 'opening',
+        date: '',
+        effectiveOn: o.effectiveOn,
+        currency: o.currency,
+        amount: o.amount,
+        effect: o.amount,
+        description: '',
+        category: '',
+        payee: '',
+        reference: '',
+        notes: o.provenance || '',
+        enteredBy: o.enteredBy || null,
+        monthClosed: false
+      });
+    return rows;
+  }
   const period = balances?.period || '';
   for (const [currency, total] of Object.entries(balances?.totals || {})) {
     const before = active
@@ -332,12 +373,92 @@ function paymentMix(contributions) {
     .filter(x => x.v > 0);
 }
 
+/* ---------- the office's own records: rates, budgets, recurring gifts, receipts, sessions ---------- */
+const toRate = r => ({
+  id: r.id,
+  base: r.baseCurrency,
+  quote: r.quoteCurrency,
+  rate: r.rate,
+  on: r.effectiveOn,
+  source: r.source,
+  note: r.note || '',
+  recordedBy: r.recordedBy,
+  recordedAt: r.recordedAt
+});
+const toBudget = b => ({
+  id: b.id,
+  version: b.version,
+  fund: b.fundId,
+  year: b.year,
+  currency: b.currency,
+  amount: b.amount,
+  spent: b.spent,
+  remaining: b.remaining,
+  note: b.note || '',
+  setBy: b.setBy,
+  setAt: b.setAt
+});
+export const RECURRING_STATUS = { Active: 'active', Paused: 'paused', Ended: 'ended' };
+const toRecurring = r => ({
+  id: r.id,
+  version: r.version,
+  p: r.personId || null,
+  hh: r.householdId || null,
+  fund: r.fundId,
+  amount: r.amount,
+  currency: r.currency,
+  frequency: r.frequency,
+  method: r.method,
+  starts: r.startsOn,
+  ends: r.endsOn || '',
+  next: r.nextExpectedOn || '', // an expected date only, never a charge
+  note: r.note || '',
+  status: r.status,
+  reason: r.reason || ''
+});
+const toReceipt = r => ({
+  id: r.id,
+  version: r.version,
+  no: r.number,
+  contribution: r.contributionId,
+  p: r.personId || null,
+  hh: r.householdId || null,
+  fund: r.fundId,
+  amount: r.amount,
+  currency: r.currency,
+  date: r.receivedOn,
+  status: r.status,
+  giftStatus: r.giftStatus || '',
+  voidReason: r.voidReason || '',
+  issuedBy: r.issuedBy,
+  issuedAt: r.issuedAt
+});
+const toSession = ({ value: s }) => ({
+  id: s.id,
+  ref: s.reference,
+  source: s.source,
+  date: s.collectedOn,
+  status: SESSION_STATUS[s.status] || String(s.status || '').toLowerCase(),
+  apiStatus: s.status,
+  countedBy: s.countedBy || []
+});
+/* The latest recorded dollar-to-lira rate, for the screens that show one rate; value 0 when none. */
+const latestRate = rates => {
+  const r = rates.find(x => x.base === 'USD' && x.quote === 'LBP');
+  return r
+    ? { value: r.rate, setOn: r.on, setBy: r.recordedBy, source: r.source, id: r.id }
+    : { value: 0, setOn: null, setBy: '', source: '', id: '' };
+};
+
 /* ---------- load ---------- */
 export async function load(parish, d) {
-  d.RATE = { value: 0, setOn: null, setBy: '' }; // the API has no exchange rate
+  d.RATE = latestRate([]);
+  d.RATES = [];
+  d.BUDGETS = [];
+  d.SESSIONS = [];
   d.BATCH = emptyBatch();
-  d.RECURRING = []; // no recurring gifts in the API
-  d.RECEIPTS = []; // no numbered receipts in the API
+  d.RECURRING = [];
+  d.RECEIPTS = [];
   if (!canRead(parish)) return;
   /* a 403 means this account may not read that part: leave it empty */
   const get = async path => {
@@ -348,32 +469,62 @@ export async function load(parish, d) {
       throw e;
     }
   };
-  const [funds, balances, campaigns, pledges, gifts, expenses, lines, reconciliations, entries, office] =
-    await Promise.all([
-      get(fin(parish, 'funds')),
-      get(fin(parish, 'balances')),
-      get(fin(parish, 'campaigns')),
-      get(fin(parish, 'pledges')),
-      get(fin(parish, 'contributions')),
-      get(fin(parish, 'expenses')),
-      get(fin(parish, 'bank/lines')),
-      get(fin(parish, 'bank/reconciliations')),
-      get(`${base(parish)}/office-ledger/entries`),
-      get(`${base(parish)}/office-ledger/balances`)
-    ]);
-  d.FUNDS = (funds || []).map(f => toFund(f, balances || []));
+  const [
+    funds,
+    balances,
+    campaigns,
+    pledges,
+    gifts,
+    expenses,
+    lines,
+    reconciliations,
+    entries,
+    office,
+    openings,
+    rates,
+    budgets,
+    recurring,
+    receipts,
+    sessions
+  ] = await Promise.all([
+    get(fin(parish, 'funds')),
+    get(fin(parish, 'balances')),
+    get(fin(parish, 'campaigns')),
+    get(fin(parish, 'pledges')),
+    get(fin(parish, 'contributions')),
+    get(fin(parish, 'expenses')),
+    get(fin(parish, 'bank/lines')),
+    get(fin(parish, 'bank/reconciliations')),
+    get(`${base(parish)}/office-ledger/entries`),
+    get(`${base(parish)}/office-ledger/balances`),
+    get(`${base(parish)}/office-ledger/openings`),
+    get(fin(parish, 'exchange-rates')),
+    get(fin(parish, 'budgets')),
+    get(fin(parish, 'recurring-gifts')),
+    get(fin(parish, 'receipts')),
+    get(fin(parish, 'sessions'))
+  ]);
+  d.RATES = (rates || []).map(toRate);
+  d.RATE = latestRate(d.RATES);
+  d.BUDGETS = (budgets || []).map(toBudget);
+  d.FUNDS = (funds || []).map(f => toFund(f, balances || [], d.BUDGETS));
   d.CAMPAIGNS = (campaigns || []).map(toCampaign);
   d.PLEDGES = (pledges || []).map(toPledge);
   d.CONTRIBUTIONS = (gifts || []).map(toContribution).sort((a, b) => b.date.localeCompare(a.date));
   d.EXPENSES = (expenses || []).map(toExpense);
+  d.RECURRING = (recurring || []).map(toRecurring);
+  d.RECEIPTS = (receipts || []).map(toReceipt);
+  d.SESSIONS = (sessions || []).map(toSession);
   const closed = new Set(
     (reconciliations || []).filter(r => r.status === 'Closed').map(r => `${r.bankAccount}:${r.period}`)
   );
   d.BANKLINES = (lines || []).map(b => toBankLine(b, closed)).sort((a, b) => b.at.localeCompare(a.at));
-  d.OFFICE_LEDGER = toOffice(entries || [], office ? { period: office.period, totals: office.totals } : null);
+  d.OFFICE_LEDGER = toOffice(entries || [], office ? { period: office.period, totals: office.totals } : null, openings);
   d.GIVING_SERIES = givingSeries(d.CONTRIBUTIONS);
   d.PAYMENT_MIX = paymentMix(d.CONTRIBUTIONS);
-  const id = rememberedSession(parish);
+  const remembered = rememberedSession(parish);
+  const working = d.SESSIONS.find(s => ['Open', 'Variance', 'Verified'].includes(s.apiStatus));
+  const id = remembered || working?.id || '';
   if (id) {
     try {
       d.BATCH = toBatch(await api(fin(parish, `sessions/${encode(id)}`)), id);
@@ -383,6 +534,17 @@ export async function load(parish, d) {
       else throw e;
     }
   }
+  /* people's names for the account ids these records carry */
+  await loadNames(parish.id, [
+    ...d.EXPENSES.flatMap(x => [x.createdBy, x.submittedBy, x.approvedBy]),
+    ...d.RATES.map(r => r.recordedBy),
+    ...d.BUDGETS.map(b => b.setBy),
+    ...d.RECEIPTS.map(r => r.issuedBy),
+    ...d.SESSIONS.flatMap(s => s.countedBy),
+    ...d.BATCH.counters,
+    d.BATCH.verifiedBy,
+    d.BATCH.postedBy
+  ]);
 }
 
 /* ---------- save: what a diff can say ---------- */
@@ -391,11 +553,22 @@ const byId = list => new Map((list || []).map(x => [x.id, x]));
 /* the fields the API stores; derived ones (usd, totals, balances) are ignored when comparing */
 const core = (x, fields) => Object.fromEntries(fields.map(f => [f, x?.[f] ?? null]));
 const FIELDS = {
-  fund: ['name', 'purpose', 'restricted'],
-  campaign: ['name', 'purpose', 'fund', 'starts', 'ends', 'targets'],
+  fund: ['name', 'nameAr', 'purpose', 'purposeAr', 'restricted'],
+  campaign: ['name', 'nameAr', 'purpose', 'purposeAr', 'fund', 'starts', 'ends', 'targets'],
   pledge: ['p', 'hh', 'fund', 'campaign', 'currency', 'pledged', 'schedule', 'starts', 'ends'],
-  expense: ['what', 'fund', 'payee', 'd', 'amount', 'currency', 'evidence', 'missingEvidence'],
-  office: ['kind', 'date', 'currency', 'amount', 'description', 'payee', 'reference', 'notes']
+  expense: ['what', 'descriptionAr', 'fund', 'payee', 'd', 'amount', 'currency', 'evidence', 'missingEvidence'],
+  office: [
+    'kind',
+    'date',
+    'currency',
+    'amount',
+    'description',
+    'descriptionAr',
+    'category',
+    'payee',
+    'reference',
+    'notes'
+  ]
 };
 /* new, changed and removed records between two snapshots of a collection */
 function changes(before, now, fields) {
@@ -421,32 +594,78 @@ export async function save(before, now, parish) {
     saved = false;
   const post = (path, body) => api(path, 'POST', { operationId: newOperationId(), ...body });
 
-  /* the exchange rate, recurring gifts, receipts and contributions are read-only here */
-  for (const key of ['RATE', 'RECURRING', 'RECEIPTS', 'CONTRIBUTIONS', 'BANKLINES', 'GIVING_SERIES', 'PAYMENT_MIX'])
+  /* rates, budgets, recurring gifts, receipts and sessions change through their own dialogs (recordRate,
+     saveBudget, saveRecurring, issueReceipt...), and posted gifts never change: read-only in a diff */
+  for (const key of [
+    'RATE',
+    'RATES',
+    'BUDGETS',
+    'SESSIONS',
+    'RECURRING',
+    'RECEIPTS',
+    'CONTRIBUTIONS',
+    'BANKLINES',
+    'GIVING_SERIES',
+    'PAYMENT_MIX'
+  ])
     if (!sameJSON(before[key], now[key])) unsupported = true;
   if (!sameJSON(before.BATCH?.status, now.BATCH?.status)) unsupported = true;
 
+  /* a fund's names and purpose (in each language, as typed) can be corrected; its restriction never changes */
   const funds = changes(before.FUNDS, now.FUNDS, FIELDS.fund);
-  if (funds.edited.length || funds.removed.length) unsupported = true; // funds can be created, not changed
+  if (funds.removed.length) unsupported = true;
+  const fundBody = f => ({
+    name: String(f.name || '').trim(),
+    nameAr: optional(f.nameAr),
+    purpose: String(f.purpose || '').trim(),
+    purposeAr: optional(f.purposeAr),
+    restricted: !!f.restricted
+  });
   for (const f of funds.added) {
-    await post(fin(parish, 'funds'), {
-      name: String(f.name || '').trim(),
-      purpose: String(f.purpose || '').trim(),
-      restricted: !!f.restricted
+    await post(fin(parish, 'funds'), fundBody(f));
+    saved = true;
+  }
+  for (const f of funds.edited) {
+    const was = byId(before.FUNDS).get(f.id);
+    if (!!was.restricted !== !!f.restricted) {
+      unsupported = true;
+      continue;
+    }
+    await api(fin(parish, `funds/${encode(f.id)}`), 'PUT', {
+      operationId: newOperationId(),
+      version: was.version,
+      ...fundBody(f)
     });
     saved = true;
   }
 
+  /* a campaign can be corrected except for its fund, which posted gifts already name */
   const campaigns = changes(before.CAMPAIGNS, now.CAMPAIGNS, FIELDS.campaign);
-  if (campaigns.edited.length || campaigns.removed.length) unsupported = true;
+  if (campaigns.removed.length) unsupported = true;
+  const campaignBody = c => ({
+    name: String(c.name || '').trim(),
+    nameAr: optional(c.nameAr),
+    purpose: String(c.purpose || '').trim(),
+    purposeAr: optional(c.purposeAr),
+    fundId: c.fund,
+    startsOn: isDate(c.starts) ? c.starts : todayDate(),
+    endsOn: isDate(c.ends) ? c.ends : null,
+    targets: c.targets
+  });
   for (const c of campaigns.added) {
-    await post(fin(parish, 'campaigns'), {
-      name: String(c.name || '').trim(),
-      purpose: String(c.purpose || '').trim(),
-      fundId: c.fund,
-      startsOn: isDate(c.starts) ? c.starts : todayDate(),
-      endsOn: isDate(c.ends) ? c.ends : null,
-      targets: c.targets
+    await post(fin(parish, 'campaigns'), campaignBody(c));
+    saved = true;
+  }
+  for (const c of campaigns.edited) {
+    const was = byId(before.CAMPAIGNS).get(c.id);
+    if (was.fund !== c.fund) {
+      unsupported = true;
+      continue;
+    }
+    await api(fin(parish, `campaigns/${encode(c.id)}`), 'PUT', {
+      operationId: newOperationId(),
+      version: was.version,
+      ...campaignBody(c)
     });
     saved = true;
   }
@@ -472,6 +691,7 @@ export async function save(before, now, parish) {
   if (expenses.removed.length) unsupported = true; // an expense is cancelled with a reason, not deleted
   const expenseBody = x => ({
     description: String(x.what || '').trim(),
+    descriptionAr: optional(x.descriptionAr),
     fundId: x.fund,
     payee: String(x.payee || '').trim(),
     incurredOn: isDate(x.d) ? x.d : todayDate(),
@@ -549,6 +769,8 @@ const officeBody = e => ({
   amount: money(e.amount, 'An entry'),
   currency: e.currency,
   description: String(e.description || '').trim(),
+  descriptionAr: optional(e.descriptionAr),
+  category: optional(e.category),
   supplier: e.kind === 'expense' ? optional(e.payee) : null,
   evidenceReference: e.kind === 'expense' ? optional(e.reference) : null,
   missingEvidenceReason: e.kind === 'expense' && !optional(e.reference) ? optional(e.notes) : null,
@@ -650,3 +872,61 @@ export const officeEntryAction = (parish, entry, action, reason, occurredOn) =>
   });
 export const closeOfficeMonth = (parish, period) =>
   api(`${base(parish)}/office-ledger/months`, 'POST', { operationId: newOperationId(), period });
+
+/* An exchange rate the office took from a named source for a date: recorded, never fetched or invented. */
+export const recordRate = (parish, { base: baseCurrency, quote, rate, on, source, note }) =>
+  api(fin(parish, 'exchange-rates'), 'POST', {
+    operationId: newOperationId(),
+    baseCurrency,
+    quoteCurrency: quote,
+    rate: Number(rate),
+    effectiveOn: on,
+    source: String(source || '').trim(),
+    note: optional(note)
+  });
+
+/* A fund's budget for a year and currency; replacing one sends the version it was read at. */
+export const saveBudget = (parish, { fund, year, currency, amount, note }, existing) =>
+  api(fin(parish, 'budgets'), 'PUT', {
+    operationId: newOperationId(),
+    version: existing?.version || null,
+    fundId: fund,
+    year: Number(year),
+    currency,
+    amount: money(amount, 'A budget'),
+    note: optional(note)
+  });
+
+/* A recurring gift is a stored schedule: saving it never charges anyone or records a gift. */
+export const saveRecurring = (parish, value, existing) =>
+  api(fin(parish, existing ? `recurring-gifts/${encode(existing.id)}` : 'recurring-gifts'), existing ? 'PUT' : 'POST', {
+    operationId: newOperationId(),
+    ...(existing ? { version: existing.version } : {}),
+    personId: value.p || null,
+    householdId: value.hh || null,
+    fundId: value.fund,
+    amount: money(value.amount, 'A recurring gift'),
+    currency: value.currency || 'USD',
+    frequency: value.frequency || 'Monthly',
+    method: value.method || 'Cash',
+    startsOn: isDate(value.starts) ? value.starts : todayDate(),
+    endsOn: isDate(value.ends) ? value.ends : null,
+    note: optional(value.note)
+  });
+export const recurringAction = (parish, gift, action, reason) =>
+  api(fin(parish, `recurring-gifts/${encode(gift.id)}/actions`), 'POST', {
+    operationId: newOperationId(),
+    version: gift.version,
+    action,
+    reason: optional(reason)
+  });
+
+/* The next numbered receipt for a posted gift with a named giver; a void keeps the number. */
+export const issueReceipt = (parish, contributionId) =>
+  api(fin(parish, 'receipts'), 'POST', { operationId: newOperationId(), contributionId });
+export const voidReceipt = (parish, receipt, reason) =>
+  api(fin(parish, `receipts/${encode(receipt.id)}/void`), 'POST', {
+    operationId: newOperationId(),
+    version: receipt.version,
+    reason: String(reason || '').trim()
+  });
