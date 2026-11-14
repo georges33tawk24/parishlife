@@ -1,20 +1,20 @@
-# Handover: where the full-stack work stopped (14 November 2026, 12:00 Beirut)
+# Handover: where the full-stack work stands (14 November 2026, night, Beirut)
 
 Georges, this is the exact state, so you can continue without asking Colin. Everything below is pushed to your repository, `georges33tawk24/parishlife`. In your checkout that remote is probably `origin`; on Colin's machine it is `upstream`.
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **People, calendar, sacraments, member, facilities, account, public, administration and finance are finished and merged** into `fullstack-integration`, where the whole solution builds with 0 warnings and **508 tests pass**. The **other 4 areas are partly done**. Their branches are pushed, and any edits that were not committed yet are saved on `wip/20261114-1224/<area>` branches. Usage limits kept stopping the workers mid-edit, which is why most areas end with uncommitted frontend work.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **All 13 areas are finished and merged** into `fullstack-integration`, together with the shared account-name lookup and the route check. The whole solution builds with 0 warnings and **533 tests pass**. Only 2 known route gaps remain. What is still open is listed under "What is still open" below. The signed-in end-to-end tests (the 15th item of your list) are not started.
 
 ## The branches
 
 | Branch | What it is |
 | --- | --- |
 | **`fullstack-integration`** | **Start here.** Your `fullstack` (`520cdb8`) plus the latest `backend` (Colin's Azure-connection commits up to `b2aaf92`), plus the work listed below. Every area gets merged into this branch. |
-| `fullstack2-<area>` (13 branches) | One per area, all cut from `fullstack-integration`: people, sacraments, calendar and finance from `9c1c291`; communications and requests from `f5a9a0a`; the other 7 from `6951bcd`. Committed work only. |
-| `wip/20261114-1224/<area>` | **Snapshots of uncommitted edits**, each a single commit on top of that area's `fullstack2-<area>` head. Not reviewed, not tested; they may not even build. Three areas still need one: requests, ministries, registrations (the finance and communications snapshots are now committed on their branches). |
-| `wip/20261114-1224/azure-connection-main-folder` | Colin's *other* session (the Azure connection), saved on top of `backend` `b2aaf92`. Its uncommitted edits: the Aspire 13.6.5 bump, an "Azure" launch profile, request-letter changes, `coverage.json`, docs. Not tested. That session owns it; it is not part of the area work. |
-| `wip/20261114-0623/*`, `wip/20261114-1158/*` | Earlier snapshots. **Superseded** by `20261114-1224`; ignore them, or delete them once you are happy. |
+| `fullstack2-<area>` (13 branches) | One per area, cut from `fullstack-integration`. **All merged.** Kept for history; each area doc is on it too. |
+| `wip/*/<area>` | Snapshots of uncommitted edits taken while usage limits stopped the workers. **All superseded**: everything is committed on the area branches and merged. Safe to delete. |
+| `wip/20261114-1224/azure-connection-main-folder` | **Not superseded.** Colin's *other* session (the Azure connection), saved on top of `backend` `b2aaf92`. Its uncommitted edits: the Aspire 13.6.5 bump (also applied here), an "Azure" launch profile, request-letter changes, `coverage.json` and docs. Not tested. That session owns it. |
+| `wip/20261114-0623/*`, `wip/20261114-1158/*` | Older snapshots, also superseded. Safe to delete. |
 | `fullstack`, `backend`, `frontend-new2`, `fullstack-<module>` | Untouched by this work. |
 
 ## What is merged and verified (`fullstack-integration`)
@@ -80,29 +80,73 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
     - Numbered receipts (`finance/receipts`, void keeps the number): one counter per parish, saved in the same transaction as the receipt. Gap-free and unique on the local store (5 concurrent receipts gave 1–5); **not verified on Cosmos**.
     - Arabic names for funds, campaigns, expenses and office entries; fund and campaign name corrections; lists of counting sessions and opening balances.
     - Owner questions (converted amounts, receipt number format and yearly reset, fees and refunds) are in `docs/frontend-modules/finance.md`.
-11. **Tooling:**
+11. **Communications** (`fullstack2-communications`, `8c2e1fb`):
+    - Broadcast scheduling (`schedule`/`unschedule`). A background job stores the broadcast at its time only if the scheduler still has access; otherwise it goes back to Approved with a note.
+    - Automations (`broadcast-automations`): each due time makes one draft from an approved template. The draft still needs a different staff member's approval. Bounded: 1–52 runs, at most 20 active per parish.
+    - Arabic versions of broadcasts, templates and notices.
+    - Notice priority (Normal/Urgent; urgent sends nothing).
+    - Direct messages to a person (exactly one linked account in the parish), and sender names via the lookup.
+    - No external delivery: channels stay NotConfigured. Owner questions 5–9 are in `docs/frontend-modules/communications.md`.
+12. **Requests** (`fullstack2-requests`, `5570793`):
+    - Opening the record from an accepted request (`requests/{r}/records`). It opens a sacramental case or certificate through the existing services, with their own authority still required, and is idempotent.
+    - Files tied to checklist items.
+    - Guest uploads with the tracking code (metadata only, never downloads).
+    - Pending claims (`me/request-claims`).
+    - Letters on the office case view (draft, priest signature with authenticator code, release), with the U05 "reference only" wording.
+    - The generic upload component and letter signing now use the API; `model/signing.js` is gone. Person and group files still have no store, so they say "not connected".
+    - Owner questions are in `docs/frontend-modules/requests.md`.
+13. **Ministries** (`fullstack2-ministries`, `f67c8e2`):
+    - Arabic twins across ministries, meetings, stock, loans, opportunities and formation.
+    - Meeting times (`ministries/{id}/meeting-times`).
+    - Priest-only roster removal with a protected reason.
+    - Person-to-account lookup for appointing leaders.
+    - Formation draft editing.
+    - Screens for leaders, roster, loans and formation.
+    - Still open: Arabic names on already-approved groups (the API only edits drafts). Owner questions 6–9 are in `docs/frontend-modules/ministries.md`.
+14. **Registrations** (`fullstack2-registrations`, `a87d8b0`):
+    - Editing the registration terms after creation (capacity, fee, ages, deadline, discounts, instalments, payment methods, muster point).
+    - Named discounts.
+    - Household registration (1–12 members in one transaction).
+    - Pickup codes: shown once, salted hash stored, never in audit or receipts, required at checkout.
+    - Evacuation roll calls.
+    - Deadline enforcement.
+    - Payment method on receipts (nothing is charged).
+    - Owner questions 6–12 are in `docs/frontend-modules/registrations.md`.
+15. **Tooling:**
    - `npm run check:routes` matches every frontend API call against the real controller routes. Known gaps are listed in `frontend/scripts/route-gaps.json`.
    - `frontend/.gitattributes` keeps the frontend LF, so `format:check` passes on Windows.
    - Aspire AppHost was bumped 13.6.4 → 13.6.5 for advisory GHSA-f7vh-h5g3-7jrh, so `dotnet test ParishLife.slnx` runs again.
+   - Two test fixes found while merging:
+     - The topic-catalog test now also sees the mute check that communications moved into `BroadcastAudience`.
+     - The exchange-rate correction test advances the frozen fixture clock, so the "current" rate no longer depends on a random id.
 
-**Checks after merging finance** (SDK 10.0.401, Windows):
+**Checks with all 13 areas merged** (SDK 10.0.401, Windows):
 - `dotnet restore --locked-mode` OK; Release build 0 warnings.
-- **57 unit + 451 integration tests passed, 0 failed.**
+- **57 unit + 476 integration tests passed (533), 0 failed.**
 - Frontend: `format:check`, `check` (all modules) and `build` pass.
-- `check:routes`: 615 routes, 591 requests, 6 known gaps (the deliberate `workspace/plan` check, attendance import, letter signing, generic file upload), 0 new.
+- `check:routes`: 635 routes, 627 requests, **2 known gaps** (the deliberate `workspace/plan` check, and the attendance import `parishes/{id}/attendance-preview`), 0 new.
 
 All of this ran on local storage only, which is not Cosmos acceptance.
 
-## The 4 unfinished areas
+## What is still open
 
-Each worker wrote its owner questions and remaining gaps into `docs/frontend-modules/<module>.md` and `docs/operations/<area>.md` on its own branch.
+All 13 areas are merged. Every area doc lists what it could not finish and why; the larger items are:
 
-| Area | Committed on `fullstack2-<area>` | Uncommitted, saved in `wip/20261114-1224/<area>` | Where it stopped |
-| --- | --- | --- | --- |
-| communications | `8c2e1fb`: scheduling, automations, Arabic versions, notice priority, direct messages by person (backend + tests), then the inbox and module wiring | none | Final test run and report; check new notification topics against `NotificationTopicCatalog` |
-| requests | `4bc6603`: open records from accepted requests, checklist-bound files, guest uploads, claim list (backend; 37 targeted tests passed) | 17 frontend/doc files, including replacing the old `parishes/{id}/files` and `sign/options` calls | Extending `checks/requests.mjs` |
-| ministries | `5ef42d5`: Arabic twins, meeting times, roster removal, person lookup, formation drafts (backend + tests) | 7 frontend files (groups, volunteers, attendance, resources) | Rewriting the module's load |
-| registrations | `346e3fd`: model fields only (deadline, discount, instalments, payment methods, pickup code) | 6 backend files (services, options controller, evacuation, terms, `RegistrationOptionsTests`) | Fixing two tests (AsyncLocal actor context set inside helpers) |
+- **API gaps the screens still hit:**
+  - the attendance import preview (`parishes/{id}/attendance-preview`);
+  - person and group file stores (their drop areas say "not connected");
+  - shared ministry documents (My resources shows stock only);
+  - a staff list for assigning facility issues;
+  - external delivery for email, SMS and WhatsApp (no provider configured).
+- **Small screen gaps:**
+  - an Arabic title input in the meeting dialogs;
+  - a link/unlink panel for external sign-in;
+  - a QR code;
+  - a rank/season Arabic input in the liturgical calendar editor;
+  - reservations from booking requests;
+  - per-member answers when registering a household.
+- **Owner questions:** each `docs/frontend-modules/<module>.md`, plus `docs/continuation/OWNER-QUESTIONS.md`. The workers recorded these instead of guessing. Examples: which rites exist, member vs visitor eligibility, receipt numbering, electronic-signature validity (U05), and whether publishing needs a priest's review.
+- **Not proven yet:** everything ran on local storage. Cosmos behaviour is unverified, in particular the receipt counter and the new index paths. No screen has been used signed in against a running API.
 
 ## How to continue
 
@@ -110,35 +154,20 @@ Each worker wrote its owner questions and remaining gaps into `docs/frontend-mod
 - .NET SDK **10.0.401** exactly, as `global.json` requires. If missing: `dotnet-install.ps1 -Version 10.0.401`.
 - Node 20+.
 
-**To finish an area:**
-
 ```bash
 git fetch origin
-git switch fullstack2-<area>                     # or: git switch -c fullstack2-<area> origin/fullstack2-<area>
-git merge --ff-only origin/wip/20261114-1224/<area>   # only for the areas that have a snapshot; it is a fast-forward
+git switch -c fullstack-integration origin/fullstack-integration
+dotnet test ParishLife.slnx -c Release                    # must stay 0 failures and 0 new warnings
+cd frontend && npm ci && npm run format:check && npm run check && npm run check:routes && npm run build
 ```
 
-Then finish what the table says.
-- **Backend:** `dotnet test ParishLife.IntegrationTests -c Release --filter "FullyQualifiedName~<Area>"`.
-- **Frontend**, in `frontend/`: `npm ci && npm run format:check && npm run check && npm run check:routes && npm run build`.
+When you add a route that the frontend already calls, remove its entry from `frontend/scripts/route-gaps.json`. `check:routes` tells you when a gap is closed.
 
-**Then merge it into `fullstack-integration`, one area at a time:**
-
-```bash
-git switch fullstack-integration
-git merge fullstack2-<area>
-dotnet test ParishLife.slnx -c Release        # full solution, must stay 0 failures and 0 new warnings
-cd frontend && npm run format:check && npm run check && npm run check:routes && npm run build
-git push origin fullstack-integration
-```
-
-**Expected conflicts** (take the union): `ParishLife.Api/Extensions/ServiceCollectionExtensions.cs` (one registration line per service), `docs/cosmos/containers.json` (index paths), `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `frontend/scripts/route-gaps.json` (remove a gap once its route exists).
-
-**Overlaps to watch while merging:**
-- `PublicCalendarEventDto`/`CalendarService.PublicAsync`: calendar and public both touched them; both are merged now, with no conflict.
-- `record-editor.jsx`: finance and ministries.
-- The request-letter code: requests and the Azure session's snapshot.
-- Finance areas started before the names route existed, so they may still show account ids where `loadNames`/`nameOf` would now work.
+**Conflicts that came up while merging** (useful if you merge more branches):
+- `frontend/scripts/route-gaps.json`: each branch removed its own closed gaps; keep all the removals.
+- `people.jsx`: people renamed `consentsOf` to `directoryConsents`; administration added `accountStatus`.
+- `account.jsx`: kept the account area's `saveSignature(version, …)` plus requests' `SignerProfilePanel`.
+- `ServiceCollectionExtensions.cs`: one registration line per service merged cleanly.
 
 **Rules every worker followed** (keep them): `docs/frontend-modules/CONVENTIONS.md`, `CLAUDE.md`, `AGENTS.md`, and the worker brief in `docs/frontend-modules/AREA-WORKER-BRIEF.md`. In short:
 - no seed or invented data;
@@ -149,9 +178,9 @@ git push origin fullstack-integration
 - recovery-session restrictions kept;
 - tests for every route.
 
-## After the 4 areas
+## Next steps
 
-1. **Signed-in end-to-end tests** in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
+1. **Signed-in end-to-end tests** (the last item of the 15) in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
 3. **Hosting decision (owner):** the pages and the API must share one HTTPS host (`__Host-` cookies, no CORS). The recommendation is that the API on `app-parishlife` serves `frontend/dist`. That changes the "deploy only the API" rule, so Colin has to agree.
 4. **Azure (Colin's Azure session):**
