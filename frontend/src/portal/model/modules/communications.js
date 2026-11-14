@@ -3,8 +3,11 @@
    plus the inbox calls the inbox screens make directly.
    Main members: keys, routes, load, save (what the portal's data layer calls); SECTIONS (the website
    sections the editor offers); and the workflow calls the screens use (saveBroadcast, broadcastAction,
-   saveTemplate, templateAction, saveNotice, noticeAction, saveWebsiteDraft, websiteAction,
-   decideIntention, listMinistries, the inbox calls and the exact-message review calls).
+   scheduleBroadcast, saveTemplate, templateAction, saveNotice, noticeAction, the automation calls
+   (automations, saveAutomation, automationAction), saveWebsiteDraft, websiteAction, decideIntention,
+   listMinistries, the inbox calls and the exact-message review calls).
+   People's names for the account ids these records carry come from model/names.js (loadNames in load,
+   nameOf on the screens).
 
    What the portal calls each collection:
      MESSAGES       the parish's broadcasts (staff only), one per BroadcastDto
@@ -19,6 +22,7 @@
    notification-read change goes through save(); every other change is a workflow call from a screen,
    followed by hydrate(). Any other edit to these collections is undone and reported. */
 import { api, newOperationId } from '../api.js';
+import { loadNames } from '../names.js';
 
 export const keys = ['MESSAGES', 'TEMPLATES', 'NOTICES', 'NOTIFICATIONS', 'CONTENT', 'PRAYERS'];
 export const routes = ['inbox', 'mymessages', 'messaging', 'notices', 'portal'];
@@ -53,17 +57,25 @@ const toMessage = ({ value: b, version }) => ({
   id: b.id,
   version,
   subject: b.title,
-  subjectAr: b.title,
+  /* the Arabic version is shown only when one was written (or the main text is Arabic) */
+  subjectAr: b.titleAr || b.title,
   body: b.body,
+  bodyAr: b.bodyAr || b.body,
+  titleAr: b.titleAr || '',
+  arabicBody: b.bodyAr || '',
   language: b.language,
+  automationId: b.automationId || null,
+  scheduledFor: b.scheduledFor || null,
+  scheduledBy: b.scheduledBy || null,
+  scheduleNote: b.scheduleNote || '',
   audience: b.audience,
   ministryId: b.ministryId || null,
   templateId: b.templateId || null,
-  status: lower(b.status), // draft, approved, sent, cancelled
+  status: lower(b.status), // draft, approved, scheduled, sent, cancelled
   channels: b.channels || [],
   reach: b.recipientCount,
   skipped: b.skippedByPreferenceCount,
-  when: b.sentAt || b.approvedAt || '',
+  when: b.sentAt || b.scheduledFor || b.approvedAt || '',
   updatedBy: b.updatedBy,
   approvedBy: b.approvedBy || null,
   sentBy: b.sentBy || null,
@@ -78,6 +90,8 @@ const toTemplate = ({ value: t, version }) => ({
   ar: t.name,
   title: t.title,
   body: t.body,
+  titleAr: t.titleAr || '',
+  bodyAr: t.bodyAr || '',
   language: t.language,
   status: lower(t.status), // draft, approved, retired
   updatedBy: t.updatedBy,
@@ -90,10 +104,17 @@ const toNotice = ({ value: a, version }) => ({
   id: a.id,
   version: version || null,
   title: a.title,
-  ar: a.title,
+  ar: a.titleAr || a.title,
   body: a.body,
+  bodyAr: a.bodyAr || a.body,
+  titleAr: a.titleAr || '',
+  arabicBody: a.bodyAr || '',
   category: a.category || '',
   language: a.language,
+  priority: a.priority || 'Normal', // Normal or Urgent
+  urgent: a.priority === 'Urgent',
+  authorId: a.authorAccountId || null, // staff lists only
+  publishedBy: a.publishedBy || null,
   visibility: a.visibility, // Public, Members or Ministry
   ministryId: a.ministryId || null,
   pinned: !!a.pinned,
@@ -199,6 +220,12 @@ export async function load(parish, d) {
   d.NOTIFICATIONS = (feed || [])
     .filter(n => n.status !== 'Archived' && (!n.parishId || n.parishId === parish.id))
     .map(n => toBell(n, parish));
+  /* who wrote, approved, scheduled or stored each broadcast, template and notice (names are a courtesy) */
+  await loadNames(parish.id, [
+    ...d.MESSAGES.flatMap(m => [m.updatedBy, m.approvedBy, m.sentBy, m.scheduledBy]),
+    ...d.TEMPLATES.flatMap(x => [x.updatedBy, x.approvedBy]),
+    ...d.NOTICES.flatMap(n => [n.authorId, n.publishedBy])
+  ]);
 }
 
 /* ---------- save ---------- */
@@ -235,19 +262,64 @@ export function saveBroadcast(parishId, b) {
     audience: b.audience,
     ministryId: b.audience === 'Ministry' ? b.ministryId : null,
     templateId: b.templateId || null,
-    ...(b.templateId ? {} : { title: b.title, body: b.body, language: b.language })
+    ...(b.templateId
+      ? {}
+      : {
+          title: b.title,
+          body: b.body,
+          language: b.language,
+          /* an Arabic version is saved as typed, never filled from the main text */
+          titleAr: b.titleAr || null,
+          bodyAr: b.bodyAr || null
+        })
   };
   return b.id
     ? api(`${base(parishId)}/broadcasts/${enc(b.id)}`, 'PUT', body)
     : api(`${base(parishId)}/broadcasts`, 'POST', body);
 }
-/* approve, send or cancel (a reason is required to cancel) against the exact version read */
-export const broadcastAction = (parishId, id, version, action, reason) =>
+/* approve, unschedule, send or cancel (a reason is required to cancel) against the exact version read */
+export const broadcastAction = (parishId, id, version, action, reason, scheduledFor) =>
   api(`${base(parishId)}/broadcasts/${enc(id)}/actions`, 'POST', {
     operationId: newOperationId(),
     version,
     action,
-    reason: reason || null
+    reason: reason || null,
+    scheduledFor: scheduledFor || null
+  });
+/* Stores an approved broadcast in the app at a later time (an ISO UTC instant). Nothing is stored now; at
+   that time the API checks the scheduler's access again and resolves the audience. */
+export const scheduleBroadcast = (parishId, id, version, when) =>
+  broadcastAction(parishId, id, version, 'schedule', null, new Date(when).toISOString());
+
+/* ---------- broadcast automations ---------- */
+
+/* Staff only: [{ version, value: BroadcastAutomationDto }]; an empty list when not allowed. */
+export const automations = parishId => soft(api(`${base(parishId)}/broadcast-automations`)).then(r => r || []);
+/* An automation drafts one broadcast from an approved template at each due time (weekly or monthly, at most
+   maxRuns times). It never approves or sends: each draft is approved by someone else and stored by hand. */
+export function saveAutomation(parishId, a) {
+  const body = {
+    operationId: newOperationId(),
+    version: a.id ? a.version : undefined,
+    name: a.name,
+    nameAr: a.nameAr || null,
+    templateId: a.templateId,
+    audience: a.audience,
+    ministryId: a.audience === 'Ministry' ? a.ministryId : null,
+    recurrence: a.recurrence,
+    firstRunAt: new Date(a.firstRunAt).toISOString(),
+    maxRuns: Number(a.maxRuns)
+  };
+  return a.id
+    ? api(`${base(parishId)}/broadcast-automations/${enc(a.id)}`, 'PUT', body)
+    : api(`${base(parishId)}/broadcast-automations`, 'POST', body);
+}
+/* pause, resume or end */
+export const automationAction = (parishId, id, version, action) =>
+  api(`${base(parishId)}/broadcast-automations/${enc(id)}/actions`, 'POST', {
+    operationId: newOperationId(),
+    version,
+    action
   });
 export const audiencePreview = (parishId, id) => api(`${base(parishId)}/broadcasts/${enc(id)}/audience-preview`);
 
@@ -258,7 +330,9 @@ export function saveTemplate(parishId, t) {
     name: t.name,
     title: t.title,
     body: t.body,
-    language: t.language
+    language: t.language,
+    titleAr: t.titleAr || null,
+    bodyAr: t.bodyAr || null
   };
   return t.id
     ? api(`${base(parishId)}/broadcast-templates/${enc(t.id)}`, 'PUT', body)
@@ -296,6 +370,9 @@ export function saveNotice(parishId, n) {
     body: n.body,
     category: n.category || null,
     language: n.language,
+    titleAr: n.titleAr || null,
+    bodyAr: n.bodyAr || null,
+    priority: n.priority === 'Urgent' ? 'Urgent' : 'Normal',
     pinned: !!n.pinned,
     expiresAt: n.expiresAt || null
   };
@@ -348,13 +425,16 @@ export const receivedBroadcasts = parishId => soft(api(`${base(parishId)}/broadc
 export const ownReports = parishId => soft(api(`${base(parishId)}/inbox/reports/mine`)).then(r => r || []);
 /* Opening a conversation marks it read for this account. */
 export const messages = (parishId, id) => api(`${base(parishId)}/inbox/${enc(id)}`);
-/* A member writes to the parish office; office staff may write to a linked parishioner's account. */
-export const startConversation = (parishId, subject, body, recipientAccountId) =>
+/* A member writes to the parish office; office staff may write to a linked parishioner's account, or to a
+   person from the people list (`{ personId }`, which needs people.read; the API finds the person's one
+   linked account and refuses when there is none). */
+export const startConversation = (parishId, subject, body, recipient) =>
   api(`${base(parishId)}/inbox`, 'POST', {
     operationId: newOperationId(),
     subject,
     body,
-    recipientAccountId: recipientAccountId || null
+    recipientAccountId: (typeof recipient === 'string' ? recipient : null) || null,
+    recipientPersonId: recipient?.personId || null
   });
 export const postMessage = (parishId, id, body) =>
   api(`${base(parishId)}/inbox/${enc(id)}/messages`, 'POST', { operationId: newOperationId(), body });

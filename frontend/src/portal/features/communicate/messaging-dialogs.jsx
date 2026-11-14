@@ -1,6 +1,7 @@
 /* Writing to people: broadcast drafts and templates (saved through ParishLife.Api and kept in the app),
-   direct messages, reminders and ready-made posters.
-   Main functions: compose, broadcastForm, templateForm, designTemplate, useSubmit, reload, remind, broadcast.
+   direct messages to a person, scheduling, automations, reminders and ready-made posters.
+   Main functions: compose, broadcastForm, templateForm, scheduleForm, automationForm, ArabicFields,
+   designTemplate, useSubmit, reload, remind, broadcast.
 
    Broadcasts are stored in the app for their recipients only; email, SMS and push have no provider, so
    nothing here claims to send anything outside ParishLife. */
@@ -14,7 +15,16 @@ import * as D from '../../model/data.js';
 import { session } from '../../model/api.js';
 import { bus, S } from '../../model/store.js';
 import { hydrate } from '../../model/persist.js';
-import { saveBroadcast, saveTemplate, listMinistries, LANGUAGES } from '../../model/modules/communications.js';
+import {
+  saveBroadcast,
+  saveTemplate,
+  listMinistries,
+  LANGUAGES,
+  can,
+  startConversation,
+  scheduleBroadcast,
+  saveAutomation
+} from '../../model/modules/communications.js';
 import { download } from '../../shell/actions.jsx';
 import { ok, val } from '../../shared/dialog-helpers.jsx';
 import { pickPerson } from '../records/people-dialogs.jsx';
@@ -60,6 +70,28 @@ export function LanguageSelect({ name = 'language', defaultValue = 'en', disable
   );
 }
 
+/* The optional Arabic version of a non-Arabic text: saved as typed, both or neither, never copied. */
+export function ArabicFields({ title = '', body = '', bodyMax = 20000 }) {
+  return (
+    <>
+      <label className="formrow">
+        <span className="label">{L('Arabic title (optional)', 'العنوان بالعربية (اختياري)')}</span>
+        <input className="input" name="titleAr" maxLength="300" dir="rtl" defaultValue={title} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Arabic text (optional)', 'النص بالعربية (اختياري)')}</span>
+        <textarea className="textarea" name="bodyAr" maxLength={bodyMax} rows="6" dir="rtl" defaultValue={body} />
+      </label>
+      <p className="help">
+        {L(
+          'Fill both or leave both empty. Leave them empty when the main text is already Arabic.',
+          'املأ الحقلين أو اتركهما فارغين. اتركهما فارغين إذا كان النص الأساسي بالعربية.'
+        )}
+      </p>
+    </>
+  );
+}
+
 /* The ministries a broadcast or notice can be aimed at, read when the form opens. */
 export function useMinistries(parishId) {
   const [list, setList] = useState(null);
@@ -94,7 +126,9 @@ function BroadcastForm({ parish, broadcast, preset }) {
       templateId: templateId || null,
       title: (q.title || '').trim(),
       body: (q.body || '').trim(),
-      language: q.language
+      language: q.language,
+      titleAr: (q.titleAr || '').trim(),
+      bodyAr: (q.bodyAr || '').trim()
     });
     closeOverlays();
     await reload();
@@ -180,6 +214,7 @@ function BroadcastForm({ parish, broadcast, preset }) {
               defaultValue={broadcast?.body || preset.body || ''}
             />
           </label>
+          <ArabicFields title={broadcast?.titleAr || ''} body={broadcast?.arabicBody || ''} />
         </>
       )}
       <p className="help">
@@ -216,7 +251,9 @@ function TemplateForm({ parish, template }) {
       name: (q.name || '').trim(),
       title: (q.title || '').trim(),
       body: (q.body || '').trim(),
-      language: q.language
+      language: q.language,
+      titleAr: (q.titleAr || '').trim(),
+      bodyAr: (q.bodyAr || '').trim()
     });
     closeOverlays();
     await reload();
@@ -250,6 +287,7 @@ function TemplateForm({ parish, template }) {
           defaultValue={template?.body || ''}
         />
       </label>
+      <ArabicFields title={template?.titleAr || ''} body={template?.bodyAr || ''} />
       <p className="help-error" role="alert">
         {error}
       </p>
@@ -269,8 +307,179 @@ export function templateForm(template = null) {
   });
 }
 
+/* A direct message from office staff to a person in the people list. The API finds the person's one linked
+   account in this parish (it needs people.read) and refuses when there is none; nothing is sent then. */
+function DirectForm({ parish, personId }) {
+  const { error, busy, submit } = useSubmit(async q => {
+    const c = await startConversation(parish.id, q.subject.trim(), q.body.trim(), { personId });
+    closeOverlays();
+    ok(L('Message stored in the app', 'حُفظت الرسالة داخل التطبيق'), c.notificationOutcome?.meaning || '');
+  });
+  return (
+    <form onSubmit={submit} data-direct-form="">
+      <label className="formrow">
+        <span className="label">{L('Subject', 'الموضوع')}</span>
+        <input className="input" name="subject" required maxLength="300" />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Message', 'الرسالة')}</span>
+        <textarea className="textarea" name="body" required maxLength="10000" rows="8" />
+      </label>
+      <p className="help">
+        {L(
+          'It goes to the linked ParishLife account of this person and is read inside the app. Nothing is sent by email or SMS.',
+          'تصل إلى حساب الشخص المرتبط في ParishLife وتُقرأ داخل التطبيق. لا يُرسل شيء بالبريد أو الرسائل القصيرة.'
+        )}
+      </p>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {L('Send message', 'إرسال الرسالة')}
+      </button>
+    </form>
+  );
+}
+
+/* Schedules an approved broadcast: it is stored in the app at that time, if the scheduler still has access. */
+function ScheduleForm({ parish, m }) {
+  const { error, busy, submit } = useSubmit(async q => {
+    await scheduleBroadcast(parish.id, m.id, m.version, q.when);
+    closeOverlays();
+    await reload();
+    ok(
+      L('Scheduled', 'جُدول'),
+      L(
+        'Nothing is stored yet. At that time it is stored in the app for the audience as it is then.',
+        'لم يُحفظ شيء بعد. في ذلك الوقت يُحفظ داخل التطبيق للجمهور كما يكون حينها.'
+      )
+    );
+  });
+  return (
+    <form onSubmit={submit}>
+      <label className="formrow">
+        <span className="label">{L('Store it in the app at', 'حفظه داخل التطبيق في')}</span>
+        <input className="input" name="when" type="datetime-local" required />
+      </label>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {L('Schedule', 'جدولة')}
+      </button>
+    </form>
+  );
+}
+export function scheduleForm(m) {
+  const parish = session.parishes.find(p => p.id === session.parishId);
+  if (!parish) return;
+  openDrawer({ title: L('Schedule this broadcast', 'جدولة هذا البثّ'), body: <ScheduleForm parish={parish} m={m} /> });
+}
+
+/* A bounded automation: one draft from an approved template at each due time, at most a set number of times. */
+function AutomationForm({ parish, automation, done }) {
+  const ministries = useMinistries(parish.id),
+    templates = D.TEMPLATES.filter(x => x.status === 'approved');
+  const [audience, setAudience] = useState(automation?.audience || 'Members');
+  const { error, busy, submit } = useSubmit(async q => {
+    await saveAutomation(parish.id, {
+      id: automation?.id,
+      version: automation?.version,
+      name: q.name.trim(),
+      nameAr: (q.nameAr || '').trim(),
+      templateId: q.templateId,
+      audience,
+      ministryId: q.ministryId,
+      recurrence: q.recurrence,
+      firstRunAt: q.firstRunAt,
+      maxRuns: q.maxRuns
+    });
+    closeOverlays();
+    await done();
+    ok(
+      L('Automation saved', 'حُفظت الأتمتة'),
+      L(
+        'At each run it saves one draft. A different staff member approves it before anything is stored for members.',
+        'في كل مرة تحفظ مسودة واحدة. يعتمدها موظف آخر قبل أن يُحفظ أي شيء للأعضاء.'
+      )
+    );
+  });
+  return (
+    <form onSubmit={submit}>
+      <label className="formrow">
+        <span className="label">{L('Name', 'الاسم')}</span>
+        <input className="input" name="name" required maxLength="200" defaultValue={automation?.name || ''} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Arabic name (optional)', 'الاسم بالعربية (اختياري)')}</span>
+        <input className="input" name="nameAr" maxLength="200" dir="rtl" defaultValue={automation?.nameAr || ''} />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Approved template', 'قالب معتمد')}</span>
+        <Select name="templateId" required defaultValue={automation?.templateId || ''}>
+          <option value="">{L('Choose a template', 'اختر قالباً')}</option>
+          {templates.map(x => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Audience', 'الجمهور')}</span>
+        <Select value={audience} onChange={e => setAudience(e.target.value)}>
+          <option value="Members">{L('All members of the parish', 'كل أعضاء الرعية')}</option>
+          <option value="Ministry">{L('The members of a ministry', 'أعضاء خدمة')}</option>
+        </Select>
+      </label>
+      {audience === 'Ministry' ? (
+        <label className="formrow">
+          <span className="label">{L('Ministry', 'الخدمة')}</span>
+          <Select name="ministryId" required defaultValue={automation?.ministryId || ''}>
+            <option value="">{L('Choose a ministry', 'اختر الخدمة')}</option>
+            {(ministries || []).map(x => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
+      <label className="formrow">
+        <span className="label">{L('Repeat', 'التكرار')}</span>
+        <Select name="recurrence" defaultValue={automation?.recurrence || 'Weekly'}>
+          <option value="Weekly">{L('Every week', 'كل أسبوع')}</option>
+          <option value="Monthly">{L('Every month', 'كل شهر')}</option>
+        </Select>
+      </label>
+      <label className="formrow">
+        <span className="label">{L('First run', 'أول تشغيل')}</span>
+        <input className="input" name="firstRunAt" type="datetime-local" required />
+      </label>
+      <label className="formrow">
+        <span className="label">{L('Number of runs (1–52)', 'عدد المرات (1–52)')}</span>
+        <input className="input" name="maxRuns" type="number" min="1" max="52" required defaultValue={automation?.maxRuns || 4} />
+      </label>
+      <p className="help-error" role="alert">
+        {error}
+      </p>
+      <button className="btn btn-primary" disabled={busy}>
+        {L('Save automation', 'حفظ الأتمتة')}
+      </button>
+    </form>
+  );
+}
+export function automationForm(automation, done) {
+  const parish = session.parishes.find(p => p.id === session.parishId);
+  if (!parish) return;
+  openDrawer({
+    title: automation ? L('Edit automation', 'تعديل الأتمتة') : L('New automation', 'أتمتة جديدة'),
+    body: <AutomationForm parish={parish} automation={automation} done={done} />
+  });
+}
+
 /* Other screens call compose() with a person's id, 'all' or 'group'. A group or all members becomes a
-   broadcast draft. A direct message needs the person's account, which the people list does not carry. */
+   broadcast draft. A person becomes a direct message from office staff (communications.manage). */
 export function compose(audience = 'all', { subject = '', body = '', bodyAr = '', template = null } = {}) {
   if (audience === 'eparchy')
     return toast(
@@ -278,15 +487,22 @@ export function compose(audience = 'all', { subject = '', body = '', bodyAr = ''
       L('Use the Eparchy contact outside this application.', 'تواصل مع الأبرشية خارج هذا التطبيق.'),
       'warning'
     );
-  if (audience !== 'all' && audience !== 'group')
+  if (audience !== 'all' && audience !== 'group') {
+    const parish = session.parishes.find(p => p.id === session.parishId);
+    if (parish && can(parish, 'communications.manage'))
+      return openDrawer({
+        title: L('Message a person', 'مراسلة شخص'),
+        body: <DirectForm parish={parish} personId={audience} />
+      });
     return toast(
-      L('Direct messages are not available from here', 'الرسائل المباشرة غير متاحة من هنا'),
+      L('Direct messages are written by the parish office', 'يكتب مكتب الرعية الرسائل المباشرة'),
       L(
-        'A direct message goes to a parishioner’s linked account, and the people list does not show accounts. Nothing was sent.',
-        'تذهب الرسالة المباشرة إلى حساب مرتبط بالمؤمن، ولا تعرض لائحة الأشخاص الحسابات. لم يُرسل شيء.'
+        'This account cannot write to a person directly. Nothing was sent.',
+        'لا يستطيع هذا الحساب مراسلة شخص مباشرة. لم يُرسل شيء.'
       ),
       'warning'
     );
+  }
   const group = audience === 'group' && S.route === 'groups' ? S.params[0] : '';
   broadcastForm(null, {
     audience: audience === 'group' ? 'Ministry' : 'Members',
