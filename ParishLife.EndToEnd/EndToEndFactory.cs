@@ -1,8 +1,9 @@
-// Purpose: hosts the actual API on Kestrel (HTTPS, development certificate) against an isolated temporary storage directory, and serves
-// the built frontend from the same origin so the API's __Host- cookies work in a real browser. Test-only; never deployed.
-// Main functions: ConfigureWebHost applies final test configuration and the static-page middleware; DataDirectory names the storage path.
+// Purpose: hosts the actual API on Kestrel (HTTPS, development certificate) against an isolated temporary storage directory, with the built
+// frontend as its web root, so the API's own production hosting (UseParishLifeFrontend: same origin, caching, Content-Security-Policy)
+// serves the pages the browser tests open. Test-only; never deployed.
+// Main functions: ConfigureWebHost applies final test configuration, the web root and the per-test client address; DataDirectory names the
+// storage path.
 
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.RateLimiting;
@@ -20,6 +21,8 @@ public class EndToEndFactory(string dataDirectory, string distDirectory, string 
     {
         builder.UseEnvironment("Development");
         builder.UseContentRoot(apiDirectory);
+        // The pages come from frontend/dist exactly as a -p:IncludeFrontend=true publish serves them from wwwroot.
+        builder.UseSetting(WebHostDefaults.WebRootKey, distDirectory);
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "Local",
@@ -29,11 +32,7 @@ public class EndToEndFactory(string dataDirectory, string distDirectory, string 
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "",
             ["Logging:LogLevel:Default"] = "Warning"
         }));
-        builder.ConfigureServices(services =>
-        {
-            services.AddSingleton<IStartupFilter>(new ClientAddressFilter());
-            services.AddSingleton<IStartupFilter>(new StaticPagesFilter(distDirectory));
-        });
+        builder.ConfigureServices(services => services.AddSingleton<IStartupFilter>(new ClientAddressFilter()));
         // Each role acts as its own client (ClientAddressFilter), so the sign-in limit (20 /api/auth calls a minute) stays as in production.
         // The general limit (200 API calls a minute) is lifted: a crawl opens screens far faster than a person does. See
         // docs/verification/end-to-end.md.

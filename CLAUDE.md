@@ -20,7 +20,7 @@ Read `docs/continuation/STATUS.md` at the beginning of a session and whenever th
 - Keep account identity, Person facts, parish membership, following/primary preferences, ministry membership, ecclesiastical office and subscriptions separate. Preserve exact selected capacity, current authorization, explicit denials and restricted recovery-session rules.
 - Preserve transaction/ETag/idempotency/privacy boundaries. Credentials never enter fingerprints, receipts or audit. A stored event, approval, payment, notification or signature is not proof of an unperformed external action.
 - Local tests are not live Cosmos/Blob/Key Vault/managed-identity acceptance. Do not provision, deploy, alter Azure RBAC/network/index policy, run live write tests or bootstrap live accounts without the corresponding explicit authorization.
-- Keep tests in source; deploy only the API publish output. Do not expose credentials, key rings, operational data or private logs.
+- Keep tests in source; deploy only the API publish output. By owner decision (17 November 2026) that output includes the built frontend in `wwwroot` (`tools/Publish-ParishLife.ps1`, or `dotnet publish -p:IncludeFrontend=true`), served from the API's own origin; never tests, AppHost, tools or the end-to-end host. Do not expose credentials, key rings, operational data or private logs.
 
 ## Git and collaboration
 

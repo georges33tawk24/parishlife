@@ -5,7 +5,11 @@
 - **Browser tests:** in `frontend/e2e/`, Playwright drives the installed Edge. Each role signs in through the real form and opens every screen in English and Arabic.
 - **Result:** `npm run e2e` passes all 9 tests.
 - **Fixed along the way:** the public calendar (it asked for 127 days, the API allows 31), the bishop's menu, and the "My resources" banner.
-- **Hosting prepared, off by default:** `dotnet publish -p:IncludeFrontend=true` puts the frontend in `wwwroot`, and the API serves it from the same origin. Without the property the publish is API-only, as today.
+- **Hosting decided (Colin, 17 November): the API serves the frontend.**
+  - `tools/Publish-ParishLife.ps1` builds the package (frontend in `wwwroot`) and its zip, and prints the deploy command; it does not deploy.
+  - The pages get caching and a Content-Security-Policy, and the browser tests now run through this same hosting code.
+  - `CLAUDE.md` and `AGENTS.md` are updated.
+  - The actual deploy is still a separate go-ahead, through the Azure session.
 
 See `docs/verification/end-to-end.md` and `docs/operations/frontend-hosting.md`. The sections below are from 14 November, except "Next steps", which is current.
 
@@ -191,7 +195,7 @@ When you add a route that the frontend already calls, remove its entry from `fro
 
 1. ~~Signed-in end-to-end tests~~ **Done (17 November).** Run them with `cd frontend && npm run e2e`; see `docs/verification/end-to-end.md`. Keep them passing when screens change, and add the expected menu entries for any new role.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
-3. **Hosting decision (owner):** the code is ready and off by default (`-p:IncludeFrontend=true`, see `docs/operations/frontend-hosting.md`). Deploying it changes the "deploy only the API" rule, so Colin has to agree.
+3. ~~Hosting decision~~ **Decided: the API serves the frontend.** It's ready to deploy with `tools/Publish-ParishLife.ps1`; see `docs/operations/frontend-hosting.md`.
 4. **Sign-in rate limit (owner):** every `/api/auth` call, including `auth/me` on each page load, shares 20 calls a minute per client address. A parish office or hall on one connection can hit "Too many attempts". Options are in `docs/verification/end-to-end.md`.
 5. **Azure (Colin's Azure session):**
    - deploy `fullstack-integration` instead of `backend`;

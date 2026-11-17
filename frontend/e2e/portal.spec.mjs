@@ -33,9 +33,12 @@ const client = (page, n) =>
 test('public pages load signed out', async ({ page }) => {
   await client(page, 2);
   const state = watch(page);
-  for (const path of ['/public.html', '/landing.html', '/index.html']) {
+  for (const path of ['/', '/public.html', '/landing.html', '/index.html']) {
     state.where = path;
-    await page.goto(M.baseUrl + path);
+    const response = await page.goto(M.baseUrl + path);
+    // served by the API's own hosting (UseParishLifeFrontend), as in production; a blocked resource is a console error
+    expect(response.headers()['content-security-policy'], path).toContain("default-src 'self'");
+    expect(response.headers()['cache-control'], path).toBe('no-cache');
     await settle(page, state);
   }
   await expect(page.locator('input[name="username"]')).toBeVisible();

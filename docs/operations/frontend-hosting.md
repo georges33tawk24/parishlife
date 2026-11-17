@@ -1,42 +1,58 @@
 # Hosting the frontend with the API (single origin)
 
-The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` and `SameSite=Strict`, and the API has no CORS. So a browser must load the pages and call `/api` from the same HTTPS origin.
+**Owner decision (17 November 2026):** the API on App Service `app-parishlife` serves the frontend from its own origin (option 1 of the three discussed). The alternatives were separate static hosting behind Front Door, or not hosting the pages yet.
 
-This repository supports that origin being the API itself: App Service `app-parishlife` serves `frontend/dist` from its `wwwroot`.
+The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` and `SameSite=Strict`, and the API has no CORS. So the pages and `/api` must come from the same HTTPS origin.
 
 ## How it works
 
-- **Publish option:** `dotnet publish ParishLife.Api/ParishLife.Api.csproj -c Release -p:UseAppHost=false -p:IncludeFrontend=true -o artifacts/api` copies `frontend/dist` into `artifacts/api/wwwroot`. It stops with an error if the frontend was not built (`npm run build` in `frontend/`).
-- **Default publish:** without the property the publish output is exactly the API-only output used today. No `wwwroot` is created, and nothing changes for the current deployment.
-- **Serving:** `UseParishLifeFrontend` (`ParishLife.Api/Extensions/FrontendHostingExtensions.cs`) serves `wwwroot` only when `wwwroot/index.html` exists. It sits before the rate limiter, so loading pages and assets does not use up a client's API budget.
+- **Package:**
+  - `tools/Publish-ParishLife.ps1` runs `npm ci` and `npm run build`, then `dotnet publish -p:IncludeFrontend=true`, which copies `frontend/dist` into `wwwroot`.
+  - It checks the package: no tests, AppHost, tools, end-to-end host or key files.
+  - It zips the package with the Windows `tar.exe`, which writes forward-slash paths.
+  - It prints the deploy command and makes no Azure calls.
+  - `-IncludeFrontend:$false` builds the old API-only package.
+- **Serving:** `UseParishLifeFrontend` (`ParishLife.Api/Extensions/FrontendHostingExtensions.cs`) serves `wwwroot` only when `wwwroot/index.html` exists, so an API-only package behaves exactly as before. It sits before the rate limiter, so loading pages and assets does not use up a client's API budget.
 - **Caching:**
   - Hashed build files under `/assets/app/` are cached for a year (`immutable`).
   - Pages, `sw.js` and the manifest are revalidated on every visit (`no-cache`).
   - `/api` stays `no-store`.
+- **Content-Security-Policy (pages only):**
+  - Scripts come only from this origin, from Cloudflare Turnstile (`challenges.cloudflare.com`), and from the exact inline start-up script of each page. Those scripts are allowed by SHA-256 hashes computed from the published HTML when the API starts, so editing them needs no policy change.
+  - Styles come from this origin and Google Fonts. Inline styles are allowed, which the print views need.
+  - Fonts come from `fonts.gstatic.com`.
+  - Images: this origin, `data:`, `blob:`, and any HTTPS address (parish photos).
+  - Connections: this origin and Turnstile only.
+  - Frames: Turnstile only.
+  - No plugins. The pages may not be framed (`frame-ancestors 'none'`). `base-uri` and `form-action` are limited to this origin.
+  - If a new external service is added (maps, embedded video…), add its origin in `ContentSecurityPolicy`; the browser tests fail on any blocked resource.
 - **Unchanged:** routing, authentication, CSRF and the security headers. `/api/*` and `/health/*` behave as before.
 
-Verified locally (17 November 2026):
-- Both publishes compared: the API files are identical, and the frontend publish adds the 74 files of `frontend/dist` under `wwwroot`.
-- The published `ParishLife.Api.dll`, run in Development with local storage, answered:
-  - `/`, `/index.html` and `/public.html`: 200 HTML (`no-cache`)
+## Verification (17 November 2026)
+
+- **Publish:** the API files are identical with and without the frontend. The frontend adds the 74 files of `frontend/dist` under `wwwroot`. `Publish-ParishLife.ps1` produced a 147-file zip with no backslash entries.
+- **Local run:** the published `ParishLife.Api.dll`, run in Development with local storage, answered:
+  - `/`, `/index.html` and `/public.html`: 200 (`no-cache`)
   - a hashed asset: 200 (`immutable`)
-  - `/api/auth/csrf`: 200 JSON (`no-store`)
+  - `/api/auth/csrf`: 200 (`no-store`)
   - `/health/live`: 200
+- **`FrontendHostingTests`:** pages are served with caching and the hashed policy, assets and `/api` carry no page policy, and without a web root no pages are served.
+- **Browser tests:** the end-to-end host now serves the pages through this same code (web root = `frontend/dist`). `npm run e2e` passes 9/9 with the policy enforced, with no blocked resource in any screen for any role, in English or Arabic.
+- **Not exercised:** Turnstile, which is not configured locally, and the deployed App Service.
 
-## Deploying it (needs the owner's explicit go-ahead)
+## Deploying (each deployment still needs the owner's go-ahead)
 
-`CLAUDE.md` and `AGENTS.md` currently say to deploy only the API publish output. With this option the frontend is part of that output, but it is still a deployment change and needs a decision.
-
-1. In `frontend/`, run `npm ci`, then `npm run build`.
-2. Publish with `-p:IncludeFrontend=true`.
-3. Zip with `tar.exe -a -c -f <zip> *` from inside the folder, not `Compress-Archive` (see `docs/continuation/AZURE-CONNECTION.md`).
-4. Deploy with `az webapp deploy ... --clean true`.
-5. Check:
+1. From a clean checkout of the commit to deploy, run `powershell -File tools/Publish-ParishLife.ps1` (it needs .NET SDK 10.0.4xx and Node).
+2. In the Azure session, after `az login`, run the command it prints: `az webapp deploy -g rg-parishlife -n app-parishlife --src-path <zip> --type zip --clean true`.
+3. Check:
    - `https://<host>/` shows the sign-in page.
    - `/health/ready` reports Healthy.
    - A sign-in completes in the browser.
+   - In Application Insights, no CSP or `/api` errors.
 
-## Not covered yet
+Deploying `fullstack-integration` also needs its new Cosmos index paths applied first (`tools/Initialize-Cosmos.ps1 -Apply`, see `docs/cosmos/containers.json`): the new queries filter on those paths, and the local store already refuses queries on unindexed paths to catch this.
 
-- **Content-Security-Policy:** there is none for the pages. The pages load Google Fonts, so a policy must allow `fonts.googleapis.com` and `fonts.gstatic.com`. Add one once the external origins are confirmed.
-- **Address routing:** the portal routes with `#/…` hashes, so no server-side fallback is needed. Any future path-based route would need `MapFallbackToFile`.
+## Notes
+
+- **Address routing:** the portal routes with `#/…` hashes, so no server-side fallback is needed. A future path-based route would need `MapFallbackToFile`.
+- **Custom domain:** if one is added, add it to `AllowedHosts` in `appsettings.json`.

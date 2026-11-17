@@ -9,7 +9,7 @@
 - Aspire is for local orchestration/observation. Do not provision or replace the existing Azure resources through AppHost startup.
 - Use the configured Cosmos DB, private Blob Storage, Key Vault key, and user-assigned managed identity. Keep developer credentials separate from hosted managed identity.
 - No initial business data or sample organizations. The only bootstrap accounts are `colinsleiman` and `georgestawk`, through the explicit private operator command with secure credentials and MFA. Never seed at API startup.
-- Preserve tests in source; publish only the API and its runtime dependencies. Test fixtures must remain isolated from production.
+- Preserve tests in source; publish only the API and its runtime dependencies, plus the built frontend in `wwwroot` (owner decision, 17 November 2026; see `docs/operations/frontend-hosting.md`). Test fixtures, including `ParishLife.EndToEnd`, must remain isolated from production.
 - Do not claim that local storage tests prove Cosmos transaction/query behavior, that metadata reads prove write/crypto access, or that the whole product is complete after the foundation.
 - Do not change Azure RBAC/networking, provision infrastructure, run live write tests, or deploy without the corresponding explicit task. Read-only Azure inspection is allowed.
 - Record feature completion and verification honestly; preserve the full requested scope and the current frontend work.
