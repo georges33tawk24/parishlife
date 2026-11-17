@@ -251,8 +251,13 @@ export const role = () => {
   if ((session.user?.roles || []).includes('treasurer') && !nav.some(item => item[0] === 'l' && item[1] === 'settings'))
     nav.push(L('settings'));
   nav.push(L('account'));
+  // Without a parish only the screens that need none remain; the bishop's oversight spans every parish of the archdiocese.
   if (!session.parishId)
-    nav = nav.filter(item => item[0] === 'l' && ['workspace', 'activity', 'inbox', 'account'].includes(item[1]));
+    nav = nav.filter(
+      item =>
+        item[0] === 'l' &&
+        ['workspace', 'activity', 'inbox', 'account', 'oversight', 'bishopmap', 'bishopeparchy'].includes(item[1])
+    );
   return { ...base, nav };
 };
 export const me = () =>

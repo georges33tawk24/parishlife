@@ -69,7 +69,10 @@ npm run format:check   # Prettier, two-space style (.prettierrc.json, .editorcon
 npm run check          # the API layer against an in-memory stand-in for the routes it uses
 npm run check:routes   # every route the frontend calls exists in ParishLife.Api (see below)
 npm run build          # writes frontend/dist
+npm run e2e            # signed-in browser tests against the real API (test-only host, every role, EN + AR)
 ```
+
+`npm run e2e` builds the pages, starts `ParishLife.EndToEnd` (the real API on `https://localhost:7311` with temporary storage and fixture accounts), runs Playwright with the installed Edge (`E2E_CHANNEL=chrome` for Chrome), then stops the host. It needs the .NET SDK from `global.json` and a trusted development certificate. See `docs/verification/end-to-end.md`.
 
 `npm run check:routes` keeps the stand-ins honest. It reruns the checks while recording each request, adds the literal paths passed to `api()`, `parishAPI()` and `allPages()` in `src/`, and matches them by method and path against the `[Route]`/`[Http*]` attributes in `ParishLife.Api/Controllers`. A request no route answers fails the check unless `scripts/route-gaps.json` lists it with the reason it is still open. When a route is added to the API, the check says which gap is closed so it can be removed from that list. It reads the C# source; it does not prove request or response shapes.
 

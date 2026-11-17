@@ -5,3 +5,4 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("ParishLife.IntegrationTests")]
 [assembly: InternalsVisibleTo("ParishLife.UnitTests")]
+[assembly: InternalsVisibleTo("ParishLife.EndToEnd")]

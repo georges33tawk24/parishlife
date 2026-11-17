@@ -10,8 +10,9 @@
     "check": "node scripts/run-checks.mjs",
     "check:routes": "node scripts/check-routes.mjs --strict",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{js,jsx}\" vite.config.js scripts",
-    "format:check": "prettier --check \"src/**/*.{js,jsx}\" vite.config.js scripts"
+    "format": "prettier --write \"src/**/*.{js,jsx}\" vite.config.js playwright.config.mjs scripts e2e",
+    "format:check": "prettier --check \"src/**/*.{js,jsx}\" vite.config.js playwright.config.mjs scripts e2e",
+    "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
     "gsap": "3.15.0",
@@ -20,6 +21,7 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@vitejs/plugin-react": "5.2.0",
     "prettier": "3.9.10",
     "vite": "7.3.7"

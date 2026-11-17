@@ -1,4 +1,13 @@
-# Handover: where the full-stack work stands (14 November 2026, night, Beirut)
+# Handover: where the full-stack work stands (17 November 2026, Beirut)
+
+**Update 17 November:** the signed-in end-to-end tests are done.
+- **Test host:** the new test-only `ParishLife.EndToEnd` runs the real API on `https://localhost` with temporary storage and fixture accounts for 8 roles.
+- **Browser tests:** in `frontend/e2e/`, Playwright drives the installed Edge. Each role signs in through the real form and opens every screen in English and Arabic.
+- **Result:** `npm run e2e` passes all 9 tests.
+- **Fixed along the way:** the public calendar (it asked for 127 days, the API allows 31), the bishop's menu, and the "My resources" banner.
+- **Hosting prepared, off by default:** `dotnet publish -p:IncludeFrontend=true` puts the frontend in `wwwroot`, and the API serves it from the same origin. Without the property the publish is API-only, as today.
+
+See `docs/verification/end-to-end.md` and `docs/operations/frontend-hosting.md`. The sections below are from 14 November, except "Next steps", which is current.
 
 Georges, this is the exact state, so you can continue without asking Colin. Everything below is pushed to your repository, `georges33tawk24/parishlife`. In your checkout that remote is probably `origin`; on Colin's machine it is `upstream`.
 
@@ -146,7 +155,7 @@ All 13 areas are merged. Every area doc lists what it could not finish and why; 
   - reservations from booking requests;
   - per-member answers when registering a household.
 - **Owner questions:** each `docs/frontend-modules/<module>.md`, plus `docs/continuation/OWNER-QUESTIONS.md`. The workers recorded these instead of guessing. Examples: which rites exist, member vs visitor eligibility, receipt numbering, electronic-signature validity (U05), and whether publishing needs a priest's review.
-- **Not proven yet:** everything ran on local storage. Cosmos behaviour is unverified, in particular the receipt counter and the new index paths. No screen has been used signed in against a running API.
+- **Not proven yet:** everything ran on local storage. Cosmos behaviour is unverified, in particular the receipt counter and the new index paths. Signed-in use is now covered locally by `npm run e2e` (17 November), not on Azure.
 
 ## How to continue
 
@@ -180,14 +189,15 @@ When you add a route that the frontend already calls, remove its entry from `fro
 
 ## Next steps
 
-1. **Signed-in end-to-end tests** (the last item of the 15) in a test-only host with accounts for every role (the "e2e" item of `REMAINING-WORK.md`). Not started. Locally, signing in needs the interactive `bootstrap-superadmins --local` / `verify-identity` commands.
+1. ~~Signed-in end-to-end tests~~ **Done (17 November).** Run them with `cd frontend && npm run e2e`; see `docs/verification/end-to-end.md`. Keep them passing when screens change, and add the expected menu entries for any new role.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
-3. **Hosting decision (owner):** the pages and the API must share one HTTPS host (`__Host-` cookies, no CORS). The recommendation is that the API on `app-parishlife` serves `frontend/dist`. That changes the "deploy only the API" rule, so Colin has to agree.
-4. **Azure (Colin's Azure session):**
+3. **Hosting decision (owner):** the code is ready and off by default (`-p:IncludeFrontend=true`, see `docs/operations/frontend-hosting.md`). Deploying it changes the "deploy only the API" rule, so Colin has to agree.
+4. **Sign-in rate limit (owner):** every `/api/auth` call, including `auth/me` on each page load, shares 20 calls a minute per client address. A parish office or hall on one connection can hit "Too many attempts". Options are in `docs/verification/end-to-end.md`.
+5. **Azure (Colin's Azure session):**
    - deploy `fullstack-integration` instead of `backend`;
    - apply the new index paths in `docs/cosmos/containers.json`;
    - commit or reconcile its own snapshot (the `azure-connection-main-folder` branch).
-5. Owner questions: each `docs/frontend-modules/<module>.md`, plus `docs/continuation/OWNER-QUESTIONS.md`.
+6. Owner questions: each `docs/frontend-modules/<module>.md`, plus `docs/continuation/OWNER-QUESTIONS.md`.
 
 ## Where the details are
 

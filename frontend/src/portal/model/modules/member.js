@@ -18,6 +18,7 @@ export const routes = [
   'mycalendar',
   'myattendance',
   'myfeed',
+  'myresources', // GET me/ministry-resources (member-data.js)
   'myformation',
   'mycommitments',
   'mynotes',

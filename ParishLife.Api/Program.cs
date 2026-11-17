@@ -1,5 +1,6 @@
 // Purpose: hosts the backend API with validated Azure services, account security, telemetry, and health checks.
-// Main flow: register services -> configure middleware -> map health/OpenAPI/controllers -> run; no seeds or provisioning.
+// Main flow: register services -> configure middleware (and the built frontend when published into wwwroot) -> map health/OpenAPI/controllers
+// -> run; no seeds or provisioning.
 
 using System.Security.Claims;
 using System.Threading.RateLimiting;
@@ -85,6 +86,7 @@ app.Use(async (context, next) =>
         context.Response.Headers.CacheControl = "no-store";
     await next();
 });
+app.UseParishLifeFrontend(); // only when the frontend was published into wwwroot; static pages do not count against the API rate limit
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<RecoverySessionMiddleware>();

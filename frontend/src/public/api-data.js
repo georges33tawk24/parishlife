@@ -149,18 +149,33 @@ export const feedURL = (parishId, scheme = '') => {
   return scheme ? url.replace(/^https?:/, scheme) : url;
 };
 
-const days = n => new Date(Date.now() + n * 86400000).toISOString();
 const dateOnly = n => {
   const d = new Date(Date.now() + n * 86400000);
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 };
+/* The API answers at most 31 days of public events per request, so a longer window is asked for in
+   31-day pieces at once and joined in order. A piece that fails is left out, not the whole calendar. */
+async function calendarWindows(base, from, to) {
+  const pieces = [],
+    now = Date.now(); // one instant, so each piece is exactly 31 days at most
+  const at = n => new Date(now + n * 86400000).toISOString();
+  for (let start = from; start < to; start += 31) pieces.push([start, Math.min(start + 31, to)]);
+  const pages = await Promise.all(
+    pieces.map(([a, b]) =>
+      json(`${base}/calendar?start=${encodeURIComponent(at(a))}&end=${encodeURIComponent(at(b))}&size=50`).catch(
+        () => ({ items: [] })
+      )
+    )
+  );
+  // an event crossing a boundary is in both pieces
+  const seen = new Map(pages.flatMap(page => page.items || []).map(e => [e.id, e]));
+  return { items: [...seen.values()] };
+}
 async function parts(p, withMinistries) {
   const base = '/api/public/parishes/' + encodeURIComponent(p.id);
   const [sections, calendar, ministries, liturgy, profile, news] = await Promise.all([
     json(base + '/website').catch(() => []),
-    json(`${base}/calendar?start=${encodeURIComponent(days(-7))}&end=${encodeURIComponent(days(120))}&size=50`).catch(
-      () => ({ items: [] })
-    ),
+    calendarWindows(base, -7, 120),
     withMinistries ? json(base + '/ministries?size=50').catch(() => ({ items: [] })) : { items: [] },
     // approved observances for the same window as the calendar; the parish's own exceptions are its own
     withMinistries ? liturgyPages(p.id, dateOnly(-7), dateOnly(120)) : null,

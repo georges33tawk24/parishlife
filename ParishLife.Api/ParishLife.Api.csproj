@@ -21,4 +21,12 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 
+  <!-- Opt-in single-host deployment: `dotnet publish -p:IncludeFrontend=true` copies the built frontend (run `npm run build` in frontend/
+       first) into the publish output's wwwroot, where UseParishLifeFrontend serves it. Without the property the publish stays API-only. -->
+  <Target Name="PublishFrontend" AfterTargets="Publish" Condition="'$(IncludeFrontend)' == 'true'">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/../frontend/dist/index.html')" Text="IncludeFrontend=true needs a built frontend: run npm run build in frontend/." />
+    <ItemGroup><FrontendFile Include="$(MSBuildProjectDirectory)/../frontend/dist/**/*" /></ItemGroup>
+    <Copy SourceFiles="@(FrontendFile)" DestinationFiles="@(FrontendFile->'$(PublishDir)wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
