@@ -45,17 +45,21 @@ No browser is downloaded. Results are written to `frontend/e2e-report/` (HTML) a
   - Browsers other than Edge and Chrome.
   - Whether the Arabic reads well to a native reader.
 
-## Result (17 November 2026)
+## Result (18 November 2026)
 
-All 9 tests pass in about 1.6 minutes:
+All 11 tests pass in about 1.7 minutes:
 - the public pages signed out
 - each of the 8 roles, signed in through the real form, opening every screen in its menu in English and then in Arabic
+- signing out from the user menu, once from the member menu (visitor) and once from the staff menu (priest). The test checks that `auth/logout` returns 204, the sign-in screen returns, `auth/me` is 401 and a reload stays signed out.
+
+A sign-in by an account that already used the current authenticator code waits for the next 30-second code (`signIn` in `e2e/support.mjs`).
 
 ## Findings
 
 - **Public calendar:** the public parish page asked for 127 days of events in one request, and the API allows at most 31 days. Fixed in `frontend/src/public/api-data.js`, which now asks in 31-day pieces taken from one instant and drops duplicates.
 - **Bishop's menu:** a bishop follows no parish, and with no parish selected the menu kept only Administration, My parish life, Inbox and My account. This hid the bishop's oversight, eparchy and map screens. Fixed in `frontend/src/portal/model/store.js`.
 - **"My resources":** the page is wired to `GET me/ministry-resources`, but it was missing from the member module's list of connected screens. So it showed the "not connected" banner over real data. Fixed in `frontend/src/portal/model/modules/member.js`.
+- **Sign-out (18 November):** "Sign out" in the user menu froze the tab and never sent `auth/logout`. The shell's handler shadowed the imported API function and called itself. Fixed in `frontend/src/portal/shell/Portal.jsx`; the sign-out tests fail with the bug put back.
 - **Runner (test tooling only):** a blocking Playwright launch stopped the runner from reading the host's output. Once the output pipe filled, the host stopped answering requests. The runner now launches Playwright asynchronously, and the host logs warnings only.
 - **Sign-in rate limit (decided 18 November: option A):** every `/api/auth` route shared the 20-a-minute limit per client address, including `GET /api/auth/me` and `/api/auth/csrf`, which the portal calls each time it loads. People on one shared connection (a parish office or hall) could see "Too many attempts".
   - **Change:** the owner chose to exempt `me` and `csrf` from that policy. They still count toward the general per-address limit.

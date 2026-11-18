@@ -11,7 +11,9 @@ import { closeOverlays, toast, openModal, openDrawer, Avatar, openPopover, close
 import { S, MOBILE_NAV, role, me, canSee, go, save, bus } from '../model/store.js';
 import { runAction } from './actions.jsx';
 import { hydrate, persist, saveFailed, loadFailures } from '../model/persist.js';
-import { api, loadSession, session, selectParish, signOut } from '../model/api.js';
+// endSession: the API sign-out. Named apart from the shell's own signOut handler below, which used to shadow it
+// and call itself forever, so auth/logout was never sent.
+import { api, loadSession, session, selectParish, signOut as endSession } from '../model/api.js';
 import { MODULES } from '../model/modules/index.js';
 import { M, loadMember } from '../model/member-data.js';
 import { applyTheme } from '../../lib/theme.js';
@@ -609,7 +611,7 @@ export function Portal() {
         'danger'
       );
     closeOverlays();
-    await signOut().catch(() => {});
+    await endSession().catch(() => {});
     loginScreen();
   };
   const switchLanguage = () => {

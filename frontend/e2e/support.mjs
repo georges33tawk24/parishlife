@@ -64,6 +64,10 @@ export async function settle(page, state, quiet = 400, max = 6000) {
   }
 }
 
+/* The 30-second authenticator step each account last signed in with: a second sign-in by the same
+   account (the sign-out test) waits for a fresh code instead of replaying one. */
+const usedStep = new Map();
+
 export async function signIn(page, state, account, secret, password) {
   state.where = 'sign-in ' + account.username;
   await page.locator('input[name="username"]').fill(account.username);
@@ -73,6 +77,8 @@ export async function signIn(page, state, account, secret, password) {
   const shell = page.locator('nav.rail-nav');
   await code.or(shell).first().waitFor({ timeout: 30000 });
   if (await code.isVisible()) {
+    while (usedStep.get(account.username) === Math.floor(Date.now() / 30000)) await page.waitForTimeout(1000);
+    usedStep.set(account.username, Math.floor(Date.now() / 30000));
     await code.fill(totp(secret));
     await page.locator('button.auth-submit').click();
   }

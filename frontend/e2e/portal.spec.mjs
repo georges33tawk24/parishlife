@@ -1,6 +1,7 @@
 /* Purpose: the signed-in end-to-end tests. Against the real API (test-only host, isolated storage), each
    fixture role signs in through the real sign-in screen and opens every screen its menu offers, first in
    English and then in Arabic (right to left); the public pages are opened signed out.
+   Then the visitor and the priest sign out from the user menu, and the session must be gone.
    Main checks: no page errors, no 5xx or 400 API responses, no "not connected" screen, the expected
    menu entries for each role, and dir="rtl" in Arabic. 403/404 answers are listed, not failed: the API
    answers 404 for records a role may not see. */
@@ -87,6 +88,34 @@ for (const role of Object.keys(EXPECTED)) {
     }
 
     await info.attach('api-403-404.txt', { body: state.notes.join('\n') || 'none', contentType: 'text/plain' });
+    expect(state.problems, state.problems.join('\n')).toEqual([]);
+  });
+}
+
+/* Signing out from the user menu ends the session on the API. Both menus are covered: the member menu
+   (visitor) and the staff menu (priest). A sign-out that never sent auth/logout once froze the tab. */
+for (const [role, n] of [
+  ['visitor', 30],
+  ['priest', 31]
+]) {
+  test(`${role}: signs out from the user menu and the session is gone`, async ({ page }) => {
+    await client(page, n);
+    const state = watch(page);
+    await page.goto(M.baseUrl + '/index.html');
+    await signIn(page, state, M.accounts[role], M.totpSecret, M.password);
+
+    state.where = `${role} sign-out`;
+    await page.locator('#userbtn').click();
+    const logout = page.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/logout', { timeout: 15000 });
+    await page.locator('[data-u="signout"]').click();
+    expect((await logout).status()).toBe(204);
+    await expect(page.locator('input[name="username"]')).toBeVisible();
+
+    // The cookie no longer signs anything in, even after a reload.
+    expect(await page.evaluate(() => fetch('/api/auth/me').then(r => r.status))).toBe(401);
+    await page.reload();
+    await expect(page.locator('input[name="username"]')).toBeVisible();
+    await expect(page.locator('nav.rail-nav')).toHaveCount(0);
     expect(state.problems, state.problems.join('\n')).toEqual([]);
   });
 }

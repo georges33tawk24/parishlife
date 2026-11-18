@@ -62,6 +62,15 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
   - The existing Key Vault-wrapped key ring was reused.
   - Owner browser sign-in (password and authenticator) at 15:08 UTC. Application Insights afterwards showed no exceptions, failed dependencies or error traces. The only 404s were `api/public/homepage` and `api/public/app/manifest`: nothing is published yet, and the pages fall back as designed.
   - Afterwards the script was fixed to work without `-OutputRoot` under Windows PowerShell 5.1.
+- **18 November 2026, `094f9d5`** (Azure session, owner's go-ahead):
+  - Packaged with `Publish-ParishLife.ps1` without `-OutputRoot`: 145 files, no backslash entries. Only `ParishLife.Api.dll`/`.pdb` differ from the `a156ae3` package.
+  - Cosmos index matched the manifest, so nothing was applied.
+  - Deployed 15:52–15:54 UTC; the app started at 15:53:51.
+  - `/health/ready` Healthy. Pages carry the policy, and hashed assets are `immutable`. `/api` unchanged.
+  - The existing key ring was reused (unwrapped with key version `426eb917…`, no new key).
+  - **Sign-in limit (option A) confirmed live:** 30 rapid `auth/csrf` calls returned 200 and 30 rapid `auth/me` calls returned 401, with no 429s. There were no 429s at all after the deploy.
+  - Owner visit at 15:56 UTC: `auth/me`, `me/parishes` and `me/capacities` returned 200. No exceptions besides the start-up cancel, no failed dependencies, no error traces.
+  - **Known issue found:** "Sign out" in the portal's user menu froze the tab and never sent `auth/logout`. In `Portal.jsx` the shell's own `signOut` handler shadowed the imported API `signOut` and called itself forever. The same bug was in `a156ae3`. Fixed in the next commit, which adds browser tests that sign out and check the session is gone.
 
 ## Notes
 
