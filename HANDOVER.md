@@ -196,7 +196,7 @@ When you add a route that the frontend already calls, remove its entry from `fro
 1. ~~Signed-in end-to-end tests~~ **Done (17 November).** Run them with `cd frontend && npm run e2e`; see `docs/verification/end-to-end.md`. Keep them passing when screens change, and add the expected menu entries for any new role.
 2. Update `docs/features/coverage.json`, `docs/features/implementation-status.md` and `docs/continuation/STATUS.md`.
 3. ~~Hosting decision~~ **Decided: the API serves the frontend.** It's ready to deploy with `tools/Publish-ParishLife.ps1`; see `docs/operations/frontend-hosting.md`.
-4. **Sign-in rate limit (owner):** every `/api/auth` call, including `auth/me` on each page load, shares 20 calls a minute per client address. A parish office or hall on one connection can hit "Too many attempts". Options are in `docs/verification/end-to-end.md`.
+4. ~~Sign-in rate limit~~ **Decided (option A, 18 November):** `auth/me` and `auth/csrf` no longer use the 20-a-minute sign-in budget; sign-in itself still does. The live site runs `a156ae3` (deployed 18 November, healthy; see `docs/operations/frontend-hosting.md`). The newer commits on this branch still need to be built and deployed by the Azure session.
 5. **Azure (Colin's Azure session):**
    - deploy `fullstack-integration` instead of `backend`;
    - apply the new index paths in `docs/cosmos/containers.json`;

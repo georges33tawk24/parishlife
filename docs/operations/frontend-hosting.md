@@ -50,7 +50,18 @@ The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` a
    - A sign-in completes in the browser.
    - In Application Insights, no CSP or `/api` errors.
 
-Deploying `fullstack-integration` also needs its new Cosmos index paths applied first (`tools/Initialize-Cosmos.ps1 -Apply`, see `docs/cosmos/containers.json`): the new queries filter on those paths, and the local store already refuses queries on unindexed paths to catch this.
+Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` (without `-Apply`) and apply only if it plans a change. The queries filter on the paths in `docs/cosmos/containers.json`, and the local store refuses queries on unindexed paths to catch a missing one.
+
+## Deployment log
+
+- **18 November 2026, `a156ae3`** (Azure session, owner's go-ahead):
+  - Packaged with `Publish-ParishLife.ps1 -OutputRoot …`: 145 files, no backslash entries.
+  - Deployed to `app-parishlife` at 14:54 UTC.
+  - Cosmos index already matched the manifest, so nothing was applied.
+  - `/health/ready` Healthy. `/` and `/public.html` carry the policy, and hashed assets are `immutable`. `/api` unchanged.
+  - The existing Key Vault-wrapped key ring was reused.
+  - Owner browser sign-in (password and authenticator) at 15:08 UTC. Application Insights afterwards showed no exceptions, failed dependencies or error traces. The only 404s were `api/public/homepage` and `api/public/app/manifest`: nothing is published yet, and the pages fall back as designed.
+  - Afterwards the script was fixed to work without `-OutputRoot` under Windows PowerShell 5.1.
 
 ## Notes
 

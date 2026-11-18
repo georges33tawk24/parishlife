@@ -57,9 +57,7 @@ All 9 tests pass in about 1.6 minutes:
 - **Bishop's menu:** a bishop follows no parish, and with no parish selected the menu kept only Administration, My parish life, Inbox and My account. This hid the bishop's oversight, eparchy and map screens. Fixed in `frontend/src/portal/model/store.js`.
 - **"My resources":** the page is wired to `GET me/ministry-resources`, but it was missing from the member module's list of connected screens. So it showed the "not connected" banner over real data. Fixed in `frontend/src/portal/model/modules/member.js`.
 - **Runner (test tooling only):** a blocking Playwright launch stopped the runner from reading the host's output. Once the output pipe filled, the host stopped answering requests. The runner now launches Playwright asynchronously, and the host logs warnings only.
-- **Sign-in rate limit (owner decision):** every `/api/auth` route shares the 20-a-minute limit per client address, including `GET /api/auth/me` and `/api/auth/csrf`, which the portal calls each time it loads. People signing in from one shared connection (a parish office or hall) share that budget and can see "Too many attempts". Options:
-  - Exempt `me` and `csrf` from the sign-in policy.
-  - Partition by account once signed in.
-  - Raise the limit.
-
-  The values are a security setting, so they are not changed here.
+- **Sign-in rate limit (decided 18 November: option A):** every `/api/auth` route shared the 20-a-minute limit per client address, including `GET /api/auth/me` and `/api/auth/csrf`, which the portal calls each time it loads. People on one shared connection (a parish office or hall) could see "Too many attempts".
+  - **Change:** the owner chose to exempt `me` and `csrf` from that policy. They still count toward the general per-address limit.
+  - **Unchanged:** register, login, login/mfa, logout, sessions and password keep the 20-a-minute limit (`AccountsController`).
+  - **Test:** `AuthenticationRateLimitTests` checks both sides.

@@ -14,7 +14,8 @@ Without -IncludeFrontend:$false the package contains the built frontend; with it
 [CmdletBinding()]
 param(
     [bool]$IncludeFrontend = $true,
-    [string]$OutputRoot = (Join-Path $PSScriptRoot '../artifacts')
+    # Defaults to <repository>/artifacts, computed below: Windows PowerShell 5.1 leaves $PSScriptRoot empty inside param() defaults.
+    [string]$OutputRoot = ''
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +31,7 @@ function Invoke-Checked([string]$File, [string[]]$Arguments, [string]$WorkingDir
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if (-not $OutputRoot) { $OutputRoot = Join-Path $repo 'artifacts' }
 $commit = (& git -C $repo rev-parse --short HEAD).Trim()
 $dirty = & git -C $repo status --porcelain
 if ($dirty) { Write-Warning 'The working tree has uncommitted changes; the package will not match a commit exactly.' }
