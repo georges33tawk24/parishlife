@@ -1,8 +1,10 @@
 /* Purpose: shared helpers for the signed-in end-to-end tests.
    Main functions: manifest (the fixture accounts the test-only host wrote), totp (the current authenticator
    code for a Base32 key), watch (collects page errors, failing API calls and "not connected" screens),
-   settle (waits until no request is in flight), signIn (password, then the authenticator code when asked). */
+   settle (waits until no request is in flight), turnstileToken (waits for the bot check), signIn (the check
+   when Turnstile is on, the password, then the authenticator code when asked). */
 import { createHmac } from 'node:crypto';
+import { expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
 export const NOT_CONNECTED = "isn't connected to the new backend yet";
@@ -68,10 +70,18 @@ export async function settle(page, state, quiet = 400, max = 6000) {
    account (the sign-out test) waits for a fresh code instead of replaying one. */
 const usedStep = new Map();
 
-export async function signIn(page, state, account, secret, password) {
+/* With Turnstile on, the widget's token must be there before the form is sent, as for a person. */
+export async function turnstileToken(page) {
+  await expect(page.locator('[data-turnstile] input[name="cf-turnstile-response"]')).not.toHaveValue('', {
+    timeout: 30000
+  });
+}
+
+export async function signIn(page, state, account, secret, password, turnstile = false) {
   state.where = 'sign-in ' + account.username;
   await page.locator('input[name="username"]').fill(account.username);
   await page.locator('input[name="password"]').fill(password);
+  if (turnstile) await turnstileToken(page);
   await page.locator('button.auth-submit').click();
   const code = page.locator('input[name="code"]');
   const shell = page.locator('nav.rail-nav');

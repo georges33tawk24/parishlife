@@ -50,7 +50,35 @@ Providers `google` and `microsoft` exist only when `ExternalSignIn:<provider>:Cl
 
 ## Turnstile and capability (X13)
 
-`Turnstile:SiteKey` + `Turnstile:SecretKey` (secret via App Service/Key Vault reference) enable enforcement; otherwise behaviour is unchanged. Optional `Turnstile:ExpectedHostname`. Protected public endpoints: `register`, `login`, `login/passkey/options`, `contact-verification`, `external/{provider}/sign-in`. Clients send the widget token in `X-Turnstile-Token`; the API posts secret/token/remote IP to Cloudflare siteverify through the named `Turnstile` HttpClient (10 s timeout). Missing/failed token → 400 `turnstile_failed`; verifier unreachable → 503 `turnstile_unavailable` (fail closed). Secrets/tokens are never logged. Guest intake (Q08) is not covered by this card.
+`Turnstile:SiteKey` + `Turnstile:SecretKey` (secret via App Service/Key Vault reference) enable enforcement; otherwise behaviour is unchanged. Optional `Turnstile:ExpectedHostname`. Protected public endpoints: `register`, `login`, `login/passkey/options`, `contact-verification`, `external/{provider}/sign-in`. Clients send the widget token in `X-Turnstile-Token`; the API posts secret/token/remote IP to Cloudflare siteverify through the named `Turnstile` HttpClient (10 s timeout). Missing/failed token → 400 `turnstile_failed`; verifier unreachable → 503 `turnstile_unavailable` (fail closed). Secrets/tokens are never logged. Since 19 November 2026 the anonymous guest request form (`POST /api/public/parishes/{id}/requests`, Q08) is protected too: the public request page already sent the token, but the API did not check it. The later guest steps (tracking, messages, files) use the private tracking token and are not bot-checked.
+
+**Frontend:** the sign-in screen and the public request page show the widget only when `auth/capabilities` reports Turnstile on (`frontend/src/lib/turnstile.js`). A token works once, so the screen fetches a fresh check after every attempt, including after the password step. A press before the check has finished shows "Complete the check first." instead of sending a request the API would refuse. The page Content-Security-Policy allows `challenges.cloudflare.com` for the script, the frame and verification.
+
+**Production setup (`parish-life.org`), each step with the owner's go-ahead in the Azure session:**
+1. In Cloudflare (the account that holds `parish-life.org`), go to Turnstile and add a widget:
+   - name "ParishLife";
+   - mode "Managed";
+   - hostnames `parish-life.org` and `app-parishlife-gxcjhmgqagd7hhg0.francecentral-01.azurewebsites.net`, so sign-in also works on the old address.
+
+   Note the site key (public) and the secret key.
+2. Store the secret key only in Key Vault `keyvault-parishlife`, as secret `turnstile-secret-key`: never in Git, chat or `appsettings.json`.
+3. Let the app read it: grant the user-assigned identity `id-parishlife` "Key Vault Secrets User" on that secret (or the vault). This is an RBAC change. Then set the App Service `keyVaultReferenceIdentity` to that identity.
+4. App settings:
+   - `Turnstile__SiteKey` = the site key;
+   - `Turnstile__SecretKey` = `@Microsoft.KeyVault(SecretUri=https://keyvault-parishlife.vault.azure.net/secrets/turnstile-secret-key/)`.
+
+   Leave `Turnstile__ExpectedHostname` empty while both hostnames are allowed. The widget's hostname list already limits where tokens can be made. Use `-o none` so values are not echoed.
+5. Check:
+   - `GET /api/auth/capabilities` shows `turnstile.enabled: true` with the site key, and the Key Vault reference shows as resolved in the portal;
+   - the sign-in page on `parish-life.org` shows the check, and sign-in with password and authenticator works;
+   - a `POST /api/auth/login` without `X-Turnstile-Token` returns 400 `turnstile_failed`;
+   - Application Insights shows no `turnstile_unavailable` responses.
+6. **Rollback:** remove the two `Turnstile__*` settings. Enforcement stops after the restart, and nothing else changes.
+
+**Tests:**
+- `AuthenticationCapabilityTests` uses a fake verifier: tokens refused on every protected endpoint (including the guest form), the secret posted only to the verifier, fail-closed outage.
+- The browser tests (`npm run e2e`) run with Cloudflare's published test keys: the site key `1x00000000000000000000AA` always passes, and its secret is accepted by the real siteverify. Every sign-in goes through the real widget and the real Cloudflare check under the page policy.
+- That test secret accepts any token, so forged-token refusal is proven by the backend test, not the browser test. `E2E_TURNSTILE=0` runs the browser tests without Turnstile.
 
 `GET /api/auth/capabilities` (anonymous, no-store) returns `AuthenticationCapabilitiesDto`: PasswordSignIn, Registration, Passkeys, ExternalProviders[{Provider, Available}], Turnstile {Enabled, SiteKey (only when enabled), Header}, ContactVerificationDelivery, ManualIdentityReview. It never returns secrets.
 

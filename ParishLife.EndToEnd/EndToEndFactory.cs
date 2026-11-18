@@ -1,7 +1,8 @@
 // Purpose: hosts the actual API on Kestrel (HTTPS, development certificate) against an isolated temporary storage directory, with the built
 // frontend as its web root, so the API's own production hosting (UseParishLifeFrontend: same origin, caching, Content-Security-Policy)
 // serves the pages the browser tests open. Test-only; never deployed.
-// Main functions: ConfigureWebHost applies final test configuration, the web root and the per-test client address; DataDirectory names the
+// Main functions: ConfigureWebHost applies final test configuration, the web root, the per-test client address and, when asked, Cloudflare's
+// published Turnstile test keys (TestSiteKey/TestSecretKey: always pass, verified by Cloudflare's real siteverify); DataDirectory names the
 // storage path.
 
 using Microsoft.AspNetCore.Hosting;
@@ -13,8 +14,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ParishLife.EndToEnd;
 
-public class EndToEndFactory(string dataDirectory, string distDirectory, string apiDirectory) : WebApplicationFactory<Program>
+public class EndToEndFactory(string dataDirectory, string distDirectory, string apiDirectory, bool turnstile = false) : WebApplicationFactory<Program>
 {
+    // Cloudflare's documented dummy keys for testing: the widget always passes and siteverify always accepts its token. Not secrets.
+    public const string TestSiteKey = "1x00000000000000000000AA";
+    public const string TestSecretKey = "1x0000000000000000000000000000000AA";
+
     public string DataDirectory { get; } = dataDirectory;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -30,7 +35,9 @@ public class EndToEndFactory(string dataDirectory, string distDirectory, string 
             ["BackgroundJobs:Enabled"] = "false",
             ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = "",
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "",
-            ["Logging:LogLevel:Default"] = "Warning"
+            ["Logging:LogLevel:Default"] = "Warning",
+            ["Turnstile:SiteKey"] = turnstile ? TestSiteKey : null,
+            ["Turnstile:SecretKey"] = turnstile ? TestSecretKey : null
         }));
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter>(new ClientAddressFilter()));
         // Each role acts as its own client (ClientAddressFilter), so the sign-in limit (20 /api/auth calls a minute) stays as in production.

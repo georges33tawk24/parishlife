@@ -38,6 +38,7 @@ No browser is downloaded. Results are written to `frontend/e2e-report/` (HTML) a
 ## Differences from production
 
 - **Rate limits:** each test sends `X-E2E-Client`, and the test host turns it into the client address (`ClientAddressFilter`), so each role is limited like a separate device. The sign-in limit (20 `/api/auth` calls a minute per address) stays as in production. The general limit (200 API calls a minute per address) is lifted, because a crawl opens screens far faster than a person.
+- **Turnstile:** on by default, with Cloudflare's published test keys (`--turnstile-test-keys` on the host; `E2E_TURNSTILE=0` turns it off). The sign-in helper waits for the widget's token before sending the form, and the public-pages test checks the widget gives one under the page policy. This needs internet access to `challenges.cloudflare.com`, as the pages already need Google Fonts. The test secret accepts any token; forged-token refusal is covered by `AuthenticationCapabilityTests`.
 - **Hosting:** none. The host sets the API's web root to `frontend/dist`, so the pages are served by the production code (`UseParishLifeFrontend`, with caching and the Content-Security-Policy), as a deployed `-p:IncludeFrontend=true` package serves them from `wwwroot`. See `docs/operations/frontend-hosting.md`. The public-pages test asserts the policy and cache headers, and a blocked resource on any screen fails the run.
 - **Not proven here:**
   - Cosmos DB, Blob Storage and Key Vault: storage is local.

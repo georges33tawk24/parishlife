@@ -65,6 +65,12 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - **Unverified:** plain `http://www` from the owner's network (it looks intercepted locally).
   - Keep the bare domain DNS only: certificate renewal and per-visitor rate limits depend on it.
   - Details: "Custom domain" in `docs/operations/frontend-hosting.md`.
+- **Turnstile ready to switch on (19 November):**
+  - The API already enforced Turnstile on sign-in, sign-up, email codes, passkeys and external sign-in once both keys are set. Now the anonymous guest request form is protected too: the public request page sent the token, but the API ignored it.
+  - **Sign-in screen:** a fresh check after every attempt (also after the password step), and "Complete the check first." instead of a refused request.
+  - **Browser tests:** they run with Cloudflare's published test keys through the real widget and siteverify. 11/11 pass; 536 backend tests pass.
+  - **Setup steps** (Cloudflare widget, Key Vault secret, identity access, two app settings, checks, rollback): `docs/operations/account-sign-in-methods.md`.
+  - **Not live yet:** needs the Azure session, an RBAC grant for the Key Vault reference, and the owner's go-ahead.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.

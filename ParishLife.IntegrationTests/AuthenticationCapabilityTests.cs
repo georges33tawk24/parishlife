@@ -1,11 +1,12 @@
 // Purpose: verifies X13 optional Turnstile enforcement and the honest public authentication capability endpoint over real HTTP.
-// Main tests: default deployment reports nothing configured and enforces nothing; configured Turnstile requires a server-verified
+// Main tests: default deployment reports nothing configured and enforces nothing; configured Turnstile (sign-in, sign-up, codes, passkeys and the public request form) requires a server-verified
 // token on public auth endpoints, exposes only the site key, posts the secret only to the verifier, and fails closed when unreachable.
 
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Accounts;
+using ParishLife.Api.DTOs.Requests;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.IntegrationTests.Support;
 using Xunit;
@@ -69,6 +70,12 @@ public class AuthenticationCapabilityTests
         { OperationId = Guid.NewGuid(), Email = "bot@fixture.example", Password = Password, DisplayName = "Bot" })));
         Assert.Equal("turnstile_failed", await Title(await client.PostAsJsonAsync("/api/auth/contact-verification", new { email = "bot@fixture.example" })));
         Assert.Equal("turnstile_failed", await Title(await client.PostAsync("/api/auth/login/passkey/options", null)));
+        // The public request form anyone can send without an account is bot-checked too.
+        Assert.Equal("turnstile_failed", await Title(await client.PostAsJsonAsync($"/api/public/parishes/{Guid.NewGuid()}/requests", new GuestRequestDto
+        {
+            OperationId = Guid.NewGuid(), Kind = "Blessing", Summary = "Bot request", Details = new() { ["address"] = "Isolated street" },
+            RequesterName = "Bot", RequesterContact = "bot@fixture.example", SubjectDescription = "Bot"
+        })));
         client.DefaultRequestHeaders.Remove(TurnstileVerifier.Header);
         client.DefaultRequestHeaders.Add(TurnstileVerifier.Header, "good-token");
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/login", login)).StatusCode);

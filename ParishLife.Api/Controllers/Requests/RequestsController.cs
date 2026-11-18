@@ -1,9 +1,10 @@
 // Purpose: exposes request cases for applicants and the parish office, plus anonymous guest intake/tracking with a private token header.
 // Main functions: Submit, Mine, Queue, Get, Act, SetChecklist, Messages, PostMessage, History, Handover, Claim, Associate, RotateTracking, GuestSubmit,
-// GuestGet, GuestAct, GuestMessages, GuestPostMessage and NotificationOutcome delegate rules to RequestService.
+// GuestGet, GuestAct, GuestMessages, GuestPostMessage and NotificationOutcome delegate rules to RequestService. GuestSubmit is Turnstile-protected when Turnstile is configured.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ParishLife.Api.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using ParishLife.Api.DTOs.Requests;
 using ParishLife.Api.DTOs.Communications;
@@ -79,7 +80,7 @@ public class GuestRequestsController(RequestService service) : ControllerBase
 {
     internal const string TokenHeader = "X-ParishLife-Tracking";
 
-    [HttpPost]
+    [HttpPost, TurnstileProtected] // the public request form anyone can send: bot-checked when Turnstile is configured
     public async Task<ActionResult<GuestRequestReceiptDto>> GuestSubmit(Guid parishId, GuestRequestDto request, CancellationToken ct)
         => Ok(await service.GuestSubmitAsync(Guard.Id(parishId), request, ct));
 

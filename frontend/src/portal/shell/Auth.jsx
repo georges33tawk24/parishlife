@@ -230,11 +230,17 @@ export function Auth({ enter, error = '', onLanguage }) {
       </span>
     </label>
   );
+  /* When Turnstile is on, its check must have finished before a bot-checked request is sent: the API
+     refuses one without a token, and each token works once. */
+  const pending = () => !!check.current && !check.current.token;
+  const notChecked = () => t('Complete the check first.', 'أكمل التحقّق أولاً.');
   const signInWithKey = async () => {
+    if (pending()) return setAlert(notChecked());
     setAlert('');
     setBusy({ ...busy, passkey: true });
     try {
       const result = await signInWithPasskey(check.current?.token);
+      check.current?.reset(); // spent, whatever comes next
       if (result.twoFactor) {
         setChallenge(result.twoFactor);
         return setBusy({ ...busy, passkey: false });
@@ -250,6 +256,7 @@ export function Auth({ enter, error = '', onLanguage }) {
   /* Google or Microsoft: the API answers a form post with a redirect to the provider, which a script cannot
      follow, so the page posts a form (with the anti-forgery token as a form field) and the browser leaves. */
   const signInWithProvider = async provider => {
+    if (pending()) return setAlert(notChecked());
     setAlert('');
     try {
       const { token } = await api('auth/csrf');
@@ -276,6 +283,7 @@ export function Auth({ enter, error = '', onLanguage }) {
   const sendCode = async () => {
     const email = String(new FormData(form.current).get('email') || '').trim();
     if (!email) return setAlert(t('Enter the email address of your account.', 'أدخل البريد الإلكتروني لحسابك.'));
+    if (pending()) return setAlert(notChecked());
     setBusy({ ...busy, code: true });
     setAlert('');
     try {
@@ -311,6 +319,7 @@ export function Auth({ enter, error = '', onLanguage }) {
           throw new Error(t('Choose a password of at least 16 characters.', 'اختر كلمة مرور من ١٦ حرفاً على الأقل.'));
         if (q.password !== q.confirmPassword)
           throw new Error(t('The passwords do not match.', 'كلمتا المرور غير متطابقتين.'));
+        if (pending()) throw new Error(notChecked());
         await register({
           email: q.email.trim(),
           password: q.password,
@@ -350,7 +359,9 @@ export function Auth({ enter, error = '', onLanguage }) {
       }
       if (challenge) await completeTwoFactor(challenge, q.code);
       else {
+        if (pending()) throw new Error(notChecked());
         const result = await signIn(q.username, q.password, check.current?.token);
+        check.current?.reset(); // spent: "Use another account" after the code step needs a fresh check
         if (result.twoFactor) {
           setChallenge(result.twoFactor);
           return setBusy({ ...busy, submit: false });

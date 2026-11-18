@@ -6,7 +6,7 @@
    menu entries for each role, and dir="rtl" in Arabic. 403/404 answers are listed, not failed: the API
    answers 404 for records a role may not see. */
 import { test, expect } from '@playwright/test';
-import { manifest, NOT_CONNECTED, settle, signIn, watch } from './support.mjs';
+import { manifest, NOT_CONNECTED, settle, signIn, turnstileToken, watch } from './support.mjs';
 
 const M = manifest();
 
@@ -43,6 +43,8 @@ test('public pages load signed out', async ({ page }) => {
     await settle(page, state);
   }
   await expect(page.locator('input[name="username"]')).toBeVisible();
+  // With Turnstile on, the widget loads under the page policy and gives the sign-in form a token.
+  if (M.turnstile) await turnstileToken(page);
   expect(state.problems, state.problems.join('\n')).toEqual([]);
 });
 
@@ -58,7 +60,7 @@ for (const role of Object.keys(EXPECTED)) {
       }
     });
     await page.goto(M.baseUrl + '/index.html');
-    await signIn(page, state, account, M.totpSecret, M.password);
+    await signIn(page, state, account, M.totpSecret, M.password, M.turnstile);
 
     const hrefs = [
       ...new Set(await page.locator('nav.rail-nav a[href^="#/"]').evaluateAll(a => a.map(x => x.getAttribute('href'))))
@@ -102,7 +104,7 @@ for (const [role, n] of [
     await client(page, n);
     const state = watch(page);
     await page.goto(M.baseUrl + '/index.html');
-    await signIn(page, state, M.accounts[role], M.totpSecret, M.password);
+    await signIn(page, state, M.accounts[role], M.totpSecret, M.password, M.turnstile);
 
     state.where = `${role} sign-out`;
     await page.locator('#userbtn').click();

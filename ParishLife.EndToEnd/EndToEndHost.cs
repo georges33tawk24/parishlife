@@ -1,6 +1,6 @@
 // Purpose: the entry point of the test-only end-to-end host: starts the real API on https://localhost:<port> with isolated temporary
 // storage and the built frontend, prepares the fixture accounts, writes a manifest for the browser tests, then waits until stdin closes.
-// Main function: Main parses --port/--manifest/--dist, starts Kestrel, builds the fixture, prints "E2E READY", and deletes only its own
+// Main function: Main parses --port/--manifest/--dist/--turnstile-test-keys, starts Kestrel, builds the fixture, prints "E2E READY", and deletes only its own
 // temporary directory on exit.
 
 using System.Text.Json;
@@ -23,9 +23,10 @@ public static class EndToEndHost
             else if (args[i] == "--manifest") manifestPath = args[++i];
             else if (args[i] == "--dist") dist = args[++i];
         }
+        var turnstile = args.Contains("--turnstile-test-keys");
         if (manifestPath is null)
         {
-            Console.Error.WriteLine("Usage: ParishLife.EndToEnd --manifest <file> [--port 7311] [--dist frontend/dist]");
+            Console.Error.WriteLine("Usage: ParishLife.EndToEnd --manifest <file> [--port 7311] [--dist frontend/dist] [--turnstile-test-keys]");
             return 2;
         }
 
@@ -44,7 +45,7 @@ public static class EndToEndHost
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
         try
         {
-            await using var factory = new EndToEndFactory(dataDirectory, dist, Path.Combine(root.FullName, "ParishLife.Api"));
+            await using var factory = new EndToEndFactory(dataDirectory, dist, Path.Combine(root.FullName, "ParishLife.Api"), turnstile);
             factory.UseKestrel(options => options.ListenLocalhost(port, listen => listen.UseHttps()));
             factory.StartServer();
             if (factory.Services.GetRequiredService<StorageOptions>().LocalPath != dataDirectory)
@@ -55,6 +56,7 @@ public static class EndToEndHost
                 var manifest = await new EndToEndFixture(scope.ServiceProvider).BuildAsync(stop.Token);
                 manifest["baseUrl"] = $"https://localhost:{port}";
                 manifest["dataDirectory"] = dataDirectory;
+                manifest["turnstile"] = turnstile;
                 await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
             }
 

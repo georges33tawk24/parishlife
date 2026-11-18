@@ -3,7 +3,7 @@
    pages and fixture accounts for every role), runs Playwright, then stops the host, which deletes its
    temporary data.
    Main steps: build (skip with --no-build), start the host and wait for "E2E READY", run the tests with
-   E2E_MANIFEST set, close the host's stdin. Extra arguments go to Playwright (for example --grep priest). */
+   E2E_MANIFEST set, close the host's stdin. Turnstile runs with Cloudflare's test keys unless E2E_TURNSTILE=0. Extra arguments go to Playwright (for example --grep priest). */
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,7 +27,18 @@ const work = mkdtempSync(join(tmpdir(), 'parishlife-e2e-run-'));
 const manifest = join(work, 'manifest.json');
 const host = spawn(
   'dotnet',
-  ['run', '--project', join(repo, 'ParishLife.EndToEnd'), '--', '--manifest', manifest, '--port', port],
+  [
+    'run',
+    '--project',
+    join(repo, 'ParishLife.EndToEnd'),
+    '--',
+    '--manifest',
+    manifest,
+    '--port',
+    port,
+    // Cloudflare's Turnstile test keys: every sign-in goes through the real widget and siteverify (E2E_TURNSTILE=0 to skip)
+    ...(process.env.E2E_TURNSTILE === '0' ? [] : ['--turnstile-test-keys'])
+  ],
   { cwd: repo, stdio: ['pipe', 'pipe', 'inherit'] }
 );
 
