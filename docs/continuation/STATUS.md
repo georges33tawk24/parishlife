@@ -49,6 +49,14 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - **Cause:** the user menu's "Sign out" froze the tab and never sent `auth/logout`. The shell's `signOut` handler in `Portal.jsx` shadowed the imported API function and called itself. It was live in `a156ae3` and `094f9d5`.
   - **Fix:** the import is now `signOut as endSession`.
   - **New browser tests:** the visitor (member menu) and the priest (staff menu) sign out. The tests check that `auth/logout` returns 204, the sign-in screen returns, `auth/me` is 401 and a reload stays signed out. With the bug put back, both tests fail.
+- **Deployed `63aa347` (18 November, 16:20–16:22 UTC), by the Azure session at the owner's go-ahead:**
+  - Packaged with `Publish-ParishLife.ps1`: 145 files, no backslash entries. Only the rebuilt frontend chunks, the two pages and the commit-stamped `ParishLife.Api.dll`/`.pdb` differ from `094f9d5`; no backend source changed.
+  - Index unchanged.
+  - Healthy, with the policy and caching as before.
+  - The key ring was reused (key version `426eb917…`).
+  - **Sign-out works live:** `auth/logout` 204, then a reload stays signed out (`auth/me` 401), confirmed by the owner's browser visits at 16:23 and 20:26 UTC.
+  - Application Insights is clean: no 429s, exceptions, failed dependencies or error traces.
+  - Details: the deployment log in `docs/operations/frontend-hosting.md`.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.

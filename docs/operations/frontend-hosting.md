@@ -71,6 +71,19 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
   - **Sign-in limit (option A) confirmed live:** 30 rapid `auth/csrf` calls returned 200 and 30 rapid `auth/me` calls returned 401, with no 429s. There were no 429s at all after the deploy.
   - Owner visit at 15:56 UTC: `auth/me`, `me/parishes` and `me/capacities` returned 200. No exceptions besides the start-up cancel, no failed dependencies, no error traces.
   - **Known issue found:** "Sign out" in the portal's user menu froze the tab and never sent `auth/logout`. In `Portal.jsx` the shell's own `signOut` handler shadowed the imported API `signOut` and called itself forever. The same bug was in `a156ae3`. Fixed in the next commit, which adds browser tests that sign out and check the session is gone.
+- **18 November 2026, `63aa347`** (Azure session, owner's go-ahead):
+  - Packaged with `Publish-ParishLife.ps1` without `-OutputRoot`: 145 files, no backslash entries.
+  - Compared with the `094f9d5` package, 10 files differ, all explained:
+    - the three rebuilt chunks (`portal-*`, `api-data-*`, `public-*`) and `index.html`/`public.html`, which point to them. The old bundle had dropped the API sign-out function entirely because nothing called it; the new portal chunk imports it, and the other two chunks change only by the minifier's renamed short identifiers.
+    - `ParishLife.Api.dll`/`.pdb`: no backend source changed. The DLL embeds its build commit (`1.0.0+<commit>`), so a few hundred bytes differ at the same file size.
+  - Cosmos index matched the manifest, so nothing was applied.
+  - Deployed 16:20–16:22 UTC; the app started at 16:21:53.
+  - `/health/ready` Healthy. `/` and `/public.html` carry the policy, and the new `portal-w_ZLSzE2.js` is served `immutable`. `/api` unchanged.
+  - The existing key ring was reused (unwrapped with key version `426eb917…`, no new key).
+  - **Sign-out confirmed live:**
+    - 16:23 UTC: the owner signed out (`auth/logout` 204), then signed back in (`login` 202, `login/mfa` 200).
+    - 20:25–20:26 UTC re-test: sign-in, then a reload while signed in (`auth/me` 200), then sign-out (`auth/logout` 204), then a reload, which stayed signed out (`auth/me` 401).
+  - Application Insights after both visits: no 429s, no exceptions besides the start-up cancel, no failed dependencies, no error traces. The only other error-range response was App Service's start-up `robots933456.txt` probe (400).
 
 ## Notes
 
