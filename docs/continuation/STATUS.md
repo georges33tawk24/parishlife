@@ -26,9 +26,27 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - **Fixed:** the public calendar window (31-day pieces), the bishop's menu with no parish, and the "My resources" banner.
   - **Opt-in frontend hosting:** `-p:IncludeFrontend=true` plus `UseParishLifeFrontend`, off by default. The API-only publish is verified unchanged.
   - **Owner decision, hosting (17 November):** the API serves the frontend. `tools/Publish-ParishLife.ps1` builds the package and zip without deploying. The pages get caching and a hash-based Content-Security-Policy, and the e2e host uses this same production hosting path. Checks: 535 backend tests (57 unit / 478 integration, including `FrontendHostingTests`), e2e 9/9 with the policy enforced. Not deployed: the deploy and the new Cosmos index paths need the Azure session and an explicit go-ahead.
-  - **Owner decision still open:** the shared 20-a-minute `/api/auth` limit; see `docs/verification/end-to-end.md`.
+  - **Sign-in limit, decided (option A, 18 November):** `auth/csrf` and `auth/me` no longer use the 20-a-minute `authentication` budget, but still count toward the general per-address limit. All other sign-in, session and password actions keep it. `AuthenticationRateLimitTests` covers both sides.
+- **Deployed to Azure (18 November 2026), by the Azure session at the owner's go-ahead:**
+  - `a156ae3`, built with `tools/Publish-ParishLife.ps1` (145 files, no backslash entries), was deployed to `app-parishlife` at 14:54 UTC.
+  - `/health/ready` is Healthy.
+  - `/` and `/public.html` serve the portal with the Content-Security-Policy, hashed assets are `immutable`, and `/api` is unchanged.
+  - The existing Key Vault-wrapped key ring was reused.
+  - The Cosmos index already matched the `a156ae3` manifest (unchanged since `30f6132`), so nothing was applied.
+  - The owner signed in with password and authenticator in the browser at 15:08 UTC.
+  - Application Insights after that visit showed no exceptions, failed dependencies or error traces. The only 404s were `api/public/homepage` and `api/public/app/manifest`, which have nothing published yet; the pages fall back as designed.
+  - Found during the deploy: under Windows PowerShell 5.1 `$PSScriptRoot` is empty in the script's `param()` defaults, so `-OutputRoot` had to be passed. Fixed afterwards (default computed in the script body).
+- **Backend merged (18 November):** `upstream/backend` at `ae0a367`, the request-letter notification outcome read (X04 slice) from the backend attempt below. Its `RequestLetterTests` now run here on SDK 10.0.401.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.
+
+## Backend continuation attempt (13 November 2026; merged into `fullstack-integration` on 18 November)
+
+- Actual checkout remains `backend` tracking `upstream/backend` (`https://github.com/georges33tawk24/parishlife.git`), HEAD `b2aaf92` (`Record Cosmos/Storage firewalls closed back to zero IP exceptions`). No fetch, merge, commit or push was performed in this attempt.
+- The user's pre-existing unrelated working changes were present in `ParishLife.Api/Properties/launchSettings.json`, `ParishLife.AppHost/ParishLife.AppHost.csproj`, and `ParishLife.AppHost/packages.lock.json`; they were preserved untouched.
+- Implemented an X04 backend slice: `GET /api/parishes/{parishId}/letters/{letterId}/notification-outcome` uses the existing MFA staff/priest reader gate, validates the exact letter and owning request, and returns only the safe notification outcome projection. Added a regression for a verified-account release returning `Stored` and applicant denial. Updated the document-signature runbook and X04 `remaining` entry. Files: `ParishLife.Api/Controllers/Documents/RequestLettersController.cs`, `ParishLife.Api/Services/Documents/RequestLetterService.cs`, `ParishLife.IntegrationTests/RequestLetterTests.cs`, `docs/operations/document-signatures.md`, and `docs/features/coverage.json`.
+- Verification attempted: `dotnet test ParishLife.IntegrationTests/ParishLife.IntegrationTests.csproj -c Release --filter FullyQualifiedName~RequestLetterTests --no-restore` — did not start because `global.json` requires SDK `10.0.401`, absent here; installed SDKs are `8.0.403`, `9.0.300`, `10.0.102`, and `11.0.100`. Do not bypass the repository pin. `git diff --check` passed. Test/build status remains unverified.
+- Work remains uncommitted and unpublished. Next executable step: run the focused `RequestLetterTests` and then the full required build/test set under SDK 10.0.401; fix any failures, then continue with workflow transition notifications/return-for-information or broadcast notification integration. The external reviewed requirements archive referenced in `SOURCES.md` was not present at its indexed path on this machine; continue to distinguish runbook proposals from owner-approved policy.
 
 ## Repository and preserved work
 

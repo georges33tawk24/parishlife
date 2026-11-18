@@ -52,6 +52,10 @@ The proposed matrix suggested an office letter authority distinct from the pries
 - `POST /api/parishes/{p}/document-signatures/{code}/revoke` (`OperationId`, `Reason`) — current parish priest or jurisdiction bishop, MFA. Append-only; the reason stays internal. Revocation does not change the document's own status.
 - Withdrawal and revocation stop future reliance; copies already handed over or downloaded cannot be recalled, and responses say so.
 
+## Letter notification outcome
+
+- `GET /api/parishes/{p}/letters/{letterId}/notification-outcome` follows the same current MFA staff/priest reader gate as the letter list. It confirms only the exact letter's latest required in-app notice state (`NotTracked`, `NotRequired`, `Pending`, `Stored` or `Unconfirmed`); it does not expose work IDs, recipient accounts, counts or external delivery claims. Applicants and guest tracking links cannot read this operational outcome.
+
 ## Not delivered
 
-Approved arrangement/wording/seals (U05), PDF output and QR images, drawn signature images, one-use signing challenges/passkeys and contact-challenge downloads (U10), delegated or substitute signers, bishop co-signature as a separate authorization, notification-outcome reads for letters, a disclosure-incident worklist after wrongful release, letter templates/letterhead, legacy issued documents, and the frontend. Local tests only: no live Cosmos, Key Vault key-ring or managed-identity acceptance, and the catalog pointer partition is an unmeasured single logical partition.
+Approved arrangement/wording/seals (U05), PDF output and QR images, drawn signature images, one-use signing challenges/passkeys and contact-challenge downloads (U10), delegated or substitute signers, bishop co-signature as a separate authorization, a disclosure-incident worklist after wrongful release, letter templates/letterhead, legacy issued documents, and the frontend. Local tests only: no live Cosmos, Key Vault key-ring or managed-identity acceptance, and the catalog pointer partition is an unmeasured single logical partition.

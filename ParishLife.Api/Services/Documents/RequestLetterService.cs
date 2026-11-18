@@ -2,10 +2,11 @@
 // authority, never the secretary) electronically authorizes the exact text; a releaser re-enters the request reference, addressee and content hash, which the server
 // compares before release to a person checked in person or to the request's verified account; withdrawal and replacement keep history.
 // Tracking links only list released letters: the text is never served to a bearer token.
-// Main functions: CreateAsync, ReviseAsync, PreviewAsync, SignAsync, ReleaseAsync, WithdrawAsync, ListAsync (staff), MineAsync (applicant account)
+// Main functions: CreateAsync, ReviseAsync, PreviewAsync, SignAsync, ReleaseAsync, WithdrawAsync, ListAsync (staff), NotificationOutcomeAsync (staff), MineAsync (applicant account)
 // and GuestAsync (tracking token).
 
 using ParishLife.Api.DTOs.Documents;
+using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -20,7 +21,7 @@ using ParishLife.Api.Services.Requests;
 namespace ParishLife.Api.Services.Documents;
 
 public class RequestLetterService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, IClergyAuthority clergy, ICurrentActor actor, MfaAccountAccess proof, MinistryAccess own,
-    RequestService requests, DocumentSignatureService signatures, NotificationService notifications, TimeProvider clock)
+    RequestService requests, DocumentSignatureService signatures, NotificationService notifications, NotificationOutcomeReader outcomes, TimeProvider clock)
 {
     private const string Collection = "Collect the signed letter at the parish office with identification, or ask the office to link a verified account. A tracking link does not download letters.";
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -190,6 +191,15 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
         await ReaderAsync(parish, ct);
         await RequestAsync(parish, requestId, ct);
         return (await LettersAsync(parish, requestId, ct)).Select(r => new Versioned<LetterDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
+    }
+
+    // Notification state is available only to the same authorized staff audience that can read the letter case.
+    public async Task<NotificationOutcomeDto> NotificationOutcomeAsync(string parish, string letterId, CancellationToken ct)
+    {
+        await ReaderAsync(parish, ct);
+        var item = (await ReadAsync(parish, letterId, ct)).Value;
+        await RequestAsync(parish, item.RequestId, ct);
+        return await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
     }
 
     // The request's own applicant account sees released letters; the text only when it was released to that account.
