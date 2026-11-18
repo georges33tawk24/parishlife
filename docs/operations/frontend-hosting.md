@@ -85,7 +85,49 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
     - 20:25–20:26 UTC re-test: sign-in, then a reload while signed in (`auth/me` 200), then sign-out (`auth/logout` 204), then a reload, which stayed signed out (`auth/me` 401).
   - Application Insights after both visits: no 429s, no exceptions besides the start-up cancel, no failed dependencies, no error traces. The only other error-range response was App Service's start-up `robots933456.txt` probe (400).
 
+## Custom domain: `parish-life.org` (18 November 2026)
+
+Set up by the Azure session at the owner's go-ahead for each change; no code change or deploy. The domain is registered in Georges's Cloudflare account. The Cloudflare changes were made in the dashboard through the browser pane, signed in by the owner, so no API token was used.
+
+**Hostnames:**
+- Bound in App Service: **`parish-life.org`** only.
+- **`www.parish-life.org`** never reaches the app. Cloudflare redirects it, so it is not bound and is not in `AllowedHosts`.
+- `AllowedHosts` (App Service setting, overrides `appsettings.json`): `parish-life.org;app-parishlife-gxcjhmgqagd7hhg0.francecentral-01.azurewebsites.net;localhost;127.0.0.1`. `appsettings.json` has the same value.
+
+**Cloudflare DNS (zone `parish-life.org`):**
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| A | `@` | `20.43.43.43` (App Service inbound IP) | DNS only |
+| TXT | `asuid` | App Service `customDomainVerificationId` | DNS only |
+| CNAME | `www` | `parish-life.org` | Proxied |
+
+- The bare domain must stay **DNS only**, for two reasons:
+  - The Azure-managed certificate is issued and renewed only while the name points straight at Azure.
+  - With the proxy on, every visitor would reach the API from Cloudflare's addresses and share the per-address rate limits. Turning the proxy on needs a forwarded-headers code change first.
+- **Redirect rule** "Redirect from WWW to root": request URL `http*://www.parish-life.org/*` → `https://parish-life.org/${2}`, 301, query string preserved. Cloudflare's template only matched `https://www.*`. Cloudflare rejects a pattern starting with `*`, so `http*://` is used. Its "may not be proxying traffic for http" warning on deploy is a false positive, because `www` is proxied.
+- Not used: "Always Online" (could serve stale pages of a signed-in app), and the proxy on the bare domain. App Service's `httpsOnly` already redirects `http://parish-life.org` to https.
+
+**Azure:**
+- `az webapp config hostname add` at 21:34 UTC.
+- Free App Service managed certificate: GeoTrust TLS RSA CA G1, valid 18 November 2026 – 19 May 2027, auto-renewed by Azure. Bound with SNI at 21:37:51 UTC.
+- `AllowedHosts` setting at 21:37:13 UTC; the app restarted at 21:38:44.
+
+**Checks:**
+- `https://parish-life.org/` and `/public.html`: 200, Content-Security-Policy present. The certificate is trusted by Windows.
+- `/health/ready` Healthy, and `/api/auth/csrf` 200 on the new name.
+- `http://parish-life.org/` → 301 `https://parish-life.org/`.
+- `https://www.parish-life.org/public.html?lang=ar` → 301 `https://parish-life.org/public.html?lang=ar`.
+- The old azurewebsites address still works.
+- Owner browser visit on `parish-life.org` at 21:43–21:44 UTC: `login` 202, `login/mfa` 200, `auth/me` 200, `logout` 204.
+- Application Insights: 0 429s, no failed dependencies besides Key Vault's normal 401 challenge, only the start-up cancel exception.
+  - The 400s for `GET /` on `parish-life.org` all fall between adding the hostname (21:34) and the restart with the new `AllowedHosts` (21:38:44). They were Azure's validation probes against the old host list. None occurred after the restart.
+  - The only 404s were `api/public/homepage` and `api/public/app/manifest` (nothing published).
+- **Not verified:** plain `http://www.parish-life.org` returned a blank page with a `Refresh` header and no Cloudflare headers, even when sent to Cloudflare's address. This points to an HTTP interceptor on the owner's network rather than Cloudflare; `https://www` redirects correctly. Re-check from another network.
+
+**Later:** Turnstile site keys and an email sender can use this domain (outside-services step). For a custom domain on another name, repeat: TXT `asuid.<name>`, a DNS-only record to the app, `hostname add`, `ssl create`, `ssl bind --ssl-type SNI`, and `AllowedHosts`.
+
 ## Notes
 
 - **Address routing:** the portal routes with `#/…` hashes, so no server-side fallback is needed. A future path-based route would need `MapFallbackToFile`.
-- **Custom domain:** if one is added, add it to `AllowedHosts` in `appsettings.json`.
+- **Another custom domain:** add it to `AllowedHosts` in both the App Service setting and `appsettings.json` (see "Custom domain" above).
