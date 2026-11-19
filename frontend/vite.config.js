@@ -1,6 +1,6 @@
 /* Purpose: builds the React frontend (public site, portal and sign-in, product page) and serves it in
    development beside the .NET API.
-   Main parts: three page entries; images, fonts, sw.js and the manifest copied from public/; a dev
+   Main parts: three page entries plus the static privacy and terms pages; images, fonts, sw.js and the manifest copied from public/; a dev
    server on HTTPS that proxies /api to ParishLife.Api.
 
    The API's cookies are `__Host-` cookies, Secure and SameSite=Strict, and it has no CORS: the browser
@@ -43,7 +43,14 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      input: { portal: here('index.html'), public: here('public.html'), landing: here('landing.html') },
+      input: {
+        portal: here('index.html'),
+        public: here('public.html'),
+        landing: here('landing.html'),
+        // the privacy policy and terms of use: static bilingual pages with no module script
+        privacy: here('privacy.html'),
+        terms: here('terms.html')
+      },
       /* React itself is shared by the three pages, in a file of its own */
       output: {
         manualChunks: id => (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) ? 'react' : undefined)

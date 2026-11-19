@@ -38,6 +38,16 @@ Answer by number. "Default" is what the backend does today or what is recommende
 20. Email (and SMS?) provider, e.g. Azure Communication Services or SendGrid.
 21. Sign-in providers: Google, Microsoft, Apple? Their app registrations.
     **Decided by the owner, 19 November 2026 (approved policy):** (a) signing up with Google or Microsoft creates an account with no password; one can be added later in My account, and the last usable sign-in method cannot be removed (S06.11). (b) A provider-verified email counts as a confirmed email, so these accounts sign in without an email code; never merge: if any account already holds that email, nothing is created (`email-in-use`), and the subject stays the stable `sub`, stored hashed. (c) Google and Microsoft now; Apple deferred (paid developer program, `form_post` callback). Microsoft should use the managed identity instead of a secret where Microsoft accepts it. Built on `fullstack-integration`; see `docs/operations/account-sign-in-methods.md`. The app registrations are made in the Azure session.
+21a. **Privacy policy and terms of use** (drafts since 19 November 2026; `/privacy.html`, `/terms.html`; needed for Google's "In production"). Fill in the `[OWNER: …]` placeholders, approve the text with Georges, then remove the draft banner. Placeholders:
+    - operator name or organisation;
+    - contact email for privacy requests and general contact;
+    - country and governing law;
+    - minimum age for an account;
+    - effective date;
+    - retention periods for records and for technical logs;
+    - limitation of liability, if any.
+
+    Details: `docs/operations/legal-pages.md`.
 22. Turnstile: on or off? Cloudflare keys.
 23. Online payments: any provider, or cash/bank only for now? Default: none.
 24. Map tiles/directions provider for the public map, if any.

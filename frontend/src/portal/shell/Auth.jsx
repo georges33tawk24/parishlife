@@ -681,6 +681,15 @@ export function Auth({ enter, error = '', onLanguage }) {
             <a className="auth-back" href="public.html">
               {t('Browse parishes or make a request without an account', 'تصفّح الرعايا أو قدّم طلباً دون حساب')}
             </a>
+            <p className="af-help auth-legal">
+              {up ? t('By creating an account you accept the ', 'بإنشاء حساب توافق على ') : t('Read the ', 'اقرأ ')}
+              <a href={isAr() ? 'terms.html?lang=ar' : 'terms.html?lang=en'}>{t('terms of use', 'شروط الاستخدام')}</a>
+              {t(' and the ', ' و')}
+              <a href={isAr() ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>
+                {t('privacy policy', 'سياسة الخصوصية')}
+              </a>
+              .
+            </p>
           </div>
         </main>
       </div>

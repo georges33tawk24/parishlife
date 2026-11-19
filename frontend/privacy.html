@@ -1,0 +1,197 @@
+<!doctype html>
+<!-- Purpose: the ParishLife privacy policy, in English and Arabic, as a static page served from the same origin as the site.
+     Main parts: the draft banner (remove once the owner approves), the English and Arabic texts (one shows at a time, by ?lang= or the
+     site's saved language), and [OWNER: ...] placeholders for facts only the owner can give. The text describes only what the code does
+     (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0E1A31">
+  <title>ParishLife · Privacy policy</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
+  <script>(() => { const r = document.documentElement; try { const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
+  <style>
+    @font-face { font-family: "Source Sans 3"; src: url("/assets/fonts/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-display: swap; }
+    @font-face { font-family: "Noto Sans Arabic"; src: url("/assets/fonts/NotoSansArabic-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Noto Sans Arabic"; src: url("/assets/fonts/NotoSansArabic-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+    :root { color-scheme: light; --ink: #1C2433; --soft: #4A5568; --line: #E2DCD0; --navy: #0E1A31; --gold: #B8862F; --paper: #FBF8F2; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 "Source Sans 3", "Noto Sans Arabic", system-ui, sans-serif; }
+    [lang="ar"] { font-family: "Noto Sans Arabic", system-ui, sans-serif; }
+    html[lang="ar"] :is(section, .draft span)[lang="en"], html:not([lang="ar"]) :is(section, .draft span)[lang="ar"] { display: none; }
+    header { background: var(--navy); color: #F3EEE4; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    header a { color: #F3EEE4; text-decoration: none; font-weight: 600; }
+    .draft { background: #FFF3CD; border-bottom: 2px solid #E0B44C; color: #5C4300; padding: 10px 20px; font-weight: 600; text-align: center; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { font-size: 1.9rem; margin: 0 0 4px; color: var(--navy); }
+    h2 { font-size: 1.2rem; margin: 28px 0 6px; color: var(--navy); }
+    p, li { color: var(--ink); }
+    ul { padding-inline-start: 22px; }
+    .meta { color: var(--soft); margin: 0 0 18px; }
+    .owner { background: #FDECEA; color: #8A1C12; padding: 0 4px; border-radius: 3px; font-weight: 600; }
+    footer { border-top: 1px solid var(--line); max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; color: var(--soft); display: flex; gap: 18px; flex-wrap: wrap; }
+    a { color: #7A5A1E; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="public.html">ParishLife</a>
+    <span><a href="?lang=en" lang="en">English</a> · <a href="?lang=ar" lang="ar">العربية</a></span>
+  </header>
+  <div class="draft" role="note">
+    <span lang="en">Draft — pending owner approval. This text is not yet in force.</span>
+    <span lang="ar" dir="rtl">مسودة — بانتظار موافقة المالك. هذا النص غير نافذ بعد.</span>
+  </div>
+
+  <main>
+    <section lang="en" dir="ltr">
+      <h1>Privacy policy</h1>
+      <p class="meta">Effective date: <span class="owner">[OWNER: effective date]</span></p>
+
+      <h2>Who runs ParishLife</h2>
+      <p>ParishLife is run by <span class="owner">[OWNER: operator name or organisation]</span>. For any privacy question or request, write to <span class="owner">[OWNER: contact email for privacy requests]</span>.</p>
+      <p>Each parish decides what it records about its people and is responsible for those records. ParishLife provides the service the parish uses.</p>
+
+      <h2>What we store</h2>
+      <ul>
+        <li><b>Your account:</b> username, email address, display name, preferred language and colours, and any optional profile details you add. Your password is stored only as a one-way hash. If you turn on two-step sign-in, the authenticator key and recovery codes are stored protected. A passkey's private key never leaves your device; we store only its public key.</li>
+        <li><b>Google or Microsoft sign-in:</b> only if you choose it. We store a hashed form of the account identifier Google or Microsoft gives us. When you sign up this way, we also use the name and the email address Google or Microsoft has confirmed for your account.</li>
+        <li><b>Your sessions:</b> when each sign-in started and how it signed in, so you can see and end your sessions.</li>
+        <li><b>Parish records about you</b>, entered by your parish: name and family details, contact details, households, sacraments and certificates, parish and ministry membership, attendance, registrations, contributions and receipts, and letters or documents the parish issues.</li>
+        <li><b>Sensitive records</b>, only where a parish uses them: medical or allergy notes, pastoral notes, confidential concerns and incident reports. These are protected at rest and readable only by the roles the parish designates.</li>
+        <li><b>Requests and messages</b> you send to a parish, with any files you attach. Without an account, a request also stores the name and contact details you give and the details of the request.</li>
+        <li><b>Audit records</b> of who changed what and when, to keep records trustworthy.</li>
+        <li><b>Anonymous site counts:</b> daily totals of public pages viewed, by page type, language and parish. No IP address, device, visitor identifier or search text is stored with them.</li>
+        <li><b>Technical logs</b> of requests and errors, used to keep the service running and secure.</li>
+      </ul>
+
+      <h2>Why</h2>
+      <p>To run the parish services you use, to let parishes keep their records, to keep accounts secure and to prevent abuse. We do not sell your data, show advertising or use advertising or analytics trackers.</p>
+
+      <h2>Who can see it</h2>
+      <ul>
+        <li>You see your own account and the parish data linked to you.</li>
+        <li>Parish clergy and staff see what their role and appointment allow (for example, the treasurer sees finance, a ministry leader sees their ministry).</li>
+        <li>The bishop of the archdiocese sees what oversight of its parishes requires.</li>
+        <li>The people who run ParishLife (platform operators) for setup, support and security.</li>
+        <li>Anyone, for what a parish chooses to publish on its public page.</li>
+      </ul>
+
+      <h2>Services we use</h2>
+      <ul>
+        <li><b>Microsoft Azure</b> hosts ParishLife in the France Central region: the database (Cosmos DB), private file storage (Blob Storage), key protection (Key Vault) and technical monitoring (Application Insights).</li>
+        <li><b>Cloudflare</b> provides the domain name service and Turnstile, a bot check on sign-in, sign-up and public request forms. Turnstile processes technical information about your browser and connection to tell people from bots.</li>
+        <li><b>Google</b> and <b>Microsoft</b>, only if you choose to sign in with them.</li>
+        <li><b>Google Fonts:</b> the members portal and the product page load their fonts from Google, so your browser contacts Google's font servers.</li>
+      </ul>
+      <p>ParishLife does not currently send email or text messages, and takes no online payments.</p>
+
+      <h2>Cookies and storage in your browser</h2>
+      <ul>
+        <li>A session cookie that keeps you signed in (up to 8 hours, ended when you sign out).</li>
+        <li>A security cookie that protects forms against forgery.</li>
+        <li>Short-lived cookies during a Google or Microsoft sign-in (minutes).</li>
+        <li>Your language and reading preferences, and some screen choices, kept in your browser's storage.</li>
+        <li>A copy of the public pages and what they last showed, so they open without a connection.</li>
+      </ul>
+      <p>All of these are needed for the site to work. ParishLife sets no advertising or tracking cookies. Turnstile is provided by Cloudflare under its own privacy policy.</p>
+
+      <h2>How long we keep it</h2>
+      <p>Nothing is deleted automatically yet: no retention periods have been set. <span class="owner">[OWNER: retention periods]</span> Sessions end after 8 hours, sign-in codes after a few minutes. Backups: the database can be restored to any point in the last 7 days, and deleted files can be recovered for 30 days. Technical logs are kept for <span class="owner">[OWNER: log retention period]</span>.</p>
+
+      <h2>Your rights and choices</h2>
+      <ul>
+        <li><b>In ParishLife today:</b> see and change your profile, password and sign-in methods; see and end your sessions; see the data a parish holds linked to you; ask the parish to correct a record; ask a parish to close your personal data there. When the parish approves a closure, optional personal details are removed, consents are withdrawn and the link to your account ends; official, financial, safeguarding and participation history is kept.</li>
+        <li><b>By request</b> to <span class="owner">[OWNER: contact email for privacy requests]</span>: a copy of your data, deleting your account, or anything you cannot do in the app.</li>
+      </ul>
+
+      <h2>Children</h2>
+      <p>Accounts are for people aged <span class="owner">[OWNER: minimum age]</span> or older. Parishes may record children in their parish records.</p>
+
+      <h2>Changes</h2>
+      <p>We will post any change on this page with a new effective date.</p>
+
+      <h2>Law</h2>
+      <p><span class="owner">[OWNER: country and governing law]</span></p>
+    </section>
+
+    <section lang="ar" dir="rtl">
+      <h1>سياسة الخصوصية</h1>
+      <p class="meta">تاريخ السريان: <span class="owner">[OWNER: effective date]</span></p>
+
+      <h2>من يدير ParishLife</h2>
+      <p>يدير ParishLife <span class="owner">[OWNER: operator name or organisation]</span>. لأي سؤال أو طلب يتعلّق بالخصوصية، راسلنا على <span class="owner">[OWNER: contact email for privacy requests]</span>.</p>
+      <p>كل رعية تقرّر ما تسجّله عن أبنائها وهي المسؤولة عن هذه السجلات. ParishLife يقدّم الخدمة التي تستخدمها الرعية.</p>
+
+      <h2>ما نحفظه</h2>
+      <ul>
+        <li><b>حسابك:</b> اسم المستخدم والبريد الإلكتروني والاسم الظاهر واللغة والألوان المفضّلة، وأي تفاصيل اختيارية تضيفها. تُحفظ كلمة المرور بصيغة مشفّرة باتجاه واحد فقط. إذا فعّلت الدخول بخطوتين، يُحفظ مفتاح المصادقة ورموز الاسترداد محميّة. المفتاح الخاص لمفتاح المرور لا يغادر جهازك؛ نحفظ مفتاحه العام فقط.</li>
+        <li><b>الدخول عبر Google أو Microsoft:</b> فقط إذا اخترته. نحفظ صيغة مشفّرة من معرّف الحساب الذي تعطينا إياه Google أو Microsoft. وعند إنشاء حساب بهذه الطريقة نستخدم أيضاً الاسم والبريد الإلكتروني الذي أكّدته Google أو Microsoft لحسابك.</li>
+        <li><b>جلساتك:</b> متى بدأ كل دخول وبأي طريقة، لتتمكّن من رؤية جلساتك وإنهائها.</li>
+        <li><b>سجلات الرعية عنك</b>، تدخلها رعيتك: الاسم وتفاصيل العائلة ووسائل التواصل والأسر، والأسرار والشهادات، والعضوية في الرعية والأخويات، والحضور والتسجيلات، والتبرّعات والإيصالات، والرسائل أو الوثائق التي تصدرها الرعية.</li>
+        <li><b>سجلات حسّاسة</b>، فقط حيث تستخدمها الرعية: ملاحظات طبية أو عن الحساسية، وملاحظات رعوية، وشكاوى سرّية وتقارير حوادث. هذه محميّة عند التخزين ولا يقرأها إلا من تحدّدهم الرعية.</li>
+        <li><b>الطلبات والرسائل</b> التي ترسلها إلى رعية، مع أي ملفات ترفقها. ومن دون حساب، يحفظ الطلب أيضاً الاسم ووسيلة التواصل التي تعطيها وتفاصيل الطلب.</li>
+        <li><b>سجلات التدقيق</b>: من غيّر ماذا ومتى، لتبقى السجلات موثوقة.</li>
+        <li><b>إحصاءات مجهولة للموقع:</b> مجاميع يومية للصفحات العامة التي فُتحت، بحسب نوع الصفحة واللغة والرعية. لا يُحفظ معها عنوان IP ولا الجهاز ولا معرّف الزائر ولا نص البحث.</li>
+        <li><b>سجلات تقنية</b> للطلبات والأخطاء، لإبقاء الخدمة تعمل بأمان.</li>
+      </ul>
+
+      <h2>لماذا</h2>
+      <p>لتشغيل خدمات الرعية التي تستخدمها، وليحفظ الرعايا سجلاتها، ولحماية الحسابات ومنع إساءة الاستخدام. لا نبيع بياناتك، ولا نعرض إعلانات، ولا نستخدم أدوات تتبّع إعلانية أو تحليلية.</p>
+
+      <h2>من يستطيع رؤيتها</h2>
+      <ul>
+        <li>أنت ترى حسابك وبيانات الرعية المرتبطة بك.</li>
+        <li>كهنة الرعية وموظفوها يرون ما يسمح به دورهم وتعيينهم (مثلاً: أمين الصندوق يرى المالية، ومسؤول الأخوية يرى أخويته).</li>
+        <li>مطران الأبرشية يرى ما تتطلّبه متابعة رعاياها.</li>
+        <li>القائمون على ParishLife (مشغّلو المنصّة)، للإعداد والدعم والأمان.</li>
+        <li>الجميع، لما تختار الرعية نشره على صفحتها العامة.</li>
+      </ul>
+
+      <h2>الخدمات التي نستخدمها</h2>
+      <ul>
+        <li><b>Microsoft Azure</b> تستضيف ParishLife في منطقة France Central: قاعدة البيانات (Cosmos DB) وتخزين الملفات الخاص (Blob Storage) وحماية المفاتيح (Key Vault) والمراقبة التقنية (Application Insights).</li>
+        <li><b>Cloudflare</b> تقدّم خدمة اسم النطاق وخدمة Turnstile، وهي فحص ضدّ البرامج الآلية عند الدخول وإنشاء الحساب ونماذج الطلبات العامة. يعالج Turnstile معلومات تقنية عن متصفّحك واتصالك ليميّز الأشخاص من البرامج الآلية.</li>
+        <li><b>Google</b> و<b>Microsoft</b>، فقط إذا اخترت الدخول عبرهما.</li>
+        <li><b>Google Fonts:</b> تحمّل بوّابة المؤمنين وصفحة التعريف بالمنتج خطوطهما من Google، فيتّصل متصفّحك بخوادم الخطوط لدى Google.</li>
+      </ul>
+      <p>لا يرسل ParishLife حالياً رسائل بريد إلكتروني أو رسائل نصية، ولا يقبل الدفع عبر الإنترنت.</p>
+
+      <h2>ملفات تعريف الارتباط والتخزين في متصفّحك</h2>
+      <ul>
+        <li>ملف جلسة يبقيك داخلاً (حتى ٨ ساعات، وينتهي عند الخروج).</li>
+        <li>ملف أمان يحمي النماذج من التزوير.</li>
+        <li>ملفات قصيرة الأمد أثناء الدخول عبر Google أو Microsoft (دقائق).</li>
+        <li>لغتك وتفضيلات القراءة وبعض خيارات الشاشة، في تخزين متصفّحك.</li>
+        <li>نسخة من الصفحات العامة وآخر ما عرضته، لتُفتح دون اتصال.</li>
+      </ul>
+      <p>كلّها ضرورية لعمل الموقع. لا يضع ParishLife ملفات إعلانية أو تتبّعية. يقدّم Cloudflare خدمة Turnstile وفق سياسة الخصوصية الخاصة به.</p>
+
+      <h2>مدّة الحفظ</h2>
+      <p>لا يُحذف شيء تلقائياً بعد: لم تُحدَّد مدد حفظ. <span class="owner">[OWNER: retention periods]</span> تنتهي الجلسات بعد ٨ ساعات، ورموز الدخول بعد دقائق. النسخ الاحتياطية: يمكن استعادة قاعدة البيانات إلى أي لحظة في آخر ٧ أيام، ويمكن استرجاع الملفات المحذوفة خلال ٣٠ يوماً. تُحفظ السجلات التقنية لمدّة <span class="owner">[OWNER: log retention period]</span>.</p>
+
+      <h2>حقوقك وخياراتك</h2>
+      <ul>
+        <li><b>في ParishLife اليوم:</b> رؤية ملفك وكلمة مرورك وطرق دخولك وتغييرها؛ رؤية جلساتك وإنهاؤها؛ رؤية البيانات المرتبطة بك لدى رعية؛ طلب تصحيح سجل من الرعية؛ طلب إغلاق بياناتك الشخصية لدى رعية. عند موافقة الرعية على الإغلاق، تُحذف التفاصيل الشخصية الاختيارية وتُسحب الموافقات وينتهي الربط بحسابك؛ ويبقى التاريخ الرسمي والمالي والمتعلّق بالحماية والمشاركة.</li>
+        <li><b>بطلب</b> إلى <span class="owner">[OWNER: contact email for privacy requests]</span>: نسخة من بياناتك، أو حذف حسابك، أو أي أمر لا تستطيع فعله في التطبيق.</li>
+      </ul>
+
+      <h2>الأطفال</h2>
+      <p>الحسابات لمن بلغ <span class="owner">[OWNER: minimum age]</span> سنة أو أكثر. قد تسجّل الرعايا الأطفال في سجلاتها.</p>
+
+      <h2>التغييرات</h2>
+      <p>ننشر أي تغيير على هذه الصفحة مع تاريخ سريان جديد.</p>
+
+      <h2>القانون</h2>
+      <p><span class="owner">[OWNER: country and governing law]</span></p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="terms.html">Terms of use · شروط الاستخدام</a>
+    <a href="public.html">ParishLife</a>
+    <a href="index.html">Members portal · بوّابة المؤمنين</a>
+  </footer>
+</body>
+</html>

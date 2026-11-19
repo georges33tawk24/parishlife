@@ -34,13 +34,21 @@ const client = (page, n) =>
 test('public pages load signed out', async ({ page }) => {
   await client(page, 2);
   const state = watch(page);
-  for (const path of ['/', '/public.html', '/landing.html', '/index.html']) {
+  const legal = ['/privacy.html', '/terms.html', '/privacy.html?lang=ar', '/terms.html?lang=ar'];
+  for (const path of ['/', '/public.html', '/landing.html', ...legal, '/index.html']) {
     state.where = path;
     const response = await page.goto(M.baseUrl + path);
     // served by the API's own hosting (UseParishLifeFrontend), as in production; a blocked resource is a console error
     expect(response.headers()['content-security-policy'], path).toContain("default-src 'self'");
     expect(response.headers()['cache-control'], path).toBe('no-cache');
     await settle(page, state);
+    if (legal.includes(path)) {
+      // the draft banner stays until the owner approves the text; one language shows at a time
+      const ar = path.endsWith('lang=ar');
+      await expect(page.locator('html')).toHaveAttribute('dir', ar ? 'rtl' : 'ltr');
+      await expect(page.locator(`.draft span[lang="${ar ? 'ar' : 'en'}"]`)).toBeVisible();
+      await expect(page.locator(`main section[lang="${ar ? 'en' : 'ar'}"]`)).toBeHidden();
+    }
   }
   await expect(page.locator('input[name="username"]')).toBeVisible();
   // With Turnstile on, the widget loads under the page policy and gives the sign-in form a token.

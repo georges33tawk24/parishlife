@@ -18,7 +18,9 @@ const COPY = {
   footerIntro: ['The parishes of Lebanon, each with its light on.', 'رعايا لبنان، ولكلّ منها نورها.'],
   footer: ['Information published by participating parishes.', 'معلومات تنشرها الرعايا المشاركة.'],
   mapCredit: ['Map outline from Natural Earth', 'حدود الخريطة من Natural Earth'],
-  photoCredit: ['Illustrative photographs from Unsplash', 'صور توضيحية من Unsplash']
+  photoCredit: ['Illustrative photographs from Unsplash', 'صور توضيحية من Unsplash'],
+  privacy: ['Privacy policy', 'سياسة الخصوصية'],
+  terms: ['Terms of use', 'شروط الاستخدام']
 };
 
 const SECTIONS = [
@@ -177,6 +179,8 @@ export function Footer({ L, lang, onToggleLang }) {
           © <span id="year">{new Date().getFullYear()}</span> ParishLife
         </span>
         <span>{T('footer')}</span>
+        <a href={lang === 'ar' ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>{T('privacy')}</a>
+        <a href={lang === 'ar' ? 'terms.html?lang=ar' : 'terms.html?lang=en'}>{T('terms')}</a>
         <span>{T('mapCredit')}</span>
         <a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer">
           {T('photoCredit')}
