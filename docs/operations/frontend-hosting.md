@@ -84,6 +84,50 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
     - 16:23 UTC: the owner signed out (`auth/logout` 204), then signed back in (`login` 202, `login/mfa` 200).
     - 20:25–20:26 UTC re-test: sign-in, then a reload while signed in (`auth/me` 200), then sign-out (`auth/logout` 204), then a reload, which stayed signed out (`auth/me` 401).
   - Application Insights after both visits: no 429s, no exceptions besides the start-up cancel, no failed dependencies, no error traces. The only other error-range response was App Service's start-up `robots933456.txt` probe (400).
+- **18 November 2026, `b451301`** (Azure session, owner's go-ahead):
+  - Packaged with `Publish-ParishLife.ps1`: 145 files, no backslash entries.
+  - Compared with the `63aa347` package, 6 files differ, all explained:
+    - `appsettings.json`: the new `AllowedHosts` value.
+    - The rebuilt portal chunk `portal-CBbgmEAd.js`, which replaces `portal-w_ZLSzE2.js` (sign-in check guards), and `index.html`, which points to it.
+    - `ParishLife.Api.dll`/`.pdb`: the guest request form is now `[TurnstileProtected]`.
+  - Cosmos index matched the manifest, so nothing was applied.
+  - Deployed 22:13:27–22:13:34 UTC; serving again at 22:14:36.
+  - `/health/ready` Healthy. Pages carry the policy, and the new portal chunk is served `immutable`.
+  - The existing key ring was reused (key version `426eb917…`).
+  - Turnstile was still off, because no keys were set yet. Sign-in behaved as before.
+  - Owner visit on `parish-life.org` at 22:17–22:18 UTC: `login` 202, `login/mfa` 200, `auth/me` 200, `logout` 204, then `auth/me` 401.
+
+## Turnstile switched on (19 November 2026)
+
+Configured by the Azure session with the owner's go-ahead. There was no code change and no deploy. The secret key never passed through the session: the owner created the widget and stored the secret in Key Vault directly.
+
+- **Cloudflare widget** (account that holds `parish-life.org`):
+  - Created by the owner with Cloudflare's "Set up with Spin" dashboard flow. Spin's agent prompt was not used, because the widget and siteverify code already exist.
+  - Hostnames: `parish-life.org` and the azurewebsites address.
+  - Spin also adds `localhost` and `127.0.0.1` automatically. Removing them from the live widget is recommended; whether they were removed was not checked.
+  - Site key (public): `0x4AAAAAAGIg3JWtHyFPWxXW`.
+  - An earlier widget was created by mistake during setup and deleted at once, so its keys are void.
+- **Key Vault `keyvault-parishlife`:**
+  - Secret `turnstile-secret-key`, stored by the owner in the portal at 10:46:40 UTC.
+  - The owner's account was granted "Key Vault Secrets Officer" on the vault (RBAC change) so it could store the secret.
+- **App's access to the secret:**
+  - `id-parishlife` was granted "Key Vault Secrets User" scoped to that one secret only.
+  - The App Service `keyVaultReferenceIdentity` was changed from `SystemAssigned` (the app has no system identity) to `id-parishlife`.
+- **App settings** (10:50:52 UTC, 15 settings in total; the app was serving again at 10:52:39):
+  - `Turnstile__SiteKey` = the site key.
+  - `Turnstile__SecretKey` = `@Microsoft.KeyVault(SecretUri=https://keyvault-parishlife.vault.azure.net/secrets/turnstile-secret-key/)`.
+  - `Turnstile__ExpectedHostname` left unset.
+- **Checks:**
+  - The Key Vault reference status is `Resolved` (identity UserAssigned).
+  - `GET /api/auth/capabilities` returns `turnstile.enabled: true` with the site key. `/health/ready` is Healthy.
+  - `POST /api/auth/login` without a token returns 400 `turnstile_failed`. With a forged token, the app reached siteverify (200), which refused it, giving 400 `turnstile_failed`.
+  - **Live acceptance:** the owner signed in on `parish-life.org` through the widget at 10:57–10:58 UTC. Siteverify answered 200, then `login` 202, `login/mfa` 200, and `auth/me`, `me/parishes` and `me/capacities` 200. This proves that the stored secret matches the widget.
+  - Application Insights: no `turnstile_unavailable` 503s and no exceptions besides the start-up cancel. The only other error-range responses were the session's own probes and the start-up `robots933456.txt` 400.
+- **Rollback:** remove the two `Turnstile__*` settings. The role grants and the identity setting can stay.
+- **Rotating the secret:**
+  1. In Cloudflare, rotate the secret key in the widget settings.
+  2. Store it as a new version of `turnstile-secret-key`.
+  3. Restart the app. Key Vault references are otherwise re-read about every 24 hours.
 
 ## Custom domain: `parish-life.org` (18 November 2026)
 
@@ -125,7 +169,7 @@ Set up by the Azure session at the owner's go-ahead for each change; no code cha
   - The only 404s were `api/public/homepage` and `api/public/app/manifest` (nothing published).
 - **Not verified:** plain `http://www.parish-life.org` returned a blank page with a `Refresh` header and no Cloudflare headers, even when sent to Cloudflare's address. This points to an HTTP interceptor on the owner's network rather than Cloudflare; `https://www` redirects correctly. Re-check from another network.
 
-**Later:** Turnstile site keys and an email sender can use this domain (outside-services step). For a custom domain on another name, repeat: TXT `asuid.<name>`, a DNS-only record to the app, `hostname add`, `ssl create`, `ssl bind --ssl-type SNI`, and `AllowedHosts`.
+**Later:** an email sender can use this domain (outside-services step). Turnstile has used it since 19 November; see "Turnstile switched on" above. For a custom domain on another name, repeat: TXT `asuid.<name>`, a DNS-only record to the app, `hostname add`, `ssl create`, `ssl bind --ssl-type SNI`, and `AllowedHosts`.
 
 ## Notes
 

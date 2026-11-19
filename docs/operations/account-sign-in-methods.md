@@ -75,6 +75,13 @@ Providers `google` and `microsoft` exist only when `ExternalSignIn:<provider>:Cl
    - Application Insights shows no `turnstile_unavailable` responses.
 6. **Rollback:** remove the two `Turnstile__*` settings. Enforcement stops after the restart, and nothing else changes.
 
+**Live since 19 November 2026.**
+- These steps were followed, with one difference: the widget was created with Cloudflare's "Set up with Spin" dashboard flow. Skip Spin's agent prompt, because the code is already here.
+- Spin also adds `localhost` and `127.0.0.1`. Remove them from the live widget.
+- Storing the secret needed "Key Vault Secrets Officer" for the person who stores it.
+- The owner's real sign-in through the widget passed.
+- Record: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
+
 **Tests:**
 - `AuthenticationCapabilityTests` uses a fake verifier: tokens refused on every protected endpoint (including the guest form), the secret posted only to the verifier, fail-closed outage.
 - The browser tests (`npm run e2e`) run with Cloudflare's published test keys: the site key `1x00000000000000000000AA` always passes, and its secret is accepted by the real siteverify. Every sign-in goes through the real widget and the real Cloudflare check under the page policy.

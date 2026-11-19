@@ -65,12 +65,32 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - **Unverified:** plain `http://www` from the owner's network (it looks intercepted locally).
   - Keep the bare domain DNS only: certificate renewal and per-visitor rate limits depend on it.
   - Details: "Custom domain" in `docs/operations/frontend-hosting.md`.
-- **Turnstile ready to switch on (19 November):**
+- **Turnstile code (`b451301`):**
   - The API already enforced Turnstile on sign-in, sign-up, email codes, passkeys and external sign-in once both keys are set. Now the anonymous guest request form is protected too: the public request page sent the token, but the API ignored it.
   - **Sign-in screen:** a fresh check after every attempt (also after the password step), and "Complete the check first." instead of a refused request.
   - **Browser tests:** they run with Cloudflare's published test keys through the real widget and siteverify. 11/11 pass; 536 backend tests pass.
   - **Setup steps** (Cloudflare widget, Key Vault secret, identity access, two app settings, checks, rollback): `docs/operations/account-sign-in-methods.md`.
-  - **Not live yet:** needs the Azure session, an RBAC grant for the Key Vault reference, and the owner's go-ahead.
+- **`b451301` deployed (18 November, 22:13 UTC), by the Azure session at the owner's go-ahead:**
+  - 145 files; 6 differ from `63aa347`, all explained. The Cosmos index matched, and the key ring was reused.
+  - Healthy, with the policy and caching as before.
+  - The owner signed in and out on `parish-life.org` at 22:17–22:18 UTC.
+- **Turnstile live (19 November, 10:50 UTC), by the Azure session at the owner's go-ahead (owner decision: Turnstile on):**
+  - Widget: created by the owner with Cloudflare's "Set up with Spin" flow, for `parish-life.org` and the azurewebsites address. Site key `0x4AAAAAAGIg3JWtHyFPWxXW`.
+  - Secret: stored by the owner in Key Vault `turnstile-secret-key`. The session never handled it.
+  - RBAC changes:
+    - the owner's account got "Key Vault Secrets Officer" on the vault;
+    - `id-parishlife` got "Key Vault Secrets User" on that one secret.
+  - `keyVaultReferenceIdentity` was set to `id-parishlife`, and the two `Turnstile__*` app settings were added.
+  - **Verified:**
+    - the Key Vault reference is `Resolved`;
+    - capabilities report Turnstile on;
+    - a sign-in without a token, or with a forged one, gets 400 `turnstile_failed`;
+    - the owner's real sign-in through the widget passed siteverify, then MFA (10:57–10:58 UTC);
+    - Application Insights is clean.
+  - **Open:**
+    - removing the `localhost`/`127.0.0.1` hostnames that Spin adds to the widget (not checked);
+    - the public request page's widget was not exercised live, because nothing is published yet.
+  - Details: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.
