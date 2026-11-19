@@ -75,7 +75,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - Healthy, with the policy and caching as before.
   - The owner signed in and out on `parish-life.org` at 22:17–22:18 UTC.
 - **Turnstile live (19 November, 10:50 UTC), by the Azure session at the owner's go-ahead (owner decision: Turnstile on):**
-  - Widget: created by the owner with Cloudflare's "Set up with Spin" flow, for `parish-life.org` and the azurewebsites address. Site key `0x4AAAAAAGIg3JWtHyFPWxXW`.
+  - Widget: created by the owner with Cloudflare's "Set up with Spin" flow, for `parish-life.org` only. Sign-in on the old azurewebsites address can no longer pass the check, and this was accepted. Site key `0x4AAAAAAGIg3JWtHyFPWxXW`.
   - Secret: stored by the owner in Key Vault `turnstile-secret-key`. The session never handled it.
   - RBAC changes:
     - the owner's account got "Key Vault Secrets Officer" on the vault;
@@ -87,9 +87,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - a sign-in without a token, or with a forged one, gets 400 `turnstile_failed`;
     - the owner's real sign-in through the widget passed siteverify, then MFA (10:57–10:58 UTC);
     - Application Insights is clean.
-  - **Open:**
-    - removing the `localhost`/`127.0.0.1` hostnames that Spin adds to the widget (not checked);
-    - the public request page's widget was not exercised live, because nothing is published yet.
+  - **Open:** the public request page's widget was not exercised live, because nothing is published yet.
   - Details: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.

@@ -103,8 +103,8 @@ Configured by the Azure session with the owner's go-ahead. There was no code cha
 
 - **Cloudflare widget** (account that holds `parish-life.org`):
   - Created by the owner with Cloudflare's "Set up with Spin" dashboard flow. Spin's agent prompt was not used, because the widget and siteverify code already exist.
-  - Hostnames: `parish-life.org` and the azurewebsites address.
-  - Spin also adds `localhost` and `127.0.0.1` automatically. Removing them from the live widget is recommended; whether they were removed was not checked.
+  - Hostname: **`parish-life.org` only**, as the owner reported. There is no `localhost`, `127.0.0.1` or azurewebsites address.
+  - So the old azurewebsites address cannot complete the check, and sign-in works only on `parish-life.org`. This is accepted: it is the address everyone uses. To allow the old address again, add it to the widget's hostnames. No app change is needed.
   - Site key (public): `0x4AAAAAAGIg3JWtHyFPWxXW`.
   - An earlier widget was created by mistake during setup and deleted at once, so its keys are void.
 - **Key Vault `keyvault-parishlife`:**

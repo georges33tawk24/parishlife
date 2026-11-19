@@ -77,7 +77,7 @@ Providers `google` and `microsoft` exist only when `ExternalSignIn:<provider>:Cl
 
 **Live since 19 November 2026.**
 - These steps were followed, with one difference: the widget was created with Cloudflare's "Set up with Spin" dashboard flow. Skip Spin's agent prompt, because the code is already here.
-- Spin also adds `localhost` and `127.0.0.1`. Remove them from the live widget.
+- The live widget lists `parish-life.org` only, so sign-in on the old azurewebsites address cannot pass the check. If Spin adds `localhost` or `127.0.0.1`, remove them from a live widget.
 - Storing the secret needed "Key Vault Secrets Officer" for the person who stores it.
 - The owner's real sign-in through the widget passed.
 - Record: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
