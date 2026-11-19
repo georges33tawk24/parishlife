@@ -1,5 +1,6 @@
 /* My account: the profile (display name, language and the optional personal details) and appearance, how the
-   account signs in (password, email, two-factor, passkeys, sessions), my own signature image, my parish records
+   account signs in (password or a first password, email, two-factor, passkeys, Google and Microsoft, sessions), my own
+   signature image, my parish records
    (with corrections for office review), requests made before signing in, and the parishes someone follows, with
    the membership request form.
    Routes: GET and PUT auth/profile, POST auth/profile/appearance/preview and /reset, GET auth/me,
@@ -11,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { changeAccountPassword, changeAccountEmail } from './account-security.jsx';
 import { Mfa } from './account-mfa.jsx';
 import { Passkeys } from './account-passkeys.jsx';
+import { Providers, addAccountPassword } from './account-providers.jsx';
 import { Sessions } from './account-sessions.jsx';
 import { GuestLinks } from './guest-links.jsx';
 import { RecordCorrections } from '../records/profile-reviews.jsx';
@@ -362,14 +364,25 @@ export function AccountPage() {
             </span>
           </p>
           <div className="account-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              data-change-password=""
-              onClick={() => changeAccountPassword(mfa)}
-            >
-              {t('Change password', 'تغيير كلمة المرور')}
-            </button>
+            {account.hasPassword === false ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-add-password=""
+                onClick={() => addAccountPassword(mfa)}
+              >
+                {t('Add a password', 'إضافة كلمة مرور')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-change-password=""
+                onClick={() => changeAccountPassword(mfa)}
+              >
+                {t('Change password', 'تغيير كلمة المرور')}
+              </button>
+            )}
             {features.verification ? (
               <button
                 type="button"
@@ -391,6 +404,9 @@ export function AccountPage() {
           )}
           <Mfa mfa={mfa} />
           {features.passkeys ? <Passkeys mfa={mfa} key={signature} /> : null}
+          {features.external.length ? (
+            <Providers mfa={mfa} available={features.external} hasPassword={account.hasPassword !== false} />
+          ) : null}
           <Sessions />
         </Panel>
         <div data-signature="">

@@ -1,9 +1,11 @@
 // Purpose: optional external sign-in (A06). Providers exist only when configured; linking needs an MFA-authenticated account with
-// fresh proofs; sign-in only resolves an explicitly linked subject and never creates an account, Person or membership, and never
-// merges by a claimed email. An external login is one factor: MFA accounts still complete their authenticator challenge.
-// Main functions: AvailableAsync, ListAsync, SignInPropertiesAsync and LinkPropertiesAsync (provider challenges), LinkTicketAsync and
-// LinkFromTicketAsync (proof over JSON, then a credential-free browser form post), HoldPendingChallenge/TakePendingChallenge (the MFA
-// challenge of a portal round trip, via a protected HttpOnly cookie), CompleteAsync and UnlinkAsync.
+// fresh proofs; sign-in only resolves an explicitly linked subject. Sign-up (owner decision, 19 November 2026) creates a passwordless
+// member account only for an unknown subject whose provider vouches for its email, which then counts as confirmed; it never merges: if
+// any account already holds that email, nothing is created (external_email_in_use). No Person, membership or capacity is ever created.
+// An external login is one factor: MFA accounts still complete their authenticator challenge.
+// Main functions: AvailableAsync, ListAsync, SignInPropertiesAsync, SignUpPropertiesAsync and LinkPropertiesAsync (provider challenges),
+// LinkTicketAsync and LinkFromTicketAsync (proof over JSON, then a credential-free browser form post), HoldPendingChallenge/
+// TakePendingChallenge (the MFA challenge of a portal round trip, via a protected HttpOnly cookie), CompleteAsync and UnlinkAsync.
 
 using System.Globalization;
 using System.Security.Claims;
@@ -51,6 +53,12 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
     {
         await RequireProviderAsync(provider);
         return Properties(provider, "sign-in", portal);
+    }
+
+    public async Task<AuthenticationProperties> SignUpPropertiesAsync(string provider, bool portal = false)
+    {
+        await RequireProviderAsync(provider);
+        return Properties(provider, "sign-up", portal);
     }
 
     public async Task<AuthenticationProperties> LinkPropertiesAsync(string provider, LinkExternalLoginDto request, CancellationToken ct)
@@ -154,11 +162,20 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
             || !items.TryGetValue("mode", out var mode) || !items.TryGetValue("nonce", out var nonce) || nonce is null)
             return null;
         var hash = HashText(provider + "\n" + subject);
-        return mode == "link" ? await LinkAsync(provider, hash, items, nonce, ct) : await SignInAsync(provider, hash, nonce, ct);
+        return mode switch
+        {
+            "link" => await LinkAsync(provider, hash, items, nonce, ct),
+            "sign-up" => await SignUpAsync(provider, hash, external.Principal!, nonce, ct),
+            _ => await SignInAsync(provider, hash, nonce, ct)
+        };
     }
 
     public async Task<AccountSecurityChangeDto> UnlinkAsync(string provider, UnlinkExternalLoginDto request, CancellationToken ct)
     {
+        // The last usable sign-in method is refused before any proof is asked for: an account made by provider sign-up has no password
+        // to prove, so in the other order it would only ever see credentials_invalid. The check below repeats it on the proven state.
+        if (!proof.RecoverySession && LastMethod(await proof.CurrentAsync(ct), provider))
+            throw LastMethodError();
         var user = await proof.FreshPersonalProofAsync(request.CurrentPassword, request.CurrentCode, ct);
         var scope = MfaRecoveryService.Scope(user.Id);
         var operation = Operation.Create(request.OperationId, user.Id, new { Kind = "external.unlink", Provider = provider }, clock, "account-external:v1");
@@ -166,8 +183,8 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
             return Change(operation.Id, "AlreadyApplied", provider);
         var login = user.ExternalLogins.FirstOrDefault(item => item.Provider == provider)
             ?? throw new DomainException("external_login_not_found", "No account is linked for this provider.", FailureKind.NotFound);
-        if (user.PasswordHash is null && user.Passkeys.Count == 0 && user.ExternalLogins.Count == 1)
-            throw new DomainException("last_sign_in_method", "Add another sign-in method before unlinking this provider.", FailureKind.Conflict);
+        if (LastMethod(user, provider))
+            throw LastMethodError();
         user.ExternalLogins.Remove(login);
         user.SecurityStamp = users.CreateSecurityStamp();
         await records.CommitAsync(scope, operation, "identity.external_login.unlinked", provider,
@@ -224,6 +241,77 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
         catch (DomainException error) when (error.Code is "write_conflict" or "account_unavailable" or "mfa_required")
         { return null; }
     }
+
+    // Provider sign-up. A subject already linked signs in instead. Otherwise the provider must vouch for an email that no account holds:
+    // the external index, then the username and email aliases are claimed for a new id (the registration pattern: a pending account,
+    // aliases, then activation), and every claimed index is released again if a step fails, so a refused sign-up leaves no login.
+    private async Task<(string, ParishUser, AccountSession?, MfaLoginChallengeDto?)?> SignUpAsync(string provider, string hash,
+        ClaimsPrincipal principal, string nonce, CancellationToken ct)
+    {
+        var key = provider + ":" + hash;
+        if (await Store.FindAliasOwnerAsync("external", key, ct) is not null)
+            return await SignInAsync(provider, hash, nonce, ct);
+        var email = principal.FindFirstValue(ExternalIdentityClaims.VerifiedEmailClaim)
+            ?? throw new DomainException("external_email_not_verified",
+                "This provider did not confirm an email address. Register with an email and password instead.", FailureKind.Conflict);
+        if (await Store.FindAliasOwnerAsync("email", users.NormalizeEmail(email), ct) is not null
+            || await Store.FindAliasOwnerAsync("username", users.NormalizeName(email), ct) is not null)
+            throw EmailInUse();
+        var id = Guid.NewGuid().ToString("N");
+        if (!await Store.ClaimAliasAsync(id, "external", key, ct))
+            return null; // the same subject signed up at the same moment elsewhere
+        var name = principal.FindFirstValue(ExternalIdentityClaims.DisplayNameClaim)?.Trim();
+        var user = new ParishUser
+        {
+            Id = id,
+            Email = email,
+            UserName = email,
+            DisplayName = string.IsNullOrWhiteSpace(name) ? email[..email.IndexOf('@')] : name.Length > 200 ? name[..200] : name,
+            EmailConfirmed = true, // the provider verified it (ExternalIdentityClaims); no code is sent
+            LockoutEnabled = true,
+            ExternalLogins = [new AccountExternalLogin { Provider = provider, SubjectHash = hash, LinkedAt = clock.GetUtcNow() }]
+        };
+        IdentityResult created;
+        try
+        {
+            created = await users.CreateAsync(user); // no password: one can be added later from My account
+        }
+        catch
+        {
+            await ReleaseSignUpAsync(id, key, email);
+            throw;
+        }
+        if (!created.Succeeded)
+        {
+            await ReleaseSignUpAsync(id, key, email);
+            if (created.Errors.Any(error => error.Code is "DuplicateEmail" or "DuplicateUserName"))
+                throw EmailInUse();
+            return null;
+        }
+        try
+        {
+            return ("sign-up", user, await sessions.CreateFirstFactorAsync(user, "external", nonce, ct), null);
+        }
+        catch (DomainException error) when (error.Code is "write_conflict" or "account_unavailable")
+        { return null; } // the account exists and signs in with this provider next time
+    }
+
+    private async Task ReleaseSignUpAsync(string id, string key, string email)
+    {
+        await Store.ReleaseAliasAsync(id, "external", key, CancellationToken.None);
+        await Store.ReleaseAliasAsync(id, "username", users.NormalizeName(email), CancellationToken.None);
+        await Store.ReleaseAliasAsync(id, "email", users.NormalizeEmail(email), CancellationToken.None);
+    }
+
+    // True when this provider is the account's only way to sign in (no password, no passkey, no other provider).
+    private static bool LastMethod(ParishUser user, string provider) => user.PasswordHash is null && user.Passkeys.Count == 0
+        && user.ExternalLogins.Count == 1 && user.ExternalLogins[0].Provider == provider;
+
+    private static DomainException LastMethodError() =>
+        new("last_sign_in_method", "Add a password or another sign-in method before unlinking this provider.", FailureKind.Conflict);
+
+    private static DomainException EmailInUse() => new("external_email_in_use",
+        "An account already uses this email. Sign in to it normally, then link this provider from My account.", FailureKind.Conflict);
 
     private async Task RequireProviderAsync(string provider)
     {

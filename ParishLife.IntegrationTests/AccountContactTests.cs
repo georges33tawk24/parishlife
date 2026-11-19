@@ -251,7 +251,7 @@ public class AccountContactTests
         {
             ["ExternalSignIn:google:ClientId"] = "isolated-client",
             ["ExternalSignIn:google:ClientSecret"] = "isolated-client-secret"
-        }, services => services.Configure<OAuthOptions>("external-google", options => options.BackchannelHttpHandler = provider));
+        }, services => services.Configure<ParishLife.Api.Configuration.ExternalOAuthOptions>("external-google", options => options.BackchannelHttpHandler = provider));
     }
 
     // Follows the provider redirect as a browser would: the fake provider "approves" by returning to the callback with the state.

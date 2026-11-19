@@ -71,7 +71,8 @@ Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `do
    - My parish records (`account/records`: only the account's own linked person; corrections go through the existing review).
    - A membership request form.
    - External sign-in and linking that finish in the portal (still `external_provider_unavailable` until providers are configured).
-   - Still open: a link/unlink panel, a QR code, and a list of earlier-request claims. See `docs/frontend-modules/account.md`.
+   - Since 19 November: sign-up with Google or Microsoft (a passwordless account from a provider-verified email, never merged into an existing one), the link/unlink panel and "Add a password" in My account. Rules: `docs/operations/account-sign-in-methods.md`.
+   - Still open: a QR code, and a list of earlier-request claims. See `docs/frontend-modules/account.md`.
 8. **Public** (`fullstack2-public`, `08b4120`):
    - The parish public profile, as a draft with publish/unpublish (`parishes/{id}/profile`), editable in both languages.
    - Private photo uploads with an explicit publish step.
@@ -153,7 +154,6 @@ All 13 areas are merged. Every area doc lists what it could not finish and why; 
   - external delivery for email, SMS and WhatsApp (no provider configured).
 - **Small screen gaps:**
   - an Arabic title input in the meeting dialogs;
-  - a link/unlink panel for external sign-in;
   - a QR code;
   - a rank/season Arabic input in the liturgical calendar editor;
   - reservations from booking requests;

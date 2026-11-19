@@ -19,7 +19,8 @@ import { M, loadMember } from '../model/member-data.js';
 import { applyTheme } from '../../lib/theme.js';
 import { confirmPlanNavigation, planDirty } from '../model/planning.js';
 import { refresh, useVersion } from './version.js';
-import { Auth } from './Auth.jsx';
+import { Auth, externalMessage } from './Auth.jsx';
+import { takeExternalStatus } from '../model/account.js';
 import { ROUTES, allowed, MEMBER_ROUTES } from './routes.jsx';
 
 /* ---------------- delegated controls ----------------
@@ -526,6 +527,28 @@ export function Portal() {
     refresh();
   };
 
+  /* Back from Google or Microsoft already signed in (a new account, or linking from My account): say what happened.
+     Signed out, the sign-in screen reads the status instead (Auth.jsx). */
+  const afterProvider = status => {
+    if (!status || status === 'signed-in') return;
+    location.hash = '#/account';
+    if (status === 'signed-up')
+      return toast(
+        t('Welcome to ParishLife', 'أهلاً بك في ParishLife'),
+        t(
+          'Your account is ready. You can add a password under Sign-in and security, and follow your parish below.',
+          'حسابك جاهز. يمكنك إضافة كلمة مرور من «الدخول والأمان»، ومتابعة رعيتك أدناه.'
+        ),
+        'success'
+      );
+    if (status === 'linked')
+      return toast(
+        t('Linked', 'تم الربط'),
+        t('You can now sign in with that provider.', 'يمكنك الآن الدخول عبر هذا المزوّد.'),
+        'success'
+      );
+    toast(t('Not linked', 'لم يتم الربط'), externalMessage(status), 'danger');
+  };
   /* A link from a parish's public page names the parish; open the account there when it can. */
   const pickParish = () => {
     const wanted = new URLSearchParams(location.search).get('parish');
@@ -866,6 +889,7 @@ export function Portal() {
     (async () => {
       try {
         await enter();
+        afterProvider(takeExternalStatus());
       } catch (error) {
         session.user = null;
         loginScreen(error.status === 401 ? '' : error.message);

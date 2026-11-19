@@ -5,7 +5,7 @@
    provider (GET auth/capabilities). Passkeys, email codes and external providers appear only when the
    capabilities report them. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { api, signIn, completeTwoFactor, register } from '../model/api.js';
+import { signIn, completeTwoFactor, register } from '../model/api.js';
 import { t, isAr } from '../../lib/i18n.js';
 import { applyTheme } from '../../lib/theme.js';
 import { signInWithPasskey, passkeyMessage, passkeysSupported } from '../model/passkeys.js';
@@ -15,11 +15,36 @@ import {
   requestVerificationCode,
   confirmVerificationCode,
   externalSignInPath,
-  pendingExternalChallenge
+  externalSignUpPath,
+  pendingExternalChallenge,
+  takeExternalStatus,
+  postToProvider
 } from '../model/account.js';
 import { mountTurnstile } from '../../lib/turnstile.js';
 import { Sanctuary } from '../../public/components/Sanctuary.jsx';
 import { EasyReading } from '../../reading/EasyReading.jsx';
+
+/* What a provider round trip that did not sign anyone in came back with (ExternalSignInController.Complete). */
+export const externalMessage = status =>
+  ({
+    'not-linked': t(
+      'No ParishLife account uses that sign-in yet. Choose “Sign up” to make one with it, or sign in another way and link it under My account.',
+      'لا يستخدم أي حساب في ParishLife هذا الدخول بعد. اختر «إنشاء حساب» لتنشئ حساباً به، أو ادخل بطريقة أخرى واربطه من «حسابي».'
+    ),
+    'email-in-use': t(
+      'An account already uses that email address, so no new account was made. Sign in to it normally, then link Google or Microsoft under My account.',
+      'يستخدم حسابٌ هذا البريد الإلكتروني، فلم يُنشأ حساب جديد. ادخل إليه كالمعتاد ثم اربط Google أو Microsoft من «حسابي».'
+    ),
+    'not-verified': t(
+      'That provider did not confirm an email address for the account, so no account was made. Sign up with an email and password instead.',
+      'لم يؤكّد هذا المزوّد بريداً إلكترونياً للحساب، فلم يُنشأ حساب. أنشئ حساباً ببريد وكلمة مرور بدلاً من ذلك.'
+    ),
+    'in-use': t(
+      'That Google or Microsoft account is already linked to another ParishLife account.',
+      'حساب Google أو Microsoft هذا مربوط بحساب آخر في ParishLife.'
+    )
+  })[status] ||
+  t('Signing in with that provider did not work. Try again.', 'لم ينجح الدخول عبر هذا المزوّد. حاول مجدداً.');
 
 /* What was typed survives a switch of tab or language; passwords never do. */
 const state = { tab: '', values: {}, shown: false };
@@ -129,29 +154,13 @@ export function Auth({ enter, error = '', onLanguage }) {
     let live = true;
     loadCapabilities().then(c => live && setFeatures(featuresOf(c)));
     /* back from Google or Microsoft: the API put a status word in the address (never a secret) */
-    const back = new URLSearchParams(location.search).get('external');
-    if (back) {
-      const url = new URL(location.href);
-      url.searchParams.delete('external');
-      history.replaceState(null, '', url);
-      if (back === 'two-factor')
-        pendingExternalChallenge().then(
-          c => live && setChallenge(c),
-          () => live && setAlert(t('Sign in again.', 'سجّل الدخول مجدداً.'))
-        );
-      else if (back !== 'signed-in' && back !== 'linked')
-        setAlert(
-          back === 'not-linked'
-            ? t(
-                'That account is not linked to ParishLife. Sign in another way, then link it under My account.',
-                'هذا الحساب غير مربوط بـ ParishLife. سجّل الدخول بطريقة أخرى ثم اربطه من «حسابي».'
-              )
-            : t(
-                'Signing in with that provider did not work. Try again.',
-                'لم ينجح الدخول عبر هذا المزوّد. حاول مجدداً.'
-              )
-        );
-    }
+    const back = takeExternalStatus();
+    if (back === 'two-factor')
+      pendingExternalChallenge().then(
+        c => live && setChallenge(c),
+        () => live && setAlert(t('Sign in again.', 'سجّل الدخول مجدداً.'))
+      );
+    else if (back && !['signed-in', 'signed-up', 'linked'].includes(back)) setAlert(externalMessage(back));
     return () => {
       live = false;
     };
@@ -253,28 +262,16 @@ export function Auth({ enter, error = '', onLanguage }) {
       check.current?.reset();
     }
   };
-  /* Google or Microsoft: the API answers a form post with a redirect to the provider, which a script cannot
-     follow, so the page posts a form (with the anti-forgery token as a form field) and the browser leaves. */
-  const signInWithProvider = async provider => {
+  /* Google or Microsoft, to sign in or (on the sign-up tab) to make an account: a real form post the browser
+     follows to the provider, which sends the person back here (?external=...). The bot-check token rides in the form. */
+  const continueWithProvider = async provider => {
     if (pending()) return setAlert(notChecked());
     setAlert('');
     try {
-      const { token } = await api('auth/csrf');
-      const f = document.createElement('form');
-      f.method = 'POST';
-      f.action = externalSignInPath(provider);
-      /* the provider sends the person back to this page (?external=...); the bot-check token rides in the form */
-      for (const [name, value] of [
-        ['__RequestVerificationToken', token],
-        ['returnTo', 'portal'],
-        ...(check.current?.token ? [['turnstileToken', check.current.token]] : [])
-      ]) {
-        const input = document.createElement('input');
-        Object.assign(input, { type: 'hidden', name, value });
-        f.append(input);
-      }
-      document.body.append(f);
-      f.submit();
+      await postToProvider(
+        up ? externalSignUpPath(provider) : externalSignInPath(provider),
+        check.current?.token ? [['turnstileToken', check.current.token]] : []
+      );
     } catch (err) {
       setAlert(err.message);
     }
@@ -626,12 +623,12 @@ export function Auth({ enter, error = '', onLanguage }) {
                     : t('Sign in', 'تسجيل الدخول')}
               </button>
             </form>
-            {!up && !verify && !challenge && (passkeys || features.external.length) ? (
+            {!verify && !challenge && ((!up && passkeys) || features.external.length) ? (
               <>
                 <div className="auth-or" style={{ '--i': n++ }}>
                   <span>{t('or', 'أو')}</span>
                 </div>
-                {passkeys ? (
+                {!up && passkeys ? (
                   <button
                     type="button"
                     className="auth-passkey"
@@ -651,23 +648,32 @@ export function Auth({ enter, error = '', onLanguage }) {
                     data-external={provider}
                     key={provider}
                     style={{ '--i': n++ }}
-                    onClick={() => signInWithProvider(provider)}
+                    onClick={() => continueWithProvider(provider)}
                   >
                     <span>
                       {provider === 'google'
-                        ? t('Continue with Google', 'المتابعة عبر Google')
+                        ? up
+                          ? t('Sign up with Google', 'إنشاء حساب عبر Google')
+                          : t('Continue with Google', 'المتابعة عبر Google')
                         : provider === 'microsoft'
-                          ? t('Continue with Microsoft', 'المتابعة عبر Microsoft')
+                          ? up
+                            ? t('Sign up with Microsoft', 'إنشاء حساب عبر Microsoft')
+                            : t('Continue with Microsoft', 'المتابعة عبر Microsoft')
                           : provider}
                     </span>
                   </button>
                 ))}
                 {features.external.length ? (
                   <p className="af-help">
-                    {t(
-                      'Works for an account you have already linked to that provider.',
-                      'يعمل للحساب الذي ربطته سابقاً بهذه الخدمة.'
-                    )}
+                    {up
+                      ? t(
+                          'Makes an account with the email address Google or Microsoft has confirmed, without a password. You can add one later under My account. If an account already uses that email, sign in to it and link the provider instead.',
+                          'يُنشئ حساباً بالبريد الذي أكّدته Google أو Microsoft، دون كلمة مرور. يمكنك إضافتها لاحقاً من «حسابي». وإن كان حسابٌ يستخدم هذا البريد، فادخل إليه واربط المزوّد بدلاً من ذلك.'
+                        )
+                      : t(
+                          'Works for an account made with that provider or linked to it.',
+                          'يعمل للحساب الذي أُنشئ عبر هذا المزوّد أو رُبط به.'
+                        )}
                   </p>
                 ) : null}
               </>

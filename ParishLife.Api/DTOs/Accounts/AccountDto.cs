@@ -1,5 +1,5 @@
 // Purpose: returns a safe account profile without exposing private Identity state.
-// Main members: Id, DisplayName, Email, EmailConfirmed, Username, AccountVerified; From maps only safe account fields.
+// Main members: Id, DisplayName, Email, EmailConfirmed, Username, AccountVerified, HasPassword; From maps only safe account fields.
 
 using ParishLife.Api.Identity;
 
@@ -19,6 +19,9 @@ public class AccountDto
 
     public bool AccountVerified { get; set; } = false;
 
+    // False for an account made by Google or Microsoft sign-up until it adds one (My account offers "Add a password").
+    public bool HasPassword { get; set; } = true;
+
     public static AccountDto From(ParishUser user) => new()
     {
         Id = user.Id,
@@ -26,6 +29,7 @@ public class AccountDto
         Email = user.Email,
         EmailConfirmed = user.EmailConfirmed,
         Username = user.UserName,
-        AccountVerified = AccountVerification.IsVerified(user)
+        AccountVerified = AccountVerification.IsVerified(user),
+        HasPassword = user.PasswordHash is not null
     };
 }

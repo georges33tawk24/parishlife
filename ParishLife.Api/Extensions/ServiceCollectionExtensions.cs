@@ -342,19 +342,22 @@ public static class ServiceCollectionExtensions
         foreach (var (provider, endpoints) in ExternalProviderOptions.Providers)
         {
             var settings = configuration.GetSection("ExternalSignIn:" + provider).Get<ExternalProviderOptions>() ?? new();
-            if (!settings.Configured)
+            if (!settings.IsConfigured(provider))
                 continue; // An unconfigured provider has no scheme, so capability reports it unavailable and its routes return 404.
-            services.AddAuthentication().AddOAuth(ExternalProviderOptions.SchemePrefix + provider, options =>
+            services.AddAuthentication().AddOAuth<ExternalOAuthOptions, ExternalOAuthHandler>(ExternalProviderOptions.SchemePrefix + provider, options =>
             {
                 options.ClientId = settings.ClientId!;
-                options.ClientSecret = settings.ClientSecret!;
+                // Microsoft with the managed-identity assertion never holds or sends a secret (ExternalOAuthHandler.ExchangeCodeAsync).
+                options.UseManagedIdentityAssertion = provider == "microsoft" && settings.UseManagedIdentityAssertion;
+                options.ClientSecret = options.UseManagedIdentityAssertion ? string.Empty : settings.ClientSecret!;
                 options.AuthorizationEndpoint = endpoints[0];
                 options.TokenEndpoint = endpoints[1];
                 options.UserInformationEndpoint = endpoints[2];
                 options.CallbackPath = "/api/auth/external/callback/" + provider;
                 options.SignInScheme = IdentityConstants.ExternalScheme;
                 options.UsePkce = true;
-                options.Scope.Add("openid");
+                foreach (var scope in ExternalProviderOptions.Scopes)
+                    options.Scope.Add(scope);
                 options.ClaimActions.MapJsonKey(System.Security.Claims.ClaimTypes.NameIdentifier, "sub");
                 options.Events.OnCreatingTicket = async context =>
                 {
@@ -363,7 +366,11 @@ public static class ServiceCollectionExtensions
                     using var response = await context.Backchannel.SendAsync(request, context.HttpContext.RequestAborted);
                     response.EnsureSuccessStatusCode();
                     using var user = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
-                    context.RunClaimActions(user.RootElement); // Only the stable subject is mapped; provider email is never trusted or merged.
+                    context.RunClaimActions(user.RootElement); // The stable subject: the only key sign-in ever matches on.
+                    // Sign-up may also use a provider-verified email (never to merge into an existing account) and a display name.
+                    var idToken = context.TokenResponse.Response?.RootElement.TryGetProperty("id_token", out var token) == true && token.ValueKind == System.Text.Json.JsonValueKind.String ? token.GetString() : null;
+                    ExternalIdentityClaims.Apply(context.Identity!, provider, user.RootElement, idToken, context.Options.ClientId,
+                        context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow());
                 };
             });
         }

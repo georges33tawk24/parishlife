@@ -1,6 +1,7 @@
-// Purpose: optional OAuth client settings for one external sign-in provider; the provider exists only when both values are set.
-// Main members: ClientId, ClientSecret (private; App Service/Key Vault reference only), Configured, and the known provider table
-// (Providers) with each provider's documented public OAuth/userinfo endpoints.
+// Purpose: optional OAuth client settings for one external sign-in provider; the provider exists only when it is configured.
+// Main members: ClientId, ClientSecret (private; App Service/Key Vault reference only), UseManagedIdentityAssertion (Microsoft only:
+// the client proves itself with a token of the app's user-assigned managed identity instead of a secret), IsConfigured, the sign-in
+// Scopes, and the known provider table (Providers) with each provider's documented public OAuth/userinfo endpoints.
 
 namespace ParishLife.Api.Configuration;
 
@@ -15,9 +16,16 @@ public class ExternalProviderOptions
         ["microsoft"] = ["https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "https://login.microsoftonline.com/common/oauth2/v2.0/token", "https://graph.microsoft.com/oidc/userinfo"]
     };
 
+    // openid for the subject; email and profile so sign-up can read a verified email and a display name.
+    public static readonly string[] Scopes = ["openid", "email", "profile"];
+
     public string? ClientId { get; set; }
 
     public string? ClientSecret { get; set; }
 
-    public bool Configured => !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
+    public bool UseManagedIdentityAssertion { get; set; } = false;
+
+    // Google always needs its secret; Microsoft needs either its secret or the managed-identity assertion (which wins when both are set).
+    public bool IsConfigured(string provider) => !string.IsNullOrWhiteSpace(ClientId)
+        && (!string.IsNullOrWhiteSpace(ClientSecret) || provider == "microsoft" && UseManagedIdentityAssertion);
 }

@@ -1,6 +1,6 @@
 // Purpose: Stores revocable sessions and one-use MFA challenges; rechecks account eligibility and security stamps.
 // Main functions: CreateAsync, CreateRecoveryAsync, CreateFirstFactorAsync (passkey/external single-factor sessions), CommitSessionAsync,
-// CreateChallengeAsync (optionally consuming a one-use ceremony nonce), GetChallengeAsync, ValidAsync, ListAsync, RevokeAsync.
+// CreateChallengeAsync (optionally consuming a one-use ceremony nonce), GetChallengeAsync, ValidAsync, FindValidAsync, ListAsync, RevokeAsync.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -108,16 +108,20 @@ public sealed class AccountSessionService
     }
 
     public async Task<bool> ValidAsync(string accountId, string sessionId, string stamp, CancellationToken ct, string? authenticationMethod = null)
+        => await FindValidAsync(accountId, sessionId, stamp, ct) is { } session
+            && (authenticationMethod is null || session.AuthenticationMethod == authenticationMethod);
+
+    // The stored session when it is still usable for this eligible account and security stamp; otherwise null.
+    internal async Task<AccountSession?> FindValidAsync(string accountId, string sessionId, string stamp, CancellationToken ct)
     {
         var key = CosmosIdentityStore.AccountKey(accountId);
         var account = await documents.ReadAsync<ParishUser>(Containers.Accounts, key, "account", ct);
         if (account?.Value.Active != true || !AccountVerification.IsVerified(account.Value) || account.Value.SecurityStamp != stamp)
-            return false;
+            return null;
         var session = await documents.ReadAsync<AccountSession>(Containers.Accounts, key, "session:" + sessionId, ct);
         return session is not null && !session.Value.Revoked && session.Value.ExpiresAt > clock.GetUtcNow()
             && session.Value.SecurityStamp == stamp && session.Value.AccountId == accountId
-            && Methods.Contains(session.Value.AuthenticationMethod)
-            && (authenticationMethod is null || session.Value.AuthenticationMethod == authenticationMethod);
+            && Methods.Contains(session.Value.AuthenticationMethod) ? session.Value : null;
     }
 
     private static Document<CommandResult> CeremonyRow(string key, string nonce, Operation op) => Row("ceremony:" + nonce, key, "ceremonyNonce",

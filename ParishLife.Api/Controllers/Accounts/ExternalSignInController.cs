@@ -1,7 +1,8 @@
 // Purpose: HTTP endpoints for optional, configuration-gated external sign-in and account linking (A06).
-// Main functions: List, SignIn, Link, LinkTicket and LinkRedirect (provider challenge redirects; the ticket pair lets a browser start
-// linking with a credential-free form post), Complete (link result, cookie or MFA challenge; JSON, or for a portal round trip a redirect
-// to the fixed portal page), PendingChallenge (hands a portal round trip's MFA challenge to the portal once) and Unlink.
+// Main functions: List, SignIn, SignUp, Link, LinkTicket and LinkRedirect (provider challenge redirects; the ticket pair lets a browser
+// start linking with a credential-free form post), Complete (link result, cookie or MFA challenge; JSON, or for a portal round trip a
+// redirect to the fixed portal page with one status word: signed-in, signed-up, two-factor, linked, not-linked, in-use, email-in-use,
+// not-verified or failed), PendingChallenge (hands a portal round trip's MFA challenge to the portal once) and Unlink.
 // Providers that are not configured answer external_provider_unavailable; nothing here reports success it did not get from a provider.
 
 using Microsoft.AspNetCore.Authorization;
@@ -30,11 +31,16 @@ public class ExternalSignInController(ExternalSignInService external, SignInMana
 
     [AllowAnonymous, HttpPost("{provider}/sign-in"), TurnstileProtected]
     public async Task<IActionResult> SignIn(string provider)
-    {
-        // A browser form post may ask to come back to the portal (returnTo=portal); any other value keeps the JSON answer.
-        var portal = Request.HasFormContentType && (await Request.ReadFormAsync(HttpContext.RequestAborted))["returnTo"] == "portal";
-        return Challenge(await external.SignInPropertiesAsync(provider, portal), ExternalProviderOptions.SchemePrefix + provider);
-    }
+        => Challenge(await external.SignInPropertiesAsync(provider, await ReturnsToPortalAsync()), ExternalProviderOptions.SchemePrefix + provider);
+
+    // Creates a passwordless account for an unknown subject with a provider-verified email; a linked subject simply signs in.
+    [AllowAnonymous, HttpPost("{provider}/sign-up"), TurnstileProtected]
+    public async Task<IActionResult> SignUp(string provider)
+        => Challenge(await external.SignUpPropertiesAsync(provider, await ReturnsToPortalAsync()), ExternalProviderOptions.SchemePrefix + provider);
+
+    // A browser form post may ask to come back to the portal (returnTo=portal); any other value keeps the JSON answer.
+    private async Task<bool> ReturnsToPortalAsync()
+        => Request.HasFormContentType && (await Request.ReadFormAsync(HttpContext.RequestAborted))["returnTo"] == "portal";
 
     [Authorize, HttpPost("{provider}/link")]
     public async Task<IActionResult> Link(string provider, LinkExternalLoginDto proof, CancellationToken ct)
@@ -59,7 +65,13 @@ public class ExternalSignInController(ExternalSignInService external, SignInMana
         }
         catch (DomainException error) when (portal)
         {
-            return Redirect(PortalPage + (error.Code == "external_login_in_use" ? "in-use" : "failed"));
+            return Redirect(PortalPage + error.Code switch
+            {
+                "external_login_in_use" => "in-use",
+                "external_email_in_use" => "email-in-use",
+                "external_email_not_verified" => "not-verified",
+                _ => "failed"
+            });
         }
         if (result is null)
             return portal ? Redirect(PortalPage + "not-linked")
@@ -75,7 +87,7 @@ public class ExternalSignInController(ExternalSignInService external, SignInMana
             return Redirect(PortalPage + "two-factor");
         }
         await cookies.IssueAsync(user, session!);
-        return portal ? Redirect(PortalPage + "signed-in") : Ok(AccountDto.From(user));
+        return portal ? Redirect(PortalPage + (mode == "sign-up" ? "signed-up" : "signed-in")) : Ok(AccountDto.From(user));
     }
 
     // Anonymous and one-time: returns the challenge a portal round trip left in its protected cookie, then forgets it.

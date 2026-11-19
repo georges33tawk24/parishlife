@@ -122,7 +122,7 @@ public class ExternalSignInPortalTests
             settings[key] = value;
         return new ConfiguredApiFactory(f.DirectoryPath, settings, services =>
         {
-            services.Configure<OAuthOptions>("external-google", options => options.BackchannelHttpHandler = provider);
+            services.Configure<ParishLife.Api.Configuration.ExternalOAuthOptions>("external-google", options => options.BackchannelHttpHandler = provider);
             more?.Invoke(services);
         });
     }

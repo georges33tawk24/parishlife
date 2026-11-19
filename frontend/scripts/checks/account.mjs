@@ -118,6 +118,12 @@ const { sent } = mockApi((method, path, body, options) => {
   if (path === 'auth/passkeys/cred1/remove') return json(200, { status: 'Applied', requiresSignIn: true });
   if (path === 'auth/external/pending-challenge')
     return json(200, { accountId: 'u', challenge: 'held', expiresAt: '2026-11-11T10:00:00Z' });
+  if (path === 'auth/external' && method === 'GET')
+    return json(200, [{ provider: 'google', linkedAt: '2026-11-19T10:00:00Z' }]);
+  if (path === 'auth/external/google/unlink') return json(200, { status: 'Applied', requiresSignIn: true });
+  if (path === 'auth/external/microsoft/link/ticket')
+    return json(200, { ticket: 'tkt', expiresAt: '2026-11-19T10:02:00Z' });
+  if (path === 'auth/password/add') return json(200, { status: 'Added', requiresSignIn: true });
   if (path === 'account/signature' && method === 'GET')
     return json(200, { eligible: true, version: null, signature: null });
   if (path === 'account/signature')
@@ -347,6 +353,24 @@ try {
 // a provider round trip back to the portal: the held authenticator step is fetched once, as a POST
 assert.equal((await account.pendingExternalChallenge()).challenge, 'held');
 assert.deepEqual(last(), ['POST', 'auth/external/pending-challenge', undefined]);
+assert.equal(account.externalSignUpPath('google'), '/api/auth/external/google/sign-up');
+
+// Google and Microsoft on My account: the list, unlinking with the proof, and a first password (no current one)
+assert.equal((await account.loadExternalLogins())[0].provider, 'google');
+await account.unlinkProvider('google', { password: 'p', code: '' });
+assert.deepEqual(
+  [last()[1], last()[2].currentPassword, 'currentCode' in last()[2], uuid.test(last()[2].operationId)],
+  ['auth/external/google/unlink', 'p', false, true]
+);
+assert.equal((await account.addPassword('a-first-password-1234', '')).status, 'Added');
+assert.deepEqual(Object.keys(last()[2]).sort(), ['newPassword', 'operationId']);
+await account.addPassword('a-first-password-1234', '123456');
+assert.equal(last()[2].currentCode, '123456');
+// linking: the proof goes over JSON for a ticket; the form post that follows is the browser's (no document here)
+await account.linkProvider('microsoft', { password: 'p', code: '654321' }).catch(() => {});
+assert.ok(
+  sent.some(([, path, body]) => path === 'auth/external/microsoft/link/ticket' && body.currentCode === '654321')
+);
 
 // my own signature image: first save without a version, removal with it; nothing about passkeys or signing
 assert.equal((await account.loadSignature()).signature, null);

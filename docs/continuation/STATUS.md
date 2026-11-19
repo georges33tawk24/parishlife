@@ -90,6 +90,36 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - Widget hostnames confirmed by the owner: exactly these two, with no `localhost` or `127.0.0.1`.
   - **Open:** the public request page's widget was not exercised live, because nothing is published yet.
   - Details: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
+- **Google and Microsoft sign-up (19 November), code only, not deployed or configured:**
+  - **Owner decisions (approved policy, OWNER-QUESTIONS #21):**
+    - sign-up creates an account with no password, which can be added later;
+    - a provider-verified email counts as confirmed, and is never used to merge (`email-in-use`);
+    - Google and Microsoft now, Apple later.
+  - **API:**
+    - `POST /api/auth/external/{provider}/sign-up` (Turnstile, rate-limited).
+    - Which emails count: Google needs `email_verified`. Microsoft needs a personal-account `tid` or `xms_edov` in the ID token (`Identity/ExternalIdentityClaims.cs`).
+    - `POST /api/auth/password/add`, proven by a provider sign-in of the same session within 10 minutes.
+    - The S06.11 last-method guard is checked before any proof is asked for.
+    - `auth/me` reports `hasPassword`. Scopes are now `openid email profile`.
+  - **Microsoft without a secret:** `ExternalSignIn:microsoft:UseManagedIdentityAssertion=true` redeems the code with a managed-identity client assertion (`Identity/ExternalOAuthHandler.cs`).
+    - **Unverified:** whether Microsoft accepts it for personal accounts at `common`; the docs don't say. Test live, and fall back to a Key Vault secret if refused.
+  - **Portal:**
+    - "Sign up with Google/Microsoft" on the sign-up tab;
+    - the `signed-up`, `email-in-use` and `not-verified` messages;
+    - a Google and Microsoft panel in My account (link, unlink);
+    - "Add a password" for accounts without one.
+  - **Checks, SDK 10.0.401:**
+    - **547 backend tests passed** (64 unit / 483 integration), including `ExternalSignUpTests` 4 and `ExternalIdentityClaimsTests` 7;
+    - frontend format, lint, check and build pass;
+    - `check:routes` 638 routes, 2 known gaps, 0 new;
+    - `npm run e2e` 11/11.
+  - **Not exercised:** a real provider, or the new buttons in a browser (the e2e host has no provider configured).
+  - **Next, in the Azure session with the owner's go-ahead:**
+    - the app registrations;
+    - Google's secret in Key Vault;
+    - Microsoft's federated credential and optional claims;
+    - the App Service settings and the deploy.
+  - Rules: `docs/operations/account-sign-in-methods.md`.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.

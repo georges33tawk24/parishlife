@@ -3,7 +3,8 @@
    Main functions: loadCapabilities, featuresOf, requestVerificationCode, confirmVerificationCode, loadProfile,
    saveProfile, previewAppearance, resetAppearance, themeOf, changePassword, beginEmailChange, confirmEmailChange,
    mfaStatus, beginMfa, completeMfa, replaceRecoveryCodes, loadSessions, revokeSession, externalSignInPath,
-   pendingExternalChallenge, loadSignature, saveSignature, removeSignature, loadRecords, proposeCorrection, requestMembership,
+   externalSignUpPath, pendingExternalChallenge, takeExternalStatus, postToProvider, loadExternalLogins, linkProvider,
+   unlinkProvider, addPassword, loadSignature, saveSignature, removeSignature, loadRecords, proposeCorrection, requestMembership,
    myMembershipRequests. DETAILS lists the optional personal profile fields.
 
    What changes sign-in (password, email, two-factor, passkeys) needs the current password and, when the account
@@ -146,8 +147,56 @@ export const revokeSession = id => api(`auth/sessions/${encodeURIComponent(id)}/
 
 /* ---------- external sign-in (Google, Microsoft) ---------- */
 export const externalSignInPath = provider => `/api/auth/external/${encodeURIComponent(provider)}/sign-in`;
+/* Sign-up makes a passwordless account when the provider vouches for an email no account uses; a linked one just signs in. */
+export const externalSignUpPath = provider => `/api/auth/external/${encodeURIComponent(provider)}/sign-up`;
 /* A round trip that asked to come back to the portal may leave an authenticator step; the API hands it over once. */
 export const pendingExternalChallenge = () => api('auth/external/pending-challenge', 'POST');
+/* The status word a provider round trip left in the address (?external=...), taken out of it once. Never a secret. */
+export const takeExternalStatus = () => {
+  const url = new URL(location.href),
+    status = url.searchParams.get('external');
+  if (status) {
+    url.searchParams.delete('external');
+    history.replaceState(null, '', url);
+  }
+  return status || '';
+};
+/* The API answers these form posts with a redirect to the provider, which a script cannot follow: the page posts a
+   real form (the anti-forgery token as a form field) and the browser leaves, coming back to ?external=... */
+export async function postToProvider(path, fields = []) {
+  const { token } = await api('auth/csrf');
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = path;
+  for (const [name, value] of [['__RequestVerificationToken', token], ['returnTo', 'portal'], ...fields]) {
+    const input = document.createElement('input');
+    Object.assign(input, { type: 'hidden', name, value });
+    f.append(input);
+  }
+  document.body.append(f);
+  f.submit();
+}
+/* ExternalLoginDto[]: { provider, linkedAt } for this account. */
+export const loadExternalLogins = async () => (await api('auth/external')) || [];
+/* Linking: the proof goes over JSON for a two-minute ticket, then a credential-free form post starts the provider trip. */
+export async function linkProvider(provider, credentials) {
+  const { ticket } = await api(`auth/external/${encodeURIComponent(provider)}/link/ticket`, 'POST', proof(credentials));
+  await postToProvider(`/api/auth/external/${encodeURIComponent(provider)}/link/redirect`, [['ticket', ticket]]);
+}
+/* Unlinking ends every session (AccountSecurityChangeDto.requiresSignIn). The API refuses the last sign-in method. */
+export const unlinkProvider = (provider, credentials) =>
+  api(`auth/external/${encodeURIComponent(provider)}/unlink`, 'POST', {
+    operationId: newOperationId(),
+    ...proof(credentials)
+  });
+/* A first password for an account made by provider sign-up: needs a provider sign-in of this session within ten
+   minutes. Every session ends afterwards. */
+export const addPassword = (newPassword, code) =>
+  api('auth/password/add', 'POST', {
+    operationId: newOperationId(),
+    newPassword,
+    ...(code ? { currentCode: code } : {})
+  });
 
 /* ---------- my own signature image (private; an image only, it signs nothing) ---------- */
 /* { eligible, version, signature: { drawing, title, titleAr, updatedAt } | null } */

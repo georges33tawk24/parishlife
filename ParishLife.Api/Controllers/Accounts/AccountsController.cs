@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for accounts workflows; delegates work to backend services.
-// Main functions: Csrf, Register, Login, CompleteMfa, Me, Logout, Sessions, Revoke, ChangePassword.
+// Main functions: Csrf, Register, Login, CompleteMfa, Me, Logout, Sessions, Revoke, ChangePassword, AddPassword.
 // AccountDto.From supplies the shared safe profile projection.
 // Rate limits: every sign-in, registration, session and password action uses the strict "authentication" policy. Csrf and Me do not:
 // the portal calls them on every page load, so on a shared connection (a parish office or hall) they would use up the sign-in budget
@@ -117,6 +117,16 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
         [FromServices] AccountPasswordService passwords, CancellationToken ct)
     {
         var result = await passwords.ChangeAsync(request, ct);
+        await signIn.SignOutAsync();
+        return Ok(result);
+    }
+
+    // A first password for an account made by Google or Microsoft sign-up; every session ends afterwards, as for a change.
+    [Authorize, HttpPost("password/add"), EnableRateLimiting(Authentication)]
+    public async Task<ActionResult<PasswordChangeResultDto>> AddPassword(AddAccountPasswordDto request,
+        [FromServices] AccountPasswordService passwords, CancellationToken ct)
+    {
+        var result = await passwords.AddAsync(request, ct);
         await signIn.SignOutAsync();
         return Ok(result);
     }
