@@ -1,7 +1,12 @@
 // Purpose: proves ownership of a sign-in email with one-use, expiring, attempt-bounded codes (A06): confirming a registered
 // account's email and replacing the sign-in email while the old one stays active until the new one is proven.
-// Main functions: RequestAsync, ConfirmAsync (anonymous, neutral responses), BeginEmailChangeAsync, ConfirmEmailChangeAsync;
-// helpers Hash, Pending, FailAttemptAsync. Codes are stored only as hashes and never enter fingerprints, receipts, audit or logs.
+// Main functions: RequestAsync, ConfirmAsync (anonymous, neutral responses), BeginEmailChangeAsync, ConfirmEmailChangeAsync,
+// RequestPasswordResetAsync and ConfirmPasswordResetAsync (forgotten password, below); helpers Hash, Pending, FailAttemptAsync.
+// Codes are stored only as hashes and never enter fingerprints, receipts, audit or logs.
+// Password reset: an 8-digit code (15 minutes, 5 attempts, one request a minute) goes only to an active account's confirmed email; the
+// request answer is the same for every address. Confirming it with a new password (and the current authenticator code when the account
+// has one) sets the password and a new security stamp in one account transaction, which ends every session and invalidates any other
+// pending code. It never signs in, never creates a recovery or MFA session, and a later password change also voids an unused code.
 
 using System.Net.Mail;
 using System.Security.Cryptography;
@@ -24,6 +29,7 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
     private static readonly TimeSpan ResendInterval = TimeSpan.FromMinutes(1);
     private const string ConfirmKey = "contactVerification:ConfirmEmail";
     private const string ChangeKey = "contactVerification:ChangeEmail";
+    private const string ResetKey = "contactVerification:ResetPassword";
     private CosmosIdentityStore Store => (CosmosIdentityStore)store;
     private string DeliveryState => delivery.Configured ? "ProviderConfigured" : "NotConfigured";
 
@@ -149,6 +155,54 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
             await Store.ReleaseAliasAsync(user.Id, "email", oldEmail, ct);
         if (userNameFollowsEmail)
             await Store.ReleaseAliasAsync(user.Id, "username", oldUserName!, ct);
+        return Change(operation.Id, "Applied", item.Id);
+    }
+
+    public async Task<ContactVerificationStatusDto> RequestPasswordResetAsync(RequestPasswordResetDto request, CancellationToken ct)
+    {
+        var neutral = new ContactVerificationStatusDto { Status = "RequestReceived", Delivery = DeliveryState };
+        var user = await users.FindByEmailAsync(Email(request.Email));
+        // Unknown, inactive, closed and unconfirmed addresses get the same answer; without a provider nothing is generated.
+        if (user is not { Active: true, EmailConfirmed: true } || user.Email is null || user.PlatformOperator || !delivery.Configured)
+            return neutral;
+        var scope = MfaRecoveryService.Scope(user.Id);
+        var current = await records.ReadAsync<ContactVerification>(scope, ResetKey, ct);
+        if (current?.Value is { Status: "Pending" } open && open.CreatedAt + ResendInterval > clock.GetUtcNow())
+            return neutral;
+        var code = RandomNumberGenerator.GetInt32(0, 100_000_000).ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
+        var item = Stage(user, "ResetPassword", user.Email, user.NormalizedEmail!, code);
+        if (!await delivery.SendAsync(user.Email, code, item.Purpose, ct))
+            return neutral;
+        item.Delivery = "Accepted";
+        await records.CommitAsync(scope, Internal(user.Id, "password.reset.requested"), "identity.password_reset.requested", item.Id,
+            [current is null ? RecordChange.Create(ResetKey, "contactVerification", item) : RecordChange.Replace(ResetKey, "contactVerification", item, current.Version)],
+            new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        return neutral;
+    }
+
+    public async Task<AccountSecurityChangeDto> ConfirmPasswordResetAsync(ConfirmPasswordResetDto request, CancellationToken ct)
+    {
+        var user = await users.FindByEmailAsync(Email(request.Email));
+        if (user is not { Active: true, EmailConfirmed: true } || user.PlatformOperator || user.PersistenceVersion is null)
+            throw Invalid();
+        var scope = MfaRecoveryService.Scope(user.Id);
+        var row = await records.ReadAsync<ContactVerification>(scope, ResetKey, ct);
+        var item = Pending(row, user, user.NormalizedEmail);
+        // The code proves the mailbox; an account with an authenticator still proves that factor, so email alone never resets it.
+        if (!Matches(item, request.Code) || user.TwoFactorEnabled && !await proof.VerifyAsync(user, request.CurrentCode))
+            await FailAttemptAsync(scope, ResetKey, row!, ct);
+        if (request.NewPassword is null || request.NewPassword.Length is < 16 or > 200)
+            throw new DomainException("invalid_password", "New password must contain 16–200 characters.");
+        var staged = await users.StagePasswordAsync(user, request.NewPassword); // also issues the new security stamp
+        if (!staged.Succeeded)
+            throw new DomainException("new_password_rejected", "The proposed password does not satisfy the configured password policy.");
+        user.AccessFailedCount = 0;
+        item.Status = "Completed";
+        item.CompletedAt = clock.GetUtcNow();
+        var operation = Internal(user.Id, "password.reset.completed");
+        await records.CommitAsync(scope, operation, "identity.password_reset.completed", item.Id,
+            [RecordChange.Replace("account", "account", user, user.PersistenceVersion), RecordChange.Replace(ResetKey, "contactVerification", item, row!.Version)],
+            new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Change(operation.Id, "Applied", item.Id);
     }
 
