@@ -2,7 +2,7 @@
    anti-forgery token, readable errors from the API's ProblemDetails, and the signed-in account's session
    (account, parishes, role in each parish), and the bot-check token when the API asks for one.
    Main functions: api, parishAPI, loadSession, selectParish, signIn, completeTwoFactor, signOut, register,
-   newOperationId.
+   requestPasswordReset, confirmPasswordReset, closeAccount, forgetAccountStorage, newOperationId.
 
    The API's cookies are __Host-, Secure and SameSite=Strict and it has no CORS, so these requests only work
    when the page and /api share one HTTPS origin (the Vite proxy in development; one host in production).
@@ -126,10 +126,45 @@ export async function signOut() {
   } finally {
     csrf = '';
     Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
+    forgetAccountStorage();
   }
 }
-export const register = ({ email, password, displayName, turnstile }) =>
-  api('auth/register', 'POST', { operationId: newOperationId(), email, password, displayName }, checked(turnstile));
+/* Browser storage that names an account or a parish's finance work is removed at sign-out, so a shared computer
+   does not show who used it (language, text size and the sidebar choice stay). */
+export function forgetAccountStorage() {
+  try {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith('pl-anniversaries-') || key.startsWith('pl-finance-session:')) localStorage.removeItem(key);
+    sessionStorage.removeItem('pl-admin-opened');
+  } catch {}
+}
+/* ageConfirmed: the person ticked "I am 13 or older" (accounts are for 13 and over); the API refuses sign-up without it. */
+export const register = ({ email, password, displayName, ageConfirmed, turnstile }) =>
+  api(
+    'auth/register',
+    'POST',
+    { operationId: newOperationId(), email, password, displayName, ageConfirmed: !!ageConfirmed },
+    checked(turnstile)
+  );
+/* Forgotten password: a code goes to the account's confirmed email (the answer is the same for any address); the code,
+   a new password and, for an account with an authenticator, its current code set the password. Nobody is signed in. */
+export const requestPasswordReset = (email, turnstile) =>
+  api('auth/password-reset', 'POST', { email }, checked(turnstile));
+export const confirmPasswordReset = ({ email, code, newPassword, currentCode }) =>
+  api('auth/password-reset/confirm', 'POST', { email, code, newPassword, currentCode: currentCode || null });
+/* Closes the signed-in account (fresh proof and the word CLOSE); the API ends every session. */
+export async function closeAccount({ currentPassword, currentCode, confirmation }) {
+  const result = await api('auth/account/close', 'POST', {
+    operationId: newOperationId(),
+    currentPassword: currentPassword || null,
+    currentCode: currentCode || null,
+    confirmation
+  });
+  csrf = '';
+  Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
+  forgetAccountStorage();
+  return result;
+}
 
 /* What each capacity means in the portal. An office grant (ParishGrant) carries capabilities: records
    work makes the secretary's view, finance alone the treasurer's. */

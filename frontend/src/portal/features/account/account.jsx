@@ -14,6 +14,7 @@ import { Mfa } from './account-mfa.jsx';
 import { Passkeys } from './account-passkeys.jsx';
 import { Providers, addAccountPassword } from './account-providers.jsx';
 import { Sessions } from './account-sessions.jsx';
+import { AccountData } from './account-closure.jsx';
 import { GuestLinks } from './guest-links.jsx';
 import { RecordCorrections } from '../records/profile-reviews.jsx';
 import { api, session, loadSession } from '../../model/api.js';
@@ -408,6 +409,7 @@ export function AccountPage() {
             <Providers mfa={mfa} available={features.external} hasPassword={account.hasPassword !== false} />
           ) : null}
           <Sessions />
+          <AccountData mfa={mfa} hasPassword={account.hasPassword !== false} />
         </Panel>
         <div data-signature="">
           <MySignature key={signature} />
