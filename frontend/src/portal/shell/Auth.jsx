@@ -42,6 +42,14 @@ export const externalMessage = status =>
     'in-use': t(
       'That Google or Microsoft account is already linked to another ParishLife account.',
       'حساب Google أو Microsoft هذا مربوط بحساب آخر في ParishLife.'
+    ),
+    'check-failed': t(
+      'The security check did not go through. Complete the check again, then press the button once.',
+      'لم ينجح فحص الأمان. أكمل الفحص من جديد، ثم اضغط الزر مرّة واحدة.'
+    ),
+    'check-unavailable': t(
+      'The security check is not available right now. Try again in a few minutes.',
+      'فحص الأمان غير متاح حالياً. حاول مجدداً بعد بضع دقائق.'
     )
   })[status] ||
   t('Signing in with that provider did not work. Try again.', 'لم ينجح الدخول عبر هذا المزوّد. حاول مجدداً.');
@@ -125,7 +133,7 @@ export function Auth({ enter, error = '', onLanguage }) {
   const [tab, setTab] = useState(state.tab);
   const [first] = useState(() => !state.shown);
   const [alert, setAlert] = useState(error);
-  const [busy, setBusy] = useState({ submit: false, passkey: false, code: false });
+  const [busy, setBusy] = useState({ submit: false, passkey: false, code: false, provider: false });
   const [forgot, setForgot] = useState(false);
   const [challenge, setChallenge] = useState(null); // set when the API asks for an authenticator code
   const [verify, setVerify] = useState(null); // set while confirming an email with a code
@@ -264,9 +272,12 @@ export function Auth({ enter, error = '', onLanguage }) {
   };
   /* Google or Microsoft, to sign in or (on the sign-up tab) to make an account: a real form post the browser
      follows to the provider, which sends the person back here (?external=...). The bot-check token rides in the form. */
+  /* One press only: the buttons stay disabled while the browser leaves (the check's token works once). */
   const continueWithProvider = async provider => {
+    if (busy.provider) return;
     if (pending()) return setAlert(notChecked());
     setAlert('');
+    setBusy(b => ({ ...b, provider: true }));
     try {
       await postToProvider(
         up ? externalSignUpPath(provider) : externalSignInPath(provider),
@@ -274,8 +285,21 @@ export function Auth({ enter, error = '', onLanguage }) {
       );
     } catch (err) {
       setAlert(err.message);
+      setBusy(b => ({ ...b, provider: false }));
+      check.current?.reset();
     }
   };
+  /* Back from Google or Microsoft with the browser's restored copy of this page: the token was spent, so the check
+     starts again and the buttons work again. */
+  useEffect(() => {
+    const restored = event => {
+      if (!event.persisted) return;
+      setBusy(b => ({ ...b, provider: false }));
+      check.current?.reset();
+    };
+    addEventListener('pageshow', restored);
+    return () => removeEventListener('pageshow', restored);
+  }, []);
   /* Ask for an email code. The reply is the same whether or not the address belongs to an account waiting for one. */
   const sendCode = async () => {
     const email = String(new FormData(form.current).get('email') || '').trim();
@@ -615,7 +639,12 @@ export function Auth({ enter, error = '', onLanguage }) {
               <p className="auth-error" role="alert" data-error hidden={!alert}>
                 {alert}
               </p>
-              <button type="submit" className="auth-submit" style={{ '--i': n++ }} disabled={busy.submit}>
+              <button
+                type="submit"
+                className="auth-submit"
+                style={{ '--i': n++ }}
+                disabled={busy.submit || busy.provider}
+              >
                 {up
                   ? t('Create account', 'إنشاء الحساب')
                   : verify
@@ -634,7 +663,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                     className="auth-passkey"
                     data-passkey
                     style={{ '--i': n++ }}
-                    disabled={busy.passkey}
+                    disabled={busy.passkey || busy.provider}
                     onClick={signInWithKey}
                   >
                     <Key />
@@ -648,6 +677,8 @@ export function Auth({ enter, error = '', onLanguage }) {
                     data-external={provider}
                     key={provider}
                     style={{ '--i': n++ }}
+                    disabled={busy.provider}
+                    aria-busy={busy.provider}
                     onClick={() => continueWithProvider(provider)}
                   >
                     <span>

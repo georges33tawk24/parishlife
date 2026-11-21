@@ -88,8 +88,13 @@ public class ExternalSignInPortalTests
     {
         await using var f = new LocalBackendFixture();
         await f.InitializeAsync();
-        var verifier = new RoutedHandler(async request => RoutedHandler.Json((await request.Content!.ReadAsStringAsync()).Contains("response=good-token", StringComparison.Ordinal)
-            ? """{"success":true,"hostname":"localhost"}""" : """{"success":false}"""));
+        var verifier = new RoutedHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            return body.Contains("response=down-token", StringComparison.Ordinal) ? RoutedHandler.Json("{}", HttpStatusCode.BadGateway)
+                : RoutedHandler.Json(body.Contains("response=good-token", StringComparison.Ordinal)
+                    ? """{"success":true,"hostname":"localhost"}""" : """{"success":false}""");
+        });
         await using var factory = Provider(f, "portal-subject-2", new()
         {
             ["Turnstile:SiteKey"] = "isolated-site-key",
@@ -98,8 +103,20 @@ public class ExternalSignInPortalTests
         }, services => services.AddHttpClient(TurnstileVerifier.ClientName).ConfigurePrimaryHttpMessageHandler(() => verifier));
         using var browser = factory.Client();
         await Csrf(browser);
-        Assert.Equal("turnstile_failed", await Title(await browser.PostAsync("/api/auth/external/google/sign-in", Form(("returnTo", "portal")))));
+        // A portal form post with a missing, spent or rejected token goes back to the sign-in page with a status word, never a JSON page.
+        foreach (var path in new[] { "/api/auth/external/google/sign-in", "/api/auth/external/google/sign-up" })
+        {
+            var missing = await browser.PostAsync(path, Form(("returnTo", "portal")));
+            Assert.Equal(HttpStatusCode.Redirect, missing.StatusCode);
+            Assert.Equal("/index.html?external=check-failed", missing.Headers.Location!.OriginalString);
+            Assert.Equal("/index.html?external=check-failed",
+                (await browser.PostAsync(path, Form(("turnstileToken", "bad-token"), ("returnTo", "portal")))).Headers.Location!.OriginalString);
+            Assert.Equal("/index.html?external=check-unavailable",
+                (await browser.PostAsync(path, Form(("turnstileToken", "down-token"), ("returnTo", "portal")))).Headers.Location!.OriginalString);
+        }
+        // Without returnTo=portal the JSON answers stay as they were.
         Assert.Equal("turnstile_failed", await Title(await browser.PostAsync("/api/auth/external/google/sign-in", Form(("turnstileToken", "bad-token")))));
+        Assert.Equal("turnstile_unavailable", await Title(await browser.PostAsync("/api/auth/external/google/sign-in", Form(("turnstileToken", "down-token")))));
         var challenge = await browser.PostAsync("/api/auth/external/google/sign-in", Form(("turnstileToken", "good-token"), ("returnTo", "portal")));
         Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
         Assert.Equal("accounts.google.com", challenge.Headers.Location!.Host);

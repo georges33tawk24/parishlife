@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Purpose: the ParishLife terms of use, in English and Arabic, as a static page served from the same origin as the site.
-     Main parts: the draft banner (remove once the owner approves), the English and Arabic texts (one shows at a time, by ?lang= or the
-     site's saved language), and [OWNER: ...] placeholders for facts only the owner can give. The text describes only what the code does
+     Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language), approved by
+     the owner on 21 November 2026. The text describes only what the code does
      (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
 <html lang="en" dir="ltr">
 <head>
@@ -19,17 +19,15 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 "Source Sans 3", "Noto Sans Arabic", system-ui, sans-serif; }
     [lang="ar"] { font-family: "Noto Sans Arabic", system-ui, sans-serif; }
-    html[lang="ar"] :is(section, .draft span)[lang="en"], html:not([lang="ar"]) :is(section, .draft span)[lang="ar"] { display: none; }
+    html[lang="ar"] section[lang="en"], html:not([lang="ar"]) section[lang="ar"] { display: none; }
     header { background: var(--navy); color: #F3EEE4; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     header a { color: #F3EEE4; text-decoration: none; font-weight: 600; }
-    .draft { background: #FFF3CD; border-bottom: 2px solid #E0B44C; color: #5C4300; padding: 10px 20px; font-weight: 600; text-align: center; }
     main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
     h1 { font-size: 1.9rem; margin: 0 0 4px; color: var(--navy); }
     h2 { font-size: 1.2rem; margin: 28px 0 6px; color: var(--navy); }
     p, li { color: var(--ink); }
     ul { padding-inline-start: 22px; }
     .meta { color: var(--soft); margin: 0 0 18px; }
-    .owner { background: #FDECEA; color: #8A1C12; padding: 0 4px; border-radius: 3px; font-weight: 600; }
     footer { border-top: 1px solid var(--line); max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; color: var(--soft); display: flex; gap: 18px; flex-wrap: wrap; }
     a { color: #7A5A1E; }
   </style>
@@ -39,18 +37,13 @@
     <a href="public.html">ParishLife</a>
     <span><a href="?lang=en" lang="en">English</a> · <a href="?lang=ar" lang="ar">العربية</a></span>
   </header>
-  <div class="draft" role="note">
-    <span lang="en">Draft — pending owner approval. This text is not yet in force.</span>
-    <span lang="ar" dir="rtl">مسودة — بانتظار موافقة المالك. هذا النص غير نافذ بعد.</span>
-  </div>
-
   <main>
     <section lang="en" dir="ltr">
       <h1>Terms of use</h1>
-      <p class="meta">Effective date: <span class="owner">[OWNER: effective date]</span></p>
+      <p class="meta">Effective date: 21 November 2026</p>
 
       <h2>About these terms</h2>
-      <p>ParishLife is run by <span class="owner">[OWNER: operator name or organisation]</span>. By using ParishLife you accept these terms. How we handle personal data is in the <a href="privacy.html">privacy policy</a>.</p>
+      <p>ParishLife runs this service at parish-life.org. By using ParishLife you accept these terms. How we handle personal data is in the <a href="privacy.html">privacy policy</a>.</p>
 
       <h2>Using ParishLife</h2>
       <ul>
@@ -75,24 +68,24 @@
       <p>ParishLife helps parishes keep records and issue documents. Sacramental, canonical and other decisions remain with the parish and the Church authorities. Decisions taken outside ParishLife, or on information not confirmed with the parish, are not ParishLife's responsibility.</p>
 
       <h2>Availability</h2>
-      <p>We work to keep ParishLife available and the data safe, but we cannot promise that it will always be available or free of errors. <span class="owner">[OWNER: limitation of liability, if any]</span></p>
+      <p>We work to keep ParishLife available and the data safe, but we cannot promise that it will always be available or free of errors.</p>
 
       <h2>Suspension and closing</h2>
-      <p>We or a parish may suspend an account or limit access that breaks these terms or puts other people or the service at risk. You can stop using ParishLife at any time; to close your account, write to <span class="owner">[OWNER: contact email]</span>.</p>
+      <p>We or a parish may suspend an account or limit access that breaks these terms or puts other people or the service at risk. You can stop using ParishLife at any time; to close your account, write to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
 
       <h2>Changes</h2>
       <p>We may change these terms. We will post the new text here with a new effective date.</p>
 
       <h2>Contact and law</h2>
-      <p>Questions: <span class="owner">[OWNER: contact email]</span>. These terms are governed by <span class="owner">[OWNER: country and governing law]</span>.</p>
+      <p>Questions: <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>. These terms are governed by the laws of Lebanon.</p>
     </section>
 
     <section lang="ar" dir="rtl">
       <h1>شروط الاستخدام</h1>
-      <p class="meta">تاريخ السريان: <span class="owner">[OWNER: effective date]</span></p>
+      <p class="meta">تاريخ السريان: 21 November 2026</p>
 
       <h2>عن هذه الشروط</h2>
-      <p>يدير ParishLife <span class="owner">[OWNER: operator name or organisation]</span>. باستخدامك ParishLife توافق على هذه الشروط. طريقة تعاملنا مع البيانات الشخصية مشروحة في <a href="privacy.html?lang=ar">سياسة الخصوصية</a>.</p>
+      <p>يدير ParishLife هذه الخدمة على parish-life.org. باستخدامك ParishLife توافق على هذه الشروط. طريقة تعاملنا مع البيانات الشخصية مشروحة في <a href="privacy.html?lang=ar">سياسة الخصوصية</a>.</p>
 
       <h2>استخدام ParishLife</h2>
       <ul>
@@ -117,16 +110,16 @@
       <p>يساعد ParishLife الرعايا على حفظ السجلات وإصدار الوثائق. تبقى القرارات المتعلّقة بالأسرار والقوانين الكنسية وغيرها للرعية وللسلطات الكنسية. القرارات المتّخذة خارج ParishLife، أو بناءً على معلومات لم تؤكّدها الرعية، ليست من مسؤولية ParishLife.</p>
 
       <h2>التوفّر</h2>
-      <p>نعمل على إبقاء ParishLife متاحاً والبيانات آمنة، لكن لا نستطيع أن نضمن توفّره الدائم أو خلوّه من الأخطاء. <span class="owner">[OWNER: limitation of liability, if any]</span></p>
+      <p>نعمل على إبقاء ParishLife متاحاً والبيانات آمنة، لكن لا نستطيع أن نضمن توفّره الدائم أو خلوّه من الأخطاء.</p>
 
       <h2>التعليق والإغلاق</h2>
-      <p>يجوز لنا أو للرعية تعليق حساب أو تقييد وصول يخالف هذه الشروط أو يعرّض الآخرين أو الخدمة للخطر. يمكنك التوقّف عن استخدام ParishLife متى شئت؛ ولإغلاق حسابك راسلنا على <span class="owner">[OWNER: contact email]</span>.</p>
+      <p>يجوز لنا أو للرعية تعليق حساب أو تقييد وصول يخالف هذه الشروط أو يعرّض الآخرين أو الخدمة للخطر. يمكنك التوقّف عن استخدام ParishLife متى شئت؛ ولإغلاق حسابك راسلنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
 
       <h2>التغييرات</h2>
       <p>قد نغيّر هذه الشروط، وننشر النص الجديد هنا مع تاريخ سريان جديد.</p>
 
       <h2>التواصل والقانون</h2>
-      <p>للأسئلة: <span class="owner">[OWNER: contact email]</span>. تخضع هذه الشروط لـ <span class="owner">[OWNER: country and governing law]</span>.</p>
+      <p>للأسئلة: <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>. تخضع هذه الشروط لقوانين لبنان.</p>
     </section>
   </main>
 

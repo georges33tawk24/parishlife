@@ -162,20 +162,39 @@ export const takeExternalStatus = () => {
   return status || '';
 };
 /* The API answers these form posts with a redirect to the provider, which a script cannot follow: the page posts a
-   real form (the anti-forgery token as a form field) and the browser leaves, coming back to ?external=... */
+   real form (the anti-forgery token as a form field) and the browser leaves, coming back to ?external=...
+   One trip at a time: a second click while the browser is leaving would send the same single-use bot-check token
+   again, and its refusal would replace the trip to Google or Microsoft. Returns false when a trip is already under way. */
+let leaving = false;
 export async function postToProvider(path, fields = []) {
-  const { token } = await api('auth/csrf');
-  const f = document.createElement('form');
-  f.method = 'POST';
-  f.action = path;
-  for (const [name, value] of [['__RequestVerificationToken', token], ['returnTo', 'portal'], ...fields]) {
-    const input = document.createElement('input');
-    Object.assign(input, { type: 'hidden', name, value });
-    f.append(input);
+  if (leaving) return false;
+  leaving = true;
+  try {
+    const { token } = await api('auth/csrf');
+    const f = document.createElement('form');
+    f.method = 'POST';
+    f.action = path;
+    for (const [name, value] of [['__RequestVerificationToken', token], ['returnTo', 'portal'], ...fields]) {
+      const input = document.createElement('input');
+      Object.assign(input, { type: 'hidden', name, value });
+      f.append(input);
+    }
+    document.body.append(f);
+    f.submit();
+    return true;
+  } catch (error) {
+    leaving = false;
+    throw error;
   }
-  document.body.append(f);
-  f.submit();
 }
+/* Back from the provider, the browser may restore this page as it was (back/forward cache): a new trip may start. */
+export const providerTripEnded = () => {
+  leaving = false;
+};
+if (typeof addEventListener === 'function')
+  addEventListener('pageshow', event => {
+    if (event.persisted) providerTripEnded();
+  });
 /* ExternalLoginDto[]: { provider, linkedAt } for this account. */
 export const loadExternalLogins = async () => (await api('auth/external')) || [];
 /* Linking: the proof goes over JSON for a two-minute ticket, then a credential-free form post starts the provider trip. */

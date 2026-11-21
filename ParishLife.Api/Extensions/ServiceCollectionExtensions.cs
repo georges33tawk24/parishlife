@@ -336,7 +336,14 @@ public static class ServiceCollectionExtensions
         services.AddOptions<TurnstileOptions>().Bind(configuration.GetSection("Turnstile"));
         services.AddHttpClient(TurnstileVerifier.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddScoped<TurnstileVerifier>();
-        services.AddScoped<IContactCodeDelivery, UnconfiguredContactCodeDelivery>();
+        // Account emails go through Resend only when Email:Provider, Email:ResendApiKey (Key Vault reference) and Email:From are all set;
+        // otherwise nothing is sent and capabilities report NotConfigured, as before.
+        services.AddOptions<EmailOptions>().Bind(configuration.GetSection("Email"));
+        services.AddHttpClient(ResendContactCodeDelivery.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        if (configuration.GetSection("Email").Get<EmailOptions>()?.Configured == true)
+            services.AddScoped<IContactCodeDelivery, ResendContactCodeDelivery>();
+        else
+            services.AddScoped<IContactCodeDelivery, UnconfiguredContactCodeDelivery>();
         services.AddScoped<ContactVerificationService>();
         services.AddScoped<ExternalSignInService>();
         foreach (var (provider, endpoints) in ExternalProviderOptions.Providers)
