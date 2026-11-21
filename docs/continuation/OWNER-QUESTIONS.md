@@ -2,6 +2,31 @@
 
 Answer by number. "Default" is what the backend does today or what is recommended; answering "default" accepts it. Nothing here is treated as approved until the owner answers.
 
+## Decided by the owner, 21 November 2026 (approved policy, asked as the pilot-critical subset)
+
+| Question | Decision | Code today |
+| --- | --- | --- |
+| 4. First archdiocese / rite | **Maronite.** The exact archdiocese or eparchy name is still to come with the pilot parish. | Rite is free text; nothing to change. |
+| 5. Electronic signatures (U05) | **The paper copy, wet-signed and sealed, is the official one.** The digital copy is for reference and verification. | Matches: signed letters stay "reference only". |
+| 6. Who signs request letters | **The priest only.** | Matches. |
+| 7. Who prepares liturgical calendars | **The bishop, or a delegate he approves.** The delegate prepares; the bishop approves before it applies. | **Change needed:** today only the bishop prepares. |
+| 17. Money: currencies | **LBP and USD both.** Each amount keeps its own currency, totals stay separate, no automatic conversion. | Matches (no converted figures shown). |
+| Finance 2. Receipt numbers | **Year + number per parish**, e.g. `2026-0001`, restarting each year. | **Change needed:** today one running number that never resets. |
+| 18. Minors | **Accounts from age 13. Children are recorded and registered by the parish office only**; parents do not act for them in the app. | **Check needed:** confirm no route lets a parent act for a child. |
+| Requests 4. Guest files | **Yes, with the built limits** (10 MB each, 20 per request, office-only access). | Matches. |
+| People 2. Member vs Visitor | **Members only for event registrations, joining ministries and sacrament requests.** Visitors contact the office for those. | **Change needed:** today the labels give no rights. |
+| 19 / Admin 10. Bishop's view | **Totals only:** counts and summaries, no individual names or records. | Matches today's aggregates; keep it so. |
+| Sacraments 9. Preparation requirements | **The archdiocese sets one checklist per sacrament for all its parishes.** | **Change needed:** requirement sets are per parish today. |
+
+Still open, not needed to start the pilot:
+- 8–11 (custom workflows, billing representative, contested ownership, message review);
+- 13 (sign-in before email is verified; the default "no" stays);
+- 14–16 (small-count hiding, retention beyond the privacy page, backup drills);
+- 23–24 (online payments, map provider);
+- 26 (a staging database);
+- the remaining per-area items in `docs/frontend-modules/*.md`;
+- the proposals in `docs/REMAINING-WORK.md`.
+
 ## A. Frontend connection
 
 1. **Which branch is the frontend to connect?** `frontend` (4 Nov) or `frontend-new2` (Georges, 9 Nov)? Default: `frontend-new2`.
