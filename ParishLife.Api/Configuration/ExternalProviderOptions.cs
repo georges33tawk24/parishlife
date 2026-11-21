@@ -1,7 +1,8 @@
 // Purpose: optional OAuth client settings for one external sign-in provider; the provider exists only when it is configured.
 // Main members: ClientId, ClientSecret (private; App Service/Key Vault reference only), UseManagedIdentityAssertion (Microsoft only:
 // the client proves itself with a token of the app's user-assigned managed identity instead of a secret), IsConfigured, the sign-in
-// Scopes, and the known provider table (Providers) with each provider's documented public OAuth/userinfo endpoints.
+// Scopes, the known provider table (Providers) with each provider's documented public OAuth/userinfo endpoints, and
+// ConfigurationProblem (startup check: a client ID without its secret, or a secret without its client ID, or an unresolved Key Vault reference).
 
 namespace ParishLife.Api.Configuration;
 
@@ -28,4 +29,19 @@ public class ExternalProviderOptions
     // Google always needs its secret; Microsoft needs either its secret or the managed-identity assertion (which wins when both are set).
     public bool IsConfigured(string provider) => !string.IsNullOrWhiteSpace(ClientId)
         && (!string.IsNullOrWhiteSpace(ClientSecret) || provider == "microsoft" && UseManagedIdentityAssertion);
+
+    // Null when the provider is fully configured or fully off; otherwise a message naming the setting (never its value).
+    public string? ConfigurationProblem(string provider)
+    {
+        var anySet = !string.IsNullOrWhiteSpace(ClientId) || !string.IsNullOrWhiteSpace(ClientSecret) || UseManagedIdentityAssertion;
+        if (!anySet || IsConfigured(provider) && !AzureConfiguration.IsUnresolvedKeyVaultReference(ClientSecret))
+            return null;
+        if (AzureConfiguration.IsUnresolvedKeyVaultReference(ClientSecret))
+            return $"ExternalSignIn:{provider}:ClientSecret is an unresolved Key Vault reference; check the App Service identity's access to the secret.";
+        if (UseManagedIdentityAssertion && provider != "microsoft")
+            return $"ExternalSignIn:{provider}:UseManagedIdentityAssertion is supported for microsoft only.";
+        return string.IsNullOrWhiteSpace(ClientId)
+            ? $"ExternalSignIn:{provider}:ClientId is required when other settings for that provider are present."
+            : $"ExternalSignIn:{provider} needs ClientSecret{(provider == "microsoft" ? " or UseManagedIdentityAssertion=true" : "")}.";
+    }
 }

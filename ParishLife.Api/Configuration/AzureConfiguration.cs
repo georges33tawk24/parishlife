@@ -1,5 +1,6 @@
 // Purpose: validates Azure endpoint configuration before clients are used; never reads or logs credentials.
-// Main functions: IsHttps, IsBlobUri, IsVersionlessKeyUri, IsContainerName.
+// Main functions: IsHttps, IsBlobUri, IsVersionlessKeyUri, IsContainerName, IsUnresolvedKeyVaultReference (App Service passes the
+// literal "@Microsoft.KeyVault(...)" text when it cannot resolve a reference, so a secret setting holding it is a configuration error).
 
 namespace ParishLife.Api.Configuration;
 
@@ -14,6 +15,8 @@ internal static class AzureConfiguration
         var parts = new Uri(value!).AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 2 && parts[0] == "keys" && parts[1].Length > 0;
     }
+
+    internal static bool IsUnresolvedKeyVaultReference(string? value) => value?.TrimStart().StartsWith("@Microsoft.KeyVault(", StringComparison.OrdinalIgnoreCase) == true;
 
     internal static bool IsContainerName(string value) => System.Text.RegularExpressions.Regex.IsMatch(value, @"\A[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]\z");
 }
