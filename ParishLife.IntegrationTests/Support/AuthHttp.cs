@@ -1,5 +1,6 @@
 // Purpose: shared fixture-only HTTP helpers for account-security tests (CSRF token, password/TOTP sign-in, typed reads).
-// Main functions: Csrf, LoginAsync (password then authenticator when challenged), Read, PostAsync.
+// Main functions: Csrf, LoginAsync (password then authenticator when challenged), CompleteMfaAsync and PostMfaAsync (an unspent code),
+// Read, PostAsync.
 
 using System.Net;
 using System.Net.Http.Json;
@@ -31,12 +32,25 @@ internal static class AuthHttp
     }
 
     public static async Task CompleteMfaAsync(HttpClient client, JsonElement challenge)
-        => await Read<JsonElement>(await client.PostAsJsonAsync("/api/auth/login/mfa", new
+        => await Read<JsonElement>(await PostMfaAsync(client, challenge));
+
+    // Each authenticator code signs in once, so a second sign-in of the same account within one step uses a neighbouring step's code.
+    public static async Task<HttpResponseMessage> PostMfaAsync(HttpClient client, JsonElement challenge)
+    {
+        HttpResponseMessage? response = null;
+        foreach (var step in new[] { 0, 1, -1, 2 })
         {
-            accountId = challenge.GetProperty("accountId").GetString(),
-            challenge = challenge.GetProperty("challenge").GetString(),
-            code = TestAuthenticator.Code()
-        }));
+            response = await client.PostAsJsonAsync("/api/auth/login/mfa", new
+            {
+                accountId = challenge.GetProperty("accountId").GetString(),
+                challenge = challenge.GetProperty("challenge").GetString(),
+                code = TestAuthenticator.Code(step: step)
+            });
+            if (response.StatusCode != HttpStatusCode.Unauthorized)
+                break;
+        }
+        return response!;
+    }
 
     public static async Task<T> Read<T>(HttpResponseMessage response)
     {

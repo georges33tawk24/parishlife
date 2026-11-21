@@ -5,6 +5,7 @@
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Web;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,7 +61,7 @@ public class ExternalSignInPortalTests
         Assert.Equal("external_challenge_not_found", await Title(await browser.PostAsync("/api/auth/external/pending-challenge", null)));
         // The handed-over challenge is only a challenge: a wrong code does not sign in, the authenticator code does.
         Assert.False((await browser.PostAsJsonAsync("/api/auth/login/mfa", new { accountId = held.AccountId, challenge = held.Challenge, code = "000000" })).IsSuccessStatusCode);
-        await Read<AccountDto>(await browser.PostAsJsonAsync("/api/auth/login/mfa", new { accountId = held.AccountId, challenge = held.Challenge, code = TestAuthenticator.Code() }));
+        await Read<AccountDto>(await PostMfaAsync(browser, JsonSerializer.SerializeToElement(new { accountId = held.AccountId, challenge = held.Challenge })));
         Assert.Equal(f.Other, (await Read<AccountDto>(await browser.GetAsync("/api/auth/me"))).Id);
     }
 

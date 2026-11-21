@@ -8,7 +8,8 @@
 // GetSecurityStampAsync, GetLockoutEndDateAsync, SetLockoutEndDateAsync, IncrementAccessFailedCountAsync,
 // ResetAccessFailedCountAsync, GetAccessFailedCountAsync, GetLockoutEnabledAsync, SetLockoutEnabledAsync,
 // SetTwoFactorEnabledAsync, GetTwoFactorEnabledAsync, SetAuthenticatorKeyAsync, GetAuthenticatorKeyAsync,
-// ReplaceCodesAsync, RedeemCodeAsync, CountCodesAsync, IndexKey, ClaimAliasAsync, FindAliasOwnerAsync, ReleaseAliasAsync, passkey store members
+// ReplaceCodesAsync, RedeemCodeAsync, CountCodesAsync, IndexKey, ClaimAliasAsync, FindAliasOwnerAsync, ReleaseAliasAsync,
+// ClaimAuthenticatorCodeAsync (one sign-in per authenticator code), passkey store members
 // (AddOrUpdatePasskeyAsync, GetPasskeysAsync, FindByPasskeyIdAsync, FindPasskeyAsync, RemovePasskeyAsync), Dispose.
 
 using System.Net;
@@ -313,6 +314,27 @@ internal sealed class CosmosIdentityStore(PartitionDocuments documents, TimeProv
     {
         var current = await documents.ReadAsync<LoginAlias>(Containers.LoginAliases, IndexKey(kind, normalized), "alias", ct);
         return current is { Value.Active: true } && current.Value.NormalizedEmail == normalized ? current.Value.AccountId : null;
+    }
+
+    // Vector 6: an authenticator code signs in once. Identity accepts a code for about two and a half minutes (two steps either side), so
+    // every code accepted in the last five minutes is remembered (as a hash) and refused again. The use record sits beside the account document (the account's
+    // version is untouched); a concurrent sign-in with any code loses the conditional write and is refused.
+    internal async Task<bool> ClaimAuthenticatorCodeAsync(string accountId, string code, CancellationToken ct)
+    {
+        const string id = "authenticatorCodeUse";
+        var key = AccountKey(accountId);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("authenticator-code:v1\n" + accountId + "\n" + code)));
+        var since = clock.GetUtcNow().AddMinutes(-5).ToUnixTimeSeconds();
+        var current = await documents.ReadAsync<AuthenticatorCodeUse>(Containers.Accounts, key, id, ct);
+        var recent = (current?.Value.Recent ?? []).Where(entry => long.TryParse(entry.Split(':')[0], out var at) && at > since).ToList();
+        if (recent.Any(entry => entry.EndsWith(":" + hash, StringComparison.Ordinal)))
+            return false;
+        recent.Add(clock.GetUtcNow().ToUnixTimeSeconds() + ":" + hash);
+        var row = Row(id, key, id, new AuthenticatorCodeUse { Recent = recent });
+        var batch = current is null ? documents.Batch(Containers.Accounts, key).CreateItem(row)
+            : documents.Batch(Containers.Accounts, key).ReplaceItem(id, row, PartitionDocuments.Match(current.Version));
+        using var result = await batch.ExecuteAsync(ct);
+        return result.IsSuccessStatusCode;
     }
 
     // Releases an index owned by the account (compensation or a superseded alias); another owner's index is never touched.
