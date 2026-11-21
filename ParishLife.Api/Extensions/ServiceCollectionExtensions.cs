@@ -146,6 +146,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AccountProfileService>();
         services.AddScoped<AccountSignatureService>();
         services.AddScoped<AccountRecordsService>();
+        services.AddScoped<AccountClosureService>();
         services.AddScoped<IResourceAllocator, ResourceAllocator>();
         services.AddScoped<MinistryAccess>();
         services.AddScoped<MinistryService>();
