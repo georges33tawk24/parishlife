@@ -1,0 +1,9 @@
+#!/bin/sh
+# Purpose: blocks a commit when gitleaks finds a secret in the staged changes; findings are redacted, so no value is printed.
+# Main behaviour: runs `gitleaks git --pre-commit --staged --redact`; fails the commit if gitleaks is missing rather than skipping the check.
+# Enable once per clone: git config core.hooksPath .githooks   (bypass for a reviewed false positive: git commit --no-verify)
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed (https://github.com/gitleaks/gitleaks); install it or commit with --no-verify after a manual check." >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner --verbose
