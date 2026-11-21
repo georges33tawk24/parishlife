@@ -1,5 +1,6 @@
 // Purpose: verifies the opt-in single-origin hosting of the built frontend (UseParishLifeFrontend) against isolated temporary directories.
-// Main tests: Pages_are_served_with_caching_and_a_hashed_script_policy (a web root with index.html) and
+// Main tests: Pages_are_served_with_caching_and_a_hashed_script_policy (a web root with index.html; form posts may redirect to the
+// sign-in providers) and
 // Without_a_web_root_the_api_serves_no_pages (the API-only deployment is unchanged).
 
 using System.Net;
@@ -38,6 +39,8 @@ public sealed class FrontendHostingTests
             Assert.Contains("default-src 'self'", policy, StringComparison.Ordinal);
             Assert.Contains(hash, policy, StringComparison.Ordinal);
             Assert.Contains("frame-ancestors 'none'", policy, StringComparison.Ordinal);
+            // The provider sign-in form post is answered with a redirect to the provider, which form-action also governs.
+            Assert.Contains("form-action 'self' https://accounts.google.com https://login.live.com https://login.microsoftonline.com", policy, StringComparison.Ordinal);
             Assert.DoesNotContain("'unsafe-inline' https://challenges", policy, StringComparison.Ordinal);
             Assert.DoesNotContain("script-src 'self' 'unsafe-inline'", policy, StringComparison.Ordinal);
 

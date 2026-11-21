@@ -24,7 +24,8 @@ The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` a
   - Images: this origin, `data:`, `blob:`, and any HTTPS address (parish photos).
   - Connections: this origin and Turnstile only.
   - Frames: Turnstile only.
-  - No plugins. The pages may not be framed (`frame-ancestors 'none'`). `base-uri` and `form-action` are limited to this origin.
+  - No plugins. The pages may not be framed (`frame-ancestors 'none'`). `base-uri` is limited to this origin.
+  - `form-action` allows this origin plus the external sign-in providers' authorization origins (`https://accounts.google.com`, `https://login.microsoftonline.com`) and `https://login.live.com`, which Microsoft uses for personal accounts. Google/Microsoft sign-in is a same-origin form post that the API answers with a redirect to the provider. Browsers apply `form-action` to that redirect too, so with `'self'` alone Chrome silently blocked it (found live on 20 November 2026). A new provider (for example Apple) needs its authorization origin here, and that follows from `ExternalProviderOptions.Providers`.
   - If a new external service is added (maps, embedded video…), add its origin in `ContentSecurityPolicy`; the browser tests fail on any blocked resource.
 - **Unchanged:** routing, authentication, CSRF and the security headers. `/api/*` and `/health/*` behave as before.
 
@@ -96,6 +97,48 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
   - The existing key ring was reused (key version `426eb917…`).
   - Turnstile was still off, because no keys were set yet. Sign-in behaved as before.
   - Owner visit on `parish-life.org` at 22:17–22:18 UTC: `login` 202, `login/mfa` 200, `auth/me` 200, `logout` 204, then `auth/me` 401.
+- **20 November 2026, `ea2e388`** (Azure session, owner's go-ahead): Google/Microsoft sign-up code plus the draft privacy and terms pages.
+  - 147 files: the live 145 plus `privacy.html` and `terms.html`. Changed: the API dll/pdb, the portal and public chunks, and `index.html`/`public.html`. No index change.
+  - Deployed 12:01:28–12:03:26 UTC. Healthy, all pages carry the policy (`/privacy.html`, `/terms.html` and `?lang=ar` 200, with the draft banner), and the new portal chunk is served `immutable`.
+  - The key ring was reused (unwrap with `426eb917…`).
+- **20 November 2026, `ea2e388` plus the `form-action` fix** (Azure session, owner's go-ahead):
+  - **Bug found live:** with Google switched on, "Sign up with Google" did nothing on one click. The page policy's `form-action 'self'` made Chrome block the API's redirect to `accounts.google.com`. A second click re-sent the spent Turnstile token, and the 400 `turnstile_failed` JSON replaced the page. The logs showed each first POST answered 302, with no Google callback.
+  - **Fix:** `form-action` now also lists the providers' authorization origins (see "How it works"), with a test in `FrontendHostingTests`. 547 backend tests pass (64 unit / 483 integration).
+  - The package differs from `ea2e388` only in `ParishLife.Api.dll`/`.pdb`. It was built from the `ea2e388` checkout with this fix, before the fix had a commit of its own.
+  - Deployed 17:31:59–17:33:59 UTC. Healthy, and the live `form-action` is `'self' https://accounts.google.com https://login.live.com https://login.microsoftonline.com`.
+
+## Google and Microsoft sign-in configuration (20–21 November 2026)
+
+Configured by the Azure session with the owner's go-ahead. The secret never passed through the session: the owner created the Google client and stored its secret in Key Vault directly.
+
+- **Google** (Google Cloud project "ParishLife", Google Auth Platform):
+  - External audience, still in **Testing**: only listed test users can sign in.
+  - "In production" needs the privacy and terms URLs on the Branding page, filled in and without the draft banner.
+  - Web client "ParishLife web", client ID `156934952553-7p7fpvg3s5kj5lkcngftgs339aqbtan8.apps.googleusercontent.com` (public).
+  - Redirect URI `https://parish-life.org/api/auth/external/callback/google`. Scopes `openid`, `email`, `profile`.
+  - Secret: Key Vault `google-client-secret`, stored by the owner at 13:29 UTC on 19 November. `id-parishlife` has "Key Vault Secrets User" on that secret only.
+  - App settings (20 November, 12:03:57 UTC): `ExternalSignIn__google__ClientId` and `ExternalSignIn__google__ClientSecret` = `@Microsoft.KeyVault(SecretUri=https://keyvault-parishlife.vault.azure.net/secrets/google-client-secret/)`. The reference shows `Resolved`, and capabilities report Google available.
+  - **Live acceptance:** the owner's Google sign-up at 17:34:45–17:35:08 UTC:
+    - `sign-up` 302 after Turnstile;
+    - Google callback 302, then `complete` 302;
+    - `auth/me` 200 and the portal loaded;
+    - then `logout` 204.
+    - A sign-in attempt just before it (17:34:22) correctly came back not linked.
+  - Application Insights afterwards: only the start-up cancel exception.
+- **Microsoft** (Entra app registration "ParishLife" in the subscription's tenant, created 19 November):
+  - Application (client) ID `3fb431a8-e78f-4634-a87e-81de5940d686`.
+  - Audience `AzureADandPersonalMicrosoftAccount`, `requestedAccessTokenVersion` 2.
+  - Redirect URIs for both hostnames; optional ID-token claims `email` and `xms_edov`; delegated `openid`, `email`, `profile`.
+  - **No secret exists** (0 client secrets).
+  - Federated identity credential "id-parishlife-app-service" (20 November): issuer `https://login.microsoftonline.com/abfbf22a-4501-410d-99f1-cc1a921afad5/v2.0`, subject = `id-parishlife`'s object ID `cc0278ec-f74d-40b9-8e8b-0544e438a49b`, audience `api://AzureADTokenExchange`.
+  - App settings (20 November, 18:05:04 UTC): `ExternalSignIn__microsoft__ClientId` and `ExternalSignIn__microsoft__UseManagedIdentityAssertion=true`, with no ClientSecret. Capabilities reported Microsoft available at 18:06:50.
+  - **Live acceptance, personal Microsoft account** (owner, 21 November):
+    - 14:30:46 UTC: `sign-up` 302 after Turnstile;
+    - 14:30:49: Microsoft callback; the token endpoint `login.microsoftonline.com` answered 200 to the managed-identity client assertion; Graph userinfo 200;
+    - `complete` 302, then `auth/me` 200 and the portal loaded.
+    - This settles the open question: Microsoft accepts the managed-identity federated credential for a personal account at `common`.
+    - A sign-in attempt just before it (14:30:09) correctly came back not linked.
+- **Rollback:** remove the `ExternalSignIn__<provider>__*` settings. The provider disappears after the restart, and existing accounts keep working with their other sign-in methods.
 
 ## Turnstile switched on (19 November 2026)
 

@@ -90,7 +90,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - Widget hostnames confirmed by the owner: exactly these two, with no `localhost` or `127.0.0.1`.
   - **Open:** the public request page's widget was not exercised live, because nothing is published yet.
   - Details: "Turnstile switched on" in `docs/operations/frontend-hosting.md`.
-- **Google and Microsoft sign-up (19 November), code only, not deployed or configured:**
+- **Google and Microsoft sign-up (19 November; deployed 20 November, and Google is live, see below):**
   - **Owner decisions (approved policy, OWNER-QUESTIONS #21):**
     - sign-up creates an account with no password, which can be added later;
     - a provider-verified email counts as confirmed, and is never used to merge (`email-in-use`);
@@ -102,7 +102,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - The S06.11 last-method guard is checked before any proof is asked for.
     - `auth/me` reports `hasPassword`. Scopes are now `openid email profile`.
   - **Microsoft without a secret:** `ExternalSignIn:microsoft:UseManagedIdentityAssertion=true` redeems the code with a managed-identity client assertion (`Identity/ExternalOAuthHandler.cs`).
-    - **Unverified:** whether Microsoft accepts it for personal accounts at `common`; the docs don't say. Test live, and fall back to a Key Vault secret if refused.
+    - **Verified live on 21 November:** Microsoft accepts it for a personal account at `common`. The Key Vault secret fallback isn't needed.
   - **Portal:**
     - "Sign up with Google/Microsoft" on the sign-up tab;
     - the `signed-up`, `email-in-use` and `not-verified` messages;
@@ -126,7 +126,20 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
   - The text describes only what the code does; each statement's source is in `docs/operations/legal-pages.md`.
   - **Open placeholders** (OWNER-QUESTIONS 21a): operator, contact email, governing law, minimum age, effective date, retention periods, liability.
   - **Checks:** the e2e public-pages test opens both pages in both languages under the page policy.
-  - Not deployed. Google's Branding page and the Microsoft app registration get the URLs from the Azure session.
+  - Deployed on 20 November (see "Google sign-up live" below). Google's Branding page and the Microsoft app registration still need the URLs once the text is final.
+- **Google and Microsoft sign-up live (20–21 November), by the Azure session at the owner's go-ahead:**
+  - `ea2e388` deployed (12:01–12:03 UTC). The privacy and terms pages are live with the draft banner.
+  - Google settings added (12:03 UTC); the Key Vault reference shows `Resolved`.
+  - **Bug fixed live:** the page policy's `form-action 'self'` blocked the redirect to Google, so one click did nothing and a second gave 400 `turnstile_failed`. `form-action` now allows the providers' authorization origins. Test added; 547 backend tests pass. Deployed 17:32–17:34 UTC.
+  - **Verified:** the owner signed up with Google at 17:34:45–17:35:08 UTC and was signed in to the portal.
+  - **Microsoft, with no secret:**
+    - Federated credential for `id-parishlife` on app registration `3fb431a8-…`, plus `ClientId` and `UseManagedIdentityAssertion=true` (20 November, 18:05 UTC).
+    - **Verified:** the owner signed up with a personal Microsoft account (21 November, 14:30 UTC). The token endpoint accepted the managed-identity assertion at `common`.
+  - **Open:**
+    - Google is in Testing (test users only). It goes to "In production" once the privacy/terms placeholders are filled and the banners removed.
+    - The Microsoft consent screen shows "unverified". Publisher verification and the privacy/terms URLs on the app registration come later.
+    - Frontend double-click guard and a portal redirect instead of JSON on a failed check (requested from the front/back chat on 20 November).
+  - Details: "Google and Microsoft sign-in configuration" in `docs/operations/frontend-hosting.md`.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.
