@@ -11,11 +11,12 @@ using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Communications;
 
 namespace ParishLife.Api.Services.Reporting;
 
 public class ReportScheduleProcessor(IRecordTransactions records, WorkOverviewService overview, IParishRepository parishes, MfaAccountAccess proof,
-    TimeProvider clock, ILogger<ReportScheduleProcessor> logger)
+    TimeProvider clock, ILogger<ReportScheduleProcessor> logger, DeliveryQueue queue)
 {
     internal const string Topic = "reports";
 
@@ -38,7 +39,9 @@ public class ReportScheduleProcessor(IRecordTransactions records, WorkOverviewSe
         {
             Id = op.Id, ScheduleId = id, AccountId = account, Report = schedule.Report, ParishId = schedule.ParishId, ScheduledFor = schedule.NextRunAt,
             ProducedAt = now, Status = authorized ? "StoredInApp" : "NotAuthorized", Counts = counts,
-            ExternalChannel = schedule.EmailRequested ? "Email" : null, ExternalStatus = schedule.EmailRequested ? ReportScheduleService.EmailNotConfigured : null
+            ExternalChannel = schedule.EmailRequested ? "Email" : null,
+            // With email configured the notice below is queued for the recipient's chosen channels; the report itself stays in the app.
+            ExternalStatus = schedule.EmailRequested ? (queue.Configured("Email") ? "Queued" : ReportScheduleService.EmailNotConfigured) : null
         };
         schedule.LastRunAt = now;
         schedule.UpdatedAt = now;
@@ -56,12 +59,18 @@ public class ReportScheduleProcessor(IRecordTransactions records, WorkOverviewSe
         // A ready report is an optional notice the recipient may mute; a pause caused by lost access is always shown.
         var muted = (await records.ReadAsync<NotificationPreferences>(scope, "notificationPreferences", ct))?.Value.MutedTopics.Contains(Topic) == true;
         if (!authorized || !muted)
-            changes.Add(RecordChange.Create("notification:" + delivery.Id, "notification", new Notification
+        {
+            var notice = new Notification
             {
                 Id = delivery.Id, AccountId = account, ParishId = schedule.ParishId, Kind = authorized ? "Optional" : "Required", Topic = Topic, CreatedAt = now,
                 Title = authorized ? "Your scheduled parish work overview is ready." : "A scheduled report was paused because your access changed.",
                 Link = authorized ? "/api/report-deliveries/" + delivery.Id : "/api/report-schedules/" + id
-            }));
+            };
+            changes.Add(RecordChange.Create("notification:" + delivery.Id, "notification", notice));
+            // The notice (not the report) goes out on the recipient's chosen channels, in the same commit.
+            if (queue.NoticeWork(notice) is { } queued)
+                changes.Add(queued);
+        }
         await records.CommitAsync(scope, op, "report.delivered", delivery.Id, changes, new CommandResult { Id = delivery.Id, Status = delivery.Status }, ct);
         return true;
     }

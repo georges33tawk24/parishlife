@@ -124,6 +124,29 @@ const { sent } = mockApi((method, path, body, options) => {
   if (path === 'auth/external/microsoft/link/ticket')
     return json(200, { ticket: 'tkt', expiresAt: '2026-11-19T10:02:00Z' });
   if (path === 'auth/password/add') return json(200, { status: 'Added', requiresSignIn: true });
+  if (path === 'notifications/channels')
+    return json(200, {
+      email: true,
+      emailAddressConfirmed: true,
+      push: true,
+      pushPublicKey: 'BPub',
+      pushDevices: 0,
+      whatsApp: true,
+      whatsAppStatus: 'None'
+    });
+  if (path === 'notifications/preferences' && method === 'GET')
+    return json(200, {
+      mutedTopics: ['parish.broadcast'],
+      language: 'ar',
+      digestOptional: true,
+      email: true,
+      push: true,
+      whatsApp: false
+    });
+  if (path === 'notifications/preferences') return json(200, body);
+  if (path === 'notifications/whatsapp')
+    return json(200, { whatsApp: true, whatsAppPhone: body.phone, whatsAppStatus: 'Pending' });
+  if (path === 'notifications/whatsapp/confirm') return json(200, { whatsApp: true, whatsAppStatus: 'Verified' });
   if (path === 'account/signature' && method === 'GET')
     return json(200, { eligible: true, version: null, signature: null });
   if (path === 'account/signature')
@@ -354,6 +377,20 @@ try {
 assert.equal((await account.pendingExternalChallenge()).challenge, 'held');
 assert.deepEqual(last(), ['POST', 'auth/external/pending-challenge', undefined]);
 assert.equal(account.externalSignUpPath('google'), '/api/auth/external/google/sign-up');
+
+// how ParishLife reaches the person: one channel switch keeps the other preferences; WhatsApp numbers and codes are tidied
+const notify = await import('../../src/portal/model/notify.js');
+assert.equal((await notify.loadChannels()).pushPublicKey, 'BPub');
+await notify.saveChannel('whatsApp', true);
+assert.deepEqual(last(), [
+  'PUT',
+  'notifications/preferences',
+  { mutedTopics: ['parish.broadcast'], language: 'ar', digestOptional: true, whatsApp: true }
+]);
+assert.equal((await notify.startWhatsApp('+961 3-123 456')).whatsAppPhone, '+9613123456');
+await notify.confirmWhatsApp(' 123 456 ');
+assert.deepEqual(last(), ['POST', 'notifications/whatsapp/confirm', { code: '123456' }]);
+assert.equal(notify.pushSupported(), false); // no browser here
 
 // Google and Microsoft on My account: the list, unlinking with the proof, and a first password (no current one)
 assert.equal((await account.loadExternalLogins())[0].provider, 'google');

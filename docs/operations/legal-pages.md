@@ -11,7 +11,7 @@ Approved by the owner on 21 November 2026 (effective that day; the draft banner 
 ## The owner's answers (21 November 2026)
 
 - **Operator:** ParishLife ("ParishLife runs this service at parish-life.org").
-- **Contact for privacy requests and questions:** `privacy@parish-life.org`. It needs Cloudflare Email Routing to the owner's inbox; see `docs/operations/email-delivery.md`.
+- **Contact for privacy requests and questions:** `privacy@parish-life.org`. It needs Cloudflare Email Routing to the owner's inbox; see `docs/operations/notification-delivery.md`.
 - **Governing law:** Lebanon.
 - **Minimum age for an account:** 13.
 - **Effective date:** 21 November 2026.
@@ -20,7 +20,7 @@ Filled in from the code and setup rather than asked:
 - **Records:** kept until the person or the parish asks for removal; nothing is deleted automatically.
 - **Technical logs:** deleted after 90 days. This is the Application Insights retention to confirm in the Azure session; if it differs, change both pages.
 - **Liability:** no limitation clause; the pages keep the plain statement that availability cannot be guaranteed.
-- **Resend:** named as the email sender, because account emails now go out through it (`docs/operations/email-delivery.md`).
+- **Resend, push services and Meta (WhatsApp):** named as the services that carry outside messages (`docs/operations/notification-delivery.md`). The push and WhatsApp lines were added the same day, when those channels were built.
 
 Georges was not consulted on this wording. Any change later: edit both files, keep English and Arabic in step, and update the effective date.
 
@@ -44,7 +44,10 @@ Georges was not consulted on this wording. Any change later: edit both files, ke
 | **Hosting:** Azure France Central (Cosmos DB, Blob Storage, Key Vault, Application Insights). | `docs/operations/frontend-hosting.md`; App Service `app-parishlife` in France Central |
 | **Cloudflare:** DNS and Turnstile on sign-in, sign-up and public request forms. | `TurnstileProtected` on register, login, passkey options, contact verification, external sign-in/sign-up, guest requests |
 | **Google Fonts** on the portal and product pages. | `index.html`, `landing.html`, `src/portal/shared/print.js` |
-| **Account emails through Resend only; no newsletters, SMS or online payments.** | `ResendContactCodeDelivery` (codes only); broadcast channels report NotConfigured; no payment provider |
+| **Resend emails:** codes, plus copies of notices and broadcasts for people who keep email on; no marketing, SMS or online payments. | `ResendEmailSender`, `EmailDeliveryChannel`; no SMS channel or payment provider |
+| **Push services** carry encrypted push messages to devices the person turned on. | `WebPushSender` (RFC 8291 encryption), `PushDeliveryChannel` |
+| **Meta (WhatsApp)** gets the number and the short title, only after the person proves the number and keeps WhatsApp on. | `WhatsAppSender`, `WhatsAppDeliveryChannel`, `NotificationChannelService` |
+| **How you chose to be reached** is stored: channel choices, push device addresses, the proven WhatsApp number; the code is kept only hashed, until used. | `NotificationPreferences`, `PushDevice`, `WhatsAppContact` |
 | **Cookies:** session (8 h), anti-forgery, short-lived provider cookies. | `Program.cs` (`__Host-ParishLife`, `__Host-ParishLife.Csrf`), `AccountSessionService` (8 h), `ExternalSignInService` (`__Host-ParishLife.ExternalMfa`, at most 10 min), the Identity external cookie |
 | **Browser storage:** language, reading preferences, screen choices; offline copy of public pages. | `lib/i18n.js`, `reading/EasyReading.jsx`, `portal/model/store.js`, `public/sw.js` |
 | **Retention:** nothing deleted automatically. | `CapabilityService` ("No retention classes are approved") |

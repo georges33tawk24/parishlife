@@ -18,7 +18,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Communications;
 
 public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepository parishes, MfaAccountAccess proof, BroadcastAudience audience,
-    TimeProvider clock, ILogger<BroadcastScheduleProcessor> logger)
+    TimeProvider clock, ILogger<BroadcastScheduleProcessor> logger, DeliveryQueue delivery)
 {
     private const string System = "system:broadcasts";
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
@@ -75,6 +75,9 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
             item.ScheduleNote = note;
         }
         changes.Add(RecordChange.Replace("broadcast:" + id, "broadcast", item, row.Version));
+        // A scheduled send queues its outside delivery in the same commit, like a send by hand.
+        if (item.Status == "Sent" && delivery.BroadcastWork(item) is { } queued)
+            changes.Add(queued);
         await records.CommitAsync(Scope(parish), op, item.Status == "Sent" ? "communications.broadcast_scheduled_send" : "communications.broadcast_schedule_held",
             id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return true;

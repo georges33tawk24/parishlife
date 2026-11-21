@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Accounts;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Communications;
 using ParishLife.IntegrationTests.Support;
 using Xunit;
 using static ParishLife.IntegrationTests.Support.AuthHttp;
@@ -42,7 +43,7 @@ public class ResendEmailTests
         Assert.True((await client.PostAsJsonAsync("/api/auth/contact-verification", new { email })).IsSuccessStatusCode);
 
         var (uri, body) = Assert.Single(resend.Requests);
-        Assert.Equal(ResendContactCodeDelivery.Endpoint, uri);
+        Assert.Equal(ResendEmailSender.Endpoint, uri);
         Assert.Equal("Bearer " + Key, Assert.Single(auth));
         Assert.DoesNotContain(Key, body, StringComparison.Ordinal);
         using var sent = JsonDocument.Parse(body);
@@ -96,5 +97,5 @@ public class ResendEmailTests
         ["Email:Provider"] = "Resend",
         ["Email:ResendApiKey"] = Key,
         ["Email:From"] = "ParishLife <no-reply@parish-life.org>"
-    }, services => services.AddHttpClient(ResendContactCodeDelivery.ClientName).ConfigurePrimaryHttpMessageHandler(() => resend));
+    }, services => services.AddHttpClient(ResendEmailSender.ClientName).ConfigurePrimaryHttpMessageHandler(() => resend));
 }

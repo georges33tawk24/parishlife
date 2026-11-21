@@ -18,11 +18,10 @@ Answer by number. "Default" is what the backend does today or what is recommende
 | 19 / Admin 10. Bishop's view | **Totals only:** counts and summaries, no individual names or records. | Matches today's aggregates; keep it so. |
 | Sacraments 9. Preparation requirements | **The archdiocese sets one checklist per sacrament for all its parishes.** | **Change needed:** requirement sets are per parish today. |
 
-Still open, not needed to start the pilot:
+Still open (to answer next):
 - 8–11 (custom workflows, billing representative, contested ownership, message review);
 - 13 (sign-in before email is verified; the default "no" stays);
 - 14–16 (small-count hiding, retention beyond the privacy page, backup drills);
-- 23–24 (online payments, map provider);
 - 26 (a staging database);
 - the remaining per-area items in `docs/frontend-modules/*.md`;
 - the proposals in `docs/REMAINING-WORK.md`.
@@ -61,13 +60,26 @@ Still open, not needed to start the pilot:
 ## E. External services (to configure; keys go to Key Vault, never chat or Git)
 
 20. Email (and SMS?) provider, e.g. Azure Communication Services or SendGrid.
-    **Decided by the owner (21 November 2026): Resend**, from `ParishLife <no-reply@parish-life.org>`, for account codes only. SMS: not decided. Setup: `docs/operations/email-delivery.md`.
+    **Decided by the owner (21 November 2026):**
+    - **Resend**, from `ParishLife <no-reply@parish-life.org>`: account codes, personal notices, scheduled-report notices and parish broadcasts.
+    - **WhatsApp** through Meta's WhatsApp Cloud API.
+    - **Web push** to phones and browsers.
+    - **No SMS.**
+
+    Setup: `docs/operations/notification-delivery.md`.
 21. Sign-in providers: Google, Microsoft, Apple? Their app registrations.
     **Decided by the owner, 19 November 2026 (approved policy):** (a) signing up with Google or Microsoft creates an account with no password; one can be added later in My account, and the last usable sign-in method cannot be removed (S06.11). (b) A provider-verified email counts as a confirmed email, so these accounts sign in without an email code; never merge: if any account already holds that email, nothing is created (`email-in-use`), and the subject stays the stable `sub`, stored hashed. (c) Google and Microsoft now; Apple deferred (paid developer program, `form_post` callback). Microsoft should use the managed identity instead of a secret where Microsoft accepts it. Built on `fullstack-integration`; see `docs/operations/account-sign-in-methods.md`. The app registrations are made in the Azure session.
 21a. **Privacy policy and terms of use: decided by the owner, 21 November 2026.** Operator "ParishLife"; contact `privacy@parish-life.org`; Lebanese law; accounts from age 13; effective 21 November 2026; draft banner removed. Details: `docs/operations/legal-pages.md`.
 22. Turnstile: on or off? Cloudflare keys.
 23. Online payments: any provider, or cash/bank only for now? Default: none.
+    **Decided by the owner (21 November 2026): not now.** Cash and bank transfers only, recorded by the office.
 24. Map tiles/directions provider for the public map, if any.
+    **Decided by the owner (21 November 2026): Google Maps, integrated by the owner.** "Get directions" already opens Google Maps through a plain link (no key). An embedded Google map will also need:
+    - a browser API key restricted to `parish-life.org`. A browser key is public by nature, so it goes in App Service settings, not Key Vault;
+    - the page Content-Security-Policy to allow Google's map domains (`FrontendHostingExtensions`);
+    - a privacy-page line: Google receives the visitor's address when a map loads.
+
+    The Maps Embed API (an iframe) has no usage charge; the JavaScript API is billed beyond Google's free allowance.
 
 ## F. Azure connection
 

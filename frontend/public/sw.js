@@ -1,7 +1,8 @@
 /* ParishLife on a phone without a connection: the public pages, and the parishes, Mass times and
    events they last showed, stay readable. Every request still goes to the network first, so
    nothing is served from this copy while the phone is online. The members portal, private links
-   (request tracking, documents) and document checks are never kept. */
+   (request tracking, documents) and document checks are never kept. It also shows push notifications
+   (see the end of this file). */
 const CACHE = 'parishlife-public-v2';
 
 self.addEventListener('install', event => {
@@ -65,4 +66,38 @@ self.addEventListener('fetch', event => {
   }
   if (url.pathname.startsWith('/api/') || !kept(url)) return;
   event.respondWith(load(event, request, request.mode === 'navigate'));
+});
+
+/* Push notifications (Web Push, sent by the API's WebPushSender): the payload is { title, body, url } with a neutral
+   notice title or a parish broadcast. Show it; a tap opens the site (or focuses an open tab) at that address,
+   only ever on this site's own origin. */
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    /* not ours to read: show a plain notice */
+  }
+  const url = typeof data.url === 'string' && new URL(data.url, self.location.origin).origin === self.location.origin ? data.url : '/index.html';
+  event.waitUntil(self.registration.showNotification(String(data.title || 'ParishLife').slice(0, 120), {
+    body: typeof data.body === 'string' ? data.body.slice(0, 200) : undefined,
+    icon: '/assets/images/icons/apple-touch-icon.png',
+    badge: '/assets/images/icons/apple-touch-icon.png',
+    data: { url },
+    lang: /[؀-ۿ]/.test(String(data.title || '')) ? 'ar' : 'en'
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '/index.html', self.location.origin);
+  if (target.origin !== self.location.origin) return;
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const tab = open.find(client => new URL(client.url).origin === self.location.origin);
+    if (tab) {
+      await tab.focus();
+      return tab.navigate ? tab.navigate(target.href).catch(() => undefined) : undefined;
+    }
+    return self.clients.openWindow(target.href);
+  })());
 });

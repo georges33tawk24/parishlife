@@ -51,6 +51,7 @@
         <li><b>Your account:</b> username, email address, display name, preferred language and colours, and any optional profile details you add. Your password is stored only as a one-way hash. If you turn on two-step sign-in, the authenticator key and recovery codes are stored protected. A passkey's private key never leaves your device; we store only its public key.</li>
         <li><b>Google or Microsoft sign-in:</b> only if you choose it. We store a hashed form of the account identifier Google or Microsoft gives us. When you sign up this way, we also use the name and the email address Google or Microsoft has confirmed for your account.</li>
         <li><b>Your sessions:</b> when each sign-in started and how it signed in, so you can see and end your sessions.</li>
+        <li><b>How you chose to be reached:</b> your email, push and WhatsApp choices; for each device you turn notifications on, the address its browser gives for receiving them; and the WhatsApp number you prove with a code (the code is kept only in a scrambled form and only until used).</li>
         <li><b>Parish records about you</b>, entered by your parish: name and family details, contact details, households, sacraments and certificates, parish and ministry membership, attendance, registrations, contributions and receipts, and letters or documents the parish issues.</li>
         <li><b>Sensitive records</b>, only where a parish uses them: medical or allergy notes, pastoral notes, confidential concerns and incident reports. These are protected at rest and readable only by the roles the parish designates.</li>
         <li><b>Requests and messages</b> you send to a parish, with any files you attach. Without an account, a request also stores the name and contact details you give and the details of the request.</li>
@@ -76,10 +77,12 @@
         <li><b>Microsoft Azure</b> hosts ParishLife in the France Central region: the database (Cosmos DB), private file storage (Blob Storage), key protection (Key Vault) and technical monitoring (Application Insights).</li>
         <li><b>Cloudflare</b> provides the domain name service and Turnstile, a bot check on sign-in, sign-up and public request forms. Turnstile processes technical information about your browser and connection to tell people from bots.</li>
         <li><b>Google</b> and <b>Microsoft</b>, only if you choose to sign in with them.</li>
-        <li><b>Resend</b> sends ParishLife's account emails: the codes that confirm your email address when you sign up or change it.</li>
+        <li><b>Resend</b> sends ParishLife's emails: the codes that confirm your email address, and, if you keep email on, a short copy of your notices and parish announcements with a link to sign in.</li>
+        <li><b>Push services</b> of your browser's maker (Google, Apple, Microsoft or Mozilla) carry push notifications to the devices you turn them on for. The message is encrypted so that only your device can read it.</li>
+        <li><b>Meta (WhatsApp)</b>, only if you prove a WhatsApp number and keep WhatsApp on: it receives your number and the short notice or announcement title sent to it.</li>
         <li><b>Google Fonts:</b> the members portal and the product page load their fonts from Google, so your browser contacts Google's font servers.</li>
       </ul>
-      <p>ParishLife sends no newsletters, marketing email or text messages, and takes no online payments.</p>
+      <p>ParishLife sends no marketing or advertising messages and no SMS text messages, and takes no online payments. You can turn email, push and WhatsApp on or off at any time under My account.</p>
 
       <h2>Cookies and storage in your browser</h2>
       <ul>
@@ -123,6 +126,7 @@
         <li><b>حسابك:</b> اسم المستخدم والبريد الإلكتروني والاسم الظاهر واللغة والألوان المفضّلة، وأي تفاصيل اختيارية تضيفها. تُحفظ كلمة المرور بصيغة مشفّرة باتجاه واحد فقط. إذا فعّلت الدخول بخطوتين، يُحفظ مفتاح المصادقة ورموز الاسترداد محميّة. المفتاح الخاص لمفتاح المرور لا يغادر جهازك؛ نحفظ مفتاحه العام فقط.</li>
         <li><b>الدخول عبر Google أو Microsoft:</b> فقط إذا اخترته. نحفظ صيغة مشفّرة من معرّف الحساب الذي تعطينا إياه Google أو Microsoft. وعند إنشاء حساب بهذه الطريقة نستخدم أيضاً الاسم والبريد الإلكتروني الذي أكّدته Google أو Microsoft لحسابك.</li>
         <li><b>جلساتك:</b> متى بدأ كل دخول وبأي طريقة، لتتمكّن من رؤية جلساتك وإنهائها.</li>
+        <li><b>طريقة التواصل التي اخترتها:</b> خياراتك للبريد والإشعارات الفورية وواتساب؛ ولكل جهاز تفعّل عليه الإشعارات، العنوان الذي يعطيه متصفّحه لتلقّيها؛ ورقم واتساب الذي تؤكّده برمز (يُحفظ الرمز بصيغة مشفّرة فقط وحتى استعماله).</li>
         <li><b>سجلات الرعية عنك</b>، تدخلها رعيتك: الاسم وتفاصيل العائلة ووسائل التواصل والأسر، والأسرار والشهادات، والعضوية في الرعية والأخويات، والحضور والتسجيلات، والتبرّعات والإيصالات، والرسائل أو الوثائق التي تصدرها الرعية.</li>
         <li><b>سجلات حسّاسة</b>، فقط حيث تستخدمها الرعية: ملاحظات طبية أو عن الحساسية، وملاحظات رعوية، وشكاوى سرّية وتقارير حوادث. هذه محميّة عند التخزين ولا يقرأها إلا من تحدّدهم الرعية.</li>
         <li><b>الطلبات والرسائل</b> التي ترسلها إلى رعية، مع أي ملفات ترفقها. ومن دون حساب، يحفظ الطلب أيضاً الاسم ووسيلة التواصل التي تعطيها وتفاصيل الطلب.</li>
@@ -148,10 +152,12 @@
         <li><b>Microsoft Azure</b> تستضيف ParishLife في منطقة France Central: قاعدة البيانات (Cosmos DB) وتخزين الملفات الخاص (Blob Storage) وحماية المفاتيح (Key Vault) والمراقبة التقنية (Application Insights).</li>
         <li><b>Cloudflare</b> تقدّم خدمة اسم النطاق وخدمة Turnstile، وهي فحص ضدّ البرامج الآلية عند الدخول وإنشاء الحساب ونماذج الطلبات العامة. يعالج Turnstile معلومات تقنية عن متصفّحك واتصالك ليميّز الأشخاص من البرامج الآلية.</li>
         <li><b>Google</b> و<b>Microsoft</b>، فقط إذا اخترت الدخول عبرهما.</li>
-        <li><b>Resend</b> ترسل رسائل البريد الخاصة بحسابك في ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد.</li>
+        <li><b>Resend</b> ترسل رسائل البريد من ParishLife: رموز تأكيد بريدك، وإن أبقيت البريد مفعّلاً، نسخة قصيرة من إشعاراتك وإعلانات الرعية مع رابط للدخول.</li>
+        <li><b>خدمات الإشعارات الفورية</b> لدى الجهة المصنّعة لمتصفّحك (Google أو Apple أو Microsoft أو Mozilla) تنقل الإشعارات إلى الأجهزة التي فعّلتها عليها. الرسالة مشفّرة بحيث لا يقرؤها إلا جهازك.</li>
+        <li><b>Meta (واتساب)</b>، فقط إن أكّدت رقم واتساب وأبقيته مفعّلاً: تتلقّى رقمك وعنوان الإشعار أو الإعلان القصير المرسل إليه.</li>
         <li><b>Google Fonts:</b> تحمّل بوّابة المؤمنين وصفحة التعريف بالمنتج خطوطهما من Google، فيتّصل متصفّحك بخوادم الخطوط لدى Google.</li>
       </ul>
-      <p>لا يرسل ParishLife نشرات أو رسائل تسويقية أو رسائل نصية، ولا يقبل الدفع عبر الإنترنت.</p>
+      <p>لا يرسل ParishLife رسائل تسويقية أو إعلانية ولا رسائل نصية قصيرة، ولا يقبل الدفع عبر الإنترنت. يمكنك تفعيل البريد والإشعارات الفورية وواتساب أو إيقافها في أي وقت من «حسابي».</p>
 
       <h2>ملفات تعريف الارتباط والتخزين في متصفّحك</h2>
       <ul>

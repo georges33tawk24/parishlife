@@ -140,7 +140,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - The Microsoft consent screen shows "unverified". Publisher verification and the privacy/terms URLs on the app registration come later.
     - Frontend double-click guard and a portal redirect instead of JSON on a failed check: built 21 November (below), not deployed yet.
   - Details: "Google and Microsoft sign-in configuration" in `docs/operations/frontend-hosting.md`.
-- **Double-click fix, Resend email, final privacy and terms (21 November), code only, not deployed:**
+- **Double-click fix, Resend email, final privacy and terms (21 November): `39e5df6` deployed 15:15–15:17 UTC by the Azure session (owner's go-ahead):**
   - **Double click:**
     - one press per provider trip (`postToProvider` guard plus disabled buttons, reset when Back restores the page);
     - a failed or unavailable check on a portal form post now redirects to `/index.html?external=check-failed` / `check-unavailable` with a plain message, instead of a JSON page.
@@ -149,7 +149,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
       - New e2e test "Google sign-up: a double press posts once and reaches Google", with a stand-in Google client in the e2e host. It also guards the `form-action` fix. Proven to fail with the guard removed (2 posts).
   - **Email through Resend** (owner decision): `ResendContactCodeDelivery`, from `ParishLife <no-reply@parish-life.org>`, for sign-up and email-change codes; `ResendEmailTests` (3).
     - Off until `Email__Provider`, `Email__ResendApiKey` (Key Vault) and `Email__From` are set.
-    - Setup steps (Resend account and DNS, key in Key Vault, RBAC, settings): `docs/operations/email-delivery.md`.
+    - Setup steps (Resend account and DNS, key in Key Vault, RBAC, settings): `docs/operations/notification-delivery.md`.
   - **Privacy and terms final** (owner answers): operator ParishLife, contact `privacy@parish-life.org`, Lebanese law, age 13+, effective 21 November 2026, draft banner removed, Resend named.
     - "Technical logs deleted after 90 days" is to be confirmed against the Application Insights retention.
     - `privacy@` needs Cloudflare Email Routing.
@@ -159,6 +159,43 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - `check:routes` 0 new gaps;
     - `npm run e2e` 13/13.
     - No real Resend email has been sent yet.
+  - **Verified live:**
+    - the pages serve with the page policy, and the privacy and terms pages have no banner or placeholders;
+    - a forged check on a portal form post redirects to `check-failed`;
+    - capabilities show Google and Microsoft available and email NotConfigured (Resend not set up yet).
+    - The privacy text "logs deleted after 90 days" is correct: the App* tables in Application Insights keep 90 days.
+    - The Microsoft app registration now has the home, terms and privacy URLs. Publisher verification needs an MPN ID.
+  - **Left for the owner:** Google Branding and Publish, Cloudflare Email Routing for privacy@, and the Resend account and DNS.
+- **Outside delivery: email, web push and WhatsApp (21 November), code only, not deployed:**
+  - **Owner decisions:**
+    - Resend also emails personal notices, report notices and broadcasts;
+    - WhatsApp through the Meta Cloud API;
+    - web push;
+    - no SMS, no online payments.
+  - **Design:**
+    - a `deliveryWork` row is written in the same transaction as the stored notice (account partition) or the sent broadcast (parish partition);
+    - `DeliveryWorker` sends it on each person's chosen channels: email to a confirmed address only, push to allowed devices, WhatsApp to a proven number.
+    - Notices carry only their neutral title and a sign-in link; broadcasts carry their text, in the recipient's language.
+    - Broadcast channel status `Queued` (never "sent"). The "Sms" channel became "WhatsApp".
+  - **Code:**
+    - `EmailDeliveryChannel`, and `ResendEmailSender` (now shared with the account codes);
+    - `WebPushSender`: RFC 8291/8292 with platform crypto only, and only known push services allowed;
+    - `WhatsAppSender` (templates `parishlife_notice`, `parishlife_code`);
+    - `NotificationChannelService` and routes `api/notifications/channels|push-devices|whatsapp`;
+    - My account → "How ParishLife reaches you";
+    - service-worker push and click handlers;
+    - `tools/New-VapidKeys.ps1`;
+    - the privacy page names the push services and Meta.
+  - **Tests:** `DeliveryTests` (4), `WebPushSenderTests` (12, including RFC 8291 Appendix A byte for byte), and account check assertions.
+  - **Setup** (Resend; VAPID keys; Meta business, number, templates, token; RBAC; settings): `docs/operations/notification-delivery.md`.
+  - **Checks, SDK 10.0.401:**
+    - Release build: 0 warnings;
+    - **566 backend tests passed** (76 unit / 490 integration);
+    - frontend format, lint, check and build pass;
+    - `check:routes` 644 routes, 0 new gaps;
+    - `npm run e2e` 13/13.
+  - Nothing exercised live yet. The new My account section has not been seen in a browser with channels configured.
+  - **Owner decision, maps (Q24):** Google Maps, integrated by the owner. That will need a browser key, the page policy and a privacy line (OWNER-QUESTIONS 24).
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.

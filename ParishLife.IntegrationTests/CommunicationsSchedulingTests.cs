@@ -63,7 +63,7 @@ public class CommunicationsSchedulingTests
         f.As(reviewer);
         var sent = (await service.ListAsync(s.Parish, default)).Single(r => r.Value.Id == draft).Value;
         Assert.Equal(("Sent", author, 1), (sent.Status, sent.SentBy!, sent.RecipientCount));
-        Assert.Equal([("InApp", "Stored"), ("Email", "NotConfigured"), ("Sms", "NotConfigured"), ("Push", "NotConfigured")], sent.Channels.Select(c => (c.Channel, c.Status)).ToArray());
+        Assert.Equal([("InApp", "Stored"), ("Email", "NotConfigured"), ("WhatsApp", "NotConfigured"), ("Push", "NotConfigured")], sent.Channels.Select(c => (c.Channel, c.Status)).ToArray());
 
         // Unscheduling and cancelling remove the pending store.
         var second = await ApprovedAsync(f, service, s.Parish, author, reviewer, "Second", "en");

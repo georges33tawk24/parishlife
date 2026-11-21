@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ParishLife.Api.Authorization;
 using ParishLife.Api.BackgroundJobs;
+using ParishLife.Api.Interfaces.Services.Communications;
 using ParishLife.Api.Configuration;
 using ParishLife.Api.Data.Cosmos;
 using ParishLife.Api.Data.Local;
@@ -213,6 +214,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<BillingActivationWorker>();
             services.AddHostedService<ReservationWorker>();
             services.AddHostedService<NotificationWorker>();
+            services.AddHostedService<DeliveryWorker>();
             services.AddHostedService<ReportScheduleWorker>();
             services.AddHostedService<BroadcastScheduleWorker>();
         }
@@ -339,7 +341,9 @@ public static class ServiceCollectionExtensions
         // Account emails go through Resend only when Email:Provider, Email:ResendApiKey (Key Vault reference) and Email:From are all set;
         // otherwise nothing is sent and capabilities report NotConfigured, as before.
         services.AddOptions<EmailOptions>().Bind(configuration.GetSection("Email"));
-        services.AddHttpClient(ResendContactCodeDelivery.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddHttpClient(ResendEmailSender.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<ResendEmailSender>();
+        RegisterDelivery(services, configuration);
         if (configuration.GetSection("Email").Get<EmailOptions>()?.Configured == true)
             services.AddScoped<IContactCodeDelivery, ResendContactCodeDelivery>();
         else
@@ -381,6 +385,26 @@ public static class ServiceCollectionExtensions
                 };
             });
         }
+    }
+
+    // Outside delivery of notices and broadcasts (email through Resend, Web Push, WhatsApp). Each channel works only once its settings exist
+    // (secrets as Key Vault references); with none, nothing is queued and the worker idles.
+    private static void RegisterDelivery(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<DeliveryOptions>().Bind(configuration.GetSection("Delivery"));
+        services.AddOptions<WebPushOptions>().Bind(configuration.GetSection("WebPush"));
+        services.AddOptions<WhatsAppOptions>().Bind(configuration.GetSection("WhatsApp"));
+        services.AddHttpClient(WebPushSender.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddHttpClient(WhatsAppSender.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<WebPushSender>();
+        services.AddScoped<WhatsAppSender>();
+        services.AddScoped<IDeliveryChannel, EmailDeliveryChannel>();
+        services.AddScoped<IDeliveryChannel, PushDeliveryChannel>();
+        services.AddScoped<IDeliveryChannel, WhatsAppDeliveryChannel>();
+        services.AddScoped<DeliveryQueue>();
+        services.AddScoped<DeliveryService>();
+        services.AddScoped<DeliveryProcessor>();
+        services.AddScoped<NotificationChannelService>();
     }
 
     private static void ConfigureDataProtection(IServiceCollection services, IHostEnvironment environment)

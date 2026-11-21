@@ -49,15 +49,17 @@ import { MESSAGES, TEMPLATES, PARISH, GROUPS, groupInfo } from '../../model/data
 
 const L = (en, ar) => t(en, ar);
 
-/* The channels the API reports for a broadcast: only the app stores anything; the others have no provider. */
+/* The channels the API reports for a broadcast. In the app it is stored for every recipient; email, WhatsApp and push
+   are "queued" for the people who chose them (each person's choice and address decide), or "not set up" on this site. */
 const CHANNEL = {
   InApp: ['In the app', 'داخل التطبيق'],
   Email: ['Email', 'بريد إلكتروني'],
-  Sms: ['SMS', 'رسالة قصيرة'],
+  WhatsApp: ['WhatsApp', 'واتساب'],
   Push: ['Push', 'إشعار']
 };
 const CHANNEL_STATE = {
   Stored: ['stored for recipients', 'محفوظة للمستلمين'],
+  Queued: ['being sent to those who chose it', 'قيد الإرسال لمن اختاره'],
   NotSent: ['not sent yet', 'لم تُرسل بعد'],
   NotConfigured: ['not set up', 'غير مفعّل']
 };
