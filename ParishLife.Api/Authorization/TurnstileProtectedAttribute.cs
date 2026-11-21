@@ -30,6 +30,7 @@ public class TurnstileProtectedAttribute : Attribute, IAsyncActionFilter
             if (outcome != "Passed")
             {
                 var unavailable = outcome == "Unavailable";
+                SecurityEvents.Log(context.HttpContext, "security.turnstile_failed", detail: outcome);
                 if (form is not null && form["returnTo"].ToString() == "portal")
                 {
                     // The fixed portal page only, never a caller-chosen address; nothing secret goes into it.

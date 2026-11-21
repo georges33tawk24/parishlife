@@ -35,7 +35,7 @@ public class ExternalSignUpTests
         await using var factory = Google(f, """{"sub":"signup-subject-1","email":"new.person@fixture.example","email_verified":true,"name":"New Person"}""");
         using var browser = factory.Client();
         await Csrf(browser);
-        var returned = await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"))));
+        var returned = await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))));
         Assert.Equal("/index.html?external=signed-up", returned.Headers.Location!.OriginalString);
         var me = await Read<AccountDto>(await browser.GetAsync("/api/auth/me"));
         Assert.Equal("new.person@fixture.example", me.Email);
@@ -59,7 +59,7 @@ public class ExternalSignUpTests
         using var again = next.Client();
         await Csrf(again);
         Assert.Equal("/index.html?external=signed-in",
-            (await RoundTripAsync(again, "google", await again.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"))))).Headers.Location!.OriginalString);
+            (await RoundTripAsync(again, "google", await again.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))))).Headers.Location!.OriginalString);
         Assert.Equal(me.Id, (await Read<AccountDto>(await again.GetAsync("/api/auth/me"))).Id);
         using var signIn = next.Client();
         await Csrf(signIn);
@@ -79,7 +79,7 @@ public class ExternalSignUpTests
         await using var factory = Google(f, """{"sub":"signup-subject-taken","email":"other@fixture.example","email_verified":true}""");
         using var browser = factory.Client();
         await Csrf(browser);
-        var returned = await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"))));
+        var returned = await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))));
         Assert.Equal("/index.html?external=email-in-use", returned.Headers.Location!.OriginalString);
         Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync("/api/auth/me")).StatusCode);
         var after = (await users.FindByIdAsync(holder.Id))!;
@@ -90,13 +90,13 @@ public class ExternalSignUpTests
         Assert.Equal("/index.html?external=not-linked",
             (await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-in", Form(("returnTo", "portal"))))).Headers.Location!.OriginalString);
         await Csrf(browser);
-        Assert.Equal("external_email_in_use", await Title(await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", null))));
+        Assert.Equal("external_email_in_use", await Title(await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("ageConfirmed", "true"))))));
 
         await using var unverified = Google(f, """{"sub":"signup-subject-unverified","email":"unverified@fixture.example","email_verified":false}""");
         using var other = unverified.Client();
         await Csrf(other);
         Assert.Equal("/index.html?external=not-verified",
-            (await RoundTripAsync(other, "google", await other.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"))))).Headers.Location!.OriginalString);
+            (await RoundTripAsync(other, "google", await other.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))))).Headers.Location!.OriginalString);
         Assert.Null(await users.FindByEmailAsync("unverified@fixture.example"));
         Assert.Null(await users.FindByNameAsync("unverified@fixture.example"));
     }
@@ -111,7 +111,7 @@ public class ExternalSignUpTests
         await using var factory = Google(f, userinfo, clock);
         using var browser = factory.Client();
         await Csrf(browser);
-        await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"))));
+        await RoundTripAsync(browser, "google", await browser.PostAsync("/api/auth/external/google/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))));
         await Csrf(browser);
 
         // The last usable sign-in method: refused with a clear reason, before any password is asked for.
@@ -157,7 +157,7 @@ public class ExternalSignUpTests
         {
             using var browser = factory.Client();
             await Csrf(browser);
-            var returned = await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"))));
+            var returned = await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))));
             Assert.Equal("/index.html?external=signed-up", returned.Headers.Location!.OriginalString);
             Assert.Equal("ms.person@fixture.example", (await Read<AccountDto>(await browser.GetAsync("/api/auth/me"))).Email);
             var token = Assert.Single(provider.Requests, request => request.Uri.EndsWith("/token", StringComparison.Ordinal)).Body;
@@ -174,7 +174,7 @@ public class ExternalSignUpTests
             using var browser = organization.Client();
             await Csrf(browser);
             Assert.Equal("/index.html?external=not-verified",
-                (await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"))))).Headers.Location!.OriginalString);
+                (await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))))).Headers.Location!.OriginalString);
         }
         // The same tenant with the domain-owner-verified claim: accepted.
         var (verified, _) = Microsoft(f, "ms-subject-work-2", "11111111-2222-3333-4444-555555555555", "verified@fixture.example", edov: true);
@@ -183,7 +183,7 @@ public class ExternalSignUpTests
             using var browser = verified.Client();
             await Csrf(browser);
             Assert.Equal("/index.html?external=signed-up",
-                (await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"))))).Headers.Location!.OriginalString);
+                (await RoundTripAsync(browser, "microsoft", await browser.PostAsync("/api/auth/external/microsoft/sign-up", Form(("returnTo", "portal"), ("ageConfirmed", "true"))))).Headers.Location!.OriginalString);
         }
     }
 

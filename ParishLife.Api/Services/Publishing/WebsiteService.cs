@@ -42,7 +42,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
             return await SectionAsync(parish, key, ct);
         if (request.Texts is null || request.Texts.Count == 0 || request.Texts.Keys.Any(l => !Languages.Contains(l)))
             throw new DomainException("invalid_input", "Give the section text in en, fr and/or ar.");
-        var texts = request.Texts.ToDictionary(t => t.Key, t => new WebsiteText { Title = Guard.Text(t.Value.Title, "Title", 200), Body = Guard.Text(t.Value.Body, "Body", 20000) });
+        var texts = request.Texts.ToDictionary(t => t.Key, t => new WebsiteText { Title = Guard.Text(t.Value.Title, "Title", 200), Body = RichText.Sanitize(Guard.Text(t.Value.Body, "Body", 20000)) });
         // Only one revision is worked on at a time; saving a draft never touches the live one.
         var pending = (await RevisionsAsync(parish, key, ct)).FirstOrDefault(r => r.Value.Status is "Draft" or "Returned" or "AwaitingReview");
         if (pending?.Value.Status == "AwaitingReview")

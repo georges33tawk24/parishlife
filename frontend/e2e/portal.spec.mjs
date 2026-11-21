@@ -116,6 +116,7 @@ test('Google sign-up: a double press posts once and reaches Google', async ({ pa
   await page.goto(M.baseUrl + '/index.html?signup');
   const button = page.locator('[data-external="google"]');
   await expect(button).toBeVisible();
+  await page.locator('[data-age]').check(); // accounts are for 13 and over (the API refuses sign-up without it)
   if (M.turnstile) await turnstileToken(page);
   const google = page.waitForRequest(r => new URL(r.url()).host === 'accounts.google.com', { timeout: 30000 });
   await button.dblclick();

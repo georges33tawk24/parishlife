@@ -307,7 +307,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
                 await clergy.RequireAsync(parish, account, "Priest", ct);
                 result.Add(new PlanCelebrantDto { AccountId = account });
             }
-            catch (DomainException) { }
+            catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { } // not a current priest; a store failure still surfaces
         }
         return result;
     }

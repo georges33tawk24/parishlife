@@ -21,6 +21,7 @@ internal sealed class ValidateCsrfFilter(IAntiforgery antiforgery) : IAsyncAutho
         }
         catch (AntiforgeryValidationException)
         {
+            SecurityEvents.Log(context.HttpContext, "security.csrf_rejected");
             context.Result = new BadRequestObjectResult(new ProblemDetails { Status = 400, Title = "csrf_invalid", Detail = "Obtain a current antiforgery token and send it with this request." });
         }
     }

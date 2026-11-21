@@ -250,12 +250,7 @@ public class AccountPasswordTests
     {
         await Csrf(client);
         var challenge = (await Read<JsonElement>(await client.PostAsJsonAsync("/api/auth/login", new { username, password }))).GetProperty("challenge");
-        var account = await Read<AccountDto>(await client.PostAsJsonAsync("/api/auth/login/mfa", new
-        {
-            accountId = challenge.GetProperty("accountId").GetString(),
-            challenge = challenge.GetProperty("challenge").GetString(),
-            code = TestAuthenticator.Code()
-        }));
+        var account = await Read<AccountDto>(await AuthHttp.PostMfaAsync(client, challenge));
         await Csrf(client);
         return account;
     }

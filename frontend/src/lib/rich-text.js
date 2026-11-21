@@ -20,7 +20,9 @@ export function safeRichText(html) {
       try {
         const url = new URL(node.getAttribute('href') || '');
         if (url.protocol === 'https:' || url.protocol === 'http:') href = url.href;
-      } catch {}
+      } catch {
+        /* not an absolute address: the link is dropped and its text kept, which is the safe outcome */
+      }
       return href
         ? `<a href="${escapeText(href)}" target="_blank" rel="noopener noreferrer">${contents}</a>`
         : contents;

@@ -3,9 +3,11 @@
    every check of the account form on one screen, with the password rules shown before typing.
    An account whose email is not confirmed yet can confirm it here with a code, once the API has a delivery
    provider (GET auth/capabilities). Passkeys, email codes and external providers appear only when the
-   capabilities report them. */
+   capabilities report them. With a delivery provider, a forgotten password is reset here with an emailed code
+   (plus the authenticator code for an account that has one); nobody is signed in by it. Signing up, by form or
+   with a provider, needs the "13 or older" box (owner decision, 21 November 2026). */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { signIn, completeTwoFactor, register } from '../model/api.js';
+import { signIn, completeTwoFactor, register, requestPasswordReset, confirmPasswordReset } from '../model/api.js';
 import { t, isAr } from '../../lib/i18n.js';
 import { applyTheme } from '../../lib/theme.js';
 import { signInWithPasskey, passkeyMessage, passkeysSupported } from '../model/passkeys.js';
@@ -46,6 +48,10 @@ export const externalMessage = status =>
     'check-failed': t(
       'The security check did not go through. Complete the check again, then press the button once.',
       'لم ينجح فحص الأمان. أكمل الفحص من جديد، ثم اضغط الزر مرّة واحدة.'
+    ),
+    'age-required': t(
+      'Accounts are for people aged 13 or older. Tick the box to confirm your age, then press the button again.',
+      'الحسابات لمن بلغوا ١٣ سنة أو أكثر. أشِر إلى المربّع لتأكيد عمرك، ثم اضغط الزر مجدداً.'
     ),
     'check-unavailable': t(
       'The security check is not available right now. Try again in a few minutes.',
@@ -137,6 +143,7 @@ export function Auth({ enter, error = '', onLanguage }) {
   const [forgot, setForgot] = useState(false);
   const [challenge, setChallenge] = useState(null); // set when the API asks for an authenticator code
   const [verify, setVerify] = useState(null); // set while confirming an email with a code
+  const [reset, setReset] = useState(null); // set while resetting a forgotten password with an emailed code
   const [features, setFeatures] = useState(() => featuresOf(null));
   const [note, setNote] = useState(() => {
     /* A security change that ended every session leaves its explanation here for the next sign-in. */
@@ -179,7 +186,9 @@ export function Auth({ enter, error = '', onLanguage }) {
   const remember = () => {
     if (form.current)
       state.values = Object.fromEntries(
-        [...new FormData(form.current)].filter(([k]) => !['password', 'confirmPassword', 'code'].includes(k))
+        [...new FormData(form.current)].filter(
+          ([k]) => !['password', 'confirmPassword', 'code', 'authenticator', 'ageConfirmed'].includes(k)
+        )
       );
   };
   /* the gold ink under the chosen tab */
@@ -251,6 +260,9 @@ export function Auth({ enter, error = '', onLanguage }) {
      refuses one without a token, and each token works once. */
   const pending = () => !!check.current && !check.current.token;
   const notChecked = () => t('Complete the check first.', 'أكمل التحقّق أولاً.');
+  const ageNeeded = () =>
+    t('Confirm that you are 13 or older to create an account.', 'أكّد أن عمرك ١٣ سنة أو أكثر لإنشاء حساب.');
+  const ageTicked = () => !!form.current?.querySelector('[data-age]')?.checked;
   const signInWithKey = async () => {
     if (pending()) return setAlert(notChecked());
     setAlert('');
@@ -275,14 +287,15 @@ export function Auth({ enter, error = '', onLanguage }) {
   /* One press only: the buttons stay disabled while the browser leaves (the check's token works once). */
   const continueWithProvider = async provider => {
     if (busy.provider) return;
+    if (up && !ageTicked()) return setAlert(ageNeeded());
     if (pending()) return setAlert(notChecked());
     setAlert('');
     setBusy(b => ({ ...b, provider: true }));
     try {
-      await postToProvider(
-        up ? externalSignUpPath(provider) : externalSignInPath(provider),
-        check.current?.token ? [['turnstileToken', check.current.token]] : []
-      );
+      await postToProvider(up ? externalSignUpPath(provider) : externalSignInPath(provider), [
+        ...(check.current?.token ? [['turnstileToken', check.current.token]] : []),
+        ...(up ? [['ageConfirmed', 'true']] : [])
+      ]);
     } catch (err) {
       setAlert(err.message);
       setBusy(b => ({ ...b, provider: false }));
@@ -322,6 +335,28 @@ export function Auth({ enter, error = '', onLanguage }) {
     setBusy({ ...busy, code: false });
     check.current?.reset();
   };
+  /* Forgotten password: the reply is the same whether or not the address belongs to an account. */
+  const sendResetCode = async () => {
+    const email = String(new FormData(form.current).get('email') || '').trim();
+    if (!email) return setAlert(t('Enter the email address of your account.', 'أدخل البريد الإلكتروني لحسابك.'));
+    if (pending()) return setAlert(notChecked());
+    setBusy({ ...busy, code: true });
+    setAlert('');
+    try {
+      await requestPasswordReset(email, check.current?.token);
+      setReset({ sent: true });
+      setNote(
+        t(
+          'If this email belongs to an account, a code is on its way. It works for 15 minutes.',
+          'إن كان هذا البريد لحساب، فقد أُرسل إليه رمز. يصلح الرمز ١٥ دقيقة.'
+        )
+      );
+    } catch (err) {
+      setAlert(err.message);
+    }
+    setBusy({ ...busy, code: false });
+    check.current?.reset();
+  };
   const submit = async e => {
     e.preventDefault();
     remember();
@@ -340,11 +375,13 @@ export function Auth({ enter, error = '', onLanguage }) {
           throw new Error(t('Choose a password of at least 16 characters.', 'اختر كلمة مرور من ١٦ حرفاً على الأقل.'));
         if (q.password !== q.confirmPassword)
           throw new Error(t('The passwords do not match.', 'كلمتا المرور غير متطابقتين.'));
+        if (!q.ageConfirmed) throw new Error(ageNeeded());
         if (pending()) throw new Error(notChecked());
         await register({
           email: q.email.trim(),
           password: q.password,
           displayName: `${q.firstName.trim()} ${q.lastName.trim()}`,
+          ageConfirmed: true,
           turnstile: check.current?.token
         });
         setBusy({ ...busy, submit: false });
@@ -366,6 +403,25 @@ export function Auth({ enter, error = '', onLanguage }) {
             )
           );
         return switchTab('login');
+      }
+      if (reset) {
+        if (String(q.password || '').length < 16)
+          throw new Error(t('Choose a password of at least 16 characters.', 'اختر كلمة مرور من ١٦ حرفاً على الأقل.'));
+        await confirmPasswordReset({
+          email: q.email.trim(),
+          code: q.code.trim(),
+          newPassword: q.password,
+          currentCode: q.authenticator
+        });
+        setReset(null);
+        setForgot(false);
+        setNote(
+          t(
+            'Your password is changed and every signed-in device was signed out. Sign in with the new password.',
+            'تغيّرت كلمة المرور وخرجت كل الأجهزة. ادخل بكلمة المرور الجديدة.'
+          )
+        );
+        return setBusy({ ...busy, submit: false });
       }
       if (verify) {
         await confirmVerificationCode(q.email.trim(), q.code);
@@ -510,10 +566,61 @@ export function Auth({ enter, error = '', onLanguage }) {
                   <div className="auth-honeypot" aria-hidden="true">
                     <input name="website" tabIndex="-1" autoComplete="off" />
                   </div>
+                  <label className="af-check" style={{ '--i': n++ }}>
+                    <input type="checkbox" name="ageConfirmed" value="true" required data-age />{' '}
+                    <span>{t('I am 13 or older.', 'عمري ١٣ سنة أو أكثر.')}</span>
+                  </label>
                 </>
               ) : (
                 <>
-                  {verify ? (
+                  {reset ? (
+                    <>
+                      {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        required: true,
+                        autoComplete: 'email',
+                        maxLength: 254,
+                        dir: 'ltr',
+                        autoCapitalize: 'none',
+                        spellCheck: 'false'
+                      })}
+                      <p className="af-help">
+                        <button
+                          type="button"
+                          className="af-link"
+                          data-send-reset
+                          disabled={busy.code}
+                          onClick={sendResetCode}
+                        >
+                          {reset.sent ? t('Send a new code', 'إرسال رمز جديد') : t('Send code', 'إرسال الرمز')}
+                        </button>
+                      </p>
+                      {field('code', t('Code from your email', 'الرمز الذي وصلك بالبريد'), 'text', {
+                        required: true,
+                        inputMode: 'numeric',
+                        autoComplete: 'one-time-code',
+                        maxLength: 12,
+                        dir: 'ltr'
+                      })}
+                      {field('password', t('New password', 'كلمة المرور الجديدة'), 'password', {
+                        required: true,
+                        minLength: 16,
+                        maxLength: 200,
+                        autoComplete: 'new-password'
+                      })}
+                      {field(
+                        'authenticator',
+                        t('Authenticator code', 'رمز المصادقة'),
+                        'text',
+                        { inputMode: 'numeric', autoComplete: 'off', maxLength: 12, dir: 'ltr' },
+                        t('only if your account uses an authenticator app', 'فقط إن كان حسابك يستخدم تطبيق مصادقة')
+                      )}
+                      <p className="af-help">
+                        <button type="button" className="af-link" onClick={() => setReset(null)}>
+                          {t('Back to sign in', 'العودة إلى الدخول')}
+                        </button>
+                      </p>
+                    </>
+                  ) : verify ? (
                     <>
                       {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
                         required: true,
@@ -585,7 +692,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                     </>
                   )}
                   <div className="af-forgot-row" style={{ '--i': n++ }}>
-                    {features.verification && !verify && !challenge ? (
+                    {features.verification && !verify && !challenge && !reset ? (
                       <button
                         type="button"
                         className="af-link"
@@ -620,6 +727,26 @@ export function Auth({ enter, error = '', onLanguage }) {
                         'يستطيع مكتب الرعية المرتبط بها حسابك إعادة تعيينها لك وإعطاءك كلمة مرور جديدة تغيّرها عند الدخول. اتصل بالمكتب أو زُره.'
                       )}
                     </p>
+                    {features.verification ? (
+                      <p>
+                        <button
+                          type="button"
+                          className="af-link"
+                          data-reset-password
+                          onClick={() => {
+                            remember();
+                            const id = String(state.values.username || '').trim();
+                            state.values = { ...state.values, email: id.includes('@') ? id : '' };
+                            setAlert('');
+                            setNote('');
+                            setVerify(null);
+                            setReset({ sent: false });
+                          }}
+                        >
+                          {t('Reset it with a code sent to your email', 'أعد تعيينها برمز يُرسل إلى بريدك')}
+                        </button>
+                      </p>
+                    ) : null}
                     <a href="public.html#directory">{t('Find your parish office', 'ابحث عن مكتب رعيتك')}</a>
                     {passkeys ? (
                       <p>
@@ -647,12 +774,14 @@ export function Auth({ enter, error = '', onLanguage }) {
               >
                 {up
                   ? t('Create account', 'إنشاء الحساب')
-                  : verify
-                    ? t('Verify email', 'تحقّق من البريد')
-                    : t('Sign in', 'تسجيل الدخول')}
+                  : reset
+                    ? t('Set new password', 'تعيين كلمة المرور الجديدة')
+                    : verify
+                      ? t('Verify email', 'تحقّق من البريد')
+                      : t('Sign in', 'تسجيل الدخول')}
               </button>
             </form>
-            {!verify && !challenge && ((!up && passkeys) || features.external.length) ? (
+            {!verify && !challenge && !reset && ((!up && passkeys) || features.external.length) ? (
               <>
                 <div className="auth-or" style={{ '--i': n++ }}>
                   <span>{t('or', 'أو')}</span>

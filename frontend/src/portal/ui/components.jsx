@@ -9,6 +9,7 @@ import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from '../model/
 import { listFiles, uploadFile, fileURL } from '../model/modules/requests.js';
 import { Avatar, toast, openPopover, closeMenu } from './ui.jsx';
 import { useVersion } from '../shell/version.js';
+import { safeRichText } from '../../lib/rich-text.js';
 export { AddressCascade } from './geography.jsx';
 
 /* ---------------- buttons ---------------- */
@@ -923,7 +924,7 @@ export const RichText = forwardRef(function RichText({ body = '' }, ref) {
   const area = useRef(null);
   useImperativeHandle(ref, () => area.current);
   useLayoutEffect(() => {
-    area.current.innerHTML = body;
+    area.current.innerHTML = safeRichText(body); // stored text is never trusted as markup
   }, []);
   /* mousedown only keeps the selection in the text; the command runs on click, so Enter and Space work too */
   const command = (kind, button) => {

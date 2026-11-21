@@ -1,4 +1,4 @@
-// Purpose: delivers one-use contact-ownership codes (confirming a registered email, changing the sign-in email) by email through
+// Purpose: delivers one-use account codes (confirming a registered email, changing the sign-in email, resetting a password) by email through
 // Resend's HTTPS API, in English and Arabic. Acceptance by Resend is not proof of receipt.
 // Main members: ClientName (the named HttpClient), Configured, SendAsync (one POST /emails; true only on a 2xx answer), Message (the
 // subject and bodies for a purpose). The code and the API key are never logged or stored; failures log only the HTTP status.
@@ -49,14 +49,19 @@ public class ResendContactCodeDelivery(IHttpClientFactory clients, IOptions<Emai
     internal static (string Subject, string Text, string Html) Message(string code, string purpose)
     {
         var change = purpose == "ChangeEmail";
-        var subject = change ? "Confirm your new ParishLife email · تأكيد بريدك الجديد في ParishLife"
+        var reset = purpose == "ResetPassword";
+        var subject = reset ? "Reset your ParishLife password · إعادة تعيين كلمة المرور في ParishLife"
+            : change ? "Confirm your new ParishLife email · تأكيد بريدك الجديد في ParishLife"
             : "Your ParishLife confirmation code · رمز التأكيد في ParishLife";
-        var en = change ? "Use this code to confirm the new email address for your ParishLife account:"
+        var en = reset ? "Use this code on the ParishLife sign-in page to choose a new password:"
+            : change ? "Use this code to confirm the new email address for your ParishLife account:"
             : "Use this code to confirm your email address on ParishLife:";
-        var ar = change ? "استخدم هذا الرمز لتأكيد البريد الإلكتروني الجديد لحسابك في ParishLife:"
+        var ar = reset ? "استخدم هذا الرمز في صفحة الدخول إلى ParishLife لاختيار كلمة مرور جديدة:"
+            : change ? "استخدم هذا الرمز لتأكيد البريد الإلكتروني الجديد لحسابك في ParishLife:"
             : "استخدم هذا الرمز لتأكيد بريدك الإلكتروني في ParishLife:";
-        const string expiresEn = "It expires in 15 minutes. If you did not ask for it, you can ignore this email.";
-        const string expiresAr = "تنتهي صلاحيته بعد ١٥ دقيقة. إذا لم تطلبه، يمكنك تجاهل هذه الرسالة.";
+        var expiresEn = "It expires in 15 minutes. If you did not ask for it, you can ignore this email"
+            + (reset ? "; your password stays as it is." : ".");
+        var expiresAr = "تنتهي صلاحيته بعد ١٥ دقيقة. إذا لم تطلبه، يمكنك تجاهل هذه الرسالة" + (reset ? "؛ تبقى كلمة المرور كما هي." : ".");
         var text = $"{en}\n\n{code}\n\n{expiresEn}\n\n{ar}\n\n{code}\n\n{expiresAr}\n\nParishLife · https://parish-life.org";
         var safe = WebUtility.HtmlEncode(code);
         var html = $"""

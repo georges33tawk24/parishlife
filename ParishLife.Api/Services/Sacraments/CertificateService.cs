@@ -345,7 +345,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         try { await access.RequireAsync(parish, Permissions.SacramentsRecord, ct); return; }
         catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { }
         try { await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct); return; }
-        catch (DomainException) { }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { }
         await bishops.RequireBishopAsync(await ArchdioceseAsync(parish, ct), ct);
     }
 

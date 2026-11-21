@@ -1,5 +1,6 @@
 // Purpose: HTTP endpoints for accounts workflows; delegates work to backend services.
-// Main functions: Csrf, Register, Login, CompleteMfa, Me, Logout, Sessions, Revoke, ChangePassword, AddPassword.
+// Main functions: Csrf, Register, Login, CompleteMfa (each authenticator code signs in once), Me, Logout, Sessions, Revoke, ChangePassword,
+// AddPassword.
 // AccountDto.From supplies the shared safe profile projection.
 // Rate limits: every sign-in, registration, session and password action uses the strict "authentication" policy. Csrf and Me do not:
 // the portal calls them on every page load, so on a shared connection (a parish office or hall) they would use up the sign-in budget
@@ -22,7 +23,7 @@ namespace ParishLife.Api.Controllers.Accounts;
 [ApiController]
 [Route("api/auth")]
 public sealed class AccountsController(AccountService accounts, UserManager<ParishUser> users, SignInManager<ParishUser> signIn,
-    AccountSessionService sessions, AccountCookieService cookies, TimeProvider clock) : ControllerBase
+    AccountSessionService sessions, AccountCookieService cookies, TimeProvider clock, IUserStore<ParishUser> store) : ControllerBase
 {
     private const string Authentication = "authentication";
 
@@ -48,10 +49,16 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
             return Unauthorized();
         var user = identifier.Contains('@') ? await users.FindByEmailAsync(identifier) : await users.FindByNameAsync(identifier);
         if (user is null || !user.Active)
+        {
+            SecurityEvents.Log(HttpContext, "security.sign_in_failed", detail: "unknown_or_inactive");
             return Unauthorized();
+        }
         var result = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
+        {
+            SecurityEvents.Log(HttpContext, "security.sign_in_failed", user.Id, result.IsLockedOut ? "locked_out" : "password");
             return Unauthorized();
+        }
         if (user.PlatformOperator && !user.TwoFactorEnabled)
             return Unauthorized();
         if (user.TwoFactorEnabled)
@@ -68,9 +75,13 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
         var challenge = await sessions.GetChallengeAsync(Guard.Id(request.AccountId), request.Challenge, ct);
         if (user is not { Active: true, TwoFactorEnabled: true } || !AccountVerification.IsVerified(user) || challenge is null || challenge.Value.SecurityStamp != user.SecurityStamp || challenge.Value.Consumed || challenge.Value.ExpiresAt <= clock.GetUtcNow() || await users.IsLockedOutAsync(user))
             return Unauthorized();
-        if (string.IsNullOrWhiteSpace(request.Code) || request.Code.Length > 12 || !await users.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, request.Code.Replace(" ", "", StringComparison.Ordinal)))
+        var code = request.Code?.Replace(" ", "", StringComparison.Ordinal);
+        // A code that already signed in (vector 6, replay) counts as a failure like a wrong one.
+        if (string.IsNullOrWhiteSpace(code) || code.Length > 12 || !await users.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, code)
+            || !await ((CosmosIdentityStore)store).ClaimAuthenticatorCodeAsync(user.Id, code, ct))
         {
             _ = await users.AccessFailedAsync(user);
+            SecurityEvents.Log(HttpContext, "security.mfa_failed", user.Id);
             return Unauthorized();
         }
 

@@ -37,7 +37,7 @@ public class ResendEmailTests
         Assert.Equal("ProviderConfigured", (await Read<JsonElement>(await client.GetAsync("/api/auth/capabilities"))).GetProperty("contactVerificationDelivery").GetString());
 
         var email = "resend-" + Guid.NewGuid().ToString("N") + "@fixture.example";
-        Assert.True((await client.PostAsJsonAsync("/api/auth/register", new { operationId = Guid.NewGuid(), email, password = Password, displayName = "New member" })).IsSuccessStatusCode);
+        Assert.True((await client.PostAsJsonAsync("/api/auth/register", new { operationId = Guid.NewGuid(), email, password = Password, displayName = "New member", ageConfirmed = true })).IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new { username = email, password = Password })).StatusCode);
         Assert.True((await client.PostAsJsonAsync("/api/auth/contact-verification", new { email })).IsSuccessStatusCode);
 

@@ -12,6 +12,7 @@ using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Ministries;
+using ParishLife.Api.Services.Publishing;
 
 namespace ParishLife.Api.Services.Communications;
 
@@ -56,10 +57,11 @@ public class CommunicationsService(IRecordTransactions records, IParishAccess ac
         if (item.Visibility == "Ministry")
             item.MinistryId = (await own.ReadAsync(parish, Guard.Id(request.MinistryId ?? throw new DomainException("invalid_input", "Choose the ministry audience.")), ct)).Value.Id;
         item.Title = Guard.Text(request.Title, "Title", 300);
-        item.Body = Guard.Text(request.Body, "Body", 20000);
+        item.Body = RichText.Sanitize(Guard.Text(request.Body, "Body", 20000)); // the public news view renders markup
         item.Category = string.IsNullOrWhiteSpace(request.Category) ? null : Guard.Text(request.Category, "Category", 100);
         item.Language = request.Language is "en" or "fr" or "ar" ? request.Language : throw new DomainException("invalid_input", "Use en, fr or ar.");
         (item.TitleAr, item.BodyAr) = ArabicVersion.Pair(request.TitleAr, request.BodyAr, item.Language, 20000);
+        item.BodyAr = item.BodyAr is null ? null : RichText.Sanitize(item.BodyAr);
         item.Priority = request.Priority is null or "Normal" ? "Normal" : request.Priority == "Urgent" ? "Urgent" : throw new DomainException("invalid_input", "Use Normal or Urgent.");
         item.Pinned = request.Pinned;
         item.ExpiresAt = request.ExpiresAt is { } expiry ? Guard.Utc(expiry) : null;
