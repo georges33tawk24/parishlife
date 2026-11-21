@@ -55,8 +55,11 @@ public static class ExternalIdentityClaims
     }
 
     // An ID token that came straight from the provider's token endpoint over TLS, in the back channel, authenticated by this client:
-    // OpenID Connect Core 3.1.3.7 (6) lets TLS server validation stand in for the signature check here. The audience, issuer form and
-    // expiry are still checked; anything malformed or not for this client is treated as no ID token (so no verified email).
+    // OpenID Connect Core 3.1.3.7 (6) lets TLS server validation stand in for the signature check here (the token endpoint is the fixed
+    // https constant in ExternalProviderOptions, called by the code-flow back channel with PKCE). The audience and azp, the issuer of the
+    // token's own tenant, expiry and not-before are still checked; anything malformed or not for this client is treated as no ID token (so
+    // no verified email). No nonce is sent in the authorization request, so none is expected (3.1.3.7 (11)); state and PKCE bind the round
+    // trip. The ID token never identifies the account: sign-in matches only the userinfo sub (hashed with the provider), never an email.
     public static JsonElement? ReadIdToken(string? idToken, string clientId, DateTimeOffset now)
     {
         var parts = idToken?.Split('.');
@@ -75,6 +78,9 @@ public static class ExternalIdentityClaims
                 return null;
             if (!payload.TryGetProperty("exp", out var exp) || !exp.TryGetInt64(out var seconds) || DateTimeOffset.FromUnixTimeSeconds(seconds) < now - Skew)
                 return null;
+            // Not yet valid (nbf in the future) is refused like an expired token.
+            if (payload.TryGetProperty("nbf", out var nbf) && (!nbf.TryGetInt64(out var notBefore) || DateTimeOffset.FromUnixTimeSeconds(notBefore) > now + Skew))
+                return null;
             return payload;
         }
         catch (Exception error) when (error is FormatException or JsonException or ArgumentException)
@@ -87,8 +93,17 @@ public static class ExternalIdentityClaims
     {
         if (!payload.TryGetProperty("aud", out var aud))
             return false;
-        return aud.ValueKind == JsonValueKind.String ? aud.GetString() == clientId
-            : aud.ValueKind == JsonValueKind.Array && aud.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String && item.GetString() == clientId);
+        // OIDC Core 3.1.3.7 (3)-(5): this client among the audiences; with several audiences azp must name this client; azp, when
+        // present, must always be this client.
+        var azp = payload.TryGetProperty("azp", out var party) ? party : (JsonElement?)null;
+        if (azp is { } given && (given.ValueKind != JsonValueKind.String || given.GetString() != clientId))
+            return false;
+        if (aud.ValueKind == JsonValueKind.String)
+            return aud.GetString() == clientId;
+        if (aud.ValueKind != JsonValueKind.Array)
+            return false;
+        var audiences = aud.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null).ToArray();
+        return audiences.Contains(clientId) && (audiences.Length == 1 || azp is not null);
     }
 
     private static string? Text(JsonElement element, string name)
