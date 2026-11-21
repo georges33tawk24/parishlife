@@ -4,7 +4,9 @@
 // rate limit; the capability report follows configuration; announcement markup is sanitized when saved; the 13-or-older confirmation at
 // sign-up; forgotten-password reset by emailed code (neutral answers, attempt limit, one use, MFA still required, every session ended,
 // no sign-in); own data copy and account closure (fresh proof, sessions end, identity anonymized, address reusable); email lookups are
-// case-insensitive but compatibility look-alikes do not reach another account.
+// case-insensitive but compatibility look-alikes do not reach another account; an authenticator code signs in once; security events
+// are logged with the account id and no secret; no CORS allow header for another origin; real names (O'Brien, José, محمد, 李) are
+// stored exactly.
 
 using System.Net;
 using System.Net.Http.Json;
@@ -13,6 +15,7 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ParishLife.Api.DTOs.Accounts;
 using ParishLife.Api.DTOs.Communications;
@@ -46,6 +49,11 @@ public class SecurityHardeningHttpTests
         Assert.Contains("camera=()", response.Headers.GetValues("Permissions-Policy").Single(), StringComparison.Ordinal);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.False(response.Headers.Contains("Server"));
+        // No CORS: another site's origin gets no allow header, so cookies never go cross-origin with a readable answer.
+        using var preflight = new HttpRequestMessage(HttpMethod.Options, "/api/auth/me");
+        preflight.Headers.Add("Origin", "https://evil.example");
+        preflight.Headers.Add("Access-Control-Request-Method", "GET");
+        Assert.False((await client.SendAsync(preflight)).Headers.Contains("Access-Control-Allow-Origin"));
         Assert.False(factory.Services.GetRequiredService<IOptions<KestrelServerOptions>>().Value.AddServerHeader);
         var hsts = factory.Services.GetRequiredService<IOptions<HstsOptions>>().Value;
         Assert.Equal(TimeSpan.FromDays(365), hsts.MaxAge);
@@ -89,6 +97,40 @@ public class SecurityHardeningHttpTests
         Assert.Equal(HttpStatusCode.TooManyRequests, await LoginFrom("10.0.0.1, 192.0.2.1, 203.0.113.7"));
         // Another real client (another right-most address) has its own budget.
         Assert.NotEqual(HttpStatusCode.TooManyRequests, await LoginFrom("203.0.113.7, 203.0.113.8"));
+    }
+
+    [Fact]
+    public async Task An_authenticator_code_signs_in_once_and_security_events_are_logged_without_secrets()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var logs = new CapturedLogs();
+        await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new(), services => services.AddSingleton<ILoggerProvider>(logs));
+        async Task<(HttpStatusCode Status, string Code)> SignInAsync(HttpClient client, string? code = null)
+        {
+            await Csrf(client);
+            var challenge = (await Read<JsonElement>(await client.PostAsJsonAsync("/api/auth/login", new { username = "other@fixture.example", password = Password })))
+                .GetProperty("challenge");
+            code ??= TestAuthenticator.Code();
+            var response = await client.PostAsJsonAsync("/api/auth/login/mfa", new
+            {
+                accountId = challenge.GetProperty("accountId").GetString(), challenge = challenge.GetProperty("challenge").GetString(), code
+            });
+            return (response.StatusCode, code);
+        }
+        using var first = factory.Client();
+        var (status, used) = await SignInAsync(first);
+        Assert.Equal(HttpStatusCode.OK, status);
+        using var replay = factory.Client();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SignInAsync(replay, used)).Status);
+
+        await Csrf(replay);
+        await replay.PostAsJsonAsync("/api/auth/login", new { username = "other@fixture.example", password = "not-the-password-at-all" });
+        var events = logs.Lines.Where(line => line.Contains("Security event", StringComparison.Ordinal)).ToArray();
+        Assert.Contains(events, line => line.Contains("security.mfa_failed", StringComparison.Ordinal) && line.Contains(f.Other, StringComparison.Ordinal));
+        Assert.Contains(events, line => line.Contains("security.sign_in_failed", StringComparison.Ordinal) && line.Contains("password", StringComparison.Ordinal));
+        Assert.DoesNotContain(logs.Lines, line => line.Contains("not-the-password-at-all", StringComparison.Ordinal)
+            || line.Contains(Password, StringComparison.Ordinal) || line.Contains("other@fixture.example", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -309,6 +351,24 @@ public class SecurityHardeningHttpTests
     }
 
     [Fact]
+    public async Task Real_names_with_apostrophes_accents_and_other_scripts_are_kept_exactly()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        await using var factory = new LocalApiFactory(f.DirectoryPath);
+        using var client = factory.Client();
+        await Csrf(client);
+        var users = f.Services.GetRequiredService<UserManager<ParishUser>>();
+        foreach (var name in new[] { "Seán O'Brien", "Jean-Luc", "José", "محمد", "李", "Robert'); DROP TABLE people;--" })
+        {
+            var email = "name-" + Guid.NewGuid().ToString("N") + "@fixture.example";
+            Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/register",
+                new { operationId = Guid.NewGuid(), email, password = Password, displayName = name, ageConfirmed = true })).StatusCode);
+            Assert.Equal(name, (await users.FindByEmailAsync(email))!.DisplayName);
+        }
+    }
+
+    [Fact]
     public async Task Email_lookup_ignores_case_but_compatibility_lookalikes_do_not_reach_the_account()
     {
         await using var f = new LocalBackendFixture();
@@ -328,6 +388,27 @@ public class SecurityHardeningHttpTests
         user.EmailConfirmed = true; // controlled test setup: the confirmation flow itself is covered by AccountContactTests
         Assert.True((await users.UpdateAsync(user)).Succeeded);
         return user.Email!;
+    }
+
+    private sealed class CapturedLogs : ILoggerProvider
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Lines { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(CapturedLogs owner) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                => owner.Lines.Enqueue(formatter(state, exception));
+        }
     }
 
     private static FormUrlEncodedContent Form(params (string Name, string Value)[] fields)
