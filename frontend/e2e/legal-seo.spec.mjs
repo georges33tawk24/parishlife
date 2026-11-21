@@ -1,0 +1,101 @@
+/* Purpose: the legal pages, the product page and the search files, served by the real API host as in production (Agent 06).
+   Main checks: the privacy policy, terms of use and cookie policy load under the page policy in English and Arabic with no
+   blocked resource or script error, show one language and an effective date, and link each other; the product page and the
+   sign-in page load no font or file from another site (Turnstile excepted on sign-in); robots.txt and sitemap.xml are served
+   and every sitemap address answers 200; the sign-in page is noindex; canonical links and JSON-LD are present and valid.
+   It does not open public.html in a browser: its service worker needs a trusted local certificate (see the public-pages test). */
+import { test, expect } from '@playwright/test';
+import { manifest, settle, watch } from './support.mjs';
+
+const M = manifest();
+const client = (page, n) =>
+  page.context().route(
+    url => url.origin === M.baseUrl,
+    route => route.continue({ headers: { ...route.request().headers(), 'x-e2e-client': '10.0.0.' + n } })
+  );
+
+test('legal pages load under the page policy in both languages', async ({ page }) => {
+  await client(page, 31);
+  const state = watch(page);
+  const pages = { privacy: ['terms', 'cookies'], terms: ['privacy', 'cookies'], cookies: ['privacy', 'terms'] };
+  for (const [name, others] of Object.entries(pages))
+    for (const lang of ['en', 'ar']) {
+      state.where = `${name} ${lang}`;
+      const response = await page.goto(`${M.baseUrl}/${name}.html?lang=${lang}`);
+      expect(response.status(), state.where).toBe(200);
+      expect(response.headers()['content-security-policy'], state.where).toContain("default-src 'self'");
+      await settle(page, state);
+      await expect(page.locator('html')).toHaveAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+      await expect(page.locator(`main section[lang="${lang}"]`)).toBeVisible();
+      await expect(page.locator(`main section[lang="${lang === 'ar' ? 'en' : 'ar'}"]`)).toBeHidden();
+      await expect(page.locator(`main section[lang="${lang}"] .meta`)).toContainText(
+        lang === 'ar' ? 'تاريخ السريان' : 'Effective date'
+      );
+      const text = await page.locator('body').innerText();
+      expect(text).not.toMatch(/\[(OWNER|PLACEHOLDER|COUNSEL|ASSUMPTION)/);
+      for (const other of others) await expect(page.locator(`footer a[href="${other}.html"]`)).toHaveCount(1);
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+        'href',
+        `https://parish-life.org/${name}.html`
+      );
+    }
+  expect(state.problems, state.problems.join('\n')).toEqual([]);
+});
+
+test('the product page and the sign-in page load nothing from Google', async ({ page }) => {
+  await client(page, 32);
+  const state = watch(page);
+  const elsewhere = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== M.baseUrl && url.protocol.startsWith('http') && url.host !== 'challenges.cloudflare.com')
+      elsewhere.push(url.host + url.pathname);
+  });
+  for (const path of ['/landing.html', '/landing.html?lang=ar', '/index.html']) {
+    state.where = path;
+    await page.goto(M.baseUrl + path);
+    await settle(page, state);
+    expect(await page.evaluate(() => [...document.fonts].some(f => f.family.includes('Inter')))).toBe(true);
+  }
+  // the product page's footer links the three policies
+  await page.goto(M.baseUrl + '/landing.html?lang=en');
+  for (const name of ['privacy', 'terms', 'cookies'])
+    await expect(page.locator(`footer a[href="${name}.html?lang=en"]`)).toHaveCount(1);
+  expect(elsewhere).toEqual([]);
+  expect(state.problems, state.problems.join('\n')).toEqual([]);
+});
+
+test('robots, sitemap, noindex, canonical links and structured data', async ({ request }) => {
+  const robots = await request.get(M.baseUrl + '/robots.txt');
+  expect(robots.status()).toBe(200);
+  const rules = await robots.text();
+  expect(rules).toContain('Disallow: /api/');
+  expect(rules).toContain('Allow: /api/public/');
+  expect(rules).toContain('Sitemap: https://parish-life.org/sitemap.xml');
+  expect(rules).not.toMatch(/Disallow: \/(\s|$)|Disallow: \/assets/);
+
+  const sitemap = await request.get(M.baseUrl + '/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+  const locations = [...(await sitemap.text()).matchAll(/<loc>https:\/\/parish-life\.org(\/[^<]*)<\/loc>/g)].map(
+    m => m[1]
+  );
+  expect(locations.length).toBeGreaterThanOrEqual(5);
+  for (const path of locations) expect((await request.get(M.baseUrl + path)).status(), path).toBe(200);
+
+  const html = async path => (await (await request.get(M.baseUrl + path)).text()).toString();
+  expect(await html('/index.html')).toMatch(/<meta name="robots" content="noindex">/);
+  for (const path of ['/public.html', '/landing.html', '/privacy.html', '/terms.html', '/cookies.html'])
+    expect(await html(path), path).not.toMatch(/noindex/);
+  expect(await html('/landing.html')).toContain('<link rel="canonical" href="https://parish-life.org/landing.html">');
+
+  const blocks = async path =>
+    [...(await html(path)).matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m =>
+      JSON.parse(m[1])
+    );
+  const types = list => list.flatMap(block => block['@graph'].map(node => node['@type']));
+  expect(types(await blocks('/landing.html'))).toEqual(['SoftwareApplication', 'FAQPage']);
+  expect(types(await blocks('/public.html'))).toEqual(['WebSite', 'Organization']);
+  const faq = (await blocks('/landing.html'))[0]['@graph'][1].mainEntity;
+  expect(faq.length).toBeGreaterThan(0);
+  for (const item of faq) expect(item.name && item.acceptedAnswer.text).toBeTruthy();
+});
