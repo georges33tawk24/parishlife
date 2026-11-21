@@ -3,6 +3,13 @@
 > **DRAFT. Not for publication.** This must be reviewed by a lawyer licensed in Lebanon before it is published (Part B publishes it as `cookies.html`). It is not legal advice.
 > Prepared 21 November 2026 on branch `hardening/06-legal`. It is a new document: no cookie policy exists today. The privacy policy has a short cookies section.
 
+**Status after Part B (22 November 2026).** Published as `frontend/public/cookies.html` (both languages), with these updates:
+- The account-linked keys (`pl-anniversaries-…`, `pl-finance-session:…`, `pl-admin-opened`) are now cleared at sign-out by Agent 03's `forgetAccountStorage`.
+- The visit beacon (`src/lib/beacon.js`) also causes the anti-forgery cookie on the public site.
+- Google Fonts is limited to printed sheets, because the portal and product page now use `/assets/fonts`.
+
+Turnstile's own cookies remain unverified in a browser.
+
 Section 1 is the inventory for maintainers, with code references. Sections 2 and 3 are the text to publish, in English and Arabic. Keep all three in step whenever the code adds a cookie or a storage key.
 
 ---

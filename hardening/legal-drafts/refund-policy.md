@@ -3,6 +3,8 @@
 > **DRAFT. Not for publication.** This must be reviewed by a lawyer licensed in Lebanon. It is not legal advice.
 > Prepared 21 November 2026 on branch `hardening/06-legal`.
 
+**Status after Part B (22 November 2026).** Part 1 is published as the "Payments and refunds" section of `frontend/terms.html`, without the sentence about future paid plans. The product page shows monthly prices for parishes ($19 and $49), but no subscription or refund terms exist. Part 2 stays NOT FOR PUBLICATION until the owner confirms the prices and how parishes pay (Needs your action).
+
 ## Facts this draft rests on (checked in the code)
 
 - **ParishLife sells nothing online.** There is no payment provider and no card or online payment route (`PROJECT_CONTEXT.md`; online payments are open owner question 23).

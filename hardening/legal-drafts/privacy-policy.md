@@ -3,6 +3,13 @@
 > **DRAFT. Not for publication.** This must be reviewed by a lawyer licensed in Lebanon before any of it is published. It is not legal advice.
 > Prepared 21 November 2026 on branch `hardening/06-legal`.
 
+**Status after Part B (22 November 2026).** Published in `frontend/privacy.html` (both languages):
+- P2 (a–i), P5 without placeholders, P8, P10, P11, the factual sentence of P13, P14 and P15.
+- Google Fonts is limited to printed sheets (P16, interim). Agent 03's new features are described: self-service copy and closure, password reset, and the 13+ confirmation.
+- Rows 32 and 33 of the fact check are now supported by the code.
+
+Still drafts, for the owner and the lawyer: P1, P3, P4, P6 (periods), P7 (objection, response time, complaints), P9 (guardians), P12, the breach sentence of P13, and the GDPR changes in C2.
+
 **Starting point.** The privacy policy is already published in English and Arabic (`frontend/privacy.html`). The owner approved it on 21 November 2026, and its sources are in `docs/operations/legal-pages.md`. This draft keeps that text. It does four things:
 
 - **A.** It checks each statement in the published text against the code.
