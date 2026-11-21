@@ -1,9 +1,10 @@
 // Purpose: Maps expected failures to safe ProblemDetails and logs non-sensitive support correlation for unexpected
 // failures.
-// Main functions: TryHandleAsync.
+// Main functions: TryHandleAsync (403s are also written as security.permission_denied events).
 
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using ParishLife.Api.Authorization;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 
@@ -25,6 +26,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             FailureKind.Unavailable => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError
         };
+        if (status == StatusCodes.Status403Forbidden)
+            SecurityEvents.Log(context, "security.permission_denied", detail: error?.Code);
         if (error is null)
             logger.LogError("Unhandled API failure {FailureType}; correlation {CorrelationId}", exception.GetType().Name, context.TraceIdentifier);
         context.Response.StatusCode = status;

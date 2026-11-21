@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using ParishLife.Api.Authorization;
 using ParishLife.Api.DTOs.Accounts;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Services.Accounts;
@@ -31,6 +32,7 @@ public class AccountClosureController(AccountClosureService closure, SignInManag
     public async Task<ActionResult<AccountClosureDto>> Close(CloseAccountDto request, CancellationToken ct)
     {
         var result = await closure.CloseAsync(request, ct);
+        SecurityEvents.Log(HttpContext, "security.account_closed");
         await signIn.SignOutAsync();
         return Ok(result);
     }

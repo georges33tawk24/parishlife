@@ -28,12 +28,16 @@ public class ContactVerificationController(ContactVerificationService contacts, 
 
     [AllowAnonymous, HttpPost("password-reset"), TurnstileProtected]
     public async Task<ActionResult<ContactVerificationStatusDto>> RequestPasswordReset(RequestPasswordResetDto request, CancellationToken ct)
-        => Accepted(await contacts.RequestPasswordResetAsync(request, ct));
+    {
+        SecurityEvents.Log(HttpContext, "security.password_reset_requested");
+        return Accepted(await contacts.RequestPasswordResetAsync(request, ct));
+    }
 
     [AllowAnonymous, HttpPost("password-reset/confirm")]
     public async Task<ActionResult<AccountSecurityChangeDto>> ConfirmPasswordReset(ConfirmPasswordResetDto request, CancellationToken ct)
     {
         var result = await contacts.ConfirmPasswordResetAsync(request, ct);
+        SecurityEvents.Log(HttpContext, "security.password_reset_completed");
         await signIn.SignOutAsync();
         return Ok(result);
     }
