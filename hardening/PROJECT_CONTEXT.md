@@ -1,0 +1,47 @@
+# Project context (shared by every hardening agent)
+
+Filled in on 21 November 2026 from the repository and the owner's recorded decisions. Where a line says **Not provided**, the owner has not given the fact; agents must use a marked placeholder and list it under "Needs your action". Never invent it.
+
+- **Product name and what it does:** ParishLife. A bilingual (English and Arabic, right-to-left) parish management platform: a public parish directory and site, a member portal, and office, clergy, bishop and operator workspaces. It covers people and households, sacraments and certificates, calendar and services, facilities, ministries, event registrations, finance records, communications, requests and letters, and administration. Source: `README.md`, `docs/operations/`, `docs/frontend-modules/`.
+- **Tech stack / framework / hosting / database / auth provider / payment provider:**
+  - API: one ASP.NET Core project on .NET 10 (`ParishLife.Api`), SDK pinned to 10.0.401 in `global.json`. Tests are in `ParishLife.UnitTests`, `ParishLife.IntegrationTests` and `ParishLife.EndToEnd` (Playwright). Aspire AppHost (`ParishLife.AppHost`) is for local runs only.
+  - Frontend: React 19 and Vite 7 in `frontend/`. Three pages: `index.html` (sign-in and portal), `public.html` (public site) and `landing.html` (product page), plus `privacy.html` and `terms.html`. It is built into the API's `wwwroot` and served from the API's own origin (owner decision, 17 November 2026; `docs/operations/frontend-hosting.md`).
+  - Hosting: Azure App Service `app-parishlife` in France Central, resource group `rg-parishlife`, custom domain `parish-life.org`. Cloudflare handles DNS and Turnstile.
+  - Data: Azure Cosmos DB, private Azure Blob Storage, and an Azure Key Vault key that wraps the Data Protection key ring. A user-assigned managed identity is used when hosted. Local development uses local file storage.
+  - Auth: the app's own accounts (ASP.NET Core Identity password hasher), TOTP authenticator and recovery codes, passkeys (WebAuthn), and Google and Microsoft sign-in (live since 21 November 2026). Session cookie `__Host-ParishLife` (8 h), anti-forgery cookie `__Host-ParishLife.Csrf`, Turnstile on sign-in, sign-up and public request forms.
+  - Payments: **none online.** Parish finance records offline gifts and numbered receipts in LBP and USD. Online payments are an open owner question (23).
+- **Does the product use an AI/LLM model?** No. There are no model calls in the code (searched for OpenAI, Anthropic, Azure AI, Semantic Kernel and Gemini). Agent 07 therefore does not run, and its items are "Not applicable". Re-check this in recon.
+- **Countries/states where users are located:** Lebanon for the pilot: Maronite parishes, governing law Lebanon, currencies LBP and USD. Whether diaspora parishes in other countries (for example the EU, US or Australia) will use it is **Not provided**.
+- **Country/state where the business is registered:** **Not provided.** The terms name Lebanese law as the governing law.
+- **Legal business name:** **Not provided.** The published pages say "ParishLife runs this service at parish-life.org". No registered entity is named.
+- **Business address:** **Not provided.**
+- **Contact email for legal/privacy requests:** `privacy@parish-life.org`. It reaches the owner through Cloudflare Email Routing, and that routing still has to be confirmed (`docs/operations/email-delivery.md`).
+- **Company registration number / VAT number:** **Not provided.**
+- **Does it sell anything?** Not online today. A platform subscription and billing-representative model exists in the code (`docs/operations/subscription-payer-transfer.md`) without a payment provider. Parishes record donations and receipts offline.
+- **Refund terms:** Not applicable while nothing is sold online. **Not provided** for future subscriptions.
+- **Is the product used by children under 13 (or under 16 in the EU)?** Accounts are allowed from age 13. Children are recorded and registered by the parish office only, and parents do not act for them in the app (owner decision, 21 November 2026). Children's records (sacraments, registrations, pickup codes, incidents) are stored by parishes.
+- **Production URL / custom domain:** `https://parish-life.org` (App Service `app-parishlife`).
+- **Staging URL:** none. A staging database is an open owner question (26).
+- **Email sending domain and provider:** Resend, from `ParishLife <no-reply@parish-life.org>`. It sends sign-up and email-change codes only, and is off until `Email__Provider`, `Email__ResendApiKey` (in Key Vault) and `Email__From` are set. There is no SMS, newsletter or WhatsApp provider configured.
+- **Analytics tool currently used:** none. The site keeps anonymous daily counts in the API (`SiteMetric`), with no IP address, device or visitor ID.
+- **Monitoring / error tracking tools currently used:** Azure Application Insights through `TelemetryExtensions`, only when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set. Health endpoints are `/health/live` and `/health/ready`.
+- **Anything an agent must NOT touch:**
+  - Production and Azure. Never deploy. Never run live write tests. Never change Azure resources, RBAC, networking, Cosmos index policy, Key Vault or DNS. Read-only inspection only, and only when it is needed.
+  - Git:
+    - Never push. Never force-push. Never rewrite history.
+    - Never commit to the branches `backend`, `frontend-new2`, `fullstack`, `fullstack-integration`, `main` or `dev/colin-following`.
+    - Each agent works only on its own `hardening/NN-name` branch. The integrator merges into `fullstack-hardening`.
+  - Accounts and data:
+    - Never seed data or create accounts at startup.
+    - The only bootstrap usernames are `colinsleiman` and `georgestawk`, through the operator command.
+    - Never invent church, official or person data.
+  - Secrets: never print, log or commit secret values, key rings, connection strings or private logs. Refer to them by name.
+  - Project rules (`CLAUDE.md`, `AGENTS.md`, `docs/frontend-modules/CONVENTIONS.md`):
+    - one public type per file, with DTOs under `DTOs/<Feature>` and models under `Models`;
+    - every created or rewritten code file starts with a purpose comment;
+    - credentials never enter fingerprints, receipts or audit records;
+    - recovery sessions stay restricted;
+    - tests live in source.
+  - Policy:
+    - Owner decisions recorded in `docs/continuation/OWNER-QUESTIONS.md` are fixed; do not change them.
+    - The published `privacy.html` and `terms.html` may be corrected or extended where the law or a new feature requires it. Keep English and Arabic in step, update the effective date, and list every changed sentence in the report for the owner's review.
