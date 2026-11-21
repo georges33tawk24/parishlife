@@ -2,7 +2,7 @@
 // Main functions: List, SignIn, SignUp, Link, LinkTicket and LinkRedirect (provider challenge redirects; the ticket pair lets a browser
 // start linking with a credential-free form post), Complete (link result, cookie or MFA challenge; JSON, or for a portal round trip a
 // redirect to the fixed portal page with one status word: signed-in, signed-up, two-factor, linked, not-linked, in-use, email-in-use,
-// not-verified or failed), PendingChallenge (hands a portal round trip's MFA challenge to the portal once) and Unlink.
+// not-verified, age-required or failed), PendingChallenge (hands a portal round trip's MFA challenge to the portal once) and Unlink.
 // Providers that are not configured answer external_provider_unavailable; nothing here reports success it did not get from a provider.
 
 using Microsoft.AspNetCore.Authorization;
@@ -34,9 +34,16 @@ public class ExternalSignInController(ExternalSignInService external, SignInMana
         => Challenge(await external.SignInPropertiesAsync(provider, await ReturnsToPortalAsync()), ExternalProviderOptions.SchemePrefix + provider);
 
     // Creates a passwordless account for an unknown subject with a provider-verified email; a linked subject simply signs in.
+    // The form must carry ageConfirmed=true (13 or older, owner decision 21 November 2026), checked before the provider is contacted.
     [AllowAnonymous, HttpPost("{provider}/sign-up"), TurnstileProtected]
     public async Task<IActionResult> SignUp(string provider)
-        => Challenge(await external.SignUpPropertiesAsync(provider, await ReturnsToPortalAsync()), ExternalProviderOptions.SchemePrefix + provider);
+    {
+        var portal = await ReturnsToPortalAsync();
+        if (!Request.HasFormContentType || (await Request.ReadFormAsync(HttpContext.RequestAborted))["ageConfirmed"] != "true")
+            return portal ? Redirect(PortalPage + "age-required")
+                : Problem(statusCode: 400, title: "age_confirmation_required", detail: AccountService.AgeRequired().Message);
+        return Challenge(await external.SignUpPropertiesAsync(provider, portal), ExternalProviderOptions.SchemePrefix + provider);
+    }
 
     // A browser form post may ask to come back to the portal (returnTo=portal); any other value keeps the JSON answer.
     private async Task<bool> ReturnsToPortalAsync()

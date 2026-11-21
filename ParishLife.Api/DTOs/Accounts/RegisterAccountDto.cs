@@ -1,5 +1,6 @@
 // Purpose: carries public account-registration input without accepting privileged roles.
-// Main members: OperationId, Email, Password, DisplayName.
+// Main members: OperationId, Email, Password, DisplayName, AgeConfirmed (the person confirms they are 13 or older: owner decision,
+// 21 November 2026; no birth date is collected).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -23,4 +24,6 @@ public class RegisterAccountDto
     [Required]
     [StringLength(200)]
     public string DisplayName { get; set; } = string.Empty;
+
+    public bool AgeConfirmed { get; set; }
 }

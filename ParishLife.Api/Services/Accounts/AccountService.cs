@@ -1,6 +1,6 @@
 // Purpose: Registers ordinary email accounts using Identity managers without creating people, appointments, or
 // fake verification.
-// Main functions: RegisterAsync.
+// Main functions: RegisterAsync (refused without the 13-or-older confirmation), AgeRequired.
 
 using System.Net.Mail;
 using Microsoft.AspNetCore.Identity;
@@ -15,6 +15,8 @@ public sealed class AccountService(UserManager<ParishUser> users, IUserStore<Par
     public async Task RegisterAsync(RegisterAccountDto request, CancellationToken ct)
     {
         var id = Guard.Id(request.OperationId);
+        if (!request.AgeConfirmed)
+            throw AgeRequired();
         var email = Guard.Text(request.Email, "Email", 254);
         if (!MailAddress.TryCreate(email, out var parsed) || parsed.Address != email)
             throw new DomainException("invalid_email", "A valid email address is required.");
@@ -45,4 +47,7 @@ public sealed class AccountService(UserManager<ParishUser> users, IUserStore<Par
         // Return the same neutral public response for existing and new identifiers.
         // Contact verification is deliberately not fabricated or auto-confirmed.
     }
+
+    // Accounts are for people aged 13 and over (owner decision, 21 November 2026); children are recorded by the parish office only.
+    public static DomainException AgeRequired() => new("age_confirmation_required", "Confirm that you are 13 or older to create an account.");
 }

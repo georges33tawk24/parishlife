@@ -30,7 +30,7 @@ public class AccountContactTests
         await f.InitializeAsync();
         var email = "new-" + Guid.NewGuid().ToString("N") + "@fixture.example";
         await f.Services.GetRequiredService<AccountService>().RegisterAsync(new RegisterAccountDto
-        { OperationId = Guid.NewGuid(), Email = email, Password = Password, DisplayName = "Pending member" }, default);
+        { OperationId = Guid.NewGuid(), Email = email, Password = Password, DisplayName = "Pending member", AgeConfirmed = true }, default);
         var users = f.Services.GetRequiredService<UserManager<ParishUser>>();
         var account = (await users.FindByEmailAsync(email))!;
         Assert.False(account.EmailConfirmed);
@@ -125,7 +125,7 @@ public class AccountContactTests
         Assert.Equal("AlreadyApplied", (await service.ConfirmEmailChangeAsync(confirm, default)).Status);
         // The released old address can be registered by someone else.
         await f.Services.GetRequiredService<AccountService>().RegisterAsync(new RegisterAccountDto
-        { OperationId = Guid.NewGuid(), Email = oldEmail, Password = Password, DisplayName = "Another person" }, default);
+        { OperationId = Guid.NewGuid(), Email = oldEmail, Password = Password, DisplayName = "Another person", AgeConfirmed = true }, default);
         Assert.NotEqual(member, (await users.FindByEmailAsync(oldEmail))!.Id);
     }
 
