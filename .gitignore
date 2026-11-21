@@ -111,3 +111,27 @@ artifacts/
 frontend/node_modules
 frontend/dist/
 frontend/.cert/
+
+# Secrets, keys and local data that must never be committed (Agent 02 hardening).
+# Data Protection key-ring files, publish profiles (they hold deployment credentials), user-secrets copies, certificates and key stores.
+key-*.xml
+*.publishsettings
+*.pubxml
+*.pubxml.user
+secrets.json
+*.cer
+*.crt
+*.der
+*.jks
+*.keystore
+*.ppk
+# Local databases, dumps, backups, logs and HTTP captures (they can hold personal data or session cookies).
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+*.log
+*.har
+# The API's web root is filled only in the publish output; a copied frontend build must not be committed from the project folder.
+ParishLife.Api/wwwroot/
