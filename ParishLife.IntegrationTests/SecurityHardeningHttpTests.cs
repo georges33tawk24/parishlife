@@ -133,6 +133,19 @@ public class SecurityHardeningHttpTests
             || line.Contains(Password, StringComparison.Ordinal) || line.Contains("other@fixture.example", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("Turnstile:SiteKey", "isolated-site-key")]
+    [InlineData("ExternalSignIn:google:ClientId", "isolated-client")]
+    [InlineData("Email:ResendApiKey", "isolated-resend-key")]
+    public async Task Half_configured_secret_settings_stop_startup_naming_only_the_setting(string key, string value)
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new() { [key] = value }, _ => { });
+        var error = Assert.Throws<InvalidOperationException>(() => factory.Client());
+        Assert.DoesNotContain(value, error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Capability_report_follows_the_configured_providers_and_bot_check()
     {

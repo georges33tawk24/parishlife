@@ -9,7 +9,7 @@ using ParishLife.Api.Models.Enums;
 
 namespace ParishLife.Api.Services.Communications;
 
-public class NotificationOutcomeReader(IRecordTransactions records)
+public class NotificationOutcomeReader(IRecordTransactions records, ILogger<NotificationOutcomeReader>? logger = null)
 {
     internal async Task<NotificationOutcomeDto> ReadAsync(string parish, IReadOnlyList<string>? workIds, CancellationToken ct)
     {
@@ -32,7 +32,12 @@ public class NotificationOutcomeReader(IRecordTransactions records)
             Versioned<NotificationWork>? row;
             try { row = await records.ReadAsync<NotificationWork>(scope, "notificationWork:" + id, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception) { ct.ThrowIfCancellationRequested(); return Outcome("Unconfirmed"); }
+            catch (Exception error)
+            {
+                ct.ThrowIfCancellationRequested();
+                logger?.LogWarning("Notification outcome read failed. Failure type: {FailureType}", error.GetType().Name); // the type only
+                return Outcome("Unconfirmed");
+            }
             ct.ThrowIfCancellationRequested();
             if (row?.Value is not { } work || work.Id != id || work.ParishId != parish || work.IdentityVersion is not (1 or 2))
                 return Outcome("Unconfirmed");

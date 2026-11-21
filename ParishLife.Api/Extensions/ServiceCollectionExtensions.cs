@@ -334,6 +334,12 @@ public static class ServiceCollectionExtensions
             options.UserVerificationRequirement = "required";
         });
         services.AddScoped<PasskeyService>();
+        // Fail fast on a half-set or unresolved secret setting (one Turnstile key, a Resend or OAuth setup with a missing value, a Key Vault
+        // reference App Service could not resolve); the messages name the setting, never its value.
+        if ((configuration.GetSection("Turnstile").Get<TurnstileOptions>() ?? new()).ConfigurationProblem() is { } turnstileProblem)
+            throw new InvalidOperationException(turnstileProblem);
+        if ((configuration.GetSection("Email").Get<EmailOptions>() ?? new()).ConfigurationProblem() is { } emailProblem)
+            throw new InvalidOperationException(emailProblem);
         services.AddOptions<TurnstileOptions>().Bind(configuration.GetSection("Turnstile"));
         services.AddHttpClient(TurnstileVerifier.ClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddScoped<TurnstileVerifier>();
@@ -350,6 +356,8 @@ public static class ServiceCollectionExtensions
         foreach (var (provider, endpoints) in ExternalProviderOptions.Providers)
         {
             var settings = configuration.GetSection("ExternalSignIn:" + provider).Get<ExternalProviderOptions>() ?? new();
+            if (settings.ConfigurationProblem(provider) is { } providerProblem)
+                throw new InvalidOperationException(providerProblem);
             if (!settings.IsConfigured(provider))
                 continue; // An unconfigured provider has no scheme, so capability reports it unavailable and its routes return 404.
             services.AddAuthentication().AddOAuth<ExternalOAuthOptions, ExternalOAuthHandler>(ExternalProviderOptions.SchemePrefix + provider, options =>
