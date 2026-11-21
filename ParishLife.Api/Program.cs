@@ -1,9 +1,13 @@
 // Purpose: hosts the backend API with validated Azure services, account security, telemetry, and health checks.
 // Main flow: register services -> configure middleware (and the built frontend when published into wwwroot) -> map health/OpenAPI/controllers
 // -> run; no seeds or provisioning.
+// Client address (rate limits, Turnstile, audit): when hosted, App Service's front end is the one proxy in front of Kestrel and appends the
+// caller's address to X-Forwarded-For. Only that one right-most hop is trusted (ForwardLimit 1), so addresses a client writes into the
+// header itself are ignored. Development (no proxy) trusts nothing unless ForwardedHeaders:Enabled is set.
 
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ParishLife.Api.Authorization;
@@ -15,7 +19,18 @@ using ParishLife.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddParishLifeTelemetry();
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 64 * 1024);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 64 * 1024;
+    options.AddServerHeader = false; // no "Server: Kestrel"
+});
+// One year; includeSubDomains is safe because the only other web host, www, is served over HTTPS by Cloudflare. Preload is the owner's
+// decision (hardening/reports/03-security.md, "Needs your action").
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+});
 builder.Services.AddControllers(options => options.Filters.Add<ValidateCsrfFilter>()).AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new ApiGuidJsonConverter());
@@ -74,6 +89,15 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("authentication", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
 });
 var app = builder.Build();
+// When App Service sets ASPNETCORE_FORWARDEDHEADERS_ENABLED the framework already runs this middleware with the same settings (cleared
+// known proxies, ForwardLimit 1); running it twice would let the second pass trust a client-written entry, so it is added only otherwise.
+if (app.Configuration.GetValue("ForwardedHeaders:Enabled", !app.Environment.IsDevelopment()) && !app.Configuration.GetValue<bool>("FORWARDEDHEADERS_ENABLED"))
+{
+    var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto, ForwardLimit = 1 };
+    forwarded.KnownIPNetworks.Clear(); // the front end's addresses are not fixed; nothing but the front end can reach the app
+    forwarded.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwarded);
+}
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
@@ -82,6 +106,10 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
+    context.Response.Headers.XFrameOptions = "DENY";
+    context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
+    // Geolocation stays for the public "near me" search; passkeys use the same-origin default.
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)";
     if (context.Request.Path.StartsWithSegments("/api"))
         context.Response.Headers.CacheControl = "no-store";
     await next();
@@ -97,7 +125,9 @@ app.MapGet("/health/ready", async (HealthCheckService health, CancellationToken 
     var result = await health.CheckHealthAsync(check => check.Tags.Contains("ready"), cancellationToken);
     return Results.Json(new { status = result.Status.ToString() }, statusCode: result.Status == HealthStatus.Healthy ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
 }).AllowAnonymous();
-app.MapOpenApi().RequireAuthorization();
+// The API description is a development aid only: in production it would map every route for any signed-in account.
+if (app.Configuration.GetValue("OpenApi:Enabled", app.Environment.IsDevelopment()))
+    app.MapOpenApi().RequireAuthorization();
 app.MapControllers().RequireAuthorization();
 app.Run();
 public partial class Program;
