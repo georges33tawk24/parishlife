@@ -541,7 +541,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
   width:56px;height:56px;border-radius:var(--r-modal);background:var(--muted);color:var(--text-3);
   display:grid;place-items:center;margin-bottom:var(--s2)
 }
-.empty h3{font:600 17px/24px var(--sans);color:var(--text)}
+.empty h1,.empty h3{font:600 17px/24px var(--sans);color:var(--text)}
 .empty p{max-width:44ch;font:400 14px/22px var(--sans)}
 .empty .acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
 

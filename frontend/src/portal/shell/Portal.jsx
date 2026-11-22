@@ -7,7 +7,18 @@ import { Icon } from '../ui/icons.jsx';
 import { t, isAr, lang, setLang, num, matches } from '../../lib/i18n.js';
 import { PARISH, RATE, PEOPLE, PHOTOS, PREFS } from '../model/data.js';
 import * as D from '../model/data.js';
-import { closeOverlays, toast, openModal, openDrawer, Avatar, openPopover, closeMenu, OverlayHost } from '../ui/ui.jsx';
+import {
+  closeOverlays,
+  toast,
+  openModal,
+  openDrawer,
+  Avatar,
+  openPopover,
+  closeMenu,
+  OverlayHost,
+  PageSkeleton,
+  ScreenBoundary
+} from '../ui/ui.jsx';
 import { S, MOBILE_NAV, role, me, canSee, go, save, bus } from '../model/store.js';
 import { runAction } from './actions.jsx';
 import { hydrate, persist, saveFailed, loadFailures } from '../model/persist.js';
@@ -1175,9 +1186,7 @@ function View() {
   return (
     <div className="wellpad" id="view" ref={host}>
       {waiting ? (
-        <div className="member-page member-empty">
-          <p>{t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')}</p>
-        </div>
+        <PageSkeleton label={t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')} />
       ) : (
         <>
           {loadFailures.has(S.route) ? (
@@ -1202,7 +1211,9 @@ function View() {
               )}
             </div>
           ) : null}
-          <Screen params={S.params} />
+          <ScreenBoundary>
+            <Screen params={S.params} />
+          </ScreenBoundary>
         </>
       )}
     </div>

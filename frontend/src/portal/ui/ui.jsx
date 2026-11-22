@@ -1,7 +1,7 @@
 /* Shared rendering pieces. They keep the markup consistent with the design system so a card never
    grows a fifth radius: page furniture, atoms, the data table and its pages, and the overlays
    (drawer, modal, menu, popover, toasts) every flow opens. */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Component, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './icons.jsx';
 import { t, isAr, usd, lbp, num, fmtDate } from '../../lib/i18n.js';
@@ -30,6 +30,80 @@ export function PageHead({ crumbs = [], title, sub, actions }) {
       {actions ? <div className="acts">{actions}</div> : null}
     </div>
   );
+}
+
+/* A page still on its way (its screen's file, or the member's data): the shape of a page head and a list,
+   so the well never stands blank. Screen readers hear `label` once. */
+export function PageSkeleton({ label }) {
+  return (
+    <div className="page-skel" role="status" aria-busy="true">
+      <span className="sr">{label || t('Loading…', 'جارٍ التحميل…')}</span>
+      <div className="pagehead" aria-hidden="true">
+        <div>
+          <span className="skel" style={{ display: 'block', width: 220, maxWidth: '60%', height: 28 }}></span>
+          <span
+            className="skel"
+            style={{ display: 'block', width: 320, maxWidth: '80%', height: 12, marginTop: 12 }}
+          ></span>
+        </div>
+      </div>
+      <section className="panel" aria-hidden="true">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="skel-row">
+            <span className="skel" style={{ width: 28, height: 28, borderRadius: 99 }}></span>
+            <span className="skel" style={{ width: '32%', height: 12 }}></span>
+            <span className="skel" style={{ width: '18%', height: 12 }}></span>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+/* A screen that throws while drawing, or whose file cannot be downloaded (offline, or a new version was
+   deployed meanwhile), shows what happened and a way on instead of a blank page. The rail stays usable. */
+export class ScreenBoundary extends Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error) {
+    console.error('Screen failed to draw:', error); // the browser console is the only trace; nothing is sent
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const offline = navigator.onLine === false;
+    const download = /dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(
+      String(this.state.error?.message)
+    );
+    return (
+      <div className="empty" role="alert">
+        <span className="glyph">
+          <Icon name="warn" size={26} />
+        </span>
+        <h1>{t('This page could not open', 'تعذّر فتح هذه الصفحة')}</h1>
+        <p>
+          {offline || download
+            ? t(
+                'Part of ParishLife could not be downloaded. Check your internet connection, then reload the page.',
+                'تعذّر تنزيل جزء من ParishLife. تحقّق من اتصالك بالإنترنت، ثم أعد تحميل الصفحة.'
+              )
+            : t(
+                'Something on this page stopped it from opening. Reload the page; if it happens again, tell your parish office which page you were opening.',
+                'منع خلل في هذه الصفحة فتحها. أعد تحميل الصفحة، وإن تكرّر ذلك فأخبر مكتب الرعية بالصفحة التي كنت تفتحها.'
+              )}
+        </p>
+        <div className="acts">
+          <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+            {t('Reload the page', 'أعد تحميل الصفحة')}
+          </button>
+          <a className="btn btn-secondary" href="#/account">
+            {t('Go to My account', 'انتقل إلى حسابي')}
+          </a>
+        </div>
+      </div>
+    );
+  }
 }
 
 /** Tab bar whose tabs are real routes, so a tab is linkable and survives reload.
