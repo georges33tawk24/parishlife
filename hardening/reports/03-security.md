@@ -182,11 +182,11 @@ Branch `hardening/03-security-sweep-1`, cut from `fullstack-hardening` at `0e0ad
 
 | Status | Count |
 |---|---|
-| Fixed | 15 |
+| Fixed | 14 |
 | Already OK | 4 |
 | Needs your action | 2 |
 | Not applicable | 1 |
-| **Total** | **22** |
+| **Total** | **21** |
 
 ### Item table
 
