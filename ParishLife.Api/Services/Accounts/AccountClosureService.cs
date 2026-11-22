@@ -8,12 +8,16 @@
 // signature; the sign-in aliases are then released so the address can be used again, and the encrypted personal notes are removed in
 // further batches (repeated by a retry with the same operation id). The anonymized document stays as a tombstone so audit and parish
 // records that name the account id stay readable. Parish records (person, sacraments, gifts, registrations, safeguarding) stay with
-// each parish under its retention; the answer says so. Platform operator accounts are closed only through the private operator procedure.
+// each parish under its retention; the answer says so. Platform operator accounts are closed only through the private operator procedure,
+// and an account that a parish or archdiocese depends on (owner, representative, access grant, staff/clergy or bishop appointment) is
+// refused until that is handed over (RequireNothingHeldAsync).
 
 using System.Security.Claims;
 using ParishLife.Api.DTOs.Accounts;
 using ParishLife.Api.Identity;
+using ParishLife.Api.Interfaces.Repositories.Administration;
 using ParishLife.Api.Interfaces.Repositories.Common;
+using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
@@ -25,7 +29,8 @@ namespace ParishLife.Api.Services.Accounts;
 
 public class AccountClosureService(IRecordTransactions records, MfaAccountAccess proof, ParishUserManager users, IUserStore<ParishUser> store,
     ICurrentActor actor, AccountSessionService sessions, AccountProfileService profiles, AccountRecordsService parishRecords,
-    PersonDataService personData, PersonalWorkspaceService workspace, IHttpContextAccessor context, TimeProvider clock)
+    PersonDataService personData, PersonalWorkspaceService workspace, IHttpContextAccessor context, TimeProvider clock,
+    IParishDirectory parishDirectory, IParishRepository parishes, IPlatformDirectory platform, IStaffAppointmentDirectory appointments)
 {
     private static readonly string[] PersonalContent = ["personalWorkspaceItem", "personalWorkspaceRevision", "personalWorkspaceCommand"];
 
@@ -78,6 +83,7 @@ public class AccountClosureService(IRecordTransactions records, MfaAccountAccess
         var user = await ProveAsync(request, ct);
         if (user.PlatformOperator)
             throw new DomainException("operator_account_protected", "Platform operator accounts are closed only through the private operator procedure.", FailureKind.Forbidden);
+        await RequireNothingHeldAsync(user.Id, ct);
         var email = user.NormalizedEmail;
         var userName = user.NormalizedUserName;
         var external = user.ExternalLogins.Select(login => login.Provider + ":" + login.SubjectHash).ToArray();
@@ -107,6 +113,43 @@ public class AccountClosureService(IRecordTransactions records, MfaAccountAccess
         // Passkey indexes stay: they hold only a credential id and keep that credential from being registered to another account.
         await RemovePersonalContentAsync(user.Id, ct);
         return Result(operation.Id, "Closed", operation.At);
+    }
+
+    // A closed account cannot act, so closing one that a parish or archdiocese depends on would leave it without a responsible person.
+    // Refused while the account owns a parish, represents an archdiocese, holds parish access (a grant), or holds an accepted or suspended
+    // staff or clergy appointment or an effective bishop appointment. Pending invitations do not block (they simply lapse).
+    // ponytail: one bounded read of every parish plus one grant query per parish; a per-account role index if parishes grow past a few hundred.
+    private async Task RequireNothingHeldAsync(string accountId, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var held = new List<string>();
+        var all = await parishDirectory.AllAsync(ct);
+        if (all.Any(parish => parish.OwnerAccountId == accountId))
+            held.Add("parish ownership (transfer it through the parish ownership procedure)");
+        foreach (var parish in all)
+            if (await parishes.GetGrantAsync(parish.Id, accountId, ct) is not null)
+            {
+                held.Add("parish access (ask the parish owner to end your access)");
+                break;
+            }
+        if ((await platform.ArchdiocesesAsync(ct)).Any(archdiocese => archdiocese.Value.OwnerAccountId == accountId))
+            held.Add("archdiocese representative (hand it to another representative first)");
+        for (string? cursor = null; ;)
+        {
+            var page = await appointments.ForAccountAsync(accountId, 100, cursor, ct);
+            if (page.Items.Any(row => row.Value.AccountId == accountId && row.Value.ReservesPeriod && (row.Value.EndsAt is null || row.Value.EndsAt > now)))
+            {
+                held.Add("a staff or clergy appointment (ask for it to be ended)");
+                break;
+            }
+            if ((cursor = page.ContinuationToken) is null)
+                break;
+        }
+        if ((await appointments.BishopAppointmentsForAccountAsync(accountId, ct)).Any(appointment => appointment.IsEffective(now)))
+            held.Add("a bishop appointment (ask for it to be ended)");
+        if (held.Count > 0)
+            throw new DomainException("closure_responsibilities_held",
+                "This account still holds " + string.Join("; ", held) + ". Hand these over first, then close the account.", FailureKind.Conflict);
     }
 
     private async Task<ParishUser> PersonalAsync(CancellationToken ct)
