@@ -1,0 +1,8 @@
+# ParishLife: public pages are open to search engines. The signed-in portal (/ and /index.html) carries its own noindex tag
+# and is not blocked here, so crawlers can read that tag. The API is not for crawling, except the public reads the public
+# pages need to show their content.
+User-agent: *
+Allow: /api/public/
+Disallow: /api/
+
+Sitemap: https://parish-life.org/sitemap.xml

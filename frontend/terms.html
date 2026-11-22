@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- Purpose: the ParishLife terms of use, in English and Arabic, as a static page served from the same origin as the site.
-     Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language), approved by
-     the owner on 21 November 2026. The text describes only what the code does
+     Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language). First approved by
+     the owner on 21 November 2026; the 22 November 2026 version adds the minimum age, payments and refunds, reporting content and
+     self-service closure, and corrects who can suspend an account. The text describes only what the code does
      (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
 <html lang="en" dir="ltr">
 <head>
@@ -9,6 +10,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0E1A31">
   <title>ParishLife · Terms of use</title>
+  <meta name="description" content="The terms of use of ParishLife: using the service, accounts and security, parish content, payments, reporting content, suspension and closing, and the law that applies.">
+  <link rel="canonical" href="https://parish-life.org/terms.html">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
   <script>(() => { const r = document.documentElement; try { const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
   <style>
@@ -38,9 +41,11 @@
     <span><a href="?lang=en" lang="en">English</a> · <a href="?lang=ar" lang="ar">العربية</a></span>
   </header>
   <main>
+    <!-- PLACEHOLDER (owner to provide, never invent): the operator's legal name and registered address belong in "About these
+         terms" in both languages once provided (hardening/legal-drafts/terms-of-use.md, T1). -->
     <section lang="en" dir="ltr">
       <h1>Terms of use</h1>
-      <p class="meta">Effective date: 21 November 2026</p>
+      <p class="meta">Effective date: 22 November 2026</p>
 
       <h2>About these terms</h2>
       <p>ParishLife runs this service at parish-life.org. By using ParishLife you accept these terms. How we handle personal data is in the <a href="privacy.html">privacy policy</a>.</p>
@@ -55,6 +60,7 @@
 
       <h2>Accounts and security</h2>
       <ul>
+        <li>You must be 13 or older to create an account; sign-up asks you to confirm it.</li>
         <li>Keep your sign-in details private and tell us at once if you think someone else has used your account.</li>
         <li>You are responsible for what is done with your account.</li>
         <li>Parish staff, clergy and platform operators sign in with an authenticator app as a second step.</li>
@@ -67,11 +73,17 @@
       <h2>Records and decisions</h2>
       <p>ParishLife helps parishes keep records and issue documents. Sacramental, canonical and other decisions remain with the parish and the Church authorities. Decisions taken outside ParishLife, or on information not confirmed with the parish, are not ParishLife's responsibility.</p>
 
+      <h2>Payments and refunds</h2>
+      <p>Using ParishLife as a member is free, and ParishLife takes no payments online, so there is nothing to refund through ParishLife. Gifts, registration fees, rentals and any refunds that a parish records are arranged directly with that parish, under its own rules; ask the parish office.</p>
+
+      <h2>Reporting content</h2>
+      <p>To report a message, use the report option on that message. To report other content that is unlawful, abusive or infringes your rights, write to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+
       <h2>Availability</h2>
       <p>We work to keep ParishLife available and the data safe, but we cannot promise that it will always be available or free of errors.</p>
 
       <h2>Suspension and closing</h2>
-      <p>We or a parish may suspend an account or limit access that breaks these terms or puts other people or the service at risk. You can stop using ParishLife at any time; to close your account, write to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+      <p>We may suspend an account, and a parish may end your access to its records, if the account breaks these terms or puts other people or the service at risk. You can stop using ParishLife at any time, and close your account yourself in My account ("Close my account") or by writing to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>. What closing deletes and what is kept is explained in the <a href="privacy.html">privacy policy</a>.</p>
 
       <h2>Changes</h2>
       <p>We may change these terms. We will post the new text here with a new effective date.</p>
@@ -82,7 +94,7 @@
 
     <section lang="ar" dir="rtl">
       <h1>شروط الاستخدام</h1>
-      <p class="meta">تاريخ السريان: 21 November 2026</p>
+      <p class="meta">تاريخ السريان: ٢٢ تشرين الثاني ٢٠٢٦</p>
 
       <h2>عن هذه الشروط</h2>
       <p>يدير ParishLife هذه الخدمة على parish-life.org. باستخدامك ParishLife توافق على هذه الشروط. طريقة تعاملنا مع البيانات الشخصية مشروحة في <a href="privacy.html?lang=ar">سياسة الخصوصية</a>.</p>
@@ -97,6 +109,7 @@
 
       <h2>الحسابات والأمان</h2>
       <ul>
+        <li>يجب أن يكون عمرك ١٣ سنة أو أكثر لإنشاء حساب، ويطلب منك إنشاء الحساب تأكيد ذلك.</li>
         <li>احفظ بيانات دخولك سرّية، وأبلغنا فوراً إذا ظننت أن غيرك استخدم حسابك.</li>
         <li>أنت مسؤول عمّا يُفعل بحسابك.</li>
         <li>موظفو الرعايا والكهنة ومشغّلو المنصّة يدخلون بتطبيق مصادقة كخطوة ثانية.</li>
@@ -109,11 +122,17 @@
       <h2>السجلات والقرارات</h2>
       <p>يساعد ParishLife الرعايا على حفظ السجلات وإصدار الوثائق. تبقى القرارات المتعلّقة بالأسرار والقوانين الكنسية وغيرها للرعية وللسلطات الكنسية. القرارات المتّخذة خارج ParishLife، أو بناءً على معلومات لم تؤكّدها الرعية، ليست من مسؤولية ParishLife.</p>
 
+      <h2>الدفع واسترداد المبالغ</h2>
+      <p>استخدام ParishLife مجاني للمؤمنين، ولا يقبل ParishLife أي دفع عبر الإنترنت، فلا يوجد ما يُستردّ عبره. التبرّعات ورسوم التسجيل والإيجارات وأي مبالغ مستردّة تسجّلها رعية تُرتَّب مباشرة مع تلك الرعية وفق قواعدها؛ راجع مكتب الرعية.</p>
+
+      <h2>الإبلاغ عن محتوى</h2>
+      <p>للإبلاغ عن رسالة، استعمل خيار الإبلاغ عليها. وللإبلاغ عن أي محتوى آخر مخالف للقانون أو مسيء أو يمسّ حقوقك، راسلنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+
       <h2>التوفّر</h2>
       <p>نعمل على إبقاء ParishLife متاحاً والبيانات آمنة، لكن لا نستطيع أن نضمن توفّره الدائم أو خلوّه من الأخطاء.</p>
 
       <h2>التعليق والإغلاق</h2>
-      <p>يجوز لنا أو للرعية تعليق حساب أو تقييد وصول يخالف هذه الشروط أو يعرّض الآخرين أو الخدمة للخطر. يمكنك التوقّف عن استخدام ParishLife متى شئت؛ ولإغلاق حسابك راسلنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+      <p>يجوز لنا تعليق حساب، ويجوز للرعية إنهاء وصولك إلى سجلاتها، إذا خالف الحساب هذه الشروط أو عرّض الآخرين أو الخدمة للخطر. يمكنك التوقّف عن استخدام ParishLife متى شئت، وإغلاق حسابك بنفسك من "حسابي" ("إغلاق حسابي") أو بمراسلتنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>. ما يحذفه الإغلاق وما يُحفظ مشروح في <a href="privacy.html?lang=ar">سياسة الخصوصية</a>.</p>
 
       <h2>التغييرات</h2>
       <p>قد نغيّر هذه الشروط، وننشر النص الجديد هنا مع تاريخ سريان جديد.</p>
@@ -125,6 +144,7 @@
 
   <footer>
     <a href="privacy.html">Privacy policy · سياسة الخصوصية</a>
+    <a href="cookies.html">Cookie policy · سياسة ملفات تعريف الارتباط</a>
     <a href="public.html">ParishLife</a>
     <a href="index.html">Members portal · بوّابة المؤمنين</a>
   </footer>

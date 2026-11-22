@@ -3,6 +3,15 @@
 > **DRAFT. Not for publication.** This must be reviewed by a lawyer licensed in Lebanon before any of it is published. It is not legal advice.
 > Prepared 21 November 2026 on branch `hardening/06-legal`.
 
+**Status after Part B (22 November 2026).** Published in `frontend/terms.html` (both languages):
+- the minimum age (T2, without the counsel note);
+- T3 as "Payments and refunds", without the placeholder;
+- T6, with the existing contact address;
+- T10's correction of who can suspend, plus self-service closure;
+- T14.
+
+Still drafts: T1, T4, T5, T7, T8 (**owner decision**), T9 (parish agreement), T11, T12 and T13.
+
 **Starting point.** The terms of use are already published in English and Arabic (`frontend/terms.html`). The owner approved them on 21 November 2026 (`docs/operations/legal-pages.md`). This draft keeps that text, checks it against the code, against the contents the hardening prompt requires and against the law that applies, and proposes each change in English and Arabic.
 
 **Markers.** `[PLACEHOLDER: …]` marks a fact only the owner can supply. `[COUNSEL: …]` marks a legal point for the lawyer. **OWNER DECISION** marks wording that would change what users have already agreed to. Under the hardening rules it is not published until the owner says yes.

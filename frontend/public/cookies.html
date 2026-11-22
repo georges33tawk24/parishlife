@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Purpose: the ParishLife cookie policy, in English and Arabic: every cookie and browser-storage item the site sets, with its purpose,
+     type and duration (inventory and code references: hardening/legal-drafts/cookie-policy.md). One language shows at a time, by
+     ?lang= or the site's saved language. It sits in public/ (copied as is into the build) because it has no module script; the page
+     policy still hashes its inline language line like every other page. Effective 22 November 2026. -->
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0E1A31">
+  <title>ParishLife · Cookie policy</title>
+  <meta name="description" content="Every cookie and browser-storage item ParishLife sets, why, and for how long. ParishLife uses no advertising, analytics or tracking cookies.">
+  <link rel="canonical" href="https://parish-life.org/cookies.html">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
+  <script>(() => { const r = document.documentElement; try { const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
+  <style>
+    @font-face { font-family: "Source Sans 3"; src: url("/assets/fonts/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-weight: 200 900; font-display: swap; }
+    @font-face { font-family: "Noto Sans Arabic"; src: url("/assets/fonts/NotoSansArabic-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Noto Sans Arabic"; src: url("/assets/fonts/NotoSansArabic-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+    :root { color-scheme: light; --ink: #1C2433; --soft: #4A5568; --line: #E2DCD0; --navy: #0E1A31; --gold: #B8862F; --paper: #FBF8F2; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 "Source Sans 3", "Noto Sans Arabic", system-ui, sans-serif; }
+    [lang="ar"] { font-family: "Noto Sans Arabic", system-ui, sans-serif; }
+    html[lang="ar"] section[lang="en"], html:not([lang="ar"]) section[lang="ar"] { display: none; }
+    header { background: var(--navy); color: #F3EEE4; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    header a { color: #F3EEE4; text-decoration: none; font-weight: 600; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { font-size: 1.9rem; margin: 0 0 4px; color: var(--navy); }
+    h2 { font-size: 1.2rem; margin: 28px 0 6px; color: var(--navy); }
+    p, li { color: var(--ink); }
+    ul { padding-inline-start: 22px; }
+    .meta { color: var(--soft); margin: 0 0 18px; }
+    footer { border-top: 1px solid var(--line); max-width: 760px; margin: 0 auto; padding: 18px 20px 40px; color: var(--soft); display: flex; gap: 18px; flex-wrap: wrap; }
+    a { color: #7A5A1E; }
+    .scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 0.95rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: start; vertical-align: top; }
+    th { color: var(--navy); }
+    code { font-size: 0.88em; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="public.html">ParishLife</a>
+    <span><a href="?lang=en" lang="en">English</a> · <a href="?lang=ar" lang="ar">العربية</a></span>
+  </header>
+  <main>
+    <section lang="en" dir="ltr">
+      <h1>Cookie policy</h1>
+      <p class="meta">Effective date: 22 November 2026</p>
+      <p>This page lists every cookie and every item ParishLife keeps in your browser, and why. ParishLife uses no advertising, analytics or tracking cookies. How we handle personal data is explained in the <a href="privacy.html">privacy policy</a>.</p>
+
+      <h2>Cookies ParishLife sets</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col">Cookie</th><th scope="col">What it does</th><th scope="col">Type</th><th scope="col">How long</th></tr></thead>
+        <tbody>
+          <tr><td><code>__Host-ParishLife</code></td><td>Keeps you signed in</td><td>Necessary</td><td>Until you sign out or close the browser; the sign-in ends after 8 hours at most</td></tr>
+          <tr><td><code>__Host-ParishLife.Csrf</code></td><td>Protects forms against forgery; the public pages also use it to send the anonymous visit count</td><td>Necessary</td><td>Until you close the browser</td></tr>
+          <tr><td><code>.AspNetCore.Correlation.…</code></td><td>Protects a Google or Microsoft sign-in</td><td>Necessary</td><td>15 minutes at most</td></tr>
+          <tr><td><code>Identity.External</code></td><td>Completes a Google or Microsoft sign-in</td><td>Necessary</td><td>5 minutes at most</td></tr>
+          <tr><td><code>__Host-ParishLife.ExternalMfa</code></td><td>Holds a two-step sign-in check after Google or Microsoft</td><td>Necessary</td><td>10 minutes at most</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>What ParishLife keeps in your browser</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col">Item</th><th scope="col">What it does</th><th scope="col">Type</th><th scope="col">How long</th></tr></thead>
+        <tbody>
+          <tr><td><code>pl-lang</code></td><td>Your language</td><td>Preference</td><td>Until you clear it</td></tr>
+          <tr><td><code>pl-text</code>, <code>pl-simple</code></td><td>Text size and Simple view</td><td>Preference</td><td>Until you change or clear it</td></tr>
+          <tr><td><code>pl-rail</code></td><td>Whether the portal's side menu is collapsed</td><td>Preference</td><td>Until you clear it</td></tr>
+          <tr><td><code>pl-anniversaries-…</code></td><td>How the anniversaries list is shown</td><td>Preference</td><td>Until you sign out</td></tr>
+          <tr><td><code>pl-finance-session:…</code></td><td>The finance counting session you last opened</td><td>Preference</td><td>Until you sign out</td></tr>
+          <tr><td><code>pl-notice</code></td><td>Why you were signed out, shown once</td><td>Necessary</td><td>Until shown, or the tab closes</td></tr>
+          <tr><td><code>pl-admin-opened</code></td><td>Platform operators only: records opened in this tab</td><td>Preference</td><td>Until you sign out or the tab closes</td></tr>
+          <tr><td>Offline copy (<code>parishlife-public-v2</code>)</td><td>Lets the public pages, and the parishes and Mass times they last showed, open without a connection. It never keeps the members portal or anything signed in.</td><td>Functional</td><td>Until replaced by a newer version, or you clear it</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Other services</h2>
+      <ul>
+        <li><b>Cloudflare Turnstile</b> checks that a person, not a bot, is using the sign-in, sign-up and request forms. It processes technical information about your browser and connection. Cloudflare states that Turnstile does not use cookies to collect or store information; see Cloudflare's Turnstile privacy addendum.</li>
+        <li><b>Google Fonts</b> supplies the fonts of documents printed or saved from the members portal. It sets no cookies, but your browser sends Google your IP address and browser details. The pages themselves use fonts served by ParishLife.</li>
+        <li><b>Google and Microsoft</b> set their own cookies on their own sites if you choose to sign in with them.</li>
+      </ul>
+
+      <h2>Your choices</h2>
+      <p>Everything above is either needed for ParishLife to work or only remembers choices you made, so there is nothing to switch on or off. You can delete these items at any time in your browser's settings (site data for parish-life.org). If you do, you will be signed out and your preferences return to their defaults.</p>
+
+      <h2>Changes and contact</h2>
+      <p>We will update this page, with a new effective date, before ParishLife sets any new cookie or stored item. Questions: <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+    </section>
+
+    <section lang="ar" dir="rtl">
+      <h1>سياسة ملفات تعريف الارتباط</h1>
+      <p class="meta">تاريخ السريان: ٢٢ تشرين الثاني ٢٠٢٦</p>
+      <p>تعدّد هذه الصفحة كل ملف تعريف ارتباط وكل عنصر يحفظه ParishLife في متصفّحك، وسبب ذلك. لا يستخدم ParishLife أي ملفات إعلانية أو تحليلية أو تتبّعية. طريقة تعاملنا مع البيانات الشخصية مشروحة في <a href="privacy.html?lang=ar">سياسة الخصوصية</a>.</p>
+
+      <h2>ملفات تعريف الارتباط التي يضعها ParishLife</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col">الملف</th><th scope="col">وظيفته</th><th scope="col">النوع</th><th scope="col">مدّته</th></tr></thead>
+        <tbody>
+          <tr><td><code dir="ltr">__Host-ParishLife</code></td><td>يبقيك داخلاً</td><td>ضروري</td><td>حتى تخرج أو تغلق المتصفّح؛ وينتهي الدخول بعد ٨ ساعات على الأكثر</td></tr>
+          <tr><td><code dir="ltr">__Host-ParishLife.Csrf</code></td><td>يحمي النماذج من التزوير؛ وتستعمله الصفحات العامة أيضاً لإرسال إحصاء الزيارة المجهول</td><td>ضروري</td><td>حتى تغلق المتصفّح</td></tr>
+          <tr><td><code dir="ltr">.AspNetCore.Correlation.…</code></td><td>يحمي الدخول عبر Google أو Microsoft</td><td>ضروري</td><td>١٥ دقيقة على الأكثر</td></tr>
+          <tr><td><code dir="ltr">Identity.External</code></td><td>يُكمل الدخول عبر Google أو Microsoft</td><td>ضروري</td><td>٥ دقائق على الأكثر</td></tr>
+          <tr><td><code dir="ltr">__Host-ParishLife.ExternalMfa</code></td><td>يحفظ تحقّق الدخول بخطوتين بعد Google أو Microsoft</td><td>ضروري</td><td>١٠ دقائق على الأكثر</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>ما يحفظه ParishLife في متصفّحك</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col">العنصر</th><th scope="col">وظيفته</th><th scope="col">النوع</th><th scope="col">مدّته</th></tr></thead>
+        <tbody>
+          <tr><td><code dir="ltr">pl-lang</code></td><td>لغتك</td><td>تفضيل</td><td>حتى تحذفه</td></tr>
+          <tr><td><code dir="ltr">pl-text</code>، <code dir="ltr">pl-simple</code></td><td>حجم النص والعرض المبسّط</td><td>تفضيل</td><td>حتى تغيّره أو تحذفه</td></tr>
+          <tr><td><code dir="ltr">pl-rail</code></td><td>طيّ القائمة الجانبية في البوّابة أو فتحها</td><td>تفضيل</td><td>حتى تحذفه</td></tr>
+          <tr><td><code dir="ltr">pl-anniversaries-…</code></td><td>طريقة عرض لائحة الذكريات السنوية</td><td>تفضيل</td><td>حتى تخرج من حسابك</td></tr>
+          <tr><td><code dir="ltr">pl-finance-session:…</code></td><td>جلسة العدّ المالية التي فتحتها آخر مرّة</td><td>تفضيل</td><td>حتى تخرج من حسابك</td></tr>
+          <tr><td><code dir="ltr">pl-notice</code></td><td>سبب خروجك، يُعرض مرّة واحدة</td><td>ضروري</td><td>حتى يُعرض أو تُغلق النافذة</td></tr>
+          <tr><td><code dir="ltr">pl-admin-opened</code></td><td>لمشغّلي المنصّة فقط: السجلات المفتوحة في هذه النافذة</td><td>تفضيل</td><td>حتى تخرج من حسابك أو تُغلق النافذة</td></tr>
+          <tr><td>نسخة دون اتصال (<code dir="ltr">parishlife-public-v2</code>)</td><td>تتيح فتح الصفحات العامة، والرعايا ومواعيد القداديس التي عرضتها آخر مرّة، دون اتصال. لا تحفظ أبداً بوّابة المؤمنين أو أي محتوى بعد الدخول.</td><td>وظيفي</td><td>حتى تحلّ محلّها نسخة أحدث أو تحذفها</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>خدمات أخرى</h2>
+      <ul>
+        <li><b>Cloudflare Turnstile</b> يتحقّق من أن شخصاً، لا برنامجاً آلياً، يستخدم نماذج الدخول وإنشاء الحساب والطلبات. يعالج معلومات تقنية عن متصفّحك واتصالك. وتقول Cloudflare إن Turnstile لا يستخدم ملفات تعريف الارتباط لجمع المعلومات أو حفظها؛ راجع ملحق الخصوصية الخاص بـ Turnstile لدى Cloudflare.</li>
+        <li><b>Google Fonts</b> يوفّر خطوط الوثائق التي تُطبع أو تُحفظ من بوّابة المؤمنين. لا يضع ملفات تعريف ارتباط، لكن متصفّحك يرسل إلى Google عنوان IP وتفاصيل المتصفّح. أمّا الصفحات نفسها فتستعمل خطوطاً يقدّمها ParishLife.</li>
+        <li><b>Google وMicrosoft</b> تضعان ملفاتهما الخاصة على موقعيهما إذا اخترت الدخول عبرهما.</li>
+      </ul>
+
+      <h2>خياراتك</h2>
+      <p>كل ما سبق إمّا ضروري لعمل ParishLife وإمّا يتذكّر خيارات اخترتها فقط، فلا شيء يحتاج إلى تفعيل أو إيقاف. يمكنك حذف هذه العناصر متى شئت من إعدادات متصفّحك (بيانات الموقع parish-life.org). إذا فعلت، تخرج من حسابك وتعود تفضيلاتك إلى وضعها الافتراضي.</p>
+
+      <h2>التغييرات والتواصل</h2>
+      <p>نحدّث هذه الصفحة، مع تاريخ سريان جديد، قبل أن يضع ParishLife أي ملف أو عنصر جديد. للأسئلة: <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="privacy.html">Privacy policy · سياسة الخصوصية</a>
+    <a href="terms.html">Terms of use · شروط الاستخدام</a>
+    <a href="public.html">ParishLife</a>
+    <a href="index.html">Members portal · بوّابة المؤمنين</a>
+  </footer>
+</body>
+</html>

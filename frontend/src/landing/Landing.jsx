@@ -361,8 +361,8 @@ const MODULES = [
     'reports',
     ['Reports', 'التقارير'],
     [
-      'Eparchy and council reports, exported to PDF or Excel in either language.',
-      'تقارير للأبرشية وللمجلس، تُصدَّر إلى PDF وExcel بأيّ من اللغتين.'
+      'Eparchy and council reports, exported to PDF or to a CSV file that opens in Excel, in either language.',
+      'تقارير للأبرشية وللمجلس، تُصدَّر إلى PDF أو إلى ملف CSV يُفتح في Excel، بأيّ من اللغتين.'
     ]
   ],
   [
@@ -374,19 +374,21 @@ const MODULES = [
     ]
   ]
 ];
+/* The English questions and answers are repeated in landing.html as FAQPage structured data (JSON-LD) for search and
+   answer engines: change both together. */
 const FAQ = [
   [
     ['Does it work without internet?', 'هل يعمل من دون إنترنت؟'],
     [
-      'Not for office work yet. Records are saved on the parish’s server, so entering them needs a connection; if a save fails, the screen says so at once and shows what is really on record. The public pages (parishes, Mass times and events) stay readable on a phone without a connection.',
-      'ليس لعمل المكتب بعد. تُحفظ السجلات على خادم الرعية، لذا يحتاج إدخالها إلى اتصال؛ وإذا تعذّر الحفظ تقول الشاشة ذلك فوراً وتعرض ما هو مسجَّل فعلاً. أمّا الصفحات العامة (الرعايا ومواعيد القداديس والأحداث) فتبقى مقروءة على الهاتف من دون اتصال.'
+      'Not for office work yet. Records are saved on ParishLife’s server, so entering them needs a connection; if a save fails, the screen says so at once and shows what is really on record. The public pages (parishes, Mass times and events) stay readable on a phone without a connection.',
+      'ليس لعمل المكتب بعد. تُحفظ السجلات على خادم ParishLife، لذا يحتاج إدخالها إلى اتصال؛ وإذا تعذّر الحفظ تقول الشاشة ذلك فوراً وتعرض ما هو مسجَّل فعلاً. أمّا الصفحات العامة (الرعايا ومواعيد القداديس والأحداث) فتبقى مقروءة على الهاتف من دون اتصال.'
     ]
   ],
   [
     ['Can we keep our paper registers?', 'هل نستطيع الاحتفاظ بسجلّاتنا الورقية؟'],
     [
-      'Yes, and many parishes do. ParishLife prints A4 pages carrying the same register numbering, so the bound book stays the legal original while the system is what you search and report from.',
-      'نعم، والكثير من الرعايا تفعل. تطبع ParishLife على مقاس A4 بترقيم السجلّ نفسه، فيبقى الدفتر هو الأصل القانوني ويكون النظام هو ما تبحث فيه وتُصدر منه التقارير.'
+      'Yes. ParishLife prints A4 pages carrying the same register numbering, so the bound book stays the legal original while the system is what you search and report from.',
+      'نعم. تطبع ParishLife على مقاس A4 بترقيم السجلّ نفسه، فيبقى الدفتر هو الأصل القانوني ويكون النظام هو ما تبحث فيه وتُصدر منه التقارير.'
     ]
   ],
   [
@@ -413,8 +415,8 @@ const FAQ = [
   [
     ['Where is the data kept, and can we export it?', 'أين تُحفظ البيانات، وهل نستطيع تصديرها؟'],
     [
-      'In the parish’s database on the server. Lists and reports export to Excel, CSV or PDF in either language, without asking and without a fee. The records belong to the parish.',
-      'في قاعدة بيانات الرعية على الخادم. تُصدَّر القوائم والتقارير إلى Excel أو CSV أو PDF بأيّ من اللغتين، من دون طلب ومن دون رسم. السجلات ملك الرعية.'
+      'In ParishLife’s database, hosted by Microsoft Azure in France, with each parish’s records kept apart. Lists and reports export to CSV (which opens in Excel) or PDF in either language, without asking and without a fee. The records belong to the parish.',
+      'في قاعدة بيانات ParishLife لدى Microsoft Azure في فرنسا، وسجلات كل رعية منفصلة عن غيرها. تُصدَّر القوائم والتقارير إلى CSV (يُفتح في Excel) أو PDF بأيّ من اللغتين، من دون طلب ومن دون رسم. السجلات ملك الرعية.'
     ]
   ]
 ];
@@ -983,7 +985,7 @@ export function Landing({ initialLang }) {
                     <span className="t-ui dim">{L('Parish', 'رعية')}</span>
                     <span className="pill pill-info">
                       <span className="dot"></span>
-                      <span>{L('Most parishes', 'الأكثر اختياراً')}</span>
+                      <span>{L('Recommended', 'المقترحة')}</span>
                     </span>
                   </div>
                   <div className="amount" style={{ marginTop: 10 }} dir="ltr">
@@ -1156,8 +1158,15 @@ export function Landing({ initialLang }) {
           <hr className="rule" style={{ margin: '32px 0 20px' }} />
           <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
             <span className="t-caption dimmer">© 2026 ParishLife</span>
-            <span className="t-caption dimmer">{L('Privacy', 'الخصوصية')}</span>
-            <span className="t-caption dimmer">{L('Terms', 'الشروط')}</span>
+            <a className="t-caption dimmer" href={lang === 'ar' ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>
+              {L('Privacy policy', 'سياسة الخصوصية')}
+            </a>
+            <a className="t-caption dimmer" href={lang === 'ar' ? 'terms.html?lang=ar' : 'terms.html?lang=en'}>
+              {L('Terms of use', 'شروط الاستخدام')}
+            </a>
+            <a className="t-caption dimmer" href={lang === 'ar' ? 'cookies.html?lang=ar' : 'cookies.html?lang=en'}>
+              {L('Cookie policy', 'سياسة ملفات تعريف الارتباط')}
+            </a>
           </div>
         </div>
         <div className="footer-mark" aria-hidden="true">

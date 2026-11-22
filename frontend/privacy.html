@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- Purpose: the ParishLife privacy policy, in English and Arabic, as a static page served from the same origin as the site.
-     Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language), approved by
-     the owner on 21 November 2026. The text describes only what the code does
+     Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language). First approved by
+     the owner on 21 November 2026; the 22 November 2026 version adds factual corrections and the new account features
+     (self-service data copy and closure, password reset, the 13+ confirmation). The text describes only what the code does
      (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
 <html lang="en" dir="ltr">
 <head>
@@ -9,6 +10,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0E1A31">
   <title>ParishLife · Privacy policy</title>
+  <meta name="description" content="How ParishLife handles personal data: what it stores and why, who can see it, the services it uses, cookies, how long data is kept and your rights.">
+  <link rel="canonical" href="https://parish-life.org/privacy.html">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230E1A31'/%3E%3Cpath d='M12 33V18a8 8 0 0 1 16 0v15' fill='none' stroke='%23E6DED0' stroke-width='2.2'/%3E%3Ccircle cx='20' cy='23' r='3.2' fill='%23D7A548'/%3E%3C/svg%3E">
   <script>(() => { const r = document.documentElement; try { const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
   <style>
@@ -38,9 +41,11 @@
     <span><a href="?lang=en" lang="en">English</a> · <a href="?lang=ar" lang="ar">العربية</a></span>
   </header>
   <main>
+    <!-- PLACEHOLDER (owner to provide, never invent): the operator's legal name, registered address and registration number
+         belong in "Who runs ParishLife" in both languages once provided (hardening/legal-drafts/privacy-policy.md, P1). -->
     <section lang="en" dir="ltr">
       <h1>Privacy policy</h1>
-      <p class="meta">Effective date: 21 November 2026</p>
+      <p class="meta">Effective date: 22 November 2026</p>
 
       <h2>Who runs ParishLife</h2>
       <p>ParishLife runs this service at parish-life.org. For any privacy question or request, write to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
@@ -48,26 +53,35 @@
 
       <h2>What we store</h2>
       <ul>
-        <li><b>Your account:</b> username, email address, display name, preferred language and colours, and any optional profile details you add. Your password is stored only as a one-way hash. If you turn on two-step sign-in, the authenticator key and recovery codes are stored protected. A passkey's private key never leaves your device; we store only its public key.</li>
+        <li><b>Your account:</b> username, email address, display name, preferred language and colours, and any optional profile details you add. It also holds the parishes you follow, your notification choices, your own notes and to-do list (visible only to you and stored encrypted) and, if you add one, the signature you draw and the title shown with it on documents you sign. Your password is stored only as a one-way hash. If you turn on two-step sign-in, the authenticator key and recovery codes are stored protected. A passkey's private key never leaves your device; we store only its public key. If you unlock a passkey with your face or fingerprint, that check happens on your device: ParishLife never receives biometric data.</li>
         <li><b>Google or Microsoft sign-in:</b> only if you choose it. We store a hashed form of the account identifier Google or Microsoft gives us. When you sign up this way, we also use the name and the email address Google or Microsoft has confirmed for your account.</li>
         <li><b>Your sessions:</b> when each sign-in started and how it signed in, so you can see and end your sessions.</li>
-        <li><b>Parish records about you</b>, entered by your parish: name and family details, contact details, households, sacraments and certificates, parish and ministry membership, attendance, registrations, contributions and receipts, and letters or documents the parish issues.</li>
+        <li><b>Parish records about you</b>, entered by your parish: name, date of birth and family details, contact details and address, rite, occupation and skills, households and relationships, sacraments and certificates, parish and ministry membership, catechism and formation progress, attendance, volunteering, registrations, contributions and receipts, consents you have given the parish, date of death, and letters or documents the parish issues.</li>
         <li><b>Sensitive records</b>, only where a parish uses them: medical or allergy notes, pastoral notes, confidential concerns and incident reports. These are protected at rest and readable only by the roles the parish designates.</li>
-        <li><b>Requests and messages</b> you send to a parish, with any files you attach. Without an account, a request also stores the name and contact details you give and the details of the request.</li>
+        <li><b>Children's safety records</b>, only where a parish uses them: who may collect a child and on what authority, and check-in and evacuation rolls. Only the parish office records these.</li>
+        <li><b>Prayer intentions</b> you send to a parish, with the visibility you choose.</li>
+        <li><b>Clergy signatures:</b> images of a priest's or bishop's signature, used only on documents they sign.</li>
+        <li><b>People who rent parish facilities:</b> name, organisation and a responsible contact, seen only by the parish's facilities and finance staff.</li>
+        <li><b>Requests and messages</b> you send to a parish, and messages in the parish inbox, with any files you attach. Without an account, a request also stores the name and contact details you give and the details of the request.</li>
+        <li><b>Help with two-step sign-in:</b> if you lose your authenticator and ask for help, your request and how it was reviewed.</li>
+        <li><b>Your location</b>, only if you press "Near me" in the parish directory: your browser sends your position to work out distances, and it is not stored.</li>
         <li><b>Audit records</b> of who changed what and when, to keep records trustworthy.</li>
-        <li><b>Anonymous site counts:</b> daily totals of public pages viewed, by page type, language and parish. No IP address, device, visitor identifier or search text is stored with them.</li>
+        <li><b>Anonymous site counts:</b> daily totals of public pages viewed, by page type, language and parish. No IP address, device, visitor identifier or search text is stored with them, and a browser that asks not to be tracked (Do Not Track or Global Privacy Control) is not counted.</li>
         <li><b>Technical logs</b> of requests and errors, used to keep the service running and secure.</li>
       </ul>
 
       <h2>Why</h2>
       <p>To run the parish services you use, to let parishes keep their records, to keep accounts secure and to prevent abuse. We do not sell your data, show advertising or use advertising or analytics trackers.</p>
 
+      <h2>Artificial intelligence</h2>
+      <p>ParishLife does not use artificial intelligence to analyse your data, and no decision about you is made by automated means alone.</p>
+
       <h2>Who can see it</h2>
       <ul>
         <li>You see your own account and the parish data linked to you.</li>
         <li>Parish clergy and staff see what their role and appointment allow (for example, the treasurer sees finance, a ministry leader sees their ministry).</li>
         <li>The bishop of the archdiocese sees what oversight of its parishes requires.</li>
-        <li>The people who run ParishLife (platform operators) for setup, support and security.</li>
+        <li>The people who run ParishLife (platform operators), for setup, support and security. This includes reviewing a message that someone reports to them and requests for help with two-step sign-in.</li>
         <li>Anyone, for what a parish chooses to publish on its public page.</li>
       </ul>
 
@@ -76,32 +90,38 @@
         <li><b>Microsoft Azure</b> hosts ParishLife in the France Central region: the database (Cosmos DB), private file storage (Blob Storage), key protection (Key Vault) and technical monitoring (Application Insights).</li>
         <li><b>Cloudflare</b> provides the domain name service and Turnstile, a bot check on sign-in, sign-up and public request forms. Turnstile processes technical information about your browser and connection to tell people from bots.</li>
         <li><b>Google</b> and <b>Microsoft</b>, only if you choose to sign in with them.</li>
-        <li><b>Resend</b> sends ParishLife's account emails: the codes that confirm your email address when you sign up or change it.</li>
-        <li><b>Google Fonts:</b> the members portal and the product page load their fonts from Google, so your browser contacts Google's font servers.</li>
+        <li><b>Resend</b> sends ParishLife's account emails: the codes that confirm your email address when you sign up or change it, and the codes that reset a forgotten password.</li>
+        <li><b>Google Fonts:</b> when you print or save a document from the members portal, the printed page loads its fonts from Google, so your browser contacts Google's font servers. The pages themselves use fonts served by ParishLife.</li>
       </ul>
+      <p>ParishLife stores its data in Microsoft Azure's France Central region, in the European Union. Cloudflare, Google, Microsoft and Resend may handle the limited data described above in other countries, including the United States.</p>
       <p>ParishLife sends no newsletters, marketing email or text messages, and takes no online payments.</p>
 
       <h2>Cookies and storage in your browser</h2>
       <ul>
-        <li>A session cookie that keeps you signed in (up to 8 hours, ended when you sign out).</li>
-        <li>A security cookie that protects forms against forgery.</li>
-        <li>Short-lived cookies during a Google or Microsoft sign-in (minutes).</li>
+        <li>A sign-in cookie that keeps you signed in. It is deleted when you sign out or close the browser, and the sign-in inside it ends 8 hours after you signed in.</li>
+        <li>A security cookie that protects forms against forgery. The public pages also use it to send the anonymous visit count.</li>
+        <li>Short-lived cookies during a Google or Microsoft sign-in (15 minutes at most).</li>
         <li>Your language and reading preferences, and some screen choices, kept in your browser's storage.</li>
         <li>A copy of the public pages and what they last showed, so they open without a connection.</li>
       </ul>
-      <p>All of these are needed for the site to work. ParishLife sets no advertising or tracking cookies. Turnstile is provided by Cloudflare under its own privacy policy.</p>
+      <p>The cookies are strictly necessary; the stored preferences and the offline copy only remember your choices and the pages you opened. ParishLife sets no advertising or tracking cookies. Cloudflare states that Turnstile does not use cookies to collect or store information; it is provided under Cloudflare's own privacy policy. Every cookie and stored item is listed in the <a href="cookies.html">cookie policy</a>.</p>
+
+      <h2>How we protect it</h2>
+      <p>We protect data with encrypted connections, access limited by role and appointment, two-step sign-in for parish staff, clergy and platform operators, extra protection at rest for sensitive records, and audit records of changes.</p>
 
       <h2>How long we keep it</h2>
-      <p>Records are kept until you or your parish ask for them to be removed (see below); nothing is deleted automatically. Sessions end after 8 hours, sign-in codes after a few minutes. Backups: the database can be restored to any point in the last 7 days, and deleted files can be recovered for 30 days. Technical logs are deleted automatically after 90 days.</p>
+      <p>Records are kept until you or your parish ask for them to be removed (see below); nothing is deleted automatically. A sign-in ends after 8 hours (15 minutes for a recovery sign-in), or as soon as you sign out; email codes expire after 15 minutes.</p>
+      <p>When you close your account, your sign-in details and methods, your sessions, your personal profile, your signature and your own notes are deleted at once. ParishLife keeps a marker that the account existed and was closed (its number and the closing time, without your name, email or password) and its security and audit records, so parish history stays readable. Records a parish keeps about you stay with that parish.</p>
+      <p>Backups: the database can be restored to any point in the last 7 days, and deleted files can be recovered for 30 days, so deleted data can remain in backups until then. Technical logs are deleted automatically after 90 days.</p>
 
       <h2>Your rights and choices</h2>
       <ul>
-        <li><b>In ParishLife today:</b> see and change your profile, password and sign-in methods; see and end your sessions; see the data a parish holds linked to you; ask the parish to correct a record; ask a parish to close your personal data there. When the parish approves a closure, optional personal details are removed, consents are withdrawn and the link to your account ends; official, financial, safeguarding and participation history is kept.</li>
+        <li><b>In ParishLife today:</b> see and change your profile, password and sign-in methods; reset a forgotten password with a code we email you; see and end your sessions; download a copy of your account data and of your own record in each parish you are linked to; close your account yourself; see the data a parish holds linked to you; ask the parish to correct a record; ask a parish to close your personal data there. When the parish approves a closure, optional personal details are removed, consents are withdrawn and the link to your account ends; official, financial, safeguarding and participation history is kept.</li>
         <li><b>By request</b> to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>: a copy of your data, deleting your account, or anything you cannot do in the app.</li>
       </ul>
 
       <h2>Children</h2>
-      <p>Accounts are for people aged 13 or older. Parishes may record children in their parish records.</p>
+      <p>Accounts are for people aged 13 or older: sign-up asks you to confirm your age and does not ask for your date of birth. Parishes may record children in their parish records; only the parish office records them.</p>
 
       <h2>Changes</h2>
       <p>We will post any change on this page with a new effective date.</p>
@@ -112,7 +132,7 @@
 
     <section lang="ar" dir="rtl">
       <h1>سياسة الخصوصية</h1>
-      <p class="meta">تاريخ السريان: 21 November 2026</p>
+      <p class="meta">تاريخ السريان: ٢٢ تشرين الثاني ٢٠٢٦</p>
 
       <h2>من يدير ParishLife</h2>
       <p>يدير ParishLife هذه الخدمة على parish-life.org. لأي سؤال أو طلب يتعلّق بالخصوصية، راسلنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
@@ -120,26 +140,35 @@
 
       <h2>ما نحفظه</h2>
       <ul>
-        <li><b>حسابك:</b> اسم المستخدم والبريد الإلكتروني والاسم الظاهر واللغة والألوان المفضّلة، وأي تفاصيل اختيارية تضيفها. تُحفظ كلمة المرور بصيغة مشفّرة باتجاه واحد فقط. إذا فعّلت الدخول بخطوتين، يُحفظ مفتاح المصادقة ورموز الاسترداد محميّة. المفتاح الخاص لمفتاح المرور لا يغادر جهازك؛ نحفظ مفتاحه العام فقط.</li>
+        <li><b>حسابك:</b> اسم المستخدم والبريد الإلكتروني والاسم الظاهر واللغة والألوان المفضّلة، وأي تفاصيل اختيارية تضيفها. ويحفظ أيضاً الرعايا التي تتابعها، وخيارات الإشعارات، وملاحظاتك وقائمة مهامك الخاصة (لا يراها غيرك وتُحفظ مشفّرة)، وإن أضفتهما، التوقيع الذي ترسمه واللقب الذي يظهر معه على الوثائق التي توقّعها. تُحفظ كلمة المرور بصيغة مشفّرة باتجاه واحد فقط. إذا فعّلت الدخول بخطوتين، يُحفظ مفتاح المصادقة ورموز الاسترداد محميّة. المفتاح الخاص لمفتاح المرور لا يغادر جهازك؛ نحفظ مفتاحه العام فقط. وإذا فتحت مفتاح المرور بوجهك أو ببصمتك، يجري هذا التحقّق على جهازك: لا يتلقّى ParishLife أي بيانات بيومترية.</li>
         <li><b>الدخول عبر Google أو Microsoft:</b> فقط إذا اخترته. نحفظ صيغة مشفّرة من معرّف الحساب الذي تعطينا إياه Google أو Microsoft. وعند إنشاء حساب بهذه الطريقة نستخدم أيضاً الاسم والبريد الإلكتروني الذي أكّدته Google أو Microsoft لحسابك.</li>
         <li><b>جلساتك:</b> متى بدأ كل دخول وبأي طريقة، لتتمكّن من رؤية جلساتك وإنهائها.</li>
-        <li><b>سجلات الرعية عنك</b>، تدخلها رعيتك: الاسم وتفاصيل العائلة ووسائل التواصل والأسر، والأسرار والشهادات، والعضوية في الرعية والأخويات، والحضور والتسجيلات، والتبرّعات والإيصالات، والرسائل أو الوثائق التي تصدرها الرعية.</li>
+        <li><b>سجلات الرعية عنك</b>، تدخلها رعيتك: الاسم وتاريخ الولادة وتفاصيل العائلة، ووسائل التواصل والعنوان، والطقس، والمهنة والمهارات، والأسر وصلات القرابة، والأسرار والشهادات، والعضوية في الرعية والأخويات، والتعليم المسيحي ومسار التنشئة، والحضور والتطوّع والتسجيلات، والتبرّعات والإيصالات، والموافقات التي أعطيتها للرعية، وتاريخ الوفاة، والرسائل أو الوثائق التي تصدرها الرعية.</li>
         <li><b>سجلات حسّاسة</b>، فقط حيث تستخدمها الرعية: ملاحظات طبية أو عن الحساسية، وملاحظات رعوية، وشكاوى سرّية وتقارير حوادث. هذه محميّة عند التخزين ولا يقرأها إلا من تحدّدهم الرعية.</li>
-        <li><b>الطلبات والرسائل</b> التي ترسلها إلى رعية، مع أي ملفات ترفقها. ومن دون حساب، يحفظ الطلب أيضاً الاسم ووسيلة التواصل التي تعطيها وتفاصيل الطلب.</li>
+        <li><b>سجلات سلامة الأطفال</b>، فقط حيث تستخدمها الرعية: من يحقّ له استلام الطفل وبأي صفة، ولوائح الحضور والإخلاء. لا يسجّلها إلا مكتب الرعية.</li>
+        <li><b>نوايا الصلاة</b> التي ترسلها إلى رعية، مع درجة الظهور التي تختارها.</li>
+        <li><b>تواقيع الإكليروس:</b> صور توقيع الكاهن أو المطران، تُستعمل فقط على الوثائق التي يوقّعها.</li>
+        <li><b>مستأجرو مرافق الرعية:</b> الاسم والجهة وشخص مسؤول للتواصل، ولا يراها إلا موظفو المرافق والمالية في الرعية.</li>
+        <li><b>الطلبات والرسائل</b> التي ترسلها إلى رعية، والرسائل في بريد الرعية الداخلي، مع أي ملفات ترفقها. ومن دون حساب، يحفظ الطلب أيضاً الاسم ووسيلة التواصل التي تعطيها وتفاصيل الطلب.</li>
+        <li><b>المساعدة في الدخول بخطوتين:</b> إذا فقدت تطبيق المصادقة وطلبت المساعدة، يُحفظ طلبك وكيف رُوجع.</li>
+        <li><b>موقعك</b>، فقط إذا ضغطت "بالقرب مني" في دليل الرعايا: يرسل متصفّحك موقعك لحساب المسافات، ولا يُحفظ.</li>
         <li><b>سجلات التدقيق</b>: من غيّر ماذا ومتى، لتبقى السجلات موثوقة.</li>
-        <li><b>إحصاءات مجهولة للموقع:</b> مجاميع يومية للصفحات العامة التي فُتحت، بحسب نوع الصفحة واللغة والرعية. لا يُحفظ معها عنوان IP ولا الجهاز ولا معرّف الزائر ولا نص البحث.</li>
+        <li><b>إحصاءات مجهولة للموقع:</b> مجاميع يومية للصفحات العامة التي فُتحت، بحسب نوع الصفحة واللغة والرعية. لا يُحفظ معها عنوان IP ولا الجهاز ولا معرّف الزائر ولا نص البحث، ولا يُحتسب المتصفّح الذي يطلب عدم التتبّع (Do Not Track أو Global Privacy Control).</li>
         <li><b>سجلات تقنية</b> للطلبات والأخطاء، لإبقاء الخدمة تعمل بأمان.</li>
       </ul>
 
       <h2>لماذا</h2>
       <p>لتشغيل خدمات الرعية التي تستخدمها، وليحفظ الرعايا سجلاتها، ولحماية الحسابات ومنع إساءة الاستخدام. لا نبيع بياناتك، ولا نعرض إعلانات، ولا نستخدم أدوات تتبّع إعلانية أو تحليلية.</p>
 
+      <h2>الذكاء الاصطناعي</h2>
+      <p>لا يستخدم ParishLife الذكاء الاصطناعي لتحليل بياناتك، ولا يُتّخذ أي قرار بشأنك بوسائل آلية وحدها.</p>
+
       <h2>من يستطيع رؤيتها</h2>
       <ul>
         <li>أنت ترى حسابك وبيانات الرعية المرتبطة بك.</li>
         <li>كهنة الرعية وموظفوها يرون ما يسمح به دورهم وتعيينهم (مثلاً: أمين الصندوق يرى المالية، ومسؤول الأخوية يرى أخويته).</li>
         <li>مطران الأبرشية يرى ما تتطلّبه متابعة رعاياها.</li>
-        <li>القائمون على ParishLife (مشغّلو المنصّة)، للإعداد والدعم والأمان.</li>
+        <li>القائمون على ParishLife (مشغّلو المنصّة)، للإعداد والدعم والأمان، ومن ذلك مراجعة رسالة يُبلَّغون عنها وطلبات المساعدة في الدخول بخطوتين.</li>
         <li>الجميع، لما تختار الرعية نشره على صفحتها العامة.</li>
       </ul>
 
@@ -148,32 +177,38 @@
         <li><b>Microsoft Azure</b> تستضيف ParishLife في منطقة France Central: قاعدة البيانات (Cosmos DB) وتخزين الملفات الخاص (Blob Storage) وحماية المفاتيح (Key Vault) والمراقبة التقنية (Application Insights).</li>
         <li><b>Cloudflare</b> تقدّم خدمة اسم النطاق وخدمة Turnstile، وهي فحص ضدّ البرامج الآلية عند الدخول وإنشاء الحساب ونماذج الطلبات العامة. يعالج Turnstile معلومات تقنية عن متصفّحك واتصالك ليميّز الأشخاص من البرامج الآلية.</li>
         <li><b>Google</b> و<b>Microsoft</b>، فقط إذا اخترت الدخول عبرهما.</li>
-        <li><b>Resend</b> ترسل رسائل البريد الخاصة بحسابك في ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد.</li>
-        <li><b>Google Fonts:</b> تحمّل بوّابة المؤمنين وصفحة التعريف بالمنتج خطوطهما من Google، فيتّصل متصفّحك بخوادم الخطوط لدى Google.</li>
+        <li><b>Resend</b> ترسل رسائل البريد الخاصة بحسابك في ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد، والرموز التي تعيد تعيين كلمة مرور منسيّة.</li>
+        <li><b>Google Fonts:</b> عند طباعة وثيقة أو حفظها من بوّابة المؤمنين، تحمّل الصفحة المطبوعة خطوطها من Google، فيتّصل متصفّحك بخوادم الخطوط لدى Google. أمّا الصفحات نفسها فتستعمل خطوطاً يقدّمها ParishLife.</li>
       </ul>
+      <p>يحفظ ParishLife بياناته لدى Microsoft Azure في منطقة France Central داخل الاتحاد الأوروبي. وقد تعالج Cloudflare وGoogle وMicrosoft وResend البيانات المحدودة المذكورة أعلاه في بلدان أخرى، منها الولايات المتحدة.</p>
       <p>لا يرسل ParishLife نشرات أو رسائل تسويقية أو رسائل نصية، ولا يقبل الدفع عبر الإنترنت.</p>
 
       <h2>ملفات تعريف الارتباط والتخزين في متصفّحك</h2>
       <ul>
-        <li>ملف جلسة يبقيك داخلاً (حتى ٨ ساعات، وينتهي عند الخروج).</li>
-        <li>ملف أمان يحمي النماذج من التزوير.</li>
-        <li>ملفات قصيرة الأمد أثناء الدخول عبر Google أو Microsoft (دقائق).</li>
+        <li>ملف دخول يبقيك داخلاً. يُحذف عند الخروج أو إغلاق المتصفّح، وينتهي الدخول الذي يحمله بعد ٨ ساعات من دخولك.</li>
+        <li>ملف أمان يحمي النماذج من التزوير. وتستعمله الصفحات العامة أيضاً لإرسال إحصاء الزيارة المجهول.</li>
+        <li>ملفات قصيرة الأمد أثناء الدخول عبر Google أو Microsoft (١٥ دقيقة على الأكثر).</li>
         <li>لغتك وتفضيلات القراءة وبعض خيارات الشاشة، في تخزين متصفّحك.</li>
         <li>نسخة من الصفحات العامة وآخر ما عرضته، لتُفتح دون اتصال.</li>
       </ul>
-      <p>كلّها ضرورية لعمل الموقع. لا يضع ParishLife ملفات إعلانية أو تتبّعية. يقدّم Cloudflare خدمة Turnstile وفق سياسة الخصوصية الخاصة به.</p>
+      <p>ملفات تعريف الارتباط ضرورية تماماً؛ أمّا التفضيلات المحفوظة والنسخة المتاحة دون اتصال فتتذكّر خياراتك والصفحات التي فتحتها فقط. لا يضع ParishLife ملفات إعلانية أو تتبّعية. تقول Cloudflare إن Turnstile لا يستخدم ملفات تعريف الارتباط لجمع المعلومات أو حفظها، وهي تقدّمه وفق سياسة الخصوصية الخاصة بها. كل ملف وكل عنصر محفوظ مذكور في <a href="cookies.html?lang=ar">سياسة ملفات تعريف الارتباط</a>.</p>
+
+      <h2>كيف نحميها</h2>
+      <p>نحمي البيانات باتصالات مشفّرة، وبوصول محصور بحسب الدور والتعيين، وبالدخول بخطوتين لموظفي الرعايا والكهنة ومشغّلي المنصّة، وبحماية إضافية للسجلات الحسّاسة عند التخزين، وبسجلات تدقيق للتغييرات.</p>
 
       <h2>مدّة الحفظ</h2>
-      <p>تُحفظ السجلات إلى أن تطلب أنت أو رعيتك إزالتها (انظر أدناه)؛ ولا يُحذف شيء تلقائياً. تنتهي الجلسات بعد ٨ ساعات، ورموز الدخول بعد دقائق. النسخ الاحتياطية: يمكن استعادة قاعدة البيانات إلى أي لحظة في آخر ٧ أيام، ويمكن استرجاع الملفات المحذوفة خلال ٣٠ يوماً. تُحذف السجلات التقنية تلقائياً بعد ٩٠ يوماً.</p>
+      <p>تُحفظ السجلات إلى أن تطلب أنت أو رعيتك إزالتها (انظر أدناه)؛ ولا يُحذف شيء تلقائياً. ينتهي الدخول بعد ٨ ساعات (و١٥ دقيقة لدخول الاسترداد) أو فور خروجك، وتنتهي رموز البريد الإلكتروني بعد ١٥ دقيقة.</p>
+      <p>عند إغلاق حسابك، تُحذف فوراً بيانات دخولك وطرقه وجلساتك وملفك الشخصي وتوقيعك وملاحظاتك الخاصة. ويحتفظ ParishLife بإشارة إلى أن الحساب كان موجوداً وأُغلق (رقمه ووقت إغلاقه، من دون اسمك أو بريدك أو كلمة مرورك) وبسجلات الأمان والتدقيق الخاصة به، لتبقى سجلات الرعية مفهومة. أمّا السجلات التي تحفظها رعية عنك فتبقى لدى تلك الرعية.</p>
+      <p>النسخ الاحتياطية: يمكن استعادة قاعدة البيانات إلى أي لحظة في آخر ٧ أيام، ويمكن استرجاع الملفات المحذوفة خلال ٣٠ يوماً، لذا قد تبقى البيانات المحذوفة في النسخ الاحتياطية حتى ذلك الحين. تُحذف السجلات التقنية تلقائياً بعد ٩٠ يوماً.</p>
 
       <h2>حقوقك وخياراتك</h2>
       <ul>
-        <li><b>في ParishLife اليوم:</b> رؤية ملفك وكلمة مرورك وطرق دخولك وتغييرها؛ رؤية جلساتك وإنهاؤها؛ رؤية البيانات المرتبطة بك لدى رعية؛ طلب تصحيح سجل من الرعية؛ طلب إغلاق بياناتك الشخصية لدى رعية. عند موافقة الرعية على الإغلاق، تُحذف التفاصيل الشخصية الاختيارية وتُسحب الموافقات وينتهي الربط بحسابك؛ ويبقى التاريخ الرسمي والمالي والمتعلّق بالحماية والمشاركة.</li>
+        <li><b>في ParishLife اليوم:</b> رؤية ملفك وكلمة مرورك وطرق دخولك وتغييرها؛ إعادة تعيين كلمة مرور منسيّة برمز نرسله إلى بريدك؛ رؤية جلساتك وإنهاؤها؛ تنزيل نسخة من بيانات حسابك ومن سجلك الخاص في كل رعية أنت مرتبط بها؛ إغلاق حسابك بنفسك؛ رؤية البيانات المرتبطة بك لدى رعية؛ طلب تصحيح سجل من الرعية؛ طلب إغلاق بياناتك الشخصية لدى رعية. عند موافقة الرعية على الإغلاق، تُحذف التفاصيل الشخصية الاختيارية وتُسحب الموافقات وينتهي الربط بحسابك؛ ويبقى التاريخ الرسمي والمالي والمتعلّق بالحماية والمشاركة.</li>
         <li><b>بطلب</b> إلى <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>: نسخة من بياناتك، أو حذف حسابك، أو أي أمر لا تستطيع فعله في التطبيق.</li>
       </ul>
 
       <h2>الأطفال</h2>
-      <p>الحسابات لمن بلغ ١٣ سنة أو أكثر. قد تسجّل الرعايا الأطفال في سجلاتها.</p>
+      <p>الحسابات لمن بلغ ١٣ سنة أو أكثر: يطلب منك إنشاء الحساب تأكيد عمرك ولا يسألك عن تاريخ ولادتك. قد تسجّل الرعايا الأطفال في سجلاتها، ولا يسجّلهم إلا مكتب الرعية.</p>
 
       <h2>التغييرات</h2>
       <p>ننشر أي تغيير على هذه الصفحة مع تاريخ سريان جديد.</p>
@@ -185,6 +220,7 @@
 
   <footer>
     <a href="terms.html">Terms of use · شروط الاستخدام</a>
+    <a href="cookies.html">Cookie policy · سياسة ملفات تعريف الارتباط</a>
     <a href="public.html">ParishLife</a>
     <a href="index.html">Members portal · بوّابة المؤمنين</a>
   </footer>
