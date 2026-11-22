@@ -6,8 +6,8 @@
    Main checks: no page errors, no 5xx or 400 API responses, no "not connected" screen, the expected
    menu entries for each role, and dir="rtl" in Arabic. 403/404 answers are listed, not failed: the API
    answers 404 for records a role may not see. */
-import { test, expect } from '@playwright/test';
-import { manifest, NOT_CONNECTED, settle, signIn, turnstileToken, watch } from './support.mjs';
+import { expect } from '@playwright/test';
+import { NOT_CONNECTED, manifest, settle, signIn, test, turnstileToken, watch } from './support.mjs';
 
 const M = manifest();
 

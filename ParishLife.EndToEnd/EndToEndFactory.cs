@@ -3,7 +3,9 @@
 // serves the pages the browser tests open. Test-only; never deployed.
 // Main functions: ConfigureWebHost applies final test configuration, the web root, the per-test client address and, when asked, Cloudflare's
 // published Turnstile test keys (TestSiteKey/TestSecretKey: always pass, verified by Cloudflare's real siteverify), and a stand-in Google
-// client (sign-in buttons and the redirect to Google, never a completed sign-in); DataDirectory names the storage path.
+// client (sign-in buttons and the redirect to Google, never a completed sign-in); DataDirectory names the storage path. Nothing reaches the
+// internet: Turnstile's siteverify is answered in-process (OfflineTurnstileHandler) and account codes go to a test inbox file
+// (OutboxContactCodeDelivery) when an outbox path is given.
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,10 +13,13 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ParishLife.Api.Interfaces.Services.Accounts;
+using ParishLife.Api.Services.Accounts;
 
 namespace ParishLife.EndToEnd;
 
-public class EndToEndFactory(string dataDirectory, string distDirectory, string apiDirectory, bool turnstile = false) : WebApplicationFactory<Program>
+public class EndToEndFactory(string dataDirectory, string distDirectory, string apiDirectory, bool turnstile = false, string? outbox = null)
+    : WebApplicationFactory<Program>
 {
     // Cloudflare's documented dummy keys for testing: the widget always passes and siteverify always accepts its token. Not secrets.
     public const string TestSiteKey = "1x00000000000000000000AA";
@@ -48,6 +53,13 @@ public class EndToEndFactory(string dataDirectory, string distDirectory, string 
         // Each role acts as its own client (ClientAddressFilter), so the sign-in limit (20 /api/auth calls a minute) stays as in production.
         // The general limit (200 API calls a minute) is lifted: a crawl opens screens far faster than a person does. See
         // docs/verification/end-to-end.md.
-        builder.ConfigureTestServices(services => services.PostConfigure<RateLimiterOptions>(options => options.GlobalLimiter = null));
+        builder.ConfigureTestServices(services =>
+        {
+            services.PostConfigure<RateLimiterOptions>(options => options.GlobalLimiter = null);
+            // Offline: the dummy keys are checked here exactly as Cloudflare checks them, without a network call.
+            services.AddHttpClient(TurnstileVerifier.ClientName).ConfigurePrimaryHttpMessageHandler(() => new OfflineTurnstileHandler());
+            if (outbox is not null)
+                services.AddScoped<IContactCodeDelivery>(_ => new OutboxContactCodeDelivery(outbox));
+        });
     }
 }
