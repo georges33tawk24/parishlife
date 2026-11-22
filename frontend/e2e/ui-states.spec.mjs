@@ -19,9 +19,9 @@ test('a double click on Delete removes one meeting, not two', async ({ page }) =
   const state = watch(page);
   await page.addInitScript(() => localStorage.setItem('pl-lang', 'en'));
   await page.goto(M.baseUrl + '/index.html');
-  await signIn(page, state, M.accounts.priest, M.totpSecret, M.password, M.turnstile);
+  await signIn(page, state, M.accounts.leader, M.totpSecret, M.password, M.turnstile);
 
-  // Two meetings of the fixture ministry, through the API as the signed-in priest.
+  // Two meetings of the fixture ministry, through the API as its signed-in leader.
   const seat = `parishes/${M.parishId}/ministries/${M.ministryId}/meetings`;
   const [first, second] = await page.evaluate(async seat => {
     const { token } = await (await fetch('/api/auth/csrf')).json();
@@ -41,7 +41,7 @@ test('a double click on Delete removes one meeting, not two', async ({ page }) =
           rsvpMode: 'Optional'
         })
       });
-      if (!response.ok) throw new Error('meeting not created: ' + response.status);
+      if (!response.ok) throw new Error('meeting not created: ' + response.status + ' ' + (await response.text()));
       made.push((await response.json()).id);
     }
     return made;
@@ -55,8 +55,14 @@ test('a double click on Delete removes one meeting, not two', async ({ page }) =
   await page.locator('#me_delete').click();
   const confirm = page.locator('#me_confirm');
   await expect(confirm).toBeVisible();
-  await confirm.dblclick();
-  await expect(page.locator('.modal.open')).toHaveCount(0, { timeout: 30000 });
+  // A double click whose second press lands just after the server answered, while the dialog fades out: the
+  // button is still under the pointer for a moment, and the record it named is already gone.
+  const box = await confirm.boundingBox();
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  await page.mouse.click(x, y);
+  await page.waitForFunction(() => !document.querySelector('.modal.open'), null, { polling: 'raf', timeout: 30000 });
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(500);
   await settle(page, state);
 
   const status = await page.evaluate(
