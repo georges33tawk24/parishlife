@@ -4,9 +4,11 @@
 // year, pages revalidated, pages sent with a Content-Security-Policy); with no wwwroot (an API-only deployment) it adds nothing.
 // ContentSecurityPolicy builds the page policy, allowing each page's inline start-up script only by its SHA-256 hash, and form posts
 // to this origin plus the external sign-in providers' authorization origins (their redirect follows a same-origin form post).
+// Before the static files, GET /public.html?parish=<id> and GET /sitemap.xml are generated (Middleware/PublicPages.cs), rate limited.
 
 using System.Security.Cryptography;
 using ParishLife.Api.Configuration;
+using ParishLife.Api.Middleware;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -20,6 +22,23 @@ public static partial class FrontendHostingExtensions
         if (string.IsNullOrEmpty(root) || !File.Exists(Path.Combine(root, "index.html")))
             return app;
         var policy = ContentSecurityPolicy(root);
+        var publicPage = File.Exists(Path.Combine(root, "public.html")) ? File.ReadAllText(Path.Combine(root, "public.html")) : null;
+        // Generated answers (a parish page's head, the sitemap) read storage, so unlike the static files they count against the per-address limit.
+        app.MapWhen(context => IsGenerated(context.Request, publicPage is not null), generated =>
+        {
+            generated.UseRateLimiter();
+            generated.Run(async context =>
+            {
+                if (context.Request.Path.Equals("/sitemap.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    await PublicPages.SitemapAsync(context);
+                    return;
+                }
+                context.Response.Headers.CacheControl = "no-cache";
+                context.Response.Headers.ContentSecurityPolicy = policy;
+                await PublicPages.ParishPageAsync(context, publicPage!);
+            });
+        });
         app.UseDefaultFiles();
         app.UseStaticFiles(new StaticFileOptions
         {
@@ -34,9 +53,14 @@ public static partial class FrontendHostingExtensions
         return app;
     }
 
+    private static bool IsGenerated(HttpRequest request, bool hasPublicPage)
+        => (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
+            && (request.Path.Equals("/sitemap.xml", StringComparison.OrdinalIgnoreCase)
+                || hasPublicPage && request.Path.Equals("/public.html", StringComparison.OrdinalIgnoreCase) && request.Query.ContainsKey("parish"));
+
     /// <summary>
     /// The pages' policy: scripts only from this origin, Cloudflare Turnstile and the exact inline start-up scripts of the published pages;
-    /// fonts from Google Fonts; images from anywhere over HTTPS (parish photos), data: and blob: (previews); no framing of the pages.
+    /// fonts self-hosted under /assets/fonts (no Google Fonts host since the fonts moved here); images from anywhere over HTTPS (parish photos), data: and blob: (previews); no framing of the pages.
     /// </summary>
     public static string ContentSecurityPolicy(string webRoot)
     {
@@ -56,8 +80,8 @@ public static partial class FrontendHostingExtensions
         return string.Join("; ",
             "default-src 'self'",
             $"script-src 'self' {string.Join(' ', hashes)} {turnstile}",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com data:",
+            "style-src 'self' 'unsafe-inline'",
+            "font-src 'self' data:",
             "img-src 'self' data: blob: https:",
             $"connect-src 'self' {turnstile}",
             $"frame-src {turnstile}",
