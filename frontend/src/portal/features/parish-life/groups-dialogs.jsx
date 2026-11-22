@@ -462,7 +462,9 @@ export function meetingEdit(id) {
           ),
           onMount(mod) {
             mod.querySelector('#me_confirm').addEventListener('click', async () => {
-              gd().meetings.splice(gd().meetings.indexOf(meeting), 1);
+              const at = gd().meetings.indexOf(meeting);
+              if (at < 0) return; // already removed by an earlier press: splice(-1) would take the last one
+              gd().meetings.splice(at, 1);
               if (!(await persist())) return;
               closeOverlays();
               refresh();

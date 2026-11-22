@@ -628,6 +628,49 @@ export function openModal(opts) {
   emit();
 }
 
+/* Buttons that wait for the server. A button whose press starts a save (persist() announces
+   `parish-saving`) shows a spinner (.btn[aria-busy]) and takes no further press until the API answers,
+   and neither do the other actions of the dialog it is in, so a second press cannot send a second change
+   (a double click on Delete would otherwise remove a second record). aria-disabled rather than disabled
+   keeps keyboard focus where it was; presses on such a button are stopped here, before its own handler.
+   The press is remembered only for the task it happened in. */
+let pressed = null;
+const busyButtons = new Set();
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'click',
+    e => {
+      const button = e.target.closest?.('button') || null;
+      if (button && busyButtons.has(button)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      pressed = button;
+      setTimeout(() => (pressed = null));
+    },
+    true
+  );
+  document.addEventListener('parish-saving', e => {
+    if (!e.detail) {
+      busyButtons.forEach(b => {
+        b.removeAttribute('aria-disabled');
+        b.removeAttribute('aria-busy');
+      });
+      busyButtons.clear();
+      return;
+    }
+    if (!pressed || pressed.hasAttribute('data-close') || pressed.disabled) return;
+    const foot = pressed.closest('.modal-foot,.drawer-foot');
+    for (const b of foot ? foot.querySelectorAll('button:not([data-close])') : [pressed]) {
+      if (b.disabled || b.hasAttribute('aria-disabled')) continue;
+      b.setAttribute('aria-disabled', 'true');
+      busyButtons.add(b);
+    }
+    if (busyButtons.has(pressed)) pressed.setAttribute('aria-busy', 'true');
+  });
+}
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]';
 /* what the keyboard can reach: not an element taken out of the tab order, nor one hidden from

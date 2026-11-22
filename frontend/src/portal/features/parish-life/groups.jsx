@@ -1326,7 +1326,9 @@ groups.mount = host => {
           ),
           onMount(el) {
             el.querySelector('#group-task-confirm').addEventListener('click', async () => {
-              d.tasks.splice(i, 1);
+              const at = d.tasks.indexOf(item); // by identity: after one removal, index i names the next item
+              if (at < 0) return;
+              d.tasks.splice(at, 1);
               if (!(await persist())) return;
               closeOverlays();
               bus.refresh();

@@ -100,7 +100,7 @@ a{text-underline-offset:.18em}
   .scrim,.drawer,.modal .sheet,.toast{transform:none!important;transition:opacity 160ms linear,visibility 160ms linear!important}
   .drawer:not(.open){opacity:0;visibility:hidden}
   .menu,#view.view-in{animation:pl-fade 160ms linear!important}
-  .spinner,.btn .spin{animation:pl-breathe 1.4s ease-in-out infinite!important}
+  .spinner,.btn .spin,.btn[aria-busy=true]::before{animation:pl-breathe 1.4s ease-in-out infinite!important}
 }
 @keyframes pl-fade{from{opacity:0}}
 @keyframes pl-breathe{50%{opacity:.35}}
@@ -582,6 +582,12 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .btn-danger-quiet{background:var(--surface);border-color:var(--border);color:var(--danger-ink)}
 .btn-danger-quiet:hover{background:var(--danger-subtle);border-color:var(--border)}
 .btn:disabled,.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed;pointer-events:none}
+/* waiting for the server: still readable, with a spinner before the label (ui.jsx marks it) */
+.btn[aria-busy=true]{opacity:.85;cursor:progress}
+.btn[aria-busy=true]::before{
+  content:"";width:14px;height:14px;border-radius:99px;border:2px solid currentColor;border-top-color:transparent;
+  animation:plspin .7s linear infinite;flex:none
+}
 .btn-dense{min-height:32px;padding:0 12px;font-size:13px}
 .btn-touch{min-height:48px;padding:0 20px;font-size:16px}
 .btn .spin{

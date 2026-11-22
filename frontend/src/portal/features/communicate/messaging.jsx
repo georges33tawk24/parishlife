@@ -783,7 +783,9 @@ messaging.mount = host => {
         ),
         onMount(el) {
           el.querySelector('#mc_delete').addEventListener('click', async () => {
-            items.splice(Number(index), 1);
+            const at = items.indexOf(item); // by identity: after one removal, the index names the next item
+            if (at < 0) return;
+            items.splice(at, 1);
             if (!(await persist())) return;
             closeOverlays();
             bus.refresh();

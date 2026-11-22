@@ -1082,6 +1082,7 @@ export function Portal() {
           <span className="sr" id="route-said" role="status">
             {ROUTES[S.route] ? t(ROUTES[S.route].en, ROUTES[S.route].ar) : ''}
           </span>
+          <ConnectionBanner />
           <main className="well" id="well" tabIndex="-1">
             <View key={S.route + '/' + S.params.join('/') + '#' + version} />
           </main>
@@ -1102,6 +1103,50 @@ export function Portal() {
       <Palette open={palette} onClose={() => setPalette(false)} />
       <OverlayHost />
     </>
+  );
+}
+
+/* Offline, or the API cannot be reached: say so above the page until it can. Nothing typed is lost (a failed
+   save leaves its dialog open), and when the connection is back the parish data is read again; writes are
+   never repeated on their own, the person presses Save again. */
+function ConnectionBanner() {
+  const [online, setOnline] = useState(() => navigator.onLine !== false);
+  const [reachable, setReachable] = useState(true);
+  useEffect(() => {
+    const up = () => {
+      setOnline(true);
+      if (session.user)
+        hydrate()
+          .then(refresh)
+          .catch(() => {}); // still unreachable: the banner stays and says so
+    };
+    const down = () => setOnline(false);
+    const api = e => setReachable(e.detail);
+    addEventListener('online', up);
+    addEventListener('offline', down);
+    document.addEventListener('parish-connection', api);
+    return () => {
+      removeEventListener('online', up);
+      removeEventListener('offline', down);
+      document.removeEventListener('parish-connection', api);
+    };
+  }, []);
+  if (online && reachable) return null;
+  return (
+    <div className="offbar" role="status" data-offline-banner="">
+      <Icon name="warn" size={18} />
+      <span>
+        {!online
+          ? t(
+              'You are offline. What you type stays on this page; save it again when the connection is back.',
+              'أنت غير متّصل. يبقى ما تكتبه في هذه الصفحة؛ احفظه مجدداً عند عودة الاتصال.'
+            )
+          : t(
+              'ParishLife cannot be reached right now. Check your connection; what you typed stays on this page.',
+              'تعذّر الوصول إلى ParishLife الآن. تحقّق من اتصالك؛ يبقى ما كتبته في هذه الصفحة.'
+            )}
+      </span>
+    </div>
   );
 }
 

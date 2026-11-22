@@ -15,7 +15,7 @@
    sacrament services' own authority, and the case links it. The office queue becomes MEMBER_REQUESTS (every case, guest cases included, kept apart by
    `origin`), and the person's own cases become MY_REQUESTS. Both are read-only on screen: every change is
    an action sent straight to the API, after which the portal reloads. */
-import { api, parishAPI, session, newOperationId } from '../api.js';
+import { api, parishAPI, session, newOperationId, connectionMessage } from '../api.js';
 
 export const keys = ['MEMBER_REQUESTS', 'MY_REQUESTS'];
 export const routes = ['requests', 'guestrequests', 'myrequests'];
@@ -287,7 +287,7 @@ export async function multipart(url, file, { replacesId, reason, checklistKey } 
       body: form
     });
   } catch {
-    throw new Error('ParishLife cannot reach its API. Try again in a moment.');
+    throw new Error(connectionMessage());
   }
   const data = await response.json().catch(() => null);
   if (response.ok) return data;

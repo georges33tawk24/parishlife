@@ -106,9 +106,15 @@ export async function hydrate() {
 const DERIVED = ['PARISH', 'PARISHES'];
 const owned = () => new Set([...MODULES.flatMap(m => m.keys), ...DERIVED]);
 
+/* The button that started a save shows it is working until the API answers (portal/ui/ui.jsx). A page
+   signal only: the module checks run without a window and keep their own event list. */
+const saving = busy =>
+  typeof window !== 'undefined' && document.dispatchEvent(new CustomEvent('parish-saving', { detail: busy }));
+
 export function persist() {
   if (!session.user) return Promise.resolve(false);
   again = true;
+  saving(true);
   if (running) return running;
   running = Promise.resolve().then(async () => {
     let ok = true;
@@ -143,6 +149,7 @@ export function persist() {
       return false;
     } finally {
       running = null;
+      saving(false);
     }
   });
   return running;
