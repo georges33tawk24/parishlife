@@ -1,7 +1,7 @@
 // Purpose: Agent 09 regressions for fixes that had no automated test yet (item 3), everyday-user cases (item 14) and abuse limits (item 15).
 // Each test is named after the fix or the behaviour it holds in place. Known failures prove bugs reported in hardening/handoffs/from-09-qa.md.
 // Main tests: website section markup sanitized on save (03 B6); pages compressed but /api never (04 #1, BREACH); differently capitalized
-// sign-in email; Apple relay address at sign-up; a link scanner's GET never spends a code; a double-tapped or retried create makes one
+// sign-in email; Apple relay address at sign-up; reset and verification codes expire; a link scanner's GET never spends a code; a double-tapped or retried create makes one
 // record; photo location metadata (known failure); sign-up and code requests limited per client; a daily cap on code emails per address
 // (known failure); an oversized upload refused before its body is read.
 
@@ -117,6 +117,33 @@ public class QaRegressionTests
         }
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/password-reset/confirm",
             new { email = user.Email, code, newPassword = "a-new-isolated-fixture-password" })).StatusCode);
+    }
+
+    // Items 6 and 7: an emailed code is good for 15 minutes; one minute later the right code no longer works, for a reset and for
+    // an email confirmation alike.
+    [Fact]
+    public async Task Reset_and_verification_codes_expire_after_15_minutes()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var users = f.Services.GetRequiredService<UserManager<ParishUser>>();
+        var confirmed = (await users.FindByIdAsync(await f.CreateVerifiedMemberAsync()))!;
+        confirmed.EmailConfirmed = true;
+        Assert.True((await users.UpdateAsync(confirmed)).Succeeded);
+        var pending = "pending-" + Guid.NewGuid().ToString("N") + "@fixture.example";
+        await f.Services.GetRequiredService<AccountService>().RegisterAsync(new RegisterAccountDto
+        { OperationId = Guid.NewGuid(), Email = pending, Password = Password, DisplayName = "Pending", AgeConfirmed = true }, default);
+        var delivery = new CapturedContactDelivery();
+        var service = ActivatorUtilities.CreateInstance<ContactVerificationService>(f.Services, delivery);
+        await service.RequestPasswordResetAsync(new RequestPasswordResetDto { Email = confirmed.Email! }, default);
+        await service.RequestAsync(new RequestContactVerificationDto { Email = pending }, default);
+        Assert.Equal(2, delivery.Sent.Count);
+        f.Clock.Now = f.Clock.Now.AddMinutes(16);
+        Assert.Equal("verification_invalid", (await Assert.ThrowsAsync<DomainException>(() => service.ConfirmPasswordResetAsync(new ConfirmPasswordResetDto
+        { Email = confirmed.Email!, Code = delivery.Sent[0].Code, NewPassword = "a-new-isolated-fixture-password" }, default))).Code);
+        Assert.Equal("verification_invalid", (await Assert.ThrowsAsync<DomainException>(() => service.ConfirmAsync(new ConfirmContactVerificationDto
+        { Email = pending, Code = delivery.Sent[1].Code }, default))).Code);
+        Assert.False((await users.FindByEmailAsync(pending))!.EmailConfirmed);
     }
 
     // Item 14: a double tap, or a retry after the connection dropped right after submitting, sends the same operation id: one record.
