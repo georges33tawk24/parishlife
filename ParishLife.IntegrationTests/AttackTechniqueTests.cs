@@ -9,11 +9,8 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Identity;
@@ -87,7 +84,7 @@ public class AttackTechniqueTests
     {
         await using var f = new LocalBackendFixture();
         await f.InitializeAsync();
-        await using var host = Kestrel(f.DirectoryPath, out var server);
+        await using var host = RawHttp.Kestrel(f.DirectoryPath, out var server);
         const string hidden = "GET /api/auth/me HTTP/1.1\r\nHost: localhost\r\n\r\n";
         var cases = new Dictionary<string, string>
         {
@@ -98,13 +95,13 @@ public class AttackTechniqueTests
         };
         foreach (var (name, request) in cases)
         {
-            var answer = await RawAsync(server, request);
+            var answer = await RawHttp.SendAsync(server, request);
             Assert.True(answer.StartsWith("HTTP/1.1 400", StringComparison.Ordinal), $"{name}: {answer.Split("\r\n")[0]}");
-            Assert.True(CountResponses(answer) == 1, $"{name}: the hidden request was answered too");
+            Assert.True(RawHttp.Count(answer) == 1, $"{name}: the hidden request was answered too");
         }
         // Content-Length together with Transfer-Encoding: chunked wins and the connection is not reused, so a smuggled tail cannot ride it.
-        var both = await RawAsync(server, "POST /api/auth/login HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 50\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n" + hidden);
-        Assert.True(CountResponses(both) <= 1 || !both.Contains("HTTP/1.1 200", StringComparison.Ordinal), both.Split("\r\n")[0]);
+        var both = await RawHttp.SendAsync(server, "POST /api/auth/login HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 50\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n" + hidden);
+        Assert.True(RawHttp.Count(both) <= 1 || !both.Contains("HTTP/1.1 200", StringComparison.Ordinal), both.Split("\r\n")[0]);
     }
 
     // Technique 10: nothing the caller controls besides path and query varies a cached or generated public answer. A foreign Host is
@@ -338,41 +335,6 @@ public class AttackTechniqueTests
         var session = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("__Host-ParishLife=", StringComparison.Ordinal));
         return (csrf, session);
     }
-
-    // The real API on Kestrel over plain HTTP on a free local port; X-Forwarded-Proto marks a request as HTTPS, as the front end does.
-    private static ConfiguredApiFactory Kestrel(string directory, out Uri server)
-    {
-        var factory = new ConfiguredApiFactory(directory, new() { ["ForwardedHeaders:Enabled"] = "true" }, _ => { });
-        factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
-        factory.StartServer();
-        Assert.Equal(directory, factory.Services.GetRequiredService<StorageOptions>().LocalPath);
-        server = new Uri(factory.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single());
-        return factory;
-    }
-
-    internal static async Task<string> RawAsync(Uri server, string request, int sendBytes = int.MaxValue, int waitMs = 3000)
-    {
-        using var tcp = new TcpClient();
-        await tcp.ConnectAsync(server.Host, server.Port);
-        var stream = tcp.GetStream();
-        var bytes = Encoding.ASCII.GetBytes(request);
-        await stream.WriteAsync(bytes.AsMemory(0, Math.Min(sendBytes, bytes.Length)));
-        var all = new MemoryStream();
-        var buffer = new byte[16384];
-        using var timeout = new CancellationTokenSource(waitMs);
-        try
-        {
-            int read;
-            while ((read = await stream.ReadAsync(buffer, timeout.Token)) > 0)
-                all.Write(buffer, 0, read);
-        }
-        catch (Exception error) when (error is OperationCanceledException or IOException)
-        {
-        }
-        return Encoding.ASCII.GetString(all.ToArray());
-    }
-
-    private static int CountResponses(string raw) => raw.Split("HTTP/1.1 ").Length - 1;
 
     // Every route value becomes a fresh GUID (as in EndpointAuthorizationSweepTests).
     private static string Fill(RoutePattern pattern)
