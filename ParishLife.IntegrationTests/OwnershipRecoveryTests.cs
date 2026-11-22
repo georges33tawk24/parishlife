@@ -1,6 +1,7 @@
 // Purpose: verifies contested parish ownership review and administration recovery (SUB12) through real local services, Identity and storage.
 // Main tests: recovery moves only control while records, staff grants, coverage and history stay and no clergy authority appears; stale or
-// competing claims cannot install a second owner; rejection and withdrawal expose nothing; role-limited views; party, MFA and capacity refusals.
+// competing claims cannot install a second owner; rejection and withdrawal expose nothing; role-limited views; party, MFA and capacity refusals;
+// the archdiocese bishop must confirm before recovery and the parish is read-only while any claim is open (owner decision, 23 November 2026).
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Billing;
@@ -33,6 +34,38 @@ public class OwnershipRecoveryTests
         }, default);
     }
 
+    // Places the independent parish under an archdiocese whose bishop (the fixture Nominee) can confirm ownership claims.
+    private static async Task UnderBishopAsync(LocalBackendFixture f, IndependentParishScenario s)
+    {
+        var archdiocese = await f.AppointedOrganizationAsync();
+        var jurisdiction = f.Services.GetRequiredService<ParishJurisdictionService>();
+        f.As(f.Other);
+        var proposal = await jurisdiction.ProposeAsync(s.Parish, new ProposeParishJurisdictionDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await s.Parishes.GetAsync(s.Parish, default))!.Version, ArchdioceseId = Guid.Parse(archdiocese),
+            Reason = "Isolated first jurisdiction", EvidenceReference = "isolated factual jurisdiction evidence"
+        }, default);
+        f.As(f.Nominee);
+        var row = await jurisdiction.GetAsync(s.Parish, proposal.Id, default);
+        await jurisdiction.DecideAsync(s.Parish, proposal.Id, new DecideParishJurisdictionDto
+        {
+            OperationId = Guid.NewGuid(), Version = row.Version, Accept = true, Reason = "Isolated bishop decision",
+            CurrentPassword = "isolated-fixture-long-password", CurrentCode = RealIdentityWorkflowTests.FixtureCode()
+        }, default);
+    }
+
+    private static async Task<OwnershipClaimDto> ConfirmAsync(LocalBackendFixture f, string parish, string id, bool confirmed = true)
+    {
+        f.As(f.Nominee);
+        var row = await Claims(f).GetAsync(parish, id, default);
+        return await Claims(f).ConfirmAsync(parish, id, new ConfirmOwnershipClaimDto
+        {
+            OperationId = Guid.NewGuid(), Version = row.Version, Confirmed = confirmed, Note = "Isolated archdiocese answer"
+        }, default);
+    }
+
+    private static async Task<bool> ContestedAsync(IndependentParishScenario s) => (await s.Parishes.GetAsync(s.Parish, default))!.Value.OwnershipContested;
+
     private static async Task<LocalBackendFixture> StartAsync()
     {
         var f = new LocalBackendFixture();
@@ -49,6 +82,8 @@ public class OwnershipRecoveryTests
         await s.PayAsync(s.Parish, invoice.Id);
         Assert.Equal(1, await s.ActivateAsync());
         var staff = await f.CreateVerifiedStaffAsync();
+        var claimant = await f.CreateVerifiedStaffAsync();
+        await UnderBishopAsync(f, s);
         f.As(f.Other);
         await f.Services.GetRequiredService<ParishService>().GrantAsync(s.Parish, new GrantAccessDto
         {
@@ -60,10 +95,11 @@ public class OwnershipRecoveryTests
             OperationId = Guid.NewGuid(), Direction = "ToArchdiocese", EffectiveFrom = f.Clock.Now.AddMonths(2), AcceptBy = f.Clock.Now.AddDays(7), Reason = "Pending under old control"
         }, default);
 
-        f.As(f.Nominee);
+        f.As(claimant);
         var request = Open();
         var claim = await Claims(f).OpenAsync(s.Parish, request, default);
-        Assert.Equal(("Open", f.Nominee), (claim.Status, claim.ClaimantAccountId));
+        Assert.Equal(("Open", claimant), (claim.Status, claim.ClaimantAccountId));
+        Assert.True(await ContestedAsync(s));
         Assert.Equal(claim.Id, (await Claims(f).OpenAsync(s.Parish, request, default)).Id);
         Assert.Equal("claim_already_open", (await Assert.ThrowsAsync<DomainException>(() => Claims(f).OpenAsync(s.Parish, Open(), default))).Code);
         // Opening a claim grants the claimant nothing.
@@ -72,6 +108,9 @@ public class OwnershipRecoveryTests
 
         // The owner is told in-app that a review exists and sees no claimant identity, statement or evidence.
         f.As(f.Other);
+        // While contested the parish stays readable but refuses every change, including the owner's.
+        await Access(f).RequireAsync(s.Parish, Permissions.BillingRead, default);
+        Assert.Equal("parish_contested", (await Assert.ThrowsAsync<DomainException>(() => Access(f).RequireAsync(s.Parish, Permissions.PeopleWrite, default))).Code);
         Assert.Contains((await f.Services.GetRequiredService<NotificationService>().ListAsync(null, 25, null, default)).Items, n => n.Topic == "parish.ownership_claim");
         var ownerView = (await Claims(f).ListAsync(s.Parish, 25, null, default)).Items.Single();
         Assert.Equal(("Open", (string?)null, (string?)null, (string?)null), (ownerView.Status, ownerView.ClaimantAccountId, ownerView.Statement, ownerView.EvidenceReference));
@@ -79,6 +118,10 @@ public class OwnershipRecoveryTests
         await Claims(f).RespondAsync(s.Parish, claim.Id, new RespondOwnershipClaimDto { OperationId = Guid.NewGuid(), Version = row.Version, Response = "Please contact me first." }, default);
 
         Assert.Equal("write_conflict", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, claim.Id, true, version: row.Version))).Code);
+        // Recovery waits for the archdiocese; the bishop sees the full claim.
+        Assert.Equal("church_confirmation_required", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, claim.Id, true))).Code);
+        var confirmed = await ConfirmAsync(f, s.Parish, claim.Id);
+        Assert.Equal(("Confirmed", f.Nominee, "isolated claim evidence"), (confirmed.ChurchConfirmation, confirmed.ChurchConfirmedBy, confirmed.EvidenceReference));
         f.As(f.SecondAdmin);
         var decision = new DecideOwnershipClaimDto
         {
@@ -90,14 +133,16 @@ public class OwnershipRecoveryTests
         Assert.Equal(("Recovered", f.Other, "Please contact me first."), (recovered.Status, recovered.PreviousOwnerAccountId, recovered.OwnerResponse));
         Assert.Contains("grant:" + f.Other + ":local revoked", recovered.ReconciledRecords);
         Assert.Contains("payerTransfer:" + transfer.Id + " cancelled", recovered.ReconciledRecords);
-        Assert.Equal(f.Nominee, (await s.Parishes.GetAsync(s.Parish, default))!.Value.OwnerAccountId);
+        Assert.Equal(claimant, (await s.Parishes.GetAsync(s.Parish, default))!.Value.OwnerAccountId);
+        Assert.False(await ContestedAsync(s));
 
         // Control moved; the prior owner's access ended; staff grants, coverage, invoices and the claim history stay.
         f.As(f.Other);
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => Access(f).RequireAsync(s.Parish, Permissions.BillingRead, default))).Kind);
         f.As(staff);
         await Access(f).RequireAsync(s.Parish, Permissions.PeopleRead, default);
-        f.As(f.Nominee);
+        f.As(claimant);
+        await Access(f).RequireAsync(s.Parish, Permissions.PeopleWrite, default);
         Assert.Single(await s.Billing.GetCoverageAsync(s.Parish, default));
         Assert.Equal("Paid", (await s.Billing.GetAsync(s.Parish, invoice.Id, default)).Invoice.Value.Status);
         Assert.Equal("Cancelled", (await f.Services.GetRequiredService<PayerTransferService>().GetAsync(s.Parish, transfer.Id, default)).Value.Status);
@@ -113,17 +158,24 @@ public class OwnershipRecoveryTests
         await using var f = await StartAsync();
         var s = await IndependentParishScenario.CreateAsync(f);
         var second = await f.CreateVerifiedStaffAsync();
-        f.As(f.Nominee);
+        var claimant = await f.CreateVerifiedStaffAsync();
+        await UnderBishopAsync(f, s);
+        f.As(claimant);
         var first = await Claims(f).OpenAsync(s.Parish, Open(), default);
         f.As(second);
         var competing = await Claims(f).OpenAsync(s.Parish, Open(), default);
         // The claimant's own view never includes the owner's response or reviewer evidence.
         Assert.Null((await Claims(f).GetAsync(s.Parish, competing.Id, default)).Value.OwnerAtOpening);
 
+        await ConfirmAsync(f, s.Parish, first.Id);
+        await ConfirmAsync(f, s.Parish, competing.Id);
         Assert.Equal("Recovered", (await DecideAsync(f, s.Parish, first.Id, true)).Status);
+        // The competing claim is still open, so the parish stays read-only until it ends.
+        Assert.True(await ContestedAsync(s));
         Assert.Equal("owner_changed", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, competing.Id, true))).Code);
         Assert.Equal("Rejected", (await DecideAsync(f, s.Parish, competing.Id, false)).Status);
-        Assert.Equal(f.Nominee, (await s.Parishes.GetAsync(s.Parish, default))!.Value.OwnerAccountId);
+        Assert.False(await ContestedAsync(s));
+        Assert.Equal(claimant, (await s.Parishes.GetAsync(s.Parish, default))!.Value.OwnerAccountId);
         f.As(second);
         Assert.Equal("Rejected", (await Claims(f).GetAsync(s.Parish, competing.Id, default)).Value.Status);
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => Access(f).RequireAsync(s.Parish, Permissions.PeopleRead, default))).Kind);
@@ -131,7 +183,9 @@ public class OwnershipRecoveryTests
         // Withdrawal closes the claim and lets the claimant open a fresh one later.
         var again = await Claims(f).OpenAsync(s.Parish, Open(), default);
         var row = await Claims(f).GetAsync(s.Parish, again.Id, default);
+        Assert.True(await ContestedAsync(s));
         Assert.Equal("Withdrawn", (await Claims(f).WithdrawAsync(s.Parish, again.Id, new WithdrawOwnershipClaimDto { OperationId = Guid.NewGuid(), Version = row.Version }, default)).Status);
+        Assert.False(await ContestedAsync(s));
         Assert.Equal("invalid_claim_state", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, again.Id, true))).Code);
         f.As(second);
         await Claims(f).OpenAsync(s.Parish, Open(), default);
@@ -170,5 +224,44 @@ public class OwnershipRecoveryTests
         f.As(f.SecondAdmin);
         var review = (await Claims(f).GetAsync(s.Parish, claim.Id, default)).Value;
         Assert.Equal(("isolated claim evidence", f.Other), (review.EvidenceReference, review.OwnerAtOpening));
+        // A parish with no confirmed archdiocese has no church to confirm, so it cannot be recovered; rejection still works.
+        Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => ConfirmAsync(f, s.Parish, claim.Id))).Kind);
+        Assert.Equal("church_confirmation_required", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, claim.Id, true))).Code);
+        Assert.Equal("Rejected", (await DecideAsync(f, s.Parish, claim.Id, false)).Status);
+    }
+
+    [Fact]
+    public async Task Only_an_independent_archdiocese_bishop_confirms_and_a_disputed_claim_cannot_recover()
+    {
+        await using var f = await StartAsync();
+        var s = await IndependentParishScenario.CreateAsync(f);
+        var claimant = await f.CreateVerifiedStaffAsync();
+        var stranger = await f.CreateVerifiedStaffAsync();
+        await UnderBishopAsync(f, s);
+        f.As(claimant);
+        var claim = await Claims(f).OpenAsync(s.Parish, Open(), default);
+
+        // Strangers, the claimant and the owner are not the church.
+        foreach (var account in new[] { stranger, claimant, f.Other })
+        {
+            f.As(account);
+            await Assert.ThrowsAsync<DomainException>(() => Claims(f).ConfirmAsync(s.Parish, claim.Id,
+                new ConfirmOwnershipClaimDto { OperationId = Guid.NewGuid(), Version = "any", Confirmed = true, Note = "Not the bishop" }, default));
+        }
+
+        Assert.Equal("Disputed", (await ConfirmAsync(f, s.Parish, claim.Id, false)).ChurchConfirmation);
+        Assert.Equal("church_confirmation_required", (await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, s.Parish, claim.Id, true))).Code);
+        // A later answer replaces the earlier one while the claim is open.
+        Assert.Equal("Confirmed", (await ConfirmAsync(f, s.Parish, claim.Id)).ChurchConfirmation);
+
+        // The bishop cannot confirm a claim they made themselves.
+        f.As(f.Nominee);
+        var own = await Claims(f).OpenAsync(s.Parish, Open(), default);
+        Assert.Equal("independent_review_required", (await Assert.ThrowsAsync<DomainException>(() => ConfirmAsync(f, s.Parish, own.Id))).Code);
+
+        Assert.Equal("Recovered", (await DecideAsync(f, s.Parish, claim.Id, true)).Status);
+        // The bishop's own claim is still open, so the parish stays read-only for the new owner too.
+        f.As(claimant);
+        Assert.Equal("parish_contested", (await Assert.ThrowsAsync<DomainException>(() => Access(f).RequireAsync(s.Parish, Permissions.PeopleWrite, default))).Code);
     }
 }

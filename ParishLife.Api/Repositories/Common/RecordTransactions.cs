@@ -54,7 +54,9 @@ internal sealed class RecordTransactions(PartitionDocuments documents, IDataProt
         // Outside delivery work lives beside its source: notices in account partitions, broadcasts in parish partitions.
         if (type is not ("reservationWork" or "backgroundJob" or "notificationWork" or "subscriptionWork" or "broadcastWork")
             && !(type == "parishCrmRecord" && area == RecordArea.Platform) && !(type == "reportSchedule" && area == RecordArea.Account)
-            && !(type == "deliveryWork" && area is RecordArea.Account or RecordArea.Parish))
+            && !(type == "deliveryWork" && area is RecordArea.Account or RecordArea.Parish)
+            // Retention: read or archived notices, to delete those read more than a year ago (owner decision, 23 November 2026).
+            && !(type == "notification" && area == RecordArea.Account))
             throw new InvalidOperationException("Only runtime-owned due-work types and the platform CRM worklist can be scanned across partitions.");
         var (container, _) = Location(new RecordScope { Area = area, OwnerId = "worker" });
         var query = StorageQuery.Type(type);
@@ -65,6 +67,8 @@ internal sealed class RecordTransactions(PartitionDocuments documents, IDataProt
             query = query.Where(StorageFilter.Eq("data.status", "Pending"));
         if (type == "reportSchedule")
             query = query.Where(StorageFilter.Eq("data.status", "Active"));
+        if (type == "notification")
+            query = query.Where(StorageFilter.Or(StorageFilter.Eq("data.status", "Read"), StorageFilter.Eq("data.status", "Archived")));
         return documents.QueryPageAsync<T>(container, null, query, Math.Clamp(size, 1, 100), continuation, ct);
     }
 

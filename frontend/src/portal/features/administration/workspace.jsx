@@ -71,7 +71,8 @@ function claimsDrawer(parish) {
 }
 
 /* Who owns a parish record is contested through a claim: opened by someone with evidence, answered by
-   the current owner, decided by a platform operator. */
+   the current owner, confirmed or disputed by the bishop of the parish's archdiocese, decided by a platform
+   operator (recovery only after the church confirmed). The parish is read-only while a claim is open. */
 function Claims({ parish }) {
   const { data, error, reload } = useLoad(() => A.orEmpty(A.listClaims(parish.id)), []);
   const open = () =>
@@ -104,7 +105,15 @@ function Claims({ parish }) {
         <Row
           key={c.id}
           title={`${c.status} · ${shortDay(c.openedAt)}`}
-          lines={[c.statement, c.decisionReason, c.ownerResponse && `${L('Owner', 'المالك')}: ${c.ownerResponse}`]}
+          lines={[
+            c.statement,
+            c.decisionReason,
+            c.ownerResponse && `${L('Owner', 'المالك')}: ${c.ownerResponse}`,
+            c.churchConfirmation &&
+              `${L('Archdiocese', 'الأبرشية')}: ${
+                c.churchConfirmation === 'Confirmed' ? L('confirmed', 'أكّدت') : L('disputed', 'اعترضت')
+              }${c.churchNote ? ' · ' + c.churchNote : ''}`
+          ]}
           actions={
             c.status === 'Open' ? (
               <>
@@ -130,6 +139,31 @@ function Claims({ parish }) {
                   }
                 >
                   {L('Withdraw', 'سحب')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-dense"
+                  onClick={() =>
+                    act(
+                      c,
+                      L('Archdiocese answer', 'جواب الأبرشية'),
+                      [
+                        {
+                          name: 'confirmed',
+                          label: L('The archdiocese', 'الأبرشية'),
+                          type: 'select',
+                          options: [
+                            ['true', L('Confirms the claim', 'تؤكّد المطالبة')],
+                            ['false', L('Disputes the claim', 'تعترض على المطالبة')]
+                          ]
+                        },
+                        { name: 'note', label: L('Note', 'ملاحظة'), type: 'textarea' }
+                      ],
+                      (version, v) =>
+                        A.confirmClaim(parish.id, c.id, { version, confirmed: v.confirmed === 'true', note: v.note })
+                    )
+                  }
+                >
+                  {L('Archdiocese answer', 'جواب الأبرشية')}
                 </button>
                 <button
                   className="btn btn-secondary btn-dense"
@@ -439,6 +473,12 @@ function Organizations({ data, reload }) {
                 title={
                   <>
                     {p.name} <StatusPill status={p.status} />
+                    {p.ownershipContested ? (
+                      <Pill
+                        label={L('Under ownership review · read-only', 'قيد مراجعة الملكية · للقراءة فقط')}
+                        tone="warning"
+                      />
+                    ) : null}
                   </>
                 }
                 lines={[

@@ -1,7 +1,7 @@
 // Purpose: Declares the IParishRepository boundary used by backend services without exposing provider
 // implementation details.
 // Main functions: GetAsync, GetGrantAsync, RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync, GetCoveragesAsync,
-// ActivateCoverageAsync, RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync,
+// ActivateCoverageAsync, RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, SetBillingRepresentativeAsync,
 // ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, GetPayerScheduleAsync.
 
 using ParishLife.Api.Models;
@@ -21,6 +21,8 @@ public interface IParishRepository
     Task<Archdiocese> RegisterArchdioceseAsync(Archdiocese organization, Operation operation, CancellationToken ct);
     Task<Versioned<Archdiocese>?> GetArchdioceseAsync(string id, CancellationToken ct);
     Task<Archdiocese> VerifyArchdioceseAsync(string id, string version, string evidence, Operation operation, CancellationToken ct);
+
+    Task<Archdiocese> SetBillingRepresentativeAsync(string id, string version, string accountId, Operation operation, CancellationToken ct);
     Task<AssociationRequest> ProposeAssociationAsync(string parishId, string version, string archdioceseId, Operation operation, CancellationToken ct);
     Task<Versioned<AssociationRequest>?> GetAssociationAsync(string parishId, string requestId, CancellationToken ct);
     Task<AssociationRequest> DecideAssociationAsync(string parishId, string requestId, string version, bool accept, Operation operation, CancellationToken ct);

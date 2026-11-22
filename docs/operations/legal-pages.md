@@ -17,7 +17,7 @@ Approved by the owner on 21 November 2026 (effective that day; the draft banner 
 - **Effective date:** 21 November 2026.
 
 Filled in from the code and setup rather than asked:
-- **Records:** kept until the person or the parish asks for removal; nothing is deleted automatically.
+- **Records:** kept until the person or the parish asks for removal. Since 23 November 2026 (owner decision, Q15), read notices are deleted after one year and anonymous site counts after two years.
 - **Technical logs:** deleted after 90 days. This is the Application Insights retention to confirm in the Azure session; if it differs, change both pages.
 - **Liability:** no limitation clause; the pages keep the plain statement that availability cannot be guaranteed.
 - **Resend, push services and Meta (WhatsApp):** named as the services that carry outside messages (`docs/operations/notification-delivery.md`). The push and WhatsApp lines were added the same day, when those channels were built.
@@ -50,7 +50,7 @@ Georges was not consulted on this wording. Any change later: edit both files, ke
 | **How you chose to be reached** is stored: channel choices, push device addresses, the proven WhatsApp number; the code is kept only hashed, until used. | `NotificationPreferences`, `PushDevice`, `WhatsAppContact` |
 | **Cookies:** session (8 h), anti-forgery, short-lived provider cookies. | `Program.cs` (`__Host-ParishLife`, `__Host-ParishLife.Csrf`), `AccountSessionService` (8 h), `ExternalSignInService` (`__Host-ParishLife.ExternalMfa`, at most 10 min), the Identity external cookie |
 | **Browser storage:** language, reading preferences, screen choices; offline copy of public pages. | `lib/i18n.js`, `reading/EasyReading.jsx`, `portal/model/store.js`, `public/sw.js` |
-| **Retention:** nothing deleted automatically. | `CapabilityService` ("No retention classes are approved") |
+| **Retention:** parish records and audit kept; read notices deleted after 1 year, anonymous site counts after 2 years (owner decision, 23 November 2026). | `RetentionService`, `RetentionWorker` (runs with the background jobs) |
 | **Backups:** 7 days point-in-time; deleted files recoverable 30 days. | Azure setup recorded by the Azure session (Cosmos continuous backup, blob soft delete) |
 | **In-product rights:** own data per parish, closure request, profile corrections, password, sign-in methods, sessions. | `PersonDataService` (`me/data`, closure requests), `ProfileCorrection`, account routes |
 | **Account deletion only by request.** | `CosmosIdentityStore.DeleteAsync` refuses ("requires the retention and ownership review workflow") |

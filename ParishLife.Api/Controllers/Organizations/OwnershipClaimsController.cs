@@ -1,5 +1,5 @@
 // Purpose: HTTP routes for contested parish ownership claims and administration recovery (SUB12); authorization lives in the service.
-// Main functions: Open, List, Get, Respond, Withdraw and Decide (platform recovery operator).
+// Main functions: Open, List, Get, Respond, Withdraw, Confirm (archdiocese bishop) and Decide (platform recovery operator).
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +31,10 @@ public sealed class OwnershipClaimsController(OwnershipRecoveryService service) 
     [HttpPost("{claimId:guid}/withdraw")]
     public async Task<ActionResult<OwnershipClaimDto>> Withdraw(Guid parishId, Guid claimId, WithdrawOwnershipClaimDto request, CancellationToken ct)
         => Ok(await service.WithdrawAsync(Guard.Id(parishId), Guard.Id(claimId), request, ct));
+
+    [HttpPost("{claimId:guid}/church-confirmation")]
+    public async Task<ActionResult<OwnershipClaimDto>> Confirm(Guid parishId, Guid claimId, ConfirmOwnershipClaimDto request, CancellationToken ct)
+        => Ok(await service.ConfirmAsync(Guard.Id(parishId), Guard.Id(claimId), request, ct));
 
     [HttpPost("{claimId:guid}/decision")]
     public async Task<ActionResult<OwnershipClaimDto>> Decide(Guid parishId, Guid claimId, DecideOwnershipClaimDto request, CancellationToken ct)

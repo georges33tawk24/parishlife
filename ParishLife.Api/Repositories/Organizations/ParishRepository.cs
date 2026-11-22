@@ -141,11 +141,28 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             Name = organization.Value.Name,
             Locality = organization.Value.Locality,
             OwnerAccountId = organization.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = organization.Value.BillingRepresentativeAccountId,
             CreatedAt = organization.Value.CreatedAt,
             Verified = true,
             VerificationReference = evidence
         };
         return await CommitOrReplay(documents.Batch(C, key).ReplaceItem("organization", Row("organization", key, "organization", verified), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, verified)).CreateItem(Audit(key, operation, "archdiocese.verify", id, evidence)), key, operation, verified, ct);
+    }
+
+    // Names the archdiocese's billing representative: one conditional replace with its receipt and audit row (who named whom, never secrets).
+    public async Task<Archdiocese> SetBillingRepresentativeAsync(string id, string version, string accountId, Operation operation, CancellationToken ct)
+    {
+        var key = A(id);
+        if (await documents.ReplayAsync<Archdiocese>(C, key, operation, ct) is { } prior)
+            return prior;
+        var organization = await GetArchdioceseAsync(id, ct) ?? throw Missing();
+        var named = new Archdiocese
+        {
+            Id = organization.Value.Id, Name = organization.Value.Name, Locality = organization.Value.Locality, OwnerAccountId = organization.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = accountId, CreatedAt = organization.Value.CreatedAt, Verified = organization.Value.Verified,
+            VerificationReference = organization.Value.VerificationReference
+        };
+        return await CommitOrReplay(documents.Batch(C, key).ReplaceItem("organization", Row("organization", key, "organization", named), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, named)).CreateItem(Audit(key, operation, "archdiocese.billing_representative", id, accountId)), key, operation, named, ct);
     }
 
     public async Task<AssociationRequest> ProposeAssociationAsync(string parishId, string version, string archdioceseId, Operation operation, CancellationToken ct)
@@ -203,7 +220,8 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             VerificationReference = parish.Value.VerificationReference,
             RegisteredAssociationId = requestId,
             JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = parish.Value.JurisdictionProposalId
+            JurisdictionProposalId = parish.Value.JurisdictionProposalId,
+            OwnershipContested = parish.Value.OwnershipContested
         }
 
         : parish.Value;
@@ -233,7 +251,8 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             VerificationReference = parish.Value.VerificationReference,
             RegisteredAssociationId = null,
             JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = parish.Value.JurisdictionProposalId
+            JurisdictionProposalId = parish.Value.JurisdictionProposalId,
+            OwnershipContested = parish.Value.OwnershipContested
         };
         // Changing the association epoch invalidates all of its delegated grants
         // immediately, without an unbounded cross-document revocation fan-out.

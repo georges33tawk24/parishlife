@@ -264,13 +264,14 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - `check:routes` 649 routes, 0 new gaps;
     - `npm run e2e` 13/13.
   - **Screens:** the finance screens show the new receipt numbers. Not built (no portal screens yet): the bishop's calendar editor and delegate list, and the archdiocese checklist editor.
-  - **Changes these answers need, not done yet:**
-    - the priest manages workflows (Q8);
-    - a named billing representative (Q9);
-    - contested ownership with church confirmation and freeze (Q10);
-    - hiding counts under 5 (Q14);
-    - retention purges and the privacy-page wording (Q15).
-    - Azure, in the Azure session with the owner's go-ahead: backups to 30 days (Q16), and the test database (Q26).
+  - **The five further changes (23 November), code only, not deployed:**
+    - **Q8:** the parish priest manages workflows without a grant unless a grant denies `workflows.manage`; restricted answers stay with explicit grants (`The_parish_priest_manages_workflows_without_a_grant_unless_a_grant_denies_it`).
+    - **Q9:** the bishop names the archdiocese billing representative (`GET/PUT api/archdioceses/{id}/billing-representative`, verified account with two-factor); payer transfers use it, the registering account until one is named. Two tests in `PayerTransferTests`. No portal screen yet.
+    - **Q10:** the bishop of the parish's confirmed archdiocese confirms or disputes an ownership claim (`POST …/ownership-claims/{id}/church-confirmation`); recovery needs "Confirmed"; rejection does not. While any claim is open the parish is `OwnershipContested`: `ParishAccess` and selected-appointment access refuse every permission not ending in `.read` (`parish_contested`); priest-only clergy actions are not frozen. The admin screen shows "Under ownership review · read-only" and an "Archdiocese answer" button. `OwnershipRecoveryTests` updated plus `Only_an_independent_archdiocese_bishop_confirms_and_a_disputed_claim_cannot_recover`.
+    - **Q14:** bishop overview counts of requests, certificates and membership requests 1–4 return `null` ("fewer than 5" on screen), totals too; `SmallCountTests`.
+    - **Q15:** `RetentionWorker` (every 6 hours when background jobs run) deletes notices read or archived over a year ago and site counts over two years; the capability list reads real configuration; privacy page and `legal-pages.md` updated; `RetentionTests`.
+    - **Still for the Azure session, with the owner's go-ahead:** backups to 30 days and the quarterly restore test (Q16), the test database (Q26), and deploying these changes.
+    - **Checks, SDK 10.0.401:** Release build 0 warnings; **586 backend tests passed** (81 unit / 505 integration); frontend format, lint, check and build pass; `check:routes` 652 routes, 0 new gaps; `npm run e2e` 13/13. Local storage only.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.

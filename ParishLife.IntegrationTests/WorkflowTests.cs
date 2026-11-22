@@ -123,6 +123,31 @@ public class WorkflowTests
     private static async Task<string> CodeAsync(Func<Task> action) => (await Assert.ThrowsAsync<DomainException>(action)).Code;
 
     [Fact]
+    public async Task The_parish_priest_manages_workflows_without_a_grant_unless_a_grant_denies_it()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        // The reviewer is the parish priest acting in his priest appointment, with no workflows.manage grant (owner decision, 23 November 2026).
+        x.As(x.Reviewer);
+        var created = await x.Definitions.CreateAsync(x.Parish, new CreateWorkflowDefinitionDto { OperationId = Guid.NewGuid(), Title = "Priest-made process", Template = Template() }, default);
+        Assert.Equal(f.Other, created.Value.CreatedBy);
+        Assert.Contains((await x.Definitions.ListAsync(x.Parish, 25, null, default)).Items, d => d.Value.Id == created.Value.Id);
+        // Outside his priest appointment (no selected capacity) the implied right does not apply.
+        f.As(f.Other);
+        Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => x.Definitions.ListAsync(x.Parish, 25, null, default))).Kind);
+        // An explicit denial in a parish grant still wins.
+        x.S.Fixture.As(x.S.Fixture.FirstAdmin);
+        await f.Services.GetRequiredService<ParishService>().GrantAsync(x.Parish, new GrantAccessDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await x.S.Parishes.GetAsync(x.Parish, default))!.Version, AccountId = Guid.Parse(f.Other),
+            Allows = [Permissions.PeopleRead], Denies = [Permissions.WorkflowsManage], StartsAt = f.Clock.Now
+        }, default);
+        x.As(x.Reviewer);
+        Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => x.Definitions.ListAsync(x.Parish, 25, null, default))).Kind);
+    }
+
+    [Fact]
     public async Task Templates_are_validated_and_publishing_pins_immutable_versions_for_process_owners_only()
     {
         await using var f = new LocalBackendFixture();

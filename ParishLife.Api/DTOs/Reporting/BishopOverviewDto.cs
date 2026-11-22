@@ -1,5 +1,5 @@
 // Purpose: the bishop's aggregate overview of parishes in his current jurisdiction for an explicit period, with definitions, exclusions and alphabetical (not ranked) order.
-// Main members: ArchdioceseId, From, To, GeneratedAt, Ordering, Measures, Excluded, Parishes, Totals.
+// Main members: ArchdioceseId, From, To, GeneratedAt, Ordering, Measures, Excluded, Parishes, Totals, SmallCounts.
 
 namespace ParishLife.Api.DTOs.Reporting;
 
@@ -22,4 +22,7 @@ public class BishopOverviewDto
     public ParishOverviewDto[] Parishes { get; set; } = Array.Empty<ParishOverviewDto>();
 
     public OverviewTotalsDto Totals { get; set; } = new();
+
+    // How small counts are shown: the person-related counts of 1–4 are null ("fewer than 5"); 0 and 5 or more are exact.
+    public string SmallCounts { get; set; } = string.Empty;
 }

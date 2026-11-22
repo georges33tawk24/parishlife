@@ -36,6 +36,53 @@ public class PayerTransferTests
     }
 
     [Fact]
+    public async Task The_bishop_names_the_billing_representative_and_the_registering_account_stops_acting()
+    {
+        await using var f = await StartAsync();
+        var organization = await f.AppointedOrganizationAsync();
+        var representatives = f.Services.GetRequiredService<BillingRepresentativeService>();
+        // Until someone is named, the registering account acts and may see that.
+        f.As(f.FirstAdmin);
+        var before = await representatives.GetAsync(organization, default);
+        Assert.Equal((f.FirstAdmin, false), (before.AccountId, before.Named));
+        await Assert.ThrowsAsync<DomainException>(() => representatives.SetAsync(organization,
+            new SetBillingRepresentativeDto { OperationId = Guid.NewGuid(), Version = before.Version, Account = "other@fixture.example" }, default));
+
+        f.As(f.Nominee); // the archdiocese's bishop
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => representatives.SetAsync(organization,
+            new SetBillingRepresentativeDto { OperationId = Guid.NewGuid(), Version = before.Version, Account = "nobody@fixture.example" }, default))).Code);
+        var named = await representatives.SetAsync(organization,
+            new SetBillingRepresentativeDto { OperationId = Guid.NewGuid(), Version = before.Version, Account = "other@fixture.example" }, default);
+        Assert.Equal((f.Other, true), (named.AccountId, named.Named));
+
+        f.As(f.Other);
+        Assert.Equal(f.Other, (await representatives.GetAsync(organization, default)).AccountId);
+        f.As(f.FirstAdmin);
+        await Assert.ThrowsAsync<DomainException>(() => representatives.GetAsync(organization, default));
+    }
+
+    [Fact]
+    public async Task A_named_billing_representative_approves_for_the_archdiocese_instead_of_the_registering_account()
+    {
+        await using var f = await StartAsync();
+        var s = await IndependentParishScenario.CreateAsync(f);
+        var now = f.Clock.Now;
+        await s.PayAsync(s.Parish, (await s.InvoiceAsync(now)).Id);
+        await s.ActivateAsync();
+        // The archdiocese names a representative (stored as the bishop's naming would store it).
+        var parishes = f.Services.GetRequiredService<ParishLife.Api.Interfaces.Repositories.Organizations.IParishRepository>();
+        var org = (await parishes.GetArchdioceseAsync(s.Archdiocese, default))!;
+        await parishes.SetBillingRepresentativeAsync(s.Archdiocese, org.Version, f.Nominee, Operation.Create(Guid.NewGuid(), "isolated-test", new { }, f.Clock), default);
+
+        f.As(f.Other);
+        var proposed = await Transfers(f).ProposeForParishAsync(s.Parish, s.Archdiocese, Proposal(f, "ToArchdiocese", now.AddMonths(1)), default);
+        // The registering account no longer acts for the archdiocese; the named representative does.
+        await Assert.ThrowsAsync<DomainException>(() => DecideAsync(f, f.FirstAdmin, s.Parish, proposed.Id, true));
+        var accepted = await DecideAsync(f, f.Nominee, s.Parish, proposed.Id, true);
+        Assert.Equal(("Accepted", f.Nominee), (accepted.Status, accepted.ArchdioceseApprovedBy));
+    }
+
+    [Fact]
     public async Task Coverage_moves_to_the_archdiocese_and_back_for_future_periods_only_with_both_approvals()
     {
         await using var f = await StartAsync();

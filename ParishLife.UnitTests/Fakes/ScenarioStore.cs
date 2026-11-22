@@ -2,7 +2,7 @@
 // deployment.
 // Main functions: Row, G, K, Missing, Conflict, Match, Mutate, IsActiveVerifiedAsync, GetGrantAsync,
 // RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync, GetCoveragesAsync, ActivateCoverageAsync,
-// RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, ProposeAssociationAsync,
+// RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, SetBillingRepresentativeAsync, ProposeAssociationAsync,
 // GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, PublishAsync, CreateInvoiceAsync,
 // GetInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync, GetActivationStatusAsync, FindDueActivationsAsync,
 // TryLeaseAsync, CompleteActivationAsync, GetPayerScheduleAsync, ListInvoicesAsync, CreateAsync, UpdateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
@@ -210,9 +210,22 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             Name = row.Value.Name,
             Locality = row.Value.Locality,
             OwnerAccountId = row.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = row.Value.BillingRepresentativeAccountId,
             CreatedAt = row.Value.CreatedAt,
             Verified = true,
             VerificationReference = evidence
+        };
+        organizations[id] = Row(updated);
+        return updated;
+    }));
+    public Task<Archdiocese> SetBillingRepresentativeAsync(string id, string expected, string accountId, Operation op, CancellationToken ct) => Task.FromResult(Mutate("organization:" + id, op, () =>
+    {
+        var row = organizations.GetValueOrDefault(id) ?? throw Missing();
+        Match(row, expected);
+        var updated = new Archdiocese
+        {
+            Id = row.Value.Id, Name = row.Value.Name, Locality = row.Value.Locality, OwnerAccountId = row.Value.OwnerAccountId, BillingRepresentativeAccountId = accountId,
+            CreatedAt = row.Value.CreatedAt, Verified = row.Value.Verified, VerificationReference = row.Value.VerificationReference
         };
         organizations[id] = Row(updated);
         return updated;
@@ -261,7 +274,7 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             DecidedAt = op.At
         };
         associations[K(parishId, requestId)] = Row(result);
-        parishes[parishId] = Row(accept ? new Parish { Id = parish.Value.Id, Name = parish.Value.Name, Locality = parish.Value.Locality, Contact = parish.Value.Contact, DeclaredArchdiocese = parish.Value.DeclaredArchdiocese, Status = parish.Value.Status, OwnerAccountId = parish.Value.OwnerAccountId, CreatedAt = parish.Value.CreatedAt, RegisteredArchdioceseId = row.Value.ArchdioceseId, VerificationReference = parish.Value.VerificationReference, RegisteredAssociationId = requestId, JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId, JurisdictionProposalId = parish.Value.JurisdictionProposalId } : parish.Value);
+        parishes[parishId] = Row(accept ? new Parish { Id = parish.Value.Id, Name = parish.Value.Name, Locality = parish.Value.Locality, Contact = parish.Value.Contact, DeclaredArchdiocese = parish.Value.DeclaredArchdiocese, Status = parish.Value.Status, OwnerAccountId = parish.Value.OwnerAccountId, CreatedAt = parish.Value.CreatedAt, RegisteredArchdioceseId = row.Value.ArchdioceseId, VerificationReference = parish.Value.VerificationReference, RegisteredAssociationId = requestId, JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId, JurisdictionProposalId = parish.Value.JurisdictionProposalId, OwnershipContested = parish.Value.OwnershipContested } : parish.Value);
         return result;
     }));
     public Task<Parish> EndAssociationAsync(string id, string expected, string reason, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + id, op, () =>
@@ -282,7 +295,8 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             VerificationReference = row.Value.VerificationReference,
             RegisteredAssociationId = null,
             JurisdictionArchdioceseId = row.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = row.Value.JurisdictionProposalId
+            JurisdictionProposalId = row.Value.JurisdictionProposalId,
+            OwnershipContested = row.Value.OwnershipContested
         };
         parishes[id] = Row(result);
         return result;

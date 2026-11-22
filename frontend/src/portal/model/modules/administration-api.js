@@ -116,6 +116,8 @@ export const respondClaim = (parishId, id, version, response) =>
   api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/response`, 'POST', op({ version, response }));
 export const withdrawClaim = (parishId, id, version) =>
   api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/withdraw`, 'POST', op({ version }));
+export const confirmClaim = (parishId, id, body) =>
+  api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/church-confirmation`, 'POST', op(body));
 export const decideClaim = (parishId, id, body) =>
   api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/decision`, 'POST', op(body));
 

@@ -19,13 +19,14 @@ public class ParishOverviewDto
 
     public int OtherCurrentStaff { get; set; }
 
-    public int OpenRequests { get; set; }
+    // Null means 1–4 ("fewer than 5"), hidden so a small count cannot point to a person (owner decision, 23 November 2026).
+    public int? OpenRequests { get; set; }
 
-    public int RequestsReceived { get; set; }
+    public int? RequestsReceived { get; set; }
 
-    public int CertificatesAwaitingBishop { get; set; }
+    public int? CertificatesAwaitingBishop { get; set; }
 
-    public int MembershipRequestsPending { get; set; }
+    public int? MembershipRequestsPending { get; set; }
 
     public int PublishedEvents { get; set; }
 }

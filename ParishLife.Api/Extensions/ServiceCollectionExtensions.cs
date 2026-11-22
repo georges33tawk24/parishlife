@@ -103,6 +103,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OfficeCoverageService>();
         services.AddScoped<BillingService>();
         services.AddScoped<PayerTransferService>();
+        services.AddScoped<BillingRepresentativeService>();
         services.AddScoped<PeopleService>();
         services.AddScoped<HouseholdService>();
         services.AddScoped<MembershipService>();
@@ -216,6 +217,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<ReservationWorker>();
             services.AddHostedService<NotificationWorker>();
             services.AddHostedService<DeliveryWorker>();
+            services.AddHostedService<RetentionWorker>();
             services.AddHostedService<ReportScheduleWorker>();
             services.AddHostedService<BroadcastScheduleWorker>();
         }
@@ -407,6 +409,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeliveryProcessor>();
         services.AddScoped<NotificationChannelService>();
         services.AddScoped<NotificationTestService>();
+        services.AddScoped<RetentionService>();
     }
 
     private static void ConfigureDataProtection(IServiceCollection services, IHostEnvironment environment)

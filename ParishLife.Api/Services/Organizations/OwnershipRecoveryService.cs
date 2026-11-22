@@ -1,15 +1,19 @@
 // Purpose: contested parish ownership and administration recovery (SUB12). A verified MFA account opens a restricted claim with minimal
-// evidence; the current controlling owner is told in-app that a review exists and may respond; a current MFA platform recovery operator who
-// is neither party decides. Recovery moves only the controlling owner and owner grant in one parish transaction: the prior owner grant is
+// evidence; the current controlling owner is told in-app that a review exists and may respond; the bishop of the parish's confirmed archdiocese
+// confirms or disputes the claim; a current MFA platform recovery operator who is neither party decides, and recovers administration only
+// after the church confirmed (rejection needs no confirmation) - owner decision, 23 November 2026. Recovery moves only the controlling owner and owner grant in one parish transaction: the prior owner grant is
 // revoked (kept), the claimant receives the ordinary setup-owner grant (no clergy office or signing authority), pending payer transfers and
 // association proposals approved under the old control are withdrawn, and every parish record, staff grant, appointment and billing record stays.
-// A claim decided after control already changed is refused, so concurrent claims cannot install competing owners. Nothing is frozen.
-// Main functions: OpenAsync, GetAsync, ListAsync, RespondAsync, WithdrawAsync, DecideAsync; helpers ReviewerAsync, OwnerAsync and ReadAsync.
+// A claim decided after control already changed is refused, so concurrent claims cannot install competing owners. While any claim is open
+// the parish is marked OwnershipContested and parish access refuses every change (reads stay); the mark clears when the last open claim ends.
+// Main functions: OpenAsync, GetAsync, ListAsync, RespondAsync, WithdrawAsync, ConfirmAsync, DecideAsync; helpers ReviewerAsync, BishopAsync,
+// OwnerAsync, ReadAsync and StillContestedAsync.
 
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
+using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
@@ -18,7 +22,7 @@ using ParishLife.Api.Services.Communications;
 namespace ParishLife.Api.Services.Organizations;
 
 public class OwnershipRecoveryService(IRecordTransactions records, IParishRepository parishes, IPlatformAccess platform, MfaAccountAccess proof,
-    ICurrentActor actor, NotificationService notifications, TimeProvider clock)
+    ICurrentActor actor, NotificationService notifications, IArchdioceseAuthority archdioceses, TimeProvider clock)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Marker(string account) => "ownershipClaimOpen:" + account;
@@ -42,6 +46,20 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         try { await platform.RequireOperatorAsync(ct); return true; }
         catch (DomainException e) when (e.Kind == FailureKind.Forbidden) { return false; }
     }
+
+    // The bishop of the parish's confirmed archdiocese; others learn nothing.
+    private async Task<bool> BishopAsync(Parish parish, CancellationToken ct)
+    {
+        if (parish.JurisdictionArchdioceseId is not { } archdiocese)
+            return false;
+        try { await archdioceses.RequireBishopAsync(archdiocese, ct); return true; }
+        catch (DomainException e) when (e.Kind is FailureKind.Forbidden or FailureKind.NotFound) { return false; }
+    }
+
+    // True when another claim than the one ending is still open, so the parish stays read-only.
+    private async Task<bool> StillContestedAsync(string parishId, string endingId, CancellationToken ct)
+        => (await records.CollectAsync<OwnershipClaim>(Scope(parishId), "ownershipClaim", ct, 200,
+            new RecordCondition { Path = "status", Comparison = "eq", Value = "Open" })).Any(c => c.Value.Id != endingId);
 
     private async Task<Versioned<Parish>> OwnerAsync(string parishId, CancellationToken ct)
     {
@@ -74,9 +92,18 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         // The owner notice is generic: it names neither the claimant nor the evidence.
         var notice = notifications.StageRequired(parishId, parish.Value.OwnerAccountId, "parish.ownership_claim", "An ownership review was opened for your parish.",
             null, "ownership-claim:" + op.Id, "ParishOwner", parishId, op.At);
-        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_open", op.Id,
-            [RecordChange.Create("ownershipClaim:" + op.Id, "ownershipClaim", claim), RecordChange.Create(Marker(actor.AccountId), "ownershipClaimOpen", new CommandResult { Id = op.Id, Status = "Open" }), notice],
-            new CommandResult { Id = op.Id, Status = "Open" }, ct);
+        var changes = new List<RecordChange>
+        {
+            RecordChange.Create("ownershipClaim:" + op.Id, "ownershipClaim", claim),
+            RecordChange.Create(Marker(actor.AccountId), "ownershipClaimOpen", new CommandResult { Id = op.Id, Status = "Open" }), notice
+        };
+        // The parish becomes read-only in the same commit that opens the claim.
+        if (!parish.Value.OwnershipContested)
+        {
+            parish.Value.OwnershipContested = true;
+            changes.Add(RecordChange.Replace("parish", "parish", parish.Value, parish.Version));
+        }
+        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_open", op.Id, changes, new CommandResult { Id = op.Id, Status = "Open" }, ct);
         await notifications.DispatchAsync(parishId, parish.Value.OwnerAccountId, "ownership-claim:" + op.Id, ct);
         return OwnershipClaimDto.ForClaimant(claim);
     }
@@ -90,7 +117,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
             view = OwnershipClaimDto.ForClaimant(row.Value);
         else if (actor.ActingAppointmentId is null && (await ParishAsync(parishId, ct)).Value.OwnerAccountId == actor.AccountId)
             view = OwnershipClaimDto.ForOwner(row.Value);
-        else if (await ReviewerAsync(ct))
+        else if (await ReviewerAsync(ct) || await BishopAsync((await ParishAsync(parishId, ct)).Value, ct))
             view = OwnershipClaimDto.ForReviewer(row.Value);
         else
             throw Missing();
@@ -101,9 +128,10 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
     {
         await proof.RequireMfaAsync(ct);
         Func<OwnershipClaim, OwnershipClaimDto> project;
-        if (actor.ActingAppointmentId is null && (await ParishAsync(parishId, ct)).Value.OwnerAccountId == actor.AccountId)
+        var parish = (await ParishAsync(parishId, ct)).Value;
+        if (actor.ActingAppointmentId is null && parish.OwnerAccountId == actor.AccountId)
             project = OwnershipClaimDto.ForOwner;
-        else if (await ReviewerAsync(ct))
+        else if (await ReviewerAsync(ct) || await BishopAsync(parish, ct))
             project = OwnershipClaimDto.ForReviewer;
         else
             throw Missing();
@@ -144,12 +172,45 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         var changes = new List<RecordChange> { RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", row.Value, Versions.Require(request.Version)) };
         if (await records.ReadAsync<CommandResult>(Scope(parishId), Marker(actor.AccountId), ct) is { } marker && marker.Value.Id == id)
             changes.Add(RecordChange.Remove(Marker(actor.AccountId), marker.Version));
+        var parish = await ParishAsync(parishId, ct);
+        if (parish.Value.OwnershipContested && !await StillContestedAsync(parishId, id, ct))
+        {
+            parish.Value.OwnershipContested = false;
+            changes.Add(RecordChange.Replace("parish", "parish", parish.Value, parish.Version));
+        }
         await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_withdraw", id, changes, new CommandResult { Id = id, Status = "Withdrawn" }, ct);
         return OwnershipClaimDto.ForClaimant(row.Value);
     }
 
-    // Proposed policy (not owner-approved): one current platform recovery operator, independent of both parties, decides with a recorded
-    // evidence reference. No second reviewer, appeal or church-authority confirmation is implemented.
+    // The bishop of the parish's confirmed archdiocese, independent of both parties, confirms or disputes an open claim. A later answer
+    // replaces an earlier one while the claim is open.
+    public async Task<OwnershipClaimDto> ConfirmAsync(string parishId, string id, ConfirmOwnershipClaimDto request, CancellationToken ct)
+    {
+        var parish = await ParishAsync(parishId, ct);
+        if (parish.Value.JurisdictionArchdioceseId is not { } archdiocese)
+            throw Missing();
+        await archdioceses.RequireBishopAsync(archdiocese, ct);
+        var row = await ReadAsync(parishId, id, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "ownership-claim-confirmation:" + id);
+        if (await records.ReplayAsync<CommandResult>(Scope(parishId), op, ct) is not null)
+            return OwnershipClaimDto.ForReviewer((await ReadAsync(parishId, id, ct)).Value);
+        if (request.Confirmed is null)
+            throw new DomainException("invalid_input", "State explicitly whether the church confirms the claim.");
+        if (row.Value.Status != "Open")
+            throw State("Only an open claim can be confirmed or disputed.");
+        if (actor.AccountId == row.Value.ClaimantAccountId || actor.AccountId == parish.Value.OwnerAccountId)
+            throw new DomainException("independent_review_required", "A party to the claim cannot confirm it.", FailureKind.Forbidden);
+        row.Value.ChurchConfirmation = request.Confirmed == true ? "Confirmed" : "Disputed";
+        row.Value.ChurchConfirmedBy = actor.AccountId;
+        row.Value.ChurchConfirmedAt = op.At;
+        row.Value.ChurchNote = Guard.Text(request.Note, "Note", 1000);
+        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_church_" + row.Value.ChurchConfirmation.ToLowerInvariant(), id,
+            [RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", row.Value, Versions.Require(request.Version))], new CommandResult { Id = id, Status = "Open" }, ct);
+        return OwnershipClaimDto.ForReviewer(row.Value);
+    }
+
+    // Owner decision (23 November 2026): one current platform recovery operator, independent of both parties, decides with a recorded evidence
+    // reference; administration is recovered only after the archdiocese bishop confirmed the claim. A rejection needs no confirmation.
     public async Task<OwnershipClaimDto> DecideAsync(string parishId, string id, DecideOwnershipClaimDto request, CancellationToken ct)
     {
         await platform.RequireOperatorAsync(ct);
@@ -179,6 +240,8 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         {
             if (parish.Value.Status == ParishStatus.Closed)
                 throw new DomainException("parish_closed", "A closed parish's administration is not recovered here.", FailureKind.Conflict);
+            if (claim.ChurchConfirmation != "Confirmed")
+                throw new DomainException("church_confirmation_required", "The parish's archdiocese must confirm this claim before administration is recovered.", FailureKind.Conflict);
             if (parish.Value.OwnerAccountId != claim.OwnerAtOpening)
                 throw new DomainException("owner_changed", "Control changed after this claim was opened; it must be reopened against the current owner.", FailureKind.Conflict);
             if (!await proof.IsVerifiedMfaAccountAsync(claim.ClaimantAccountId, ct))
@@ -187,6 +250,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
             var reconciled = new List<string>();
             var priorOwner = parish.Value.OwnerAccountId;
             parish.Value.OwnerAccountId = claim.ClaimantAccountId;
+            parish.Value.OwnershipContested = await StillContestedAsync(parishId, id, ct);
             changes.Add(RecordChange.Replace("parish", "parish", parish.Value, parish.Version));
             if (await records.ReadAsync<AccessGrant>(scope, "grant:" + priorOwner + ":local", ct) is { } priorGrant && !priorGrant.Value.Revoked)
             {
@@ -227,6 +291,11 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
             claim.Status = "Recovered";
             claim.PreviousOwnerAccountId = priorOwner;
             claim.ReconciledRecords = [.. reconciled];
+        }
+        if (request.Recover == false && parish.Value.OwnershipContested && !await StillContestedAsync(parishId, id, ct))
+        {
+            parish.Value.OwnershipContested = false;
+            changes.Add(RecordChange.Replace("parish", "parish", parish.Value, parish.Version));
         }
         changes.Add(RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", claim, row.Version));
         if (await records.ReadAsync<CommandResult>(Scope(parishId), Marker(claim.ClaimantAccountId), ct) is { } marker && marker.Value.Id == id)

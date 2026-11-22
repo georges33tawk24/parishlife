@@ -1,4 +1,4 @@
-// Purpose: role-limited view of an ownership claim. The reviewer sees everything; the claimant sees its own submission and the outcome;
+// Purpose: role-limited view of an ownership claim. The reviewer and the confirming archdiocese bishop see everything; the claimant sees its own submission and the outcome;
 // the current owner sees only that a claim exists, its status and its own response (no claimant identity, statement or evidence).
 // Main members: claim fields (null when the viewer may not see them); ForReviewer, ForClaimant and ForOwner build each projection.
 
@@ -30,6 +30,14 @@ public class OwnershipClaimDto
 
     public DateTimeOffset? OwnerRespondedAt { get; set; }
 
+    public string? ChurchConfirmation { get; set; }
+
+    public string? ChurchConfirmedBy { get; set; }
+
+    public DateTimeOffset? ChurchConfirmedAt { get; set; }
+
+    public string? ChurchNote { get; set; }
+
     public string? DecidedBy { get; set; }
 
     public string? DecisionReason { get; set; }
@@ -44,7 +52,8 @@ public class OwnershipClaimDto
     {
         Id = c.Id, ParishId = c.ParishId, Status = c.Status, OpenedAt = c.OpenedAt, DecidedAt = c.DecidedAt, ClaimantAccountId = c.ClaimantAccountId,
         Statement = c.Statement, EvidenceReference = c.EvidenceReference, OwnerAtOpening = c.OwnerAtOpening, OwnerResponse = c.OwnerResponse,
-        OwnerRespondedAt = c.OwnerRespondedAt, DecidedBy = c.DecidedBy, DecisionReason = c.DecisionReason, ReviewEvidenceReference = c.ReviewEvidenceReference,
+        OwnerRespondedAt = c.OwnerRespondedAt, ChurchConfirmation = c.ChurchConfirmation, ChurchConfirmedBy = c.ChurchConfirmedBy,
+        ChurchConfirmedAt = c.ChurchConfirmedAt, ChurchNote = c.ChurchNote, DecidedBy = c.DecidedBy, DecisionReason = c.DecisionReason, ReviewEvidenceReference = c.ReviewEvidenceReference,
         PreviousOwnerAccountId = c.PreviousOwnerAccountId, ReconciledRecords = [.. c.ReconciledRecords]
     };
 

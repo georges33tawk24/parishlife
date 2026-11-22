@@ -1,9 +1,14 @@
 // Purpose: shared custom-workflow access, storage keys and template mapping for the definition and run services.
 // Main functions: RequireMfaAsync, RequireModuleAsync, RequireAsync (current MFA + exact parish permission in the selected capacity + paid office module), HoldsAsync (non-throwing
 // permission probe), RequireAnyAsync, DefinitionAsync, VersionAsync, Fence, ToModel/ToDto. Recovery sessions fail the MFA check.
+// workflows.manage is also held by the parish's current priest acting in his priest appointment (owner decision, 23 November 2026), unless a
+// grant explicitly denies it to him. That implied right manages workflows and runs; it does not reveal restricted answers (HoldsAsync uses
+// explicit grants only).
 
 using ParishLife.Api.DTOs.Workflows;
 using ParishLife.Api.Interfaces.Repositories.Common;
+using ParishLife.Api.Interfaces.Repositories.Organizations;
+using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
@@ -11,7 +16,8 @@ using ParishLife.Api.Services.Accounts;
 
 namespace ParishLife.Api.Services.Workflows;
 
-public class WorkflowAccess(IRecordTransactions records, IParishAccess access, MfaAccountAccess proof)
+public class WorkflowAccess(IRecordTransactions records, IParishAccess access, MfaAccountAccess proof, IStaffAppointmentAccess staff,
+    IParishRepository parishes, ICurrentActor actor)
 {
     internal static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     internal static string DefinitionKey(string id) => "workflowDefinition:" + id;
@@ -24,9 +30,32 @@ public class WorkflowAccess(IRecordTransactions records, IParishAccess access, M
     internal async Task<Versioned<Parish>> RequireAsync(string parish, string permission, CancellationToken ct)
     {
         await proof.RequireMfaAsync(ct);
-        var root = await access.RequireAsync(parish, permission, ct);
+        var root = await PermissionAsync(parish, permission, ct);
         await access.RequireModuleAsync(parish, "office", ct);
         return root;
+    }
+
+    private async Task<bool> IsPriestAsync(string parish, CancellationToken ct)
+    {
+        try { await staff.RequirePriestAsync(parish, actor.AccountId, ct); return true; }
+        catch (DomainException) { return false; }
+    }
+
+    // The exact permission in the selected capacity; for workflows.manage, the parish's current priest also holds it.
+    private async Task<Versioned<Parish>> PermissionAsync(string parish, string permission, CancellationToken ct)
+    {
+        try
+        {
+            return await access.RequireAsync(parish, permission, ct);
+        }
+        catch (DomainException missing) when (missing.Kind == FailureKind.NotFound && permission == Permissions.WorkflowsManage)
+        {
+            if ((await parishes.GetGrantAsync(parish, actor.AccountId, ct))?.Denies.Contains(Permissions.WorkflowsManage, StringComparer.Ordinal) == true)
+                throw;
+            if (!await IsPriestAsync(parish, ct))
+                throw;
+            return await parishes.GetAsync(parish, ct) ?? throw Missing();
+        }
     }
 
     internal Task RequireMfaAsync(CancellationToken ct) => proof.RequireMfaAsync(ct);
@@ -36,6 +65,7 @@ public class WorkflowAccess(IRecordTransactions records, IParishAccess access, M
     // Probes one permission without throwing for an absent grant; callers must already have required MFA.
     internal async Task<bool> HoldsAsync(string parish, string permission, CancellationToken ct)
     {
+        // Explicit grants only: the priest's implied workflows.manage covers managing workflows, not reading restricted answers.
         try { await access.RequireAsync(parish, permission, ct); return true; }
         catch (DomainException error) when (error.Kind == FailureKind.NotFound) { return false; }
     }

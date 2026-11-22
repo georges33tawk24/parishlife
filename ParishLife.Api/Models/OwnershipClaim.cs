@@ -1,6 +1,8 @@
-// Purpose: a restricted claim that a parish's controlling administration belongs to someone else, reviewed by a platform recovery operator.
+// Purpose: a restricted claim that a parish's controlling administration belongs to someone else; the archdiocese bishop confirms or disputes it
+// and a platform recovery operator decides.
 // Recovery moves only the controlling owner and owner grant; prior grants are revoked, never deleted, and all parish records stay.
-// Main members: Id, ParishId, ClaimantAccountId, OwnerAtOpening, Statement, EvidenceReference, Status, owner response, decision and reconciliation.
+// Main members: Id, ParishId, ClaimantAccountId, OwnerAtOpening, Statement, EvidenceReference, Status, owner response, church confirmation
+// (ChurchConfirmation "Confirmed"/"Disputed", by, at, note), decision and reconciliation.
 
 namespace ParishLife.Api.Models;
 
@@ -25,6 +27,14 @@ public class OwnershipClaim
     public string? OwnerResponse { get; set; }
 
     public DateTimeOffset? OwnerRespondedAt { get; set; }
+
+    public string? ChurchConfirmation { get; set; }
+
+    public string? ChurchConfirmedBy { get; set; }
+
+    public DateTimeOffset? ChurchConfirmedAt { get; set; }
+
+    public string? ChurchNote { get; set; }
 
     public string? DecidedBy { get; set; }
 

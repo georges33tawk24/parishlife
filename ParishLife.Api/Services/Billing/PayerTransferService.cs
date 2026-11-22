@@ -1,7 +1,7 @@
 // Purpose: transfers who pays for a parish's FUTURE subscription coverage between the parish and a registered archdiocese (SUB09), and lets
 // a sponsoring archdiocese invoice exactly the periods it accepted. Both sides approve the exact transfer version in their current capacity:
-// the parish's controlling owner (billing.manage, personal capacity, MFA) and the verified archdiocese's registered representative (personal
-// capacity, MFA). Acceptance only appends a dated payer period: paid periods, invoices, receipts, data, users, grants and association stay.
+// the parish's controlling owner (billing.manage, personal capacity, MFA) and the verified archdiocese's billing representative: the account
+// its bishop named (owner decision, 23 November 2026), else the registering account (personal capacity, MFA). Acceptance only appends a dated payer period: paid periods, invoices, receipts, data, users, grants and association stay.
 // No payment is taken or claimed. One proposal may await a decision at a time; a pending proposal past AcceptBy reads as Expired.
 // Main functions: ProposeForParishAsync, ProposeForArchdioceseAsync, GetAsync, ListAsync, ScheduleAsync, DecideAsync, CancelAsync,
 // CreateSponsoredInvoiceAsync and GetSponsoredInvoiceAsync; helpers ParishSideAsync, ArchdioceseSideAsync and SideAsync check each party.
@@ -44,20 +44,20 @@ public class PayerTransferService(IRecordTransactions records, IParishRepository
         return parish;
     }
 
-    // Proposed policy (not owner-approved): the archdiocese side is its verified registered representative; no bishop/clergy office is implied.
+    // The archdiocese side is its named billing representative (owner decision, 23 November 2026), else the registering account.
     private async Task<Versioned<Archdiocese>> ArchdioceseSideAsync(string archdioceseId, CancellationToken ct)
     {
         Personal();
         await proof.RequireMfaAsync(ct);
         var org = await parishes.GetArchdioceseAsync(archdioceseId, ct);
-        if (org?.Value.Verified != true || org.Value.OwnerAccountId != actor.AccountId)
+        if (org?.Value.Verified != true || org.Value.BillingRepresentative() != actor.AccountId)
             throw Missing();
         return org;
     }
 
     private async Task<string> SideAsync(PayerTransfer t, CancellationToken ct)
     {
-        if (actor.ActingAppointmentId is null && (await parishes.GetArchdioceseAsync(t.ArchdioceseId, ct))?.Value.OwnerAccountId == actor.AccountId)
+        if (actor.ActingAppointmentId is null && (await parishes.GetArchdioceseAsync(t.ArchdioceseId, ct))?.Value.BillingRepresentative() == actor.AccountId)
         {
             await ArchdioceseSideAsync(t.ArchdioceseId, ct);
             return "Archdiocese";
@@ -137,7 +137,7 @@ public class PayerTransferService(IRecordTransactions records, IParishRepository
     public async Task<Versioned<PayerTransferDto>> GetAsync(string parishId, string id, CancellationToken ct)
     {
         var row = await ReadAsync(parishId, id, ct);
-        if (actor.ActingAppointmentId is not null || (await parishes.GetArchdioceseAsync(row.Value.ArchdioceseId, ct))?.Value.OwnerAccountId != actor.AccountId)
+        if (actor.ActingAppointmentId is not null || (await parishes.GetArchdioceseAsync(row.Value.ArchdioceseId, ct))?.Value.BillingRepresentative() != actor.AccountId)
             await access.RequireAsync(parishId, Permissions.BillingRead, ct);
         return new Versioned<PayerTransferDto> { Value = PayerTransferDto.From(row.Value, clock.GetUtcNow()), Version = row.Version };
     }
@@ -197,7 +197,7 @@ public class PayerTransferService(IRecordTransactions records, IParishRepository
             if (parish.Value.Status != ParishStatus.Verified || org?.Value.Verified != true)
                 throw State("Both organizations must be verified and the parish open.");
             // The proposing side's approval only counts while its approver still represents that side (e.g. after ownership recovery it does not).
-            if (side == "Archdiocese" ? parish.Value.OwnerAccountId != t.ParishApprovedBy : org.Value.OwnerAccountId != t.ArchdioceseApprovedBy)
+            if (side == "Archdiocese" ? parish.Value.OwnerAccountId != t.ParishApprovedBy : org.Value.BillingRepresentative() != t.ArchdioceseApprovedBy)
                 throw new DomainException("approval_stale", "The proposing side's approval no longer comes from its current representative; propose again.", FailureKind.Conflict);
             if (side == "Parish") t.ParishApprovedBy = actor.AccountId;
             else t.ArchdioceseApprovedBy = actor.AccountId;

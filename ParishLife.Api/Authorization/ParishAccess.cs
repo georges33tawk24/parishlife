@@ -1,5 +1,6 @@
 // Purpose: authorizes parish work using either an explicitly selected appointment or the legacy explicit grant path, without combining them.
-// Main functions: RequireAsync checks current scoped duties and denials; RequireModuleAsync independently checks verified paid coverage.
+// Main functions: RequireAsync checks current scoped duties and denials and refuses changes while ownership is contested (reads stay);
+// RequireModuleAsync independently checks verified paid coverage.
 
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -22,6 +23,8 @@ public class ParishAccess(IParishRepository repository, ICurrentActor actor, Tim
             ?? throw new DomainException("resource_not_found", "The requested resource is unavailable.", FailureKind.NotFound);
         if (parish.Value.Status is ParishStatus.Closed or ParishStatus.Suspended)
             throw new DomainException("parish_closed", "This parish is " + (parish.Value.Status == ParishStatus.Closed ? "closed" : "suspended") + " for ordinary operations.", FailureKind.Forbidden);
+        if (parish.Value.OwnershipContested && !Permissions.IsReadOnly(permission))
+            throw new DomainException("parish_contested", "This parish is read-only while its ownership is under review.", FailureKind.Forbidden);
         return parish;
     }
 
