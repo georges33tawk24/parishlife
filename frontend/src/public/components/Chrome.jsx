@@ -58,7 +58,7 @@ function LanguageButton({ L, lang, onToggle, ...props }) {
     <button
       type="button"
       lang={lang === 'ar' ? 'en' : 'ar'}
-      aria-label={L('Switch to Arabic', 'التبديل إلى الإنكليزية')}
+      /* named by the language it switches to, in that language (its lang attribute sets the voice): 2.5.3 */
       onClick={onToggle}
       {...props}
     >

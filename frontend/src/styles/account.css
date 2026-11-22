@@ -8,6 +8,8 @@
 [data-access-management] .account-parishes>article>div{min-width:0;overflow-wrap:anywhere}
 [data-access-management] .account-actions{max-width:100%}
 [data-mode=dark] .panel,[data-mode=dark] .card,[data-mode=dark] .topbar-app,[data-mode=dark] .tablewrap,[data-mode=dark] .tbl tbody,[data-mode=dark] .drawer,[data-mode=dark] .modal-box,[data-mode=dark] .popover,[data-mode=dark] .input,[data-mode=dark] .select,[data-mode=dark] .textarea{background-color:var(--surface);color:var(--text)}
+/* elevation in dark mode is a lighter surface, not a shadow (--surface-raised, lib/theme.js) */
+[data-mode=dark] :is(.drawer,.modal .sheet,.menu,.popover,.toast,.cmdk .box){background-color:var(--surface-raised,var(--surface))}
 [data-mode=dark] .btn-secondary,[data-mode=dark] .btn-ghost{background:var(--surface-soft);color:var(--text)}
 [data-mode=dark] a:not(.btn-primary):not(.navitem){color:var(--link)}
 [data-mode=dark] .pill{background:var(--surface-soft);color:var(--text)}
@@ -24,7 +26,7 @@
 .account-welcome p{margin:0;max-width:60ch;color:var(--text-2)}
 /* Passkeys in Sign-in and security */
 .account-passkeys{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
-.account-passkeys h4{margin:0 0 6px;font-size:16px}
+.account-passkeys h3{margin:0 0 6px;font-size:16px}
 .passkey-list{display:grid;gap:0;margin:10px 0 14px;padding:0;list-style:none}
 .passkey-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
 .passkey-list b{display:block}
@@ -55,6 +57,6 @@ html[data-mode=dark] .sig-card,html[data-mode=dark] .sig-pad{filter:none}
 .account-actions.request-queues{justify-content:flex-start;gap:10px;margin:0 0 20px}
 /* Two-factor and sessions in Sign-in and security */
 .account-mfa,.account-sessions{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
-.account-mfa h4,.account-sessions h4{margin:0 0 6px;font-size:16px}
+.account-mfa h3,.account-sessions h3,.account-providers h3{margin:0 0 6px;font-size:16px}
 .recovery-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:14px 0;padding:14px 16px;list-style:none;border:1px solid var(--border);border-radius:8px;background:var(--muted)}
 .recovery-codes code{font-size:15px;letter-spacing:.04em}

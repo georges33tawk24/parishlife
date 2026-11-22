@@ -515,6 +515,7 @@ export function volunteers(tab = '') {
           <div
             className={`rota-board${teams.length < 3 ? ' few' : ''}`}
             tabIndex="0"
+            role="region"
             aria-label={L('Teams — scroll sideways for more', 'الفرق — مرّر جانبياً للمزيد')}
           >
             {cols}

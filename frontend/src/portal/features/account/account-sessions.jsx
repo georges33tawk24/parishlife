@@ -56,7 +56,7 @@ export function Sessions() {
   const shown = (list || []).filter(s => s.status === 'Active' || s.isCurrent);
   return (
     <div className="account-sessions" data-sessions="">
-      <h4>{t('Where you are signed in', 'أين سجّلت الدخول')}</h4>
+      <h3>{t('Where you are signed in', 'أين سجّلت الدخول')}</h3>
       {error ? <p className="help-error">{error}</p> : null}
       {list && !shown.length ? <p className="help">{t('No active sessions.', 'لا جلسات نشطة.')}</p> : null}
       {shown.length ? (

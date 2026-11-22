@@ -1134,25 +1134,25 @@ export function Landing({ initialLang }) {
               </p>
             </div>
             <div>
-              <h5>{L('Product', 'المنتج')}</h5>
+              <h2>{L('Product', 'المنتج')}</h2>
               <a href="#modules">{L('Modules', 'الوحدات')}</a>
               <a href="#roles">{L('Roles', 'الأدوار')}</a>
               <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
               <a href="#faq">{L('Questions', 'أسئلة متكرّرة')}</a>
             </div>
             <div>
-              <h5>{L('Parish', 'الرعية')}</h5>
+              <h2>{L('Parish', 'الرعية')}</h2>
               <a href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
               <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
               <a href="#how">{L('When the line drops', 'حين ينقطع الخط')}</a>
             </div>
             <div>
-              <h5>{L('Contact', 'تواصل')}</h5>
+              <h2>{L('Contact', 'تواصل')}</h2>
               <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
               <a href="https://wa.me/9613421887" dir="ltr">
                 +961 3 421 887
               </a>
-              <a href="#">{L('Beirut, Lebanon', 'بيروت، لبنان')}</a>
+              <span>{L('Beirut, Lebanon', 'بيروت، لبنان')}</span>
             </div>
           </div>
           <hr className="rule" style={{ margin: '32px 0 20px' }} />

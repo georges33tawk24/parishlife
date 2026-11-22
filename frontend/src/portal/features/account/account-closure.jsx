@@ -89,7 +89,7 @@ export function AccountData({ mfa, hasPassword }) {
   };
   return (
     <div className="account-sessions" data-account-data="">
-      <h4>{t('Your data', 'بياناتك')}</h4>
+      <h3>{t('Your data', 'بياناتك')}</h3>
       <p className="help">
         {t(
           'Download a copy of what your account holds and, for each parish where you are linked, your own record there.',

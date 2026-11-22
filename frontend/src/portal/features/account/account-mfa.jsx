@@ -203,7 +203,7 @@ function CodesForm({ mfa }) {
 export function Mfa({ mfa }) {
   return (
     <div className="account-mfa" data-mfa="">
-      <h4>{t('Two-factor sign-in', 'تسجيل الدخول بخطوتين')}</h4>
+      <h3>{t('Two-factor sign-in', 'تسجيل الدخول بخطوتين')}</h3>
       {mfa ? (
         <p className="help">
           {mfa.enabled

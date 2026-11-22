@@ -313,6 +313,7 @@ function HeroSearch({ directory }) {
     <form
       className="hero-search"
       role="search"
+      aria-label={L('Find a parish', 'ابحث عن رعية')}
       data-hero-search
       data-hero-rise
       onSubmit={e => {
