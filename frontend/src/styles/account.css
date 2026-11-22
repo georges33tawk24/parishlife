@@ -11,6 +11,8 @@
 /* elevation in dark mode is a lighter surface, not a shadow (--surface-raised, lib/theme.js) */
 [data-mode=dark] :is(.drawer,.modal .sheet,.menu,.popover,.toast,.cmdk .box){background-color:var(--surface-raised,var(--surface))}
 [data-mode=dark] .btn-secondary,[data-mode=dark] .btn-ghost{background:var(--surface-soft);color:var(--text)}
+/* the danger colour turns pale in dark mode, so the words on it turn dark (white on #FFB4AB was 1.7:1) */
+[data-mode=dark] .btn-danger,[data-mode=dark] .btn-danger:hover{color:var(--on-primary)}
 [data-mode=dark] a:not(.btn-primary):not(.navitem){color:var(--link)}
 [data-mode=dark] .pill{background:var(--surface-soft);color:var(--text)}
 [data-mode=dark] .pill-success{background:var(--success-subtle);color:var(--success-ink);border-color:var(--success-border)}

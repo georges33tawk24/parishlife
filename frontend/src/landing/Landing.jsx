@@ -462,6 +462,9 @@ export function Landing({ initialLang }) {
   return (
     <>
       <Sprite />
+      <a className="skip" href="#top">
+        {L('Skip to content', 'انتقل إلى المحتوى')}
+      </a>
       <header className="topbar">
         <div className="wrap">
           <a className="brand" href="#top">
@@ -470,14 +473,14 @@ export function Landing({ initialLang }) {
             </span>
             <span className="name">{L('ParishLife', 'حياة الرعية')}</span>
           </a>
-          <nav className="navlinks" aria-label="Primary">
+          <nav className="navlinks" aria-label={L('Sections', 'الأقسام')}>
             <a href="#how">{L('How it works', 'كيف يعمل')}</a>
             <a href="#modules">{L('Modules', 'الوحدات')}</a>
             <a href="#roles">{L('Roles', 'الأدوار')}</a>
             <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
             <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
           </nav>
-          <div className="langtoggle" role="group" aria-label="Language">
+          <div className="langtoggle" role="group" aria-label={L('Language', 'اللغة')}>
             <button type="button" data-lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>
               EN
             </button>

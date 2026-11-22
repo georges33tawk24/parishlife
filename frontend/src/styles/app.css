@@ -1579,7 +1579,8 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 @supports (animation-timeline:scroll()){
   .drawer-body::before,.modal-body::before{
     content:"";display:block;position:sticky;top:0;z-index:2;height:20px;margin:-24px -24px 4px;
-    background:linear-gradient(var(--surface),transparent);pointer-events:none;
+    /* opacity 0 unless scrolled: a body too short to scroll has no active timeline, and the fade covered its first line */
+    background:linear-gradient(var(--surface-raised,var(--surface)),transparent);pointer-events:none;opacity:0;
     animation:edge-in linear both;animation-timeline:scroll();animation-range:0 24px
   }
   @keyframes edge-in{from{opacity:0}to{opacity:1}}

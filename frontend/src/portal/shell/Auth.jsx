@@ -231,8 +231,10 @@ export function Auth({ enter, error = '', onLanguage }) {
   };
 
   let n = 0;
+  /* keyed by name: a step that swaps one field for another (the password form for the authenticator code) gets a new
+     input, not the old one with its text still in it, and autoFocus applies */
   const field = (name, label, type = 'text', extra = {}, hint = '', prefix = null) => (
-    <label className="af" style={{ '--i': n++ }}>
+    <label className="af" style={{ '--i': n++ }} key={name}>
       <span className="af-label">
         {label}
         {hint ? (
@@ -576,6 +578,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                   {reset ? (
                     <>
                       {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        autoFocus: true,
                         required: true,
                         autoComplete: 'email',
                         maxLength: 254,
@@ -623,6 +626,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                   ) : verify ? (
                     <>
                       {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        autoFocus: true,
                         required: true,
                         autoComplete: 'email',
                         maxLength: 254,
@@ -657,7 +661,9 @@ export function Auth({ enter, error = '', onLanguage }) {
                     </>
                   ) : challenge ? (
                     <>
+                      {/* a step that replaces the form takes the focus with it, or the keyboard is left on the page */}
                       {field('code', t('Authenticator code', 'رمز المصادقة'), 'text', {
+                        autoFocus: true,
                         required: true,
                         inputMode: 'numeric',
                         autoComplete: 'one-time-code',
