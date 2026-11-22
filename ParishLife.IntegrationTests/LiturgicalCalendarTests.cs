@@ -1,5 +1,6 @@
 // Purpose: verifies authority-managed liturgical calendars and parish exceptions (X12) through real local services and storage.
-// Main tests: only the current bishop drafts and approves; drafts and superseded/withdrawn versions are never public; one approved version per rite
+// Main tests: only the current bishop approves, and drafts come from the bishop or a delegate he named (an authenticator account in personal
+// capacity); drafts and superseded/withdrawn versions are never public; one approved version per rite
 // and year, changed only by a reviewed correction; versions, replays and validation hold; priests record exceptions only under a permitting approved
 // calendar, and visitors see them flagged without internal reasons.
 
@@ -45,6 +46,50 @@ public class LiturgicalCalendarTests
         var draft = await l.SaveAsync(s.Organization, id, Draft(exceptions: exceptions), default);
         await l.ActAsync(s.Organization, id, Act(draft.Version, "approve"), default);
         return id;
+    }
+
+    [Fact]
+    public async Task A_delegate_named_by_the_bishop_prepares_drafts_and_only_the_bishop_approves()
+    {
+        var (f, s, l) = await StartAsync();
+        await using var _ = f;
+        var id = Guid.NewGuid().ToString("N");
+        SaveLiturgicalDelegatesDto Delegates(string? version, params string[] accounts) => new() { OperationId = Guid.NewGuid(), Version = version, Accounts = [.. accounts] };
+
+        // Not yet named: the other account is refused, and cannot name itself.
+        f.As(f.Other);
+        await Assert.ThrowsAsync<DomainException>(() => l.SaveAsync(s.Organization, id, Draft(), default));
+        await Assert.ThrowsAsync<DomainException>(() => l.SaveDelegatesAsync(s.Organization, Delegates(null, "other@fixture.example"), default));
+
+        // The bishop names a delegate; an unknown account or one without an authenticator cannot be named.
+        f.As(f.Nominee);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => l.SaveDelegatesAsync(s.Organization, Delegates(null, "nobody@fixture.example"), default))).Code);
+        var member = await f.CreateVerifiedMemberAsync();
+        var memberName = (await f.Services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ParishLife.Api.Identity.ParishUser>>().FindByIdAsync(member))!.UserName!;
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => l.SaveDelegatesAsync(s.Organization, Delegates(null, memberName), default))).Code);
+        var named = await l.SaveDelegatesAsync(s.Organization, Delegates(null, "other@fixture.example"), default);
+        Assert.Equal(f.Other, Assert.Single(named.Delegates).AccountId);
+
+        // The delegate prepares and reads drafts, with the authenticator, in personal capacity only; approving stays with the bishop.
+        f.As(f.Other, mfa: false);
+        await Assert.ThrowsAsync<DomainException>(() => l.SaveAsync(s.Organization, id, Draft(), default));
+        f.AsAppointment(f.Other, Guid.NewGuid().ToString("N"));
+        await Assert.ThrowsAsync<DomainException>(() => l.SaveAsync(s.Organization, id, Draft(), default));
+        f.As(f.Other);
+        var draft = await l.SaveAsync(s.Organization, id, Draft(), default);
+        Assert.Equal(("Draft", f.Other), (draft.Value.Status, draft.Value.PreparedBy));
+        Assert.Single(await l.ListAsync(s.Organization, default));
+        await Assert.ThrowsAsync<DomainException>(() => l.ActAsync(s.Organization, id, Act(draft.Version, "approve"), default));
+        await Assert.ThrowsAsync<DomainException>(() => l.DelegatesAsync(s.Organization, default));
+
+        f.As(f.Nominee);
+        var approved = await l.ActAsync(s.Organization, id, Act(draft.Version, "approve"), default);
+        Assert.Equal(("Approved", f.Nominee, f.Other), (approved.Value.Status, approved.Value.ApprovedBy, approved.Value.PreparedBy));
+
+        // Removed from the list: no longer admitted.
+        await l.SaveDelegatesAsync(s.Organization, Delegates(named.Version), default);
+        f.As(f.Other);
+        await Assert.ThrowsAsync<DomainException>(() => l.ListAsync(s.Organization, default));
     }
 
     [Fact]

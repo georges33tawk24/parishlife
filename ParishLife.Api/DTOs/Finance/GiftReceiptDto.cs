@@ -1,5 +1,5 @@
 // Purpose: returns a numbered gift receipt with the current status of the gift it names.
-// Main members: Id, Version, Number, ContributionId, PersonId, HouseholdId, FundId, Amount, Currency, ReceivedOn, Status, GiftStatus,
+// Main members: Id, Version, Year, Number, DisplayNumber (e.g. 2026-0001, or the plain number of an older receipt), ContributionId, PersonId, HouseholdId, FundId, Amount, Currency, ReceivedOn, Status, GiftStatus,
 // VoidReason, VoidedBy, VoidedAt, IssuedBy, IssuedAt and Notice.
 
 namespace ParishLife.Api.DTOs.Finance;
@@ -10,7 +10,11 @@ public class GiftReceiptDto
 
     public string Version { get; set; } = string.Empty;
 
+    public int Year { get; set; }
+
     public long Number { get; set; }
+
+    public string DisplayNumber { get; set; } = string.Empty;
 
     public string ContributionId { get; set; } = string.Empty;
 

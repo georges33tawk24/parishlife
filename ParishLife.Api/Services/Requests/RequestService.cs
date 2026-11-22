@@ -13,6 +13,7 @@ using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
+using ParishLife.Api.Services.People;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Communications;
@@ -57,6 +58,9 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             await own.PersonalAsync(ct);
             await own.RootAsync(parish, ct);
             await access.RequireModuleAsync(parish, "requests", ct);
+            if (request.Kind == "SacramentInquiry")
+                MemberOnly.Require(await OwnPersonAsync(parish, ct) is { } self ? (await records.ReadAsync<Person>(Scope(parish), "person:" + self, ct))?.Value : null,
+                    "Asking for a sacrament online");
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "request:v1:" + parish);
         if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)

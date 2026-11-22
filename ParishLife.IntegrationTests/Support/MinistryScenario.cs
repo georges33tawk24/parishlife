@@ -65,7 +65,7 @@ internal class MinistryScenario(StaffAppointmentScenario staff, string appointme
         }, default);
     }
 
-    internal async Task<(string AccountId, string PersonId, string Username)> LinkedApplicantAsync(bool mfa = false)
+    internal async Task<(string AccountId, string PersonId, string Username)> LinkedApplicantAsync(bool mfa = false, string? status = "Member")
     {
         var account = mfa ? await Fixture.CreateVerifiedStaffAsync() : await Fixture.CreateVerifiedMemberAsync();
         Use();
@@ -74,7 +74,9 @@ internal class MinistryScenario(StaffAppointmentScenario staff, string appointme
             OperationId = Guid.NewGuid(),
             GivenName = "Isolated",
             FamilyName = "Applicant",
-            BirthDate = new DateOnly(1990, 1, 1)
+            BirthDate = new DateOnly(1990, 1, 1),
+            // Joining a ministry yourself is for recorded parish Members (owner decision, 21 November 2026).
+            RegisterStatus = status
         }, default);
         await Links.LinkAsync(Parish, new LinkMinistryPersonDto
         {

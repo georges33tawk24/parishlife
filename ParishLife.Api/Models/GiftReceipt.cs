@@ -10,6 +10,9 @@ public class GiftReceipt
 
     public string ParishId { get; set; } = string.Empty;
 
+    // The issue year (Beirut time) the number belongs to; 0 for receipts issued before yearly numbering.
+    public int Year { get; set; }
+
     public long Number { get; set; }
 
     public string ContributionId { get; set; } = string.Empty;

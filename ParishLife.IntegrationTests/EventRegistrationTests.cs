@@ -151,6 +151,24 @@ public class EventRegistrationTests
     }
 
     [Fact]
+    public async Task Visitors_and_unrecorded_people_ask_the_office_instead_of_registering_themselves()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        await ConfigureAsync(x);
+        await OpenAsync(x);
+        foreach (var status in new string?[] { "Visitor", null })
+        {
+            var person = await LinkedMemberAsync(x, status);
+            f.As(person.AccountId, mfa: false);
+            Assert.Equal("members_only", (await Assert.ThrowsAsync<DomainException>(() => RegisterOwnAsync(x))).Code);
+            // The office may still register them: the rule limits only registering yourself.
+            Assert.Equal(person.PersonId, (await RegisterAsync(x, person.PersonId)).PersonId);
+        }
+    }
+
+    [Fact]
     public async Task Members_register_themselves_see_only_their_own_projection_and_cancel_before_arrival()
     {
         await using var f = new LocalBackendFixture();
@@ -273,19 +291,20 @@ public class EventRegistrationTests
         }, default);
     }
 
-    private static async Task<string> PersonAsync(Setup x, DateOnly birth)
+    private static async Task<string> PersonAsync(Setup x, DateOnly birth, string? status = null)
     {
         x.S.Use();
         return (await x.F.Services.GetRequiredService<PeopleService>().CreateAsync(x.Parish, new CreatePersonDto
         {
-            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Participant", BirthDate = birth
+            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Participant", BirthDate = birth, RegisterStatus = status
         }, default)).Id;
     }
 
-    private static async Task<(string AccountId, string PersonId, string Username)> LinkedMemberAsync(Setup x)
+    // Registering yourself is for recorded parish Members (owner decision, 21 November 2026); other statuses are tested explicitly.
+    private static async Task<(string AccountId, string PersonId, string Username)> LinkedMemberAsync(Setup x, string? status = "Member")
     {
         var account = await x.F.CreateVerifiedMemberAsync();
-        var person = await PersonAsync(x, new DateOnly(1985, 3, 1));
+        var person = await PersonAsync(x, new DateOnly(1985, 3, 1), status);
         x.S.Use();
         await x.F.Services.GetRequiredService<MinistryPersonLinkService>().LinkAsync(x.Parish, new LinkMinistryPersonDto
         {

@@ -245,7 +245,8 @@ public class RegistrationNotificationOutcomeTests
         x.S.Use();
         return (await x.F.Services.GetRequiredService<PeopleService>().CreateAsync(x.Parish, new CreatePersonDto
         {
-            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Participant", BirthDate = new DateOnly(1990, 1, 1)
+            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Participant", BirthDate = new DateOnly(1990, 1, 1),
+            RegisterStatus = "Member" // self-registration is for recorded Members
         }, default)).Id;
     }
 

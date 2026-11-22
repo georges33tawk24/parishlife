@@ -117,6 +117,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RequestClaimService>();
         services.AddScoped<RequestRecordService>();
         services.AddScoped<SacramentService>();
+        services.AddScoped<ArchdioceseRequirementService>();
         services.AddScoped<CertificateService>();
         services.AddScoped<ClergySignatureImageService>();
         services.AddScoped<PastoralNoteService>();

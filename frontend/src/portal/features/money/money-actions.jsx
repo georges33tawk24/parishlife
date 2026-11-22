@@ -723,7 +723,11 @@ export function issueReceiptDialog(contributionId) {
     cta: L('Issue receipt', 'إصدار الإيصال'),
     onSubmit: () =>
       F.issueReceipt(parish(), gift.id).then(r =>
-        toast(L(`Receipt No. ${r.number} issued`, `صدر الإيصال رقم ${r.number}`), '', 'success')
+        toast(
+          L(`Receipt No. ${r.displayNumber || r.number} issued`, `صدر الإيصال رقم ${r.displayNumber || r.number}`),
+          '',
+          'success'
+        )
       )
   });
 }

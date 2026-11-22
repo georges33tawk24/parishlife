@@ -36,6 +36,26 @@ public class RequestTests
     }
 
     [Fact]
+    public async Task Only_recorded_members_ask_for_a_sacrament_themselves_and_other_requests_stay_open_to_everyone()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var visitor = await LinkedMemberAsync(x, "Visitor");
+        var unrecorded = await LinkedMemberAsync(x, null);
+        var unlinked = await f.CreateVerifiedMemberAsync();
+        foreach (var account in new[] { visitor.Account, unrecorded.Account, unlinked })
+        {
+            f.As(account, mfa: false);
+            Assert.Equal("members_only", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SubmitAsync(x.Parish, Submit("SacramentInquiry"), default))).Code);
+            Assert.Equal("Received", (await x.Service.SubmitAsync(x.Parish, Submit("General"), default)).Status);
+        }
+        var member = await LinkedMemberAsync(x);
+        f.As(member.Account, mfa: false);
+        Assert.Equal("Received", (await x.Service.SubmitAsync(x.Parish, Submit("SacramentInquiry"), default)).Status);
+    }
+
+    [Fact]
     public async Task Member_case_keeps_received_accepted_approved_and_dated_as_separate_facts()
     {
         await using var f = new LocalBackendFixture();
@@ -368,19 +388,20 @@ public class RequestTests
         return new Setup(f, staff, appointment.Id, clerk);
     }
 
-    private static async Task<string> PersonAsync(Setup x)
+    private static async Task<string> PersonAsync(Setup x, string? status = null)
     {
         x.Priest();
         return (await x.F.Services.GetRequiredService<PeopleService>().CreateAsync(x.Parish, new CreatePersonDto
         {
-            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Subject", BirthDate = new DateOnly(2000, 1, 1)
+            OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = "Subject", BirthDate = new DateOnly(2000, 1, 1), RegisterStatus = status
         }, default)).Id;
     }
 
-    private static async Task<(string Account, string Person)> LinkedMemberAsync(Setup x)
+    // Asking for a sacrament yourself is for recorded parish Members (owner decision, 21 November 2026); other statuses are tested explicitly.
+    private static async Task<(string Account, string Person)> LinkedMemberAsync(Setup x, string? status = "Member")
     {
         var account = await x.F.CreateVerifiedMemberAsync();
-        var person = await PersonAsync(x);
+        var person = await PersonAsync(x, status);
         x.Priest();
         await x.F.Services.GetRequiredService<MinistryPersonLinkService>().LinkAsync(x.Parish, new LinkMinistryPersonDto
         {

@@ -231,6 +231,46 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - built with `tools/Publish-ParishLife.ps1` from a clean worktree (147 files). Compared with live `7ecde63`, only `ParishLife.Api.dll`/`.pdb`, `wwwroot/index.html` and the portal chunk changed.
     - **Verified live:** `/health/live` and `/health/ready` 200; the pages serve the new portal chunk; anonymous `POST /api/notifications/test` gets 401. Application Insights shows only the usual start-up TaskCanceledException and no 5xx.
     - **Verified by the owner (22 November):** they pressed "Send a test notification" on the iPhone Home Screen app and the push notification arrived. This is the first real push end to end: VAPID signing, RFC 8291 encryption, Apple's push service and the service worker. Members without two-factor may still test their own devices; the owner asked for no change.
+- **Google sign-in published to everyone (22 November):** recorded above; the owner verified it with a non-test account.
+- **Owner answers and four decision changes (23 November), code only, not deployed:**
+  - **Answers** (OWNER-QUESTIONS, decided table):
+    - Archeparchy of Beirut;
+    - the priest always manages parish workflows;
+    - a named archdiocese billing representative;
+    - contested ownership decided by an operator only after church confirmation, parish read-only meanwhile;
+    - message review kept;
+    - no sign-in before email confirmation;
+    - counts under 5 hidden in bishop totals;
+    - records and audit permanent, read notifications 1 year, site counts 2 years;
+    - backups 30 days with a quarterly restore test;
+    - a separate test database.
+  - **The four changes, done:**
+    - yearly receipt numbers `2026-0001` (Beirut time; older receipts keep plain numbers);
+    - Members only for registering yourself, joining a ministry and asking for a sacrament online (`members_only`; office staff not limited);
+    - calendar delegates named by the bishop prepare drafts and only the bishop approves (`…/liturgical-calendars/delegates`);
+    - archdiocese-wide sacrament checklists set by the bishop (`api/archdioceses/{id}/sacrament-requirements`), replacing parish lists for that sacrament.
+  - **Checked:** no self-service route lets a parent act for a child.
+  - **Tests:**
+    - `Receipt_numbers_restart_each_year_at_midnight_in_Beirut`;
+    - Members-only tests for registrations, requests and ministries;
+    - `A_delegate_named_by_the_bishop_prepares_drafts_and_only_the_bishop_approves`;
+    - `The_archdiocese_checklist_replaces_parish_lists_for_its_sacrament_and_only_the_bishop_sets_it`.
+
+    Existing test people who act as members are now recorded as Members.
+  - **Checks, SDK 10.0.401:**
+    - Release build: 0 warnings;
+    - **574 backend tests passed** (76 unit / 498 integration);
+    - frontend format, lint, check and build pass;
+    - `check:routes` 649 routes, 0 new gaps;
+    - `npm run e2e` 13/13.
+  - **Screens:** the finance screens show the new receipt numbers. Not built (no portal screens yet): the bishop's calendar editor and delegate list, and the archdiocese checklist editor.
+  - **Changes these answers need, not done yet:**
+    - the priest manages workflows (Q8);
+    - a named billing representative (Q9);
+    - contested ownership with church confirmation and freeze (Q10);
+    - hiding counts under 5 (Q14);
+    - retention purges and the privacy-page wording (Q15).
+    - Azure, in the Azure session with the owner's go-ahead: backups to 30 days (Q16), and the test database (Q26).
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.
