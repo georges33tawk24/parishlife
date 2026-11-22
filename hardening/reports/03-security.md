@@ -173,3 +173,61 @@ Other fixed items, counted in the B rows above:
 - `dotnet build ParishLife.slnx`: the API and all test projects build with 0 errors. `ParishLife.AppHost` fails with `ASPIRE009`: the Aspire CLI bundle download timed out. This is environmental; the same error appeared on the untouched baseline build. Tests were run per project for that reason.
 - Frontend: `npm run format:check`, `npm run check`, `npm run check:routes` (0 new gaps) and `npm run build` all pass.
 - End-to-end (`E2E_CHANNEL=chromium npm run e2e`): 12 passed, 1 failed. The failure is the known baseline "public pages load signed out" (the local HTTPS certificate is untrusted for the service-worker fetch). The Google sign-up test, now with the age box ticked, passed.
+
+## Sweep 1 (22 November 2026)
+
+Branch `hardening/03-security-sweep-1`, cut from `fullstack-hardening` at `0e0ad78`. Backend only; nothing under `frontend/` was edited.
+
+### Status counts
+
+| Status | Count |
+|---|---|
+| Fixed | 15 |
+| Already OK | 4 |
+| Needs your action | 2 |
+| Not applicable | 1 |
+| **Total** | **22** |
+
+### Item table
+
+| Item | Status | Severity | What I found | What I changed (files) | How I verified it |
+|---|---|---|---|---|---|
+| A1 Closure refuses nothing based on what the account holds | **Fixed** | High | Closing a parish owner's or office holder's account would leave the parish without a responsible person. | After proof and before the commit, closure answers `closure_responsibilities_held` (409), naming what to hand over first. It refuses while the account: owns a parish (`Parish.OwnerAccountId`); represents an archdiocese (`Archdiocese.OwnerAccountId`); holds an active parish access grant; holds an accepted or suspended staff or clergy appointment; or holds an effective bishop appointment. Pending invitations do not block. Billing payers are parish or archdiocese ids, not accounts, so they cannot block. `Services/Accounts/AccountClosureService.cs` (`e6c7e95`). | `SecuritySweepTests.Closure_is_refused_while_the_account_owns_a_parish_or_holds_access_and_allowed_once_access_ends` (refused for owner and grantee, allowed after the grant is revoked). |
+| A2 Reset with MFA did not spend the authenticator code | **Fixed** | Medium | The code was verified but not claimed. | The reset now calls `ClaimAuthenticatorCodeAsync`, so a code is spent across sign-in and reset in both directions. The code is normalized inside the claim. `ContactVerificationService.cs`, `CosmosIdentityStore.cs` (`28994ef`). | `SecuritySweepTests.An_authenticator_code_spent_on_a_reset_cannot_sign_in_and_one_spent_on_a_sign_in_cannot_reset`. |
+| 04 #1 Static compression | **Fixed** | Medium | — | Patch applied as given; `/api` stays uncompressed (BREACH). `Program.cs` (`cfa0296`). | Local host (`ParishLife.EndToEnd`, port 7323): portal script 1,674,547 bytes plain, 687,807 with Brotli, 714,211 with gzip. `/api/auth/csrf` with `Accept-Encoding: br, gzip` had no `Content-Encoding`. `public.html` was served as `br`. |
+| 04 #3 Batched public directory reads | **Fixed** | Medium | The verified-only filter and the location `ParishId` check are kept. The patch dropped the profile's `ParishId == parish` check that the per-parish read has. | Patch applied, and that check restored, so a profile document must name the parish whose partition holds it. The cross-partition read covers only the two allow-listed types, keyed by partition. `PublicDirectoryService.cs` (`cfa0296`). | Existing `PublicDirectoryTests` (an unverified parish is excluded) and `RequestCostTests` pass. |
+| 04 #6 Photo and `.ics` cache headers | **Fixed** | Low | The `.ics` feed already had `max-age=900`. Photos had 300. | Photos now `public, max-age=900`, not the suggested 86400: a photo the parish unpublishes should leave visitors' browsers within 15 minutes. `PublicParishProfileController.cs` (`3b635fe`). | `ParishProfileTests` (expectation updated, handoff 09 S4). |
+| 04 #6 `[PublicCache]` on calendar, ministries, announcements | **Fixed** | Medium | All three actions take route and query only, and their services read no actor, cookie or header (`CalendarService.PublicAsync`, `MinistryService.PublicAsync`, `CommunicationsService.PublicAnnouncementsAsync` with `MinistryAccess.RootAsync`). Everything they read lives in TenantControl (parish root, events, ministries, announcements, coverages), which clears the server cache on every commit. Time-based changes (announcement expiry, coverage lapse) show at most 60 s late. | `[PublicCache(60)]` on all three, so browsers also hold them for only 60 s (`3b635fe`). | `SecuritySweepTests.A_withdrawn_public_announcement_disappears_from_the_cached_public_read_at_once` (cached answer served with `max-age=60`; withdrawal through the host clears it); `PublicDirectoryTests` offline-policy list updated. |
+| 04 public cache security review | **Fixed** | Low | Checked: (1) **Key:** path plus query only; no header or cookie is read, so nothing unkeyed varies the answer. Case variants of the path are separate keys but carry the same content, so no poisoning. Only 200 answers to GET are cached. (2) **Generation race:** safe. An answer computed across a commit is refused by `Set`, and `TryGet` also requires the current generation. (3) **Memory bound:** real bug. A replaced key added its bytes again and a clear forgot the entry being added, so the 32 MB bound drifted. Callers choose query strings, so the bound is what keeps memory finite. | Each stored body is now counted exactly once (`Data/Cosmos/PublicReadCache.cs`, `3b635fe`). Remaining risk (Low): arbitrary query strings can churn the cache and cause misses, but cannot poison it or grow memory. | Review; public tests above pass. |
+| 04 #4 Repeated account and parish reads per signed-in request | Needs your action | Low | The account document is re-read on purpose at each proof and check, and services mutate it then commit with its ETag (staged-proof and fence rules). A request-scoped cache would hand them a shared, mutable `ParishUser` whose stamp and version change mid-request. Passing `Versioned<Parish>` from `ParishAccess` to `RequireModuleAsync` touches every service. | Not done. Skipped as risky to authorization, as the brief allows. | Decision C-S1 below. |
+| 04 #5 N+1 in list endpoints | Needs your action | Low | Each list is one parish at pilot size (`/api/me/parishes` reads one root and one link per followed parish, usually 1–3). The gain is small; each rewrite touches authorization code. | Not done (pilot size). | Decision C-S1 below. |
+| 04 #7 Cosmos `EnableContentResponseOnWrite` | Not applicable | — | Optional; it trims response size, not RU. | None | — |
+| 02 #5 Duplicated helpers | **Fixed** | Low | 65 private copies of the parish/account `RecordScope` and the `eq` `RecordCondition` in 64 service files. | Replaced with `RecordScopes.Parish/Account` and `RecordConditions.Equal`; private copies deleted. Archdiocese and fixed-path helpers are different and stay. `Guard.OptionalText`, a shared `NotFound` and one token-hash helper were not done (optional). `Services/**` (`f604c3c`). | Build plus full suite 591/591. |
+| 06 #1 Account deletion | Already OK | — | Done in wave 1 (`fee7996`, `826b05d`, `3976aa8`), plus the A1 guard. Marked in `from-06-legal.md`. | — | — |
+| 06 #2 Storage after sign-out | Already OK | — | Done in wave 1 (`826b05d`). Marked. | — | — |
+| 06 #5 Google Fonts out of the CSP | **Fixed** | Low | Fonts are self-hosted under `/assets/fonts` (same origin). Only `print.js` still points at Google; handoff 05 S1. | `style-src 'self' 'unsafe-inline'`, `font-src 'self' data:`. `FrontendHostingExtensions.cs` (`f2733a5`). | `SecuritySweepTests.Parish_pages_...` (no `fonts.g*` in the header or in `ContentSecurityPolicy`); existing hosting tests. |
+| 06 #6 Server-side head, 404, sitemap | **Fixed** | Medium | Parish pages were client-only and unknown parishes answered 200. | `Middleware/PublicPages.cs`, wired in `FrontendHostingExtensions` before the static files and rate limited per address. For `public.html?parish=<id>` with a published profile it rewrites the HTML in memory: `<title>`, description, `og:title`/`og:description`, canonical link and JSON-LD `Church` (name, url, address if published, geo if recorded). Values are HTML- or JSON-encoded. Unknown, unverified, unpublished or invalid ids get **404** with the same body. **The sitemap is replaced** by a generated `/sitemap.xml`: the 5 static pages plus every published parish with its publish date. The static file is unreachable (handoff 05 S2). `robots.txt` is unchanged. (`f2733a5`) | `SecuritySweepTests.Parish_pages_get_their_own_encoded_head_unknown_ones_a_404_and_the_sitemap_lists_only_published_parishes` (404 before publish and after, encoding of `<b>…&"`, canonical, JSON-LD, sitemap before and after); local curl: unknown parish 404, sitemap served. |
+| 06 #7 X-Robots-Tag | **Fixed** | Low | — | `X-Robots-Tag: noindex, nofollow` on every `/api` response and on any page requested with a `track` query. The tracking link itself uses `#track=`, a fragment the server never sees; the portal page has its own noindex meta. `Program.cs` (`c062c71`). | Same test; local curl on `/api/auth/csrf` and `public.html?track=abc`. |
+| 06 #8 Accepted policy version | **Fixed** | Medium | — | `ParishUser.TermsVersion` (`AccountService.TermsVersion = "2026-11-22"`) and `TermsAcceptedAt`, set by form sign-up and by Google/Microsoft sign-up. Both appear in the data copy. Never in fingerprints or audit (no credential involved). (`c062c71`) | `SecuritySweepTests.Sign_up_records_the_accepted_terms_version_and_time`. |
+| 02 #1 Configuration checks | Already OK | — | Wired in wave 1 (`4634a8f`): 3 checks in `RegisterAuthenticationCapabilities`, with a test. | — | `SecurityHardeningHttpTests.Half_configured_secret_settings_stop_startup_naming_only_the_setting`. |
+| 02 #2 Silent catches | **Fixed** | Low | Wave 1 handled the three named ones. This sweep found five more broad `catch (DomainException)` in "is priest / may read" helpers: `SacramentService`, `PastoralNoteService`, `ScheduleService`, `ServicePlanService` and `AccountNamesService`. A storage failure would read as "no". | Narrowed to NotFound/Forbidden (`280b7c7`). Compensation `catch { …; throw; }` blocks and the passkey state parse are deliberate and kept. | Full suite. |
+| 02 #4 Unreferenced types | Already OK | — | The four types were deleted in wave 1 (`4634a8f`); no other unused types were found to remove. | — | Build. |
+| Report and handoffs | **Fixed** | — | — | `from-03-security.md` section "Sweep 1"; Agent 06's handoff list marked. | — |
+
+### Needs your action (sweep 1)
+
+- **C-S1. Signed-in read cost (04 #4 and #5).** Recommendation: leave it until more parishes join or the measured staff p95 matters. When it does, the safe shape is a read-only, request-scoped snapshot used only for checks: services keep loading their own copy before they write. That change should get its own review.
+
+### Handoffs (sweep 1)
+
+- **05 S1:** switch `print.js` to the self-hosted fonts.
+- **05 S2:** delete `frontend/public/sitemap.xml`.
+- **05 S3 (FYI):** the parish page head and 404 now come from the server.
+- **09 S4:** two existing test expectations changed; new `SecuritySweepTests.cs`.
+- No new handoffs to 08.
+
+### Checks (sweep 1, final branch)
+
+- `dotnet test ParishLife.slnx`: unit 80/80 passed; integration 511/511 passed. Total 591, against a baseline of 586 plus 5 new tests.
+- `gitleaks git --redact --log-opts="0e0ad78..HEAD"`: 11 commits scanned, no leaks found.
+- The frontend was not edited, so no frontend checks were needed. The frontend was built once, locally, only to serve the curl checks.
