@@ -681,9 +681,9 @@ function groupDetail(id, tab) {
                       return (
                         <div className={`cal-day${outside ? ' out' : ''}${date === today ? ' today' : ''}`}>
                           <span className="dn">{day.getDate()}</span>
-                          {items.map((m, k) => (
+                          {items.map(m => (
                             <button
-                              key={k}
+                              key={meetingId(m)}
                               className="cal-ev ministry-calendar-event"
                               data-meeting-edit={meetingId(m)}
                               title={m.title || L('Group meeting', 'اجتماع المجموعة')}
@@ -709,8 +709,8 @@ function groupDetail(id, tab) {
                     <h3>{L('Upcoming', 'القادمة')}</h3>
                     <span className="badge badge-quiet">{upcoming.length}</span>
                   </div>
-                  {upcoming.map((m, i) => (
-                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  {upcoming.map(m => (
+                    <Fragment key={meetingId(m)}>{meetingCard(g, m)}</Fragment>
                   ))}
                 </section>
               ) : (
@@ -722,8 +722,8 @@ function groupDetail(id, tab) {
                     <h3>{L('Earlier meetings', 'الاجتماعات السابقة')}</h3>
                     <span className="badge badge-quiet">{earlier.length}</span>
                   </div>
-                  {earlier.map((m, i) => (
-                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  {earlier.map(m => (
+                    <Fragment key={meetingId(m)}>{meetingCard(g, m)}</Fragment>
                   ))}
                 </section>
               ) : (
