@@ -1,8 +1,8 @@
 /* Purpose: how the signed-in person is reached outside the app: email, push notifications on this device, and WhatsApp.
    Main functions: loadChannels, saveChannel (one on/off choice, keeping the rest of the preferences), pushSupported,
-   pushOnThisDevice, enablePush, disablePush, startWhatsApp, confirmWhatsApp, removeWhatsApp.
+   pushOnThisDevice, enablePush, disablePush, startWhatsApp, confirmWhatsApp, removeWhatsApp, sendTest.
    Routes: GET notifications/channels, GET/PUT notifications/preferences, POST notifications/push-devices(/remove),
-   POST notifications/whatsapp(/confirm|/remove). A channel the API reports unconfigured is not offered. */
+   POST notifications/whatsapp(/confirm|/remove), POST notifications/test. A channel the API reports unconfigured is not offered. */
 import { api } from './api.js';
 
 /* { email, emailAddressConfirmed, push, pushPublicKey, pushDevices, whatsApp, whatsAppPhone, whatsAppStatus } */
@@ -81,3 +81,8 @@ export const startWhatsApp = phone =>
 export const confirmWhatsApp = code =>
   api('notifications/whatsapp/confirm', 'POST', { code: String(code || '').replace(/\s+/g, '') });
 export const removeWhatsApp = () => api('notifications/whatsapp/remove', 'POST');
+
+/* ---------- test ---------- */
+/* A fixed test message to the caller alone, on every channel they set up (one a minute, five a day):
+   { push, email, whatsApp, remainingToday }, each sent | no-device | no-address | no-number | not-enabled | failed. */
+export const sendTest = () => api('notifications/test', 'POST');

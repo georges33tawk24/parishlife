@@ -3,7 +3,9 @@
 // Main tests: a stored notice reaches a confirmed email and a registered push device (encrypted, VAPID-signed), WhatsApp only after the number
 // is proven with its code; a push device the service reports gone is removed; unknown push endpoints are refused; a failed channel is retried
 // without repeating the channels already sent, and channel choices are kept and honoured; a sent broadcast reaches its recipients in their
-// language, only at confirmed addresses; nothing is queued while no channel is configured.
+// language, only at confirmed addresses; nothing is queued while no channel is configured; "Send a test notification" reaches only the
+// caller's own devices and address, reports each channel honestly, removes gone devices, is limited (1 a minute, 5 a day) and refuses
+// recovery, appointment and authenticator-less sessions of two-factor accounts.
 
 using System.Buffers.Text;
 using System.Net;
@@ -13,6 +15,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -185,6 +188,103 @@ public class DeliveryTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/notifications/channels")).StatusCode);
     }
 
+    [Fact]
+    public async Task Test_notification_reaches_only_the_callers_own_devices_and_address_and_reports_each_channel_honestly()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var (member, email) = await ConfirmedMemberAsync(f);
+        var (other, otherEmail) = await ConfirmedMemberAsync(f);
+        var stand = new StandIns();
+        var clock = new ShiftedClock();
+        await using var factory = Factory(f, stand, clock);
+        using var anonymous = factory.Client();
+        await Csrf(anonymous);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/notifications/test", null)).StatusCode);
+
+        // Someone else's device and address exist, and must never be used.
+        using var someoneElse = factory.Client();
+        await LoginAsync(someoneElse, otherEmail);
+        var theirs = new BrowserKeys();
+        await Read<NotificationChannelsDto>(await someoneElse.PostAsJsonAsync("/api/notifications/push-devices",
+            new SavePushDeviceDto { Endpoint = Endpoint + "-theirs", P256dh = theirs.Public, Auth = theirs.Auth }));
+
+        using var client = factory.Client();
+        await LoginAsync(client, email);
+        // No device yet: push says so; email goes to the caller's confirmed address; WhatsApp is off until a number is proven.
+        var first = await Read<NotificationTestDto>(await client.PostAsync("/api/notifications/test", null));
+        Assert.Equal(("no-device", "sent", "not-enabled", 4), (first.Push, first.Email, first.WhatsApp, first.RemainingToday));
+        var mail = Assert.Single(stand.Resend);
+        Assert.Contains(email, mail.Body);
+        Assert.DoesNotContain(otherEmail, mail.Body);
+        Assert.Contains("ParishLife test notification", mail.Body);
+        Assert.Empty(stand.Push);
+
+        // At most one a minute.
+        Assert.Equal("notification_test_throttled", await Title(await client.PostAsync("/api/notifications/test", null)));
+
+        var mine = new BrowserKeys();
+        await Read<NotificationChannelsDto>(await client.PostAsJsonAsync("/api/notifications/push-devices",
+            new SavePushDeviceDto { Endpoint = Endpoint + "-mine", P256dh = mine.Public, Auth = mine.Auth }));
+        stand.ResendStatus = HttpStatusCode.InternalServerError;
+        clock.Offset += TimeSpan.FromMinutes(2);
+        var second = await Read<NotificationTestDto>(await client.PostAsync("/api/notifications/test", null));
+        Assert.Equal(("sent", "failed", 3), (second.Push, second.Email, second.RemainingToday)); // "sent" only when the provider accepted it
+        var push = Assert.Single(stand.Push);
+        Assert.Equal(Endpoint + "-mine", push.Uri);
+        using (var payload = JsonDocument.Parse(mine.Decrypt(push.Bytes)))
+            Assert.StartsWith("ParishLife test notification", payload.RootElement.GetProperty("title").GetString());
+
+        // Email turned off: not-enabled. A device the push service reports gone: removed, and reported as no device.
+        await Read<NotificationPreferencesDto>(await client.PutAsJsonAsync("/api/notifications/preferences",
+            new { mutedTopics = Array.Empty<string>(), language = "en", digestOptional = false, email = false }));
+        stand.PushStatus = HttpStatusCode.Gone;
+        clock.Offset += TimeSpan.FromMinutes(2);
+        var third = await Read<NotificationTestDto>(await client.PostAsync("/api/notifications/test", null));
+        Assert.Equal(("no-device", "not-enabled"), (third.Push, third.Email));
+        Assert.Equal(0, (await Read<NotificationChannelsDto>(await client.GetAsync("/api/notifications/channels"))).PushDevices);
+        Assert.Equal(1, (await Read<NotificationChannelsDto>(await someoneElse.GetAsync("/api/notifications/channels"))).PushDevices);
+        Assert.DoesNotContain(stand.Push, request => request.Uri.EndsWith("-theirs", StringComparison.Ordinal));
+
+        // Five a day: two more, then refused until tomorrow.
+        for (var i = 0; i < 2; i++)
+        {
+            clock.Offset += TimeSpan.FromMinutes(2);
+            await Read<NotificationTestDto>(await client.PostAsync("/api/notifications/test", null));
+        }
+        clock.Offset += TimeSpan.FromMinutes(2);
+        Assert.Equal("notification_test_limit", await Title(await client.PostAsync("/api/notifications/test", null)));
+
+        // Receipts and audit hold no device endpoint or key.
+        using var scope = factory.Services.CreateScope();
+        var records = scope.ServiceProvider.GetRequiredService<IRecordTransactions>();
+        var account = new RecordScope { Area = RecordArea.Account, OwnerId = member };
+        var stored = JsonSerializer.Serialize(new
+        {
+            Audit = await records.PageAsync<JsonElement>(account, "audit", 100, null, default),
+            Receipts = await records.PageAsync<JsonElement>(account, "operation", 100, null, default)
+        });
+        Assert.DoesNotContain("fcm.googleapis.com", stored, StringComparison.Ordinal);
+        Assert.DoesNotContain(mine.Public, stored, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Test_notification_refuses_recovery_and_appointment_sessions_and_needs_the_authenticator_on_two_factor_accounts()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var tests = () => ActivatorUtilities.CreateInstance<NotificationTestService>(f.Services);
+        f.AsRecovery(f.Other);
+        Assert.Equal("personal_capacity_required", (await Assert.ThrowsAsync<DomainException>(() => tests().SendAsync(default))).Code);
+        f.AsAppointment(f.Other, Guid.NewGuid().ToString("N"));
+        Assert.Equal("personal_capacity_required", (await Assert.ThrowsAsync<DomainException>(() => tests().SendAsync(default))).Code);
+        f.As(f.Other, mfa: false); // a two-factor account signed in without its authenticator step
+        Assert.Equal("mfa_required", (await Assert.ThrowsAsync<DomainException>(() => tests().SendAsync(default))).Code);
+        f.As(f.Other); // with it: allowed (nothing is set up here, so every channel says not-enabled)
+        var result = await tests().SendAsync(default);
+        Assert.Equal(("not-enabled", "not-enabled", "not-enabled"), (result.Push, result.Email, result.WhatsApp));
+    }
+
     private static async Task<(string Id, string Email)> ConfirmedMemberAsync(LocalBackendFixture f)
     {
         var id = await f.CreateVerifiedMemberAsync();
@@ -229,7 +329,7 @@ public class DeliveryTests
         Assert.DoesNotContain("\"" + code + "\"", stored, StringComparison.Ordinal);
     }
 
-    private static ConfiguredApiFactory Factory(LocalBackendFixture f, StandIns stand) => new(f.DirectoryPath, new()
+    private static ConfiguredApiFactory Factory(LocalBackendFixture f, StandIns stand, ShiftedClock? clock = null) => new(f.DirectoryPath, new()
     {
         ["Email:Provider"] = "Resend",
         ["Email:ResendApiKey"] = "isolated-resend-key",
@@ -243,7 +343,16 @@ public class DeliveryTests
         services.AddHttpClient(ResendEmailSender.ClientName).ConfigurePrimaryHttpMessageHandler(() => stand.Handler("resend"));
         services.AddHttpClient(WebPushSender.ClientName).ConfigurePrimaryHttpMessageHandler(() => stand.Handler("push"));
         services.AddHttpClient(WhatsAppSender.ClientName).ConfigurePrimaryHttpMessageHandler(() => stand.Handler("whatsapp"));
+        if (clock is not null)
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
     });
+
+    private sealed class ShiftedClock : TimeProvider
+    {
+        public TimeSpan Offset { get; set; } = TimeSpan.Zero;
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Offset;
+    }
 
     // Records every outside request and answers as Resend, a push service and the WhatsApp API would.
     private sealed class StandIns

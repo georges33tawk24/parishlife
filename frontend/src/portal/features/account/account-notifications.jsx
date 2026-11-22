@@ -14,7 +14,8 @@ import {
   disablePush,
   startWhatsApp,
   confirmWhatsApp,
-  removeWhatsApp
+  removeWhatsApp,
+  sendTest
 } from '../../model/notify.js';
 import { api } from '../../model/api.js';
 import { t } from '../../../lib/i18n.js';
@@ -94,8 +95,20 @@ function WhatsAppForm({ channels, done }) {
   );
 }
 
+/* What "Send a test notification" found on each channel ("sent" only when the service accepted it). */
+const OUTCOME = outcome =>
+  ({
+    sent: t('sent', 'أُرسل'),
+    'no-device': t('no device turned on', 'لا جهاز مفعّل'),
+    'no-address': t('no confirmed email', 'لا بريد مؤكَّد'),
+    'no-number': t('no confirmed number', 'لا رقم مؤكَّد'),
+    'not-enabled': t('off', 'متوقّف'),
+    failed: t('could not be sent, try again later', 'تعذّر الإرسال، حاول لاحقاً')
+  })[outcome] || outcome;
+
 export function Reach() {
   const [channels, setChannels] = useState(null),
+    [tested, setTested] = useState(null),
     [prefs, setPrefs] = useState(null),
     [here, setHere] = useState(false),
     [busy, setBusy] = useState(''),
@@ -199,6 +212,38 @@ export function Reach() {
             )}
           </p>
         </>
+      ) : null}
+      <button
+        type="button"
+        className="btn btn-secondary"
+        data-test-notification=""
+        disabled={busy === 'test'}
+        onClick={async () => {
+          setBusy('test');
+          setTested(null);
+          try {
+            setTested(await sendTest());
+            setChannels(await loadChannels()); // a gone device may have been removed
+          } catch (err) {
+            setTested({ error: err.message });
+          }
+          setBusy('');
+        }}
+      >
+        {t('Send a test notification', 'أرسل إشعاراً تجريبياً')}
+      </button>
+      {tested ? (
+        <p className="help" role="status" data-test-result="">
+          {tested.error ||
+            [
+              channels.push ? `${t('Push', 'الإشعارات الفورية')}: ${OUTCOME(tested.push)}` : null,
+              channels.email ? `${t('Email', 'البريد')}: ${OUTCOME(tested.email)}` : null,
+              channels.whatsApp ? `${t('WhatsApp', 'واتساب')}: ${OUTCOME(tested.whatsApp)}` : null,
+              t(`${tested.remainingToday} test(s) left today.`, `بقي ${tested.remainingToday} اختبار اليوم.`)
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+        </p>
       ) : null}
       {channels.whatsApp ? (
         channels.whatsAppStatus === 'Verified' ? (

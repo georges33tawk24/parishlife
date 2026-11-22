@@ -138,6 +138,15 @@ Done by the owner (Resend and Cloudflare dashboards) and the Azure session (Azur
   - Remove the three `Email__*` settings, and sending stops after the restart.
   - Disabling Email Routing removes its records; the Resend records stay.
 
+## Send a test notification
+
+My account → How ParishLife reaches you → **Send a test notification** (`POST /api/notifications/test`, `NotificationTestService`) checks delivery live.
+- **What it sends:** one fixed, neutral message ("ParishLife test notification: notifications are working.") to the person pressing it. That means their own push devices, their own confirmed email if email is on, and their own proven WhatsApp number if WhatsApp is on. It takes no recipient, text or link.
+- **Who may use it:** a personal sign-in only. Never a recovery sign-in or an appointment capacity, and an account with two-factor needs its authenticator session.
+- **Limits:** one a minute and five a day per account, counted before sending.
+- **Result per channel:** `sent` only when the push service, Resend or WhatsApp accepted the message, then `no-device`, `no-address`, `no-number`, `not-enabled` or `failed`. Push devices reported gone are removed.
+- **What it records:** nothing about devices or addresses in receipts or audit; the log holds outcomes and the device count only.
+
 ## Privacy
 
 - **Processors:** the privacy page names Resend, the push services, and Meta (WhatsApp, only for people who turn it on).
@@ -146,7 +155,7 @@ Done by the owner (Resend and Cloudflare dashboards) and the Azure session (Azur
 
 ## Tests
 
-- `DeliveryTests` (4):
+- `DeliveryTests` (6, two of them for the test notification):
   - a notice reaches a confirmed email and a registered push device; the test decrypts the push like a browser and checks the VAPID header;
   - WhatsApp only after the code; the code is never stored in plain text, receipts or audit;
   - a gone device is removed, and unknown push endpoints are refused;

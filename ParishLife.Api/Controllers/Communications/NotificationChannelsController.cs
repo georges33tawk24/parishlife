@@ -1,5 +1,6 @@
 // Purpose: HTTP endpoints for how the signed-in person is reached outside the app (email, push, WhatsApp).
-// Main functions: Status, SavePushDevice, RemovePushDevice, StartWhatsApp (rate-limited: it sends a message), ConfirmWhatsApp, RemoveWhatsApp.
+// Main functions: Status, SavePushDevice, RemovePushDevice, StartWhatsApp (rate-limited: it sends a message), ConfirmWhatsApp, RemoveWhatsApp,
+// SendTest (a fixed test message to the caller alone; one a minute, five a day per account, plus the per-address sign-in limit).
 // The email and channel on/off choices themselves are saved with the notification preferences (PUT api/notifications/preferences).
 
 using Microsoft.AspNetCore.Authorization;
@@ -16,6 +17,11 @@ public class NotificationChannelsController(NotificationChannelService channels)
 {
     [HttpGet("channels")]
     public async Task<ActionResult<NotificationChannelsDto>> Status(CancellationToken ct) => Ok(await channels.StatusAsync(ct));
+
+    // Takes no input: the message, the recipient (the caller) and the link are fixed.
+    [HttpPost("test"), EnableRateLimiting("authentication")]
+    public async Task<ActionResult<NotificationTestDto>> SendTest([FromServices] NotificationTestService tests, CancellationToken ct)
+        => Ok(await tests.SendAsync(ct));
 
     [HttpPost("push-devices")]
     public async Task<ActionResult<NotificationChannelsDto>> SavePushDevice(SavePushDeviceDto request, CancellationToken ct)

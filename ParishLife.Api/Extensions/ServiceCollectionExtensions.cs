@@ -405,6 +405,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeliveryService>();
         services.AddScoped<DeliveryProcessor>();
         services.AddScoped<NotificationChannelService>();
+        services.AddScoped<NotificationTestService>();
     }
 
     private static void ConfigureDataProtection(IServiceCollection services, IHostEnvironment environment)

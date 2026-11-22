@@ -147,6 +147,8 @@ const { sent } = mockApi((method, path, body, options) => {
   if (path === 'notifications/whatsapp')
     return json(200, { whatsApp: true, whatsAppPhone: body.phone, whatsAppStatus: 'Pending' });
   if (path === 'notifications/whatsapp/confirm') return json(200, { whatsApp: true, whatsAppStatus: 'Verified' });
+  if (path === 'notifications/test')
+    return json(200, { push: 'sent', email: 'no-address', whatsApp: 'not-enabled', remainingToday: 4 });
   if (path === 'account/signature' && method === 'GET')
     return json(200, { eligible: true, version: null, signature: null });
   if (path === 'account/signature')
@@ -391,6 +393,9 @@ assert.equal((await notify.startWhatsApp('+961 3-123 456')).whatsAppPhone, '+961
 await notify.confirmWhatsApp(' 123 456 ');
 assert.deepEqual(last(), ['POST', 'notifications/whatsapp/confirm', { code: '123456' }]);
 assert.equal(notify.pushSupported(), false); // no browser here
+// the test notification takes no input at all: no recipient, text or link
+assert.equal((await notify.sendTest()).push, 'sent');
+assert.deepEqual(last(), ['POST', 'notifications/test', undefined]);
 
 // Google and Microsoft on My account: the list, unlinking with the proof, and a first password (no current one)
 assert.equal((await account.loadExternalLogins())[0].provider, 'google');
