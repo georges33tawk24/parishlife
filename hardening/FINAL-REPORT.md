@@ -711,3 +711,30 @@ Each handoff with its status as I found it in the code on `70959fd`.
 | 09 → 03 | #7 directory canonical | Done (`70959fd`; e2e passes); residual N1 in the same file |
 | 09 → 08 | smoke command | Recorded in 09's report; not yet in a runbook step. Included in D1.6 |
 | 10 (new) | N1–N8 | Sent back to the agents named in section C |
+
+---
+
+## K. Integrator addendum (after the audit, 23 November 2026)
+
+The audit above was written on `70959fd`. The integrator then fixed the new findings where the fix sat inside the repository, in `81e4de4`. Each fix has a test that fails on the old code and passes on the new.
+
+| Finding | Now | Evidence |
+|---|---|---|
+| N1 regex substitution in the parish page head | Fixed: match evaluators | `SecuritySweepTests` publishes Mass times containing `$_ $' $&` and finds them encoded and verbatim in the description |
+| N2 a timed-out write can be repeated | Mitigated: a timed-out write now says it may already be saved and asks for a reload before retrying; the wrong comment is corrected. Residual: a retry still sends a new operation id. Reusing it would mean changing every module's save path. | `frontend/src/portal/model/api.js` |
+| N3 timing for locked or unconfirmed accounts | Fixed: they pay the dummy-hash cost too | `Sign_in_takes_as_long_for_an_unknown_address_as_for_a_wrong_password` now also times a locked account and compares fastest runs with a 25 ms margin. It passed 3 of 3 under parallel load and fails on the old code (49.0 ms vs 0.4 ms). |
+| N4 closure ignores ministry leaders | Fixed: a current or future leader appointment blocks closure | `Closure_is_refused_while_the_account_leads_a_ministry` (fails without the fix) |
+| N5 terms version behind the privacy page | Fixed: `2026-11-23`. D15 is done for now, and still applies to future policy changes. | `AccountService.TermsVersion` |
+| N6 staging could share the production deploy identity | Fixed in the runbook: staging-only identity; environment-scoped names only | `docs/operations/deployment-and-rollback.md`, staging step 7 |
+| N7 demo records in the bundles | Partly fixed: the real-looking phone number is removed and no built bundle contains it. The demo parish, the priest's name and the town stay; that is a content decision (added to D11 and D13). | `grep "461 220" frontend/dist/assets/app/*.js`: no match |
+| N8 CI actions pinned by tag | Fixed: all 18 `uses:` lines are pinned to the commit behind their tag on 23 November 2026 | `.github/workflows/ci.yml` |
+
+Still open on purpose, all already in section D:
+- QA bugs 2 (D7), 3 (D6) and 4 (D27).
+- 04 #4/#5 (D23).
+- Registering the service worker from the portal (section J). Agent 05 saw headless Firefox hang on a portal reload with the public worker active. Do a real-Firefox check first (D25), then add the one line in `frontend/src/portal/main.jsx`.
+
+Checks on `81e4de4`, run by the integrator:
+- **Backend** (`dotnet test ParishLife.slnx`): unit 99/99; integration 533 passed, 2 skipped (the `[KnownFailureFact]` tests for QA bugs 2 and 3), 0 failed.
+- **Frontend:** `format:check`, `check`, `check:routes` (634 matched, 0 new gaps) and `build` pass.
+- **e2e** (`E2E_CHANNEL=chromium npm run e2e`): 42 passed in 6.0 min, including the expected failure for QA bug 4.
