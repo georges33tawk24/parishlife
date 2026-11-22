@@ -6,6 +6,10 @@
    fetches the service-worker script from it; any other certificate is still checked. No system trust setting is changed. */
 import { defineConfig } from '@playwright/test';
 
+// Requests made by the public site's service worker show in the context's network events and obey its routes (Chromium), so the
+// offline tests can cut the worker's connection too and every test's requests stay on the local host.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS ??= '1';
+
 export default defineConfig({
   testDir: 'e2e',
   testMatch: '*.spec.mjs',

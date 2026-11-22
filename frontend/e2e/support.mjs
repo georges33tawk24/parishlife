@@ -6,7 +6,8 @@
    another host answered locally: the suite never needs the internet), outbox (the codes the test host "emailed").
    Offline stand-ins: Cloudflare's widget script is replaced by one that behaves like its dummy site key (the dummy token, which the
    test host's offline siteverify accepts), accounts.google.com answers a blank page, and any other outside request is refused. The
-   page policy still applies to each of them, because the browser checks it before a request is routed. */
+   page policy still applies to each of them, because the browser checks it before a request is routed. client (a separate
+   rate-limit client per test). */
 import { createHmac } from 'node:crypto';
 import { test as base, expect } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -174,3 +175,11 @@ export const outboxSize = () => {
   const file = manifest().outbox;
   return existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).length : 0;
 };
+
+/* Each test is its own client for the API's per-address rate limits (the test host reads X-E2E-Client), as separate people
+   on separate devices would be. Only requests to the test host carry it. */
+export const client = (page, n) =>
+  page.context().route(
+    url => url.origin === manifest().baseUrl,
+    route => route.continue({ headers: { ...route.request().headers(), 'x-e2e-client': '10.0.0.' + n } })
+  );
