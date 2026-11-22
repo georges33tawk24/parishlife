@@ -135,15 +135,15 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
         {
             if (kind is not ("Note" or "Task"))
                 throw Invalid("Filter by Note or Task.");
-            filters.Add(Equal("kind", kind));
+            filters.Add(RecordConditions.Equal("kind", kind));
         }
         if (status is not null)
         {
             if (status != "Saved" && !TaskStatuses.Contains(status))
                 throw Invalid("Use an actual personal item status.");
-            filters.Add(Equal("status", status));
+            filters.Add(RecordConditions.Equal("status", status));
         }
-        var page = await records.PageAsync<PersonalWorkspaceItem>(Scope(account.Id), "personalWorkspaceItem", size, cursor, ct, filters.ToArray());
+        var page = await records.PageAsync<PersonalWorkspaceItem>(RecordScopes.Account(account.Id), "personalWorkspaceItem", size, cursor, ct, filters.ToArray());
         foreach (var row in page.Items)
             ValidateItem(account.Id, row.Value.Id, row.Value);
         return new()
@@ -158,7 +158,7 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
         var account = await PersonalAsync(ct);
         var id = Id(itemId);
         await ReadAsync(account.Id, id, ct);
-        var page = await records.PageAsync<PersonalWorkspaceRevision>(Scope(account.Id), "personalWorkspaceRevision", size, cursor, ct, Equal("itemId", id));
+        var page = await records.PageAsync<PersonalWorkspaceRevision>(RecordScopes.Account(account.Id), "personalWorkspaceRevision", size, cursor, ct, RecordConditions.Equal("itemId", id));
         var items = new List<PersonalItemRevisionDto>();
         foreach (var row in page.Items)
         {
@@ -192,7 +192,7 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
 
     private async Task<Versioned<PersonalWorkspaceItem>> ReadAsync(string account, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<PersonalWorkspaceItem>(Scope(account), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<PersonalWorkspaceItem>(RecordScopes.Account(account), Key(id), ct) ?? throw Missing();
         ValidateItem(account, id, row.Value);
         return row;
     }
@@ -220,7 +220,7 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
             Action = action,
             ProtectedRequest = CommandProtector(account.Id, operation.Id).Protect(input)
         };
-        await records.CommitAsync(Scope(account.Id), operation, "personal.workspace_changed", value.Id,
+        await records.CommitAsync(RecordScopes.Account(account.Id), operation, "personal.workspace_changed", value.Id,
             [RecordChange.Replace("account", "account", account, account.PersistenceVersion!), itemChange,
              RecordChange.Create("personalWorkspaceRevision:" + operation.Id, "personalWorkspaceRevision", revision),
              RecordChange.Create("personalWorkspaceCommand:" + operation.Id, "personalWorkspaceCommand", command)],
@@ -231,7 +231,7 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
 
     private async Task<bool> ReplayAsync(string account, string id, string action, Operation operation, string input, CancellationToken ct)
     {
-        if (await records.ReplayAsync<CommandResult>(Scope(account), operation, ct) is null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Account(account), operation, ct) is null)
             return false;
         await RequireCommandAsync(account, id, action, operation.Id, input, ct);
         return true;
@@ -239,7 +239,7 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
 
     private async Task RequireCommandAsync(string account, string id, string action, string operationId, string input, CancellationToken ct)
     {
-        var row = await records.ReadAsync<PersonalWorkspaceCommand>(Scope(account), "personalWorkspaceCommand:" + operationId, ct);
+        var row = await records.ReadAsync<PersonalWorkspaceCommand>(RecordScopes.Account(account), "personalWorkspaceCommand:" + operationId, ct);
         if (row is null || row.Value.Id != operationId || row.Value.AccountId != account || row.Value.ItemId != id || row.Value.Action != action)
             throw State("The private command record requires review before this operation can be acknowledged.");
         string previous;
@@ -353,10 +353,8 @@ public class PersonalWorkspaceService(IRecordTransactions records, MfaAccountAcc
         => protection.CreateProtector("ParishLife.PersonalWorkspace.Content.v1", account, id, revision);
     private IDataProtector CommandProtector(string account, string operation)
         => protection.CreateProtector("ParishLife.PersonalWorkspace.Command.v1", account, operation);
-    private static RecordScope Scope(string account) => new() { Area = RecordArea.Account, OwnerId = account };
     private static string Key(string id) => "personalWorkspaceItem:" + id;
     private static string Id(string id) => Guid.TryParse(id, out var value) && value != Guid.Empty && value.ToString("N") == id ? id : throw Missing();
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static string? Optional(string? text, string name, int maximum) => string.IsNullOrWhiteSpace(text) ? null : Guard.Text(text, name, maximum);
     private static DomainException Missing() => new("resource_not_found", "The requested personal item is unavailable.", FailureKind.NotFound);
     private static DomainException Invalid(string message) => new("invalid_personal_item", message);

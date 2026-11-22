@@ -25,11 +25,9 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
     NotificationOutcomeReader outcomes)
 {
     private static readonly string[] Categories = ["Operational", "Interpersonal", "Safeguarding", "Other"];
-    private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordScope Archdiocese(string id) => new() { Area = RecordArea.Archdiocese, OwnerId = id };
     private static string Key(string id) => "concern:" + id;
     private static string ReviewerKey(string id) => "concernReviewer:" + id;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested case is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_concern_state", message, FailureKind.Conflict);
     private IDataProtector Protector(string parish, string id) => protection.CreateProtector("ParishLife.Concerns.v1", parish, id);
@@ -90,7 +88,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         await own.PersonalAsync(ct);
         var archdiocese = await ArchdioceseAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "concern:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value, null);
         if (!Categories.Contains(request.Category) || request.Urgency is not ("Normal" or "Urgent") || request.ReviewerIds is null || request.ImplicatedAccountIds is null)
             throw new DomainException("invalid_input", "Use a supported category and urgency.");
@@ -111,7 +109,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             SelectedReviewerIds = selected.Select(r => r.Id).ToArray(), CreatedAt = op.At, UpdatedAt = op.At
         };
         item.ProtectedContent = Protector(parish, item.Id).Protect(JsonSerializer.Serialize(content));
-        await records.CommitAsync(Parish(parish), op, "care.concern_submit", item.Id, [RecordChange.Create(Key(item.Id), "concern", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "care.concern_submit", item.Id, [RecordChange.Create(Key(item.Id), "concern", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item, null);
     }
@@ -127,7 +125,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         else
             reviewer = await RequireReviewerAsync(item, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "concern-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ActionViewAsync((await ReadAsync(parish, id, ct)).Value, reviewer, ct);
         switch (request.Action)
         {
@@ -166,7 +164,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
             changes.Add(notice);
         }
-        await records.CommitAsync(Parish(parish), op, "care.concern_" + request.Action.Replace('-', '_'), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "care.concern_" + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (reviewer is not null)
             await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
@@ -188,7 +186,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.ApplicantAccountId == actor.AccountId) throw Missing();
         await RequireReviewerAsync(item, ct);
-        var row = await records.ReadAsync<ConcernEntry>(Parish(parish), "concernEntry:" + entry, ct);
+        var row = await records.ReadAsync<ConcernEntry>(RecordScopes.Parish(parish), "concernEntry:" + entry, ct);
         if (row?.Value is not { } value || value.Id != entry || value.RequestId != id) throw Missing();
         return await outcomes.ReadAsync(parish, value.NotificationWorkIds, ct);
     }
@@ -221,7 +219,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
                 throw Missing();
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "concern-entry:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             throw State("This entry was already recorded.");
         var entry = new ConcernEntry { Id = op.Id, RequestId = id, Kind = request.Kind, AuthorAccountId = actor.AccountId, At = op.At };
         entry.ProtectedBody = Protector(parish, id).Protect(Guard.Text(request.Body, "Entry", 10000));
@@ -246,7 +244,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         }
         else if (reviewer is not null)
             entry.NotificationWorkIds = [];
-        await records.CommitAsync(Parish(parish), op, "care.concern_entry", id, changes, new CommandResult { Id = entry.Id, Status = entry.Kind }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "care.concern_entry", id, changes, new CommandResult { Id = entry.Id, Status = entry.Kind }, ct);
         if (request.Kind is "MessageToSubmitter" or "InformationRequest")
             await notifications.DispatchAsync(parish, item.ApplicantAccountId, "concern:" + op.Id, ct);
         var result = Project(parish, entry);
@@ -263,7 +261,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
             await own.PersonalAsync(ct);
         else
             await RequireReviewerAsync(item, ct);
-        var rows = await records.CollectAsync<ConcernEntry>(Parish(parish), "concernEntry", ct, 1000, Equal("requestId", id));
+        var rows = await records.CollectAsync<ConcernEntry>(RecordScopes.Parish(parish), "concernEntry", ct, 1000, RecordConditions.Equal("requestId", id));
         // Submitters see only the entries addressed to them; reviewer-only notes never leave the reviewer audience.
         return rows.Select(r => r.Value).Where(e => !submitter || e.Kind != "ReviewerNote")
             .OrderBy(e => e.At).ThenBy(e => e.Id, StringComparer.Ordinal).Select(e => Project(parish, e)).ToArray();
@@ -284,7 +282,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
     public async Task<IReadOnlyList<Versioned<ConcernDto>>> OwnAsync(string parish, CancellationToken ct)
     {
         await own.PersonalAsync(ct);
-        var rows = await records.CollectAsync<Concern>(Parish(parish), "concern", ct, 500, Equal("applicantAccountId", actor.AccountId));
+        var rows = await records.CollectAsync<Concern>(RecordScopes.Parish(parish), "concern", ct, 500, RecordConditions.Equal("applicantAccountId", actor.AccountId));
         return rows.Select(r => new Versioned<ConcernDto> { Version = r.Version, Value = Project(r.Value, null) }).ToArray();
     }
 
@@ -296,7 +294,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
         var mine = (await ActiveReviewersAsync(archdiocese, ct)).Where(r => r.AccountId == actor.AccountId).ToList();
         if (mine.Count == 0)
             return [];
-        var rows = await records.CollectAsync<Concern>(Parish(parish), "concern", ct, 2000);
+        var rows = await records.CollectAsync<Concern>(RecordScopes.Parish(parish), "concern", ct, 2000);
         return rows.Select(r => (Row: r, Reviewer: mine.FirstOrDefault(m => r.Value.SelectedReviewerIds.Contains(m.Id) && m.Categories.Contains(r.Value.Category)
                 && !r.Value.ImplicatedAccountIds.Contains(m.AccountId))))
             .Where(x => x.Reviewer is not null)
@@ -331,7 +329,7 @@ public class ConcernService(IRecordTransactions records, IParishRepository paris
 
     private async Task<Versioned<Concern>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<Concern>(Parish(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<Concern>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

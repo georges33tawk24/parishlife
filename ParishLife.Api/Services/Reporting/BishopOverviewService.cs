@@ -59,7 +59,7 @@ public class BishopOverviewService(IRecordTransactions records, IParishDirectory
             var parishPriests = staff.Where(a => a.Role == StaffAppointmentRole.Priest).Select(a => a.AccountId).Distinct(StringComparer.Ordinal).ToList();
             priests.UnionWith(parishPriests);
             var requests = (await records.CollectAsync<ParishRequest>(scope, "parishRequest", ct, 20000)).Select(r => r.Value).ToList();
-            var events = await records.CollectAsync<CalendarEvent>(scope, "event", ct, 20000, Eq("status", "Confirmed"));
+            var events = await records.CollectAsync<CalendarEvent>(scope, "event", ct, 20000, RecordConditions.Equal("status", "Confirmed"));
             rows.Add(new ParishOverviewDto
             {
                 ParishId = parish.Id, Name = parish.Name, Locality = parish.Locality, Status = parish.Status.ToString(),
@@ -68,9 +68,9 @@ public class BishopOverviewService(IRecordTransactions records, IParishDirectory
                 OtherCurrentStaff = staff.Count(a => a.Role != StaffAppointmentRole.Priest),
                 OpenRequests = requests.Count(r => !RequestService.Terminal.Contains(r.Status)),
                 RequestsReceived = requests.Count(r => r.ReceivedAt >= from && r.ReceivedAt < to),
-                CertificatesAwaitingBishop = (await records.CollectAsync<object>(scope, "certificate", ct, 20000, Eq("status", "AwaitingBishop"))).Count,
-                MembershipRequestsPending = (await records.CollectAsync<object>(scope, "membershipRequest", ct, 20000, Eq("status", "Submitted"))).Count
-                    + (await records.CollectAsync<object>(scope, "membershipRequest", ct, 20000, Eq("status", "NeedsInformation"))).Count,
+                CertificatesAwaitingBishop = (await records.CollectAsync<object>(scope, "certificate", ct, 20000, RecordConditions.Equal("status", "AwaitingBishop"))).Count,
+                MembershipRequestsPending = (await records.CollectAsync<object>(scope, "membershipRequest", ct, 20000, RecordConditions.Equal("status", "Submitted"))).Count
+                    + (await records.CollectAsync<object>(scope, "membershipRequest", ct, 20000, RecordConditions.Equal("status", "NeedsInformation"))).Count,
                 PublishedEvents = events.Count(e => e.Value.Published && e.Value.StartsAt >= from && e.Value.StartsAt < to)
             });
         }
@@ -121,5 +121,4 @@ public class BishopOverviewService(IRecordTransactions records, IParishDirectory
         return parishes;
     }
 
-    private static RecordCondition Eq(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
 }

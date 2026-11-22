@@ -12,7 +12,6 @@ namespace ParishLife.Api.Services.Finance;
 
 public class ExpenseService(IRecordTransactions records, GivingService giving, ICurrentActor actor, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "expense:" + id;
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
 
@@ -20,7 +19,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "expense:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         GivingService.Money(request.Amount, request.Currency);
         Versioned<Expense>? old = id is null ? null : await ReadAsync(parish, id, ct);
@@ -42,7 +41,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
         item.MissingEvidenceReason = missing;
         item.Status = "Draft";
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "finance.expense_save", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.expense_save", item.Id,
             [Fence(root), old is null ? RecordChange.Create(Key(item.Id), "expense", item) : RecordChange.Replace(Key(item.Id), "expense", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
@@ -58,7 +57,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
         };
         var root = await giving.AuthorizeAsync(parish, permission, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "expense-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         var independent = item.CreatedBy != actor.AccountId && item.SubmittedBy != actor.AccountId;
@@ -96,7 +95,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
                     ? "A different person from the one who entered or submitted the expense decides it." : "This expense action is not available now.");
         }
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "finance.expense_" + request.Action.Replace('-', '_'), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.expense_" + request.Action.Replace('-', '_'), id,
             [Fence(root), RecordChange.Replace(Key(id), "expense", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -105,8 +104,8 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var rows = status is null
-            ? await records.CollectAsync<Expense>(Scope(parish), "expense", ct, 5000)
-            : await records.CollectAsync<Expense>(Scope(parish), "expense", ct, 5000, new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 30) });
+            ? await records.CollectAsync<Expense>(RecordScopes.Parish(parish), "expense", ct, 5000)
+            : await records.CollectAsync<Expense>(RecordScopes.Parish(parish), "expense", ct, 5000, new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 30) });
         return rows.OrderByDescending(r => r.Value.UpdatedAt).Select(r => new Versioned<ExpenseDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -115,7 +114,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
     {
         var funds = await giving.FundsAsync(parish, ct);
         var gifts = (await giving.AllContributionsAsync(parish, ct)).Select(r => r.Value).ToList();
-        var paid = (await records.CollectAsync<Expense>(Scope(parish), "expense", ct, 5000, new RecordCondition { Path = "status", Comparison = "eq", Value = "Paid" }))
+        var paid = (await records.CollectAsync<Expense>(RecordScopes.Parish(parish), "expense", ct, 5000, new RecordCondition { Path = "status", Comparison = "eq", Value = "Paid" }))
             .Select(r => r.Value).ToList();
         return funds.SelectMany(fund => gifts.Where(g => g.FundId == fund.Id).Select(g => g.Currency).Concat(paid.Where(e => e.FundId == fund.Id).Select(e => e.Currency))
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(currency =>
@@ -129,7 +128,7 @@ public class ExpenseService(IRecordTransactions records, GivingService giving, I
 
     private async Task<Versioned<Expense>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<Expense>(Scope(parish), Key(id), ct)
+        var row = await records.ReadAsync<Expense>(RecordScopes.Parish(parish), Key(id), ct)
             ?? throw new DomainException("resource_not_found", "The requested expense is unavailable.", FailureKind.NotFound);
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw new DomainException("resource_not_found", "The requested expense is unavailable.", FailureKind.NotFound);

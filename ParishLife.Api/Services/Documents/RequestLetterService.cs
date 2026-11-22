@@ -24,7 +24,6 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
     RequestService requests, DocumentSignatureService signatures, NotificationService notifications, NotificationOutcomeReader outcomes, TimeProvider clock)
 {
     private const string Collection = "Collect the signed letter at the parish office with identification, or ask the office to link a verified account. A tracking link does not download letters.";
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "requestLetter:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested letter is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_letter_state", message, FailureKind.Conflict);
@@ -34,7 +33,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
     {
         var root = await StaffAsync(parish, Permissions.RequestsManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-letter:v1:" + requestId);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         var source = Open((await RequestAsync(parish, requestId, ct)).Value);
         var item = new RequestLetter
@@ -54,7 +53,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
             item.Version = old.Version + 1;
             item.ReplaceReason = Guard.Text(request.ReplaceReason, "Replacement reason", 2000);
         }
-        await records.CommitAsync(Scope(parish), op, "request_letter.create", item.Id, [Fence(root), RecordChange.Create(Key(item.Id), "requestLetter", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request_letter.create", item.Id, [Fence(root), RecordChange.Create(Key(item.Id), "requestLetter", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -63,14 +62,14 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
     {
         var root = await StaffAsync(parish, Permissions.RequestsManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-letter-revise:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is null)
         {
             var item = (await ReadAsync(parish, id, ct)).Value;
             if (item.Status != "Draft")
                 throw State("A signed letter is never edited; draft a replacement instead.");
             SetText(item, request.Title, request.Body, request.AddresseeName);
             item.UpdatedAt = op.At;
-            await records.CommitAsync(Scope(parish), op, "request_letter.revise", id, [Fence(root), RecordChange.Replace(Key(id), "requestLetter", item, Versions.Require(request.Version))],
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "request_letter.revise", id, [Fence(root), RecordChange.Replace(Key(id), "requestLetter", item, Versions.Require(request.Version))],
                 new CommandResult { Id = id, Status = item.Status }, ct);
         }
         return Project((await ReadAsync(parish, id, ct)).Value);
@@ -98,7 +97,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
         var root = await parishes.GetAsync(parish, ct) ?? throw Missing();
         // The authenticator code is a credential and never enters the operation fingerprint.
         var op = actor.CreateOperation(request.OperationId, new { request.Version, request.ExpectedContentHash }, clock, "request-letter-sign:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status != "Draft")
@@ -122,7 +121,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
         item.UpdatedAt = op.At;
         changes.Add(RecordChange.Replace(Key(id), "requestLetter", item, Versions.Require(request.Version)));
         changes.Add(change);
-        await records.CommitAsync(Scope(parish), op, "request_letter.sign", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request_letter.sign", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -131,7 +130,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
     {
         var root = await StaffAsync(parish, Permissions.DocumentsRelease, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-letter-release:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status != "Signed" || item.SupersededById is not null)
@@ -168,7 +167,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
     {
         var root = await StaffAsync(parish, Permissions.DocumentsRelease, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-letter-withdraw:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status is not ("Signed" or "Released"))
@@ -249,7 +248,7 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
             item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
         }
         changes.Add(RecordChange.Replace(Key(item.Id), "requestLetter", item, version));
-        await records.CommitAsync(Scope(parish), op, action, item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, action, item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         if (recipient is not null)
             await notifications.DispatchAsync(parish, recipient, "letter:" + op.Id, ct);
     }
@@ -293,20 +292,20 @@ public class RequestLetterService(IRecordTransactions records, IParishAccess acc
 
     private async Task<Versioned<ParishRequest>> RequestAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<ParishRequest>(Scope(parish), "request:" + id, ct);
+        var row = await records.ReadAsync<ParishRequest>(RecordScopes.Parish(parish), "request:" + id, ct);
         if (row is null || row.Value.Id != id || row.Value.ParishId != parish) throw Missing();
         return row;
     }
 
     private async Task<Versioned<RequestLetter>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<RequestLetter>(Scope(parish), Key(id), ct);
+        var row = await records.ReadAsync<RequestLetter>(RecordScopes.Parish(parish), Key(id), ct);
         if (row is null || row.Value.Id != id || row.Value.ParishId != parish) throw Missing();
         return row;
     }
 
     private async Task<IReadOnlyList<Versioned<RequestLetter>>> LettersAsync(string parish, string requestId, CancellationToken ct)
-        => (await records.CollectAsync<RequestLetter>(Scope(parish), "requestLetter", ct, 200, new RecordCondition { Path = "requestId", Comparison = "eq", Value = requestId }))
+        => (await records.CollectAsync<RequestLetter>(RecordScopes.Parish(parish), "requestLetter", ct, 200, new RecordCondition { Path = "requestId", Comparison = "eq", Value = requestId }))
             .Where(r => r.Value.ParishId == parish && r.Value.RequestId == requestId).OrderBy(r => r.Value.Version).ThenBy(r => r.Value.DraftedAt).ToArray();
 
     private static ApplicantLetterDto Applicant(RequestLetter x) => new()

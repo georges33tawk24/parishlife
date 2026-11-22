@@ -16,7 +16,6 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
 {
     private const string CounterKey = "giftReceiptCounter";
     private const int Attempts = 8;
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static string Key(string id) => "giftReceipt:" + id;
     private static string Claim(string contribution) => "giftReceiptFor:" + contribution;
@@ -29,18 +28,18 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
         {
             // Every attempt re-reads the parish fence, the gift, the claim and the counter, so a retry never reuses a stale number.
             var root = await giving.AuthorizeAsync(parish, Permissions.FinancePost, ct);
-            if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+            if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
                 return await GetAsync(parish, prior.Id, ct);
-            var gift = (await records.ReadAsync<Contribution>(Scope(parish), "contribution:" + request.ContributionId, ct))?.Value;
+            var gift = (await records.ReadAsync<Contribution>(RecordScopes.Parish(parish), "contribution:" + request.ContributionId, ct))?.Value;
             if (gift is null || gift.ParishId != parish)
                 throw new DomainException("resource_not_found", "The requested gift is unavailable.", FailureKind.NotFound);
             if (gift.Status != "Posted" || gift.Amount <= 0)
                 throw GivingService.State("Only a posted, unreversed gift receives a receipt.");
             if (gift.Anonymous || gift.PersonId is null && gift.HouseholdId is null)
                 throw GivingService.State("An anonymous or unattributed gift has no giver to receive a receipt.");
-            if (await records.ReadAsync<CommandResult>(Scope(parish), Claim(gift.Id), ct) is not null)
+            if (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), Claim(gift.Id), ct) is not null)
                 throw GivingService.State("This gift already has a receipt; a voided receipt is not reissued.");
-            var counter = await records.ReadAsync<GiftReceiptCounter>(Scope(parish), CounterKey, ct);
+            var counter = await records.ReadAsync<GiftReceiptCounter>(RecordScopes.Parish(parish), CounterKey, ct);
             var number = counter?.Value.Next ?? 1;
             var next = new GiftReceiptCounter { ParishId = parish, Next = number + 1 };
             var item = new GiftReceipt
@@ -50,7 +49,7 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
             };
             try
             {
-                await records.CommitAsync(Scope(parish), op, "finance.receipt_issue", item.Id,
+                await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.receipt_issue", item.Id,
                     [Fence(root),
                      counter is null ? RecordChange.Create(CounterKey, "giftReceiptCounter", next) : RecordChange.Replace(CounterKey, "giftReceiptCounter", next, counter.Version),
                      RecordChange.Create(Claim(gift.Id), "giftReceiptClaim", new CommandResult { Id = item.Id, Status = "Issued" }),
@@ -70,7 +69,7 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "gift-receipt-void:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await GetAsync(parish, id, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status != "Issued")
@@ -79,7 +78,7 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
         item.VoidReason = Guard.Text(request.Reason, "Reason", 1000);
         item.VoidedBy = actor.AccountId;
         item.VoidedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "finance.receipt_void", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.receipt_void", id,
             [Fence(root), RecordChange.Replace(Key(id), "giftReceipt", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return await GetAsync(parish, id, ct);
     }
@@ -88,19 +87,19 @@ public class GiftReceiptService(IRecordTransactions records, GivingService givin
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var gifts = (await giving.AllContributionsAsync(parish, ct)).ToDictionary(r => r.Value.Id, r => r.Value.Status, StringComparer.Ordinal);
-        return (await records.CollectAsync<GiftReceipt>(Scope(parish), "giftReceipt", ct, 5000)).Where(r => r.Value.ParishId == parish)
+        return (await records.CollectAsync<GiftReceipt>(RecordScopes.Parish(parish), "giftReceipt", ct, 5000)).Where(r => r.Value.ParishId == parish)
             .OrderByDescending(r => r.Value.Number).Select(r => Project(r, gifts.GetValueOrDefault(r.Value.ContributionId) ?? string.Empty)).ToArray();
     }
 
     private async Task<GiftReceiptDto> GetAsync(string parish, string id, CancellationToken ct)
     {
         var row = await ReadAsync(parish, id, ct);
-        var gift = await records.ReadAsync<Contribution>(Scope(parish), "contribution:" + row.Value.ContributionId, ct);
+        var gift = await records.ReadAsync<Contribution>(RecordScopes.Parish(parish), "contribution:" + row.Value.ContributionId, ct);
         return Project(row, gift?.Value.Status ?? string.Empty);
     }
 
     private async Task<Versioned<GiftReceipt>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<GiftReceipt>(Scope(parish), Key(id), ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<GiftReceipt>(RecordScopes.Parish(parish), Key(id), ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private static GiftReceiptDto Project(Versioned<GiftReceipt> row, string giftStatus)
     {

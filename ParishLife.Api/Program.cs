@@ -36,6 +36,15 @@ builder.Services.AddControllers(options => options.Filters.Add<ValidateCsrfFilte
     options.JsonSerializerOptions.Converters.Add(new ApiGuidJsonConverter());
     options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
+// Brotli or gzip for the static pages, scripts and styles (the portal script is 1.6 MB uncompressed). Never for /api: an answer that
+// carries a token next to text the caller chose must not be compressed over HTTPS (BREACH); the API stays uncompressed.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes.Concat(["image/svg+xml", "application/manifest+json"]);
+});
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -117,8 +126,12 @@ app.Use(async (context, next) =>
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)";
     if (context.Request.Path.StartsWithSegments("/api"))
         context.Response.Headers.CacheControl = "no-store";
+    // Not for search results: the API, and a guest's request-tracking link (its token is private).
+    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Query.ContainsKey("track"))
+        context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
     await next();
 });
+app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api"), pages => pages.UseResponseCompression());
 app.UseParishLifeFrontend(); // only when the frontend was published into wwwroot; static pages do not count against the API rate limit
 app.UseRateLimiter();
 app.UseAuthentication();

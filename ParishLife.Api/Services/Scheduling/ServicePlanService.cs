@@ -16,7 +16,6 @@ namespace ParishLife.Api.Services.Scheduling;
 public class ServicePlanService(IRecordTransactions records, IParishAccess access, IClergyAuthority clergy, IAccountDirectory accounts,
     ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "servicePlan:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested plan is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_plan_state", message, FailureKind.Conflict);
@@ -34,13 +33,13 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
     {
         var root = await AuthorizeAsync(parish, Permissions.ScheduleManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "service-plan:v2:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return (await GetAsync(parish, prior.Id, ct)).Value;
         var kind = request.EventId is null ? "Template" : "Plan";
         CalendarEvent? occurrence = null;
         if (request.EventId is { } eventId)
         {
-            occurrence = (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + Guard.Id(eventId), ct) ?? throw Missing()).Value;
+            occurrence = (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + Guard.Id(eventId), ct) ?? throw Missing()).Value;
             if (occurrence.ParishId != parish || occurrence.Status == "Cancelled")
                 throw State("Plans are linked to an existing, uncancelled event of this parish.");
         }
@@ -72,7 +71,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         item.Status = "Draft";
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "service_plan.save", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "service_plan.save", item.Id,
             [Fence(root), old is null ? RecordChange.Create(Key(item.Id), "servicePlan", item)
                 : RecordChange.Replace(Key(item.Id), "servicePlan", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -86,10 +85,10 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         if (request.Action is "return" or "approve")
             await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "service-plan-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return (await GetAsync(parish, id, ct)).Value;
         var item = (await ReadAsync(parish, id, ct)).Value;
-        var occurrence = item.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + item.EventId, ct))?.Value;
+        var occurrence = item.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + item.EventId, ct))?.Value;
         switch (request.Action)
         {
             case "submit" when item.Status is "Draft" or "Returned":
@@ -127,7 +126,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         }
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "service_plan." + request.Action, item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "service_plan." + request.Action, item.Id,
             [Fence(root), RecordChange.Replace(Key(item.Id), "servicePlan", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await ProjectAsync(parish, item, occurrence, ct);
@@ -137,7 +136,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
     {
         await AuthorizeAsync(parish, Permissions.ScheduleRead, ct);
         var row = await ReadAsync(parish, id, ct);
-        var occurrence = row.Value.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + row.Value.EventId, ct))?.Value;
+        var occurrence = row.Value.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + row.Value.EventId, ct))?.Value;
         return new Versioned<ServicePlanDto> { Version = row.Version, Value = await ProjectAsync(parish, row.Value, occurrence, ct) };
     }
 
@@ -147,11 +146,11 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         var condition = eventId is null
             ? new RecordCondition { Path = "kind", Comparison = "eq", Value = "Template" }
             : new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId };
-        var page = await records.PageAsync<ServicePlan>(Scope(parish), "servicePlan", size, cursor, ct, condition);
+        var page = await records.PageAsync<ServicePlan>(RecordScopes.Parish(parish), "servicePlan", size, cursor, ct, condition);
         var items = new List<Versioned<ServicePlanDto>>();
         foreach (var row in page.Items)
         {
-            var occurrence = row.Value.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + row.Value.EventId, ct))?.Value;
+            var occurrence = row.Value.EventId is null ? null : (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + row.Value.EventId, ct))?.Value;
             items.Add(new Versioned<ServicePlanDto> { Version = row.Version, Value = await ProjectAsync(parish, row.Value, occurrence, ct) });
         }
         return new Page<Versioned<ServicePlanDto>> { Items = items, ContinuationToken = page.ContinuationToken };
@@ -166,11 +165,11 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Kind != "Plan" || item.Status is not ("Approved" or "Completed"))
             throw State("Outputs are produced from an approved plan.");
-        var occurrence = (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + item.EventId, ct) ?? throw Missing()).Value;
+        var occurrence = (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + item.EventId, ct) ?? throw Missing()).Value;
         var output = new List<PlanOutputItemDto>();
         foreach (var (entry, start, end) in Timeline(item.Items, occurrence.StartsAt))
         {
-            var music = entry.MusicVersionId is null ? null : (await records.ReadAsync<MusicVersion>(Scope(parish), "music:" + entry.MusicVersionId, ct))?.Value;
+            var music = entry.MusicVersionId is null ? null : (await records.ReadAsync<MusicVersion>(RecordScopes.Parish(parish), "music:" + entry.MusicVersionId, ct))?.Value;
             if (audience == "musicians" && music is null)
                 continue;
             var visible = audience switch
@@ -245,7 +244,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
     {
         var issues = new List<string>();
         foreach (var entry in item.Items.Where(x => x.MusicVersionId is not null))
-            if ((await records.ReadAsync<MusicVersion>(Scope(parish), "music:" + entry.MusicVersionId, ct))?.Value is not { Status: not "Withdrawn" })
+            if ((await records.ReadAsync<MusicVersion>(RecordScopes.Parish(parish), "music:" + entry.MusicVersionId, ct))?.Value is not { Status: not "Withdrawn" })
                 issues.Add("MusicUnavailable:" + entry.Key);
         if (item.Kind == "Template")
             return [.. issues];
@@ -273,7 +272,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
                 if (item.CelebrantAccountId is null) issues.Add("CelebrantRequired");
                 else await clergy.RequireAsync(parish, item.CelebrantAccountId, "Priest", ct);
             }
-            catch (DomainException) { issues.Add("CelebrantRequired"); }
+            catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { issues.Add("CelebrantRequired"); }
         }
         return [.. issues];
     }
@@ -296,7 +295,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
     {
         await AuthorizeAsync(parish, Permissions.ScheduleManage, ct);
         var now = clock.GetUtcNow();
-        var rows = await records.CollectAsync<StaffAppointment>(Scope(parish), "staffAppointment", ct, 500);
+        var rows = await records.CollectAsync<StaffAppointment>(RecordScopes.Parish(parish), "staffAppointment", ct, 500);
         var result = new List<PlanCelebrantDto>();
         foreach (var account in rows.Select(row => row.Value)
             .Where(value => value.ParishId == parish && value.Role == StaffAppointmentRole.Priest && value.IsEffective(now))
@@ -316,7 +315,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
 
     private async Task<Versioned<ServicePlan>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<ServicePlan>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<ServicePlan>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

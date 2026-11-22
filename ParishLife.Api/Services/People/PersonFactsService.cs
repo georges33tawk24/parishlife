@@ -22,7 +22,6 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
 {
     private static readonly string[] Kinds = ["Directory", "Photo", "Communications", "Event", "Representation"];
     private static readonly string[] DirectoryFields = ["Name", "Phone", "Email", "Address", "Photo", "Household"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested person information is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_person_state", message, FailureKind.Conflict);
     private static string? Optional(string? value, string name, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, max);
@@ -37,16 +36,16 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     }
 
     private async Task<Versioned<Person>> PersonAsync(string parish, string person, CancellationToken ct)
-        => await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     public async Task<PersonFactsDto> SaveFactsAsync(string parish, string person, SavePersonFactsDto request, CancellationToken ct)
     {
         var root = await OfficeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-facts:v1:" + person);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + person, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person, ct))!.Value);
         await PersonAsync(parish, person, ct);
-        var old = await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + person, ct);
+        var old = await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person, ct);
         var skills = request.Skills.Select(s => Guard.Text(s, "Skill", 80)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         // Partial dates keep their precision; nothing invents a day or month.
         var precision = request.DeceasedPrecision;
@@ -70,7 +69,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         };
         if (item.LocalityNotListed is not null && (item.Town is not null || item.TownAr is not null))
             throw new DomainException("invalid_input", "Choose a listed town or describe the locality that is not listed, not both.");
-        await records.CommitAsync(Scope(parish), op, "person.facts", person,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.facts", person,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), old is null
                 ? RecordChange.Create("personFacts:" + person, "personFacts", item)
                 : RecordChange.Replace("personFacts:" + person, "personFacts", item, Versions.Require(request.Version))],
@@ -82,7 +81,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     {
         await OfficeAsync(parish, Permissions.PeopleRead, ct);
         await PersonAsync(parish, person, ct);
-        var row = await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + person, ct);
+        var row = await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person, ct);
         return row is null
             ? new Versioned<PersonFactsDto> { Version = "", Value = Project(new PersonFacts { PersonId = person, ParishId = parish }) }
             : new Versioned<PersonFactsDto> { Version = row.Version, Value = Project(row.Value) };
@@ -93,7 +92,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     public async Task<Page<Versioned<PersonFactsDto>>> ListFactsAsync(string parish, int size, string? cursor, CancellationToken ct)
     {
         await OfficeAsync(parish, Permissions.PeopleRead, ct);
-        var page = await records.PageAsync<PersonFacts>(Scope(parish), "personFacts", size, cursor, ct);
+        var page = await records.PageAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts", size, cursor, ct);
         return new Page<Versioned<PersonFactsDto>>
         {
             Items = page.Items.Where(r => r.Value.ParishId == parish).Select(r => new Versioned<PersonFactsDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
@@ -105,10 +104,10 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     {
         var root = await OfficeAsync(parish, Permissions.PeopleMedicalManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-medical:v1:" + person);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<PersonMedical>(Scope(parish), "personMedical:" + person, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<PersonMedical>(RecordScopes.Parish(parish), "personMedical:" + person, ct))!.Value);
         await PersonAsync(parish, person, ct);
-        var old = await records.ReadAsync<PersonMedical>(Scope(parish), "personMedical:" + person, ct);
+        var old = await records.ReadAsync<PersonMedical>(RecordScopes.Parish(parish), "personMedical:" + person, ct);
         var content = new PersonMedicalContent
         {
             Allergies = Optional(request.Allergies, "Allergies", 1000), Conditions = Optional(request.Conditions, "Conditions", 1000),
@@ -119,7 +118,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
             PersonId = person, ParishId = parish, Source = Optional(request.Source, "Source", 300), Purpose = Guard.Text(request.Purpose, "Purpose", 300),
             UpdatedBy = actor.AccountId, UpdatedAt = op.At, ProtectedContent = Protector(parish, person).Protect(JsonSerializer.Serialize(content))
         };
-        await records.CommitAsync(Scope(parish), op, "person.medical", person,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.medical", person,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), old is null
                 ? RecordChange.Create("personMedical:" + person, "personMedical", item)
                 : RecordChange.Replace("personMedical:" + person, "personMedical", item, Versions.Require(request.Version))],
@@ -130,7 +129,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     public async Task<Versioned<MedicalDto>> GetMedicalAsync(string parish, string person, CancellationToken ct)
     {
         await OfficeAsync(parish, Permissions.PeopleMedicalManage, ct);
-        var row = await records.ReadAsync<PersonMedical>(Scope(parish), "personMedical:" + person, ct) ?? throw Missing();
+        var row = await records.ReadAsync<PersonMedical>(RecordScopes.Parish(parish), "personMedical:" + person, ct) ?? throw Missing();
         return new Versioned<MedicalDto> { Version = row.Version, Value = Project(row.Value) };
     }
 
@@ -178,7 +177,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         var conditions = new List<RecordCondition> { new() { Path = "kind", Comparison = "eq", Value = kind } };
         if (!includeWithdrawn)
             conditions.Add(new RecordCondition { Path = "status", Comparison = "eq", Value = "Given" });
-        var page = await records.PageAsync<PersonConsent>(Scope(parish), "personConsent", size, cursor, ct, [.. conditions]);
+        var page = await records.PageAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent", size, cursor, ct, [.. conditions]);
         return new Page<Versioned<ConsentDto>>
         {
             Items = page.Items.Where(r => r.Value.ParishId == parish).Select(r => new Versioned<ConsentDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
@@ -192,8 +191,8 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     private async Task<ConsentDto> AddConsentAsync(string parish, string person, RecordConsentDto request, string source, string givenBy, Versioned<Parish>? root, CancellationToken ct)
     {
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-consent:v1:" + person);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await records.ReadAsync<PersonConsent>(Scope(parish), "personConsent:" + prior.Id, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return Project((await records.ReadAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent:" + prior.Id, ct))!.Value);
         var fields = request.Fields.Distinct(StringComparer.Ordinal).ToArray();
         if (request.Kind == "Directory" ? fields.Length == 0 || fields.Any(f => !DirectoryFields.Contains(f)) : fields.Length > 0)
             throw new DomainException("invalid_input", "Directory consent names the exact fields it discloses (Name, Phone, Email, Address, Photo, Household); other consents name none.");
@@ -205,7 +204,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         };
         var changes = new List<RecordChange> { RecordChange.Create("personConsent:" + item.Id, "personConsent", item) };
         if (root is not null) changes.Insert(0, RecordChange.Replace("parish", "parish", root.Value, root.Version));
-        await records.CommitAsync(Scope(parish), op, "person.consent", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.consent", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -213,9 +212,9 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
     {
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-consent-withdraw:v1:" + id);
         var key = "personConsent:" + id;
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<PersonConsent>(Scope(parish), key, ct))!.Value);
-        var item = (await records.ReadAsync<PersonConsent>(Scope(parish), key, ct))?.Value;
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<PersonConsent>(RecordScopes.Parish(parish), key, ct))!.Value);
+        var item = (await records.ReadAsync<PersonConsent>(RecordScopes.Parish(parish), key, ct))?.Value;
         if (item is null || item.ParishId != parish || ownPerson is not null && item.PersonId != ownPerson)
             throw Missing();
         if (item.Status != "Given")
@@ -225,12 +224,12 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         item.WithdrawalReason = Optional(request.Reason, "Reason", 500);
         var changes = new List<RecordChange> { RecordChange.Replace(key, "personConsent", item, Versions.Require(request.Version)) };
         if (root is not null) changes.Insert(0, RecordChange.Replace("parish", "parish", root.Value, root.Version));
-        await records.CommitAsync(Scope(parish), op, "person.consent_withdraw", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.consent_withdraw", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
 
     private async Task<IReadOnlyList<Versioned<ConsentDto>>> ConsentRowsAsync(string parish, string person, CancellationToken ct)
-        => (await records.CollectAsync<PersonConsent>(Scope(parish), "personConsent", ct, 500, new RecordCondition { Path = "personId", Comparison = "eq", Value = person }))
+        => (await records.CollectAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent", ct, 500, new RecordCondition { Path = "personId", Comparison = "eq", Value = person }))
             .OrderByDescending(r => r.Value.GivenAt).Select(r => new Versioned<ConsentDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
 
     internal static PersonFactsDto Project(PersonFacts x) => new()

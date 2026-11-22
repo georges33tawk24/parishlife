@@ -15,7 +15,6 @@ namespace ParishLife.Api.Services.Organizations;
 public class ParishJurisdictionService(IRecordTransactions records, IParishRepository parishes, ICurrentActor actor,
     IArchdioceseAuthority bishops, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string id) => new() { Area = RecordArea.Parish, OwnerId = id };
     private static string Key(string id) => "jurisdictionProposal:" + id;
 
     public async Task<ParishJurisdictionProposalDto> ProposeAsync(string parishId, ProposeParishJurisdictionDto request, CancellationToken ct)
@@ -28,7 +27,7 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
         if ((await parishes.GetArchdioceseAsync(arch, ct))?.Value.Verified != true)
             throw new DomainException("organization_unavailable", "Select a verified registered archdiocese.");
         var operation = actor.CreateOperation(request.OperationId, request, clock, "jurisdiction:" + parishId);
-        if (await records.ReplayAsync<ParishJurisdictionProposal>(Scope(parishId), operation, ct) is { } prior)
+        if (await records.ReplayAsync<ParishJurisdictionProposal>(RecordScopes.Parish(parishId), operation, ct) is { } prior)
             return View(prior);
         if (parish.Value.Status != ParishStatus.Verified || parish.Value.JurisdictionArchdioceseId is not null)
             throw new DomainException("jurisdiction_review_required", "Use verified representative setup for a first jurisdiction; reassignment requires its separate reviewed process.", FailureKind.Conflict);
@@ -42,7 +41,7 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
             Reason = Guard.Text(request.Reason, "Reason", 2000),
             EvidenceReference = Guard.Text(request.EvidenceReference, "Actual jurisdiction/adoption evidence", 500)
         };
-        return View(await records.CommitAsync(Scope(parishId), operation, "jurisdiction.proposed", value.Id,
+        return View(await records.CommitAsync(RecordScopes.Parish(parishId), operation, "jurisdiction.proposed", value.Id,
             [RecordChange.Replace("parish", "parish", parish.Value, Versions.Require(request.Version)),
              RecordChange.Create(Key(value.Id), "jurisdictionProposal", value)], value, ct, value.Reason));
     }
@@ -59,7 +58,7 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
         var operation = Operation.Create(request.OperationId, actor.AccountId,
             new { Kind = "jurisdiction.decide", ParishId = parishId, ProposalId = id, request.Version, request.Accept, request.Reason },
             clock, actingAppointmentId: bishop.Value.Id);
-        if (await records.ReplayAsync<ParishJurisdictionProposal>(Scope(parishId), operation, ct) is { } prior)
+        if (await records.ReplayAsync<ParishJurisdictionProposal>(RecordScopes.Parish(parishId), operation, ct) is { } prior)
             return View(prior);
         var parish = await parishes.GetAsync(parishId, ct) ?? throw Missing();
         if (row.Value.Status != "Pending" || parish.Value.Status != ParishStatus.Verified || parish.Value.JurisdictionArchdioceseId is not null)
@@ -74,7 +73,7 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
             parish.Value.JurisdictionArchdioceseId = value.ArchdioceseId;
             parish.Value.JurisdictionProposalId = value.Id;
         }
-        return View(await records.CommitAsync(Scope(parishId), operation, "jurisdiction.decided", id,
+        return View(await records.CommitAsync(RecordScopes.Parish(parishId), operation, "jurisdiction.decided", id,
             [RecordChange.Replace("parish", "parish", parish.Value, parish.Version),
              RecordChange.Replace(Key(id), "jurisdictionProposal", value, Versions.Require(request.Version))], value, ct, value.DecisionReason));
     }
@@ -95,7 +94,7 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
 
     private async Task<Versioned<ParishJurisdictionProposal>> ReadAsync(string parishId, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<ParishJurisdictionProposal>(Scope(parishId), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<ParishJurisdictionProposal>(RecordScopes.Parish(parishId), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parishId)
             throw Missing();
         return row;

@@ -15,7 +15,6 @@ namespace ParishLife.Api.Services.Administration;
 
 public class AccountStatusService(IRecordTransactions records, IPlatformAccess platform, MfaAccountAccess proof, ICurrentActor actor, TimeProvider clock)
 {
-    private static RecordScope Scope(string accountId) => new() { Area = RecordArea.Account, OwnerId = accountId };
     private static string Key(string id) => "accountStatusChange:" + id;
 
     public Task<AccountStatusChangeDto> SuspendAsync(string accountId, AccountStatusActionDto request, CancellationToken ct)
@@ -28,7 +27,7 @@ public class AccountStatusService(IRecordTransactions records, IPlatformAccess p
     {
         await RequireAsync(ct);
         await PlatformDirectoryService.ReadAccountAsync(records, accountId, ct);
-        var page = await records.PageAsync<AccountStatusChange>(Scope(accountId), "accountStatusChange", size, cursor, ct);
+        var page = await records.PageAsync<AccountStatusChange>(RecordScopes.Account(accountId), "accountStatusChange", size, cursor, ct);
         return new Page<AccountStatusChangeDto>
         {
             Items = page.Items.Select(r => r.Value).Where(v => v.AccountId == accountId).OrderByDescending(v => v.At).Select(Project).ToArray(),
@@ -42,7 +41,7 @@ public class AccountStatusService(IRecordTransactions records, IPlatformAccess p
         var reason = Guard.Text(request.Reason, "Reason", 1000);
         var op = actor.CreateOperation(request.OperationId, new { Kind = suspend ? "account.suspend" : "account.reinstate", AccountId = accountId, request.Version, Reason = reason },
             clock, "account-status:v1:" + accountId);
-        if (await records.ReplayAsync<CommandResult>(Scope(accountId), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Account(accountId), op, ct) is { } prior)
             return await ReadAsync(accountId, prior.Id, ct);
         if (accountId == actor.AccountId)
             throw new DomainException("independent_operator_required", "Another platform operator must change the status of your own account.", FailureKind.Forbidden);
@@ -62,7 +61,7 @@ public class AccountStatusService(IRecordTransactions records, IPlatformAccess p
         {
             Id = op.Id, AccountId = accountId, Action = suspend ? "Suspended" : "Reinstated", Reason = reason, By = actor.AccountId, At = op.At
         };
-        await records.CommitAsync(Scope(accountId), op, suspend ? "account.suspended" : "account.reinstated", accountId,
+        await records.CommitAsync(RecordScopes.Account(accountId), op, suspend ? "account.suspended" : "account.reinstated", accountId,
             [RecordChange.Replace("account", "account", user, row.Version), RecordChange.Create(Key(change.Id), "accountStatusChange", change)],
             new CommandResult { Id = change.Id, Status = change.Action }, ct, reason);
         return Project(change);
@@ -76,7 +75,7 @@ public class AccountStatusService(IRecordTransactions records, IPlatformAccess p
 
     private async Task<AccountStatusChangeDto> ReadAsync(string accountId, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<AccountStatusChange>(Scope(accountId), Key(id), ct);
+        var row = await records.ReadAsync<AccountStatusChange>(RecordScopes.Account(accountId), Key(id), ct);
         return row is not null && row.Value.AccountId == accountId ? Project(row.Value)
             : throw new DomainException("resource_not_found", "The requested status change is unavailable.", FailureKind.NotFound);
     }

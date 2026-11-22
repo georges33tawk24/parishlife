@@ -21,17 +21,16 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
     TimeProvider clock, ILogger<BroadcastScheduleProcessor> logger)
 {
     private const string System = "system:broadcasts";
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
 
     public async Task<bool> RunAsync(string parish, string id, CancellationToken ct)
     {
-        var work = await records.ReadAsync<BroadcastWork>(Scope(parish), BroadcastService.WorkKey(id), ct);
+        var work = await records.ReadAsync<BroadcastWork>(RecordScopes.Parish(parish), BroadcastService.WorkKey(id), ct);
         var now = clock.GetUtcNow();
         if (work is null || work.Value.Id != id || work.Value.ParishId != parish || work.Value.DueAt > now)
             return false;
         var opId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("broadcast-work\n" + work.Value.Kind + "\n" + id + "\n" + work.Value.DueAt.UtcTicks)).AsSpan(0, 16));
         var op = Operation.Create(opId, System, new { work = id, kind = work.Value.Kind, due = work.Value.DueAt }, clock, "broadcast-work:v1");
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return false;
         return work.Value.Kind == "Automation" ? await AutomationAsync(parish, work, op, now, ct) : await SendAsync(parish, work, op, now, ct);
     }
@@ -39,12 +38,12 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
     private async Task<bool> SendAsync(string parish, Versioned<BroadcastWork> work, Operation op, DateTimeOffset now, CancellationToken ct)
     {
         var id = work.Value.TargetId;
-        var row = await records.ReadAsync<Broadcast>(Scope(parish), "broadcast:" + id, ct);
+        var row = await records.ReadAsync<Broadcast>(RecordScopes.Parish(parish), "broadcast:" + id, ct);
         var changes = new List<RecordChange> { RecordChange.Remove(BroadcastService.WorkKey(work.Value.Id), work.Version) };
         // A work item left behind by an unschedule or cancel is only removed.
         if (row is null || row.Value.ParishId != parish || row.Value.Status != "Scheduled" || row.Value.ScheduledFor != work.Value.DueAt)
         {
-            await records.CommitAsync(Scope(parish), op, "communications.broadcast_schedule_cleared", id, changes, new CommandResult { Id = id, Status = "Cleared" }, ct);
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.broadcast_schedule_cleared", id, changes, new CommandResult { Id = id, Status = "Cleared" }, ct);
             return true;
         }
         var item = row.Value;
@@ -75,7 +74,7 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
             item.ScheduleNote = note;
         }
         changes.Add(RecordChange.Replace("broadcast:" + id, "broadcast", item, row.Version));
-        await records.CommitAsync(Scope(parish), op, item.Status == "Sent" ? "communications.broadcast_scheduled_send" : "communications.broadcast_schedule_held",
+        await records.CommitAsync(RecordScopes.Parish(parish), op, item.Status == "Sent" ? "communications.broadcast_scheduled_send" : "communications.broadcast_schedule_held",
             id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return true;
     }
@@ -83,17 +82,17 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
     private async Task<bool> AutomationAsync(string parish, Versioned<BroadcastWork> work, Operation op, DateTimeOffset now, CancellationToken ct)
     {
         var id = work.Value.TargetId;
-        var row = await records.ReadAsync<BroadcastAutomation>(Scope(parish), "broadcastAutomation:" + id, ct);
+        var row = await records.ReadAsync<BroadcastAutomation>(RecordScopes.Parish(parish), "broadcastAutomation:" + id, ct);
         var changes = new List<RecordChange>();
         if (row is null || row.Value.ParishId != parish || row.Value.Status != "Active" || row.Value.NextRunAt != work.Value.DueAt)
         {
             changes.Add(RecordChange.Remove(BroadcastService.WorkKey(work.Value.Id), work.Version));
-            await records.CommitAsync(Scope(parish), op, "communications.automation_work_cleared", id, changes, new CommandResult { Id = id, Status = "Cleared" }, ct);
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.automation_work_cleared", id, changes, new CommandResult { Id = id, Status = "Cleared" }, ct);
             return true;
         }
         var item = row.Value;
         var root = await AuthorizedAsync(parish, item.UpdatedBy, item.UpdatedByAppointmentId, now, ct);
-        var template = (await records.ReadAsync<BroadcastTemplate>(Scope(parish), "broadcastTemplate:" + item.TemplateId, ct))?.Value;
+        var template = (await records.ReadAsync<BroadcastTemplate>(RecordScopes.Parish(parish), "broadcastTemplate:" + item.TemplateId, ct))?.Value;
         if (root is null || template?.Status != "Approved" || template.ParishId != parish)
         {
             item.Status = "Paused";
@@ -103,12 +102,12 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
             item.UpdatedAt = now;
             changes.Add(RecordChange.Remove(BroadcastService.WorkKey(work.Value.Id), work.Version));
             changes.Add(RecordChange.Replace("broadcastAutomation:" + id, "broadcastAutomation", item, row.Version));
-            await records.CommitAsync(Scope(parish), op, "communications.automation_paused", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.automation_paused", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
             return true;
         }
         changes.Add(RecordChange.Replace("parish", "parish", root.Value, root.Version));
         // One waiting draft at a time: if the previous draft was neither sent nor cancelled, this due time adds nothing.
-        var previous = item.LastDraftId is null ? null : (await records.ReadAsync<Broadcast>(Scope(parish), "broadcast:" + item.LastDraftId, ct))?.Value;
+        var previous = item.LastDraftId is null ? null : (await records.ReadAsync<Broadcast>(RecordScopes.Parish(parish), "broadcast:" + item.LastDraftId, ct))?.Value;
         if (previous?.Status is "Draft" or "Approved" or "Scheduled")
             item.LastOutcome = "Skipped";
         else
@@ -138,7 +137,7 @@ public class BroadcastScheduleProcessor(IRecordTransactions records, IParishRepo
                 new BroadcastWork { Id = work.Value.Id, ParishId = parish, Kind = "Automation", TargetId = id, DueAt = item.NextRunAt }, work.Version));
         }
         changes.Add(RecordChange.Replace("broadcastAutomation:" + id, "broadcastAutomation", item, row.Version));
-        await records.CommitAsync(Scope(parish), op, "communications.automation_run", id, changes, new CommandResult { Id = id, Status = item.LastOutcome! }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.automation_run", id, changes, new CommandResult { Id = id, Status = item.LastOutcome! }, ct);
         return true;
     }
 

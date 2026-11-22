@@ -16,7 +16,6 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
     private static string ProgramKey(string id) => "formationProgram:" + id;
     private static string EnrollmentKey(string id) => "formationEnrollment:" + id;
     private static string ClaimKey(string program, string person) => "formationEnrollmentClaim:" + program + ":" + person;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException State(string message) => new("invalid_formation_state", message, FailureKind.Conflict);
 
     public async Task<FormationProgramDto> CreateProgramAsync(string parish, string ministry, CreateFormationDto request, CancellationToken ct)
@@ -131,7 +130,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
     public async Task<Page<Versioned<FormationProgramDto>>> ListProgramsAsync(string parish, string ministry, int size, string? cursor, CancellationToken ct)
     {
         await access.RequireFormationAsync(parish, ministry, ct, readOnly: true);
-        var page = await records.PageAsync<FormationProgram>(MinistryAccess.Scope(parish), "formationProgram", size, cursor, ct, Equal("ministryId", ministry));
+        var page = await records.PageAsync<FormationProgram>(MinistryAccess.Scope(parish), "formationProgram", size, cursor, ct, RecordConditions.Equal("ministryId", ministry));
         return new Page<Versioned<FormationProgramDto>>
         {
             Items = page.Items.Select(row => new Versioned<FormationProgramDto> { Version = row.Version, Value = Project(row.Value) }).ToArray(),
@@ -321,7 +320,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
         await access.RequireFormationAsync(parish, ministry, ct, readOnly: true);
         if (status is not (null or "Active" or "Completed" or "Withdrawn"))
             throw new DomainException("invalid_input", "Use Active, Completed or Withdrawn.");
-        RecordCondition[] conditions = status is null ? [Equal("ministryId", ministry)] : [Equal("ministryId", ministry), Equal("status", status)];
+        RecordCondition[] conditions = status is null ? [RecordConditions.Equal("ministryId", ministry)] : [RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("status", status)];
         var page = await records.PageAsync<FormationEnrollment>(MinistryAccess.Scope(parish), "formationEnrollment", size, cursor, ct, conditions);
         return await ProjectPageAsync(parish, ministry, page, true, ct);
     }
@@ -331,7 +330,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
         var link = await access.OwnLinkAsync(parish, ct);
         await access.ReadAsync(parish, ministry, ct);
         var page = await records.PageAsync<FormationEnrollment>(MinistryAccess.Scope(parish), "formationEnrollment", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", link.Value.PersonId));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", link.Value.PersonId));
         return await ProjectPageAsync(parish, ministry, page, false, ct);
     }
 
@@ -339,7 +338,7 @@ public class MinistryFormationService(IRecordTransactions records, MinistryAcces
     {
         await access.RequireFormationAsync(parish, ministry, ct, readOnly: true);
         var page = await records.PageAsync<FormationHistory>(MinistryAccess.Scope(parish), "formationChange", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", person));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", person));
         var programs = new Dictionary<string, FormationProgram>(StringComparer.Ordinal);
         var items = new List<FormationHistoryDto>();
         foreach (var row in page.Items)

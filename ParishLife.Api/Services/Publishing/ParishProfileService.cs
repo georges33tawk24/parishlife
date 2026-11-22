@@ -30,7 +30,6 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
     private const int MaximumClergy = 50;
     private static readonly string[] WhatsAppHosts = ["wa.me", "chat.whatsapp.com", "whatsapp.com", "www.whatsapp.com"];
 
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string PhotoKey(string id) => "profilePhoto:" + id;
     private static DomainException Missing(string what = "The parish profile") => new("resource_not_found", what + " is unavailable.", FailureKind.NotFound);
     private static DomainException Invalid(string message) => new("invalid_input", message);
@@ -77,7 +76,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
     {
         await EditorAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "parish-profile:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ViewAsync(parish, ct);
         var draft = Normalize(request.Profile ?? throw Invalid("Send the profile."));
         var previous = await ReadAsync(parish, ct);
@@ -88,7 +87,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
         value.DraftUpdatedBy = actor.AccountId;
         value.DraftUpdatedAt = op.At;
         await EditorAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "parish.profile_draft_saved", parish,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "parish.profile_draft_saved", parish,
             [previous is null ? RecordChange.Create(Key, "parishProfile", value) : RecordChange.Replace(Key, "parishProfile", value, previous.Version)],
             new CommandResult { Id = parish, Status = "Draft" }, ct);
         return await ViewAsync(parish, ct);
@@ -99,7 +98,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
     {
         await EditorAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "parish-profile-action:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ViewAsync(parish, ct);
         var row = await ReadAsync(parish, ct) ?? throw new DomainException("invalid_profile_state", "Save the profile before publishing it.", FailureKind.Conflict);
         if (row.Version != Versions.Require(request.Version))
@@ -123,7 +122,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
                 throw Invalid("Choose publish or unpublish.");
         }
         await EditorAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "parish.profile_" + request.Action, parish,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "parish.profile_" + request.Action, parish,
             [RecordChange.Replace(Key, "parishProfile", value, row.Version)], new CommandResult { Id = parish, Status = request.Action }, ct);
         return await ViewAsync(parish, ct);
     }
@@ -139,7 +138,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
             throw new DomainException("invalid_file", "Upload a JPEG, PNG or WebP image whose content matches its type.");
         var digest = Convert.ToHexString(SHA256.HashData(content));
         var op = actor.CreateOperation(operationId, new { type, size = content.Length, digest, caption, captionAr }, clock, "parish-profile-photo:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return ProjectPhoto(await ReadPhotoAsync(parish, prior.Id, ct));
         if ((await PhotosAsync(parish, ct)).Count(p => p.Value.Status != "Removed") >= MaximumPhotos)
             throw new DomainException("invalid_file_state", "A parish profile holds up to " + MaximumPhotos + " photos; remove one first.", FailureKind.Conflict);
@@ -151,7 +150,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
         // The complete private object exists before its metadata commits; it stays private until an explicit publish.
         await store.PutAsync(photo.StoragePath, content, type, ct);
         await EditorAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "parish.profile_photo_uploaded", photo.Id, [RecordChange.Create(PhotoKey(photo.Id), "parishProfilePhoto", photo)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "parish.profile_photo_uploaded", photo.Id, [RecordChange.Create(PhotoKey(photo.Id), "parishProfilePhoto", photo)],
             new CommandResult { Id = photo.Id, Status = photo.Status }, ct);
         return ProjectPhoto(await ReadPhotoAsync(parish, photo.Id, ct));
     }
@@ -160,7 +159,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
     {
         await EditorAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "parish-profile-photo-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return ProjectPhoto(await ReadPhotoAsync(parish, id, ct));
         var row = await ReadPhotoAsync(parish, id, ct);
         if (row.Version != Versions.Require(request.Version))
@@ -195,7 +194,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
                 throw Invalid("Choose publish, unpublish, remove or caption.");
         }
         await EditorAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "parish.profile_photo_" + request.Action, id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "parish.profile_photo_" + request.Action, id,
             [RecordChange.Replace(PhotoKey(id), "parishProfilePhoto", photo, row.Version)], new CommandResult { Id = id, Status = photo.Status }, ct);
         return ProjectPhoto(await ReadPhotoAsync(parish, id, ct));
     }
@@ -242,7 +241,7 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
         var now = clock.GetUtcNow();
         var clergy = new List<(bool Head, PublicClergyDto Item)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var row in await records.CollectAsync<StaffAppointment>(Scope(parish.Id), "staffAppointment", ct, 500))
+        foreach (var row in await records.CollectAsync<StaffAppointment>(RecordScopes.Parish(parish.Id), "staffAppointment", ct, 500))
         {
             var appointment = row.Value;
             if (appointment.Role != StaffAppointmentRole.Priest || appointment.ParishId != parish.Id || appointment.ArchdioceseId != archdiocese
@@ -266,13 +265,13 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
     }
 
     private async Task<Versioned<ParishProfile>?> ReadAsync(string parish, CancellationToken ct)
-        => await records.ReadAsync<ParishProfile>(Scope(parish), Key, ct) is { } row && row.Value.ParishId == parish ? row : null;
+        => await records.ReadAsync<ParishProfile>(RecordScopes.Parish(parish), Key, ct) is { } row && row.Value.ParishId == parish ? row : null;
 
     private async Task<IReadOnlyList<Versioned<ParishProfilePhoto>>> PhotosAsync(string parish, CancellationToken ct)
-        => (await records.CollectAsync<ParishProfilePhoto>(Scope(parish), "parishProfilePhoto", ct, 500)).Where(p => p.Value.ParishId == parish).ToArray();
+        => (await records.CollectAsync<ParishProfilePhoto>(RecordScopes.Parish(parish), "parishProfilePhoto", ct, 500)).Where(p => p.Value.ParishId == parish).ToArray();
 
     private async Task<Versioned<ParishProfilePhoto>> ReadPhotoAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<ParishProfilePhoto>(Scope(parish), PhotoKey(id), ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id
+        => await records.ReadAsync<ParishProfilePhoto>(RecordScopes.Parish(parish), PhotoKey(id), ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id
             ? row : throw Missing("The photo");
 
     // Only the actual bytes decide the type; names and declared types are not trusted.

@@ -17,10 +17,8 @@ namespace ParishLife.Api.Services.Communications;
 public class InboxService(IRecordTransactions records, IParishAccess access, MinistryAccess own, NotificationService notifications,
     ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock, NotificationOutcomeReader outcomes)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "conversation:" + id;
     private static string MemberKey(string conversation, string account) => "conversationMember:" + conversation + ":" + account;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested conversation is unavailable.", FailureKind.NotFound);
 
     private async Task<bool> IsOfficeAsync(string parish, CancellationToken ct)
@@ -53,14 +51,14 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
             if (!await IsOfficeAsync(parish, ct))
                 throw Missing();
             var recipient = request.RecipientAccountId is { } account ? Guard.Id(account) : await PersonAccountAsync(parish, Guard.Id(request.RecipientPersonId!.Value), ct);
-            var link = await records.ReadAsync<PersonAccountLink>(Scope(parish), "personAccountLink:" + recipient, ct);
+            var link = await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink:" + recipient, ct);
             if (link?.Value.Active != true || link.Value.ParishId != parish || recipient == actor.AccountId)
                 throw new DomainException("invalid_input", "Direct conversations are with a linked parishioner of this parish.");
             participants = [actor.AccountId, recipient];
             kind = "Direct";
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "conversation:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
         {
             var previous = (await ReadAsync(parish, prior.Id, ct)).Value;
             var replay = await ProjectAsync(parish, previous, ct);
@@ -78,7 +76,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         changes.AddRange(participants.Select(p => RecordChange.Create(MemberKey(item.Id, p), "conversationMember",
             new ConversationMember { ConversationId = item.Id, AccountId = p, LastReadAt = p == actor.AccountId ? op.At : null })));
         TrackNotices(parish, item, message, changes);
-        await records.CommitAsync(Scope(parish), op, "inbox.start", item.Id, changes, new CommandResult { Id = item.Id, Status = "Started" }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.start", item.Id, changes, new CommandResult { Id = item.Id, Status = "Started" }, ct);
         await DispatchNoticesAsync(parish, item, message, ct);
         var result = await ProjectAsync(parish, item, ct);
         result.NotificationOutcome = await outcomes.ReadAsync(parish, item.NotificationWorkIds, ct);
@@ -95,7 +93,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
             await access.RequireModuleAsync(parish, "office", ct);
         }
         catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { throw Missing(); }
-        var links = (await records.CollectAsync<PersonAccountLink>(Scope(parish), "personAccountLink", ct, 20, Equal("personId", person)))
+        var links = (await records.CollectAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink", ct, 20, RecordConditions.Equal("personId", person)))
             .Select(r => r.Value).Where(l => l.Active && l.ParishId == parish && l.PersonId == person).Select(l => l.AccountId).Distinct(StringComparer.Ordinal).ToArray();
         return links.Length switch
         {
@@ -109,12 +107,12 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     {
         var office = await IsOfficeAsync(parish, ct);
         if (!office) await own.PersonalAsync(ct);
-        var ids = (await records.CollectAsync<ConversationMember>(Scope(parish), "conversationMember", ct, 2000, Equal("accountId", actor.AccountId)))
+        var ids = (await records.CollectAsync<ConversationMember>(RecordScopes.Parish(parish), "conversationMember", ct, 2000, RecordConditions.Equal("accountId", actor.AccountId)))
             .Select(m => m.Value.ConversationId).ToHashSet(StringComparer.Ordinal);
         var result = new List<ConversationDto>();
         var listed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in ids)
-            if (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) is { } row
+            if (await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), Key(id), ct) is { } row
                 && row.Value.ParticipantAccountIds.Contains(actor.AccountId, StringComparer.Ordinal)
                 && (row.Value.Kind != "Direct" || row.Value.CreatedBy != actor.AccountId || office))
             {
@@ -124,7 +122,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
         // The shared office inbox is visible to authorized office staff, each acting under their own account. Staff who opened a
         // member's Office conversation have a read-state row without being a participant, so only already-listed rows are skipped.
         if (office)
-            foreach (var row in await records.CollectAsync<Conversation>(Scope(parish), "conversation", ct, 2000, Equal("kind", "Office")))
+            foreach (var row in await records.CollectAsync<Conversation>(RecordScopes.Parish(parish), "conversation", ct, 2000, RecordConditions.Equal("kind", "Office")))
                 if (!listed.Contains(row.Value.Id))
                     result.Add(await ProjectAsync(parish, row.Value, ct));
         return result.OrderByDescending(c => c.LastMessageAt).ToArray();
@@ -133,7 +131,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     public async Task<IReadOnlyList<InboxMessageDto>> MessagesAsync(string parish, string id, CancellationToken ct)
     {
         var item = await AccessibleAsync(parish, id, ct);
-        var messages = await records.CollectAsync<InboxMessage>(Scope(parish), "inboxMessage", ct, 2000, Equal("conversationId", id));
+        var messages = await records.CollectAsync<InboxMessage>(RecordScopes.Parish(parish), "inboxMessage", ct, 2000, RecordConditions.Equal("conversationId", id));
         await SetMemberAsync(parish, item.Id, m => m.LastReadAt = clock.GetUtcNow(), ct);
         return messages.Select(m => m.Value).OrderBy(m => m.At).ThenBy(m => m.Id, StringComparer.Ordinal)
             .Select(m => new InboxMessageDto { Id = m.Id, AuthorAccountId = m.AuthorAccountId, Capacity = m.Capacity, Body = m.Body, At = m.At }).ToArray();
@@ -141,11 +139,11 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
 
     public async Task<InboxMessageDto> PostAsync(string parish, string id, PostInboxMessageDto request, CancellationToken ct)
     {
-        var row = await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         var item = await AccessibleAsync(parish, id, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "inbox-message:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return await MessageViewAsync(parish, (await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + prior.Id, ct))!.Value, ct);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return await MessageViewAsync(parish, (await records.ReadAsync<InboxMessage>(RecordScopes.Parish(parish), "inboxMessage:" + prior.Id, ct))!.Value, ct);
         // Staff replying in a member's office conversation write for the parish office, attributed to their own account.
         var capacity = item.Kind == "Office" && !item.ParticipantAccountIds.Contains(actor.AccountId) || item.Kind == "Direct" && item.CreatedBy == actor.AccountId ? "Office" : "Self";
         var message = new InboxMessage { Id = op.Id, ConversationId = id, AuthorAccountId = actor.AccountId, Capacity = capacity, Body = Guard.Text(request.Body, "Message", 10000), At = op.At };
@@ -156,7 +154,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
             RecordChange.Replace(Key(id), "conversation", item, row.Version)
         };
         TrackNotices(parish, item, message, changes);
-        await records.CommitAsync(Scope(parish), op, "inbox.message", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.message", id,
             changes, new CommandResult { Id = message.Id, Status = "Sent" }, ct);
         await DispatchNoticesAsync(parish, item, message, ct);
         return await MessageViewAsync(parish, message, ct);
@@ -172,7 +170,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
 
     internal async Task<Conversation> AccessibleAsync(string parish, string id, CancellationToken ct)
     {
-        var item = (await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) ?? throw Missing()).Value;
+        var item = (await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing()).Value;
         if (item.ParishId != parish)
             throw Missing();
         if (item.ParticipantAccountIds.Contains(actor.AccountId))
@@ -192,12 +190,12 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     private async Task SetMemberAsync(string parish, string conversation, Action<ConversationMember> change, CancellationToken ct)
     {
         var key = MemberKey(conversation, actor.AccountId);
-        var row = await records.ReadAsync<ConversationMember>(Scope(parish), key, ct);
+        var row = await records.ReadAsync<ConversationMember>(RecordScopes.Parish(parish), key, ct);
         var value = row?.Value ?? new ConversationMember { ConversationId = conversation, AccountId = actor.AccountId };
         change(value);
         try
         {
-            await records.CommitAsync(Scope(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { conversation }, clock), "inbox.state", conversation,
+            await records.CommitAsync(RecordScopes.Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { conversation }, clock), "inbox.state", conversation,
                 [row is null ? RecordChange.Create(key, "conversationMember", value) : RecordChange.Replace(key, "conversationMember", value, row.Version)],
                 new CommandResult { Id = conversation, Status = "Updated" }, ct);
         }
@@ -227,7 +225,7 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     public async Task<NotificationOutcomeDto> MessageNotificationOutcomeAsync(string parish, string conversation, string id, CancellationToken ct)
     {
         await AccessibleAsync(parish, conversation, ct);
-        var row = await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + id, ct);
+        var row = await records.ReadAsync<InboxMessage>(RecordScopes.Parish(parish), "inboxMessage:" + id, ct);
         if (row is null || row.Value.Id != id || row.Value.ConversationId != conversation) throw Missing();
         return await outcomes.ReadAsync(parish, row.Value.NotificationWorkIds, ct);
     }
@@ -246,11 +244,11 @@ public class InboxService(IRecordTransactions records, IParishAccess access, Min
     }
 
     private async Task<Versioned<Conversation>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<Conversation>(Scope(parish), Key(id), ct) ?? throw Missing();
+        => await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
 
     private async Task<ConversationDto> ProjectAsync(string parish, Conversation x, CancellationToken ct)
     {
-        var member = (await records.ReadAsync<ConversationMember>(Scope(parish), MemberKey(x.Id, actor.AccountId), ct))?.Value;
+        var member = (await records.ReadAsync<ConversationMember>(RecordScopes.Parish(parish), MemberKey(x.Id, actor.AccountId), ct))?.Value;
         return new ConversationDto
         {
             Id = x.Id, Kind = x.Kind, Subject = x.Subject, ParticipantAccountIds = [.. x.ParticipantAccountIds], CreatedBy = x.CreatedBy, LastMessageAt = x.LastMessageAt,

@@ -13,7 +13,6 @@ namespace ParishLife.Api.Services.Scheduling;
 
 public class MusicLibraryService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "music:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested music is unavailable.", FailureKind.NotFound);
 
@@ -29,7 +28,7 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
     {
         var root = await AuthorizeAsync(parish, Permissions.MusicManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "music:v2");
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         if (request.AlternateTitles is null || request.AlternateTitles.Length > 10 || request.MediaLinks is null || request.MediaLinks.Length > 10
             || request.MediaLinks.Any(link => !Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
@@ -61,7 +60,7 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
             changes.Add(RecordChange.Replace(Key(old.Value.Id), "music", old.Value, old.Version));
         }
         changes.Add(RecordChange.Create(Key(item.Id), "music", item));
-        await records.CommitAsync(Scope(parish), op, "music.publish_version", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "music.publish_version", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -69,14 +68,14 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
     {
         var root = await AuthorizeAsync(parish, Permissions.MusicManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "music-withdraw:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var row = await ReadAsync(parish, id, ct);
         if (row.Value.Status == "Withdrawn")
             throw new DomainException("invalid_music_state", "This version is already withdrawn.", FailureKind.Conflict);
         Guard.Text(request.Reason, "Withdrawal reason", 2000);
         row.Value.Status = "Withdrawn";
-        await records.CommitAsync(Scope(parish), op, "music.withdraw", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "music.withdraw", id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace(Key(id), "music", row.Value, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = row.Value.Status }, ct);
         return Project(row.Value);
@@ -96,7 +95,7 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
         await AuthorizeAsync(parish, Permissions.ScheduleRead, ct);
         if (size is < 1 or > 100 || offset is < 0 or > 2000)
             throw new DomainException("invalid_page", "Use 1–100 rows and an offset of 0–2000.");
-        var rows = await records.CollectAsync<MusicVersion>(Scope(parish), "music", ct, 2000);
+        var rows = await records.CollectAsync<MusicVersion>(RecordScopes.Parish(parish), "music", ct, 2000);
         var matches = rows.Select(r => r.Value)
             .Where(x => includeInactive || x.Status == "Active")
             .Where(x => string.IsNullOrWhiteSpace(text) || x.Title.Contains(text, StringComparison.OrdinalIgnoreCase)
@@ -119,7 +118,7 @@ public class MusicLibraryService(IRecordTransactions records, IParishAccess acce
 
     private async Task<Versioned<MusicVersion>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<MusicVersion>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<MusicVersion>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

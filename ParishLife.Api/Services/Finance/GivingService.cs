@@ -18,8 +18,6 @@ namespace ParishLife.Api.Services.Finance;
 
 public class GivingService(IRecordTransactions records, IParishAccess access, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested finance record is unavailable.", FailureKind.NotFound);
     internal static DomainException State(string message) => new("invalid_finance_state", message, FailureKind.Conflict);
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
@@ -46,12 +44,12 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "fund:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project(await ReadAsync<Fund>(parish, "fund:" + prior.Id, ct));
         var item = new Fund { Id = op.Id, ParishId = parish, Name = Guard.Text(request.Name, "Name", 200), Purpose = Guard.Text(request.Purpose, "Purpose", 1000),
             NameAr = Optional(request.NameAr, "Arabic name", 200), PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000),
             Restricted = request.Restricted, CreatedBy = actor.AccountId, CreatedAt = op.At };
-        await records.CommitAsync(Scope(parish), op, "finance.fund_create", item.Id, [Fence(root), RecordChange.Create("fund:" + item.Id, "fund", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.fund_create", item.Id, [Fence(root), RecordChange.Create("fund:" + item.Id, "fund", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(await ReadAsync<Fund>(parish, "fund:" + item.Id, ct));
     }
@@ -61,7 +59,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "fund-edit:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadAsync<Fund>(parish, "fund:" + id, ct));
         var item = (await ReadAsync<Fund>(parish, "fund:" + id, ct)).Value;
         if (item.ParishId != parish)
@@ -72,7 +70,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         item.NameAr = Optional(request.NameAr, "Arabic name", 200);
         item.Purpose = Guard.Text(request.Purpose, "Purpose", 1000);
         item.PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000);
-        await records.CommitAsync(Scope(parish), op, "finance.fund_edit", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.fund_edit", id,
             [Fence(root), RecordChange.Replace("fund:" + id, "fund", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(await ReadAsync<Fund>(parish, "fund:" + id, ct));
     }
@@ -80,14 +78,14 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     public async Task<IReadOnlyList<FundDto>> FundsAsync(string parish, CancellationToken ct)
     {
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        return (await records.CollectAsync<Fund>(Scope(parish), "fund", ct, 500)).Select(Project).ToArray();
+        return (await records.CollectAsync<Fund>(RecordScopes.Parish(parish), "fund", ct, 500)).Select(Project).ToArray();
     }
 
     public async Task<CampaignDto> CreateCampaignAsync(string parish, SaveCampaignDto request, CancellationToken ct)
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "campaign:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + prior.Id, ct), ct);
         var fund = await ActiveFundAsync(parish, Guard.Id(request.FundId), ct);
         CampaignRules(request);
@@ -97,7 +95,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
             NameAr = Optional(request.NameAr, "Arabic name", 200), PurposeAr = Optional(request.PurposeAr, "Arabic purpose", 1000),
             StartsOn = request.StartsOn, EndsOn = request.EndsOn, Targets = new(request.Targets), CreatedBy = actor.AccountId, CreatedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "finance.campaign_create", item.Id, [Fence(root), RecordChange.Create("campaign:" + item.Id, "campaign", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.campaign_create", item.Id, [Fence(root), RecordChange.Create("campaign:" + item.Id, "campaign", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + item.Id, ct), ct);
     }
@@ -107,7 +105,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "campaign-edit:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + id, ct), ct);
         var item = (await ReadAsync<Campaign>(parish, "campaign:" + id, ct)).Value;
         if (item.ParishId != parish)
@@ -122,7 +120,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         item.StartsOn = request.StartsOn;
         item.EndsOn = request.EndsOn;
         item.Targets = new(request.Targets);
-        await records.CommitAsync(Scope(parish), op, "finance.campaign_edit", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.campaign_edit", id,
             [Fence(root), RecordChange.Replace("campaign:" + id, "campaign", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return await ProjectAsync(parish, await ReadAsync<Campaign>(parish, "campaign:" + id, ct), ct);
     }
@@ -139,7 +137,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var result = new List<CampaignDto>();
-        foreach (var row in await records.CollectAsync<Campaign>(Scope(parish), "campaign", ct, 500))
+        foreach (var row in await records.CollectAsync<Campaign>(RecordScopes.Parish(parish), "campaign", ct, 500))
             result.Add(await ProjectAsync(parish, row, ct));
         return result;
     }
@@ -148,7 +146,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     public async Task<IReadOnlyList<Versioned<CountSessionDto>>> SessionsAsync(string parish, string? status, CancellationToken ct)
     {
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        return (await records.CollectAsync<CountSession>(Scope(parish), "countSession", ct, 2000))
+        return (await records.CollectAsync<CountSession>(RecordScopes.Parish(parish), "countSession", ct, 2000))
             .Where(r => status is null || string.Equals(r.Value.Status, status, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.Value.CollectedOn).ThenByDescending(r => r.Value.CreatedAt)
             .Select(r => new Versioned<CountSessionDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
@@ -158,14 +156,14 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "count-session:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync<CountSession>(parish, "countSession:" + prior.Id, ct)).Value);
         var item = new CountSession
         {
             Id = op.Id, ParishId = parish, Reference = "CS-" + request.CollectedOn.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture) + "-" + op.Id[..6].ToUpperInvariant(),
             Source = Guard.Text(request.Source, "Source", 200), CollectedOn = request.CollectedOn, EditorAccountIds = [actor.AccountId], CreatedBy = actor.AccountId, CreatedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "finance.session_open", item.Id, [Fence(root), RecordChange.Create("countSession:" + item.Id, "countSession", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.session_open", item.Id, [Fence(root), RecordChange.Create("countSession:" + item.Id, "countSession", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -174,7 +172,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "count-lines:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value);
         var item = (await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value;
         if (item.Status is not ("Open" or "Variance"))
@@ -192,7 +190,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         item.VerifiedRevision = null;
         if (!item.EditorAccountIds.Contains(actor.AccountId))
             item.EditorAccountIds = [.. item.EditorAccountIds, actor.AccountId];
-        await records.CommitAsync(Scope(parish), op, "finance.session_lines", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.session_lines", id,
             [Fence(root), RecordChange.Replace("countSession:" + id, "countSession", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -201,7 +199,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "count-verify:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value);
         var item = (await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value;
         // Verification is a different person's actual count of the exact revision they reviewed.
@@ -227,7 +225,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
             item.VarianceObserved = observed;
             item.VarianceNote = string.IsNullOrWhiteSpace(request.Note) ? null : Guard.Text(request.Note, "Note", 2000);
         }
-        await records.CommitAsync(Scope(parish), op, "finance.session_verify", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.session_verify", id,
             [Fence(root), RecordChange.Replace("countSession:" + id, "countSession", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -236,7 +234,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinancePost, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "count-post:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value);
         var item = (await ReadAsync<CountSession>(parish, "countSession:" + id, ct)).Value;
         if (item.Status != "Verified" || item.VerifiedRevision != item.Revision)
@@ -252,7 +250,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
             CampaignId = line.CampaignId, PersonId = line.PersonId, HouseholdId = line.HouseholdId, Anonymous = line.Anonymous, ReceivedOn = item.CollectedOn,
             PostedBy = actor.AccountId, PostedAt = op.At
         })));
-        await records.CommitAsync(Scope(parish), op, "finance.session_post", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.session_post", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -275,7 +273,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "contribution-correct:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync<Contribution>(parish, "contribution:" + prior.Id, ct)).Value);
         var original = (await ReadAsync<Contribution>(parish, "contribution:" + id, ct)).Value;
         if (original.Status != "Posted")
@@ -307,7 +305,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         }
         else if (request.Action != "reverse")
             throw new DomainException("invalid_input", "Use reverse or reclassify.");
-        await records.CommitAsync(Scope(parish), op, "finance.contribution_" + request.Action, id, changes, new CommandResult { Id = result.Id, Status = result.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.contribution_" + request.Action, id, changes, new CommandResult { Id = result.Id, Status = result.Status }, ct);
         return Project(result);
     }
 
@@ -315,7 +313,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "pledge:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ProjectAsync(parish, (await ReadAsync<Pledge>(parish, "pledge:" + prior.Id, ct)).Value, ct);
         Money(request.Amount, request.Currency);
         if (request.PersonId is null && request.HouseholdId is null || request.EndsOn < request.StartsOn)
@@ -328,7 +326,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
             Amount = request.Amount, Currency = request.Currency, Schedule = string.IsNullOrWhiteSpace(request.Schedule) ? null : Guard.Text(request.Schedule, "Schedule", 300),
             StartsOn = request.StartsOn, EndsOn = request.EndsOn, CreatedBy = actor.AccountId, CreatedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "finance.pledge_create", item.Id, [Fence(root), RecordChange.Create("pledge:" + item.Id, "pledge", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.pledge_create", item.Id, [Fence(root), RecordChange.Create("pledge:" + item.Id, "pledge", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await ProjectAsync(parish, item, ct);
     }
@@ -337,7 +335,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var root = await AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "pledge-allocate:v1:" + pledge);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, (await ReadAsync<Pledge>(parish, "pledge:" + pledge, ct)).Value, ct);
         var pledgeRow = await ReadAsync<Pledge>(parish, "pledge:" + pledge, ct);
         var gift = await ReadAsync<Contribution>(parish, "contribution:" + Guard.Id(request.ContributionId), ct);
@@ -351,7 +349,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         if (allocated >= pledgeRow.Value.Amount)
             pledgeRow.Value.Status = "Fulfilled";
         // The gift is fenced so two concurrent allocations cannot both spend the same unallocated amount.
-        await records.CommitAsync(Scope(parish), op, "finance.pledge_allocate", pledge,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.pledge_allocate", pledge,
             [Fence(root), RecordChange.Replace("contribution:" + gift.Value.Id, "contribution", gift.Value, gift.Version),
              RecordChange.Replace("pledge:" + pledge, "pledge", pledgeRow.Value, pledgeRow.Version),
              RecordChange.Create("pledgeAllocation:" + op.Id, "pledgeAllocation", new PledgeAllocation
@@ -365,7 +363,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         await AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var result = new List<PledgeDto>();
-        foreach (var row in await records.CollectAsync<Pledge>(Scope(parish), "pledge", ct, 2000))
+        foreach (var row in await records.CollectAsync<Pledge>(RecordScopes.Parish(parish), "pledge", ct, 2000))
             result.Add(await ProjectAsync(parish, row.Value, ct));
         return result;
     }
@@ -414,7 +412,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
         {
             // Envelope numbers resolve only against actual household assignments; an unknown number stays unattributed for review.
             result.EnvelopeId = Guard.Text(line.EnvelopeId, "Envelope", 40);
-            var claim = await records.ReadAsync<CommandResult>(Scope(parish), "householdEnvelope:" + result.EnvelopeId.ToUpperInvariant(), ct);
+            var claim = await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), "householdEnvelope:" + result.EnvelopeId.ToUpperInvariant(), ct);
             result.HouseholdId = claim?.Value.Id;
             result.Unattributed = claim is null;
         }
@@ -437,17 +435,17 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     }
 
     internal async Task<string> PersonAsync(string parish, string person, CancellationToken ct)
-        => (await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is { } row && row.ParishId == parish ? row.Id : throw Missing();
+        => (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value is { } row && row.ParishId == parish ? row.Id : throw Missing();
 
     // ponytail: giving reads scan up to 5000 contribution rows per parish; add per-fund/period summaries if a parish outgrows that.
     internal async Task<IReadOnlyList<Versioned<Contribution>>> AllContributionsAsync(string parish, CancellationToken ct)
-        => await records.CollectAsync<Contribution>(Scope(parish), "contribution", ct, 5000);
+        => await records.CollectAsync<Contribution>(RecordScopes.Parish(parish), "contribution", ct, 5000);
 
     private async Task<List<PledgeAllocation>> AllocationsAsync(string parish, CancellationToken ct)
-        => (await records.CollectAsync<PledgeAllocation>(Scope(parish), "pledgeAllocation", ct, 5000)).Select(r => r.Value).ToList();
+        => (await records.CollectAsync<PledgeAllocation>(RecordScopes.Parish(parish), "pledgeAllocation", ct, 5000)).Select(r => r.Value).ToList();
 
     private async Task<Versioned<T>> ReadAsync<T>(string parish, string key, CancellationToken ct)
-        => await records.ReadAsync<T>(Scope(parish), key, ct) ?? throw Missing();
+        => await records.ReadAsync<T>(RecordScopes.Parish(parish), key, ct) ?? throw Missing();
 
     private static string ContributionId(string session, string line)
         => new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(session + ":" + line)).AsSpan(0, 16)).ToString("N");
@@ -466,7 +464,7 @@ public class GivingService(IRecordTransactions records, IParishAccess access, Mi
     {
         var x = row.Value;
         var gifts = (await AllContributionsAsync(parish, ct)).Select(r => r.Value).Where(c => c.CampaignId == x.Id);
-        var pledges = (await records.CollectAsync<Pledge>(Scope(parish), "pledge", ct, 2000)).Select(r => r.Value).Where(p => p.CampaignId == x.Id && p.Status != "Cancelled");
+        var pledges = (await records.CollectAsync<Pledge>(RecordScopes.Parish(parish), "pledge", ct, 2000)).Select(r => r.Value).Where(p => p.CampaignId == x.Id && p.Status != "Cancelled");
         return new CampaignDto
         {
             Id = x.Id, Version = row.Version, Name = x.Name, NameAr = x.NameAr, Purpose = x.Purpose, PurposeAr = x.PurposeAr, FundId = x.FundId, StartsOn = x.StartsOn, EndsOn = x.EndsOn, Targets = new(x.Targets), Status = x.Status,

@@ -17,7 +17,6 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
     private static string OpportunityKey(string id) => "volunteerOpportunity:" + id;
     private static string AssignmentKey(string id) => "volunteerAssignment:" + id;
     private static string HoursKey(string assignment) => "volunteerHours:" + assignment;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException State(string message) => new("invalid_volunteer_state", message, FailureKind.Conflict);
 
     // One assignment per person and opportunity, shared by invitations and signups.
@@ -89,7 +88,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
     {
         await access.RequireCoordinatorAsync(parish, ministry, ct, readOnly: true);
         return OpportunityPage(await records.PageAsync<VolunteerOpportunity>(MinistryAccess.Scope(parish), "volunteerOpportunity", size, cursor, ct,
-            Equal("ministryId", ministry)));
+            RecordConditions.Equal("ministryId", ministry)));
     }
 
     // The member signup sheet shows requirements and remaining places, never other volunteers' identities.
@@ -99,7 +98,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
         if (!await access.IsCurrentMemberAsync(parish, ministry, link.Value.PersonId, clock.GetUtcNow(), ct))
             throw MinistryAccess.Missing();
         return OpportunityPage(await records.PageAsync<VolunteerOpportunity>(MinistryAccess.Scope(parish), "volunteerOpportunity", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("status", "Open")));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("status", "Open")));
     }
 
     public async Task<VolunteerAssignmentDto> InviteAsync(string parish, string ministry, string opportunity, InviteVolunteerDto request, CancellationToken ct)
@@ -229,7 +228,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
         await access.RequireCoordinatorAsync(parish, ministry, ct, readOnly: true);
         await ReadOpportunityAsync(parish, ministry, opportunity, ct);
         return AssignmentPage(await records.PageAsync<VolunteerAssignment>(MinistryAccess.Scope(parish), "volunteerAssignment", size, cursor, ct,
-            Equal("opportunityId", opportunity)), true);
+            RecordConditions.Equal("opportunityId", opportunity)), true);
     }
 
     public async Task<Page<Versioned<VolunteerAssignmentDto>>> OwnAssignmentsAsync(string parish, string ministry, int size, string? cursor, CancellationToken ct)
@@ -237,7 +236,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
         var link = await access.OwnLinkAsync(parish, ct);
         await access.ReadAsync(parish, ministry, ct);
         return AssignmentPage(await records.PageAsync<VolunteerAssignment>(MinistryAccess.Scope(parish), "volunteerAssignment", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", link.Value.PersonId)), false);
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", link.Value.PersonId)), false);
     }
 
     public async Task<VolunteerHoursDto> SubmitHoursAsync(string parish, string ministry, string assignment, SubmitHoursDto request, CancellationToken ct)
@@ -316,7 +315,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
     {
         await access.RequireCoordinatorAsync(parish, ministry, ct, readOnly: true);
         return HoursPage(await records.PageAsync<VolunteerHours>(MinistryAccess.Scope(parish), "volunteerHours", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", person)));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", person)));
     }
 
     public async Task<Page<Versioned<VolunteerHoursDto>>> OwnHoursAsync(string parish, string ministry, int size, string? cursor, CancellationToken ct)
@@ -324,7 +323,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
         var link = await access.OwnLinkAsync(parish, ct);
         await access.ReadAsync(parish, ministry, ct);
         var page = HoursPage(await records.PageAsync<VolunteerHours>(MinistryAccess.Scope(parish), "volunteerHours", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", link.Value.PersonId)));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", link.Value.PersonId)));
         foreach (var row in page.Items)
             row.Value.ReviewedBy = null;
         return page;
@@ -334,7 +333,7 @@ public class MinistryVolunteerService(IRecordTransactions records, MinistryAcces
     {
         // Committed duties across all of this parish's ministries block an overlapping confirmation; other parishes stay private.
         var committed = await records.CollectAsync<VolunteerAssignment>(MinistryAccess.Scope(parish), "volunteerAssignment", ct, 2000,
-            Equal("personId", item.PersonId), new RecordCondition { Path = "status", Comparison = "in", Value = new[] { "Confirmed", "CancellationRequested" } });
+            RecordConditions.Equal("personId", item.PersonId), new RecordCondition { Path = "status", Comparison = "in", Value = new[] { "Confirmed", "CancellationRequested" } });
         if (committed.Any(row => row.Value.Id != item.Id && row.Value.StartsAt < item.EndsAt && item.StartsAt < row.Value.EndsAt))
             throw State("This person already has an overlapping confirmed duty.");
     }

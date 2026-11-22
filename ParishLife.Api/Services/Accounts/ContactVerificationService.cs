@@ -196,6 +196,9 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
         var staged = await users.StagePasswordAsync(user, request.NewPassword); // also issues the new security stamp
         if (!staged.Succeeded)
             throw new DomainException("new_password_rejected", "The proposed password does not satisfy the configured password policy.");
+        // The authenticator code is spent like a sign-in code: it cannot reset again, nor sign in, within its window (and the reverse).
+        if (user.TwoFactorEnabled && !await Store.ClaimAuthenticatorCodeAsync(user.Id, request.CurrentCode!, ct))
+            await FailAttemptAsync(scope, ResetKey, row!, ct);
         user.AccessFailedCount = 0;
         item.Status = "Completed";
         item.CompletedAt = clock.GetUtcNow();

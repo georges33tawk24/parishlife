@@ -18,8 +18,6 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     private static readonly string[] Fields = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Rite", "RegisterStatus"];
     // Records that keep pointing at the merged-away person; they stay individually traceable and are listed, never rewritten.
     private static readonly string[] DependentTypes = ["sacramentRecord", "registration", "volunteerAssignment", "householdMember", "personConsent"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested person is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_merge_state", message, FailureKind.Conflict);
     private static string PairKey(string a, string b) => string.CompareOrdinal(a, b) < 0 ? a + ":" + b : b + ":" + a;
@@ -35,9 +33,9 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     public async Task<IReadOnlyList<DuplicateSuggestionDto>> SuggestAsync(string parish, CancellationToken ct)
     {
         await OfficeAsync(parish, Permissions.PeopleRead, ct);
-        var people = (await records.CollectAsync<Person>(Scope(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => !p.Archived).ToList();
-        var decisions = (await records.CollectAsync<DuplicateDecision>(Scope(parish), "duplicateDecision", ct, 5000)).ToDictionary(d => PairKey(d.Value.PersonA, d.Value.PersonB), d => d.Value.Decision);
-        var linked = (await records.CollectAsync<PersonAccountLink>(Scope(parish), "personAccountLink", ct, 20000)).Where(l => l.Value.Active)
+        var people = (await records.CollectAsync<Person>(RecordScopes.Parish(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => !p.Archived).ToList();
+        var decisions = (await records.CollectAsync<DuplicateDecision>(RecordScopes.Parish(parish), "duplicateDecision", ct, 5000)).ToDictionary(d => PairKey(d.Value.PersonA, d.Value.PersonB), d => d.Value.Decision);
+        var linked = (await records.CollectAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink", ct, 20000)).Where(l => l.Value.Active)
             .Select(l => l.Value.PersonId).ToHashSet(StringComparer.Ordinal);
         var result = new List<DuplicateSuggestionDto>();
         // ponytail: groups by normalized family name before comparing pairs; a phonetic/transliteration index is the upgrade for large parishes.
@@ -70,18 +68,18 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
         var root = await OfficeAsync(parish, Permissions.PeopleWrite, ct);
         var (a, b) = (Guard.Id(request.PersonA), Guard.Id(request.PersonB));
         var op = actor.CreateOperation(request.OperationId, request, clock, "duplicate-decision:v1:" + PairKey(a, b));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return;
         await PersonAsync(parish, a, ct);
         await PersonAsync(parish, b, ct);
         var key = "duplicateDecision:" + PairKey(a, b);
-        var old = await records.ReadAsync<DuplicateDecision>(Scope(parish), key, ct);
+        var old = await records.ReadAsync<DuplicateDecision>(RecordScopes.Parish(parish), key, ct);
         var item = new DuplicateDecision
         {
             Id = PairKey(a, b), ParishId = parish, PersonA = a, PersonB = b, Decision = request.Decision, Reason = Guard.Text(request.Reason, "Reason", 1000),
             By = actor.AccountId, At = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "person.duplicate_decision", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.duplicate_decision", item.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), old is null ? RecordChange.Create(key, "duplicateDecision", item) : RecordChange.Replace(key, "duplicateDecision", item, old.Version)],
             new CommandResult { Id = item.Id, Status = item.Decision }, ct);
     }
@@ -96,7 +94,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     {
         var root = await OfficeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-merge:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadMergeAsync(parish, prior.Id, ct)));
         var survivorRow = await PersonAsync(parish, Guard.Id(request.SurvivorId), ct);
         var sourceRow = await PersonAsync(parish, Guard.Id(request.SourceId), ct);
@@ -123,7 +121,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
             Id = op.Id, ParishId = parish, SurvivorId = survivor.Id, SourceId = source.Id, SurvivorBefore = before, SourceBefore = sourceBefore,
             SurvivorAfter = Copy(survivor), Choices = new(choices), Reason = Guard.Text(request.Reason, "Reason", 1000), By = actor.AccountId, At = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "person.merge", merge.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.merge", merge.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version),
              RecordChange.Replace("person:" + survivor.Id, "person", survivor, survivorRow.Version),
              RecordChange.Replace("person:" + source.Id, "person", source, sourceRow.Version),
@@ -137,7 +135,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     {
         var root = await OfficeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-unmerge:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadMergeAsync(parish, id, ct));
         var merge = (await ReadMergeAsync(parish, id, ct)).Value;
         if (merge.Status != "Merged")
@@ -150,7 +148,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
         merge.UnmergedBy = actor.AccountId;
         merge.UnmergedAt = op.At;
         merge.UnmergeReason = Guard.Text(request.Reason, "Reason", 1000);
-        await records.CommitAsync(Scope(parish), op, "person.unmerge", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.unmerge", id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version),
              RecordChange.Replace("person:" + merge.SurvivorId, "person", merge.SurvivorBefore, survivorRow.Version),
              RecordChange.Replace("person:" + merge.SourceId, "person", merge.SourceBefore, sourceRow.Version),
@@ -162,29 +160,29 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     public async Task<IReadOnlyList<PersonMergeDto>> MergesAsync(string parish, CancellationToken ct)
     {
         await OfficeAsync(parish, Permissions.PeopleRead, ct);
-        return (await records.CollectAsync<PersonMerge>(Scope(parish), "personMerge", ct, 2000)).OrderByDescending(r => r.Value.At).Select(Project).ToArray();
+        return (await records.CollectAsync<PersonMerge>(RecordScopes.Parish(parish), "personMerge", ct, 2000)).OrderByDescending(r => r.Value.At).Select(Project).ToArray();
     }
 
     private async Task<MergePreviewDto> PreviewAsync(string parish, Person survivor, Person source, CancellationToken ct)
     {
         var dependents = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var type in DependentTypes)
-            if ((await records.CollectAsync<object>(Scope(parish), type, ct, 1000, Equal("personId", source.Id))).Count is > 0 and var count)
+            if ((await records.CollectAsync<object>(RecordScopes.Parish(parish), type, ct, 1000, RecordConditions.Equal("personId", source.Id))).Count is > 0 and var count)
                 dependents[type] = count;
-        async Task<bool> Linked(string person) => (await records.ReadAsync<CommandResult>(Scope(parish), "personAccountClaim:" + person, ct))?.Value.Status == "Linked";
+        async Task<bool> Linked(string person) => (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), "personAccountClaim:" + person, ct))?.Value.Status == "Linked";
         return new MergePreviewDto
         {
             Conflicts = Fields.Where(f => Value(survivor, f) != Value(source, f)).ToArray(), Dependents = dependents,
             SourceLinked = await Linked(source.Id), SurvivorLinked = await Linked(survivor.Id),
-            NeedsPriest = dependents.ContainsKey("sacramentRecord") || (await records.CollectAsync<object>(Scope(parish), "sacramentRecord", ct, 1, Equal("personId", survivor.Id))).Count > 0
+            NeedsPriest = dependents.ContainsKey("sacramentRecord") || (await records.CollectAsync<object>(RecordScopes.Parish(parish), "sacramentRecord", ct, 1, RecordConditions.Equal("personId", survivor.Id))).Count > 0
         };
     }
 
     private async Task<Versioned<Person>> PersonAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<Person>(Scope(parish), "person:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private async Task<Versioned<PersonMerge>> ReadMergeAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<PersonMerge>(Scope(parish), "personMerge:" + id, ct) ?? throw Missing();
+        => await records.ReadAsync<PersonMerge>(RecordScopes.Parish(parish), "personMerge:" + id, ct) ?? throw Missing();
 
     private static string? Value(Person p, string field) => field switch
     {

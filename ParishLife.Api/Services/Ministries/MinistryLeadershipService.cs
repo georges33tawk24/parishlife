@@ -15,7 +15,6 @@ namespace ParishLife.Api.Services.Ministries;
 public class MinistryLeadershipService(IRecordTransactions records, IParishAccess access, IParishRepository parishes,
     ICurrentActor actor, IClergyAuthority clergy, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string ministry, string account) => "ministryLeader:" + ministry + ":" + account;
     private static DomainException Missing() => new("resource_not_found", "The requested ministry leadership is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_leadership_state", message, FailureKind.Conflict);
@@ -28,7 +27,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         var duties = await ValidateDutiesAsync(parish, request.Duties, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-leadership:v2:" + ministry + ":" + account);
         var group = await GroupAsync(parish, ministry, ct);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await CurrentAsync(parish, group.Value, account, true, ct);
         if (group.Value.Status != "Active" || request.Role is not ("Leader" or "Assistant"))
             throw State("An active ministry and a supported leadership role are required.");
@@ -40,7 +39,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         var evidence = Guard.Text(request.EvidenceReference, "Appointment evidence", 1000);
         if (!await EligibleAsync(parish, account, ct))
             throw Missing();
-        var old = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(ministry, account), ct);
+        var old = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(ministry, account), ct);
         if (old is not null && (!Matches(old.Value, ministry, account)
             || !old.Value.Revoked && old.Value.EndedAt is null && (old.Value.EndsAt is null || old.Value.EndsAt > op.At)))
             throw State("End the existing current or scheduled appointment before replacing it.");
@@ -70,7 +69,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         {
             if (outgoing == account || request.StartsAt > op.At)
                 throw State("A handover requires a different outgoing account and an immediately effective replacement.");
-            var previous = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(ministry, outgoing), ct) ?? throw Missing();
+            var previous = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(ministry, outgoing), ct) ?? throw Missing();
             if (!Matches(previous.Value, ministry, outgoing) || !previous.Value.Current(op.At))
                 throw State("The outgoing leadership appointment is no longer current.");
             End(previous.Value, op, "Leadership handover");
@@ -84,7 +83,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         await RequirePriestAsync(parish, ct);
         if (!await EligibleAsync(parish, account, ct))
             throw Missing();
-        await records.CommitAsync(Scope(parish), op, "ministry.leadership_appoint", ministry, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "ministry.leadership_appoint", ministry, changes,
             new CommandResult { Id = account, Status = "Recorded" }, ct);
         return await CurrentAsync(parish, (await GroupAsync(parish, ministry, ct)).Value, account, true, ct);
     }
@@ -95,9 +94,9 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         var duties = await ValidateDutiesAsync(parish, request.Duties, ct, authorize: false);
         var group = await GroupAsync(parish, ministry, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-leadership-duties:v1:" + ministry + ":" + account);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await CurrentAsync(parish, group.Value, account, true, ct);
-        var row = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(ministry, account), ct) ?? throw Missing();
+        var row = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(ministry, account), ct) ?? throw Missing();
         if (account == actor.AccountId || !Matches(row.Value, ministry, account) || !row.Value.Current(op.At))
             throw State("A different qualified priest must review a current leader's duties.");
         var priorDuties = row.Value.Duties ?? [];
@@ -120,7 +119,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
             EvidenceReference = evidence, Reason = request.Reason.Trim()
         };
         await RequirePriestAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "ministry.leadership_duties", ministry,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "ministry.leadership_duties", ministry,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version),
                 RecordChange.Replace("ministry:" + ministry, "ministry", group.Value, group.Version),
                 RecordChange.Replace(Key(ministry, account), "ministryLeader", row.Value, Versions.Require(request.Version)),
@@ -134,16 +133,16 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         var root = await RequirePriestAsync(parish, ct);
         var group = await GroupAsync(parish, ministry, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-leadership-end:v2:" + ministry + ":" + account);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await CurrentAsync(parish, group.Value, account, true, ct);
-        var row = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(ministry, account), ct) ?? throw Missing();
+        var row = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(ministry, account), ct) ?? throw Missing();
         if (!Matches(row.Value, ministry, account))
             throw Missing();
         if (row.Value.Revoked || row.Value.EndedAt is not null)
             throw State("This appointment has already ended.");
         End(row.Value, op, Guard.Text(request.Reason, "Ending reason", 2000));
         await RequirePriestAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "ministry.leadership_end", ministry,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "ministry.leadership_end", ministry,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version),
              RecordChange.Replace("ministry:" + ministry, "ministry", group.Value, group.Version),
              RecordChange.Replace(Key(ministry, account), "ministryLeader", row.Value, Versions.Require(request.Version)),
@@ -155,7 +154,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
     {
         var group = await GroupAsync(parish, ministry, ct);
         var privileged = await RequireReaderAsync(parish, group.Value, ct);
-        var row = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(ministry, account), ct) ?? throw Missing();
+        var row = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(ministry, account), ct) ?? throw Missing();
         if (!Matches(row.Value, ministry, account))
             throw Missing();
         return new Versioned<MinistryLeaderDto>
@@ -170,7 +169,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
     {
         var group = await GroupAsync(parish, ministry, ct);
         await RequireReaderAsync(parish, group.Value, ct);
-        var page = await records.PageAsync<MinistryLeader>(Scope(parish), "ministryLeader", size, cursor, ct,
+        var page = await records.PageAsync<MinistryLeader>(RecordScopes.Parish(parish), "ministryLeader", size, cursor, ct,
             new RecordCondition { Path = "ministryId", Comparison = "eq", Value = ministry });
         var rows = new List<Versioned<MinistryLeaderDto>>();
         foreach (var row in page.Items)
@@ -189,7 +188,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         await proof.RequireMfaAsync(ct);
         await access.RequireAsync(parish, Permissions.MinistriesManage, ct);
         await GroupAsync(parish, ministry, ct);
-        var page = await records.PageAsync<MinistryLeadershipHistory>(Scope(parish), "ministryLeadershipChange", size, cursor, ct,
+        var page = await records.PageAsync<MinistryLeadershipHistory>(RecordScopes.Parish(parish), "ministryLeadershipChange", size, cursor, ct,
             new RecordCondition { Path = "ministryId", Comparison = "eq", Value = ministry },
             new RecordCondition { Path = "accountId", Comparison = "eq", Value = account });
         return new Page<MinistryLeadershipHistoryDto>
@@ -234,7 +233,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
             return true;
         }
         var root = await parishes.GetAsync(parish, ct);
-        var own = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(group.Id, actor.AccountId), ct);
+        var own = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(group.Id, actor.AccountId), ct);
         if (root?.Value.Status != ParishStatus.Verified || group.Status != "Active"
             || own is null || !Matches(own.Value, group.Id, actor.AccountId) || !own.Value.Current(clock.GetUtcNow())
             || own.Value.Role is not ("Leader" or "Assistant"))
@@ -248,7 +247,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
 
     private async Task<Versioned<Ministry>> GroupAsync(string parish, string ministry, CancellationToken ct)
     {
-        var group = await records.ReadAsync<Ministry>(Scope(parish), "ministry:" + ministry, ct) ?? throw Missing();
+        var group = await records.ReadAsync<Ministry>(RecordScopes.Parish(parish), "ministry:" + ministry, ct) ?? throw Missing();
         if (group.Value.Id != ministry || group.Value.ParishId != parish)
             throw Missing();
         return group;
@@ -256,7 +255,7 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
 
     private async Task<MinistryLeaderDto> CurrentAsync(string parish, Ministry group, string account, bool privileged, CancellationToken ct)
     {
-        var row = await records.ReadAsync<MinistryLeader>(Scope(parish), Key(group.Id, account), ct) ?? throw Missing();
+        var row = await records.ReadAsync<MinistryLeader>(RecordScopes.Parish(parish), Key(group.Id, account), ct) ?? throw Missing();
         if (!Matches(row.Value, group.Id, account))
             throw Missing();
         return Project(row.Value, privileged, group.Status == "Active" && row.Value.Current(clock.GetUtcNow())

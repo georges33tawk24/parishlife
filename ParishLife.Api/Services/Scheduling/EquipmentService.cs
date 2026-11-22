@@ -14,7 +14,6 @@ namespace ParishLife.Api.Services.Scheduling;
 
 public class EquipmentService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     internal static string Key(string id) => "equipment:" + id;
     private static string BookingKey(string id) => "equipmentBooking:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested equipment is unavailable.", FailureKind.NotFound);
@@ -33,7 +32,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "equipment:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         if (request.Quantity is < 0 or > 100000 || request.Status is not ("Serviceable" or "OutOfService" or "Retired")
             || request.ConditionGrade is not (null or "Good" or "Fair" or "NeedsService"))
@@ -65,14 +64,14 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
         item.Status = request.Status;
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "facilities.equipment_save", item.Id, [Fence(root), change], new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "facilities.equipment_save", item.Id, [Fence(root), change], new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
 
     public async Task<Page<Versioned<EquipmentDto>>> ListAsync(string parish, int size, string? cursor, CancellationToken ct)
     {
         await AuthorizeAsync(parish, ct);
-        var page = await records.PageAsync<FacilityEquipment>(Scope(parish), "equipment", size, cursor, ct);
+        var page = await records.PageAsync<FacilityEquipment>(RecordScopes.Parish(parish), "equipment", size, cursor, ct);
         return new Page<Versioned<EquipmentDto>>
         {
             Items = page.Items.Select(r => new Versioned<EquipmentDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
@@ -84,10 +83,10 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "equipment-booking:v1:" + equipment);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadBookingAsync(parish, prior.Id, ct)).Value);
         var row = await ReadAsync(parish, equipment, ct);
-        var occurrence = (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + Guard.Id(request.EventId), ct))?.Value;
+        var occurrence = (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + Guard.Id(request.EventId), ct))?.Value;
         if (occurrence is null || occurrence.ParishId != parish || occurrence.Status == "Cancelled" || occurrence.EndsAt <= op.At)
             throw State("Book equipment for an existing, uncancelled, future event.");
         if (row.Value.Status != "Serviceable")
@@ -103,7 +102,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
             Id = op.Id, ParishId = parish, EquipmentId = equipment, EventId = occurrence.Id, Quantity = request.Quantity,
             StartsAt = occurrence.StartsAt, EndsAt = occurrence.EndsAt, CreatedBy = actor.AccountId, CreatedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "facilities.equipment_book", equipment,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "facilities.equipment_book", equipment,
             [Fence(root), RecordChange.Replace(Key(equipment), "equipment", row.Value, row.Version), RecordChange.Create(BookingKey(booking.Id), "equipmentBooking", booking)],
             new CommandResult { Id = booking.Id, Status = booking.Status }, ct);
         return Project(booking);
@@ -113,7 +112,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "equipment-booking-action:v1:" + bookingId);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadBookingAsync(parish, bookingId, ct)).Value);
         var booking = (await ReadBookingAsync(parish, bookingId, ct)).Value;
         var equipment = await ReadAsync(parish, booking.EquipmentId, ct);
@@ -158,7 +157,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
         equipment.Value.UpdatedAt = op.At;
         changes.Add(RecordChange.Replace(Key(equipment.Value.Id), "equipment", equipment.Value, equipment.Version));
         changes.Add(RecordChange.Replace(BookingKey(booking.Id), "equipmentBooking", booking, Versions.Require(request.Version)));
-        await records.CommitAsync(Scope(parish), op, "facilities.equipment_" + request.Action, booking.EquipmentId, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "facilities.equipment_" + request.Action, booking.EquipmentId, changes,
             new CommandResult { Id = booking.Id, Status = booking.Status }, ct);
         return Project(booking);
     }
@@ -167,7 +166,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
     {
         await AuthorizeAsync(parish, ct);
         await ReadAsync(parish, equipment, ct);
-        var page = await records.PageAsync<EquipmentBooking>(Scope(parish), "equipmentBooking", size, cursor, ct,
+        var page = await records.PageAsync<EquipmentBooking>(RecordScopes.Parish(parish), "equipmentBooking", size, cursor, ct,
             new RecordCondition { Path = "equipmentId", Comparison = "eq", Value = equipment });
         return new Page<Versioned<EquipmentBookingDto>>
         {
@@ -177,13 +176,13 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
     }
 
     private async Task<List<EquipmentBooking>> ActiveBookingsAsync(string parish, string equipment, CancellationToken ct)
-        => (await records.CollectAsync<EquipmentBooking>(Scope(parish), "equipmentBooking", ct, 2000,
+        => (await records.CollectAsync<EquipmentBooking>(RecordScopes.Parish(parish), "equipmentBooking", ct, 2000,
             new RecordCondition { Path = "equipmentId", Comparison = "eq", Value = equipment }))
             .Select(r => r.Value).Where(b => b.Status is "Booked" or "Issued").ToList();
 
     internal async Task<Versioned<FacilityEquipment>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<FacilityEquipment>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<FacilityEquipment>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;
@@ -191,7 +190,7 @@ public class EquipmentService(IRecordTransactions records, IParishAccess access,
 
     private async Task<Versioned<EquipmentBooking>> ReadBookingAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<EquipmentBooking>(Scope(parish), BookingKey(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<EquipmentBooking>(RecordScopes.Parish(parish), BookingKey(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

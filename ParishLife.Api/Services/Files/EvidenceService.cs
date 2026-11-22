@@ -25,14 +25,13 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
 
     internal const long MaximumBytes = 10 * 1024 * 1024;
     private const int MaximumActive = 20;
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested file is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_file_state", message, FailureKind.Conflict);
 
     // Office (requests.manage with MFA) or the case's own signed-in applicant; anyone else sees nothing.
     private async Task<(Versioned<ParishRequest> Case, Versioned<Parish> Root, bool Office)> CaseAsync(string parish, string request, CancellationToken ct)
     {
-        var item = await records.ReadAsync<ParishRequest>(Scope(parish), "request:" + request, ct);
+        var item = await records.ReadAsync<ParishRequest>(RecordScopes.Parish(parish), "request:" + request, ct);
         if (item is null || item.Value.ParishId != parish || item.Value.Id != request)
             throw Missing();
         Versioned<Parish> root;
@@ -105,7 +104,7 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         if (type is null || type != declaredType)
             throw new DomainException("invalid_file", "Upload a PDF, JPEG or PNG file whose content matches its type.");
         var digest = Convert.ToHexString(SHA256.HashData(content));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
         {
             var saved = await ReadAsync(parish, prior.Id, ct);
             if (saved.Value.RequestId != request || !uploader.Office && saved.Value.UploadedBy != uploader.Id)
@@ -153,7 +152,7 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         await store.PutAsync(file.StoragePath, content, type, ct);
         // Recheck current authority after I/O, retaining the original conditional versions rather than refreshing stale values.
         await recheck();
-        await records.CommitAsync(Scope(parish), op, "evidence.upload", file.Id, changes, new CommandResult { Id = file.Id, Status = file.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "evidence.upload", file.Id, changes, new CommandResult { Id = file.Id, Status = file.Status }, ct);
         return Project(await ReadAsync(parish, file.Id, ct));
     }
 
@@ -185,7 +184,7 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         var file = (await ReadAsync(parish, id, ct)).Value;
         RequireAudience(file, request, office);
         var op = actor.CreateOperation(body.OperationId, body, clock, "evidence-remove:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadAsync(parish, id, ct));
         if (RequestService.Terminal.Contains(item.Value.Status))
             throw State("This case is closed; its files are read-only.");
@@ -194,7 +193,7 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
         file.Status = "Removed";
         file.Reason = Guard.Text(body.Reason, "Reason", 500);
         await CaseAsync(parish, request, ct);
-        await records.CommitAsync(Scope(parish), op, "evidence.remove", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "evidence.remove", id,
             [MinistryAccess.Fence(root), RecordChange.Replace("request:" + request, "parishRequest", item.Value, item.Version),
                 RecordChange.Replace("evidenceFile:" + id, "evidenceFile", file, Versions.Require(body.Version))],
             new CommandResult { Id = id, Status = file.Status }, ct);
@@ -211,10 +210,10 @@ public class EvidenceService(IRecordTransactions records, IEvidenceStore store, 
     };
 
     private async Task<IReadOnlyList<Versioned<EvidenceFile>>> FilesAsync(string parish, string request, CancellationToken ct)
-        => (await records.CollectAsync<EvidenceFile>(Scope(parish), "evidenceFile", ct, 500, new RecordCondition { Path = "requestId", Comparison = "eq", Value = request }));
+        => (await records.CollectAsync<EvidenceFile>(RecordScopes.Parish(parish), "evidenceFile", ct, 500, new RecordCondition { Path = "requestId", Comparison = "eq", Value = request }));
 
     private async Task<Versioned<EvidenceFile>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<EvidenceFile>(Scope(parish), "evidenceFile:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
+        => await records.ReadAsync<EvidenceFile>(RecordScopes.Parish(parish), "evidenceFile:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
 
     private void RequireAudience(EvidenceFile file, string request, bool office)
     {

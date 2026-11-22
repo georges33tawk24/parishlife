@@ -16,7 +16,6 @@ public class BroadcastAutomationService(IRecordTransactions records, BroadcastSe
 {
     // Technical bound on live automations per parish, not an agreed parish policy.
     internal const int MaximumLive = 20;
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "broadcastAutomation:" + id;
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static DomainException State(string message) => new("invalid_automation_state", message, FailureKind.Conflict);
@@ -25,14 +24,14 @@ public class BroadcastAutomationService(IRecordTransactions records, BroadcastSe
     {
         var root = await broadcasts.StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast-automation:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         var old = id is null ? null : await ReadAsync(parish, id, ct);
         if (old?.Value.Status == "Ended")
             throw State("An ended automation is not edited; create a new one.");
         if (old is null)
         {
-            var live = (await records.CollectAsync<BroadcastAutomation>(Scope(parish), "broadcastAutomation", ct, 500)).Count(r => r.Value.Status != "Ended");
+            var live = (await records.CollectAsync<BroadcastAutomation>(RecordScopes.Parish(parish), "broadcastAutomation", ct, 500)).Count(r => r.Value.Status != "Ended");
             if (live >= MaximumLive)
                 throw new DomainException("batch_limit", $"A parish keeps at most {MaximumLive} automations that have not ended; end one first.", FailureKind.Conflict);
         }
@@ -66,7 +65,7 @@ public class BroadcastAutomationService(IRecordTransactions records, BroadcastSe
             old is null ? RecordChange.Create(Key(item.Id), "broadcastAutomation", item) : RecordChange.Replace(Key(item.Id), "broadcastAutomation", item, Versions.Require(request.Version))
         };
         await WorkChangesAsync(parish, item, changes, ct);
-        await records.CommitAsync(Scope(parish), op, "communications.automation_save", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.automation_save", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -75,7 +74,7 @@ public class BroadcastAutomationService(IRecordTransactions records, BroadcastSe
         var root = await broadcasts.StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast-automation-action:v1:" + id);
         var row = await ReadAsync(parish, id, ct);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(row.Value);
         var item = row.Value;
         switch (request.Action)
@@ -102,21 +101,21 @@ public class BroadcastAutomationService(IRecordTransactions records, BroadcastSe
         item.UpdatedAt = op.At;
         var changes = new List<RecordChange> { Fence(root), RecordChange.Replace(Key(id), "broadcastAutomation", item, Versions.Require(request.Version)) };
         await WorkChangesAsync(parish, item, changes, ct);
-        await records.CommitAsync(Scope(parish), op, "communications.automation_" + request.Action, id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.automation_" + request.Action, id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
     }
 
     public async Task<IReadOnlyList<Versioned<BroadcastAutomationDto>>> ListAsync(string parish, CancellationToken ct)
     {
         await broadcasts.StaffAsync(parish, ct);
-        return (await records.CollectAsync<BroadcastAutomation>(Scope(parish), "broadcastAutomation", ct, 500))
+        return (await records.CollectAsync<BroadcastAutomation>(RecordScopes.Parish(parish), "broadcastAutomation", ct, 500))
             .OrderByDescending(r => r.Value.UpdatedAt).Select(r => new Versioned<BroadcastAutomationDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
     // An Active automation has exactly one work item due at its next run; any other state has none.
     private async Task WorkChangesAsync(string parish, BroadcastAutomation item, List<RecordChange> changes, CancellationToken ct)
     {
-        var work = await records.ReadAsync<BroadcastWork>(Scope(parish), BroadcastService.WorkKey(item.Id), ct);
+        var work = await records.ReadAsync<BroadcastWork>(RecordScopes.Parish(parish), BroadcastService.WorkKey(item.Id), ct);
         var due = new BroadcastWork { Id = item.Id, ParishId = parish, Kind = "Automation", TargetId = item.Id, DueAt = item.NextRunAt };
         if (item.Status == "Active")
             changes.Add(work is null ? RecordChange.Create(BroadcastService.WorkKey(item.Id), "broadcastWork", due)

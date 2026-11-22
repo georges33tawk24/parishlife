@@ -25,9 +25,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     NotificationOutcomeReader outcomes, RequestClaimService claims)
 {
     internal static readonly string[] Terminal = ["Completed", "Declined", "Withdrawn", "Cancelled"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "request:" + id;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested case is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_request_state", message, FailureKind.Conflict);
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
@@ -59,7 +57,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             await access.RequireModuleAsync(parish, "requests", ct);
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "request:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value, office);
         var item = NewCase(parish, op, request.Kind, request.Summary, request.Details, request.PreferredDates, request.Relationship, request.AuthorityBasis, actor.AccountId);
         if (office)
@@ -86,7 +84,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         var changes = new List<RecordChange> { RecordChange.Create(Key(item.Id), "parishRequest", item), History(item, "submit", "", null, op, actor.AccountId) };
         if (root is not null)
             changes.Insert(0, Fence(root));
-        await records.CommitAsync(Scope(parish), op, "request.submit", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.submit", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item, office);
     }
 
@@ -96,7 +94,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         await access.RequireModuleAsync(parish, "requests", ct);
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var op = Operation.Create(request.OperationId, "guest", request, clock, "guest-request:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             throw State("This guest request was already received; use the tracking token returned the first time.");
         var item = NewCase(parish, op, request.Kind, request.Summary, request.Details, request.PreferredDates, request.Relationship, request.AuthorityBasis, "guest");
         item.Origin = "Guest";
@@ -104,7 +102,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         item.RequesterContact = Guard.Text(request.RequesterContact, "Requester contact", 300);
         item.SubjectDescription = Guard.Text(request.SubjectDescription, "Subject", 1000);
         item.GuestTokenHash = Hash(token);
-        await records.CommitAsync(Scope(parish), op, "request.guest_submit", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.guest_submit", item.Id,
             [RecordChange.Create(Key(item.Id), "parishRequest", item), History(item, "submit", "", null, op, null)], new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return new GuestRequestReceiptDto { Reference = item.Reference, RequestId = item.Id, TrackingToken = token };
     }
@@ -134,7 +132,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         if (request.Action == "clergy-approve")
             await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await WithOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, true, ct);
         var item = row.Value;
         var previous = Copy(item);
@@ -229,7 +227,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
             changes.Add(notice);
         }
-        await records.CommitAsync(Scope(parish), op, "request." + request.Action.Replace('-', '_'), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request." + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (recipient is not null)
             await notifications.DispatchAsync(parish, recipient, dedupKey, ct);
@@ -240,7 +238,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-checklist:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value, true);
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
@@ -250,7 +248,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         var previous = Copy(item);
         var old = item.Checklist.ToDictionary(c => c.Key, StringComparer.Ordinal);
         // A newly referenced evidence file must be an active file of this case; it is fenced at its version with the checklist change.
-        var files = (await records.CollectAsync<EvidenceFile>(Scope(parish), "evidenceFile", ct, 500, Equal("requestId", id))).ToDictionary(f => f.Value.Id, StringComparer.Ordinal);
+        var files = (await records.CollectAsync<EvidenceFile>(RecordScopes.Parish(parish), "evidenceFile", ct, 500, RecordConditions.Equal("requestId", id))).ToDictionary(f => f.Value.Id, StringComparer.Ordinal);
         var fenced = new Dictionary<string, Versioned<EvidenceFile>>(StringComparer.Ordinal);
         item.Checklist = request.Items.Select(i =>
         {
@@ -279,7 +277,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         item.UpdatedAt = op.At;
         var changes = new List<RecordChange> { Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)), History(item, "checklist", previous.Status, previous, op, actor.AccountId) };
         changes.AddRange(fenced.Values.Select(f => RecordChange.Replace("evidenceFile:" + f.Value.Id, "evidenceFile", f.Value, f.Version)));
-        await records.CommitAsync(Scope(parish), op, "request.checklist", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.checklist", id,
             changes,
             new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item, true);
@@ -326,7 +324,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
                     throw Missing();
             }
         }
-        var rows = await records.CollectAsync<RequestMessage>(Scope(parish), "requestMessage", ct, 500, Equal("requestId", id));
+        var rows = await records.CollectAsync<RequestMessage>(RecordScopes.Parish(parish), "requestMessage", ct, 500, RecordConditions.Equal("requestId", id));
         // Applicants and guests only ever receive applicant-visible messages; internal notes stay with the office.
         return rows.Select(r => r.Value).Where(m => office || m.Audience == "Applicant").OrderBy(m => m.At).ThenBy(m => m.Id, StringComparer.Ordinal)
             .Select(m => new RequestMessageDto { Id = m.Id, Audience = m.Audience, AuthorKind = m.AuthorKind, AuthorAccountId = office ? m.AuthorAccountId : null, Body = m.Body, At = m.At })
@@ -351,7 +349,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         item.ClaimantAccountId = actor.AccountId;
         item.UpdatedAt = clock.GetUtcNow();
         var op = Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock, "request-claim:v1:" + id);
-        await records.CommitAsync(Scope(parish), op, "request.claim", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.claim", id,
             [RecordChange.Replace(Key(id), "parishRequest", item, row.Version), History(item, "claim", item.Status, previous, op, actor.AccountId)],
             new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item, false);
@@ -361,7 +359,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-association:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await WithOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, true, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         var claimant = item.ClaimantAccountId ?? throw State("No account association is waiting for review.");
@@ -382,7 +380,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         var associationNotice = notifications.StageRequired(parish, claimant, "request.update", "There is an update to your request association.",
             request.Approve ? "/api/parishes/" + parish + "/requests/" + id : null, "request-association:" + op.Id, "RequestAssociation", id, op.At);
         item.NotificationWorkIds = [((NotificationWork)associationNotice.Value!).Id];
-        await records.CommitAsync(Scope(parish), op, request.Approve ? "request.associate" : "request.association_decline", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, request.Approve ? "request.associate" : "request.association_decline", id,
             [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)),
              History(item, request.Approve ? "associate" : "association-decline", previous.Status, previous, op, actor.AccountId),
              MessageChange(item, "Internal", "Office", actor.AccountId, note, op),
@@ -397,7 +395,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-rotate:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             throw State("This link was already replaced; replace it again to get a new token.");
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.GuestTokenHash is null || item.ApplicantAccountId is not null)
@@ -407,7 +405,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         item.GuestTokenHash = Hash(token);
         item.ClaimantAccountId = null;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "request.rotate_tracking", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.rotate_tracking", id,
             [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, Versions.Require(request.Version)), History(item, "rotate-tracking", previous.Status, previous, op, actor.AccountId),
              MessageChange(item, "Internal", "Office", actor.AccountId, "Tracking link replaced: " + Guard.Text(request.Reason, "Reason", 1000), op)],
             new CommandResult { Id = id, Status = item.Status }, ct);
@@ -424,12 +422,12 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         if (from == to)
             throw new DomainException("invalid_input", "Choose a different account to take over the open cases.");
         var now = clock.GetUtcNow();
-        if (!(await records.CollectAsync<AccessGrant>(Scope(parish), "grant", ct, 20, Equal("accountId", to))).Any(g => g.Value.Permits(Permissions.RequestsManage, now)))
+        if (!(await records.CollectAsync<AccessGrant>(RecordScopes.Parish(parish), "grant", ct, 20, RecordConditions.Equal("accountId", to))).Any(g => g.Value.Permits(Permissions.RequestsManage, now)))
             throw State("The new owner needs current requests.manage access in this parish.");
         var op = actor.CreateOperation(request.OperationId, request, clock, "request-handover:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return new OfficeHandoverResultDto { Moved = int.Parse(prior.Status, System.Globalization.CultureInfo.InvariantCulture), Remaining = await OpenCountAsync(parish, from, ct) };
-        var open = (await records.CollectAsync<ParishRequest>(Scope(parish), "parishRequest", ct, 5000))
+        var open = (await records.CollectAsync<ParishRequest>(RecordScopes.Parish(parish), "parishRequest", ct, 5000))
             .Where(r => r.Value.AssignedTo == from && !Terminal.Contains(r.Value.Status)).OrderBy(r => r.Value.ReceivedAt).ToList();
         // Two changes per case plus the parish fence stay inside one transactional batch.
         var batch = open.Take(45).ToList();
@@ -442,7 +440,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
             changes.Add(RecordChange.Replace(Key(row.Value.Id), "parishRequest", row.Value, row.Version));
             changes.Add(History(row.Value, "handover", previous.Status, previous, Operation.Create(Guid.NewGuid(), actor.AccountId, new { row.Value.Id, to }, clock), actor.AccountId));
         }
-        await records.CommitAsync(Scope(parish), op, "request.handover", from, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.handover", from, changes,
             new CommandResult { Id = from, Status = batch.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) }, ct);
         return new OfficeHandoverResultDto { Moved = batch.Count, Remaining = open.Count - batch.Count };
     }
@@ -453,7 +451,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(operationId, new { id, kind, recordId }, clock, "request-record-link:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return true;
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
@@ -464,14 +462,14 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         var previous = Copy(item);
         item.Links = [.. item.Links, new RequestLink { Kind = kind, RecordId = recordId }];
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "request.link", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.link", id,
             [Fence(root), RecordChange.Replace(Key(id), "parishRequest", item, row.Version), History(item, "link", previous.Status, previous, op, actor.AccountId)],
             new CommandResult { Id = id, Status = item.Status }, ct);
         return true;
     }
 
     internal async Task<int> OpenCountAsync(string parish, string account, CancellationToken ct)
-        => (await records.CollectAsync<ParishRequest>(Scope(parish), "parishRequest", ct, 5000)).Count(r => r.Value.AssignedTo == account && !Terminal.Contains(r.Value.Status));
+        => (await records.CollectAsync<ParishRequest>(RecordScopes.Parish(parish), "parishRequest", ct, 5000)).Count(r => r.Value.AssignedTo == account && !Terminal.Contains(r.Value.Status));
 
     public async Task<Versioned<ParishRequestDto>> GetAsync(string parish, string id, CancellationToken ct)
     {
@@ -499,7 +497,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     public async Task<Page<Versioned<ParishRequestDto>>> OwnAsync(string parish, int size, string? cursor, CancellationToken ct)
     {
         await own.PersonalAsync(ct);
-        var page = await records.PageAsync<ParishRequest>(Scope(parish), "parishRequest", size, cursor, ct, Equal("applicantAccountId", actor.AccountId));
+        var page = await records.PageAsync<ParishRequest>(RecordScopes.Parish(parish), "parishRequest", size, cursor, ct, RecordConditions.Equal("applicantAccountId", actor.AccountId));
         return ProjectPage(page, false);
     }
 
@@ -507,16 +505,16 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     {
         await OfficeAsync(parish, ct);
         var conditions = new List<RecordCondition>();
-        if (status is not null) conditions.Add(Equal("status", Guard.Text(status, "Status", 40)));
-        if (kind is not null) conditions.Add(Equal("kind", Guard.Text(kind, "Kind", 40)));
-        return ProjectPage(await records.PageAsync<ParishRequest>(Scope(parish), "parishRequest", size, cursor, ct, [.. conditions]), true);
+        if (status is not null) conditions.Add(RecordConditions.Equal("status", Guard.Text(status, "Status", 40)));
+        if (kind is not null) conditions.Add(RecordConditions.Equal("kind", Guard.Text(kind, "Kind", 40)));
+        return ProjectPage(await records.PageAsync<ParishRequest>(RecordScopes.Parish(parish), "parishRequest", size, cursor, ct, [.. conditions]), true);
     }
 
     public async Task<IReadOnlyList<RequestHistoryDto>> HistoryAsync(string parish, string id, CancellationToken ct)
     {
         await OfficeAsync(parish, ct);
         await ReadAsync(parish, id, ct);
-        var rows = await records.CollectAsync<RequestHistory>(Scope(parish), "requestChange", ct, 1000, Equal("requestId", id));
+        var rows = await records.CollectAsync<RequestHistory>(RecordScopes.Parish(parish), "requestChange", ct, 1000, RecordConditions.Equal("requestId", id));
         return rows.Select(r => r.Value).OrderBy(h => h.At).ThenBy(h => h.Id, StringComparer.Ordinal).Select(h => new RequestHistoryDto
         {
             Id = h.Id, Action = h.Action, FromStatus = h.FromStatus, ToStatus = h.ToStatus, ActorAccountId = h.ActorAccountId, At = h.At,
@@ -527,7 +525,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
     private async Task<ParishRequestDto> ApplicantActAsync(string parish, Versioned<ParishRequest> row, RequestActionDto request, string author, CancellationToken ct)
     {
         var op = Operation.Create(request.OperationId, author == "Guest" ? "guest:" + row.Value.Id : actor.AccountId, request, clock, "request-applicant:v1:" + row.Value.Id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, row.Value.Id, ct)).Value, false);
         var item = row.Value;
         var previous = Copy(item);
@@ -564,7 +562,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         item.UpdatedAt = op.At;
         changes.Add(RecordChange.Replace(Key(item.Id), "parishRequest", item, Versions.Require(request.Version)));
         changes.Add(History(item, request.Action, previous.Status, previous, op, author == "Guest" ? null : actor.AccountId));
-        await records.CommitAsync(Scope(parish), op, "request.applicant_" + request.Action.Replace('-', '_'), item.Id, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.applicant_" + request.Action.Replace('-', '_'), item.Id, changes,
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item, false);
     }
@@ -575,7 +573,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
         if (Terminal.Contains(item.Status) && author != "Office")
             throw State("This case is closed; contact the parish office.");
         var change = MessageChange(item, request.Audience, author, account, request.Body, op);
-        await records.CommitAsync(Scope(parish), op, "request.message", item.Id, [change], new CommandResult { Id = op.Id, Status = "Posted" }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "request.message", item.Id, [change], new CommandResult { Id = op.Id, Status = "Posted" }, ct);
         var message = (RequestMessage)change.Value!;
         return new RequestMessageDto { Id = message.Id, Audience = message.Audience, AuthorKind = message.AuthorKind, AuthorAccountId = account, Body = message.Body, At = message.At };
     }
@@ -632,7 +630,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
 
     private async Task<string> PersonAsync(string parish, string person, CancellationToken ct)
     {
-        var row = (await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value;
+        var row = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value;
         if (row is null || row.ParishId != parish || row.Archived)
             throw Missing();
         return person;
@@ -640,7 +638,7 @@ public class RequestService(IRecordTransactions records, IParishAccess access, I
 
     private async Task<Versioned<ParishRequest>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<ParishRequest>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<ParishRequest>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

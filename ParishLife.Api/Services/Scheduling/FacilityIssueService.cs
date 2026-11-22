@@ -15,7 +15,6 @@ namespace ParishLife.Api.Services.Scheduling;
 public class FacilityIssueService(IRecordTransactions records, IParishAccess access, IAccountDirectory accounts, ICurrentActor actor,
     MfaAccountAccess proof, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "facilityIssue:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested issue is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_issue_state", message, FailureKind.Conflict);
@@ -39,13 +38,13 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
             root = await AuthorizeAsync(parish, Permissions.ScheduleRead, ct);
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "facility-issue:v1");
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         var resource = Guard.Id(request.ResourceId);
         var exists = request.ResourceKind switch
         {
             "Facility" => (await records.ReadAsync<Facility>(SchedulingScope.For(parish), "facility:" + resource, ct))?.Value.ParishId == parish,
-            "Equipment" => (await records.ReadAsync<FacilityEquipment>(Scope(parish), EquipmentService.Key(resource), ct))?.Value.ParishId == parish,
+            "Equipment" => (await records.ReadAsync<FacilityEquipment>(RecordScopes.Parish(parish), EquipmentService.Key(resource), ct))?.Value.ParishId == parish,
             _ => false
         };
         if (!exists || request.Urgency is not ("Low" or "Normal" or "Urgent" or "Hazard"))
@@ -59,7 +58,7 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
             Evidence = string.IsNullOrWhiteSpace(request.Evidence) ? null : Guard.Text(request.Evidence, "Evidence", 1000),
             ReportedBy = actor.AccountId, ReportedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "facilities.issue_report", resource, [Fence(root), RecordChange.Create(Key(item.Id), "facilityIssue", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "facilities.issue_report", resource, [Fence(root), RecordChange.Create(Key(item.Id), "facilityIssue", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -68,7 +67,7 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
     {
         var root = await AuthorizeAsync(parish, Permissions.FacilitiesManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "facility-issue-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         var serious = item.Urgency is "Urgent" or "Hazard";
@@ -108,7 +107,7 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
             default:
                 throw State("This issue action is not available in its current state.");
         }
-        await records.CommitAsync(Scope(parish), op, "facilities.issue_" + request.Action.Replace('-', '_'), item.ResourceId,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "facilities.issue_" + request.Action.Replace('-', '_'), item.ResourceId,
             [Fence(root), RecordChange.Replace(Key(item.Id), "facilityIssue", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
@@ -125,8 +124,8 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
     {
         await AuthorizeAsync(parish, Permissions.FacilitiesManage, ct);
         var page = status is null
-            ? await records.PageAsync<FacilityIssue>(Scope(parish), "facilityIssue", size, cursor, ct)
-            : await records.PageAsync<FacilityIssue>(Scope(parish), "facilityIssue", size, cursor, ct,
+            ? await records.PageAsync<FacilityIssue>(RecordScopes.Parish(parish), "facilityIssue", size, cursor, ct)
+            : await records.PageAsync<FacilityIssue>(RecordScopes.Parish(parish), "facilityIssue", size, cursor, ct,
                 new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 30) });
         return new Page<Versioned<FacilityIssueDto>>
         {
@@ -137,7 +136,7 @@ public class FacilityIssueService(IRecordTransactions records, IParishAccess acc
 
     private async Task<Versioned<FacilityIssue>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<FacilityIssue>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<FacilityIssue>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

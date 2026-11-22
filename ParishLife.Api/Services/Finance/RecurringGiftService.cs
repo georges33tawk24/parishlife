@@ -13,7 +13,6 @@ namespace ParishLife.Api.Services.Finance;
 
 public class RecurringGiftService(IRecordTransactions records, GivingService giving, ICurrentActor actor, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static string Key(string id) => "recurringGift:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested recurring gift is unavailable.", FailureKind.NotFound);
@@ -22,7 +21,7 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "recurring-gift:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project(await ReadAsync(parish, prior.Id, ct), Today());
         GivingService.Money(request.Amount, request.Currency);
         if (request.PersonId is null && request.HouseholdId is null)
@@ -47,7 +46,7 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
         item.Note = GivingService.Optional(request.Note, "Note", 500);
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, old is null ? "finance.recurring_create" : "finance.recurring_edit", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, old is null ? "finance.recurring_create" : "finance.recurring_edit", item.Id,
             [Fence(root), old is null ? RecordChange.Create(Key(item.Id), "recurringGift", item) : RecordChange.Replace(Key(item.Id), "recurringGift", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(await ReadAsync(parish, item.Id, ct), Today());
@@ -57,7 +56,7 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "recurring-gift-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadAsync(parish, id, ct), Today());
         var item = (await ReadAsync(parish, id, ct)).Value;
         switch (request.Action)
@@ -79,7 +78,7 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
         }
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "finance.recurring_" + request.Action, id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.recurring_" + request.Action, id,
             [Fence(root), RecordChange.Replace(Key(id), "recurringGift", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(await ReadAsync(parish, id, ct), Today());
     }
@@ -88,7 +87,7 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
         var today = Today();
-        return (await records.CollectAsync<RecurringGift>(Scope(parish), "recurringGift", ct, 5000)).Where(r => r.Value.ParishId == parish)
+        return (await records.CollectAsync<RecurringGift>(RecordScopes.Parish(parish), "recurringGift", ct, 5000)).Where(r => r.Value.ParishId == parish)
             .OrderBy(r => r.Value.Status == "Ended").ThenBy(r => r.Value.StartsOn).ThenBy(r => r.Value.Id, StringComparer.Ordinal)
             .Select(r => Project(r, today)).ToArray();
     }
@@ -117,10 +116,10 @@ public class RecurringGiftService(IRecordTransactions records, GivingService giv
     private DateOnly Today() => DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
 
     private async Task<string> HouseholdAsync(string parish, string household, CancellationToken ct)
-        => (await records.ReadAsync<Household>(Scope(parish), "household:" + household, ct))?.Value is { } row && row.ParishId == parish ? row.Id : throw Missing();
+        => (await records.ReadAsync<Household>(RecordScopes.Parish(parish), "household:" + household, ct))?.Value is { } row && row.ParishId == parish ? row.Id : throw Missing();
 
     private async Task<Versioned<RecurringGift>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<RecurringGift>(Scope(parish), Key(id), ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<RecurringGift>(RecordScopes.Parish(parish), Key(id), ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private static RecurringGiftDto Project(Versioned<RecurringGift> row, DateOnly today)
     {

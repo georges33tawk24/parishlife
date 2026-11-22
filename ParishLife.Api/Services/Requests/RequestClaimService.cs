@@ -15,13 +15,12 @@ namespace ParishLife.Api.Services.Requests;
 public class RequestClaimService(IRecordTransactions records, IParishRepository parishes, MinistryAccess own, ICurrentActor actor, TimeProvider clock)
 {
     internal const int MaximumListed = 200;
-    private static RecordScope AccountScope(string account) => new() { Area = RecordArea.Account, OwnerId = account };
     private static string Key(string request) => "requestClaim:" + request;
 
     // Written in the claimant's own partition before the parish claim; it is not part of that transaction and carries no case contents.
     internal async Task RecordPointerAsync(string parish, ParishRequest item, CancellationToken ct)
     {
-        var scope = AccountScope(actor.AccountId);
+        var scope = RecordScopes.Account(actor.AccountId);
         var existing = await records.ReadAsync<RequestClaimPointer>(scope, Key(item.Id), ct);
         var pointer = new RequestClaimPointer
         {
@@ -36,7 +35,7 @@ public class RequestClaimService(IRecordTransactions records, IParishRepository 
     public async Task<IReadOnlyList<RequestClaimDto>> ListAsync(CancellationToken ct)
     {
         await own.PersonalAsync(ct);
-        var pointers = await records.CollectAsync<RequestClaimPointer>(AccountScope(actor.AccountId), "requestClaimPointer", ct, MaximumListed);
+        var pointers = await records.CollectAsync<RequestClaimPointer>(RecordScopes.Account(actor.AccountId), "requestClaimPointer", ct, MaximumListed);
         var result = new List<RequestClaimDto>();
         foreach (var pointer in pointers.Select(p => p.Value).Where(p => p.AccountId == actor.AccountId).OrderByDescending(p => p.ClaimedAt))
         {

@@ -20,7 +20,6 @@ namespace ParishLife.Api.Services.Care;
 public class IncidentService(IRecordTransactions records, IParishAccess access, ICurrentActor actor, MfaAccountAccess proof,
     IDataProtectionProvider protection, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader outcomes)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested incident is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_incident_state", message, FailureKind.Conflict);
     private IDataProtector Protector(string parish, string id) => protection.CreateProtector("ParishLife.Incidents.v1", parish, id);
@@ -37,17 +36,17 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
     {
         var root = await RequireAsync(parish, Permissions.IncidentsRecord, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "incident:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Receipt((await ReadAsync(parish, prior.Id, ct)).Value);
         if (request.OccurredAt == default || request.OccurredAt > op.At)
             throw new DomainException("invalid_input", "Give when the incident happened; it cannot be in the future.");
         // Links are recorded only when the record exists; nothing is inferred from attendance.
         string? eventId = null;
         if (request.EventId is { } e)
-            eventId = (await records.ReadAsync<CalendarEvent>(Scope(parish), "event:" + Guard.Id(e), ct))?.Value.Id ?? throw Missing();
+            eventId = (await records.ReadAsync<CalendarEvent>(RecordScopes.Parish(parish), "event:" + Guard.Id(e), ct))?.Value.Id ?? throw Missing();
         var persons = request.PersonIds.Select(Guard.Id).Distinct(StringComparer.Ordinal).ToArray();
         foreach (var person in persons)
-            if ((await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is not { Archived: false } p || p.ParishId != parish)
+            if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value is not { Archived: false } p || p.ParishId != parish)
                 throw Missing();
         var item = new Incident
         {
@@ -59,7 +58,7 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
             Description = Guard.Text(request.Description, "Description", 8000), ImmediateActions = Optional(request.ImmediateActions, "Immediate actions", 4000),
             Witnesses = Optional(request.Witnesses, "Witnesses", 2000)
         }));
-        await records.CommitAsync(Scope(parish), op, "incident.record", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "incident.record", item.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Create("incident:" + item.Id, "incident", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Receipt(item);
@@ -69,7 +68,7 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
     {
         var root = await RequireAsync(parish, Permissions.IncidentsManage, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "incident-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
         {
             // ponytail: an assign replay reports the latest assignment notice; keep per-entry pointers if reassignment replays need their own.
             var current = (await ReadAsync(parish, id, ct)).Value;
@@ -131,7 +130,7 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
             item.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
             changes.Add(notice);
         }
-        await records.CommitAsync(Scope(parish), op, "incident." + request.Action.Replace('-', '_'), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "incident." + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (request.Action == "assign")
             await notifications.DispatchAsync(parish, item.HandlerAccountId!, "incident:" + op.Id, ct);
@@ -165,12 +164,12 @@ public class IncidentService(IRecordTransactions records, IParishAccess access, 
         var conditions = new List<RecordCondition>();
         if (status is not null) conditions.Add(new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 20) });
         if (eventId is not null) conditions.Add(new RecordCondition { Path = "eventId", Comparison = "eq", Value = eventId });
-        return (await records.CollectAsync<Incident>(Scope(parish), "incident", ct, 2000, [.. conditions]))
+        return (await records.CollectAsync<Incident>(RecordScopes.Parish(parish), "incident", ct, 2000, [.. conditions]))
             .OrderByDescending(r => r.Value.RecordedAt).Select(r => new Versioned<IncidentDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
     private async Task<Versioned<Incident>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<Incident>(Scope(parish), "incident:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<Incident>(RecordScopes.Parish(parish), "incident:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private static string? Optional(string? value, string name, int max) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, max);
 

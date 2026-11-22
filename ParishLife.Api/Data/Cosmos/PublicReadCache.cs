@@ -47,9 +47,14 @@ internal sealed class PublicReadCache
     {
         if (entry.Generation != Generation)
             return;
-        if (entries.Count >= MaximumEntries || Interlocked.Add(ref bytes, entry.Body.Length) > MaximumBytes)
+        // Keys include the caller-chosen query string, so the bounds are what keep memory finite: count every stored body exactly once
+        // (a replaced answer gives its bytes back; a clear starts the count again from this entry).
+        if (entries.Count >= MaximumEntries || Interlocked.Read(ref bytes) + entry.Body.Length > MaximumBytes)
             Clear();
+        if (entries.TryGetValue(request, out var previous))
+            Interlocked.Add(ref bytes, -previous.Body.Length);
         entries[request] = entry;
+        Interlocked.Add(ref bytes, entry.Body.Length);
     }
 
     private void Clear()

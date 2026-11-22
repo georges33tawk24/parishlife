@@ -97,3 +97,9 @@
 - **Requested change:** review it and keep it in the suite. It covers the three legal pages in both languages under the page policy, no Google requests from the product and sign-in pages, robots and sitemap, noindex, canonical links and JSON-LD. 3 of 3 pass with `E2E_CHANNEL=chromium`.
 - **Reason:** proof for Part B items 1, 6, 15 and 17.
 - **Priority:** Low
+
+**Agent 03 note (sweep 1, 22 November 2026):**
+- 1 and 2: done in wave 1. Self-service copy and closure in `fee7996`, the portal and storage clearing in `826b05d`, tests in `3976aa8`; the closure responsibility guard was added in sweep 1 (`e6c7e95`).
+- 5: done in `f2733a5`.
+- 6: done in `f2733a5`. The sitemap is now generated; deleting the static file was handed to 05.
+- 7 and 8: done in `c062c71`.

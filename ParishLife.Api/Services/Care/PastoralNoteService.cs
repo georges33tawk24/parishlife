@@ -17,7 +17,6 @@ namespace ParishLife.Api.Services.Care;
 public class PastoralNoteService(IRecordTransactions records, IClergyAuthority clergy, ICurrentActor actor, MfaAccountAccess proof,
     IDataProtectionProvider protection, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "pastoralNote:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested note is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_note_state", message, FailureKind.Conflict);
@@ -26,7 +25,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
     private async Task<bool> IsPriestAsync(string parish, string account, CancellationToken ct)
     {
         try { await clergy.RequireAsync(parish, account, "Priest", ct); return true; }
-        catch (DomainException) { return false; }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { return false; }
     }
 
     public async Task<PastoralNoteDto> SaveAsync(string parish, string? id, SavePastoralNoteDto request, CancellationToken ct)
@@ -35,7 +34,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
         if (!await IsPriestAsync(parish, actor.AccountId, ct))
             throw Missing();
         var op = actor.CreateOperation(request.OperationId, request, clock, "pastoral-note:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project(parish, (await ReadAsync(parish, prior.Id, ct)).Value);
         Versioned<PastoralNote>? old = null;
         if (id is not null)
@@ -70,7 +69,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
         }
         if (request.PersonId is { } person)
         {
-            var row = (await records.ReadAsync<Person>(Scope(parish), "person:" + Guard.Id(person), ct))?.Value;
+            var row = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + Guard.Id(person), ct))?.Value;
             if (row is null || row.ParishId != parish)
                 throw Missing();
             item.PersonId = row.Id;
@@ -84,7 +83,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
         item.ProtectedContent = Protector(parish, item.Id).Protect(JsonSerializer.Serialize(content));
         item.UpdatedAt = op.At;
         // The receipt carries only the id and status; protected content never reaches receipts or audit.
-        await records.CommitAsync(Scope(parish), op, "care.note_save", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "care.note_save", item.Id,
             [old is null ? RecordChange.Create(Key(item.Id), "pastoralNote", item) : RecordChange.Replace(Key(item.Id), "pastoralNote", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(parish, item);
@@ -98,7 +97,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
         var author = item.AccountId == actor.AccountId;
         var assignee = item.AssigneeAccountId == actor.AccountId && await CanReadAsync(parish, item, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "pastoral-note-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(parish, (await ReadAsync(parish, id, ct)).Value);
         switch (request.Action)
         {
@@ -124,7 +123,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
                 throw State("This action is not available for this note now.");
         }
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "care.note_" + request.Action, id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "care.note_" + request.Action, id,
             [RecordChange.Replace(Key(id), "pastoralNote", item, Versions.Require(request.Version))], new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(parish, item);
     }
@@ -142,7 +141,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
     public async Task<IReadOnlyList<Versioned<PastoralNoteDto>>> ListAsync(string parish, CancellationToken ct)
     {
         await proof.RequireMfaAsync(ct);
-        var rows = await records.CollectAsync<PastoralNote>(Scope(parish), "pastoralNote", ct, 2000);
+        var rows = await records.CollectAsync<PastoralNote>(RecordScopes.Parish(parish), "pastoralNote", ct, 2000);
         var priest = await IsPriestAsync(parish, actor.AccountId, ct);
         return rows.Where(r => r.Value.AccountId == actor.AccountId
                 || priest && (r.Value.Visibility == "ParishPriests" || r.Value.Visibility == "NamedPriest" && r.Value.SharedWithAccountId == actor.AccountId))
@@ -158,7 +157,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
 
     private async Task<Versioned<PastoralNote>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<PastoralNote>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<PastoralNote>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

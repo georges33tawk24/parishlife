@@ -13,15 +13,14 @@ namespace ParishLife.Api.Services.Finance;
 
 public class ExchangeRateService(IRecordTransactions records, GivingService giving, ICurrentActor actor, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
 
     public async Task<ExchangeRateDto> RecordAsync(string parish, RecordExchangeRateDto request, CancellationToken ct)
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "exchange-rate:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await records.ReadAsync<ExchangeRate>(Scope(parish), "exchangeRate:" + prior.Id, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return Project((await records.ReadAsync<ExchangeRate>(RecordScopes.Parish(parish), "exchangeRate:" + prior.Id, ct))!.Value);
         if (!Code(request.BaseCurrency) || !Code(request.QuoteCurrency) || request.BaseCurrency == request.QuoteCurrency)
             throw new DomainException("invalid_input", "Use two different three-letter currency codes.");
         if (request.Rate <= 0 || request.Rate > 1_000_000_000_000m || decimal.Round(request.Rate, 6) != request.Rate)
@@ -34,7 +33,7 @@ public class ExchangeRateService(IRecordTransactions records, GivingService givi
             Id = op.Id, ParishId = parish, BaseCurrency = request.BaseCurrency, QuoteCurrency = request.QuoteCurrency, Rate = request.Rate, EffectiveOn = request.EffectiveOn,
             Source = Guard.Text(request.Source, "Source", 300), Note = GivingService.Optional(request.Note, "Note", 1000), RecordedBy = actor.AccountId, RecordedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "finance.exchange_rate_record", item.Id, [Fence(root), RecordChange.Create("exchangeRate:" + item.Id, "exchangeRate", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "finance.exchange_rate_record", item.Id, [Fence(root), RecordChange.Create("exchangeRate:" + item.Id, "exchangeRate", item)],
             new CommandResult { Id = item.Id, Status = "Recorded" }, ct);
         return Project(item);
     }
@@ -57,7 +56,7 @@ public class ExchangeRateService(IRecordTransactions records, GivingService givi
     }
 
     private async Task<IEnumerable<ExchangeRate>> RatesAsync(string parish, CancellationToken ct)
-        => (await records.CollectAsync<ExchangeRate>(Scope(parish), "exchangeRate", ct, 5000)).Select(r => r.Value).Where(r => r.ParishId == parish)
+        => (await records.CollectAsync<ExchangeRate>(RecordScopes.Parish(parish), "exchangeRate", ct, 5000)).Select(r => r.Value).Where(r => r.ParishId == parish)
             .OrderByDescending(r => r.EffectiveOn).ThenByDescending(r => r.RecordedAt).ThenByDescending(r => r.Id, StringComparer.Ordinal);
 
     private static bool Code(string? value) => value is { Length: 3 } && value.All(c => c is >= 'A' and <= 'Z');

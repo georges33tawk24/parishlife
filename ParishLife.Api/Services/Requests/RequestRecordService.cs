@@ -21,7 +21,6 @@ namespace ParishLife.Api.Services.Requests;
 public class RequestRecordService(IRecordTransactions records, IParishAccess access, MfaAccountAccess proof, SacramentService sacraments,
     CertificateService certificates, RequestService requests)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested case is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_request_state", message, FailureKind.Conflict);
 
@@ -30,7 +29,7 @@ public class RequestRecordService(IRecordTransactions records, IParishAccess acc
         await proof.RequireMfaAsync(ct);
         await access.RequireAsync(parish, Permissions.RequestsManage, ct);
         await access.RequireModuleAsync(parish, "requests", ct);
-        var row = await records.ReadAsync<ParishRequest>(Scope(parish), "request:" + id, ct);
+        var row = await records.ReadAsync<ParishRequest>(RecordScopes.Parish(parish), "request:" + id, ct);
         if (row is null || row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         var sacramental = request.RecordKind == "SacramentalCase";
@@ -38,8 +37,8 @@ public class RequestRecordService(IRecordTransactions records, IParishAccess acc
         var recordOperation = Derive(request.OperationId, "record");
         var recordId = recordOperation.ToString("N");
         var exists = sacramental
-            ? await records.ReadAsync<SacramentRecord>(Scope(parish), "sacrament:" + recordId, ct) is not null
-            : await records.ReadAsync<Certificate>(Scope(parish), "certificate:" + recordId, ct) is not null;
+            ? await records.ReadAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacrament:" + recordId, ct) is not null
+            : await records.ReadAsync<Certificate>(RecordScopes.Parish(parish), "certificate:" + recordId, ct) is not null;
         var item = row.Value;
         if (!exists)
         {
