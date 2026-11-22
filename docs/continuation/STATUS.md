@@ -137,8 +137,8 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - **Verified:** the owner signed up with a personal Microsoft account (21 November, 14:30 UTC). The token endpoint accepted the managed-identity assertion at `common`.
   - **Open:**
     - Google is in Testing (test users only). It goes to "In production" once the privacy/terms placeholders are filled and the banners removed.
-    - The Microsoft consent screen shows "unverified". Publisher verification and the privacy/terms URLs on the app registration come later.
-    - Frontend double-click guard and a portal redirect instead of JSON on a failed check: built 21 November (below), not deployed yet.
+    - The Microsoft consent screen shows "unverified". Publisher verification comes later; the privacy/terms URLs are on the app registration since 21 November.
+    - The double-click guard and the portal redirect on a failed check: deployed 21 November (below).
   - Details: "Google and Microsoft sign-in configuration" in `docs/operations/frontend-hosting.md`.
 - **Double-click fix, Resend email, final privacy and terms (21 November): `39e5df6` deployed 15:15–15:17 UTC by the Azure session (owner's go-ahead):**
   - **Double click:**
@@ -151,21 +151,27 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - Off until `Email__Provider`, `Email__ResendApiKey` (Key Vault) and `Email__From` are set.
     - Setup steps (Resend account and DNS, key in Key Vault, RBAC, settings): `docs/operations/notification-delivery.md`.
   - **Privacy and terms final** (owner answers): operator ParishLife, contact `privacy@parish-life.org`, Lebanese law, age 13+, effective 21 November 2026, draft banner removed, Resend named.
-    - "Technical logs deleted after 90 days" is to be confirmed against the Application Insights retention.
-    - `privacy@` needs Cloudflare Email Routing.
+    - "Technical logs deleted after 90 days": confirmed (see below).
+    - `privacy@`: Cloudflare Email Routing is on and forwarding, tested 22 November.
   - **Checks, SDK 10.0.401:**
     - **550 backend tests passed** (64 unit / 486 integration);
     - frontend format, lint, check and build pass;
     - `check:routes` 0 new gaps;
     - `npm run e2e` 13/13.
-    - No real Resend email has been sent yet.
   - **Verified live:**
     - the pages serve with the page policy, and the privacy and terms pages have no banner or placeholders;
     - a forged check on a portal form post redirects to `check-failed`;
     - capabilities show Google and Microsoft available and email NotConfigured (Resend not set up yet).
     - The privacy text "logs deleted after 90 days" is correct: the App* tables in Application Insights keep 90 days.
     - The Microsoft app registration now has the home, terms and privacy URLs. Publisher verification needs an MPN ID.
-  - **Left for the owner:** Google Branding and Publish, Cloudflare Email Routing for privacy@, and the Resend account and DNS.
+  - **Resend live** (21 November, Azure session, owner's go-ahead):
+    - the domain is verified in Ireland, and the key is in Key Vault `resend-api-key` (stored by the owner);
+    - the `Email__` settings were added at 15:44 UTC;
+    - DMARC `p=none` with Cloudflare reports.
+    - **Verified:** the owner registered, received the code (in Junk, before DMARC), confirmed it and signed in.
+    - The owner keeps the `no-reply` sender. privacy@ forwarding is on and tested.
+    - Details: "Email: live setup" in `docs/operations/notification-delivery.md`.
+  - **Left for the owner:** Google Branding and Publish.
 - **Outside delivery: email, web push and WhatsApp (21 November), code only, not deployed:**
   - **Owner decisions:**
     - Resend also emails personal notices, report notices and broadcasts;

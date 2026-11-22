@@ -101,6 +101,43 @@ Resend only sends. To receive at `privacy@parish-life.org`, turn on Cloudflare *
 
 These do not clash with Resend's records, which are on the `send` subdomain.
 
+## Email: live setup (21–22 November 2026)
+
+Done by the owner (Resend and Cloudflare dashboards) and the Azure session (Azure only), each Azure change with the owner's go-ahead. The API key never passed through the Azure session: the owner stored it in Key Vault directly.
+
+- **Resend:**
+  - Domain `parish-life.org`, region Ireland (`eu-west-1`), verified 21 November. Resend's "Forge" infrastructure is enabled for the domain.
+  - Open and click tracking are off: no tracking subdomain is configured. TLS is "Opportunistic".
+  - The API key has sending access, restricted to `parish-life.org`.
+  - Free plan: 3,000 emails a month, **100 a day**. A broadcast to more people than that will need a paid plan.
+- **Cloudflare DNS** (all DNS only), checked against the zone's own nameservers:
+
+  | Name | Type | Content |
+  |---|---|---|
+  | `resend._domainkey` | TXT | Resend's DKIM key |
+  | `send` | MX | `10 feedback.forge.rmta.net` |
+  | `send` | TXT | `v=spf1 ip4:52.3.252.119 ip4:44.222.39.36 ip4:199.249.231.0/24 ~all` |
+  | `_dmarc` | TXT | `v=DMARC1; p=none; rua=mailto:066e8fd7867b4ff39decf2aa6200e04e@dmarc-reports.cloudflare.net` |
+  | `@` | MX | `route1/2/3.mx.cloudflare.net` (Email Routing, managed by Cloudflare) |
+  | `@` | TXT | `v=spf1 include:_spf.mx.cloudflare.net ~all` (Email Routing) |
+  | `cf2024-1._domainkey` | TXT | Cloudflare Email Routing's DKIM key |
+
+  - DMARC is `p=none` (monitoring). Aggregate reports go to Cloudflare **DMARC Management** for the zone. Move to `p=quarantine` once the reports show only Resend and Cloudflare sending as the domain.
+- **Azure:**
+  - Key Vault secret `resend-api-key` (owner, 21 November, 15:39:58 UTC). `id-parishlife` has "Key Vault Secrets User" on that secret only.
+  - App settings at 15:44:04 UTC: `Email__Provider=Resend`, `Email__ResendApiKey` (Key Vault reference, `Resolved`), `Email__From=ParishLife <no-reply@parish-life.org>`. The owner chose to keep `no-reply` despite Resend's advice.
+  - Capabilities have reported `contactVerificationDelivery: ProviderConfigured` since 15:45:44 UTC.
+- **Live test** (owner, 21 November, running `39e5df6`):
+  - A new account registered with email and password, and the code email was sent through Resend.
+  - The code confirmed the address, and the account signed in.
+  - The email landed in **Junk**. That happened before DMARC existed, from a brand-new sending domain; inbox placement should improve with DMARC and normal use.
+- **privacy@parish-life.org:**
+  - Cloudflare Email Routing is on. The rule `privacy@` forwards to the project's own verified Gmail inbox (changed by the owner on 22 November); the catch-all is disabled (drop).
+  - Forwarding was tested 22 November from another account.
+- **Rollback:**
+  - Remove the three `Email__*` settings, and sending stops after the restart.
+  - Disabling Email Routing removes its records; the Resend records stay.
+
 ## Privacy
 
 - **Processors:** the privacy page names Resend, the push services, and Meta (WhatsApp, only for people who turn it on).

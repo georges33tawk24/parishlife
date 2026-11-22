@@ -106,6 +106,15 @@ Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` 
   - **Fix:** `form-action` now also lists the providers' authorization origins (see "How it works"), with a test in `FrontendHostingTests`. 547 backend tests pass (64 unit / 483 integration).
   - The package differs from `ea2e388` only in `ParishLife.Api.dll`/`.pdb`. It was built from the `ea2e388` checkout with this fix, before the fix had a commit of its own.
   - Deployed 17:31:59–17:33:59 UTC. Healthy, and the live `form-action` is `'self' https://accounts.google.com https://login.live.com https://login.microsoftonline.com`.
+- **21 November 2026, `39e5df6`** (Azure session, owner's go-ahead): one press per provider sign-in, account email through Resend, final privacy and terms.
+  - 147 files. Compared with the live `ea2e388` plus the fix, only these differ: the API dll/pdb, the portal chunk (`portal-C1oHGJX7.js`), `index.html`, `privacy.html` and `terms.html`. No index change. The `form-action` fix is included.
+  - The first attempt (15:14 UTC) failed before upload, on a local DNS failure resolving the scm host, so nothing changed. The retry deployed at 15:15:41–15:17:35 UTC.
+  - Healthy, and the key ring was reused (unwrap with `426eb917…`). Every page carries the policy.
+  - The privacy and terms pages (also `?lang=ar`) have no draft banner and no placeholders.
+  - A failed check on a portal form post now answers 302 to `/index.html?external=check-failed` instead of JSON.
+  - The privacy text's 90-day log retention is true: Application Insights' `App*` tables keep 90 days, and App Service file and HTTP logging are off.
+  - The Microsoft app registration got its home page (`/public.html`), terms and privacy URLs via Graph.
+  - Resend was then switched on (see `docs/operations/notification-delivery.md`, "Email: live setup").
 
 ## Google and Microsoft sign-in configuration (20–21 November 2026)
 
