@@ -2,11 +2,11 @@
 
 Answer by number. "Default" is what the backend does today or what is recommended; answering "default" accepts it. Nothing here is treated as approved until the owner answers.
 
-## Decided by the owner, 21 November 2026 (approved policy, asked as the pilot-critical subset)
+## Decided by the owner, 21–23 November 2026 (approved policy)
 
 | Question | Decision | Code today |
 | --- | --- | --- |
-| 4. First archdiocese / rite | **Maronite.** The exact archdiocese or eparchy name is still to come with the pilot parish. | Rite is free text; nothing to change. |
+| 4. First archdiocese / rite | **Maronite; the Maronite Archeparchy of Beirut** (named 23 November). It is entered through the app by its authorized people, never seeded. | Rite is free text; nothing to change. |
 | 5. Electronic signatures (U05) | **The paper copy, wet-signed and sealed, is the official one.** The digital copy is for reference and verification. | Matches: signed letters stay "reference only". |
 | 6. Who signs request letters | **The priest only.** | Matches. |
 | 7. Who prepares liturgical calendars | **The bishop, or a delegate he approves.** The delegate prepares; the bishop approves before it applies. | **Change needed:** today only the bishop prepares. |
@@ -17,12 +17,17 @@ Answer by number. "Default" is what the backend does today or what is recommende
 | People 2. Member vs Visitor | **Members only for event registrations, joining ministries and sacrament requests.** Visitors contact the office for those. | **Change needed:** today the labels give no rights. |
 | 19 / Admin 10. Bishop's view | **Totals only:** counts and summaries, no individual names or records. | Matches today's aggregates; keep it so. |
 | Sacraments 9. Preparation requirements | **The archdiocese sets one checklist per sacrament for all its parishes.** | **Change needed:** requirement sets are per parish today. |
+| 8. Custom workflows | **The parish priest always may manage the parish's workflows** (decided 23 November). | **Change needed:** today only an explicit `workflows.manage` grant. |
+| 9. Archdiocese billing representative | **A named representative account**, separate from whoever registered the archdiocese. | **Change needed:** today the registering account. |
+| 10. Contested parish ownership | **A ParishLife operator decides only after the archdiocese/bishop confirms; the parish is read-only while contested.** | **Change needed:** today one operator, no confirmation, no freeze. |
+| 11. Exact-message review (N02) | **Keep:** operators only, a second approver, access for 5 minutes to 24 hours. | Matches. |
+| 13. Sign-in before email is verified | **No: confirm the emailed code first.** | Matches. |
+| 14. Small-count hiding | **Counts of 1–4 in bishop totals show as "fewer than 5".** | **Change needed:** today exact counts. |
+| 15. Retention | **Parish records and audit are kept permanently; read notifications are deleted after 1 year; anonymous site counts after 2 years.** | **Change needed:** today nothing is deleted. The privacy page needs the same wording. |
+| 16. Backups (U15) | **Database point-in-time restore for 30 days (up from 7), and a restore test every 3 months.** Deleted files stay recoverable for 30 days. | **Azure change** (Azure session, owner's go-ahead) and a recurring task; the privacy page says 7 days today. |
+| 26. Test database | **Yes: a separate, small Cosmos test database** for live tests, never holding real data. | **Azure change** (Azure session, owner's go-ahead); the live tests then point at it. |
 
 Still open (to answer next):
-- 8–11 (custom workflows, billing representative, contested ownership, message review);
-- 13 (sign-in before email is verified; the default "no" stays);
-- 14–16 (small-count hiding, retention beyond the privacy page, backup drills);
-- 26 (a staging database);
 - the remaining per-area items in `docs/frontend-modules/*.md`;
 - the proposals in `docs/REMAINING-WORK.md`.
 
