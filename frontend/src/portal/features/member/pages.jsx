@@ -584,7 +584,11 @@ export function feed() {
                   <p className="dim">
                     {txt(groupName(x.groupId))} · {date(x.at)} · {txt(x.category)}
                   </p>
-                  <div>{x.html ? safeRichText(x.html) : txt(itemBody(x))}</div>
+                  {x.html ? (
+                    <div dir="auto" dangerouslySetInnerHTML={{ __html: safeRichText(x.html) }} />
+                  ) : (
+                    <div>{txt(itemBody(x))}</div>
+                  )}
                   {x.attachment ? (
                     <a
                       className="btn btn-secondary btn-dense"

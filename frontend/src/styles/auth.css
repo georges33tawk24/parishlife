@@ -60,7 +60,7 @@
 .auth-form{display:grid;gap:14px}
 .af-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .af{display:grid;gap:6px;min-width:0}
-.account-auth.is-first .af,.account-auth.is-first .af-set,.account-auth.is-first .af-rules,.account-auth.is-first .af-forgot-row,.account-auth.is-first .auth-submit,.account-auth.is-first .auth-or,.account-auth.is-first .auth-passkey{animation:rise .4s calc(.04s + var(--i,0) * .03s) var(--a-ease) both}
+.account-auth.is-first .af,.account-auth.is-first .af-set,.account-auth.is-first .af-rules,.account-auth.is-first .af-forgot-row,.account-auth.is-first .af-check,.account-auth.is-first .auth-submit,.account-auth.is-first .auth-or,.account-auth.is-first .auth-passkey{animation:rise .4s calc(.04s + var(--i,0) * .03s) var(--a-ease) both}
 .af-label{font-size:calc(17px * var(--fs,1));font-weight:600;color:var(--ink)}
 .af-label small{font-weight:400;color:var(--ink-2)}
 .af-box{position:relative;display:flex}
@@ -91,6 +91,9 @@
 .af-rules .af-rules-tip{display:block;margin-top:2px;line-height:1.5}
 .af-turnstile{min-height:66px}
 .af-turnstile[hidden]{display:none}
+/* a statement to tick (the age check at sign-up): the box sits on the first line of its words, 24px for a thumb */
+.af-check{display:flex;align-items:flex-start;gap:12px;font-size:calc(17px * var(--fs,1));line-height:1.5;color:var(--ink);cursor:var(--hand,pointer)}
+.af-check input{flex:none;width:22px;height:22px;margin:2px 0 0;accent-color:#8A6420;cursor:inherit}
 .af-forgot-row{display:flex;justify-content:flex-end;margin-top:-6px}
 .af-link{padding:4px 0;border:0;background:none;color:var(--lapis);font:600 calc(17px * var(--fs,1)) var(--a-sans);cursor:var(--hand,pointer);text-decoration:underline;text-decoration-color:rgb(42 74 150 / .3);text-underline-offset:4px}
 .af-link:hover{text-decoration-color:var(--lapis)}
@@ -165,7 +168,7 @@
   .account-auth{--arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='none' stroke='%231B1410' stroke-width='3.4' stroke-linejoin='round'/%3E %3Cpath d='M4.5 3.2v17.6l4.6-4.4 3 7 3.3-1.4-3-6.9 6.4-.4Z' fill='%231B1410' stroke='%23F6E7C1' stroke-width='1.3' stroke-linejoin='round'/%3E %3Cpath d='M6.5 7.8v8.6' stroke='%23D7A548' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") 4 3,auto;--hand:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32'%3E %3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23FFCF75' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23FFCF75' stop-opacity='0'/%3E%3C/radialGradient%3E %3CradialGradient id='f' cx='.5' cy='.74' r='.66'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.34' stop-color='%23FFEDB8'/%3E%3Cstop offset='.72' stop-color='%23F5AE45'/%3E%3Cstop offset='1' stop-color='%23D2661C'/%3E%3C/radialGradient%3E%3C/defs%3E %3Ccircle cx='12' cy='12.5' r='11.5' fill='url(%23g)'/%3E %3Cpath d='M12 1.4C13.3 5.4 17.3 8.4 17.3 13.4a5.3 5.3 0 0 1-10.6 0C6.7 9.6 10.1 7.2 12 1.4Z' fill='url(%23f)' stroke='%233A1E06' stroke-width='1' stroke-linejoin='round'/%3E %3Cpath d='M12 10.6c-1 1.6-1.7 2.8-1.7 3.9a1.7 1.7 0 0 0 3.4 0c0-1.1-.7-2.3-1.7-3.9Z' fill='%23FFFDF6'/%3E %3Cpath d='M12 17.4v2.8' stroke='%232A1606' stroke-width='1.2' stroke-linecap='round'/%3E %3Crect x='8.2' y='20' width='7.6' height='11.2' rx='1.4' fill='%23F3E6C6' stroke='%233A2A18' stroke-width='1'/%3E %3Cpath d='M9.6 21.4v8.2' stroke='%23fff' stroke-width='1' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") 12 2,pointer;cursor:var(--arrow)}
   .account-auth :is(p,h1,h2,blockquote,figcaption){cursor:auto}
   .account-auth :is(input:not([type=checkbox],[type=radio]),textarea){cursor:text}
-  .account-auth :is(a[href],button:not(:disabled),label[for],select,[role=tab],input:is([type=checkbox],[type=radio])){cursor:var(--hand)}
+  .account-auth :is(a[href],button:not(:disabled),label[for],.af-check,select,[role=tab],input:is([type=checkbox],[type=radio])){cursor:var(--hand)}
 }
 @media(prefers-reduced-motion:reduce){.auth-quote,.account-auth.is-first *{animation:none!important}.auth-tabs-ink,.auth-submit,.auth-submit::after{transition:none!important}}
 @media(hover:none){.auth-passkey:hover,.auth-submit:hover{transform:none}}

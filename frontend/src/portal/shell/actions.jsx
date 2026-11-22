@@ -736,46 +736,6 @@ export const VERBS = {
     });
   },
   'webhook-add': () => webhookAdd(),
-  'key-rotate': () =>
-    confirmAction({
-      title: D.PARISH.apiKeyRevoked
-        ? L('Issue a new key?', 'إصدار مفتاح جديد؟')
-        : L('Rotate the key?', 'تدوير المفتاح؟'),
-      body: L(
-        'The old key stops working in 24 hours. The eparchy will need the new one.',
-        'يتوقّف المفتاح القديم خلال ٢٤ ساعة. وستحتاج الأبرشية الجديد.'
-      ),
-      cta: L('Issue key', 'إصدار المفتاح'),
-      then: () => {
-        D.PARISH.apiKey = Math.random().toString(16).slice(2, 6);
-        delete D.PARISH.apiKeyRevoked;
-        refresh();
-        ok(
-          L('New key issued', 'صدر مفتاح جديد'),
-          L('Copy the new key into the eparchy system.', 'انسخ المفتاح الجديد إلى نظام الأبرشية.')
-        );
-      }
-    }),
-  'key-revoke': () =>
-    confirmAction({
-      title: L('Revoke this key?', 'إلغاء هذا المفتاح؟'),
-      body: L('The eparchy reporting link stops immediately.', 'يتوقّف ربط تقارير الأبرشية فوراً.'),
-      cta: L('Revoke', 'إلغاء'),
-      danger: true,
-      then: () => {
-        D.PARISH.apiKeyRevoked = true;
-        refresh();
-        toast(L('Key revoked', 'أُلغي المفتاح'), '', 'warning', {
-          action: {
-            label: L('Undo', 'تراجع'),
-            fn: () => {
-              delete D.PARISH.apiKeyRevoked;
-              refresh();
-            }
-          }
-        });
-      }
-    }),
   'avatar-upload': (b, key) => avatarPick(b, key),
   'avatar-remove': (b, key) => avatarRemove(b, key),
 

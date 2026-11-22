@@ -754,9 +754,19 @@ function groupDetail(id, tab) {
                     </small>
                   </span>
                 </div>{' '}
-                <div className="t-body" style={{ fontSize: '14px', marginTop: '10px' }}>
-                  {p.html ? safeRichText(p.html) : L(p.body, p.bodyAr)}
-                </div>
+                {p.html ? (
+                  /* the editor's markup, through the same allow-list as the public site's published bodies */
+                  <div
+                    className="t-body"
+                    style={{ fontSize: '14px', marginTop: '10px' }}
+                    dir="auto"
+                    dangerouslySetInnerHTML={{ __html: safeRichText(p.html) }}
+                  />
+                ) : (
+                  <div className="t-body" style={{ fontSize: '14px', marginTop: '10px' }}>
+                    {L(p.body, p.bodyAr)}
+                  </div>
+                )}
               </div>
             ))}
           </Panel>

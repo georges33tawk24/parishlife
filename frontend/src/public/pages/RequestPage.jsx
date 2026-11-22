@@ -10,7 +10,7 @@ import { Bring, ParishSub, Thumb, facts } from './parish-parts.jsx';
 export function RequestPage({ p, d, kind }) {
   const c = useSite(),
     f = facts(c, p, d),
-    { L } = c;
+    { L, lang } = c;
   const ministry = new URLSearchParams(location.search).get('ministry') || '';
   const all = [
     ...c.REQUESTS,
@@ -68,6 +68,14 @@ export function RequestPage({ p, d, kind }) {
           <Bring f={f} side />
           <p className="rq-privacy">
             {L(
+              'The parish receives these details to handle your request. See the ',
+              'تتلقّى الرعية هذه التفاصيل لمتابعة طلبك. راجع '
+            )}
+            <a href={lang === 'ar' ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>
+              {L('privacy policy', 'سياسة الخصوصية')}
+            </a>
+            {'. '}
+            {L(
               'No email or text message is sent automatically. Anyone with your tracking link can see the request’s status, so keep it to yourself.',
               'لا تُرسل رسائل بريد أو رسائل نصية تلقائياً. يستطيع كل من يملك رابط المتابعة رؤية حالة الطلب، فاحتفظ به لنفسك.'
             )}
@@ -81,7 +89,7 @@ export function RequestPage({ p, d, kind }) {
 /* The request itself: sent to the parish office, answered with a private tracking link. */
 function RequestForm({ p, all, chosen, ministry }) {
   const c = useSite(),
-    { L } = c;
+    { L, lang } = c;
   const turnstile = useRef(null),
     check = useRef(null),
     result = useRef(null);
