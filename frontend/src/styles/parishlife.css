@@ -12,7 +12,10 @@
 :root{
   /* Forest, sage and warm-white design system shared by management screens. */
   --bg:#F7F7F2; --surface:#FFFFFF; --surface-soft:#F7F7F2; --muted:#EDF0E8;
-  --border:#DCE2DB; --border-strong:#9BAC9F;
+  /* borders that only divide are a tint of the ink, so they blend into whatever surface is behind them
+     (#DCE2DB on white); a field's own edge is what identifies it, so it is solid and clears 3:1 on white,
+     --bg and --muted (WCAG 1.4.11) */
+  --border:rgb(var(--primary-rgb) / .16); --border-strong:#9BAC9F; --border-field:#7D8A82;
   --line:var(--border); --surface-2:var(--surface-soft);
 
   --primary:#233B32; --primary-hover:#172B23; --primary-subtle:#EDF0E8; --primary-rgb:35 59 50;
@@ -38,7 +41,9 @@
   /* space — everything lands on 8, half-steps of 4 only inside a control */
   --s1:4px; --s2:8px; --s3:16px; --s4:24px; --s5:32px; --s6:48px; --s7:64px;
 
-  /* radius */
+  /* radius. Nested corners: the inner radius is the outer radius minus the gap between the two edges
+     (padding plus border), never the same value, e.g. calc(var(--r-card) - 6px) inside a 10px menu with 6px
+     of padding. Pills (999px) nest in anything. */
   --r-input:6px; --r-card:10px; --r-modal:14px;
 
   /* elevation */
@@ -126,6 +131,11 @@ a{text-underline-offset:.18em}
 .t-body   {font:400 16px/26px var(--sans)}
 .t-ui     {font:500 14px/20px var(--sans)}
 .t-caption{font:400 12px/18px var(--sans)}
+/* Icon strokes are drawn in screen pixels and follow the weight of the words beside them: 1.5px next to regular
+   and medium text, 1.75px next to semibold headings and the chosen tab (a 15px icon no longer thins to 1.1px). */
+.pl-ico{stroke-width:var(--icon-stroke,1.5px)}
+.pl-ico path{vector-effect:non-scaling-stroke}
+:is(.panel-h,.section-h,.empty,.pagehead,.tabs [aria-selected=true],.t-sub,.t-heading){--icon-stroke:1.75px}
 .mono{font-family:var(--mono)}
 .tnum{font-variant-numeric:tabular-nums}
 .dim{color:var(--text-2)}
@@ -280,13 +290,13 @@ button.chip svg{flex:none}
 /* ---------- inputs ---------- */
 .input,.select,.textarea{
   width:100%;min-height:var(--h-control);padding:0 12px;
-  border:1px solid var(--border);border-radius:var(--r-input);background:var(--surface);
+  border:1px solid var(--border-field);border-radius:var(--r-input);background:var(--surface);
   font:400 14px/38px var(--sans);color:var(--text);
   transition:border-color var(--t-micro) var(--ease)
 }
 .textarea{padding:10px 12px;line-height:22px;min-height:96px;resize:vertical}
 .input::placeholder,.textarea::placeholder{color:var(--text-3)}
-.input:hover,.select:hover,.textarea:hover{border-color:var(--border-strong)}
+.input:hover,.select:hover,.textarea:hover{border-color:var(--text-2)}
 .input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-soft)}
 .input:disabled,.select:disabled{background:var(--muted);color:var(--text-3);cursor:not-allowed}
 .input[aria-invalid=true],.select[aria-invalid=true],.textarea[aria-invalid=true]{border-color:var(--danger);box-shadow:0 0 0 3px rgb(var(--primary-rgb) / .16)}
@@ -311,7 +321,7 @@ button.chip svg{flex:none}
 .dd{position:fixed;z-index:140;max-width:min(380px,calc(100vw - 16px));padding:6px;background:var(--surface);border:1px solid var(--border);
   border-radius:var(--r-card);box-shadow:var(--e3);animation:pl-menu 120ms var(--ease)}
 .dd-opts{max-height:288px;overflow:auto;overscroll-behavior:contain}
-.dd-opt{display:flex;align-items:center;gap:12px;min-height:38px;padding:8px 10px;border-radius:var(--r-input);cursor:pointer;
+.dd-opt{display:flex;align-items:center;gap:12px;min-height:38px;padding:8px 10px;border-radius:calc(var(--r-card) - 6px);cursor:pointer;
   font:400 14px/20px var(--sans);color:var(--text)}
 .dd-opt > span{flex:1;min-width:0}
 .dd-opt.active{background:var(--muted)}
@@ -351,7 +361,7 @@ button.chip svg{flex:none}
 
 /* switch */
 .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font:400 14px/20px var(--sans)}
-.switch input{appearance:none;margin:0;width:38px;height:22px;border-radius:999px;background:var(--border-strong);
+.switch input{appearance:none;margin:0;width:38px;height:22px;border-radius:999px;background:var(--border-field);
   position:relative;cursor:pointer;transition:background var(--t-micro) var(--ease);flex:none}
 .switch input::after{content:"";position:absolute;inset-inline-start:2px;top:2px;width:18px;height:18px;
   border-radius:999px;background:#FFFFFF;transition:transform var(--t-micro) var(--ease);box-shadow:var(--e1)}
@@ -363,7 +373,7 @@ button.chip svg{flex:none}
 /* ---------- segmented control / tabs ---------- */
 .seg{display:inline-flex;padding:3px;gap:2px;background:var(--muted);border-radius:var(--r-card);border:1px solid var(--border)}
 .seg button{
-  border:0;background:none;cursor:pointer;padding:0 14px;height:32px;border-radius:7px;
+  border:0;background:none;cursor:pointer;padding:0 14px;height:32px;border-radius:calc(var(--r-card) - 4px);
   font:500 13px/1 var(--sans);color:var(--text-2);white-space:nowrap;
   transition:background var(--t-micro) var(--ease)
 }
@@ -448,7 +458,7 @@ table.tbl .wide{min-width:200px}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--e2)
 }
 .menu button,.menu a{
-  display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:var(--r-input);
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:calc(var(--r-card) - 6px);
   background:none;cursor:pointer;text-align:start;font:400 14px/20px var(--sans);color:var(--text)
 }
 .menu button:hover,.menu a:hover{background:var(--muted);color:var(--text)}
@@ -490,7 +500,7 @@ table.tbl .wide{min-width:200px}
   position:fixed;z-index:95;inset:0;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:24px;pointer-events:none
 }
 .modal .sheet{
-  width:min(100%,560px);min-width:0;justify-self:center;max-height:calc(100vh - 48px);background:var(--surface);
+  width:min(100%,560px);min-width:0;justify-self:center;max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);background:var(--surface);
   border-radius:var(--r-modal);box-shadow:var(--e3);display:flex;flex-direction:column;
   opacity:0;transform:scale(.97);transition:opacity 120ms var(--ease),transform 120ms var(--ease);pointer-events:auto
 }
@@ -528,6 +538,14 @@ table.tbl .wide{min-width:200px}
 /* press feedback: a control gives a little under the pointer, at once */
 .btn,.btn-icon,.iconbtn{transition-property:background,color,border-color,box-shadow,transform}
 .btn:active:not(:disabled),.btn-icon:active:not(:disabled),.iconbtn:active,button.chip:active{transform:scale(.97)}
+/* every other press shows at once too: controls dip, rows in a list or menu take the chosen tint */
+:is(.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar button,.stepper button):active:not(:disabled){transform:scale(.97)}
+:is(.menu button,.menu a,.dd-opt):active{background:var(--selection)}
+.navitem:active{background:rgb(255 255 255 / .14)}
+/* with less motion a press darkens instead of dipping */
+@media (prefers-reduced-motion:reduce){
+  :is(.btn,.btn-icon,.iconbtn,button.chip,.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar button,.stepper button):active{transform:none;filter:brightness(.94)}
+}
 /* a page arriving, and a record that just changed */
 @keyframes pl-view{from{opacity:0}to{opacity:1}}
 @keyframes pl-flash-ring{from{box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 34%,transparent),var(--e1)}to{box-shadow:0 0 0 3px transparent,var(--e1)}}
@@ -544,7 +562,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
   width:56px;height:56px;border-radius:var(--r-modal);background:var(--muted);color:var(--text-3);
   display:grid;place-items:center;margin-bottom:var(--s2)
 }
-.empty h1,.empty h3{font:600 17px/24px var(--sans);color:var(--text)}
+.empty :is(h1,h2,h3){font:600 17px/24px var(--sans);color:var(--text)}
 .empty p{max-width:44ch;font:400 14px/22px var(--sans)}
 .empty .acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
 
@@ -643,7 +661,7 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 .counter.over{color:var(--danger-ink)}
 
 /* number stepper — 38px so a thumb can hit it */
-.stepper{display:flex;height:var(--h-control);border:1px solid var(--border);border-radius:var(--r-input);overflow:hidden;background:var(--surface);max-width:180px}
+.stepper{display:flex;height:var(--h-control);border:1px solid var(--border-field);border-radius:var(--r-input);overflow:hidden;background:var(--surface);max-width:180px}
 .stepper button{
   width:38px;flex:none;border:0;background:var(--muted);cursor:pointer;color:var(--text);
   font:500 16px/1 var(--sans);border-inline-end:1px solid var(--border)

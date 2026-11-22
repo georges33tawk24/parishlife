@@ -21,7 +21,10 @@ html{scroll-padding-top:calc(var(--header) + 72px)}
   --night:#0E1A31;--night-deep:#08101F;--night-2:#15233F;--lapis:#2A4A96;--lapis-ink:#213C80;
   --gilt:#D7A548;--gilt-hi:#F1C77A;--gilt-ink:#80601C;--limestone:#E6DED0;--stone-line:#D6CAB6;
   --mist:#F5F1E8;--white:#FFFFFF;--cedar:#1F3A2E;--sanctuary:#B23A2B;
-  --ink:#15203A;--ink-2:#4A5468;--hair:#E0D7C7;--hair-dark:rgba(230,222,208,.16);
+  --ink:#15203A;--ink-2:#4A5468;
+  /* dividers are a tint of the gilt ink, so they blend into mist, white or a photo's edge (#E0D7C7 on mist); a
+     field's own edge is solid and clears 3:1 on white and mist (WCAG 1.4.11) */
+  --hair:rgb(128 96 28 / .16);--hair-dark:rgba(230,222,208,.16);--field-line:#8F7A55;
   --on-night:#EEF1F6;--on-night-2:#B9C3D6;--on-night-3:#8E9AB2;
   --display:"Marcellus","Amiri",Georgia,"Times New Roman",serif;
   --sans:"Source Sans 3","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -34,7 +37,7 @@ html{scroll-padding-top:calc(var(--header) + 72px)}
   --arch:clamp(26px,5vw,76px);
   /* the earlier public tokens, retuned so parish pages share the new identity */
   --paper:#F5F1E8;--paper-rgb:245 241 232;--forest:#1F3A2E;--forest-rgb:31 58 46;--forest-hover:#2B4C3D;--deep-rgb:14 26 49;
-  --muted:#4A5468;--line:#E0D7C7;--soft:#EEE7DA;--gold:#D7A548;--sage:#6D7F99;--sage-soft:#AAB5C6;--icon:#2A4A96;
+  --muted:#4A5468;--line:rgb(128 96 28 / .16);--soft:#EEE7DA;--gold:#D7A548;--sage:#6D7F99;--sage-soft:#AAB5C6;--icon:#2A4A96;
   font-family:var(--sans);color:var(--ink);background:var(--mist)
 }
 body{font-family:var(--sans);font-size:calc(17px * var(--fs,1));line-height:1.6;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
@@ -185,3 +188,30 @@ html.lenis{scroll-behavior:auto}
   -webkit-text-stroke:1px rgb(230 222 208 / .16);background:linear-gradient(100deg,transparent 35%,rgb(241 199 122 / .55) 50%,transparent 65%) no-repeat;background-size:220% 100%;background-position:160% 0;-webkit-background-clip:text;background-clip:text;user-select:none;animation:mark-sheen 10s ease-in-out infinite}
 @keyframes mark-sheen{0%{background-position:160% 0}55%,100%{background-position:-60% 0}}
 @media(prefers-reduced-motion:reduce){.site-header::after{display:none}::view-transition-old(root),::view-transition-new(root){animation:none}.footer-mark{animation:none}.btn-gilt::after{transition:none}}
+
+/* A press shows at once on everything tappable: it dips a little (darkens instead with less motion). */
+:is(.button,.text-button,.share-btn,.icon-button,.language-button,.sign-in,.round-link,.parish-card,.request-card,.wk-day,.ask-wide,.parish-item a,.menu-toggle):active{transform:scale(.98);transition-duration:.06s}
+@media(prefers-reduced-motion:reduce){:is(.button,.text-button,.share-btn,.icon-button,.language-button,.sign-in,.round-link,.parish-card,.request-card,.wk-day,.ask-wide,.parish-item a,.menu-toggle):active{transform:none;filter:brightness(.94)}}
+
+/* An icon that changes (copy to tick) arrives with a short blur and scale rather than a jump; with less motion it
+   simply appears (no transition, so the starting style never shows). */
+.ico-swap{display:inline-flex;transition:opacity .18s var(--ease-out),filter .18s var(--ease-out),scale .18s var(--ease-out)}
+@starting-style{.ico-swap{opacity:0;filter:blur(3px);scale:.6}}
+@media(prefers-reduced-motion:reduce){.ico-swap{transition:none}}
+
+/* Horizontal scrollers fade at whichever edge has more behind them, and not at all when nothing overflows
+   (a scroll-driven mask, as on the rail; without support they simply scroll). Tables keep their edge shadows. */
+@supports (animation-timeline:scroll()){
+  @property --fade-s{syntax:'<length>';inherits:false;initial-value:0px}
+  @property --fade-e{syntax:'<length>';inherits:false;initial-value:0px}
+  :is(.ph-nav ul,.profile-nav .site-wrap,.wk-tonight ul){
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    animation:edge-fade linear both;animation-timeline:scroll(self inline)
+  }
+  [dir=rtl] :is(.ph-nav ul,.profile-nav .site-wrap,.wk-tonight ul){
+    -webkit-mask-image:linear-gradient(270deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    mask-image:linear-gradient(270deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent)
+  }
+  @keyframes edge-fade{0%{--fade-s:0px;--fade-e:24px}6%{--fade-s:24px}94%{--fade-e:24px}100%{--fade-s:24px;--fade-e:0px}}
+}

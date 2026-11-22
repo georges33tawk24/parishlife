@@ -127,7 +127,12 @@ export function CopyButton({ url, className, children, label, ...rest }) {
         }
       }}
     >
-      {children}
+      {/* the icon gives way to a tick, and back: a new element each time, so it eases in (.ico-swap) */}
+      {children ? (
+        <span className="ico-swap" key={done ? 'done' : 'idle'}>
+          {done ? <Glyph name="check" /> : children}
+        </span>
+      ) : null}
       <span data-copy-label>{done ? L('Link copied', 'نُسخ الرابط') : label}</span>
     </button>
   );

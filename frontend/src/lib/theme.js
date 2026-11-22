@@ -140,6 +140,8 @@ export function palette(color) {
     selection: hex(0.897, quiet(0.026), h),
     border: hex(0.906, quiet(0.011), h),
     strong: hex(0.727, quiet(0.027), h),
+    /* a field's edge: 3:1 on every surface a field sits on (WCAG 1.4.11) */
+    field: atLeast(0.62, quiet(0.02), h, 3.1, [bg, muted, '#FFFFFF']),
     sage: hex(0.639, quiet(0.036), h),
     icon: atLeast(0.55, quiet(0.05), h, 4.5, [muted]),
     onInkQuiet: quietOn(primary)
@@ -168,8 +170,10 @@ const APP_TOKENS = p => ({
   '--bg': p.bg,
   '--surface-soft': p.bg,
   '--muted': p.muted,
-  '--border': p.border,
+  /* dividers are a tint of the parish colour, so they blend into any surface; a field's edge stays solid */
+  '--border': `rgb(${rgbOf(p.primary)} / .16)`,
   '--border-strong': p.strong,
+  '--border-field': p.field,
   '--danger': '#B42318',
   '--danger-subtle': '#FFF1F0',
   '--danger-ink': '#8A1C13',
@@ -228,12 +232,15 @@ export function applyTheme(theme, root = document.documentElement) {
         '--bg': '#11161E',
         '--surface': '#1A2230',
         '--surface-soft': '#202A39',
+        /* what floats above the page (dialogs, drawers, menus, toasts) is a step lighter: shadows barely show on dark */
+        '--surface-raised': '#232E40',
         '--muted': '#263244',
         '--text': '#F3F6FC',
         '--text-2': '#CBD5E4',
         '--text-3': '#B5C4D8',
-        '--border': '#415169',
+        '--border': 'rgb(150 175 210 / .3)',
         '--border-strong': '#8193AC',
+        '--border-field': '#8193AC',
         '--selection': '#34465F',
         '--selection-hover': '#3D5472',
         '--primary-subtle': '#2B3C52',

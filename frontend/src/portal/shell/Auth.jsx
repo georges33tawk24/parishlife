@@ -773,6 +773,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                 className="auth-submit"
                 style={{ '--i': n++ }}
                 disabled={busy.submit || busy.provider}
+                aria-busy={busy.submit || undefined}
               >
                 {up
                   ? t('Create account', 'إنشاء الحساب')

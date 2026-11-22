@@ -155,7 +155,7 @@ export function Icon({ name, size = 18, cls = '' }) {
   if (MIRROR.has(name)) cls = (cls + ' mir').trim();
   return (
     <svg
-      className={cls || undefined}
+      className={('pl-ico ' + cls).trim()}
       width={size}
       height={size}
       viewBox="0 0 20 20"

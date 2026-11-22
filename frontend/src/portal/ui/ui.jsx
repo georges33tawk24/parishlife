@@ -256,7 +256,8 @@ export const Empty = ({ glyph, title, body, action }) => (
     <span className="glyph">
       <Icon name={glyph} size={26} />
     </span>
-    <h3>{title}</h3>
+    {/* h2: an empty state usually stands right under the page title or a panel's h2 */}
+    <h2>{title}</h2>
     <p>{body}</p>
     {action ? <div className="acts">{action}</div> : null}
   </div>
@@ -794,7 +795,8 @@ function Layer({ layer }) {
     Object.assign(
       el.style,
       { position: 'fixed', top: top + 'px', left: left + 'px', zIndex: 140 },
-      layer.kind === 'popover' ? { maxHeight: `calc(100vh - ${r.bottom + 24}px)`, overflowY: 'auto', padding: 0 } : {}
+      // the visible height (innerHeight), not 100vh, which on phones includes the space behind the browser's bars
+      layer.kind === 'popover' ? { maxHeight: `${innerHeight - r.bottom - 24}px`, overflowY: 'auto', padding: 0 } : {}
     );
     if (layer.kind === 'menu') el.querySelector('[data-mi]')?.focus();
   }, [layer]);

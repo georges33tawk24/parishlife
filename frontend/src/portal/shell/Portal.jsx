@@ -918,10 +918,22 @@ export function Portal() {
     };
   }, []);
 
+  /* While the session is checked: the frame of the portal, shown only if the check takes a moment (a quick
+     answer goes straight to the sign-in page or the portal without a flash), never a blank page. */
   if (screen.kind === 'starting')
     return (
       <>
-        <div id="app" className="app"></div>
+        <div id="app" className="app app-starting">
+          <aside className="rail" aria-hidden="true"></aside>
+          <div className="main">
+            <header className="topbar-app" aria-hidden="true"></header>
+            <main className="well" id="well" tabIndex="-1">
+              <div className="wellpad">
+                <PageSkeleton label={t('Opening ParishLife…', 'جارٍ فتح ParishLife…')} />
+              </div>
+            </main>
+          </div>
+        </div>
         <OverlayHost />
       </>
     );
@@ -947,7 +959,7 @@ export function Portal() {
   return (
     <>
       <div id="app" className={'app' + (collapsed ? ' collapsed' : '') + (railOpen ? ' railopen' : '')}>
-        <aside className="rail" id="rail">
+        <aside className="rail" id="rail" aria-label={t('Parish navigation', 'تنقّل الرعية')}>
           <button
             className="rail-parish"
             id="parishbtn"
@@ -987,8 +999,6 @@ export function Portal() {
                   className={'navitem ' + (on ? 'on' : '')}
                   href={'#/' + n[1]}
                   aria-current={on ? 'page' : undefined}
-                  /* collapsed, the label is display:none, which also takes it away from a screen reader */
-                  aria-label={badge ? `${t(rt.en, rt.ar)} (${badge})` : t(rt.en, rt.ar)}
                   data-tip={t(rt.en, rt.ar)}
                   onClick={() => setRailOpen(false)}
                 >
@@ -1067,12 +1077,13 @@ export function Portal() {
                   {S.role !== 'member' || M.notifications.some(n => !n.read) ? <span className="dotmark"></span> : null}
                 </button>
               )}
-              <button className="userbtn" id="userbtn" aria-label={t('Account', 'الحساب')} onClick={userMenu}>
+              {/* named by its visible words (2.5.3, label in name), then what it opens; on phones the words are hidden */}
+              <button className="userbtn" id="userbtn" aria-haspopup="true" onClick={userMenu}>
                 <Avatar p={p} />
                 <span className="txt">
-                  <span className="un">{isAr() ? p.ar : p.lat}</span>
-                  <span className="ur">{t(r.en, r.ar)}</span>
-                </span>
+                  <span className="un">{isAr() ? p.ar : p.lat}</span> <span className="ur">{t(r.en, r.ar)}</span>
+                </span>{' '}
+                <span className="sr">{t('Account menu', 'قائمة الحساب')}</span>
                 <Icon name="chevD" size={15} cls="dimmer" />
               </button>
             </div>
@@ -1236,8 +1247,22 @@ function View() {
         <>
           {loadFailures.has(S.route) ? (
             <div className="alert alert-danger" role="alert">
-              {t('This page could not load from the backend: ', 'تعذّر تحميل هذه الصفحة من الخادم: ')}
-              {loadFailures.get(S.route)}
+              <span>
+                {t('Part of this page could not load. ', 'تعذّر تحميل جزء من هذه الصفحة. ')}
+                {loadFailures.get(S.route)}{' '}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-dense"
+                  onClick={
+                    () =>
+                      hydrate()
+                        .then(refresh)
+                        .catch(() => refresh()) // the alert stays, with the new reason
+                  }
+                >
+                  {t('Try again', 'حاول مجدداً')}
+                </button>
+              </span>
             </div>
           ) : null}
           {!CONNECTED.has(S.route) ? (
