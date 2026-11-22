@@ -1,9 +1,14 @@
 // Purpose: measures how many document operations (point reads, query pages, commits) the main public and signed-in HTTP requests make,
-// through a counting decorator around the real local store, and prints a table for the performance report (Agent 04).
-// Main test: Main_requests_report_their_document_operation_counts; helpers create verified parishes with recorded locations and send
-// one measured request each.
+// through a counting decorator around the real local store, and prints a table for the performance report (Agent 04). It also holds the
+// public read cache to its contract: a repeated public read touches no document, sign-ins do not clear it, a parish write does at once,
+// and the cached answer has the same bytes, ETag and 304 revalidation as a computed one.
+// Main test: Main_requests_report_their_document_operation_counts; helpers create verified parishes with recorded locations through the
+// host's own services and send one measured request each.
 
 using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,28 +41,37 @@ public class RequestCostTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task VerifiedLocatedParishAsync(LocalBackendFixture f, int n)
+    // Through the host's own services (its own document store), as an operator, so the write reaches that host's public read cache.
+    private static async Task VerifiedLocatedParishAsync(CountingFactory factory, string admin, int n)
     {
-        f.As(f.FirstAdmin);
-        var service = f.Services.GetRequiredService<ParishService>();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        services.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
+        {
+            RequestServices = services,
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, admin), new Claim("amr", "mfa")], "IsolatedFixture"))
+        };
+        var service = services.GetRequiredService<ParishService>();
         var parish = await service.RegisterAsync(new RegisterParishDto { OperationId = Guid.NewGuid(), Name = "Cost parish " + n, Locality = "Cost town", Contact = "office@fixture.example" }, default);
         await service.VerifyAsync(parish.Id, new VerifyParishDto
         {
-            OperationId = Guid.NewGuid(), Version = (await f.Services.GetRequiredService<IParishRepository>().GetAsync(parish.Id, default))!.Version,
+            OperationId = Guid.NewGuid(), Version = (await services.GetRequiredService<IParishRepository>().GetAsync(parish.Id, default))!.Version,
             EvidenceReference = "isolated representative verification"
         }, default);
-        await f.Services.GetRequiredService<ParishLocationService>().SetAsync(parish.Id, new SetParishLocationDto
+        await services.GetRequiredService<ParishLocationService>().SetAsync(parish.Id, new SetParishLocationDto
         {
             OperationId = Guid.NewGuid(), Latitude = 33.9m + n / 100m, Longitude = 35.5m, SourceReference = "isolated surveyed coordinates"
         }, default);
+        services.GetRequiredService<IHttpContextAccessor>().HttpContext = null;
     }
 
-    private async Task<(int Reads, int Queries, int Commits)> MeasureAsync(CountingFactory factory, HttpClient client, string label, string path)
+    private async Task<(int Reads, int Queries, int Commits, string Body, string? ETag)> MeasureAsync(CountingFactory factory, HttpClient client, string label, string path)
     {
         factory.Counter.Reset();
         var response = await client.GetAsync(path);
-        var cost = (factory.Counter.Reads, factory.Counter.Queries, factory.Counter.Commits);
-        Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.NotFound, $"{label}: {response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+        var body = await response.Content.ReadAsStringAsync();
+        var cost = (factory.Counter.Reads, factory.Counter.Queries, factory.Counter.Commits, body, response.Headers.ETag?.Tag);
+        Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.NotFound, $"{label}: {response.StatusCode} {body}");
         output.WriteLine($"| {label} | {cost.Reads} | {cost.Queries} | {cost.Commits} | {(int)response.StatusCode} |");
         foreach (var repeated in factory.Counter.Log.GroupBy(x => x).Where(g => g.Count() > 1))
             output.WriteLine($"|   repeated {repeated.Count()}x: {repeated.Key} | | | | |");
@@ -84,6 +98,7 @@ public class RequestCostTests(ITestOutputHelper output)
         output.WriteLine("| Request | Point reads | Query pages | Commits | Status |");
         output.WriteLine("|---|---|---|---|---|");
         var directoryOne = await MeasureAsync(factory, visitor, "GET /api/public/parishes (1 verified parish)", "/api/public/parishes");
+        Assert.Equal((0, 0), Cost(await MeasureAsync(factory, visitor, "GET /api/public/parishes again (server cache)", "/api/public/parishes")));
         await MeasureAsync(factory, visitor, "GET .../profile", p + "/profile");
         await MeasureAsync(factory, visitor, "GET .../website?lang=en", p + "/website?lang=en");
         await MeasureAsync(factory, visitor, "GET .../calendar (30 days)", p + "/calendar?" + window + "&size=50");
@@ -103,9 +118,21 @@ public class RequestCostTests(ITestOutputHelper output)
         await MeasureAsync(factory, office, "GET /api/parishes/{id}/calendar/events (staff, 31 days)", $"/api/parishes/{s.Parish}/calendar/events?{window}");
         await MeasureAsync(factory, office, "GET /api/parishes/{id}/facilities (staff)", $"/api/parishes/{s.Parish}/facilities");
 
+        // Signing in wrote sessions to the Accounts container: public answers stay cached.
+        Assert.Equal((0, 0), Cost(await MeasureAsync(factory, visitor, "GET /api/public/parishes again after sign-ins (server cache)", "/api/public/parishes")));
+
         for (var n = 0; n < 10; n++)
-            await VerifiedLocatedParishAsync(fixture, n);
-        var directoryEleven = await MeasureAsync(factory, visitor, "GET /api/public/parishes (11 verified parishes)", "/api/public/parishes");
+            await VerifiedLocatedParishAsync(factory, fixture.FirstAdmin, n);
+        var directoryEleven = await MeasureAsync(factory, visitor, "GET /api/public/parishes (11 verified parishes, after the writes)", "/api/public/parishes");
+        Assert.Contains("Cost parish 9", directoryEleven.Body); // the parish writes cleared the cached directory at once
         output.WriteLine($"Directory growth for 10 more parishes: {directoryEleven.Reads - directoryOne.Reads} point reads, {directoryEleven.Queries - directoryOne.Queries} query pages.");
+        var cached = await MeasureAsync(factory, visitor, "GET /api/public/parishes again (server cache)", "/api/public/parishes");
+        Assert.Equal((0, 0), Cost(cached));
+        Assert.Equal((directoryEleven.Body, directoryEleven.ETag), (cached.Body, cached.ETag)); // the same bytes and validator as computed
+        visitor.DefaultRequestHeaders.IfNoneMatch.Add(new EntityTagHeaderValue(cached.ETag!));
+        var revalidated = await visitor.GetAsync("/api/public/parishes");
+        Assert.Equal((HttpStatusCode.NotModified, "public, max-age=300"), (revalidated.StatusCode, revalidated.Headers.CacheControl?.ToString()));
     }
+
+    private static (int, int) Cost((int Reads, int Queries, int Commits, string Body, string? ETag) cost) => (cost.Reads, cost.Queries);
 }
