@@ -213,6 +213,28 @@ Set up by the Azure session at the owner's go-ahead for each change; no code cha
 
 **Later:** an email sender can use this domain (outside-services step). Turnstile has used it since 19 November; see "Turnstile switched on" above. For a custom domain on another name, repeat: TXT `asuid.<name>`, a DNS-only record to the app, `hostname add`, `ssl create`, `ssl bind --ssl-type SNI`, and `AllowedHosts`.
 
+## Domain, certificate and HSTS check (22 November 2026, read-only)
+
+Five read-only requests from the hardening run (Agent 08):
+- **Certificate:** the chain is `CN=parish-life.org` ← GeoTrust TLS RSA CA G1 ← DigiCert Global Root G2, and verifies (`openssl s_client`: "Verify return code: 0").
+  - Valid 18 November 2026 to 18 May 2027. The App Service managed certificate renews itself while the apex points straight at Azure.
+  - TLS 1.3 was negotiated.
+- **Redirects:**
+  - `http://parish-life.org/` gives 301 to `https://parish-life.org/` (App Service `httpsOnly`).
+  - `https://www.parish-life.org/` gives 301 to `https://parish-life.org/` (Cloudflare, over HTTP/2).
+  - The apex is the one canonical host.
+- **Live headers on the apex still come from the code before the hardening run:** HTTP/1.1, `Server: Kestrel`, `Strict-Transport-Security: max-age=2592000`.
+  - The merged hardening code sends one year with `includeSubDomains` and no `Server` header (Agent 03). Those take effect on the next deploy.
+  - After that deploy, check with `curl -sI https://parish-life.org/`.
+  - HSTS preload is the owner's decision (hardening report 03).
+- **HTTP/2 and request smuggling:**
+  - The apex is served over HTTP/1.1 by App Service's front end, so HTTP/2 Rapid Reset (CVE-2023-44487) does not reach the app.
+  - Kestrel comes from the .NET 10 runtime that App Service keeps patched. To see the exact patch, follow Agent 02's report, D8: expect 10.0.15 or later.
+  - Kestrel refuses requests that carry both Content-Length and Transfer-Encoding.
+  - Turning on HTTP/2 in App Service, or proxying the apex through Cloudflare, keeps patched platform defaults.
+  - Proxying also needs the client-address change in Agent 03's handoff 2 in the same deploy, or every visitor shares one rate-limit bucket.
+- **No WAF or CDN in front of the apex** (DNS only). See the hardening report 08, "Needs your action", for the Cloudflare proxy decision.
+
 ## Notes
 
 - **Address routing:** the portal routes with `#/…` hashes, so no server-side fallback is needed. A future path-based route would need `MapFallbackToFile`.
