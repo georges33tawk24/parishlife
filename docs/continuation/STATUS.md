@@ -136,7 +136,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - Federated credential for `id-parishlife` on app registration `3fb431a8-…`, plus `ClientId` and `UseManagedIdentityAssertion=true` (20 November, 18:05 UTC).
     - **Verified:** the owner signed up with a personal Microsoft account (21 November, 14:30 UTC). The token endpoint accepted the managed-identity assertion at `common`.
   - **Open:**
-    - Google is in Testing (test users only). It goes to "In production" once the privacy/terms placeholders are filled and the banners removed.
+    - Google: **In production since 22 November** (see below).
     - The Microsoft consent screen shows "unverified". Publisher verification comes later; the privacy/terms URLs are on the app registration since 21 November.
     - The double-click guard and the portal redirect on a failed check: deployed 21 November (below).
   - Details: "Google and Microsoft sign-in configuration" in `docs/operations/frontend-hosting.md`.
@@ -171,7 +171,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - **Verified:** the owner registered, received the code (in Junk, before DMARC), confirmed it and signed in.
     - The owner keeps the `no-reply` sender. privacy@ forwarding is on and tested.
     - Details: "Email: live setup" in `docs/operations/notification-delivery.md`.
-  - **Left for the owner:** Google Branding and Publish.
+  - **Google sign-in open to everyone (22 November, done by the owner):** Branding filled in (home page `public.html`, privacy and terms links, authorized domain `parish-life.org`, no logo), scopes `openid`/email/profile only, then "Publish app" to In production. No Google review was needed for these scopes. **Verified:** the owner signed up with a Google account that was not a test user, from a private window.
 - **Outside delivery: email, web push and WhatsApp (21 November; `cb5a630`, deployed as `7ecde63` on 22 November 18:33–18:35 UTC by the Azure session, owner's go-ahead):**
   - **Owner decisions:**
     - Resend also emails personal notices, report notices and broadcasts;
