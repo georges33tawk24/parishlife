@@ -42,7 +42,8 @@
 .auth-main{grid-template-columns:minmax(0,1fr)}
 .auth-card{min-width:0}
 .auth-top{flex-wrap:wrap;row-gap:12px}
-@media(max-width:700px){.auth-actions .ease-word{display:none}.auth-actions .ease-toggle{padding-inline:10px}}
+/* on phones the word is clipped, not removed, so the button keeps its name for a screen reader */
+@media(max-width:700px){.auth-actions .ease-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.auth-actions .ease-toggle{padding-inline:10px}}
 .af input::placeholder{color:#6B6150;opacity:1}
 .auth-actions .ease-toggle{border-color:var(--hair);background:#fff;color:var(--ink)}
 .auth-lang{padding:8px 14px;border:1px solid var(--hair);border-radius:999px;background:#fff;color:var(--ink);font:500 calc(17px * var(--fs,1)) var(--a-sans);cursor:var(--hand,pointer);transition:border-color .2s}
