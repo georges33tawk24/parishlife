@@ -206,7 +206,7 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - WhatsApp is not set up yet (Meta business, number, templates and token are the owner's).
     - No push had been sent: nothing could send one before the test button below.
   - **Owner decision, maps (Q24):** Google Maps, integrated by the owner. That will need a browser key, the page policy and a privacy line (OWNER-QUESTIONS 24).
-- **"Send a test notification" (22 November, owner's request), code only, not deployed:**
+- **"Send a test notification" (22 November, owner's request; `d8ca9d1`, deployed 21:37–21:39 UTC by the Azure session, owner's go-ahead):**
   - `POST /api/notifications/test` (`NotificationTestService`) sends one fixed, neutral message to the caller alone: their own push devices, their own confirmed email (if email is on) and their own proven WhatsApp number (if on). It takes no input.
   - **Access:** a personal sign-in only. No recovery sign-in (middleware and service) and no appointment capacity; an account with two-factor needs its authenticator session. Members without two-factor may test their own devices.
   - **Limits:** one a minute and five a day per account, counted before sending, plus the per-address sign-in limit.
@@ -227,6 +227,10 @@ The overall to-do list is `docs/REMAINING-WORK.md` (Georges, 12 November). This 
     - frontend format, lint, check and build pass;
     - `check:routes` 645 routes, 0 new gaps;
     - `npm run e2e` 13/13.
+  - **Deployed:**
+    - built with `tools/Publish-ParishLife.ps1` from a clean worktree (147 files). Compared with live `7ecde63`, only `ParishLife.Api.dll`/`.pdb`, `wwwroot/index.html` and the portal chunk changed.
+    - **Verified live:** `/health/live` and `/health/ready` 200; the pages serve the new portal chunk; anonymous `POST /api/notifications/test` gets 401. Application Insights shows only the usual start-up TaskCanceledException and no 5xx.
+    - **Open:** the owner's own press of the button, the first real push to the iPhone. Members without two-factor may still test their own devices; the owner asked for no change.
 - **npm audit (build tools only):** 4 "high" ReDoS advisories in `picomatch` (GHSA-fc5q-39xc-vjpf) via Vite's `fdir` and `tinyglobby`. The advisory covers every published `picomatch` version, and 4.0.7, the latest, is installed. npm's only "fix" is downgrading Vite to 6.2.7, a breaking older major, so nothing was changed. Production dependencies: 0 vulnerabilities, and these packages are not in the deployed package. Re-check when `picomatch` publishes a fixed version.
 - **Resuming after a stop:** workers do not survive a session or usage-limit stop, but their edits stay on disk. For each `PL-areas/<area>`, check `git status` and `git log fullstack-integration..HEAD`, then continue that area from its uncommitted diff and its module doc (`docs/frontend-modules/<module>.md`); do not restart it from scratch.
 - **Next:** merge each finished `fullstack2-<area>` into `fullstack-integration` one at a time (expected conflicts: `ServiceCollectionExtensions.cs`, `docs/cosmos/containers.json`, `frontend/src/portal/model/modules/index.js`, `frontend/scripts/check-api.mjs`, `route-gaps.json`); after each, run `npm run format:check && npm run check && npm run check:routes && npm run build` and `dotnet test ParishLife.slnx -c Release` on SDK 10.0.401; push. At the end update `docs/features/coverage.json` and `implementation-status.md`.
