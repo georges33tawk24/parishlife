@@ -1,6 +1,7 @@
 // Purpose: reads parish root documents across TenantControl partitions by their indexed document type, for bishop oversight and platform
 // insights. It never returns grants, people or case documents; services authorize and filter the result.
-// Main function: AllAsync.
+// Main functions: AllAsync; ByParishAsync reads one reviewed public-directory document type (location, profile) of every parish in one
+// query instead of one read per parish.
 
 using ParishLife.Api.Configuration;
 using ParishLife.Api.Data.Cosmos;
@@ -18,4 +19,19 @@ internal sealed class ParishDirectory(PartitionDocuments documents) : IParishDir
     // through the separately authorized index update before parish counts reach the bound.
     public Task<IReadOnlyList<Parish>> AllAsync(CancellationToken ct)
         => documents.QueryAsync<Parish>(Containers.TenantControl, null, StorageQuery.Type("parish"), ct, Maximum);
+
+    // Only what the public directory projects; anything else stays readable per parish only, after that parish's checks.
+    private static readonly string[] DirectoryTypes = ["parishLocation", "parishProfile"];
+
+    public async Task<IReadOnlyDictionary<string, T>> ByParishAsync<T>(string type, CancellationToken ct)
+    {
+        if (!DirectoryTypes.Contains(type, StringComparer.Ordinal))
+            throw new InvalidOperationException("Only the public directory's location and profile documents are read across parishes.");
+        var result = new Dictionary<string, T>(StringComparer.Ordinal);
+        // Keyed by the partition that holds each document, never by the parish id written inside it.
+        foreach (var row in await documents.QueryDocumentsAsync<T>(Containers.TenantControl, null, StorageQuery.Type(type), ct, Maximum))
+            if (row.PartitionKey.StartsWith("parish:", StringComparison.Ordinal))
+                result[row.PartitionKey["parish:".Length..]] = row.Data;
+        return result;
+    }
 }

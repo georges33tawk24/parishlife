@@ -1,0 +1,50 @@
+diff --git a/ParishLife.Api/Services/Publishing/PublicDirectoryService.cs b/ParishLife.Api/Services/Publishing/PublicDirectoryService.cs
+index cfb742e..25a975c 100644
+--- a/ParishLife.Api/Services/Publishing/PublicDirectoryService.cs
++++ b/ParishLife.Api/Services/Publishing/PublicDirectoryService.cs
+@@ -6,7 +6,6 @@
+ // DistanceKm (haversine, no external service).
+ 
+ using ParishLife.Api.DTOs.Publishing;
+-using ParishLife.Api.Interfaces.Repositories.Common;
+ using ParishLife.Api.Interfaces.Repositories.Organizations;
+ using ParishLife.Api.Models;
+ using ParishLife.Api.Models.Enums;
+@@ -14,7 +13,7 @@ using ParishLife.Api.Services.Organizations;
+ 
+ namespace ParishLife.Api.Services.Publishing;
+ 
+-public class PublicDirectoryService(IParishDirectory directory, IParishRepository parishes, IRecordTransactions records, ParishProfileService profiles)
++public class PublicDirectoryService(IParishDirectory directory, IParishRepository parishes)
+ {
+     private const double EarthRadiusKm = 6371.0088;
+ 
+@@ -61,12 +60,14 @@ public class PublicDirectoryService(IParishDirectory directory, IParishRepositor
+             || c.LocalityAr?.Contains(text, StringComparison.OrdinalIgnoreCase) == true || c.DioceseName?.Contains(text, StringComparison.OrdinalIgnoreCase) == true);
+     }
+ 
+-    // ponytail: one location point read and one published-profile read per verified parish and one read per diocese (bounded by
+-    // ParishDirectory.Maximum); materialize a public directory projection when parish counts make this slow.
++    // One query for the parishes, one for their recorded locations and one for their published profiles (each keyed by the partition that
++    // holds it), plus one read per diocese; no read per parish.
+     private async Task<List<PublicParishDto>> CardsAsync(CancellationToken ct)
+     {
+         var dioceses = new Dictionary<string, string?>(StringComparer.Ordinal);
+         var cards = new List<PublicParishDto>();
++        var locations = await directory.ByParishAsync<ParishLocation>("parishLocation", ct);
++        var profiles = await directory.ByParishAsync<ParishProfile>("parishProfile", ct);
+         foreach (var parish in await directory.AllAsync(ct))
+         {
+             if (parish.Status != ParishStatus.Verified)
+@@ -74,9 +75,9 @@ public class PublicDirectoryService(IParishDirectory directory, IParishRepositor
+             string? diocese = null;
+             if (parish.JurisdictionArchdioceseId is { } id && !dioceses.TryGetValue(id, out diocese))
+                 dioceses[id] = diocese = (await parishes.GetArchdioceseAsync(id, ct))?.Value is { Verified: true } org ? org.Name : null;
+-            var location = (await records.ReadAsync<ParishLocation>(new RecordScope { Area = RecordArea.Parish, OwnerId = parish.Id }, ParishLocationService.Key, ct))?.Value;
++            var location = locations.GetValueOrDefault(parish.Id);
+             var recorded = location is not null && location.ParishId == parish.Id && location.IsRecorded();
+-            var published = await profiles.PublishedAsync(parish.Id, ct);
++            var published = profiles.GetValueOrDefault(parish.Id)?.Published;
+             cards.Add(new PublicParishDto
+             {
+                 ParishId = parish.Id, Name = parish.Name, NameAr = published?.NameAr, Locality = parish.Locality, LocalityAr = published?.LocalityAr, DioceseName = diocese,

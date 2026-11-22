@@ -1,7 +1,8 @@
 // Purpose: Runs Cosmos point reads and bounded queries/batches inside one complete container/partition transaction
 // boundary.
-// Main functions: CreateItem, UpsertItem, ReplaceItem, DeleteItem, Add, ExecuteAsync, Dispose, Container,
-// ReadAsync, QueryAsync, CommitAsync, ContainersAsync (operator snapshot enumeration).
+// Main functions: CreateItem, UpsertItem, ReplaceItem, DeleteItem, Add, ExecuteAsync (a successful commit also clears the public read
+// cache when public pages read that container), Dispose, Container, ReadAsync, QueryAsync, CommitAsync, ContainersAsync (operator
+// snapshot enumeration).
 
 using System.Net;
 using System.Text.Json;
@@ -64,7 +65,9 @@ internal sealed class DocumentBatch(IDocumentDatabase database, string container
             throw new DomainException("batch_limit", "The atomic operation exceeds its bounded document transaction.");
         try
         {
-            return new(HttpStatusCode.OK, await database.CommitAsync(container, key, mutations, ct));
+            var versions = await database.CommitAsync(container, key, mutations, ct);
+            PublicReadCache.For(database).Changed(container, key);
+            return new(HttpStatusCode.OK, versions);
         }
         catch (DomainException ex) when (ex.Code == "write_conflict")
         {

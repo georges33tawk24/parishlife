@@ -19,7 +19,12 @@ import { api } from '../portal/model/api.js';
 
 async function json(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw Object.assign(new Error('Could not load parish information'), { status: response.status });
+  if (!response.ok) {
+    /* an unread error body (a 404 for a profile not yet published) kept its request open until the
+       12-second timeout; cancelling it frees the connection at once */
+    response.body?.cancel().catch(() => {});
+    throw Object.assign(new Error('Could not load parish information'), { status: response.status });
+  }
   return response.json();
 }
 
@@ -171,16 +176,23 @@ async function calendarWindows(base, from, to) {
   const seen = new Map(pages.flatMap(page => page.items || []).map(e => [e.id, e]));
   return { items: [...seen.values()] };
 }
-async function parts(p, withMinistries) {
+/* What a page reads of one parish: 'parish' for its own page (everything, events from a week ago to four
+   months ahead), 'home' for the homepage (website and profile, events from yesterday to a month ahead: the
+   week, tonight and the next one after the week), 'card' for the other parishes beside a parish page (the profile only:
+   their photo and place). Each 31 days of calendar is one more request, so only the parish's own page asks
+   for the long window. */
+async function parts(p, what) {
   const base = '/api/public/parishes/' + encodeURIComponent(p.id);
+  const own = what === 'parish',
+    card = what === 'card';
   const [sections, calendar, ministries, liturgy, profile, news] = await Promise.all([
-    json(base + '/website').catch(() => []),
-    calendarWindows(base, -7, 120),
-    withMinistries ? json(base + '/ministries?size=50').catch(() => ({ items: [] })) : { items: [] },
+    card ? [] : json(base + '/website').catch(() => []),
+    card ? { items: [] } : own ? calendarWindows(base, -7, 120) : calendarWindows(base, -1, 30),
+    own ? json(base + '/ministries?size=50').catch(() => ({ items: [] })) : { items: [] },
     // approved observances for the same window as the calendar; the parish's own exceptions are its own
-    withMinistries ? liturgyPages(p.id, dateOnly(-7), dateOnly(120)) : null,
+    own ? liturgyPages(p.id, dateOnly(-7), dateOnly(120)) : null,
     json(base + '/profile').catch(() => null), // 404 until the parish publishes its profile
-    withMinistries ? json(base + '/announcements').catch(() => []) : []
+    own ? json(base + '/announcements').catch(() => []) : []
   ]);
   const shaped = toProfile(profile),
     content = toContent(sections);
@@ -202,18 +214,24 @@ async function parts(p, withMinistries) {
 }
 
 /* The directory and, for the homepage's events and Mass times, each parish's website and calendar
-   (the first `limit` parishes; ministries load with a parish's own page). */
-export async function loadDirectory(limit = 40) {
+   (the first `limit` parishes; ministries load with a parish's own page). On a parish's own page
+   (`selected`, the ?parish= that App.jsx reads too) the other parishes need only their photo and place,
+   and the parish itself is loaded in full by loadParish, so it is skipped here. */
+export async function loadDirectory(
+  limit = 40,
+  selected = new URLSearchParams(globalThis.location?.search).get('parish')
+) {
   const page = await json('/api/public/parishes');
   const seen = new Set(),
     directory = [...(page.items || []), ...(page.distanceUnavailable || [])]
       .map(toParish)
       .filter(p => !seen.has(p.id) && seen.add(p.id));
-  const details = new Map(await Promise.all(directory.slice(0, limit).map(async p => [p.id, await parts(p, false)])));
+  const listed = directory.slice(0, limit).filter(p => p.id !== selected);
+  const details = new Map(await Promise.all(listed.map(async p => [p.id, await parts(p, selected ? 'card' : 'home')])));
   return { directory, details };
 }
 
-export const loadParish = p => parts(p, true);
+export const loadParish = p => parts(p, 'parish');
 
 /* ---------- the liturgical calendar ---------- */
 
