@@ -1,6 +1,6 @@
 // Purpose: Reads versioned document envelopes and commits/replays bounded operations with ETag concurrency.
 // Main functions: ReadAsync, Decode, ReplayAsync, Batch, CommitAsync, CreateAsync, ReplaceAsync, QueryPageAsync,
-// QueryAsync, Match.
+// QueryAsync, QueryDocumentsAsync (with envelopes), Match.
 
 using System.Text.Json;
 using Microsoft.Azure.Cosmos;
@@ -95,14 +95,24 @@ internal sealed class PartitionDocuments
     }
 
     internal async Task<IReadOnlyList<T>> QueryAsync<T>(string container, string? key, StorageQuery query, CancellationToken ct, int limit = 500)
+        => (await QueryDocumentsAsync<T>(container, key, query, ct, limit)).Select(document => document.Data).ToArray();
+
+    // The same bounded read with each document's envelope, so a cross-partition caller knows which partition held it.
+    internal async Task<IReadOnlyList<Document<T>>> QueryDocumentsAsync<T>(string container, string? key, StorageQuery query, CancellationToken ct, int limit = 500)
     {
-        var result = new List<T>();
+        var result = new List<Document<T>>();
         string? continuation = null;
         do
         {
-            var page = await QueryPageAsync<T>(container, key, query, Math.Min(limit, 100), continuation, ct);
-            result.AddRange(page.Items.Select(x => x.Value));
-            continuation = page.ContinuationToken;
+            var page = await database.QueryAsync(container, key, query, Math.Min(limit, 100), continuation, ct);
+            foreach (var row in page.Items)
+            {
+                var document = row.Document.Deserialize<Document<T>>(JsonDefaults.Options);
+                if (document?.SchemaVersion != 1)
+                    throw new DomainException("unsupported_document_version", "A supported document upgrade is required.", FailureKind.Unavailable);
+                result.Add(document);
+            }
+            continuation = page.Continuation;
             if (result.Count > limit)
                 throw new DomainException("query_bound_exceeded", "Use the paged or background operation for this dataset.", FailureKind.Unavailable);
         }

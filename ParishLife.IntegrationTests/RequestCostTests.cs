@@ -2,7 +2,8 @@
 // through a counting decorator around the real local store, and prints a table for the performance report (Agent 04). It also holds the
 // public read cache to its contract: a repeated public read touches no document, sign-ins do not clear it, a parish write does at once,
 // and the cached answer has the same bytes, ETag and 304 revalidation as a computed one.
-// Main test: Main_requests_report_their_document_operation_counts; helpers create verified parishes with recorded locations through the
+// Main tests: Main_requests_report_their_document_operation_counts; Directory_documents_of_every_parish_come_back_in_one_query_keyed_by_their_partition
+// (the batched public-directory read, allow-listed types only); helpers create verified parishes with recorded locations through the
 // host's own services and send one measured request each.
 
 using System.Net;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.Data.Cosmos;
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
+using ParishLife.Api.Models;
 using ParishLife.Api.Services.Organizations;
 using ParishLife.IntegrationTests.Support;
 using Xunit;
@@ -132,6 +134,25 @@ public class RequestCostTests(ITestOutputHelper output)
         visitor.DefaultRequestHeaders.IfNoneMatch.Add(new EntityTagHeaderValue(cached.ETag!));
         var revalidated = await visitor.GetAsync("/api/public/parishes");
         Assert.Equal((HttpStatusCode.NotModified, "public, max-age=300"), (revalidated.StatusCode, revalidated.Headers.CacheControl?.ToString()));
+    }
+
+    [Fact]
+    public async Task Directory_documents_of_every_parish_come_back_in_one_query_keyed_by_their_partition()
+    {
+        await using var fixture = new LocalBackendFixture();
+        await fixture.InitializeAsync();
+        await using var factory = new CountingFactory(fixture.DirectoryPath);
+        for (var n = 0; n < 3; n++)
+            await VerifiedLocatedParishAsync(factory, fixture.FirstAdmin, n);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var directory = scope.ServiceProvider.GetRequiredService<IParishDirectory>();
+        factory.Counter.Reset();
+        var locations = await directory.ByParishAsync<ParishLocation>("parishLocation", default);
+        Assert.Equal((0, 1), (factory.Counter.Reads, factory.Counter.Queries));
+        Assert.Equal(3, locations.Count);
+        Assert.All(locations, pair => Assert.Equal(pair.Key, pair.Value.ParishId));
+        // Only the public directory's own types: nothing else is read across parishes.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => directory.ByParishAsync<Person>("person", default));
     }
 
     private static (int, int) Cost((int Reads, int Queries, int Commits, string Body, string? ETag) cost) => (cost.Reads, cost.Queries);
