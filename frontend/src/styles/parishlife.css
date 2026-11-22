@@ -539,12 +539,12 @@ table.tbl .wide{min-width:200px}
 .btn,.btn-icon,.iconbtn{transition-property:background,color,border-color,box-shadow,transform}
 .btn:active:not(:disabled),.btn-icon:active:not(:disabled),.iconbtn:active,button.chip:active{transform:scale(.97)}
 /* every other press shows at once too: controls dip, rows in a list or menu take the chosen tint */
-:is(.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar button,.stepper button):active:not(:disabled){transform:scale(.97)}
+:is(.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar a,.stepper button):active:not(:disabled){transform:scale(.97)}
 :is(.menu button,.menu a,.dd-opt):active{background:var(--selection)}
 .navitem:active{background:rgb(255 255 255 / .14)}
 /* with less motion a press darkens instead of dipping */
 @media (prefers-reduced-motion:reduce){
-  :is(.btn,.btn-icon,.iconbtn,button.chip,.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar button,.stepper button):active{transform:none;filter:brightness(.94)}
+  :is(.btn,.btn-icon,.iconbtn,button.chip,.tabs button,.seg button,.bgroup button,.userbtn,.dd-trigger,.mobilebar a,.stepper button):active{transform:none;filter:brightness(.94)}
 }
 /* a page arriving, and a record that just changed */
 @keyframes pl-view{from{opacity:0}to{opacity:1}}

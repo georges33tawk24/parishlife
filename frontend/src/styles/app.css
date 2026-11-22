@@ -726,13 +726,13 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
     background:var(--surface);border-top:1px solid var(--border);
     padding-bottom:env(safe-area-inset-bottom)
   }
-  .mobilebar button{
+  .mobilebar :is(a,button){
     flex:1;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:3px;color:var(--text-2);font:500 12px/14px var(--sans);position:relative;
     min-height:44px
   }
-  .mobilebar button[aria-current=page]{color:var(--primary)}
-  .mobilebar button[aria-current=page] svg{color:var(--primary)}
+  .mobilebar :is(a,button)[aria-current=page]{color:var(--primary)}
+  .mobilebar :is(a,button)[aria-current=page] svg{color:var(--primary)}
   .mobilebar svg{color:var(--text-3)}
   .mobilebar .nb{
     position:absolute;top:6px;inset-inline-start:calc(50% + 6px);min-width:15px;height:15px;padding:0 4px;

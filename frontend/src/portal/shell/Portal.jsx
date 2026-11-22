@@ -62,6 +62,7 @@ const savePref = (key, v, what) => {
 function onClick(e) {
   const goer = e.target.closest('[data-go]');
   if (goer) {
+    if (goer.href && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return; // a real link: new tab or window
     e.preventDefault();
     go(goer.dataset.go);
     return;
@@ -1103,10 +1104,10 @@ export function Portal() {
             const rt = ROUTES[id];
             if (!rt) return null;
             return (
-              <button key={id} data-go={id} aria-current={S.route === id ? 'page' : undefined}>
+              <a key={id} href={'#/' + id} data-go={id} aria-current={S.route === id ? 'page' : undefined}>
                 <Icon name={rt.ico} size={20} />
                 <span>{rt.mEn ? t(rt.mEn, rt.mAr) : t(rt.en, rt.ar)}</span>
-              </button>
+              </a>
             );
           })}
         </nav>
