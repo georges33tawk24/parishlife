@@ -1,91 +1,127 @@
-# ParishLife backend
+# ParishLife
 
-Latest published verification checkpoint: **331 tests pass**, including parish-scoped notices/legacy recovery, required-notice interruption recovery, immutable request-file retries and limited-role registration HTTP workflows. See the [verification and remaining limits](docs/verification/backend-2026-11-10-notification-identity.md) and [current continuation state](docs/continuation/STATUS.md). This continuation was pushed to `georges33tawk24/parishlife`, branch `backend`, at `7b3d285`; later work is verified and published in batches.
+ParishLife is a parish management platform for Maronite parishes in Lebanon, in English and Arabic (right to left). It has three faces:
+- a **public site** with a parish directory, each parish's page, calendar, events and a form for guest requests;
+- a **members' portal** for parishioners: their requests, ministries, meetings, calendar and messages;
+- **workspaces** for parish offices, priests, ministry leaders, treasurers, the bishop and the platform operators. They cover people and households, sacraments and certificates, calendar and services, rooms and equipment, ministries and attendance, event registrations, finance records and numbered receipts, communications, requests and letters, and administration.
 
-C#/.NET 10 backend with one production API project, organized into understandable folders. The current stage covers the backend/Azure foundation, local Aspire monitoring, MiniDevOps-style DTO/model classes, account security, first bishop, factual jurisdiction, selected staff capacities, calendar/facility/reservations, and ministry membership/meetings/attendance. Frontend integration is deferred. The full product is still under implementation; see `docs/architecture/backend-foundation.md` and the feature coverage register.
+It runs at `https://parish-life.org`. The pilot is a few parishes. Nothing is sold or charged online: donations and receipts are recorded by the parish office.
 
-## Projects
+## How it is put together
 
-- `ParishLife.Api`: controllers, services, repositories, interfaces, models, DTOs, Identity, authorization, Cosmos, Azure configuration, and background jobs.
-- `ParishLife.AppHost`: local Aspire dashboard/orchestration. It starts the API, monitors its dependency readiness, and links to the configured Azure endpoints; it does not provision them.
-- `ParishLife.UnitTests`: isolated rule/persistence checks.
-- `ParishLife.IntegrationTests`: HTTP, real local authentication, and configuration checks. Local tests do not establish Cosmos service guarantees.
-- `tools/ParishLife.Maintenance`: explicit private operator commands; not part of the public API deployment.
+One ASP.NET Core application on .NET 10 (`ParishLife.Api`) answers the API and also serves the React pages, from one Azure App Service. Data is in Azure Cosmos DB (serverless) and private Blob Storage. A Key Vault key protects the encryption keys. The app reaches all three with its own managed identity, so it holds no passwords.
 
-Each created/rewritten code file starts with its purpose and main functions. `AGENTS.md` preserves that convention for future work.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains each part, how a request travels through the system, where data lives and why the main decisions were made.
+- [hardening/PROJECT_MAP.md](hardening/PROJECT_MAP.md) is the full inventory: every route, stored document type, setting, cookie and third party, and who owns which file.
+- [frontend/ARCHITECTURE.md](frontend/ARCHITECTURE.md) explains the frontend.
 
-Account security now includes staged authenticator enrollment, protected one-use recovery codes, restricted recovery sign-in, and independently reviewed lost-device reset. See `docs/operations/account-mfa.md` for endpoints, proof requirements, expiry, and the still-incomplete all-factors-lost/password-recovery cases.
+The other projects in the solution are never deployed:
+- `ParishLife.UnitTests` and `ParishLife.IntegrationTests`: the backend tests;
+- `ParishLife.EndToEnd`: a test-only host for the browser tests;
+- `ParishLife.AppHost`: an Aspire dashboard for local runs;
+- `tools/ParishLife.Maintenance`: a private operator console.
 
-DTOs use one `*Dto` class per file under feature folders, with ordinary properties and input validation. Models use one class per file directly under `Models`, with separate `Models/Enums`. See `docs/architecture/dto-model-conventions.md`. The first-bishop API and its remaining governance dependencies are documented in `docs/operations/first-bishop-appointment.md`.
+## Running it on your computer
 
-The bishop can invite Archdiocese Admins and parish priests through dated, accepted, explicitly scoped appointments. Head designation has independent periods/history and cannot overlap another reserved head period. Factual parish jurisdiction is separate from commercial association. Operational priest requests select one appointment using `X-ParishLife-Appointment`; permissions do not combine across capacities. See `docs/operations/staff-appointments.md` for routes, proofs, limits and remaining governance work.
+You need:
+- the .NET SDK 10.0.4xx (`global.json` pins 10.0.401 and accepts later patches);
+- Node 26 LTS (Node 20 or later works);
+- nothing from Azure. Development uses local files under `.parishlife-data/`, which Git ignores.
 
-Manual calendar drafts/publication, privacy-safe busy views, local-time recurring drafts, room/space configuration, buffered availability and durable office bookings are now integrated. Reservations remain pending until the worker confirms every resource; conflicts/cancellation use recoverable compensation. See `docs/operations/calendar-and-reservations.md`, including the required query-index review and remaining clergy/source/rental/notification work.
+1. Trust the development certificate once: `dotnet dev-certs https --trust`.
+2. Start the API with local storage: `dotnet run --project ParishLife.Api --launch-profile https`. It listens on `https://localhost:7243`. Do not use the `Azure` profile for everyday work: it talks to the real database.
+3. Start the frontend: `cd frontend && npm ci && npm run dev`, then open `https://localhost:5173/index.html`.
+4. To sign in locally, create the two operator accounts with the private interactive command `dotnet run --project tools/ParishLife.Maintenance -- bootstrap-superadmins --local`. Details, including how to verify an ordinary account, are in [frontend/README.md](frontend/README.md).
 
-Ministry lifecycle and safe public/member projections, reviewed identity links and join/private-departure decisions, dated leadership/duties, source-owned meetings/RSVP, protected private planning reasons and occurrence-date attendance are now wired. Attendance snapshots are resumable and do not infer absence from missing data. See [ministries and attendance](docs/operations/ministries-and-attendance.md) for routes, permissions, storage and remaining acceptance.
+The Aspire dashboard (`dotnet run --project ParishLife.AppHost`) is optional. It needs the Aspire CLI.
 
-Ministry formation (S19.09/WF65) now has priest-approved program revisions with prerequisite milestones, pinned member enrollments, recorded evidence, independent qualified review, clergy sign-off where a milestone requires it, returned information, reopening and append-only history. Completion is never derived from attendance and is not a sacramental certificate. Ministries also have counted belongings with loans and stock reconciliation, and volunteering with coordinator-confirmed assignments, overlap/capacity checks and independently reviewed hours. See [ministries and attendance](docs/operations/ministries-and-attendance.md).
+No business data is ever created at startup. The only accounts a command creates are the two operators, `colinsleiman` and `georgestawk`.
 
-Event registration (policy/forms, office and member self-registration, capacity/waitlist/offers, receipts and independently decided refunds, assigned door arrival and authorized pickup) is wired and tested. See [event registrations](docs/operations/event-registrations.md). The [10 November verification record](docs/verification/backend-2026-11-10.md) lists the current 220-test result.
+## Settings
 
-Personal account display/language/appearance now has safe preview/reset and conditional saves, separately from sign-in and official Person facts. [Account-private notes/tasks](docs/operations/personal-workspace.md) provide protected own drafts/history and task lifecycle without administrator fallback; [profile operations](docs/operations/account-profile.md) describe the personal settings contract. Reviewed guest attendance remains separate from member denominators and grants no ministry membership.
+ASP.NET Core reads settings from `appsettings*.json`, from environment variables (`Section__Key`) and, in production, from App Service settings. Secrets live only in Key Vault; App Service holds a Key Vault reference. [.env.example](.env.example) lists every name with placeholders. The full table with the file that reads each one is in the project map, section 5.
 
-Later 10 November slices, each with a runbook: [service plans and music](docs/operations/service-plans-and-music.md), [households and relationships](docs/operations/households-and-relationships.md), [equipment and facility issues](docs/operations/equipment-and-facility-issues.md), [requests and guest association](docs/operations/requests.md), [sacraments, certificates and anniversaries](docs/operations/sacraments.md), [pastoral care, concerns and incidents](docs/operations/pastoral-care.md), [communications](docs/operations/communications.md), [finance](docs/operations/finance.md), [membership, corrections and invitations](docs/operations/membership-and-profile-corrections.md), [schedules and rentals](docs/operations/calendar-and-reservations.md), [people search, export, duplicates and import](docs/operations/people-search-and-export.md), [person facts, consents and data closure](docs/operations/person-facts-and-consents.md), [website](docs/operations/website.md), [office coverage and parish status](docs/operations/staff-appointments.md) and [work overview and capabilities](docs/operations/work-overview.md). See the [verification record](docs/verification/backend-2026-11-10.md); 124 of 149 cards are partial and 25 not started.
+| Settings | Purpose |
+|---|---|
+| `ASPNETCORE_ENVIRONMENT`, `AllowedHosts` | Development or Production; the host names the app answers to |
+| `Storage__Provider`, `Storage__LocalPath` | `Cosmos` in production; `Local` (development and tests only) and its folder |
+| `Cosmos__Endpoint`, `Cosmos__Database`, `Azure__ManagedIdentityClientId` | which Cosmos database, and which managed identity the app uses |
+| `BlobStorage__ServiceUri`, `BlobStorage__EvidenceContainer` | where uploaded files go |
+| `DataProtection__ApplicationName`, `DataProtection__BlobUri`, `DataProtection__KeyIdentifier` | the encryption key ring and the Key Vault key that wraps it |
+| `BackgroundJobs__Enabled` | runs the five background workers (on in production) |
+| `Passkeys__ServerDomain` | optional passkey domain |
+| `Turnstile__SiteKey`, `Turnstile__SecretKey` (secret), `Turnstile__ExpectedHostname` | the Cloudflare bot check: both keys or neither |
+| `Email__Provider`, `Email__ResendApiKey` (secret), `Email__From` | account code emails through Resend: all three or none |
+| `ExternalSignIn__google__*`, `ExternalSignIn__microsoft__*` | Google and Microsoft sign-in. Google's secret is in Key Vault; Microsoft uses the managed identity instead of a secret. |
+| `PublicApp__*` | the installable-app manifest for the public site |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` (treat as secret), `OTEL_EXPORTER_OTLP_ENDPOINT` | telemetry to Application Insights, or to the Aspire dashboard locally |
+| `ForwardedHeaders__Enabled`, `OpenApi__Enabled` | optional overrides: trust of the App Service front end (on outside Development), and the API description (Development only) |
+| `PARISHLIFE_API`, `E2E_*` | frontend development proxy and browser-test options; never put into the built pages |
 
-## Build and verify
+Startup refuses a half-configured feature (one Turnstile key without the other, for example) and an unresolved Key Vault reference, so a mistake shows up at once instead of breaking sign-in later.
 
-From this directory, using a serviced .NET 10 SDK/runtime:
+## Tests and checks
 
-```powershell
-dotnet restore ParishLife.slnx --locked-mode
-dotnet build ParishLife.slnx -c Release --no-restore
-dotnet test ParishLife.slnx -c Release --no-build --no-restore
-```
+| What | Command | Last result (22 November 2026) |
+|---|---|---|
+| Backend unit and integration tests | `dotnet test ParishLife.slnx` | see `hardening/reports/08-devops.md` for the final count (baseline 591 of 591) |
+| Frontend format, module checks, route check, build | `cd frontend && npm run format:check && npm run check && npm run check:routes && npm run build` | all pass |
+| Browser tests (every role, English and Arabic, against the real API on temporary storage) | `cd frontend && E2E_CHANNEL=chromium npm run e2e` | 17 of 18 pass; "public pages load signed out" fails on machines that do not trust the local development certificate |
+| Load test (local hosts only) | see the header of `tools/load/parishlife.k6.js` | hardening report 04 |
+| Secret scan and dependency audits | `gitleaks git --redact --log-opts="--all" .`, `dotnet list ParishLife.slnx package --vulnerable --include-transitive`, `npm audit --audit-level=high` | no leaks, no vulnerable packages |
 
-The [latest 9 November verification record](docs/verification/backend-2026-11-09-personal-and-guests.md) records 196 passing local tests, a clean Release build, API-only publish checks and live Azure checks still outstanding. The [169-test record](docs/verification/backend-2026-11-09.md) is the earlier checkpoint. These results do not establish whole-product completion.
+There are no AI evaluations: ParishLife makes no AI model calls.
 
-## Run with Aspire
+All of these run on GitHub for every push and pull request (`.github/workflows/ci.yml`). Turn on the local hooks once per clone with `git config core.hooksPath .githooks`: one refuses a commit that contains a secret, the other a commit message that does not say what changed and why.
 
-```powershell
-dotnet run --project ParishLife.AppHost
-```
+The tests run on local storage. They do not prove Cosmos behaviour under real load or concurrency.
 
-The launcher prints a private dashboard login URL. Keep its token private. The AppHost uses the Aspire CLI bundle; the supported CLI must be installed. No Docker database, Azure emulator, frontend, or new Azure resource is started.
+## Deploying
 
-By default AppHost selects the configured Azure Cosmos service using your developer credentials and disables background jobs. `/health/live` reports the HTTP process; `/health/ready` reports required dependency metadata access. Azure access failures must remain visible as unhealthy, not be described as successful integration. Azure endpoint links are configuration references; the API readiness probe reports actual dependency access rather than inventing healthy Azure resources.
+Every deploy needs the owner's go-ahead.
+- **Through GitHub (prepared, not switched on yet).** A push to `main` builds and checks the package. It deploys to staging if staging exists, then waits for a reviewer to approve production. The sign-in to Azure uses OpenID Connect, so GitHub holds no password. The one-time setup is in [docs/operations/deployment-and-rollback.md](docs/operations/deployment-and-rollback.md).
+- **By hand (today).** Run `pwsh tools/Publish-ParishLife.ps1` to build the package, then run the `az webapp deploy` command it prints, after `az login`. The deploy log and the checks after each deploy are in [docs/operations/frontend-hosting.md](docs/operations/frontend-hosting.md).
+- **Before a deploy that adds a queried field:** preview the Cosmos index with `tools/Initialize-Cosmos.ps1` and apply it first.
 
-For deliberate local runner testing, set `Backend__RunBackgroundJobs=true` before launching AppHost, then clear it afterwards. Queued reservations remain pending while the runner is disabled. The API worker checks final configuration; AppHost startup still creates no business records. Queries use reviewed `TenantControl` and personal-workspace `Accounts` metadata index paths; readiness checks these policies as well as partition/TTL metadata. No Azure index changes are applied at startup.
+There is **no staging environment yet**. The cheapest one that mirrors production (same plan, its own database, containers, key and identity) is described step by step in the same runbook.
 
-For isolated local development only, you can set `Backend__UseAzure=false` before launching AppHost, then clear that variable afterwards. This uses local documents and separate development Data Protection keys. It is not the production provider or proof of Azure connectivity. Never point automated write tests at production.
+## Rolling back
 
-## Existing Azure resources
+App Service B1 has no deployment slots, so a rollback deploys the previous package again:
+- with one click: re-run the last good `main` run in GitHub Actions;
+- with one command: `az webapp deploy … --src-path <previous package> --type zip --clean true`.
 
-The configuration targets `cosmos-parishlife`, database `ParishLife`, `storageparishlife`, the versionless `parishlife-data-protection` key in `keyvault-parishlife`, and the supplied user-assigned identity. Details are in `docs/azure-manual-setup/production.md`.
+Stored data stays readable by the previous version because changes only add optional fields. The rules are in [docs/operations/deployment-and-rollback.md](docs/operations/deployment-and-rollback.md).
 
-Local Azure checks use your signed-in developer/operator credentials. App Service uses the configured user-assigned managed identity. An `az login` on your machine does not test App Service's identity. No database/container creation, schema initializer, or administrator seed runs at API startup.
+## Backups and restore
 
-```powershell
-dotnet run --project tools/ParishLife.Maintenance -- check-infrastructure
-```
+- **Azure's own backups:** Cosmos continuous backup and Blob soft delete. The legal pages say 7 and 30 days; the owner still has to confirm them in Azure.
+- **Operator snapshots:** `tools/ParishLife.Maintenance` exports a verifiable snapshot and restores it only into an empty, separate target.
 
-This checks existing metadata without writing business data. It does not prove writes, key wrap/unwrap, authentication across a deployed restart, or monitoring ingestion.
+A local restore drill on 22 November 2026 restored 148 records in under a second and matched the source exactly. How to export, verify, restore and run an Azure point-in-time restore test: [docs/operations/data-snapshot-and-recovery.md](docs/operations/data-snapshot-and-recovery.md).
 
-## Only two initial accounts
+## Monitoring, logs, alerts and errors
 
-The only allowed bootstrap usernames are `colinsleiman` and `georgestawk`. No email, church, diocese, clergy, member, plan, subscription, or financial record is fabricated.
+- **Telemetry:** Application Insights `insights-parishlife` holds requests, dependency calls, warnings and failures, joined by the trace id users see on error messages. Search it in the Azure portal under **Logs**.
+- **Health:** `/health/live` and `/health/ready`.
+- **Alerts, uptime tests and the budget** are defined in `infra/monitoring.bicep`. They are not deployed yet. The runbook, with what the logs keep, how long, and the spend caps per service: [docs/operations/monitoring-and-alerts.md](docs/operations/monitoring-and-alerts.md).
+- **Browser errors and real-user page speed** are not collected (an owner decision; the runbook gives the options).
 
-```powershell
-dotnet run --project tools/ParishLife.Maintenance -- bootstrap-superadmins
-```
+## Security decisions
 
-Run this only as the authorized operator against the intended environment. It requires private interactive password/MFA input and explicit confirmation. See `docs/operations/initial-setup.md`. The command has not been run automatically.
+- **Sessions** are `__Host-` cookies (`Secure`, `SameSite=Strict`) backed by a server-side session checked on every request. Every write needs an anti-forgery token.
+- **Sign-in** uses passwords of 16 or more characters, an authenticator app with recovery codes, passkeys, and Google or Microsoft. Operators and staff must use MFA. A recovery sign-in is restricted.
+- **Permissions** are checked in the services, for one selected staff appointment at a time. Hidden records answer 404.
+- **Abuse:** rate limits per client address, the Cloudflare Turnstile bot check on anonymous forms, and security events logged for alerting.
+- **Encryption:** sensitive free text is encrypted with a key ring wrapped by Key Vault. There are no secrets in the repository, and its whole history was scanned.
+- **Production access:** who and what can reach production today, and what to remove, is in [docs/operations/production-access.md](docs/operations/production-access.md).
 
-## Publishing
+The hardening run of 21 and 22 November 2026 reviewed secrets, security, performance, UI, legal pages, operations and tests. Each agent's report, with its findings, changes and the steps left for the owner, is in [hardening/reports/](hardening/reports/). Requests between agents are in [hardening/handoffs/](hardening/handoffs/).
 
-Keep tests in the repository after launch. Publish only the API and deploy only that output:
+## More documents
 
-```powershell
-dotnet publish ParishLife.Api/ParishLife.Api.csproj -c Release -p:UseAppHost=false -o artifacts/api
-```
-
-Do not deploy the whole repository, AppHost, test projects, fixtures, private maintenance executable, or local data. Publishing creates local artifacts; it does not deploy to Azure. Live deployment is a separate step after the appropriate verification.
+- `docs/operations/`: one runbook per area (accounts, sacraments, finance, requests, hosting, email…).
+- `docs/frontend-modules/`: what each portal module shows and which API it uses.
+- `docs/continuation/`: the project's working state, owner decisions and open owner questions (`OWNER-QUESTIONS.md`).
+- `docs/verification/`: earlier verification records.
+- `HANDOVER.md`: the state of the full-stack work on 17 November 2026.

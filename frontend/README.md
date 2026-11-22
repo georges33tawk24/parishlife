@@ -13,7 +13,7 @@ What is connected so far, and what is not, is in [`docs/frontend-integration.md`
 The API's cookies are `__Host-` cookies, `Secure` and `SameSite=Strict`, and the API has no CORS. The browser must load the pages and call `/api` from **one HTTPS origin**:
 
 - **Development:** Vite serves the pages and forwards `/api` and `/health` to the API (`vite.config.js`).
-- **Production:** the built pages (`frontend/dist`) and the API must be served behind one host. That hosting is not set up yet (see the integration doc).
+- **Production:** the API serves the built pages (`frontend/dist`, copied into its `wwwroot` by `tools/Publish-ParishLife.ps1`) from its own origin, `https://parish-life.org` (owner decision, 17 November 2026; `docs/operations/frontend-hosting.md`).
 
 Every unsafe request carries the anti-forgery token from `GET /api/auth/csrf` in `X-CSRF-TOKEN`. `src/portal/model/api.js` handles this, including fetching a new token after sign-in and sign-out.
 
@@ -72,7 +72,7 @@ npm run build          # writes frontend/dist
 npm run e2e            # signed-in browser tests against the real API (test-only host, every role, EN + AR)
 ```
 
-`npm run e2e` builds the pages, starts `ParishLife.EndToEnd` (the real API on `https://localhost:7311` with temporary storage and fixture accounts), runs Playwright with the installed Edge (`E2E_CHANNEL=chrome` for Chrome), then stops the host. It needs the .NET SDK from `global.json` and a trusted development certificate. See `docs/verification/end-to-end.md`.
+`npm run e2e` builds the pages, starts `ParishLife.EndToEnd` (the real API on `https://localhost:7311` with temporary storage and fixture accounts), runs Playwright with the installed Edge by default (`E2E_CHANNEL=chromium` for Playwright's own Chromium, as CI does; `chrome` for Chrome), then stops the host. It needs the .NET SDK from `global.json` and a trusted development certificate. See `docs/verification/end-to-end.md`.
 
 `npm run check:routes` keeps the stand-ins honest. It reruns the checks while recording each request, adds the literal paths passed to `api()`, `parishAPI()` and `allPages()` in `src/`, and matches them by method and path against the `[Route]`/`[Http*]` attributes in `ParishLife.Api/Controllers`. A request no route answers fails the check unless `scripts/route-gaps.json` lists it with the reason it is still open. When a route is added to the API, the check says which gap is closed so it can be removed from that list. It reads the C# source; it does not prove request or response shapes.
 

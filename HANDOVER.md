@@ -17,7 +17,7 @@ Georges, this is the exact state, so you can continue without asking Colin. Ever
 
 ## In one paragraph
 
-Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **All 13 areas are finished and merged** into `fullstack-integration`, together with the shared account-name lookup and the route check. The whole solution builds with 0 warnings and **533 tests pass**. Only 2 known route gaps remain. What is still open is listed under "What is still open" below. The signed-in end-to-end tests (the 15th item of your list) are not started.
+Your `fullstack2-*` cloud sessions never ran, so Colin had the 13 areas from `docs/REMAINING-WORK.md` built on his machine by parallel Claude workers, one branch per area, following your `docs/frontend-modules/CONVENTIONS.md`. **All 13 areas are finished and merged** into `fullstack-integration`, together with the shared account-name lookup and the route check. The whole solution builds with 0 warnings and **533 tests pass**. Only 2 known route gaps remain. What is still open is listed under "What is still open" below. The signed-in end-to-end tests (the 15th item of your list) were not started on 14 November; they were done on 17 November (see the update at the top).
 
 ## The branches
 
