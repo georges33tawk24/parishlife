@@ -1,0 +1,69 @@
+diff --git a/ParishLife.Api/Extensions/TelemetryExtensions.cs b/ParishLife.Api/Extensions/TelemetryExtensions.cs
+index 7e2a4e8..811cc43 100644
+--- a/ParishLife.Api/Extensions/TelemetryExtensions.cs
++++ b/ParishLife.Api/Extensions/TelemetryExtensions.cs
+@@ -1,12 +1,20 @@
+ // Purpose: routes backend telemetry to Aspire locally and Application Insights when configured.
+-// Main function: AddParishLifeTelemetry enables only configured OTLP/Azure Monitor exporters.
++// Main function: AddParishLifeTelemetry enables only configured OTLP/Azure Monitor exporters and tags every signal with this build's release
++// (service.version = the informational version, 1.0.0+<commit>; Application Insights shows it as application_Version), so an error or a slow
++// request can be traced to the deploy that brought it. The role name stays the one App Service reports.
+ 
++using System.Reflection;
+ using Microsoft.OpenTelemetry;
++using OpenTelemetry;
++using OpenTelemetry.Resources;
+ 
+ namespace ParishLife.Api.Extensions;
+ 
+ public static class TelemetryExtensions
+ {
++    public static string Release { get; } =
++        typeof(TelemetryExtensions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
++
+     public static WebApplicationBuilder AddParishLifeTelemetry(this WebApplicationBuilder builder)
+     {
+         var connection = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+@@ -19,6 +27,7 @@ public static class TelemetryExtensions
+             if (!string.IsNullOrWhiteSpace(connection))
+                 options.AzureMonitor.ConnectionString = connection;
+         });
++        builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddAttributes([new("service.version", Release)]));
+         return builder;
+     }
+ }
+diff --git a/ParishLife.UnitTests/TelemetryReleaseTests.cs b/ParishLife.UnitTests/TelemetryReleaseTests.cs
+new file mode 100644
+index 0000000..32de0a9
+--- /dev/null
++++ b/ParishLife.UnitTests/TelemetryReleaseTests.cs
+@@ -0,0 +1,29 @@
++// Purpose: proves that telemetry carries the build's release tag (hardening item 7), so Application Insights can tell deploys apart.
++// Main test: Telemetry_resource_names_the_release builds the host with an OTLP endpoint that nothing listens on (no data leaves the machine)
++// and reads service.version from the tracer provider's resource.
++
++using Microsoft.AspNetCore.Builder;
++using Microsoft.Extensions.DependencyInjection;
++using OpenTelemetry;
++using OpenTelemetry.Trace;
++using ParishLife.Api.Extensions;
++using Xunit;
++
++namespace ParishLife.UnitTests;
++
++public sealed class TelemetryReleaseTests
++{
++    [Fact]
++    public async Task Telemetry_resource_names_the_release()
++    {
++        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
++        builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:9";
++        builder.AddParishLifeTelemetry();
++        await using var app = builder.Build();
++
++        var resource = app.Services.GetRequiredService<TracerProvider>().GetResource();
++
++        Assert.Contains('+', TelemetryExtensions.Release); // 1.0.0+<commit>: the SDK embeds the source revision
++        Assert.Equal(TelemetryExtensions.Release, Assert.Single(resource.Attributes, attribute => attribute.Key == "service.version").Value);
++    }
++}

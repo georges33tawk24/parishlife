@@ -1,7 +1,8 @@
 # Purpose: builds the deployable single-origin package (the API publish output with the built frontend in wwwroot) and its zip.
 # Makes NO Azure calls: it prints the deploy command for the operator, who runs it only with the owner's go-ahead.
 # Main steps: Invoke-Checked (run a native command, stop on failure), npm ci + build, dotnet publish -p:IncludeFrontend=true,
-# package checks (no tests/AppHost/tools/keys), and a tar.exe zip with forward-slash entries for the Linux App Service.
+# package checks (no tests/AppHost/tools/keys), and a zip with forward-slash entries for the Linux App Service (tar.exe on Windows,
+# .NET ZipFile on Linux/macOS, so the CI workflow builds the same package).
 
 #requires -Version 5.1
 <#
@@ -62,10 +63,17 @@ $forbidden = Get-ChildItem -Path $output -Recurse -File | Where-Object {
 }
 if ($forbidden) { throw "The package contains files that must not be deployed: $($forbidden.Name -join ', ')" }
 
-# tar.exe writes forward-slash entries; Compress-Archive in Windows PowerShell 5.1 writes backslashes, which the Linux deployment rejects.
-# The Windows bsdtar by full path: a GNU tar from Git for Windows earlier on PATH reads "C:" as a remote host.
-$tar = Join-Path $env:SystemRoot 'System32/tar.exe'
-Invoke-Checked $tar @('-a', '-c', '-f', $zip, '*') $output
+# The Linux deployment rejects backslash entries, which Compress-Archive in Windows PowerShell 5.1 writes.
+# Windows: the built-in bsdtar by full path (a GNU tar from Git for Windows earlier on PATH reads "C:" as a remote host).
+# Elsewhere (PowerShell 7 on Linux or macOS, as in CI): .NET's ZipFile, whose entry names use forward slashes there.
+if ($env:OS -eq 'Windows_NT') {
+    $tar = Join-Path $env:SystemRoot 'System32/tar.exe'
+    Invoke-Checked $tar @('-a', '-c', '-f', $zip, '*') $output
+}
+else {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($output, $zip)
+}
 $files = (Get-ChildItem -Path $output -Recurse -File).Count
 Write-Host "Package: $zip ($files files, commit $commit, frontend: $IncludeFrontend)"
 Write-Host 'Deploy only with the owner''s go-ahead:'
