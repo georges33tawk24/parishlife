@@ -1,6 +1,7 @@
 // Purpose: HTTP regressions for the hardening run's security sweep 1 (hardening/reports/03-security.md, "Sweep 1").
 // Main tests: account closure is refused while the account owns a parish or holds parish access, and succeeds once access ends; an
-// authenticator code spent on a password reset cannot sign in, and one spent on a sign-in cannot reset a password.
+// authenticator code spent on a password reset cannot sign in, and one spent on a sign-in cannot reset a password; a withdrawn public
+// announcement leaves the server's public cache at once.
 
 using System.Net;
 using System.Net.Http.Json;
@@ -98,5 +99,45 @@ public class SecuritySweepTests
         await client.PostAsJsonAsync("/api/auth/password-reset", new { email });
         Assert.Equal("verification_invalid", await Title(await client.PostAsJsonAsync("/api/auth/password-reset/confirm",
             new { email, code = delivery.Sent[^1].Code, newPassword = "yet-another-isolated-password", currentCode = next })));
+    }
+
+    [Fact]
+    public async Task A_withdrawn_public_announcement_disappears_from_the_cached_public_read_at_once()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var s = await MinistryScenario.CreateAsync(f);
+        var publisher = await f.CreateVerifiedStaffAsync();
+        f.As(f.FirstAdmin);
+        await f.Services.GetRequiredService<ParishService>().GrantAsync(s.Parish, new GrantAccessDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await s.Staff.Parishes.GetAsync(s.Parish, default))!.Version,
+            AccountId = Guid.Parse(publisher), Allows = [Permissions.CommunicationsManage, Permissions.PublishingManage], StartsAt = f.Clock.Now
+        }, default);
+        var email = (await f.Services.GetRequiredService<UserManager<ParishUser>>().FindByIdAsync(publisher))!.Email!;
+        await using var factory = new LocalApiFactory(f.DirectoryPath);
+        using var staff = factory.Client();
+        await LoginAsync(staff, email);
+        var draft = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/parishes/{s.Parish}/announcements",
+            new { operationId = Guid.NewGuid(), visibility = "Public", title = "Visible for now", body = "Details", language = "en" }));
+        var id = draft.GetProperty("id").GetString();
+        async Task ActAsync(string action)
+        {
+            var rows = await Read<JsonElement>(await staff.GetAsync($"/api/parishes/{s.Parish}/announcements"));
+            var version = rows.EnumerateArray().Single(r => r.GetProperty("value").GetProperty("id").GetString() == id).GetProperty("version").GetString();
+            await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/parishes/{s.Parish}/announcements/{id}/actions",
+                new { operationId = Guid.NewGuid(), version, action, reason = "Isolated test" }));
+        }
+        await ActAsync("publish");
+
+        using var visitor = factory.Client();
+        var path = $"/api/public/parishes/{s.Parish}/announcements";
+        Assert.Contains("Visible for now", await visitor.GetStringAsync(path), StringComparison.Ordinal);
+        var cached = await visitor.GetAsync(path);
+        Assert.Equal("public, max-age=60", cached.Headers.CacheControl!.ToString());
+        Assert.Contains("Visible for now", await cached.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        await ActAsync("withdraw");
+        Assert.DoesNotContain("Visible for now", await visitor.GetStringAsync(path), StringComparison.Ordinal);
     }
 }

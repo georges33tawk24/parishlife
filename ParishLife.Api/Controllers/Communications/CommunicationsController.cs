@@ -4,6 +4,7 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ParishLife.Api.Middleware;
 using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Models;
 using ParishLife.Api.Services.Communications;
@@ -53,7 +54,8 @@ public class CommunicationsController(CommunicationsService service) : Controlle
 [AllowAnonymous, ApiController, Route("api/public/parishes/{parishId:guid}")]
 public class PublicCommunicationsController(CommunicationsService service) : ControllerBase
 {
-    [HttpGet("announcements")]
+    // Server-cached (cleared by any TenantControl write); 60 s also bounds how long an expired announcement can still show. No identity read.
+    [HttpGet("announcements"), PublicCache(60)]
     public async Task<ActionResult<IReadOnlyList<AnnouncementDto>>> PublicAnnouncements(Guid parishId, CancellationToken ct)
         => Ok(await service.PublicAnnouncementsAsync(Guard.Id(parishId), ct));
 

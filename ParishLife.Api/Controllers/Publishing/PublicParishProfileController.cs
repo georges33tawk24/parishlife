@@ -21,7 +21,8 @@ public class PublicParishProfileController(ParishProfileService service) : Contr
     public async Task<IActionResult> Photo(Guid parishId, Guid photoId, CancellationToken ct)
     {
         var (content, type) = await service.PublicPhotoAsync(Guard.Id(parishId), Guard.Id(photoId), ct);
-        Response.Headers.CacheControl = "public, max-age=300";
+        // A photo id names one immutable upload; 15 minutes, not a day, so an unpublished photo leaves visitors' browsers soon.
+        Response.Headers.CacheControl = "public, max-age=900";
         return File(content, type);
     }
 }

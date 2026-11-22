@@ -122,8 +122,9 @@ public class PublicDirectoryTests
         var policy = await client.GetFromJsonAsync<OfflinePolicyDto>("/api/public/app/offline-policy");
         Assert.Equal(("no-store", "NotSupported"), (policy!.DefaultPolicy, policy.OfflineWrites));
         Assert.Equal(["/api/public/app/manifest", "/api/public/app/offline-policy", "/api/public/homepage", "/api/public/parishes",
-            "/api/public/parishes/{parishId:guid}/liturgical-calendar", "/api/public/parishes/{parishId:guid}/profile",
-            "/api/public/parishes/{parishId:guid}/website"],
+            "/api/public/parishes/{parishId:guid}/announcements", "/api/public/parishes/{parishId:guid}/calendar",
+            "/api/public/parishes/{parishId:guid}/liturgical-calendar", "/api/public/parishes/{parishId:guid}/ministries",
+            "/api/public/parishes/{parishId:guid}/profile", "/api/public/parishes/{parishId:guid}/website"],
             policy.CacheableReads.Select(r => r.Template).ToArray());
     }
 
