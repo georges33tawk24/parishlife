@@ -171,7 +171,8 @@ public class SecuritySweepTests
         Directory.CreateDirectory(web);
         await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<!doctype html><html><head><title>Sign in</title></head><body></body></html>");
         await File.WriteAllTextAsync(Path.Combine(web, "public.html"), "<!doctype html><html><head><meta name=\"description\" content=\"Find parishes\">"
-            + "<meta property=\"og:title\" content=\"ParishLife\"><meta property=\"og:description\" content=\"Find parishes\"><title>ParishLife · Find your parish</title></head><body></body></html>");
+            + "<meta property=\"og:title\" content=\"ParishLife\"><meta property=\"og:description\" content=\"Find parishes\"><title>ParishLife · Find your parish</title>"
+            + "<link rel=\"canonical\" href=\"https://parish-life.org/public.html\"></head><body></body></html>");
         await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new() { ["webroot"] = web }, _ => { });
         using var client = factory.Client();
         var page = "/public.html?parish=" + staff.Parish;
@@ -194,6 +195,7 @@ public class SecuritySweepTests
         var html = await published.Content.ReadAsStringAsync();
         Assert.Contains("<title>Isolated parish &#183; ParishLife</title>", html, StringComparison.Ordinal);
         Assert.Contains($"<link rel=\"canonical\" href=\"https://localhost/public.html?parish={staff.Parish}\">", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("parish-life.org/public.html\"", html, StringComparison.Ordinal); // the directory's static canonical is replaced, never doubled
         Assert.Contains("&lt;b&gt;Maronite&lt;/b&gt; &amp; &quot;Syriac&quot;", html, StringComparison.Ordinal);
         Assert.DoesNotContain("<b>Maronite", html, StringComparison.Ordinal);
         Assert.Contains("\"@type\":\"Church\"", html, StringComparison.Ordinal);

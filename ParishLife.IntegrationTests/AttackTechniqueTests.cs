@@ -136,7 +136,7 @@ public class AttackTechniqueTests
 
     // Technique 14: a sign-in for an address with no account must take as long as a wrong password for a real one; otherwise the response
     // time tells an attacker which addresses have accounts. Today an unknown address answers before any password hashing.
-    [KnownFailureFact("from-09-qa.md #1: login answers unknown addresses without hashing, so timing reveals which emails have accounts")]
+    [Fact] // from-09-qa.md #1, fixed: unknown addresses now verify against a dummy hash
     public async Task Sign_in_takes_as_long_for_an_unknown_address_as_for_a_wrong_password()
     {
         await using var f = new LocalBackendFixture();

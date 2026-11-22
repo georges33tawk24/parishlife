@@ -2,7 +2,7 @@
 // is unknown or unverified (a verified parish with no published profile yet gets the plain page), and a sitemap generated from the
 // published parishes. The served public.html is rewritten in
 // memory (title, description, Open Graph, canonical link, schema.org JSON-LD); the frontend files are never edited.
-// Main functions: ParishPageAsync (GET /public.html?parish=<id>) and SitemapAsync (GET /sitemap.xml). Every value comes from the published
+// Main functions: ParishPageAsync (GET /public.html?parish=<id>; drops the directory's static canonical link) and SitemapAsync (GET /sitemap.xml). Every value comes from the published
 // profile and the parish's public directory fields only (the same rules as GET /api/public/parishes/{id}/profile), and is HTML-encoded
 // (JSON-LD is JSON-encoded, which escapes < and >). Anything else falls through to the static files unchanged.
 
@@ -32,6 +32,8 @@ public static partial class PublicPages
         response.ContentType = "text/html; charset=utf-8";
         var parish = Guid.TryParse(context.Request.Query["parish"].ToString(), out var id) ? id.ToString("N") : null;
         var page = parish is null ? null : await ProfileAsync(context, parish);
+        // public.html names the directory as its canonical address; a parish page names its own, or none while nothing is published (QA bug 7).
+        html = Canonical().Replace(html, string.Empty);
         if (page is null)
         {
             // A verified parish without a published profile is still listed in the directory and shown: the plain page, 200.
@@ -125,4 +127,7 @@ public static partial class PublicPages
 
     [GeneratedRegex("<title>[^<]*</title>", RegexOptions.IgnoreCase)]
     private static partial Regex Title();
+
+    [GeneratedRegex("<link\\s+rel=\"canonical\"[^>]*>\\s*", RegexOptions.IgnoreCase)]
+    private static partial Regex Canonical();
 }

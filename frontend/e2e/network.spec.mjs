@@ -2,8 +2,8 @@
    Chromium's network emulation throttles the page to slow 3G (2 s round trip, 400 kbit/s) and slow 4G (150 ms, 1.6 Mbit/s down,
    750 kbit/s up, Lighthouse's mobile profile).
    Main checks: the sign-in form arrives; a double press sends one sign-in and the button shows it is busy; a page skeleton
-   covers the wait for the first screen instead of a blank page; a wrong password gets a plain message in English and (known
-   failure) in Arabic; a sign-in that never answers ends in a message (known failure: there is no client time-out). */
+   covers the wait for the first screen instead of a blank page; a wrong password gets a plain message in English and
+   in Arabic; a sign-in that never answers ends in a message (the client stops waiting after 30 seconds). */
 import { expect } from '@playwright/test';
 import { client, manifest, settle, test, turnstileToken, watch } from './support.mjs';
 
@@ -68,7 +68,7 @@ test('a wrong password gets a plain message and the form keeps what was typed', 
 });
 
 test('a wrong password gets its message in Arabic on the Arabic page', async ({ page }) => {
-  test.fail(true, 'Known failure, from-09-qa.md #5: the sign-in 401 messages in model/api.js are English only');
+  // from-09-qa.md #5, fixed: the sign-in 401 messages in model/api.js are bilingual
   await client(page, 93);
   await page.addInitScript(() => localStorage.setItem('pl-lang', 'ar'));
   await page.goto(M.baseUrl + '/index.html');
@@ -81,10 +81,7 @@ test('a wrong password gets its message in Arabic on the Arabic page', async ({ 
 });
 
 test('a sign-in that never answers ends in a message instead of waiting for ever', async ({ page }) => {
-  test.fail(
-    true,
-    'Known failure, from-09-qa.md #6: API calls have no time-out; a request that never answers leaves the button busy'
-  );
+  // from-09-qa.md #6, fixed: API calls stop waiting for an answer after 30 seconds
   await client(page, 94);
   await page.addInitScript(() => localStorage.setItem('pl-lang', 'en'));
   await page.goto(M.baseUrl + '/index.html');

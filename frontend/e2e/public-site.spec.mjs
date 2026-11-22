@@ -49,8 +49,8 @@ test('every public page has its own title, description and canonical link, and u
     const title = /<title>([^<]+)<\/title>/.exec(html)?.[1];
     const description = /<meta name="description" content="([^"]+)"/.exec(html)?.[1];
     const canonical = /<link rel="canonical" href="([^"]+)"/.exec(html)?.[1];
-    // public.html has none (from-09-qa.md #7, the test below); parish pages get theirs from the server (SecuritySweepTests).
-    if (path !== '/public.html') expect(canonical, path).toBe('https://parish-life.org' + path);
+    // parish pages get their own from the server (SecuritySweepTests).
+    expect(canonical, path).toBe('https://parish-life.org' + path);
     expect([path, !!title, !!description]).toEqual([path, true, true]);
     expect(html, path).not.toMatch(/noindex/);
     heads.push({ title, description });
@@ -68,10 +68,7 @@ test('every public page has its own title, description and canonical link, and u
 });
 
 test('the directory page names its canonical address', async ({ request }) => {
-  test.fail(
-    true,
-    'Known failure, from-09-qa.md #7: public.html has no canonical link, so ?lang= and ?view= variants compete'
-  );
+  // from-09-qa.md #7, fixed: public.html carries the directory's canonical link; parish pages replace it with their own
   const html = await (await request.get(M.baseUrl + '/public.html?lang=ar')).text();
   expect(html).toContain('<link rel="canonical" href="https://parish-life.org/public.html">');
 });

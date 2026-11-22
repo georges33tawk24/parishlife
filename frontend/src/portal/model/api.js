@@ -62,12 +62,20 @@ const reached = ok => {
   if (typeof window !== 'undefined') document.dispatchEvent(new CustomEvent('parish-connection', { detail: ok }));
 };
 
+/* A request that gets no answer within this time (a dead mobile connection) ends with the connection message instead of a
+   button that stays busy (QA bug 6). Only the wait for the answer is timed, never the reading of a large one. A write that
+   timed out may still have been saved; its retry carries the same operation id. */
+const ANSWER_TIMEOUT_MS = 30000;
+
 async function send(path, method, body, extra = {}) {
   if (method !== 'GET' && !csrf) csrf = (await send('auth/csrf', 'GET')).token;
   let response;
+  const waiting = new AbortController();
+  const timer = setTimeout(() => waiting.abort(), ANSWER_TIMEOUT_MS);
   try {
     response = await fetch('/api/' + path, {
       method,
+      signal: waiting.signal,
       credentials: 'same-origin',
       cache: 'no-store',
       headers: {
@@ -81,6 +89,8 @@ async function send(path, method, body, extra = {}) {
   } catch {
     reached(false);
     throw new Error(connectionMessage());
+  } finally {
+    clearTimeout(timer);
   }
   reached(true);
   const json = (response.headers.get('Content-Type') || '').toLowerCase().includes('json');
@@ -88,9 +98,15 @@ async function send(path, method, body, extra = {}) {
   if (response.ok) return data;
   const error = new Error(
     response.status === 401 && path === 'auth/login'
-      ? 'That email or username and password do not match, or the account is not verified yet.'
+      ? t(
+          'That email or username and password do not match, or the account is not verified yet.',
+          'البريد أو اسم المستخدم وكلمة المرور غير متطابقة، أو أنّ الحساب لم يُتحقَّق منه بعد.'
+        )
       : response.status === 401 && path === 'auth/login/mfa'
-        ? 'That code did not work. Enter the code your authenticator shows now.'
+        ? t(
+            'That code did not work. Enter the code your authenticator shows now.',
+            'لم ينجح هذا الرمز. أدخل الرمز الذي يعرضه تطبيق المصادقة الآن.'
+          )
         : readable(response.status, data)
   );
   error.status = response.status;
