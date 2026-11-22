@@ -1,6 +1,6 @@
 // Purpose: Registers ordinary email accounts using Identity managers without creating people, appointments, or
 // fake verification.
-// Main functions: RegisterAsync (refused without the 13-or-older confirmation), AgeRequired.
+// Main functions: RegisterAsync (refused without the 13-or-older confirmation; records TermsVersion and the acceptance time), AgeRequired.
 
 using System.Net.Mail;
 using Microsoft.AspNetCore.Identity;
@@ -10,8 +10,11 @@ using ParishLife.Api.Models;
 
 namespace ParishLife.Api.Services.Accounts;
 
-public sealed class AccountService(UserManager<ParishUser> users, IUserStore<ParishUser> store)
+public sealed class AccountService(UserManager<ParishUser> users, IUserStore<ParishUser> store, TimeProvider clock)
 {
+    // The effective date of terms.html and privacy.html; change it together with them. Sign-up records it with the acceptance time.
+    public const string TermsVersion = "2026-11-22";
+
     public async Task RegisterAsync(RegisterAccountDto request, CancellationToken ct)
     {
         var id = Guard.Id(request.OperationId);
@@ -39,7 +42,9 @@ public sealed class AccountService(UserManager<ParishUser> users, IUserStore<Par
             Email = email,
             UserName = email,
             DisplayName = name,
-            LockoutEnabled = true
+            LockoutEnabled = true,
+            TermsVersion = TermsVersion,
+            TermsAcceptedAt = clock.GetUtcNow()
         };
         var result = await users.CreateAsync(user, request.Password);
         if (!result.Succeeded && result.Errors.Any(e => e.Code is not ("DuplicateEmail" or "DuplicateUserName" or "DuplicateAccount")))

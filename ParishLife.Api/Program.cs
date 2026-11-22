@@ -126,6 +126,9 @@ app.Use(async (context, next) =>
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)";
     if (context.Request.Path.StartsWithSegments("/api"))
         context.Response.Headers.CacheControl = "no-store";
+    // Not for search results: the API, and a guest's request-tracking link (its token is private).
+    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Query.ContainsKey("track"))
+        context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
     await next();
 });
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api"), pages => pages.UseResponseCompression());

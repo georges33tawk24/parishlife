@@ -1,6 +1,6 @@
 // Purpose: Defines persisted account/security state separately from parish Person records; LoginAlias retains its
 // legacy field shape.
-// Main members: AccountSession, LoginAlias, MfaChallenge, ParishUser (including registered passkeys, linked external logins, the operator suspension flag and ClosedAt).
+// Main members: AccountSession, LoginAlias, MfaChallenge, ParishUser (including registered passkeys, linked external logins, the operator suspension flag, ClosedAt and the accepted terms version).
 
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Identity;
@@ -16,6 +16,9 @@ public sealed class ParishUser : IdentityUser
     public bool PlatformOperator { get; set; }
     // Set when the person closed the account themselves (AccountClosureService); the identity is then anonymized and inactive for good.
     public DateTimeOffset? ClosedAt { get; set; }
+    // Which terms and privacy version the person accepted when the account was made (AccountService.TermsVersion), and when.
+    public string? TermsVersion { get; set; }
+    public DateTimeOffset? TermsAcceptedAt { get; set; }
     public bool IdentityVerified { get; set; }
     public string? AuthenticatorKey { get; set; }
     public string? ProtectedRecoveryCodes { get; set; }

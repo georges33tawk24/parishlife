@@ -52,6 +52,7 @@ public class AccountClosureService(IRecordTransactions records, MfaAccountAccess
         var export = new AccountDataExportDto
         {
             ExportedAt = clock.GetUtcNow(), Account = AccountDto.From(user), CreatedAt = user.CreatedAt, TwoFactorEnabled = user.TwoFactorEnabled,
+            TermsVersion = user.TermsVersion, TermsAcceptedAt = user.TermsAcceptedAt,
             Passkeys = user.Passkeys.Select(p => new PasskeyDto { Id = p.CredentialId, Name = p.Name, CreatedAt = p.CreatedAt, LastUsedAt = p.LastUsedAt, IsBackedUp = p.IsBackedUp }).ToList(),
             ExternalLogins = user.ExternalLogins.Select(l => new ExternalLoginDto { Provider = l.Provider, LinkedAt = l.LinkedAt }).ToList(),
             Profile = (await profiles.GetAsync(ct)).Value

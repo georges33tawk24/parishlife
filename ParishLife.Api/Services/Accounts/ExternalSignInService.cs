@@ -269,6 +269,8 @@ public class ExternalSignInService(IRecordTransactions records, MfaAccountAccess
             DisplayName = string.IsNullOrWhiteSpace(name) ? email[..email.IndexOf('@')] : name.Length > 200 ? name[..200] : name,
             EmailConfirmed = true, // the provider verified it (ExternalIdentityClaims); no code is sent
             LockoutEnabled = true,
+            TermsVersion = AccountService.TermsVersion, // the sign-up screen states acceptance of the terms and privacy policy
+            TermsAcceptedAt = clock.GetUtcNow(),
             ExternalLogins = [new AccountExternalLogin { Provider = provider, SubjectHash = hash, LinkedAt = clock.GetUtcNow() }]
         };
         IdentityResult created;
