@@ -126,7 +126,7 @@ public class AccountNamesService(IRecordTransactions records, IParishAccess acce
             await access.RequireModuleAsync(parish, "office", ct);
             return true;
         }
-        catch (DomainException)
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden)
         {
             return false;
         }

@@ -272,7 +272,7 @@ public class ServicePlanService(IRecordTransactions records, IParishAccess acces
                 if (item.CelebrantAccountId is null) issues.Add("CelebrantRequired");
                 else await clergy.RequireAsync(parish, item.CelebrantAccountId, "Priest", ct);
             }
-            catch (DomainException) { issues.Add("CelebrantRequired"); }
+            catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { issues.Add("CelebrantRequired"); }
         }
         return [.. issues];
     }

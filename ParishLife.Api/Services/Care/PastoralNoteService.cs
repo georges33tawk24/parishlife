@@ -25,7 +25,7 @@ public class PastoralNoteService(IRecordTransactions records, IClergyAuthority c
     private async Task<bool> IsPriestAsync(string parish, string account, CancellationToken ct)
     {
         try { await clergy.RequireAsync(parish, account, "Priest", ct); return true; }
-        catch (DomainException) { return false; }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { return false; }
     }
 
     public async Task<PastoralNoteDto> SaveAsync(string parish, string? id, SavePastoralNoteDto request, CancellationToken ct)

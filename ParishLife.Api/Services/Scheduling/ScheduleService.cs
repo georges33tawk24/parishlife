@@ -37,7 +37,7 @@ public class ScheduleService(IRecordTransactions records, IParishRepository pari
             var parish = (await parishes.GetAsync(follow.Value.ParishId, ct))?.Value;
             Versioned<PersonAccountLink> link;
             try { link = await own.OwnLinkAsync(follow.Value.ParishId, ct); }
-            catch (DomainException) { continue; }
+            catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { continue; }
             var scope = RecordScopes.Parish(parish!.Id);
             var person = link.Value.PersonId;
             foreach (var r in await records.CollectAsync<EventRegistration>(scope, "registration", ct, 500, RecordConditions.Equal("personId", person)))

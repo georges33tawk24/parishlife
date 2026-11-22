@@ -52,7 +52,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     private async Task<bool> IsPriestAsync(string parish, string account, CancellationToken ct)
     {
         try { await clergy.RequireAsync(parish, account, "Priest", ct); return true; }
-        catch (DomainException) { return false; }
+        catch (DomainException error) when (error.Kind is FailureKind.NotFound or FailureKind.Forbidden) { return false; }
     }
 
     public async Task<SacramentRecordDto> CreateAsync(string parish, CreateSacramentDto request, CancellationToken ct)
