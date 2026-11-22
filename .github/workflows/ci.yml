@@ -1,0 +1,262 @@
+# Purpose: the ParishLife pipeline (hardening item 1). On every push and pull request it runs the secret scan, the dependency audits, the
+# backend build and tests, the frontend checks and build, the commit-message check and the deploy package; the end-to-end browser tests run
+# as their own job. Deploys run only for pushes to main: staging first (when the repository variable STAGING_ENABLED is true), then
+# production behind the "production" environment's required reviewers (and only when PRODUCTION_DEPLOY_ENABLED is true).
+# Main jobs: secret-scan, backend, frontend, commit-messages, package, e2e, deploy-staging, deploy-production.
+# Azure sign-in is OpenID Connect through azure/login: no publish profile, password or client secret exists anywhere.
+# Every command below was run locally first; the results and the owner's setup steps are in docs/operations/deployment-and-rollback.md.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # global.json pins 10.0.401 with rollForward latestPatch; the newest 10.0.4xx satisfies it.
+  DOTNET_VERSION: "10.0.4xx"
+  NODE_VERSION: "26"
+  GITLEAKS_VERSION: "8.30.1"
+  # NuGet restores inside build, publish and dotnet run use the committed lock files only.
+  RestoreLockedMode: "true"
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (release checksum verified)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -sSfLO "$base/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --check --ignore-missing "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+      - name: Scan every commit (findings are redacted, so no value reaches the log)
+        run: ./gitleaks git --redact --no-banner --log-opts="--all" .
+
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - name: Restore (locked versions only)
+        run: dotnet restore ParishLife.slnx --locked-mode
+      - name: Known-vulnerable NuGet packages, direct and transitive
+        run: |
+          dotnet list ParishLife.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q 'has the following vulnerable packages' vulnerable.txt; then exit 1; fi
+      - name: Build (warnings are errors)
+        # The local-only Aspire AppHost is compiled without downloading the Aspire CLI bundle; it is never run or deployed.
+        run: dotnet build ParishLife.slnx -c Release --no-restore -p:AspireUseCliBundle=false
+      - name: Unit and integration tests (isolated local storage, no Azure)
+        run: dotnet test ParishLife.slnx -c Release --no-build
+
+  frontend:
+    name: Frontend checks and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Formatting (Prettier)
+        run: npm run format:check
+      - name: Module checks against the in-memory API stand-in
+        run: npm run check
+      - name: Every frontend API call matches a real route
+        run: npm run check:routes
+      - name: Build
+        run: npm run build
+      - name: Known-vulnerable npm packages (high and critical fail)
+        run: npm audit --audit-level=high
+
+  commit-messages:
+    name: Commit messages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The commit-msg hook's own tests
+        run: sh tools/tests/commit-msg.Tests.sh
+      - name: Every commit in this pull request says what changed and why
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            git log -1 --format=%B "$commit" > "$RUNNER_TEMP/message.txt"
+            if ! sh .githooks/commit-msg "$RUNNER_TEMP/message.txt"; then
+              echo "Refused: $(git log -1 --format='%h %s' "$commit")"
+              status=1
+            fi
+          done
+          exit $status
+
+  package:
+    name: Deploy package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the package (API plus the frontend in wwwroot; refuses tests, AppHost, tools and key files)
+        shell: pwsh
+        run: ./tools/Publish-ParishLife.ps1 -OutputRoot artifacts
+      - name: Name the package after the full commit
+        run: mv artifacts/api-*.zip "parishlife-${GITHUB_SHA}.zip"
+      - name: Keep the package for the deploy jobs and for rollback (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: parishlife-package
+          path: parishlife-${{ github.sha }}.zip
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  e2e:
+    # Not a required check until the test host's certificate is trusted on Linux runners (Agent 09); see the runbook.
+    name: End-to-end browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies and Playwright's Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Development HTTPS certificate for the test-only host
+        run: dotnet dev-certs https
+      - name: Run the end-to-end tests (test-only host, temporary storage, fixture accounts)
+        working-directory: frontend
+        env:
+          E2E_CHANNEL: chromium
+        run: npm run e2e
+      - name: Keep the report when a test fails (synthetic fixture data only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            frontend/e2e-report
+            frontend/test-results
+          retention-days: 7
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: [secret-scan, backend, frontend, commit-messages, package]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: parishlife-package
+      - name: Sign in to Azure (OpenID Connect, no stored password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy the package
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: az webapp deploy -g "$RESOURCE_GROUP" -n "$WEBAPP_NAME" --src-path "parishlife-${GITHUB_SHA}.zip" --type zip --clean true -o none
+      - name: Readiness check
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: curl -fsS --retry 10 --retry-delay 15 --retry-all-errors "$PUBLIC_URL/health/ready"
+
+  deploy-production:
+    name: Deploy to production
+    needs: [secret-scan, backend, frontend, commit-messages, package, deploy-staging]
+    # Runs when staging passed or is not set up yet (skipped), never after a failure.
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: parishlife-package
+      - name: Sign in to Azure (OpenID Connect, no stored password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy the package
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: az webapp deploy -g "$RESOURCE_GROUP" -n "$WEBAPP_NAME" --src-path "parishlife-${GITHUB_SHA}.zip" --type zip --clean true -o none
+      - name: Readiness check
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: curl -fsS --retry 10 --retry-delay 15 --retry-all-errors "$PUBLIC_URL/health/ready"
