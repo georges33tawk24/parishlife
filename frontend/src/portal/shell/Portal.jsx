@@ -645,7 +645,7 @@ export function Portal() {
         'danger'
       );
     closeOverlays();
-    await endSession().catch(() => {});
+    await endSession().catch(() => {}); // signOut() clears the session locally even when the API cannot be reached
     loginScreen();
   };
   const switchLanguage = () => {
@@ -682,7 +682,7 @@ export function Portal() {
     } catch (e) {
       selectParish(previous);
       S.role = session.user.role;
-      await hydrate().catch(() => {});
+      await hydrate().catch(() => {}); // the failure is already shown by the toast below
       toast(t('Parish could not be opened', 'تعذّر فتح الرعية'), e.message, 'danger');
       return false;
     }
