@@ -134,7 +134,7 @@ resource availabilityAlerts 'Microsoft.Insights/metricAlerts@2018-03-01' = [for 
   }
 }]
 
-// Single-resource metric alerts. The first 10 monitored time series a month are free; these are 5 of them plus the 2 above.
+// Single-resource metric alerts. The first 10 monitored time series a month are free; these are 6 of them, plus the 2 availability alerts above.
 var metricAlerts = [
   {
     name: 'parishlife-health-check'
