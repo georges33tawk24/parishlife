@@ -1,14 +1,21 @@
 // Purpose: HTTP regressions for the hardening run's security sweep 1 (hardening/reports/03-security.md, "Sweep 1").
 // Main tests: account closure is refused while the account owns a parish or holds parish access, and succeeds once access ends; an
 // authenticator code spent on a password reset cannot sign in, and one spent on a sign-in cannot reset a password; a withdrawn public
-// announcement leaves the server's public cache at once.
+// announcement leaves the server's public cache at once; a published parish page gets its own encoded head, an unknown or unpublished one
+// a 404, and the generated sitemap lists only published parishes; the page policy names no Google host; the API and tracking links
+// carry X-Robots-Tag noindex; sign-up records the accepted terms version and time.
 
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using ParishLife.Api.DTOs.Accounts;
 using ParishLife.Api.DTOs.Organizations;
+using ParishLife.Api.DTOs.Publishing;
+using ParishLife.Api.Extensions;
+using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Publishing;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Accounts;
@@ -139,5 +146,73 @@ public class SecuritySweepTests
 
         await ActAsync("withdraw");
         Assert.DoesNotContain("Visible for now", await visitor.GetStringAsync(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parish_pages_get_their_own_encoded_head_unknown_ones_a_404_and_the_sitemap_lists_only_published_parishes()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var staff = await StaffAppointmentScenario.CreateAsync(f);
+        await staff.ActivateOfficeAsync(["core"]);
+        var appointment = await staff.AcceptAsync(await staff.InviteAsync(f.Other, allows: [Permissions.PublishingManage]));
+        f.AsAppointment(f.Other, appointment.Id);
+        var profiles = f.Services.GetRequiredService<ParishProfileService>();
+        var saved = await profiles.SaveAsync(staff.Parish, new SaveParishProfileDto
+        {
+            OperationId = Guid.NewGuid(), Profile = new ParishProfileContentDto { Rite = "<b>Maronite</b> & \"Syriac\"", MassTimes = "Sunday 10:00", Address = "Fixture street" }
+        }, default);
+        var web = Path.Combine(f.DirectoryPath, "web");
+        Directory.CreateDirectory(web);
+        await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<!doctype html><html><head><title>Sign in</title></head><body></body></html>");
+        await File.WriteAllTextAsync(Path.Combine(web, "public.html"), "<!doctype html><html><head><meta name=\"description\" content=\"Find parishes\">"
+            + "<meta property=\"og:title\" content=\"ParishLife\"><meta property=\"og:description\" content=\"Find parishes\"><title>ParishLife · Find your parish</title></head><body></body></html>");
+        await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new() { ["webroot"] = web }, _ => { });
+        using var client = factory.Client();
+        var page = "/public.html?parish=" + staff.Parish;
+
+        var unpublished = await client.GetAsync(page);
+        Assert.Equal(HttpStatusCode.NotFound, unpublished.StatusCode);
+        Assert.Contains("Find your parish", await unpublished.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.DoesNotContain(staff.Parish, await client.GetStringAsync("/sitemap.xml"), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/public.html?parish=" + Guid.NewGuid())).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/public.html?parish=not-a-guid")).StatusCode);
+
+        f.AsAppointment(f.Other, appointment.Id);
+        await profiles.ActAsync(staff.Parish, new ParishProfileActionDto { OperationId = Guid.NewGuid(), Version = saved.Version, Action = "publish" }, default);
+        var published = await client.GetAsync(page);
+        Assert.Equal(HttpStatusCode.OK, published.StatusCode);
+        var html = await published.Content.ReadAsStringAsync();
+        Assert.Contains("<title>Isolated parish &#183; ParishLife</title>", html, StringComparison.Ordinal);
+        Assert.Contains($"<link rel=\"canonical\" href=\"https://localhost/public.html?parish={staff.Parish}\">", html, StringComparison.Ordinal);
+        Assert.Contains("&lt;b&gt;Maronite&lt;/b&gt; &amp; &quot;Syriac&quot;", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<b>Maronite", html, StringComparison.Ordinal);
+        Assert.Contains("\"@type\":\"Church\"", html, StringComparison.Ordinal);
+        Assert.Contains("\"streetAddress\":\"Fixture street\"", html, StringComparison.Ordinal);
+        var policy = string.Join(" ", published.Headers.GetValues("Content-Security-Policy"));
+        Assert.DoesNotContain("fonts.g", policy, StringComparison.OrdinalIgnoreCase); // Google sign-in stays in form-action; Google Fonts are gone
+        Assert.Contains("font-src 'self' data:", policy, StringComparison.Ordinal);
+        var sitemap = await client.GetStringAsync("/sitemap.xml");
+        Assert.Contains($"<loc>https://localhost/public.html?parish={staff.Parish}</loc>", sitemap, StringComparison.Ordinal);
+        Assert.Contains("<loc>https://localhost/privacy.html</loc>", sitemap, StringComparison.Ordinal);
+        Assert.DoesNotContain("fonts.g", FrontendHostingExtensions.ContentSecurityPolicy(web), StringComparison.OrdinalIgnoreCase);
+
+        // Not for search results: the API and a guest's tracking link.
+        Assert.Equal("noindex, nofollow", (await client.GetAsync("/api/auth/csrf")).Headers.GetValues("X-Robots-Tag").Single());
+        Assert.Equal("noindex, nofollow", (await client.GetAsync("/public.html?track=private-token")).Headers.GetValues("X-Robots-Tag").Single());
+        Assert.False(published.Headers.Contains("X-Robots-Tag"));
+    }
+
+    [Fact]
+    public async Task Sign_up_records_the_accepted_terms_version_and_time()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var email = "terms-" + Guid.NewGuid().ToString("N") + "@fixture.example";
+        await f.Services.GetRequiredService<AccountService>().RegisterAsync(new RegisterAccountDto
+        { OperationId = Guid.NewGuid(), Email = email, Password = Password, DisplayName = "New member", AgeConfirmed = true }, default);
+        var user = (await f.Services.GetRequiredService<UserManager<ParishUser>>().FindByEmailAsync(email))!;
+        Assert.Equal(AccountService.TermsVersion, user.TermsVersion);
+        Assert.Equal(f.Clock.Now, user.TermsAcceptedAt);
     }
 }
