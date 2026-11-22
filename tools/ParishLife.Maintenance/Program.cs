@@ -55,6 +55,9 @@ try
         builder.Configuration["Storage:Provider"] = "Local";
     builder.Services.AddParishLifeBackend(builder.Configuration, builder.Environment, operatorWorkstation: true);
     builder.Services.AddScoped<ICurrentActor, MaintenanceActor>();
+    // The web registrations include sign-in services that need the web host's authentication schemes, which this console host never
+    // resolves. Development (--local) would otherwise validate every registration at build and refuse to start; Production never did.
+    builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = false }));
     using var host = builder.Build(); // Deliberately never Start/Run: no background jobs or web listener.
     await using var scope = host.Services.CreateAsyncScope();
     switch (arguments[0])
