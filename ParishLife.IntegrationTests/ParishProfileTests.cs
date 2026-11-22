@@ -232,7 +232,7 @@ public class ParishProfileTests
         var image = await client.GetAsync(body.Photos[0].Url);
         Assert.Equal("image/png", image.Content.Headers.ContentType!.MediaType);
         Assert.Equal(Png, await image.Content.ReadAsByteArrayAsync());
-        Assert.Equal("public, max-age=300", image.Headers.CacheControl!.ToString());
+        Assert.Equal("public, max-age=900", image.Headers.CacheControl!.ToString());
 
         var feed = await client.GetAsync("/api/public/parishes/" + staff.Parish + "/calendar.ics");
         Assert.Equal(HttpStatusCode.OK, feed.StatusCode);
