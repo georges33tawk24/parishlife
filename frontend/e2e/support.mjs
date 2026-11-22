@@ -2,10 +2,14 @@
    Main functions: manifest (the fixture accounts the test-only host wrote), totp (the current authenticator
    code for a Base32 key), watch (collects page errors, failing API calls and "not connected" screens),
    settle (waits until no request is in flight), turnstileToken (waits for the bot check), signIn (the check
-   when Turnstile is on, the password, then the authenticator code when asked). */
+   when Turnstile is on, the password, then the authenticator code when asked), test (Playwright's test with every request to
+   another host answered locally: the suite never needs the internet), outbox (the codes the test host "emailed").
+   Offline stand-ins: Cloudflare's widget script is replaced by one that behaves like its dummy site key (the dummy token, which the
+   test host's offline siteverify accepts), accounts.google.com answers a blank page, and any other outside request is refused. The
+   page policy still applies to each of them, because the browser checks it before a request is routed. */
 import { createHmac } from 'node:crypto';
-import { expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { test as base, expect } from '@playwright/test';
+import { existsSync, readFileSync } from 'node:fs';
 
 export const NOT_CONNECTED = "isn't connected to the new backend yet";
 
@@ -95,3 +99,78 @@ export async function signIn(page, state, account, secret, password, turnstile =
   await shell.waitFor({ timeout: 30000 });
   await settle(page, state);
 }
+
+const WIDGET = `(() => {
+  const boxes = [];
+  window.turnstile = {
+    render(box, options) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'cf-turnstile-response';
+      box.append(input);
+      boxes.push({ input, options });
+      window.turnstile.reset(boxes.length - 1);
+      return boxes.length - 1;
+    },
+    reset(id) {
+      const box = boxes[id];
+      if (!box) return;
+      box.input.value = '';
+      setTimeout(() => {
+        box.input.value = 'XXXX.DUMMY.TOKEN.XXXX';
+        box.options.callback?.(box.input.value);
+      }, 50);
+    },
+    getResponse: id => boxes[id]?.input.value,
+    remove() {}
+  };
+})();`;
+
+/* Requests to any host but the test host never leave the machine. */
+export async function offline(context, baseUrl) {
+  await context.route(
+    url => url.protocol.startsWith('http') && url.origin !== baseUrl,
+    route => {
+      const url = new URL(route.request().url());
+      if (url.host === 'challenges.cloudflare.com' && url.pathname === '/turnstile/v0/api.js')
+        return route.fulfill({ contentType: 'text/javascript', body: WIDGET });
+      if (url.host === 'accounts.google.com')
+        return route.fulfill({
+          contentType: 'text/html',
+          body: '<!doctype html><title>Google (offline stand-in)</title>'
+        });
+      return route.abort('internetdisconnected');
+    }
+  );
+}
+
+export const test = base.extend({
+  context: async ({ context }, use) => {
+    await offline(context, manifest().baseUrl);
+    await use(context);
+  }
+});
+
+/* The newest code the test host "emailed" to an address for a purpose (ConfirmEmail, ResetPassword, ChangeEmail). */
+export async function outbox(email, purpose, after = 0) {
+  const file = manifest().outbox;
+  for (let i = 0; i < 100; i++) {
+    const lines = existsSync(file)
+      ? readFileSync(file, 'utf8')
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map(l => JSON.parse(l))
+      : [];
+    const found = lines.slice(after).filter(m => m.email === email && m.purpose === purpose);
+    if (found.length) return found.at(-1).code;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`no ${purpose} code reached the test inbox for ${email}`);
+}
+
+/* How many messages the test inbox holds now (to look only at newer ones). */
+export const outboxSize = () => {
+  const file = manifest().outbox;
+  return existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).length : 0;
+};

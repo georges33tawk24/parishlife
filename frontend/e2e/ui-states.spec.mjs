@@ -2,8 +2,8 @@
    Main checks: a double click on a dialog's Delete removes exactly one record (the button waits for the server,
    and a second press never removes the next or the last record: handoff 04-8); while the browser is offline the
    portal says so, and the banner goes when the connection is back. */
-import { test, expect } from '@playwright/test';
-import { manifest, settle, signIn, watch } from './support.mjs';
+import { expect } from '@playwright/test';
+import { manifest, settle, signIn, test, watch } from './support.mjs';
 
 const M = manifest();
 

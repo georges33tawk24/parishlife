@@ -3,9 +3,13 @@
    pages and fixture accounts for every role), runs Playwright, then stops the host, which deletes its
    temporary data.
    Main steps: build (skip with --no-build), start the host and wait for "E2E READY", run the tests with
-   E2E_MANIFEST set, close the host's stdin. Turnstile runs with Cloudflare's test keys unless E2E_TURNSTILE=0. Extra arguments go to Playwright (for example --grep priest). */
+   E2E_MANIFEST set, close the host's stdin. Turnstile runs with Cloudflare's test keys unless E2E_TURNSTILE=0. Extra arguments go to Playwright (for example --grep priest).
+   The host's certificate (the untrusted local development certificate) is accepted by its public-key hash only (E2E_CERT_SPKI):
+   Chromium then fetches the service-worker script from the test host, and nothing else is trusted; no system setting changes. */
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { connect } from 'node:tls';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,13 +65,23 @@ const ready = new Promise((resolve, reject) => {
 let status = 1;
 try {
   await ready;
+  const spki = await new Promise((resolve, reject) => {
+    const socket = connect(
+      { host: 'localhost', port: Number(port), servername: 'localhost', rejectUnauthorized: false },
+      () => {
+        resolve(createHash('sha256').update(socket.getPeerCertificate().pubkey).digest('base64'));
+        socket.end();
+      }
+    );
+    socket.on('error', reject);
+  });
   // Asynchronous on purpose: a blocking spawnSync would stop this process from draining the host's
   // output, and a host whose output pipe is full stops answering requests.
   const run = spawn('npx', ['playwright', 'test', ...extra], {
     cwd: frontend,
     stdio: 'inherit',
     shell,
-    env: { ...process.env, E2E_MANIFEST: manifest }
+    env: { ...process.env, E2E_MANIFEST: manifest, E2E_CERT_SPKI: spki }
   });
   status = await new Promise(resolve => run.on('exit', code => resolve(code ?? 1)));
 } catch (error) {

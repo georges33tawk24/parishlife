@@ -4,8 +4,8 @@
    sign-in page load no font or file from another site (Turnstile excepted on sign-in); robots.txt and sitemap.xml are served
    and every sitemap address answers 200; the sign-in page is noindex; canonical links and JSON-LD are present and valid.
    It does not open public.html in a browser: its service worker needs a trusted local certificate (see the public-pages test). */
-import { test, expect } from '@playwright/test';
-import { manifest, settle, watch } from './support.mjs';
+import { expect } from '@playwright/test';
+import { manifest, settle, test, watch } from './support.mjs';
 
 const M = manifest();
 const client = (page, n) =>

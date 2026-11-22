@@ -1,7 +1,7 @@
 // Purpose: the entry point of the test-only end-to-end host: starts the real API on https://localhost:<port> with isolated temporary
 // storage and the built frontend, prepares the fixture accounts, writes a manifest for the browser tests, then waits until stdin closes.
-// Main function: Main parses --port/--manifest/--dist/--turnstile-test-keys, starts Kestrel, builds the fixture, prints "E2E READY", and deletes only its own
-// temporary directory on exit.
+// Main function: Main parses --port/--manifest/--dist/--turnstile-test-keys, starts Kestrel, builds the fixture, writes the manifest (with the
+// test inbox path), prints "E2E READY", and deletes only its own temporary directory on exit.
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -45,7 +45,9 @@ public static class EndToEndHost
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
         try
         {
-            await using var factory = new EndToEndFactory(dataDirectory, dist, Path.Combine(root.FullName, "ParishLife.Api"), turnstile);
+            // The test inbox sits beside the manifest, in the runner's own temporary folder, and goes with it.
+            var outbox = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, "outbox.jsonl");
+            await using var factory = new EndToEndFactory(dataDirectory, dist, Path.Combine(root.FullName, "ParishLife.Api"), turnstile, outbox);
             factory.UseKestrel(options => options.ListenLocalhost(port, listen => listen.UseHttps()));
             factory.StartServer();
             if (factory.Services.GetRequiredService<StorageOptions>().LocalPath != dataDirectory)
@@ -57,6 +59,7 @@ public static class EndToEndHost
                 manifest["baseUrl"] = $"https://localhost:{port}";
                 manifest["dataDirectory"] = dataDirectory;
                 manifest["turnstile"] = turnstile;
+                manifest["outbox"] = outbox;
                 await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
             }
 
