@@ -12,8 +12,9 @@ namespace ParishLife.Api.Services.Accounts;
 
 public sealed class AccountService(UserManager<ParishUser> users, IUserStore<ParishUser> store, TimeProvider clock)
 {
-    // The effective date of terms.html and privacy.html; change it together with them. Sign-up records it with the acceptance time.
-    public const string TermsVersion = "2026-11-22";
+    // The later effective date of terms.html and privacy.html (privacy: 23 November 2026); change it with either. Sign-up records it
+    // with the acceptance time.
+    public const string TermsVersion = "2026-11-23";
 
     public async Task RegisterAsync(RegisterAccountDto request, CancellationToken ct)
     {

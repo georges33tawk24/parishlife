@@ -62,9 +62,9 @@ const reached = ok => {
   if (typeof window !== 'undefined') document.dispatchEvent(new CustomEvent('parish-connection', { detail: ok }));
 };
 
-/* A request that gets no answer within this time (a dead mobile connection) ends with the connection message instead of a
-   button that stays busy (QA bug 6). Only the wait for the answer is timed, never the reading of a large one. A write that
-   timed out may still have been saved; its retry carries the same operation id. */
+/* A request that gets no answer within this time (a dead mobile connection) ends with a message instead of a button that
+   stays busy (QA bug 6). Only the wait for the answer is timed, never the reading of a large one. A write that timed out may
+   still have been saved, and a second press sends a new operation id, so its message says to reload and check first (audit N2). */
 const ANSWER_TIMEOUT_MS = 30000;
 
 async function send(path, method, body, extra = {}) {
@@ -88,6 +88,13 @@ async function send(path, method, body, extra = {}) {
     });
   } catch {
     reached(false);
+    if (waiting.signal.aborted && method !== 'GET' && !path.startsWith('auth/'))
+      throw new Error(
+        t(
+          'ParishLife did not answer in time. Your change may still have been saved: reload the page and check before trying again.',
+          'لم يُجب ParishLife في الوقت المحدّد. ربما حُفظ تغييرك: أعد تحميل الصفحة وتحقّق قبل المحاولة مجدداً.'
+        )
+      );
     throw new Error(connectionMessage());
   } finally {
     clearTimeout(timer);

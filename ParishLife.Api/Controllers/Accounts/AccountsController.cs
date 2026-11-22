@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for accounts workflows; delegates work to backend services.
-// Main functions: Csrf, Register, Login (unknown addresses take as long as a wrong password), CompleteMfa (each authenticator code signs in once), Me, Logout, Sessions, Revoke, ChangePassword,
+// Main functions: Csrf, Register, Login (unknown, inactive, locked and unconfirmed accounts take as long as a wrong password), CompleteMfa (each authenticator code signs in once), Me, Logout, Sessions, Revoke, ChangePassword,
 // AddPassword.
 // AccountDto.From supplies the shared safe profile projection.
 // Rate limits: every sign-in, registration, session and password action uses the strict "authentication" policy. Csrf and Me do not:
@@ -51,15 +51,16 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
         var user = identifier.Contains('@') ? await users.FindByEmailAsync(identifier) : await users.FindByNameAsync(identifier);
         if (user is null || !user.Active)
         {
-            // Same hashing cost as a wrong password, so the answer time does not reveal which addresses have accounts (QA bug 1).
-            var dummy = new ParishUser();
-            users.PasswordHasher.VerifyHashedPassword(dummy, timingHash ??= users.PasswordHasher.HashPassword(dummy, Guid.NewGuid().ToString("N")), request.Password);
+            HashAsIfChecked(request.Password);
             SecurityEvents.Log(HttpContext, "security.sign_in_failed", detail: "unknown_or_inactive");
             return Unauthorized();
         }
         var result = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
+            // Identity answers locked and unconfirmed accounts before hashing; pay the same cost there too (audit N3).
+            if (result.IsLockedOut || result.IsNotAllowed)
+                HashAsIfChecked(request.Password);
             SecurityEvents.Log(HttpContext, "security.sign_in_failed", user.Id, result.IsLockedOut ? "locked_out" : "password");
             return Unauthorized();
         }
@@ -70,6 +71,14 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
         var session = await sessions.CreateAsync(user, ct);
         await cookies.IssueAsync(user, session);
         return Ok(AccountDto.From(user));
+    }
+
+    // The cost of one password check against a fixed dummy hash, so an answer that needs no check (unknown, inactive, locked or
+    // unconfirmed account) takes as long as a wrong password and timing does not reveal which addresses have accounts (QA bug 1).
+    private void HashAsIfChecked(string password)
+    {
+        var dummy = new ParishUser();
+        users.PasswordHasher.VerifyHashedPassword(dummy, timingHash ??= users.PasswordHasher.HashPassword(dummy, Guid.NewGuid().ToString("N")), password);
     }
 
     [AllowAnonymous, HttpPost("login/mfa"), EnableRateLimiting(Authentication)]

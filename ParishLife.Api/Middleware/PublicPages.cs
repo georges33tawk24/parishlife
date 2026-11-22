@@ -50,10 +50,11 @@ public static partial class PublicPages
         var head = new StringBuilder()
             .Append("<link rel=\"canonical\" href=\"").Append(Encode(canonical)).Append("\">\n")
             .Append("<script type=\"application/ld+json\">").Append(JsonLd(profile, location, canonical)).Append("</script>\n");
-        html = Title().Replace(html, "<title>" + Encode(title) + "</title>", 1);
-        html = Meta("name", "description").Replace(html, MetaTag("name", "description", description), 1);
-        html = Meta("property", "og:title").Replace(html, MetaTag("property", "og:title", title), 1);
-        html = Meta("property", "og:description").Replace(html, MetaTag("property", "og:description", description), 1);
+        // Evaluators, not replacement strings: a parish's "$&" or "$'" must stay text, never a regex substitution (audit N1).
+        html = Title().Replace(html, _ => "<title>" + Encode(title) + "</title>", 1);
+        html = Meta("name", "description").Replace(html, _ => MetaTag("name", "description", description), 1);
+        html = Meta("property", "og:title").Replace(html, _ => MetaTag("property", "og:title", title), 1);
+        html = Meta("property", "og:description").Replace(html, _ => MetaTag("property", "og:description", description), 1);
         var end = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
         html = end < 0 ? html : html.Insert(end, head.ToString());
         await response.WriteAsync(html, context.RequestAborted);

@@ -9,7 +9,7 @@
 // further batches (repeated by a retry with the same operation id). The anonymized document stays as a tombstone so audit and parish
 // records that name the account id stay readable. Parish records (person, sacraments, gifts, registrations, safeguarding) stay with
 // each parish under its retention; the answer says so. Platform operator accounts are closed only through the private operator procedure,
-// and an account that a parish or archdiocese depends on (owner, representative, access grant, staff/clergy or bishop appointment) is
+// and an account that a parish or archdiocese depends on (owner, representative, access grant, staff/clergy, ministry leader or bishop appointment) is
 // refused until that is handed over (RequireNothingHeldAsync).
 
 using System.Security.Claims;
@@ -131,6 +131,14 @@ public class AccountClosureService(IRecordTransactions records, MfaAccountAccess
             if (await parishes.GetGrantAsync(parish.Id, accountId, ct) is not null)
             {
                 held.Add("parish access (ask the parish owner to end your access)");
+                break;
+            }
+        // ponytail: one query per parish, fine for the pilot's handful; an account-indexed leader list if parishes grow into the hundreds.
+        foreach (var parish in all)
+            if ((await records.CollectAsync<MinistryLeader>(RecordScopes.Parish(parish.Id), "ministryLeader", ct, 200, RecordConditions.Equal("accountId", accountId)))
+                .Any(row => row.Value.AccountId == accountId && !row.Value.Revoked && row.Value.EndedAt is null && (row.Value.EndsAt is null || row.Value.EndsAt > now)))
+            {
+                held.Add("a ministry leader appointment (ask the parish office to end it or appoint someone else)");
                 break;
             }
         if ((await platform.ArchdiocesesAsync(ct)).Any(archdiocese => archdiocese.Value.OwnerAccountId == accountId))

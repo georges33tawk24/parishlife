@@ -162,9 +162,18 @@ public class AttackTechniqueTests
             unknown.Add(await TimeAsync($"nobody-{i}@fixture.example"));
             wrong.Add(await TimeAsync(known));
         }
-        double Median(List<double> values) => values.Order().Skip(values.Count / 2).First();
-        Assert.True(Median(wrong) - Median(unknown) < 15,
-            $"wrong password for a real account: median {Median(wrong):F1} ms; unknown address: median {Median(unknown):F1} ms");
+        // The fastest of each: other tests running in parallel only ever add time, so minimums compare the work done. The leak was a
+        // ~50 ms gap (one PBKDF2 check), so 25 ms still catches it without flaking under load.
+        double Fastest(List<double> values) => values.Min();
+        Assert.True(Fastest(wrong) - Fastest(unknown) < 25,
+            $"wrong password for a real account: fastest {Fastest(wrong):F1} ms; unknown address: fastest {Fastest(unknown):F1} ms");
+        // Audit N3: Identity answers a locked account before hashing; the controller pays the same cost there too.
+        await TimeAsync(known); // the fifth wrong password locks the account
+        var locked = new List<double>();
+        for (var i = 0; i < 4; i++)
+            locked.Add(await TimeAsync(known));
+        Assert.True(Fastest(wrong) - Fastest(locked) < 25,
+            $"wrong password for a real account: fastest {Fastest(wrong):F1} ms; locked account: fastest {Fastest(locked):F1} ms");
     }
 
     // Technique 15: tampered encrypted cookies (Data Protection: AES-CBC with HMAC, encrypt-then-MAC) all fail the same way as no cookie,

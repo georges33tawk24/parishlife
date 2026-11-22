@@ -18,7 +18,7 @@ export const PARISH = {
   eparchyAr: 'أبرشية بيروت',
   address: 'Imm. Khoury, main road — behind the municipality',
   addressAr: 'بناية خوري، الطريق العام — خلف البلدية',
-  phone: '+961 5 461 220',
+  phone: '', // audit N7: a real-looking number may belong to someone; nothing reads this view-model field
   people: 1380,
   households: 412,
   groups: 11,

@@ -1,5 +1,5 @@
 // Purpose: HTTP regressions for the hardening run's security sweep 1 (hardening/reports/03-security.md, "Sweep 1").
-// Main tests: account closure is refused while the account owns a parish or holds parish access, and succeeds once access ends; an
+// Main tests: account closure is refused while the account owns a parish, holds parish access or leads a ministry, and succeeds once access ends; an
 // authenticator code spent on a password reset cannot sign in, and one spent on a sign-in cannot reset a password; a withdrawn public
 // announcement leaves the server's public cache at once; a published parish page gets its own encoded head, an unknown or unverified one
 // a 404, a verified one with no published profile the plain page, and the generated sitemap lists only published parishes; the page policy names no Google host; the API and tracking links
@@ -11,10 +11,12 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Accounts;
+using ParishLife.Api.DTOs.Ministries;
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.DTOs.Publishing;
 using ParishLife.Api.Extensions;
 using ParishLife.Api.Services.Accounts;
+using ParishLife.Api.Services.Ministries;
 using ParishLife.Api.Services.Publishing;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -70,6 +72,33 @@ public class SecuritySweepTests
             OperationId = Guid.NewGuid(), Version = (await s.Parishes.GetAsync(s.Parish, default))!.Version, AccountId = Guid.Parse(staff), Reason = "Isolated hand-over"
         }, default);
         Assert.Equal(HttpStatusCode.OK, (await member.PostAsJsonAsync("/api/auth/account/close", Close())).StatusCode);
+    }
+
+    // Audit N4: a ministry leader appointment gives leader rights without a grant, so it must be handed over before closure too.
+    [Fact]
+    public async Task Closure_is_refused_while_the_account_leads_a_ministry()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var s = await MinistryScenario.CreateAsync(f);
+        var group = await s.MinistryAsync();
+        var leader = await s.LinkedApplicantAsync(true); // leaders need MFA
+        await s.ApplicationActionAsync(group.Id, (await s.ApplyAsync(group.Id, leader.AccountId)).Id, "approve");
+        s.Use();
+        await f.Services.GetRequiredService<MinistryLeadershipService>().AppointAsync(s.Parish, group.Id, new AppointLeaderDto
+        {
+            OperationId = Guid.NewGuid(), MinistryVersion = (await s.Ministries.GetAsync(s.Parish, group.Id, default)).Version,
+            AccountId = Guid.Parse(leader.AccountId), Role = "Leader", StartsAt = f.Clock.Now, EvidenceReference = "Isolated leader appointment"
+        }, default);
+        await using var factory = new LocalApiFactory(f.DirectoryPath);
+        using var client = factory.Client();
+        await LoginAsync(client, (await f.Services.GetRequiredService<UserManager<ParishUser>>().FindByIdAsync(leader.AccountId))!.Email!);
+
+        var refused = await client.PostAsJsonAsync("/api/auth/account/close", Close());
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        var problem = await refused.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("closure_responsibilities_held", problem.GetProperty("title").GetString());
+        Assert.Contains("ministry leader", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -160,7 +189,7 @@ public class SecuritySweepTests
         var profiles = f.Services.GetRequiredService<ParishProfileService>();
         var saved = await profiles.SaveAsync(staff.Parish, new SaveParishProfileDto
         {
-            OperationId = Guid.NewGuid(), Profile = new ParishProfileContentDto { Rite = "<b>Maronite</b> & \"Syriac\"", MassTimes = "Sunday 10:00", Address = "Fixture street" }
+            OperationId = Guid.NewGuid(), Profile = new ParishProfileContentDto { Rite = "<b>Maronite</b> & \"Syriac\"", MassTimes = "Sunday 10:00 $_ $' $&", Address = "Fixture street" }
         }, default);
         f.As(f.FirstAdmin);
         var pending = (await f.Services.GetRequiredService<ParishService>().RegisterAsync(new RegisterParishDto
@@ -198,6 +227,7 @@ public class SecuritySweepTests
         Assert.DoesNotContain("parish-life.org/public.html\"", html, StringComparison.Ordinal); // the directory's static canonical is replaced, never doubled
         Assert.Contains("&lt;b&gt;Maronite&lt;/b&gt; &amp; &quot;Syriac&quot;", html, StringComparison.Ordinal);
         Assert.DoesNotContain("<b>Maronite", html, StringComparison.Ordinal);
+        Assert.Contains("Mass times: Sunday 10:00 $_ $&#39; $&amp;\">", html, StringComparison.Ordinal); // "$" stays text, never a regex substitution
         Assert.Contains("\"@type\":\"Church\"", html, StringComparison.Ordinal);
         Assert.Contains("\"streetAddress\":\"Fixture street\"", html, StringComparison.Ordinal);
         var policy = string.Join(" ", published.Headers.GetValues("Content-Security-Policy"));
