@@ -1,5 +1,6 @@
 // Purpose: what search engines read without running JavaScript (Agent 06 handoff 6): a parish page's own head, a real 404 for a parish that
-// is unknown, unverified or not published, and a sitemap generated from the published parishes. The served public.html is rewritten in
+// is unknown or unverified (a verified parish with no published profile yet gets the plain page), and a sitemap generated from the
+// published parishes. The served public.html is rewritten in
 // memory (title, description, Open Graph, canonical link, schema.org JSON-LD); the frontend files are never edited.
 // Main functions: ParishPageAsync (GET /public.html?parish=<id>) and SitemapAsync (GET /sitemap.xml). Every value comes from the published
 // profile and the parish's public directory fields only (the same rules as GET /api/public/parishes/{id}/profile), and is HTML-encoded
@@ -29,10 +30,13 @@ public static partial class PublicPages
     {
         var response = context.Response;
         response.ContentType = "text/html; charset=utf-8";
-        var page = Guid.TryParse(context.Request.Query["parish"].ToString(), out var id) ? await ProfileAsync(context, id.ToString("N")) : null;
+        var parish = Guid.TryParse(context.Request.Query["parish"].ToString(), out var id) ? id.ToString("N") : null;
+        var page = parish is null ? null : await ProfileAsync(context, parish);
         if (page is null)
         {
-            response.StatusCode = StatusCodes.Status404NotFound;
+            // A verified parish without a published profile is still listed in the directory and shown: the plain page, 200.
+            if (parish is null || (await context.RequestServices.GetRequiredService<IParishRepository>().GetAsync(parish, context.RequestAborted))?.Value.Status != ParishStatus.Verified)
+                response.StatusCode = StatusCodes.Status404NotFound;
             await response.WriteAsync(html, context.RequestAborted);
             return;
         }

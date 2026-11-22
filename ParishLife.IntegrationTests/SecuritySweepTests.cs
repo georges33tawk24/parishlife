@@ -1,8 +1,8 @@
 // Purpose: HTTP regressions for the hardening run's security sweep 1 (hardening/reports/03-security.md, "Sweep 1").
 // Main tests: account closure is refused while the account owns a parish or holds parish access, and succeeds once access ends; an
 // authenticator code spent on a password reset cannot sign in, and one spent on a sign-in cannot reset a password; a withdrawn public
-// announcement leaves the server's public cache at once; a published parish page gets its own encoded head, an unknown or unpublished one
-// a 404, and the generated sitemap lists only published parishes; the page policy names no Google host; the API and tracking links
+// announcement leaves the server's public cache at once; a published parish page gets its own encoded head, an unknown or unverified one
+// a 404, a verified one with no published profile the plain page, and the generated sitemap lists only published parishes; the page policy names no Google host; the API and tracking links
 // carry X-Robots-Tag noindex; sign-up records the accepted terms version and time.
 
 using System.Net;
@@ -162,6 +162,11 @@ public class SecuritySweepTests
         {
             OperationId = Guid.NewGuid(), Profile = new ParishProfileContentDto { Rite = "<b>Maronite</b> & \"Syriac\"", MassTimes = "Sunday 10:00", Address = "Fixture street" }
         }, default);
+        f.As(f.FirstAdmin);
+        var pending = (await f.Services.GetRequiredService<ParishService>().RegisterAsync(new RegisterParishDto
+        {
+            OperationId = Guid.NewGuid(), Name = "Pending parish", Locality = "Fixture locality", Contact = "fixture.example"
+        }, default)).Id;
         var web = Path.Combine(f.DirectoryPath, "web");
         Directory.CreateDirectory(web);
         await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<!doctype html><html><head><title>Sign in</title></head><body></body></html>");
@@ -171,10 +176,14 @@ public class SecuritySweepTests
         using var client = factory.Client();
         var page = "/public.html?parish=" + staff.Parish;
 
+        // Verified and listed, profile not published yet: the plain page with 200 (the directory shows it), no parish head.
         var unpublished = await client.GetAsync(page);
-        Assert.Equal(HttpStatusCode.NotFound, unpublished.StatusCode);
-        Assert.Contains("Find your parish", await unpublished.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, unpublished.StatusCode);
+        var plain = await unpublished.Content.ReadAsStringAsync();
+        Assert.Contains("Find your parish", plain, StringComparison.Ordinal);
+        Assert.DoesNotContain("rel=\"canonical\"", plain, StringComparison.Ordinal);
         Assert.DoesNotContain(staff.Parish, await client.GetStringAsync("/sitemap.xml"), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/public.html?parish=" + pending)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/public.html?parish=" + Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/public.html?parish=not-a-guid")).StatusCode);
 
