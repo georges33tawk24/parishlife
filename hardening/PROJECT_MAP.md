@@ -62,7 +62,8 @@ How to read this map:
 | `ParishLife.IntegrationTests/` | 117 files, 445 test attributes: HTTP tests through `WebApplicationFactory` on isolated local storage; `Support/` holds fixtures. |
 | `ParishLife.EndToEnd/` | Test-only host: real API on Kestrel HTTPS with temporary storage, the built frontend and fixture accounts; used by `npm run e2e`. Not publishable. |
 | `tools/ParishLife.Maintenance/` | Private operator console: `check-infrastructure`, `bootstrap-superadmins`, `verify-identity`, `snapshot-export`, `snapshot-restore`. |
-| `tools/Publish-ParishLife.ps1`, `tools/Initialize-Cosmos.ps1`, `tools/tests/` | Packaging script (frontend + API zip, prints the deploy command), Cosmos container/index plan-and-apply script, its Pester test. |
+| `tools/Publish-ParishLife.ps1`, `tools/Initialize-Cosmos.ps1`, `tools/tests/` | Packaging script (frontend + API zip, prints the deploy command; Windows, Linux and macOS), Cosmos container/index plan-and-apply script, its Pester test, and `commit-msg.Tests.sh` for the commit-message hook. |
+| `infra/monitoring.bicep` | Alert rules, uptime tests, action group and budget definitions (Agent 08); not deployed, see `docs/operations/monitoring-and-alerts.md`. |
 | `frontend/index.html`, `public.html`, `landing.html`, `privacy.html`, `terms.html` | Page entries; each has one inline start-up script (language and reading preferences). |
 | `frontend/src/portal/` | Members portal: `shell/` (frame, auth screen, route table, actions), `model/` (API client, session, view model, per-module loaders in `model/modules/`), `features/<group>/` (screens and dialogs), `ui/` (design-system components), `shared/` (dialogs, record editor, print). |
 | `frontend/src/public/` | Public site: `App.jsx` (query-string routing), `pages/`, `components/`, `api-data.js`. |
@@ -1150,7 +1151,7 @@ Signed-in forms: every portal screen edits records through dialogs and the gener
 | Frontend checks | `npm run check` (module checks against an in-memory API stand-in: `scripts/check-api.mjs`, 15 files in `scripts/checks/`), `npm run check:routes` (frontend calls vs API routes), `npm run format:check` (Prettier 3.9.10), `npm run build`. | `frontend/package.json`, `frontend/scripts/` |
 | End-to-end | `npm run e2e`: builds the frontend, starts `ParishLife.EndToEnd` (real API, temporary storage, fixture accounts for every role), runs Playwright (`frontend/e2e/portal.spec.mjs`, 5 `test()` blocks; docs say 9 runs), Turnstile test keys by default. Browser channel `msedge` by default (`E2E_CHANNEL`). | `frontend/scripts/e2e.mjs`, `frontend/playwright.config.mjs`, `ParishLife.EndToEnd/` |
 | Script tests | Pester test for `Initialize-Cosmos.ps1`. | `tools/tests/Initialize-Cosmos.Tests.ps1` |
-| CI/CD | **None.** No `.github/`, Azure Pipelines or other workflow files. No pre-commit hooks, no secret-scanning config. | repository root (searched) |
+| CI/CD | **Updated by Agent 08:** `.github/workflows/ci.yml` runs the secret scan, dependency audits, backend build and tests, frontend checks, commit-message check, deploy package and end-to-end tests on every push and pull request; deploys run only from `main` and stay off until the owner sets `STAGING_ENABLED` / `PRODUCTION_DEPLOY_ENABLED`. `.githooks/pre-commit` (gitleaks, Agent 02), `.githooks/commit-msg` and `.github/pull_request_template.md` (Agent 08). | `.github/`, `.githooks/`, `docs/operations/deployment-and-rollback.md` |
 | Linting and type checking | C#: compiler with nullable reference types, `TreatWarningsAsErrors`, `AnalysisLevel` latest. Frontend: Prettier only; plain JavaScript, no type checker, no ESLint. `.editorconfig` at root and in `frontend/`. | `Directory.Build.props`, `frontend/.prettierrc.json` |
 | Monitoring | Application Insights through OpenTelemetry when configured; App Service health check on `/health/ready` (docs); `GET /api/administration/readiness` for operators. No alert rules or uptime tests found in the repo (**Unverified** in Azure). | `Api/Extensions/TelemetryExtensions.cs`, `docs/continuation/AZURE-CONNECTION.md` |
 | Logging | `ILogger` with very few messages: unhandled-failure type and trace ID, worker retry types, Resend and Turnstile failures. No security-event log lines (sign-in failures, lockouts); security history lives in Cosmos `audit` documents. | `Api/Middleware/ApiExceptionHandler.cs`, `Api/BackgroundJobs/*`, `Api/Services/Accounts/*` |
@@ -1275,7 +1276,7 @@ One line each, no fixes. Owner agent in brackets.
 3. User-generated website HTML is sanitized only in the browser (`lib/rich-text.js`); the API stores raw HTML. [03]
 4. Any signed-in account can read the full OpenAPI document at `/openapi/v1.json`. [03]
 5. `Server: Kestrel` header and HSTS of only 30 days without `includeSubDomains` (seen live). [03]
-6. No CI at all: nothing runs the 547 tests or the frontend checks before a deploy. [08]
+6. No CI at all: nothing runs the 547 tests or the frontend checks before a deploy. [08] **Resolved by Agent 08 (`.github/workflows/ci.yml`); not yet run on GitHub.**
 7. `GET /api/capabilities` hard-codes External sign-in and Bot check as "Not configured" although both are live (`Api/Services/Operations/CapabilityService.cs`). [03, 06]
 8. No `robots.txt`/`sitemap.xml`; unknown public addresses return 200. [06]
 9. Google Fonts load before consent on the portal and product page, while the privacy page lists Google Fonts. [06]
@@ -1285,7 +1286,7 @@ One line each, no fixes. Owner agent in brackets.
 
 | Doc says | Code says | Owner to fix the doc |
 |---|---|---|
-| `CLAUDE.md`, `AGENTS.md`, `README.md`: "Frontend integration is deferred"; README titled "ParishLife backend", "331 tests", publish "only the API". | The frontend is integrated, served from `wwwroot` (`FrontendHostingExtensions.cs`, `PublishFrontend` target); about 547 tests. | 08 (README); `CLAUDE.md`/`AGENTS.md` are owner files |
+| `CLAUDE.md`, `AGENTS.md`, `README.md`: "Frontend integration is deferred"; README titled "ParishLife backend", "331 tests", publish "only the API". | The frontend is integrated, served from `wwwroot` (`FrontendHostingExtensions.cs`, `PublishFrontend` target); about 547 tests. | 08 (README: **rewritten by Agent 08**); `CLAUDE.md`/`AGENTS.md` are owner files and still say "deferred" |
 | `HANDOVER.md` summary: signed-in end-to-end tests "not started". | `frontend/e2e/portal.spec.mjs` and `ParishLife.EndToEnd` exist (the same file later says they run since 17 November). | 08 |
 | `docs/cosmos/containers.json` lists 5 containers. | `RecordTransactions` also maps areas to `Finance`, `RestrictedCases`, `Publishing` (unused). | 02/04 |
 | `docs/operations/legal-pages.md` and the privacy page: "Technical logs deleted after 90 days", "Backups 7 days point-in-time, deleted files 30 days". | Not in code; Azure settings, **Unverified**. | 06/08 |
