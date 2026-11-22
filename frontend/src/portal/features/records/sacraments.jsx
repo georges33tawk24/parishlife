@@ -516,7 +516,9 @@ export function sacraments(tab = '', below = null) {
     if (!layout) {
       try {
         layout = localStorage.getItem(key);
-      } catch {}
+      } catch {
+        /* storage blocked (private mode): the default layout is used */
+      }
     }
     layout = layout === 'grouped' ? 'grouped' : 'combined';
     const items = anniversaryItems().map((a, index) => ({ ...a, index }));

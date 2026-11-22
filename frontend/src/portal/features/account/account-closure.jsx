@@ -47,8 +47,8 @@ function CloseForm({ mfa, hasPassword }) {
     <form data-account-close="" onSubmit={submit}>
       <p className="help">
         {t(
-          'Closing removes your sign-in email and username, password, authenticator, passkeys, Google or Microsoft links, every session, and your personal profile, signature and notes. It cannot be undone. Records a parish keeps about you (your person record, sacraments, gifts and receipts, registrations, ministry and safeguarding history) stay with that parish under its retention; ask the parish office to close optional parish data.',
-          'يزيل الإغلاق بريد الدخول واسم المستخدم وكلمة المرور والمصادقة ومفاتيح المرور وربط Google أو Microsoft وكل الجلسات، وملفك الشخصي وتوقيعك وملاحظاتك. لا يمكن التراجع عنه. السجلات التي تحتفظ بها رعية عنك (سجلك الشخصي والأسرار والتقدمات والإيصالات والتسجيلات وتاريخ الخدمة والحماية) تبقى لدى تلك الرعية وفق مدة حفظها؛ اطلب من مكتب الرعية إغلاق البيانات الاختيارية.'
+          'Closing removes your sign-in email and username, password, authenticator, passkeys, Google or Microsoft links, every session, and your personal profile, signature and notes. It cannot be undone. ParishLife keeps only a marker that the account existed and was closed (its number and the closing time, without your name or email) and its security and audit records. Records a parish keeps about you (your person record, sacraments, gifts and receipts, registrations, ministry and safeguarding history) stay with that parish under its retention; ask the parish office to close optional parish data.',
+          'يزيل الإغلاق بريد الدخول واسم المستخدم وكلمة المرور والمصادقة ومفاتيح المرور وربط Google أو Microsoft وكل الجلسات، وملفك الشخصي وتوقيعك وملاحظاتك. لا يمكن التراجع عنه. لا يحتفظ ParishLife إلا بإشارة إلى أن الحساب كان موجوداً وأُغلق (رقمه ووقت إغلاقه، من دون اسمك أو بريدك) وبسجلات الأمان والتدقيق الخاصة به. السجلات التي تحتفظ بها رعية عنك (سجلك الشخصي والأسرار والتقدمات والإيصالات والتسجيلات وتاريخ الخدمة والحماية) تبقى لدى تلك الرعية وفق مدة حفظها؛ اطلب من مكتب الرعية إغلاق البيانات الاختيارية.'
         )}
       </p>
       {hasPassword ? (
@@ -68,7 +68,7 @@ function CloseForm({ mfa, hasPassword }) {
       <p className="help-error" role="alert">
         {error}
       </p>
-      <button type="submit" className="btn btn-danger" disabled={busy}>
+      <button type="submit" className="btn btn-danger" disabled={busy} aria-busy={busy || undefined}>
         {t('Close my account', 'إغلاق حسابي')}
       </button>
     </form>
@@ -89,14 +89,21 @@ export function AccountData({ mfa, hasPassword }) {
   };
   return (
     <div className="account-sessions" data-account-data="">
-      <h4>{t('Your data', 'بياناتك')}</h4>
+      <h3>{t('Your data', 'بياناتك')}</h3>
       <p className="help">
         {t(
           'Download a copy of what your account holds and, for each parish where you are linked, your own record there.',
           'نزّل نسخة مما يحفظه حسابك، ولكل رعية أنت مرتبط بها، سجلك الخاص فيها.'
         )}
       </p>
-      <button type="button" className="btn btn-secondary" data-download-data="" disabled={busy} onClick={copy}>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        data-download-data=""
+        disabled={busy}
+        aria-busy={busy || undefined}
+        onClick={copy}
+      >
         {t('Download my data', 'تنزيل بياناتي')}
       </button>{' '}
       <button

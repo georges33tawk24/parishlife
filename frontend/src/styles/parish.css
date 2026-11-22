@@ -115,7 +115,7 @@ html[dir=rtl] .ph-other{text-align:right}
 .pcal-title{min-width:9.5em;margin:0;text-align:center;font-size:calc(clamp(24px,1rem + .8vw,30px) * var(--fs-d,1));line-height:1.2}
 .pcal-period .text-button{margin-inline-start:6px;font-size:calc(17px * var(--fs,1));color:var(--lapis)}
 .pcal-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.pcal-search{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 16px;border-radius:999px;background:var(--white);border:1px solid var(--hair);transition:border-color .2s,box-shadow .2s}
+.pcal-search{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 16px;border-radius:999px;background:var(--white);border:1px solid var(--field-line);transition:border-color .2s,box-shadow .2s}
 .pcal-search:focus-within{border-color:var(--lapis);box-shadow:0 0 0 4px rgb(42 74 150 / .12)}
 .pcal-search .icon{width:18px;height:18px;color:var(--ink-2)}
 .pcal-search input{width:min(220px,44vw);border:0;outline:none;background:transparent;font-size:calc(17px * var(--fs,1));color:var(--ink);padding:10px 0}
@@ -282,7 +282,7 @@ html[dir=rtl] .ph-other{text-align:right}
 .rq-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
 .rq-field{display:grid;gap:7px;font-size:calc(17px * var(--fs,1));font-weight:600;color:var(--ink)}
 .rq-field small{font-weight:400;font-size:calc(17px * var(--fs,1));color:var(--ink-2)}
-.rq-field input,.rq-field textarea{width:100%;min-height:50px;padding:12px 16px;border-radius:14px;border:1px solid var(--hair);background:var(--mist);font:400 calc(17px * var(--fs,1))/1.5 var(--sans);color:var(--ink);transition:border-color .2s,box-shadow .2s,background-color .2s}
+.rq-field input,.rq-field textarea{width:100%;min-height:50px;padding:12px 16px;border-radius:14px;border:1px solid var(--field-line);background:var(--mist);font:400 calc(17px * var(--fs,1))/1.5 var(--sans);color:var(--ink);transition:border-color .2s,box-shadow .2s,background-color .2s}
 .rq-field textarea{resize:vertical;min-height:130px}
 .rq-field input:focus,.rq-field textarea:focus{outline:none;border-color:var(--lapis);background:var(--white);box-shadow:0 0 0 4px rgb(42 74 150 / .12)}
 .rq-hint{margin:12px 0 0;font-size:calc(17px * var(--fs,1));color:var(--ink-2)}
@@ -322,7 +322,7 @@ html[dir=rtl] .ph-other{text-align:right}
 @keyframes tick-draw{to{stroke-dashoffset:0}}
 .rq-link{display:grid;gap:6px;width:100%;font-size:calc(14.5px * var(--fs,1));font-weight:600}
 .rq-link-row{display:flex;gap:8px}
-.rq-link input{flex:1;min-width:0;min-height:44px;padding:10px 14px;border-radius:12px;border:1px solid var(--hair);background:var(--mist);font:400 calc(14.5px * var(--fs,1)) var(--sans);color:var(--ink)}
+.rq-link input{flex:1;min-width:0;min-height:44px;padding:10px 14px;border-radius:12px;border:1px solid var(--field-line);background:var(--mist);font:400 calc(14.5px * var(--fs,1)) var(--sans);color:var(--ink)}
 
 /* request tracking */
 .track{display:grid;place-items:center;padding-block:clamp(56px,8vw,110px)}
@@ -561,7 +561,7 @@ html[dir=rtl] .ph-other{text-align:right}
 .verify-card>p{margin:0 0 22px;color:var(--ink-2);line-height:1.6}
 .verify-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
 .verify-form label{display:grid;gap:6px;flex:1 1 260px;font-weight:600;font-size:calc(17px * var(--fs,1))}
-.verify-form input{min-height:50px;padding:10px 16px;border-radius:14px;border:1px solid var(--hair);font:600 calc(18px * var(--fs,1))/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.verify-form input{min-height:50px;padding:10px 16px;border-radius:14px;border:1px solid var(--field-line);font:600 calc(18px * var(--fs,1))/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
 .verify-form input:focus{outline:none;border-color:var(--lapis);box-shadow:0 0 0 4px rgb(42 74 150 / .12)}
 .verify-result{margin-top:24px}
 .verify-state{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;font-weight:700;font-size:calc(17px * var(--fs,1))}

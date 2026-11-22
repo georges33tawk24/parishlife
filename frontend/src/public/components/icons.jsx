@@ -200,7 +200,8 @@ const GLYPHS = {
       <path d="M10 20a2 2 0 0 0 4 0" />
     </>
   ),
-  google: <path d="M12.5 12H20a8 8 0 1 1-2.3-5.6" />
+  google: <path d="M12.5 12H20a8 8 0 1 1-2.3-5.6" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />
 };
 
 export function Glyph({ name }) {

@@ -22,7 +22,7 @@ html[data-simple]{scroll-behavior:auto}
 
 /* the control: a button with the two A's, and a parchment panel below it */
 .ease{position:relative;display:flex}
-.ease-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:4px 14px;border:1px solid rgb(21 32 58 / .28);border-radius:999px;background:transparent;color:inherit;
+.ease-toggle{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:4px 14px;border:1px solid rgb(21 32 58 / .28);border-radius:999px;background:transparent;color:inherit;
   font:600 calc(17px * var(--fs,1))/1 var(--sans,"Source Sans 3",system-ui,sans-serif);cursor:var(--hand,pointer);transition:background-color .2s,border-color .2s,color .2s}
 body.over-hero .ease-toggle,body.menu-open .ease-toggle{border-color:rgb(238 241 246 / .38)}
 /* over the sanctuary the header's two pill buttons are lightly frosted, so the lamp's chain and
@@ -35,7 +35,8 @@ body.over-hero:not(.is-scrolled):not(.menu-open) :is(.ease-toggle,.sign-in):not(
 [dir=rtl] .ease-glyph{direction:ltr}
 [dir=rtl] .ease-toggle{font-family:"Noto Sans Arabic","Source Sans 3",system-ui,sans-serif}
 .ease-word{white-space:nowrap}
-@media(max-width:1279px){.site-header .ease-word{display:none}.site-header .ease-toggle{padding-inline:10px}}
+/* narrower, the word is clipped, not removed, so the button keeps its name for a screen reader */
+@media(max-width:1279px){.site-header .ease-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.site-header .ease-toggle{padding-inline:10px}}
 .ease-panel{position:absolute;z-index:80;top:calc(100% + 10px);inset-inline-end:0;width:min(340px,calc(100vw - 32px));padding:18px;border:1px solid #DCCDB2;border-radius:18px;
   background:#FFFDF8;color:#15203A;text-align:start;box-shadow:0 1px 0 #fff inset,0 30px 60px -24px rgb(14 26 49 / .45),0 6px 16px -8px rgb(14 26 49 / .2)}
 .ease-panel[hidden]{display:none}

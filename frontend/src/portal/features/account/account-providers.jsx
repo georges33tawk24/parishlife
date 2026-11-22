@@ -189,7 +189,7 @@ export function Providers({ mfa, available, hasPassword }) {
   const linked = new Set((list || []).map(l => l.provider));
   return (
     <div className="account-passkeys" data-providers="">
-      <h4>{t('Google and Microsoft', 'Google وMicrosoft')}</h4>
+      <h3>{t('Google and Microsoft', 'Google وMicrosoft')}</h3>
       <p className="help">
         {t(
           'Sign in with a Google or Microsoft account you link here. With two-factor on, your authenticator code is still asked for.',

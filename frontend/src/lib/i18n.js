@@ -11,8 +11,15 @@ export const LANGS = {
   ar: { label: 'ع', dir: 'rtl', name: 'العربية' }
 };
 
+/* A link may name the language (?lang=ar, as the page's start-up script already reads for its direction): it wins
+   and is remembered; otherwise the stored choice. */
 export let lang = (() => {
   try {
+    const asked = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lang');
+    if (LANGS[asked]) {
+      localStorage.setItem(STORE, asked);
+      return asked;
+    }
     return LANGS[localStorage.getItem(STORE)] ? localStorage.getItem(STORE) : 'en';
   } catch {
     return 'en';

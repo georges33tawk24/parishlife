@@ -7,7 +7,18 @@ import { Icon } from '../ui/icons.jsx';
 import { t, isAr, lang, setLang, num, matches } from '../../lib/i18n.js';
 import { PARISH, RATE, PEOPLE, PHOTOS, PREFS } from '../model/data.js';
 import * as D from '../model/data.js';
-import { closeOverlays, toast, openModal, openDrawer, Avatar, openPopover, closeMenu, OverlayHost } from '../ui/ui.jsx';
+import {
+  closeOverlays,
+  toast,
+  openModal,
+  openDrawer,
+  Avatar,
+  openPopover,
+  closeMenu,
+  OverlayHost,
+  PageSkeleton,
+  ScreenBoundary
+} from '../ui/ui.jsx';
 import { S, MOBILE_NAV, role, me, canSee, go, save, bus } from '../model/store.js';
 import { runAction } from './actions.jsx';
 import { hydrate, persist, saveFailed, loadFailures } from '../model/persist.js';
@@ -51,6 +62,7 @@ const savePref = (key, v, what) => {
 function onClick(e) {
   const goer = e.target.closest('[data-go]');
   if (goer) {
+    if (goer.href && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return; // a real link: new tab or window
     e.preventDefault();
     go(goer.dataset.go);
     return;
@@ -634,7 +646,7 @@ export function Portal() {
         'danger'
       );
     closeOverlays();
-    await endSession().catch(() => {});
+    await endSession().catch(() => {}); // signOut() clears the session locally even when the API cannot be reached
     loginScreen();
   };
   const switchLanguage = () => {
@@ -671,7 +683,7 @@ export function Portal() {
     } catch (e) {
       selectParish(previous);
       S.role = session.user.role;
-      await hydrate().catch(() => {});
+      await hydrate().catch(() => {}); // the failure is already shown by the toast below
       toast(t('Parish could not be opened', 'تعذّر فتح الرعية'), e.message, 'danger');
       return false;
     }
@@ -907,10 +919,22 @@ export function Portal() {
     };
   }, []);
 
+  /* While the session is checked: the frame of the portal, shown only if the check takes a moment (a quick
+     answer goes straight to the sign-in page or the portal without a flash), never a blank page. */
   if (screen.kind === 'starting')
     return (
       <>
-        <div id="app" className="app"></div>
+        <div id="app" className="app app-starting">
+          <aside className="rail" aria-hidden="true"></aside>
+          <div className="main">
+            <header className="topbar-app" aria-hidden="true"></header>
+            <main className="well" id="well" tabIndex="-1">
+              <div className="wellpad">
+                <PageSkeleton label={t('Opening ParishLife…', 'جارٍ فتح ParishLife…')} />
+              </div>
+            </main>
+          </div>
+        </div>
         <OverlayHost />
       </>
     );
@@ -936,7 +960,7 @@ export function Portal() {
   return (
     <>
       <div id="app" className={'app' + (collapsed ? ' collapsed' : '') + (railOpen ? ' railopen' : '')}>
-        <aside className="rail" id="rail">
+        <aside className="rail" id="rail" aria-label={t('Parish navigation', 'تنقّل الرعية')}>
           <button
             className="rail-parish"
             id="parishbtn"
@@ -976,8 +1000,6 @@ export function Portal() {
                   className={'navitem ' + (on ? 'on' : '')}
                   href={'#/' + n[1]}
                   aria-current={on ? 'page' : undefined}
-                  /* collapsed, the label is display:none, which also takes it away from a screen reader */
-                  aria-label={badge ? `${t(rt.en, rt.ar)} (${badge})` : t(rt.en, rt.ar)}
                   data-tip={t(rt.en, rt.ar)}
                   onClick={() => setRailOpen(false)}
                 >
@@ -1056,12 +1078,13 @@ export function Portal() {
                   {S.role !== 'member' || M.notifications.some(n => !n.read) ? <span className="dotmark"></span> : null}
                 </button>
               )}
-              <button className="userbtn" id="userbtn" aria-label={t('Account', 'الحساب')} onClick={userMenu}>
+              {/* named by its visible words (2.5.3, label in name), then what it opens; on phones the words are hidden */}
+              <button className="userbtn" id="userbtn" aria-haspopup="true" onClick={userMenu}>
                 <Avatar p={p} />
                 <span className="txt">
-                  <span className="un">{isAr() ? p.ar : p.lat}</span>
-                  <span className="ur">{t(r.en, r.ar)}</span>
-                </span>
+                  <span className="un">{isAr() ? p.ar : p.lat}</span> <span className="ur">{t(r.en, r.ar)}</span>
+                </span>{' '}
+                <span className="sr">{t('Account menu', 'قائمة الحساب')}</span>
                 <Icon name="chevD" size={15} cls="dimmer" />
               </button>
             </div>
@@ -1071,6 +1094,7 @@ export function Portal() {
           <span className="sr" id="route-said" role="status">
             {ROUTES[S.route] ? t(ROUTES[S.route].en, ROUTES[S.route].ar) : ''}
           </span>
+          <ConnectionBanner />
           <main className="well" id="well" tabIndex="-1">
             <View key={S.route + '/' + S.params.join('/') + '#' + version} />
           </main>
@@ -1080,10 +1104,10 @@ export function Portal() {
             const rt = ROUTES[id];
             if (!rt) return null;
             return (
-              <button key={id} data-go={id} aria-current={S.route === id ? 'page' : undefined}>
+              <a key={id} href={'#/' + id} data-go={id} aria-current={S.route === id ? 'page' : undefined}>
                 <Icon name={rt.ico} size={20} />
                 <span>{rt.mEn ? t(rt.mEn, rt.mAr) : t(rt.en, rt.ar)}</span>
-              </button>
+              </a>
             );
           })}
         </nav>
@@ -1091,6 +1115,50 @@ export function Portal() {
       <Palette open={palette} onClose={() => setPalette(false)} />
       <OverlayHost />
     </>
+  );
+}
+
+/* Offline, or the API cannot be reached: say so above the page until it can. Nothing typed is lost (a failed
+   save leaves its dialog open), and when the connection is back the parish data is read again; writes are
+   never repeated on their own, the person presses Save again. */
+function ConnectionBanner() {
+  const [online, setOnline] = useState(() => navigator.onLine !== false);
+  const [reachable, setReachable] = useState(true);
+  useEffect(() => {
+    const up = () => {
+      setOnline(true);
+      if (session.user)
+        hydrate()
+          .then(refresh)
+          .catch(() => {}); // still unreachable: the banner stays and says so
+    };
+    const down = () => setOnline(false);
+    const api = e => setReachable(e.detail);
+    addEventListener('online', up);
+    addEventListener('offline', down);
+    document.addEventListener('parish-connection', api);
+    return () => {
+      removeEventListener('online', up);
+      removeEventListener('offline', down);
+      document.removeEventListener('parish-connection', api);
+    };
+  }, []);
+  if (online && reachable) return null;
+  return (
+    <div className="offbar" role="status" data-offline-banner="">
+      <Icon name="warn" size={18} />
+      <span>
+        {!online
+          ? t(
+              'You are offline. What you type stays on this page; save it again when the connection is back.',
+              'أنت غير متّصل. يبقى ما تكتبه في هذه الصفحة؛ احفظه مجدداً عند عودة الاتصال.'
+            )
+          : t(
+              'ParishLife cannot be reached right now. Check your connection; what you typed stays on this page.',
+              'تعذّر الوصول إلى ParishLife الآن. تحقّق من اتصالك؛ يبقى ما كتبته في هذه الصفحة.'
+            )}
+      </span>
+    </div>
   );
 }
 
@@ -1175,15 +1243,27 @@ function View() {
   return (
     <div className="wellpad" id="view" ref={host}>
       {waiting ? (
-        <div className="member-page member-empty">
-          <p>{t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')}</p>
-        </div>
+        <PageSkeleton label={t('Loading your parish life…', 'جارٍ تحميل حياتك الرعوية…')} />
       ) : (
         <>
           {loadFailures.has(S.route) ? (
             <div className="alert alert-danger" role="alert">
-              {t('This page could not load from the backend: ', 'تعذّر تحميل هذه الصفحة من الخادم: ')}
-              {loadFailures.get(S.route)}
+              <span>
+                {t('Part of this page could not load. ', 'تعذّر تحميل جزء من هذه الصفحة. ')}
+                {loadFailures.get(S.route)}{' '}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-dense"
+                  onClick={
+                    () =>
+                      hydrate()
+                        .then(refresh)
+                        .catch(() => refresh()) // the alert stays, with the new reason
+                  }
+                >
+                  {t('Try again', 'حاول مجدداً')}
+                </button>
+              </span>
             </div>
           ) : null}
           {!CONNECTED.has(S.route) ? (
@@ -1202,7 +1282,9 @@ function View() {
               )}
             </div>
           ) : null}
-          <Screen params={S.params} />
+          <ScreenBoundary>
+            <Screen params={S.params} />
+          </ScreenBoundary>
         </>
       )}
     </div>

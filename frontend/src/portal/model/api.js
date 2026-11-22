@@ -8,10 +8,17 @@
    when the page and /api share one HTTPS origin (the Vite proxy in development; one host in production).
    Every unsafe request carries X-CSRF-TOKEN. The token belongs to whoever is signed in, so it is fetched
    again after signing in or out, and once more when the API answers csrf_invalid. */
+import { t } from '../../lib/i18n.js';
+
 export const session = { user: null, parishes: [], parishId: null, accountUser: null };
 
-const connectionError =
-  'ParishLife cannot reach its API. Start ParishLife.Api and the frontend dev server (frontend/README.md), then try again.';
+/* What a person sees when a request fails: what happened and what to do next, in their language, never
+   an internal detail. An unexpected server failure carries the API's trace id as a reference to quote. */
+export const connectionMessage = () =>
+  t(
+    'ParishLife cannot be reached. Check your internet connection and try again; what you typed is still here.',
+    'تعذّر الوصول إلى ParishLife. تحقّق من اتصالك بالإنترنت وحاول مجدداً؛ ما كتبته ما زال هنا.'
+  );
 /* A route this frontend still calls but the .NET API does not have yet answers 404 or 405 with no body. */
 export const notConnected = "This part of ParishLife isn't connected to the new backend yet, so nothing was saved.";
 let csrf = '';
@@ -19,15 +26,40 @@ let csrf = '';
 const readable = (status, problem) => {
   const errors = problem?.errors && Object.values(problem.errors).flat().filter(Boolean);
   if (errors?.length) return errors.join(' ');
+  if (status >= 500 && status !== 503) {
+    const reference = problem?.traceId ? ' ' + t('Reference: ', 'المرجع: ') + problem.traceId : '';
+    return (
+      t(
+        'ParishLife could not finish this. Check whether it was saved before trying again; if it keeps happening, tell your parish office.',
+        'تعذّر على ParishLife إتمام ذلك. تحقّق ممّا إذا كان قد حُفظ قبل المحاولة مجدداً، وإن تكرّر ذلك فأخبر مكتب الرعية.'
+      ) + reference
+    );
+  }
   if (problem?.detail) return problem.detail;
-  if (status === 401) return 'Sign in again to continue.';
-  if (status === 403) return 'This account is not allowed to do that here.';
+  if (status === 401) return t('Sign in again to continue.', 'ادخل من جديد للمتابعة.');
+  if (status === 403) return t('This account is not allowed to do that here.', 'لا يُسمح لهذا الحساب بذلك هنا.');
   if ((status === 404 || status === 405) && !problem) return notConnected;
-  if (status === 404) return 'That record no longer exists.';
-  if (status === 409 || status === 412) return 'Someone else changed this first. Reload and try again.';
-  if (status === 429) return 'Too many attempts. Wait a minute and try again.';
-  if (status >= 502) return connectionError;
-  return problem?.title && !/^[a-z_]+$/.test(problem.title) ? problem.title : 'The request failed.';
+  if (status === 404) return t('That record no longer exists.', 'لم يعد هذا السجل موجوداً.');
+  if (status === 409 || status === 412)
+    return t(
+      'Someone else changed this first. Reload and try again.',
+      'غيّر شخص آخر هذا أولاً. أعد التحميل وحاول مجدداً.'
+    );
+  if (status === 429)
+    return t('Too many attempts. Wait a minute and try again.', 'محاولات كثيرة. انتظر دقيقة وحاول مجدداً.');
+  if (status >= 502) return connectionMessage();
+  return problem?.title && !/^[a-z_]+$/.test(problem.title)
+    ? problem.title
+    : t('That did not work. Try again in a moment.', 'لم ينجح ذلك. حاول مجدداً بعد قليل.');
+};
+
+/* The shell shows a banner while the API cannot be reached (portal/shell/Portal.jsx). */
+let unreachable = false;
+const reached = ok => {
+  if (unreachable === !ok) return;
+  unreachable = !ok;
+  // a page signal only: the module checks run without a window
+  if (typeof window !== 'undefined') document.dispatchEvent(new CustomEvent('parish-connection', { detail: ok }));
 };
 
 async function send(path, method, body, extra = {}) {
@@ -47,8 +79,10 @@ async function send(path, method, body, extra = {}) {
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
   } catch {
-    throw new Error(connectionError);
+    reached(false);
+    throw new Error(connectionMessage());
   }
+  reached(true);
   const json = (response.headers.get('Content-Type') || '').toLowerCase().includes('json');
   const data = json ? await response.json().catch(() => null) : null;
   if (response.ok) return data;

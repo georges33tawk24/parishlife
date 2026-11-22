@@ -1,7 +1,7 @@
 /* Shared rendering pieces. They keep the markup consistent with the design system so a card never
    grows a fifth radius: page furniture, atoms, the data table and its pages, and the overlays
    (drawer, modal, menu, popover, toasts) every flow opens. */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Component, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './icons.jsx';
 import { t, isAr, usd, lbp, num, fmtDate } from '../../lib/i18n.js';
@@ -30,6 +30,80 @@ export function PageHead({ crumbs = [], title, sub, actions }) {
       {actions ? <div className="acts">{actions}</div> : null}
     </div>
   );
+}
+
+/* A page still on its way (its screen's file, or the member's data): the shape of a page head and a list,
+   so the well never stands blank. Screen readers hear `label` once. */
+export function PageSkeleton({ label }) {
+  return (
+    <div className="page-skel" role="status" aria-busy="true">
+      <span className="sr">{label || t('Loading…', 'جارٍ التحميل…')}</span>
+      <div className="pagehead" aria-hidden="true">
+        <div>
+          <span className="skel" style={{ display: 'block', width: 220, maxWidth: '60%', height: 28 }}></span>
+          <span
+            className="skel"
+            style={{ display: 'block', width: 320, maxWidth: '80%', height: 12, marginTop: 12 }}
+          ></span>
+        </div>
+      </div>
+      <section className="panel" aria-hidden="true">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="skel-row">
+            <span className="skel" style={{ width: 28, height: 28, borderRadius: 99 }}></span>
+            <span className="skel" style={{ width: '32%', height: 12 }}></span>
+            <span className="skel" style={{ width: '18%', height: 12 }}></span>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+/* A screen that throws while drawing, or whose file cannot be downloaded (offline, or a new version was
+   deployed meanwhile), shows what happened and a way on instead of a blank page. The rail stays usable. */
+export class ScreenBoundary extends Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error) {
+    console.error('Screen failed to draw:', error); // the browser console is the only trace; nothing is sent
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const offline = navigator.onLine === false;
+    const download = /dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(
+      String(this.state.error?.message)
+    );
+    return (
+      <div className="empty" role="alert">
+        <span className="glyph">
+          <Icon name="warn" size={26} />
+        </span>
+        <h1>{t('This page could not open', 'تعذّر فتح هذه الصفحة')}</h1>
+        <p>
+          {offline || download
+            ? t(
+                'Part of ParishLife could not be downloaded. Check your internet connection, then reload the page.',
+                'تعذّر تنزيل جزء من ParishLife. تحقّق من اتصالك بالإنترنت، ثم أعد تحميل الصفحة.'
+              )
+            : t(
+                'Something on this page stopped it from opening. Reload the page; if it happens again, tell your parish office which page you were opening.',
+                'منع خلل في هذه الصفحة فتحها. أعد تحميل الصفحة، وإن تكرّر ذلك فأخبر مكتب الرعية بالصفحة التي كنت تفتحها.'
+              )}
+        </p>
+        <div className="acts">
+          <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+            {t('Reload the page', 'أعد تحميل الصفحة')}
+          </button>
+          <a className="btn btn-secondary" href="#/account">
+            {t('Go to My account', 'انتقل إلى حسابي')}
+          </a>
+        </div>
+      </div>
+    );
+  }
 }
 
 /** Tab bar whose tabs are real routes, so a tab is linkable and survives reload.
@@ -182,7 +256,8 @@ export const Empty = ({ glyph, title, body, action }) => (
     <span className="glyph">
       <Icon name={glyph} size={26} />
     </span>
-    <h3>{title}</h3>
+    {/* h2: an empty state usually stands right under the page title or a panel's h2 */}
+    <h2>{title}</h2>
     <p>{body}</p>
     {action ? <div className="acts">{action}</div> : null}
   </div>
@@ -554,6 +629,49 @@ export function openModal(opts) {
   emit();
 }
 
+/* Buttons that wait for the server. A button whose press starts a save (persist() announces
+   `parish-saving`) shows a spinner (.btn[aria-busy]) and takes no further press until the API answers,
+   and neither do the other actions of the dialog it is in, so a second press cannot send a second change
+   (a double click on Delete would otherwise remove a second record). aria-disabled rather than disabled
+   keeps keyboard focus where it was; presses on such a button are stopped here, before its own handler.
+   The press is remembered only for the task it happened in. */
+let pressed = null;
+const busyButtons = new Set();
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'click',
+    e => {
+      const button = e.target.closest?.('button') || null;
+      if (button && busyButtons.has(button)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      pressed = button;
+      setTimeout(() => (pressed = null));
+    },
+    true
+  );
+  document.addEventListener('parish-saving', e => {
+    if (!e.detail) {
+      busyButtons.forEach(b => {
+        b.removeAttribute('aria-disabled');
+        b.removeAttribute('aria-busy');
+      });
+      busyButtons.clear();
+      return;
+    }
+    if (!pressed || pressed.hasAttribute('data-close') || pressed.disabled) return;
+    const foot = pressed.closest('.modal-foot,.drawer-foot');
+    for (const b of foot ? foot.querySelectorAll('button:not([data-close])') : [pressed]) {
+      if (b.disabled || b.hasAttribute('aria-disabled')) continue;
+      b.setAttribute('aria-disabled', 'true');
+      busyButtons.add(b);
+    }
+    if (busyButtons.has(pressed)) pressed.setAttribute('aria-busy', 'true');
+  });
+}
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]';
 /* what the keyboard can reach: not an element taken out of the tab order, nor one hidden from
@@ -677,7 +795,8 @@ function Layer({ layer }) {
     Object.assign(
       el.style,
       { position: 'fixed', top: top + 'px', left: left + 'px', zIndex: 140 },
-      layer.kind === 'popover' ? { maxHeight: `calc(100vh - ${r.bottom + 24}px)`, overflowY: 'auto', padding: 0 } : {}
+      // the visible height (innerHeight), not 100vh, which on phones includes the space behind the browser's bars
+      layer.kind === 'popover' ? { maxHeight: `${innerHeight - r.bottom - 24}px`, overflowY: 'auto', padding: 0 } : {}
     );
     if (layer.kind === 'menu') el.querySelector('[data-mi]')?.focus();
   }, [layer]);

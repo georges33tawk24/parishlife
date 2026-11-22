@@ -8,10 +8,15 @@
 <meta name="robots" content="noindex">
 <meta name="description" content="ParishLife — parish administration for Lebanon. Bilingual and dual-currency.">
 <meta name="theme-color" content="#FFFFFF">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/assets/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23233B32'/%3E%3Ctext x='16' y='23' font-family='Inter,sans-serif' font-size='19' font-weight='600' fill='%23FFFFFF' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <!-- Fonts served from this site (OFL licences beside them), not from Google: opening the page sends nothing to a third party. -->
 <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts/portal-fonts.css">
+<!-- The sign-in and home backdrop (.sn-wall) is the largest paint; found only after the styles load without this. -->
+<link rel="preload" as="image" href="/assets/images/sanctuary/wall.webp" fetchpriority="high">
 <!-- Easier reading (src/reading/EasyReading.jsx) and the language, applied before the first frame. -->
 <script>(() => { const r = document.documentElement; try { const s = localStorage.getItem('pl-text'); if (s === '2' || s === '3') r.dataset.text = s; if (localStorage.getItem('pl-simple') === '1') r.dataset.simple = ''; const q = new URLSearchParams(location.search).get('lang'), l = q === 'ar' || q === 'en' ? q : localStorage.getItem('pl-lang') === 'ar' ? 'ar' : 'en'; r.lang = l; r.dir = l === 'ar' ? 'rtl' : 'ltr'; } catch {} })();</script>
 <script type="module" src="/src/portal/main.jsx"></script>

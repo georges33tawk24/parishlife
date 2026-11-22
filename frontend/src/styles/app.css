@@ -53,6 +53,24 @@ body.app-body{overflow:hidden}
     100%{--rail-t:20px;--rail-b:0px}
   }
 }
+/* Horizontal scrollers fade at whichever edge has more behind them, and not at all when nothing overflows
+   (a scroll-driven mask, as on the rail; without support they simply scroll). Tables keep their edge shadows. */
+@supports (animation-timeline:scroll()){
+  @property --fade-s{syntax:'<length>';inherits:false;initial-value:0px}
+  @property --fade-e{syntax:'<length>';inherits:false;initial-value:0px}
+  :is(.tabs,.board,.rota-board,.ministry-calendar-scroll,.oversight-calendar-scroll,.member-calendar,.ins-tablewrap){
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    animation:edge-fade linear both;animation-timeline:scroll(self inline)
+  }
+  [dir=rtl] :is(.tabs,.board,.rota-board,.ministry-calendar-scroll,.oversight-calendar-scroll,.member-calendar,.ins-tablewrap){
+    -webkit-mask-image:linear-gradient(270deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent);
+    mask-image:linear-gradient(270deg,transparent,#000 var(--fade-s),#000 calc(100% - var(--fade-e)),transparent)
+  }
+  @keyframes edge-fade{0%{--fade-s:0px;--fade-e:24px}6%{--fade-s:24px}94%{--fade-e:24px}100%{--fade-s:24px;--fade-e:0px}}
+}
+/* the frame shown while the session is checked appears only after a moment (Portal.jsx) */
+.app-starting{animation:pl-fade 200ms 300ms both}
 .navgroup{
   font:500 12px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--on-ink-quiet,rgb(var(--on-dark-rgb) / .66));
   padding:18px 10px 6px
@@ -78,7 +96,8 @@ body.app-body{overflow:hidden}
 }
 [dir=rtl] .navitem.on::before{border-radius:3px 0 0 3px}
 .app.collapsed .navitem{justify-content:center;padding-inline:0}
-.app.collapsed .navitem .nl{display:none}
+/* collapsed, the label is clipped rather than display:none, so the link keeps its name for a screen reader */
+.app.collapsed .navitem .nl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .app.collapsed .navitem .nb{
   position:absolute;top:3px;inset-inline-end:8px;min-width:16px;height:16px;padding:0 4px;
   border-radius:999px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-size:9px
@@ -639,7 +658,7 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
   .rail{width:72px}
   .rail .navgroup{opacity:0;height:14px;padding:6px 0 0;overflow:hidden}
   .rail .navitem{justify-content:center;padding-inline:0}
-  .rail .navitem .nl{display:none}
+  .rail .navitem .nl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .rail .navitem .nb{position:absolute;top:3px;inset-inline-end:8px;min-width:16px;height:16px;padding:0 4px;
     border-radius:999px;background:var(--on-dark);color:var(--ink);display:grid;place-items:center;font-size:9px}
   .rail-parish .txt{display:none}
@@ -666,7 +685,7 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
   .app.railopen .rail{transform:none;box-shadow:var(--e3)} /* closed, its shadow would fall on the page edge */
   .rail .navgroup{opacity:1;height:auto;padding:16px 10px 6px}
   .rail .navitem{justify-content:flex-start;padding-inline:10px}
-  .rail .navitem .nl{display:block}
+  .rail .navitem .nl{display:block;position:static;width:auto;height:auto;clip:auto}
   .rail .navitem .nb{position:static;background:none;color:var(--on-ink-quiet,rgba(255,255,255,.55));min-width:0;height:auto;padding:0;font-size:12px}
   .rail-parish .txt{display:block}
   .rail-parish{justify-content:flex-start;padding-inline:16px}
@@ -707,13 +726,13 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
     background:var(--surface);border-top:1px solid var(--border);
     padding-bottom:env(safe-area-inset-bottom)
   }
-  .mobilebar button{
+  .mobilebar :is(a,button){
     flex:1;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:3px;color:var(--text-2);font:500 12px/14px var(--sans);position:relative;
     min-height:44px
   }
-  .mobilebar button[aria-current=page]{color:var(--primary)}
-  .mobilebar button[aria-current=page] svg{color:var(--primary)}
+  .mobilebar :is(a,button)[aria-current=page]{color:var(--primary)}
+  .mobilebar :is(a,button)[aria-current=page] svg{color:var(--primary)}
   .mobilebar svg{color:var(--text-3)}
   .mobilebar .nb{
     position:absolute;top:6px;inset-inline-start:calc(50% + 6px);min-width:15px;height:15px;padding:0 4px;
@@ -981,7 +1000,7 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .docempty p{margin:0;font:400 14px/22px var(--sans)}
 .docview-bar{display:flex;justify-content:center;margin-bottom:14px}
 .docviewer{display:flex;justify-content:center;background:var(--muted);border-radius:var(--r-card);padding:16px}
-.docviewer svg{display:block;width:min(100%,calc(clamp(320px,100vh - 350px,1000px) * 210 / 297));height:auto;aspect-ratio:210 / 297;background:#FFFFFF;box-shadow:var(--e2)}
+.docviewer svg{display:block;width:min(100%,calc(clamp(320px,100vh - 350px,1000px) * 210 / 297));width:min(100%,calc(clamp(320px,100dvh - 350px,1000px) * 210 / 297));height:auto;aspect-ratio:210 / 297;background:#FFFFFF;box-shadow:var(--e2)}
 @media (max-width:560px){.docviewer{padding:10px}}
 
 /* ---------- workflows: conditional rules, the step chain, a task's steps ---------- */
@@ -1491,7 +1510,9 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .ss-line.short{width:55%;opacity:.35}
 .ss-chip{height:12px;width:60%;border-radius:999px;background:var(--sw-2)}
 .ss-btn{height:13px;width:46%;border-radius:4px;background:var(--sw-1);margin-top:auto}
-.scheme-sample.wheel{display:grid;place-items:center;background:conic-gradient(from 200deg,#8E2B3B,#A8742A,#2F6B4F,#1C4F8A,#4A2D6E,#8E2B3B)}
+/* the colour wheel runs through OKLCH, so gold to green and green to blue stay clear instead of turning grey (sRGB first, for older browsers) */
+.scheme-sample.wheel{display:grid;place-items:center;background:conic-gradient(from 200deg,#8E2B3B,#A8742A,#2F6B4F,#1C4F8A,#4A2D6E,#8E2B3B);
+  background:conic-gradient(from 200deg in oklch,#8E2B3B,#A8742A,#2F6B4F,#1C4F8A,#4A2D6E,#8E2B3B)}
 .ss-wheel{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgb(0 0 0 / .18)}
 .scheme-name{display:flex;align-items:center;justify-content:space-between;gap:6px;font:500 14px/20px var(--sans);color:var(--text);min-height:20px}
 .scheme-tick{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--primary);color:var(--on-primary);flex:none}
@@ -1539,7 +1560,7 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .office-toolbar .input,.office-toolbar .select {width:auto;min-width:140px}
 .office-summary {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
 .office-summary .stat {border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface,#fff);padding:16px}
-.office-summary .stat:last-child {background:var(--warning-bg,#FFF5C9)}
+.office-summary .stat:last-child {background:var(--warning-subtle)}
 .office-ledger .rowacts {flex-wrap:wrap}
 .request-documents {display:grid;gap:12px;margin:16px 0}
 .request-document {padding:14px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface,#fff)}
@@ -1558,7 +1579,8 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 @supports (animation-timeline:scroll()){
   .drawer-body::before,.modal-body::before{
     content:"";display:block;position:sticky;top:0;z-index:2;height:20px;margin:-24px -24px 4px;
-    background:linear-gradient(var(--surface),transparent);pointer-events:none;
+    /* opacity 0 unless scrolled: a body too short to scroll has no active timeline, and the fade covered its first line */
+    background:linear-gradient(var(--surface-raised,var(--surface)),transparent);pointer-events:none;opacity:0;
     animation:edge-in linear both;animation-timeline:scroll();animation-range:0 24px
   }
   @keyframes edge-in{from{opacity:0}to{opacity:1}}

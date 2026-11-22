@@ -462,6 +462,9 @@ export function Landing({ initialLang }) {
   return (
     <>
       <Sprite />
+      <a className="skip" href="#top">
+        {L('Skip to content', 'انتقل إلى المحتوى')}
+      </a>
       <header className="topbar">
         <div className="wrap">
           <a className="brand" href="#top">
@@ -470,14 +473,14 @@ export function Landing({ initialLang }) {
             </span>
             <span className="name">{L('ParishLife', 'حياة الرعية')}</span>
           </a>
-          <nav className="navlinks" aria-label="Primary">
+          <nav className="navlinks" aria-label={L('Sections', 'الأقسام')}>
             <a href="#how">{L('How it works', 'كيف يعمل')}</a>
             <a href="#modules">{L('Modules', 'الوحدات')}</a>
             <a href="#roles">{L('Roles', 'الأدوار')}</a>
             <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
             <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
           </nav>
-          <div className="langtoggle" role="group" aria-label="Language">
+          <div className="langtoggle" role="group" aria-label={L('Language', 'اللغة')}>
             <button type="button" data-lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>
               EN
             </button>
@@ -1134,25 +1137,25 @@ export function Landing({ initialLang }) {
               </p>
             </div>
             <div>
-              <h5>{L('Product', 'المنتج')}</h5>
+              <h2>{L('Product', 'المنتج')}</h2>
               <a href="#modules">{L('Modules', 'الوحدات')}</a>
               <a href="#roles">{L('Roles', 'الأدوار')}</a>
               <a href="#pricing">{L('Pricing', 'الأسعار')}</a>
               <a href="#faq">{L('Questions', 'أسئلة متكرّرة')}</a>
             </div>
             <div>
-              <h5>{L('Parish', 'الرعية')}</h5>
+              <h2>{L('Parish', 'الرعية')}</h2>
               <a href="#book">{L('Book a walkthrough', 'احجز عرضاً')}</a>
               <a href="#lebanon">{L('Built for Lebanon', 'من أجل لبنان')}</a>
               <a href="#how">{L('When the line drops', 'حين ينقطع الخط')}</a>
             </div>
             <div>
-              <h5>{L('Contact', 'تواصل')}</h5>
+              <h2>{L('Contact', 'تواصل')}</h2>
               <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
               <a href="https://wa.me/9613421887" dir="ltr">
                 +961 3 421 887
               </a>
-              <a href="#">{L('Beirut, Lebanon', 'بيروت، لبنان')}</a>
+              <span>{L('Beirut, Lebanon', 'بيروت، لبنان')}</span>
             </div>
           </div>
           <hr className="rule" style={{ margin: '32px 0 20px' }} />

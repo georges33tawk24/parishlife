@@ -81,8 +81,10 @@ function WindowPicture({ seed, initial }) {
     <img
       className="sn-window-img"
       src={`${IMAGES}window-1080.webp`}
-      srcSet={`${IMAGES}window-1080.webp 1080w, ${IMAGES}window-1620.webp 1620w`}
-      sizes="(max-width: 1099px) 86vw, 44vh"
+      srcSet={`${IMAGES}window-540.webp 540w, ${IMAGES}window-1080.webp 1080w, ${IMAGES}window-1620.webp 1620w`}
+      /* ponytail: on narrow screens the window is a backdrop at 40% opacity behind the text, so it asks for
+         less than its drawn width and phones take the 540px file (about 50 KB instead of 153 KB) */
+      sizes="(max-width: 1099px) 45vw, 44vh"
       alt=""
       decoding="async"
       fetchPriority="high"

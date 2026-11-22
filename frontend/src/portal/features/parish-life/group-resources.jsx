@@ -148,7 +148,9 @@ export function resourceDelete(id) {
     ),
     onMount(el) {
       el.querySelector('#rs_delete').addEventListener('click', async () => {
-        d.belongings.splice(d.belongings.indexOf(r), 1);
+        const at = d.belongings.indexOf(r);
+        if (at < 0) return; // already removed by an earlier press: splice(-1) would take the last one
+        d.belongings.splice(at, 1);
         if (!(await persist())) return;
         closeOverlays();
         bus.refresh();

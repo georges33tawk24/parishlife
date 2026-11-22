@@ -20,7 +20,8 @@ const COPY = {
   mapCredit: ['Map outline from Natural Earth', 'حدود الخريطة من Natural Earth'],
   photoCredit: ['Illustrative photographs from Unsplash', 'صور توضيحية من Unsplash'],
   privacy: ['Privacy policy', 'سياسة الخصوصية'],
-  terms: ['Terms of use', 'شروط الاستخدام']
+  terms: ['Terms of use', 'شروط الاستخدام'],
+  cookies: ['Cookie policy', 'سياسة ملفات تعريف الارتباط']
 };
 
 const SECTIONS = [
@@ -57,7 +58,7 @@ function LanguageButton({ L, lang, onToggle, ...props }) {
     <button
       type="button"
       lang={lang === 'ar' ? 'en' : 'ar'}
-      aria-label={L('Switch to Arabic', 'التبديل إلى الإنكليزية')}
+      /* named by the language it switches to, in that language (its lang attribute sets the voice): 2.5.3 */
       onClick={onToggle}
       {...props}
     >
@@ -181,6 +182,7 @@ export function Footer({ L, lang, onToggleLang }) {
         <span>{T('footer')}</span>
         <a href={lang === 'ar' ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>{T('privacy')}</a>
         <a href={lang === 'ar' ? 'terms.html?lang=ar' : 'terms.html?lang=en'}>{T('terms')}</a>
+        <a href={lang === 'ar' ? 'cookies.html?lang=ar' : 'cookies.html?lang=en'}>{T('cookies')}</a>
         <span>{T('mapCredit')}</span>
         <a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer">
           {T('photoCredit')}

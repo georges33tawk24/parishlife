@@ -231,8 +231,10 @@ export function Auth({ enter, error = '', onLanguage }) {
   };
 
   let n = 0;
+  /* keyed by name: a step that swaps one field for another (the password form for the authenticator code) gets a new
+     input, not the old one with its text still in it, and autoFocus applies */
   const field = (name, label, type = 'text', extra = {}, hint = '', prefix = null) => (
-    <label className="af" style={{ '--i': n++ }}>
+    <label className="af" style={{ '--i': n++ }} key={name}>
       <span className="af-label">
         {label}
         {hint ? (
@@ -576,6 +578,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                   {reset ? (
                     <>
                       {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        autoFocus: true,
                         required: true,
                         autoComplete: 'email',
                         maxLength: 254,
@@ -623,6 +626,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                   ) : verify ? (
                     <>
                       {field('email', t('Email', 'البريد الإلكتروني'), 'email', {
+                        autoFocus: true,
                         required: true,
                         autoComplete: 'email',
                         maxLength: 254,
@@ -657,7 +661,9 @@ export function Auth({ enter, error = '', onLanguage }) {
                     </>
                   ) : challenge ? (
                     <>
+                      {/* a step that replaces the form takes the focus with it, or the keyboard is left on the page */}
                       {field('code', t('Authenticator code', 'رمز المصادقة'), 'text', {
+                        autoFocus: true,
                         required: true,
                         inputMode: 'numeric',
                         autoComplete: 'one-time-code',
@@ -721,32 +727,34 @@ export function Auth({ enter, error = '', onLanguage }) {
                     </button>
                   </div>
                   <div className="af-forgot" id="af-forgot" hidden={!forgot}>
+                    {/* no office can reset a password: the emailed code is the way, and the privacy address otherwise */}
                     <p>
-                      {t(
-                        'The office of the parish your account is with can reset it for you and give you a new password to change when you sign in. Call or visit the office.',
-                        'يستطيع مكتب الرعية المرتبط بها حسابك إعادة تعيينها لك وإعطاءك كلمة مرور جديدة تغيّرها عند الدخول. اتصل بالمكتب أو زُره.'
-                      )}
+                      {features.verification ? (
+                        <>
+                          <button
+                            type="button"
+                            className="af-link"
+                            data-reset-password
+                            onClick={() => {
+                              remember();
+                              const id = String(state.values.username || '').trim();
+                              state.values = { ...state.values, email: id.includes('@') ? id : '' };
+                              setAlert('');
+                              setNote('');
+                              setVerify(null);
+                              setReset({ sent: false });
+                            }}
+                          >
+                            {t('Reset it with a code sent to your email.', 'أعد تعيينها برمز يُرسَل إلى بريدك.')}
+                          </button>{' '}
+                        </>
+                      ) : null}
+                      {t('If you cannot receive email, write to ', 'وإذا لم يصلك البريد، راسلنا على ')}
+                      <a href="mailto:privacy@parish-life.org" dir="ltr">
+                        privacy@parish-life.org
+                      </a>
+                      .
                     </p>
-                    {features.verification ? (
-                      <p>
-                        <button
-                          type="button"
-                          className="af-link"
-                          data-reset-password
-                          onClick={() => {
-                            remember();
-                            const id = String(state.values.username || '').trim();
-                            state.values = { ...state.values, email: id.includes('@') ? id : '' };
-                            setAlert('');
-                            setNote('');
-                            setVerify(null);
-                            setReset({ sent: false });
-                          }}
-                        >
-                          {t('Reset it with a code sent to your email', 'أعد تعيينها برمز يُرسل إلى بريدك')}
-                        </button>
-                      </p>
-                    ) : null}
                     <a href="public.html#directory">{t('Find your parish office', 'ابحث عن مكتب رعيتك')}</a>
                     {passkeys ? (
                       <p>
@@ -771,6 +779,7 @@ export function Auth({ enter, error = '', onLanguage }) {
                 className="auth-submit"
                 style={{ '--i': n++ }}
                 disabled={busy.submit || busy.provider}
+                aria-busy={busy.submit || undefined}
               >
                 {up
                   ? t('Create account', 'إنشاء الحساب')

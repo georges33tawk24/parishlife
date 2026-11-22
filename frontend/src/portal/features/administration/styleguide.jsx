@@ -61,7 +61,7 @@ export function styleguide(tab = '') {
   const spec = (title, note, body) => (
     <section className="panel">
       <div className="panel-h">
-        <h3>{title}</h3>
+        <h2>{title}</h2>
         {note ? (
           <span className="t-caption dim" style={{ marginInlineStart: 'auto' }}>
             {note}

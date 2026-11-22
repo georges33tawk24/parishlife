@@ -55,7 +55,7 @@ export const OTHER_REQUESTS = [
 
 /* The photographs a parish publishes: its own picture first, then its gallery. Only addresses
    the site can show safely. */
-export const DEFAULT_PHOTOS = ['assets/images/church-light.jpg', 'assets/images/church-interior.jpg'];
+export const DEFAULT_PHOTOS = ['assets/images/church-light.webp', 'assets/images/church-interior.webp'];
 export const parishPhotos = d =>
   [d?.parishPhoto, ...(Array.isArray(d?.gallery) ? d.gallery : [])].filter(
     src =>

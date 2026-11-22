@@ -22,7 +22,7 @@
    amendments decided by a priest, Arabic spellings kept beside the Latin ones (never copied across), book and
    page apart, the request date, actor names through names.js, and the priest's signature image (a picture for
    the printed paper; never an electronic signature). */
-import { api, parishAPI, session, newOperationId } from '../api.js';
+import { api, parishAPI, session, newOperationId, connectionMessage } from '../api.js';
 import { hydrate } from '../persist.js';
 import { loadNames, nameOf } from '../names.js';
 import * as D from '../data.js';
@@ -609,7 +609,7 @@ export async function uploadSignatureImage(file) {
       body: form
     });
   } catch {
-    throw new Error('ParishLife cannot reach its API. Try again in a moment.');
+    throw new Error(connectionMessage());
   }
   const data = await response.json().catch(() => null);
   if (response.ok) return data;

@@ -123,7 +123,7 @@ export function Passkeys({ mfa }) {
   }, [round]);
   return (
     <div className="account-passkeys" data-passkeys="">
-      <h4>{t('Passkeys', 'مفاتيح المرور')}</h4>
+      <h3>{t('Passkeys', 'مفاتيح المرور')}</h3>
       <p className="help">
         {t(
           'Sign in with this device’s face, fingerprint or PIN instead of your password. Each device keeps its own passkey.',

@@ -191,9 +191,9 @@
 
 /* ---------- footer ---------- */
 .footer{border-top:1px solid var(--border);padding-block:var(--s6)}
-.footer a{color:var(--text-2);font:400 14px/28px var(--sans);display:block}
+.footer a,.footer .g4>div>span{color:var(--text-2);font:400 14px/28px var(--sans);display:block}
 .footer a:hover{color:var(--primary)}
-.footer h5{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px}
+.footer h2{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px}
 
 /* ---------- responsive ---------- */
 @media (max-width:1000px){
@@ -473,8 +473,8 @@ html{scroll-padding-top:var(--h-topbar)}
 /* the page closes in the night, with the name large and faint */
 .footer{padding-block:72px 0;background:var(--night-deep);border-top:0;color:var(--on-night-2);overflow:hidden}
 .footer .dimmer,.footer .dim,.footer div{color:var(--on-night-2)}
-.footer h5{color:var(--on-night);letter-spacing:.04em;text-transform:none;font:600 15px/1 var(--sans)}
-.footer a{font:400 16px/30px var(--sans);color:var(--on-night-2)}
+.footer h2{color:var(--on-night);letter-spacing:.04em;text-transform:none;font:600 15px/1 var(--sans)}
+.footer a,.footer .g4>div>span{font:400 16px/30px var(--sans);color:var(--on-night-2)}
 .footer a:hover{color:#FFFFFF}
 .footer .rule{background:var(--hair-dark)}
 .footer .footer-mark{margin-top:32px;direction:ltr;font:400 clamp(64px,21.4vw,292px)/.8 var(--display);text-align:center;white-space:nowrap;color:transparent;-webkit-text-stroke:1px rgb(230 222 208 / .16)}

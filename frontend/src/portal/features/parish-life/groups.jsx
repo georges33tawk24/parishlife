@@ -681,9 +681,9 @@ function groupDetail(id, tab) {
                       return (
                         <div className={`cal-day${outside ? ' out' : ''}${date === today ? ' today' : ''}`}>
                           <span className="dn">{day.getDate()}</span>
-                          {items.map((m, k) => (
+                          {items.map(m => (
                             <button
-                              key={k}
+                              key={meetingId(m)}
                               className="cal-ev ministry-calendar-event"
                               data-meeting-edit={meetingId(m)}
                               title={m.title || L('Group meeting', 'اجتماع المجموعة')}
@@ -709,8 +709,8 @@ function groupDetail(id, tab) {
                     <h3>{L('Upcoming', 'القادمة')}</h3>
                     <span className="badge badge-quiet">{upcoming.length}</span>
                   </div>
-                  {upcoming.map((m, i) => (
-                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  {upcoming.map(m => (
+                    <Fragment key={meetingId(m)}>{meetingCard(g, m)}</Fragment>
                   ))}
                 </section>
               ) : (
@@ -722,8 +722,8 @@ function groupDetail(id, tab) {
                     <h3>{L('Earlier meetings', 'الاجتماعات السابقة')}</h3>
                     <span className="badge badge-quiet">{earlier.length}</span>
                   </div>
-                  {earlier.map((m, i) => (
-                    <Fragment key={i}>{meetingCard(g, m)}</Fragment>
+                  {earlier.map(m => (
+                    <Fragment key={meetingId(m)}>{meetingCard(g, m)}</Fragment>
                   ))}
                 </section>
               ) : (
@@ -754,9 +754,19 @@ function groupDetail(id, tab) {
                     </small>
                   </span>
                 </div>{' '}
-                <div className="t-body" style={{ fontSize: '14px', marginTop: '10px' }}>
-                  {p.html ? safeRichText(p.html) : L(p.body, p.bodyAr)}
-                </div>
+                {p.html ? (
+                  /* the editor's markup, through the same allow-list as the public site's published bodies */
+                  <div
+                    className="t-body"
+                    style={{ fontSize: '14px', marginTop: '10px' }}
+                    dir="auto"
+                    dangerouslySetInnerHTML={{ __html: safeRichText(p.html) }}
+                  />
+                ) : (
+                  <div className="t-body" style={{ fontSize: '14px', marginTop: '10px' }}>
+                    {L(p.body, p.bodyAr)}
+                  </div>
+                )}
               </div>
             ))}
           </Panel>
@@ -1326,7 +1336,9 @@ groups.mount = host => {
           ),
           onMount(el) {
             el.querySelector('#group-task-confirm').addEventListener('click', async () => {
-              d.tasks.splice(i, 1);
+              const at = d.tasks.indexOf(item); // by identity: after one removal, index i names the next item
+              if (at < 0) return;
+              d.tasks.splice(at, 1);
               if (!(await persist())) return;
               closeOverlays();
               bus.refresh();

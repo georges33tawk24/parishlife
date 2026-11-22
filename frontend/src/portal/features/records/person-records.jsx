@@ -16,7 +16,7 @@ import {
   searchPeople,
   withdrawConsent
 } from '../../model/modules/people-workflows.js';
-import { Panel, openModal, closeOverlays } from '../../ui/ui.jsx';
+import { Panel, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const opened = new Map(); // person id → when it was last read, so a refresh does not read it again at once
@@ -32,7 +32,13 @@ export async function reloadPerson(id) {
 export function PersonLoader({ id }) {
   useEffect(() => {
     if (Date.now() - (opened.get(id) || 0) < 15000) return;
-    reloadPerson(id).catch(() => {});
+    reloadPerson(id).catch(error =>
+      toast(
+        t('This person’s details could not be read again', 'تعذّرت إعادة قراءة تفاصيل هذا الشخص'),
+        error.message,
+        'danger'
+      )
+    );
   }, [id]);
   return null;
 }

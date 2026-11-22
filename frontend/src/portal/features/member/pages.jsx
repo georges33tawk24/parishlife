@@ -345,7 +345,7 @@ export function attendancePage() {
         )}
       </Paged>{' '}
       <div className="member-toolbar">
-        <Select data-filter="group">
+        <Select data-filter="group" aria-label={L('Ministry', 'الخدمة')}>
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
           {M.groups.map((g, i) => (
             <option key={i} value={txt(g.id)}>
@@ -353,10 +353,19 @@ export function attendancePage() {
             </option>
           ))}
         </Select>
-        <Select data-filter="source">
+        <Select data-filter="source" aria-label={L('Attendance status', 'حالة الحضور')}>
           <option value="">{L('All statuses', 'كل الحالات')}</option>
-          {['present', 'absent', 'excused', 'late', 'unrecorded', 'upcoming'].map((x, i) => (
-            <option key={i}>{x}</option>
+          {[
+            ['present', 'حضور'],
+            ['absent', 'غياب'],
+            ['excused', 'غياب معذور'],
+            ['late', 'تأخير'],
+            ['unrecorded', 'غير مسجّل'],
+            ['upcoming', 'قادم']
+          ].map(([x, ar], i) => (
+            <option key={i} value={x}>
+              {L(x, ar)}
+            </option>
           ))}
         </Select>
       </div>{' '}
@@ -584,7 +593,11 @@ export function feed() {
                   <p className="dim">
                     {txt(groupName(x.groupId))} · {date(x.at)} · {txt(x.category)}
                   </p>
-                  <div>{x.html ? safeRichText(x.html) : txt(itemBody(x))}</div>
+                  {x.html ? (
+                    <div dir="auto" dangerouslySetInnerHTML={{ __html: safeRichText(x.html) }} />
+                  ) : (
+                    <div>{txt(itemBody(x))}</div>
+                  )}
                   {x.attachment ? (
                     <a
                       className="btn btn-secondary btn-dense"
@@ -625,7 +638,7 @@ export function resources() {
         )
       )}
       <div className="member-toolbar">
-        <Select data-filter="group">
+        <Select data-filter="group" aria-label={L('Ministry', 'الخدمة')}>
           <option value="">{L('All ministries', 'كل الخدمات')}</option>
           {[...ministries].map(([id, name], i) => (
             <option key={i} value={txt(id)}>
@@ -853,7 +866,7 @@ export function notes() {
               placeholder={L('Search notes', 'البحث في الملاحظات')}
               aria-label={L('Search notes', 'البحث في الملاحظات')}
             />
-            <Select data-filter="category">
+            <Select data-filter="category" aria-label={L('Category', 'الفئة')}>
               <option value="">{L('All categories', 'كل الفئات')}</option>
               {[...new Set(rows.map(n => n.category).filter(Boolean))].map((x, i) => (
                 <option key={i}>{txt(x)}</option>

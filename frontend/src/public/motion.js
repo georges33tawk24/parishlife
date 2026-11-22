@@ -808,7 +808,9 @@ function counters(gsap, root) {
    never dimmed: they show at full strength from the start. */
 function litText(gsap, root) {
   const blocks = [...root.querySelectorAll('[data-lit]')];
-  const splits = blocks.map(b => SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'auto' }));
+  // aria 'none': the words stay real text a screen reader reads in order. 'auto' would hide every word behind an
+  // aria-label on the <p>, which ARIA does not allow on a paragraph and some readers ignore (the verse went silent).
+  const splits = blocks.map(b => SplitText.create(b.querySelectorAll('p'), { type: 'words', aria: 'none' }));
   // the words start legible, only a little dimmed, and are all lit before the middle of the screen
   splits.forEach((s, i) =>
     gsap.fromTo(

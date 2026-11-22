@@ -1,75 +1,12 @@
-/* Every screen of the portal, the module it belongs to, and who may open it. */
-import { useLayoutEffect } from 'react';
+/* Every screen of the portal, the module it belongs to, and who may open it. Each screen's module is
+   loaded the first time it is opened (its own file in the build), so signing in downloads the shell and
+   the first screen instead of every screen. */
+import { lazy, Suspense, useLayoutEffect } from 'react';
 import { num } from '../../lib/i18n.js';
+import { PageSkeleton } from '../ui/ui.jsx';
 import * as D from '../model/data.js';
 import { S, canSee } from '../model/store.js';
 import { session } from '../model/api.js';
-
-// Records
-import { dashboard } from '../features/dashboard/dashboard.jsx';
-import { people } from '../features/records/people.jsx';
-import { personView } from '../features/records/person.jsx';
-import { households, householdView } from '../features/records/households.jsx';
-import { sacraments } from '../features/records/sacraments.jsx';
-import { requests } from '../features/records/requests.jsx';
-import { certificate } from '../features/records/certificate.jsx';
-import { MembershipReviews } from '../features/records/membership-reviews.jsx';
-import { ProfileReviews } from '../features/records/profile-reviews.jsx';
-import { GuestRequests } from '../features/records/guest-requests.jsx';
-import { notes } from '../features/records/notes.jsx';
-// Parish life
-import { calendar } from '../features/parish-life/calendar.jsx';
-import { services } from '../features/parish-life/services.jsx';
-import { groups } from '../features/parish-life/groups.jsx';
-import { ministryAttendance } from '../features/parish-life/attendance.jsx';
-import { MinistryRequests } from '../features/parish-life/ministry-requests.jsx';
-import { volunteers } from '../features/parish-life/volunteers.jsx';
-import { registrations } from '../features/parish-life/registrations.jsx';
-import { checkin } from '../features/parish-life/checkin.jsx';
-// Spaces
-import { facilities } from '../features/spaces/facilities.jsx';
-import { reservations } from '../features/spaces/reservations.jsx';
-// Communicate
-import { messaging } from '../features/communicate/messaging.jsx';
-import { InboxPage } from '../features/communicate/inbox.jsx';
-import { notices } from '../features/communicate/notices.jsx';
-import { music } from '../features/communicate/music.jsx';
-import { portal } from '../features/communicate/website.jsx';
-// Money
-import { giving } from '../features/money/giving.jsx';
-import { finance } from '../features/money/finance.jsx';
-import { officeExpenses } from '../features/money/office-expenses.jsx';
-// Administration
-import { forms } from '../features/administration/forms.jsx';
-import { reports } from '../features/administration/reports.jsx';
-import { audit } from '../features/administration/audit.jsx';
-import { settings } from '../features/administration/settings.jsx';
-import { eparchy } from '../features/administration/eparchy.jsx';
-import { styleguide } from '../features/administration/styleguide.jsx';
-import { WorkspacePage } from '../features/administration/workspace.jsx';
-import { InsightsPage } from '../features/administration/insights.jsx';
-// The bishop's oversight
-import { Oversight, Eparchy as BishopEparchy, MapView } from '../features/oversight/oversight.jsx';
-// A member's own pages, and everyone's account
-import {
-  attendancePage as memberAttendance,
-  calendar as memberCalendar,
-  commitments as memberCommitments,
-  concerns as memberConcerns,
-  feed as memberFeed,
-  formation as memberFormation,
-  home as memberHome,
-  hub as memberHub,
-  meetings as memberMeetings,
-  ministries as memberMinistries,
-  notes as memberNotes,
-  notificationsPage as memberNotifications,
-  profile as memberProfile,
-  resources as memberResources
-} from '../features/member/pages.jsx';
-import { requestsPage } from '../features/member/requests.jsx';
-import { ActivityPage } from '../features/member/activity.jsx';
-import { AccountPage } from '../features/account/account.jsx';
 
 /* A screen draws from the parish data and the route's parameters; what it wires once drawn (its
    own forms and lists) runs after it is on the page. */
@@ -90,68 +27,265 @@ function screen(render) {
   screens.set(render, Screen);
   return Screen;
 }
-/* A screen written as a component is used as it is (named here: a built file renames functions). */
-const COMPONENTS = new Set([
-  MembershipReviews,
-  ProfileReviews,
-  GuestRequests,
-  ActivityPage,
-  MinistryRequests,
-  InboxPage,
-  WorkspacePage,
-  InsightsPage,
-  AccountPage,
-  Oversight,
-  BishopEparchy,
-  MapView
-]);
-const R = (ico, en, ar, view, more = {}) => ({
-  ico,
-  en,
-  ar,
-  view: COMPONENTS.has(view) ? view : screen(view),
-  ...more
-});
+/* A screen loaded on first use: `load` imports its module, `pick` names the screen in it. A render
+   function goes through screen(); a screen written as a component (`component`) is used as it is. */
+function later(load, pick, component = false) {
+  const Lazy = lazy(() => load().then(m => ({ default: component ? pick(m) : screen(pick(m)) })));
+  function Later(props) {
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <Lazy {...props} />
+      </Suspense>
+    );
+  }
+  return Later;
+}
+const page = (load, pick) => later(load, pick);
+const part = (load, pick) => later(load, pick, true);
+
+const records = {
+  dashboard: page(
+    () => import('../features/dashboard/dashboard.jsx'),
+    m => m.dashboard
+  ),
+  people: page(
+    () => import('../features/records/people.jsx'),
+    m => m.people
+  ),
+  person: page(
+    () => import('../features/records/person.jsx'),
+    m => m.personView
+  ),
+  households: page(
+    () => import('../features/records/households.jsx'),
+    m => m.households
+  ),
+  household: page(
+    () => import('../features/records/households.jsx'),
+    m => m.householdView
+  ),
+  sacraments: page(
+    () => import('../features/records/sacraments.jsx'),
+    m => m.sacraments
+  ),
+  requests: page(
+    () => import('../features/records/requests.jsx'),
+    m => m.requests
+  ),
+  certificate: page(
+    () => import('../features/records/certificate.jsx'),
+    m => m.certificate
+  ),
+  membershipreviews: part(
+    () => import('../features/records/membership-reviews.jsx'),
+    m => m.MembershipReviews
+  ),
+  profilereviews: part(
+    () => import('../features/records/profile-reviews.jsx'),
+    m => m.ProfileReviews
+  ),
+  guestrequests: part(
+    () => import('../features/records/guest-requests.jsx'),
+    m => m.GuestRequests
+  ),
+  notes: page(
+    () => import('../features/records/notes.jsx'),
+    m => m.notes
+  )
+};
+const parishLife = {
+  calendar: page(
+    () => import('../features/parish-life/calendar.jsx'),
+    m => m.calendar
+  ),
+  services: page(
+    () => import('../features/parish-life/services.jsx'),
+    m => m.services
+  ),
+  groups: page(
+    () => import('../features/parish-life/groups.jsx'),
+    m => m.groups
+  ),
+  attendance: page(
+    () => import('../features/parish-life/attendance.jsx'),
+    m => m.ministryAttendance
+  ),
+  ministryrequests: part(
+    () => import('../features/parish-life/ministry-requests.jsx'),
+    m => m.MinistryRequests
+  ),
+  volunteers: page(
+    () => import('../features/parish-life/volunteers.jsx'),
+    m => m.volunteers
+  ),
+  registrations: page(
+    () => import('../features/parish-life/registrations.jsx'),
+    m => m.registrations
+  ),
+  checkin: page(
+    () => import('../features/parish-life/checkin.jsx'),
+    m => m.checkin
+  ),
+  facilities: page(
+    () => import('../features/spaces/facilities.jsx'),
+    m => m.facilities
+  ),
+  reservations: page(
+    () => import('../features/spaces/reservations.jsx'),
+    m => m.reservations
+  )
+};
+const communicate = {
+  messaging: page(
+    () => import('../features/communicate/messaging.jsx'),
+    m => m.messaging
+  ),
+  inbox: part(
+    () => import('../features/communicate/inbox.jsx'),
+    m => m.InboxPage
+  ),
+  notices: page(
+    () => import('../features/communicate/notices.jsx'),
+    m => m.notices
+  ),
+  music: page(
+    () => import('../features/communicate/music.jsx'),
+    m => m.music
+  ),
+  portal: page(
+    () => import('../features/communicate/website.jsx'),
+    m => m.portal
+  )
+};
+const office = {
+  giving: page(
+    () => import('../features/money/giving.jsx'),
+    m => m.giving
+  ),
+  finance: page(
+    () => import('../features/money/finance.jsx'),
+    m => m.finance
+  ),
+  officeexpenses: page(
+    () => import('../features/money/office-expenses.jsx'),
+    m => m.officeExpenses
+  ),
+  forms: page(
+    () => import('../features/administration/forms.jsx'),
+    m => m.forms
+  ),
+  reports: page(
+    () => import('../features/administration/reports.jsx'),
+    m => m.reports
+  ),
+  audit: page(
+    () => import('../features/administration/audit.jsx'),
+    m => m.audit
+  ),
+  settings: page(
+    () => import('../features/administration/settings.jsx'),
+    m => m.settings
+  ),
+  eparchy: page(
+    () => import('../features/administration/eparchy.jsx'),
+    m => m.eparchy
+  ),
+  styleguide: page(
+    () => import('../features/administration/styleguide.jsx'),
+    m => m.styleguide
+  ),
+  workspace: part(
+    () => import('../features/administration/workspace.jsx'),
+    m => m.WorkspacePage
+  ),
+  insights: part(
+    () => import('../features/administration/insights.jsx'),
+    m => m.InsightsPage
+  ),
+  oversight: part(
+    () => import('../features/oversight/oversight.jsx'),
+    m => m.Oversight
+  ),
+  bishopeparchy: part(
+    () => import('../features/oversight/oversight.jsx'),
+    m => m.Eparchy
+  ),
+  bishopmap: part(
+    () => import('../features/oversight/oversight.jsx'),
+    m => m.MapView
+  )
+};
+const memberPages = () => import('../features/member/pages.jsx');
+const mine = {
+  memberhome: page(memberPages, m => m.home),
+  myministries: page(memberPages, m => m.ministries),
+  mymeetings: page(memberPages, m => m.meetings),
+  mycalendar: page(memberPages, m => m.calendar),
+  myattendance: page(memberPages, m => m.attendancePage),
+  myfeed: page(memberPages, m => m.feed),
+  myresources: page(memberPages, m => m.resources),
+  myformation: page(memberPages, m => m.formation),
+  mycommitments: page(memberPages, m => m.commitments),
+  mynotes: page(memberPages, m => m.notes),
+  myprofile: page(memberPages, m => m.profile),
+  myconcerns: page(memberPages, m => m.concerns),
+  membernotifications: page(memberPages, m => m.notificationsPage),
+  memberhub: page(memberPages, m => m.hub),
+  myrequests: page(
+    () => import('../features/member/requests.jsx'),
+    m => m.requestsPage
+  ),
+  activity: part(
+    () => import('../features/member/activity.jsx'),
+    m => m.ActivityPage
+  ),
+  account: part(
+    () => import('../features/account/account.jsx'),
+    m => m.AccountPage
+  )
+};
+const V = { ...records, ...parishLife, ...communicate, ...office, ...mine };
+const R = (ico, en, ar, view, more = {}) => ({ ico, en, ar, view, ...more });
 
 export const ROUTES = {
-  membershipreviews: R('people', 'Parish membership requests', 'طلبات عضوية الرعية', MembershipReviews),
-  profilereviews: R('people', 'Profile corrections', 'تصحيحات الملفات', ProfileReviews),
-  guestrequests: R('doc', 'Guest requests', 'طلبات الزوّار', GuestRequests),
-  activity: R('dash', 'My parish life', 'حياتي الرعوية', ActivityPage),
-  ministryrequests: R('groups', 'Ministry membership', 'عضوية الخدمات', MinistryRequests),
-  inbox: R('msg', 'Inbox', 'البريد', InboxPage),
-  workspace: R('shield', 'Administration', 'الإدارة', WorkspacePage),
-  insights: R('reports', 'Insights', 'المؤشرات', InsightsPage),
-  account: R('settings', 'My account', 'حسابي', AccountPage),
-  memberhome: R('dash', 'Home', 'الرئيسية', memberHome),
-  myrequests: R('sacr', 'My requests', 'طلباتي', requestsPage, { mEn: 'Requests', mAr: 'طلباتي' }),
-  myministries: R('groups', 'My Ministries', 'خدماتي', memberMinistries),
-  mymeetings: R('events', 'Meetings', 'الاجتماعات', memberMeetings),
-  mycalendar: R('events', 'Calendar', 'الرزنامة', memberCalendar),
-  myattendance: R('attend', 'Attendance', 'الحضور', memberAttendance),
-  mymessages: R('msg', 'Messages', 'الرسائل', InboxPage),
-  myfeed: R('bell', 'Announcements & Posts', 'الإعلانات والمنشورات', memberFeed),
-  myresources: R('doc', 'Resources', 'الموارد', memberResources),
-  myformation: R('doc', 'Formation', 'التنشئة', memberFormation),
-  mycommitments: R('vol', 'My Commitments', 'التزاماتي', memberCommitments),
-  mynotes: R('notes', 'My Notes', 'ملاحظاتي', memberNotes),
-  myprofile: R('people', 'My Profile', 'ملفي', memberProfile),
-  myconcerns: R('shield', 'Submit a Concern', 'تقديم ملاحظة', memberConcerns),
-  membernotifications: R('bell', 'Notifications', 'الإشعارات', memberNotifications),
-  memberhub: R('msg', 'Member communication', 'التواصل مع الأعضاء', memberHub),
-  oversight: R('portal', 'Parish oversight', 'الإشراف على الرعايا', Oversight),
-  bishopeparchy: R('portal', 'Eparchy', 'الأبرشية', BishopEparchy),
-  bishopmap: R('pin', 'Parish map', 'خريطة الرعايا', MapView),
-  dashboard: R('dash', 'Dashboard', 'لوحة القيادة', dashboard),
-  people: R('people', 'People', 'المؤمنون', people, { badge: () => num(D.PEOPLE.length) }),
-  person: R('people', 'Person', 'سجلّ شخص', personView, { hidden: true }),
-  households: R('family', 'Households', 'العائلات', households, { badge: () => D.HOUSEHOLDS.length }),
-  sacraments: R('sacr', 'Sacraments', 'الأسرار', sacraments, {
+  membershipreviews: R('people', 'Parish membership requests', 'طلبات عضوية الرعية', V.membershipreviews),
+  profilereviews: R('people', 'Profile corrections', 'تصحيحات الملفات', V.profilereviews),
+  guestrequests: R('doc', 'Guest requests', 'طلبات الزوّار', V.guestrequests),
+  activity: R('dash', 'My parish life', 'حياتي الرعوية', V.activity),
+  ministryrequests: R('groups', 'Ministry membership', 'عضوية الخدمات', V.ministryrequests),
+  inbox: R('msg', 'Inbox', 'البريد', V.inbox),
+  workspace: R('shield', 'Administration', 'الإدارة', V.workspace),
+  insights: R('reports', 'Insights', 'المؤشرات', V.insights),
+  account: R('settings', 'My account', 'حسابي', V.account),
+  memberhome: R('dash', 'Home', 'الرئيسية', V.memberhome),
+  myrequests: R('sacr', 'My requests', 'طلباتي', V.myrequests, { mEn: 'Requests', mAr: 'طلباتي' }),
+  myministries: R('groups', 'My Ministries', 'خدماتي', V.myministries),
+  mymeetings: R('events', 'Meetings', 'الاجتماعات', V.mymeetings),
+  mycalendar: R('events', 'Calendar', 'الرزنامة', V.mycalendar),
+  myattendance: R('attend', 'Attendance', 'الحضور', V.myattendance),
+  mymessages: R('msg', 'Messages', 'الرسائل', V.inbox),
+  myfeed: R('bell', 'Announcements & Posts', 'الإعلانات والمنشورات', V.myfeed),
+  myresources: R('doc', 'Resources', 'الموارد', V.myresources),
+  myformation: R('doc', 'Formation', 'التنشئة', V.myformation),
+  mycommitments: R('vol', 'My Commitments', 'التزاماتي', V.mycommitments),
+  mynotes: R('notes', 'My Notes', 'ملاحظاتي', V.mynotes),
+  myprofile: R('people', 'My Profile', 'ملفي', V.myprofile),
+  myconcerns: R('shield', 'Submit a Concern', 'تقديم ملاحظة', V.myconcerns),
+  membernotifications: R('bell', 'Notifications', 'الإشعارات', V.membernotifications),
+  memberhub: R('msg', 'Member communication', 'التواصل مع الأعضاء', V.memberhub),
+  oversight: R('portal', 'Parish oversight', 'الإشراف على الرعايا', V.oversight),
+  bishopeparchy: R('portal', 'Eparchy', 'الأبرشية', V.bishopeparchy),
+  bishopmap: R('pin', 'Parish map', 'خريطة الرعايا', V.bishopmap),
+  dashboard: R('dash', 'Dashboard', 'لوحة القيادة', V.dashboard),
+  people: R('people', 'People', 'المؤمنون', V.people, { badge: () => num(D.PEOPLE.length) }),
+  person: R('people', 'Person', 'سجلّ شخص', V.person, { hidden: true }),
+  households: R('family', 'Households', 'العائلات', V.households, { badge: () => D.HOUSEHOLDS.length }),
+  sacraments: R('sacr', 'Sacraments', 'الأسرار', V.sacraments, {
     badge: () =>
       D.SACRAMENTS.filter(x => x.kind !== 'certificate' && ['preparing', 'scheduled', 'draft'].includes(x.status))
         .length
   }),
-  requests: R('doc', 'Requests', 'الطلبات', requests, {
+  requests: R('doc', 'Requests', 'الطلبات', V.requests, {
     badge: () =>
       D.SACRAMENTS.filter(x =>
         x.kind === 'certificate'
@@ -164,46 +298,46 @@ export const ROUTES = {
       D.REGISTRATIONS.filter(x => x.waiting > 0).length +
       D.MEMBER_REQUESTS.filter(x => x.status === 'submitted').length
   }),
-  certificate: R('doc', 'Record', 'قيد', certificate, { hidden: true }),
-  notes: R('notes', 'Notes & Tasks', 'الملاحظات والمهام', notes),
+  certificate: R('doc', 'Record', 'قيد', V.certificate, { hidden: true }),
+  notes: R('notes', 'Notes & Tasks', 'الملاحظات والمهام', V.notes),
 
-  calendar: R('events', 'Calendar', 'الرزنامة', calendar),
-  services: R('service', 'Services & Activities', 'الخدمات والأنشطة', services),
-  groups: R('groups', 'Groups', 'المجموعات', groups, { badge: () => D.GROUPS.length }),
-  attendance: R('attend', 'Attendance', 'الحضور', ministryAttendance),
-  volunteers: R('vol', 'Volunteers', 'المتطوّعون', volunteers, {
+  calendar: R('events', 'Calendar', 'الرزنامة', V.calendar),
+  services: R('service', 'Services & Activities', 'الخدمات والأنشطة', V.services),
+  groups: R('groups', 'Groups', 'المجموعات', V.groups, { badge: () => D.GROUPS.length }),
+  attendance: R('attend', 'Attendance', 'الحضور', V.attendance),
+  volunteers: R('vol', 'Volunteers', 'المتطوّعون', V.volunteers, {
     badge: () =>
       S.role === 'leader'
         ? new Set(D.GROUPS.flatMap(g => D.groupInfo(g.id).roster.map(r => r.p))).size
         : D.ROTA.teams.flatMap(x => x.filled).filter(f => !f.p || f.s === 'declined').length
   }),
-  registrations: R('registr', 'Registrations & Payments', 'التسجيلات والدفعات', registrations),
-  checkin: R('checkin', 'Check-in', 'التسجيل عند الباب', checkin),
+  registrations: R('registr', 'Registrations & Payments', 'التسجيلات والدفعات', V.registrations),
+  checkin: R('checkin', 'Check-in', 'التسجيل عند الباب', V.checkin),
 
-  facilities: R('rooms', 'Facilities', 'المرافق', facilities),
-  reservations: R('attend', 'Reservations', 'الحجوزات', reservations, {
+  facilities: R('rooms', 'Facilities', 'المرافق', V.facilities),
+  reservations: R('attend', 'Reservations', 'الحجوزات', V.reservations, {
     badge: () => D.RESERVATIONS.filter(r => r.status === 'pending').length
   }),
 
-  messaging: R('msg', 'Messaging', 'المراسلة', messaging, {
+  messaging: R('msg', 'Messaging', 'المراسلة', V.messaging, {
     badge: () => D.MESSAGES.filter(m => m.status === 'failed').length
   }),
-  notices: R('bell', 'Notices', 'الإعلانات', notices),
-  music: R('music', 'Music library', 'مكتبة الألحان', music),
-  portal: R('portal', 'Member portal', 'بوّابة المؤمنين', portal),
+  notices: R('bell', 'Notices', 'الإعلانات', V.notices),
+  music: R('music', 'Music library', 'مكتبة الألحان', V.music),
+  portal: R('portal', 'Member portal', 'بوّابة المؤمنين', V.portal),
 
-  giving: R('give', 'Giving', 'التقدمات', giving, { badge: () => (D.BATCH.status === 'open' ? 1 : 0) }),
-  finance: R('fin', 'Finance', 'المالية', finance),
-  officeexpenses: R('fin', 'Office Expenses', 'مصاريف المكتب', officeExpenses),
+  giving: R('give', 'Giving', 'التقدمات', V.giving, { badge: () => (D.BATCH.status === 'open' ? 1 : 0) }),
+  finance: R('fin', 'Finance', 'المالية', V.finance),
+  officeexpenses: R('fin', 'Office Expenses', 'مصاريف المكتب', V.officeexpenses),
 
-  forms: R('forms', 'Forms & workflows', 'الاستمارات والمسارات', forms),
-  reports: R('reports', 'Reports', 'التقارير', reports),
-  audit: R('shield', 'Audit trail', 'سجل التدقيق', audit),
-  settings: R('settings', 'Settings', 'الإعدادات', settings),
-  eparchy: R('portal', 'Eparchy', 'الأبرشية', eparchy),
-  assignments: R('shield', 'Priest assignments', 'تعيينات الكهنة', WorkspacePage),
-  household: R('family', 'Household', 'العائلة', householdView, { hidden: true }),
-  styleguide: R('doc', 'Design system', 'نظام التصميم', styleguide)
+  forms: R('forms', 'Forms & workflows', 'الاستمارات والمسارات', V.forms),
+  reports: R('reports', 'Reports', 'التقارير', V.reports),
+  audit: R('shield', 'Audit trail', 'سجل التدقيق', V.audit),
+  settings: R('settings', 'Settings', 'الإعدادات', V.settings),
+  eparchy: R('portal', 'Eparchy', 'الأبرشية', V.eparchy),
+  assignments: R('shield', 'Priest assignments', 'تعيينات الكهنة', V.workspace),
+  household: R('family', 'Household', 'العائلة', V.household, { hidden: true }),
+  styleguide: R('doc', 'Design system', 'نظام التصميم', V.styleguide)
 };
 
 /* Detail views (a person, a certificate, the design system) are reachable from whatever module

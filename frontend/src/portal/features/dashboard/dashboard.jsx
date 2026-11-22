@@ -5,7 +5,7 @@ import { t, isAr, num, usd, fmtLong, fmtDate } from '../../../lib/i18n.js';
 import { S, me, is, bus } from '../../model/store.js';
 import { session } from '../../model/api.js';
 import { M, loadMember } from '../../model/member-data.js';
-import { Icon, PageHead, SectionH, Stat, Panel, Who, Status, Amount, Pill, Empty, Paged } from '../../ui/ui.jsx';
+import { Icon, PageHead, SectionH, Stat, Panel, Who, Status, Amount, Pill, Empty, Paged, toast } from '../../ui/ui.jsx';
 import {
   PARISH,
   RATE,
@@ -689,5 +689,5 @@ dashboard.mount = host => {
       .then(() => {
         if (S.route === 'dashboard') bus.refresh();
       })
-      .catch(() => {});
+      .catch(error => toast(t('Your ministries could not load', 'تعذّر تحميل خدماتك'), error.message, 'danger'));
 };

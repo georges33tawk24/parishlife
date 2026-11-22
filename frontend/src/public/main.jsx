@@ -35,4 +35,5 @@ createRoot(document.getElementById('root')).render(<PublicApp initialLang={lang}
 
 /* Installable, and readable offline with what it last showed (see sw.js). */
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+  // without the worker (blocked, an untrusted certificate) the site works online exactly the same; nothing to show
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

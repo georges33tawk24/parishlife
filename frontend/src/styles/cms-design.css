@@ -1,5 +1,5 @@
 /* Website content workspace. Scoped to the CMS and its existing content editor. */
-.well:has(.cms-page){background:#fff}
+.well:has(.cms-page){background:var(--surface)}
 .cms-page{
   --cms-forest:var(--text);--cms-muted:var(--text-2);--cms-line:var(--border);--cms-paper:var(--bg);
   color:var(--cms-forest);max-width:1280px;margin-inline:auto;
@@ -10,7 +10,7 @@
 .cms-page .pagehead .sub{max-width:60ch;font-size:18px;line-height:1.65;margin-top:10px}
 .cms-page .btn{border-radius:4px;min-height:42px}
 .cms-page .btn-primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
-.cms-page .btn-secondary{background:#fff;border-color:var(--cms-line);color:var(--cms-forest)}
+.cms-page .btn-secondary{background:var(--surface);border-color:var(--cms-line);color:var(--cms-forest)}
 .cms-page .tabs{border-color:var(--cms-line)}
 .cms-page .tabs [aria-selected=true]{color:var(--cms-forest);border-color:var(--primary)}
 .cms-page .tabs [aria-selected=true]::after{background:var(--primary)}
@@ -30,7 +30,7 @@
 .cms-section-heading>p{max-width:40ch;font-size:15px;line-height:1.8;color:var(--cms-muted)}
 .cms-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
 .cms-section-grid>:last-child:nth-child(odd){grid-column:1/-1}   /* an odd last section takes the full row */
-.cms-section-card{min-width:0;background:#fff;border:1px solid var(--cms-line);padding:27px;display:flex;flex-direction:column;transition:border-color .18s ease}
+.cms-section-card{min-width:0;background:var(--surface);border:1px solid var(--cms-line);padding:27px;display:flex;flex-direction:column;transition:border-color .18s ease}
 .cms-section-card:focus-within,.cms-section-card:hover{border-color:var(--border-strong)}
 .cms-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
 .cms-section-number{font:400 12px/1 var(--mono);color:var(--cms-muted)}
@@ -60,7 +60,7 @@
 .cms-related-links a>span{flex:1}
 .cms-related-links strong{font-size:13px;font-weight:500;display:block}
 .cms-related-links small{font-size:12px;line-height:1.6;color:var(--cms-muted);display:block;margin-top:3px}
-.drawer:has(#ce-en){background:#fff}
+.drawer:has(#ce-en){background:var(--surface)}
 .drawer:has(#ce-en) textarea{line-height:1.8;resize:vertical;min-height:170px;background:#fdfdfa;border-radius:3px}
 .drawer:has(#ce-en) .panel{box-shadow:none;border-radius:3px;background:var(--bg)}
 .drawer:has(#ce-en) .btn{border-radius:4px}
