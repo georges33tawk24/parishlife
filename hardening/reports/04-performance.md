@@ -116,7 +116,7 @@ Requests per second follow the virtual users' think time (each visitor reads a p
 - Frontend (`cd frontend`): `npm run format:check` (all files use Prettier style), `npm run check` (check-api and all 15 module checks pass), `npm run check:routes` (634 matched, 2 known gaps, 0 new), `npm run build` (succeeds): all pass.
 - End-to-end, committed branch (`E2E_CHANNEL=chromium npm run e2e`): 11 passed, 2 failed (16.5 min). (1) The known baseline failure "public pages load signed out" (untrusted local certificate, service-worker fetch). (2) "operator: signs in…" timed out at the password step; its screenshot shows "Bot verification is temporarily unavailable. Try again later.", the API's 503 when Cloudflare's real Turnstile siteverify (used with the test keys) is unreachable: an outside network failure, not this branch. Rerun alone (`npm run e2e -- --no-build --grep operator`): 1 passed (55.7 s). So 12 of 13 pass, the same as the baseline. Per-role durations vary a lot between runs (secretary 3.5 min in one run, 10.6 s in the next) because the test's settle step counts third-party requests (Google Fonts, Turnstile); they are not a performance measure.
 - End-to-end with both handoff patches applied (route splitting and compression), before removing them: 12 passed, 1 failed (10.5 min). The failure is the known baseline one, "public pages load signed out": "An SSL certificate error occurred when fetching the script" (the untrusted local certificate blocks the service worker).
-- `gitleaks git --redact --log-opts="4bc66d1..HEAD"`: no leaks in my 8 commits.
+- `gitleaks git --redact --log-opts="4bc66d1..HEAD"`: no leaks in the branch's 10 commits.
 
 ## F. New packages, migrations, indexes and environment variables
 
