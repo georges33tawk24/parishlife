@@ -1,0 +1,43 @@
+#!/bin/sh
+# Purpose: refuses commit messages that do not say what changed and why (hardening item 16: no more bare "fix").
+# Main rules: a subject of 10 to 72 characters that is not a lone vague word (fix, update, wip...), then a blank line and at least one
+# line of explanation that is not a trailer (Co-Authored-By:, Signed-off-by: and the like). Merge, revert, fixup! and squash! messages pass unchanged.
+# Enable once per clone (with the gitleaks pre-commit hook): git config core.hooksPath .githooks
+# CI runs the same file over every commit of a pull request (.github/workflows/ci.yml, job "Commit messages").
+# Usage: .githooks/commit-msg <message file>
+
+file="$1"
+# Drop the diff below the scissors line (git commit -v), comment lines and trailing blank lines, as git does when it stores the message.
+message=$(sed '/^# -* >8 -*$/,$d' "$file" | grep -v '^#' | sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}')
+subject=$(printf '%s\n' "$message" | head -n 1)
+
+case "$subject" in
+  "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+fail() {
+  echo "commit-msg: $1" >&2
+  echo "  Write a subject line that says what changed (10-72 characters), a blank line, then why it changed." >&2
+  echo "  Example:  Rate limits: key on the forwarded client address" >&2
+  echo "" >&2
+  echo "            Behind App Service every visitor shared one bucket, so ten people signing in locked out the parish." >&2
+  exit 1
+}
+
+length=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+[ "$length" -ge 10 ] || fail "the subject is too short ($length characters)."
+[ "$length" -le 72 ] || fail "the subject is too long ($length characters, at most 72)."
+
+word=$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]' | sed -e 's/[[:punct:]]*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+case "$word" in
+  fix | fixes | fixed | "bug fix" | bugfix | update | updates | updated | change | changes | wip | tmp | temp | misc | stuff | "small fix" | "minor fix" | "minor changes" | cleanup | "clean up" | test | tests)
+    fail "\"$subject\" does not say what changed." ;;
+esac
+
+second=$(printf '%s\n' "$message" | sed -n '2p')
+[ -z "$(printf '%s' "$second" | tr -d '[:space:]')" ] || fail "put a blank line after the subject."
+
+# The explanation: any non-blank line after the subject that is not a sign-off or co-author trailer.
+body=$(printf '%s\n' "$message" | sed -n '3,$p' | grep -i -v -E '^(co-authored-by|signed-off-by|reviewed-by|acked-by|tested-by|reported-by|helped-by|suggested-by|change-id):' | tr -d '[:space:]')
+[ -n "$body" ] || fail "add a line after the blank line that says why this change is needed."
+exit 0
