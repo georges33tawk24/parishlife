@@ -18,7 +18,6 @@ namespace ParishLife.Api.Services.Accounts;
 
 public class AccountRecordsService(IRecordTransactions records, IParishRepository parishes, MinistryAccess own, MembershipService memberships, ICurrentActor actor)
 {
-    private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
 
     public async Task<IReadOnlyList<AccountParishRecordDto>> RecordsAsync(CancellationToken ct)
     {
@@ -28,14 +27,14 @@ public class AccountRecordsService(IRecordTransactions records, IParishRepositor
         foreach (var follow in await records.CollectAsync<ParishFollow>(account, "parishFollow", ct, 200))
         {
             var parish = follow.Value.ParishId;
-            var link = await records.ReadAsync<PersonAccountLink>(Parish(parish), "personAccountLink:" + actor.AccountId, ct);
+            var link = await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink:" + actor.AccountId, ct);
             if (link?.Value.Active != true)
                 continue;
             try
             {
                 // Rechecks the link, its claim, the person and the parish exactly as the per-parish own-data routes do.
                 var current = await own.OwnLinkAsync(parish, ct);
-                var person = (await records.ReadAsync<Person>(Parish(parish), "person:" + current.Value.PersonId, ct))!.Value;
+                var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + current.Value.PersonId, ct))!.Value;
                 var name = (await parishes.GetAsync(parish, ct))?.Value.Name ?? string.Empty;
                 var corrections = await memberships.CorrectionsAsync(parish, true, ct);
                 result.Add(new AccountParishRecordDto

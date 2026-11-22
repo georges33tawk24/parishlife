@@ -109,7 +109,7 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
         ScheduleRules.ValidatePeriod(start, end);
         var filters = new List<RecordCondition>
         {
-            Equal("ministryId", ministry), new() { Path = "startsAt", Comparison = "lt", Value = end },
+            RecordConditions.Equal("ministryId", ministry), new() { Path = "startsAt", Comparison = "lt", Value = end },
             new() { Path = "endsAt", Comparison = "gt", Value = start }
         };
         if (!reader.Privileged)
@@ -187,7 +187,7 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
         await access.LeaderAsync(parish, ministry, ct, requireModule: false);
         var meeting = await ReadAsync(parish, ministry, id, ct);
         var page = await records.PageAsync<MeetingRsvp>(MinistryAccess.Scope(parish), "meetingRsvp", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("meetingId", id));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("meetingId", id));
         return new()
         {
             Items = page.Items.Select(row => RsvpView(meeting.Value, row.Value.PersonId, row.Value, false)).ToArray(),
@@ -200,7 +200,7 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
         await access.LeaderAsync(parish, ministry, ct, requireModule: false);
         await ReadAsync(parish, ministry, id, ct);
         var page = await records.PageAsync<MinistryMeetingHistory>(MinistryAccess.Scope(parish), "ministryMeetingHistory", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("meetingId", id));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("meetingId", id));
         return new()
         {
             Items = page.Items.Select(row => new MinistryMeetingHistoryDto
@@ -344,7 +344,6 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
     }
     private static string Key(string id) => "ministryMeeting:" + id;
     private static string RsvpKey(string meeting, string person) => "meetingRsvp:" + meeting + ":" + person;
-    private static RecordCondition Equal(string field, string value) => new() { Path = field, Comparison = "eq", Value = value };
     private static RecordChange GroupFence(Versioned<Ministry> group) => RecordChange.Replace("ministry:" + group.Value.Id, "ministry", group.Value, group.Version);
     private static CommandResult Result(MinistryMeeting value) => new() { Id = value.Id, Status = value.Status };
     private static DomainException State(string message) => new("invalid_meeting_state", message, FailureKind.Conflict);

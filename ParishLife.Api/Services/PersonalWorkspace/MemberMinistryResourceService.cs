@@ -27,7 +27,7 @@ public class MemberMinistryResourceService(IRecordTransactions records, Ministry
         string? cursor = null;
         do
         {
-            var page = await records.PageAsync<MinistryMembership>(scope, "ministryMembership", 100, cursor, ct, Equal("personId", person));
+            var page = await records.PageAsync<MinistryMembership>(scope, "ministryMembership", 100, cursor, ct, RecordConditions.Equal("personId", person));
             foreach (var row in page.Items)
             {
                 var membership = row.Value;
@@ -56,7 +56,7 @@ public class MemberMinistryResourceService(IRecordTransactions records, Ministry
             do
             {
                 var page = await records.PageAsync<MinistryStock>(scope, "ministryStock", 100, next, ct,
-                    Equal("ministryId", group.Id), Equal("status", "Active"));
+                    RecordConditions.Equal("ministryId", group.Id), RecordConditions.Equal("status", "Active"));
                 rows.AddRange(page.Items.Select(row => row.Value)
                     .Where(stock => stock.ParishId == parish && stock.MinistryId == group.Id && stock.Status == "Active"));
                 next = page.ContinuationToken;
@@ -88,5 +88,4 @@ public class MemberMinistryResourceService(IRecordTransactions records, Ministry
         return new MemberMinistryResourcesDto { Items = items.ToArray(), Truncated = truncated };
     }
 
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
 }

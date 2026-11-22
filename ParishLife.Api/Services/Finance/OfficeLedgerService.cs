@@ -14,7 +14,6 @@ namespace ParishLife.Api.Services.Finance;
 
 public class OfficeLedgerService(IRecordTransactions records, GivingService giving, ICurrentActor actor, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static string Period(DateOnly date) => date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
     private static decimal Signed(OfficeLedgerEntry e, IReadOnlyDictionary<string, OfficeLedgerEntry> all)
@@ -25,13 +24,13 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var key = "officeOpening:" + request.Currency;
         var op = actor.CreateOperation(request.OperationId, request, clock, "office-opening:v1:" + request.Currency);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return request;
-        if (await records.ReadAsync<OfficeOpening>(Scope(parish), key, ct) is not null)
+        if (await records.ReadAsync<OfficeOpening>(RecordScopes.Parish(parish), key, ct) is not null)
             throw GivingService.State("The opening balance for " + request.Currency + " was already entered; later months carry it forward.");
         if (request.Amount < 0 || decimal.Round(request.Amount, 2) != request.Amount)
             throw new DomainException("invalid_money", "Use an exact opening amount with at most two decimals.");
-        await records.CommitAsync(Scope(parish), op, "office.opening", request.Currency,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "office.opening", request.Currency,
             [Fence(root), RecordChange.Create(key, "officeOpening", new OfficeOpening
             {
                 Currency = request.Currency, ParishId = parish, Amount = request.Amount, EffectiveOn = request.EffectiveOn,
@@ -44,10 +43,10 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "office-entry:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await GetAsync(parish, prior.Id, ct);
         GivingService.Money(request.Amount, request.Currency);
-        var opening = await records.ReadAsync<OfficeOpening>(Scope(parish), "officeOpening:" + request.Currency, ct)
+        var opening = await records.ReadAsync<OfficeOpening>(RecordScopes.Parish(parish), "officeOpening:" + request.Currency, ct)
             ?? throw GivingService.State("Enter the opening office balance for " + request.Currency + " first.");
         if (request.OccurredOn < opening.Value.EffectiveOn || request.OccurredOn > DateOnly.FromDateTime(op.At.UtcDateTime))
             throw new DomainException("invalid_input", "The date must be on or after the opening balance and not in the future.");
@@ -74,7 +73,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         }
         else
             item.FinanceReference = Guard.Text(request.FinanceReference, "Finance record of the transfer", 100);
-        await records.CommitAsync(Scope(parish), op, "office.entry", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "office.entry", item.Id,
             [Fence(root), old is null ? RecordChange.Create("officeEntry:" + item.Id, "officeEntry", item)
                 : RecordChange.Replace("officeEntry:" + item.Id, "officeEntry", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -86,13 +85,13 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     {
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceEnter, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "office-entry-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await GetAsync(parish, prior.Id, ct);
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
         if (item.Status != "Active")
             throw GivingService.State("This entry was already removed.");
-        var closed = await records.ReadAsync<OfficeMonth>(Scope(parish), "officeMonth:" + Period(item.OccurredOn), ct) is not null;
+        var closed = await records.ReadAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth:" + Period(item.OccurredOn), ct) is not null;
         var reason = Guard.Text(request.Reason, "Reason", 500);
         if (request.Action == "remove")
         {
@@ -101,7 +100,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
             item.Status = "Removed";
             item.DeleteReason = reason;
             item.UpdatedAt = op.At;
-            await records.CommitAsync(Scope(parish), op, "office.remove", id, [Fence(root), RecordChange.Replace("officeEntry:" + id, "officeEntry", item, Versions.Require(request.Version))],
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "office.remove", id, [Fence(root), RecordChange.Replace("officeEntry:" + id, "officeEntry", item, Versions.Require(request.Version))],
                 new CommandResult { Id = id, Status = item.Status }, ct);
             return await GetAsync(parish, id, ct);
         }
@@ -116,7 +115,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
             Id = op.Id, ParishId = parish, Kind = "Reversal", OccurredOn = on, Amount = item.Amount, Currency = item.Currency, Description = "Reversal: " + reason,
             ReversalOf = id, CreatedBy = actor.AccountId, UpdatedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "office.reverse", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "office.reverse", id,
             [Fence(root), RecordChange.Replace("officeEntry:" + id, "officeEntry", item, Versions.Require(request.Version)), RecordChange.Create("officeEntry:" + reversal.Id, "officeEntry", reversal)],
             new CommandResult { Id = reversal.Id, Status = reversal.Status }, ct);
         return await GetAsync(parish, reversal.Id, ct);
@@ -125,8 +124,8 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     public async Task<IReadOnlyList<OfficeEntryDto>> EntriesAsync(string parish, string? period, CancellationToken ct)
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        var closed = (await records.CollectAsync<OfficeMonth>(Scope(parish), "officeMonth", ct, 1000)).Select(m => m.Value.Period).ToHashSet(StringComparer.Ordinal);
-        return (await records.CollectAsync<OfficeLedgerEntry>(Scope(parish), "officeEntry", ct, 20000))
+        var closed = (await records.CollectAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth", ct, 1000)).Select(m => m.Value.Period).ToHashSet(StringComparer.Ordinal);
+        return (await records.CollectAsync<OfficeLedgerEntry>(RecordScopes.Parish(parish), "officeEntry", ct, 20000))
             .Where(r => period is null || Period(r.Value.OccurredOn) == period).OrderBy(r => r.Value.OccurredOn).ThenBy(r => r.Value.UpdatedAt)
             .Select(r => Project(r, closed.Contains(Period(r.Value.OccurredOn)))).ToArray();
     }
@@ -137,12 +136,12 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         var root = await giving.AuthorizeAsync(parish, Permissions.FinanceApprove, ct);
         var key = "officeMonth:" + request.Period;
         var op = actor.CreateOperation(request.OperationId, request, clock, "office-close:v1:" + request.Period);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<OfficeMonth>(Scope(parish), key, ct))!.Value);
-        if (await records.ReadAsync<OfficeMonth>(Scope(parish), key, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<OfficeMonth>(RecordScopes.Parish(parish), key, ct))!.Value);
+        if (await records.ReadAsync<OfficeMonth>(RecordScopes.Parish(parish), key, ct) is not null)
             throw GivingService.State("This month is already closed.");
         var entries = (await EntriesRawAsync(parish, ct)).Where(e => e.Status == "Active").ToList();
-        var closed = (await records.CollectAsync<OfficeMonth>(Scope(parish), "officeMonth", ct, 1000)).Select(m => m.Value.Period).ToHashSet(StringComparer.Ordinal);
+        var closed = (await records.CollectAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth", ct, 1000)).Select(m => m.Value.Period).ToHashSet(StringComparer.Ordinal);
         if (entries.Any(e => string.CompareOrdinal(Period(e.OccurredOn), request.Period) < 0 && !closed.Contains(Period(e.OccurredOn))))
             throw GivingService.State("Close the earlier months that have entries first.");
         var month = entries.Where(e => Period(e.OccurredOn) == request.Period).ToList();
@@ -153,7 +152,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
             Period = request.Period, ParishId = parish, Totals = await TotalsAsync(parish, request.Period, ct), ClosedBy = actor.AccountId, ClosedAt = op.At
         };
         item.NegativeCurrencies = item.Totals.Where(t => t.Value.Closing < 0).Select(t => t.Key).ToArray();
-        await records.CommitAsync(Scope(parish), op, "office.close", request.Period, [Fence(root), RecordChange.Create(key, "officeMonth", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "office.close", request.Period, [Fence(root), RecordChange.Create(key, "officeMonth", item)],
             new CommandResult { Id = request.Period, Status = "Closed" }, ct);
         return Project(item);
     }
@@ -162,7 +161,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     public async Task<IReadOnlyList<OfficeOpeningRecordDto>> OpeningsAsync(string parish, CancellationToken ct)
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        return (await records.CollectAsync<OfficeOpening>(Scope(parish), "officeOpening", ct, 50)).Select(r => r.Value).Where(o => o.ParishId == parish)
+        return (await records.CollectAsync<OfficeOpening>(RecordScopes.Parish(parish), "officeOpening", ct, 50)).Select(r => r.Value).Where(o => o.ParishId == parish)
             .OrderBy(o => o.Currency, StringComparer.Ordinal)
             .Select(o => new OfficeOpeningRecordDto { Currency = o.Currency, Amount = o.Amount, EffectiveOn = o.EffectiveOn, Provenance = o.Provenance, EnteredBy = o.By, EnteredAt = o.At })
             .ToArray();
@@ -171,7 +170,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
     public async Task<IReadOnlyList<OfficeMonthDto>> MonthsAsync(string parish, CancellationToken ct)
     {
         await giving.AuthorizeAsync(parish, Permissions.FinanceRead, ct);
-        return (await records.CollectAsync<OfficeMonth>(Scope(parish), "officeMonth", ct, 1000)).Select(m => Project(m.Value)).OrderBy(m => m.Period, StringComparer.Ordinal).ToArray();
+        return (await records.CollectAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth", ct, 1000)).Select(m => Project(m.Value)).OrderBy(m => m.Period, StringComparer.Ordinal).ToArray();
     }
 
     public async Task<OfficeMonthDto> BalancesAsync(string parish, CancellationToken ct)
@@ -187,7 +186,7 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
         var all = (await EntriesRawAsync(parish, ct)).ToDictionary(e => e.Id, StringComparer.Ordinal);
         var active = all.Values.Where(e => e.Status == "Active").ToList();
         var result = new Dictionary<string, OfficeMonthTotal>(StringComparer.Ordinal);
-        foreach (var opening in await records.CollectAsync<OfficeOpening>(Scope(parish), "officeOpening", ct, 50))
+        foreach (var opening in await records.CollectAsync<OfficeOpening>(RecordScopes.Parish(parish), "officeOpening", ct, 50))
         {
             var currency = opening.Value.Currency;
             var before = active.Where(e => e.Currency == currency && string.CompareOrdinal(Period(e.OccurredOn), period) < 0).Sum(e => Signed(e, all));
@@ -203,21 +202,21 @@ public class OfficeLedgerService(IRecordTransactions records, GivingService givi
 
     private async Task OpenMonthAsync(string parish, DateOnly date, CancellationToken ct)
     {
-        if (await records.ReadAsync<OfficeMonth>(Scope(parish), "officeMonth:" + Period(date), ct) is not null)
+        if (await records.ReadAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth:" + Period(date), ct) is not null)
             throw GivingService.State("The month " + Period(date) + " is closed; use a reversal dated in an open month.");
     }
 
     private async Task<List<OfficeLedgerEntry>> EntriesRawAsync(string parish, CancellationToken ct)
-        => (await records.CollectAsync<OfficeLedgerEntry>(Scope(parish), "officeEntry", ct, 20000)).Select(r => r.Value).ToList();
+        => (await records.CollectAsync<OfficeLedgerEntry>(RecordScopes.Parish(parish), "officeEntry", ct, 20000)).Select(r => r.Value).ToList();
 
     private async Task<Versioned<OfficeLedgerEntry>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<OfficeLedgerEntry>(Scope(parish), "officeEntry:" + id, ct) is { } row && row.Value.ParishId == parish ? row
+        => await records.ReadAsync<OfficeLedgerEntry>(RecordScopes.Parish(parish), "officeEntry:" + id, ct) is { } row && row.Value.ParishId == parish ? row
             : throw new DomainException("resource_not_found", "The requested office entry is unavailable.", FailureKind.NotFound);
 
     private async Task<OfficeEntryDto> GetAsync(string parish, string id, CancellationToken ct)
     {
         var row = await ReadAsync(parish, id, ct);
-        return Project(row, await records.ReadAsync<OfficeMonth>(Scope(parish), "officeMonth:" + Period(row.Value.OccurredOn), ct) is not null);
+        return Project(row, await records.ReadAsync<OfficeMonth>(RecordScopes.Parish(parish), "officeMonth:" + Period(row.Value.OccurredOn), ct) is not null);
     }
 
     private static OfficeEntryDto Project(Versioned<OfficeLedgerEntry> row, bool closed) => new()

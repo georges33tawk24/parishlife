@@ -18,7 +18,6 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
 {
     private static readonly string[] Allowed = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Rite", "RegisterStatus", "Archived"];
     private static readonly string[] AlwaysExcluded = ["account links", "credentials and tokens", "pastoral notes and concerns", "sacramental register entries", "household and guardian details"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
 
     public async Task<IReadOnlyList<PersonSearchResultDto>> SearchAsync(string parish, string query, bool includeArchived, int size, CancellationToken ct)
     {
@@ -58,7 +57,7 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
             Id = op.Id, ParishId = parish, Kind = "people", Purpose = Guard.Text(request.Purpose, "Purpose", 500), Columns = columns,
             IncludeArchived = request.IncludeArchived, Count = people.Count, By = actor.AccountId, At = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "people.export", op.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.export", op.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Create("exportLog:" + op.Id, "exportLog", log)],
             new CommandResult { Id = op.Id, Status = "Generated" }, ct);
         var csv = new StringBuilder(string.Join(',', columns)).Append("\r\n");
@@ -89,7 +88,7 @@ public class PeopleDirectoryService(IRecordTransactions records, IParishAccess a
 
     // ponytail: scans the parish's people (cap 20000); add a normalized-name index when a parish outgrows it.
     private async Task<List<Person>> PeopleAsync(string parish, bool includeArchived, CancellationToken ct)
-        => (await records.CollectAsync<Person>(Scope(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => includeArchived || !p.Archived).ToList();
+        => (await records.CollectAsync<Person>(RecordScopes.Parish(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => includeArchived || !p.Archived).ToList();
 
     private static string[] Columns(string[]? columns)
     {

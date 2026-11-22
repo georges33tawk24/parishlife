@@ -23,7 +23,6 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
     CertificateService certificates, DocumentSignatureService signatures, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
     private static readonly string[] Fields = ["name", "reference", "officialNumber", "celebratedAt", "place", "celebrantName", "witnesses", "bookReference", "issuedAt"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException State(string message) => new("invalid_template_state", message, FailureKind.Conflict);
     private static string Key(string kind, string language) => "documentTemplate:" + kind + ":" + language;
 
@@ -41,16 +40,16 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
             throw new DomainException("invalid_input", "Unknown placeholders: " + string.Join(", ", unknown) + ". Use " + string.Join(", ", Fields) + " or facts.<key>.");
         var op = actor.CreateOperation(request.OperationId, request, clock, "document-template:v1:" + request.Kind + ":" + request.Language);
         var key = Key(request.Kind, request.Language);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is null)
         {
-            var old = await records.ReadAsync<DocumentTemplate>(Scope(parish), key, ct);
+            var old = await records.ReadAsync<DocumentTemplate>(RecordScopes.Parish(parish), key, ct);
             // A new proposal replaces the wording and needs a fresh approval before it is used.
             var item = new DocumentTemplate { Kind = request.Kind, Language = request.Language, ParishId = parish, Body = body, ProposedBy = actor.AccountId, ProposedAt = op.At };
-            await records.CommitAsync(Scope(parish), op, "document_template.propose", key,
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "document_template.propose", key,
                 [RecordChange.Replace("parish", "parish", root.Value, root.Version), old is null ? RecordChange.Create(key, "documentTemplate", item) : RecordChange.Replace(key, "documentTemplate", item, old.Version)],
                 new CommandResult { Id = key, Status = item.Status }, ct);
         }
-        return Project((await records.ReadAsync<DocumentTemplate>(Scope(parish), key, ct))!.Value);
+        return Project((await records.ReadAsync<DocumentTemplate>(RecordScopes.Parish(parish), key, ct))!.Value);
     }
 
     public async Task<DocumentTemplateDto> ApproveAsync(string parish, string kind, string language, CancellationToken ct)
@@ -59,13 +58,13 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
         var root = await parishes.GetAsync(parish, ct) ?? throw State("Unknown parish.");
         await bishops.RequireBishopAsync(root.Value.JurisdictionArchdioceseId ?? throw State("This parish has no bishop jurisdiction."), ct);
         var key = Key(kind, language);
-        var row = await records.ReadAsync<DocumentTemplate>(Scope(parish), key, ct) ?? throw State("No proposed template for " + kind + " in " + language + ".");
+        var row = await records.ReadAsync<DocumentTemplate>(RecordScopes.Parish(parish), key, ct) ?? throw State("No proposed template for " + kind + " in " + language + ".");
         if (row.Value.Status != "Proposed")
             throw State("This template is already approved.");
         row.Value.Status = "Approved";
         row.Value.ApprovedBy = actor.AccountId;
         row.Value.ApprovedAt = clock.GetUtcNow();
-        await records.CommitAsync(Scope(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { kind, language }, clock, "document-template-approve:v1"),
+        await records.CommitAsync(RecordScopes.Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { kind, language }, clock, "document-template-approve:v1"),
             "document_template.approve", key, [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace(key, "documentTemplate", row.Value, row.Version)],
             new CommandResult { Id = key, Status = row.Value.Status }, ct);
         return Project(row.Value);
@@ -75,17 +74,17 @@ public partial class DocumentSheetService(IRecordTransactions records, IParishRe
     {
         await proof.RequireMfaAsync(ct);
         await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
-        return (await records.CollectAsync<DocumentTemplate>(Scope(parish), "documentTemplate", ct, 200)).Select(r => Project(r.Value)).ToArray();
+        return (await records.CollectAsync<DocumentTemplate>(RecordScopes.Parish(parish), "documentTemplate", ct, 200)).Select(r => Project(r.Value)).ToArray();
     }
 
     public async Task<string> RenderAsync(string parish, string certificateId, CancellationToken ct)
     {
         var certificate = (await certificates.GetAsync(parish, certificateId, ct)).Value;
-        var template = (await records.ReadAsync<DocumentTemplate>(Scope(parish), Key(certificate.Sacrament, certificate.Language), ct))?.Value;
+        var template = (await records.ReadAsync<DocumentTemplate>(RecordScopes.Parish(parish), Key(certificate.Sacrament, certificate.Language), ct))?.Value;
         if (template?.Status != "Approved")
             throw State("There is no approved " + certificate.Language + " template for " + certificate.Sacrament + " certificates; preparing one is a task for the priest and bishop.");
         // The certificate's own snapshot (taken when it was prepared) is used, so later register or profile changes never alter it.
-        var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + certificate.SubjectPersonId, ct))?.Value;
+        var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + certificate.SubjectPersonId, ct))?.Value;
         var name = person is null ? null : person.GivenName + " " + person.FamilyName;
         var authorization = certificate.AuthorizationCode is { } code ? await signatures.ReadAsync(parish, code, ct) : null;
         if (authorization is not null)

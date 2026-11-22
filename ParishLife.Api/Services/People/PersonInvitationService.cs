@@ -25,7 +25,6 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
 {
     private const string Purpose = "Link your account to your parish member record. It grants no ministry membership or staff authority.";
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(7);
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested invitation is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_invitation_state", message, FailureKind.Conflict);
 
@@ -41,16 +40,16 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-invitation:v1:" + person);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             throw State("This invitation was already issued; issue a new one to get another link.");
-        var target = await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct);
+        var target = await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct);
         if (target?.Value is not { Archived: false } p || p.ParishId != parish)
             throw Missing();
-        if ((await records.ReadAsync<CommandResult>(Scope(parish), "personAccountClaim:" + person, ct))?.Value.Status == "Linked")
+        if ((await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), "personAccountClaim:" + person, ct))?.Value.Status == "Linked")
             throw State("This person is already linked to an account.");
         // A replacement keeps the same target person and makes every earlier open link unusable.
         var changes = new List<RecordChange> { RecordChange.Replace("parish", "parish", root.Value, root.Version) };
-        foreach (var old in await records.CollectAsync<PersonInvitation>(Scope(parish), "personInvitation", ct, 50,
+        foreach (var old in await records.CollectAsync<PersonInvitation>(RecordScopes.Parish(parish), "personInvitation", ct, 50,
             new RecordCondition { Path = "personId", Comparison = "eq", Value = person }))
             if (old.Value.Status == "Open")
             {
@@ -64,7 +63,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
             NotificationWorkIds = []
         };
         changes.Add(RecordChange.Create("personInvitation:" + item.Id, "personInvitation", item));
-        await records.CommitAsync(Scope(parish), op, "person.invite", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.invite", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return new PersonInvitationIssuedDto { Id = item.Id, PersonId = person, ExpiresAt = item.ExpiresAt, Delivery = item.Delivery, Token = token };
     }
 
@@ -77,7 +76,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var preview = new PersonInvitationPreviewDto { Status = status, Purpose = Purpose, ExpiresAt = item.ExpiresAt };
         if (status != "Open")
             return preview;
-        var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct))?.Value ?? throw Missing();
+        var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct))?.Value ?? throw Missing();
         preview.ParishName = root.Value.Name;
         preview.PersonName = person.GivenName + " " + person.FamilyName;
         return preview;
@@ -90,7 +89,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var row = await TokenAsync(parish, id, token, ct);
         var item = row.Value;
         var linkKey = "personAccountLink:" + actor.AccountId;
-        var link = await records.ReadAsync<PersonAccountLink>(Scope(parish), linkKey, ct);
+        var link = await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), linkKey, ct);
         // Retrying a successful claim resolves to the account's actual association instead of failing or duplicating it.
         if (item.Status == "Used" && item.UsedByAccountId == actor.AccountId && link?.Value is { Active: true } done && done.PersonId == item.PersonId)
             return Project(item);
@@ -99,11 +98,11 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var user = await users.FindByIdAsync(actor.AccountId);
         if (user is not { Active: true } || !AccountVerification.IsVerified(user))
             throw State("Verify your account's contact details before accepting.");
-        var person = await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct);
+        var person = await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct);
         if (person?.Value is not { Archived: false } p || p.ParishId != parish)
             throw Missing();
         var claimKey = "personAccountClaim:" + item.PersonId;
-        var claim = await records.ReadAsync<CommandResult>(Scope(parish), claimKey, ct);
+        var claim = await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), claimKey, ct);
         var op = Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock, "person-invitation-accept:v1:" + id);
         item.UsedByAccountId = actor.AccountId;
         item.UsedAt = op.At;
@@ -137,7 +136,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
             changes.Add(notice);
         }
         changes.Add(RecordChange.Replace("personInvitation:" + id, "personInvitation", item, row.Version));
-        await records.CommitAsync(Scope(parish), op, conflict ? "person.invitation_conflict" : "person.invitation_accept", id, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, conflict ? "person.invitation_conflict" : "person.invitation_accept", id, changes,
             new CommandResult { Id = id, Status = item.Status }, ct);
         if (conflict)
             await notifications.DispatchAsync(parish, item.CreatedBy, "person-invitation:" + id, ct);
@@ -148,13 +147,13 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-invitation-revoke:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectOutcomeAsync(parish, (await ReadAsync(parish, id, ct)).Value, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status is not ("Open" or "NeedsReview"))
             throw State("Only an open invitation or one waiting for review can be revoked.");
         item.Status = "Revoked";
-        await records.CommitAsync(Scope(parish), op, "person.invitation_revoke", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.invitation_revoke", id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace("personInvitation:" + id, "personInvitation", item, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = item.Status }, ct);
         return await ProjectOutcomeAsync(parish, item, ct);
@@ -172,12 +171,12 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
     {
         await OfficeAsync(parish, ct);
         var conditions = person is null ? [] : new[] { new RecordCondition { Path = "personId", Comparison = "eq", Value = person } };
-        return (await records.CollectAsync<PersonInvitation>(Scope(parish), "personInvitation", ct, 2000, conditions))
+        return (await records.CollectAsync<PersonInvitation>(RecordScopes.Parish(parish), "personInvitation", ct, 2000, conditions))
             .OrderByDescending(r => r.Value.CreatedAt).Select(r => new Versioned<PersonInvitationDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
     private async Task<Versioned<PersonInvitation>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<PersonInvitation>(Scope(parish), "personInvitation:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
+        => await records.ReadAsync<PersonInvitation>(RecordScopes.Parish(parish), "personInvitation:" + id, ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id ? row : throw Missing();
 
     private async Task<PersonInvitationDto> ProjectOutcomeAsync(string parish, PersonInvitation item, CancellationToken ct)
     {

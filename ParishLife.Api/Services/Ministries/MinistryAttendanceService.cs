@@ -74,7 +74,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         if (value.SnapshotPhase == "MembershipValidation")
         {
             var members = await records.PageAsync<MinistryMembership>(scope, "ministryMembership", SnapshotPageSize,
-                value.SnapshotCursor, ct, Equal("ministryId", ministry));
+                value.SnapshotCursor, ct, RecordConditions.Equal("ministryId", ministry));
             foreach (var member in members.Items)
                 await ValidateCurrentPeriodAsync(parish, ministry, member.Value, ct);
             value.SnapshotCursor = members.ContinuationToken;
@@ -84,7 +84,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         else if (value.SnapshotPhase == "PeriodSnapshot")
         {
             var periods = await records.PageAsync<MinistryMembershipPeriod>(scope, "ministryMembershipPeriod", SnapshotPageSize,
-                value.SnapshotCursor, ct, Equal("ministryId", ministry),
+                value.SnapshotCursor, ct, RecordConditions.Equal("ministryId", ministry),
                 new RecordCondition { Path = "joinedAt", Comparison = "lte", Value = value.MeetingStartsAt });
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var period in periods.Items)
@@ -144,7 +144,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         EnsureSource(sheet.Value, source.Meeting.Value);
         RequireComplete(sheet.Value);
         var page = await records.PageAsync<AttendanceRow>(MinistryAccess.Scope(parish), "attendanceRow", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("meetingId", meetingId));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("meetingId", meetingId));
         foreach (var row in page.Items)
         {
             ValidateRow(parish, ministry, meetingId, row.Value);
@@ -191,7 +191,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         {
             // Older sheets did not capture guests. Establish an actual empty guest set, never overwrite unknown existing rows.
             var existing = await records.PageAsync<AttendanceRow>(scope, "attendanceRow", 1, null, ct,
-                Equal("ministryId", ministry), Equal("meetingId", meetingId), Equal("participantKind", "Guest"));
+                RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("meetingId", meetingId), RecordConditions.Equal("participantKind", "Guest"));
             if (existing.Items.Count != 0 || existing.ContinuationToken is not null)
                 throw Review("Existing additional-person records require an explicit counter reconciliation.");
             sheet.Value.GuestCounts = new AttendanceGuestCounts();
@@ -350,7 +350,7 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
         await SourceAsync(parish, ministry, meetingId, ct, false);
         await ReadSheetAsync(parish, ministry, meetingId, ct);
         var page = await records.PageAsync<AttendanceChange>(MinistryAccess.Scope(parish), "attendanceChange", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("meetingId", meetingId));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("meetingId", meetingId));
         return new()
         {
             Items = page.Items.Select(row => ChangeView(parish, meetingId, row.Value)).ToArray(),
@@ -664,7 +664,6 @@ public class MinistryAttendanceService(IRecordTransactions records, MinistryAcce
     private static string? Optional(string? value, string name, int maximum) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, maximum);
     private static string SheetKey(string meeting) => "attendanceSheet:" + meeting;
     private static string RowKey(string meeting, string person) => "attendanceRow:" + meeting + ":" + person;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static CommandResult Result(AttendanceSheet value) => new() { Id = value.MeetingId, Status = value.Status };
     private static void RequireStatus(string value)
     {

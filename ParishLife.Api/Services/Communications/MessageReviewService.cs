@@ -18,8 +18,6 @@ namespace ParishLife.Api.Services.Communications;
 public class MessageReviewService(IRecordTransactions records, IParishRepository parishes, IPlatformAccess platform, InboxService inbox,
     ICurrentActor actor, MfaAccountAccess proof, IDataProtectionProvider protection, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested item is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_message_review_state", message, FailureKind.Conflict);
     private IDataProtector Protector(string parish, string id) => protection.CreateProtector("ParishLife.MessageReports.v1", parish, id);
@@ -36,13 +34,13 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
     private async Task<bool> ConflictedAsync(string parish, Conversation conversation, CancellationToken ct)
     {
         if (conversation.CreatedBy == actor.AccountId || conversation.ParticipantAccountIds.Contains(actor.AccountId, StringComparer.Ordinal)) return true;
-        var messages = await records.CollectAsync<InboxMessage>(Scope(parish), "inboxMessage", ct, 2000, Equal("conversationId", conversation.Id));
+        var messages = await records.CollectAsync<InboxMessage>(RecordScopes.Parish(parish), "inboxMessage", ct, 2000, RecordConditions.Equal("conversationId", conversation.Id));
         return messages.Any(m => m.Value.AuthorAccountId == actor.AccountId);
     }
 
     private async Task RequireUnconflictedAsync(string parish, string conversationId, CancellationToken ct)
     {
-        var conversation = await records.ReadAsync<Conversation>(Scope(parish), "conversation:" + conversationId, ct);
+        var conversation = await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), "conversation:" + conversationId, ct);
         if (conversation?.Value is not { } value || value.Id != conversationId || value.ParishId != parish) throw Missing();
         if (await ConflictedAsync(parish, value, ct))
             throw new DomainException("message_review_conflicted", "A participant in this conversation cannot handle its review.", FailureKind.Forbidden);
@@ -50,7 +48,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
 
     private async Task<InboxMessage> MessageAsync(string parish, string conversation, string message, CancellationToken ct)
     {
-        var row = await records.ReadAsync<InboxMessage>(Scope(parish), "inboxMessage:" + message, ct);
+        var row = await records.ReadAsync<InboxMessage>(RecordScopes.Parish(parish), "inboxMessage:" + message, ct);
         return row?.Value is { } value && value.Id == message && value.ConversationId == conversation ? value : throw Missing();
     }
 
@@ -62,14 +60,14 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         if (reported.AuthorAccountId == actor.AccountId)
             throw new DomainException("invalid_input", "Report a message someone else sent.");
         var op = actor.CreateOperation(request.OperationId, request, clock, "message-report:v1:" + message);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project(await ReadReportAsync(parish, prior.Id, ct), reviewer: false);
         var item = new MessageReport
         {
             Id = op.Id, ParishId = parish, ConversationId = conversation, MessageId = message, ReporterAccountId = actor.AccountId, CreatedAt = op.At
         };
         item.ProtectedExplanation = Protector(parish, item.Id).Protect(Guard.Text(request.Explanation, "Explanation", 4000));
-        await records.CommitAsync(Scope(parish), op, "inbox.message_report", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.message_report", item.Id,
             [RecordChange.Create("messageReport:" + item.Id, "messageReport", item)], new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item, reviewer: false);
     }
@@ -78,7 +76,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
     {
         if (proof.RecoverySession) throw Missing();
         await proof.CurrentAsync(ct);
-        return (await records.CollectAsync<MessageReport>(Scope(parish), "messageReport", ct, 500, Equal("reporterAccountId", actor.AccountId)))
+        return (await records.CollectAsync<MessageReport>(RecordScopes.Parish(parish), "messageReport", ct, 500, RecordConditions.Equal("reporterAccountId", actor.AccountId)))
             .OrderByDescending(r => r.Value.CreatedAt).Select(r => Project(r.Value, reviewer: false)).ToArray();
     }
 
@@ -87,9 +85,9 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
     {
         await OperatorAsync(parish, ct);
         var result = new List<Versioned<MessageReportDto>>();
-        foreach (var row in await records.CollectAsync<MessageReport>(Scope(parish), "messageReport", ct, 500))
+        foreach (var row in await records.CollectAsync<MessageReport>(RecordScopes.Parish(parish), "messageReport", ct, 500))
         {
-            var conversation = await records.ReadAsync<Conversation>(Scope(parish), "conversation:" + row.Value.ConversationId, ct);
+            var conversation = await records.ReadAsync<Conversation>(RecordScopes.Parish(parish), "conversation:" + row.Value.ConversationId, ct);
             if (conversation is null || await ConflictedAsync(parish, conversation.Value, ct)) continue;
             result.Add(new Versioned<MessageReportDto> { Version = row.Version, Value = Project(row.Value, reviewer: true) });
         }
@@ -102,14 +100,14 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         var row = await ReadReportRowAsync(parish, id, ct);
         await RequireUnconflictedAsync(parish, row.Value.ConversationId, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "message-report-close:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadReportAsync(parish, id, ct), reviewer: true);
         if (row.Value.Status != "Received") throw State("This report is already closed.");
         var item = row.Value;
         item.Status = "Closed";
         item.ClosedAt = op.At;
         item.ReporterOutcome = Guard.Text(request.ReporterOutcome, "Reporter outcome", 500);
-        await records.CommitAsync(Scope(parish), op, "inbox.message_report_close", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.message_report_close", id,
             [RecordChange.Replace("messageReport:" + id, "messageReport", item, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = item.Status }, ct, Guard.Text(request.Note, "Note", 2000));
         return Project(item, reviewer: true);
@@ -123,7 +121,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         await MessageAsync(parish, conversation, message, ct);
         await RequireUnconflictedAsync(parish, conversation, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "message-review:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         string? report = null;
         if (request.ReportId is { } reportId)
@@ -139,7 +137,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
             Id = op.Id, ParishId = parish, ConversationId = conversation, MessageId = message, ReportId = report, Reason = reason,
             RequestedBy = actor.AccountId, RequestedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "inbox.exact_message_review_request", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.exact_message_review_request", item.Id,
             [RecordChange.Create("messageReview:" + item.Id, "messageReview", item)], new CommandResult { Id = item.Id, Status = item.Status }, ct, reason);
         return Project(item);
     }
@@ -147,7 +145,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
     public async Task<IReadOnlyList<Versioned<MessageReviewDto>>> ListAsync(string parish, CancellationToken ct)
     {
         await OperatorAsync(parish, ct);
-        return (await records.CollectAsync<MessageReview>(Scope(parish), "messageReview", ct, 500))
+        return (await records.CollectAsync<MessageReview>(RecordScopes.Parish(parish), "messageReview", ct, 500))
             .OrderByDescending(r => r.Value.RequestedAt).Select(r => new Versioned<MessageReviewDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -157,7 +155,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
         var op = actor.CreateOperation(request.OperationId, request, clock, "message-review-decision:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(item);
         // Independent approval: switching roles or capacities never makes the requester their own second approver.
         if (item.RequestedBy == actor.AccountId)
@@ -175,7 +173,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         item.DecidedBy = actor.AccountId;
         item.DecidedAt = op.At;
         item.DecisionReason = Guard.Text(request.Reason, "Reason", 2000);
-        await records.CommitAsync(Scope(parish), op, "inbox.exact_message_review_" + (approve ? "approve" : "decline"), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.exact_message_review_" + (approve ? "approve" : "decline"), id,
             [RecordChange.Replace("messageReview:" + id, "messageReview", item, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = item.Status }, ct, item.DecisionReason);
         return Project(item);
@@ -194,7 +192,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
             throw State("This review has no current approved access window.");
         var message = await MessageAsync(parish, item.ConversationId, item.MessageId, ct);
         item.ReadCount++;
-        await records.CommitAsync(Scope(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { review = id }, clock), "inbox.exact_message_read", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { review = id }, clock), "inbox.exact_message_read", id,
             [RecordChange.Replace("messageReview:" + id, "messageReview", item, row.Version)], new CommandResult { Id = id, Status = item.Status }, ct, item.Reason);
         return new ReviewedMessageDto
         {
@@ -209,7 +207,7 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
         var op = actor.CreateOperation(request.OperationId, request, clock, "message-review-close:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(item);
         if (item.RequestedBy != actor.AccountId && item.DecidedBy != actor.AccountId) throw Missing();
         await RequireUnconflictedAsync(parish, item.ConversationId, ct);
@@ -231,16 +229,16 @@ public class MessageReviewService(IRecordTransactions records, IParishRepository
                 changes.Add(RecordChange.Replace("messageReport:" + reportId, "messageReport", report.Value, report.Version));
             }
         }
-        await records.CommitAsync(Scope(parish), op, "inbox.exact_message_review_close", id, changes, new CommandResult { Id = id, Status = item.Status }, ct, item.ClosingNote);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "inbox.exact_message_review_close", id, changes, new CommandResult { Id = id, Status = item.Status }, ct, item.ClosingNote);
         return Project(item);
     }
 
     private async Task<Versioned<MessageReview>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<MessageReview>(Scope(parish), "messageReview:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
+        => await records.ReadAsync<MessageReview>(RecordScopes.Parish(parish), "messageReview:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
             ? row : throw Missing();
 
     private async Task<Versioned<MessageReport>> ReadReportRowAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<MessageReport>(Scope(parish), "messageReport:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
+        => await records.ReadAsync<MessageReport>(RecordScopes.Parish(parish), "messageReport:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
             ? row : throw Missing();
 
     private async Task<MessageReport> ReadReportAsync(string parish, string id, CancellationToken ct) => (await ReadReportRowAsync(parish, id, ct)).Value;

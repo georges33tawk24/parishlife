@@ -28,7 +28,6 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
     private const int MaximumExceptionDays = 31;
     private const int MaximumPublicRangeDays = 366;
     private static RecordScope Archdiocese(string id) => new() { Area = RecordArea.Archdiocese, OwnerId = id };
-    private static RecordScope Parish(string id) => new() { Area = RecordArea.Parish, OwnerId = id };
     private static string Key(string id) => "liturgicalCalendar:" + id;
     private static string ExceptionKey(string id) => "liturgicalException:" + id;
     private static string SeatKey(string rite, int year)
@@ -131,7 +130,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
     {
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "liturgical-exception:v1");
-        if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ExceptionAsync(parish, prior.Id, ct);
         var archdiocese = root.Value.JurisdictionArchdioceseId ?? throw State("This parish has no confirmed jurisdiction.");
         var calendar = (await records.ReadAsync<LiturgicalCalendar>(Archdiocese(archdiocese), Key(Guard.Id(request.CalendarId)), ct))?.Value;
@@ -149,7 +148,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
             Titles = Titles(request.Titles), Reason = Guard.Text(request.Reason, "Reason", 1000), RecordedBy = actor.AccountId, RecordedAt = op.At
         };
         root = await PriestAsync(parish, ct);
-        await records.CommitAsync(Parish(parish), op, "liturgy.exception_record", value.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "liturgy.exception_record", value.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Create(ExceptionKey(value.Id), "liturgicalException", value)],
             new CommandResult { Id = value.Id, Status = value.Status }, ct);
         return await ExceptionAsync(parish, value.Id, ct);
@@ -159,7 +158,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
     {
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "liturgical-exception-withdraw:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Parish(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ExceptionAsync(parish, id, ct);
         if (request.Action != "withdraw")
             throw Invalid("A parish exception can only be withdrawn.");
@@ -172,7 +171,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
         row.Value.WithdrawnReason = Guard.Text(request.Reason, "Reason", 1000);
         row.Value.WithdrawnBy = actor.AccountId;
         row.Value.WithdrawnAt = op.At;
-        await records.CommitAsync(Parish(parish), op, "liturgy.exception_withdraw", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "liturgy.exception_withdraw", id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace(ExceptionKey(id), "liturgicalException", row.Value, row.Version)],
             new CommandResult { Id = id, Status = "Withdrawn" }, ct);
         return await ExceptionAsync(parish, id, ct);
@@ -181,7 +180,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
     public async Task<IReadOnlyList<Versioned<LiturgicalExceptionDto>>> ExceptionsAsync(string parish, CancellationToken ct)
     {
         await PriestAsync(parish, ct);
-        return (await records.CollectAsync<LiturgicalException>(Parish(parish), "liturgicalException", ct, 500)).Where(r => r.Value.ParishId == parish)
+        return (await records.CollectAsync<LiturgicalException>(RecordScopes.Parish(parish), "liturgicalException", ct, 500)).Where(r => r.Value.ParishId == parish)
             .OrderBy(r => r.Value.EffectiveFrom).Select(r => new Versioned<LiturgicalExceptionDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -208,7 +207,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
         foreach (var calendar in calendars.Values)
             foreach (var entry in calendar.Entries.Where(e => e.Date >= start && e.Date <= end))
                 days.Add(Day(calendar, entry.Date, entry.Titles, lang, entry.Rank, entry.Season, entry.DisplayColor, false, entry.RankAr, entry.SeasonAr));
-        foreach (var exception in (await records.CollectAsync<LiturgicalException>(Parish(parish), "liturgicalException", ct, 500, Status("Active"))).Select(r => r.Value))
+        foreach (var exception in (await records.CollectAsync<LiturgicalException>(RecordScopes.Parish(parish), "liturgicalException", ct, 500, Status("Active"))).Select(r => r.Value))
             if (exception.ParishId == parish && exception.Status == "Active" && calendars.TryGetValue(exception.CalendarId, out var calendar))
                 for (var day = exception.EffectiveFrom < start ? start : exception.EffectiveFrom; day <= exception.EffectiveTo && day <= end; day = day.AddDays(1))
                     days.Add(Day(calendar, day, exception.Titles, lang, null, null, null, true));
@@ -296,7 +295,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
             ? row : throw Missing();
 
     private async Task<Versioned<LiturgicalException>> ReadExceptionAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<LiturgicalException>(Parish(parish), ExceptionKey(id), ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id
+        => await records.ReadAsync<LiturgicalException>(RecordScopes.Parish(parish), ExceptionKey(id), ct) is { } row && row.Value.ParishId == parish && row.Value.Id == id
             ? row : throw Missing();
 
     private async Task<Versioned<LiturgicalExceptionDto>> ExceptionAsync(string parish, string id, CancellationToken ct)

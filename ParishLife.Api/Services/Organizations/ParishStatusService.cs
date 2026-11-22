@@ -19,7 +19,6 @@ namespace ParishLife.Api.Services.Organizations;
 public class ParishStatusService(IRecordTransactions records, IParishRepository parishes, IArchdioceseAuthority bishops, ICurrentActor actor,
     MfaAccountAccess proof, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader outcomes)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException State(string message) => new("invalid_parish_state", message, FailureKind.Conflict);
 
     private async Task<Versioned<Parish>> BishopAsync(string parish, CancellationToken ct)
@@ -34,7 +33,7 @@ public class ParishStatusService(IRecordTransactions records, IParishRepository 
     {
         var root = await BishopAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "parish-status:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await WithOutcomeAsync(parish, (await ReadAsync(parish, prior.Id, ct)).Value, ct);
         var from = root.Value.Status;
         var to = (request.Action, from) switch
@@ -53,7 +52,7 @@ public class ParishStatusService(IRecordTransactions records, IParishRepository 
         var notice = notifications.StageRequired(parish, root.Value.OwnerAccountId, "parish.status", "Your parish's operating status has changed.", null,
             "parish-status:" + op.Id, "ParishOwner", parish, op.At);
         change.NotificationWorkIds = [((NotificationWork)notice.Value!).Id];
-        await records.CommitAsync(Scope(parish), op, "parish." + request.Action, parish,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "parish." + request.Action, parish,
             [RecordChange.Replace("parish", "parish", root.Value, Versions.Require(request.Version)), RecordChange.Create("parishStatusChange:" + op.Id, "parishStatusChange", change),
              notice],
             new CommandResult { Id = op.Id, Status = to.ToString() }, ct);
@@ -69,7 +68,7 @@ public class ParishStatusService(IRecordTransactions records, IParishRepository 
     }
 
     private async Task<Versioned<ParishStatusChange>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<ParishStatusChange>(Scope(parish), "parishStatusChange:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
+        => await records.ReadAsync<ParishStatusChange>(RecordScopes.Parish(parish), "parishStatusChange:" + id, ct) is { } row && row.Value.Id == id && row.Value.ParishId == parish
             ? row : throw new DomainException("resource_not_found", "The requested status change is unavailable.", FailureKind.NotFound);
 
     private async Task<ParishStatusChangeDto> WithOutcomeAsync(string parish, ParishStatusChange change, CancellationToken ct)
@@ -82,7 +81,7 @@ public class ParishStatusService(IRecordTransactions records, IParishRepository 
     public async Task<IReadOnlyList<ParishStatusChangeDto>> HistoryAsync(string parish, CancellationToken ct)
     {
         await BishopAsync(parish, ct);
-        return (await records.CollectAsync<ParishStatusChange>(Scope(parish), "parishStatusChange", ct, 500))
+        return (await records.CollectAsync<ParishStatusChange>(RecordScopes.Parish(parish), "parishStatusChange", ct, 500))
             .Select(r => Project(r.Value)).OrderBy(c => c.At).ToArray();
     }
 

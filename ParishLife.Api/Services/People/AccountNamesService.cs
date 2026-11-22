@@ -22,7 +22,6 @@ public class AccountNamesService(IRecordTransactions records, IParishAccess acce
     public const int MaxIds = 100;
     private const int MaxRowsPerKind = 500;
 
-    private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
 
     public async Task<IReadOnlyList<AccountNameDto>> ListAsync(string parish, string? ids, CancellationToken ct)
     {
@@ -68,7 +67,7 @@ public class AccountNamesService(IRecordTransactions records, IParishAccess acce
     private async Task<HashSet<string>> CapacityHoldersAsync(Parish parish, DateTimeOffset now, CancellationToken ct)
     {
         var holders = new HashSet<string>(StringComparer.Ordinal);
-        var scope = Parish(parish.Id);
+        var scope = RecordScopes.Parish(parish.Id);
 
         foreach (var row in await records.CollectAsync<AccessGrant>(scope, "grant", ct, MaxRowsPerKind))
         {
@@ -107,7 +106,7 @@ public class AccountNamesService(IRecordTransactions records, IParishAccess acce
     /* An active, claimed link between the account and a current (not archived) person of the parish. */
     private async Task<bool> IsLinkedAsync(string parish, string account, CancellationToken ct)
     {
-        var scope = Parish(parish);
+        var scope = RecordScopes.Parish(parish);
         var link = (await records.ReadAsync<PersonAccountLink>(scope, "personAccountLink:" + account, ct))?.Value;
         if (link is not { Active: true } || link.AccountId != account || link.ParishId != parish)
             return false;

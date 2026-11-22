@@ -28,9 +28,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     private static readonly string[] CoreFields = ["place", "placeAr", "celebrantName", "celebrantNameAr", "witnesses", "witnessesAr", "bookReference", "registerPage", "celebratedAt"];
     private static string RequirementsKey(string sacrament) => "sacramentRequirements:" + sacrament;
     private static string? Optional(string? value, string name, int maximum) => string.IsNullOrWhiteSpace(value) ? null : Guard.Text(value, name, maximum);
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "sacrament:" + id;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested sacramental record is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_sacrament_state", message, FailureKind.Conflict);
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
@@ -61,10 +59,10 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync(parish, prior.Id, ct)).Value);
         var person = Guard.Id(request.SubjectPersonId);
-        if ((await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is not { Archived: false } subject || subject.ParishId != parish)
+        if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value is not { Archived: false } subject || subject.ParishId != parish)
             throw Missing();
         if (OnceOnly.Contains(request.Sacrament) && (await CasesAsync(parish, person, ct)).Any(r => r.Kind == request.Sacrament && r.Status is not ("Declined" or "Cancelled")))
             throw State("This person already has an active or registered " + request.Sacrament + " case; review it instead of creating a duplicate.");
@@ -75,7 +73,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             CreatedBy = actor.AccountId, CreatedAt = op.At
         };
         Step(item, "open", "", item.Status, op.At, null);
-        await records.CommitAsync(Scope(parish), op, "sacrament.open", item.Id, [Fence(root), RecordChange.Create(Key(item.Id), "sacramentRecord", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.open", item.Id, [Fence(root), RecordChange.Create(Key(item.Id), "sacramentRecord", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
@@ -102,7 +100,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             }
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await ReadAsync(parish, id, ct)).Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         var from = item.Status;
@@ -219,11 +217,11 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             case "register" when item.Status == "Celebrated" && item.ReturnReason is null:
                 if (OnceOnly.Contains(item.Kind) && (await CasesAsync(parish, item.PersonId, ct)).Any(r => r.Id != item.Id && r.Kind == item.Kind && r.Status == "Registered"))
                     throw State("This person already has a registered " + item.Kind + " entry.");
-                var policy = (await records.ReadAsync<SacramentNumberingPolicy>(Scope(parish), "sacramentPolicy:" + item.Kind, ct))?.Value
+                var policy = (await records.ReadAsync<SacramentNumberingPolicy>(RecordScopes.Parish(parish), "sacramentPolicy:" + item.Kind, ct))?.Value
                     ?? throw State("No approved numbering scheme exists for this register; the competent authority must supply one first.");
                 var year = item.CelebratedAt!.Value.UtcDateTime.Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var scope = "sacramentCounter:" + item.Kind + ":" + (policy.PerYear ? year : "all");
-                var counter = await records.ReadAsync<SacramentCounter>(Scope(parish), scope, ct);
+                var counter = await records.ReadAsync<SacramentCounter>(RecordScopes.Parish(parish), scope, ct);
                 var number = counter?.Value.Next ?? 1;
                 // The counter changes in the same transaction as the entry, so concurrent registrations can never share or reuse a number.
                 changes.Add(counter is null
@@ -242,7 +240,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         }
         Step(item, request.Action, from, item.Status, op.At, note, instruction);
         changes.Add(RecordChange.Replace(Key(item.Id), "sacramentRecord", item, Versions.Require(request.Version)));
-        await records.CommitAsync(Scope(parish), op, "sacrament." + request.Action.Replace('-', '_'), item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament." + request.Action.Replace('-', '_'), item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
     }
 
@@ -251,21 +249,21 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-policy:v1:" + request.Sacrament);
         var key = "sacramentPolicy:" + request.Sacrament;
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<SacramentNumberingPolicy>(Scope(parish), key, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<SacramentNumberingPolicy>(RecordScopes.Parish(parish), key, ct))!.Value);
         var format = Guard.Text(request.Format, "Format", 100);
         if (!format.Contains("{n}", StringComparison.Ordinal))
             throw new DomainException("invalid_input", "The format must contain {n} for the sequence number.");
-        var existing = await records.ReadAsync<SacramentNumberingPolicy>(Scope(parish), key, ct);
+        var existing = await records.ReadAsync<SacramentNumberingPolicy>(RecordScopes.Parish(parish), key, ct);
         // ponytail: one scheme per register; changing it mid-year needs an explicit migration decision, so it is refused once entries exist.
-        if (existing is not null && (await records.PageAsync<SacramentRecord>(Scope(parish), "sacramentRecord", 1, null, ct, Equal("kind", request.Sacrament), Equal("status", "Registered"))).Items.Count > 0)
+        if (existing is not null && (await records.PageAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacramentRecord", 1, null, ct, RecordConditions.Equal("kind", request.Sacrament), RecordConditions.Equal("status", "Registered"))).Items.Count > 0)
             throw State("Entries are already registered under the current scheme; changing it needs a separate reviewed migration.");
         var policy = new SacramentNumberingPolicy
         {
             Sacrament = request.Sacrament, Format = format, PerYear = request.PerYear,
             ApprovalReference = Guard.Text(request.ApprovalReference, "Approval reference", 1000), ApprovedBy = actor.AccountId, ApprovedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "sacrament.numbering_policy", request.Sacrament,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.numbering_policy", request.Sacrament,
             [Fence(root), existing is null ? RecordChange.Create(key, "sacramentPolicy", policy) : RecordChange.Replace(key, "sacramentPolicy", policy, existing.Version)],
             new CommandResult { Id = request.Sacrament, Status = "Approved" }, ct);
         return Project(policy);
@@ -277,7 +275,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         await OfficeOrPriestAsync(parish, ct);
         var result = new List<RequirementSetDto>();
         foreach (var kind in Kinds)
-            if (await records.ReadAsync<SacramentRequirementSet>(Scope(parish), RequirementsKey(kind), ct) is { } row)
+            if (await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), RequirementsKey(kind), ct) is { } row)
                 result.Add(Project(row));
         return result;
     }
@@ -287,8 +285,8 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-requirements:v1:" + request.Sacrament);
         var key = RequirementsKey(request.Sacrament);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct))!);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), key, ct))!);
         if (request.Items is null || request.Items.Count > 30)
             throw new DomainException("invalid_input", "List up to 30 requirements.");
         var items = request.Items.Select(i => new SacramentRequirement
@@ -301,24 +299,24 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             throw new DomainException("invalid_input", "Name each requirement in English or Arabic.");
         if (items.Select(i => i.Key).Distinct(StringComparer.Ordinal).Count() != items.Length)
             throw new DomainException("invalid_input", "Each requirement needs its own key.");
-        var existing = await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct);
+        var existing = await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), key, ct);
         var set = new SacramentRequirementSet
         {
             Sacrament = request.Sacrament, Items = items, BlockSchedulingUntilMet = request.BlockSchedulingUntilMet, SavedBy = actor.AccountId, SavedAt = op.At
         };
         // Saving changes later cases only; a case keeps its checklist until the office synchronizes it.
-        await records.CommitAsync(Scope(parish), op, "sacrament.requirements", request.Sacrament,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.requirements", request.Sacrament,
             [Fence(root), existing is null ? RecordChange.Create(key, "sacramentRequirements", set) : RecordChange.Replace(key, "sacramentRequirements", set, Versions.Require(request.Version))],
             new CommandResult { Id = request.Sacrament, Status = "Saved" }, ct);
-        return Project((await records.ReadAsync<SacramentRequirementSet>(Scope(parish), key, ct))!);
+        return Project((await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), key, ct))!);
     }
 
     public async Task<SacramentCorrectionDto> ProposeCorrectionAsync(string parish, string id, ProposeCorrectionDto request, CancellationToken ct)
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-correction:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
-            return Project((await records.ReadAsync<SacramentCorrection>(Scope(parish), "sacramentCorrection:" + prior.Id, ct))!.Value);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return Project((await records.ReadAsync<SacramentCorrection>(RecordScopes.Parish(parish), "sacramentCorrection:" + prior.Id, ct))!.Value);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status != "Registered")
             throw State("Official corrections apply to registered entries; amend facts before registration instead.");
@@ -332,7 +330,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             Id = op.Id, ParishId = parish, RecordId = id, Field = field, NewValue = Guard.Text(request.NewValue, "New value", 2000),
             Reason = Guard.Text(request.Reason, "Reason", 2000), Evidence = Guard.Text(request.Evidence, "Evidence", 1000), ProposedBy = actor.AccountId, ProposedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "sacrament.correction_propose", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.correction_propose", id,
             [Fence(root), RecordChange.Create("sacramentCorrection:" + correction.Id, "sacramentCorrection", correction)], new CommandResult { Id = correction.Id, Status = correction.Status }, ct);
         return Project(correction);
     }
@@ -342,9 +340,9 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-correction-decision:v1:" + correctionId);
         var correctionKey = "sacramentCorrection:" + correctionId;
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
-            return Project((await records.ReadAsync<SacramentCorrection>(Scope(parish), correctionKey, ct))!.Value);
-        var row = await records.ReadAsync<SacramentCorrection>(Scope(parish), correctionKey, ct) ?? throw Missing();
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
+            return Project((await records.ReadAsync<SacramentCorrection>(RecordScopes.Parish(parish), correctionKey, ct))!.Value);
+        var row = await records.ReadAsync<SacramentCorrection>(RecordScopes.Parish(parish), correctionKey, ct) ?? throw Missing();
         var correction = row.Value;
         if (correction.ParishId != parish || correction.Status != "Pending")
             throw State("Only a pending correction can be decided.");
@@ -367,7 +365,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             Step(item, "correction", item.Status, item.Status, op.At, correction.Field);
             changes.Add(RecordChange.Replace(Key(item.Id), "sacramentRecord", item, record.Version));
         }
-        await records.CommitAsync(Scope(parish), op, "sacrament.correction_" + (request.Approve ? "approve" : "reject"), correction.RecordId, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.correction_" + (request.Approve ? "approve" : "reject"), correction.RecordId, changes,
             new CommandResult { Id = correction.Id, Status = correction.Status }, ct);
         return Project(correction);
     }
@@ -383,10 +381,10 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     public async Task<Page<Versioned<SacramentRecordDto>>> SearchAsync(string parish, string sacrament, string? status, string? person, int size, string? cursor, CancellationToken ct)
     {
         await OfficeOrPriestAsync(parish, ct);
-        var conditions = new List<RecordCondition> { Equal("kind", Guard.Text(sacrament, "Sacrament", 40)) };
-        if (status is not null) conditions.Add(Equal("status", Guard.Text(status, "Status", 40)));
-        if (person is not null) conditions.Add(Equal("personId", person));
-        var page = await records.PageAsync<SacramentRecord>(Scope(parish), "sacramentRecord", size, cursor, ct, [.. conditions]);
+        var conditions = new List<RecordCondition> { RecordConditions.Equal("kind", Guard.Text(sacrament, "Sacrament", 40)) };
+        if (status is not null) conditions.Add(RecordConditions.Equal("status", Guard.Text(status, "Status", 40)));
+        if (person is not null) conditions.Add(RecordConditions.Equal("personId", person));
+        var page = await records.PageAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacramentRecord", size, cursor, ct, [.. conditions]);
         return new Page<Versioned<SacramentRecordDto>>
         {
             Items = page.Items.Select(r => new Versioned<SacramentRecordDto> { Version = r.Version, Value = Project(r.Value) }).ToArray(),
@@ -397,7 +395,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     public async Task<IReadOnlyList<Versioned<SacramentCorrectionDto>>> PendingCorrectionsAsync(string parish, CancellationToken ct)
     {
         await OfficeOrPriestAsync(parish, ct);
-        var rows = await records.CollectAsync<SacramentCorrection>(Scope(parish), "sacramentCorrection", ct, 500, Equal("status", "Pending"));
+        var rows = await records.CollectAsync<SacramentCorrection>(RecordScopes.Parish(parish), "sacramentCorrection", ct, 500, RecordConditions.Equal("status", "Pending"));
         return rows.Select(r => new Versioned<SacramentCorrectionDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -418,12 +416,12 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
 
     private async Task<IReadOnlyList<SacramentAnniversaryDto>> AnniversaryRowsAsync(string parish, string? person, DateOnly from, int days, CancellationToken ct)
     {
-        var conditions = new List<RecordCondition> { Equal("status", "Registered") };
-        if (person is not null) conditions.Add(Equal("personId", person));
+        var conditions = new List<RecordCondition> { RecordConditions.Equal("status", "Registered") };
+        if (person is not null) conditions.Add(RecordConditions.Equal("personId", person));
         var people = new Dictionary<string, Person?>(StringComparer.Ordinal);
         var result = new List<SacramentAnniversaryDto>();
         // ponytail: scans the parish's registered entries (cap 5000); add a month/day index when registers grow past that.
-        foreach (var row in await records.CollectAsync<SacramentRecord>(Scope(parish), "sacramentRecord", ct, 5000, [.. conditions]))
+        foreach (var row in await records.CollectAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacramentRecord", ct, 5000, [.. conditions]))
         {
             var x = row.Value;
             if (!Celebrated.Contains(x.Kind) || !Current(x).TryGetValue("celebratedAt", out var raw)
@@ -435,9 +433,9 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             if (next > from.AddDays(days))
                 continue;
             if (!people.TryGetValue(x.PersonId, out var subject))
-                people[x.PersonId] = subject = (await records.ReadAsync<Person>(Scope(parish), "person:" + x.PersonId, ct))?.Value;
+                people[x.PersonId] = subject = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + x.PersonId, ct))?.Value;
             // People recorded as deceased (P02) get no celebratory anniversary.
-            if (subject is not { Archived: false } || (await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + x.PersonId, ct))?.Value.DeceasedPrecision is not null)
+            if (subject is not { Archived: false } || (await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + x.PersonId, ct))?.Value.DeceasedPrecision is not null)
                 continue;
             result.Add(new SacramentAnniversaryDto
             {
@@ -475,7 +473,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         {
             // A parish person record for the celebrant; the name texts are kept as typed and never derived from it.
             var id = Guard.Id(celebrantPerson);
-            if ((await records.ReadAsync<Person>(Scope(item.ParishId), "person:" + id, ct))?.Value is not { Archived: false } person || person.ParishId != item.ParishId)
+            if ((await records.ReadAsync<Person>(RecordScopes.Parish(item.ParishId), "person:" + id, ct))?.Value is not { Archived: false } person || person.ParishId != item.ParishId)
                 throw new DomainException("invalid_input", "The celebrant must be a current person record of this parish.");
             item.CelebrantPersonId = id;
         }
@@ -490,7 +488,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     // Copies the parish's current list onto the case, keeping what was already recorded for items that remain.
     private async Task ApplyRequirementsAsync(string parish, SacramentRecord item, CancellationToken ct)
     {
-        var set = (await records.ReadAsync<SacramentRequirementSet>(Scope(parish), RequirementsKey(item.Kind), ct))?.Value;
+        var set = (await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), RequirementsKey(item.Kind), ct))?.Value;
         var before = item.Requirements.ToDictionary(r => r.Key, StringComparer.Ordinal);
         item.Requirements = (set?.Items ?? []).Select(i => before.TryGetValue(i.Key, out var kept)
             ? new SacramentRequirementState { Key = i.Key, Label = i.Label, LabelAr = i.LabelAr, Met = kept.Met, RecordedBy = kept.RecordedBy, RecordedAt = kept.RecordedAt, Note = kept.Note }
@@ -499,7 +497,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
     }
 
     private async Task<List<SacramentRecord>> CasesAsync(string parish, string person, CancellationToken ct)
-        => (await records.CollectAsync<SacramentRecord>(Scope(parish), "sacramentRecord", ct, 200, Equal("personId", person))).Select(r => r.Value).ToList();
+        => (await records.CollectAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacramentRecord", ct, 200, RecordConditions.Equal("personId", person))).Select(r => r.Value).ToList();
 
     private void Step(SacramentRecord item, string action, string from, string to, DateTimeOffset at, string? note, SacramentStep? instruction = null)
     {
@@ -541,7 +539,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
 
     private async Task<Versioned<SacramentRecord>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<SacramentRecord>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<SacramentRecord>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

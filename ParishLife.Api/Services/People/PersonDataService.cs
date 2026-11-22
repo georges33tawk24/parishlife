@@ -18,7 +18,6 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
 {
     // Records that keep their history under the parish's (not yet approved) retention policy; closure never deletes them.
     private static readonly string[] KeptTypes = ["sacramentRecord", "contribution", "registration", "volunteerAssignment", "householdMember", "pledge"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static RecordCondition Person(string person) => new() { Path = "personId", Comparison = "eq", Value = person };
     private static DomainException Missing() => new("resource_not_found", "The requested data request is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_data_request_state", message, FailureKind.Conflict);
@@ -34,13 +33,13 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
     public async Task<OwnDataDto> OwnDataAsync(string parish, CancellationToken ct)
     {
         var link = await own.OwnLinkAsync(parish, ct);
-        var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + link.Value.PersonId, ct))!.Value;
-        var facts = (await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + person.Id, ct))?.Value;
+        var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + link.Value.PersonId, ct))!.Value;
+        var facts = (await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person.Id, ct))?.Value;
         return new OwnDataDto
         {
             PersonId = person.Id, GivenName = person.GivenName, FamilyName = person.FamilyName, BirthDate = person.BirthDate, Contact = person.Contact,
             Facts = facts is null ? null : PersonFactsService.Project(facts),
-            Consents = (await records.CollectAsync<PersonConsent>(Scope(parish), "personConsent", ct, 500, Person(person.Id))).Select(c => PersonFactsService.Project(c.Value)).ToArray(),
+            Consents = (await records.CollectAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent", ct, 500, Person(person.Id))).Select(c => PersonFactsService.Project(c.Value)).ToArray(),
             Records = await CountsAsync(parish, person.Id, ct)
         };
     }
@@ -49,7 +48,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
     {
         var link = await own.OwnLinkAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, new { request.Details }, clock, "data-closure:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project(await ReadAsync(parish, prior.Id, ct));
         if ((await OwnRowsAsync(parish, ct)).Any(r => r.Value.Status == "Submitted"))
             throw State("You already have a closure request waiting for review.");
@@ -58,7 +57,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
             Id = op.Id, ParishId = parish, AccountId = actor.AccountId, PersonId = link.Value.PersonId, SubmittedAt = op.At,
             Details = string.IsNullOrWhiteSpace(request.Details) ? null : Guard.Text(request.Details, "Details", 2000)
         };
-        await records.CommitAsync(Scope(parish), op, "person.data_closure_request", item.Id, [RecordChange.Create("dataClosure:" + item.Id, "dataClosure", item)],
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.data_closure_request", item.Id, [RecordChange.Create("dataClosure:" + item.Id, "dataClosure", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(await ReadAsync(parish, item.Id, ct));
     }
@@ -73,7 +72,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
     public async Task<IReadOnlyList<DataClosureRequestDto>> QueueAsync(string parish, CancellationToken ct)
     {
         await OfficeAsync(parish, ct);
-        return (await records.CollectAsync<DataClosureRequest>(Scope(parish), "dataClosure", ct, 2000)).OrderBy(r => r.Value.SubmittedAt).Select(Project).ToArray();
+        return (await records.CollectAsync<DataClosureRequest>(RecordScopes.Parish(parish), "dataClosure", ct, 2000)).OrderBy(r => r.Value.SubmittedAt).Select(Project).ToArray();
     }
 
     public async Task<DataClosurePreviewDto> PreviewAsync(string parish, string id, CancellationToken ct)
@@ -92,7 +91,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
     {
         var root = await OfficeAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "data-closure-decision:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(await ReadAsync(parish, id, ct));
         var row = await ReadAsync(parish, id, ct);
         var item = row.Value;
@@ -104,29 +103,29 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
         var outcome = new List<string>();
         if (request.Approve)
         {
-            var person = await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct) ?? throw Missing();
+            var person = await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct) ?? throw Missing();
             person.Value.Contact = null;
             person.Value.Archived = true;
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
             outcome.Add("Contact removed and person archived; official, financial and participation history kept.");
-            if (await records.ReadAsync<PersonFacts>(Scope(parish), "personFacts:" + item.PersonId, ct) is { } facts)
+            if (await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + item.PersonId, ct) is { } facts)
             {
                 changes.Add(RecordChange.Remove("personFacts:" + item.PersonId, facts.Version));
                 outcome.Add("Optional facts removed.");
             }
-            if (await records.ReadAsync<PersonMedical>(Scope(parish), "personMedical:" + item.PersonId, ct) is { } medical)
+            if (await records.ReadAsync<PersonMedical>(RecordScopes.Parish(parish), "personMedical:" + item.PersonId, ct) is { } medical)
             {
                 changes.Add(RecordChange.Remove("personMedical:" + item.PersonId, medical.Version));
                 outcome.Add("Medical declarations removed.");
             }
-            foreach (var consent in (await records.CollectAsync<PersonConsent>(Scope(parish), "personConsent", ct, 500, Person(item.PersonId))).Where(c => c.Value.Status == "Given"))
+            foreach (var consent in (await records.CollectAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent", ct, 500, Person(item.PersonId))).Where(c => c.Value.Status == "Given"))
             {
                 consent.Value.Status = "Withdrawn";
                 consent.Value.WithdrawnAt = op.At;
                 consent.Value.WithdrawalReason = "Personal data closure request";
                 changes.Add(RecordChange.Replace("personConsent:" + consent.Value.Id, "personConsent", consent.Value, consent.Version));
             }
-            if (await records.ReadAsync<PersonAccountLink>(Scope(parish), "personAccountLink:" + item.AccountId, ct) is { } link && link.Value.Active)
+            if (await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink:" + item.AccountId, ct) is { } link && link.Value.Active)
             {
                 link.Value.Active = false;
                 changes.Add(RecordChange.Replace("personAccountLink:" + item.AccountId, "personAccountLink", link.Value, link.Version));
@@ -141,7 +140,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
         item.DecidedBy = actor.AccountId;
         item.DecidedAt = op.At;
         changes.Add(RecordChange.Replace("dataClosure:" + id, "dataClosure", item, Versions.Require(request.Version)));
-        await records.CommitAsync(Scope(parish), op, "person.data_closure_" + (request.Approve ? "complete" : "decline"), id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "person.data_closure_" + (request.Approve ? "complete" : "decline"), id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(await ReadAsync(parish, id, ct));
     }
 
@@ -149,16 +148,16 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
     {
         var result = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var type in KeptTypes)
-            if ((await records.CollectAsync<object>(Scope(parish), type, ct, 5000, Person(person))).Count is > 0 and var count)
+            if ((await records.CollectAsync<object>(RecordScopes.Parish(parish), type, ct, 5000, Person(person))).Count is > 0 and var count)
                 result[type] = count;
         return result;
     }
 
     private async Task<IReadOnlyList<Versioned<DataClosureRequest>>> OwnRowsAsync(string parish, CancellationToken ct)
-        => (await records.CollectAsync<DataClosureRequest>(Scope(parish), "dataClosure", ct, 200, new RecordCondition { Path = "accountId", Comparison = "eq", Value = actor.AccountId }));
+        => (await records.CollectAsync<DataClosureRequest>(RecordScopes.Parish(parish), "dataClosure", ct, 200, new RecordCondition { Path = "accountId", Comparison = "eq", Value = actor.AccountId }));
 
     private async Task<Versioned<DataClosureRequest>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<DataClosureRequest>(Scope(parish), "dataClosure:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<DataClosureRequest>(RecordScopes.Parish(parish), "dataClosure:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private static DataClosureRequestDto Project(Versioned<DataClosureRequest> row) => new()
     {

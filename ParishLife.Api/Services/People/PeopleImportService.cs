@@ -18,7 +18,6 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
 {
     private static readonly string[] Header = ["GivenName", "FamilyName", "BirthDate", "Contact", "SourceId"];
     private const int MaximumRows = 1000;
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException State(string message) => new("invalid_import_state", message, FailureKind.Conflict);
     private static string SourceKey(string source, string id) => "personImportSource:" + PeopleDirectoryService.Normalize(source).Replace(':', '_') + ":" + id;
 
@@ -35,7 +34,7 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
     {
         var root = await ImporterAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "people-import:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await GetAsync(parish, prior.Id, ct);
         var lines = request.Csv.Replace("\r\n", "\n").Split('\n').Where(l => l.Length > 0).ToList();
         if (lines.Count < 2 || !Split(lines[0]).SequenceEqual(Header))
@@ -43,7 +42,7 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
         if (lines.Count - 1 > MaximumRows)
             throw new DomainException("invalid_input", "Split the file into parts of up to " + MaximumRows + " rows.");
         var source = Guard.Text(request.SourceName, "Source name", 200);
-        var current = (await records.CollectAsync<Person>(Scope(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => !p.Archived)
+        var current = (await records.CollectAsync<Person>(RecordScopes.Parish(parish), "person", ct, 20000)).Select(r => r.Value).Where(p => !p.Archived)
             .Select(p => Identity(p.GivenName, p.FamilyName, p.BirthDate)).ToHashSet(StringComparer.Ordinal);
         var rows = new List<PeopleImportRow>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -72,7 +71,7 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
             }
             row.Problems = [.. problems];
             row.Outcome = problems.Count > 0 ? "Error"
-                : await records.ReadAsync<CommandResult>(Scope(parish), SourceKey(source, row.SourceId), ct) is not null ? "Duplicate"
+                : await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), SourceKey(source, row.SourceId), ct) is not null ? "Duplicate"
                 : current.Contains(Identity(row.GivenName, row.FamilyName, row.BirthDate)) ? "PossibleDuplicate" : "Valid";
             rows.Add(row);
         }
@@ -81,7 +80,7 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
             Id = op.Id, ParishId = parish, SourceName = source, SourceOwner = Guard.Text(request.SourceOwner, "Source owner", 200), SourceDate = request.SourceDate,
             DateOrder = request.DateOrder, Rows = rows, StagedBy = actor.AccountId, StagedAt = op.At
         };
-        await records.CommitAsync(Scope(parish), op, "people.import_stage", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.import_stage", item.Id,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Create("peopleImport:" + item.Id, "peopleImport", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await GetAsync(parish, item.Id, ct);
@@ -120,13 +119,13 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
             }
             item.Status = "Committing";
             changes.Add(RecordChange.Replace("peopleImport:" + id, "peopleImport", item, version));
-            await records.CommitAsync(Scope(parish), op, "people.import_batch", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "people.import_batch", id, changes, new CommandResult { Id = id, Status = item.Status }, ct);
             version = (await ReadAsync(parish, id, ct)).Version;
         }
         item.Status = "Committed";
         item.CommittedBy = actor.AccountId;
         item.CommittedAt = clock.GetUtcNow();
-        await records.CommitAsync(Scope(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock, "people-import-commit:v1:" + id, actor.ActingAppointmentId),
+        await records.CommitAsync(RecordScopes.Parish(parish), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id }, clock, "people-import-commit:v1:" + id, actor.ActingAppointmentId),
             "people.import_commit", id, [RecordChange.Replace("peopleImport:" + id, "peopleImport", item, version)], new CommandResult { Id = id, Status = item.Status }, ct);
         return await GetAsync(parish, id, ct);
     }
@@ -150,7 +149,7 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
     }
 
     private async Task<Versioned<PeopleImport>> ReadAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<PeopleImport>(Scope(parish), "peopleImport:" + id, ct) is { } row && row.Value.ParishId == parish ? row
+        => await records.ReadAsync<PeopleImport>(RecordScopes.Parish(parish), "peopleImport:" + id, ct) is { } row && row.Value.ParishId == parish ? row
             : throw new DomainException("resource_not_found", "The requested import is unavailable.", FailureKind.NotFound);
 
     private static string Identity(string given, string family, DateOnly? birth)

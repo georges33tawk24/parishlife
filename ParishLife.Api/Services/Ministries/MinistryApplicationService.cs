@@ -115,7 +115,7 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
             throw MinistryAccess.State("Choose Join or Leave; departure requests have a separate priest-only queue.");
         await access.ReadAsync(parish, ministry, ct);
         var page = await records.PageAsync<MinistryApplication>(MinistryAccess.Scope(parish), "ministryApplication", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("kind", kind));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("kind", kind));
         return ProjectPage(parish, page);
     }
 
@@ -125,7 +125,7 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
         await access.RootAsync(parish, ct);
         await access.ReadAsync(parish, ministry, ct);
         var page = await records.PageAsync<MinistryApplication>(MinistryAccess.Scope(parish), "ministryApplication", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("applicantAccountId", actor.AccountId));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("applicantAccountId", actor.AccountId));
         return ProjectPage(parish, page);
     }
 
@@ -271,7 +271,7 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
     {
         await ReadAuthorizedAsync(parish, ministry, id, ct);
         var page = await records.PageAsync<MinistryApplicationHistory>(MinistryAccess.Scope(parish), "ministryApplicationHistory", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("applicationId", id));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("applicationId", id));
         return new()
         {
             Items = page.Items.Select(row => new MinistryApplicationHistoryDto
@@ -299,7 +299,7 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
     public async Task<Page<MinistryMembershipDto>> RosterAsync(string parish, string ministry, int size, string? cursor, CancellationToken ct)
     {
         await access.ReaderAsync(parish, ministry, ct);
-        var page = await records.PageAsync<MinistryMembership>(MinistryAccess.Scope(parish), "ministryMembership", size, cursor, ct, Equal("ministryId", ministry));
+        var page = await records.PageAsync<MinistryMembership>(MinistryAccess.Scope(parish), "ministryMembership", size, cursor, ct, RecordConditions.Equal("ministryId", ministry));
         return new() { Items = page.Items.Select(row => MemberView(row.Value)).ToArray(), ContinuationToken = page.ContinuationToken };
     }
 
@@ -540,7 +540,6 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
     private static string Key(string id) => "ministryApplication:" + id;
     private static string GuardKey(string ministry, string person) => "ministryApplicationGuard:" + ministry + ":" + person;
     private static bool Terminal(string status) => status is "Approved" or "Declined" or "Withdrawn";
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static CommandResult Result(MinistryApplication item) => new() { Id = item.Id, Status = item.Status };
     private static RecordChange GroupFence(Versioned<Ministry> group) => RecordChange.Replace("ministry:" + group.Value.Id, "ministry", group.Value, group.Version);
     private static RecordChange PersonFence(Versioned<Person> person) => RecordChange.Replace("person:" + person.Value.Id, "person", person.Value, person.Version);

@@ -21,9 +21,6 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
     MfaAccountAccess proof, UserManager<ParishUser> users, IHttpContextAccessor context, ICurrentActor actor, TimeProvider clock)
 {
     private const int MaximumStaffRows = 500;
-    private static RecordScope Parish(string id) => new() { Area = RecordArea.Parish, OwnerId = id };
-    private static RecordScope Account(string id) => new() { Area = RecordArea.Account, OwnerId = id };
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested home is unavailable.", FailureKind.NotFound);
 
     private sealed class Context
@@ -39,15 +36,15 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
     {
         var account = await RequireAsync(ct);
         var state = await CapacitiesCoreAsync(account, ct);
-        var unread = await records.CollectAsync<Notification>(Account(account), "notification", ct, 5000, Equal("status", "Unread"));
-        var primary = (await records.ReadAsync<PrimaryParish>(Account(account), "primaryParish", ct))?.Value.ParishId;
+        var unread = await records.CollectAsync<Notification>(RecordScopes.Account(account), "notification", ct, 5000, RecordConditions.Equal("status", "Unread"));
+        var primary = (await records.ReadAsync<PrimaryParish>(RecordScopes.Account(account), "primaryParish", ct))?.Value.ParishId;
         var parishes = new List<HomeParishDto>();
         foreach (var (id, parish) in state.Parishes)
         {
             if (parish is null)
                 continue;
-            var link = (await records.ReadAsync<PersonAccountLink>(Parish(id), "personAccountLink:" + account, ct))?.Value;
-            var pending = (await records.CollectAsync<MembershipRequest>(Parish(id), "membershipRequest", ct, 200, Equal("applicantAccountId", account)))
+            var link = (await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(id), "personAccountLink:" + account, ct))?.Value;
+            var pending = (await records.CollectAsync<MembershipRequest>(RecordScopes.Parish(id), "membershipRequest", ct, 200, RecordConditions.Equal("applicantAccountId", account)))
                 .Any(r => r.Value.ApplicantAccountId == account && r.Value.Status is "Submitted" or "NeedsInformation");
             parishes.Add(new HomeParishDto
             {
@@ -111,7 +108,7 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
             return value is { Verified: true } ? value : null;
         }
 
-        foreach (var follow in await records.CollectAsync<ParishFollow>(Account(account), "parishFollow", ct, 200))
+        foreach (var follow in await records.CollectAsync<ParishFollow>(RecordScopes.Account(account), "parishFollow", ct, 200))
             if (await ParishAsync(state, follow.Value.ParishId, ct) is not null)
                 state.Followed.Add(follow.Value.ParishId);
 
@@ -172,12 +169,12 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
                 state.Capacities.Add(new CapacityDto { Kind = "ParishGrant", ParishId = id, ArchdioceseId = parish.JurisdictionArchdioceseId, ScopeName = parish.Name, Capabilities = allowed });
             if (grant?.Denies.Contains(Permissions.MinistriesManage, StringComparer.Ordinal) == true)
                 continue;
-            foreach (var leader in await records.CollectAsync<MinistryLeader>(Parish(id), "ministryLeader", ct, 200, Equal("accountId", account)))
+            foreach (var leader in await records.CollectAsync<MinistryLeader>(RecordScopes.Parish(id), "ministryLeader", ct, 200, RecordConditions.Equal("accountId", account)))
             {
                 var value = leader.Value;
                 if (value.AccountId != account || !value.Current(now) || value.Role is not ("Leader" or "Assistant"))
                     continue;
-                var ministry = (await records.ReadAsync<Ministry>(Parish(id), "ministry:" + value.MinistryId, ct))?.Value;
+                var ministry = (await records.ReadAsync<Ministry>(RecordScopes.Parish(id), "ministry:" + value.MinistryId, ct))?.Value;
                 if (ministry is null || ministry.ParishId != id)
                     continue;
                 state.Capacities.Add(new CapacityDto

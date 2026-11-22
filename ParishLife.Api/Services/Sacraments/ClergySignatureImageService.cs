@@ -22,7 +22,6 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
     IClergyAuthority clergy, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
     internal const long MaximumBytes = 1024 * 1024;
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string PointerKey(string account) => "clergySignature:" + account;
     private static string ImageKey(string id) => "signatureImage:" + id;
     private static DomainException Missing() => new("resource_not_found", "There is no signature image here.", FailureKind.NotFound);
@@ -60,16 +59,16 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
         var digest = Convert.ToHexString(SHA256.HashData(content));
         // The fingerprint binds the bytes by hash, so a retried operation can never attach different content.
         var op = actor.CreateOperation(operationId, new { type, size = content.Length, digest }, clock, "signature-image:v1:" + parish + ":" + actor.AccountId);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, actor.AccountId, ct);
-        var pointer = await records.ReadAsync<ClergySignature>(Scope(parish), PointerKey(actor.AccountId), ct);
+        var pointer = await records.ReadAsync<ClergySignature>(RecordScopes.Parish(parish), PointerKey(actor.AccountId), ct);
         var image = new ClergySignatureImage
         {
             Id = op.Id, ParishId = parish, AccountId = actor.AccountId, StoragePath = parish + "/signature-images/" + op.Id, ContentType = type,
             Size = content.Length, Sha256 = digest, UploadedAt = op.At
         };
         var changes = new List<RecordChange> { RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Create(ImageKey(image.Id), "signatureImage", image) };
-        if (pointer?.Value.CurrentImageId is { } previousId && await records.ReadAsync<ClergySignatureImage>(Scope(parish), ImageKey(previousId), ct) is { } previous)
+        if (pointer?.Value.CurrentImageId is { } previousId && await records.ReadAsync<ClergySignatureImage>(RecordScopes.Parish(parish), ImageKey(previousId), ct) is { } previous)
         {
             previous.Value.Status = "Replaced";
             previous.Value.ReplacedById = image.Id;
@@ -82,7 +81,7 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
         // The complete bytes exist privately before the metadata commits; a failed commit leaves only unreferenced private content.
         await store.PutAsync(image.StoragePath, content, type, ct);
         await PriestAsync(parish, ct);
-        await records.CommitAsync(Scope(parish), op, "signature_image.upload", image.Id, changes, new CommandResult { Id = image.Id, Status = image.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "signature_image.upload", image.Id, changes, new CommandResult { Id = image.Id, Status = image.Status }, ct);
         return await ProjectAsync(parish, actor.AccountId, ct);
     }
 
@@ -90,16 +89,16 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
     {
         var root = await PriestAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "signature-image-remove:v1:" + parish + ":" + actor.AccountId);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, actor.AccountId, ct);
-        var pointer = await records.ReadAsync<ClergySignature>(Scope(parish), PointerKey(actor.AccountId), ct);
-        if (pointer?.Value.CurrentImageId is not { } currentId || await records.ReadAsync<ClergySignatureImage>(Scope(parish), ImageKey(currentId), ct) is not { } current)
+        var pointer = await records.ReadAsync<ClergySignature>(RecordScopes.Parish(parish), PointerKey(actor.AccountId), ct);
+        if (pointer?.Value.CurrentImageId is not { } currentId || await records.ReadAsync<ClergySignatureImage>(RecordScopes.Parish(parish), ImageKey(currentId), ct) is not { } current)
             throw Missing();
         current.Value.Status = "Removed";
         current.Value.RemovedAt = op.At;
         pointer.Value.CurrentImageId = null;
         pointer.Value.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "signature_image.remove", currentId,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "signature_image.remove", currentId,
             [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace(ImageKey(currentId), "signatureImage", current.Value, current.Version),
                 RecordChange.Replace(PointerKey(actor.AccountId), "clergySignature", pointer.Value, Versions.Require(request.Version))],
             new CommandResult { Id = currentId, Status = current.Value.Status }, ct);
@@ -109,17 +108,17 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
     // The account's current image in this parish, or null; callers have already checked their own authority.
     internal async Task<ClergySignatureImage?> CurrentAsync(string parish, string account, CancellationToken ct)
     {
-        var pointer = (await records.ReadAsync<ClergySignature>(Scope(parish), PointerKey(account), ct))?.Value;
+        var pointer = (await records.ReadAsync<ClergySignature>(RecordScopes.Parish(parish), PointerKey(account), ct))?.Value;
         if (pointer?.CurrentImageId is not { } id)
             return null;
-        var image = (await records.ReadAsync<ClergySignatureImage>(Scope(parish), ImageKey(id), ct))?.Value;
+        var image = (await records.ReadAsync<ClergySignatureImage>(RecordScopes.Parish(parish), ImageKey(id), ct))?.Value;
         return image is { Status: "Active" } && image.ParishId == parish && image.AccountId == account ? image : null;
     }
 
     // Reads one stored image and proves it is the exact content recorded; callers have already checked their own authority.
     internal async Task<(byte[] Content, string ContentType)> ContentAsync(string parish, string imageId, string? expectedSha256, CancellationToken ct)
     {
-        var image = (await records.ReadAsync<ClergySignatureImage>(Scope(parish), ImageKey(imageId), ct))?.Value;
+        var image = (await records.ReadAsync<ClergySignatureImage>(RecordScopes.Parish(parish), ImageKey(imageId), ct))?.Value;
         if (image is null || image.ParishId != parish || image.Id != imageId)
             throw Missing();
         var content = await store.OpenAsync(image.StoragePath, ct) ?? throw Missing();
@@ -132,7 +131,7 @@ public class ClergySignatureImageService(IRecordTransactions records, IEvidenceS
 
     private async Task<ClergySignatureImageDto> ProjectAsync(string parish, string account, CancellationToken ct)
     {
-        var pointer = await records.ReadAsync<ClergySignature>(Scope(parish), PointerKey(account), ct);
+        var pointer = await records.ReadAsync<ClergySignature>(RecordScopes.Parish(parish), PointerKey(account), ct);
         var image = await CurrentAsync(parish, account, ct);
         return image is null
             ? new ClergySignatureImageDto { Version = pointer?.Version }

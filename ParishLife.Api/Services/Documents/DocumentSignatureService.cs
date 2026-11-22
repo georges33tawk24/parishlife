@@ -27,8 +27,6 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
 {
     internal const string NotOfficial = "Reference only: no approved electronic-signature arrangement was recorded by the issuing authority, so the official document is the wet-signed and sealed paper issued by the parish. A code or QR alone does not prove a signature.";
     private static readonly RecordScope PointerScope = new() { Area = RecordArea.Platform, OwnerId = "document-verification" };
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
-    private static RecordScope AccountScope(string account) => new() { Area = RecordArea.Account, OwnerId = account };
     private static RecordScope ArchdioceseScope(string archdiocese) => new() { Area = RecordArea.Archdiocese, OwnerId = archdiocese };
     private static string Key(string code) => "documentSignature:" + code;
     private static DomainException Unknown() => new("resource_not_found", "No authorized document matches this code.", FailureKind.NotFound);
@@ -37,7 +35,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
     public async Task<SignerProfileDto> ProfileAsync(CancellationToken ct)
     {
         await PersonalAsync(ct);
-        var row = await records.ReadAsync<SignerProfile>(AccountScope(actor.AccountId), "signerProfile", ct)
+        var row = await records.ReadAsync<SignerProfile>(RecordScopes.Account(actor.AccountId), "signerProfile", ct)
             ?? throw new DomainException("resource_not_found", "No signer profile is set up.", FailureKind.NotFound);
         return new SignerProfileDto { PrintedName = row.Value.PrintedName, UpdatedAt = row.Value.UpdatedAt, Version = row.Version };
     }
@@ -45,7 +43,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
     public async Task<Versioned<SignerProfileDto>> SaveProfileAsync(SaveSignerProfileDto request, CancellationToken ct)
     {
         await PersonalAsync(ct);
-        var scope = AccountScope(actor.AccountId);
+        var scope = RecordScopes.Account(actor.AccountId);
         var op = actor.CreateOperation(request.OperationId, request, clock, "signer-profile:v1");
         if (await records.ReplayAsync<CommandResult>(scope, op, ct) is null)
         {
@@ -98,7 +96,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
     internal async Task<(DocumentSignature Signature, RecordChange Change)> PrepareAsync(string parish, string type, string id, string reference, int version,
         Dictionary<string, string> content, string authority, AuthorizeDocumentDto request, DateTimeOffset at, CancellationToken ct)
     {
-        var profile = (await records.ReadAsync<SignerProfile>(AccountScope(actor.AccountId), "signerProfile", ct))?.Value
+        var profile = (await records.ReadAsync<SignerProfile>(RecordScopes.Account(actor.AccountId), "signerProfile", ct))?.Value
             ?? throw new DomainException("signer_profile_required", "Set up your printed signer name before authorizing documents.", FailureKind.Conflict);
         var hash = Hash(content);
         if (!string.Equals(hash, request.ExpectedContentHash, StringComparison.Ordinal))
@@ -148,7 +146,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
     {
         await ReaderAsync(parish, ct);
         var normalized = Normalize(code) ?? throw Unknown();
-        var row = await records.ReadAsync<DocumentSignature>(Scope(parish), Key(normalized), ct);
+        var row = await records.ReadAsync<DocumentSignature>(RecordScopes.Parish(parish), Key(normalized), ct);
         if (row is null || row.Value.ParishId != parish || row.Value.Code != normalized) throw Unknown();
         return new Versioned<DocumentSignatureDto> { Version = row.Version, Value = await ProjectAsync(row.Value, ct) };
     }
@@ -158,11 +156,11 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
     {
         await proof.RequireMfaAsync(ct);
         var normalized = Normalize(code) ?? throw Unknown();
-        var row = await records.ReadAsync<DocumentSignature>(Scope(parish), Key(normalized), ct);
+        var row = await records.ReadAsync<DocumentSignature>(RecordScopes.Parish(parish), Key(normalized), ct);
         if (row is null || row.Value.ParishId != parish || row.Value.Code != normalized) throw Unknown();
         var root = await RevokerAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "document-signature-revoke:v1:" + normalized);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is null)
         {
             var item = row.Value;
             if (item.RevokedAt is not null)
@@ -170,7 +168,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
             item.RevokedBy = actor.AccountId;
             item.RevokedAt = op.At;
             item.RevocationReason = Guard.Text(request.Reason, "Revocation reason", 2000);
-            await records.CommitAsync(Scope(parish), op, "documents.signature_revoke", normalized,
+            await records.CommitAsync(RecordScopes.Parish(parish), op, "documents.signature_revoke", normalized,
                 [RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Replace(Key(normalized), "documentSignature", item, row.Version)],
                 new CommandResult { Id = normalized, Status = "Revoked" }, ct);
         }
@@ -179,7 +177,7 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
 
     internal async Task<DocumentSignature?> ReadAsync(string parish, string code, CancellationToken ct)
     {
-        var row = (await records.ReadAsync<DocumentSignature>(Scope(parish), Key(code), ct))?.Value;
+        var row = (await records.ReadAsync<DocumentSignature>(RecordScopes.Parish(parish), Key(code), ct))?.Value;
         return row?.ParishId == parish && row.Code == code ? row : null;
     }
 
@@ -190,14 +188,14 @@ public class DocumentSignatureService(IRecordTransactions records, IParishAccess
         if (s.RevokedAt is not null) return "Revoked";
         if (s.DocumentType == "Certificate")
         {
-            var c = (await records.ReadAsync<Certificate>(Scope(s.ParishId), "certificate:" + s.DocumentId, ct))?.Value;
+            var c = (await records.ReadAsync<Certificate>(RecordScopes.Parish(s.ParishId), "certificate:" + s.DocumentId, ct))?.Value;
             if (c is null || c.Id != s.DocumentId) return "Invalidated";
             if (c.Status == "Withdrawn") return "Withdrawn";
             if (c.SupersededById is not null) return "Superseded";
             if (c.AuthorizationCode != s.Code) return "Invalidated";
             return c.Status is "Issued" or "Released" ? "Valid" : c.Status is "AwaitingBishop" or "AuthorizedForIssuance" ? "NotYetIssued" : "Invalidated";
         }
-        var l = (await records.ReadAsync<RequestLetter>(Scope(s.ParishId), "requestLetter:" + s.DocumentId, ct))?.Value;
+        var l = (await records.ReadAsync<RequestLetter>(RecordScopes.Parish(s.ParishId), "requestLetter:" + s.DocumentId, ct))?.Value;
         if (l is null || l.Id != s.DocumentId || l.SignatureCode != s.Code) return "Invalidated";
         if (l.Status == "Withdrawn") return "Withdrawn";
         if (l.SupersededById is not null) return "Superseded";

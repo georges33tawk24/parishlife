@@ -15,7 +15,6 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
 {
     private static string StockKey(string id) => "ministryStock:" + id;
     private static string LoanKey(string id) => "ministryLoan:" + id;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException State(string message) => new("invalid_loan_state", message, FailureKind.Conflict);
 
     public async Task<MinistryStockDto> SaveStockAsync(string parish, string ministry, string? stock, SaveStockDto request, CancellationToken ct)
@@ -68,7 +67,7 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
     public async Task<Page<Versioned<MinistryStockDto>>> ListStockAsync(string parish, string ministry, int size, string? cursor, CancellationToken ct)
     {
         await access.RequireCustodyAsync(parish, ministry, ct, readOnly: true);
-        var page = await records.PageAsync<MinistryStock>(MinistryAccess.Scope(parish), "ministryStock", size, cursor, ct, Equal("ministryId", ministry));
+        var page = await records.PageAsync<MinistryStock>(MinistryAccess.Scope(parish), "ministryStock", size, cursor, ct, RecordConditions.Equal("ministryId", ministry));
         return StockPage(page);
     }
 
@@ -79,7 +78,7 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
         if (!await access.IsCurrentMemberAsync(parish, ministry, link.Value.PersonId, clock.GetUtcNow(), ct))
             throw MinistryAccess.Missing();
         var page = await records.PageAsync<MinistryStock>(MinistryAccess.Scope(parish), "ministryStock", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("status", "Active"));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("status", "Active"));
         var result = StockPage(page);
         foreach (var row in result.Items)
         {
@@ -240,7 +239,7 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
     public async Task<Page<Versioned<MinistryLoanDto>>> ListAsync(string parish, string ministry, string? status, int size, string? cursor, CancellationToken ct)
     {
         await access.RequireCustodyAsync(parish, ministry, ct, readOnly: true);
-        RecordCondition[] conditions = status is null ? [Equal("ministryId", ministry)] : [Equal("ministryId", ministry), Equal("status", Guard.Text(status, "Status", 30))];
+        RecordCondition[] conditions = status is null ? [RecordConditions.Equal("ministryId", ministry)] : [RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("status", Guard.Text(status, "Status", 30))];
         var page = await records.PageAsync<MinistryLoan>(MinistryAccess.Scope(parish), "ministryLoan", size, cursor, ct, conditions);
         return await ProjectPageAsync(parish, ministry, page, true, ct);
     }
@@ -251,7 +250,7 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
         var link = await access.OwnLinkAsync(parish, ct);
         await access.ReadAsync(parish, ministry, ct);
         var page = await records.PageAsync<MinistryLoan>(MinistryAccess.Scope(parish), "ministryLoan", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", link.Value.PersonId));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", link.Value.PersonId));
         return await ProjectPageAsync(parish, ministry, page, false, ct);
     }
 
@@ -259,7 +258,7 @@ public class MinistryResourceService(IRecordTransactions records, MinistryAccess
     {
         await access.RequireCustodyAsync(parish, ministry, ct, readOnly: true);
         var page = await records.PageAsync<MinistryLoanHistory>(MinistryAccess.Scope(parish), "ministryLoanChange", size, cursor, ct,
-            Equal("ministryId", ministry), Equal("personId", person));
+            RecordConditions.Equal("ministryId", ministry), RecordConditions.Equal("personId", person));
         var stocks = new Dictionary<string, MinistryStock>(StringComparer.Ordinal);
         var items = new List<MinistryLoanHistoryDto>();
         foreach (var row in page.Items)

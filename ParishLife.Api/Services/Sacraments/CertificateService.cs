@@ -27,7 +27,6 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     IArchdioceseAuthority bishops, ICurrentActor actor, MfaAccountAccess proof, NotificationService notifications,
     NotificationOutcomeReader outcomes, DocumentSignatureService signatures, ClergySignatureImageService signatureImages, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string id) => "certificate:" + id;
     private static DomainException Missing() => new("resource_not_found", "The requested certificate is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_certificate_state", message, FailureKind.Conflict);
@@ -72,7 +71,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     {
         var root = await StaffAsync(parish, Permissions.SacramentsRecord, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "certificate:v1:" + parish);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ProjectAsync((await ReadAsync(parish, prior.Id, ct)).Value, ct);
         var person = Guard.Id(request.SubjectPersonId);
         var item = new Certificate
@@ -102,7 +101,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         else
             item.Status = "WaitingForSource";
         changes.Add(RecordChange.Create(Key(item.Id), "certificate", item));
-        await records.CommitAsync(Scope(parish), op, "certificates.create", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "certificates.create", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await ProjectAsync(item, ct);
     }
 
@@ -132,7 +131,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
                 break;
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "certificate-action:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         switch (request.Action)
@@ -239,7 +238,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
             }
         }
         changes.Add(RecordChange.Replace(Key(id), "certificate", item, Versions.Require(request.Version)));
-        await records.CommitAsync(Scope(parish), op, "certificates." + request.Action.Replace('-', '_'), id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "certificates." + request.Action.Replace('-', '_'), id,
             changes, new CommandResult { Id = id, Status = item.Status }, ct);
         if (recipient is not null)
             await notifications.DispatchAsync(parish, recipient, "certificate:" + op.Id, ct);
@@ -266,7 +265,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         var root = await parishes.GetAsync(parish, ct) ?? throw Missing();
         // The authenticator code is a credential and never enters the operation fingerprint.
         var op = actor.CreateOperation(request.OperationId, new { request.Version, request.ExpectedContentHash }, clock, "certificate-authorization:v1:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
         var item = (await ReadAsync(parish, id, ct)).Value;
         if (item.Status is not ("AwaitingBishop" or "AuthorizedForIssuance" or "Issued") || item.AuthorizationCode is not null)
@@ -277,7 +276,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
         var (signature, change) = await signatures.PrepareAsync(parish, "Certificate", item.Id, item.Reference, item.Version, content, "Parish priest", request, op.At, ct);
         item.AuthorizationCode = signature.Code;
         item.AuthorizationCodes = [.. item.AuthorizationCodes, signature.Code];
-        await records.CommitAsync(Scope(parish), op, "certificates.authorize", id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "certificates.authorize", id,
             [Fence(root), RecordChange.Replace(Key(id), "certificate", item, Versions.Require(request.Version)), change],
             new CommandResult { Id = id, Status = item.Status }, ct);
         return await ProjectAsync((await ReadAsync(parish, id, ct)).Value, ct);
@@ -288,10 +287,10 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     {
         if (item.Snapshot.Count == 0 || item.SourceRecordId is null)
             throw State("Prepare the certificate before authorizing it.");
-        var template = (await records.ReadAsync<DocumentTemplate>(Scope(parish), "documentTemplate:" + item.Kind + ":" + item.Language, ct))?.Value;
+        var template = (await records.ReadAsync<DocumentTemplate>(RecordScopes.Parish(parish), "documentTemplate:" + item.Kind + ":" + item.Language, ct))?.Value;
         if (template?.Status != "Approved")
             throw State("There is no bishop-approved " + item.Language + " wording for " + item.Kind + " certificates, so there is no exact document to authorize.");
-        var person = (await records.ReadAsync<Person>(Scope(parish), "person:" + item.PersonId, ct))?.Value;
+        var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct))?.Value;
         var content = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["documentType"] = "Certificate", ["sacrament"] = item.Kind, ["reference"] = item.Reference,
@@ -333,8 +332,8 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     {
         await ReaderAsync(parish, ct);
         var rows = status is null
-            ? await records.CollectAsync<Certificate>(Scope(parish), "certificate", ct, 2000)
-            : await records.CollectAsync<Certificate>(Scope(parish), "certificate", ct, 2000, new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 40) });
+            ? await records.CollectAsync<Certificate>(RecordScopes.Parish(parish), "certificate", ct, 2000)
+            : await records.CollectAsync<Certificate>(RecordScopes.Parish(parish), "certificate", ct, 2000, new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 40) });
         return rows.OrderByDescending(r => r.Value.CreatedAt).Select(r => new Versioned<CertificateDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -362,7 +361,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
 
     private async Task<SacramentRecord> SourceAsync(string parish, string source, Certificate item, CancellationToken ct)
     {
-        var row = (await records.ReadAsync<SacramentRecord>(Scope(parish), "sacrament:" + source, ct))?.Value;
+        var row = (await records.ReadAsync<SacramentRecord>(RecordScopes.Parish(parish), "sacrament:" + source, ct))?.Value;
         if (row is null || row.ParishId != parish || row.Status != "Registered" || row.PersonId != item.PersonId || row.Kind != item.Kind)
             throw State("A certificate comes from this person's registered entry for the same sacrament.");
         return row;
@@ -371,7 +370,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
     private async Task<Versioned<ParishRequest>?> LinkedRequestAsync(string parish, Certificate item, bool strict, CancellationToken ct)
     {
         if (item.RequestId is null) return null;
-        var row = await records.ReadAsync<ParishRequest>(Scope(parish), "request:" + item.RequestId, ct);
+        var row = await records.ReadAsync<ParishRequest>(RecordScopes.Parish(parish), "request:" + item.RequestId, ct);
         if (row?.Value.Id == item.RequestId && row.Value.ParishId == parish && row.Value.SubjectPersonId == item.PersonId)
             return row;
         if (strict)
@@ -381,7 +380,7 @@ public class CertificateService(IRecordTransactions records, IParishAccess acces
 
     private async Task<Versioned<Certificate>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<Certificate>(Scope(parish), Key(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<Certificate>(RecordScopes.Parish(parish), Key(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;

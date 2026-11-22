@@ -26,8 +26,6 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     // A technical bound on how far ahead a broadcast may be scheduled, not an agreed parish policy.
     internal static readonly TimeSpan ScheduleHorizon = TimeSpan.FromDays(366);
     private static readonly string[] ExternalChannels = ["Email", "Sms", "Push"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static DomainException Missing() => new("resource_not_found", "The requested item is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_broadcast_state", message, FailureKind.Conflict);
@@ -46,7 +44,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     {
         var root = await StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast-template:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadAsync<BroadcastTemplate>(parish, "broadcastTemplate", prior.Id, t => t.ParishId, t => t.Id, ct)).Value);
         var old = id is null ? null : await ReadAsync<BroadcastTemplate>(parish, "broadcastTemplate", id, t => t.ParishId, t => t.Id, ct);
         if (old is not null && old.Value.Status != "Draft")
@@ -59,7 +57,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         (item.TitleAr, item.BodyAr) = ArabicVersion.Pair(request.TitleAr, request.BodyAr, item.Language, 20000);
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "communications.template_save", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.template_save", item.Id,
             [Fence(root), old is null ? RecordChange.Create("broadcastTemplate:" + item.Id, "broadcastTemplate", item)
                 : RecordChange.Replace("broadcastTemplate:" + item.Id, "broadcastTemplate", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -71,7 +69,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         var root = await StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast-template-action:v1:" + id);
         var row = await ReadAsync<BroadcastTemplate>(parish, "broadcastTemplate", id, t => t.ParishId, t => t.Id, ct);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(row.Value);
         var item = row.Value;
         switch (request.Action)
@@ -88,7 +86,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
             default:
                 throw State("This template action is not available now.");
         }
-        await records.CommitAsync(Scope(parish), op, "communications.template_" + request.Action, id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.template_" + request.Action, id,
             [Fence(root), RecordChange.Replace("broadcastTemplate:" + id, "broadcastTemplate", item, Versions.Require(request.Version))],
             new CommandResult { Id = id, Status = item.Status }, ct);
         return Project(item);
@@ -97,7 +95,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     public async Task<IReadOnlyList<Versioned<BroadcastTemplateDto>>> TemplatesAsync(string parish, CancellationToken ct)
     {
         await StaffAsync(parish, ct);
-        return (await records.CollectAsync<BroadcastTemplate>(Scope(parish), "broadcastTemplate", ct, 500))
+        return (await records.CollectAsync<BroadcastTemplate>(RecordScopes.Parish(parish), "broadcastTemplate", ct, 500))
             .OrderBy(r => r.Value.Name, StringComparer.Ordinal).Select(r => new Versioned<BroadcastTemplateDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -105,7 +103,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     {
         var root = await StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return Project((await ReadBroadcastAsync(parish, prior.Id, ct)).Value);
         var old = id is null ? null : await ReadBroadcastAsync(parish, id, ct);
         if (old is not null && old.Value.Status != "Draft")
@@ -131,7 +129,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         }
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "communications.broadcast_save", item.Id,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.broadcast_save", item.Id,
             [Fence(root), old is null ? RecordChange.Create("broadcast:" + item.Id, "broadcast", item)
                 : RecordChange.Replace("broadcast:" + item.Id, "broadcast", item, Versions.Require(request.Version))],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -153,7 +151,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         var root = await StaffAsync(parish, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "broadcast-action:v1:" + id);
         var row = await ReadBroadcastAsync(parish, id, ct);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project(row.Value);
         var item = row.Value;
         var changes = new List<RecordChange> { Fence(root) };
@@ -200,10 +198,10 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
             default:
                 throw State("This broadcast action is not available now.");
         }
-        if (wasScheduled && await records.ReadAsync<BroadcastWork>(Scope(parish), WorkKey(id), ct) is { } work)
+        if (wasScheduled && await records.ReadAsync<BroadcastWork>(RecordScopes.Parish(parish), WorkKey(id), ct) is { } work)
             changes.Add(RecordChange.Remove(WorkKey(id), work.Version));
         changes.Add(RecordChange.Replace("broadcast:" + id, "broadcast", item, Versions.Require(request.Version)));
-        await records.CommitAsync(Scope(parish), op, "communications.broadcast_" + request.Action, id, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.broadcast_" + request.Action, id, changes,
             new CommandResult { Id = id, Status = item.Status }, ct, item.CancelReason);
         return Project(item);
     }
@@ -218,7 +216,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     public async Task<IReadOnlyList<Versioned<BroadcastDto>>> ListAsync(string parish, CancellationToken ct)
     {
         await StaffAsync(parish, ct);
-        return (await records.CollectAsync<Broadcast>(Scope(parish), "broadcast", ct, 500))
+        return (await records.CollectAsync<Broadcast>(RecordScopes.Parish(parish), "broadcast", ct, 500))
             .OrderByDescending(r => r.Value.UpdatedAt).Select(r => new Versioned<BroadcastDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
     }
 
@@ -234,7 +232,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     {
         await own.PersonalAsync(ct);
         await own.RootAsync(parish, ct);
-        return (await records.CollectAsync<Broadcast>(Scope(parish), "broadcast", ct, 500, Equal("status", "Sent")))
+        return (await records.CollectAsync<Broadcast>(RecordScopes.Parish(parish), "broadcast", ct, 500, RecordConditions.Equal("status", "Sent")))
             .Select(r => r.Value).Where(b => b.RecipientAccountIds.Contains(actor.AccountId, StringComparer.Ordinal))
             .OrderByDescending(b => b.SentAt)
             .Select(b => new ReceivedBroadcastDto { Id = b.Id, Title = b.Title, Body = b.Body, Language = b.Language, TitleAr = b.TitleAr, BodyAr = b.BodyAr, SentAt = b.SentAt })
@@ -244,7 +242,7 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
     internal static string Language(string? value) => value is "en" or "fr" or "ar" ? value : throw new DomainException("invalid_input", "Use en, fr or ar.");
 
     internal async Task<Versioned<T>> ReadAsync<T>(string parish, string type, string id, Func<T, string> parishOf, Func<T, string> idOf, CancellationToken ct)
-        => await records.ReadAsync<T>(Scope(parish), type + ":" + id, ct) is { } row && parishOf(row.Value) == parish && idOf(row.Value) == id ? row : throw Missing();
+        => await records.ReadAsync<T>(RecordScopes.Parish(parish), type + ":" + id, ct) is { } row && parishOf(row.Value) == parish && idOf(row.Value) == id ? row : throw Missing();
 
     private Task<Versioned<Broadcast>> ReadBroadcastAsync(string parish, string id, CancellationToken ct)
         => ReadAsync<Broadcast>(parish, "broadcast", id, b => b.ParishId, b => b.Id, ct);

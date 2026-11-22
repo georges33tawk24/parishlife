@@ -19,8 +19,6 @@ namespace ParishLife.Api.Services.Communications;
 public class NotificationService(IRecordTransactions records, ICurrentActor actor, TimeProvider clock, NotificationAudience audiences,
     ILogger<NotificationService> logger)
 {
-    private static RecordScope Scope(string account) => new() { Area = RecordArea.Account, OwnerId = account };
-    private static RecordScope Parish(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private const string PreferencesKey = "notificationPreferences";
 
     internal RecordChange StageRequired(string parish, string account, string topic, string title, string? link, string dedupKey,
@@ -43,7 +41,7 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
         {
             // A producer dispatches only work that actually exists. Old completed source operations are never retrofitted here.
             var current = ScopedId(account, parish, dedupKey).ToString("N");
-            if (await records.ReadAsync<NotificationWork>(Parish(parish), "notificationWork:" + current, ct) is not null)
+            if (await records.ReadAsync<NotificationWork>(RecordScopes.Parish(parish), "notificationWork:" + current, ct) is not null)
             {
                 await DispatchWorkAsync(parish, current, ct);
                 return;
@@ -59,7 +57,7 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
     {
         try
         {
-            var scope = Parish(parish);
+            var scope = RecordScopes.Parish(parish);
             var key = "notificationWork:" + id;
             var row = await records.ReadAsync<NotificationWork>(scope, key, ct);
             if (row is null || row.Value.Status != "Pending") return;
@@ -105,7 +103,7 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
     // Required source workflows use StageRequired in their own transaction, followed by DispatchAsync.
     internal async Task NotifyAsync(string account, string? parish, string topic, string title, string? link, bool required, string dedupKey, CancellationToken ct)
     {
-        if (!required && (await records.ReadAsync<NotificationPreferences>(Scope(account), PreferencesKey, ct))?.Value.MutedTopics.Contains(topic) == true)
+        if (!required && (await records.ReadAsync<NotificationPreferences>(RecordScopes.Account(account), PreferencesKey, ct))?.Value.MutedTopics.Contains(topic) == true)
             return;
         await StoreLegacyAsync(account, parish, topic, title, link, required, dedupKey, clock.GetUtcNow(), ct);
     }
@@ -130,14 +128,14 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
         var item = Expected(work, id);
         var operation = ScopedOperation(work, id);
         // A scoped row is authoritative when present, including a row that needs receipt/operator recovery.
-        if (await records.ReadAsync<Notification>(Scope(work.AccountId), "notification:" + item.Id, ct) is { } scoped)
+        if (await records.ReadAsync<Notification>(RecordScopes.Account(work.AccountId), "notification:" + item.Id, ct) is { } scoped)
         {
             await ConfirmAsync(scoped.Value, item, operation, ct);
             return item.Id;
         }
         var legacyId = LegacyId(work.AccountId, work.DedupKey);
         var expectedLegacy = Expected(work, legacyId);
-        var legacy = await records.ReadAsync<Notification>(Scope(work.AccountId), "notification:" + expectedLegacy.Id, ct);
+        var legacy = await records.ReadAsync<Notification>(RecordScopes.Account(work.AccountId), "notification:" + expectedLegacy.Id, ct);
         if (legacy is not null)
         {
             if (Matches(legacy.Value, expectedLegacy))
@@ -160,14 +158,14 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
     {
         var scopedId = ScopedId(work.AccountId, work.ParishId, work.DedupKey);
         var expectedScoped = Expected(work, scopedId);
-        if (await records.ReadAsync<Notification>(Scope(work.AccountId), "notification:" + expectedScoped.Id, ct) is { } scoped)
+        if (await records.ReadAsync<Notification>(RecordScopes.Account(work.AccountId), "notification:" + expectedScoped.Id, ct) is { } scoped)
         {
             // An earlier repair may have stored the scoped notice before its acknowledgment was lost.
             await ConfirmAsync(scoped.Value, expectedScoped, ScopedOperation(work, scopedId), ct);
             return expectedScoped.Id;
         }
         var legacyId = LegacyId(work.AccountId, work.DedupKey).ToString("N");
-        var legacy = await records.ReadAsync<Notification>(Scope(work.AccountId), "notification:" + legacyId, ct);
+        var legacy = await records.ReadAsync<Notification>(RecordScopes.Account(work.AccountId), "notification:" + legacyId, ct);
         if (legacy?.Value is { } existing && ForeignLegacy(existing, work, legacyId))
         {
             // Only a known, valid pending source obligation can take this narrow cross-parish recovery path.
@@ -180,7 +178,7 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
 
     private async Task<string> StoreIdentityAsync(Notification item, Operation operation, CancellationToken ct)
     {
-        var scope = Scope(item.AccountId);
+        var scope = RecordScopes.Account(item.AccountId);
         var key = "notification:" + item.Id;
         if (await records.ReadAsync<Notification>(scope, key, ct) is not { } existing)
         {
@@ -204,7 +202,7 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
             throw IdentityConflict();
         try
         {
-            if ((await records.ReplayAsync<CommandResult>(Scope(expected.AccountId), operation, ct))?.Id != expected.Id)
+            if ((await records.ReplayAsync<CommandResult>(RecordScopes.Account(expected.AccountId), operation, ct))?.Id != expected.Id)
                 throw new DomainException("notification_storage_unconfirmed", "The recipient notification receipt has not been confirmed.", FailureKind.Unavailable);
         }
         catch (DomainException error) when (error.Code == "operation_reused") { throw IdentityConflict(); }
@@ -253,8 +251,8 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
     public async Task<Page<NotificationDto>> ListAsync(string? status, int size, string? cursor, CancellationToken ct)
     {
         var page = status is null
-            ? await records.PageAsync<Notification>(Scope(actor.AccountId), "notification", size, cursor, ct)
-            : await records.PageAsync<Notification>(Scope(actor.AccountId), "notification", size, cursor, ct,
+            ? await records.PageAsync<Notification>(RecordScopes.Account(actor.AccountId), "notification", size, cursor, ct)
+            : await records.PageAsync<Notification>(RecordScopes.Account(actor.AccountId), "notification", size, cursor, ct,
                 new RecordCondition { Path = "status", Comparison = "eq", Value = Guard.Text(status, "Status", 20) });
         return new Page<NotificationDto> { Items = page.Items.Select(r => Project(r.Value)).ToArray(), ContinuationToken = page.ContinuationToken };
     }
@@ -264,18 +262,18 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
         if (request.Status is not ("Read" or "Unread" or "Archived"))
             throw new DomainException("invalid_input", "Use Read, Unread or Archived.");
         var key = "notification:" + id;
-        var row = await records.ReadAsync<Notification>(Scope(actor.AccountId), key, ct)
+        var row = await records.ReadAsync<Notification>(RecordScopes.Account(actor.AccountId), key, ct)
             ?? throw new DomainException("resource_not_found", "The requested notification is unavailable.", FailureKind.NotFound);
         row.Value.Status = request.Status;
         row.Value.ReadAt = request.Status == "Unread" ? null : row.Value.ReadAt ?? clock.GetUtcNow();
-        await records.CommitAsync(Scope(actor.AccountId), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id, request.Status }, clock), "notification.state", id,
+        await records.CommitAsync(RecordScopes.Account(actor.AccountId), Operation.Create(Guid.NewGuid(), actor.AccountId, new { id, request.Status }, clock), "notification.state", id,
             [RecordChange.Replace(key, "notification", row.Value, row.Version)], new CommandResult { Id = id, Status = row.Value.Status }, ct);
         return Project(row.Value);
     }
 
     public async Task<NotificationPreferencesDto> PreferencesAsync(CancellationToken ct)
     {
-        var value = (await records.ReadAsync<NotificationPreferences>(Scope(actor.AccountId), PreferencesKey, ct))?.Value ?? new NotificationPreferences();
+        var value = (await records.ReadAsync<NotificationPreferences>(RecordScopes.Account(actor.AccountId), PreferencesKey, ct))?.Value ?? new NotificationPreferences();
         return new NotificationPreferencesDto { MutedTopics = [.. value.MutedTopics], Language = value.Language, DigestOptional = value.DigestOptional };
     }
 
@@ -284,9 +282,9 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
         if (request.MutedTopics is null || request.MutedTopics.Length > 30 || request.MutedTopics.Any(t => string.IsNullOrWhiteSpace(t) || t.Length > 60)
             || request.Language is not ("en" or "fr" or "ar"))
             throw new DomainException("invalid_input", "Use up to 30 short topic names and en, fr or ar.");
-        var existing = await records.ReadAsync<NotificationPreferences>(Scope(actor.AccountId), PreferencesKey, ct);
+        var existing = await records.ReadAsync<NotificationPreferences>(RecordScopes.Account(actor.AccountId), PreferencesKey, ct);
         var value = new NotificationPreferences { MutedTopics = request.MutedTopics.Distinct(StringComparer.Ordinal).ToArray(), Language = request.Language, DigestOptional = request.DigestOptional };
-        await records.CommitAsync(Scope(actor.AccountId), Operation.Create(Guid.NewGuid(), actor.AccountId, request, clock), "notification.preferences", actor.AccountId,
+        await records.CommitAsync(RecordScopes.Account(actor.AccountId), Operation.Create(Guid.NewGuid(), actor.AccountId, request, clock), "notification.preferences", actor.AccountId,
             [existing is null ? RecordChange.Create(PreferencesKey, "notificationPreferences", value) : RecordChange.Replace(PreferencesKey, "notificationPreferences", value, existing.Version)],
             new CommandResult { Id = actor.AccountId, Status = "Saved" }, ct);
         return await PreferencesAsync(ct);

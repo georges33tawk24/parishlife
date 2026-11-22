@@ -20,7 +20,6 @@ namespace ParishLife.Api.Services.Organizations;
 public class OwnershipRecoveryService(IRecordTransactions records, IParishRepository parishes, IPlatformAccess platform, MfaAccountAccess proof,
     ICurrentActor actor, NotificationService notifications, TimeProvider clock)
 {
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Marker(string account) => "ownershipClaimOpen:" + account;
     private static DomainException Missing() => new("resource_not_found", "The requested resource is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_claim_state", message, FailureKind.Conflict);
@@ -34,7 +33,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
     private async Task<Versioned<Parish>> ParishAsync(string parishId, CancellationToken ct) => await parishes.GetAsync(parishId, ct) ?? throw Missing();
 
     private async Task<Versioned<OwnershipClaim>> ReadAsync(string parishId, string id, CancellationToken ct)
-        => await records.ReadAsync<OwnershipClaim>(Scope(parishId), "ownershipClaim:" + id, ct) is { } row && row.Value.ParishId == parishId ? row : throw Missing();
+        => await records.ReadAsync<OwnershipClaim>(RecordScopes.Parish(parishId), "ownershipClaim:" + id, ct) is { } row && row.Value.ParishId == parishId ? row : throw Missing();
 
     // Non-reviewers learn nothing about whether a claim exists.
     private async Task<bool> ReviewerAsync(CancellationToken ct)
@@ -57,13 +56,13 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         await proof.RequireMfaAsync(ct);
         var parish = await ParishAsync(parishId, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ownership-claim:v1:" + parishId);
-        if (await records.ReplayAsync<CommandResult>(Scope(parishId), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parishId), op, ct) is { } prior)
             return OwnershipClaimDto.ForClaimant((await ReadAsync(parishId, prior.Id, ct)).Value);
         if (parish.Value.Status == ParishStatus.Closed)
             throw new DomainException("parish_closed", "A closed parish's administration is not recovered here.", FailureKind.Conflict);
         if (parish.Value.OwnerAccountId == actor.AccountId)
             throw State("You already control this parish.");
-        if (await records.ReadAsync<CommandResult>(Scope(parishId), Marker(actor.AccountId), ct) is not null)
+        if (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parishId), Marker(actor.AccountId), ct) is not null)
             throw new DomainException("claim_already_open", "You already have an open claim for this parish.", FailureKind.Conflict);
         var claim = new OwnershipClaim
         {
@@ -74,7 +73,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         // The owner notice is generic: it names neither the claimant nor the evidence.
         var notice = notifications.StageRequired(parishId, parish.Value.OwnerAccountId, "parish.ownership_claim", "An ownership review was opened for your parish.",
             null, "ownership-claim:" + op.Id, "ParishOwner", parishId, op.At);
-        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_open", op.Id,
+        await records.CommitAsync(RecordScopes.Parish(parishId), op, "parish.ownership_claim_open", op.Id,
             [RecordChange.Create("ownershipClaim:" + op.Id, "ownershipClaim", claim), RecordChange.Create(Marker(actor.AccountId), "ownershipClaimOpen", new CommandResult { Id = op.Id, Status = "Open" }), notice],
             new CommandResult { Id = op.Id, Status = "Open" }, ct);
         await notifications.DispatchAsync(parishId, parish.Value.OwnerAccountId, "ownership-claim:" + op.Id, ct);
@@ -107,7 +106,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
             project = OwnershipClaimDto.ForReviewer;
         else
             throw Missing();
-        var page = await records.PageAsync<OwnershipClaim>(Scope(parishId), "ownershipClaim", size, cursor, ct);
+        var page = await records.PageAsync<OwnershipClaim>(RecordScopes.Parish(parishId), "ownershipClaim", size, cursor, ct);
         return new Page<OwnershipClaimDto> { Items = page.Items.Select(r => project(r.Value)).OrderByDescending(c => c.OpenedAt).ToArray(), ContinuationToken = page.ContinuationToken };
     }
 
@@ -116,13 +115,13 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         await OwnerAsync(parishId, ct);
         var row = await ReadAsync(parishId, id, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ownership-claim-response:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parishId), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parishId), op, ct) is not null)
             return OwnershipClaimDto.ForOwner((await ReadAsync(parishId, id, ct)).Value);
         if (row.Value.Status != "Open")
             throw State("Only an open claim can receive a response.");
         row.Value.OwnerResponse = Guard.Text(request.Response, "Response", 2000);
         row.Value.OwnerRespondedAt = op.At;
-        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_response", id,
+        await records.CommitAsync(RecordScopes.Parish(parishId), op, "parish.ownership_claim_response", id,
             [RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", row.Value, Versions.Require(request.Version))], new CommandResult { Id = id, Status = "Open" }, ct);
         return OwnershipClaimDto.ForOwner(row.Value);
     }
@@ -135,16 +134,16 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         if (row.Value.ClaimantAccountId != actor.AccountId)
             throw Missing();
         var op = actor.CreateOperation(request.OperationId, request, clock, "ownership-claim-withdraw:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parishId), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parishId), op, ct) is not null)
             return OwnershipClaimDto.ForClaimant((await ReadAsync(parishId, id, ct)).Value);
         if (row.Value.Status != "Open")
             throw State("Only an open claim can be withdrawn.");
         row.Value.Status = "Withdrawn";
         row.Value.DecidedAt = op.At;
         var changes = new List<RecordChange> { RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", row.Value, Versions.Require(request.Version)) };
-        if (await records.ReadAsync<CommandResult>(Scope(parishId), Marker(actor.AccountId), ct) is { } marker && marker.Value.Id == id)
+        if (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parishId), Marker(actor.AccountId), ct) is { } marker && marker.Value.Id == id)
             changes.Add(RecordChange.Remove(Marker(actor.AccountId), marker.Version));
-        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_withdraw", id, changes, new CommandResult { Id = id, Status = "Withdrawn" }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parishId), op, "parish.ownership_claim_withdraw", id, changes, new CommandResult { Id = id, Status = "Withdrawn" }, ct);
         return OwnershipClaimDto.ForClaimant(row.Value);
     }
 
@@ -156,7 +155,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
         await proof.RequireMfaAsync(ct);
         var row = await ReadAsync(parishId, id, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "ownership-claim-decision:" + id);
-        if (await records.ReplayAsync<CommandResult>(Scope(parishId), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parishId), op, ct) is not null)
             return OwnershipClaimDto.ForReviewer((await ReadAsync(parishId, id, ct)).Value);
         if (request.Recover is null)
             throw new DomainException("invalid_input", "State explicitly whether administration is recovered.");
@@ -183,7 +182,7 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
                 throw new DomainException("owner_changed", "Control changed after this claim was opened; it must be reopened against the current owner.", FailureKind.Conflict);
             if (!await proof.IsVerifiedMfaAccountAsync(claim.ClaimantAccountId, ct))
                 throw new DomainException("account_unavailable", "The claimant must be an active verified account with an authenticator.", FailureKind.Conflict);
-            var scope = Scope(parishId);
+            var scope = RecordScopes.Parish(parishId);
             var reconciled = new List<string>();
             var priorOwner = parish.Value.OwnerAccountId;
             parish.Value.OwnerAccountId = claim.ClaimantAccountId;
@@ -229,9 +228,9 @@ public class OwnershipRecoveryService(IRecordTransactions records, IParishReposi
             claim.ReconciledRecords = [.. reconciled];
         }
         changes.Add(RecordChange.Replace("ownershipClaim:" + id, "ownershipClaim", claim, row.Version));
-        if (await records.ReadAsync<CommandResult>(Scope(parishId), Marker(claim.ClaimantAccountId), ct) is { } marker && marker.Value.Id == id)
+        if (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parishId), Marker(claim.ClaimantAccountId), ct) is { } marker && marker.Value.Id == id)
             changes.Add(RecordChange.Remove(Marker(claim.ClaimantAccountId), marker.Version));
-        await records.CommitAsync(Scope(parishId), op, "parish.ownership_claim_" + claim.Status.ToLowerInvariant(), id, changes, new CommandResult { Id = id, Status = claim.Status }, ct, claim.DecisionReason);
+        await records.CommitAsync(RecordScopes.Parish(parishId), op, "parish.ownership_claim_" + claim.Status.ToLowerInvariant(), id, changes, new CommandResult { Id = id, Status = claim.Status }, ct, claim.DecisionReason);
         return OwnershipClaimDto.ForReviewer(claim);
     }
 }

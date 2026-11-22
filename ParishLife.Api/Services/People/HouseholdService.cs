@@ -21,12 +21,10 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         ["StepParent"] = "StepChild", ["StepChild"] = "StepParent", ["Spouse"] = "Spouse", ["Sibling"] = "Sibling",
         ["Guardian"] = "Ward", ["Ward"] = "Guardian", ["Relative"] = "Relative"
     };
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string HouseholdKey(string id) => "household:" + id;
     private static string MemberKey(string person) => "householdMember:" + person;
     private static string EnvelopeKey(string envelope) => "householdEnvelope:" + envelope.ToUpperInvariant();
     private static string RelationshipKey(string id) => "personRelationship:" + id;
-    private static RecordCondition Equal(string path, string value) => new() { Path = path, Comparison = "eq", Value = value };
     private static DomainException Missing() => new("resource_not_found", "The requested household or person is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_household_state", message, FailureKind.Conflict);
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
@@ -43,7 +41,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "household:v1:" + (id ?? "new"));
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ProjectAsync(parish, (await ReadAsync(parish, prior.Id, ct)).Value, ct);
         var envelope = string.IsNullOrWhiteSpace(request.EnvelopeId) ? null : Guard.Text(request.EnvelopeId, "Envelope identifier", 40);
         var address = string.IsNullOrWhiteSpace(request.Address) ? null : Guard.Text(request.Address, "Address", 1000);
@@ -75,11 +73,11 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             // Envelope identifiers are assigned manually and claimed atomically so two households can never share one.
             if (envelope is not null)
             {
-                if (await records.ReadAsync<CommandResult>(Scope(parish), EnvelopeKey(envelope), ct) is not null)
+                if (await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), EnvelopeKey(envelope), ct) is not null)
                     throw State("That envelope identifier is already assigned in this parish.");
                 changes.Add(RecordChange.Create(EnvelopeKey(envelope), "householdEnvelope", new CommandResult { Id = item.Id, Status = "Assigned" }));
             }
-            if (item.EnvelopeId is { } old && await records.ReadAsync<CommandResult>(Scope(parish), EnvelopeKey(old), ct) is { } claim)
+            if (item.EnvelopeId is { } old && await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), EnvelopeKey(old), ct) is { } claim)
                 changes.Add(RecordChange.Remove(EnvelopeKey(old), claim.Version));
             if (id is not null)
                 changes.Add(History(item.Id, null, "envelope", item.EnvelopeId, op));
@@ -93,7 +91,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         item.EnvelopeId = envelope;
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "people.household_save", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.household_save", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await ProjectAsync(parish, item, ct);
     }
 
@@ -101,16 +99,16 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "household-member:v1:" + household);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, (await ReadAsync(parish, household, ct)).Value, ct);
         var item = (await ReadAsync(parish, household, ct)).Value;
         if (item.Status != "Active")
             throw State("Only an active household changes members.");
         var person = Guard.Id(request.PersonId);
-        var subject = (await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value;
+        var subject = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value;
         if (subject is null || subject.ParishId != parish)
             throw Missing();
-        var member = await records.ReadAsync<HouseholdMember>(Scope(parish), MemberKey(person), ct);
+        var member = await records.ReadAsync<HouseholdMember>(RecordScopes.Parish(parish), MemberKey(person), ct);
         var inHousehold = member?.Value.HouseholdId == household;
         var changes = new List<RecordChange> { Fence(root), RecordChange.Replace(HouseholdKey(item.Id), "household", item, Versions.Require(request.Version)) };
         switch (request.Action)
@@ -156,7 +154,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         }
         item.UpdatedBy = actor.AccountId;
         item.UpdatedAt = op.At;
-        await records.CommitAsync(Scope(parish), op, "people.household_" + request.Action.Replace('-', '_'), household, changes,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.household_" + request.Action.Replace('-', '_'), household, changes,
             new CommandResult { Id = household, Status = item.Status }, ct);
         return await ProjectAsync(parish, item, ct);
     }
@@ -171,7 +169,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     public async Task<Page<Versioned<HouseholdDto>>> ListAsync(string parish, int size, string? cursor, CancellationToken ct)
     {
         await AuthorizeAsync(parish, Permissions.PeopleRead, ct);
-        var page = await records.PageAsync<Household>(Scope(parish), "household", size, cursor, ct);
+        var page = await records.PageAsync<Household>(RecordScopes.Parish(parish), "household", size, cursor, ct);
         // Members come with each household so a list needs no read per household (one member query per household on the server).
         var items = new List<Versioned<HouseholdDto>>();
         foreach (var row in page.Items.Where(r => r.Value.ParishId == parish))
@@ -183,7 +181,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         await AuthorizeAsync(parish, Permissions.PeopleRead, ct);
         await ReadAsync(parish, id, ct);
-        var page = await records.PageAsync<HouseholdChange>(Scope(parish), "householdChange", size, cursor, ct, Equal("householdId", id));
+        var page = await records.PageAsync<HouseholdChange>(RecordScopes.Parish(parish), "householdChange", size, cursor, ct, RecordConditions.Equal("householdId", id));
         return new Page<HouseholdChangeDto>
         {
             Items = page.Items.Select(row => new HouseholdChangeDto
@@ -199,13 +197,13 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-relationship:v1:" + person);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
             return await ProjectAsync(parish, (await ReadRelationshipAsync(parish, person, prior.Id, ct)).Value, ct);
         var related = Guard.Id(request.RelatedPersonId);
         if (related == person || !Mirror.TryGetValue(request.Kind, out var mirror))
             throw new DomainException("invalid_input", "Relate two different people with a supported relationship kind.");
         foreach (var id in new[] { person, related })
-            if ((await records.ReadAsync<Person>(Scope(parish), "person:" + id, ct))?.Value is not { } row || row.ParishId != parish)
+            if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + id, ct))?.Value is not { } row || row.ParishId != parish)
                 throw Missing();
         var evidence = string.IsNullOrWhiteSpace(request.EvidenceReference) ? null : Guard.Text(request.EvidenceReference, "Evidence", 1000);
         // Guardianship is a consequential authority fact, so it needs actual evidence; household membership never implies it.
@@ -235,7 +233,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         };
         var forward = Make(op.Id + "a", person, related, request.Kind);
         var backward = Make(op.Id + "b", related, person, mirror);
-        await records.CommitAsync(Scope(parish), op, "people.relationship_add", person,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.relationship_add", person,
             [Fence(root), RecordChange.Create(RelationshipKey(forward.Id), "personRelationship", forward),
              RecordChange.Create(RelationshipKey(backward.Id), "personRelationship", backward)],
             new CommandResult { Id = forward.Id, Status = forward.Status }, ct);
@@ -246,13 +244,13 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     {
         var root = await AuthorizeAsync(parish, Permissions.PeopleWrite, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-relationship-end:v1:" + relationship);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await ProjectAsync(parish, (await ReadRelationshipAsync(parish, person, relationship, ct)).Value, ct);
         var row = await ReadRelationshipAsync(parish, person, relationship, ct);
         if (row.Value.Status != "Active")
             throw State("This relationship has already ended.");
         var mirrorId = row.Value.PairId + (row.Value.Id.EndsWith('a') ? "b" : "a");
-        var mirror = await records.ReadAsync<PersonRelationship>(Scope(parish), RelationshipKey(mirrorId), ct) ?? throw Missing();
+        var mirror = await records.ReadAsync<PersonRelationship>(RecordScopes.Parish(parish), RelationshipKey(mirrorId), ct) ?? throw Missing();
         var reason = Guard.Text(request.Reason, "Reason", 2000);
         foreach (var item in new[] { row.Value, mirror.Value })
         {
@@ -260,7 +258,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             item.EndedAt = op.At;
             item.EndReason = reason;
         }
-        await records.CommitAsync(Scope(parish), op, "people.relationship_end", person,
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "people.relationship_end", person,
             [Fence(root), RecordChange.Replace(RelationshipKey(row.Value.Id), "personRelationship", row.Value, Versions.Require(request.Version)),
              RecordChange.Replace(RelationshipKey(mirrorId), "personRelationship", mirror.Value, mirror.Version)],
             new CommandResult { Id = row.Value.Id, Status = row.Value.Status }, ct);
@@ -270,7 +268,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     public async Task<Page<Versioned<RelationshipDto>>> RelationshipsAsync(string parish, string person, int size, string? cursor, CancellationToken ct)
     {
         await AuthorizeAsync(parish, Permissions.PeopleRead, ct);
-        var page = await records.PageAsync<PersonRelationship>(Scope(parish), "personRelationship", size, cursor, ct, Equal("personId", person));
+        var page = await records.PageAsync<PersonRelationship>(RecordScopes.Parish(parish), "personRelationship", size, cursor, ct, RecordConditions.Equal("personId", person));
         var items = new List<Versioned<RelationshipDto>>();
         foreach (var row in page.Items)
             items.Add(new Versioned<RelationshipDto> { Version = row.Version, Value = await ProjectAsync(parish, row.Value, ct) });
@@ -278,7 +276,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     }
 
     private async Task<List<PersonRelationship>> ActiveRelationshipsAsync(string parish, string person, CancellationToken ct)
-        => (await records.CollectAsync<PersonRelationship>(Scope(parish), "personRelationship", ct, 500, Equal("personId", person)))
+        => (await records.CollectAsync<PersonRelationship>(RecordScopes.Parish(parish), "personRelationship", ct, 500, RecordConditions.Equal("personId", person)))
             .Select(r => r.Value).Where(r => r.Status == "Active").ToList();
 
     private async Task<HashSet<string>> AncestorsAsync(string parish, string person, CancellationToken ct)
@@ -307,7 +305,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
 
     private async Task<Versioned<Household>> ReadAsync(string parish, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<Household>(Scope(parish), HouseholdKey(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<Household>(RecordScopes.Parish(parish), HouseholdKey(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.ParishId != parish)
             throw Missing();
         return row;
@@ -315,7 +313,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
 
     private async Task<Versioned<PersonRelationship>> ReadRelationshipAsync(string parish, string person, string id, CancellationToken ct)
     {
-        var row = await records.ReadAsync<PersonRelationship>(Scope(parish), RelationshipKey(id), ct) ?? throw Missing();
+        var row = await records.ReadAsync<PersonRelationship>(RecordScopes.Parish(parish), RelationshipKey(id), ct) ?? throw Missing();
         if (row.Value.Id != id || row.Value.PersonId != person || row.Value.ParishId != parish)
             throw Missing();
         return row;
@@ -324,7 +322,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     // The Latin display name, and the Arabic one only when an Arabic spelling is recorded (never copied from the Latin name).
     private async Task<(string Name, string? NameAr)> NameAsync(string parish, string person, CancellationToken ct)
     {
-        if ((await records.ReadAsync<Person>(Scope(parish), "person:" + person, ct))?.Value is not { } row)
+        if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value is not { } row)
             return ("", null);
         var arabic = string.Join(' ', new[] { row.GivenNameAr, row.FamilyNameAr }.Where(x => !string.IsNullOrWhiteSpace(x)));
         return (row.GivenName + " " + row.FamilyName, arabic.Length == 0 ? null : arabic);
@@ -341,7 +339,7 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
     private async Task<HouseholdDto> ProjectAsync(string parish, Household item, CancellationToken ct)
     {
         var result = Summary(item);
-        var members = await records.CollectAsync<HouseholdMember>(Scope(parish), "householdMember", ct, 200, Equal("householdId", item.Id));
+        var members = await records.CollectAsync<HouseholdMember>(RecordScopes.Parish(parish), "householdMember", ct, 200, RecordConditions.Equal("householdId", item.Id));
         var list = new List<HouseholdMemberDto>();
         foreach (var member in members.Select(m => m.Value))
         {

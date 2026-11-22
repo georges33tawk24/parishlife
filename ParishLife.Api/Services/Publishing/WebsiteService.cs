@@ -17,7 +17,6 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
     MfaAccountAccess proof, TimeProvider clock)
 {
     private static readonly string[] Languages = ["en", "fr", "ar"];
-    private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static DomainException Missing() => new("resource_not_found", "The requested website content is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_website_state", message, FailureKind.Conflict);
 
@@ -38,7 +37,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         var root = await EditorAsync(parish, ct);
         key = Section(key);
         var op = actor.CreateOperation(request.OperationId, request, clock, "website-draft:v1:" + key);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await SectionAsync(parish, key, ct);
         if (request.Texts is null || request.Texts.Count == 0 || request.Texts.Keys.Any(l => !Languages.Contains(l)))
             throw new DomainException("invalid_input", "Give the section text in en, fr and/or ar.");
@@ -47,7 +46,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         var pending = (await RevisionsAsync(parish, key, ct)).FirstOrDefault(r => r.Value.Status is "Draft" or "Returned" or "AwaitingReview");
         if (pending?.Value.Status == "AwaitingReview")
             throw State("A revision is waiting for review; wait for it to be returned before editing.");
-        var section = await records.ReadAsync<WebsiteSection>(Scope(parish), "websiteSection:" + key, ct);
+        var section = await records.ReadAsync<WebsiteSection>(RecordScopes.Parish(parish), "websiteSection:" + key, ct);
         var changes = new List<RecordChange> { RecordChange.Replace("parish", "parish", root.Value, root.Version) };
         WebsiteRevision item;
         if (pending is null)
@@ -66,7 +65,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         }
         if (section is null)
             changes.Add(RecordChange.Create("websiteSection:" + key, "websiteSection", new WebsiteSection { Key = key, ParishId = parish, UpdatedAt = op.At }));
-        await records.CommitAsync(Scope(parish), op, "website.draft", key, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "website.draft", key, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await SectionAsync(parish, key, ct);
     }
 
@@ -77,9 +76,9 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         if (request.Action is "return" or "publish" or "unpublish")
             await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "website-action:v1:" + key);
-        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is not null)
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return await SectionAsync(parish, key, ct);
-        var sectionRow = await records.ReadAsync<WebsiteSection>(Scope(parish), "websiteSection:" + key, ct) ?? throw Missing();
+        var sectionRow = await records.ReadAsync<WebsiteSection>(RecordScopes.Parish(parish), "websiteSection:" + key, ct) ?? throw Missing();
         var section = sectionRow.Value;
         var row = await ReadRevisionAsync(parish, revisionId, ct);
         var item = row.Value;
@@ -128,7 +127,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         section.UpdatedAt = op.At;
         changes.Add(RecordChange.Replace("websiteRevision:" + item.Id, "websiteRevision", item, Versions.Require(request.Version)));
         changes.Add(RecordChange.Replace("websiteSection:" + key, "websiteSection", section, sectionRow.Version));
-        await records.CommitAsync(Scope(parish), op, "website." + request.Action, key, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "website." + request.Action, key, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return await SectionAsync(parish, key, ct);
     }
 
@@ -136,7 +135,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
     {
         await EditorAsync(parish, ct);
         var result = new List<Versioned<WebsiteSectionDto>>();
-        foreach (var row in await records.CollectAsync<WebsiteSection>(Scope(parish), "websiteSection", ct, 200))
+        foreach (var row in await records.CollectAsync<WebsiteSection>(RecordScopes.Parish(parish), "websiteSection", ct, 200))
             result.Add(new Versioned<WebsiteSectionDto> { Version = row.Version, Value = await SectionAsync(parish, row.Value.Key, ct) });
         return result.OrderBy(s => s.Value.Key, StringComparer.Ordinal).ToArray();
     }
@@ -146,8 +145,8 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
         await own.RootAsync(parish, ct);
         var lang = language is null ? "en" : Languages.Contains(language) ? language : throw new DomainException("invalid_input", "Choose en, fr or ar.");
         var result = new List<PublicWebsiteSectionDto>();
-        foreach (var section in await records.CollectAsync<WebsiteSection>(Scope(parish), "websiteSection", ct, 200, new RecordCondition { Path = "status", Comparison = "eq", Value = "Published" }))
-            if (section.Value.PublishedRevisionId is { } live && (await records.ReadAsync<WebsiteRevision>(Scope(parish), "websiteRevision:" + live, ct))?.Value is { } revision
+        foreach (var section in await records.CollectAsync<WebsiteSection>(RecordScopes.Parish(parish), "websiteSection", ct, 200, new RecordCondition { Path = "status", Comparison = "eq", Value = "Published" }))
+            if (section.Value.PublishedRevisionId is { } live && (await records.ReadAsync<WebsiteRevision>(RecordScopes.Parish(parish), "websiteRevision:" + live, ct))?.Value is { } revision
                 && revision.Texts.TryGetValue(lang, out var text))
                 result.Add(new PublicWebsiteSectionDto { Key = section.Value.Key, Language = lang, Title = text.Title, Body = text.Body, PublishedAt = revision.PublishedAt });
         return result.OrderBy(s => s.Key, StringComparer.Ordinal).ToArray();
@@ -155,7 +154,7 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
 
     private async Task<WebsiteSectionDto> SectionAsync(string parish, string key, CancellationToken ct)
     {
-        var section = (await records.ReadAsync<WebsiteSection>(Scope(parish), "websiteSection:" + key, ct))?.Value ?? throw Missing();
+        var section = (await records.ReadAsync<WebsiteSection>(RecordScopes.Parish(parish), "websiteSection:" + key, ct))?.Value ?? throw Missing();
         var revisions = await RevisionsAsync(parish, key, ct);
         return new WebsiteSectionDto
         {
@@ -167,10 +166,10 @@ public class WebsiteService(IRecordTransactions records, IParishAccess access, I
 
     // ponytail: filters a parish's revisions in memory (cap 2000); index sectionKey if sites grow large.
     private async Task<List<Versioned<WebsiteRevision>>> RevisionsAsync(string parish, string key, CancellationToken ct)
-        => (await records.CollectAsync<WebsiteRevision>(Scope(parish), "websiteRevision", ct, 2000)).Where(r => r.Value.SectionKey == key).ToList();
+        => (await records.CollectAsync<WebsiteRevision>(RecordScopes.Parish(parish), "websiteRevision", ct, 2000)).Where(r => r.Value.SectionKey == key).ToList();
 
     private async Task<Versioned<WebsiteRevision>> ReadRevisionAsync(string parish, string id, CancellationToken ct)
-        => await records.ReadAsync<WebsiteRevision>(Scope(parish), "websiteRevision:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
+        => await records.ReadAsync<WebsiteRevision>(RecordScopes.Parish(parish), "websiteRevision:" + id, ct) is { } row && row.Value.ParishId == parish ? row : throw Missing();
 
     private static string[] Missing(WebsiteRevision x) => Languages.Where(l => !x.Texts.ContainsKey(l)).ToArray();
 
