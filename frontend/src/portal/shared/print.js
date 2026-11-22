@@ -9,8 +9,8 @@ const esc = s =>
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
   );
 
-const FONTS =
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap';
+/* The portal's own fonts, served by this site (OFL): a printed sheet contacts no third party. */
+const FONTS = '/assets/fonts/portal-fonts.css';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
