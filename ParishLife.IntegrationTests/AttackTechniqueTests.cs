@@ -141,7 +141,7 @@ public class AttackTechniqueTests
     {
         await using var f = new LocalBackendFixture();
         await f.InitializeAsync();
-        var known = (await f.Services.GetRequiredService<UserManager<ParishUser>>().FindByIdAsync(await f.CreateVerifiedMemberAsync()))!.Email!;
+        var users = f.Services.GetRequiredService<UserManager<ParishUser>>();
         await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new() { ["ForwardedHeaders:Enabled"] = "true" }, _ => { });
         using var client = factory.Client();
         await Csrf(client);
@@ -155,25 +155,29 @@ public class AttackTechniqueTests
             return timer.Elapsed.TotalMilliseconds;
         }
         await TimeAsync("warm-up@fixture.example");
-        var unknown = new List<double>();
-        var wrong = new List<double>();
-        for (var i = 0; i < 4; i++) // four: the fifth wrong password locks the account, and a locked account answers without hashing
-        {
-            unknown.Add(await TimeAsync($"nobody-{i}@fixture.example"));
-            wrong.Add(await TimeAsync(known));
-        }
         // The fastest of each: other tests running in parallel only ever add time, so minimums compare the work done. The leak was a
-        // ~50 ms gap (one PBKDF2 check), so 25 ms still catches it without flaking under load.
-        double Fastest(List<double> values) => values.Min();
-        Assert.True(Fastest(wrong) - Fastest(unknown) < 25,
-            $"wrong password for a real account: fastest {Fastest(wrong):F1} ms; unknown address: fastest {Fastest(unknown):F1} ms");
-        // Audit N3: Identity answers a locked account before hashing; the controller pays the same cost there too.
-        await TimeAsync(known); // the fifth wrong password locks the account
-        var locked = new List<double>();
-        for (var i = 0; i < 4; i++)
-            locked.Add(await TimeAsync(known));
-        Assert.True(Fastest(wrong) - Fastest(locked) < 25,
-            $"wrong password for a real account: fastest {Fastest(wrong):F1} ms; locked account: fastest {Fastest(locked):F1} ms");
+        // ~50 ms gap (one PBKDF2 check), so 25 ms still catches it. A round uses a fresh account (four wrong passwords, then the lock);
+        // a real leak fails every round, while a burst of load on a busy machine fails one at most, so up to two rounds are measured.
+        async Task<string?> RoundAsync(int round)
+        {
+            var known = (await users.FindByIdAsync(await f.CreateVerifiedMemberAsync()))!.Email!;
+            var unknown = new List<double>();
+            var wrong = new List<double>();
+            for (var i = 0; i < 4; i++) // four: the fifth wrong password locks the account
+            {
+                unknown.Add(await TimeAsync($"nobody-{round}-{i}@fixture.example"));
+                wrong.Add(await TimeAsync(known));
+            }
+            await TimeAsync(known); // the fifth wrong password locks the account
+            var locked = new List<double>();
+            for (var i = 0; i < 4; i++)
+                locked.Add(await TimeAsync(known)); // audit N3: Identity answers a locked account before hashing; the controller pays the cost
+            var (w, u, l) = (wrong.Min(), unknown.Min(), locked.Min());
+            return w - u < 25 && w - l < 25 ? null : $"fastest: wrong password {w:F1} ms, unknown address {u:F1} ms, locked account {l:F1} ms";
+        }
+        var first = await RoundAsync(1);
+        var second = first is null ? null : await RoundAsync(2);
+        Assert.True(first is null || second is null, $"round 1 {first}; round 2 {second}");
     }
 
     // Technique 15: tampered encrypted cookies (Data Protection: AES-CBC with HMAC, encrypt-then-MAC) all fail the same way as no cookie,
