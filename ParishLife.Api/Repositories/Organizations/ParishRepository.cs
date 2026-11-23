@@ -1,7 +1,7 @@
 // Purpose: Persists organization verification, scoped grants, associations, and coverage with
 // conditional/idempotent writes.
 // Main functions: P, A, GetAsync, GrantId, GetGrantAsync, RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync,
-// GetCoveragesAsync, ActivateCoverageAsync, GetArchdioceseAsync, RegisterArchdioceseAsync, VerifyArchdioceseAsync,
+// GetCoveragesAsync, ActivateCoverageAsync, GrantFreeCoverageAsync, GetArchdioceseAsync, RegisterArchdioceseAsync, VerifyArchdioceseAsync,
 // ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, GetPayerScheduleAsync, CommitOrReplay,
 // Missing.
 
@@ -115,6 +115,21 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
         // The parish document is a shared revision guard for EVERY coverage writer.
         // Concurrent activation sees a changed ETag and cannot oversubscribe a period.
         await CommitOrReplay(documents.Batch(C, key).ReplaceItem("parish", Row("parish", key, "parish", parish.Value), PartitionDocuments.Match(parish.Version)).CreateItem(Row("coverage:" + coverage.Id, key, "coverage", coverage)).CreateItem(Receipt(key, operation, coverage)).CreateItem(Audit(key, operation, "subscription.activate_paid", coverage.InvoiceId)), key, operation, coverage, ct);
+    }
+
+    // Free coverage granted by an operator: the same verified-parish and no-overlap rules and parish revision guard as paid coverage, with no
+    // invoice or payer; the audit carries the operator's reason.
+    public async Task GrantFreeCoverageAsync(Coverage coverage, Operation operation, CancellationToken ct)
+    {
+        var key = P(coverage.ParishId);
+        if (await documents.ReplayAsync<Coverage>(C, key, operation, ct) is not null)
+            return;
+        var parish = await GetAsync(coverage.ParishId, ct) ?? throw Missing();
+        if (parish.Value.Status != ParishStatus.Verified)
+            throw new DomainException("verification_required", "Coverage requires an open verified parish.", FailureKind.Conflict);
+        if ((await GetCoveragesAsync(coverage.ParishId, ct)).Any(c => c.Overlaps(coverage)))
+            throw new DomainException("coverage_overlap", "Other coverage already covers part of this period; choose dates after it.", FailureKind.Conflict);
+        await CommitOrReplay(documents.Batch(C, key).ReplaceItem("parish", Row("parish", key, "parish", parish.Value), PartitionDocuments.Match(parish.Version)).CreateItem(Row("coverage:" + coverage.Id, key, "coverage", coverage)).CreateItem(Receipt(key, operation, coverage)).CreateItem(Audit(key, operation, "subscription.grant_free", coverage.Id, coverage.GrantReason)), key, operation, coverage, ct);
     }
 
     public Task<Versioned<PayerSchedule>?> GetPayerScheduleAsync(string parishId, CancellationToken ct) => documents.ReadAsync<PayerSchedule>(C, P(parishId), "payerSchedule", ct);

@@ -146,6 +146,9 @@ export const respondBishop = (a, id, body) =>
 export const listPlans = () => api('plans');
 export const publishPlan = body => api('plans', 'POST', op(body));
 export const parishCoverage = parishId => api(`parishes/${e(parishId)}/billing/coverage`);
+/* Operator only: free coverage with no invoice (owner decision, 23 November 2026). */
+export const grantFreeCoverage = (parishId, body) =>
+  api(`parishes/${e(parishId)}/billing/free-coverage`, 'POST', op(body));
 export const createInvoice = (parishId, body) => api(`parishes/${e(parishId)}/billing/invoices`, 'POST', op(body));
 export const getInvoice = (parishId, id) => api(`parishes/${e(parishId)}/billing/invoices/${e(id)}`);
 export const recordCash = (parishId, id, body) =>

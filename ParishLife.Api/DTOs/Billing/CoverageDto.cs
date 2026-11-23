@@ -23,6 +23,12 @@ public class CoverageDto
 
     public string BillingAccountId { get; set; } = string.Empty;
 
+    public bool Complimentary { get; set; }
+
+    public string? GrantedBy { get; set; }
+
+    public string? GrantReason { get; set; }
+
     public static CoverageDto From(Coverage value)
     {
         return new CoverageDto
@@ -34,7 +40,10 @@ public class CoverageDto
             Modules = [.. value.Modules],
             StartsAt = value.StartsAt,
             EndsAt = value.EndsAt,
-            BillingAccountId = value.BillingAccountId
+            BillingAccountId = value.BillingAccountId,
+            Complimentary = value.Complimentary,
+            GrantedBy = value.GrantedBy,
+            GrantReason = value.GrantReason
         };
     }
 }

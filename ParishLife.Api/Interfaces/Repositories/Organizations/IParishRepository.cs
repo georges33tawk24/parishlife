@@ -18,6 +18,8 @@ public interface IParishRepository
     Task RevokeAsync(string parishId, string version, string accountId, string reason, Operation operation, CancellationToken ct);
     Task<IReadOnlyList<Coverage>> GetCoveragesAsync(string parishId, CancellationToken ct);
     Task ActivateCoverageAsync(Coverage coverage, Operation operation, CancellationToken ct);
+
+    Task GrantFreeCoverageAsync(Coverage coverage, Operation operation, CancellationToken ct);
     Task<Archdiocese> RegisterArchdioceseAsync(Archdiocese organization, Operation operation, CancellationToken ct);
     Task<Versioned<Archdiocese>?> GetArchdioceseAsync(string id, CancellationToken ct);
     Task<Archdiocese> VerifyArchdioceseAsync(string id, string version, string evidence, Operation operation, CancellationToken ct);

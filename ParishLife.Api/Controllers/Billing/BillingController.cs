@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for billing workflows; delegates work to backend services.
-// Main functions: List, Publish, Create, Get, Receive, Coverage.
+// Main functions: List, Publish, Create, Get, Receive, Coverage, GrantFree (operator: free coverage).
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +18,8 @@ public sealed class BillingController(BillingService service) : ControllerBase
     public async Task<IActionResult> Get(Guid parishId, Guid invoiceId, CancellationToken ct) => Ok(await service.GetAsync(Guard.Id(parishId), Guard.Id(invoiceId), ct));
     [HttpPost("invoices/{invoiceId:guid}/cash-receipts")]
     public async Task<IActionResult> Receive(Guid parishId, Guid invoiceId, RecordCashDto request, CancellationToken ct) => Ok(CashReceiptDto.From(await service.RecordCashAsync(Guard.Id(parishId), Guard.Id(invoiceId), request, ct)));
+    [HttpPost("free-coverage")]
+    public async Task<IActionResult> GrantFree(Guid parishId, GrantFreeCoverageDto request, CancellationToken ct) => Ok(CoverageDto.From(await service.GrantFreeCoverageAsync(Guard.Id(parishId), request, ct)));
     [HttpGet("coverage")]
     public async Task<IActionResult> Coverage(Guid parishId, CancellationToken ct) => Ok((await service.GetCoverageAsync(Guard.Id(parishId), ct)).Select(CoverageDto.From));
 }

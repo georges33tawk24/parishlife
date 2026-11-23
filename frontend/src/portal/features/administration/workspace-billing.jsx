@@ -1,4 +1,5 @@
 /* Purpose: the Access and billing tab of the workspace, on ParishLife.Api: a parish's office coverage and
+   free coverage granted by an operator (POST .../billing/free-coverage), and
    grants (PUT /api/parishes/{id}/grants, .../grants/revoke), plans and the modules a parish has bought
    (GET /api/plans, .../billing/coverage), invoices and cash receipts, and the payer: who pays for the
    parish, and transfers between parish and archdiocese.
@@ -113,6 +114,42 @@ function Billing({ parish, archdioceses, operator }) {
     ]);
     return { plans, coverage, schedule, transfers };
   }, [parish.id]);
+  /* Free coverage: every module ticked by default; core is always included. */
+  const FREE_MODULES = [
+    ['office', L('Office', 'المكتب')],
+    ['requests', L('Requests', 'الطلبات')],
+    ['sacraments', L('Sacraments', 'الأسرار')],
+    ['ministries', L('Ministries', 'الأخويات')],
+    ['facilities', L('Facilities', 'المرافق')],
+    ['finance', L('Finance', 'المالية')]
+  ];
+  const grantFree = () =>
+    openForm({
+      title: L('Grant free coverage', 'منح تغطية مجانية') + ' · ' + parish.name,
+      intro: L(
+        'Free of charge: no invoice, receipt or payment. It is recorded with your name and reason, and cannot overlap other coverage.',
+        'مجاناً: بلا فاتورة أو إيصال أو دفع. تُسجَّل باسمك وسببك، ولا يمكن أن تتداخل مع تغطية أخرى.'
+      ),
+      fields: [
+        ...FREE_MODULES.map(([name, label]) => ({ name: 'module-' + name, label, type: 'check', value: true })),
+        { name: 'startsAt', label: L('Starts', 'تبدأ'), type: 'date', value: new Date().toISOString().slice(0, 10) },
+        {
+          name: 'endsAt',
+          label: L('Ends (optional, empty = no end)', 'تنتهي (اختياري، فارغ = بلا نهاية)'),
+          type: 'date',
+          required: false
+        },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }
+      ],
+      save: v =>
+        A.grantFreeCoverage(parish.id, {
+          modules: FREE_MODULES.map(([name]) => name).filter(name => v['module-' + name]),
+          startsAt: startOfDay(v.startsAt),
+          endsAt: startOfDay(v.endsAt),
+          reason: v.reason
+        }),
+      done: reload
+    });
   const newInvoice = () =>
     openForm({
       title: L('Create an invoice', 'إنشاء فاتورة') + ' · ' + parish.name,
@@ -271,9 +308,14 @@ function Billing({ parish, archdioceses, operator }) {
               {L('Create invoice', 'إنشاء فاتورة')}
             </button>{' '}
             {operator ? (
-              <button className="btn btn-secondary btn-dense" data-plan-publish="" onClick={publish}>
-                {L('Publish a plan', 'نشر باقة')}
-              </button>
+              <>
+                <button className="btn btn-secondary btn-dense" data-free-coverage="" onClick={grantFree}>
+                  {L('Grant free coverage', 'منح تغطية مجانية')}
+                </button>{' '}
+                <button className="btn btn-secondary btn-dense" data-plan-publish="" onClick={publish}>
+                  {L('Publish a plan', 'نشر باقة')}
+                </button>
+              </>
             ) : null}
           </>
         }
@@ -287,8 +329,14 @@ function Billing({ parish, archdioceses, operator }) {
                   key={c.id}
                   title={c.modules.join(', ')}
                   lines={[
-                    `${shortDay(c.startsAt)} → ${shortDay(c.endsAt)}`,
-                    `${L('Invoice', 'الفاتورة')}: ${c.invoiceId}`
+                    `${shortDay(c.startsAt)} → ${
+                      String(c.endsAt).startsWith('9999') ? L('no end', 'بلا نهاية') : shortDay(c.endsAt)
+                    }`,
+                    c.complimentary
+                      ? `${L('Free (granted by a ParishLife administrator)', 'مجانية (منحها مشرف ParishLife)')}${
+                          c.grantReason ? ' · ' + c.grantReason : ''
+                        }`
+                      : `${L('Invoice', 'الفاتورة')}: ${c.invoiceId}`
                   ]}
                 />
               ))

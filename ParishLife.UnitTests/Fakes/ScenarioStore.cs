@@ -171,6 +171,8 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             return Task.FromResult<IReadOnlyList<Coverage>>(Coverages.Where(c => c.ParishId == id).ToArray());
     }
 
+    public Task GrantFreeCoverageAsync(Coverage coverage, Operation op, CancellationToken ct) => ActivateCoverageAsync(coverage, op, ct);
+
     public Task ActivateCoverageAsync(Coverage coverage, Operation op, CancellationToken ct)
     {
         Mutate("tenant:" + coverage.ParishId, op, () =>

@@ -1,7 +1,8 @@
 // Purpose: Coordinates plan/invoice/receipt operations and durable subscription coverage with current access
 // checks.
 // Main functions: ListPlansAsync, PublishPlanAsync, CreateInvoiceAsync, GetAsync, InspectForOperatorAsync,
-// Summary, RecordCashAsync, GetCoverageAsync, ProcessAsync. Invoices and cash follow the parish's accepted payer schedule (SUB09).
+// Summary, RecordCashAsync, GetCoverageAsync, GrantFreeCoverageAsync (operator only: free coverage with no invoice, owner decision
+// 23 November 2026), ProcessAsync. Invoices and cash follow the parish's accepted payer schedule (SUB09).
 
 using ParishLife.Api.DTOs.Billing;
 using ParishLife.Api.Interfaces.Repositories.Billing;
@@ -114,6 +115,26 @@ public sealed class BillingService(IPlanRepository plans, IBillingRepository bil
             RecordedAt = op.At
         };
         return await billing.ReceiveCashAsync(billingAccountId, invoiceId, Versions.Require(request.Version), receipt, op, ct);
+    }
+
+    public async Task<Coverage> GrantFreeCoverageAsync(string parishId, GrantFreeCoverageDto request, CancellationToken ct)
+    {
+        await platform.RequireOperatorAsync(ct);
+        var modules = (request.Modules ?? []).Append("core").Distinct(StringComparer.Ordinal).ToArray();
+        if (modules.Any(m => !ProductModules.All.Contains(m)))
+            throw new DomainException("invalid_modules", "Choose known modules.");
+        var starts = Guard.Utc(request.StartsAt);
+        var ends = request.EndsAt is { } end ? Guard.Utc(end) : Coverage.NoEnd;
+        if (ends <= starts || ends <= clock.GetUtcNow())
+            throw new DomainException("invalid_dates", "The end must follow the start and today.");
+        var op = actor.CreateOperation(request.OperationId, request, clock, "free-coverage:v1:" + parishId);
+        var coverage = new Coverage
+        {
+            Id = op.Id, ParishId = parishId, InvoiceId = string.Empty, PlanId = string.Empty, Modules = modules, StartsAt = starts, EndsAt = ends,
+            BillingAccountId = string.Empty, Complimentary = true, GrantedBy = actor.AccountId, GrantReason = Guard.Text(request.Reason, "Reason", 500)
+        };
+        await parishes.GrantFreeCoverageAsync(coverage, op, ct);
+        return coverage;
     }
 
     public async Task<IReadOnlyList<Coverage>> GetCoverageAsync(string parishId, CancellationToken ct)

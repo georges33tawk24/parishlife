@@ -15,6 +15,7 @@
 - All code is on GitHub (`fullstack-integration`).
 
 ## Still to do
+0. **Free coverage** is built (not live yet): Administration → Access and billing → "Grant free coverage". Next after deploy: the rest of your fix list (setup checklist, forms, sign-in, spacing).
 1. **WhatsApp:** you set up Meta Business, a WhatsApp number, two message templates and a token. Then the Azure chat switches it on.
 2. **Google Maps** on the public pages: you said you'll add it.
 3. **Restore test every 3 months:** not scheduled yet.
