@@ -205,7 +205,9 @@ export async function loadSession() {
     role: ['super_admin', 'diocesan_admin', 'bishop'].find(r => across.has(r)) || 'member',
     person_id: null
   };
-  if (!session.parishes.some(p => p.id === session.parishId)) session.parishId = session.parishes[0]?.id || null;
+  // A ParishLife administrator starts in Administration (no parish) and picks a parish in the switcher; others start in their first parish.
+  if (!session.parishes.some(p => p.id === session.parishId))
+    session.parishId = session.accountUser.role === 'super_admin' ? null : session.parishes[0]?.id || null;
   selectParish(session.parishId);
   return session;
 }

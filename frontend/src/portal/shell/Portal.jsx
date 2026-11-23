@@ -676,6 +676,16 @@ export function Portal() {
       return false;
     }
   };
+  /* Back from a parish to the ParishLife administration (super admins only). */
+  const switchToPlatform = async () => {
+    if (!session.parishId || !confirmPlanNavigation() || !(await persist())) return;
+    selectParish(null);
+    S.role = session.user.role;
+    await hydrate().catch(() => {});
+    closeOverlays();
+    location.hash = '#/workspace';
+    renderAll();
+  };
   const parishSwitcher = () => {
     if (!session.parishes.length) {
       go('account');
@@ -692,6 +702,15 @@ export function Portal() {
           <div className="ac-group" style={{ paddingInline: 0 }}>
             {t(PARISH.eparchy, PARISH.eparchyAr)}
           </div>
+          {session.accountUser?.role === 'super_admin' ? (
+            <button className="ac-opt" data-parish="" onClick={switchToPlatform}>
+              <span className="avatar">P</span>
+              <span>
+                <b>{t('ParishLife administration', 'إدارة ParishLife')}</b>
+                <small>{t('Every church and archdiocese', 'كل الكنائس والأبرشيات')}</small>
+              </span>
+            </button>
+          ) : null}
           {session.parishes.map(x => (
             <button key={x.id} className="ac-opt" data-parish={x.id} onClick={() => switchParish(x.id)}>
               <span className="avatar">{t(x.name, x.ar).slice(0, 1)}</span>

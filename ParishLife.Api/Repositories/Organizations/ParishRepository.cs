@@ -21,6 +21,10 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
     private static string A(string id) => "archdiocese:" + id;
     public Task<Versioned<Parish>?> GetAsync(string parishId, CancellationToken ct) => documents.ReadAsync<Parish>(C, P(parishId), "parish", ct);
     private static string GrantId(AccessGrant grant) => "grant:" + grant.AccountId + ":" + (grant.AssociationId ?? "local");
+    public async Task<IReadOnlyList<string>> GrantParishIdsAsync(string accountId, CancellationToken ct)
+        => (await documents.PartitionKeysAsync(C, StorageQuery.Type("grant").Where(StorageFilter.And(StorageFilter.Eq("data.accountId", accountId), StorageFilter.Eq("data.revoked", false))), 200, ct))
+            .Where(key => key.StartsWith("parish:", StringComparison.Ordinal)).Select(key => key["parish:".Length..]).ToArray();
+
     public async Task<AccessGrant?> GetGrantAsync(string parishId, string accountId, CancellationToken ct)
     {
         var parish = await GetAsync(parishId, ct);

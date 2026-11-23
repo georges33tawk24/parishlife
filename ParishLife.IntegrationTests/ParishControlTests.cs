@@ -113,7 +113,7 @@ public class ParishControlTests
     }
 
     [Fact]
-    public async Task The_controller_grants_office_access_by_email_and_an_unknown_name_is_refused()
+    public async Task The_controller_grants_office_access_by_email_and_both_find_the_parish_without_following_it()
     {
         await using var f = new LocalBackendFixture();
         await f.InitializeAsync();
@@ -131,5 +131,10 @@ public class ParishControlTests
         await parishes.GrantAsync(s.Parish, Grant(email.ToUpperInvariant()), default);
         f.As(secretary);
         await f.Services.GetRequiredService<IParishAccess>().RequireAsync(s.Parish, Permissions.PeopleRead, default);
+        // Neither follows the parish, yet both find it in their capacities (the parish switcher).
+        var home = f.Services.GetRequiredService<ParishLife.Api.Services.PersonalWorkspace.CombinedHomeService>();
+        Assert.Contains(await home.CapacitiesAsync(default), c => c.Kind == "ParishGrant" && c.ParishId == s.Parish);
+        f.As(f.Other);
+        Assert.Contains(await home.CapacitiesAsync(default), c => c.Kind == "ParishGrant" && c.ParishId == s.Parish);
     }
 }

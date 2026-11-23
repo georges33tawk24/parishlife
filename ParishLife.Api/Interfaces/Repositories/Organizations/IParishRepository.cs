@@ -12,6 +12,9 @@ public interface IParishRepository
 {
     Task<Versioned<Parish>?> GetAsync(string parishId, CancellationToken ct);
     Task<AccessGrant?> GetGrantAsync(string parishId, string accountId, CancellationToken ct);
+
+    // Parishes where the account holds a current (unrevoked) grant row: a discovery hint; callers still check the grant itself.
+    Task<IReadOnlyList<string>> GrantParishIdsAsync(string accountId, CancellationToken ct) => Task.FromResult<IReadOnlyList<string>>([]);
     Task<Parish> RegisterAsync(Parish parish, AccessGrant ownerGrant, Operation operation, CancellationToken ct);
     Task<Parish> VerifyAsync(string parishId, string version, string evidence, Operation operation, CancellationToken ct);
     Task GrantAsync(string parishId, string version, AccessGrant grant, Operation operation, CancellationToken ct);
