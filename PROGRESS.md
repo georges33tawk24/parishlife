@@ -18,7 +18,7 @@
 1. **WhatsApp:** you set up Meta Business, a WhatsApp number, two message templates and a token. Then the Azure chat switches it on.
 2. **Google Maps** on the public pages: you said you'll add it.
 3. **Restore test every 3 months:** not scheduled yet.
-4. **Point the live tests at the test database** (code), then open the database firewall for them when you're ready.
+4. **Live tests:** built, and they use only the test database. To run them, open the database firewall for your computer (Azure chat), then follow docs/operations/live-tests.md.
 5. **Screens not built yet:** the bishop's calendar editor and delegate list, the archdiocese checklist editor, and the billing representative.
 6. **With Georges:** make `fullstack-integration` the main branch and delete the old branches.
 
