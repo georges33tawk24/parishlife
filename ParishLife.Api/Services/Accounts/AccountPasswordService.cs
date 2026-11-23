@@ -49,6 +49,7 @@ public class AccountPasswordService(IRecordTransactions records, MfaAccountAcces
         if (request.NewPassword is null || request.NewPassword.Length is < 16 or > 200)
             throw new DomainException("invalid_password", "New password must contain 16–200 characters.");
         var staged = await users.StagePasswordAsync(user, request.NewPassword);
+        BreachedPasswordValidator.ThrowIfBreached(staged);
         if (!staged.Succeeded)
             throw new DomainException("new_password_rejected", "The proposed password does not satisfy the configured password policy.");
         user.AccessFailedCount = 0;
@@ -86,6 +87,7 @@ public class AccountPasswordService(IRecordTransactions records, MfaAccountAcces
             throw new DomainException("password_unchanged", "Choose a password different from the current password.");
 
         var staged = await users.StagePasswordAsync(user, request.NewPassword);
+        BreachedPasswordValidator.ThrowIfBreached(staged);
         if (!staged.Succeeded)
             throw new DomainException("new_password_rejected", "The proposed password does not satisfy the configured password policy.");
         user.AccessFailedCount = 0;

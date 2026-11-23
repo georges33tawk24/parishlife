@@ -12,9 +12,9 @@ namespace ParishLife.Api.Services.Accounts;
 
 public sealed class AccountService(UserManager<ParishUser> users, IUserStore<ParishUser> store, TimeProvider clock)
 {
-    // The later effective date of terms.html and privacy.html (privacy: 23 November 2026); change it with either. Sign-up records it
+    // The later effective date of terms.html and privacy.html (privacy: 24 November 2026); change it with either. Sign-up records it
     // with the acceptance time.
-    public const string TermsVersion = "2026-11-23";
+    public const string TermsVersion = "2026-11-24";
 
     public async Task RegisterAsync(RegisterAccountDto request, CancellationToken ct)
     {
@@ -48,6 +48,7 @@ public sealed class AccountService(UserManager<ParishUser> users, IUserStore<Par
             TermsAcceptedAt = clock.GetUtcNow()
         };
         var result = await users.CreateAsync(user, request.Password);
+        BreachedPasswordValidator.ThrowIfBreached(result); // checked before the account exists, so it says nothing about the address
         if (!result.Succeeded && result.Errors.Any(e => e.Code is not ("DuplicateEmail" or "DuplicateUserName" or "DuplicateAccount")))
             throw new DomainException("registration_invalid", "The account could not be registered with the supplied details.");
         // Return the same neutral public response for existing and new identifiers.

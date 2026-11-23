@@ -210,6 +210,7 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
         if (request.NewPassword is null || request.NewPassword.Length is < 16 or > 200)
             throw new DomainException("invalid_password", "New password must contain 16–200 characters.");
         var staged = await users.StagePasswordAsync(user, request.NewPassword); // also issues the new security stamp
+        BreachedPasswordValidator.ThrowIfBreached(staged);
         if (!staged.Succeeded)
             throw new DomainException("new_password_rejected", "The proposed password does not satisfy the configured password policy.");
         // The authenticator code is spent like a sign-in code: it cannot reset again, nor sign in, within its window (and the reverse).

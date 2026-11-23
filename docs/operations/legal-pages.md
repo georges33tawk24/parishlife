@@ -56,6 +56,7 @@ Georges was not consulted on this wording. Any change later: edit the page, keep
 | **Visit counts skip Do Not Track / Global Privacy Control**; the count sends the anti-forgery cookie. | `frontend/src/lib/beacon.js` |
 | **Operators review reported messages.** | `MessageReport`, `docs/operations/communications.md` (N02) |
 | **Resend also sends password-reset codes.** | `ResendContactCodeDelivery` (reset purpose), `docs/operations/account-*.md` |
+| **Have I Been Pwned checks new passwords; only the first 5 characters of a one-way fingerprint are sent.** | `Identity/BreachedPasswordValidator.cs` (SHA-1 prefix, `Add-Padding`, on in Production only, fails open after 3 s) |
 | **Self-service copy and closure; what closing deletes and keeps.** | `AccountClosureService` (`ExportAsync`, `CloseAsync`), `account-closure.jsx` |
 | **Sign-up asks for the 13+ confirmation, no birth date.** | `RegisterAccountDto`, `Auth.jsx` (`ageConfirmed`) |
 | **No AI.** | No model calls in the code (`hardening/PROJECT_MAP.md` section 12) |

@@ -74,6 +74,15 @@ Unconfigured providers have no authentication scheme: capability reports `Availa
 
 Known limit: someone who registered with email and password but never confirmed the email (no email sender exists yet) cannot sign in, and sign-up with that email answers `email-in-use`. That is the never-merge rule working as decided; it resolves once email delivery exists. Apple is not implemented. No provider app registration or secret exists in this repository.
 
+## Breached-password check (owner decision, 23 November 2026)
+
+Every new password (sign-up, password change, add a password, reset) is also checked against the Have I Been Pwned range API by `Identity/BreachedPasswordValidator.cs`, registered as an Identity password validator:
+- Only the first 5 characters of the password's SHA-1 hash are sent, with `Add-Padding: true`; the answer lists matching suffixes, compared on the server. The password, its full hash, the email and the name never leave.
+- A match answers `password_breached` with its own message. The check runs before the account exists, so it says nothing about whether an address has an account.
+- On by default in Production only; `PasswordBreachCheck__Enabled` (`true` or `false`) overrides it. Development and tests never call out.
+- If the service does not answer within 3 seconds or fails, the password is accepted and a warning is logged without any password data.
+- The App Service needs outbound HTTPS to `api.pwnedpasswords.com`.
+
 ## Turnstile and capability (X13)
 
 `Turnstile:SiteKey` + `Turnstile:SecretKey` (secret via App Service/Key Vault reference) enable enforcement; otherwise behaviour is unchanged. Optional `Turnstile:ExpectedHostname`. Protected public endpoints: `register`, `login`, `login/passkey/options`, `contact-verification`, `external/{provider}/sign-in`, `external/{provider}/sign-up` (the external posts take the token as the `turnstileToken` form field). Clients send the widget token in `X-Turnstile-Token`; the API posts secret/token/remote IP to Cloudflare siteverify through the named `Turnstile` HttpClient (10 s timeout). Missing/failed token → 400 `turnstile_failed`; verifier unreachable → 503 `turnstile_unavailable` (fail closed). Secrets/tokens are never logged. Since 19 November 2026 the anonymous guest request form (`POST /api/public/parishes/{id}/requests`, Q08) is protected too: the public request page already sent the token, but the API did not check it. The later guest steps (tracking, messages, files) use the private tracking token and are not bot-checked.

@@ -3,7 +3,7 @@
      Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language). First approved by
      the owner on 21 November 2026; the 22 November 2026 version adds factual corrections and the new account features
      (self-service data copy and closure, password reset, the 13+ confirmation); the 23 November 2026 version says what
-     security events keep (Agent 08 handoff 4). The text describes only what the code does
+     security events keep (Agent 08 handoff 4); the 24 November 2026 version adds the breached-password check. The text describes only what the code does
      (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
 <html lang="en" dir="ltr">
 <head>
@@ -48,7 +48,7 @@
          belong in "Who runs ParishLife" in both languages once provided (hardening/legal-drafts/privacy-policy.md, P1). -->
     <section lang="en" dir="ltr">
       <h1>Privacy policy</h1>
-      <p class="meta">Effective date: 23 November 2026</p>
+      <p class="meta">Effective date: 24 November 2026</p>
 
       <h2>Who runs ParishLife</h2>
       <p>ParishLife runs this service at parish-life.org. For any privacy question or request, write to <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
@@ -94,6 +94,7 @@
         <li><b>Cloudflare</b> provides the domain name service and Turnstile, a bot check on sign-in, sign-up and public request forms. Turnstile processes technical information about your browser and connection to tell people from bots.</li>
         <li><b>Google</b> and <b>Microsoft</b>, only if you choose to sign in with them.</li>
         <li><b>Resend</b> sends ParishLife's account emails: the codes that confirm your email address when you sign up or change it, and the codes that reset a forgotten password.</li>
+        <li><b>Have I Been Pwned</b> checks whether a new password has appeared in a known data breach. ParishLife sends only the first 5 characters of a one-way fingerprint of the password, never the password itself, your email or your name.</li>
       </ul>
       <p>ParishLife stores its data in Microsoft Azure's France Central region, in the European Union. Cloudflare, Google, Microsoft and Resend may handle the limited data described above in other countries, including the United States.</p>
       <p>ParishLife sends no newsletters, marketing email or text messages, and takes no online payments.</p>
@@ -134,7 +135,7 @@
 
     <section lang="ar" dir="rtl">
       <h1>سياسة الخصوصية</h1>
-      <p class="meta">تاريخ السريان: ٢٣ تشرين الثاني ٢٠٢٦</p>
+      <p class="meta">تاريخ السريان: ٢٤ تشرين الثاني ٢٠٢٦</p>
 
       <h2>من يدير ParishLife</h2>
       <p>يدير ParishLife هذه الخدمة على parish-life.org. لأي سؤال أو طلب يتعلّق بالخصوصية، راسلنا على <a href="mailto:privacy@parish-life.org">privacy@parish-life.org</a>.</p>
@@ -180,6 +181,7 @@
         <li><b>Cloudflare</b> تقدّم خدمة اسم النطاق وخدمة Turnstile، وهي فحص ضدّ البرامج الآلية عند الدخول وإنشاء الحساب ونماذج الطلبات العامة. يعالج Turnstile معلومات تقنية عن متصفّحك واتصالك ليميّز الأشخاص من البرامج الآلية.</li>
         <li><b>Google</b> و<b>Microsoft</b>، فقط إذا اخترت الدخول عبرهما.</li>
         <li><b>Resend</b> ترسل رسائل البريد الخاصة بحسابك في ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد، والرموز التي تعيد تعيين كلمة مرور منسيّة.</li>
+        <li><b>Have I Been Pwned</b> تتحقّق ممّا إذا كانت كلمة المرور الجديدة قد ظهرت في تسريب بيانات معروف. لا يرسل ParishLife إلّا أول ٥ أحرف من بصمة أحادية الاتجاه لكلمة المرور، ولا يرسل أبداً كلمة المرور نفسها ولا بريدك ولا اسمك.</li>
       </ul>
       <p>يحفظ ParishLife بياناته لدى Microsoft Azure في منطقة France Central داخل الاتحاد الأوروبي. وقد تعالج Cloudflare وGoogle وMicrosoft وResend البيانات المحدودة المذكورة أعلاه في بلدان أخرى، منها الولايات المتحدة.</p>
       <p>لا يرسل ParishLife نشرات أو رسائل تسويقية أو رسائل نصية، ولا يقبل الدفع عبر الإنترنت.</p>

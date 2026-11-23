@@ -312,9 +312,10 @@ public static class ServiceCollectionExtensions
             options.Lockout.AllowedForNewUsers = true;
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        }).AddUserStore<CosmosIdentityStore>().AddUserManager<ParishUserManager>().AddSignInManager()
+        }).AddUserStore<CosmosIdentityStore>().AddUserManager<ParishUserManager>().AddSignInManager().AddPasswordValidator<BreachedPasswordValidator>()
             .AddUserConfirmation<VerifiedAccountConfirmation>().AddTokenProvider<DataProtectorTokenProvider<ParishUser>>(TokenOptions.DefaultProvider)
             .AddTokenProvider<AuthenticatorTokenProvider<ParishUser>>(TokenOptions.DefaultAuthenticatorProvider);
+        services.AddHttpClient(BreachedPasswordValidator.ClientName, client => client.Timeout = TimeSpan.FromSeconds(3));
         services.AddScoped<AccountService>();
         services.AddScoped<AccountPasswordService>();
         services.AddScoped<AccountCookieService>();
