@@ -199,6 +199,30 @@ public class MembershipTests
         Assert.Equal(ParishLife.Api.Models.Enums.FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.FinanceRead, default))).Kind);
     }
 
+    [Fact]
+    public async Task An_invitation_role_is_not_applied_when_its_issuer_lost_control_before_acceptance()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var person = await PersonAsync(x, "Late");
+        f.As(f.FirstAdmin);
+        var issued = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid(), Allows = [Permissions.PeopleWrite] }, default);
+        // Control moves to the parish's appointed priest before the person accepts.
+        await f.Services.GetRequiredService<ParishLife.Api.Services.Organizations.ParishControlService>().HandOverAsync(x.Parish, new ParishLife.Api.DTOs.Organizations.HandOverParishControlDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await f.Services.GetRequiredService<ParishLife.Api.Interfaces.Repositories.Organizations.IParishRepository>().GetAsync(x.Parish, default))!.Version,
+            Account = "other@fixture.example"
+        }, default);
+
+        var invitee = await f.CreateVerifiedStaffAsync();
+        f.As(invitee);
+        var accepted = await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default);
+        Assert.Equal(("Used", false), (accepted.Status, accepted.RoleApplied));
+        await Assert.ThrowsAsync<DomainException>(() => f.Services.GetRequiredService<ParishLife.Api.Interfaces.Services.Organizations.IParishAccess>().RequireAsync(x.Parish, Permissions.PeopleWrite, default));
+    }
+
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)
     {
         var staff = await StaffAppointmentScenario.CreateAsync(f);

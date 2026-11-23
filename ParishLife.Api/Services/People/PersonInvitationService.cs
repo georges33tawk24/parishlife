@@ -147,14 +147,17 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
                 : RecordChange.Replace(claimKey, "personAccountClaim", claim.Value, claim.Version));
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
             // The attached role, if the issuer still controls the parish: merged into the account's own local grant.
-            if (item.RoleAllows.Length > 0 && root.Value.OwnerAccountId == item.CreatedBy && root.Value.OwnerAccountId != actor.AccountId)
+            // Only what the issuer still holds at acceptance is given, so a shrunken grant cannot be widened through an old link.
+            var issuerGrant = item.RoleAllows.Length > 0 ? await parishes.GetGrantAsync(parish, item.CreatedBy, ct) : null;
+            var role = item.RoleAllows.Where(x => x != Permissions.AccessManage && issuerGrant?.Permits(x, op.At) == true).ToArray();
+            if (role.Length > 0 && root.Value.OwnerAccountId == item.CreatedBy && root.Value.OwnerAccountId != actor.AccountId)
             {
                 var key = "grant:" + actor.AccountId + ":local";
                 var existing = await records.ReadAsync<AccessGrant>(Scope(parish), key, ct);
                 var current = existing?.Value is { Revoked: false } held ? held.Allows : [];
                 var grant = new AccessGrant
                 {
-                    AccountId = actor.AccountId, Allows = current.Union(item.RoleAllows, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    AccountId = actor.AccountId, Allows = current.Union(role, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                     Denies = existing?.Value is { Revoked: false } kept ? kept.Denies : [], StartsAt = op.At, EndsAt = null, Revoked = false, GrantedBy = item.CreatedBy
                 };
                 changes.Add(existing is null ? RecordChange.Create(key, "grant", grant) : RecordChange.Replace(key, "grant", grant, existing.Version));
