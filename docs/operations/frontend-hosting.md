@@ -46,10 +46,12 @@ The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` a
 1. From a clean checkout of the commit to deploy, run `powershell -File tools/Publish-ParishLife.ps1` (it needs .NET SDK 10.0.4xx and Node).
 2. In the Azure session, after `az login`, run the command it prints: `az webapp deploy -g rg-parishlife -n app-parishlife --src-path <zip> --type zip --clean true`.
 3. Check:
-   - `https://<host>/` shows the sign-in page.
+   - `https://<host>/` shows the public home page and `/index.html` the sign-in page (since `0d35ee3`).
    - `/health/ready` reports Healthy.
    - A sign-in completes in the browser.
    - In Application Insights, no CSP or `/api` errors.
+
+**Deploy window:** a zip deploy with `--clean` on the single instance takes about two minutes, and requests during the file swap can fail with 500 (`BadImageFormatException`: the old process loads a half-replaced assembly; seen 23 November at 13:52–13:53 UTC on sign-in). Tell the owner not to sign in during that window, deploy at a quiet time, and check Application Insights only after it ends. A deployment slot with swap would remove the window; that is an Azure change needing the owner's go-ahead.
 
 Before each deploy, preview the Cosmos index with `tools/Initialize-Cosmos.ps1` (without `-Apply`) and apply only if it plans a change. The queries filter on the paths in `docs/cosmos/containers.json`, and the local store refuses queries on unindexed paths to catch a missing one.
 
