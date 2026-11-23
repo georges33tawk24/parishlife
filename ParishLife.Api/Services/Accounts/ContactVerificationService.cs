@@ -1,7 +1,9 @@
 // Purpose: proves ownership of a sign-in email with one-use, expiring, attempt-bounded codes (A06): confirming a registered
 // account's email and replacing the sign-in email while the old one stays active until the new one is proven.
 // Main functions: RequestAsync, ConfirmAsync (anonymous, neutral responses), BeginEmailChangeAsync, ConfirmEmailChangeAsync,
-// RequestPasswordResetAsync and ConfirmPasswordResetAsync (forgotten password, below); helpers Hash, Pending, FailAttemptAsync.
+// RequestPasswordResetAsync and ConfirmPasswordResetAsync (forgotten password, below); helpers Hash, Pending, FailAttemptAsync, Window.
+// Daily cap (owner decision, 23 November 2026): at most 10 codes per account and purpose in 24 hours, so no one can flood an inbox
+// (or the email bill) one code a minute; past it, requests get the usual neutral answer and nothing is sent.
 // Codes are stored only as hashes and never enter fingerprints, receipts, audit or logs.
 // Password reset: an 8-digit code (15 minutes, 5 attempts, one request a minute) goes only to an active account's confirmed email; the
 // request answer is the same for every address. Confirming it with a new password (and the current authenticator code when the account
@@ -27,6 +29,8 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
     internal const int MaximumAttempts = 5;
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan ResendInterval = TimeSpan.FromMinutes(1);
+    internal const int DailyLimit = 10;
+    private static readonly TimeSpan Day = TimeSpan.FromHours(24);
     private const string ConfirmKey = "contactVerification:ConfirmEmail";
     private const string ChangeKey = "contactVerification:ChangeEmail";
     private const string ResetKey = "contactVerification:ResetPassword";
@@ -44,8 +48,12 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
         var current = await records.ReadAsync<ContactVerification>(scope, ConfirmKey, ct);
         if (current?.Value is { Status: "Pending" } open && open.CreatedAt + ResendInterval > clock.GetUtcNow())
             return neutral;
+        var (start, sent) = Window(current?.Value);
+        if (sent >= DailyLimit)
+            return neutral;
         var code = NewCode();
         var item = Stage(user, "ConfirmEmail", user.Email, user.NormalizedEmail!, code);
+        (item.WindowStartedAt, item.SentInWindow) = (start, sent + 1);
         if (!await delivery.SendAsync(user.Email, code, item.Purpose, ct))
             return neutral;
         item.Delivery = "Accepted";
@@ -91,13 +99,17 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
                 ? saved : throw new DomainException("email_change_superseded", "A later email change replaced this one.", FailureKind.Conflict));
         if (!delivery.Configured)
             throw new DomainException("contact_delivery_unavailable", "No email delivery provider is configured, so a new address cannot be verified. Use the office identity-review route.", FailureKind.Unavailable);
+        var current = await records.ReadAsync<ContactVerification>(scope, ChangeKey, ct);
+        var (start, sent) = Window(current?.Value);
+        if (sent >= DailyLimit)
+            throw new DomainException("contact_daily_limit", "Too many verification codes were sent today. Try again tomorrow.", FailureKind.Unavailable);
         var code = NewCode();
         var item = Stage(user, "ChangeEmail", email, normalized, code, operation.Id);
+        (item.WindowStartedAt, item.SentInWindow) = (start, sent + 1);
         // The code goes only to the replacement address; the current email stays the active sign-in alias until confirmation.
         if (!await delivery.SendAsync(email, code, item.Purpose, ct))
             throw new DomainException("contact_delivery_failed", "The verification code could not be handed to the delivery provider. Try again later.", FailureKind.Unavailable);
         item.Delivery = "Accepted";
-        var current = await records.ReadAsync<ContactVerification>(scope, ChangeKey, ct);
         await records.CommitAsync(scope, operation, "identity.email_change.requested", item.Id,
             [RecordChange.Replace("account", "account", user, user.PersistenceVersion!),
              current is null ? RecordChange.Create(ChangeKey, "contactVerification", item) : RecordChange.Replace(ChangeKey, "contactVerification", item, current.Version)],
@@ -169,8 +181,12 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
         var current = await records.ReadAsync<ContactVerification>(scope, ResetKey, ct);
         if (current?.Value is { Status: "Pending" } open && open.CreatedAt + ResendInterval > clock.GetUtcNow())
             return neutral;
+        var (start, sent) = Window(current?.Value);
+        if (sent >= DailyLimit)
+            return neutral;
         var code = RandomNumberGenerator.GetInt32(0, 100_000_000).ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
         var item = Stage(user, "ResetPassword", user.Email, user.NormalizedEmail!, code);
+        (item.WindowStartedAt, item.SentInWindow) = (start, sent + 1);
         if (!await delivery.SendAsync(user.Email, code, item.Purpose, ct))
             return neutral;
         item.Delivery = "Accepted";
@@ -224,6 +240,13 @@ public class ContactVerificationService(IRecordTransactions records, MfaAccountA
             CreatedAt = clock.GetUtcNow(),
             ExpiresAt = clock.GetUtcNow().Add(Lifetime)
         };
+    }
+
+    // The 24-hour window the next code would count in: the previous code's window while it lasts, otherwise a new one from now.
+    private (DateTimeOffset Start, int Sent) Window(ContactVerification? previous)
+    {
+        var now = clock.GetUtcNow();
+        return previous is { WindowStartedAt: { } start } && start + Day > now ? (start, previous.SentInWindow) : (now, 0);
     }
 
     private ContactVerification Pending(Versioned<ContactVerification>? row, ParishUser user, string? normalizedTarget)

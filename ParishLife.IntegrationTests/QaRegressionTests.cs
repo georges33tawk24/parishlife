@@ -210,7 +210,7 @@ public class QaRegressionTests
     }
 
     // Item 15: one address can be sent a code once a minute, which is still up to 1,440 emails a day to a victim's inbox (and on the bill).
-    [KnownFailureFact("from-09-qa.md #3: no daily cap on code emails per address; 10 a day is a placeholder until the owner sets the number")]
+    [Fact] // from-09-qa.md #3, fixed: 10 codes per account and purpose in 24 hours (owner decision, 23 November 2026)
     public async Task Code_emails_to_one_address_stop_at_a_daily_cap()
     {
         await using var f = new LocalBackendFixture();
@@ -227,6 +227,10 @@ public class QaRegressionTests
             f.Clock.Now = f.Clock.Now.AddMinutes(1).AddSeconds(1);
         }
         Assert.True(delivery.Sent.Count <= 10, $"{delivery.Sent.Count} reset emails to one address within 31 minutes");
+        Assert.Equal(10, delivery.Sent.Count); // the cap, not something stricter
+        f.Clock.Now = f.Clock.Now.AddHours(24); // a new 24-hour window
+        await service.RequestPasswordResetAsync(new RequestPasswordResetDto { Email = user.Email! }, default);
+        Assert.Equal(11, delivery.Sent.Count);
     }
 
     // Item 15: an oversized upload is refused as soon as its headers arrive (50 MB declared, 1 KB sent); the body is never read or stored.

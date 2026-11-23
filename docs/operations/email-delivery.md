@@ -1,8 +1,11 @@
 # Account email through Resend
 
-ParishLife sends two kinds of email, both one-use codes valid for 15 minutes:
+ParishLife sends three kinds of email, all one-use codes valid for 15 minutes:
 - a code to confirm the email address of a new account (registration with email and password);
-- a code to confirm a new sign-in email (change of email).
+- a code to confirm a new sign-in email (change of email);
+- a code to reset a forgotten password.
+
+Limits: at most one code a minute, and at most 10 codes in 24 hours, per account and kind of code (owner decision, 23 November 2026). Past the daily cap, the confirmation and reset requests get the usual neutral answer and nothing is sent; an email change answers `contact_daily_limit`. This keeps one address from being flooded and bounds the Resend bill (`ContactVerificationService`).
 
 Owner decision (19–21 November 2026): Resend, from `ParishLife <no-reply@parish-life.org>`. Nothing else is emailed: no newsletters or notifications yet.
 
