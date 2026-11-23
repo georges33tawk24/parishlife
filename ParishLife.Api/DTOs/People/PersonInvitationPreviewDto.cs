@@ -13,5 +13,7 @@ public class PersonInvitationPreviewDto
 
     public string Purpose { get; set; } = string.Empty;
 
+    public string[] RoleAllows { get; set; } = Array.Empty<string>();
+
     public DateTimeOffset ExpiresAt { get; set; }
 }

@@ -170,6 +170,35 @@ public class MembershipTests
         Assert.Equal("invalid_invitation_state", (await Assert.ThrowsAsync<DomainException>(() => invitations.AcceptAsync(x.Parish, forLate.Id, forLate.Token, default))).Code);
     }
 
+    [Fact]
+    public async Task The_controller_invites_a_person_with_a_role_that_applies_when_they_accept()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var access = f.Services.GetRequiredService<ParishLife.Api.Interfaces.Services.Organizations.IParishAccess>();
+        var person = await PersonAsync(x, "Secretary");
+        CreatePersonInvitationDto With(params string[] allows) => new() { OperationId = Guid.NewGuid(), Allows = allows };
+
+        // Office staff who are not the controller cannot attach a role; grant administration is never given.
+        x.Office();
+        Assert.Equal("owner_authority_required", (await Assert.ThrowsAsync<DomainException>(() => invitations.CreateAsync(x.Parish, person, With(Permissions.PeopleRead), default))).Code);
+        f.As(f.FirstAdmin);
+        Assert.Equal("delegation_forbidden", (await Assert.ThrowsAsync<DomainException>(() => invitations.CreateAsync(x.Parish, person, With(Permissions.AccessManage), default))).Code);
+        var issued = await invitations.CreateAsync(x.Parish, person, With(Permissions.PeopleRead, Permissions.PeopleWrite), default);
+
+        // The person signs up with their own account, sees the role in the preview and receives it on accepting.
+        var secretary = await f.CreateVerifiedStaffAsync();
+        f.As(secretary);
+        Assert.Equal(2, (await invitations.PreviewAsync(x.Parish, issued.Id, issued.Token, default)).RoleAllows.Length);
+        await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.PeopleWrite, default));
+        var accepted = await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default);
+        Assert.Equal(("Used", true), (accepted.Status, accepted.RoleApplied));
+        await access.RequireAsync(x.Parish, Permissions.PeopleWrite, default);
+        Assert.Equal(ParishLife.Api.Models.Enums.FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.FinanceRead, default))).Kind);
+    }
+
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)
     {
         var staff = await StaffAppointmentScenario.CreateAsync(f);

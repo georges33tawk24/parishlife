@@ -1,5 +1,6 @@
 // Purpose: represents an office-issued, single-use invitation that lets one account claim the link to one existing Person.
-// Main members: Id, ParishId, PersonId, TokenHash, Status, Delivery, CreatedBy, dates, UsedByAccountId, ReviewReason and latest notification-work pointers.
+// Main members: Id, ParishId, PersonId, TokenHash, Status, Delivery, CreatedBy, dates, UsedByAccountId, ReviewReason, latest notification-work pointers,
+// and RoleAllows: office access the parish controller attached, applied when the invitation is accepted (owner decision, 23 November 2026).
 
 namespace ParishLife.Api.Models;
 
@@ -33,4 +34,8 @@ public class PersonInvitation
 
     // Internal source linkage only; token previews and claim responses never expose these pointers.
     public List<string>? NotificationWorkIds { get; set; } = null;
+
+    public string[] RoleAllows { get; set; } = Array.Empty<string>();
+
+    public bool RoleApplied { get; set; }
 }

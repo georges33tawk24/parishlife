@@ -23,6 +23,14 @@ import { Auth, externalMessage } from './Auth.jsx';
 import { takeExternalStatus } from '../model/account.js';
 import { ROUTES, allowed, MEMBER_ROUTES } from './routes.jsx';
 
+/* An invitation link opened before signing in is kept for this tab, so a Google or Microsoft sign-up round trip does not lose it. */
+if (location.hash.startsWith('#invite='))
+  try {
+    sessionStorage.setItem('pl-invite', location.hash.slice(8));
+  } catch {
+    /* private mode: the link must be opened again after signing in */
+  }
+
 /* ---------------- delegated controls ----------------
    The screens mark their controls the way the design system does: data-go navigates, data-act runs
    a verb from shell/actions.jsx, data-pref saves a preference, data-find narrows a page's rows, data-tip
@@ -559,12 +567,21 @@ export function Portal() {
   /* Into the portal after signing in or opening an account: the page that was asked for, or the role's first page. */
   const enter = async (parishId = '') => {
     await loadSession();
-    const invitation = location.hash.startsWith('#invite=') ? new URLSearchParams(location.hash.slice(8)) : null;
+    // An invitation link survives a provider sign-up round trip (kept for this tab only), then is used once.
+    let held = null;
+    try {
+      held = sessionStorage.getItem('pl-invite');
+      sessionStorage.removeItem('pl-invite');
+    } catch {
+      /* private mode */
+    }
+    const raw = location.hash.startsWith('#invite=') ? location.hash.slice(8) : held;
+    const invitation = raw ? new URLSearchParams(raw) : null;
     if (invitation) {
       try {
         // accepting links this account to the invited person (card A11); the token travels in a header
         const at = invitation.get('p');
-        await api(
+        const accepted = await api(
           `parishes/${encodeURIComponent(at)}/person-invitations/${encodeURIComponent(invitation.get('i'))}/accept`,
           'POST',
           undefined,
@@ -573,6 +590,16 @@ export function Portal() {
         await loadSession();
         parishId = at;
         history.replaceState(null, '', '#/account');
+        toast(
+          t('Invitation accepted', 'قُبلت الدعوة'),
+          accepted?.roleApplied
+            ? t(
+                'Your role in the parish is ready. Turn on the authenticator in My account to use it.',
+                'دورك في الرعية جاهز. فعّل المصادِق في حسابي لاستخدامه.'
+              )
+            : t('Your account is linked to your parish record.', 'رُبط حسابك بسجلك في الرعية.'),
+          'success'
+        );
       } catch (e) {
         history.replaceState(null, '', '#/account');
         toast(t('Invitation could not be accepted', 'تعذّر قبول الدعوة'), e.message, 'danger');
