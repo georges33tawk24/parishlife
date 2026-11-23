@@ -110,6 +110,14 @@ Steps (owner, in your own terminal after `az login`; each one is an Azure change
 7. Deploy identity for staging: repeat setup step 1 to create a **separate, staging-only** identity, with the subject `repo:georges33tawk24/parishlife:environment:staging` and the role on `app-parishlife-staging` only. Never add the staging subject to the production deploy identity: the `staging` environment has no reviewers, so that identity must not be able to touch `app-parishlife`. Create the GitHub environment `staging` (branch `main`, no reviewers) and set **all** of its secrets and variables there, including `AZURE_WEBAPP_NAME=app-parishlife-staging`. Keep `AZURE_WEBAPP_NAME`, `AZURE_CLIENT_ID` and the other deploy names out of the repository-level variables and secrets, so a missing staging value fails the job instead of falling back to production's (audit N6). Then set `STAGING_ENABLED=true`.
 8. Create the two operator accounts in staging with the bootstrap command against staging settings. Never reuse production passwords there.
 
+## After every deploy: the smoke test
+
+Run it from a clean checkout of the deployed commit, against the live site (about 35 read-only GET requests; no browser, no sign-in):
+```bash
+cd frontend && npm ci && SMOKE_URL=https://parish-life.org npx playwright test e2e/smoke.spec.mjs --reporter=list
+```
+It fails on a page that is down, a missing script or style, a failing health check or public read, a protected read that does not answer 401, a missing `robots.txt` or sitemap, a 404 that shows a stack trace, a public OpenAPI document, a certificate that is not valid, or HSTS shorter than one year. If it fails, roll back (below), then find the cause. Before a deploy, the same file runs inside `E2E_CHANNEL=chromium npm run e2e` against the local test host (Agent 09).
+
 ## Rollback
 
 App Service B1 has no deployment slots (they start at Standard), so rolling back means deploying the previous package again. Both ways below were written from the workflow and the existing manual command. Neither has been tried yet, because there is no staging.
