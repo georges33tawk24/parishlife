@@ -1,5 +1,5 @@
 // Purpose: keeps legacy grant-boundary unit scenarios isolated from the new staff implementation, which is exercised by real integration tests.
-// Main functions: RequireParishPermissionAsync and RequirePriestAsync reject selected staff capacity; these legacy scenarios never select an appointment.
+// Main functions: RequireParishPermissionAsync and RequirePriestAsync reject selected staff capacity, IsArchdioceseAdminAsync is always false; these legacy scenarios never select an appointment.
 
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
@@ -14,4 +14,6 @@ public class LegacyOnlyStaffAccess : IStaffAppointmentAccess
 
     public Task RequirePriestAsync(string parishId, string accountId, CancellationToken ct)
         => throw new DomainException("clergy_authority_required", "No clergy fixture exists.", FailureKind.Forbidden);
+
+    public Task<bool> IsArchdioceseAdminAsync(string archdioceseId, CancellationToken ct) => Task.FromResult(false);
 }

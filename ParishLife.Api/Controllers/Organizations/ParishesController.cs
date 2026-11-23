@@ -1,5 +1,5 @@
 // Purpose: HTTP endpoints for parishes workflows; delegates work to backend services.
-// Main functions: Register, Get, Verify, Grant, Revoke, Propose, Decide, Association, EndAssociation.
+// Main functions: Register, Get, HandOverControl (POST {id}/control), Verify, Grant, Revoke, Propose, Decide, Association, EndAssociation.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ using ParishLife.Api.Services.Organizations;
 namespace ParishLife.Api.Controllers.Organizations;
 
 [Authorize, ApiController, Route("api/parishes")]
-public sealed class ParishesController(ParishService service) : ControllerBase
+public sealed class ParishesController(ParishService service, ParishControlService control) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Register(RegisterParishDto request, CancellationToken ct) => Ok(ParishDto.From(await service.RegisterAsync(request, ct)));
@@ -20,6 +20,10 @@ public sealed class ParishesController(ParishService service) : ControllerBase
         var row = await service.GetAsync(Guard.Id(parishId), ct);
         return Ok(new Versioned<ParishDto> { Value = ParishDto.From(row.Value), Version = row.Version });
     }
+
+    [HttpPost("{parishId:guid}/control")]
+    public async Task<ActionResult<ParishDto>> HandOverControl(Guid parishId, HandOverParishControlDto request, CancellationToken ct)
+        => Ok(await control.HandOverAsync(Guard.Id(parishId), request, ct));
 
     [HttpPost("{parishId:guid}/verify")]
     public async Task<IActionResult> Verify(Guid parishId, VerifyParishDto request, CancellationToken ct) => Ok(ParishDto.From(await service.VerifyAsync(Guard.Id(parishId), request, ct)));

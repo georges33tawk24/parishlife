@@ -9,4 +9,6 @@ public interface IStaffAppointmentAccess
 {
     Task<Versioned<Parish>> RequireParishPermissionAsync(string parishId, string appointmentId, string permission, CancellationToken ct);
     Task RequirePriestAsync(string parishId, string accountId, CancellationToken ct);
+
+    Task<bool> IsArchdioceseAdminAsync(string archdioceseId, CancellationToken ct);
 }

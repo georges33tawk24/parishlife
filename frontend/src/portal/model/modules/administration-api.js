@@ -76,8 +76,21 @@ export async function myScopes() {
 export const getArchdiocese = id => api(`archdioceses/${e(id)}`); // Versioned<ArchdioceseDto>
 export const getParish = id => api(`parishes/${e(id)}`); // Versioned<ParishDto>
 export const registerArchdiocese = ({ name, locality }) => api('archdioceses', 'POST', op({ name, locality }));
-export const registerParish = ({ name, locality, contact, declaredArchdiocese }) =>
-  api('parishes', 'POST', op({ name, locality, contact, declaredArchdiocese: declaredArchdiocese || null }));
+export const registerParish = ({ name, locality, contact, declaredArchdiocese, archdioceseId }) =>
+  api(
+    'parishes',
+    'POST',
+    op({
+      name,
+      locality,
+      contact,
+      declaredArchdiocese: declaredArchdiocese || null,
+      archdioceseId: archdioceseId || null
+    })
+  );
+/* Hands the parish's control to its appointed priest (username or email). */
+export const handOverControl = (parishId, version, account) =>
+  api(`parishes/${e(parishId)}/control`, 'POST', op({ version, account }));
 /* Verification needs the version the operator inspected (GET /api/administration/...-verifications/{id}). */
 export const inspectParishVerification = id => api(`administration/parish-verifications/${e(id)}`);
 export const inspectArchdioceseVerification = id => api(`administration/archdiocese-verifications/${e(id)}`);
@@ -107,19 +120,6 @@ export const decideJurisdiction = (id, proposalId, body) =>
 /* Parish office grants (GrantAccessDto, RevokeAccessDto): the parish version is required. */
 export const grantAccess = (parishId, body) => api(`parishes/${e(parishId)}/grants`, 'PUT', op(body));
 export const revokeAccess = (parishId, body) => api(`parishes/${e(parishId)}/grants/revoke`, 'POST', op(body));
-
-/* Ownership claims */
-export const listClaims = parishId => listAll(`parishes/${e(parishId)}/ownership-claims`);
-export const openClaim = (parishId, body) => api(`parishes/${e(parishId)}/ownership-claims`, 'POST', op(body));
-export const getClaim = (parishId, id) => api(`parishes/${e(parishId)}/ownership-claims/${e(id)}`);
-export const respondClaim = (parishId, id, version, response) =>
-  api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/response`, 'POST', op({ version, response }));
-export const withdrawClaim = (parishId, id, version) =>
-  api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/withdraw`, 'POST', op({ version }));
-export const confirmClaim = (parishId, id, body) =>
-  api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/church-confirmation`, 'POST', op(body));
-export const decideClaim = (parishId, id, body) =>
-  api(`parishes/${e(parishId)}/ownership-claims/${e(id)}/decision`, 'POST', op(body));
 
 /* ---- Appointments ---- */
 /* Staff appointments in an archdiocese; priest appointments in a parish of it (with the head designation). */

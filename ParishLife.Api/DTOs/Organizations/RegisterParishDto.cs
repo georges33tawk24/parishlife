@@ -1,5 +1,6 @@
 // Purpose: represents register parish input/output data.
-// Main members: OperationId, Name, Locality, Contact, DeclaredArchdiocese.
+// Main members: OperationId, Name, Locality, Contact, DeclaredArchdiocese, ArchdioceseId (the archdiocese the church is registered under;
+// required for a bishop or archdiocese administrator, optional for a ParishLife operator).
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -25,4 +26,6 @@ public class RegisterParishDto
 
     [StringLength(500)]
     public string? DeclaredArchdiocese { get; set; }
+
+    public Guid? ArchdioceseId { get; set; }
 }

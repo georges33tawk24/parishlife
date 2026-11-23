@@ -99,7 +99,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BishopAppointmentService>();
         services.AddScoped<ParishService>();
         services.AddScoped<ParishStatusService>();
-        services.AddScoped<OwnershipRecoveryService>();
+        services.AddScoped<ParishControlService>();
+        services.AddScoped<ParishLife.Api.Authorization.ChurchAdministrationAuthority>();
         services.AddScoped<OfficeCoverageService>();
         services.AddScoped<BillingService>();
         services.AddScoped<PayerTransferService>();

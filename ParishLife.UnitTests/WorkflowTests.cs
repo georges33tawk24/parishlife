@@ -41,7 +41,8 @@ public sealed class WorkflowTests
             Store = new(Clock);
             Store.VerifiedAccounts.Add(Actor.AccountId);
             Access = new(Store, Actor, Clock, new LegacyOnlyStaffAccess());
-            Parishes = new(Store, Access, Actor, Platform, Store, Clock);
+            // Only an operator registers a church (owner decision, 23 November 2026); the bishop path is covered by integration tests.
+            Parishes = new(Store, Access, Actor, Platform, Store, new ChurchAdministrationAuthority(Platform, null!, new LegacyOnlyStaffAccess(), Store, Actor), Clock);
             Billing = new(Store, Store, Store, Access, Actor, Platform, Clock);
             // The authenticator check is used only by the office edit, which the integration tests cover with real accounts.
             People = new(Store, Access, Actor, null!, Clock);
@@ -49,7 +50,9 @@ public sealed class WorkflowTests
 
         internal async Task<string> Parish(bool verified = true)
         {
+            Platform.Allowed = true;
             var parish = await Parishes.RegisterAsync(new Api.DTOs.Organizations.RegisterParishDto { OperationId = Guid.NewGuid(), Name = "Independent parish", Locality = "Beirut", Contact = "Office contact", DeclaredArchdiocese = "An unregistered archdiocese" }, default);
+            Platform.Allowed = false;
             if (verified)
             {
                 Platform.Allowed = true;

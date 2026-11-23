@@ -1,5 +1,4 @@
-// Purpose: stores parish identity and verification, factual jurisdiction, its separate optional commercial association, and whether its
-// ownership is under review (OwnershipContested: the parish is then read-only for staff and owner changes).
+// Purpose: stores parish identity and verification, factual jurisdiction, and its separate optional commercial association.
 // Main functions: Verify.
 
 using ParishLife.Api.Models.Enums;
@@ -34,9 +33,6 @@ public class Parish
 
     public string? JurisdictionProposalId { get; set; }
 
-    // True while an ownership claim is open: staff and owner changes are refused until it is decided or withdrawn (owner decision, 23 November 2026).
-    public bool OwnershipContested { get; set; }
-
     public Parish Verify(string reference) => Status == ParishStatus.PendingVerification ? new Parish
     {
         Id = this.Id,
@@ -51,8 +47,7 @@ public class Parish
         VerificationReference = Guard.Text(reference, "Verification reference", 500),
         RegisteredAssociationId = this.RegisteredAssociationId,
         JurisdictionArchdioceseId = this.JurisdictionArchdioceseId,
-        JurisdictionProposalId = this.JurisdictionProposalId,
-        OwnershipContested = this.OwnershipContested
+        JurisdictionProposalId = this.JurisdictionProposalId
     }
 
     : throw new DomainException("invalid_state", "Only a pending parish can be verified.", FailureKind.Conflict);

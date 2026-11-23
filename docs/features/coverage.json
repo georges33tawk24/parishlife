@@ -1341,11 +1341,11 @@
     },
     {
       "id": "SUB12",
-      "workflow": "Review contested parish ownership and recover parish administration",
+      "workflow": "Parish control: who registers a church and hands its control to the priest",
       "module": "Subscriptions/Organizations/Access",
       "status": "partial",
-      "implemented_slice": "Restricted contested-ownership claims: verified MFA claimant opens a claim with minimal evidence (one open claim per claimant per parish); current owner gets a generic in-app notice, a minimal view and can respond; an independent MFA platform recovery operator decides with a recorded reason and evidence reference. Recovery moves only the controlling owner in one parish transaction: prior owner grant revoked (kept), claimant gets the ordinary setup-owner grant (no clergy approval/signing), pending payer transfer and association proposals from the old control withdrawn and listed; staff grants, appointments, coverage, invoices and records stay. Claims opened against a superseded owner are refused, so competing claims cannot install two owners; rejected/withdrawn claims expose nothing; role-limited projections; replay and version conflicts. Local tests only; runbook docs/operations/parish-ownership-recovery.md.",
-      "remaining": "SUB12 is a proposed workflow; the single-operator reviewer and evidence-reference rules are implementation choices pending the owner's verification/appeal policy. Not delivered: second reviewer or appeal, competent church-authority confirmation route, out-of-band contact of representatives, cross-parish reviewer worklist, outcome notifications, exceptional support record access, freeze policy (none applied; sources do not require one), frontend. Live Cosmos acceptance not performed.",
+      "implemented_slice": "Owner decision (23 November 2026): only a ParishLife operator, the bishop or his archdiocese administrators register a church; one registered under an archdiocese is verified and placed under it, and a bishop/administrator registrar holds only ChurchAdministration (no personal records, sacraments or finances). POST api/parishes/{id}/control hands control to a priest currently appointed to that parish (bishop, archdiocese administrator or operator), or for a parish without an archdiocese to any verified MFA account (operator only); the previous controller's grant is revoked and pending payer transfers/association proposals are withdrawn. Ownership claims by ordinary accounts were removed.",
+      "remaining": "Bishop and archdiocese-administrator access to parishes they did not register (beyond appointing priests and handing control) is not built; parishes registered before this rule keep their registrant as controller (test data only).",
       "questionnaire_references": "Latest independent parish/subscription requirement; see updated workflow register."
     }
   ],

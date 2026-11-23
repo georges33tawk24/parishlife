@@ -220,8 +220,7 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             VerificationReference = parish.Value.VerificationReference,
             RegisteredAssociationId = requestId,
             JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = parish.Value.JurisdictionProposalId,
-            OwnershipContested = parish.Value.OwnershipContested
+            JurisdictionProposalId = parish.Value.JurisdictionProposalId
         }
 
         : parish.Value;
@@ -251,8 +250,7 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             VerificationReference = parish.Value.VerificationReference,
             RegisteredAssociationId = null,
             JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = parish.Value.JurisdictionProposalId,
-            OwnershipContested = parish.Value.OwnershipContested
+            JurisdictionProposalId = parish.Value.JurisdictionProposalId
         };
         // Changing the association epoch invalidates all of its delegated grants
         // immediately, without an unbounded cross-document revocation fan-out.

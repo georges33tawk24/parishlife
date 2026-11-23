@@ -274,7 +274,7 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             DecidedAt = op.At
         };
         associations[K(parishId, requestId)] = Row(result);
-        parishes[parishId] = Row(accept ? new Parish { Id = parish.Value.Id, Name = parish.Value.Name, Locality = parish.Value.Locality, Contact = parish.Value.Contact, DeclaredArchdiocese = parish.Value.DeclaredArchdiocese, Status = parish.Value.Status, OwnerAccountId = parish.Value.OwnerAccountId, CreatedAt = parish.Value.CreatedAt, RegisteredArchdioceseId = row.Value.ArchdioceseId, VerificationReference = parish.Value.VerificationReference, RegisteredAssociationId = requestId, JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId, JurisdictionProposalId = parish.Value.JurisdictionProposalId, OwnershipContested = parish.Value.OwnershipContested } : parish.Value);
+        parishes[parishId] = Row(accept ? new Parish { Id = parish.Value.Id, Name = parish.Value.Name, Locality = parish.Value.Locality, Contact = parish.Value.Contact, DeclaredArchdiocese = parish.Value.DeclaredArchdiocese, Status = parish.Value.Status, OwnerAccountId = parish.Value.OwnerAccountId, CreatedAt = parish.Value.CreatedAt, RegisteredArchdioceseId = row.Value.ArchdioceseId, VerificationReference = parish.Value.VerificationReference, RegisteredAssociationId = requestId, JurisdictionArchdioceseId = parish.Value.JurisdictionArchdioceseId, JurisdictionProposalId = parish.Value.JurisdictionProposalId } : parish.Value);
         return result;
     }));
     public Task<Parish> EndAssociationAsync(string id, string expected, string reason, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + id, op, () =>
@@ -295,8 +295,7 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             VerificationReference = row.Value.VerificationReference,
             RegisteredAssociationId = null,
             JurisdictionArchdioceseId = row.Value.JurisdictionArchdioceseId,
-            JurisdictionProposalId = row.Value.JurisdictionProposalId,
-            OwnershipContested = row.Value.OwnershipContested
+            JurisdictionProposalId = row.Value.JurisdictionProposalId
         };
         parishes[id] = Row(result);
         return result;

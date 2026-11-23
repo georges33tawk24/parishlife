@@ -1,6 +1,6 @@
 /* Administration workspace for platform operators, bishops and archdiocese administrators, on
    ParishLife.Api. Tabs: Organizations (archdioceses and parishes: register, verify, operating status,
-   location, association, jurisdiction, ownership claims, homepage), Appointments (workspace-appointments.jsx),
+   location, association, jurisdiction, handing control to the priest, homepage), Appointments (workspace-appointments.jsx),
    Access and billing (workspace-billing.jsx), and for platform operators Platform (workspace-platform.jsx:
    every parish, archdiocese and account, account status, clergy titles).
    Organizations shows what the account reaches through its capacities (GET /api/me/capacities), plus any
@@ -65,147 +65,6 @@ async function loadOrganizations() {
   return { scopes, archdioceses, parishes };
 }
 
-function claimsDrawer(parish) {
-  const body = <Claims parish={parish} />;
-  openDrawer({ large: true, title: L('Ownership claims', 'مطالبات الملكية'), sub: parish.name, body });
-}
-
-/* Who owns a parish record is contested through a claim: opened by someone with evidence, answered by
-   the current owner, confirmed or disputed by the bishop of the parish's archdiocese, decided by a platform
-   operator (recovery only after the church confirmed). The parish is read-only while a claim is open. */
-function Claims({ parish }) {
-  const { data, error, reload } = useLoad(() => A.orEmpty(A.listClaims(parish.id)), []);
-  const open = () =>
-    openForm({
-      title: L('Open a claim', 'فتح مطالبة'),
-      fields: [
-        { name: 'statement', label: L('What you are claiming and why', 'ما تطالب به ولماذا'), type: 'textarea' },
-        { name: 'evidenceReference', label: L('Evidence reference', 'مرجع الإثبات') }
-      ],
-      save: v => A.openClaim(parish.id, { statement: v.statement, evidenceReference: v.evidenceReference }),
-      done: reload
-    });
-  const act = (c, title, fields, send) =>
-    openForm({
-      title,
-      fields,
-      save: async v => {
-        const fresh = await A.getClaim(parish.id, c.id);
-        return send(fresh.version, v);
-      },
-      done: reload
-    });
-  return (
-    <>
-      <button className="btn btn-primary" data-claim-open="" onClick={open}>
-        {L('Open a claim', 'فتح مطالبة')}
-      </button>
-      {error ? <p className="alert alert-danger">{error}</p> : null}
-      {(data || []).map(c => (
-        <Row
-          key={c.id}
-          title={`${c.status} · ${shortDay(c.openedAt)}`}
-          lines={[
-            c.statement,
-            c.decisionReason,
-            c.ownerResponse && `${L('Owner', 'المالك')}: ${c.ownerResponse}`,
-            c.churchConfirmation &&
-              `${L('Archdiocese', 'الأبرشية')}: ${
-                c.churchConfirmation === 'Confirmed' ? L('confirmed', 'أكّدت') : L('disputed', 'اعترضت')
-              }${c.churchNote ? ' · ' + c.churchNote : ''}`
-          ]}
-          actions={
-            c.status === 'Open' ? (
-              <>
-                <button
-                  className="btn btn-secondary btn-dense"
-                  onClick={() =>
-                    act(
-                      c,
-                      L('Respond to the claim', 'الردّ على المطالبة'),
-                      [{ name: 'response', label: L('Response', 'الردّ'), type: 'textarea' }],
-                      (version, v) => A.respondClaim(parish.id, c.id, version, v.response)
-                    )
-                  }
-                >
-                  {L('Respond', 'ردّ')}
-                </button>
-                <button
-                  className="btn btn-secondary btn-dense"
-                  onClick={() =>
-                    act(c, L('Withdraw the claim', 'سحب المطالبة'), [], version =>
-                      A.withdrawClaim(parish.id, c.id, version)
-                    )
-                  }
-                >
-                  {L('Withdraw', 'سحب')}
-                </button>
-                <button
-                  className="btn btn-secondary btn-dense"
-                  onClick={() =>
-                    act(
-                      c,
-                      L('Archdiocese answer', 'جواب الأبرشية'),
-                      [
-                        {
-                          name: 'confirmed',
-                          label: L('The archdiocese', 'الأبرشية'),
-                          type: 'select',
-                          options: [
-                            ['true', L('Confirms the claim', 'تؤكّد المطالبة')],
-                            ['false', L('Disputes the claim', 'تعترض على المطالبة')]
-                          ]
-                        },
-                        { name: 'note', label: L('Note', 'ملاحظة'), type: 'textarea' }
-                      ],
-                      (version, v) =>
-                        A.confirmClaim(parish.id, c.id, { version, confirmed: v.confirmed === 'true', note: v.note })
-                    )
-                  }
-                >
-                  {L('Archdiocese answer', 'جواب الأبرشية')}
-                </button>
-                <button
-                  className="btn btn-secondary btn-dense"
-                  onClick={() =>
-                    act(
-                      c,
-                      L('Decide the claim', 'البتّ في المطالبة'),
-                      [
-                        {
-                          name: 'recover',
-                          label: L('Decision', 'القرار'),
-                          type: 'select',
-                          options: [
-                            ['true', L('Recover to the claimant', 'استرداد للمطالب')],
-                            ['false', L('Keep the current owner', 'إبقاء المالك الحالي')]
-                          ]
-                        },
-                        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' },
-                        { name: 'evidenceReference', label: L('Review evidence reference', 'مرجع إثبات المراجعة') }
-                      ],
-                      (version, v) =>
-                        A.decideClaim(parish.id, c.id, {
-                          version,
-                          recover: v.recover === 'true',
-                          reason: v.reason,
-                          evidenceReference: v.evidenceReference
-                        })
-                    )
-                  }
-                >
-                  {L('Decide', 'بتّ')}
-                </button>
-              </>
-            ) : null
-          }
-        />
-      ))}
-      {data && !data.length ? <p>{L('No claims on this parish.', 'لا مطالبات على هذه الرعية.')}</p> : null}
-    </>
-  );
-}
-
 function historyDrawer(parish) {
   A.parishStatusHistory(parish.id).then(
     list =>
@@ -252,10 +111,21 @@ function Organizations({ data, reload }) {
     openForm({
       title: L('Register a parish', 'تسجيل رعية'),
       intro: L(
-        'The parish is pending until a platform operator verifies it.',
-        'تبقى الرعية بانتظار التوثيق إلى أن يوثّقها مشغّل المنصة.'
+        'Only ParishLife administrators, the bishop or his archdiocese administrators register a church. A church registered under its archdiocese is verified at once; then appoint its priest and hand him control.',
+        'لا يسجّل الكنيسة إلا مشرفو ParishLife أو المطران أو مشرفو أبرشيته. الكنيسة المسجّلة تحت أبرشيتها موثّقة فوراً؛ ثم عيّن كاهنها وسلّمه الإدارة.'
       ),
       fields: [
+        {
+          name: 'archdioceseId',
+          label: L('Archdiocese', 'الأبرشية'),
+          type: 'select',
+          required: false,
+          value: archdioceses[0]?.id || '',
+          options: [
+            ...archdioceses.map(a => [a.id, a.name || a.id]),
+            ['', L('None (ParishLife administrators only)', 'بلا أبرشية (لمشرفي ParishLife فقط)')]
+          ]
+        },
         { name: 'name', label: L('Name', 'الاسم') },
         { name: 'locality', label: L('Locality', 'البلدة') },
         { name: 'contact', label: L('Contact (email or phone)', 'جهة الاتصال (بريد أو هاتف)') },
@@ -344,6 +214,17 @@ function Organizations({ data, reload }) {
       done: reload
     });
   };
+  const handControl = p =>
+    openForm({
+      title: L('Hand control to the priest', 'تسليم الإدارة للكاهن') + ' · ' + p.name,
+      intro: L(
+        'The priest must already be appointed to this parish. Your own access to the parish ends.',
+        'يجب أن يكون الكاهن معيّناً في هذه الرعية. ينتهي وصولك أنت إلى الرعية.'
+      ),
+      fields: [{ name: 'account', label: L("Priest's username or email", 'اسم مستخدم الكاهن أو بريده') }],
+      save: async v => A.handOverControl(p.id, (await A.getParish(p.id)).version, v.account.trim()),
+      done: reload
+    });
   const associate = p =>
     openForm({
       title: L('Associate with an archdiocese', 'ربط بأبرشية') + ' · ' + p.name,
@@ -518,8 +399,8 @@ function Organizations({ data, reload }) {
                     <button className="btn btn-secondary btn-dense" onClick={() => decideJurisdiction(p)}>
                       {L('Decide proposal', 'البتّ في اقتراح')}
                     </button>
-                    <button className="btn btn-secondary btn-dense" onClick={() => claimsDrawer(p)}>
-                      {L('Ownership claims', 'مطالبات الملكية')}
+                    <button className="btn btn-secondary btn-dense" onClick={() => handControl(p)}>
+                      {L('Hand control to the priest', 'تسليم الإدارة للكاهن')}
                     </button>
                     <button className="btn btn-secondary btn-dense" onClick={() => historyDrawer(p)}>
                       {L('Status history', 'سجل الحالة')}

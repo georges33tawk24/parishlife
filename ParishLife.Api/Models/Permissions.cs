@@ -1,13 +1,10 @@
 // Purpose: represents permissions business state and rules.
-// Main members: the declared named values or shared rule constants; IsReadOnly tells reading permissions (ending ".read") from changes.
+// Main members: the declared named values or shared rule constants.
 
 namespace ParishLife.Api.Models;
 
 public static class Permissions
 {
-    // A parish under ownership review stays readable but refuses every change (owner decision, 23 November 2026).
-    public static bool IsReadOnly(string permission) => permission.EndsWith(".read", StringComparison.Ordinal);
-
     public const string ParishManage = "parish.manage";
     public const string AccessManage = "access.manage";
     public const string BillingRead = "billing.read";
@@ -49,6 +46,13 @@ public static class Permissions
     public const string IncidentsRecord = "incidents.record";
     public const string IncidentsManage = "incidents.manage";
     public const string PeopleMedicalManage = "people.medical.manage";
+    // What a bishop or archdiocese administrator holds in a church they registered, until its priest takes control: running the parish
+    // (details, settings, publishing, schedule, facilities, billing) but no personal records, sacraments or finances (owner decision, 23 November 2026).
+    public static readonly IReadOnlySet<string> ChurchAdministration = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ParishManage, BillingRead, BillingManage, SettingsManage, PublishingManage, ScheduleRead, ScheduleManage, SchedulePublish, FacilitiesManage
+    };
+
     public static readonly IReadOnlySet<string> SetupOwner = new HashSet<string>(StringComparer.Ordinal)
     {
         ParishManage,

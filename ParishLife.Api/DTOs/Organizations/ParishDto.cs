@@ -1,5 +1,5 @@
 // Purpose: represents parish input/output data.
-// Main functions: From. OwnershipContested says the parish is read-only while an ownership claim is open.
+// Main functions: From.
 
 using ParishLife.Api.Models;
 using ParishLife.Api.Models.Enums;
@@ -30,8 +30,6 @@ public class ParishDto
 
     public string? JurisdictionArchdioceseId { get; set; }
 
-    public bool OwnershipContested { get; set; }
-
     public static ParishDto From(Parish value) => new ParishDto
     {
         Id = value.Id,
@@ -44,7 +42,6 @@ public class ParishDto
         CreatedAt = value.CreatedAt,
         RegisteredArchdioceseId = value.RegisteredArchdioceseId,
         RegisteredAssociationId = value.RegisteredAssociationId,
-        JurisdictionArchdioceseId = value.JurisdictionArchdioceseId,
-        OwnershipContested = value.OwnershipContested
+        JurisdictionArchdioceseId = value.JurisdictionArchdioceseId
     };
 }

@@ -29,7 +29,8 @@ public class DtoMigrationTests
             Contact = "Fixture office",
             DeclaredArchdiocese = null
         };
-        const string previousJson = "{\"OperationId\":\"12121212-3434-5656-7878-909090909090\",\"Name\":\"Isolated fixture\",\"Locality\":\"Fixture locality\",\"Contact\":\"Fixture office\",\"DeclaredArchdiocese\":null}";
+        // ArchdioceseId was added on 23 November 2026 (who may register a church); the renamed type still fingerprints under its old name.
+        const string previousJson = "{\"OperationId\":\"12121212-3434-5656-7878-909090909090\",\"Name\":\"Isolated fixture\",\"Locality\":\"Fixture locality\",\"Contact\":\"Fixture office\",\"DeclaredArchdiocese\":null,\"ArchdioceseId\":null}";
         var previousPayload = "fixture-actor\nParishLife.Api.DTOs.Organizations.RegisterParishRequest\n\n" + previousJson;
         var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(previousPayload)));
 

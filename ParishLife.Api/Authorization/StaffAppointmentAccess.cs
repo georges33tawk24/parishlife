@@ -1,5 +1,6 @@
 // Purpose: derives priest and administrative access from accepted appointments, actual jurisdiction, current identity and selected capacity.
-// Main functions: RequireParishPermissionAsync, RequirePriestAsync, RequireOwnAsync, RequireReaderAsync; explicit denials survive role switching.
+// Main functions: RequireParishPermissionAsync, RequirePriestAsync, RequireOwnAsync, RequireReaderAsync, IsArchdioceseAdminAsync (the selected
+// appointment is a current administrator appointment of that archdiocese); explicit denials survive role switching.
 
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -32,8 +33,6 @@ public class StaffAppointmentAccess(IRecordTransactions records, IParishReposito
             throw Missing();
         if (parish.Value.Status is ParishStatus.Closed or ParishStatus.Suspended)
             throw new DomainException("parish_closed", "This parish is " + (parish.Value.Status == ParishStatus.Closed ? "closed" : "suspended") + " for ordinary operations.", FailureKind.Forbidden);
-        if (parish.Value.OwnershipContested && !Permissions.IsReadOnly(permission))
-            throw new DomainException("parish_contested", "This parish is read-only while its ownership is under review.", FailureKind.Forbidden);
         return parish;
     }
 
@@ -47,6 +46,14 @@ public class StaffAppointmentAccess(IRecordTransactions records, IParishReposito
             throw Missing();
         await CurrentScopeAsync(row.Value, ct);
         return row;
+    }
+
+    public async Task<bool> IsArchdioceseAdminAsync(string archdioceseId, CancellationToken ct)
+    {
+        if (actor.ActingAppointmentId is not { } selected)
+            return false;
+        try { return (await RequireOwnAsync(archdioceseId, null, selected, ct)).Value.Role == StaffAppointmentRole.ArchdioceseAdmin; }
+        catch (DomainException e) when (e.Kind is FailureKind.NotFound or FailureKind.Forbidden) { return false; }
     }
 
     public async Task RequirePriestAsync(string parishId, string accountId, CancellationToken ct)
