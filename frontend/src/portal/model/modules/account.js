@@ -15,7 +15,10 @@ export const routes = ['account'];
 export async function load() {
   try {
     const profile = await loadProfile();
-    session.preferences = { theme: themeOf(profile.appearance), language: profile.preferredLanguage };
+    session.preferences = {
+      theme: themeOf(profile.appearance, profile.configured),
+      language: profile.preferredLanguage
+    };
   } catch {
     // A restricted sign-in or an acting capacity may not read the personal profile (403), and a failed read
     // must not stop the portal loading: the default colours stay.

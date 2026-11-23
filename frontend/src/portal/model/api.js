@@ -63,12 +63,22 @@ const reached = ok => {
 };
 
 /* A request that gets no answer within this time (a dead mobile connection) ends with a message instead of a button that
-   stays busy (QA bug 6). Only the wait for the answer is timed, never the reading of a large one. A write that timed out may
-   still have been saved, and a second press sends a new operation id, so its message says to reload and check first (audit N2). */
+   stays busy (QA bug 6). Only the wait for the answer is timed, never the reading of a large one. */
 const ANSWER_TIMEOUT_MS = 30000;
+
+/* A write that got no answer (time-out or dropped connection) may still have been saved. Its operation id is kept, keyed by
+   method, path and the body without the id, so the same write sent again (Save pressed again) reuses it and the API replays
+   the first result instead of saving twice (audit N2). Any answer from the server forgets it. A changed body is a new write.
+   ponytail: auth/ writes are left out, since their bodies can hold passwords and they are versioned or one-off anyway. */
+const unanswered = new Map();
 
 async function send(path, method, body, extra = {}) {
   if (method !== 'GET' && !csrf) csrf = (await send('auth/csrf', 'GET')).token;
+  const retry =
+    method !== 'GET' && typeof body?.operationId === 'string' && !path.startsWith('auth/')
+      ? `${method} ${path} ${JSON.stringify({ ...body, operationId: undefined })}`
+      : null;
+  if (retry && unanswered.has(retry)) body = { ...body, operationId: unanswered.get(retry) };
   let response;
   const waiting = new AbortController();
   const timer = setTimeout(() => waiting.abort(), ANSWER_TIMEOUT_MS);
@@ -88,17 +98,19 @@ async function send(path, method, body, extra = {}) {
     });
   } catch {
     reached(false);
+    if (retry) unanswered.set(retry, body.operationId);
     if (waiting.signal.aborted && method !== 'GET' && !path.startsWith('auth/'))
       throw new Error(
         t(
-          'ParishLife did not answer in time. Your change may still have been saved: reload the page and check before trying again.',
-          'لم يُجب ParishLife في الوقت المحدّد. ربما حُفظ تغييرك: أعد تحميل الصفحة وتحقّق قبل المحاولة مجدداً.'
+          'ParishLife did not answer in time, so your change may already be saved. Saving the same again is safe: it is never recorded twice.',
+          'لم يُجب ParishLife في الوقت المحدّد، فربما حُفظ تغييرك. حفظه كما هو مجدداً آمن: لا يُسجَّل مرّتين أبداً.'
         )
       );
     throw new Error(connectionMessage());
   } finally {
     clearTimeout(timer);
   }
+  if (retry) unanswered.delete(retry);
   reached(true);
   const json = (response.headers.get('Content-Type') || '').toLowerCase().includes('json');
   const data = json ? await response.json().catch(() => null) : null;
@@ -182,6 +194,7 @@ export async function signOut() {
     await api('auth/logout', 'POST');
   } finally {
     csrf = '';
+    unanswered.clear();
     Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
     forgetAccountStorage();
   }

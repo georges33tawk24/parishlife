@@ -1,6 +1,7 @@
 /* Personal dashboard palettes derive shared tokens from one primary colour.
    Public websites use applySiteTheme so all parishes share the same public palette.
-   Contrast calculations select readable foreground colours. */
+   Contrast calculations select readable foreground colours. applyTheme paints light, dark or, for an account
+   with no saved appearance ('system'), the device's setting, repainting when the device changes (modeOf). */
 
 export const DEFAULT_PRIMARY = '#233B32';
 
@@ -221,9 +222,21 @@ function paint(theme, tokens, root) {
   return scheme;
 }
 
+/* A theme's mode is 'light', 'dark' or 'system': an account with no saved appearance follows the device. */
+const deviceDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+export const modeOf = theme =>
+  theme?.mode === 'system' ? (deviceDark() ? 'dark' : 'light') : theme?.mode === 'dark' ? 'dark' : 'light';
+let painted = null; // [theme, root] last applied, painted again when the device's setting changes
+if (typeof matchMedia === 'function')
+  matchMedia('(prefers-color-scheme: dark)').addEventListener(
+    'change',
+    () => painted?.[0]?.mode === 'system' && applyTheme(...painted)
+  );
+
 export function applyTheme(theme, root = document.documentElement) {
+  painted = [theme, root];
   const scheme = paint(theme, APP_TOKENS, root);
-  const dark = theme?.mode === 'dark';
+  const dark = modeOf(theme) === 'dark';
   root.dataset.mode = dark ? 'dark' : 'light';
   root.style.colorScheme = dark ? 'dark' : 'light';
   // Mode tokens are removed on every switch, including a return to Forest.

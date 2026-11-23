@@ -131,7 +131,7 @@ const { sent, events } = mockApi((method, path, body) => {
           id: 'k',
           recordId: REG,
           field: 'place',
-          newValue: 'Saint Elias',
+          newValue: 'Demo Parish',
           reason: 'typo',
           evidence: 'book',
           proposedAt: '2026-11-02T10:00:00Z'
@@ -243,7 +243,7 @@ assert.deepEqual(
 // the parish's own lists; a sacrament without one has none
 assert.deepEqual(S.requirementSetFor('baptism').items, [{ key: 'k1', label: 'Class', labelAr: '' }]);
 assert.equal(S.requirementSetFor('marriage'), null);
-assert.equal(baptism.pendingCorrections[0].to, 'Saint Elias');
+assert.equal(baptism.pendingCorrections[0].to, 'Demo Parish');
 const cert = D.SACRAMENTS.find(s => s.id === CERT);
 assert.deepEqual(
   [cert.kind, cert.certificateOf, cert.status, cert.apiStatus, cert.date],

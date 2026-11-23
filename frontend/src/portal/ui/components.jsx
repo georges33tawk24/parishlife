@@ -495,8 +495,8 @@ export function PersonPicker({ label = t('Person', 'الشخص'), id = 'pp' }) {
                     id: 'p' + Date.now(),
                     lat: q,
                     ar: q,
-                    town: 'Hadath',
-                    townAr: 'الحدث',
+                    town: '',
+                    townAr: '',
                     rite: 'Maronite',
                     status: 'visitor',
                     phone: '—',
@@ -1119,7 +1119,7 @@ export const RatePopover = ({ amount = 50 }) => (
       <dd className="mono">{num(amount * RATE.value)}</dd>
     </dl>
     <p className="t-caption dim" style={{ marginTop: 10 }}>
-      {t('Set by Fr. Antoine on 4 Oct 2026.', 'ضبطه الأب أنطوان في ٤ تشرين الأول ٢٠٢٦.')}{' '}
+      {t(`Set by ${RATE.setBy || 'the parish office'}.`, `ضبطه ${RATE.setBy || 'مكتب الرعية'}.`)}{' '}
       <a href="#/settings">{t('Rate history', 'سجل الأسعار')}</a>
     </p>
   </div>

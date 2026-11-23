@@ -95,7 +95,7 @@ export async function hydrate() {
     const first = MODULES.filter(m => m.keys.includes('PEOPLE'));
     await Promise.all(first.map(load));
     await Promise.all(MODULES.filter(m => !first.includes(m)).map(load));
-  }
+  } else await Promise.all(MODULES.filter(m => !m.keys.length).map(load)); // the account's own appearance needs no parish
   applyData(d);
   baseline = snapshot();
   saveFailed = false;

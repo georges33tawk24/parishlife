@@ -170,7 +170,7 @@ export function styleguide(tab = '') {
                 </thead>
                 <tbody>
                   {[
-                    ['t-display', 'Saint Elias', 'مار الياس', '32 / 40 / 600'],
+                    ['t-display', 'Demo Parish', 'الرعية التجريبية', '32 / 40 / 600'],
                     ['t-heading', 'Baptism register', 'سجل المعمودية', '24 / 32 / 600'],
                     ['t-sub', 'Counting session 214', 'جلسة العدّ ٢١٤', '20 / 28 / 600'],
                     [
@@ -675,8 +675,8 @@ export function styleguide(tab = '') {
                 tone="warning"
                 title={L('This family has two records', 'لهذه العائلة سجلّان')}
                 body={L(
-                  'Haddad (Hadath) and Hadad (Hadath) look like the same household.',
-                  'يبدو أن «حدّاد» و«حداد» في الحدث العائلة نفسها.'
+                  'Haddad (Demo Town) and Hadad (Demo Town) look like the same household.',
+                  'يبدو أن «حدّاد» و«حداد» في البلدة التجريبية العائلة نفسها.'
                 )}
                 actions={<button data-go="people/duplicates">{L('Compare and merge', 'قارن وادمج')}</button>}
               />{' '}
@@ -821,8 +821,8 @@ export function styleguide(tab = '') {
                 glyph="search"
                 title={L('Nothing matches those filters', 'لا شيء يطابق المرشّحات')}
                 body={L(
-                  'Status “Visitor”, town “Hadath” and last 30 days together return no one.',
-                  'الحالة «زائر» والبلدة «الحدث» وآخر ٣٠ يوماً معاً لا تُرجع أحداً.'
+                  'Status “Visitor”, town “Demo Town” and last 30 days together return no one.',
+                  'الحالة «زائر» والبلدة «البلدة التجريبية» وآخر ٣٠ يوماً معاً لا تُرجع أحداً.'
                 )}
                 action={
                   <button className="btn btn-secondary btn-dense" data-act="spec-clear">
@@ -856,7 +856,7 @@ export function styleguide(tab = '') {
                 glyph="shield"
                 title={L('Giving is not part of your role', 'التقدمات ليست ضمن دورك')}
                 body={L(
-                  'Only the treasurer and the parish priest can open financial records. Ask Fr. Antoine if you need access.',
+                  'Only the treasurer and the parish priest can open financial records. Ask the parish priest if you need access.',
                   'أمين الصندوق والكاهن وحدهما يفتحان السجلات المالية.'
                 )}
                 action={
@@ -889,7 +889,8 @@ export function styleguide(tab = '') {
                   <span className="pill">{L('Maronite', 'ماروني')}</span>
                 </h1>{' '}
                 <div className="meta" style={{ fontFamily: 'var(--arabic)' }}>
-                  جورج حدّاد · {L('Envelope', 'مظروف')} <span className="mono">0142</span> · {L('Hadath', 'الحدث')}
+                  جورج حدّاد · {L('Envelope', 'مظروف')} <span className="mono">0142</span> ·{' '}
+                  {L('Demo Town', 'البلدة التجريبية')}
                 </div>
               </div>{' '}
               <div className="acts">
@@ -939,8 +940,8 @@ export function styleguide(tab = '') {
                   { label: '', cls: 'shrink' }
                 ]}
                 rows={[
-                  ['p1', 'Hadath', '0142', 'member', 50],
-                  ['p3', 'Hadath', '—', 'visitor', 0],
+                  ['p1', 'Demo Town', '0142', 'member', 50],
+                  ['p3', 'Demo Town', '—', 'visitor', 0],
                   ['p4', 'Baabda', '0088', 'member', 120]
                 ].map(([pid, town, env, st, gift]) => ({
                   detail: (
