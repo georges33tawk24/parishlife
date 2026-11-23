@@ -111,4 +111,25 @@ public class ParishControlTests
         f.As(f.Other);
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => f.Services.GetRequiredService<IParishAccess>().RequireAsync(s.Parish, Permissions.BillingRead, default))).Kind);
     }
+
+    [Fact]
+    public async Task The_controller_grants_office_access_by_email_and_an_unknown_name_is_refused()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var s = await IndependentParishScenario.CreateAsync(f);
+        var secretary = await f.CreateVerifiedStaffAsync();
+        var email = (await f.Services.GetRequiredService<UserManager<ParishUser>>().FindByIdAsync(secretary))!.Email!;
+        var parishes = f.Services.GetRequiredService<ParishService>();
+        GrantAccessDto Grant(string account) => new()
+        {
+            OperationId = Guid.NewGuid(), Version = s.Parishes.GetAsync(s.Parish, default).Result!.Version, Account = account,
+            Allows = [Permissions.PeopleRead], Denies = [], StartsAt = f.Clock.Now
+        };
+        f.As(f.Other);
+        Assert.Equal("account_unavailable", (await Assert.ThrowsAsync<DomainException>(() => parishes.GrantAsync(s.Parish, Grant("nobody@fixture.example"), default))).Code);
+        await parishes.GrantAsync(s.Parish, Grant(email.ToUpperInvariant()), default);
+        f.As(secretary);
+        await f.Services.GetRequiredService<IParishAccess>().RequireAsync(s.Parish, Permissions.PeopleRead, default);
+    }
 }

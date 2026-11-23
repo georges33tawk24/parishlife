@@ -53,6 +53,17 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
         return await repository.RegisterAsync(parish, owner, op, ct);
     }
 
+    // The account by reference, or by username or email.
+    private async Task<string> TargetAsync(Guid id, string? name, CancellationToken ct)
+    {
+        if (id != Guid.Empty)
+            return Guard.Id(id);
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("invalid_input", "Name the account by its username or email.");
+        return await accounts.FindIdAsync(Guard.Text(name, "Account", 254), ct)
+            ?? throw new DomainException("account_unavailable", "No active verified account has that username or email.");
+    }
+
     private async Task<bool> IsOperatorAsync(CancellationToken ct)
     {
         try { await platform.RequireOperatorAsync(ct); return true; }
@@ -78,7 +89,7 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
         var mine = await repository.GetGrantAsync(id, actor.AccountId, ct);
         if (request.Allows.Concat(request.Denies).Any(p => mine?.Permits(p, clock.GetUtcNow()) != true))
             throw new DomainException("delegation_forbidden", "Cannot delegate authority outside your current grant.", FailureKind.Forbidden);
-        var target = Guard.Id(request.AccountId);
+        var target = await TargetAsync(request.AccountId, request.Account, ct);
         if (!await accounts.IsActiveVerifiedAsync(target, ct))
             throw new DomainException("account_unavailable", "The target must be an existing active verified account.");
         if (target == parish.Value.OwnerAccountId)
@@ -96,7 +107,7 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
         var parish = await access.RequireAsync(id, Permissions.AccessManage, ct);
         if (actor.AccountId != parish.Value.OwnerAccountId)
             throw new DomainException("owner_authority_required", "The controlling parish owner manages grants in this implementation stage.", FailureKind.Forbidden);
-        var target = Guard.Id(request.AccountId);
+        var target = await TargetAsync(request.AccountId, request.Account, ct);
         if (target == parish.Value.OwnerAccountId)
             throw new DomainException("owner_change_requires_review", "Use the separate controlling-owner recovery/succession procedure.", FailureKind.Conflict);
         await repository.RevokeAsync(id, Versions.Require(request.Version), target, Guard.Text(request.Reason, "Reason", 500), actor.CreateOperation(request.OperationId, request, clock), ct);

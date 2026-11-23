@@ -65,6 +65,92 @@ async function loadOrganizations() {
   return { scopes, archdioceses, parishes };
 }
 
+/* "Set up this church": where each part of a new church is filled in, in order. */
+function setupDrawer(parish, actions) {
+  const step = (title, text, button) => (
+    <li className="setup-step">
+      <strong>{title}</strong>
+      <p className="help">{text}</p>
+      {button || null}
+    </li>
+  );
+  const go = hash => () => {
+    location.hash = hash;
+  };
+  openDrawer({
+    large: true,
+    title: L('Set up this church', 'إعداد هذه الكنيسة'),
+    sub: parish.name,
+    body: (
+      <ol className="setup-list">
+        {step(
+          L('1. Modules', '١. الوحدات'),
+          L(
+            'Give the church its modules: free coverage, or a plan and invoice. Without them its menu stays empty.',
+            'امنح الكنيسة وحداتها: تغطية مجانية أو باقة وفاتورة. من دونها تبقى قائمتها فارغة.'
+          ),
+          <button className="btn btn-secondary btn-dense" onClick={go('#/workspace/access')}>
+            {L('Open Access and billing', 'فتح الصلاحيات والفوترة')}
+          </button>
+        )}
+        {step(
+          L('2. Location', '٢. الموقع'),
+          L('Where the church is on the map.', 'موقع الكنيسة على الخريطة.'),
+          <button className="btn btn-secondary btn-dense" onClick={() => actions.location(parish)}>
+            {L('Set the location', 'تحديد الموقع')}
+          </button>
+        )}
+        {step(
+          L('3. Details, Mass times and public page', '٣. التفاصيل ومواعيد القداديس والصفحة العامة'),
+          L(
+            'Pick this church in the parish switcher at the top left, then open Parish settings (your name menu): contact details, Mass and office times, photos, then Publish.',
+            'اختر هذه الكنيسة من مبدّل الرعايا أعلى اليسار، ثم افتح إعدادات الرعية (قائمة اسمك): بيانات الاتصال ومواعيد القداديس والمكتب والصور، ثم انشر.'
+          )
+        )}
+        {step(
+          L('4. Secretary, treasurer and other helpers', '٤. السكرتير وأمين الصندوق وسواهم'),
+          L(
+            'Each person signs up first. Then give them office access by username or email, ticking what they may do.',
+            'يسجّل كل شخص أولاً. ثم امنحه صلاحية المكتب باسم المستخدم أو البريد، مع اختيار ما يمكنه فعله.'
+          ),
+          <button className="btn btn-secondary btn-dense" onClick={go('#/workspace/access')}>
+            {L('Grant office access', 'منح صلاحية مكتب')}
+          </button>
+        )}
+        {step(
+          L('5. The priest', '٥. الكاهن'),
+          L(
+            "The bishop of the church's archdiocese appoints the priest (Appointments tab). Then hand the priest control of the church. A church with no archdiocese is handed over by a ParishLife administrator.",
+            'يعيّن مطران أبرشية الكنيسة الكاهن (تبويب التعيينات). ثم سلّم الكاهن إدارة الكنيسة. الكنيسة بلا أبرشية يسلّمها مشرف ParishLife.'
+          ),
+          <>
+            <button className="btn btn-secondary btn-dense" onClick={go('#/workspace/appointments')}>
+              {L('Open Appointments', 'فتح التعيينات')}
+            </button>{' '}
+            <button className="btn btn-secondary btn-dense" onClick={() => actions.handControl(parish)}>
+              {L('Hand control to the priest', 'تسليم الإدارة للكاهن')}
+            </button>
+          </>
+        )}
+        {step(
+          L('6. Ministries and their leaders', '٦. الأخويات وقادتها'),
+          L(
+            'Once the priest is appointed, he creates the ministries and names their leaders from the Ministries menu.',
+            'بعد تعيين الكاهن، ينشئ الأخويات ويسمّي قادتها من قائمة الأخويات.'
+          )
+        )}
+        {step(
+          L('7. Parishioners', '٧. أبناء الرعية'),
+          L(
+            'Parishioners sign up on parish-life.org. The office records them in People as Members and links their account, so they see their own page.',
+            'يسجّل أبناء الرعية على parish-life.org. يسجّلهم المكتب في الأشخاص كأعضاء ويربط حساباتهم، فيرون صفحتهم.'
+          )
+        )}
+      </ol>
+    )
+  });
+}
+
 function historyDrawer(parish) {
   A.parishStatusHistory(parish.id).then(
     list =>
@@ -107,6 +193,7 @@ function Organizations({ data, reload }) {
       save: A.registerArchdiocese,
       done: reload
     });
+  let created = null;
   const registerParish = () =>
     openForm({
       title: L('Register a parish', 'تسجيل رعية'),
@@ -117,7 +204,7 @@ function Organizations({ data, reload }) {
       fields: [
         {
           name: 'archdioceseId',
-          label: L('Archdiocese', 'الأبرشية'),
+          label: L('Archdiocese (registered in ParishLife)', 'الأبرشية (المسجّلة في ParishLife)'),
           type: 'select',
           required: false,
           value: archdioceses[0]?.id || '',
@@ -131,12 +218,24 @@ function Organizations({ data, reload }) {
         { name: 'contact', label: L('Contact (email or phone)', 'جهة الاتصال (بريد أو هاتف)') },
         {
           name: 'declaredArchdiocese',
-          label: L('Archdiocese, as declared (optional)', 'الأبرشية كما أُعلنت (اختياري)'),
+          label: L(
+            'Not in the list above? Type the archdiocese name (optional)',
+            'غير موجودة في القائمة؟ اكتب اسم الأبرشية (اختياري)'
+          ),
           required: false
         }
       ],
-      save: A.registerParish,
-      done: reload
+      // A new church appears at once and opens its setup checklist.
+      save: async v => {
+        created = await A.registerParish(v);
+        opened.parishes.add(created.id);
+        remember();
+        return created;
+      },
+      done: async () => {
+        await reload();
+        if (created?.id) setupDrawer(created, { location, handControl });
+      }
     });
   const verify = async (org, kind) => {
     try {
@@ -187,6 +286,7 @@ function Organizations({ data, reload }) {
           name: 'latitude',
           label: L('Latitude', 'خط العرض'),
           type: 'number',
+          step: 'any',
           value: loc?.latitude ?? '',
           required: false
         },
@@ -194,14 +294,24 @@ function Organizations({ data, reload }) {
           name: 'longitude',
           label: L('Longitude', 'خط الطول'),
           type: 'number',
+          step: 'any',
           value: loc?.longitude ?? '',
           required: false
         },
         {
           name: 'sourceReference',
           label: L('Source of the coordinates', 'مصدر الإحداثيات'),
-          value: loc?.sourceReference || '',
-          required: false
+          type: 'select',
+          value: loc?.sourceReference || 'Google Maps',
+          required: false,
+          options: [
+            ...['Google Maps', 'Apple Maps', 'OpenStreetMap', 'GPS on site'].map(o => [o, o]),
+            ...(loc?.sourceReference &&
+            !['Google Maps', 'Apple Maps', 'OpenStreetMap', 'GPS on site'].includes(loc.sourceReference)
+              ? [[loc.sourceReference, loc.sourceReference]]
+              : []),
+            ['Other', L('Other', 'غير ذلك')]
+          ]
         }
       ],
       save: v =>
@@ -354,12 +464,6 @@ function Organizations({ data, reload }) {
                 title={
                   <>
                     {p.name} <StatusPill status={p.status} />
-                    {p.ownershipContested ? (
-                      <Pill
-                        label={L('Under ownership review · read-only', 'قيد مراجعة الملكية · للقراءة فقط')}
-                        tone="warning"
-                      />
-                    ) : null}
                   </>
                 }
                 lines={[
@@ -387,6 +491,13 @@ function Organizations({ data, reload }) {
                         {L('Operating status', 'الحالة التشغيلية')}
                       </button>
                     ) : null}
+                    <button
+                      className="btn btn-primary btn-dense"
+                      data-setup={p.id}
+                      onClick={() => setupDrawer(p, { location, handControl })}
+                    >
+                      {L('Set up this church', 'إعداد هذه الكنيسة')}
+                    </button>
                     <button className="btn btn-secondary btn-dense" onClick={() => location(p)}>
                       {L('Location', 'الموقع')}
                     </button>

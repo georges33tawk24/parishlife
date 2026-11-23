@@ -1,5 +1,5 @@
 // Purpose: represents revoke access input/output data.
-// Main members: OperationId, Version, AccountId, Reason.
+// Main members: OperationId, Version, AccountId or Account (username or email), Reason.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -14,8 +14,10 @@ public class RevokeAccessDto
     [Required]
     [StringLength(1024)]
     public string Version { get; set; } = string.Empty;
-    [NotEmptyGuid]
     public Guid AccountId { get; set; }
+
+    [StringLength(254)]
+    public string? Account { get; set; }
 
     [Required]
     [StringLength(2000)]

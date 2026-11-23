@@ -1,5 +1,5 @@
 // Purpose: represents grant access input/output data.
-// Main members: OperationId, Version, AccountId, Allows, Denies, StartsAt, EndsAt, and related workflow details.
+// Main members: OperationId, Version, AccountId or Account (username or email), Allows, Denies, StartsAt, EndsAt, and related workflow details.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -14,8 +14,10 @@ public class GrantAccessDto
     [Required]
     [StringLength(1024)]
     public string Version { get; set; } = string.Empty;
-    [NotEmptyGuid]
     public Guid AccountId { get; set; }
+
+    [StringLength(254)]
+    public string? Account { get; set; }
     [Required]
     public string[] Allows { get; set; } = Array.Empty<string>();
     [Required]

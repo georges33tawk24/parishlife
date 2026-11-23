@@ -17,8 +17,8 @@ export const csv = text =>
 export const startOfDay = date => (date ? `${date}T00:00:00Z` : null);
 export const shortDay = value => (value ? String(value).slice(0, 10) : '—');
 
-/* field: { name, label, type = 'text' | 'date' | 'password' | 'textarea' | 'select' | 'check',
-   required = true, options = [[value, label]], value, help } */
+/* field: { name, label, type = 'text' | 'date' | 'number' | 'password' | 'textarea' | 'select' | 'check',
+   required = true, options = [[value, label]], value, help, step (for numbers, e.g. 'any' for decimals) } */
 export function Fields({ fields }) {
   return fields.map(f => (
     <label key={f.name} className={f.type === 'check' ? 'check' : 'formrow'}>
@@ -51,6 +51,7 @@ export function Fields({ fields }) {
               className="input"
               name={f.name}
               type={f.type || 'text'}
+              step={f.step}
               defaultValue={f.value || ''}
               required={f.required !== false}
               autoComplete={f.type === 'password' ? 'current-password' : 'off'}
