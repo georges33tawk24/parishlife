@@ -4,9 +4,11 @@
 // year, pages revalidated, pages sent with a Content-Security-Policy); with no wwwroot (an API-only deployment) it adds nothing.
 // ContentSecurityPolicy builds the page policy, allowing each page's inline start-up script only by its SHA-256 hash, and form posts
 // to this origin plus the external sign-in providers' authorization origins (their redirect follows a same-origin form post).
-// Before the static files, GET /public.html?parish=<id> and GET /sitemap.xml are generated (Middleware/PublicPages.cs), rate limited.
+// Before the static files, GET /public.html?parish=<id> and GET /sitemap.xml are generated (Middleware/PublicPages.cs), rate limited, and
+// scripts and styles go out as the build's precompressed copies when the browser accepts them (Middleware/PrecompressedAssets.cs).
 
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.StaticFiles;
 using ParishLife.Api.Configuration;
 using ParishLife.Api.Middleware;
 using System.Text;
@@ -39,11 +41,17 @@ public static partial class FrontendHostingExtensions
                 await PublicPages.ParishPageAsync(context, publicPage!);
             });
         });
+        app.UsePrecompressedAssets(root);
         app.UseDefaultFiles();
+        var types = new FileExtensionContentTypeProvider();
+        types.Mappings[".br"] = "application/octet-stream"; // the build's compressed copies; Apply gives them the original type
+        types.Mappings[".gz"] = "application/octet-stream";
         app.UseStaticFiles(new StaticFileOptions
         {
+            ContentTypeProvider = types,
             OnPrepareResponse = context =>
             {
+                PrecompressedAssets.Apply(context.Context);
                 var headers = context.Context.Response.Headers;
                 headers.CacheControl = context.Context.Request.Path.StartsWithSegments("/assets/app") ? "public, max-age=31536000, immutable" : "no-cache";
                 if (context.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))

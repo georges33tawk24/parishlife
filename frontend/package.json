@@ -6,7 +6,7 @@
   "description": "The ParishLife frontend in React: the public site (public.html), the members portal and sign-in (index.html) and the product page (landing.html).",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/precompress.mjs",
     "check": "node scripts/run-checks.mjs",
     "check:routes": "node scripts/check-routes.mjs --strict",
     "preview": "vite preview",

@@ -151,7 +151,7 @@ body.menu-open{overflow:hidden}
 
 /* ---------- loader: the night before the valley appears ---------- */
 .page-loader{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:radial-gradient(ellipse 60% 50% at 50% 56%,#2B1D13,#0B0806 70%);
-  transition:opacity .35s var(--ease-out),visibility .35s;animation:loader-out .35s 8s forwards}
+  transition:opacity .35s var(--ease-out),visibility .35s;animation:loader-out .35s 30s forwards} /* a safety net if the scripts never load; 8 s hid it before the page arrived on slow lines */
 body.is-ready .page-loader{opacity:0;visibility:hidden}
 .loader-mark{display:grid;justify-items:center;gap:16px;color:var(--on-night)}
 .loader-mark svg{width:56px;height:68px;overflow:visible}

@@ -13,6 +13,10 @@ The API's cookies (`__Host-ParishLife`, `__Host-ParishLife.Csrf`) are `Secure` a
   - It prints the deploy command and makes no Azure calls.
   - `-IncludeFrontend:$false` builds the old API-only package.
 - **Serving:** `UseParishLifeFrontend` (`ParishLife.Api/Extensions/FrontendHostingExtensions.cs`) serves `wwwroot` only when `wwwroot/index.html` exists, so an API-only package behaves exactly as before. It sits before the rate limiter, so loading pages and assets does not use up a client's API budget.
+- **Compression (24 November 2026):**
+  - `npm run build` ends with `scripts/precompress.mjs`, which writes a Brotli (quality 11) and a gzip (level 9) copy next to every built script, style sheet and SVG under `dist/assets`. On a slow line this is a third fewer bytes than compressing on the fly: the public script is 124 KB instead of 185 KB.
+  - `Middleware/PrecompressedAssets.cs` sends the `.br` or `.gz` copy when the browser accepts it, with the original type, `Content-Encoding` and `Vary: Accept-Encoding`. Other responses outside `/api` are still compressed on the fly; `/api` is never compressed.
+- **First paint:** `index.html` and `landing.html` carry a tiny inline loader inside `#root`, which React replaces on its first render, so a slow line shows the name at once instead of a blank page. `public.html` has its own candle loader, whose safety fade-out was moved from 8 s to 30 s so it no longer disappears before the page arrives.
 - **Caching:**
   - Hashed build files under `/assets/app/` are cached for a year (`immutable`).
   - Pages, `sw.js` and the manifest are revalidated on every visit (`no-cache`).

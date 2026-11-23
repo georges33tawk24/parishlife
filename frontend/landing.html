@@ -28,8 +28,15 @@
 <link rel="stylesheet" href="/assets/fonts/portal-fonts.css">
 <script>(() => { try { if (localStorage.getItem('pl-lang') === 'ar') { document.documentElement.lang = 'ar'; document.documentElement.dir = 'rtl'; } } catch {} })();</script>
 <script type="module" src="/src/landing/main.jsx"></script>
+<!-- Shown at once, before the scripts arrive (on a slow line they take many seconds); React replaces it on its first render. -->
+<style>
+.boot{position:fixed;inset:0;display:grid;place-items:center;background:#F5F1E8;color:#0E1A31;font:400 24px/1.3 Georgia,"Times New Roman",serif;letter-spacing:.03em}
+.boot i{display:block;width:120px;height:2px;margin:14px auto 0;border-radius:2px;background:linear-gradient(90deg,transparent,#B8862E,transparent);animation:boot 1.6s ease-in-out infinite}
+@keyframes boot{0%,100%{transform:scaleX(.15);opacity:.35}50%{transform:scaleX(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.boot i{animation:none}}
+</style>
 </head>
 <body>
-<div id="root" style="display:contents"></div>
+<div id="root" style="display:contents"><div class="boot" role="status" aria-label="Loading ParishLife"><div>ParishLife<i></i></div></div></div>
 </body>
 </html>
