@@ -24,8 +24,8 @@ Answer by number. "Default" is what the backend does today or what is recommende
 | 13. Sign-in before email is verified | **No: confirm the emailed code first.** | Matches. |
 | 14. Small-count hiding | **Counts of 1–4 in bishop totals show as "fewer than 5".** | **Done (23 November):** requests, certificates and membership requests of 1–4 show as "fewer than 5" in rows and totals; priest, staff and event counts stay exact. |
 | 15. Retention | **Parish records and audit are kept permanently; read notifications are deleted after 1 year; anonymous site counts after 2 years.** | **Done (23 November):** a background job deletes notices read or archived over a year ago and site counts over two years old; unread notices stay. The privacy page says the same. |
-| 16. Backups (U15) | **Database point-in-time restore for 30 days (up from 7), and a restore test every 3 months.** Deleted files stay recoverable for 30 days. | **Azure change** (Azure session, owner's go-ahead) and a recurring task; the privacy page says 7 days today. |
-| 26. Test database | **Yes: a separate, small Cosmos test database** for live tests, never holding real data. | **Azure change** (Azure session, owner's go-ahead); the live tests then point at it. |
+| 16. Backups (U15) | **Database point-in-time restore for 30 days (up from 7), and a restore test every 3 months.** Deleted files stay recoverable for 30 days. | **Done (23 November):** Cosmos `Continuous30Days`; blob and container soft delete were already 30 days; privacy page says 30 days. The quarterly restore test is not scheduled yet. |
+| 26. Test database | **Yes: a separate, small Cosmos test database** for live tests, never holding real data. | **Done (23 November):** `ParishLifeTest` created with the manifest containers (empty; the app identity cannot reach it). Pointing the live tests at it is still to do. |
 
 Still open (to answer next):
 - the remaining per-area items in `docs/frontend-modules/*.md`;

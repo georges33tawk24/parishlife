@@ -53,7 +53,7 @@ Each command asks for an operator change/approval reference. That reference is s
 
 ## Unresolved inputs (no defaults invented)
 
-Retention period, schedule/frequency, RPO, RTO, the approved backup owner/custodian, where snapshots are stored, key-ring custody/escrow and the restore-exercise cadence are **U15 inputs**. The code has no settings or defaults for them. Record the approved values in the operational runbook when the owners supply them. Azure-native Cosmos/Blob backup policy is unchanged and not inspected here.
+Retention period, schedule/frequency, RPO, RTO, the approved backup owner/custodian, where snapshots are stored, key-ring custody/escrow and the restore-exercise cadence are **U15 inputs**. The code has no settings or defaults for them. Record the approved values in the operational runbook when the owners supply them. Azure-native backups (owner Q16, 23 November 2026): Cosmos continuous backup `Continuous30Days` (point-in-time restore to any moment in the last 30 days); Blob soft delete 30 days, container soft delete 30 days, versioning on. The owner asked for a restore test every 3 months; it is not scheduled yet.
 
 ## Not delivered
 

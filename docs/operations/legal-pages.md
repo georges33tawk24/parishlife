@@ -51,7 +51,7 @@ Georges was not consulted on this wording. Any change later: edit both files, ke
 | **Cookies:** session (8 h), anti-forgery, short-lived provider cookies. | `Program.cs` (`__Host-ParishLife`, `__Host-ParishLife.Csrf`), `AccountSessionService` (8 h), `ExternalSignInService` (`__Host-ParishLife.ExternalMfa`, at most 10 min), the Identity external cookie |
 | **Browser storage:** language, reading preferences, screen choices; offline copy of public pages. | `lib/i18n.js`, `reading/EasyReading.jsx`, `portal/model/store.js`, `public/sw.js` |
 | **Retention:** parish records and audit kept; read notices deleted after 1 year, anonymous site counts after 2 years (owner decision, 23 November 2026). | `RetentionService`, `RetentionWorker` (runs with the background jobs) |
-| **Backups:** 7 days point-in-time; deleted files recoverable 30 days. | Azure setup recorded by the Azure session (Cosmos continuous backup, blob soft delete) |
+| **Backups:** 30 days point-in-time (Continuous30Days, owner Q16, 23 November 2026); deleted files and containers recoverable 30 days. | Azure setup recorded by the Azure session (Cosmos continuous backup, blob soft delete) |
 | **In-product rights:** own data per parish, closure request, profile corrections, password, sign-in methods, sessions. | `PersonDataService` (`me/data`, closure requests), `ProfileCorrection`, account routes |
 | **Account deletion only by request.** | `CosmosIdentityStore.DeleteAsync` refuses ("requires the retention and ownership review workflow") |
 | **Staff, clergy and operators use an authenticator.** | `StaffAppointmentAccess`, `ClergyAuthority`, `AccountDirectory.RequireOperatorAsync` |
