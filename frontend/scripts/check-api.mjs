@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 const sent = [],
   events = [];
 let csrfCalls = 0,
-  rejectNextWrite = false;
+  rejectNextWrite = false,
+  dropNextWrite = false;
 const people = [
   {
     id: 'a1',
@@ -34,6 +35,11 @@ globalThis.fetch = async (url, options = {}) => {
   if (path === 'auth/csrf') return json(200, { token: `t${++csrfCalls}`, header: 'X-CSRF-TOKEN' });
   if (method !== 'GET') {
     assert.equal(options.headers['X-CSRF-TOKEN'], `t${csrfCalls}`, 'every write carries the current token');
+    if (dropNextWrite) {
+      dropNextWrite = false; // the request left, the answer never came back
+      sent.push([method, path, body]);
+      throw new TypeError('Failed to fetch');
+    }
     if (rejectNextWrite) {
       rejectNextWrite = false;
       return json(400, { status: 400, title: 'csrf_invalid', detail: 'Obtain a current antiforgery token.' });
@@ -211,6 +217,20 @@ assert.equal(events.at(-1).detail, notConnected);
 
 // a route the API does not have says so plainly
 await assert.rejects(api('workspace/plan'), { message: notConnected });
+
+// a write that got no answer may have been saved: the same write again carries the same operation id, so the API
+// replays it instead of saving twice; once the server answers it is forgotten, and a changed write is a new one (audit N2)
+const ids = () => sent.slice(-1)[0][2].operationId;
+dropNextWrite = true;
+await assert.rejects(api('parishes/P/people', 'POST', { operationId: 'o1', givenName: 'A' }));
+await api('parishes/P/people', 'POST', { operationId: 'o2', givenName: 'A' });
+assert.equal(ids(), 'o1', 'the repeated write reuses the unanswered operation id');
+await api('parishes/P/people', 'POST', { operationId: 'o3', givenName: 'A' });
+assert.equal(ids(), 'o3', 'an answered write is forgotten');
+dropNextWrite = true;
+await assert.rejects(api('parishes/P/people', 'POST', { operationId: 'o4', givenName: 'A' }));
+await api('parishes/P/people', 'POST', { operationId: 'o5', givenName: 'B' });
+assert.equal(ids(), 'o5', 'a changed write is a new write');
 
 // the public site: the directory and a parish's pages, from the anonymous routes
 const { loadDirectory, loadParish } = await import('../src/public/api-data.js');
