@@ -10,6 +10,37 @@ Written 23 November 2026, after the hardening run (branch `fullstack-hardening`)
 - the Bible verse's copyright notice;
 - parishes outside Lebanon (GDPR).
 
+## Status on 24 November 2026 (after you accepted my recommendations)
+
+**Done, tested and committed on `fullstack-hardening`:**
+
+| Item | What changed | Commit |
+|---|---|---|
+| T1 daily code-email cap | At most 10 codes per account and kind of code in 24 hours; past that, the usual neutral answer and nothing is sent | `efbfa37` |
+| T2 photo location data | Uploads lose every metadata block: GPS, device, time, XMP, IPTC, comments, and extra pictures appended after the image. A photo taken turned keeps only its orientation, so it stays upright. Done **without SkiaSharp**: removing metadata needs no image decoder, and SkiaSharp's native libraries would have added about 100 MB to every build and to the deploy package, on a machine with under 2 GB free. Image data is copied unchanged, so there's no quality loss. Checked on real files with Apple's ImageIO. | `c15971b` |
+| T3 demo names and data | "Saint Elias, Hadath", "Fr. Antoine Khoury" and the Khoury address are replaced with "Demo Parish", "Demo Town", "Fr. John Doe" and "Demo Building" (Arabic too). Demo data no screen reads is deleted (`data.js`: 2,606 lines to 269). The portal bundle is 48 KB smaller. | `5b0f750`, `2007eee` |
+| T5 prerendering | Proposal written: [PRERENDER-PROPOSAL.md](PRERENDER-PROPOSAL.md). Nothing built yet. | `fd651fd` |
+| T6 accessibility checks in CI | `e2e/accessibility.spec.mjs`: 130 axe scans (public pages EN/AR, every member and priest screen, dark mode, Arabic), 0 violations. CI's e2e job runs it. | `78d7471`, `02fde30` |
+| T7 breached passwords | New passwords are checked with Have I Been Pwned (5-character hash prefix only). On in production by default; if the service is down, the password is accepted. The privacy page names it in both languages (effective 24 November 2026). | `000a5ed` |
+| T8–T11, T13 | No change, as recommended | — |
+| T15 unused images | Both JPEGs deleted (1.6 MB) | `bcf3d3b` |
+| T16 one tab icon | Every page uses the app's own icon | `661e27c` |
+| T17 dark mode | An account with no saved appearance follows the device, live | `b3756bf` |
+| Saving twice after a time-out (audit N2) | Pressing Save again after no answer reuses the same operation id, so the server never records it twice | `43c08a2` |
+| Smoke test step in the deploy runbook | Added | `f802bdf` |
+
+**Still waiting on you:**
+- **T4:** whose is the WhatsApp number +961 3 421 887? My recommendation was conditional on the answer.
+- **T5:** reply "go" to start the prerendering.
+- **T12 staging (approved):** it needs Azure. Either grant P1–P3 below, or create it yourself from the runbook.
+- **T14 upgrades (approved):** blocked by disk space. This Mac has under 2 GB free, and a .NET 11 SDK plus builds needs about 3 GB more. Please free at least 5 GB; the largest caches here are `~/Library/Caches/Google` (3.1 GB) and `~/Library/Caches/JetBrains` (1.3 GB). Then I'll do the upgrades one at a time.
+- **F1–F3 and P1–P6** below.
+- **New questions from this round:**
+  1. **"Same as device" appearance:** today, an account that once saved light or dark keeps it, and "Reset appearance" stores light. A real "Same as device" option needs a new `system` value in the backend appearance setting. Do you want it?
+  2. **The remaining demo first names on the product page** (Rita Nassar, Nabil Saade, Maya Haddad, and the donors in the counting demo): make them obviously fictional too?
+  3. **Leftover demo text in fallback screens** (for example "Youth retreat — Annaya"). It shows only when a module fails to load. Replace it?
+  4. **A native Arabic check** of the new demo names and the new time-out message (listed in `hardening/reports/11-owner-frontend.md`, section B).
+
 The numbers here (T, F, P) are this file's own. To answer, reply for example "T1 yes, T2 yes, T3 as recommended, F1 …". The detail behind each item is in [FINAL-REPORT.md](FINAL-REPORT.md), section D.
 
 ---

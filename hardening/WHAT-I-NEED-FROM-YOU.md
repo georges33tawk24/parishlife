@@ -2,6 +2,16 @@
 
 Written 23 November 2026, after the hardening run (branch `fullstack-hardening`, commit `ba43f3c`). The full detail behind every line is in [FINAL-REPORT.md](FINAL-REPORT.md), section D, whose step numbers are given as "D…" below.
 
+**Update, 24 November 2026:** you accepted my recommendations. The non-legal items are done or waiting on you as listed in the status table at the top of [WHAT-I-NEED-FROM-YOU-NON-LEGAL.md](WHAT-I-NEED-FROM-YOU-NON-LEGAL.md). In this file, that covers:
+- 1.1–1.3, 1.6–1.18 and section 6;
+- 1.2 was done without SkiaSharp (no image library needed).
+
+Two legal-side effects:
+- the privacy page now names Have I Been Pwned (breached-password check) and is effective 24 November 2026;
+- the recorded terms version is `2026-11-24`.
+
+Every legal item below (1.5 and sections 2–5) still waits on you.
+
 There are four kinds of request:
 
 1. **Decisions.** Answer them and I build the result.
