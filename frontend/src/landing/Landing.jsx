@@ -88,13 +88,13 @@ const ROLES = {
   priest: {
     en: 'Parish priest',
     ar: 'كاهن الرعية',
-    user: 'Fr. Antoine Khoury',
-    userAr: 'الأب أنطوان خوري',
-    initials: 'AK',
+    user: 'Fr. John Doe',
+    userAr: 'الأب فلان الفلاني',
+    initials: 'JD',
     noteEn: 'Full access. The only role that can see pastoral notes, sign certificates and change the exchange rate.',
     noteAr: 'صلاحية كاملة. الدور الوحيد الذي يرى الملاحظات الرعوية ويوقّع الشهادات ويغيّر سعر الصرف.',
-    titleEn: 'Good evening, Fr. Antoine',
-    titleAr: 'مساء الخير يا أبونا أنطوان',
+    titleEn: 'Good evening, Father',
+    titleAr: 'مساء الخير يا أبونا',
     subEn: 'Sunday 4 October · 3 certificates awaiting your signature',
     subAr: 'الأحد ٤ تشرين الأول · ٣ شهادات بانتظار توقيعك',
     items: [
@@ -867,7 +867,10 @@ export function Landing({ initialLang }) {
                   <span className="chip chip-on">{L('Hadath', 'الحدث')}</span>
                 </div>
                 <div className="t-ui dim" style={{ marginTop: 12 }}>
-                  {L('Imm. Khoury, 3rd floor — behind the municipality', 'بناية خوري، الطابق الثالث — خلف البلدية')}
+                  {L(
+                    'Demo Building, 3rd floor — behind the municipality',
+                    'البناية التجريبية، الطابق الثالث — خلف البلدية'
+                  )}
                 </div>
                 <div className="field" style={{ marginTop: 12, maxWidth: 240 }} dir="ltr">
                   <span className="prefix">+961</span>

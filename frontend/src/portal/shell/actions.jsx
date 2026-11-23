@@ -151,7 +151,7 @@ export const VERBS = {
       r.stage = 'priest';
       ok(
         L('Forwarded to the priest', 'أُحيل إلى الكاهن'),
-        L(`${r.ref} is now waiting on Fr. Antoine.`, `${r.ref} بانتظار الأب أنطوان.`)
+        L(`${r.ref} is now waiting on the parish priest.`, `${r.ref} بانتظار كاهن الرعية.`)
       );
     } else {
       const other = D.resClash(r); // approving one of two clashing requests refuses the other
@@ -470,7 +470,10 @@ export const VERBS = {
   'rota-remove': (b, a) => rotaRemove(a),
   'rota-swap': (b, a) => rotaSwap(b, a),
   'share-cert': () =>
-    share({ title: L('Certificate', 'شهادة'), text: L('Your certificate from Saint Elias', 'شهادتك من مار الياس') }),
+    share({
+      title: L('Certificate', 'شهادة'),
+      text: L(`Your certificate from ${D.PARISH.name}`, `شهادتك من ${D.PARISH.nameAr || D.PARISH.name}`)
+    }),
   doc: (b, a) => previewDoc(a || 'Document'),
   ics: () => downloadICS(),
   statement: (b, a) => statement(a || 'p1'),

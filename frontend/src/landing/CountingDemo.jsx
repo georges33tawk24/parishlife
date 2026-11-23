@@ -216,8 +216,8 @@ export function CountingDemo({ L, Use }) {
               <div className="shell-parish">
                 <span className="mark">P</span>
                 <span>
-                  <b>{L('Saint Elias', 'مار الياس')}</b>
-                  <small>{L('Hadath · Maronite', 'الحدث · ماروني')}</small>
+                  <b>{L('Demo Parish', 'الرعية التجريبية')}</b>
+                  <small>{L('Demo Town · Maronite', 'البلدة التجريبية · ماروني')}</small>
                 </span>
               </div>
               <div className="navgroup">{L('Records', 'السجلات')}</div>

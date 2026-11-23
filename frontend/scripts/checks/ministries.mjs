@@ -36,7 +36,7 @@ const ministry = (id, name, extra = {}) => ({
   policyRevision: 1,
   ...extra
 });
-const ARABIC = { nameAr: 'جوقة مار الياس', meetingTimes: 'Fridays 19:00', meetingTimesAr: 'الجمعة ١٩:٠٠' };
+const ARABIC = { nameAr: 'جوقة الرعية التجريبية', meetingTimes: 'Fridays 19:00', meetingTimesAr: 'الجمعة ١٩:٠٠' };
 const meeting = (id, startsAt, status, extra = {}) => ({
   id,
   ministryId: M1,
@@ -102,9 +102,9 @@ const { sent } = mockApi((method, path, body) => {
   if (route === 'parishes/P/ministries' && method === 'GET')
     return q.get('cursor') // two pages: the first ends with a cursor
       ? page([v(ministry(M2, 'Archived choir', { status: 'Archived' }), 'v9')])
-      : page([v(ministry(M1, 'Saint Elias Choir', ARABIC), 'm1v')], 'next');
+      : page([v(ministry(M1, 'Demo Parish Choir', ARABIC), 'm1v')], 'next');
   if (route === `parishes/P/ministries/${M1}` && method === 'GET')
-    return json(200, v(ministry(M1, 'Saint Elias Choir', ARABIC), 'm1v'));
+    return json(200, v(ministry(M1, 'Demo Parish Choir', ARABIC), 'm1v'));
   if (route === `parishes/P/ministries/${M1}/leadership`)
     return page([
       v(
@@ -306,7 +306,7 @@ const { sent } = mockApi((method, path, body) => {
     return page([
       {
         id: M1,
-        name: 'Saint Elias Choir',
+        name: 'Demo Parish Choir',
         purpose: 'Sings at Mass',
         publicInformation: 'Fridays 19:00',
         applicationsOpen: true
@@ -361,12 +361,12 @@ await hydrate();
 // groups: both pages are read, an archived ministry is left out, nothing demo remains
 assert.deepEqual(
   D.GROUPS.map(g => [g.id, g.name, g.cat, g.members, g.vis, g.leader]),
-  [[M1, 'Saint Elias Choir', 'Choir', 2, 'public', PERSON_A]]
+  [[M1, 'Demo Parish Choir', 'Choir', 2, 'public', PERSON_A]]
 );
 assert.equal(D.GROUPS[0].version, 'm1v');
 assert.deepEqual(
   [D.GROUPS[0].ar, D.GROUPS[0].meets, D.GROUPS[0].meetsAr, D.GROUPS[0].purposeAr],
-  ['جوقة مار الياس', 'Fridays 19:00', 'الجمعة ١٩:٠٠', ''],
+  ['جوقة الرعية التجريبية', 'Fridays 19:00', 'الجمعة ١٩:٠٠', ''],
   'Arabic twins come from the API and are never copied from the Latin name'
 );
 const detail = D.GROUP_DETAIL[M1];
@@ -739,7 +739,7 @@ await hydrate();
   const { requests, ministries: catalogue } = await ministries.ministryRequests({ [PERSON_B]: 'Nada Haddad' });
   assert.deepEqual(
     catalogue.map(m => [m.id, m.parish, m.name, m.member, m.description]),
-    [[M1, 'P', 'Saint Elias Choir', false, 'Fridays 19:00']]
+    [[M1, 'P', 'Demo Parish Choir', false, 'Fridays 19:00']]
   );
   assert.deepEqual(
     requests.map(r => [r.id, r.own, r.status, r.kind, r.canReview, r.name]).sort(),

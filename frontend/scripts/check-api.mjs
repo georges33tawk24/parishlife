@@ -78,7 +78,7 @@ globalThis.fetch = async (url, options = {}) => {
       items: [
         {
           parishId: 'X',
-          name: 'Saint Elias',
+          name: 'Demo Parish',
           locality: 'Hadath',
           dioceseName: 'Beirut',
           latitude: 33.83,
@@ -218,7 +218,7 @@ const { directory, details } = await loadDirectory();
 assert.deepEqual(directory, [
   {
     id: 'X',
-    name: 'Saint Elias',
+    name: 'Demo Parish',
     ar: '',
     town: 'Hadath',
     townAr: '',
