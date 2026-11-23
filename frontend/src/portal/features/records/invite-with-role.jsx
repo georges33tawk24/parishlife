@@ -1,9 +1,10 @@
 /* Purpose: one step to invite a person to complete their account and, for the parish's controller, give them a role at the same time
    (owner decision, 23 November 2026). The person opens the private link, signs up or signs in with their own password, and the role
    applies when they accept. Priests and ministry leaders are appointed elsewhere (the bishop; the priest).
-   Main members: ROLE_PRESETS, inviteWithRole (opens the form, then shows the link). */
+   Main members: ROLE_PRESETS, inviteWithRole (opens the form, then shows the link), unlinkAccount (the office undoes a wrong link). */
 import { useRef, useState } from 'react';
-import { openDrawer, openModal } from '../../ui/ui.jsx';
+import { openDrawer, openModal, toast } from '../../ui/ui.jsx';
+import { bus } from '../../model/store.js';
 import { DrawerForm } from '../../ui/forms.jsx';
 import { t } from '../../../lib/i18n.js';
 import { api, session, newOperationId } from '../../model/api.js';
@@ -107,4 +108,38 @@ function InviteForm({ p }) {
 
 export function inviteWithRole(p) {
   openDrawer({ title: t('Invite to complete account', 'دعوة لإكمال الحساب'), sub: p.lat, body: <InviteForm p={p} /> });
+}
+
+/* The office undoes a person record's link to a sign-in account (for example one accepted by the wrong account). The record and the
+   account both stay; a new invitation can then be sent to the right person. */
+export function unlinkAccount(p) {
+  openDrawer({
+    title: t('Unlink account', 'فكّ ربط الحساب'),
+    sub: p.lat,
+    body: (
+      <DrawerForm
+        label={t('Unlink', 'فكّ الربط')}
+        saved={t('Account unlinked', 'فُكّ ربط الحساب')}
+        save={v =>
+          api(
+            `parishes/${encodeURIComponent(session.parishId)}/people/${encodeURIComponent(p.id)}/account-link/remove`,
+            'POST',
+            { operationId: newOperationId(), reason: v.reason }
+          )
+        }
+        done={() => bus.refresh()}
+      >
+        <p className="help">
+          {t(
+            'The sign-in account is no longer linked to this record. Nothing is deleted. Send a new invitation to the right person afterwards.',
+            'لا يعود حساب الدخول مرتبطاً بهذا السجل. لا يُحذف شيء. أرسل بعدها دعوة جديدة إلى الشخص الصحيح.'
+          )}
+        </p>
+        <label className="formrow">
+          <span className="label">{t('Reason', 'السبب')}</span>
+          <textarea className="textarea" name="reason" required maxLength="500" />
+        </label>
+      </DrawerForm>
+    )
+  });
 }

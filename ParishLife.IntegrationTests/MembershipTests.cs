@@ -223,6 +223,34 @@ public class MembershipTests
         await Assert.ThrowsAsync<DomainException>(() => f.Services.GetRequiredService<ParishLife.Api.Interfaces.Services.Organizations.IParishAccess>().RequireAsync(x.Parish, Permissions.PeopleWrite, default));
     }
 
+    [Fact]
+    public async Task The_issuer_cannot_accept_its_own_invitation_and_the_office_can_undo_a_wrong_link()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var person = await PersonAsync(x, "Elie");
+        x.Office();
+        var issued = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
+
+        // The issuer's own signed-in browser opening the link links nothing.
+        f.As(f.Other);
+        Assert.Equal("issuer_cannot_accept", (await Assert.ThrowsAsync<DomainException>(() => invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default))).Code);
+
+        // Someone else accepts by mistake; the office unlinks with a reason and invites the right person again.
+        var wrong = await f.CreateVerifiedMemberAsync();
+        f.As(wrong);
+        Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default)).Status);
+        x.Office();
+        Assert.Equal("Unlinked", (await invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Accepted by the wrong account" }, default)).Status);
+        Assert.Equal("invalid_invitation_state", (await Assert.ThrowsAsync<DomainException>(() =>
+            invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Again" }, default))).Code);
+        var again = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
+        f.As(await f.CreateVerifiedMemberAsync());
+        Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, again.Id, again.Token, default)).Status);
+    }
+
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)
     {
         var staff = await StaffAppointmentScenario.CreateAsync(f);

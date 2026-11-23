@@ -33,7 +33,7 @@ import { persist } from '../../model/persist.js';
 import { createdId } from '../../model/modules/people.js';
 import { MergeHistory } from './people-duplicates.jsx';
 import { accountStatus } from '../administration/workspace-platform.jsx';
-import { inviteWithRole } from './invite-with-role.jsx';
+import { inviteWithRole, unlinkAccount } from './invite-with-role.jsx';
 import { directoryConsents, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
@@ -419,6 +419,9 @@ export function personMenu(anchor, pid) {
         : []),
       ...(!D.ACCOUNTS[pid]?.id && is('priest', 'secretary', 'super_admin', 'parish_admin', 'diocesan_admin')
         ? [{ label: t('Invite to complete account', 'دعوة لإكمال الحساب'), icon: 'mail', fn: () => inviteWithRole(p) }]
+        : []),
+      ...(D.ACCOUNTS[pid]?.id && is('priest', 'secretary', 'super_admin', 'parish_admin', 'diocesan_admin')
+        ? [{ label: t('Unlink account', 'فكّ ربط الحساب'), icon: 'x', fn: () => unlinkAccount(p) }]
         : []),
       ...(D.ACCOUNTS[pid]?.id && is('super_admin')
         ? [

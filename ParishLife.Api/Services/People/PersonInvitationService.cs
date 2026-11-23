@@ -2,7 +2,9 @@
 // the person link; conflicting claims stop for office review instead of linking. The parish controller may attach office access (a role)
 // to the invitation; accepting it then also grants that access in the same commit, if the issuer still controls the parish (owner
 // decision, 23 November 2026). Passwords are always chosen by the person; a role never includes grant administration or clergy authority.
-// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, ListAsync and office-only NotificationOutcomeAsync.
+// The account that issued an invitation can never accept it (24 November 2026: an issuer's own signed-in browser accepted a link meant for
+// someone else), and the office can undo a wrong link with UnlinkAccountAsync.
+// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, UnlinkAccountAsync, ListAsync and office-only NotificationOutcomeAsync.
 // Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
 using System.Security.Cryptography;
@@ -114,6 +116,8 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
             return Project(item);
         if (Effective(item) != "Open")
             throw State(Effective(item) == "Expired" ? "This invitation has expired; ask the parish office for a new one." : "This invitation can no longer be used.");
+        if (item.CreatedBy == actor.AccountId)
+            throw new DomainException("issuer_cannot_accept", "You created this invitation; only the person it was made for can accept it. Send them the link.", FailureKind.Conflict);
         var user = await users.FindByIdAsync(actor.AccountId);
         if (user is not { Active: true } || !AccountVerification.IsVerified(user))
             throw State("Verify your account's contact details before accepting.");
@@ -177,6 +181,25 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         if (conflict)
             await notifications.DispatchAsync(parish, item.CreatedBy, "person-invitation:" + id, ct);
         return Project(item);
+    }
+
+    public async Task<CommandResult> UnlinkAccountAsync(string parish, string person, UnlinkPersonAccountDto request, CancellationToken ct)
+    {
+        var root = await OfficeAsync(parish, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "person-account-unlink:v1:" + person);
+        if (await records.ReplayAsync<CommandResult>(Scope(parish), op, ct) is { } prior)
+            return prior;
+        var claim = await records.ReadAsync<CommandResult>(Scope(parish), "personAccountClaim:" + person, ct);
+        if (claim?.Value is not { Status: "Linked" } linked)
+            throw State("This person is not linked to an account.");
+        var changes = new List<RecordChange>
+        {
+            RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Remove("personAccountClaim:" + person, claim.Version)
+        };
+        if (await records.ReadAsync<PersonAccountLink>(Scope(parish), "personAccountLink:" + linked.Id, ct) is { } link && link.Value.PersonId == person)
+            changes.Add(RecordChange.Remove("personAccountLink:" + linked.Id, link.Version));
+        return await records.CommitAsync(Scope(parish), op, "person.account_unlinked", person, changes,
+            new CommandResult { Id = person, Status = "Unlinked" }, ct, Guard.Text(request.Reason, "Reason", 500));
     }
 
     public async Task<PersonInvitationDto> RevokeAsync(string parish, string id, RevokePersonInvitationDto request, CancellationToken ct)

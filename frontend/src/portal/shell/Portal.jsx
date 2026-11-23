@@ -565,6 +565,77 @@ export function Portal() {
     history.replaceState(null, '', location.pathname + location.hash);
   };
   /* Into the portal after signing in or opening an account: the page that was asked for, or the role's first page. */
+  /* An invitation link: show whom it is for and accept only when the signed-in person confirms it is them. */
+  const askInvitation = async invitation => {
+    const at = invitation.get('p'),
+      id = invitation.get('i'),
+      headers = { 'X-ParishLife-Invitation': invitation.get('t') || '' };
+    const base = `parishes/${encodeURIComponent(at)}/person-invitations/${encodeURIComponent(id)}`;
+    let preview;
+    try {
+      preview = await api(base + '/preview', 'GET', undefined, headers);
+    } catch (e) {
+      return toast(t('Invitation could not be opened', 'تعذّر فتح الدعوة'), e.message, 'danger');
+    }
+    if (preview.status !== 'Open')
+      return toast(
+        t('This invitation can no longer be used', 'لم يعد بالإمكان استخدام هذه الدعوة'),
+        t('Ask the parish office for a new link.', 'اطلب رابطاً جديداً من مكتب الرعية.'),
+        'danger'
+      );
+    const accept = async () => {
+      try {
+        const accepted = await api(base + '/accept', 'POST', undefined, headers);
+        await loadSession();
+        closeOverlays();
+        await enter(at);
+        toast(
+          t('Invitation accepted', 'قُبلت الدعوة'),
+          accepted?.roleApplied
+            ? t(
+                'Your role in the parish is ready. Turn on the authenticator in My account to use it.',
+                'دورك في الرعية جاهز. فعّل المصادِق في حسابي لاستخدامه.'
+              )
+            : t('Your account is linked to your parish record.', 'رُبط حسابك بسجلك في الرعية.'),
+          'success'
+        );
+      } catch (e) {
+        closeOverlays();
+        toast(t('Invitation could not be accepted', 'تعذّر قبول الدعوة'), e.message, 'danger');
+      }
+    };
+    openModal({
+      title: t('Is this you?', 'هل هذا أنت؟'),
+      body: (
+        <>
+          <p>
+            {t('This invitation is for', 'هذه الدعوة لـ')} <b>{preview.personName}</b> · {preview.parishName}
+          </p>
+          {preview.roleAllows?.length ? (
+            <p className="help">
+              {t('It also gives office access in the parish.', 'وهي تمنح أيضاً صلاحيات مكتب في الرعية.')}
+            </p>
+          ) : null}
+          <p className="help">
+            {t(
+              'Accept only if you are this person. Your account will be linked to their parish record.',
+              'اقبل فقط إن كنت هذا الشخص. سيُربط حسابك بسجله في الرعية.'
+            )}
+          </p>
+        </>
+      ),
+      foot: (
+        <>
+          <button className="btn btn-secondary" data-close="">
+            {t('Not me', 'لست أنا')}
+          </button>
+          <button className="btn btn-primary" data-invite-accept="" onClick={accept}>
+            {t('Yes, this is me', 'نعم، هذا أنا')}
+          </button>
+        </>
+      )
+    });
+  };
   const enter = async (parishId = '') => {
     await loadSession();
     // An invitation link survives a provider sign-up round trip (kept for this tab only), then is used once.
@@ -577,33 +648,10 @@ export function Portal() {
     }
     const raw = location.hash.startsWith('#invite=') ? location.hash.slice(8) : held;
     const invitation = raw ? new URLSearchParams(raw) : null;
+    // Never linked silently (24 November 2026): the person sees whom the invitation is for and confirms it is them.
     if (invitation) {
-      try {
-        // accepting links this account to the invited person (card A11); the token travels in a header
-        const at = invitation.get('p');
-        const accepted = await api(
-          `parishes/${encodeURIComponent(at)}/person-invitations/${encodeURIComponent(invitation.get('i'))}/accept`,
-          'POST',
-          undefined,
-          { 'X-ParishLife-Invitation': invitation.get('t') || '' }
-        );
-        await loadSession();
-        parishId = at;
-        history.replaceState(null, '', '#/account');
-        toast(
-          t('Invitation accepted', 'قُبلت الدعوة'),
-          accepted?.roleApplied
-            ? t(
-                'Your role in the parish is ready. Turn on the authenticator in My account to use it.',
-                'دورك في الرعية جاهز. فعّل المصادِق في حسابي لاستخدامه.'
-              )
-            : t('Your account is linked to your parish record.', 'رُبط حسابك بسجلك في الرعية.'),
-          'success'
-        );
-      } catch (e) {
-        history.replaceState(null, '', '#/account');
-        toast(t('Invitation could not be accepted', 'تعذّر قبول الدعوة'), e.message, 'danger');
-      }
+      history.replaceState(null, '', location.pathname + location.search);
+      setTimeout(() => askInvitation(invitation), 0);
     }
     pickParish();
     if (parishId && session.parishes.some(p => p.id === parishId)) selectParish(parishId);
