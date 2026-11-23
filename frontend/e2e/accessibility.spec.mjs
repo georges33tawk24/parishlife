@@ -9,6 +9,9 @@ import { expect } from '@playwright/test';
 import { client, manifest, settle, signIn, test, watch } from './support.mjs';
 
 const M = manifest();
+/* No trace: each scan injects axe's whole source, so a trace of 130 scans takes hundreds of MB, and a failure already lists
+   the page, the rule, the elements and the colours measured. */
+test.use({ trace: 'off' });
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
 async function scan(page, where, found) {
