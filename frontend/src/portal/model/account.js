@@ -39,10 +39,11 @@ export const confirmVerificationCode = (email, code) =>
   api('auth/contact-verification/confirm', 'POST', { email, code: String(code || '').replace(/\s+/g, '') });
 
 /* ---------- profile and appearance ---------- */
-/* AccountAppearanceDto ⇄ the theme the portal paints with ({ scheme, primary, mode }). */
-export const themeOf = appearance => ({
+/* AccountAppearanceDto ⇄ the theme the portal paints with ({ scheme, primary, mode }). With no saved appearance
+   (the profile's configured flag is false) the mode is 'system': the device's light or dark setting. */
+export const themeOf = (appearance, saved = true) => ({
   scheme: appearance?.scheme || 'forest',
-  mode: appearance?.mode || 'light',
+  mode: saved ? appearance?.mode || 'light' : 'system',
   ...(appearance?.scheme === 'custom' ? { primary: appearance.primaryColor } : {})
 });
 export const appearanceOf = theme => ({

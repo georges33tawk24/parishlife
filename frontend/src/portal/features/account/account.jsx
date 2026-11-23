@@ -40,7 +40,7 @@ import { SignerProfilePanel } from './signer-profile.jsx';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
-import { SCHEMES, schemeOf, applyTheme } from '../../../lib/theme.js';
+import { SCHEMES, schemeOf, applyTheme, modeOf } from '../../../lib/theme.js';
 
 const RELATIONSHIP = () => ({ Following: t('Following', 'متابَعة'), Member: t('Member', 'عضو') });
 /* The optional personal details shown on the profile form: [field, English label, Arabic label, maximum, direction] */
@@ -59,7 +59,7 @@ const DETAIL_FIELDS = [
 function applyProfile(profile) {
   if (session.accountUser) session.accountUser.name = profile.displayName;
   if (session.user) session.user.name = profile.displayName;
-  session.preferences = { theme: themeOf(profile.appearance), language: profile.preferredLanguage };
+  session.preferences = { theme: themeOf(profile.appearance, profile.configured), language: profile.preferredLanguage };
   applyTheme(session.preferences.theme);
 }
 const settled = (result, saved) =>
@@ -138,7 +138,7 @@ export function AccountPage() {
       </>
     );
   const { profile, account, mfa, features, directory } = loaded,
-    theme = themeOf(profile.appearance);
+    theme = themeOf(profile.appearance, profile.configured);
   const store = (next, message) => {
     applyProfile(next);
     setLoaded(l => ({ ...l, profile: next }));
@@ -319,7 +319,7 @@ export function AccountPage() {
               </div>
               <label className="formrow">
                 <span className="label">{t('Mode', 'الوضع')}</span>
-                <Select name="mode" defaultValue={theme.mode}>
+                <Select name="mode" defaultValue={modeOf(theme)}>
                   <option value="light">{t('Light', 'فاتح')}</option>
                   <option value="dark">{t('Dark', 'داكن')}</option>
                 </Select>

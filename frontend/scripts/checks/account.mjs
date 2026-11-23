@@ -199,6 +199,11 @@ assert.deepEqual(account.featuresOf(null), { passkeys: false, verification: fals
 assert.ok(accountModule && accountModule.keys.length === 0);
 await accountModule.load();
 assert.deepEqual(session.preferences.theme, { scheme: 'custom', mode: 'dark', primary: '#123456' });
+// no saved appearance (the API's defaults, not configured): the portal follows the device's light or dark setting
+profile.value.isConfigured = false;
+await accountModule.load();
+assert.equal(session.preferences.theme.mode, 'system');
+profile.value.isConfigured = true;
 profileStatus = 403;
 await accountModule.load();
 assert.equal(session.preferences, undefined);

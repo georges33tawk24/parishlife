@@ -1,7 +1,8 @@
 /* Purpose: end-to-end checks of the portal's waiting and failure states against the real API (test-only host).
    Main checks: a double click on a dialog's Delete removes exactly one record (the button waits for the server,
    and a second press never removes the next or the last record: handoff 04-8); while the browser is offline the
-   portal says so, and the banner goes when the connection is back. */
+   portal says so, and the banner goes when the connection is back; with no saved appearance the portal is light or dark
+   as the device is, and changes with it (owner decision T17). */
 import { expect } from '@playwright/test';
 import { manifest, settle, signIn, test, watch } from './support.mjs';
 
@@ -88,5 +89,25 @@ test('the portal says when the device is offline, and stops saying it when it is
   await expect(banner).toContainText('offline');
   await page.context().setOffline(false);
   await expect(banner).toHaveCount(0);
+  expect(state.problems, state.problems.join('\n')).toEqual([]);
+});
+
+test('with no saved appearance the portal follows the device, also when it changes', async ({ page }) => {
+  await client(page, 52);
+  const state = watch(page);
+  await page.addInitScript(() => localStorage.setItem('pl-lang', 'en'));
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(M.baseUrl + '/index.html');
+  await signIn(page, state, M.accounts.member, M.totpSecret, M.password, M.turnstile);
+  const html = page.locator('html');
+  await expect(html).toHaveAttribute('data-mode', 'dark');
+  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--bg'))).toBe('#11161E');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(html).toHaveAttribute('data-mode', 'light');
+  await page.reload();
+  await page.locator('nav.rail-nav').waitFor();
+  await expect(html).toHaveAttribute('data-mode', 'light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(html).toHaveAttribute('data-mode', 'dark');
   expect(state.problems, state.problems.join('\n')).toEqual([]);
 });
