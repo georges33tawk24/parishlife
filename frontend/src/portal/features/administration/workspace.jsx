@@ -120,7 +120,7 @@ function setupDrawer(parish, actions) {
         {step(
           L('5. The priest', '٥. الكاهن'),
           L(
-            "The bishop of the church's archdiocese appoints the priest (Appointments tab). Then hand the priest control of the church. A church with no archdiocese is handed over by a ParishLife administrator.",
+            "The bishop of the church's archdiocese, or a ParishLife administrator, appoints the priest (Appointments tab); the church must be under a verified archdiocese. Then hand the priest control of the church.",
             'يعيّن مطران أبرشية الكنيسة الكاهن (تبويب التعيينات). ثم سلّم الكاهن إدارة الكنيسة. الكنيسة بلا أبرشية يسلّمها مشرف ParishLife.'
           ),
           <>
@@ -135,7 +135,7 @@ function setupDrawer(parish, actions) {
         {step(
           L('6. Ministries and their leaders', '٦. الأخويات وقادتها'),
           L(
-            'Once the priest is appointed, he creates the ministries and names their leaders from the Ministries menu.',
+            'The priest, or a ParishLife administrator, creates the ministries and names their leaders from the Ministries menu.',
             'بعد تعيين الكاهن، ينشئ الأخويات ويسمّي قادتها من قائمة الأخويات.'
           )
         )}

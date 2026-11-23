@@ -13,7 +13,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Ministries;
 
 public class MinistryLeadershipService(IRecordTransactions records, IParishAccess access, IParishRepository parishes,
-    ICurrentActor actor, IClergyAuthority clergy, MfaAccountAccess proof, TimeProvider clock)
+    ICurrentActor actor, IClergyAuthority clergy, MfaAccountAccess proof, TimeProvider clock, IPlatformAccess platform)
 {
     private static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     private static string Key(string ministry, string account) => "ministryLeader:" + ministry + ":" + account;
@@ -209,9 +209,20 @@ public class MinistryLeadershipService(IRecordTransactions records, IParishAcces
         };
     }
 
+    // The parish priest, or a ParishLife super admin (owner decision, 23 November 2026), names and manages ministry leaders.
     private async Task<Versioned<Parish>> RequirePriestAsync(string parish, CancellationToken ct)
     {
         await proof.RequireMfaAsync(ct);
+        if (actor.ActingAppointmentId is null)
+        {
+            try
+            {
+                await platform.RequireOperatorAsync(ct);
+                return await parishes.GetAsync(parish, ct) is { Value.Status: ParishStatus.Verified } open ? open
+                    : throw new DomainException("resource_not_found", "The requested resource is unavailable.", FailureKind.NotFound);
+            }
+            catch (DomainException e) when (e.Code == "operator_required") { /* not a super admin: the priest path below */ }
+        }
         var root = await access.RequireAsync(parish, Permissions.MinistriesManage, ct);
         await clergy.RequireAsync(parish, actor.AccountId, "Priest", ct);
         return root;

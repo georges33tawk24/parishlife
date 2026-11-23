@@ -11,13 +11,11 @@ Nothing here is seeded: every record is entered through the app by the person wh
 4. **Treasurer:** the same, ticking **Finance** only.
 5. **Parishioner:** they sign up. The secretary adds them in **People** as a Member, opens their record → **Invite to complete account**, and sends them the private link. Once they open it signed in, they see their own member pages.
 
-## B. Priest and ministry leader (needs the archdiocese and its bishop)
-Clergy authority comes from the bishop, so the priest's own screens (signing certificates and letters, naming ministry leaders) need this structure:
+## B. Priest and ministry leader (needs a verified archdiocese)
+A ParishLife administrator may act in the bishop's place for appointments (owner decision, 23 November 2026), so no bishop is needed:
 1. **Archdiocese:** Administration → Organizations → **Register an archdiocese** (the Maronite Archeparchy of Beirut), then **Verify** it.
-2. **Bishop:** Appointments → propose the bishop's account. **A second ParishLife administrator (georgestawk) must review it**: the one who proposed cannot. Then the bishop's account accepts the invitation.
-3. **Your church under the archdiocese:** Organizations → your church → **Propose jurisdiction** → the archdiocese. The bishop signs in and decides it (password and authenticator code).
-4. **Priest:** the bishop, under Appointments → the church → invites the priest's account (tick what he may do); the priest accepts.
+2. **Your church under the archdiocese:** Organizations → your church → **Propose jurisdiction** → the archdiocese, then **Decide proposal** yourself (password and authenticator code). A church registered under the archdiocese from the start skips this.
+3. **Priest:** Appointments → the archdiocese → the church → invite the priest's account (tick what he may do; your password and code); the priest accepts.
+4. *(Optional)* **Bishop:** propose the bishop's account; a second ParishLife administrator must review it.
 5. **Hand control:** Organizations → your church → **Hand control to the priest** (his username or email). Your own access to the church ends; ParishLife administrator tools stay yours.
-6. **Ministry leader:** the priest creates a ministry under Ministries and names its leader's account.
-
-Order matters: do A first (it works without B), and B when Georges can do the review in step B2.
+6. **Ministry leader:** the priest, or you, creates a ministry under Ministries and names its leader's account.

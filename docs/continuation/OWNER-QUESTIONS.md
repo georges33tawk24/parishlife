@@ -27,6 +27,8 @@ Answer by number. "Default" is what the backend does today or what is recommende
 | 16. Backups (U15) | **Database point-in-time restore for 30 days (up from 7), and a restore test every 3 months.** Deleted files stay recoverable for 30 days. | **Done (23 November):** Cosmos `Continuous30Days`; blob and container soft delete were already 30 days; privacy page says 30 days. The quarterly restore test is not scheduled yet. |
 | 26. Test database | **Yes: a separate, small Cosmos test database** for live tests, never holding real data. | **Done (23 November):** `ParishLifeTest` created with the manifest containers (empty; the app identity cannot reach it). **Live tests (23 November):** `ParishLife.IntegrationTests/Live` runs only against `ParishLifeTest` (any other name is refused), skipped unless opted in; see `docs/operations/live-tests.md`. Not run yet: the Cosmos firewall is closed. |
 
+| Appointments by a super admin (23 November) | **A ParishLife super admin may appoint priests and ministry leaders too, not only the bishop (and the priest for leaders).** | **Done (23 November):** a super admin can invite and manage priest and archdiocese-staff appointments, decide a church's jurisdiction, and name ministry leaders. A priest still needs the church under a verified archdiocese. |
+
 Still open (to answer next):
 - the remaining per-area items in `docs/frontend-modules/*.md`;
 - the proposals in `docs/REMAINING-WORK.md`.

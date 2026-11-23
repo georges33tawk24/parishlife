@@ -1,4 +1,4 @@
-// Purpose: records factual parish jurisdiction through its representative proposal and actual bishop decision, independent of commercial association.
+// Purpose: records factual parish jurisdiction through its representative proposal and actual bishop decision, independent of commercial association. The bishop or a ParishLife super admin decides (owner decision, 23 November 2026).
 // Main functions: ProposeAsync, DecideAsync, GetAsync; conditional parish/proposal writes preserve existing grants, payer and coverage.
 
 using ParishLife.Api.DTOs.Organizations;
@@ -13,7 +13,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Organizations;
 
 public class ParishJurisdictionService(IRecordTransactions records, IParishRepository parishes, ICurrentActor actor,
-    IArchdioceseAuthority bishops, MfaAccountAccess proof, TimeProvider clock)
+    IArchdioceseAuthority bishops, MfaAccountAccess proof, TimeProvider clock, IPlatformAccess platform)
 {
     private static RecordScope Scope(string id) => new() { Area = RecordArea.Parish, OwnerId = id };
     private static string Key(string id) => "jurisdictionProposal:" + id;
@@ -52,13 +52,16 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
         if (request.Accept is null)
             throw new DomainException("decision_required", "Explicitly accept or decline the jurisdiction proposal.");
         var row = await ReadAsync(parishId, id, ct);
-        var bishop = await bishops.RequireBishopAppointmentAsync(row.Value.ArchdioceseId, ct);
+        // The archdiocese's bishop, or a ParishLife super admin in the bishop's place (owner decision, 23 November 2026).
+        string? bishop = null;
+        try { bishop = (await bishops.RequireBishopAppointmentAsync(row.Value.ArchdioceseId, ct)).Value.Id; }
+        catch (DomainException e) when (e.Kind is FailureKind.Forbidden or FailureKind.NotFound) { await platform.RequireOperatorAsync(ct); }
         var user = await proof.RequireMfaAsync(ct);
         await proof.PasswordAsync(user, request.CurrentPassword);
         await proof.AuthenticatorAsync(user, request.CurrentCode);
         var operation = Operation.Create(request.OperationId, actor.AccountId,
             new { Kind = "jurisdiction.decide", ParishId = parishId, ProposalId = id, request.Version, request.Accept, request.Reason },
-            clock, actingAppointmentId: bishop.Value.Id);
+            clock, actingAppointmentId: bishop);
         if (await records.ReplayAsync<ParishJurisdictionProposal>(Scope(parishId), operation, ct) is { } prior)
             return View(prior);
         var parish = await parishes.GetAsync(parishId, ct) ?? throw Missing();
@@ -88,7 +91,11 @@ public class ParishJurisdictionService(IRecordTransactions records, IParishRepos
         {
             try
             { await bishops.RequireBishopAsync(row.Value.ArchdioceseId, ct); }
-            catch (DomainException error) when (error.Kind == FailureKind.Forbidden) { throw Missing(); }
+            catch (DomainException error) when (error.Kind is FailureKind.Forbidden or FailureKind.NotFound)
+            {
+                try { await platform.RequireOperatorAsync(ct); }
+                catch (DomainException) { throw Missing(); }
+            }
         }
         return new Versioned<ParishJurisdictionProposalDto> { Value = View(row.Value), Version = row.Version };
     }
