@@ -672,6 +672,8 @@ export function Portal() {
       selectParish(previous);
       S.role = session.user.role;
       await hydrate().catch(() => {});
+      closeOverlays();
+      renderAll();
       toast(t('Parish could not be opened', 'تعذّر فتح الرعية'), e.message, 'danger');
       return false;
     }

@@ -132,14 +132,17 @@ export const register = ({ email, password, displayName, turnstile }) =>
   api('auth/register', 'POST', { operationId: newOperationId(), email, password, displayName }, checked(turnstile));
 
 /* What each capacity means in the portal. An office grant (ParishGrant) carries capabilities: records
-   work makes the secretary's view, finance alone the treasurer's. */
+   work makes the secretary's view, finance alone the treasurer's; the parish's controller (who alone holds access.manage)
+   gets the full parish administrator view. */
 const officeRole = (capabilities = []) =>
-  capabilities.some(c => ['people.write', 'requests.manage', 'sacraments.record'].includes(c))
-    ? 'secretary'
-    : capabilities.some(c => c.startsWith('finance.'))
-      ? 'treasurer'
-      : null;
-const PARISH_ROLES = ['priest', 'secretary', 'treasurer', 'leader'];
+  capabilities.includes('access.manage')
+    ? 'parish_admin'
+    : capabilities.some(c => ['people.write', 'requests.manage', 'sacraments.record'].includes(c))
+      ? 'secretary'
+      : capabilities.some(c => c.startsWith('finance.'))
+        ? 'treasurer'
+        : null;
+const PARISH_ROLES = ['priest', 'parish_admin', 'secretary', 'treasurer', 'leader'];
 
 /* The account, the parishes it follows or belongs to, and its capacities (GET /api/me/capacities):
    Priest, ParishGrant and MinistryLeader in a parish; Bishop, ArchdioceseAdmin and PlatformOperator
@@ -219,7 +222,8 @@ export function selectParish(id) {
     session.user = {
       ...base,
       platformRole: base.role,
-      role: p && p.effectiveRole !== 'member' ? p.effectiveRole : base.role,
+      // A ParishLife administrator keeps the full administrator view inside any parish.
+      role: base.role === 'super_admin' ? base.role : p && p.effectiveRole !== 'member' ? p.effectiveRole : base.role,
       canViewFinance: !!p?.canViewFinance,
       roles: p?.roles || [],
       person_id: p ? p.personId : base.person_id
