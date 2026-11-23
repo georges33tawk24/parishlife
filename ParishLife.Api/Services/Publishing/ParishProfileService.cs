@@ -1,6 +1,6 @@
 // Purpose: a parish's public profile (contacts, Arabic name and locality, rite, Mass and office times, visitor notes, feast, livestream and
 // WhatsApp links) and its photographs. Editors (publishing.manage with MFA and the core module) save a draft and explicitly publish or unpublish
-// it; visitors read only the published copy of a verified parish. Photos are uploaded into the private evidence store as Private and served to
+// it; visitors read only the published copy of a verified parish. Photos lose their metadata (PhotoMetadata), are stored as Private and served to
 // visitors only after an explicit publish. Clergy are listed publicly only when the published profile asks for it, and only from current
 // accepted priest appointments. Links are stored as entered: nothing is fetched, embedded or called.
 // Main functions: GetAsync, SaveAsync, ActAsync, UploadPhotoAsync, PhotoActAsync, DownloadPhotoAsync (editors); PublicAsync and
@@ -142,13 +142,18 @@ public class ParishProfileService(IRecordTransactions records, IParishRepository
             return ProjectPhoto(await ReadPhotoAsync(parish, prior.Id, ct));
         if ((await PhotosAsync(parish, ct)).Count(p => p.Value.Status != "Removed") >= MaximumPhotos)
             throw new DomainException("invalid_file_state", "A parish profile holds up to " + MaximumPhotos + " photos; remove one first.", FailureKind.Conflict);
+        // What is stored and served has no EXIF (a phone photo's GPS position), XMP, IPTC or comments; the image data is unchanged.
+        // The operation keeps the upload's own digest, so a retried upload still replays.
+        var clean = PhotoMetadata.Strip(content, type)
+            ?? throw new DomainException("invalid_file", "The image file is damaged. Export it again as JPEG, PNG or WebP and upload that.");
         var photo = new ParishProfilePhoto
         {
-            Id = op.Id, ParishId = parish, ContentType = type, Size = content.Length, Sha256 = digest, StoragePath = "profile-photos/" + parish + "/" + op.Id,
+            Id = op.Id, ParishId = parish, ContentType = type, Size = clean.Length, Sha256 = Convert.ToHexString(SHA256.HashData(clean)),
+            StoragePath = "profile-photos/" + parish + "/" + op.Id,
             Caption = Line(caption, "Caption", 300), CaptionAr = Line(captionAr, "CaptionAr", 300), UploadedBy = actor.AccountId, UploadedAt = op.At
         };
         // The complete private object exists before its metadata commits; it stays private until an explicit publish.
-        await store.PutAsync(photo.StoragePath, content, type, ct);
+        await store.PutAsync(photo.StoragePath, clean, type, ct);
         await EditorAsync(parish, ct);
         await records.CommitAsync(RecordScopes.Parish(parish), op, "parish.profile_photo_uploaded", photo.Id, [RecordChange.Create(PhotoKey(photo.Id), "parishProfilePhoto", photo)],
             new CommandResult { Id = photo.Id, Status = photo.Status }, ct);

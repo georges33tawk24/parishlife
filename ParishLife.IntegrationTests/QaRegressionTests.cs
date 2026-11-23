@@ -168,7 +168,7 @@ public class QaRegressionTests
     }
 
     // Item 14: a phone photo carries its GPS position in EXIF. Public parish photos are served byte for byte, location included.
-    [KnownFailureFact("from-09-qa.md #2: uploaded photos keep EXIF metadata (GPS position); needs an image library (owner decision C3 in 03-security.md)")]
+    [Fact] // from-09-qa.md #2, fixed: uploads lose their EXIF, XMP, IPTC and comments (PhotoMetadata; owner decision 23 November 2026)
     public async Task A_published_photo_is_served_without_its_location_metadata()
     {
         await using var f = new LocalBackendFixture();

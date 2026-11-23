@@ -19,7 +19,10 @@ namespace ParishLife.IntegrationTests;
 
 public class ParishProfileTests
 {
-    private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4, 5];
+    // A real 1×1 PNG (signature, IHDR, IDAT, IEND): uploads now lose their metadata chunk by chunk (PhotoMetadata), so a bare signature
+    // with no chunks is refused as a damaged file. This one has no metadata, so it is stored and served unchanged.
+    private static readonly byte[] Png = Convert.FromHexString(
+        "89504E470D0A1A0A0000000D4948445200000001000000010806000000" + "1F15C4890000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082");
 
     // The caller must then act as the editor itself: the request context is async-local and does not flow out of this helper.
     private static async Task<(StaffAppointmentScenario Staff, string Appointment)> EditorAsync(LocalBackendFixture f)
