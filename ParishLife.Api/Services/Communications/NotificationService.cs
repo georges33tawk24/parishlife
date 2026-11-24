@@ -2,6 +2,8 @@
 // Main functions: StageRequired, DispatchAsync, DispatchWorkAsync, NotifyAsync, ListAsync, SetStateAsync, PreferencesAsync and SavePreferencesAsync.
 // Store/confirm helpers bind versioned identities to receipts; exact saved-work dispatch supports parish-scoped v2 and legacy obligations.
 // Legacy NotifyAsync, recipient identities/receipts and read state remain compatible; pending work survives failure without claiming external delivery.
+// Storing a notice also queues its outside delivery (DeliveryQueue) in the same commit when a channel is configured; preferences carry the
+// per-person Email, Push and WhatsApp choices (a save that leaves a channel out keeps it).
 
 using System.Security.Cryptography;
 using System.Text;
@@ -17,7 +19,7 @@ using ParishLife.Api.Models.Enums;
 namespace ParishLife.Api.Services.Communications;
 
 public class NotificationService(IRecordTransactions records, ICurrentActor actor, TimeProvider clock, NotificationAudience audiences,
-    ILogger<NotificationService> logger)
+    ILogger<NotificationService> logger, DeliveryQueue delivery)
 {
     private const string PreferencesKey = "notificationPreferences";
 
@@ -184,8 +186,11 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
         {
             try
             {
-                await records.CommitAsync(scope, operation,
-                    "notification.store", item.Id, [RecordChange.Create(key, "notification", item)], new CommandResult { Id = item.Id, Status = item.Status }, ct);
+                // The outside delivery (email, push, WhatsApp) is queued in the same commit, so a stored notice is queued exactly once.
+                var changes = new List<RecordChange> { RecordChange.Create(key, "notification", item) };
+                if (delivery.NoticeWork(item) is { } queued)
+                    changes.Add(queued);
+                await records.CommitAsync(scope, operation, "notification.store", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
             }
             catch (DomainException error) when (error.Code == "write_conflict") { /* Only a matching current recipient row can prove this race succeeded. */ }
             catch (DomainException error) when (error.Code == "operation_reused") { throw IdentityConflict(); }
@@ -274,7 +279,11 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
     public async Task<NotificationPreferencesDto> PreferencesAsync(CancellationToken ct)
     {
         var value = (await records.ReadAsync<NotificationPreferences>(RecordScopes.Account(actor.AccountId), PreferencesKey, ct))?.Value ?? new NotificationPreferences();
-        return new NotificationPreferencesDto { MutedTopics = [.. value.MutedTopics], Language = value.Language, DigestOptional = value.DigestOptional };
+        return new NotificationPreferencesDto
+        {
+            MutedTopics = [.. value.MutedTopics], Language = value.Language, DigestOptional = value.DigestOptional,
+            Email = value.Email, Push = value.Push, WhatsApp = value.WhatsApp
+        };
     }
 
     public async Task<NotificationPreferencesDto> SavePreferencesAsync(NotificationPreferencesDto request, CancellationToken ct)
@@ -283,7 +292,13 @@ public class NotificationService(IRecordTransactions records, ICurrentActor acto
             || request.Language is not ("en" or "fr" or "ar"))
             throw new DomainException("invalid_input", "Use up to 30 short topic names and en, fr or ar.");
         var existing = await records.ReadAsync<NotificationPreferences>(RecordScopes.Account(actor.AccountId), PreferencesKey, ct);
-        var value = new NotificationPreferences { MutedTopics = request.MutedTopics.Distinct(StringComparer.Ordinal).ToArray(), Language = request.Language, DigestOptional = request.DigestOptional };
+        var prior = existing?.Value ?? new NotificationPreferences();
+        var value = new NotificationPreferences
+        {
+            MutedTopics = request.MutedTopics.Distinct(StringComparer.Ordinal).ToArray(), Language = request.Language, DigestOptional = request.DigestOptional,
+            // A channel the request leaves out keeps its stored choice.
+            Email = request.Email ?? prior.Email, Push = request.Push ?? prior.Push, WhatsApp = request.WhatsApp ?? prior.WhatsApp
+        };
         await records.CommitAsync(RecordScopes.Account(actor.AccountId), Operation.Create(Guid.NewGuid(), actor.AccountId, request, clock), "notification.preferences", actor.AccountId,
             [existing is null ? RecordChange.Create(PreferencesKey, "notificationPreferences", value) : RecordChange.Replace(PreferencesKey, "notificationPreferences", value, existing.Version)],
             new CommandResult { Id = actor.AccountId, Status = "Saved" }, ct);

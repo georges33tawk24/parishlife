@@ -1,12 +1,12 @@
-// Purpose: the current controlling owner's response to an open ownership claim, read by the recovery reviewer.
-// Main members: OperationId, Version, Response.
+// Purpose: hands a parish's control to its priest (owner decision, 23 November 2026), named by username or email.
+// Main members: OperationId, Version (the parish's), Account.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
 
 namespace ParishLife.Api.DTOs.Organizations;
 
-public class RespondOwnershipClaimDto
+public class HandOverParishControlDto
 {
     [NotEmptyGuid]
     public Guid OperationId { get; set; }
@@ -16,6 +16,6 @@ public class RespondOwnershipClaimDto
     public string Version { get; set; } = string.Empty;
 
     [Required]
-    [StringLength(2000)]
-    public string Response { get; set; } = string.Empty;
+    [StringLength(254)]
+    public string Account { get; set; } = string.Empty;
 }

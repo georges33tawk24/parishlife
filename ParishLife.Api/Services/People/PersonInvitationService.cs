@@ -1,6 +1,10 @@
 // Purpose: issues single-use, seven-day person invitations from the office and lets the intended recipient's own verified account claim
-// the person link; conflicting claims stop for office review instead of linking.
-// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, ListAsync and office-only NotificationOutcomeAsync.
+// the person link; conflicting claims stop for office review instead of linking. The parish controller may attach office access (a role)
+// to the invitation; accepting it then also grants that access in the same commit, if the issuer still controls the parish (owner
+// decision, 23 November 2026). Passwords are always chosen by the person; a role never includes grant administration or clergy authority.
+// The account that issued an invitation can never accept it (24 November 2026: an issuer's own signed-in browser accepted a link meant for
+// someone else), and the office can undo a wrong link with UnlinkAccountAsync.
+// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, UnlinkAccountAsync, ListAsync and office-only NotificationOutcomeAsync.
 // Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
 using System.Security.Cryptography;
@@ -10,6 +14,7 @@ using ParishLife.Api.DTOs.People;
 using ParishLife.Api.DTOs.Communications;
 using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Common;
+using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
@@ -21,7 +26,8 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.People;
 
 public class PersonInvitationService(IRecordTransactions records, IParishAccess access, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof,
-    UserManager<ParishUser> users, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader notificationOutcomes)
+    UserManager<ParishUser> users, NotificationService notifications, TimeProvider clock, NotificationOutcomeReader notificationOutcomes,
+    IParishRepository parishes)
 {
     private const string Purpose = "Link your account to your parish member record. It grants no ministry membership or staff authority.";
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(7);
@@ -45,6 +51,16 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var target = await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct);
         if (target?.Value is not { Archived: false } p || p.ParishId != parish)
             throw Missing();
+        var role = (request.Allows ?? []).Distinct(StringComparer.Ordinal).ToArray();
+        if (role.Length > 0)
+        {
+            // Only the parish's controller hands out office access, and only what it holds itself.
+            if (root.Value.OwnerAccountId != actor.AccountId)
+                throw new DomainException("owner_authority_required", "Only the parish's controller attaches a role to an invitation.", FailureKind.Forbidden);
+            var mine = await parishes.GetGrantAsync(parish, actor.AccountId, ct);
+            if (role.Any(x => !Permissions.All.Contains(x) || x == Permissions.AccessManage || mine?.Permits(x, clock.GetUtcNow()) != true))
+                throw new DomainException("delegation_forbidden", "Choose permissions you hold yourself; grant administration cannot be given.", FailureKind.Forbidden);
+        }
         if ((await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), "personAccountClaim:" + person, ct))?.Value.Status == "Linked")
             throw State("This person is already linked to an account.");
         // A replacement keeps the same target person and makes every earlier open link unusable.
@@ -60,7 +76,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var item = new PersonInvitation
         {
             Id = op.Id, ParishId = parish, PersonId = person, TokenHash = Hash(token), CreatedBy = actor.AccountId, CreatedAt = op.At, ExpiresAt = op.At + Lifetime,
-            NotificationWorkIds = []
+            NotificationWorkIds = [], RoleAllows = role
         };
         changes.Add(RecordChange.Create("personInvitation:" + item.Id, "personInvitation", item));
         await records.CommitAsync(RecordScopes.Parish(parish), op, "person.invite", item.Id, changes, new CommandResult { Id = item.Id, Status = item.Status }, ct);
@@ -73,7 +89,11 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         var root = await own.RootAsync(parish, ct);
         var item = (await TokenAsync(parish, id, token, ct)).Value;
         var status = Effective(item);
-        var preview = new PersonInvitationPreviewDto { Status = status, Purpose = Purpose, ExpiresAt = item.ExpiresAt };
+        var preview = new PersonInvitationPreviewDto
+        {
+            Status = status, ExpiresAt = item.ExpiresAt, RoleAllows = [.. item.RoleAllows],
+            Purpose = item.RoleAllows.Length == 0 ? Purpose : "Link your account to your parish member record and receive the office access the parish gave you."
+        };
         if (status != "Open")
             return preview;
         var person = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct))?.Value ?? throw Missing();
@@ -95,6 +115,8 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
             return Project(item);
         if (Effective(item) != "Open")
             throw State(Effective(item) == "Expired" ? "This invitation has expired; ask the parish office for a new one." : "This invitation can no longer be used.");
+        if (item.CreatedBy == actor.AccountId)
+            throw new DomainException("issuer_cannot_accept", "You created this invitation; only the person it was made for can accept it. Send them the link.", FailureKind.Conflict);
         var user = await users.FindByIdAsync(actor.AccountId);
         if (user is not { Active: true } || !AccountVerification.IsVerified(user))
             throw State("Verify your account's contact details before accepting.");
@@ -127,6 +149,23 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
                 ? RecordChange.Create(claimKey, "personAccountClaim", new CommandResult { Id = actor.AccountId, Status = "Linked" })
                 : RecordChange.Replace(claimKey, "personAccountClaim", claim.Value, claim.Version));
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
+            // The attached role, if the issuer still controls the parish: merged into the account's own local grant.
+            // Only what the issuer still holds at acceptance is given, so a shrunken grant cannot be widened through an old link.
+            var issuerGrant = item.RoleAllows.Length > 0 ? await parishes.GetGrantAsync(parish, item.CreatedBy, ct) : null;
+            var role = item.RoleAllows.Where(x => x != Permissions.AccessManage && issuerGrant?.Permits(x, op.At) == true).ToArray();
+            if (role.Length > 0 && root.Value.OwnerAccountId == item.CreatedBy && root.Value.OwnerAccountId != actor.AccountId)
+            {
+                var key = "grant:" + actor.AccountId + ":local";
+                var existing = await records.ReadAsync<AccessGrant>(RecordScopes.Parish(parish), key, ct);
+                var current = existing?.Value is { Revoked: false } held ? held.Allows : [];
+                var grant = new AccessGrant
+                {
+                    AccountId = actor.AccountId, Allows = current.Union(role, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    Denies = existing?.Value is { Revoked: false } kept ? kept.Denies : [], StartsAt = op.At, EndsAt = null, Revoked = false, GrantedBy = item.CreatedBy
+                };
+                changes.Add(existing is null ? RecordChange.Create(key, "grant", grant) : RecordChange.Replace(key, "grant", grant, existing.Version));
+                item.RoleApplied = true;
+            }
         }
         if (conflict)
         {
@@ -141,6 +180,25 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         if (conflict)
             await notifications.DispatchAsync(parish, item.CreatedBy, "person-invitation:" + id, ct);
         return Project(item);
+    }
+
+    public async Task<CommandResult> UnlinkAccountAsync(string parish, string person, UnlinkPersonAccountDto request, CancellationToken ct)
+    {
+        var root = await OfficeAsync(parish, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "person-account-unlink:v1:" + person);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return prior;
+        var claim = await records.ReadAsync<CommandResult>(RecordScopes.Parish(parish), "personAccountClaim:" + person, ct);
+        if (claim?.Value is not { Status: "Linked" } linked)
+            throw State("This person is not linked to an account.");
+        var changes = new List<RecordChange>
+        {
+            RecordChange.Replace("parish", "parish", root.Value, root.Version), RecordChange.Remove("personAccountClaim:" + person, claim.Version)
+        };
+        if (await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink:" + linked.Id, ct) is { } link && link.Value.PersonId == person)
+            changes.Add(RecordChange.Remove("personAccountLink:" + linked.Id, link.Version));
+        return await records.CommitAsync(RecordScopes.Parish(parish), op, "person.account_unlinked", person, changes,
+            new CommandResult { Id = person, Status = "Unlinked" }, ct, Guard.Text(request.Reason, "Reason", 500));
     }
 
     public async Task<PersonInvitationDto> RevokeAsync(string parish, string id, RevokePersonInvitationDto request, CancellationToken ct)
@@ -198,7 +256,7 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
     private PersonInvitationDto Project(PersonInvitation x) => new()
     {
         Id = x.Id, PersonId = x.PersonId, Status = Effective(x), Delivery = x.Delivery, CreatedAt = x.CreatedAt, ExpiresAt = x.ExpiresAt,
-        UsedByAccountId = x.UsedByAccountId, UsedAt = x.UsedAt, ReviewReason = x.ReviewReason
+        UsedByAccountId = x.UsedByAccountId, UsedAt = x.UsedAt, ReviewReason = x.ReviewReason, RoleAllows = [.. x.RoleAllows], RoleApplied = x.RoleApplied
     };
 
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

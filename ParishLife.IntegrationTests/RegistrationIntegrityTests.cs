@@ -313,7 +313,8 @@ public class RegistrationIntegrityTests
         return (await x.Fixture.Services.GetRequiredService<PeopleService>().CreateAsync(x.Parish, new CreatePersonDto
         {
             OperationId = Guid.NewGuid(), GivenName = "Isolated", FamilyName = child ? "Child participant" : "Adult participant",
-            BirthDate = child ? new DateOnly(2018, 5, 1) : new DateOnly(1990, 1, 1)
+            BirthDate = child ? new DateOnly(2018, 5, 1) : new DateOnly(1990, 1, 1),
+            RegisterStatus = "Member" // self-registration is for recorded Members
         }, default)).Id;
     }
 

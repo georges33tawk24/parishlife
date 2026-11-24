@@ -3,7 +3,9 @@
    nothing is served from this copy while the phone is online. Private links (request tracking,
    documents), document checks and every API answer that is not on the API's public list are never
    kept, so no personal data is stored here. The members portal's page is not kept either: opened
-   offline, it gets a short bilingual page saying so instead of a browser error. */
+   offline, it gets a short bilingual page saying so instead of a browser error. The site's address
+   (/) opens the public home, so it is kept like public.html. It also shows push notifications (see the
+   end of this file). */
 const CACHE = 'parishlife-public-v3';
 const OFFLINE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ParishLife · Offline</title><style>body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#F5F1E8;color:#15203A;font:400 17px/1.6 system-ui,sans-serif;padding:24px;box-sizing:border-box}
@@ -45,9 +47,9 @@ async function readableRoutes() {
   return last ? (routes = compile(await last.json())) : [];
 }
 
-const kept = url => url.pathname === '/public.html' || url.pathname === '/site.webmanifest'
+const kept = url => url.pathname === '/' || url.pathname === '/public.html' || url.pathname === '/site.webmanifest'
   || (url.pathname.startsWith('/assets/') && !url.pathname.startsWith('/assets/app/portal-'));
-const portalPage = url => url.pathname === '/' || url.pathname === '/index.html';
+const portalPage = url => url.pathname === '/index.html'; // '/' is the public home since 23 November 2026
 
 async function load(event, request, page) {
   try {
@@ -81,4 +83,38 @@ self.addEventListener('fetch', event => {
   }
   if (url.pathname.startsWith('/api/') || !kept(url)) return;
   event.respondWith(load(event, request, request.mode === 'navigate'));
+});
+
+/* Push notifications (Web Push, sent by the API's WebPushSender): the payload is { title, body, url } with a neutral
+   notice title or a parish broadcast. Show it; a tap opens the site (or focuses an open tab) at that address,
+   only ever on this site's own origin. */
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    /* not ours to read: show a plain notice */
+  }
+  const url = typeof data.url === 'string' && new URL(data.url, self.location.origin).origin === self.location.origin ? data.url : '/index.html';
+  event.waitUntil(self.registration.showNotification(String(data.title || 'ParishLife').slice(0, 120), {
+    body: typeof data.body === 'string' ? data.body.slice(0, 200) : undefined,
+    icon: '/assets/images/icons/apple-touch-icon.png',
+    badge: '/assets/images/icons/apple-touch-icon.png',
+    data: { url },
+    lang: /[؀-ۿ]/.test(String(data.title || '')) ? 'ar' : 'en'
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '/index.html', self.location.origin);
+  if (target.origin !== self.location.origin) return;
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const tab = open.find(client => new URL(client.url).origin === self.location.origin);
+    if (tab) {
+      await tab.focus();
+      return tab.navigate ? tab.navigate(target.href).catch(() => undefined) : undefined;
+    }
+    return self.clients.openWindow(target.href);
+  })());
 });

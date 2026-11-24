@@ -175,6 +175,8 @@ public partial class FinanceTests
         var first = await receipts.IssueAsync(x.Parish, Issue(personal), default);
         Assert.Equal((1L, person, 100m, "Issued", "Posted"), (first.Number, first.PersonId, first.Amount, first.Status, first.GiftStatus));
         Assert.Contains("not a tax receipt", first.Notice);
+        var year = GiftReceiptService.IssueYear(f.Clock.Now);
+        Assert.Equal((year, year + "-0001"), (first.Year, first.DisplayNumber));
         Assert.Equal("invalid_finance_state", (await Assert.ThrowsAsync<DomainException>(() => receipts.IssueAsync(x.Parish, Issue(personal), default))).Code);
         Assert.Equal("invalid_finance_state", (await Assert.ThrowsAsync<DomainException>(() => receipts.IssueAsync(x.Parish, Issue(gifts.Single(g => g.Anonymous)), default))).Code);
         var second = await receipts.IssueAsync(x.Parish, Issue(gifts.Single(g => g.Currency == "LBP")), default);
@@ -201,6 +203,37 @@ public partial class FinanceTests
     }
 
     [Fact]
+    public async Task Receipt_numbers_restart_each_year_at_midnight_in_Beirut()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        // The parish and its coverage are set up just before midnight in Beirut on 31 December (winter time, UTC+2).
+        f.Clock.Now = new DateTimeOffset(2026, 12, 31, 21, 0, 0, TimeSpan.Zero);
+        var x = await CreateAsync(f);
+        var person = await PersonAsync(x);
+        var receipts = f.Services.GetRequiredService<GiftReceiptService>();
+        f.As(x.Treasurer);
+        var fund = await x.Giving.CreateFundAsync(x.Parish, new SaveFundDto { OperationId = Guid.NewGuid(), Name = "General", Purpose = "Operations" }, default);
+        var gifts = await PostedAsync(x, Enumerable.Range(1, 3).Select(i => Line("y" + i, i, "USD", "Cash", fund.Id, person: person)).ToArray());
+        f.As(x.Poster);
+        IssueReceiptDto Issue(int i) => new() { OperationId = Guid.NewGuid(), ContributionId = gifts[i].Id };
+
+        // 31 December, 23:30 in Beirut (21:30 UTC, winter time UTC+2): still the old year.
+        f.Clock.Now = new DateTimeOffset(2026, 12, 31, 21, 30, 0, TimeSpan.Zero);
+        Assert.Equal("2026-0001", (await receipts.IssueAsync(x.Parish, Issue(0), default)).DisplayNumber);
+        // 00:30 on 1 January in Beirut (22:30 UTC on 31 December): the new year starts again at 0001.
+        f.Clock.Now = new DateTimeOffset(2026, 12, 31, 22, 30, 0, TimeSpan.Zero);
+        var january = await receipts.IssueAsync(x.Parish, Issue(1), default);
+        Assert.Equal((2027, 1L, "2027-0001"), (january.Year, january.Number, january.DisplayNumber));
+        Assert.Equal("2027-0002", (await receipts.IssueAsync(x.Parish, Issue(2), default)).DisplayNumber);
+        // Newest year first, then newest number.
+        Assert.Equal(["2027-0002", "2027-0001", "2026-0001"], (await receipts.ListAsync(x.Parish, default)).Select(r => r.DisplayNumber).ToArray());
+        // A receipt from before yearly numbering (no year) keeps its plain number.
+        Assert.Equal("17", GiftReceiptService.DisplayNumber(0, 17));
+        Assert.Equal("2027-12345", GiftReceiptService.DisplayNumber(2027, 12345));
+    }
+
+    [Fact]
     public async Task Concurrent_receipts_take_distinct_consecutive_numbers()
     {
         await using var f = new LocalBackendFixture();
@@ -217,7 +250,8 @@ public partial class FinanceTests
         var issued = await Task.WhenAll(gifts.Select(g => receipts.IssueAsync(x.Parish, new IssueReceiptDto { OperationId = Guid.NewGuid(), ContributionId = g.Id }, default)));
         Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, issued.Select(r => r.Number).Order().ToArray());
         Assert.Equal(5, issued.Select(r => r.ContributionId).Distinct().Count());
-        var counter = await f.Services.GetRequiredService<IRecordTransactions>().ReadAsync<GiftReceiptCounter>(new RecordScope { Area = RecordArea.Parish, OwnerId = x.Parish }, "giftReceiptCounter", default);
+        var counter = await f.Services.GetRequiredService<IRecordTransactions>().ReadAsync<GiftReceiptCounter>(new RecordScope { Area = RecordArea.Parish, OwnerId = x.Parish },
+            "giftReceiptCounter:" + GiftReceiptService.IssueYear(f.Clock.Now), default);
         Assert.Equal(6L, counter!.Value.Next);
         Assert.Equal(5, (await receipts.ListAsync(x.Parish, default)).Count);
     }

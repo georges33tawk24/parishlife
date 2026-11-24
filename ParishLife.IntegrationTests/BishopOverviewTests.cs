@@ -57,16 +57,18 @@ public class BishopOverviewTests
         var row = Assert.Single(result.Parishes);
         Assert.Equal(s.Parish, row.ParishId);
         Assert.DoesNotContain(result.Parishes, p => p.ParishId == outside);
-        Assert.Equal((1, true, 0, 2, 2, 0, 0), (row.CurrentPriests, row.HeadPriestDesignated, row.OtherCurrentStaff, row.OpenRequests, row.RequestsReceived,
+        // Two requests: a person-related count of 1–4 is hidden (null, "fewer than 5"); zero and the priest/staff counts stay exact.
+        Assert.Equal((1, true, 0, (int?)null, (int?)null, (int?)0, (int?)0), (row.CurrentPriests, row.HeadPriestDesignated, row.OtherCurrentStaff, row.OpenRequests, row.RequestsReceived,
             row.CertificatesAwaitingBishop, row.MembershipRequestsPending));
-        Assert.Equal((1, 0, 1, 2), (result.Totals.Parishes, result.Totals.ParishesWithoutHeadPriest, result.Totals.CurrentPriests, result.Totals.OpenRequests));
+        Assert.Equal((1, 0, 1, (int?)null), (result.Totals.Parishes, result.Totals.ParishesWithoutHeadPriest, result.Totals.CurrentPriests, result.Totals.OpenRequests));
+        Assert.Contains("fewer than 5", result.SmallCounts);
         Assert.Contains(result.Measures, m => m.Key == "requestsReceived" && m.Basis == "period");
         Assert.Contains("not ranked", result.Ordering);
         Assert.NotEmpty(result.Excluded);
 
         // The period applies only to period measures: an earlier window received nothing, while open work is still counted now.
         var earlier = await Overview(f).OverviewAsync(s.Organization, now.AddDays(-30), now.AddDays(-20), default);
-        Assert.Equal((0, 2), (earlier.Parishes[0].RequestsReceived, earlier.Parishes[0].OpenRequests));
+        Assert.Equal(((int?)0, (int?)null), (earlier.Parishes[0].RequestsReceived, earlier.Parishes[0].OpenRequests));
 
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         foreach (var secret in new[] { "Private house blessing detail", "Isolated guest name", "guest@fixture.example", "Isolated street", f.Other })

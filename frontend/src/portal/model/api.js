@@ -237,14 +237,17 @@ export async function closeAccount({ currentPassword, currentCode, confirmation 
 }
 
 /* What each capacity means in the portal. An office grant (ParishGrant) carries capabilities: records
-   work makes the secretary's view, finance alone the treasurer's. */
+   work makes the secretary's view, finance alone the treasurer's; the parish's controller (who alone holds access.manage)
+   gets the full parish administrator view. */
 const officeRole = (capabilities = []) =>
-  capabilities.some(c => ['people.write', 'requests.manage', 'sacraments.record'].includes(c))
-    ? 'secretary'
-    : capabilities.some(c => c.startsWith('finance.'))
-      ? 'treasurer'
-      : null;
-const PARISH_ROLES = ['priest', 'secretary', 'treasurer', 'leader'];
+  capabilities.includes('access.manage')
+    ? 'parish_admin'
+    : capabilities.some(c => ['people.write', 'requests.manage', 'sacraments.record'].includes(c))
+      ? 'secretary'
+      : capabilities.some(c => c.startsWith('finance.'))
+        ? 'treasurer'
+        : null;
+const PARISH_ROLES = ['priest', 'parish_admin', 'secretary', 'treasurer', 'leader'];
 
 /* The account, the parishes it follows or belongs to, and its capacities (GET /api/me/capacities):
    Priest, ParishGrant and MinistryLeader in a parish; Bishop, ArchdioceseAdmin and PlatformOperator
@@ -310,7 +313,9 @@ export async function loadSession() {
     role: ['super_admin', 'diocesan_admin', 'bishop'].find(r => across.has(r)) || 'member',
     person_id: null
   };
-  if (!session.parishes.some(p => p.id === session.parishId)) session.parishId = session.parishes[0]?.id || null;
+  // A ParishLife administrator starts in Administration (no parish) and picks a parish in the switcher; others start in their first parish.
+  if (!session.parishes.some(p => p.id === session.parishId))
+    session.parishId = session.accountUser.role === 'super_admin' ? null : session.parishes[0]?.id || null;
   selectParish(session.parishId);
   return session;
 }
@@ -322,7 +327,8 @@ export function selectParish(id) {
     session.user = {
       ...base,
       platformRole: base.role,
-      role: p && p.effectiveRole !== 'member' ? p.effectiveRole : base.role,
+      // A ParishLife administrator keeps the full administrator view inside any parish.
+      role: base.role === 'super_admin' ? base.role : p && p.effectiveRole !== 'member' ? p.effectiveRole : base.role,
       canViewFinance: !!p?.canViewFinance,
       roles: p?.roles || [],
       person_id: p ? p.personId : base.person_id

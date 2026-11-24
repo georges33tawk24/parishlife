@@ -1,6 +1,7 @@
 // Purpose: serves the built frontend (frontend/dist, published into wwwroot only with -p:IncludeFrontend=true) from the API's own origin,
 // because the API's __Host- cookies are Secure and SameSite=Strict with no CORS: the pages and /api must share one HTTPS host.
-// Main functions: UseParishLifeFrontend adds default-file and static-file middleware when wwwroot holds index.html (hashed assets cached for a
+// Main functions: UseParishLifeFrontend adds default-file and static-file middleware (the site root shows the public home page,
+// public.html, when it exists; the portal stays at /index.html) when wwwroot holds index.html (hashed assets cached for a
 // year, pages revalidated, pages sent with a Content-Security-Policy); with no wwwroot (an API-only deployment) it adds nothing.
 // ContentSecurityPolicy builds the page policy, allowing each page's inline start-up script only by its SHA-256 hash, and form posts
 // to this origin plus the external sign-in providers' authorization origins (their redirect follows a same-origin form post).
@@ -42,7 +43,13 @@ public static partial class FrontendHostingExtensions
             });
         });
         app.UsePrecompressedAssets(root);
-        app.UseDefaultFiles();
+        // Opening the site shows the public home page; sign-in is one click away (owner, 23 November 2026).
+        var defaults = new DefaultFilesOptions();
+        defaults.DefaultFileNames.Clear();
+        if (File.Exists(Path.Combine(root, "public.html")))
+            defaults.DefaultFileNames.Add("public.html");
+        defaults.DefaultFileNames.Add("index.html");
+        app.UseDefaultFiles(defaults);
         var types = new FileExtensionContentTypeProvider();
         types.Mappings[".br"] = "application/octet-stream"; // the build's compressed copies; Apply gives them the original type
         types.Mappings[".gz"] = "application/octet-stream";

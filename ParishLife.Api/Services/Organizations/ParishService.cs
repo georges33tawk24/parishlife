@@ -1,10 +1,14 @@
 // Purpose: Handles organization setup, verification, associations, and scoped access independently of subscription
 // payer facts.
+// Only a ParishLife operator, the bishop or his archdiocese administrators register a church (owner decision, 23 November 2026); one
+// registered under an archdiocese is verified and placed under it at once, and its registrar holds only ChurchAdministration until the
+// priest takes control (ParishControlService).
 // Main functions: RegisterAsync, GetAsync, VerifyAsync, GrantAsync, RevokeAsync,
 // RegisterArchdioceseAsync, VerifyArchdioceseAsync, ProposeAssociationAsync, DecideAssociationAsync,
 // GetAssociationAsync, GetArchdioceseAsync, InspectVerificationAsync, InspectArchdioceseVerificationAsync,
 // EndAssociationAsync.
 
+using ParishLife.Api.Authorization;
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -14,11 +18,14 @@ using ParishLife.Api.Models.Enums;
 
 namespace ParishLife.Api.Services.Organizations;
 
-public sealed class ParishService(IParishRepository repository, IParishAccess access, ICurrentActor actor, IPlatformAccess platform, IAccountDirectory accounts, TimeProvider clock)
+public sealed class ParishService(IParishRepository repository, IParishAccess access, ICurrentActor actor, IPlatformAccess platform, IAccountDirectory accounts,
+    ChurchAdministrationAuthority church, TimeProvider clock)
 {
-    public Task<Parish> RegisterAsync(RegisterParishDto request, CancellationToken ct)
+    public async Task<Parish> RegisterAsync(RegisterParishDto request, CancellationToken ct)
     {
-        RequirePersonalCapacity();
+        var archdiocese = request.ArchdioceseId is { } chosen ? Guard.Id(chosen) : null;
+        await church.RequireAsync(archdiocese, ct);
+        var byOperator = actor.ActingAppointmentId is null && await IsOperatorAsync(ct);
         var op = actor.CreateOperation(request.OperationId, request, clock);
         var parish = new Parish
         {
@@ -27,21 +34,40 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
             Locality = Guard.Text(request.Locality, "Locality"),
             Contact = Guard.Text(request.Contact, "Contact", 320),
             DeclaredArchdiocese = string.IsNullOrWhiteSpace(request.DeclaredArchdiocese) ? null : Guard.Text(request.DeclaredArchdiocese, "Declared archdiocese"),
-            Status = ParishStatus.PendingVerification,
+            Status = archdiocese is null ? ParishStatus.PendingVerification : ParishStatus.Verified,
+            VerificationReference = archdiocese is null ? null : "Registered under its archdiocese by " + (byOperator ? "a ParishLife operator" : "the archdiocese"),
+            JurisdictionArchdioceseId = archdiocese,
             OwnerAccountId = actor.AccountId,
             CreatedAt = op.At
         };
         var owner = new AccessGrant
         {
             AccountId = actor.AccountId,
-            Allows = Permissions.SetupOwner.Order().ToArray(),
+            Allows = (byOperator ? Permissions.SetupOwner : Permissions.ChurchAdministration).Order().ToArray(),
             Denies = [],
             StartsAt = op.At,
             EndsAt = null,
             Revoked = false,
             GrantedBy = actor.AccountId
         };
-        return repository.RegisterAsync(parish, owner, op, ct);
+        return await repository.RegisterAsync(parish, owner, op, ct);
+    }
+
+    // The account by reference, or by username or email.
+    private async Task<string> TargetAsync(Guid id, string? name, CancellationToken ct)
+    {
+        if (id != Guid.Empty)
+            return Guard.Id(id);
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("invalid_input", "Name the account by its username or email.");
+        return await accounts.FindIdAsync(Guard.Text(name, "Account", 254), ct)
+            ?? throw new DomainException("account_unavailable", "No active verified account has that username or email.");
+    }
+
+    private async Task<bool> IsOperatorAsync(CancellationToken ct)
+    {
+        try { await platform.RequireOperatorAsync(ct); return true; }
+        catch (DomainException e) when (e.Kind is FailureKind.Forbidden or FailureKind.NotFound) { return false; }
     }
 
     public Task<Versioned<Parish>> GetAsync(string id, CancellationToken ct) => access.RequireAsync(id, Permissions.BillingRead, ct);
@@ -63,7 +89,7 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
         var mine = await repository.GetGrantAsync(id, actor.AccountId, ct);
         if (request.Allows.Concat(request.Denies).Any(p => mine?.Permits(p, clock.GetUtcNow()) != true))
             throw new DomainException("delegation_forbidden", "Cannot delegate authority outside your current grant.", FailureKind.Forbidden);
-        var target = Guard.Id(request.AccountId);
+        var target = await TargetAsync(request.AccountId, request.Account, ct);
         if (!await accounts.IsActiveVerifiedAsync(target, ct))
             throw new DomainException("account_unavailable", "The target must be an existing active verified account.");
         if (target == parish.Value.OwnerAccountId)
@@ -81,7 +107,7 @@ public sealed class ParishService(IParishRepository repository, IParishAccess ac
         var parish = await access.RequireAsync(id, Permissions.AccessManage, ct);
         if (actor.AccountId != parish.Value.OwnerAccountId)
             throw new DomainException("owner_authority_required", "The controlling parish owner manages grants in this implementation stage.", FailureKind.Forbidden);
-        var target = Guard.Id(request.AccountId);
+        var target = await TargetAsync(request.AccountId, request.Account, ct);
         if (target == parish.Value.OwnerAccountId)
             throw new DomainException("owner_change_requires_review", "Use the separate controlling-owner recovery/succession procedure.", FailureKind.Conflict);
         await repository.RevokeAsync(id, Versions.Require(request.Version), target, Guard.Text(request.Reason, "Reason", 500), actor.CreateOperation(request.OperationId, request, clock), ct);

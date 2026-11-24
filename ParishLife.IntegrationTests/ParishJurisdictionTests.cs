@@ -55,8 +55,9 @@ public class ParishJurisdictionTests
             CurrentPassword = "isolated-fixture-long-password",
             CurrentCode = RealIdentityWorkflowTests.FixtureCode()
         };
-        await Assert.ThrowsAsync<DomainException>(() => service.DecideAsync(parish.Id, proposal.Id, decision, default));
+        // Neither the bishop nor a super admin: refused (a super admin may decide in the bishop's place, owner decision 23 November 2026).
         fixture.As(fixture.Other);
+        await Assert.ThrowsAsync<DomainException>(() => service.DecideAsync(parish.Id, proposal.Id, decision, default));
         Assert.Equal(FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => service.GetAsync(parish.Id, proposal.Id, default))).Kind);
         fixture.As(fixture.Nominee);
         var before = (await repository.GetAsync(parish.Id, default))!;

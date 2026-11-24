@@ -15,7 +15,7 @@ Written 22 November 2026 (hardening run, Agent 08, item 18). Every fact comes fr
 | Cosmos account keys | All data, bypassing roles. Local (key) auth is **not** disabled; Storage shared keys are disabled. | The account key, from anyone with list-keys rights, but only from an allowed network | Not logged by the app | AZURE-CONNECTION.md |
 | App Service publishing (SCM/Kudu, FTP) | Replacing the running code | FTPS-only is recorded; whether basic-auth publishing credentials are off is not | Activity Log, Kudu deployment log | AZURE-CONNECTION.md |
 | GitHub Actions (new, not active) | Deploying the web app only (Website Contributor on `app-parishlife`) | OpenID Connect from the `production` environment, after a required reviewer approves | GitHub deployment history plus Activity Log | `.github/workflows/ci.yml`, deployment-and-rollback.md |
-| Outside consoles | Cloudflare (DNS, Turnstile, Email Routing: Georges's account), Google Cloud project "ParishLife" (OAuth client), Entra app registration "ParishLife", Resend | Each provider's own sign-in | Each provider's audit log | frontend-hosting.md, email-delivery.md |
+| Outside consoles | Cloudflare (DNS, Turnstile, Email Routing: Georges's account), Google Cloud project "ParishLife" (OAuth client), Entra app registration "ParishLife", Resend | Each provider's own sign-in | Each provider's audit log | frontend-hosting.md, notification-delivery.md |
 
 **What does not reach production:**
 - Developer machines in their normal setup run Development with local file storage and their own key ring, so they hold no production secrets.

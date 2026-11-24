@@ -57,6 +57,54 @@ public class SacramentPreparationTests
     }
 
     [Fact]
+    public async Task The_archdiocese_checklist_replaces_parish_lists_for_its_sacrament_and_only_the_bishop_sets_it()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var shared = f.Services.GetRequiredService<ArchdioceseRequirementService>();
+        SaveRequirementSetDto Archdiocese(string? version, params string[] keys) => new()
+        {
+            OperationId = Guid.NewGuid(), Version = version, Sacrament = "Baptism", BlockSchedulingUntilMet = true,
+            Items = [.. keys.Select(k => new RequirementItemDto { Key = k, Label = "Archdiocese " + k })]
+        };
+        // The parish's own list applies while the archdiocese has none.
+        x.Priest();
+        var own = await x.Service.SaveRequirementSetAsync(x.Parish, Requirements(null, false), default);
+        Assert.Equal("Parish", Assert.Single(await x.Service.RequirementSetsAsync(x.Parish, default)).Source);
+        // Only the bishop sets the archdiocese's list.
+        await Assert.ThrowsAsync<DomainException>(() => shared.SaveAsync(x.Staff.Organization, Archdiocese(null, "preparation_class"), default));
+        f.As(f.Nominee);
+        var set = (await shared.SaveAsync(x.Staff.Organization, Archdiocese(null, "preparation_class", "godparent_letter"), default))!;
+        Assert.Equal(("Archdiocese", 2), (set.Source, set.Items.Length));
+
+        // The parish now uses it, cannot save its own list for that sacrament, and new cases carry it.
+        x.Priest();
+        var effective = Assert.Single(await x.Service.RequirementSetsAsync(x.Parish, default));
+        Assert.Equal(("Archdiocese", "preparation_class"), (effective.Source, effective.Items[0].Key));
+        Assert.Equal("requirements_set_by_archdiocese", (await Assert.ThrowsAsync<DomainException>(() =>
+            x.Service.SaveRequirementSetAsync(x.Parish, Requirements(own.Version, true), default))).Code);
+        var record = await OpenAsync(x, await PersonAsync(x));
+        x.Priest();
+        var accepted = await ActAsync(x, record.Id, "accept");
+        Assert.Equal(["preparation_class", "godparent_letter"], accepted.Requirements.Select(r => r.Key));
+        Assert.True(accepted.RequirementsBlockScheduling);
+        // Another sacrament without an archdiocese list stays the parish's own choice.
+        await x.Service.SaveRequirementSetAsync(x.Parish, new SaveRequirementSetDto
+        {
+            OperationId = Guid.NewGuid(), Sacrament = "Marriage", Items = [new RequirementItemDto { Key = "course", Label = "Marriage course" }]
+        }, default);
+        Assert.Contains(await x.Service.RequirementSetsAsync(x.Parish, default), r => r.Sacrament == "Marriage" && r.Source == "Parish");
+
+        // The bishop clears it: the parish's own list applies again.
+        f.As(f.Nominee);
+        Assert.Null(await shared.SaveAsync(x.Staff.Organization, Archdiocese(set.Version), default));
+        Assert.Empty(await shared.ListAsync(x.Staff.Organization, default));
+        x.Priest();
+        Assert.Equal("Parish", (await x.Service.RequirementSetsAsync(x.Parish, default)).Single(r => r.Sacrament == "Baptism").Source);
+    }
+
+    [Fact]
     public async Task Requirement_lists_come_only_from_the_priest_and_each_case_keeps_its_own_checklist()
     {
         await using var f = new LocalBackendFixture();

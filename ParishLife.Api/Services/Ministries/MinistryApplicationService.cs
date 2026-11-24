@@ -9,6 +9,7 @@ using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
+using ParishLife.Api.Services.People;
 using ParishLife.Api.Models.Enums;
 
 namespace ParishLife.Api.Services.Ministries;
@@ -38,6 +39,8 @@ public class MinistryApplicationService(IRecordTransactions records, MinistryAcc
             await access.PersonalAsync(ct);
             link = await access.OwnLinkAsync(parish, ct);
             personId = link.Value.PersonId;
+            if (request.Kind == "Join")
+                MemberOnly.Require((await records.ReadAsync<Person>(scope, "person:" + personId, ct))?.Value, "Joining a ministry");
         }
         var op = actor.CreateOperation(request.OperationId, request, clock, "ministry-application:v2:" + ministry);
         if (await records.ReplayAsync<CommandResult>(scope, op, ct) is { } replay)

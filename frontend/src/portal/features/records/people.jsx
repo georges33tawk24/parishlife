@@ -33,6 +33,7 @@ import { persist } from '../../model/persist.js';
 import { createdId } from '../../model/modules/people.js';
 import { MergeHistory } from './people-duplicates.jsx';
 import { accountStatus } from '../administration/workspace-platform.jsx';
+import { inviteWithRole, unlinkAccount } from './invite-with-role.jsx';
 import { directoryConsents, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
 import { printSheet } from '../../shared/print.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
@@ -417,7 +418,10 @@ export function personMenu(anchor, pid) {
           ]
         : []),
       ...(!D.ACCOUNTS[pid]?.id && is('priest', 'secretary', 'super_admin', 'parish_admin', 'diocesan_admin')
-        ? [{ label: t('Invite to complete account', 'دعوة لإكمال الحساب'), icon: 'mail', fn: () => inviteAccount(p) }]
+        ? [{ label: t('Invite to complete account', 'دعوة لإكمال الحساب'), icon: 'mail', fn: () => inviteWithRole(p) }]
+        : []),
+      ...(D.ACCOUNTS[pid]?.id && is('priest', 'secretary', 'super_admin', 'parish_admin', 'diocesan_admin')
+        ? [{ label: t('Unlink account', 'فكّ ربط الحساب'), icon: 'x', fn: () => unlinkAccount(p) }]
         : []),
       ...(D.ACCOUNTS[pid]?.id && is('super_admin')
         ? [
@@ -440,47 +444,6 @@ export function personMenu(anchor, pid) {
     ],
     { width: 230 }
   );
-}
-
-async function inviteAccount(p) {
-  try {
-    // one-use invitation (card A11); the link carries the parish, the invitation and its private token
-    const result = await api(
-      `parishes/${encodeURIComponent(session.parishId)}/people/${encodeURIComponent(p.id)}/invitations`,
-      'POST',
-      { operationId: newOperationId() }
-    );
-    const link = new URL('index.html', location.href);
-    link.hash = 'invite=' + new URLSearchParams({ p: session.parishId, i: result.id, t: result.token });
-    openModal({
-      title: t('Account invitation', 'دعوة الحساب'),
-      body: (
-        <>
-          <p>{p.lat}</p>
-          <p>
-            {t(
-              'Give this private link directly to the person. Email and SMS delivery are not configured, so no message has been sent. The link expires after seven days.',
-              'أعطِ هذا الرابط الخاص للشخص مباشرة. لم يتم إعداد إرسال البريد والرسائل النصية لذلك لم تُرسل رسالة. تنتهي الدعوة بعد سبعة أيام.'
-            )}
-          </p>
-          <label className="formrow">
-            <span className="label">{t('Private invitation link', 'رابط الدعوة الخاص')}</span>
-            <input className="input" readOnly defaultValue={link.href} />
-          </label>
-        </>
-      ),
-      foot: (
-        <button className="btn btn-primary" data-close="">
-          {t('Done', 'تم')}
-        </button>
-      ),
-      onMount(el) {
-        el.querySelector('input').onclick = e => e.target.select();
-      }
-    });
-  } catch (e) {
-    toast(t('Could not create invitation', 'تعذّر إنشاء الدعوة'), e.message, 'danger');
-  }
 }
 
 /* Suspending or reinstating the person's sign-in account is a platform-operator action (MFA) on

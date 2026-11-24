@@ -32,7 +32,10 @@ public class EndpointAccessSweepTests
         "GET api/auth/mfa/status", "GET api/auth/passkeys", "GET api/auth/profile", "GET api/auth/sessions", "GET api/auth/staff-appointments",
         "GET api/capabilities", "GET api/me/capacities", "GET api/me/home", "GET api/me/notification-topics", "GET api/me/parishes",
         "GET api/me/personal-workspace", "GET api/me/request-claims", "GET api/notifications", "GET api/notifications/preferences",
-        "PUT api/notifications/preferences", "GET api/report-deliveries", "GET api/report-schedules", "POST api/auth/profile/appearance/preview",
+        "PUT api/notifications/preferences",
+        // Reviewed 24 November 2026 (merge of the notification channels): each acts only on the caller's account scope, takes no id from the request.
+        "GET api/notifications/channels", "POST api/notifications/test", "POST api/notifications/whatsapp/remove",
+        "GET api/report-deliveries", "GET api/report-schedules", "POST api/auth/profile/appearance/preview",
         // Revoking a session is scoped to the caller's own account: the owner's session id is a no-op (checked below: the owner stays signed in).
         "POST api/auth/sessions/{sessionId:guid}/revoke",
         // The operator's clergy title list and the title printed beside a priest's name on documents: readable by any signed-in account.

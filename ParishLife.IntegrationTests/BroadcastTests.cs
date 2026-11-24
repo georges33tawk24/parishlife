@@ -85,7 +85,7 @@ public class BroadcastTests
         var sent = await service.ActionAsync(m.Parish, draft.Id, send, default);
         Assert.Equal(sent.SentAt, (await service.ActionAsync(m.Parish, draft.Id, send, default)).SentAt);
         Assert.Equal(("Sent", 3, 1), (sent.Status, sent.RecipientCount, sent.SkippedByPreferenceCount));
-        Assert.Equal([("InApp", "Stored"), ("Email", "NotConfigured"), ("Sms", "NotConfigured"), ("Push", "NotConfigured")],
+        Assert.Equal([("InApp", "Stored"), ("Email", "NotConfigured"), ("WhatsApp", "NotConfigured"), ("Push", "NotConfigured")],
             sent.Channels.Select(c => (c.Channel, c.Status)).ToArray());
         Assert.DoesNotContain(member, JsonSerializer.Serialize(await service.ListAsync(m.Parish, default)));
         Assert.Equal("invalid_broadcast_state", (await Assert.ThrowsAsync<DomainException>(async () =>

@@ -1,62 +1,99 @@
 /* Purpose: the Access and billing tab of the workspace, on ParishLife.Api: a parish's office coverage and
+   free coverage granted by an operator (POST .../billing/free-coverage), and
    grants (PUT /api/parishes/{id}/grants, .../grants/revoke), plans and the modules a parish has bought
    (GET /api/plans, .../billing/coverage), invoices and cash receipts, and the payer: who pays for the
    parish, and transfers between parish and archdiocese.
    The API has no list of a parish's grants or invoices; invoices are opened by reference.
    Main member: AccessAndBilling. */
 import { useState } from 'react';
-import { toast } from '../../ui/ui.jsx';
+import { toast, openDrawer } from '../../ui/ui.jsx';
+import { DrawerForm } from '../../ui/forms.jsx';
+import { PermissionPicker } from './permission-picker.jsx';
 import { Select } from '../../ui/components.jsx';
 import * as A from '../../model/modules/administration-api.js';
 import { useLoad } from './use-load.js';
-import { L, Row, Section, ReferenceBox, openForm, csv, startOfDay, shortDay } from './workspace-forms.jsx';
+import { L, Row, Section, ReferenceBox, Fields, openForm, csv, startOfDay, shortDay } from './workspace-forms.jsx';
 
 const money = m => (m ? `${m.amount} ${m.currency}` : '—');
 
 function Access({ parish, reload: outer }) {
   const { data, error, reload } = useLoad(() => A.orEmpty(A.parishOfficeCoverage(parish.id), null), [parish.id]);
+  /* Office access for a secretary, treasurer or other helper: named by username or email, with grouped
+     permission checkboxes; denials stay an advanced option. */
   const grant = () =>
-    openForm({
-      title: L('Grant office access', 'منح صلاحية مكتب') + ' · ' + parish.name,
-      fields: [
-        { name: 'accountId', label: L('Account reference', 'مرجع الحساب') },
-        {
-          name: 'allows',
-          label: L(
-            'Allowed (comma separated, e.g. people.read, requests.manage)',
-            'المسموح (مفصول بفواصل مثل people.read)'
-          )
-        },
-        { name: 'denies', label: L('Denied (comma separated)', 'الممنوع (مفصول بفواصل)'), required: false },
-        { name: 'startsAt', label: L('Starts', 'يبدأ'), type: 'date' },
-        { name: 'endsAt', label: L('Ends (optional)', 'ينتهي (اختياري)'), type: 'date', required: false }
-      ],
-      save: async v =>
-        A.grantAccess(parish.id, {
-          version: (await A.getParish(parish.id)).version,
-          accountId: v.accountId.trim(),
-          allows: csv(v.allows),
-          denies: csv(v.denies),
-          startsAt: startOfDay(v.startsAt),
-          endsAt: startOfDay(v.endsAt)
-        }),
-      done: async () => {
-        await reload();
-        await outer?.();
-      },
-      saved: L('Access granted', 'مُنحت الصلاحية')
+    openDrawer({
+      title: L('Grant office access', 'منح صلاحية مكتب'),
+      sub: parish.name,
+      body: (
+        <DrawerForm
+          saved={L('Access granted', 'مُنحت الصلاحية')}
+          save={async (v, form) => {
+            const allows = new FormData(form).getAll('allow');
+            if (!allows.length) throw new Error(L('Tick at least one permission.', 'اختر صلاحية واحدة على الأقل.'));
+            return A.grantAccess(parish.id, {
+              version: (await A.getParish(parish.id)).version,
+              account: v.account.trim(),
+              allows,
+              denies: csv(v.denies),
+              startsAt: startOfDay(v.startsAt),
+              endsAt: startOfDay(v.endsAt)
+            });
+          }}
+          done={async () => {
+            await reload();
+            await outer?.();
+          }}
+        >
+          <Fields
+            fields={[
+              {
+                name: 'account',
+                label: L('Username or email', 'اسم المستخدم أو البريد'),
+                help: L(
+                  'The person must already have a verified ParishLife account.',
+                  'يجب أن يكون لدى الشخص حساب ParishLife موثّق.'
+                )
+              }
+            ]}
+          />
+          <PermissionPicker />
+          <Fields
+            fields={[
+              {
+                name: 'startsAt',
+                label: L('Starts', 'يبدأ'),
+                type: 'date',
+                value: new Date().toISOString().slice(0, 10)
+              },
+              { name: 'endsAt', label: L('Ends (optional)', 'ينتهي (اختياري)'), type: 'date', required: false }
+            ]}
+          />
+          <details className="perm-advanced">
+            <summary>{L('Advanced: deny specific permissions', 'متقدّم: منع صلاحيات محدّدة')}</summary>
+            <Fields
+              fields={[
+                {
+                  name: 'denies',
+                  label: L('Denied (comma separated, e.g. finance.post)', 'الممنوع (مفصول بفواصل)'),
+                  required: false
+                }
+              ]}
+            />
+          </details>
+        </DrawerForm>
+      )
     });
   const revoke = () =>
     openForm({
       title: L('Revoke office access', 'سحب صلاحية مكتب') + ' · ' + parish.name,
       fields: [
-        { name: 'accountId', label: L('Account reference', 'مرجع الحساب') },
+        { name: 'account', label: L('Username or email', 'اسم المستخدم أو البريد') },
         { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }
       ],
       save: async v =>
         A.revokeAccess(parish.id, {
           version: (await A.getParish(parish.id)).version,
-          accountId: v.accountId.trim(),
+          account: v.account.trim(),
           reason: v.reason
         }),
       done: reload,
@@ -104,6 +141,9 @@ function Access({ parish, reload: outer }) {
 }
 
 function Billing({ parish, archdioceses, operator }) {
+  // A billing account is the parish itself or an archdiocese: show its name, with the reference only as a fallback.
+  const payerName = id =>
+    id === parish.id ? parish.name : archdioceses.find(a => a.id === id)?.name || `${L('Account', 'الحساب')} ${id}`;
   const { data, error, reload } = useLoad(async () => {
     const [plans, coverage, schedule, transfers] = await Promise.all([
       A.listPlans(),
@@ -113,6 +153,42 @@ function Billing({ parish, archdioceses, operator }) {
     ]);
     return { plans, coverage, schedule, transfers };
   }, [parish.id]);
+  /* Free coverage: every module ticked by default; core is always included. */
+  const FREE_MODULES = [
+    ['office', L('Office', 'المكتب')],
+    ['requests', L('Requests', 'الطلبات')],
+    ['sacraments', L('Sacraments', 'الأسرار')],
+    ['ministries', L('Ministries', 'الأخويات')],
+    ['facilities', L('Facilities', 'المرافق')],
+    ['finance', L('Finance', 'المالية')]
+  ];
+  const grantFree = () =>
+    openForm({
+      title: L('Grant free coverage', 'منح تغطية مجانية') + ' · ' + parish.name,
+      intro: L(
+        'Free of charge: no invoice, receipt or payment. It is recorded with your name and reason, and cannot overlap other coverage.',
+        'مجاناً: بلا فاتورة أو إيصال أو دفع. تُسجَّل باسمك وسببك، ولا يمكن أن تتداخل مع تغطية أخرى.'
+      ),
+      fields: [
+        ...FREE_MODULES.map(([name, label]) => ({ name: 'module-' + name, label, type: 'check', value: true })),
+        { name: 'startsAt', label: L('Starts', 'تبدأ'), type: 'date', value: new Date().toISOString().slice(0, 10) },
+        {
+          name: 'endsAt',
+          label: L('Ends (optional, empty = no end)', 'تنتهي (اختياري، فارغ = بلا نهاية)'),
+          type: 'date',
+          required: false
+        },
+        { name: 'reason', label: L('Reason', 'السبب'), type: 'textarea' }
+      ],
+      save: v =>
+        A.grantFreeCoverage(parish.id, {
+          modules: FREE_MODULES.map(([name]) => name).filter(name => v['module-' + name]),
+          startsAt: startOfDay(v.startsAt),
+          endsAt: startOfDay(v.endsAt),
+          reason: v.reason
+        }),
+      done: reload
+    });
   const newInvoice = () =>
     openForm({
       title: L('Create an invoice', 'إنشاء فاتورة') + ' · ' + parish.name,
@@ -271,9 +347,14 @@ function Billing({ parish, archdioceses, operator }) {
               {L('Create invoice', 'إنشاء فاتورة')}
             </button>{' '}
             {operator ? (
-              <button className="btn btn-secondary btn-dense" data-plan-publish="" onClick={publish}>
-                {L('Publish a plan', 'نشر باقة')}
-              </button>
+              <>
+                <button className="btn btn-secondary btn-dense" data-free-coverage="" onClick={grantFree}>
+                  {L('Grant free coverage', 'منح تغطية مجانية')}
+                </button>{' '}
+                <button className="btn btn-secondary btn-dense" data-plan-publish="" onClick={publish}>
+                  {L('Publish a plan', 'نشر باقة')}
+                </button>
+              </>
             ) : null}
           </>
         }
@@ -287,8 +368,14 @@ function Billing({ parish, archdioceses, operator }) {
                   key={c.id}
                   title={c.modules.join(', ')}
                   lines={[
-                    `${shortDay(c.startsAt)} → ${shortDay(c.endsAt)}`,
-                    `${L('Invoice', 'الفاتورة')}: ${c.invoiceId}`
+                    `${shortDay(c.startsAt)} → ${
+                      String(c.endsAt).startsWith('9999') ? L('no end', 'بلا نهاية') : shortDay(c.endsAt)
+                    }`,
+                    c.complimentary
+                      ? `${L('Free (granted by a ParishLife administrator)', 'مجانية (منحها مشرف ParishLife)')}${
+                          c.grantReason ? ' · ' + c.grantReason : ''
+                        }`
+                      : `${L('Invoice', 'الفاتورة')}: ${c.invoiceId}`
                   ]}
                 />
               ))
@@ -327,13 +414,13 @@ function Billing({ parish, archdioceses, operator }) {
         {data?.schedule ? (
           <>
             <p>
-              {L('Current payer account', 'حساب الدافع الحالي')}: {data.schedule.currentAccountId}
+              {L('Current payer account', 'حساب الدافع الحالي')}: {payerName(data.schedule.currentAccountId)}
             </p>
             {data.schedule.periods.map((p, i) => (
               <Row
                 key={i}
                 title={p.payerKind}
-                lines={[`${L('From', 'من')} ${shortDay(p.effectiveFrom)}`, p.billingAccountId]}
+                lines={[`${L('From', 'من')} ${shortDay(p.effectiveFrom)}`, payerName(p.billingAccountId)]}
               />
             ))}
           </>

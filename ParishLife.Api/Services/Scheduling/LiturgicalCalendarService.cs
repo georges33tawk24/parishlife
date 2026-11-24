@@ -1,14 +1,18 @@
-// Purpose: authority-managed liturgical calendars (X12, proposed S16.11/S01.07). The current bishop of an archdiocese enters a calendar version
-// exactly from the competent authority's source (rite, year, source, version, dated entries) and approves it; corrections are reviewed new versions
+// Purpose: authority-managed liturgical calendars (X12, proposed S16.11/S01.07). The current bishop of an archdiocese, or a delegate he has
+// named (owner decision, 21 November 2026), enters a calendar version exactly from the competent authority's source (rite, year, source,
+// version, dated entries); only the bishop approves or withdraws it; corrections are reviewed new versions
 // that supersede the approved one; approved versions never change. Appointed parish priests may record local exceptions only under an approved
 // calendar that permits them. Visitors read approved entries and active exceptions for a parish and date range. Nothing is computed (no Easter or
 // season arithmetic) and no feast is built in.
-// Main functions: SaveAsync, ActAsync (approve, withdraw), GetAsync, ListAsync, RecordExceptionAsync, WithdrawExceptionAsync, ExceptionsAsync and
-// PublicAsync; helpers validate entries, titles and colors.
+// Main functions: SaveAsync, ActAsync (approve, withdraw; bishop only), GetAsync, ListAsync, DelegatesAsync and SaveDelegatesAsync (bishop only),
+// RecordExceptionAsync, WithdrawExceptionAsync, ExceptionsAsync and PublicAsync; PreparerAsync admits the bishop or a named delegate (an active,
+// verified account with an authenticator session, acting in personal capacity); helpers validate entries, titles and colors.
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.DTOs.Scheduling;
+using ParishLife.Api.Identity;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -20,8 +24,10 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Scheduling;
 
 public class LiturgicalCalendarService(IRecordTransactions records, IParishRepository parishes, IArchdioceseAuthority bishops, IParishAccess access,
-    IClergyAuthority clergy, MfaAccountAccess proof, ICurrentActor actor, TimeProvider clock)
+    IClergyAuthority clergy, MfaAccountAccess proof, ICurrentActor actor, TimeProvider clock, UserManager<ParishUser> users)
 {
+    private const string DelegatesKey = "liturgicalDelegates";
+    internal const int MaximumDelegates = 10;
     private static readonly string[] Languages = ["en", "fr", "ar"];
     // Technical payload bounds (one Cosmos document), not liturgical policy.
     internal const int MaximumEntries = 1000;
@@ -40,7 +46,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
 
     public async Task<Versioned<LiturgicalCalendarDto>> SaveAsync(string archdiocese, string id, SaveLiturgicalCalendarDto request, CancellationToken ct)
     {
-        await bishops.RequireBishopAsync(archdiocese, ct);
+        await PreparerAsync(archdiocese, ct);
         var op = actor.CreateOperation(request.OperationId, request, clock, "liturgical-calendar:v1:" + id);
         if (await records.ReplayAsync<CommandResult>(Archdiocese(archdiocese), op, ct) is not null)
             return await GetAsync(archdiocese, id, ct);
@@ -52,7 +58,7 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
         if (previous is not null && previous.Value.Status != "Draft")
             throw State("Only a draft can be edited; prepare a correction to change an approved calendar.");
         var value = await ValidateAsync(archdiocese, id, request, op.At, ct);
-        await bishops.RequireBishopAsync(archdiocese, ct);
+        await PreparerAsync(archdiocese, ct);
         await records.CommitAsync(Archdiocese(archdiocese), op, "liturgy.calendar_draft", id,
             [previous is null ? RecordChange.Create(Key(id), "liturgicalCalendar", value) : RecordChange.Replace(Key(id), "liturgicalCalendar", value, previous.Version)],
             new CommandResult { Id = id, Status = "Draft" }, ct);
@@ -113,17 +119,75 @@ public class LiturgicalCalendarService(IRecordTransactions records, IParishRepos
 
     public async Task<Versioned<LiturgicalCalendarDto>> GetAsync(string archdiocese, string id, CancellationToken ct)
     {
-        await bishops.RequireBishopAsync(archdiocese, ct);
+        await PreparerAsync(archdiocese, ct);
         var row = await ReadAsync(archdiocese, id, ct);
         return new Versioned<LiturgicalCalendarDto> { Version = row.Version, Value = Project(row.Value) };
     }
 
     public async Task<IReadOnlyList<Versioned<LiturgicalCalendarDto>>> ListAsync(string archdiocese, CancellationToken ct)
     {
-        await bishops.RequireBishopAsync(archdiocese, ct);
+        await PreparerAsync(archdiocese, ct);
         return (await records.CollectAsync<LiturgicalCalendar>(Archdiocese(archdiocese), "liturgicalCalendar", ct, 500))
             .Where(r => r.Value.ArchdioceseId == archdiocese).OrderByDescending(r => r.Value.Year).ThenByDescending(r => r.Value.PreparedAt)
             .Select(r => new Versioned<LiturgicalCalendarDto> { Version = r.Version, Value = Project(r.Value) }).ToArray();
+    }
+
+    public async Task<LiturgicalDelegatesDto> DelegatesAsync(string archdiocese, CancellationToken ct)
+    {
+        await bishops.RequireBishopAsync(archdiocese, ct);
+        var row = await records.ReadAsync<LiturgicalDelegates>(Archdiocese(archdiocese), DelegatesKey, ct);
+        var list = new List<LiturgicalDelegateDto>();
+        foreach (var id in row?.Value.AccountIds ?? [])
+            list.Add(new LiturgicalDelegateDto { AccountId = id, DisplayName = (await users.FindByIdAsync(id))?.DisplayName ?? string.Empty });
+        return new LiturgicalDelegatesDto { Version = row?.Version, Delegates = list };
+    }
+
+    // The bishop replaces the list. Each delegate must be an active, verified account that uses an authenticator; nobody is notified.
+    public async Task<LiturgicalDelegatesDto> SaveDelegatesAsync(string archdiocese, SaveLiturgicalDelegatesDto request, CancellationToken ct)
+    {
+        await bishops.RequireBishopAsync(archdiocese, ct);
+        var op = actor.CreateOperation(request.OperationId, request, clock, "liturgical-delegates:v1:" + archdiocese);
+        if (await records.ReplayAsync<CommandResult>(Archdiocese(archdiocese), op, ct) is not null)
+            return await DelegatesAsync(archdiocese, ct);
+        if (request.Accounts is null || request.Accounts.Count > MaximumDelegates)
+            throw Invalid($"Name up to {MaximumDelegates} delegates.");
+        var ids = new List<string>();
+        foreach (var name in request.Accounts.Select(a => a?.Trim() ?? string.Empty).Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var account = name.Length <= 254 ? await users.FindByNameAsync(name) ?? await users.FindByEmailAsync(name) : null;
+            if (account is not { Active: true, TwoFactorEnabled: true } || !AccountVerification.IsVerified(account))
+                throw Invalid($"\"{name}\" cannot be a delegate: use the username or email of an active, verified account that signs in with an authenticator.");
+            if (!ids.Contains(account.Id))
+                ids.Add(account.Id);
+        }
+        var previous = await records.ReadAsync<LiturgicalDelegates>(Archdiocese(archdiocese), DelegatesKey, ct);
+        if (previous is null && request.Version is not null || previous is not null && previous.Version != Versions.Require(request.Version))
+            throw Conflict();
+        var value = new LiturgicalDelegates { AccountIds = ids, UpdatedBy = actor.AccountId, UpdatedAt = op.At };
+        await records.CommitAsync(Archdiocese(archdiocese), op, "liturgy.delegates_set", archdiocese,
+            [previous is null ? RecordChange.Create(DelegatesKey, DelegatesKey, value) : RecordChange.Replace(DelegatesKey, DelegatesKey, value, previous.Version)],
+            new CommandResult { Id = archdiocese, Status = "Saved" }, ct);
+        return await DelegatesAsync(archdiocese, ct);
+    }
+
+    // The bishop, or a delegate he named: an active, verified account with an authenticator session, in personal capacity, of a verified
+    // archdiocese. Anyone else gets the bishop check's own refusal, so delegation reveals nothing.
+    private async Task PreparerAsync(string archdiocese, CancellationToken ct)
+    {
+        try
+        {
+            await bishops.RequireBishopAsync(archdiocese, ct);
+        }
+        catch (DomainException bishopOnly) when (bishopOnly.Code == "bishop_authority_required")
+        {
+            if (actor.ActingAppointmentId is not null || (await parishes.GetArchdioceseAsync(archdiocese, ct))?.Value.Verified != true)
+                throw;
+            var delegates = await records.ReadAsync<LiturgicalDelegates>(Archdiocese(archdiocese), DelegatesKey, ct);
+            if (delegates?.Value.AccountIds.Contains(actor.AccountId) != true)
+                throw;
+            try { await proof.RequireMfaAsync(ct); }
+            catch (DomainException error) when (error.Kind == FailureKind.Forbidden) { throw bishopOnly; }
+        }
     }
 
     public async Task<Versioned<LiturgicalExceptionDto>> RecordExceptionAsync(string parish, SaveLiturgicalExceptionDto request, CancellationToken ct)

@@ -1,5 +1,6 @@
-// Purpose: exposes the bishop's liturgical calendar versions (X12) over HTTP.
-// Main functions: List, Get, Save (create or edit a draft by client-chosen id) and Act (approve, withdraw) delegate to LiturgicalCalendarService.
+// Purpose: exposes the bishop's liturgical calendar versions (X12) over HTTP; the bishop's named delegates may prepare drafts.
+// Main functions: List, Get, Save (create or edit a draft by client-chosen id), Act (approve, withdraw: bishop only), Delegates and SaveDelegates
+// (bishop only) delegate to LiturgicalCalendarService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,15 @@ public class LiturgicalCalendarController(LiturgicalCalendarService service) : C
     [HttpPut("{calendarId:guid}")]
     public async Task<ActionResult<Versioned<LiturgicalCalendarDto>>> Save(Guid archdioceseId, Guid calendarId, SaveLiturgicalCalendarDto request, CancellationToken ct)
         => Ok(await service.SaveAsync(Guard.Id(archdioceseId), Guard.Id(calendarId), request, ct));
+
+    // The bishop's calendar delegates: they prepare drafts; approving stays with the bishop.
+    [HttpGet("delegates")]
+    public async Task<ActionResult<LiturgicalDelegatesDto>> Delegates(Guid archdioceseId, CancellationToken ct)
+        => Ok(await service.DelegatesAsync(Guard.Id(archdioceseId), ct));
+
+    [HttpPut("delegates")]
+    public async Task<ActionResult<LiturgicalDelegatesDto>> SaveDelegates(Guid archdioceseId, SaveLiturgicalDelegatesDto request, CancellationToken ct)
+        => Ok(await service.SaveDelegatesAsync(Guard.Id(archdioceseId), request, ct));
 
     [HttpPost("{calendarId:guid}/actions")]
     public async Task<ActionResult<Versioned<LiturgicalCalendarDto>>> Act(Guid archdioceseId, Guid calendarId, LiturgicalActionDto request, CancellationToken ct)

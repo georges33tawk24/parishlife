@@ -1,5 +1,5 @@
 // Purpose: exposes office-issued person invitations and the recipient's preview/accept over HTTP; the token travels in a header, never the URL.
-// Main functions: Create, List, Revoke, Preview, Accept and office-only NotificationOutcome delegate rules to PersonInvitationService.
+// Main functions: Create, List, Revoke, Preview, Accept, Unlink (office) and office-only NotificationOutcome delegate rules to PersonInvitationService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +18,10 @@ public class PersonInvitationsController(PersonInvitationService service) : Cont
     [HttpPost("people/{personId:guid}/invitations")]
     public async Task<ActionResult<PersonInvitationIssuedDto>> Create(Guid parishId, Guid personId, CreatePersonInvitationDto request, CancellationToken ct)
         => Ok(await service.CreateAsync(Guard.Id(parishId), Guard.Id(personId), request, ct));
+
+    [HttpPost("people/{personId:guid}/account-link/remove")]
+    public async Task<ActionResult<CommandResult>> Unlink(Guid parishId, Guid personId, UnlinkPersonAccountDto request, CancellationToken ct)
+        => Ok(await service.UnlinkAccountAsync(Guard.Id(parishId), Guard.Id(personId), request, ct));
 
     [HttpGet("person-invitations")]
     public async Task<ActionResult<IReadOnlyList<Versioned<PersonInvitationDto>>>> List(Guid parishId, CancellationToken ct, Guid? personId = null)

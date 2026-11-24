@@ -15,7 +15,7 @@ public class NotificationTopicCatalog
     internal static readonly string[] RequiredTopics =
     [
         "certificate.update", "concern.update", "inbox.message", "incident.assigned", "letter.update", "membership.decision",
-        "parish.ownership_claim", "parish.status", "person.invitation", "profile.correction", "registration.update", "request.update"
+        "parish.status", "person.invitation", "profile.correction", "registration.update", "request.update"
     ];
 
     public NotificationTopicDto[] List()

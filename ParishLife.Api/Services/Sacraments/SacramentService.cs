@@ -1,7 +1,8 @@
 // Purpose: runs sacramental cases from priest acceptance through preparation, scheduling and actual celebration to official registration,
 // with priest-approved numbering, secretary-recorded prior priest instructions and amendment-only corrections of registered entries.
-// The office may record a review of a received request (informative only), keep the case's checklist of the parish's own preparation
-// requirements, and propose changes to an accepted request that apply only when a priest approves them. Arabic twins of the celebrant,
+// The office may record a review of a received request (informative only), keep the case's checklist of preparation requirements (the
+// archdiocese's list where it set one, else the parish's own), and propose changes to an accepted request that apply only when a priest
+// approves them. Arabic twins of the celebrant,
 // place and witnesses, a celebrant person record and the register page are kept as typed.
 // Main functions: CreateAsync, ActAsync, SetPolicyAsync, RequirementSetsAsync, SaveRequirementSetAsync, ProposeCorrectionAsync,
 // DecideCorrectionAsync, GetAsync, SearchAsync, PendingCorrectionsAsync, AnniversariesAsync and MyAnniversariesAsync; helpers check priest
@@ -20,7 +21,8 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.Sacraments;
 
 public class SacramentService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, IClergyAuthority clergy,
-    IAccountDirectory accounts, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
+    IAccountDirectory accounts, MinistryAccess own, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock,
+    ArchdioceseRequirementService archdiocese)
 {
     private static readonly string[] Celebrated = ["Baptism", "FirstCommunion", "Confirmation", "Marriage"];
     private static readonly string[] OnceOnly = ["Baptism", "FirstCommunion", "Confirmation"];
@@ -269,15 +271,25 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         return Project(policy);
     }
 
-    // The parish's own preparation lists, one per sacrament that has one; there is no built-in list.
+    // The lists this parish uses, one per sacrament that has one: the archdiocese's where it set one (owner decision, 21 November 2026),
+    // otherwise the parish's own. There is no built-in list.
     public async Task<IReadOnlyList<RequirementSetDto>> RequirementSetsAsync(string parish, CancellationToken ct)
     {
         await OfficeOrPriestAsync(parish, ct);
         var result = new List<RequirementSetDto>();
         foreach (var kind in Kinds)
-            if (await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), RequirementsKey(kind), ct) is { } row)
-                result.Add(Project(row));
+            if (await EffectiveRequirementsAsync(parish, kind, ct) is { } effective)
+                result.Add(ArchdioceseRequirementService.Project(effective.Row, effective.Source));
         return result;
+    }
+
+    // The archdiocese's list when it set one for this sacrament, else the parish's own list, else none.
+    private async Task<(Versioned<SacramentRequirementSet> Row, string Source)?> EffectiveRequirementsAsync(string parish, string kind, CancellationToken ct)
+    {
+        var root = (await records.ReadAsync<Parish>(RecordScopes.Parish(parish), "parish", ct))?.Value;
+        if (await archdiocese.ForParishAsync(root, kind, ct) is { } shared)
+            return (shared, "Archdiocese");
+        return await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), RequirementsKey(kind), ct) is { } own ? (own, "Parish") : null;
     }
 
     public async Task<RequirementSetDto> SaveRequirementSetAsync(string parish, SaveRequirementSetDto request, CancellationToken ct)
@@ -287,18 +299,10 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         var key = RequirementsKey(request.Sacrament);
         if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is not null)
             return Project((await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), key, ct))!);
-        if (request.Items is null || request.Items.Count > 30)
-            throw new DomainException("invalid_input", "List up to 30 requirements.");
-        var items = request.Items.Select(i => new SacramentRequirement
-        {
-            Key = i.Key is { Length: >= 1 and <= 60 } k && k.All(c => char.IsAsciiLetterOrDigit(c) || c == '_')
-                ? k : throw new DomainException("invalid_input", "Each requirement needs a short alphanumeric key."),
-            Label = Optional(i.Label, "Requirement", 200), LabelAr = Optional(i.LabelAr, "Arabic requirement", 200)
-        }).ToArray();
-        if (items.Any(i => i.Label is null && i.LabelAr is null))
-            throw new DomainException("invalid_input", "Name each requirement in English or Arabic.");
-        if (items.Select(i => i.Key).Distinct(StringComparer.Ordinal).Count() != items.Length)
-            throw new DomainException("invalid_input", "Each requirement needs its own key.");
+        if (await archdiocese.ForParishAsync(root.Value, request.Sacrament, ct) is not null)
+            throw new DomainException("requirements_set_by_archdiocese",
+                "The archdiocese sets this sacrament's checklist for all its parishes; ask the bishop's office to change it.", FailureKind.Conflict);
+        var items = RequirementItems.Validate(request.Items);
         var existing = await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), key, ct);
         var set = new SacramentRequirementSet
         {
@@ -485,10 +489,10 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             throw new DomainException("invalid_input", "Name the celebrant.");
     }
 
-    // Copies the parish's current list onto the case, keeping what was already recorded for items that remain.
+    // Copies the list the parish uses now (the archdiocese's, else its own) onto the case, keeping what was already recorded for items that remain.
     private async Task ApplyRequirementsAsync(string parish, SacramentRecord item, CancellationToken ct)
     {
-        var set = (await records.ReadAsync<SacramentRequirementSet>(RecordScopes.Parish(parish), RequirementsKey(item.Kind), ct))?.Value;
+        var set = (await EffectiveRequirementsAsync(parish, item.Kind, ct))?.Row.Value;
         var before = item.Requirements.ToDictionary(r => r.Key, StringComparer.Ordinal);
         item.Requirements = (set?.Items ?? []).Select(i => before.TryGetValue(i.Key, out var kept)
             ? new SacramentRequirementState { Key = i.Key, Label = i.Label, LabelAr = i.LabelAr, Met = kept.Met, RecordedBy = kept.RecordedBy, RecordedAt = kept.RecordedAt, Note = kept.Note }

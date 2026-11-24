@@ -114,7 +114,8 @@ export async function load(parish, d) {
     getParish(id).catch(() => null),
     orEmpty(listWorkflows(id)),
     orEmpty(listRuns(id).catch(error => (error.status === 403 ? runWorklist(id) : Promise.reject(error)))),
-    orEmpty(parishStatusHistory(id)),
+    /* operating-status history is the bishop's; a parish with no archdiocese has none (409) */
+    orEmpty(parishStatusHistory(id).catch(error => (error.status === 409 ? [] : Promise.reject(error)))),
     /* the general trail needs audit.read; a refusal (403, or 404 for no grant) leaves it null */
     parishAudit(id).catch(() => null)
   ]);

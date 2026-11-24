@@ -2,7 +2,7 @@
   "name": "ParishLife",
   "short_name": "ParishLife",
   "description": "Find your parish in Lebanon: Mass times, this week's celebrations, parish news and requests to the parish office.",
-  "start_url": "/?source=app",
+  "start_url": "/index.html?source=app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0E1A31",

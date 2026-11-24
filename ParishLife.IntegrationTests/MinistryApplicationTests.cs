@@ -18,6 +18,22 @@ namespace ParishLife.IntegrationTests;
 public class MinistryApplicationTests
 {
     [Fact]
+    public async Task Visitors_and_unrecorded_people_cannot_apply_to_join_themselves_while_recorded_members_can()
+    {
+        await using var f = new LocalBackendFixture(); await f.InitializeAsync();
+        var s = await MinistryScenario.CreateAsync(f); var group = await s.MinistryAsync();
+        foreach (var status in new string?[] { "Visitor", null })
+        {
+            var person = await s.LinkedApplicantAsync(status: status);
+            f.As(person.AccountId, mfa: false);
+            Assert.Equal("members_only", (await Assert.ThrowsAsync<DomainException>(() => s.Applications.ApplyAsync(s.Parish, group.Id,
+                new ApplyMinistryDto { OperationId = Guid.NewGuid(), Kind = "Join" }, default))).Code);
+        }
+        var member = await s.LinkedApplicantAsync();
+        Assert.Equal(member.PersonId, (await s.ApplyAsync(group.Id, member.AccountId)).PersonId);
+    }
+
+    [Fact]
     public async Task Direct_priest_approval_has_no_fictional_leader_review_and_duplicate_requests_never_duplicate_roster()
     {
         await using var f = new LocalBackendFixture(); await f.InitializeAsync();

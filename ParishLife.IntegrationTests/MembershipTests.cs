@@ -170,6 +170,87 @@ public class MembershipTests
         Assert.Equal("invalid_invitation_state", (await Assert.ThrowsAsync<DomainException>(() => invitations.AcceptAsync(x.Parish, forLate.Id, forLate.Token, default))).Code);
     }
 
+    [Fact]
+    public async Task The_controller_invites_a_person_with_a_role_that_applies_when_they_accept()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var access = f.Services.GetRequiredService<ParishLife.Api.Interfaces.Services.Organizations.IParishAccess>();
+        var person = await PersonAsync(x, "Secretary");
+        CreatePersonInvitationDto With(params string[] allows) => new() { OperationId = Guid.NewGuid(), Allows = allows };
+
+        // Office staff who are not the controller cannot attach a role; grant administration is never given.
+        x.Office();
+        Assert.Equal("owner_authority_required", (await Assert.ThrowsAsync<DomainException>(() => invitations.CreateAsync(x.Parish, person, With(Permissions.PeopleRead), default))).Code);
+        f.As(f.FirstAdmin);
+        Assert.Equal("delegation_forbidden", (await Assert.ThrowsAsync<DomainException>(() => invitations.CreateAsync(x.Parish, person, With(Permissions.AccessManage), default))).Code);
+        var issued = await invitations.CreateAsync(x.Parish, person, With(Permissions.PeopleRead, Permissions.PeopleWrite), default);
+
+        // The person signs up with their own account, sees the role in the preview and receives it on accepting.
+        var secretary = await f.CreateVerifiedStaffAsync();
+        f.As(secretary);
+        Assert.Equal(2, (await invitations.PreviewAsync(x.Parish, issued.Id, issued.Token, default)).RoleAllows.Length);
+        await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.PeopleWrite, default));
+        var accepted = await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default);
+        Assert.Equal(("Used", true), (accepted.Status, accepted.RoleApplied));
+        await access.RequireAsync(x.Parish, Permissions.PeopleWrite, default);
+        Assert.Equal(ParishLife.Api.Models.Enums.FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.FinanceRead, default))).Kind);
+    }
+
+    [Fact]
+    public async Task An_invitation_role_is_not_applied_when_its_issuer_lost_control_before_acceptance()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var person = await PersonAsync(x, "Late");
+        f.As(f.FirstAdmin);
+        var issued = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid(), Allows = [Permissions.PeopleWrite] }, default);
+        // Control moves to the parish's appointed priest before the person accepts.
+        await f.Services.GetRequiredService<ParishLife.Api.Services.Organizations.ParishControlService>().HandOverAsync(x.Parish, new ParishLife.Api.DTOs.Organizations.HandOverParishControlDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await f.Services.GetRequiredService<ParishLife.Api.Interfaces.Repositories.Organizations.IParishRepository>().GetAsync(x.Parish, default))!.Version,
+            Account = "other@fixture.example"
+        }, default);
+
+        var invitee = await f.CreateVerifiedStaffAsync();
+        f.As(invitee);
+        var accepted = await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default);
+        Assert.Equal(("Used", false), (accepted.Status, accepted.RoleApplied));
+        await Assert.ThrowsAsync<DomainException>(() => f.Services.GetRequiredService<ParishLife.Api.Interfaces.Services.Organizations.IParishAccess>().RequireAsync(x.Parish, Permissions.PeopleWrite, default));
+    }
+
+    [Fact]
+    public async Task The_issuer_cannot_accept_its_own_invitation_and_the_office_can_undo_a_wrong_link()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var invitations = f.Services.GetRequiredService<PersonInvitationService>();
+        var person = await PersonAsync(x, "Elie");
+        x.Office();
+        var issued = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
+
+        // The issuer's own signed-in browser opening the link links nothing.
+        f.As(f.Other);
+        Assert.Equal("issuer_cannot_accept", (await Assert.ThrowsAsync<DomainException>(() => invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default))).Code);
+
+        // Someone else accepts by mistake; the office unlinks with a reason and invites the right person again.
+        var wrong = await f.CreateVerifiedMemberAsync();
+        f.As(wrong);
+        Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default)).Status);
+        x.Office();
+        Assert.Equal("Unlinked", (await invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Accepted by the wrong account" }, default)).Status);
+        Assert.Equal("invalid_invitation_state", (await Assert.ThrowsAsync<DomainException>(() =>
+            invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Again" }, default))).Code);
+        var again = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
+        f.As(await f.CreateVerifiedMemberAsync());
+        Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, again.Id, again.Token, default)).Status);
+    }
+
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)
     {
         var staff = await StaffAppointmentScenario.CreateAsync(f);

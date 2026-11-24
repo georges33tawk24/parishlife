@@ -11,6 +11,8 @@ import { bishopOverview, bishopMap, myScopes } from '../../model/modules/adminis
 import { useLoad } from '../administration/use-load.js';
 
 const L = (en, ar) => t(en, ar);
+/* A person-related count of 1 to 4 comes back empty from the API, so a small number cannot point to a person. */
+const few = v => v ?? L('<5', 'أقل من ٥');
 
 const TONE = { Verified: 'success', PendingVerification: 'warning', Suspended: 'danger', Closed: 'quiet' };
 const STATUS_WORDS = {
@@ -135,11 +137,14 @@ export function Oversight() {
               />
               <Stat
                 k={L('Open requests', 'الطلبات المفتوحة')}
-                v={o.totals.openRequests}
-                d={`${o.totals.requestsReceived} ${L('received', 'مستلمة')}`}
+                v={few(o.totals.openRequests)}
+                d={`${few(o.totals.requestsReceived)} ${L('received', 'مستلمة')}`}
               />
-              <Stat k={L('Certificates awaiting you', 'شهادات بانتظارك')} v={o.totals.certificatesAwaitingBishop} />
-              <Stat k={L('Membership requests', 'طلبات العضوية')} v={o.totals.membershipRequestsPending} />
+              <Stat
+                k={L('Certificates awaiting you', 'شهادات بانتظارك')}
+                v={few(o.totals.certificatesAwaitingBishop)}
+              />
+              <Stat k={L('Membership requests', 'طلبات العضوية')} v={few(o.totals.membershipRequestsPending)} />
               <Stat k={L('Published events', 'الأحداث المنشورة')} v={o.totals.publishedEvents} />
             </div>
             <Table
@@ -168,9 +173,9 @@ export function Oversight() {
                     <span className="dim">{L('None', 'لا أحد')}</span>
                   ),
                   <span className="num dim">{p.otherCurrentStaff}</span>,
-                  <span className="num">{p.openRequests}</span>,
-                  <span className="num dim">{p.certificatesAwaitingBishop}</span>,
-                  <span className="num dim">{p.membershipRequestsPending}</span>,
+                  <span className="num">{few(p.openRequests)}</span>,
+                  <span className="num dim">{few(p.certificatesAwaitingBishop)}</span>,
+                  <span className="num dim">{few(p.membershipRequestsPending)}</span>,
                   <span className="num dim">{p.publishedEvents}</span>
                 ]
               }))}

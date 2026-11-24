@@ -29,7 +29,8 @@ public class MinistryLeadershipTests
         s.UsePriest();
         var recipient = await fixture.CreateVerifiedStaffAsync();
         var request = await s.RequestAsync(recipient);
-        fixture.As(fixture.FirstAdmin);
+        // Neither the priest nor a super admin: refused (a super admin may name leaders, owner decision 23 November 2026).
+        fixture.As(await fixture.CreateVerifiedStaffAsync());
         await Assert.ThrowsAsync<DomainException>(() => s.Service.AppointAsync(s.Parish, s.Ministry, request, default));
         fixture.As(s.Priest);
         await Assert.ThrowsAsync<DomainException>(() => s.Service.AppointAsync(s.Parish, s.Ministry, request, default));

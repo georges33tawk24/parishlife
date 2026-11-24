@@ -1,6 +1,6 @@
 // Purpose: process-owner management of versioned parish custom workflows (W01): a working draft of the form and steps, publication of exactly
 // the reviewed draft as an immutable numbered version, and the Open / PausedNew / SafetyStop mode. Requires current MFA, workflows.manage in the
-// selected parish capacity and the paid office module; every write fences the parish root and the definition ETag and replays exact retries.
+// selected parish capacity (or being the parish's current priest) and the paid office module; every write fences the parish root and the definition ETag and replays exact retries.
 // Main functions: CreateAsync, SaveDraftAsync, PublishAsync, SetModeAsync, GetAsync, ListAsync and VersionAsync (the starter's form preview).
 
 using ParishLife.Api.DTOs.Workflows;

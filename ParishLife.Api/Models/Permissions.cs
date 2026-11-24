@@ -46,6 +46,13 @@ public static class Permissions
     public const string IncidentsRecord = "incidents.record";
     public const string IncidentsManage = "incidents.manage";
     public const string PeopleMedicalManage = "people.medical.manage";
+    // What a bishop or archdiocese administrator holds in a church they registered, until its priest takes control: running the parish
+    // (details, settings, publishing, schedule, facilities, billing) but no personal records, sacraments or finances (owner decision, 23 November 2026).
+    public static readonly IReadOnlySet<string> ChurchAdministration = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ParishManage, BillingRead, BillingManage, SettingsManage, PublishingManage, ScheduleRead, ScheduleManage, SchedulePublish, FacilitiesManage
+    };
+
     public static readonly IReadOnlySet<string> SetupOwner = new HashSet<string>(StringComparer.Ordinal)
     {
         ParishManage,

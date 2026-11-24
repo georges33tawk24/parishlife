@@ -1,0 +1,47 @@
+/* Purpose: spacing and bordered cards for the Administration workspace (Organizations, Appointments, Access and billing, Platform) and
+   its drawer forms (owner, 23 November 2026). Logical properties only, so Arabic (right to left) mirrors correctly.
+   Main rules: section spacing, one card per record, headings with room below, the open-by-reference box, form labels apart from
+   fields, the permission picker and the church setup checklist. */
+
+[data-workspace] .panel{margin-block-end:20px}
+[data-workspace] .panel-b > h3{margin:24px 0 10px;font:600 13px/18px var(--sans);letter-spacing:.02em;color:var(--text-2)}
+[data-workspace] .panel-b > h3:first-child{margin-block-start:0}
+[data-workspace] .panel-b > p{margin-block:0 12px}
+
+/* One record per card */
+[data-workspace] .panel-b > article{
+  display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px 16px;
+  padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2,transparent)
+}
+[data-workspace] .panel-b > article + article{margin-block-start:10px}
+[data-workspace] .panel-b > article h3{margin:0 0 4px;font:600 15px/22px var(--sans)}
+[data-workspace] .panel-b > article p{margin:0}
+[data-workspace] .panel-b > article .account-actions{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Open by reference: a grouped box, not a full-width bar */
+[data-workspace] .panel-b > form.toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-block-start:16px;
+  padding:12px 14px;border:1px dashed var(--border);border-radius:10px
+}
+[data-workspace] .panel-b > form.toolbar .input{flex:1 1 220px;max-width:420px}
+
+/* Drawer forms: labels apart from their fields, rows apart from each other */
+.drawer .formrow{display:block;margin-block-end:16px}
+.drawer .formrow > .label{display:block;margin-block-end:6px}
+.drawer form > .check{margin-block-end:8px}
+
+/* Permission picker */
+.perm-picker{border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:0 0 16px}
+.perm-picker > legend{padding-inline:6px}
+.perm-group{border-block-end:1px solid var(--border);padding-block:6px}
+.perm-group:last-child{border-block-end:0}
+.perm-group > summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style-position:inside}
+.perm-group > summary .help{margin:0}
+.perm-item{padding-inline-start:28px}
+.perm-advanced{margin-block:8px 16px}
+.perm-advanced > summary{cursor:pointer;color:var(--text-2);margin-block-end:10px}
+
+/* Church setup checklist */
+.setup-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.setup-step{padding:14px 16px;border:1px solid var(--border);border-radius:10px}
+.setup-step p{margin-block:4px 10px}

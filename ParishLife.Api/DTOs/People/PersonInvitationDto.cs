@@ -23,6 +23,10 @@ public class PersonInvitationDto
 
     public DateTimeOffset? UsedAt { get; set; }
 
+    public string[] RoleAllows { get; set; } = Array.Empty<string>();
+
+    public bool RoleApplied { get; set; }
+
     public string? ReviewReason { get; set; }
 
     // Loaded only for authorized office commands; token claim/preview responses do not disclose notice status.

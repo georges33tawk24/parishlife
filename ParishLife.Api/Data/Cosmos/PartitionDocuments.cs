@@ -94,6 +94,23 @@ internal sealed class PartitionDocuments
         };
     }
 
+    // The partitions holding rows that match a cross-partition query (e.g. which parishes hold an account's grants); bounded.
+    internal async Task<IReadOnlyList<string>> PartitionKeysAsync(string container, StorageQuery query, int limit, CancellationToken ct)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        do
+        {
+            var page = await database.QueryAsync(container, null, query, 100, continuation, ct);
+            foreach (var row in page.Items)
+                if (row.Document.TryGetProperty("partitionKey", out var key) && key.GetString() is { } value)
+                    keys.Add(value);
+            continuation = page.Continuation;
+        }
+        while (continuation is not null && keys.Count < limit);
+        return [.. keys.Take(limit)];
+    }
+
     internal async Task<IReadOnlyList<T>> QueryAsync<T>(string container, string? key, StorageQuery query, CancellationToken ct, int limit = 500)
         => (await QueryDocumentsAsync<T>(container, key, query, ct, limit)).Select(document => document.Data).ToArray();
 

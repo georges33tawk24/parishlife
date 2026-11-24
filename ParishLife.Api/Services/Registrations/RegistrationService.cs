@@ -16,6 +16,7 @@ using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Services.Common;
 using ParishLife.Api.Interfaces.Services.Organizations;
 using ParishLife.Api.Models;
+using ParishLife.Api.Services.People;
 using ParishLife.Api.Models.Enums;
 using ParishLife.Api.Services.Accounts;
 using ParishLife.Api.Services.Communications;
@@ -1000,6 +1001,7 @@ public sealed class RegistrationService(IRecordTransactions records, IParishAcce
         var person = await Get<Person>(parish, "person:" + link.Value.PersonId, ct);
         if (person.Value.Archived)
             throw Invalid("Ask the parish office to review your record before registering.");
+        MemberOnly.Require(person.Value, "Registering for parish events");
         var form = await ViewedFormAsync(parish, policy.Value, request.FormVersionId, ct);
         if (request.Answers is null)
             throw new DomainException("participant_input_required", "Answers are required.");

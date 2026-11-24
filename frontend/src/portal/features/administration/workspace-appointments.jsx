@@ -320,7 +320,9 @@ export function Appointments({ data }) {
     parishes = data.parishes;
   const [archId, setArch] = useState(arch[0]?.id || ''),
     [parishId, setParish] = useState('');
-  const canInvite = a => data.scopes.archdioceses.some(x => x.id === a && x.kinds.includes('Bishop'));
+  // The bishop, or a ParishLife super admin in his place (owner decision, 23 November 2026), appoints priests and archdiocese staff.
+  const canInvite = a =>
+    data.scopes.operator || data.scopes.archdioceses.some(x => x.id === a && x.kinds.includes('Bishop'));
   return (
     <>
       <div className="toolbar" style={{ margin: '12px 0' }}>

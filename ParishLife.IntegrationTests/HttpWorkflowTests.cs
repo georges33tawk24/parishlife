@@ -87,7 +87,8 @@ public sealed class HttpWorkflowTests
     public async Task State_changes_require_a_matching_antiforgery_token()
     {
         await using var factory = new ApiFactory();
-        using var client = factory.Client(Guid.NewGuid().ToString("N"));
+        // Only a ParishLife operator, the bishop or his archdiocese administrators register a church (owner decision, 23 November 2026).
+        using var client = factory.Client(ApiFactory.OperatorId, true);
         var request = new RegisterParishDto
         {
             OperationId = Guid.NewGuid(),
@@ -101,13 +102,17 @@ public sealed class HttpWorkflowTests
         await Csrf(client);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/parishes", request)).StatusCode);
         Assert.Equal(1, factory.Store.ParishCount);
+        using var ordinary = factory.Client(Guid.NewGuid().ToString("N"));
+        await Csrf(ordinary);
+        Assert.Equal(HttpStatusCode.Forbidden, (await ordinary.PostAsJsonAsync("/api/parishes", new RegisterParishDto { OperationId = Guid.NewGuid(), Name = "Parish", Locality = "Beirut", Contact = "Office" })).StatusCode);
+        Assert.Equal(1, factory.Store.ParishCount);
     }
 
     [Fact]
     public async Task Another_parish_user_gets_no_existence_or_billing_details()
     {
         await using var factory = new ApiFactory();
-        using var owner = factory.Client(Guid.NewGuid().ToString("N"));
+        using var owner = factory.Client(ApiFactory.OperatorId, true);
         await Csrf(owner);
         var parish = await Read<Parish>(await owner.PostAsJsonAsync("/api/parishes", new RegisterParishDto { OperationId = Guid.NewGuid(), Name = "Parish", Locality = "Beirut", Contact = "Office", DeclaredArchdiocese = null }));
         using var other = factory.Client(Guid.NewGuid().ToString("N"));
@@ -142,7 +147,7 @@ public sealed class HttpWorkflowTests
     public async Task Cash_payment_to_paid_coverage_and_people_is_a_real_http_service_flow()
     {
         await using var factory = new ApiFactory();
-        using var owner = factory.Client(Guid.NewGuid().ToString("N"));
+        using var owner = factory.Client(ApiFactory.OperatorId, true);
         await Csrf(owner);
         using var platform = factory.Client(ApiFactory.OperatorId, true);
         await Csrf(platform);
@@ -165,7 +170,10 @@ public sealed class HttpWorkflowTests
             ReceiptReference = "CASH-0001"
         };
         var route = $"/api/parishes/{parish.Id}/billing/invoices/{invoice.Id}/cash-receipts";
-        Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync(route, payment)).StatusCode);
+        // Only an operator records cash; the registering client here is an operator, so an ordinary account shows the refusal.
+        using var ordinary = factory.Client(Guid.NewGuid().ToString("N"));
+        await Csrf(ordinary);
+        Assert.Equal(HttpStatusCode.Forbidden, (await ordinary.PostAsJsonAsync(route, payment)).StatusCode);
         await Read<CashReceipt>(await platform.PostAsJsonAsync(route, payment));
         await Read<CashReceipt>(await platform.PostAsJsonAsync(route, payment));
         Assert.Equal(1, factory.Store.ReceiptCount);

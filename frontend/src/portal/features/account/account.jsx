@@ -1,5 +1,5 @@
 /* My account: the profile (display name, language and the optional personal details) and appearance, how the
-   account signs in (password or a first password, email, two-factor, passkeys, Google and Microsoft, sessions), my own
+   account signs in (password or a first password, email, two-factor, passkeys, Google and Microsoft, sessions), how ParishLife reaches me (email, push, WhatsApp), my own
    signature image, my parish records
    (with corrections for office review), requests made before signing in, and the parishes someone follows, with
    the membership request form.
@@ -13,6 +13,7 @@ import { changeAccountPassword, changeAccountEmail } from './account-security.js
 import { Mfa } from './account-mfa.jsx';
 import { Passkeys } from './account-passkeys.jsx';
 import { Providers, addAccountPassword } from './account-providers.jsx';
+import { Reach } from './account-notifications.jsx';
 import { Sessions } from './account-sessions.jsx';
 import { AccountData } from './account-closure.jsx';
 import { GuestLinks } from './guest-links.jsx';
@@ -408,6 +409,7 @@ export function AccountPage() {
           {features.external.length ? (
             <Providers mfa={mfa} available={features.external} hasPassword={account.hasPassword !== false} />
           ) : null}
+          <Reach />
           <Sessions />
           <AccountData mfa={mfa} hasPassword={account.hasPassword !== false} />
         </Panel>

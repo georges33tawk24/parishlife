@@ -2,7 +2,7 @@
 // deployment.
 // Main functions: Row, G, K, Missing, Conflict, Match, Mutate, IsActiveVerifiedAsync, GetGrantAsync,
 // RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync, GetCoveragesAsync, ActivateCoverageAsync,
-// RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, ProposeAssociationAsync,
+// RegisterArchdioceseAsync, GetArchdioceseAsync, VerifyArchdioceseAsync, SetBillingRepresentativeAsync, ProposeAssociationAsync,
 // GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, PublishAsync, CreateInvoiceAsync,
 // GetInvoiceAsync, GetReceiptsAsync, ReceiveCashAsync, GetActivationStatusAsync, FindDueActivationsAsync,
 // TryLeaseAsync, CompleteActivationAsync, GetPayerScheduleAsync, ListInvoicesAsync, CreateAsync, UpdateAsync, SetArchiveAsync, GetUtcNow, RequireOperatorAsync.
@@ -171,6 +171,8 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             return Task.FromResult<IReadOnlyList<Coverage>>(Coverages.Where(c => c.ParishId == id).ToArray());
     }
 
+    public Task GrantFreeCoverageAsync(Coverage coverage, Operation op, CancellationToken ct) => ActivateCoverageAsync(coverage, op, ct);
+
     public Task ActivateCoverageAsync(Coverage coverage, Operation op, CancellationToken ct)
     {
         Mutate("tenant:" + coverage.ParishId, op, () =>
@@ -210,9 +212,22 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
             Name = row.Value.Name,
             Locality = row.Value.Locality,
             OwnerAccountId = row.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = row.Value.BillingRepresentativeAccountId,
             CreatedAt = row.Value.CreatedAt,
             Verified = true,
             VerificationReference = evidence
+        };
+        organizations[id] = Row(updated);
+        return updated;
+    }));
+    public Task<Archdiocese> SetBillingRepresentativeAsync(string id, string expected, string accountId, Operation op, CancellationToken ct) => Task.FromResult(Mutate("organization:" + id, op, () =>
+    {
+        var row = organizations.GetValueOrDefault(id) ?? throw Missing();
+        Match(row, expected);
+        var updated = new Archdiocese
+        {
+            Id = row.Value.Id, Name = row.Value.Name, Locality = row.Value.Locality, OwnerAccountId = row.Value.OwnerAccountId, BillingRepresentativeAccountId = accountId,
+            CreatedAt = row.Value.CreatedAt, Verified = row.Value.Verified, VerificationReference = row.Value.VerificationReference
         };
         organizations[id] = Row(updated);
         return updated;

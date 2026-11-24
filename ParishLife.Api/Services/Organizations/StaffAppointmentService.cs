@@ -1,7 +1,10 @@
-// Purpose: manages bishop-authorized staff appointments and head designations with accepted dates, explicit duties, history and conditional scope fences.
+// Purpose: manages staff appointments and head designations authorized by the bishop or, equally, a ParishLife super admin (owner decision,
+// 23 November 2026; both confirm with password and authenticator, and the issuer's authority must still be current at acceptance), with accepted dates, explicit duties, history and conditional scope fences.
 // Main functions: InviteAsync, DecideAsync, ActAsync, DesignateHeadAsync, EndHeadAsync, GetAsync, ListAsync, OwnAsync, ScopeAsync, WorkspaceAsync; helpers enforce current authority and interval conflicts.
 
+using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Authorization;
+using ParishLife.Api.Identity;
 using ParishLife.Api.DTOs.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -15,7 +18,7 @@ namespace ParishLife.Api.Services.Organizations;
 
 public class StaffAppointmentService(IRecordTransactions records, IParishRepository parishes, ICurrentActor actor,
     IAccountDirectory accounts, IArchdioceseAuthority bishops, StaffAppointmentAccess access, IStaffAppointmentDirectory directory,
-    MfaAccountAccess proof, TimeProvider clock)
+    MfaAccountAccess proof, TimeProvider clock, IPlatformAccess platform, UserManager<ParishUser> users)
 {
     private class AppointmentScope
     {
@@ -47,7 +50,7 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
 
     public async Task<StaffAppointmentDto> InviteAsync(string archdioceseId, string? parishId, InviteStaffAppointmentDto request, CancellationToken ct)
     {
-        var bishop = await FreshBishopAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
+        var bishop = await FreshAuthorityAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
         var context = await ContextAsync(archdioceseId, parishId, ct);
         var expectedRole = parishId is null ? StaffAppointmentRole.ArchdioceseAdmin : StaffAppointmentRole.Priest;
         if (request.Role != expectedRole || request.IsHead && expectedRole != StaffAppointmentRole.Priest)
@@ -76,7 +79,7 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
             request.IsHead,
             request.Reason,
             request.EvidenceReference
-        }, clock, actingAppointmentId: bishop.Value.Id);
+        }, clock, actingAppointmentId: bishop.Acting);
         if (await records.ReplayAsync<StaffAppointment>(context.Scope, operation, ct) is { } prior)
             return View((await ReadAsync(context.Scope, archdioceseId, parishId, prior.Id, ct)).Value, context.Name, true);
         var value = new StaffAppointment
@@ -95,7 +98,7 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
             ReviewDueAt = request.ReviewDueAt,
             InvitedBy = actor.AccountId,
             InvitedAt = clock.GetUtcNow(),
-            AuthorizingBishopAppointmentId = bishop.Value.Id,
+            AuthorizingBishopAppointmentId = bishop.Authority,
             Reason = Guard.Text(request.Reason, "Appointment reason", 2000),
             EvidenceReference = Guard.Text(request.EvidenceReference, "Actual appointment evidence", 500),
             HeadStartsAt = request.IsHead ? request.StartsAt : null,
@@ -145,7 +148,7 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
 
     public async Task<StaffAppointmentDto> ActAsync(string archdioceseId, string? parishId, string id, ActStaffAppointmentDto request, CancellationToken ct)
     {
-        var bishop = await FreshBishopAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
+        var bishop = await FreshAuthorityAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
         if (request.Action is null || !Enum.IsDefined(request.Action.Value))
             throw new DomainException("invalid_staff_action", "Choose a supported appointment action.");
         if (request.Action != StaffAppointmentAction.Review && request.ReviewDueAt is not null)
@@ -153,7 +156,7 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
         var context = await ContextAsync(archdioceseId, parishId, ct);
         var operation = Operation.Create(request.OperationId, actor.AccountId,
             new { Kind = "staff.action", ArchdioceseId = archdioceseId, ParishId = parishId, Id = id, request.Action, request.Version, request.Reason, request.ReviewDueAt },
-            clock, actingAppointmentId: bishop.Value.Id);
+            clock, actingAppointmentId: bishop.Acting);
         if (await records.ReplayAsync<StaffAppointment>(context.Scope, operation, ct) is { } prior)
             return View((await ReadAsync(context.Scope, archdioceseId, parishId, prior.Id, ct)).Value, context.Name, true);
         var row = await ReadAsync(context.Scope, archdioceseId, parishId, id, ct);
@@ -209,11 +212,11 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
 
     public async Task<StaffAppointmentDto> DesignateHeadAsync(string archdioceseId, string parishId, string id, DesignateHeadPriestDto request, CancellationToken ct)
     {
-        var bishop = await FreshBishopAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
+        var bishop = await FreshAuthorityAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
         var context = await ContextAsync(archdioceseId, parishId, ct);
         var operation = Operation.Create(request.OperationId, actor.AccountId,
             new { Kind = "staff.head.designate", ArchdioceseId = archdioceseId, ParishId = parishId, Id = id, request.Version, request.StartsAt, request.EndsAt, request.Reason, request.EvidenceReference },
-            clock, actingAppointmentId: bishop.Value.Id);
+            clock, actingAppointmentId: bishop.Acting);
         if (await records.ReplayAsync<StaffAppointment>(context.Scope, operation, ct) is { } prior)
             return View((await ReadAsync(context.Scope, archdioceseId, parishId, prior.Id, ct)).Value, context.Name, true);
         var row = await ReadAsync(context.Scope, archdioceseId, parishId, id, ct);
@@ -237,11 +240,11 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
 
     public async Task<StaffAppointmentDto> EndHeadAsync(string archdioceseId, string parishId, string id, EndHeadPriestDto request, CancellationToken ct)
     {
-        var bishop = await FreshBishopAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
+        var bishop = await FreshAuthorityAsync(archdioceseId, request.CurrentPassword, request.CurrentCode, ct);
         var context = await ContextAsync(archdioceseId, parishId, ct);
         var operation = Operation.Create(request.OperationId, actor.AccountId,
             new { Kind = "staff.head.end", ArchdioceseId = archdioceseId, ParishId = parishId, Id = id, request.Version, request.EndsAt, request.Reason, request.EvidenceReference },
-            clock, actingAppointmentId: bishop.Value.Id);
+            clock, actingAppointmentId: bishop.Acting);
         if (await records.ReplayAsync<StaffAppointment>(context.Scope, operation, ct) is { } prior)
             return View((await ReadAsync(context.Scope, archdioceseId, parishId, prior.Id, ct)).Value, context.Name, true);
         var row = await ReadAsync(context.Scope, archdioceseId, parishId, id, ct);
@@ -318,13 +321,29 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
         };
     }
 
-    private async Task<Versioned<BishopAppointment>> FreshBishopAsync(string id, string password, string code, CancellationToken ct)
+    // The archdiocese's current bishop, or a ParishLife super admin in the bishop's place; either confirms with password and authenticator.
+    // Authority is the bishop appointment id, or OperatorAuthority + the super admin's account for an appointment a super admin issued.
+    private const string OperatorAuthority = "platform-operator:";
+
+    private sealed record Issuer(string Authority, string? Acting);
+
+    private async Task<Issuer> FreshAuthorityAsync(string id, string password, string code, CancellationToken ct)
     {
-        var bishop = await bishops.RequireBishopAppointmentAsync(id, ct);
+        Issuer issuer;
+        try
+        {
+            var bishop = await bishops.RequireBishopAppointmentAsync(id, ct);
+            issuer = new Issuer(bishop.Value.Id, bishop.Value.Id);
+        }
+        catch (DomainException e) when (e.Kind is FailureKind.Forbidden or FailureKind.NotFound)
+        {
+            await platform.RequireOperatorAsync(ct);
+            issuer = new Issuer(OperatorAuthority + actor.AccountId, null);
+        }
         var user = await proof.RequireMfaAsync(ct);
         await proof.PasswordAsync(user, password);
         await proof.AuthenticatorAsync(user, code);
-        return bishop;
+        return issuer;
     }
 
     private async Task<AppointmentScope> ContextAsync(string archdioceseId, string? parishId, CancellationToken ct)
@@ -365,6 +384,15 @@ public class StaffAppointmentService(IRecordTransactions records, IParishReposit
 
     private async Task IssuingBishopCurrentAsync(StaffAppointment value, CancellationToken ct)
     {
+        if (value.AuthorizingBishopAppointmentId.StartsWith(OperatorAuthority, StringComparison.Ordinal))
+        {
+            // Issued by a super admin: that account must still be an active super admin with an authenticator.
+            var issuer = await users.FindByIdAsync(value.InvitedBy);
+            if (value.AuthorizingBishopAppointmentId != OperatorAuthority + value.InvitedBy
+                || issuer is not { Active: true, PlatformOperator: true, TwoFactorEnabled: true } || !AccountVerification.IsVerified(issuer))
+                throw State("The issuing administrator's authority must be current when the invitation is accepted.");
+            return;
+        }
         var scope = StaffAppointmentAccess.Scope(value.ArchdioceseId, null);
         var seat = await records.ReadAsync<BishopSeat>(scope, "bishopSeat", ct);
         var bishop = seat is null ? null : await records.ReadAsync<BishopAppointment>(scope, "bishopAppointment:" + seat.Value.AppointmentId, ct);

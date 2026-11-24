@@ -1,7 +1,7 @@
 // Purpose: Persists organization verification, scoped grants, associations, and coverage with
 // conditional/idempotent writes.
 // Main functions: P, A, GetAsync, GrantId, GetGrantAsync, RegisterAsync, VerifyAsync, GrantAsync, RevokeAsync,
-// GetCoveragesAsync, ActivateCoverageAsync, GetArchdioceseAsync, RegisterArchdioceseAsync, VerifyArchdioceseAsync,
+// GetCoveragesAsync, ActivateCoverageAsync, GrantFreeCoverageAsync, GetArchdioceseAsync, RegisterArchdioceseAsync, VerifyArchdioceseAsync,
 // ProposeAssociationAsync, GetAssociationAsync, DecideAssociationAsync, EndAssociationAsync, GetPayerScheduleAsync, CommitOrReplay,
 // Missing.
 
@@ -21,6 +21,10 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
     private static string A(string id) => "archdiocese:" + id;
     public Task<Versioned<Parish>?> GetAsync(string parishId, CancellationToken ct) => documents.ReadAsync<Parish>(C, P(parishId), "parish", ct);
     private static string GrantId(AccessGrant grant) => "grant:" + grant.AccountId + ":" + (grant.AssociationId ?? "local");
+    public async Task<IReadOnlyList<string>> GrantParishIdsAsync(string accountId, CancellationToken ct)
+        => (await documents.PartitionKeysAsync(C, StorageQuery.Type("grant").Where(StorageFilter.And(StorageFilter.Eq("data.accountId", accountId), StorageFilter.Eq("data.revoked", false))), 200, ct))
+            .Where(key => key.StartsWith("parish:", StringComparison.Ordinal)).Select(key => key["parish:".Length..]).ToArray();
+
     public async Task<AccessGrant?> GetGrantAsync(string parishId, string accountId, CancellationToken ct)
     {
         var parish = await GetAsync(parishId, ct);
@@ -117,6 +121,21 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
         await CommitOrReplay(documents.Batch(C, key).ReplaceItem("parish", Row("parish", key, "parish", parish.Value), PartitionDocuments.Match(parish.Version)).CreateItem(Row("coverage:" + coverage.Id, key, "coverage", coverage)).CreateItem(Receipt(key, operation, coverage)).CreateItem(Audit(key, operation, "subscription.activate_paid", coverage.InvoiceId)), key, operation, coverage, ct);
     }
 
+    // Free coverage granted by an operator: the same verified-parish and no-overlap rules and parish revision guard as paid coverage, with no
+    // invoice or payer; the audit carries the operator's reason.
+    public async Task GrantFreeCoverageAsync(Coverage coverage, Operation operation, CancellationToken ct)
+    {
+        var key = P(coverage.ParishId);
+        if (await documents.ReplayAsync<Coverage>(C, key, operation, ct) is not null)
+            return;
+        var parish = await GetAsync(coverage.ParishId, ct) ?? throw Missing();
+        if (parish.Value.Status != ParishStatus.Verified)
+            throw new DomainException("verification_required", "Coverage requires an open verified parish.", FailureKind.Conflict);
+        if ((await GetCoveragesAsync(coverage.ParishId, ct)).Any(c => c.Overlaps(coverage)))
+            throw new DomainException("coverage_overlap", "Other coverage already covers part of this period; choose dates after it.", FailureKind.Conflict);
+        await CommitOrReplay(documents.Batch(C, key).ReplaceItem("parish", Row("parish", key, "parish", parish.Value), PartitionDocuments.Match(parish.Version)).CreateItem(Row("coverage:" + coverage.Id, key, "coverage", coverage)).CreateItem(Receipt(key, operation, coverage)).CreateItem(Audit(key, operation, "subscription.grant_free", coverage.Id, coverage.GrantReason)), key, operation, coverage, ct);
+    }
+
     public Task<Versioned<PayerSchedule>?> GetPayerScheduleAsync(string parishId, CancellationToken ct) => documents.ReadAsync<PayerSchedule>(C, P(parishId), "payerSchedule", ct);
     public Task<Versioned<Archdiocese>?> GetArchdioceseAsync(string id, CancellationToken ct) => documents.ReadAsync<Archdiocese>(C, A(id), "organization", ct);
     public async Task<Archdiocese> RegisterArchdioceseAsync(Archdiocese organization, Operation operation, CancellationToken ct)
@@ -141,11 +160,28 @@ internal sealed class ParishRepository(PartitionDocuments documents, TimeProvide
             Name = organization.Value.Name,
             Locality = organization.Value.Locality,
             OwnerAccountId = organization.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = organization.Value.BillingRepresentativeAccountId,
             CreatedAt = organization.Value.CreatedAt,
             Verified = true,
             VerificationReference = evidence
         };
         return await CommitOrReplay(documents.Batch(C, key).ReplaceItem("organization", Row("organization", key, "organization", verified), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, verified)).CreateItem(Audit(key, operation, "archdiocese.verify", id, evidence)), key, operation, verified, ct);
+    }
+
+    // Names the archdiocese's billing representative: one conditional replace with its receipt and audit row (who named whom, never secrets).
+    public async Task<Archdiocese> SetBillingRepresentativeAsync(string id, string version, string accountId, Operation operation, CancellationToken ct)
+    {
+        var key = A(id);
+        if (await documents.ReplayAsync<Archdiocese>(C, key, operation, ct) is { } prior)
+            return prior;
+        var organization = await GetArchdioceseAsync(id, ct) ?? throw Missing();
+        var named = new Archdiocese
+        {
+            Id = organization.Value.Id, Name = organization.Value.Name, Locality = organization.Value.Locality, OwnerAccountId = organization.Value.OwnerAccountId,
+            BillingRepresentativeAccountId = accountId, CreatedAt = organization.Value.CreatedAt, Verified = organization.Value.Verified,
+            VerificationReference = organization.Value.VerificationReference
+        };
+        return await CommitOrReplay(documents.Batch(C, key).ReplaceItem("organization", Row("organization", key, "organization", named), PartitionDocuments.Match(version)).CreateItem(Receipt(key, operation, named)).CreateItem(Audit(key, operation, "archdiocese.billing_representative", id, accountId)), key, operation, named, ct);
     }
 
     public async Task<AssociationRequest> ProposeAssociationAsync(string parishId, string version, string archdioceseId, Operation operation, CancellationToken ct)

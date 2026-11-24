@@ -1,5 +1,6 @@
-// Purpose: returns the parish's preparation requirement list for one sacrament with the version a later save must send.
-// Main members: Sacrament, Version, Items, BlockSchedulingUntilMet, SavedBy and SavedAt.
+// Purpose: returns a preparation requirement list for one sacrament with the version a later save must send.
+// Main members: Sacrament, Version, Items, BlockSchedulingUntilMet, SavedBy, SavedAt and Source (Archdiocese: set by the archdiocese for all
+// its parishes; Parish: the parish's own list, used while the archdiocese has none for that sacrament).
 
 using ParishLife.Api.Models;
 
@@ -18,4 +19,6 @@ public class RequirementSetDto
     public string SavedBy { get; set; } = string.Empty;
 
     public DateTimeOffset SavedAt { get; set; }
+
+    public string Source { get; set; } = "Parish";
 }

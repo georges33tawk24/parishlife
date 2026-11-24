@@ -3,7 +3,8 @@
      Main parts: the English and Arabic texts (one shows at a time, by ?lang= or the site's saved language). First approved by
      the owner on 21 November 2026; the 22 November 2026 version adds factual corrections and the new account features
      (self-service data copy and closure, password reset, the 13+ confirmation); the 23 November 2026 version says what
-     security events keep (Agent 08 handoff 4); the 24 November 2026 version adds the breached-password check. The text describes only what the code does
+     security events keep (Agent 08 handoff 4); the 24 November 2026 version adds the breached-password check and, merged from the integration branch, email,
+     push and WhatsApp delivery, the automatic deletions (Q15) and 30-day backups. The text describes only what the code does
      (see docs/operations/legal-pages.md for the sources of each statement). No script beyond the language line in the head. -->
 <html lang="en" dir="ltr">
 <head>
@@ -58,6 +59,7 @@
         <li><b>Your account:</b> username, email address, display name, preferred language and colours, and any optional profile details you add. It also holds the parishes you follow, your notification choices, your own notes and to-do list (visible only to you and stored encrypted) and, if you add one, the signature you draw and the title shown with it on documents you sign. Your password is stored only as a one-way hash. If you turn on two-step sign-in, the authenticator key and recovery codes are stored protected. A passkey's private key never leaves your device; we store only its public key. If you unlock a passkey with your face or fingerprint, that check happens on your device: ParishLife never receives biometric data.</li>
         <li><b>Google or Microsoft sign-in:</b> only if you choose it. We store a hashed form of the account identifier Google or Microsoft gives us. When you sign up this way, we also use the name and the email address Google or Microsoft has confirmed for your account.</li>
         <li><b>Your sessions:</b> when each sign-in started and how it signed in, so you can see and end your sessions.</li>
+        <li><b>How you chose to be reached:</b> your email, push and WhatsApp choices; for each device you turn notifications on, the address its browser gives for receiving them; and the WhatsApp number you prove with a code (the code is kept only in a scrambled form and only until used).</li>
         <li><b>Parish records about you</b>, entered by your parish: name, date of birth and family details, contact details and address, rite, occupation and skills, households and relationships, sacraments and certificates, parish and ministry membership, catechism and formation progress, attendance, volunteering, registrations, contributions and receipts, consents you have given the parish, date of death, and letters or documents the parish issues.</li>
         <li><b>Sensitive records</b>, only where a parish uses them: medical or allergy notes, pastoral notes, confidential concerns and incident reports. These are protected at rest and readable only by the roles the parish designates.</li>
         <li><b>Children's safety records</b>, only where a parish uses them: who may collect a child and on what authority, and check-in and evacuation rolls. Only the parish office records these.</li>
@@ -92,11 +94,13 @@
         <li><b>Microsoft Azure</b> hosts ParishLife in the France Central region: the database (Cosmos DB), private file storage (Blob Storage), key protection (Key Vault) and technical monitoring (Application Insights).</li>
         <li><b>Cloudflare</b> provides the domain name service and Turnstile, a bot check on sign-in, sign-up and public request forms. Turnstile processes technical information about your browser and connection to tell people from bots.</li>
         <li><b>Google</b> and <b>Microsoft</b>, only if you choose to sign in with them.</li>
-        <li><b>Resend</b> sends ParishLife's account emails: the codes that confirm your email address when you sign up or change it, and the codes that reset a forgotten password.</li>
+        <li><b>Resend</b> sends ParishLife's emails: the codes that confirm your email address when you sign up or change it, the codes that reset a forgotten password, and, if you keep email on, a short copy of your notices and parish announcements with a link to sign in.</li>
+        <li><b>Push services</b> of your browser's maker (Google, Apple, Microsoft or Mozilla) carry push notifications to the devices you turn them on for. The message is encrypted so that only your device can read it.</li>
+        <li><b>Meta (WhatsApp)</b>, only if you prove a WhatsApp number and keep WhatsApp on: it receives your number and the short notice or announcement title sent to it.</li>
         <li><b>Have I Been Pwned</b> checks whether a new password has appeared in a known data breach. ParishLife sends only the first 5 characters of a one-way fingerprint of the password, never the password itself, your email or your name.</li>
       </ul>
-      <p>ParishLife stores its data in Microsoft Azure's France Central region, in the European Union. Cloudflare, Google, Microsoft and Resend may handle the limited data described above in other countries, including the United States.</p>
-      <p>ParishLife sends no newsletters, marketing email or text messages, and takes no online payments.</p>
+      <p>ParishLife stores its data in Microsoft Azure's France Central region, in the European Union. Cloudflare, Google, Microsoft, Resend, the push services and Meta may handle the limited data described above in other countries, including the United States.</p>
+      <p>ParishLife sends no marketing or advertising messages and no SMS text messages, and takes no online payments. You can turn email, push and WhatsApp on or off at any time under My account.</p>
 
       <h2>Cookies and storage in your browser</h2>
       <ul>
@@ -112,9 +116,9 @@
       <p>We protect data with encrypted connections, access limited by role and appointment, two-step sign-in for parish staff, clergy and platform operators, extra protection at rest for sensitive records, and audit records of changes.</p>
 
       <h2>How long we keep it</h2>
-      <p>Records are kept until you or your parish ask for them to be removed (see below); nothing is deleted automatically. A sign-in ends after 8 hours (15 minutes for a recovery sign-in), or as soon as you sign out; email codes expire after 15 minutes.</p>
+      <p>Parish records and the audit record are kept until you or your parish ask for them to be removed (see below). Notices you have read are deleted automatically after one year, and anonymous site counts after two years. A sign-in ends after 8 hours (15 minutes for a recovery sign-in), or as soon as you sign out; email codes expire after 15 minutes.</p>
       <p>When you close your account, your sign-in details and methods, your sessions, your personal profile, your signature and your own notes are deleted at once. ParishLife keeps a marker that the account existed and was closed (its number and the closing time, without your name, email or password) and its security and audit records, so parish history stays readable. Records a parish keeps about you stay with that parish.</p>
-      <p>Backups: the database can be restored to any point in the last 7 days, and deleted files can be recovered for 30 days, so deleted data can remain in backups until then. Technical logs are deleted automatically after 90 days.</p>
+      <p>Backups: the database can be restored to any point in the last 30 days, and deleted files can be recovered for 30 days, so deleted data can remain in backups until then. Technical logs are deleted automatically after 90 days.</p>
 
       <h2>Your rights and choices</h2>
       <ul>
@@ -145,6 +149,7 @@
         <li><b>حسابك:</b> اسم المستخدم والبريد الإلكتروني والاسم الظاهر واللغة والألوان المفضّلة، وأي تفاصيل اختيارية تضيفها. ويحفظ أيضاً الرعايا التي تتابعها، وخيارات الإشعارات، وملاحظاتك وقائمة مهامك الخاصة (لا يراها غيرك وتُحفظ مشفّرة)، وإن أضفتهما، التوقيع الذي ترسمه واللقب الذي يظهر معه على الوثائق التي توقّعها. تُحفظ كلمة المرور بصيغة مشفّرة باتجاه واحد فقط. إذا فعّلت الدخول بخطوتين، يُحفظ مفتاح المصادقة ورموز الاسترداد محميّة. المفتاح الخاص لمفتاح المرور لا يغادر جهازك؛ نحفظ مفتاحه العام فقط. وإذا فتحت مفتاح المرور بوجهك أو ببصمتك، يجري هذا التحقّق على جهازك: لا يتلقّى ParishLife أي بيانات بيومترية.</li>
         <li><b>الدخول عبر Google أو Microsoft:</b> فقط إذا اخترته. نحفظ صيغة مشفّرة من معرّف الحساب الذي تعطينا إياه Google أو Microsoft. وعند إنشاء حساب بهذه الطريقة نستخدم أيضاً الاسم والبريد الإلكتروني الذي أكّدته Google أو Microsoft لحسابك.</li>
         <li><b>جلساتك:</b> متى بدأ كل دخول وبأي طريقة، لتتمكّن من رؤية جلساتك وإنهائها.</li>
+        <li><b>طريقة التواصل التي اخترتها:</b> خياراتك للبريد والإشعارات الفورية وواتساب؛ ولكل جهاز تفعّل عليه الإشعارات، العنوان الذي يعطيه متصفّحه لتلقّيها؛ ورقم واتساب الذي تؤكّده برمز (يُحفظ الرمز بصيغة مشفّرة فقط وحتى استعماله).</li>
         <li><b>سجلات الرعية عنك</b>، تدخلها رعيتك: الاسم وتاريخ الولادة وتفاصيل العائلة، ووسائل التواصل والعنوان، والطقس، والمهنة والمهارات، والأسر وصلات القرابة، والأسرار والشهادات، والعضوية في الرعية والأخويات، والتعليم المسيحي ومسار التنشئة، والحضور والتطوّع والتسجيلات، والتبرّعات والإيصالات، والموافقات التي أعطيتها للرعية، وتاريخ الوفاة، والرسائل أو الوثائق التي تصدرها الرعية.</li>
         <li><b>سجلات حسّاسة</b>، فقط حيث تستخدمها الرعية: ملاحظات طبية أو عن الحساسية، وملاحظات رعوية، وشكاوى سرّية وتقارير حوادث. هذه محميّة عند التخزين ولا يقرأها إلا من تحدّدهم الرعية.</li>
         <li><b>سجلات سلامة الأطفال</b>، فقط حيث تستخدمها الرعية: من يحقّ له استلام الطفل وبأي صفة، ولوائح الحضور والإخلاء. لا يسجّلها إلا مكتب الرعية.</li>
@@ -179,11 +184,13 @@
         <li><b>Microsoft Azure</b> تستضيف ParishLife في منطقة France Central: قاعدة البيانات (Cosmos DB) وتخزين الملفات الخاص (Blob Storage) وحماية المفاتيح (Key Vault) والمراقبة التقنية (Application Insights).</li>
         <li><b>Cloudflare</b> تقدّم خدمة اسم النطاق وخدمة Turnstile، وهي فحص ضدّ البرامج الآلية عند الدخول وإنشاء الحساب ونماذج الطلبات العامة. يعالج Turnstile معلومات تقنية عن متصفّحك واتصالك ليميّز الأشخاص من البرامج الآلية.</li>
         <li><b>Google</b> و<b>Microsoft</b>، فقط إذا اخترت الدخول عبرهما.</li>
-        <li><b>Resend</b> ترسل رسائل البريد الخاصة بحسابك في ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد، والرموز التي تعيد تعيين كلمة مرور منسيّة.</li>
+        <li><b>Resend</b> ترسل رسائل البريد من ParishLife: الرموز التي تؤكّد بريدك عند إنشاء الحساب أو تغيير البريد، والرموز التي تعيد تعيين كلمة مرور منسيّة، وإن أبقيت البريد مفعّلاً، نسخة قصيرة من إشعاراتك وإعلانات الرعية مع رابط للدخول.</li>
+        <li><b>خدمات الإشعارات الفورية</b> لدى الجهة المصنّعة لمتصفّحك (Google أو Apple أو Microsoft أو Mozilla) تنقل الإشعارات إلى الأجهزة التي فعّلتها عليها. الرسالة مشفّرة بحيث لا يقرؤها إلا جهازك.</li>
+        <li><b>Meta (واتساب)</b>، فقط إن أكّدت رقم واتساب وأبقيته مفعّلاً: تتلقّى رقمك وعنوان الإشعار أو الإعلان القصير المرسل إليه.</li>
         <li><b>Have I Been Pwned</b> تتحقّق ممّا إذا كانت كلمة المرور الجديدة قد ظهرت في تسريب بيانات معروف. لا يرسل ParishLife إلّا أول ٥ أحرف من بصمة أحادية الاتجاه لكلمة المرور، ولا يرسل أبداً كلمة المرور نفسها ولا بريدك ولا اسمك.</li>
       </ul>
-      <p>يحفظ ParishLife بياناته لدى Microsoft Azure في منطقة France Central داخل الاتحاد الأوروبي. وقد تعالج Cloudflare وGoogle وMicrosoft وResend البيانات المحدودة المذكورة أعلاه في بلدان أخرى، منها الولايات المتحدة.</p>
-      <p>لا يرسل ParishLife نشرات أو رسائل تسويقية أو رسائل نصية، ولا يقبل الدفع عبر الإنترنت.</p>
+      <p>يحفظ ParishLife بياناته لدى Microsoft Azure في منطقة France Central داخل الاتحاد الأوروبي. وقد تعالج Cloudflare وGoogle وMicrosoft وResend وخدمات الإشعارات الفورية وMeta البيانات المحدودة المذكورة أعلاه في بلدان أخرى، منها الولايات المتحدة.</p>
+      <p>لا يرسل ParishLife رسائل تسويقية أو إعلانية ولا رسائل نصية قصيرة، ولا يقبل الدفع عبر الإنترنت. يمكنك تفعيل البريد والإشعارات الفورية وواتساب أو إيقافها في أي وقت من «حسابي».</p>
 
       <h2>ملفات تعريف الارتباط والتخزين في متصفّحك</h2>
       <ul>
@@ -199,9 +206,9 @@
       <p>نحمي البيانات باتصالات مشفّرة، وبوصول محصور بحسب الدور والتعيين، وبالدخول بخطوتين لموظفي الرعايا والكهنة ومشغّلي المنصّة، وبحماية إضافية للسجلات الحسّاسة عند التخزين، وبسجلات تدقيق للتغييرات.</p>
 
       <h2>مدّة الحفظ</h2>
-      <p>تُحفظ السجلات إلى أن تطلب أنت أو رعيتك إزالتها (انظر أدناه)؛ ولا يُحذف شيء تلقائياً. ينتهي الدخول بعد ٨ ساعات (و١٥ دقيقة لدخول الاسترداد) أو فور خروجك، وتنتهي رموز البريد الإلكتروني بعد ١٥ دقيقة.</p>
+      <p>تُحفظ سجلات الرعية وسجل التدقيق إلى أن تطلب أنت أو رعيتك إزالتها (انظر أدناه). وتُحذف تلقائياً الإشعارات التي قرأتها بعد سنة، والإحصاءات المجهولة للموقع بعد سنتين. ينتهي الدخول بعد ٨ ساعات (و١٥ دقيقة لدخول الاسترداد) أو فور خروجك، وتنتهي رموز البريد الإلكتروني بعد ١٥ دقيقة.</p>
       <p>عند إغلاق حسابك، تُحذف فوراً بيانات دخولك وطرقه وجلساتك وملفك الشخصي وتوقيعك وملاحظاتك الخاصة. ويحتفظ ParishLife بإشارة إلى أن الحساب كان موجوداً وأُغلق (رقمه ووقت إغلاقه، من دون اسمك أو بريدك أو كلمة مرورك) وبسجلات الأمان والتدقيق الخاصة به، لتبقى سجلات الرعية مفهومة. أمّا السجلات التي تحفظها رعية عنك فتبقى لدى تلك الرعية.</p>
-      <p>النسخ الاحتياطية: يمكن استعادة قاعدة البيانات إلى أي لحظة في آخر ٧ أيام، ويمكن استرجاع الملفات المحذوفة خلال ٣٠ يوماً، لذا قد تبقى البيانات المحذوفة في النسخ الاحتياطية حتى ذلك الحين. تُحذف السجلات التقنية تلقائياً بعد ٩٠ يوماً.</p>
+      <p>النسخ الاحتياطية: يمكن استعادة قاعدة البيانات إلى أي لحظة في آخر ٣٠ يوماً، ويمكن استرجاع الملفات المحذوفة خلال ٣٠ يوماً، لذا قد تبقى البيانات المحذوفة في النسخ الاحتياطية حتى ذلك الحين. تُحذف السجلات التقنية تلقائياً بعد ٩٠ يوماً.</p>
 
       <h2>حقوقك وخياراتك</h2>
       <ul>

@@ -1,8 +1,9 @@
 // Purpose: runs parish broadcasts and templates (N05, proposed S26.09–S26.15/P26). Communications staff draft; a different staff member approves the
 // exact version; sending resolves the audience at that moment (active linked parishioners or current ministry members with active verified
 // accounts, minus optional-topic opt-outs) and stores one in-app copy for exactly those recipients. An approved broadcast may instead be scheduled
-// for a UTC time; BroadcastScheduleProcessor stores it then, after checking the scheduler's access again. External channels have no provider,
-// so they are reported NotConfigured and never as sent.
+// for a UTC time; BroadcastScheduleProcessor stores it then, after checking the scheduler's access again. Sending also queues the outside
+// delivery (email, WhatsApp, push) in the same commit when a channel is configured; a configured channel reports Queued (handed to the
+// delivery worker, never "sent"), an unconfigured one NotConfigured.
 // Main functions: SaveTemplateAsync, TemplateActionAsync, TemplatesAsync, SaveAsync, ActionAsync (approve, schedule, unschedule, send, cancel),
 // ListAsync, PreviewAsync and MineAsync; helpers StaffAsync, CopyTemplate, ClearSchedule and Project.
 
@@ -18,14 +19,13 @@ using ParishLife.Api.Services.Ministries;
 namespace ParishLife.Api.Services.Communications;
 
 public class BroadcastService(IRecordTransactions records, IParishAccess access, BroadcastAudience audience, MinistryAccess own, ICurrentActor actor,
-    MfaAccountAccess proof, TimeProvider clock)
+    MfaAccountAccess proof, TimeProvider clock, DeliveryQueue delivery)
 {
     internal const string Topic = "parish.broadcast";
     // A technical bound for one stored broadcast document, not an agreed audience limit.
     internal const int MaximumRecipients = 2000;
     // A technical bound on how far ahead a broadcast may be scheduled, not an agreed parish policy.
     internal static readonly TimeSpan ScheduleHorizon = TimeSpan.FromDays(366);
-    private static readonly string[] ExternalChannels = ["Email", "Sms", "Push"];
     private static RecordChange Fence(Versioned<Parish> root) => RecordChange.Replace("parish", "parish", root.Value, root.Version);
     private static DomainException Missing() => new("resource_not_found", "The requested item is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_broadcast_state", message, FailureKind.Conflict);
@@ -201,6 +201,8 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         if (wasScheduled && await records.ReadAsync<BroadcastWork>(RecordScopes.Parish(parish), WorkKey(id), ct) is { } work)
             changes.Add(RecordChange.Remove(WorkKey(id), work.Version));
         changes.Add(RecordChange.Replace("broadcast:" + id, "broadcast", item, Versions.Require(request.Version)));
+        if (request.Action == "send" && delivery.BroadcastWork(item) is { } queued)
+            changes.Add(queued);
         await records.CommitAsync(RecordScopes.Parish(parish), op, "communications.broadcast_" + request.Action, id, changes,
             new CommandResult { Id = id, Status = item.Status }, ct, item.CancelReason);
         return Project(item);
@@ -253,14 +255,16 @@ public class BroadcastService(IRecordTransactions records, IParishAccess access,
         UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt, ApprovedBy = x.ApprovedBy, ApprovedAt = x.ApprovedAt
     };
 
-    internal static BroadcastDto Project(Broadcast x) => new()
+    internal BroadcastDto Project(Broadcast x) => new()
     {
         Id = x.Id, Audience = x.Audience, MinistryId = x.MinistryId, Title = x.Title, Body = x.Body, Language = x.Language, TitleAr = x.TitleAr, BodyAr = x.BodyAr,
         TemplateId = x.TemplateId, AutomationId = x.AutomationId, Status = x.Status, UpdatedBy = x.UpdatedBy, ApprovedBy = x.ApprovedBy, ApprovedAt = x.ApprovedAt,
         ScheduledFor = x.ScheduledFor, ScheduledBy = x.ScheduledBy, ScheduleNote = x.ScheduleNote, SentBy = x.SentBy, SentAt = x.SentAt,
         CancelReason = x.CancelReason, RecipientCount = x.RecipientAccountIds.Count, SkippedByPreferenceCount = x.SkippedByPreference,
-        // "Stored" is the S26.10 in-app meaning: saved for the intended recipient, not read. No external provider exists, so nothing claims sent.
+        // "Stored" is the S26.10 in-app meaning: saved for the intended recipient, not read. An outside channel is at most "Queued": handed to the
+        // delivery worker, which follows each person's choices; nothing here claims it was sent or received.
         Channels = [new BroadcastChannelDto { Channel = "InApp", Status = x.Status == "Sent" ? "Stored" : "NotSent" },
-            .. ExternalChannels.Select(c => new BroadcastChannelDto { Channel = c, Status = "NotConfigured" })]
+            .. DeliveryQueue.ChannelNames.Select(c => new BroadcastChannelDto
+            { Channel = c, Status = !delivery.Configured(c) ? "NotConfigured" : x.Status == "Sent" ? "Queued" : "NotSent" })]
     };
 }

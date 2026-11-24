@@ -419,7 +419,7 @@ const toRecurring = r => ({
 const toReceipt = r => ({
   id: r.id,
   version: r.version,
-  no: r.number,
+  no: r.displayNumber || r.number,
   contribution: r.contributionId,
   p: r.personId || null,
   hh: r.householdId || null,

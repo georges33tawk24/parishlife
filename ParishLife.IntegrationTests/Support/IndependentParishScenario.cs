@@ -1,4 +1,4 @@
-// Purpose: prepares an isolated independent parish (controlled by the fixture's Other account) plus a verified archdiocese registered by the
+// Purpose: prepares an isolated independent parish (registered by the first operator, who then hands control to the fixture's Other account) plus a verified archdiocese registered by the
 // first operator, and drives real plan/invoice/cash/activation services for payer-transfer and ownership-recovery tests.
 // Main functions: CreateAsync, PlanAsync, InvoiceAsync, PayAsync and ActivateAsync.
 
@@ -24,14 +24,19 @@ internal class IndependentParishScenario(LocalBackendFixture fixture, string par
     public static async Task<IndependentParishScenario> CreateAsync(LocalBackendFixture f)
     {
         var archdiocese = await f.OrganizationAsync();
-        f.As(f.Other);
+        f.As(f.FirstAdmin);
         var service = f.Services.GetRequiredService<ParishService>();
         var parish = await service.RegisterAsync(new RegisterParishDto { OperationId = Guid.NewGuid(), Name = "Isolated independent parish", Locality = "Fixture locality", Contact = "fixture.example" }, default);
-        f.As(f.FirstAdmin);
         await service.VerifyAsync(parish.Id, new VerifyParishDto
         {
             OperationId = Guid.NewGuid(), Version = (await f.Services.GetRequiredService<IParishRepository>().GetAsync(parish.Id, default))!.Version,
             EvidenceReference = "isolated representative verification"
+        }, default);
+        // A parish without an archdiocese is handed to its controller by an operator (owner decision, 23 November 2026).
+        await f.Services.GetRequiredService<ParishControlService>().HandOverAsync(parish.Id, new HandOverParishControlDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await f.Services.GetRequiredService<IParishRepository>().GetAsync(parish.Id, default))!.Version,
+            Account = "other@fixture.example"
         }, default);
         var plan = await f.Services.GetRequiredService<BillingService>().PublishPlanAsync(new PublishPlanDto
         {

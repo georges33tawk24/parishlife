@@ -1,6 +1,6 @@
 // Purpose: Resolves verified account and current MFA-protected platform authority from stored facts rather than
 // client role claims.
-// Main functions: IsActiveVerifiedAsync, RequireOperatorAsync.
+// Main functions: IsActiveVerifiedAsync, FindIdAsync (by username or email), RequireOperatorAsync.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -15,6 +15,14 @@ internal sealed class AccountDirectory(IUserStore<ParishUser> store) : IAccountD
     {
         var account = await store.FindByIdAsync(accountId, ct);
         return account is { Active: true } && AccountVerification.IsVerified(account);
+    }
+
+    public async Task<string?> FindIdAsync(string usernameOrEmail, CancellationToken ct)
+    {
+        var normalized = usernameOrEmail.Trim().ToUpperInvariant();
+        var account = await store.FindByNameAsync(normalized, ct)
+            ?? (store is IUserEmailStore<ParishUser> emails ? await emails.FindByEmailAsync(normalized, ct) : null);
+        return account?.Id;
     }
 }
 

@@ -157,8 +157,10 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
                 state.Capacities.Add(new CapacityDto { Kind = "Bishop", AppointmentId = bishop.Id, ArchdioceseId = bishop.ArchdioceseId, ScopeName = organization.Name });
         }
 
-        // ponytail: direct parish grants and ministry leadership are discovered only in parishes the account follows or serves (grants and leader
-        // records carry no parish id for a cross-partition lookup); add an account-side index if office holders must find them elsewhere.
+        // Parishes where the account holds office access are found by a cross-partition grant lookup, so a controller or secretary sees the
+        // parish without following it; the grant itself is still checked below. Ministry leadership is discovered in those parishes too.
+        foreach (var id in await parishes.GrantParishIdsAsync(account, ct))
+            await ParishAsync(state, id, ct);
         foreach (var (id, parish) in state.Parishes.ToArray())
         {
             if (parish is not { Status: ParishStatus.Verified })

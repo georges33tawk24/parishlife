@@ -27,12 +27,16 @@ public sealed class FrontendHostingTests
             Directory.CreateDirectory(Path.Combine(web, "assets", "app"));
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), $"<!doctype html><html><head><script>{Script}</script><script type=\"module\" src=\"/assets/app/portal-abc.js\"></script></head><body></body></html>");
             await File.WriteAllTextAsync(Path.Combine(web, "assets", "app", "portal-abc.js"), "export {};");
+            await File.WriteAllTextAsync(Path.Combine(web, "public.html"), "<!doctype html><html><body>public-home</body></html>");
             await using var factory = new LocalApiFactory(data).WithWebHostBuilder(builder => builder.UseSetting(WebHostDefaults.WebRootKey, web));
             using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new("https://localhost") });
 
             var page = await client.GetAsync("/");
             Assert.Equal(HttpStatusCode.OK, page.StatusCode);
             Assert.Equal("text/html", page.Content.Headers.ContentType?.MediaType);
+            // The site root is the public home page; the portal stays at /index.html.
+            Assert.Contains("public-home", await page.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+            Assert.Contains("portal-abc.js", await (await client.GetAsync("/index.html")).Content.ReadAsStringAsync(), StringComparison.Ordinal);
             Assert.Equal("no-cache", page.Headers.CacheControl?.ToString());
             var policy = string.Join(";", page.Headers.GetValues("Content-Security-Policy"));
             var hash = "'sha256-" + Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(Script))) + "'";
