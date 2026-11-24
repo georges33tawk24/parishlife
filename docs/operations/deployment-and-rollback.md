@@ -110,6 +110,16 @@ Steps (owner, in your own terminal after `az login`; each one is an Azure change
 7. Deploy identity for staging: repeat setup step 1 to create a **separate, staging-only** identity, with the subject `repo:georges33tawk24/parishlife:environment:staging` and the role on `app-parishlife-staging` only. Never add the staging subject to the production deploy identity: the `staging` environment has no reviewers, so that identity must not be able to touch `app-parishlife`. Create the GitHub environment `staging` (branch `main`, no reviewers) and set **all** of its secrets and variables there, including `AZURE_WEBAPP_NAME=app-parishlife-staging`. Keep `AZURE_WEBAPP_NAME`, `AZURE_CLIENT_ID` and the other deploy names out of the repository-level variables and secrets, so a missing staging value fails the job instead of falling back to production's (audit N6). Then set `STAGING_ENABLED=true`.
 8. Create the two operator accounts in staging with the bootstrap command against staging settings. Never reuse production passwords there.
 
+## Before a deploy: settings the API checks at startup
+
+From `c7ed567` on, the API refuses to start when a settings group is half set, so check the live app settings first (names only: Azure portal → app-parishlife → Environment variables). Each group must be complete or absent:
+- `Turnstile__SiteKey` and `Turnstile__SecretKey`: both or neither.
+- `Email__Provider`, `Email__ResendApiKey` and `Email__From`: all three or none, and the provider is `Resend`.
+- `ExternalSignIn__<provider>__ClientId` with its `ClientSecret` (Microsoft may use `UseManagedIdentityAssertion=true` instead of the secret), or nothing for that provider.
+- Every Key Vault reference among them shows **Resolved** (green tick) in the portal.
+
+The startup error names the setting, never its value; read it in the Log stream if the site does not come back.
+
 ## After every deploy: the smoke test
 
 Run it from a clean checkout of the deployed commit, against the live site (about 35 read-only GET requests; no browser, no sign-in):
