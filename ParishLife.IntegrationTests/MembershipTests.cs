@@ -197,6 +197,12 @@ public class MembershipTests
         Assert.Equal(("Used", true), (accepted.Status, accepted.RoleApplied));
         await access.RequireAsync(x.Parish, Permissions.PeopleWrite, default);
         Assert.Equal(ParishLife.Api.Models.Enums.FailureKind.NotFound, (await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.FinanceRead, default))).Kind);
+
+        // Unlinking the record also removes the office access that invitation gave.
+        f.As(f.FirstAdmin);
+        await invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Wrong person" }, default);
+        f.As(secretary);
+        await Assert.ThrowsAsync<DomainException>(() => access.RequireAsync(x.Parish, Permissions.PeopleWrite, default));
     }
 
     [Fact]

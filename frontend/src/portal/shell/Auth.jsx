@@ -316,6 +316,7 @@ export function Auth({ enter, error = '', onLanguage }) {
     return () => removeEventListener('pageshow', restored);
   }, []);
   /* Ask for an email code. The reply is the same whether or not the address belongs to an account waiting for one. */
+  const fresh = useRef(null); // { email, password } from this sign-up, in memory only, until the code is accepted
   const sendCode = async () => {
     const email = String(new FormData(form.current).get('email') || '').trim();
     if (!email) return setAlert(t('Enter the email address of your account.', 'أدخل البريد الإلكتروني لحسابك.'));
@@ -327,8 +328,8 @@ export function Auth({ enter, error = '', onLanguage }) {
       setVerify({ sent: true });
       setNote(
         t(
-          'If an account with this email is waiting to be verified, a code is on its way. It works for 15 minutes.',
-          'إن كان لهذا البريد حساب ينتظر التحقّق فقد أُرسل إليه رمز. يصلح الرمز ١٥ دقيقة.'
+          'If this email is new, a code is on its way. It works for 15 minutes. Already have an account? Sign in, or reset your password.',
+          'إن كان هذا البريد جديداً فالرمز في الطريق، ويصلح ١٥ دقيقة. لديك حساب من قبل؟ ادخل، أو أعد تعيين كلمة المرور.'
         )
       );
     } catch (err) {
@@ -389,12 +390,14 @@ export function Auth({ enter, error = '', onLanguage }) {
         setBusy({ ...busy, submit: false });
         check.current?.reset();
         if (features.verification) {
-          /* the code is asked for on the next screen, with a fresh bot check: a check token works once */
+          /* the code is asked for on the next screen, with a fresh bot check: a check token works once. The new password stays only
+             in this screen's memory, so the person is signed in once the code is accepted (never stored). */
+          fresh.current = { email: q.email.trim(), password: q.password };
           setVerify({ sent: false });
           setNote(
             t(
-              'Your account is created. Press “Send code” to get a code by email, then enter it here to verify your email.',
-              'تم إنشاء حسابك. اضغط «إرسال الرمز» ليصلك رمز بالبريد، ثم أدخله هنا للتحقّق من بريدك.'
+              'If this email is new, your account is created: press “Send code” to get a code by email, then enter it here. Already have an account with this email? Sign in, or use “Forgot password”.',
+              'إن كان هذا البريد جديداً فقد أُنشئ حسابك: اضغط «إرسال الرمز» ليصلك رمز بالبريد، ثم أدخله هنا. لديك حساب بهذا البريد من قبل؟ ادخل، أو استعمل «نسيت كلمة المرور».'
             )
           );
         } else
@@ -428,6 +431,24 @@ export function Auth({ enter, error = '', onLanguage }) {
       if (verify) {
         await confirmVerificationCode(q.email.trim(), q.code);
         setVerify(null);
+        // Signed straight in after the code, with the password just chosen: an ordinary sign-in (bot check, authenticator step if any).
+        const just = fresh.current;
+        fresh.current = null;
+        if (just && just.email.toLowerCase() === q.email.trim().toLowerCase() && !pending()) {
+          try {
+            const result = await signIn(just.email, just.password, check.current?.token);
+            check.current?.reset();
+            if (result.twoFactor) {
+              setChallenge(result.twoFactor);
+              return setBusy({ ...busy, submit: false });
+            }
+            leave();
+            return await enter();
+          } catch {
+            check.current?.reset();
+            /* not signed in (for example an existing account with another password): the person signs in by hand */
+          }
+        }
         setNote(
           t(
             'Your email is verified. Sign in with your email and password.',

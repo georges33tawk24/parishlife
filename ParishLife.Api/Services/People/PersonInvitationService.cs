@@ -3,7 +3,7 @@
 // to the invitation; accepting it then also grants that access in the same commit, if the issuer still controls the parish (owner
 // decision, 23 November 2026). Passwords are always chosen by the person; a role never includes grant administration or clergy authority.
 // The account that issued an invitation can never accept it (24 November 2026: an issuer's own signed-in browser accepted a link meant for
-// someone else), and the office can undo a wrong link with UnlinkAccountAsync.
+// someone else), and the office can undo a wrong link with UnlinkAccountAsync, which also removes the office access that invitation gave.
 // Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, UnlinkAccountAsync, ListAsync and office-only NotificationOutcomeAsync.
 // Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
@@ -197,6 +197,23 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         };
         if (await records.ReadAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink:" + linked.Id, ct) is { } link && link.Value.PersonId == person)
             changes.Add(RecordChange.Remove("personAccountLink:" + linked.Id, link.Version));
+        // A role that an invitation for this person gave this account goes with the link; other office access the account holds stays.
+        var given = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var used in await records.CollectAsync<PersonInvitation>(RecordScopes.Parish(parish), "personInvitation", ct, 50,
+            new RecordCondition { Path = "personId", Comparison = "eq", Value = person }))
+            if (used.Value is { Status: "Used", RoleApplied: true } u && u.UsedByAccountId == linked.Id)
+            {
+                given.UnionWith(u.RoleAllows);
+                u.RoleApplied = false;
+                changes.Add(RecordChange.Replace("personInvitation:" + u.Id, "personInvitation", u, used.Version));
+            }
+        if (given.Count > 0 && await records.ReadAsync<AccessGrant>(RecordScopes.Parish(parish), "grant:" + linked.Id + ":local", ct) is { Value.Revoked: false } grant)
+        {
+            var remaining = grant.Value.Allows.Where(x => !given.Contains(x)).ToArray();
+            grant.Value.Allows = remaining;
+            grant.Value.Revoked = remaining.Length == 0;
+            changes.Add(RecordChange.Replace("grant:" + linked.Id + ":local", "grant", grant.Value, grant.Version));
+        }
         return await records.CommitAsync(RecordScopes.Parish(parish), op, "person.account_unlinked", person, changes,
             new CommandResult { Id = person, Status = "Unlinked" }, ct, Guard.Text(request.Reason, "Reason", 500));
     }

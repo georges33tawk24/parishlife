@@ -7,6 +7,7 @@ import { t } from '../../../lib/i18n.js';
 import { openDrawer, Panel } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { DrawerForm } from '../../ui/forms.jsx';
+import { PhoneInput } from '../../ui/phone-input.jsx';
 
 export const L = (en, ar) => t(en, ar);
 export const csv = text =>
@@ -17,52 +18,63 @@ export const csv = text =>
 export const startOfDay = date => (date ? `${date}T00:00:00Z` : null);
 export const shortDay = value => (value ? String(value).slice(0, 10) : '—');
 
-/* field: { name, label, type = 'text' | 'date' | 'number' | 'password' | 'textarea' | 'select' | 'check',
+/* field: { name, label, type = 'text' | 'date' | 'number' | 'password' | 'textarea' | 'select' | 'check' | 'phone' (country code + number),
    required = true, options = [[value, label]], value, help, step (for numbers, e.g. 'any' for decimals) } */
 export function Fields({ fields }) {
-  return fields.map(f => (
-    <label key={f.name} className={f.type === 'check' ? 'check' : 'formrow'}>
-      {f.type === 'check' ? (
-        <>
-          <input type="checkbox" name={f.name} defaultChecked={!!f.value} />
-          {f.label}
-        </>
-      ) : (
-        <>
-          <span className="label">{f.label}</span>
-          {f.type === 'select' ? (
-            <Select name={f.name} defaultValue={f.value} required={f.required !== false}>
-              {f.options.map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          ) : f.type === 'textarea' ? (
-            <textarea
-              className="textarea"
-              name={f.name}
-              defaultValue={f.value || ''}
-              required={f.required !== false}
-              maxLength="2000"
-            />
-          ) : (
-            <input
-              className="input"
-              name={f.name}
-              type={f.type || 'text'}
-              step={f.step}
-              defaultValue={f.value || ''}
-              required={f.required !== false}
-              autoComplete={f.type === 'password' ? 'current-password' : 'off'}
-              dir={f.type === 'text' || !f.type ? undefined : 'ltr'}
-            />
-          )}
-          {f.help ? <span className="help">{f.help}</span> : null}
-        </>
-      )}
-    </label>
-  ));
+  return fields.map(f =>
+    f.type === 'phone' ? (
+      <PhoneInput
+        key={f.name}
+        name={f.name}
+        label={f.label}
+        value={f.value}
+        required={f.required !== false}
+        help={f.help}
+      />
+    ) : (
+      <label key={f.name} className={f.type === 'check' ? 'check' : 'formrow'}>
+        {f.type === 'check' ? (
+          <>
+            <input type="checkbox" name={f.name} defaultChecked={!!f.value} />
+            {f.label}
+          </>
+        ) : (
+          <>
+            <span className="label">{f.label}</span>
+            {f.type === 'select' ? (
+              <Select name={f.name} defaultValue={f.value} required={f.required !== false}>
+                {f.options.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            ) : f.type === 'textarea' ? (
+              <textarea
+                className="textarea"
+                name={f.name}
+                defaultValue={f.value || ''}
+                required={f.required !== false}
+                maxLength="2000"
+              />
+            ) : (
+              <input
+                className="input"
+                name={f.name}
+                type={f.type || 'text'}
+                step={f.step}
+                defaultValue={f.value || ''}
+                required={f.required !== false}
+                autoComplete={f.type === 'password' ? 'current-password' : 'off'}
+                dir={f.type === 'text' || !f.type ? undefined : 'ltr'}
+              />
+            )}
+            {f.help ? <span className="help">{f.help}</span> : null}
+          </>
+        )}
+      </label>
+    )
+  );
 }
 
 export function openForm({ title, sub, intro, fields, save, done, label, saved }) {

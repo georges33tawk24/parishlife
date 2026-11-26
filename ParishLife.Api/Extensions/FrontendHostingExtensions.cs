@@ -71,7 +71,8 @@ public static partial class FrontendHostingExtensions
     private static bool IsGenerated(HttpRequest request, bool hasPublicPage)
         => (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
             && (request.Path.Equals("/sitemap.xml", StringComparison.OrdinalIgnoreCase)
-                || hasPublicPage && request.Path.Equals("/public.html", StringComparison.OrdinalIgnoreCase) && request.Query.ContainsKey("parish"));
+                // The directory and every parish page carry their text in the body for readers without JavaScript (T5, 26 November 2026).
+                || hasPublicPage && request.Path.Equals("/public.html", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The pages' policy: scripts only from this origin, Cloudflare Turnstile and the exact inline start-up scripts of the published pages;

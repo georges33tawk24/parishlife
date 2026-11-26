@@ -97,7 +97,10 @@ function Row({ row, L }) {
 }
 
 export function CountingDemo({ L, Use }) {
-  const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // typeof check: the page is also rendered at build time, where there is no browser (scripts/prerender.mjs).
+  const [reduced] = useState(
+    () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
   /* the finished frame is what a reader asking for less motion sees, and it needs no script */
   const [rows, setRows] = useState(() => (reduced ? [{ ...ARRIVING[0], id: 214 }, ...SEATED.slice(0, -1)] : SEATED));
   const [total, setTotal] = useState(() => START_TOTAL + (reduced ? ARRIVING[0].usd : 0));
@@ -209,7 +212,7 @@ export function CountingDemo({ L, Use }) {
             <i></i>
             <i></i>
             <i></i>
-            <span className="mono">parishlife.app / saint-elias</span>
+            <span className="mono">parish-life.org / demo-parish</span>
           </div>
           <div className="shell">
             <div className="shell-rail">

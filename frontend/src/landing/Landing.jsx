@@ -874,7 +874,7 @@ export function Landing({ initialLang }) {
                 </div>
                 <div className="field" style={{ marginTop: 12, maxWidth: 240 }} dir="ltr">
                   <span className="prefix">+961</span>
-                  <span className="value">3 421 887</span>
+                  <span className="value">71 821 056</span>
                 </div>
               </div>
 
@@ -939,12 +939,15 @@ export function Landing({ initialLang }) {
         <section className="section-lg" id="pricing">
           <div className="wrap">
             <h2 className="t-display" style={{ maxWidth: '22ch' }}>
-              {L('Priced in dollars, payable in either currency.', 'تُسعَّر بالدولار، وتُدفع بأيّ من العملتين.')}
+              {L(
+                'One subscription per church, priced in dollars, payable in either currency.',
+                'اشتراك واحد لكل كنيسة، يُسعَّر بالدولار ويُدفع بأيّ من العملتين.'
+              )}
             </h2>
             <p className="lede" style={{ marginTop: 16 }}>
               {L(
-                'Shown in both currencies at the same parish rate the system uses inside. No setup fee, no annual lock-in.',
-                'السعر يظهر بالعملتين على سعر الرعية نفسه المستعمل داخل النظام. لا رسوم إعداد، ولا عقد سنوي.'
+                "Each plan is one church's monthly subscription to the ParishLife software. Shown in both currencies at the same parish rate the system uses inside. No setup fee, no annual lock-in.",
+                'كل باقة هي اشتراك شهري لكنيسة واحدة في برنامج ParishLife. السعر يظهر بالعملتين على سعر الرعية نفسه المستعمل داخل النظام. لا رسوم إعداد، ولا عقد سنوي.'
               )}
             </p>
 
@@ -956,7 +959,7 @@ export function Landing({ initialLang }) {
                     <div className="usd">
                       $19
                       <span className="t-ui dim" style={{ fontWeight: 400 }}>
-                        /mo
+                        {L(' per church / month', ' لكل كنيسة / شهرياً')}
                       </span>
                     </div>
                     <div className="lbp">L.L 1,700,500</div>
@@ -998,7 +1001,7 @@ export function Landing({ initialLang }) {
                     <div className="usd">
                       $49
                       <span className="t-ui dim" style={{ fontWeight: 400 }}>
-                        /mo
+                        {L(' per church / month', ' لكل كنيسة / شهرياً')}
                       </span>
                     </div>
                     <div className="lbp">L.L 4,385,500</div>
@@ -1104,10 +1107,10 @@ export function Landing({ initialLang }) {
               )}
             </p>
             <div className="row" style={{ gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
-              <a className="btn btn-gilt btn-lg" href="mailto:hello@parishlife.app">
+              <a className="btn btn-gilt btn-lg" href="mailto:contact@parish-life.org">
                 {L('Book a walkthrough', 'احجز عرضاً تجريبياً')}
               </a>
-              <a className="btn btn-outline-dark btn-lg" href="https://wa.me/9613421887">
+              <a className="btn btn-outline-dark btn-lg" href="https://wa.me/96171821056">
                 {L('Message us on WhatsApp', 'راسلنا على واتساب')}
               </a>
             </div>
@@ -1154,9 +1157,9 @@ export function Landing({ initialLang }) {
             </div>
             <div>
               <h2>{L('Contact', 'تواصل')}</h2>
-              <a href="mailto:hello@parishlife.app">hello@parishlife.app</a>
-              <a href="https://wa.me/9613421887" dir="ltr">
-                +961 3 421 887
+              <a href="mailto:contact@parish-life.org">contact@parish-life.org</a>
+              <a href="https://wa.me/96171821056" dir="ltr">
+                +961 71 821 056
               </a>
               <span>{L('Beirut, Lebanon', 'بيروت، لبنان')}</span>
             </div>

@@ -25,6 +25,10 @@ param publicUrl string = 'https://parish-life.org'
 param useFreePingTests bool = true
 
 param appInsightsName string = 'insights-parishlife'
+
+@description('Region of the Application Insights component; web tests and log alerts must sit in the same region. Bicep needs it at the start of the deployment, so it is a parameter rather than read from the existing component.')
+param appInsightsLocation string = resourceGroup().location
+
 param webAppName string = 'app-parishlife'
 param planName string = 'plan-parishlife'
 param cosmosAccountName string = 'cosmos-parishlife'
@@ -76,7 +80,7 @@ var availabilityTests = [
 
 resource webTests 'Microsoft.Insights/webtests@2022-06-15' = [for test in availabilityTests: {
   name: test.name
-  location: appInsights.location
+  location: appInsightsLocation
   tags: {
     'hidden-link:${appInsights.id}': 'Resource'
   }
@@ -299,7 +303,7 @@ var logAlerts = [
 
 resource logAlertRules 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = [for alert in logAlerts: {
   name: alert.name
-  location: appInsights.location
+  location: appInsightsLocation
   kind: 'LogAlert'
   properties: {
     displayName: alert.name

@@ -1,11 +1,12 @@
 // Purpose: HTTP endpoints for accounts workflows; delegates work to backend services.
-// Main functions: Csrf, Register, Login (unknown, inactive, locked and unconfirmed accounts take as long as a wrong password), CompleteMfa (each authenticator code signs in once), Me, Logout, Sessions, Revoke, ChangePassword,
+// Main functions: Csrf, Register, Login (unknown, inactive, locked and unconfirmed accounts take as long as a wrong password, and every refusal waits for a 400 ms floor), CompleteMfa (each authenticator code signs in once), Me, Logout, Sessions, Revoke, ChangePassword,
 // AddPassword.
 // AccountDto.From supplies the shared safe profile projection.
 // Rate limits: every sign-in, registration, session and password action uses the strict "authentication" policy. Csrf and Me do not:
 // the portal calls them on every page load, so on a shared connection (a parish office or hall) they would use up the sign-in budget
 // (owner decision, 18 November 2026). They still count toward the general per-address limit.
 
+using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
@@ -45,15 +46,16 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
     [AllowAnonymous, HttpPost("login"), TurnstileProtected, EnableRateLimiting(Authentication)]
     public async Task<IActionResult> Login(LoginDto request, CancellationToken ct)
     {
+        var started = Stopwatch.GetTimestamp();
         var identifier = Guard.Text(request.Username ?? request.Email, "Login identifier", 254);
         if (request.Password is null || request.Password.Length > 200)
-            return Unauthorized();
+            return await RefusedAsync(started, ct);
         var user = identifier.Contains('@') ? await users.FindByEmailAsync(identifier) : await users.FindByNameAsync(identifier);
         if (user is null || !user.Active)
         {
             HashAsIfChecked(request.Password);
             SecurityEvents.Log(HttpContext, "security.sign_in_failed", detail: "unknown_or_inactive");
-            return Unauthorized();
+            return await RefusedAsync(started, ct);
         }
         var result = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
@@ -62,15 +64,27 @@ public sealed class AccountsController(AccountService accounts, UserManager<Pari
             if (result.IsLockedOut || result.IsNotAllowed)
                 HashAsIfChecked(request.Password);
             SecurityEvents.Log(HttpContext, "security.sign_in_failed", user.Id, result.IsLockedOut ? "locked_out" : "password");
-            return Unauthorized();
+            return await RefusedAsync(started, ct);
         }
         if (user.PlatformOperator && !user.TwoFactorEnabled)
-            return Unauthorized();
+            return await RefusedAsync(started, ct);
         if (user.TwoFactorEnabled)
             return Accepted(new { requiresTwoFactor = true, challenge = await sessions.CreateChallengeAsync(user, ct) });
         var session = await sessions.CreateAsync(user, ct);
         await cookies.IssueAsync(user, session);
         return Ok(AccountDto.From(user));
+    }
+
+    // Every refused sign-in answers no sooner than this after the request began. A wrong password also records the failed attempt (a
+    // storage write an unknown address never makes), so without a floor the answer time would still tell which addresses have accounts.
+    private static readonly TimeSpan RefusalFloor = TimeSpan.FromMilliseconds(400);
+
+    private async Task<IActionResult> RefusedAsync(long started, CancellationToken ct)
+    {
+        var left = RefusalFloor - Stopwatch.GetElapsedTime(started);
+        if (left > TimeSpan.Zero)
+            await Task.Delay(left, ct);
+        return Unauthorized();
     }
 
     // The cost of one password check against a fixed dummy hash, so an answer that needs no check (unknown, inactive, locked or
