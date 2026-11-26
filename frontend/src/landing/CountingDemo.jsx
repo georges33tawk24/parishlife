@@ -212,7 +212,7 @@ export function CountingDemo({ L, Use }) {
             <i></i>
             <i></i>
             <i></i>
-            <span className="mono">parishlife.app / saint-elias</span>
+            <span className="mono">parish-life.org / demo-parish</span>
           </div>
           <div className="shell">
             <div className="shell-rail">
