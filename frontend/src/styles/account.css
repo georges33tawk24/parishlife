@@ -62,3 +62,85 @@ html[data-mode=dark] .sig-card,html[data-mode=dark] .sig-pad{filter:none}
 .account-mfa h3,.account-sessions h3,.account-providers h3{margin:0 0 6px;font-size:16px}
 .recovery-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:14px 0;padding:14px 16px;list-style:none;border:1px solid var(--border);border-radius:8px;background:var(--muted)}
 .recovery-codes code{font-size:15px;letter-spacing:.04em}
+
+/* Inbox and Messages (communicate/inbox.jsx), laid out like a mail or chat app: the conversations on the
+   left, the open one on the right as chat bubbles with the reply box under them. On a phone the list and
+   the chat take turns. */
+.mail{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);height:clamp(520px,calc(100dvh - var(--h-topbar,56px) - 170px),1100px);border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface);overflow:hidden}
+.mail-list{display:flex;flex-direction:column;min-height:0;border-inline-end:1px solid var(--border);background:var(--surface)}
+.mail-tools{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--border)}
+.mail-search{position:relative;flex:1;min-width:0}
+.mail-search>svg{position:absolute;inset-inline-start:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none}
+.mail-search .input{width:100%;padding-inline-start:32px}
+.mail-new{flex:none;white-space:nowrap}
+.mail-folders{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.mail-folders button{display:inline-flex;align-items:center;gap:6px;flex:none;min-height:32px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--text-2);font:500 13px/1 var(--sans);cursor:pointer}
+.mail-folders button[aria-pressed=true]{border-color:transparent;background:var(--selection);color:var(--text)}
+.mail-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--primary);color:var(--on-primary);font-size:11px;font-weight:600}
+.mail-parish{padding:10px 12px 0}
+.mail-parish select{width:100%}
+.mail-rows{flex:1;min-height:0;margin:0;padding:6px;list-style:none;overflow-y:auto}
+.mail-row{display:flex;align-items:flex-start;gap:12px;width:100%;padding:12px;border:0;border-radius:var(--r-input);background:transparent;color:var(--text);font:inherit;text-align:start;cursor:pointer}
+.mail-row[aria-current=true]{background:var(--selection)}
+.mail-av{width:40px;height:40px;font-size:14px}
+.mail-row-text{display:grid;gap:2px;flex:1;min-width:0}
+.mail-row-top{display:flex;align-items:baseline;gap:8px}
+.mail-who{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail-row time{flex:none;font-size:12px;color:var(--text-3)}
+.mail-subject,.mail-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail-subject{font-size:14px}
+.mail-meta{font-size:13px;color:var(--text-2)}
+.mail-row.is-unread :is(.mail-who,.mail-subject){font-weight:700}
+.mail-row.is-unread time{color:var(--primary);font-weight:600}
+.mail-dot{flex:none;align-self:center;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+.mail-empty{margin:0;padding:28px 16px;color:var(--text-2);text-align:center}
+.mail-pane{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.mail-read{display:flex;flex-direction:column;height:100%;min-height:0}
+.mail-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.mail-back{display:none}
+.mail-head-text{flex:1;min-width:0}
+.mail-head h2{margin:0;font-size:16px;font-weight:600;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail-head p{margin:0;font-size:13px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail-head-acts{display:flex;flex:none;gap:4px}
+.chat{display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 20px 8px;overflow-y:auto}
+.chat-wait{margin:auto}
+.chat-day{display:flex;justify-content:center;margin:14px 0 4px}
+.chat-day span{padding:4px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font-size:12px}
+.chat-row{display:flex;flex-direction:column;align-items:flex-start;max-width:min(560px,78%);margin-top:10px}
+.chat-row.cont{margin-top:2px}
+.chat-row.mine{align-self:flex-end;align-items:flex-end}
+.bubble{padding:8px 12px 6px;border:1px solid var(--border);border-radius:14px;border-start-start-radius:4px;background:var(--surface);color:var(--text);box-shadow:var(--e1)}
+.mine .bubble{border-color:transparent;border-start-start-radius:14px;border-start-end-radius:4px;background:var(--primary-subtle)}
+.chat-row.cont .bubble{border-start-start-radius:14px;border-start-end-radius:14px}
+.bubble-who{display:block;margin-bottom:2px;color:var(--primary);font-size:12px;font-weight:600}
+.bubble-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:22px}
+.bubble-time{display:block;margin-top:2px;color:var(--text-3);font-size:11px;text-align:end}
+.bubble-wide{max-width:100%}
+.bubble-tools{display:flex;gap:8px;min-height:22px;padding:2px 4px;opacity:0;transition:opacity .12s}
+.chat-row:hover .bubble-tools,.chat-row:focus-within .bubble-tools{opacity:1}
+.bubble-note{margin:2px 4px 0;font-size:12px}
+.link-btn{padding:2px 0;border:0;background:none;color:var(--text-2);font:500 12px var(--sans);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+.composer-input{flex:1;min-width:0;min-height:44px;max-height:220px;padding:11px 16px;border-radius:22px;line-height:20px;resize:none}
+.composer-send{flex:none;width:44px;height:44px;min-height:44px;padding:0;border-radius:50%}
+.composer-error{flex-basis:100%;margin:0}
+.mail-archived{margin:0;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface);text-align:center}
+.mail-compose{flex:1;width:100%;max-width:720px;padding:20px;overflow-y:auto}
+.mail-compose .formrow{display:grid;gap:6px;margin-bottom:16px}
+.mail-compose-acts{display:flex;gap:8px}
+.mail-none{display:grid;flex:1;place-content:center;justify-items:center;gap:10px;padding:24px;color:var(--text-3);text-align:center}
+[dir=rtl] .mail-flip{transform:scaleX(-1)}
+@media(hover:hover) and (pointer:fine){.mail-row:hover:not([aria-current=true]){background:var(--muted)}.link-btn:hover{color:var(--text)}}
+@media(hover:none){.bubble-tools{opacity:1}}
+@media(max-width:860px){
+  .mail{grid-template-columns:1fr;height:calc(100dvh - var(--h-topbar,56px) - 140px);min-height:480px}
+  .mail.is-reading .mail-list,.mail:not(.is-reading) .mail-pane{display:none}
+  /* an open conversation takes the screen under the top bar, as a chat app does */
+  .mail.is-reading{position:fixed;top:var(--h-topbar,56px);bottom:calc(62px + env(safe-area-inset-bottom));inset-inline:0;z-index:30;height:auto;min-height:0;margin:0;border:0;border-radius:0}
+  .mail-list{border-inline-end:0}
+  .mail-back{display:inline-grid;place-items:center}
+  .mail-hide-sm{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .chat{padding:10px 12px 6px}
+  .chat-row{max-width:88%}
+  .composer{padding:10px 12px}
+}
