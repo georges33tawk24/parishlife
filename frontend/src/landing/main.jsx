@@ -1,5 +1,7 @@
-/* The product page's entry: its styles and the page, in the language remembered on this device. */
-import { createRoot } from 'react-dom/client';
+/* The product page's entry: its styles and the page, in the language remembered on this device. The built page already holds the
+   English page text (scripts/prerender.mjs); React attaches to it (hydrateRoot). In Arabic, or with reduced motion (the counting demo
+   then draws a still picture), the first drawing would differ from the prebuilt English one, so React draws the page afresh instead. */
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import '../styles/pages/landing.css';
 import { Landing } from './Landing.jsx';
 
@@ -9,4 +11,11 @@ try {
 } catch {
   /* private mode */
 }
-createRoot(document.getElementById('root')).render(<Landing initialLang={lang} />);
+const root = document.getElementById('root');
+const prebuilt = !!root.querySelector('main, header, section');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (prebuilt && lang === 'en' && !reduced) hydrateRoot(root, <Landing initialLang={lang} />);
+else {
+  root.replaceChildren();
+  createRoot(root).render(<Landing initialLang={lang} />);
+}

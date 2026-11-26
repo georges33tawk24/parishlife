@@ -1,6 +1,6 @@
 # Proposal: page text that works without JavaScript (T5, QA bug 4)
 
-Written 24 November 2026. You approved prerendering "after launch, with the approach proposed first". This is that proposal. Nothing is built yet.
+Written 24 November 2026. **Built 26 November 2026 (owner said go):** landing.html is rendered at build time (`frontend/scripts/prerender.mjs`, hydrated in `src/landing/main.jsx`; Arabic or reduced-motion visitors get a fresh render), and the server writes the directory list or the parish text into `public.html` (`Middleware/PublicPages.cs`, 60-second cache). The no-JavaScript e2e test is now a normal test.
 
 ## The problem
 

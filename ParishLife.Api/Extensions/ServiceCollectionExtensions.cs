@@ -100,6 +100,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ParishService>();
         services.AddScoped<ParishStatusService>();
         services.AddScoped<ParishControlService>();
+        // Short-lived page parts (the public directory text, 60 seconds).
+        services.AddMemoryCache();
         services.AddScoped<ParishLife.Api.Authorization.ChurchAdministrationAuthority>();
         services.AddScoped<OfficeCoverageService>();
         services.AddScoped<BillingService>();

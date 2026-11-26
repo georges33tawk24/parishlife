@@ -2,7 +2,11 @@
 // is unknown or unverified (a verified parish with no published profile yet gets the plain page), and a sitemap generated from the
 // published parishes. The served public.html is rewritten in
 // memory (title, description, Open Graph, canonical link, schema.org JSON-LD); the frontend files are never edited.
-// Main functions: ParishPageAsync (GET /public.html?parish=<id>; drops the directory's static canonical link) and SitemapAsync (GET /sitemap.xml). Every value comes from the published
+// The body also carries the page's text for crawlers, link previews and readers without JavaScript (hardening T5 / QA bug 4, owner "go"
+// 26 November 2026): the directory lists the published parishes as plain links, and a parish page shows its published text. React
+// replaces that block when it starts, so people with JavaScript see the page as before.
+// Main functions: ParishPageAsync (GET /public.html and /public.html?parish=<id>; a parish page drops the directory's static canonical
+// link), DirectoryBlockAsync (cached 60 seconds), ParishBlock and SitemapAsync (GET /sitemap.xml). Every value comes from the published
 // profile and the parish's public directory fields only (the same rules as GET /api/public/parishes/{id}/profile), and is HTML-encoded
 // (JSON-LD is JSON-encoded, which escapes < and >). Anything else falls through to the static files unchanged.
 
@@ -11,6 +15,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Caching.Memory;
 using ParishLife.Api.DTOs.Publishing;
 using ParishLife.Api.Interfaces.Repositories.Common;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
@@ -31,6 +36,12 @@ public static partial class PublicPages
         var response = context.Response;
         response.ContentType = "text/html; charset=utf-8";
         var parish = Guid.TryParse(context.Request.Query["parish"].ToString(), out var id) ? id.ToString("N") : null;
+        if (parish is null && !context.Request.Query.ContainsKey("parish"))
+        {
+            // The directory: its own canonical link stays; the published parishes are listed as plain links.
+            await response.WriteAsync(InsertBody(html, await DirectoryBlockAsync(context)), context.RequestAborted);
+            return;
+        }
         var page = parish is null ? null : await ProfileAsync(context, parish);
         // public.html names the directory as its canonical address; a parish page names its own, or none while nothing is published (QA bug 7).
         html = Canonical().Replace(html, string.Empty);
@@ -57,8 +68,59 @@ public static partial class PublicPages
         html = Meta("property", "og:description").Replace(html, _ => MetaTag("property", "og:description", description), 1);
         var end = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
         html = end < 0 ? html : html.Insert(end, head.ToString());
-        await response.WriteAsync(html, context.RequestAborted);
+        await response.WriteAsync(InsertBody(html, ParishBlock(profile)), context.RequestAborted);
     }
+
+    // The directory's text: a short introduction in both languages and every verified parish with a published profile, as plain links.
+    // Cached for 60 seconds in this app's memory cache, so a burst of visits reads storage once.
+    public static async Task<string> DirectoryBlockAsync(HttpContext context)
+    {
+        var services = context.RequestServices;
+        var cache = services.GetService<IMemoryCache>();
+        if (cache?.TryGetValue(DirectoryCacheKey, out string? cached) == true && cached is not null)
+            return cached;
+        var profiles = await services.GetRequiredService<IParishDirectory>().ByParishAsync<ParishProfile>("parishProfile", context.RequestAborted);
+        var block = new StringBuilder("<main class=\"prerendered\"><h1>ParishLife · Find your parish</h1>")
+            .Append("<p>Find a parish's Mass times, office hours, contact details and published news. Each parish publishes its own page; ")
+            .Append("choose a parish below to read it.</p>")
+            .Append("<p lang=\"ar\" dir=\"rtl\">ابحث عن رعيتك: مواعيد القداديس وساعات المكتب ومعلومات التواصل والأخبار المنشورة. ")
+            .Append("لكل رعية صفحتها الخاصة؛ اختر رعية من القائمة أدناه.</p><ul>");
+        foreach (var parish in (await services.GetRequiredService<IParishDirectory>().AllAsync(context.RequestAborted))
+            .Where(p => p.Status == ParishStatus.Verified).OrderBy(p => p.Name, StringComparer.Ordinal))
+            if (profiles.GetValueOrDefault(parish.Id) is { Published: not null } profile && profile.ParishId == parish.Id)
+                block.Append("<li><a href=\"/public.html?parish=").Append(Encode(parish.Id)).Append("\">").Append(Encode(parish.Name)).Append("</a> · ")
+                    .Append(Encode(parish.Locality)).Append("</li>");
+        block.Append("</ul></main>");
+        cache?.Set(DirectoryCacheKey, block.ToString(), TimeSpan.FromSeconds(60));
+        return block.ToString();
+    }
+
+    private const string DirectoryCacheKey = "public-pages:directory-block";
+
+    // A parish page's published text: name, locality, rite, address, times and visitor notes, each HTML-encoded with line breaks kept.
+    public static string ParishBlock(PublicParishProfileDto profile)
+    {
+        var p = profile.Profile;
+        var block = new StringBuilder("<main class=\"prerendered\"><h1>").Append(Encode(profile.Name)).Append("</h1><p>").Append(Encode(profile.Locality)).Append("</p>");
+        if (!string.IsNullOrWhiteSpace(p.NameAr))
+            block.Append("<p lang=\"ar\" dir=\"rtl\">").Append(Encode(p.NameAr)).Append(string.IsNullOrWhiteSpace(p.LocalityAr) ? "" : " · " + Encode(p.LocalityAr)).Append("</p>");
+        block.Append("<dl>");
+        foreach (var (label, value) in new[]
+                 {
+                     ("Rite", p.Rite), ("Address", p.Address), ("Mass times", p.MassTimes), ("Confession times", p.ConfessionTimes),
+                     ("Office hours", p.OfficeHours), ("Languages", p.Languages), ("What to expect", p.Expect),
+                     ("For a sacrament or certificate", p.SacramentNotes), ("Parking", p.Parking), ("Accessibility", p.Accessibility)
+                 })
+            if (!string.IsNullOrWhiteSpace(value))
+                block.Append("<dt>").Append(label).Append("</dt><dd>").Append(Encode(value).Replace("\n", "<br>", StringComparison.Ordinal)).Append("</dd>");
+        return block.Append("</dl></main>").ToString();
+    }
+
+    // Puts the block inside the page's empty <div id="root">; an evaluator, so a "$" sequence in parish text stays text (audit N1).
+    private static string InsertBody(string html, string block) => RootElement().Replace(html, m => m.Groups[1].Value + block + "</div>", 1);
+
+    [GeneratedRegex("(<div id=\"root\"[^>]*>)</div>", RegexOptions.IgnoreCase)]
+    private static partial Regex RootElement();
 
     // The static public pages plus one entry per verified parish with a published profile, last changed when it was published.
     public static async Task SitemapAsync(HttpContext context)

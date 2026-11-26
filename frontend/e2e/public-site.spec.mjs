@@ -1,7 +1,7 @@
 /* Purpose: the signed-out site as a visitor and a search engine see it, served by the real API host (Agent 09 items 11, 16 and 18).
    Main checks: no cookie banner is needed because the public pages and the sign-in page set only the strictly necessary
    anti-forgery cookie and contact no other site (Turnstile on the sign-in form excepted, as disclosed); every public page has its
-   own title, description and canonical link and unknown addresses answer 404; content without JavaScript (a known failure: the
+   own title, description and canonical link and unknown addresses answer 404; content without JavaScript (fixed 26 November 2026; was a known failure: the
    pages are drawn by React); with the service worker in control, the portal address shows the offline page and the directory
    stays readable when the connection drops. */
 import { expect } from '@playwright/test';
@@ -74,10 +74,8 @@ test('the directory page names its canonical address', async ({ request }) => {
 });
 
 test('public pages show their content without JavaScript', async ({ browser }) => {
-  test.fail(
-    true,
-    'Known failure, from-09-qa.md #4: public.html and landing.html are drawn by React; without JavaScript the body is empty'
-  );
+  // Was a known failure (from-09-qa.md #4) until the pages carried their text: landing.html is rendered at build time, and public.html
+  // gets its directory or parish text from the server (26 November 2026).
   const context = await browser.newContext({ javaScriptEnabled: false, ignoreHTTPSErrors: true });
   const page = await context.newPage();
   for (const path of ['/public.html', '/landing.html']) {

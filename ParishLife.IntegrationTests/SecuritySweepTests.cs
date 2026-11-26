@@ -201,7 +201,7 @@ public class SecuritySweepTests
         await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<!doctype html><html><head><title>Sign in</title></head><body></body></html>");
         await File.WriteAllTextAsync(Path.Combine(web, "public.html"), "<!doctype html><html><head><meta name=\"description\" content=\"Find parishes\">"
             + "<meta property=\"og:title\" content=\"ParishLife\"><meta property=\"og:description\" content=\"Find parishes\"><title>ParishLife · Find your parish</title>"
-            + "<link rel=\"canonical\" href=\"https://parish-life.org/public.html\"></head><body></body></html>");
+            + "<link rel=\"canonical\" href=\"https://parish-life.org/public.html\"></head><body><div id=\"root\" style=\"display:contents\"></div></body></html>");
         await using var factory = new ConfiguredApiFactory(f.DirectoryPath, new() { ["webroot"] = web }, _ => { });
         using var client = factory.Client();
         var page = "/public.html?parish=" + staff.Parish;
@@ -230,6 +230,13 @@ public class SecuritySweepTests
         Assert.Contains("Mass times: Sunday 10:00 $_ $&#39; $&amp;\">", html, StringComparison.Ordinal); // "$" stays text, never a regex substitution
         Assert.Contains("\"@type\":\"Church\"", html, StringComparison.Ordinal);
         Assert.Contains("\"streetAddress\":\"Fixture street\"", html, StringComparison.Ordinal);
+        // The body carries the published text for readers without JavaScript, encoded the same way (T5).
+        Assert.Contains("<dt>Rite</dt><dd>&lt;b&gt;Maronite&lt;/b&gt; &amp; &quot;Syriac&quot;</dd>", html, StringComparison.Ordinal);
+        Assert.Contains("<dt>Mass times</dt><dd>Sunday 10:00 $_ $&#39; $&amp;</dd>", html, StringComparison.Ordinal);
+        // The directory keeps its own canonical link and lists the published parish as a plain link.
+        var directory = await client.GetStringAsync("/public.html");
+        Assert.Contains("href=\"https://parish-life.org/public.html\"", directory, StringComparison.Ordinal);
+        Assert.Contains($"<a href=\"/public.html?parish={staff.Parish}\">Isolated parish</a>", directory, StringComparison.Ordinal);
         var policy = string.Join(" ", published.Headers.GetValues("Content-Security-Policy"));
         Assert.DoesNotContain("fonts.g", policy, StringComparison.OrdinalIgnoreCase); // Google sign-in stays in form-action; Google Fonts are gone
         Assert.Contains("font-src 'self' data:", policy, StringComparison.Ordinal);
