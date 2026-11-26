@@ -1,6 +1,6 @@
 // Purpose: verifies staged, reviewed CSV people imports (P06) through real local services and storage.
 // Main tests: whole-file validation before any write; ambiguous dates need a stated order; repeated source ids and likely duplicates are
-// flagged; all-or-nothing by default, valid-rows-only by choice; a re-import of the same source is recognised.
+// flagged; names with digits and birth dates over 110 years ago are errors; all-or-nothing by default, valid-rows-only by choice; a re-import of the same source is recognised.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Organizations;
@@ -17,7 +17,9 @@ public class PeopleImportTests
 {
     private const string Csv = "GivenName,FamilyName,BirthDate,Contact,SourceId\n" +
         "Élie,Haddad,1980-01-01,a@fixture.example,R1\n" +
-        "\"Marie, Rose\",Khoury,25/12/1975,,R2\n" +
+        "\"Marie Rose\",Khoury,25/12/1975,\"Office, main line\",R2\n" +
+        "Paul2,Digits,1980-01-01,,R6\n" +
+        "Old,Record,1800-01-01,,R7\n" +
         "Tony,Saad,03/04/1990,,R3\n" +
         ",Nameless,,,R4\n" +
         "Existing,Person,1960-06-06,,R5\n";
@@ -42,9 +44,12 @@ public class PeopleImportTests
         await people.CreateAsync(staff.Parish, new CreatePersonDto { OperationId = Guid.NewGuid(), GivenName = "Existing", FamilyName = "Person", BirthDate = new DateOnly(1960, 6, 6) }, default);
 
         var staged = await imports.StageAsync(staff.Parish, Stage(Csv, null), default);
-        Assert.Equal((2, 2, 1), (staged.Counts["Valid"], staged.Counts["Error"], staged.Counts["PossibleDuplicate"]));
+        Assert.Equal((2, 4, 1), (staged.Counts["Valid"], staged.Counts["Error"], staged.Counts["PossibleDuplicate"]));
+        // Names hold letters only and a birth date is at most 110 years ago (owner, 27 November 2026).
+        Assert.Contains("not digits", Assert.Single(staged.Rows.Single(r => r.SourceId == "R6").Problems), StringComparison.Ordinal);
+        Assert.Contains("110 years", Assert.Single(staged.Rows.Single(r => r.SourceId == "R7").Problems), StringComparison.Ordinal);
         Assert.Equal(new DateOnly(1975, 12, 25), staged.Rows.Single(r => r.SourceId == "R2").BirthDate);
-        Assert.Equal("Marie, Rose", staged.Rows.Single(r => r.SourceId == "R2").GivenName);
+        Assert.Equal(("Marie Rose", "Office, main line"), (staged.Rows.Single(r => r.SourceId == "R2").GivenName, staged.Rows.Single(r => r.SourceId == "R2").Contact));
         Assert.Contains("date order", Assert.Single(staged.Rows.Single(r => r.SourceId == "R3").Problems), StringComparison.Ordinal);
         Assert.Single((await people.ListAsync(staff.Parish, 50, null, default)).Items);
         Assert.Equal("invalid_import_state", (await Assert.ThrowsAsync<DomainException>(() => imports.CommitAsync(staff.Parish, staged.Id,

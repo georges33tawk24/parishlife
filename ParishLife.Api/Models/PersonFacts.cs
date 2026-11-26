@@ -1,5 +1,5 @@
 // Purpose: optional office-maintained facts about a person beyond the core record: structured locality, occupation, skills, language and deceased status.
-// Main members: PersonId, ParishId, Country, Region, District, Town, TownAr, AddressDetail, LocalityNotListed, Occupation, Skills, PreferredLanguage,
+// Main members: PersonId, ParishId, Country, Region, District, Town, TownAr, Sector, AddressDetail, LocalityNotListed, Occupation, Skills, PreferredLanguage, Languages,
 // DeceasedOn, DeceasedPrecision, DeceasedEvidence, UpdatedBy and UpdatedAt.
 
 namespace ParishLife.Api.Models;
@@ -21,6 +21,9 @@ public class PersonFacts
     // Arabic spelling of the town as typed; never derived from Town. Older records hold null.
     public string? TownAr { get; set; } = null;
 
+    // The sector or neighbourhood as typed (no verified list of sectors exists). Older records hold null.
+    public string? Sector { get; set; } = null;
+
     public string? AddressDetail { get; set; }
 
     // Submitted text kept as given when the locality is not in a verified list; it stays labelled pending.
@@ -31,6 +34,9 @@ public class PersonFacts
     public string[] Skills { get; set; } = Array.Empty<string>();
 
     public string? PreferredLanguage { get; set; }
+
+    // Every language the person speaks, as lower-case ISO 639 codes. Older records hold an empty list.
+    public string[] Languages { get; set; } = Array.Empty<string>();
 
     // Kept as supplied: yyyy-MM-dd for Exact, yyyy for Year, null for Unknown.
     public string? DeceasedOn { get; set; }

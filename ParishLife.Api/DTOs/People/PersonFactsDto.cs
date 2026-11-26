@@ -1,5 +1,5 @@
 // Purpose: shows a person's optional facts, with the locality status spelled out.
-// Main members: PersonId, locality fields (Town with its Arabic twin TownAr), LocalityStatus, Occupation, Skills, PreferredLanguage, deceased fields, UpdatedBy and UpdatedAt.
+// Main members: PersonId, locality fields (Town with its Arabic twin TownAr, Sector), LocalityStatus, Occupation, Skills, PreferredLanguage, Languages, deceased fields, UpdatedBy and UpdatedAt.
 
 namespace ParishLife.Api.DTOs.People;
 
@@ -17,6 +17,8 @@ public class PersonFactsDto
 
     public string? TownAr { get; set; } = null;
 
+    public string? Sector { get; set; } = null;
+
     public string? AddressDetail { get; set; }
 
     public string? LocalityNotListed { get; set; }
@@ -28,6 +30,8 @@ public class PersonFactsDto
     public string[] Skills { get; set; } = Array.Empty<string>();
 
     public string? PreferredLanguage { get; set; }
+
+    public string[] Languages { get; set; } = Array.Empty<string>();
 
     public bool Deceased { get; set; }
 

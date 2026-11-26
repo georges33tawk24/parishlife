@@ -1,4 +1,4 @@
-// Purpose: represents person output data, including the optional Arabic name twins, rite and register status.
+// Purpose: represents person output data, including the optional Arabic name twins, phone numbers, rite and register status.
 // Main functions: From.
 
 using ParishLife.Api.Models;
@@ -22,6 +22,8 @@ public class PersonDto
     public DateOnly? BirthDate { get; set; }
 
     public string? Contact { get; set; }
+
+    public PersonPhoneDto[] Phones { get; set; } = Array.Empty<PersonPhoneDto>();
 
     public string? Rite { get; set; } = null;
 
@@ -47,6 +49,7 @@ public class PersonDto
         FamilyNameAr = value.FamilyNameAr,
         BirthDate = value.BirthDate,
         Contact = value.Contact,
+        Phones = value.Phones.Select(p => new PersonPhoneDto { Number = p.Number, Kind = p.Kind }).ToArray(),
         Rite = value.Rite,
         RegisterStatus = value.RegisterStatus,
         CreatedBy = value.CreatedBy,
