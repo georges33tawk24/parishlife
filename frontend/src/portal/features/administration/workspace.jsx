@@ -8,7 +8,8 @@
    session). Main member: WorkspacePage. */
 import { useState } from 'react';
 import { PageHead, TabBar, Pill, Empty, openDrawer, toast } from '../../ui/ui.jsx';
-import { S } from '../../model/store.js';
+import { S, bus } from '../../model/store.js';
+import { loadSession } from '../../model/api.js';
 import * as A from '../../model/modules/administration-api.js';
 import { editHomepage } from '../communicate/homepage-editor.jsx';
 import { useLoad } from './use-load.js';
@@ -234,6 +235,9 @@ function Organizations({ data, reload }) {
       },
       done: async () => {
         await reload();
+        // The church switcher shows the new church at once: the account's churches are read again.
+        await loadSession().catch(() => {});
+        bus.renderAll?.();
         if (created?.id) setupDrawer(created, { location, handControl });
       }
     });
