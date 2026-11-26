@@ -4,7 +4,7 @@
    calendar as an .ics file. */
 import { useState } from 'react';
 import { observanceOn } from '../api-data.js';
-import { Glyph } from './icons.jsx';
+import { A3Icon, Select } from './a3.jsx';
 
 const pad = n => String(n).padStart(2, '0');
 
@@ -132,10 +132,22 @@ export function beirutNow() {
   }
 }
 
-/* The month and its agenda. events: [{id, d, t, title, titleAr, kind}]; place: the parish name and
-   town for saved events; link: an event's own page, when it has one; liturgy: the parish's approved
-   observances (api-data.js toLiturgy), which mark the feasts. */
-export function ParishCalendar({ L, lang, events, place = '', link = null, liturgy = null }) {
+/* The kinds of event, gathered into the categories the calendar's dropdown offers, with their colour. */
+export const CATEGORIES = [
+  ['', ['All events', 'كل المناسبات'], []],
+  ['mass', ['Masses', 'القداديس'], ['mass']],
+  ['sacr', ['Sacraments', 'الأسرار'], ['sacr', 'wedding', 'baptism', 'funeral']],
+  ['group', ['Gatherings', 'اللقاءات'], ['group']],
+  ['event', ['Parish events', 'أحداث الرعية'], ['event']]
+];
+export const categoryOf = kind => (CATEGORIES.find(c => c[2].includes(kind)) || CATEGORIES[4])[0];
+
+/* The month (design A3): a grid of days, each showing its first event in its category's colour and how
+   many more; the chosen day's events in a panel beside it; a dropdown narrows the calendar to one kind.
+   events: [{id, d, t, title, titleAr, kind}]; place: the parish name and town for saved events; link: an
+   event's own page, when it has one; liturgy: the parish's approved observances (api-data.js toLiturgy),
+   which mark the feasts; side: anything to show under the day's panel. */
+export function ParishCalendar({ L, lang, events, place = '', link = null, liturgy = null, side = null }) {
   const loc = lang === 'ar' ? 'ar-LB' : 'en-GB',
     digits = new Intl.NumberFormat(loc);
   const all = events
@@ -143,274 +155,185 @@ export function ParishCalendar({ L, lang, events, place = '', link = null, litur
     .map(e => ({
       ...e,
       t: e.t || '',
+      cat: categoryOf(e.kind),
       name: (lang === 'ar' ? e.titleAr || e.title : e.title || e.titleAr) || kindName(L, e.kind)
     }))
     .sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
-  const today = dayKey(new Date());
-  const [state, setState] = useState(() => ({
-    month: (all.find(e => e.d >= today)?.d || today).slice(0, 7),
-    picked: '',
-    q: '',
-    mode: 'month'
-  }));
+  const today = beirutNow().d;
+  const [state, setState] = useState(() => {
+    const first = (all.find(e => e.d >= today)?.d || today).slice(0, 7);
+    return { month: first, picked: first === today.slice(0, 7) ? today : '', cat: '' };
+  });
   const set = change => setState(s => ({ ...s, ...change }));
-  const fold = v =>
-    String(v || '')
-      .normalize('NFKD')
-      .replace(/[̀-ًͯ-ٰٟ]/g, '')
-      .toLocaleLowerCase();
-  const q = fold(state.q.trim()),
-    list = q ? all.filter(e => fold(`${e.title} ${e.titleAr} ${kindName(L, e.kind)}`).includes(q)) : all;
+  const list = state.cat ? all.filter(e => e.cat === state.cat) : all;
   const date = key => new Date(key + 'T12:00:00');
   const time = t =>
     t
-      ? new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit', hour12: false }).format(
+      ? new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit', hour12: true }).format(
           new Date(`2000-01-01T${t}`)
         )
       : L('All day', 'طوال اليوم');
   const page = e => (link && e.id ? new URL(link(e), location.href).href : '');
-  const row = e => (
-    <li key={(e.id || '') + e.d + e.t + e.name} className={`pcal-ev k-${e.kind || 'event'}`}>
-      <time>{time(e.t)}</time>
+  const count = n =>
+    L(
+      `${n} ${n === 1 ? 'event' : 'events'}`,
+      n === 1 ? 'حدث واحد' : n === 2 ? 'حدثان' : `${digits.format(n)} ${n <= 10 ? 'أحداث' : 'حدثاً'}`
+    );
+  const [y, m] = state.month.split('-').map(Number),
+    start = new Date(y, m - 1, 1),
+    lead = (start.getDay() + 6) % 7,
+    length = new Date(y, m, 0).getDate(),
+    cells = Math.ceil((lead + length) / 7) * 7;
+  const byDay = new Map();
+  list.forEach(e => byDay.set(e.d, [...(byDay.get(e.d) || []), e]));
+  const step = n => set({ month: dayKey(new Date(y, m - 1 + n, 1)).slice(0, 7), picked: '' });
+  const picked = state.picked,
+    dayEvents = picked ? byDay.get(picked) || [] : [],
+    dayFeast = picked ? observanceOn(liturgy, picked) : null;
+  const ahead = list.filter(e => e.d.startsWith(state.month) && (state.month !== today.slice(0, 7) || e.d >= today));
+  const row = (e, withDate = false) => (
+    <li key={(e.id || '') + e.d + e.t + e.name} className={'dayev c-' + e.cat}>
+      <span className="tm time">
+        {withDate ? new Intl.DateTimeFormat(loc, { weekday: 'short', day: 'numeric' }).format(date(e.d)) + ' ' : ''}
+        {time(e.t)}
+      </span>
       <div>
         {page(e) ? (
-          <a className="pcal-ev-link" href={page(e)}>
-            <strong dir="auto">{e.name}</strong>
+          <a className="t-link" href={page(e)} dir="auto">
+            {e.name}
           </a>
         ) : (
           <strong dir="auto">{e.name}</strong>
         )}
-        <span>{kindName(L, e.kind)}</span>
+        <a href={icsHref(e, e.name, place, page(e))} download={icsName(e.name)} className="ev-add">
+          {L('Add to my calendar', 'أضف إلى رزنامتي')}
+          <span className="sr-only">: {e.name}</span>
+        </a>
       </div>
-      <a
-        className="pcal-add"
-        href={icsHref(e, e.name, place, page(e))}
-        download={icsName(e.name)}
-        title={L('Add to my calendar', 'أضف إلى رزنامتي')}
-        aria-label={L(`Add ${e.name} to my calendar`, `أضف «${e.name}» إلى رزنامتي`)}
-      >
-        <Glyph name="add" />
-      </a>
     </li>
   );
-  const group = items =>
-    [...new Set(items.map(e => e.d))].map(k => (
-      <section key={k} className="pcal-group">
-        <h4>
-          <span>{new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(date(k))}</span>{' '}
-          {new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long' }).format(date(k))}
-          {k === today ? (
-            <>
-              {' '}
-              <b className="pcal-today-tag">{L('Today', 'اليوم')}</b>
-            </>
-          ) : null}
-        </h4>
-        <ul>{items.filter(e => e.d === k).map(row)}</ul>
-      </section>
-    ));
-
-  let title,
-    month = null,
-    agenda;
-  if (state.mode === 'list') {
-    const ahead = list.filter(e => e.d >= today);
-    title = L('Coming up', 'القادم');
-    agenda = ahead.length ? (
-      group(ahead.slice(0, 40))
-    ) : (
-      <p className="pcal-none">
-        {state.q
-          ? L('No event matches this search.', 'لا حدث يطابق هذا البحث.')
-          : L('Nothing has been published for the coming weeks yet.', 'لم يُنشر شيء للأسابيع المقبلة بعد.')}
-      </p>
-    );
-  } else {
-    const [y, m] = state.month.split('-').map(Number),
-      start = new Date(y, m - 1, 1);
-    title = new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric' }).format(start);
-    const lead = (start.getDay() + 6) % 7,
-      length = new Date(y, m, 0).getDate(),
-      cells = Math.ceil((lead + length) / 7) * 7;
-    const byDay = new Map();
-    list.forEach(e => byDay.set(e.d, [...(byDay.get(e.d) || []), e]));
-    const pick = k => {
-      setState(s => ({
-        ...s,
-        picked: s.picked === k ? '' : k,
-        month: k.startsWith(s.month) ? s.month : k.slice(0, 7)
-      }));
-    };
-    month = (
-      <>
-        <div className="pcal-heads" aria-hidden="true">
-          {Array.from({ length: 7 }, (_, i) => (
-            <span key={i}>{new Intl.DateTimeFormat(loc, { weekday: 'narrow' }).format(new Date(2026, 9, 5 + i))}</span>
-          ))}
+  return (
+    <div className="split cal-split">
+      <div className="main">
+        <div className="head cal-head">
+          <div className="cal-period">
+            <button
+              type="button"
+              className="arrow flip"
+              aria-label={L('Previous month', 'الشهر السابق')}
+              onClick={() => step(-1)}
+            >
+              <A3Icon name="prev" />
+            </button>
+            <h2 className="h3" id="cal-month" aria-live="polite">
+              {new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric' }).format(start)}
+            </h2>
+            <button
+              type="button"
+              className="arrow flip"
+              aria-label={L('Next month', 'الشهر التالي')}
+              onClick={() => step(1)}
+            >
+              <A3Icon name="next" />
+            </button>
+            {state.month !== today.slice(0, 7) || picked !== today ? (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => set({ month: today.slice(0, 7), picked: today })}
+              >
+                {L('Today', 'اليوم')}
+              </button>
+            ) : null}
+          </div>
+          <Select
+            id="cal-cat"
+            className="cal-cat"
+            hideLabel
+            label={L('Kind of event', 'نوع المناسبة')}
+            value={state.cat}
+            options={CATEGORIES.map(([value, words]) => ({ value, label: L(...words) }))}
+            onChange={cat => set({ cat })}
+          />
         </div>
-        <div className="pcal-grid">
+        <div className="cal" role="group" aria-labelledby="cal-month">
+          {Array.from({ length: 7 }, (_, i) => (
+            <span key={'h' + i} className="dow" aria-hidden="true">
+              <span className="dow-long">
+                {new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(new Date(2026, 9, 5 + i))}
+              </span>
+              <span className="dow-narrow">
+                {new Intl.DateTimeFormat(loc, { weekday: 'narrow' }).format(new Date(2026, 9, 5 + i))}
+              </span>
+            </span>
+          ))}
           {Array.from({ length: cells }, (_, i) => {
-            const d = new Date(y, m - 1, 1 - lead + i),
-              k = dayKey(d),
+            const n = i - lead + 1;
+            if (n < 1 || n > length) return <span key={'b' + i} aria-hidden="true"></span>;
+            const k = dayKey(new Date(y, m - 1, n)),
               evs = byDay.get(k) || [],
-              out = d.getMonth() !== m - 1;
-            const feast = observanceOn(liturgy, k);
-            const label = `${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(d)}${feast ? ', ' + L(feast.en, feast.ar) : ''}${evs.length ? ', ' + L(`${evs.length} ${evs.length === 1 ? 'event' : 'events'}`, `${digits.format(evs.length)} ${evs.length === 1 ? 'حدث' : evs.length === 2 ? 'حدثان' : evs.length <= 10 ? 'أحداث' : 'حدثاً'}`) : ''}`;
+              feast = observanceOn(liturgy, k);
+            const label = `${new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(date(k))}${feast ? ', ' + L(feast.en, feast.ar) : ''}${evs.length ? L(', ', '، ') + count(evs.length) : ''}`;
             return (
               <button
                 key={k}
                 type="button"
                 className={
-                  'pcal-day' +
-                  (out ? ' is-out' : '') +
-                  (feast ? ' is-feast' : '') +
-                  (d.getDay() === 0 ? ' is-sunday' : '') +
-                  (k === today ? ' is-today' : '') +
-                  (k === state.picked ? ' is-picked' : '') +
-                  (evs.length ? ' has-events' : '')
+                  'day' + (k === today ? ' today' : '') + (k === picked ? ' sel' : '') + (feast ? ' feast' : '')
                 }
-                data-day={k}
-                aria-pressed={k === state.picked}
+                aria-pressed={k === picked}
                 aria-label={label}
-                onClick={() => pick(k)}
+                onClick={() => set({ picked: k === picked ? '' : k })}
               >
-                <span className="pcal-n">{digits.format(d.getDate())}</span>
-                {feast ? <span className="pcal-feast" aria-hidden="true" title={L(feast.en, feast.ar)}></span> : null}
-                {evs.length ? (
-                  <span className="pcal-dots" aria-hidden="true">
-                    {evs.slice(0, 4).map((e, n) => (
-                      <i key={n} className={`k-${e.kind || 'event'}`}></i>
-                    ))}
-                  </span>
+                <span className="n time">{digits.format(n)}</span>
+                {evs.length ? <span className={'ev-dot c-' + evs[0].cat}>{evs[0].name}</span> : null}
+                {evs.length > 1 ? (
+                  <span className="more-n">{L(`+${evs.length - 1} more`, `+${digits.format(evs.length - 1)}`)}</span>
                 ) : null}
               </button>
             );
           })}
         </div>
-      </>
-    );
-    const inMonth = list.filter(e => e.d.startsWith(state.month));
-    if (state.picked) {
-      const day = list.filter(e => e.d === state.picked),
-        feast = observanceOn(liturgy, state.picked);
-      agenda = (
-        <>
-          {feast ? <p className="pcal-feast-note">{L(feast.en, feast.ar)}</p> : null}
-          {day.length ? (
-            group(day)
+      </div>
+      <aside className="side">
+        <section className="card day-panel" aria-labelledby="day-title" aria-live="polite">
+          {picked ? (
+            <>
+              <h2 id="day-title" className="h3">
+                {picked === today ? L('Today, ', 'اليوم، ') : ''}
+                {new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(date(picked))}
+              </h2>
+              {dayFeast ? <p className="cal-feast">{L(dayFeast.en, dayFeast.ar)}</p> : null}
+              {dayEvents.length ? (
+                <>
+                  <p className="d">{count(dayEvents.length)}</p>
+                  <ul className="day-list">{dayEvents.map(e => row(e))}</ul>
+                </>
+              ) : (
+                <p className="d" style={{ marginTop: 10 }}>
+                  {state.cat
+                    ? L('No events of this kind on this day.', 'لا مناسبات من هذا النوع في هذا اليوم.')
+                    : L('Nothing published for this day.', 'لا شيء منشور لهذا اليوم.')}
+                </p>
+              )}
+            </>
           ) : (
             <>
-              <h4 className="pcal-quiet-head">
-                {new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long' }).format(
-                  date(state.picked)
-                )}
-              </h4>
-              <p className="pcal-none">{L('Nothing published for this day.', 'لا شيء منشور لهذا اليوم.')}</p>
+              <h2 id="day-title" className="h3">
+                {L('Coming up this month', 'القادم هذا الشهر')}
+              </h2>
+              {ahead.length ? (
+                <ul className="day-list">{ahead.slice(0, 8).map(e => row(e, true))}</ul>
+              ) : (
+                <p className="d" style={{ marginTop: 10 }}>
+                  {L('Nothing published for the rest of this month.', 'لا شيء منشور لبقية هذا الشهر.')}
+                </p>
+              )}
             </>
           )}
-        </>
-      );
-    } else {
-      const rest = state.month === today.slice(0, 7) ? inMonth.filter(e => e.d >= today) : inMonth;
-      agenda = rest.length ? (
-        group(rest)
-      ) : (
-        <p className="pcal-none">
-          {state.q
-            ? L('No event matches this search this month.', 'لا حدث يطابق هذا البحث في هذا الشهر.')
-            : L('Nothing published for the rest of this month.', 'لا شيء منشور لبقية هذا الشهر.')}
-        </p>
-      );
-    }
-  }
-  const step = n => {
-    const [y, m] = state.month.split('-').map(Number);
-    set({ month: dayKey(new Date(y, m - 1 + n, 1)).slice(0, 7), picked: '' });
-  };
-  const listMode = state.mode === 'list';
-  return (
-    <div className="pcal" data-pcal data-mode={state.mode}>
-      <div className="pcal-bar">
-        <div className="pcal-period">
-          <button
-            type="button"
-            className="icon-button"
-            data-pcal-step="-1"
-            hidden={listMode}
-            aria-label={L('Previous month', 'الشهر السابق')}
-            onClick={() => step(-1)}
-          >
-            <Glyph name="prev" />
-          </button>
-          <h3 className="pcal-title" data-pcal-title aria-live="polite">
-            {title}
-          </h3>
-          <button
-            type="button"
-            className="icon-button"
-            data-pcal-step="1"
-            hidden={listMode}
-            aria-label={L('Next month', 'الشهر التالي')}
-            onClick={() => step(1)}
-          >
-            <Glyph name="next" />
-          </button>
-          <button
-            type="button"
-            className="text-button"
-            data-pcal-today
-            hidden={listMode}
-            onClick={() => set({ month: today.slice(0, 7), picked: today })}
-          >
-            {L('Today', 'اليوم')}
-          </button>
-        </div>
-        <div className="pcal-tools">
-          <div className="pcal-find">
-            <label className="field-cap" htmlFor="pcal-q">
-              {L('Search events', 'ابحث في الأحداث')}
-            </label>
-            <label className="pcal-search">
-              <Glyph name="search" />
-              <input
-                id="pcal-q"
-                type="search"
-                data-pcal-q
-                autoComplete="off"
-                placeholder={L('For example: Mass', 'مثلاً: قداس')}
-                value={state.q}
-                onChange={e => set({ q: e.target.value })}
-              />
-            </label>
-          </div>
-          <div className="pcal-mode" role="group" aria-label={L('Calendar view', 'عرض الرزنامة')}>
-            <button
-              type="button"
-              data-pcal-mode="month"
-              aria-pressed={state.mode === 'month'}
-              onClick={() => set({ mode: 'month' })}
-            >
-              {L('Month', 'الشهر')}
-            </button>
-            <button
-              type="button"
-              data-pcal-mode="list"
-              aria-pressed={state.mode === 'list'}
-              onClick={() => set({ mode: 'list' })}
-            >
-              {L('Coming up', 'القادم')}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="pcal-body" data-pcal-body>
-        <div className="pcal-month" data-pcal-month>
-          {month}
-        </div>
-        <div className="pcal-agenda" data-pcal-agenda>
-          {agenda}
-        </div>
-      </div>
+        </section>
+        {side}
+      </aside>
     </div>
   );
 }

@@ -29,9 +29,10 @@ frontend/src/
 │   ├── main.jsx         entry
 │   ├── App.jsx          loads the parishes and picks the page from the address
 │   ├── site.jsx         the site context (language, parishes, filters) and text helpers
-│   ├── motion.js        scroll and hero motion (GSAP, Lenis)
 │   ├── pages/           one file per page (Home, ParishPage, RequestPage, EventPage, …)
-│   └── components/      Chrome (header and footer), LebanonMap, Sanctuary, ParishCalendar, icons
+│   └── components/      Chrome (header and footer), a3.jsx (the shared icons, dropdown, title band and
+│                        photograph hero), LebanonMap, ParishCalendar; Sanctuary and icons serve the
+│                        sign-in screen and the product page
 └── portal/              the members portal
     ├── main.jsx         entry
     ├── shell/           the frame around every screen
@@ -89,7 +90,7 @@ Every file starts with a comment that says what it holds.
 | Tables, panels, drawers, modals, toasts | `portal/ui/ui.jsx` |
 | Text in both languages | the screen itself: every string is written `t('English', 'عربي')` |
 | A page of the public site | `public/pages/`; which page an address opens is decided in `public/App.jsx` |
-| Colours, spacing, type | `styles/parishlife.css` (tokens), `styles/app.css` (the portal), `styles/site.css` and `styles/home.css` (the public site) |
+| Colours, spacing, type | `styles/parishlife.css` (tokens), `styles/app.css` (the portal), `styles/a3.css` and `styles/a3-pages.css` (the public site, design A3) |
 
 ## How a portal screen works
 

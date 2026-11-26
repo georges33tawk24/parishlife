@@ -76,14 +76,15 @@ components:
 
 # Design System: ParishLife
 
-Tokens live in `frontend/src/styles/parishlife.css` (portal and product page) and `frontend/src/styles/site.css` (public site). This file says how to use them. The running reference is the portal's own `#/styleguide`, drawn with the same CSS as the product.
+Tokens live in `frontend/src/styles/parishlife.css` (portal and product page) and `frontend/src/styles/a3.css` (public site). This file says how to use them. The running reference is the portal's own `#/styleguide`, drawn with the same CSS as the product.
 
 ## Overview
 
 Two worlds, one product. Choose by who is on the screen, not by which file is open.
 
 - **The office** (portal): forest, sage and warm white, set in Inter. The people using it have a job to finish, often a volunteer on an old monitor in poor light. The interface should disappear into the task: familiar patterns, consistent controls, density where it helps. Its identity lives in a few precise details: Marcellus page titles, the gold mark in the rail, a colour for each person.
-- **The sanctuary** (public site, sign-in, product page): night, lapis and gilt, with Marcellus over Source Sans 3 and the stained-glass window. A visitor is arriving at a place, or deciding whether to trust one. These surfaces may have atmosphere. On the product page the app window keeps the office's colours, so it reads as the real product.
+- **The public site** (design A3, agreed November 2026): a white page, wine headings in a serif, colour only on the small components (cards in rose, gold, sage and sky, one walnut panel), photographs for the hero and the request band, and few animations, for an older audience. Tokens and components are in `styles/a3.css`; each page's parts in `styles/a3-pages.css`; the shared React parts in `public/components/a3.jsx`, including the dropdown the site draws itself (`Select`).
+- **The sanctuary** (sign-in, product page): night, lapis and gilt, with Marcellus over Source Sans 3 and the stained-glass window. A visitor is arriving at a place, or deciding whether to trust one. These surfaces may have atmosphere. On the product page the app window keeps the office's colours, so it reads as the real product.
 
 Parishes choose their own colours (`lib/theme.js`), so components use tokens, never the forest hex values.
 

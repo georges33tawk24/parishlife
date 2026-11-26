@@ -1,56 +1,43 @@
-/* The public site's header and footer: the brand, the sections, the language, the members portal,
-   the menu on phones, and the easier-reading control. */
+/* The public site's header and footer (design A3): one white bar with the brand, the homepage's sections,
+   the text size, the language and Sign in, a menu on narrow screens; a simple dark footer of links.
+   Main exports: Header, Footer, BrandArch. */
 import { useEffect, useState } from 'react';
 import { EasyReading } from '../../reading/EasyReading.jsx';
-import { BrandMark } from './icons.jsx';
+import { A3Icon } from './a3.jsx';
 
 const COPY = {
-  directory: ['Find a parish', 'ابحث عن رعية'],
-  week: ['This week', 'هذا الأسبوع'],
   times: ['Mass times', 'مواعيد القداديس'],
+  week: ['This week', 'هذا الأسبوع'],
+  directory: ['Find a parish', 'ابحث عن رعية'],
   requests: ['Ask your parish', 'اطلب من رعيتك'],
-  aboutNav: ['About ParishLife', 'عن ParishLife'],
-  signIn: ['Members portal', 'بوّابة المؤمنين'],
-  explore: ['Explore', 'استكشف'],
+  signIn: ['Sign in', 'تسجيل الدخول'],
   forParishes: ['For parishes', 'للرعايا'],
-  bundles: ['ParishLife bundles', 'باقات ParishLife'],
   verify: ['Check a signed document', 'التحقّق من وثيقة موقّعة'],
-  footerIntro: ['The parishes of Lebanon, each with its light on.', 'رعايا لبنان، ولكلّ منها نورها.'],
-  footer: ['Information published by participating parishes.', 'معلومات تنشرها الرعايا المشاركة.'],
-  mapCredit: ['Map outline from Natural Earth', 'حدود الخريطة من Natural Earth'],
-  photoCredit: ['Illustrative photographs from Unsplash', 'صور توضيحية من Unsplash'],
-  privacy: ['Privacy policy', 'سياسة الخصوصية'],
-  terms: ['Terms of use', 'شروط الاستخدام'],
-  cookies: ['Cookie policy', 'سياسة ملفات تعريف الارتباط']
+  privacy: ['Privacy', 'الخصوصية'],
+  terms: ['Terms', 'الشروط'],
+  cookies: ['Cookies', 'ملفات تعريف الارتباط'],
+  footer: [
+    'Information published by participating parishes. Illustrative photographs from ',
+    'معلومات تنشرها الرعايا المشاركة. صور توضيحية من '
+  ]
 };
 
 const SECTIONS = [
-  ['directory', 'public.html#directory'],
-  ['week', 'public.html#week'],
   ['times', 'public.html#times'],
+  ['week', 'public.html#week'],
+  ['directory', 'public.html#directory'],
   ['requests', 'public.html#requests']
 ];
 
-/* The header sits clear over a dark hero, and turns solid once the hero is behind it. */
-export function useHeroWatch(heroRef) {
-  useEffect(() => {
-    const hero = heroRef.current;
-    document.body.classList.toggle('over-hero', !!hero);
-    if (!hero || !('IntersectionObserver' in window)) return undefined;
-    const watch = new IntersectionObserver(
-      ([entry]) => document.body.classList.toggle('over-hero', entry.isIntersecting),
-      { rootMargin: '-76px 0px 0px 0px', threshold: 0 }
-    );
-    const scrolled = () => document.body.classList.toggle('is-scrolled', scrollY > 24);
-    watch.observe(hero);
-    scrolled();
-    addEventListener('scroll', scrolled, { passive: true });
-    return () => {
-      watch.disconnect();
-      removeEventListener('scroll', scrolled);
-      document.body.classList.remove('over-hero', 'is-scrolled');
-    };
-  }, []);
+/* The brand: an arch with a lit lamp inside. */
+export function BrandArch() {
+  return (
+    <svg viewBox="0 0 28 34" fill="none" aria-hidden="true" focusable="false">
+      <path d="M4 32V14a10 10 0 0 1 20 0v18" stroke="#7A1F2E" strokeWidth="2" />
+      <path d="M1 32.5h26" stroke="#7A1F2E" strokeWidth="2" />
+      <circle cx="14" cy="20" r="3.4" fill="#C9962E" />
+    </svg>
+  );
 }
 
 function LanguageButton({ L, lang, onToggle, ...props }) {
@@ -71,7 +58,6 @@ export function Header({ L, lang, onToggleLang }) {
   const T = key => L(...COPY[key]);
   const [menu, setMenu] = useState(false);
   useEffect(() => {
-    document.body.classList.toggle('menu-open', menu);
     if (!menu) return undefined;
     const escape = e => {
       if (e.key === 'Escape') {
@@ -80,7 +66,7 @@ export function Header({ L, lang, onToggleLang }) {
       }
     };
     const wide = () => {
-      if (innerWidth > 900) setMenu(false);
+      if (innerWidth > 1140) setMenu(false);
     };
     document.addEventListener('keydown', escape);
     addEventListener('resize', wide, { passive: true });
@@ -91,12 +77,10 @@ export function Header({ L, lang, onToggleLang }) {
   }, [menu]);
   return (
     <header className="site-header">
-      <div className="site-wrap header-inner">
+      <div className="wrap header-inner">
         <a className="brand" href="public.html" aria-label={L('ParishLife home', 'الصفحة الرئيسية لـ ParishLife')}>
-          <span className="brand-mark" aria-hidden="true">
-            <BrandMark />
-          </span>
-          <span className="brand-word">ParishLife</span>
+          <BrandArch />
+          <span translate="no">ParishLife</span>
         </a>
         <nav className="desktop-nav" aria-label={L('Main navigation', 'القائمة الرئيسية')}>
           {SECTIONS.map(([key, href]) => (
@@ -107,8 +91,10 @@ export function Header({ L, lang, onToggleLang }) {
         </nav>
         <div className="header-actions">
           <EasyReading lang={lang} />
-          <LanguageButton id="lang" className="language-button" L={L} lang={lang} onToggle={onToggleLang} />
-          <a className="sign-in" href="index.html">
+          <span className="tool-sep" aria-hidden="true"></span>
+          <LanguageButton id="lang" className="tool" L={L} lang={lang} onToggle={onToggleLang} />
+          <a className="btn btn-red sign-in" href="index.html">
+            <A3Icon name="person" />
             {T('signIn')}
           </a>
           <button
@@ -117,7 +103,7 @@ export function Header({ L, lang, onToggleLang }) {
             type="button"
             aria-expanded={menu}
             aria-controls="mobile-nav"
-            aria-label={L('Toggle navigation', 'فتح أو إغلاق القائمة')}
+            aria-label={L('Menu', 'القائمة')}
             onClick={() => setMenu(!menu)}
           >
             <span></span>
@@ -128,69 +114,50 @@ export function Header({ L, lang, onToggleLang }) {
       <nav
         id="mobile-nav"
         className="mobile-nav"
-        aria-label={L('Mobile navigation', 'قائمة الهاتف')}
+        aria-label={L('Menu', 'القائمة')}
         hidden={!menu}
         onClick={e => {
           if (e.target.closest('a')) setMenu(false);
         }}
       >
-        {[...SECTIONS, ['signIn', 'index.html']].map(([key, href], i) => (
-          <a key={key} href={href} style={{ '--i': i }}>
+        {[...SECTIONS, ['signIn', 'index.html']].map(([key, href]) => (
+          <a key={key} href={href}>
             {T(key)}
           </a>
         ))}
       </nav>
+      <div className="strip" aria-hidden="true"></div>
     </header>
   );
 }
 
 export function Footer({ L, lang, onToggleLang }) {
   const T = key => L(...COPY[key]);
+  const q = lang === 'ar' ? '?lang=ar' : '?lang=en';
   return (
-    <footer className="site-footer">
-      <div className="site-wrap footer-main">
-        <div className="footer-brand">
-          <a className="brand" href="public.html">
-            <span className="brand-mark" aria-hidden="true">
-              <BrandMark />
-            </span>
-            <span className="brand-word">ParishLife</span>
-          </a>
-          <p>{T('footerIntro')}</p>
-        </div>
-        <nav className="footer-links" aria-labelledby="footer-explore">
-          <h2 id="footer-explore">{T('explore')}</h2>
-          {SECTIONS.map(([key, href]) => (
-            <a key={key} href={href}>
-              {T(key)}
-            </a>
-          ))}
-          <a href="public.html?view=verify">{T('verify')}</a>
-        </nav>
-        <nav className="footer-links" aria-labelledby="footer-parishes">
-          <h2 id="footer-parishes">{T('forParishes')}</h2>
-          <a href="index.html">{T('signIn')}</a>
-          <a href="public.html?view=bundles">{T('bundles')}</a>
-          <a href="public.html#about">{T('aboutNav')}</a>
-          <LanguageButton id="footer-lang" className="text-button" L={L} lang={lang} onToggle={onToggleLang} />
-        </nav>
-      </div>
-      <div className="site-wrap footer-bottom">
-        <span>
-          © <span id="year">{new Date().getFullYear()}</span> ParishLife
-        </span>
-        <span>{T('footer')}</span>
-        <a href={lang === 'ar' ? 'privacy.html?lang=ar' : 'privacy.html?lang=en'}>{T('privacy')}</a>
-        <a href={lang === 'ar' ? 'terms.html?lang=ar' : 'terms.html?lang=en'}>{T('terms')}</a>
-        <a href={lang === 'ar' ? 'cookies.html?lang=ar' : 'cookies.html?lang=en'}>{T('cookies')}</a>
-        <span>{T('mapCredit')}</span>
-        <a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer">
-          {T('photoCredit')}
+    <footer className="site-footer dark">
+      <div className="strip" aria-hidden="true"></div>
+      <div className="wrap footer-main">
+        <a className="brand" href="public.html" translate="no">
+          ParishLife
         </a>
+        <nav className="footer-links" aria-label={L('Footer', 'تذييل الصفحة')}>
+          <a href="public.html#directory">{T('directory')}</a>
+          <a href="public.html?view=bundles">{T('forParishes')}</a>
+          <a href="public.html?view=verify">{T('verify')}</a>
+          <a href={'privacy.html' + q}>{T('privacy')}</a>
+          <a href={'terms.html' + q}>{T('terms')}</a>
+          <a href={'cookies.html' + q}>{T('cookies')}</a>
+          <LanguageButton id="footer-lang" L={L} lang={lang} onToggle={onToggleLang} />
+        </nav>
       </div>
-      <div className="footer-mark" aria-hidden="true">
-        ParishLife
-      </div>
+      <p className="wrap footer-note">
+        © {new Date().getFullYear()} ParishLife. {T('footer')}
+        <a href="https://unsplash.com/@adrienolichon" target="_blank" rel="noopener noreferrer">
+          Unsplash
+        </a>
+        .
+      </p>
     </footer>
   );
 }

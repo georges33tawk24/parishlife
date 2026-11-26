@@ -6,9 +6,12 @@
    exchanged, the checklist of what the office needs, the files the guest added (names only: nothing
    downloads through the bearer link) and the office's released letters by title and status. A letter's
    text and code are never shown here: the guest collects it in person or links the request to an account.
+   Design A3: a title band with where the request stands (a pill, the four steps), then the messages beside
+   the documents at equal height, and the letters beside the note to keep the link private.
    Main functions: TrackingPage, GuestDocuments, GuestLetters. */
 import { useEffect, useState } from 'react';
 import { useSite } from '../site.jsx';
+import { A3Icon, Band, Select } from '../components/a3.jsx';
 import {
   parseTracking,
   guestCase,
@@ -74,7 +77,7 @@ const stepOf = d =>
         ? 0
         : 1;
 
-/* The private tracking page: where the request stands, as four steps, and the messages. */
+/* The private tracking page: where the request stands, as four steps, the messages and the documents. */
 export function TrackingPage({ token }) {
   const { L, lang } = useSite();
   const link = parseTracking(token);
@@ -103,16 +106,15 @@ export function TrackingPage({ token }) {
       live = false;
     };
   }, [token, round]);
+  const crumbs = [['ParishLife', 'public.html'], [L('Your request', 'طلبك')]];
   const d = state.data;
   if (!d)
     return (
-      <section className="track site-wrap">
-        <div className="track-card">
-          <span className="track-lamp" aria-hidden="true"></span>
-          <h1>{L('Your request', 'طلبك')}</h1>
-          <p role="status">{state.error ?? L('Loading…', 'جارٍ التحميل…')}</p>
-        </div>
-      </section>
+      <Band L={L} crumbs={crumbs} title={L('Your request', 'طلبك')}>
+        <p className={state.error ? 'notice' : 'lede'} role="status" style={{ marginTop: 18 }}>
+          {state.error ?? L('Loading…', 'جارٍ التحميل…')}
+        </p>
+      </Band>
     );
   const updated = new Date(d.updatedAt),
     [headline, meaning] = STATUS[d.status] || [
@@ -141,82 +143,127 @@ export function TrackingPage({ token }) {
     }
   };
   return (
-    <section className="track site-wrap">
-      <div className="track-card">
-        <span className="track-lamp" aria-hidden="true"></span>
-        <h1>{L('Your request', 'طلبك')}</h1>
-        <p>
-          <bdi dir="ltr">{d.reference}</bdi>
-        </p>
-        <ol className="track-steps">
+    <div className="track-page">
+      <Band
+        L={L}
+        crumbs={crumbs}
+        title={L('Your request', 'طلبك')}
+        lede={
+          <>
+            {L('Reference ', 'المرجع ')}
+            <bdi dir="ltr">{d.reference}</bdi>
+            {Number.isNaN(updated.valueOf())
+              ? ''
+              : L(`. Updated ${stamp(updated)}.`, `. آخر تحديث: ${stamp(updated)}.`)}
+          </>
+        }
+      >
+        <div className={'card status-card ' + (warn ? 't-rose' : 't-gold')}>
+          <span className={'pill ' + (closed ? (d.status === 'Completed' ? 'ok' : 'optl') : warn ? 'need' : 'prog')}>
+            {L(...headline)}
+          </span>
+          <span dir="auto">{d.applicantExplanation || L(...meaning)}</span>
+          {d.confirmedDate ? (
+            <strong className="time">
+              {L('Date confirmed: ', 'الموعد المؤكَّد: ')}
+              {stamp(d.confirmedDate)}
+            </strong>
+          ) : null}
+        </div>
+        <ol className="tracker" aria-label={L('Progress', 'مراحل الطلب')}>
           {TRACK_STEPS.map(([k, en, ar], i) => (
             <li
               key={k}
-              className={i < at ? 'is-done' : i === at ? 'is-current' + (warn ? ' is-warn' : '') : undefined}
+              className={i < at ? 'done' : i === at ? 'now' + (warn ? ' warn' : '') : undefined}
               aria-current={i === at ? 'step' : undefined}
             >
-              <span aria-hidden="true"></span>
               {L(en, ar)}
+              <small>{i < at ? L('Done', 'تمّ') : i === at ? L('Now', 'الآن') : L('Not yet', 'ليس بعد')}</small>
             </li>
           ))}
         </ol>
-        <h2>{L(...headline)}</h2>
-        <p dir="auto">{d.applicantExplanation || L(...meaning)}</p>
-        {d.confirmedDate ? (
-          <p>
-            {L('Date confirmed: ', 'الموعد المؤكَّد: ')}
-            {stamp(d.confirmedDate)}
-          </p>
-        ) : null}
-        {Number.isNaN(updated.valueOf()) ? null : <small>{L('Updated ', 'آخر تحديث: ') + stamp(updated)}</small>}
-        <p className="track-note">
-          {L(
-            'Keep this page’s link private: anyone who has it can see this request.',
-            'احتفظ برابط هذه الصفحة لنفسك: يستطيع كل من يملكه رؤية هذا الطلب.'
-          )}
-        </p>
-      </div>
-      <div className="track-card">
-        <h2>{L('Messages with the parish office', 'الرسائل مع مكتب الرعية')}</h2>
-        {state.messages.length ? (
-          state.messages.map(m => (
-            <blockquote key={m.id} className="letter-body" dir="auto">
-              <small>
-                {m.authorKind === 'Office' ? L('Parish office', 'مكتب الرعية') : L('You', 'أنت')} · {stamp(m.at)}
-              </small>
-              <p>{m.body}</p>
-            </blockquote>
-          ))
-        ) : (
-          <p>{L('No messages yet.', 'لا رسائل بعد.')}</p>
-        )}
-        {closed ? (
-          <p>{L('This request is closed. Contact the parish office.', 'هذا الطلب مغلق. تواصل مع مكتب الرعية.')}</p>
-        ) : (
-          <form onSubmit={send}>
-            <label className="rq-field">
-              <span>{L('Write to the office', 'اكتب إلى المكتب')}</span>
-              <textarea required maxLength="4000" rows="4" value={text} onChange={e => setText(e.target.value)} />
-            </label>
-            <p className="rq-error" role="alert">
-              {problem}
+      </Band>
+      <section className="wrap track-body">
+        <div className="duo">
+          <section className="card stack" aria-labelledby="tr-msg">
+            <h2 id="tr-msg" className="h3">
+              {L('Messages with the parish office', 'الرسائل مع مكتب الرعية')}
+            </h2>
+            {state.messages.length ? (
+              <ol className="thread">
+                {state.messages.map(m => (
+                  <li key={m.id} className={'msg' + (m.authorKind === 'Office' ? '' : ' me')}>
+                    <span className="who">
+                      {m.authorKind === 'Office' ? L('Parish office', 'مكتب الرعية') : L('You', 'أنت')}
+                      {L(', ', '، ')}
+                      {stamp(m.at)}
+                    </span>
+                    <p dir="auto">{m.body}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="d" style={{ margin: '12px 0 18px' }}>
+                {L('No messages yet.', 'لا رسائل بعد.')}
+              </p>
+            )}
+            {closed ? (
+              <p className="d" style={{ marginTop: 'auto' }}>
+                {L('This request is closed. Contact the parish office.', 'هذا الطلب مغلق. تواصل مع مكتب الرعية.')}
+              </p>
+            ) : (
+              <form onSubmit={send} style={{ marginTop: 'auto' }}>
+                <label className="lbl" htmlFor="tr-write">
+                  {L('Write to the office', 'اكتب إلى المكتب')}
+                </label>
+                <textarea
+                  id="tr-write"
+                  className="field"
+                  required
+                  maxLength="4000"
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                />
+                {problem ? (
+                  <p className="notice" role="alert" style={{ marginTop: 12 }}>
+                    {problem}
+                  </p>
+                ) : null}
+                <button
+                  className="btn btn-red"
+                  type="submit"
+                  disabled={sending || !text.trim()}
+                  style={{ marginTop: 14 }}
+                >
+                  <A3Icon name="send" />
+                  {L('Send', 'إرسال')}
+                </button>
+              </form>
+            )}
+          </section>
+          <GuestDocuments
+            link={link}
+            checklist={d.checklist || []}
+            files={state.files}
+            closed={closed}
+            stamp={stamp}
+            done={() => setRound(n => n + 1)}
+          />
+        </div>
+        <div className={state.letters.length ? 'duo' : ''} style={{ marginTop: 20 }}>
+          <GuestLetters letters={state.letters} stamp={stamp} />
+          <div className="card t-sage note">
+            <span className="ic" aria-hidden="true">
+              <A3Icon name="lock" />
+            </span>
+            <p>
+              <strong>{L('Keep this link private.', 'احتفظ بهذا الرابط لنفسك.')}</strong>{' '}
+              {L('Anyone who has it can see this request.', 'يستطيع كل من يملكه رؤية هذا الطلب.')}
             </p>
-            <button className="btn btn-gilt" type="submit" disabled={sending || !text.trim()}>
-              {L('Send', 'إرسال')}
-            </button>
-          </form>
-        )}
-      </div>
-      <GuestDocuments
-        link={link}
-        checklist={d.checklist || []}
-        files={state.files}
-        closed={closed}
-        stamp={stamp}
-        done={() => setRound(n => n + 1)}
-      />
-      <GuestLetters letters={state.letters} stamp={stamp} />
-    </section>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -243,70 +290,69 @@ function GuestDocuments({ link, checklist, files, closed, stamp, done }) {
       setBusy(false);
     }
   };
-  if (!checklist.length && !files.length && closed) return null;
-  const state = c =>
-    c.status === 'Received'
-      ? L('received', 'مستلم')
-      : c.status === 'NotApplicable'
-        ? L('not needed', 'غير مطلوب')
-        : c.required
-          ? L('still needed', 'ما زال مطلوباً')
-          : L('optional', 'اختياري');
+  const pill = c =>
+    c.status === 'Received' ? (
+      <span className="pill ok">
+        <A3Icon name="check" />
+        {L('received', 'مستلم')}
+      </span>
+    ) : c.status === 'NotApplicable' ? (
+      <span className="pill optl">{L('not needed', 'غير مطلوب')}</span>
+    ) : c.required ? (
+      <span className="pill need">{L('still needed', 'ما زال مطلوباً')}</span>
+    ) : (
+      <span className="pill optl">{L('optional', 'اختياري')}</span>
+    );
   const fileState = f =>
-    f.status === 'Active' ? '' : ' · ' + (f.status === 'Replaced' ? L('replaced', 'استُبدل') : L('removed', 'أُزيل'));
+    f.status === 'Active'
+      ? ''
+      : L(', ', '، ') + (f.status === 'Replaced' ? L('replaced', 'استُبدل') : L('removed', 'أُزيل'));
   return (
-    <div className="track-card" data-guest-documents="">
-      <h2>{L('Documents', 'المستندات')}</h2>
+    <section className="card stack" aria-labelledby="tr-docs" data-guest-documents="">
+      <h2 id="tr-docs" className="h3">
+        {L('Documents', 'المستندات')}
+      </h2>
       {checklist.length ? (
-        <ul>
+        <ul className="docs">
           {checklist.map(c => (
             <li key={c.key}>
-              <bdi>{c.label}</bdi> · {state(c)}
+              <bdi>{c.label}</bdi>
+              {pill(c)}
             </li>
           ))}
         </ul>
       ) : (
-        <p>{L('The office has not listed any documents.', 'لم يحدّد المكتب أي مستندات.')}</p>
+        <p className="d" style={{ margin: '12px 0 0' }}>
+          {L('The office has not listed any documents.', 'لم يحدّد المكتب أي مستندات.')}
+        </p>
       )}
-      {files.length ? (
-        <>
-          <h3>{L('Files you sent', 'الملفات التي أرسلتها')}</h3>
-          <ul>
-            {files.map(f => (
-              <li key={f.id}>
-                <bdi>{f.fileName}</bdi> · {stamp(f.uploadedAt)}
-                {f.checklistKey ? (
-                  <>
-                    {' '}
-                    · <bdi>{label(f.checklistKey)}</bdi>
-                  </>
-                ) : null}
-                {fileState(f)}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
       {closed ? null : (
         <>
+          <h3 className="t" style={{ margin: '22px 0 6px' }}>
+            {L('Send a file to the office', 'أرسل ملفاً إلى المكتب')}
+          </h3>
+          <p className="hint">
+            {L(
+              'PDF, JPG or PNG up to 10 MB. Only the parish office can open what you send; this page lists the names.',
+              'PDF أو JPG أو PNG حتى ١٠ ميغابايت. لا يفتح ما ترسله إلا مكتب الرعية؛ تعرض هذه الصفحة الأسماء فقط.'
+            )}
+          </p>
           {checklist.length ? (
-            <label className="rq-field">
-              <span>{L('This file is for', 'هذا الملف لـ')}</span>
-              <select value={item} onChange={e => setItem(e.target.value)}>
-                <option value="">{L('No particular item', 'لا بند محدّد')}</option>
-                {checklist.map(c => (
-                  <option key={c.key} value={c.key}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Select
+              id="tr-item"
+              label={L('This file is for', 'هذا الملف لـ')}
+              value={item}
+              options={[
+                { value: '', label: L('No particular item', 'لا بند محدّد') },
+                ...checklist.map(c => ({ value: c.key, label: c.label }))
+              ]}
+              onChange={setItem}
+            />
           ) : null}
-          <label className="btn btn-gilt">
-            {busy ? L('Sending…', 'جارٍ الإرسال…') : L('Send a file to the office', 'أرسل ملفاً إلى المكتب')}
+          <label className="filepick">
             <input
               type="file"
-              hidden
+              className="sr-only"
               disabled={busy}
               accept=".pdf,.png,.jpg,.jpeg"
               onChange={e => {
@@ -315,19 +361,47 @@ function GuestDocuments({ link, checklist, files, closed, stamp, done }) {
                 take(file);
               }}
             />
+            <span className="btn btn-soft">
+              <A3Icon name="upload" />
+              {busy ? L('Sending…', 'جارٍ الإرسال…') : L('Choose a file', 'اختر ملفاً')}
+            </span>
           </label>
-          <p className="rq-error" role="alert">
-            {problem}
-          </p>
-          <small>
-            {L(
-              'PDF, JPG or PNG up to 10 MB. Only the parish office can open what you send; this page lists the names.',
-              'PDF أو JPG أو PNG حتى ١٠ ميغابايت. لا يفتح ما ترسله إلا مكتب الرعية؛ تعرض هذه الصفحة الأسماء فقط.'
-            )}
-          </small>
+          {problem ? (
+            <p className="notice" role="alert" style={{ marginTop: 12 }}>
+              {problem}
+            </p>
+          ) : null}
         </>
       )}
-    </div>
+      {files.length ? (
+        <>
+          <h3 className="t" style={{ margin: '22px 0 6px' }}>
+            {L('Files you sent', 'الملفات التي أرسلتها')}
+          </h3>
+          <ul className="files">
+            {files.map(f => (
+              <li key={f.id}>
+                <A3Icon name="file" />
+                <span>
+                  <bdi>{f.fileName}</bdi>
+                  <span className="d">
+                    {' '}
+                    {stamp(f.uploadedAt)}
+                    {f.checklistKey ? (
+                      <>
+                        {L(', ', '، ')}
+                        <bdi>{label(f.checklistKey)}</bdi>
+                      </>
+                    ) : null}
+                    {fileState(f)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -336,26 +410,41 @@ function GuestLetters({ letters, stamp }) {
   const { L } = useSite();
   if (!letters.length) return null;
   return (
-    <div className="track-card" data-guest-letters="">
-      <h2>{L('Letters from the parish', 'رسائل من الرعية')}</h2>
-      <ul>
+    <section className="card t-gold letters" aria-labelledby="tr-letters" data-guest-letters="">
+      <h2 id="tr-letters" className="h3">
+        {L('Letters from the parish', 'رسائل من الرعية')}
+      </h2>
+      <ul className="docs">
         {letters.map(l => (
           <li key={l.reference + '.' + l.version}>
-            <bdi>{l.title}</bdi> · <bdi dir="ltr">{l.reference}</bdi> ·{' '}
-            {l.status === 'Withdrawn' ? L('withdrawn', 'مسحوبة') : L('released', 'صادرة')}
-            {l.releasedAt ? ' · ' + stamp(l.releasedAt) : ''}
-            {l.releaseMethod === 'InPerson' ? ' · ' + L('collect in person', 'تُستلم شخصياً') : ''}
-            <br />
-            <small dir="auto">{l.statement}</small>
+            <span>
+              <bdi>{l.title}</bdi>{' '}
+              <bdi dir="ltr" className="d">
+                {l.reference}
+              </bdi>
+              {l.releasedAt ? <span className="d">{' ' + stamp(l.releasedAt)}</span> : null}
+              {l.statement ? (
+                <small className="d" dir="auto" style={{ display: 'block' }}>
+                  {l.statement}
+                </small>
+              ) : null}
+            </span>
+            <span className={'pill ' + (l.status === 'Withdrawn' ? 'optl' : 'ok')}>
+              {l.status === 'Withdrawn'
+                ? L('withdrawn', 'مسحوبة')
+                : l.releaseMethod === 'InPerson'
+                  ? L('collect in person', 'تُستلم شخصياً')
+                  : L('released', 'صادرة')}
+            </span>
           </li>
         ))}
       </ul>
-      <p>
+      <p className="d" style={{ margin: '12px 0 0' }}>
         {L(
           'The letter itself is not shown through this link. Collect it from the parish office, or link this request to an account.',
           'لا تظهر الرسالة نفسها عبر هذا الرابط. استلمها من مكتب الرعية، أو اربط هذا الطلب بحساب.'
         )}
       </p>
-    </div>
+    </section>
   );
 }

@@ -112,6 +112,15 @@ export function makeSite({
     parishName: p => pair(p, 'name', 'ar'),
     townName: p => pair(p, 'town', 'townAr'),
     number: value => new Intl.NumberFormat(lang === 'ar' ? 'ar-LB' : 'en').format(value),
+    /* "17:30" as the visitor reads a clock: 5:30 pm, or ٥:٣٠ م */
+    clock: t =>
+      /^\d{2}:\d{2}$/.test(t || '')
+        ? new Intl.DateTimeFormat(lang === 'ar' ? 'ar-LB' : 'en-GB', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }).format(new Date('2000-01-01T' + t))
+        : '',
     normalize,
     localToday,
     content,

@@ -5,6 +5,7 @@ import { applySiteTheme } from '../lib/theme.js';
 import { trackView } from '../lib/beacon.js';
 import { SiteContext, makeSite } from './site.jsx';
 import { Header, Footer } from './components/Chrome.jsx';
+import { A3Icon } from './components/a3.jsx';
 import { Home } from './pages/Home.jsx';
 import { ParishPage } from './pages/ParishPage.jsx';
 import { RequestPage } from './pages/RequestPage.jsx';
@@ -163,7 +164,7 @@ export function PublicApp({ initialLang }) {
   const token = hash.startsWith('#track=') ? hash.slice(7) : '';
   const verify = params.get('verify') ?? (params.get('view') === 'verify' ? '' : null);
   const retry = (
-    <button className="btn btn-gilt retry-load" type="button" onClick={load}>
+    <button className="btn btn-red retry-load" type="button" onClick={load}>
       {L('Try again', 'حاول مجدّدًا')}
     </button>
   );
@@ -178,8 +179,7 @@ export function PublicApp({ initialLang }) {
     view = 'track';
   } else if (data.loading && !data.directory.length) {
     page = (
-      <div className="site-wrap loading" role="status">
-        <span className="loading-line"></span>
+      <div className="wrap loading" role="status">
         <p>{L('Loading parish information…', 'جارٍ تحميل معلومات الرعايا…')}</p>
       </div>
     );
@@ -221,8 +221,9 @@ export function PublicApp({ initialLang }) {
         actions={
           <>
             {p ? retry : null}
-            <a className={'btn ' + (p ? 'btn-ink-line' : 'btn-gilt')} href="public.html#directory">
-              {L('Find a parish', 'ابحث عن رعية')}
+            <a className={'btn flip ' + (p ? 'btn-soft' : 'btn-red')} href="public.html">
+              <A3Icon name="back" />
+              {L('Return to the home page', 'العودة إلى الصفحة الرئيسية')}
             </a>
           </>
         }
@@ -267,11 +268,11 @@ export function PublicApp({ initialLang }) {
           actions={
             <>
               {d.parish.phone ? (
-                <a className="btn btn-gilt" href={`tel:${String(d.parish.phone).replace(/[^\d+]/g, '')}`}>
+                <a className="btn btn-red" href={`tel:${String(d.parish.phone).replace(/[^\d+]/g, '')}`}>
                   {L('Call the parish office', 'اتصل بمكتب الرعية')}
                 </a>
               ) : null}
-              <a className="btn btn-ink-line" href={`public.html?parish=${encodeURIComponent(p.id)}`}>
+              <a className="btn btn-soft" href={`public.html?parish=${encodeURIComponent(p.id)}`}>
                 {L('Parish page', 'صفحة الرعية')}
               </a>
             </>
@@ -321,7 +322,7 @@ export function PublicApp({ initialLang }) {
       <Header L={L} lang={lang} onToggleLang={toggleLanguage} />
       <main id="app" tabIndex="-1" aria-busy={!ready}>
         {!online && normal ? (
-          <div className="site-wrap load-notice" role="status">
+          <div className="wrap load-notice" role="status">
             {L(
               'You are offline. This is what ParishLife showed on this device last time.',
               'أنت غير متصل بالإنترنت. هذا ما عرضه ParishLife على هذا الجهاز في المرة الأخيرة.'
@@ -329,7 +330,7 @@ export function PublicApp({ initialLang }) {
           </div>
         ) : null}
         {data.failed.length && normal ? (
-          <div className="site-wrap load-notice" role="status">
+          <div className="wrap load-notice" role="status">
             {L('Some parish details could not be loaded. ', 'تعذّر تحميل بعض تفاصيل الرعايا. ')}
             <button className="text-button retry-load" onClick={load}>
               {L('Try again', 'حاول مجدّدًا')}

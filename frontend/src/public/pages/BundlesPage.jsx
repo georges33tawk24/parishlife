@@ -1,8 +1,10 @@
-/* The bundles a parish can choose, from a public presence to the whole office. */
-import { useRef } from 'react';
-import { Sanctuary } from '../components/Sanctuary.jsx';
+/* The bundles a parish can choose, from a public presence to the whole office (design A3): a photograph
+   with the title, the four bundles as coloured cards (one more light for each step up, the complete one in
+   walnut), how a parish joins as four notes with icons, and the candlelit band at the end.
+   Main parts: BundlesPage, Lights. */
 import { PlainPage } from './parish-parts.jsx';
 import { useSite } from '../site.jsx';
+import { A3Icon, PhotoHero } from '../components/a3.jsx';
 
 /* For parishes: the four bundles as arches (one gold light for each step up), how a parish
    joins, and the practical notes, in the words the bundles have always used. */
@@ -37,38 +39,22 @@ const BUNDLES = [
   ]
 ];
 
+/* An arch with one gold light for each step up. */
 const Lights = ({ n }) => (
-  <span className="fp-mark" aria-hidden="true">
-    <svg viewBox="0 0 64 80" fill="none">
-      <path d="M6 78V32a26 26 0 0 1 52 0v46" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M1 78.5h62" stroke="currentColor" strokeWidth="1.5" />
-      {Array.from({ length: n }, (_, i) => (
-        <circle key={i} cx={32 + (i - (n - 1) / 2) * 11} cy={n > 2 && i % 2 ? 50 : 56} r="3.6" fill="#F1C77A" />
-      ))}
-    </svg>
-  </span>
-);
-
-const Check = () => (
-  <svg
-    className="icon"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  <svg className="lights" viewBox="0 0 64 80" fill="none" aria-hidden="true" focusable="false">
+    <path d="M6 78V32a26 26 0 0 1 52 0v46" stroke="currentColor" strokeWidth="2" />
+    <path d="M1 78.5h62" stroke="currentColor" strokeWidth="2" />
+    {Array.from({ length: n }, (_, i) => (
+      <circle key={i} cx={32 + (i - (n - 1) / 2) * 11} cy={n > 2 && i % 2 ? 50 : 56} r="3.6" fill="#C9962E" />
+    ))}
   </svg>
 );
 
 export function BundlesPage() {
-  const { L, lang } = useSite(),
-    hero = useRef(null);
+  const { L, lang } = useSite();
   const notes = [
     [
+      'key',
       L('Ask through the members portal', 'اطلب عبر بوّابة المؤمنين'),
       L(
         'A parish priest or the parish office opens the bundles in the portal and asks for the one that fits.',
@@ -76,6 +62,7 @@ export function BundlesPage() {
       )
     ],
     [
+      'shield',
       L('The parish or the diocese decides', 'الرعية أو الأبرشية تقرّر'),
       L(
         'Parish priests may activate parish-managed bundles; diocese-sponsored changes are requests for diocesan approval.',
@@ -83,6 +70,7 @@ export function BundlesPage() {
       )
     ],
     [
+      'nopay',
       L('No online payment', 'لا دفع إلكتروني'),
       L(
         'Subscriptions are managed manually at present. No online payment or automatic billing is configured.',
@@ -90,6 +78,7 @@ export function BundlesPage() {
       )
     ],
     [
+      'archive',
       L('Records stay readable', 'تبقى السجلات قابلة للقراءة'),
       L(
         'Existing records remain available to read when a module is removed.',
@@ -98,105 +87,103 @@ export function BundlesPage() {
     ]
   ];
   return (
-    <PlainPage className="parish-sub fp" heroRef={hero}>
-      <section className="sub-hero is-sanctuary" data-hero aria-labelledby="sub-title" ref={hero}>
-        <div className="sub-art sub-sanctuary" aria-hidden="true">
-          <Sanctuary />
-        </div>
-        <div className="site-wrap sub-inner">
-          <nav className="ph-crumbs" aria-label={L('Breadcrumb', 'مسار التنقّل')} data-hero-rise>
-            <a href="public.html">ParishLife</a>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">{L('For parishes', 'للرعايا')}</span>
-          </nav>
-          <h1 className="hero-title" id="sub-title">
+    <PlainPage className="fp">
+      <PhotoHero L={L} image="img-light" crumbs={[['ParishLife', 'public.html'], [L('For parishes', 'للرعايا')]]}>
+        <div className="hero-gap" style={{ maxWidth: 700 }}>
+          <h1 id="pg-title" className="h1">
             {L('Choose what your parish needs', 'اختر ما تحتاجه رعيتك')}
           </h1>
-          <p data-hero-rise>
+          <p className="hl">
             {L(
               'Start with a public presence or add tools for your parish office and community. Arrangements can cover one parish or several parishes in a diocese.',
               'ابدأ بحضور عام أو أضف أدوات للمكتب والمجتمع الرعوي. يمكن أن يشمل الترتيب رعية واحدة أو عدة رعايا في أبرشية.'
             )}
           </p>
+          <div className="acts">
+            <a className="btn btn-red" href="index.html#/workspace">
+              {L('Open the members portal', 'ادخل إلى بوّابة المؤمنين')}
+            </a>
+            <a className="btn btn-ghost" href="public.html#directory">
+              {L('See the parishes', 'تصفّح الرعايا')}
+            </a>
+          </div>
         </div>
-      </section>
-      <section className="fp-bundles">
-        <div className="site-wrap">
-          <ol className="fp-grid">
-            {BUNDLES.map(([key, en, ar, items, itemsAr], i) => (
-              <li key={key} data-reveal-item>
-                <article className={'fp-card' + (key === 'complete' ? ' is-complete' : '')} data-tilt>
-                  <Lights n={i + 1} />
-                  <h2>{L(en, ar)}</h2>
-                  <p className="fp-other" lang={lang === 'ar' ? 'en' : 'ar'}>
-                    {lang === 'ar' ? en : ar}
-                  </p>
-                  <ul>
-                    {(lang === 'ar' ? itemsAr : items).map(item => (
-                      <li key={item}>
-                        <Check />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <a
-                    className={'btn ' + (key === 'complete' ? 'btn-gilt' : 'btn-ink-line')}
-                    href="index.html#/workspace"
-                  >
-                    {L('Manage or request this bundle', 'إدارة الباقة أو طلبها')}
-                  </a>
-                </article>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-      <section className="fp-how">
-        <div className="site-wrap">
-          <header className="sec-head" data-reveal>
-            <h2>{L('How a parish joins', 'كيف تنضمّ الرعية')}</h2>
-            <p>
-              {L(
-                'Parish priests and offices join through their diocese. Parishioners sign in to the members portal to follow their parish.',
-                'ينضمّ كهنة الرعايا ومكاتبها عبر أبرشيتهم. ويدخل أبناء الرعية إلى بوّابة المؤمنين لمتابعة رعيتهم.'
-              )}
-            </p>
-          </header>
-          <ol className="fp-steps">
-            {notes.map(([b, t]) => (
-              <li key={b} data-reveal-item>
-                <b>{b}</b>
-                <span>{t}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-      <section className="join fp-join">
-        <div className="join-art" aria-hidden="true">
-          {['sky', 'far', 'near'].map(part => (
-            <img
-              key={part}
-              src={`assets/images/valley/valley-wide-dusk-${part}.webp`}
-              alt=""
-              loading="lazy"
-              decoding="async"
-            />
+      </PhotoHero>
+      <section className="wrap sec" aria-labelledby="fp-b">
+        <h2 id="fp-b" className="h2">
+          {L('Four bundles', 'أربع باقات')}
+        </h2>
+        <p className="lede">{L('Each bundle adds to the one before it.', 'كل باقة تضيف إلى التي قبلها.')}</p>
+        <ol className="g4 tints bundles">
+          {BUNDLES.map(([key, en, ar, items, itemsAr], i) => (
+            <li key={key}>
+              <article className={'card bundle' + (key === 'complete' ? ' top dark' : '')}>
+                <Lights n={i + 1} />
+                <h3 className="h3">{L(en, ar)}</h3>
+                <p className="d" lang={lang === 'ar' ? 'en' : 'ar'}>
+                  {lang === 'ar' ? en : ar}
+                </p>
+                <ul className="ticks">
+                  {(lang === 'ar' ? itemsAr : items).map(item => (
+                    <li key={item}>
+                      <A3Icon name="check" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  className={'btn btn-wide ' + (key === 'complete' ? 'btn-red' : 'btn-soft')}
+                  href="index.html#/workspace"
+                >
+                  {L('Manage or request this bundle', 'إدارة الباقة أو طلبها')}
+                </a>
+              </article>
+            </li>
           ))}
+        </ol>
+      </section>
+      <section className="fp-how" aria-labelledby="fp-how">
+        <div className="strip" aria-hidden="true"></div>
+        <div className="wrap sec">
+          <h2 id="fp-how" className="h2">
+            {L('How a parish joins', 'كيف تنضمّ الرعية')}
+          </h2>
+          <p className="lede">
+            {L(
+              'Parish priests and offices join through their diocese. Parishioners sign in to the members portal to follow their parish.',
+              'ينضمّ كهنة الرعايا ومكاتبها عبر أبرشيتهم. ويدخل أبناء الرعية إلى بوّابة المؤمنين لمتابعة رعيتهم.'
+            )}
+          </p>
+          <div className="g4 tints notes">
+            {notes.map(([icon, b, s]) => (
+              <div key={icon} className="card note-card">
+                <span className="ic" aria-hidden="true">
+                  <A3Icon name={icon} />
+                </span>
+                <h3 className="t">{b}</h3>
+                <p>{s}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="site-wrap join-inner" data-reveal>
-          <h2>{L('Light your parish on the map', 'أضئ رعيتك على الخريطة')}</h2>
-          <p>
+      </section>
+      <section className="votive dark img-votive" aria-labelledby="fp-join">
+        <div className="votive-shade" aria-hidden="true"></div>
+        <div className="wrap votive-inner" style={{ maxWidth: 860 }}>
+          <h2 id="fp-join" className="votive-title">
+            {L('Light your parish on the map', 'أضئ رعيتك على الخريطة')}
+          </h2>
+          <p className="votive-lede">
             {L(
               'Every parish on ParishLife is a gold light on the map of Lebanon, with its own page, calendar and requests.',
               'كل رعية على ParishLife نورٌ ذهبي على خريطة لبنان، ولها صفحتها ورزنامتها وطلباتها.'
             )}
           </p>
-          <div className="join-actions">
-            <a className="btn btn-gilt" href="index.html#/workspace">
+          <div className="acts" style={{ justifyContent: 'center' }}>
+            <a className="btn btn-red" href="index.html#/workspace">
               {L('Open the members portal', 'ادخل إلى بوّابة المؤمنين')}
             </a>
-            <a className="btn btn-line" href="public.html#directory">
+            <a className="btn btn-ghost" href="public.html#directory">
               {L('See the parishes', 'تصفّح الرعايا')}
             </a>
           </div>

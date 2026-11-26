@@ -1,12 +1,7 @@
-/* The public site's styles, in the order the cascade expects. One file per page keeps each page's
-   order intact: the build would otherwise lift the sheets two pages share into a file of their own,
-   loaded first. */
-@import '../public.css';
-@import '../collection-ui.css';
-@import '../public-features.css';
-@import '../site.css';
-@import '../home.css';
-@import '../sanctuary.css';
-@import '../parish.css';
-@import '../church.css';
+/* The public site's styles (design A3), in the order the cascade expects: the text-size control and
+   Simple view (shared with the sign-in screen), then the A3 base and components, then each page.
+   One file per page keeps each page's order intact: the build would otherwise lift the sheets two pages
+   share into a file of their own, loaded first. */
 @import '../reading.css';
+@import '../a3.css';
+@import '../a3-pages.css';

@@ -2,10 +2,14 @@
    belongs to, who authorized it and whether that authorization still stands.
    Route: GET /api/public/document-verifications/{code} (api-data.js verifyDocument). The page reports
    what the API answers (status, statusMeaning, officialStatement) and nothing it does not check: it
-   does not see the document, so it cannot say a signature is valid or that the content matches. */
+   does not see the document, so it cannot say a signature is valid or that the content matches.
+   Design A3: a title band, the code in a card with the check beside it, the answer below as a coloured
+   card, and what the check shows beside them.
+   Main functions: VerifyPage, VerifyResult. */
 import { useEffect, useRef, useState } from 'react';
 import { useSite } from '../site.jsx';
 import { verifyDocument, verdictOf } from '../api-data.js';
+import { A3Icon, Band } from '../components/a3.jsx';
 
 /* Checking a code: which document, who authorized it, and what the issuing parish's records say now. */
 export function VerifyPage({ code = '' }) {
@@ -27,52 +31,85 @@ export function VerifyPage({ code = '' }) {
     if (code) check(code);
   }, []);
   return (
-    <section className="verify site-wrap" data-plain-page>
-      <div className="verify-card">
-        <span className="verify-seal" aria-hidden="true">
-          <svg viewBox="0 0 48 48" fill="none" focusable="false">
-            <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2.4" />
-            <circle cx="24" cy="24" r="14.5" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M24 15v18M18 21h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-        </span>
-        <h1>{L('Check a signed document', 'التحقّق من وثيقة موقّعة')}</h1>
-        <p>
-          {L(
-            'Certificates and letters authorized on ParishLife carry a code. Enter it to see which document it belongs to, who authorized it, and whether that authorization still stands.',
-            'تحمل الشهادات والرسائل المصدَّقة على ParishLife رمزاً. أدخله لترى لأي وثيقة هو، ومن صدّقها، وهل ما زال هذا التصديق قائماً.'
-          )}
-        </p>
-        <form
-          className="verify-form"
-          data-verify-form
-          onSubmit={e => {
-            e.preventDefault();
-            const v = e.currentTarget.elements.code.value;
-            history.replaceState(null, '', 'public.html?verify=' + encodeURIComponent(v.trim()));
-            check(v);
-          }}
-        >
-          <label>
-            <span>{L('Verification code', 'رمز التحقّق')}</span>
-            <input
-              name="code"
-              defaultValue={code}
-              placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX"
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck="false"
-              dir="ltr"
-              required
-            />
-          </label>
-          <button className="btn btn-gilt">{L('Check', 'تحقّق')}</button>
-        </form>
-        <div className="verify-result" data-verify-result aria-live="polite">
-          {result ? <VerifyResult result={result} L={L} lang={lang} /> : null}
+    <div className="verify-page">
+      <Band
+        L={L}
+        crumbs={[['ParishLife', 'public.html'], [L('Check a signed document', 'التحقّق من وثيقة موقّعة')]]}
+        title={L('Check a signed document', 'التحقّق من وثيقة موقّعة')}
+        lede={L(
+          'Certificates and letters authorized on ParishLife carry a code. Enter it to see which document it belongs to, who authorized it, and whether that authorization still stands.',
+          'تحمل الشهادات والرسائل المصدَّقة على ParishLife رمزاً. أدخله لترى لأي وثيقة هو، ومن صدّقها، وهل ما زال هذا التصديق قائماً.'
+        )}
+      />
+      <section className="wrap sec">
+        <div className="split">
+          <div className="main">
+            <form
+              className="card fs verify-form"
+              onSubmit={e => {
+                e.preventDefault();
+                const v = e.currentTarget.elements.code.value;
+                history.replaceState(null, '', 'public.html?verify=' + encodeURIComponent(v.trim()));
+                check(v);
+              }}
+            >
+              <label className="lbl" htmlFor="vf-code">
+                {L('Verification code', 'رمز التحقّق')}
+              </label>
+              <span className="hint" id="vf-code-h">
+                {L(
+                  'It is printed at the bottom of the certificate or letter.',
+                  'تجده مطبوعاً أسفل الشهادة أو الرسالة.'
+                )}
+              </span>
+              <div className="link-row">
+                <input
+                  id="vf-code"
+                  name="code"
+                  className="field code"
+                  aria-describedby="vf-code-h"
+                  defaultValue={code}
+                  placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck="false"
+                  dir="ltr"
+                  required
+                />
+                <button className="btn btn-red">
+                  <A3Icon name="search" />
+                  {L('Check', 'تحقّق')}
+                </button>
+              </div>
+            </form>
+            <div aria-live="polite">{result ? <VerifyResult result={result} L={L} lang={lang} /> : null}</div>
+          </div>
+          <aside className="side">
+            <div className="card t-sky side-card">
+              <h2 className="t">{L('What this check shows', 'ماذا يُظهر هذا التحقّق')}</h2>
+              <p>
+                {L(
+                  'This page reports what the issuing parish’s records say about the code now. It does not show the document or check its contents: the official document is the one the parish issued.',
+                  'تعرض هذه الصفحة ما تقوله سجلّات الرعية المُصدِرة عن الرمز الآن. لا تعرض الوثيقة ولا تفحص مضمونها: الوثيقة الرسمية هي التي أصدرتها الرعية.'
+                )}
+              </p>
+            </div>
+            <div className="card t-rose side-card">
+              <h2 className="t">{L('Need a certificate?', 'تحتاج إلى شهادة؟')}</h2>
+              <p>
+                {L(
+                  'Ask your parish office for a baptism, marriage or other certificate.',
+                  'اطلب من مكتب رعيتك شهادة معمودية أو زواج أو غيرها.'
+                )}
+              </p>
+              <a className="btn btn-soft" href="public.html#directory">
+                {L('Find your parish', 'ابحث عن رعيتك')}
+              </a>
+            </div>
+          </aside>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -93,17 +130,22 @@ const TITLES = {
 };
 
 function VerifyResult({ result, L, lang }) {
-  if (result.checking) return <p role="status">{L('Checking…', 'جارٍ التحقّق…')}</p>;
+  if (result.checking)
+    return (
+      <p className="d" role="status" style={{ marginTop: 20 }}>
+        {L('Checking…', 'جارٍ التحقّق…')}
+      </p>
+    );
   if (result.error)
     return (
-      <div className="verify-state is-critical">
+      <p className="notice" style={{ marginTop: 20 }}>
         {result.unknown
           ? L(
               'No authorized document has this code. Check the code on the document.',
               'لا وثيقة مصدَّقة بهذا الرمز. تحقّق من الرمز على الوثيقة.'
             )
           : result.error}
-      </div>
+      </p>
     );
   const d = result.d,
     { tone, key } = verdictOf(d),
@@ -121,20 +163,19 @@ function VerifyResult({ result, L, lang }) {
     );
   /* statusMeaning and officialStatement are the API's own wording, in English. */
   const english = { lang: 'en', dir: 'ltr' };
+  const sep = L(', ', '، ');
   return (
-    <>
-      <div className={`verify-state is-${tone}`}>
-        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-          <path
-            d={ok ? 'M4.2 10.4 8 14.2l7.8-8' : 'M10 3.2 17.4 16H2.6zM10 8.2v3.4M10 13.6v.9'}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        {title}
+    <section
+      className={'card verify-result ' + (ok ? 't-sage' : tone === 'critical' ? 't-rose' : 't-gold')}
+      aria-labelledby="vf-res"
+    >
+      <div className="verify-head">
+        <span className="seal" aria-hidden="true">
+          <A3Icon name={ok ? 'seal' : 'info'} />
+        </span>
+        <h2 id="vf-res" className="h3">
+          {title}
+        </h2>
       </div>
       {/* with no recorded signature arrangement the official statement says what the code is: the Valid wording would overstate it */}
       {d.statusMeaning && key !== 'ReferenceOnly' ? (
@@ -147,19 +188,19 @@ function VerifyResult({ result, L, lang }) {
           {d.officialStatement}
         </p>
       ) : null}
-      <dl className="verify-facts">
+      <dl className="facts">
         <div>
           <dt>{L('Document', 'الوثيقة')}</dt>
           <dd>
-            {kind}
-            {d.documentDetail ? <> · {d.documentDetail}</> : null}
+            <strong>{kind}</strong>
+            {d.documentDetail ? <>{sep + d.documentDetail}</> : null}
             {d.reference ? (
               <>
-                {' '}
-                · <bdi>{d.reference}</bdi>
+                {sep}
+                <bdi>{d.reference}</bdi>
               </>
             ) : null}
-            {d.documentVersion ? <> · {L(`version ${d.documentVersion}`, `النسخة ${d.documentVersion}`)}</> : null}
+            {d.documentVersion ? <>{sep + L(`version ${d.documentVersion}`, `النسخة ${d.documentVersion}`)}</> : null}
           </dd>
         </div>
         <div>
@@ -181,16 +222,10 @@ function VerifyResult({ result, L, lang }) {
         <div>
           <dt>{L('Code', 'الرمز')}</dt>
           <dd>
-            <bdi className="verify-mono">{d.code}</bdi>
+            <bdi className="code">{d.code}</bdi>
           </dd>
         </div>
       </dl>
-      <p className="verify-how">
-        {L(
-          'This page reports what the issuing parish’s records say about the code now. It does not show the document or check its contents: the official document is the one the parish issued.',
-          'تعرض هذه الصفحة ما تقوله سجلّات الرعية المُصدِرة عن الرمز الآن. لا تعرض الوثيقة ولا تفحص مضمونها: الوثيقة الرسمية هي التي أصدرتها الرعية.'
-        )}
-      </p>
-    </>
+    </section>
   );
 }
