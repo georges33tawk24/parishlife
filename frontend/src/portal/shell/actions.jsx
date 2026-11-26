@@ -720,10 +720,7 @@ export const VERBS = {
     );
   },
   'settings-save': () =>
-    ok(
-      L('Settings saved', 'حُفظت الإعدادات'),
-      L('Every role sees the change immediately.', 'يرى كل دور التغيير فوراً.')
-    ),
+    ok(L('Settings saved', 'حُفظت الإعدادات'), L('Every role sees the change immediately.', 'يرى كل دور التغيير فوراً.')),
   'session-revoke': (b, i) => {
     const [x] = D.SESSIONS.splice(+i, 1);
     if (!x) return;

@@ -224,10 +224,7 @@ export function finance(tab = '') {
               <C.InlineAlert
                 tone="success"
                 title={L('Every bank line is matched or explained', 'كل القيود المصرفية مطابَقة أو مبرَّرة')}
-                body={L(
-                  'Close each month once a second person has reviewed it.',
-                  'أقفل كل شهر بعد أن يراجعه شخص ثانٍ.'
-                )}
+                body={L('Close each month once a second person has reviewed it.', 'أقفل كل شهر بعد أن يراجعه شخص ثانٍ.')}
               />
             )
           ) : null}{' '}

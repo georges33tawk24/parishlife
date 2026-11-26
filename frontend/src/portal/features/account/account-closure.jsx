@@ -13,8 +13,7 @@ import { ProofFields, proofOf, endSession } from './account-security.jsx';
 
 async function download() {
   const response = await fetch('/api/auth/account/data', { credentials: 'same-origin' });
-  if (!response.ok)
-    throw new Error(t('The copy could not be prepared. Try again.', 'تعذّر تجهيز النسخة. حاول مجدداً.'));
+  if (!response.ok) throw new Error(t('The copy could not be prepared. Try again.', 'تعذّر تجهيز النسخة. حاول مجدداً.'));
   const name =
     /filename="?([^";]+)/.exec(response.headers.get('Content-Disposition') || '')?.[1] || 'parishlife-my-data.json';
   saveBlob(name, await response.blob());

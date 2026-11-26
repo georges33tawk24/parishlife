@@ -212,10 +212,7 @@ export function officeExpenses() {
             <Empty
               glyph="fin"
               title={L('No transactions match', 'لا عمليات مطابقة')}
-              body={L(
-                'Add an allowance or record your first office purchase.',
-                'أضف مخصّصاً أو سجّل أول مشتريات المكتب.'
-              )}
+              body={L('Add an allowance or record your first office purchase.', 'أضف مخصّصاً أو سجّل أول مشتريات المكتب.')}
             />
           }
         />

@@ -1119,10 +1119,7 @@ export function styleguide(tab = '') {
               <div className="tl-item">
                 <div className="when">28 Sep 2026</div>{' '}
                 <div className="what">
-                  {L(
-                    'Phone number changed from 03 421 880 · by the secretary',
-                    'تغيّر رقم الهاتف · بواسطة أمانة السرّ'
-                  )}
+                  {L('Phone number changed from 03 421 880 · by the secretary', 'تغيّر رقم الهاتف · بواسطة أمانة السرّ')}
                 </div>
               </div>
             </div>

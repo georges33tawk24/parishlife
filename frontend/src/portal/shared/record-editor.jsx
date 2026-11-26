@@ -634,8 +634,7 @@ export const ENT = {
       starts: new Date().toLocaleDateString('sv-SE'),
       fund: D.FUNDS[0]?.id || ''
     }),
-    canDelete: () =>
-      L('A pledge cannot be deleted or edited once recorded.', 'لا يُحذف التعهّد ولا يُعدَّل بعد تسجيله.')
+    canDelete: () => L('A pledge cannot be deleted or edited once recorded.', 'لا يُحذف التعهّد ولا يُعدَّل بعد تسجيله.')
   },
   campaign: {
     list: () => D.CAMPAIGNS,
@@ -876,13 +875,7 @@ export const ENT = {
           ['app', 'In the app', 'داخل التطبيق']
         ]
       },
-      {
-        k: 'date',
-        label: L('Send on', 'يُرسل في'),
-        type: 'date',
-        get: x => (x.when || '').slice(0, 10),
-        set: () => {}
-      },
+      { k: 'date', label: L('Send on', 'يُرسل في'), type: 'date', get: x => (x.when || '').slice(0, 10), set: () => {} },
       { k: 'time', label: L('At', 'عند'), type: 'time', get: x => (x.when || '').slice(11, 16), set: () => {} }
     ],
     blank: () => ({

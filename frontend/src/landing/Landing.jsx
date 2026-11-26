@@ -1009,10 +1009,7 @@ export function Landing({ initialLang }) {
                   </div>
                 </div>
                 <p className="t-body dim">
-                  {L(
-                    'Unlimited records, all five roles, every module.',
-                    'سجلّات غير محدودة، وخمسة أدوار، وكل الوحدات.'
-                  )}
+                  {L('Unlimited records, all five roles, every module.', 'سجلّات غير محدودة، وخمسة أدوار، وكل الوحدات.')}
                 </p>
                 <ul>
                   <li>

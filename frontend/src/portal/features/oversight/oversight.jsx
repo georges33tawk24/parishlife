@@ -167,11 +167,7 @@ export function Oversight() {
                   </>,
                   <StatusPill status={p.status} />,
                   <span className="num">{p.currentPriests}</span>,
-                  p.headPriestDesignated ? (
-                    L('Designated', 'معيَّن')
-                  ) : (
-                    <span className="dim">{L('None', 'لا أحد')}</span>
-                  ),
+                  p.headPriestDesignated ? L('Designated', 'معيَّن') : <span className="dim">{L('None', 'لا أحد')}</span>,
                   <span className="num dim">{p.otherCurrentStaff}</span>,
                   <span className="num">{few(p.openRequests)}</span>,
                   <span className="num dim">{few(p.certificatesAwaitingBishop)}</span>,

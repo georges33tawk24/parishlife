@@ -643,9 +643,7 @@ export const TimeField = () => (
       <input id="tf_time" className="input mono" defaultValue="10:30" style={{ maxWidth: 110 }} dir="ltr" />
       <BGroup items={['AM', 'PM']} sel={0} />
     </div>
-    <span className="help">
-      {t('The clock icon never mirrors in RTL.', 'أيقونة الساعة لا تنعكس في العربية أبداً.')}
-    </span>
+    <span className="help">{t('The clock icon never mirrors in RTL.', 'أيقونة الساعة لا تنعكس في العربية أبداً.')}</span>
   </div>
 );
 

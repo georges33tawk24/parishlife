@@ -78,8 +78,7 @@ export function memberAdd(gid = curGroup()) {
       el.querySelector('#group-members-add').addEventListener('click', async () => {
         const selected = [...el.querySelectorAll('[data-member-choice]:checked')].map(c => c.value);
         const evidence = val(el, '#group-member-evidence');
-        if (!selected.length)
-          return toast(L('Select at least one person', 'اختر شخصاً واحداً على الأقل'), '', 'warning');
+        if (!selected.length) return toast(L('Select at least one person', 'اختر شخصاً واحداً على الأقل'), '', 'warning');
         if (!evidence) return toast(L('Record the evidence', 'سجّل الإثبات'), '', 'warning');
         try {
           await addMembers(gid, selected, evidence);
@@ -443,10 +442,7 @@ export function meetingEdit(id) {
                 {fmtDate(meeting.d)} · {meeting.t}
               </p>
               <p className="t-caption dim">
-                {L(
-                  'Recorded attendance for this date will also be deleted.',
-                  'سيُحذف أيضاً الحضور المسجّل لهذا التاريخ.'
-                )}
+                {L('Recorded attendance for this date will also be deleted.', 'سيُحذف أيضاً الحضور المسجّل لهذا التاريخ.')}
               </p>
             </>
           ),
@@ -596,11 +592,7 @@ export function memberMenu(btn, pid) {
             icon: 'check',
             fn: () => appointDialog(curGroup(), pid, 'Assistant')
           },
-          {
-            label: L('Make leader', 'تعيين مسؤولاً'),
-            icon: 'check',
-            fn: () => appointDialog(curGroup(), pid, 'Leader')
-          }
+          { label: L('Make leader', 'تعيين مسؤولاً'), icon: 'check', fn: () => appointDialog(curGroup(), pid, 'Leader') }
         ]
       : []),
     { sep: true },

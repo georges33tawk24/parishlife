@@ -122,10 +122,7 @@ const newOnline = () => {
           list.length === 1 ? '1 parishioner registered online. ' : `${list.length} parishioners registered online. `,
           list.length === 1 ? 'سجّل مؤمن واحد إلكترونياً. ' : `سجّل ${list.length} مؤمنين إلكترونياً. `
         )}
-        body={t(
-          'Check their details and mark each record as verified.',
-          'تحقّق من معلوماتهم وعلّم كل سجل كمُتحقَّق منه.'
-        )}
+        body={t('Check their details and mark each record as verified.', 'تحقّق من معلوماتهم وعلّم كل سجل كمُتحقَّق منه.')}
         actions={
           <button className="btn btn-secondary btn-dense" data-act="people-new-open">
             {t('Review them', 'مراجعتهم')}
@@ -406,9 +403,7 @@ function secretary() {
             waitingOnline().length
               ? t(
                   waitingOnline().length === 1 ? '1 sent online' : `${waitingOnline().length} sent online`,
-                  waitingOnline().length === 1
-                    ? 'طلب واحد أُرسل إلكترونياً'
-                    : `${waitingOnline().length} أُرسلت إلكترونياً`
+                  waitingOnline().length === 1 ? 'طلب واحد أُرسل إلكترونياً' : `${waitingOnline().length} أُرسلت إلكترونياً`
                 )
               : PORTAL_REQUESTS.length
                 ? t('to review', 'للمراجعة')

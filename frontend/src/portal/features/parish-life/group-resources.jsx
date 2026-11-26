@@ -96,10 +96,7 @@ export function resourceForm(id = '') {
         if (!Number.isInteger(qty) || qty < lent || qty < 0)
           return toast(
             L('Invalid quantity', 'عدد غير صالح'),
-            L(
-              `At least ${lent} items are needed to cover active loans.`,
-              `يلزم ${lent} صنفاً لتغطية الإعارات الحالية.`
-            ),
+            L(`At least ${lent} items are needed to cover active loans.`, `يلزم ${lent} صنفاً لتغطية الإعارات الحالية.`),
             'warning'
           );
         const target = r || { id: `res-${Date.now().toString(36)}` };

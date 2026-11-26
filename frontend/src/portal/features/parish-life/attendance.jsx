@@ -670,10 +670,7 @@ export function attendanceImport(gid) {
             </div>
             {results.length > 100 ? (
               <p className="help">
-                {L(
-                  'Only the first 100 rows are shown; all rows are checked.',
-                  'تظهر أول ١٠٠ صف فقط، وتُفحص كل الصفوف.'
-                )}
+                {L('Only the first 100 rows are shown; all rows are checked.', 'تظهر أول ١٠٠ صف فقط، وتُفحص كل الصفوف.')}
               </p>
             ) : (
               ''

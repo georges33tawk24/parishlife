@@ -597,10 +597,7 @@ export function messaging(tab = '') {
         <Empty
           glyph="msg"
           title={L('Broadcasts are managed by parish communications staff', 'يدير البثّ موظفو التواصل في الرعية')}
-          body={L(
-            'This account is not allowed to draft or approve them.',
-            'هذا الحساب غير مخوّل بكتابتها أو اعتمادها.'
-          )}
+          body={L('This account is not allowed to draft or approve them.', 'هذا الحساب غير مخوّل بكتابتها أو اعتمادها.')}
         />
       )}
     </>

@@ -604,9 +604,7 @@ function FormsPage({ tab }) {
               </div>
             ))}
           </div>
-          {!RUN_LOG.length ? (
-            <p className="t-caption dim">{L('Nothing recorded yet.', 'لم يُسجَّل شيء بعد.')}</p>
-          ) : null}
+          {!RUN_LOG.length ? <p className="t-caption dim">{L('Nothing recorded yet.', 'لم يُسجَّل شيء بعد.')}</p> : null}
         </Panel>
         <Panel title={L('Run mode', 'نمط التشغيل')}>
           {WORKFLOWS.map(w => (

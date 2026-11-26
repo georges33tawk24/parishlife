@@ -170,11 +170,7 @@ export function deleteSpecimen() {
       });
       b.addEventListener('click', () => {
         closeOverlays();
-        toast(
-          L('Deleted', 'حُذف'),
-          L('Specimen only — no record was touched.', 'نموذج فقط — لم يُمسّ أي سجل.'),
-          'danger'
-        );
+        toast(L('Deleted', 'حُذف'), L('Specimen only — no record was touched.', 'نموذج فقط — لم يُمسّ أي سجل.'), 'danger');
       });
     }
   });

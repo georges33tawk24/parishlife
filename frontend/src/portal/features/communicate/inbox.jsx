@@ -132,11 +132,7 @@ function Compose({ done, onBack }) {
     const c = await startConversation(q.parish, q.subject.trim(), q.body.trim());
     closeOverlays();
     await done(c, q.parish);
-    toast(
-      L('Message stored in the app', 'حُفظت الرسالة داخل التطبيق'),
-      c.notificationOutcome?.meaning || '',
-      'success'
-    );
+    toast(L('Message stored in the app', 'حُفظت الرسالة داخل التطبيق'), c.notificationOutcome?.meaning || '', 'success');
   });
   return (
     <div className="mail-read">

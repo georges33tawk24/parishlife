@@ -492,8 +492,7 @@ export function addToService(mid) {
             meeting = D.groupInfo(gid).meetings.find(x => x.id === meetingId);
           if (!meeting) return;
           meeting.hymns ||= [];
-          if (meeting.hymns.includes(mid))
-            return toast(L('Hymn already added', 'الترنيمة مضافة مسبقاً'), '', 'warning');
+          if (meeting.hymns.includes(mid)) return toast(L('Hymn already added', 'الترنيمة مضافة مسبقاً'), '', 'warning');
           meeting.hymns.push(mid);
         } else {
           const plan = allPlans().find(x => x.id === selected);

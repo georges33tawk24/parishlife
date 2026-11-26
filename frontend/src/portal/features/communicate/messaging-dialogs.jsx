@@ -590,10 +590,7 @@ export function designTemplate(i) {
           <C.InlineAlert
             tone="info"
             title={L('Print or share', 'اطبع أو شارك')}
-            body={L(
-              'The file is a vector, so it prints sharp at A4 or A3.',
-              'الملف متّجهي، فيُطبع واضحاً على A4 أو A3.'
-            )}
+            body={L('The file is a vector, so it prints sharp at A4 or A3.', 'الملف متّجهي، فيُطبع واضحاً على A4 أو A3.')}
           />
         </div>{' '}
         <div id="dgprev" style={{ borderRadius: 'var(--r-card)', overflow: 'hidden', boxShadow: 'var(--e2)' }} />

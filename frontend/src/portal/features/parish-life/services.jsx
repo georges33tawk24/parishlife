@@ -98,10 +98,7 @@ export function services(tab = '', planId = '') {
         <PageHead
           crumbs={[{ label: L('My ministry', 'خدمتي') }, { label: L('Services & Activities', 'الخدمات والأنشطة') }]}
           title={L('Services & Activities', 'الخدمات والأنشطة')}
-          sub={L(
-            'Plan your group meetings and the music for each one.',
-            'خطّط لاجتماعات مجموعتك والموسيقى لكل اجتماع.'
-          )}
+          sub={L('Plan your group meetings and the music for each one.', 'خطّط لاجتماعات مجموعتك والموسيقى لكل اجتماع.')}
           actions={
             <button className="btn btn-primary" data-leader-meeting-new="" disabled={!GROUPS.length}>
               <Icon name="plus" size={17} />

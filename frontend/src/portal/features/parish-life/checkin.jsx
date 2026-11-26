@@ -119,10 +119,7 @@ export function checkin(tab = '') {
         <div className="tabbody">
           <C.InlineAlert
             tone="warning"
-            title={L(
-              'Check-in and release are separate, recorded actions',
-              'التسجيل والتسليم إجراءان منفصلان مسجَّلان'
-            )}
+            title={L('Check-in and release are separate, recorded actions', 'التسجيل والتسليم إجراءان منفصلان مسجَّلان')}
             body={L(
               'A child who may not leave alone is released only to a person on this list, after their identity is checked.',
               'لا يُسلَّم من لا يغادر بمفرده إلا لشخص من هذه اللائحة بعد التحقّق من هويته.'
@@ -182,9 +179,7 @@ export function checkin(tab = '') {
                 );
               })
             ) : (
-              <p className="help">
-                {L('No confirmed participants at this event.', 'لا مشتركون مؤكّدون في هذا الحدث.')}
-              </p>
+              <p className="help">{L('No confirmed participants at this event.', 'لا مشتركون مؤكّدون في هذا الحدث.')}</p>
             )}
           </div>{' '}
           <p className="t-caption dim" style={{ marginTop: '14px' }}>

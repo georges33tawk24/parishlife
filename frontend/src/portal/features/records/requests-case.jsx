@@ -846,9 +846,7 @@ function GuestLink({ dto, id, version, run, busy, fresh, setFresh }) {
           >
             {L('Replace the link', 'استبدال الرابط')}
           </button>
-          <span className="help">
-            {L('The old link stops working at once.', 'يتوقف الرابط القديم عن العمل فوراً.')}
-          </span>
+          <span className="help">{L('The old link stops working at once.', 'يتوقف الرابط القديم عن العمل فوراً.')}</span>
           {fresh ? (
             <label className="rq-link">
               <span>

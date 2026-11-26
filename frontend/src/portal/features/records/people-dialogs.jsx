@@ -536,11 +536,7 @@ export function relationEdit(pid) {
         )}{' '}
         <div className="stack" style={{ gap: '10px' }}>
           <C.CheckRow label={L('Emergency contact', 'جهة اتصال في الطوارئ')} checked={!!p.emergency} id="rel_em" />{' '}
-          <C.CheckRow
-            label={L('May collect children', 'مفوَّض باستلام الأطفال')}
-            checked={!!p.canCollect}
-            id="rel_cc"
-          />
+          <C.CheckRow label={L('May collect children', 'مفوَّض باستلام الأطفال')} checked={!!p.canCollect} id="rel_cc" />
         </div>
       </>
     ),

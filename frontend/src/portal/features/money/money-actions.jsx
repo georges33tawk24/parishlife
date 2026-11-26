@@ -255,10 +255,7 @@ export function correctGiftDialog(id) {
         reason: v.reason,
         ...(v.action === 'reclassify' ? { fundId: v.fund } : {})
       }),
-    done: [
-      L('Gift corrected', 'صُحّحت التقدمة'),
-      L('The reversal stays in the history.', 'يبقى القيد العكسي في السجل.')
-    ]
+    done: [L('Gift corrected', 'صُحّحت التقدمة'), L('The reversal stays in the history.', 'يبقى القيد العكسي في السجل.')]
   });
 }
 
@@ -402,10 +399,7 @@ export function bankMatchDialog(id) {
         label: L('Which one (gift or expense)', 'أيّ واحد (تقدمة أو مصروف)'),
         type: 'select',
         options: [...recordOptions('Contribution'), ...recordOptions('Expense')],
-        help: L(
-          'Used for a gift or an expense. The line is matched in full.',
-          'للتقدمة أو المصروف. يُطابَق القيد كاملاً.'
-        )
+        help: L('Used for a gift or an expense. The line is matched in full.', 'للتقدمة أو المصروف. يُطابَق القيد كاملاً.')
       },
       { id: 'note', label: L('Note (needed for "something else")', 'ملاحظة (مطلوبة لـ«شيء آخر»)') }
     ],

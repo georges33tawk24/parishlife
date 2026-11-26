@@ -98,9 +98,7 @@ export function Follow({ r }) {
             <button
               className="btn btn-secondary"
               disabled={busy || !text.trim()}
-              onClick={() =>
-                run(() => postMessage(r.id, 'Applicant', text.trim()), L('Message sent', 'أُرسلت الرسالة'))
-              }
+              onClick={() => run(() => postMessage(r.id, 'Applicant', text.trim()), L('Message sent', 'أُرسلت الرسالة'))}
             >
               {L('Send message', 'إرسال رسالة')}
             </button>

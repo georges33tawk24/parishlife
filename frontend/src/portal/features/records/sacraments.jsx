@@ -954,8 +954,7 @@ sacraments.mount = host => {
         el.querySelector('#srq_save').addEventListener('click', async () => {
           const manual = el.querySelector('#srq-new-child').checked,
             personId = el.querySelector('#srq_person').value;
-          if (!manual && !need(el, '#srq_person', L('Choose who receives the sacrament', 'اختر من سيقبل السرّ')))
-            return;
+          if (!manual && !need(el, '#srq_person', L('Choose who receives the sacrament', 'اختر من سيقبل السرّ'))) return;
           const child = manual
             ? {
                 lat: el.querySelector('#srq-child-lat').value.trim(),

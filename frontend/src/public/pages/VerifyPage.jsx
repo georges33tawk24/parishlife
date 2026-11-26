@@ -57,10 +57,7 @@ export function VerifyPage({ code = '' }) {
                 {L('Verification code', 'رمز التحقّق')}
               </label>
               <span className="hint" id="vf-code-h">
-                {L(
-                  'It is printed at the bottom of the certificate or letter.',
-                  'تجده مطبوعاً أسفل الشهادة أو الرسالة.'
-                )}
+                {L('It is printed at the bottom of the certificate or letter.', 'تجده مطبوعاً أسفل الشهادة أو الرسالة.')}
               </span>
               <div className="link-row">
                 <input
@@ -117,10 +114,7 @@ export function VerifyPage({ code = '' }) {
    statusMeaning, shown below the title. */
 const TITLES = {
   Valid: ['Valid: this version was authorized electronically', 'سارية: صُدِّقت هذه النسخة إلكترونيًا'],
-  ReferenceOnly: [
-    'Reference only: not an official electronic signature',
-    'للاطّلاع فقط: ليس توقيعًا إلكترونيًا رسميًا'
-  ],
+  ReferenceOnly: ['Reference only: not an official electronic signature', 'للاطّلاع فقط: ليس توقيعًا إلكترونيًا رسميًا'],
   NotYetIssued: ['Authorized, not yet issued', 'مصدَّقة ولم تُصدَر بعد'],
   Superseded: ['Replaced by a newer version', 'حلّت محلّها نسخة أحدث'],
   Withdrawn: ['Withdrawn by the parish', 'سحبتها الرعية'],

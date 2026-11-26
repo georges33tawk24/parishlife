@@ -231,10 +231,7 @@ export function lineReverse(i) {
   refresh();
   toast(
     L('Line removed', 'أُزيل البند'),
-    L(
-      'Lines can be changed until the session is verified and closed.',
-      'يمكن تغيير البنود حتى يُتحقَّق من الجلسة وتُقفل.'
-    ),
+    L('Lines can be changed until the session is verified and closed.', 'يمكن تغيير البنود حتى يُتحقَّق من الجلسة وتُقفل.'),
     'warning',
     {
       action: {

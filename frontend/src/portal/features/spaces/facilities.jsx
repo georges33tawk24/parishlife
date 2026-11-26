@@ -1318,11 +1318,7 @@ function availabilityDrawer(vid) {
             </span>
           </div>{' '}
           {failed ? (
-            <C.InlineAlert
-              tone="warning"
-              title={L('Could not load availability', 'تعذّر تحميل التوفّر')}
-              body={failed}
-            />
+            <C.InlineAlert tone="warning" title={L('Could not load availability', 'تعذّر تحميل التوفّر')} body={failed} />
           ) : loading ? (
             <p className="t-caption dim">{L('Loading…', 'جارٍ التحميل…')}</p>
           ) : out ? (

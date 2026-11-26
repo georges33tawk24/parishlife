@@ -149,9 +149,7 @@ export function MinistryRequests() {
           <p>{parishLabel(r.parish_id, r.parishName)}</p>
           <span className="pill">{label(r.status)}</span>
           {r.kind === 'leave' ? (
-            <p className="help">
-              {L('Private to the applicant and parish priests.', 'خاص بمقدّم الطلب وكهنة الرعية.')}
-            </p>
+            <p className="help">{L('Private to the applicant and parish priests.', 'خاص بمقدّم الطلب وكهنة الرعية.')}</p>
           ) : null}
           <p className="message-body">{r.reason}</p>
         </div>

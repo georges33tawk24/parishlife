@@ -50,10 +50,7 @@ export const nextStep = s => {
         WaitingForSource: [
           eligibleSources(s.person).length
             ? L('Link the registered entry', 'ربط القيد المسجَّل')
-            : L(
-                'Record the sacrament first — there is no registered entry yet',
-                'سجّل السرّ أولاً — لا قيد مسجَّل بعد'
-              ),
+            : L('Record the sacrament first — there is no registered entry yet', 'سجّل السرّ أولاً — لا قيد مسجَّل بعد'),
           OFFICE()
         ],
         Received: [

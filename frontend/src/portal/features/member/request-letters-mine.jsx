@@ -51,8 +51,7 @@ export function MyRequestLetters({ id }) {
               <bdi className="mono" dir="ltr">
                 {l.verificationCode}
               </bdi>{' '}
-              ·{' '}
-              <a href={'public.html?verify=' + encodeURIComponent(l.verificationCode)}>{L('Check it', 'تحقّق منه')}</a>
+              · <a href={'public.html?verify=' + encodeURIComponent(l.verificationCode)}>{L('Check it', 'تحقّق منه')}</a>
             </p>
           ) : null}
           <p className="help" dir="auto">
