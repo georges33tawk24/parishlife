@@ -55,11 +55,9 @@ test('a person signs up, verifies the email, resets the password, downloads the 
   await page.locator('[data-send-code]').click();
   await page.locator('input[name="code"]').fill(await outbox(email, 'ConfirmEmail', before));
   await page.locator('button.auth-submit').click();
-  await expect(page.locator('p[role="status"]')).toContainText('Your email is verified');
 
-  // Signed in on this device.
-  await page.locator('input[name="username"]').waitFor();
-  await signIn(page, state, { username: email }, M.totpSecret, first, M.turnstile);
+  // Accepting the code signs the person straight in with the password chosen at sign-up (owner, 26 November 2026).
+  await expect(page.locator('#userbtn')).toBeVisible({ timeout: 15000 });
 
   // Forgotten password, from another device that is signed out.
   const other = await browser.newContext({ ignoreHTTPSErrors: true });
