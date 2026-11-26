@@ -513,27 +513,26 @@ export function giving(tab = '') {
                   {L('Year', 'السنة')}
                 </label>
                 <input className="input" id="stmty" type="number" defaultValue={new Date().getFullYear()} />
-              </div>{' '}
-              <button className="btn btn-secondary" style={{ width: '100%' }} data-money="statement">
-                <Icon name="doc" size={17} />
-                {L('Statement for this giver', 'كشف لهذا المتبرّع')}
-              </button>{' '}
-              <C.InlineAlert
-                tone="warning"
-                title={L('Not a tax document', 'ليس مستنداً ضريبياً')}
-                body={L(
-                  'ParishLife does not assume a parish receipt qualifies as a tax document in any jurisdiction.',
-                  'لا يفترض «حياة الرعية» أن إيصال الرعية يصلح مستنداً ضريبياً في أي بلد.'
-                )}
-              />{' '}
-              <button
-                className="btn btn-primary"
-                style={{ width: '100%', marginTop: '12px' }}
-                data-act="statements-all"
-              >
-                <Icon name="doc" size={17} />
-                {L('Generate for every giver', 'إصدار لكل متبرّع')}
-              </button>
+              </div>
+              {/* the two statement buttons and the note between them, evenly spaced */}
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <button className="btn btn-secondary" style={{ width: '100%' }} data-money="statement">
+                  <Icon name="doc" size={17} />
+                  {L('Statement for this giver', 'كشف لهذا المتبرّع')}
+                </button>
+                <C.InlineAlert
+                  tone="warning"
+                  title={L('Not a tax document', 'ليس مستنداً ضريبياً')}
+                  body={L(
+                    'ParishLife does not assume a parish receipt qualifies as a tax document in any jurisdiction.',
+                    'لا يفترض «حياة الرعية» أن إيصال الرعية يصلح مستنداً ضريبياً في أي بلد.'
+                  )}
+                />
+                <button className="btn btn-primary" style={{ width: '100%' }} data-act="statements-all">
+                  <Icon name="doc" size={17} />
+                  {L('Generate for every giver', 'إصدار لكل متبرّع')}
+                </button>
+              </div>
             </Panel>
           </div>
         </div>
