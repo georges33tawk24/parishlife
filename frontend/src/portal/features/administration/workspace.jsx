@@ -216,7 +216,7 @@ function Organizations({ data, reload }) {
         },
         { name: 'name', label: L('Name', 'الاسم') },
         { name: 'locality', label: L('Locality', 'البلدة') },
-        { name: 'contact', label: L('Contact (email or phone)', 'جهة الاتصال (بريد أو هاتف)') },
+        { name: 'contact', label: L('Church phone', 'هاتف الكنيسة'), type: 'phone' },
         {
           name: 'declaredArchdiocese',
           label: L(

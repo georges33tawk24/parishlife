@@ -13,6 +13,7 @@ import { api, newOperationId } from '../../model/api.js';
 import { t } from '../../../lib/i18n.js';
 import { openDrawer, toast, Panel, Pill } from '../../ui/ui.jsx';
 import { DrawerForm } from '../../ui/forms.jsx';
+import { PhoneInput } from '../../ui/phone-input.jsx';
 import { useLoad } from '../administration/use-load.js';
 
 /* [field, English label, Arabic label, input type, maximum length] */
@@ -109,20 +110,25 @@ export async function editPublicProfile(parish, refresh) {
             )}
           </p>
           <div className="formgrid">
-            {FIELDS.map(([k, en, ar, type, max]) => (
-              <label key={k} className="formrow">
-                <span className="label">{t(en, ar)}</span>
-                <input
-                  className="input"
-                  name={k}
-                  type={type}
-                  {...(k === 'feastDate' ? { pattern: '[0-1][0-9]-[0-3][0-9]', placeholder: '07-20' } : {})}
-                  dir={k.endsWith('Ar') ? 'rtl' : type === 'text' ? undefined : 'ltr'}
-                  defaultValue={p[k] ?? ''}
-                  maxLength={max}
-                />
-              </label>
-            ))}
+            {FIELDS.map(([k, en, ar, type, max]) =>
+              type === 'tel' ? (
+                // The office phone with a country code, checked for that country (owner, 23 November 2026).
+                <PhoneInput key={k} name={k} label={t(en, ar)} value={p[k] ?? ''} required={false} />
+              ) : (
+                <label key={k} className="formrow">
+                  <span className="label">{t(en, ar)}</span>
+                  <input
+                    className="input"
+                    name={k}
+                    type={type}
+                    {...(k === 'feastDate' ? { pattern: '[0-1][0-9]-[0-3][0-9]', placeholder: '07-20' } : {})}
+                    dir={k.endsWith('Ar') ? 'rtl' : type === 'text' ? undefined : 'ltr'}
+                    defaultValue={p[k] ?? ''}
+                    maxLength={max}
+                  />
+                </label>
+              )
+            )}
           </div>
           {TEXTS.map(([k, en, ar, max]) => (
             <div key={k} className="formgrid">
