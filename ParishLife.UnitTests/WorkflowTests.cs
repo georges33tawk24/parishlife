@@ -40,7 +40,8 @@ public sealed class WorkflowTests
         {
             Store = new(Clock);
             Store.VerifiedAccounts.Add(Actor.AccountId);
-            Access = new(Store, Actor, Clock, new LegacyOnlyStaffAccess());
+            // Parish access gets its own non-operator platform so toggling Platform.Allowed for registration never grants parish permissions here.
+            Access = new(Store, Actor, Clock, new LegacyOnlyStaffAccess(), new ScenarioPlatform());
             // Only an operator registers a church (owner decision, 23 November 2026); the bishop path is covered by integration tests.
             Parishes = new(Store, Access, Actor, Platform, Store, new ChurchAdministrationAuthority(Platform, null!, new LegacyOnlyStaffAccess(), Store, Actor), Clock);
             Billing = new(Store, Store, Store, Access, Actor, Platform, Clock);

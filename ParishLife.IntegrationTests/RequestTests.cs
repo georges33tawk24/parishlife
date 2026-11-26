@@ -359,7 +359,7 @@ public class RequestTests
         var clerk = await overview.OverviewAsync(x.Parish, default);
         Assert.Equal(("Open requests", 1), (Assert.Single(clerk.Counts).Queue, clerk.Counts[0].Count));
 
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         var owner = await overview.OverviewAsync(x.Parish, default);
         Assert.Contains(owner.Counts, c => c.Queue == "Unmatched bank lines" && c.Count == 0);
         Assert.DoesNotContain(owner.Counts, c => c.Area == "Care");

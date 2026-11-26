@@ -1,6 +1,6 @@
 // Purpose: builds the actual backend/Identity/local persistence graph in a unique isolated test directory.
 // Main functions: InitializeAsync creates private test identities, As selects the test principal, OrganizationAsync verifies a synthetic organization,
-// ProposeAsync, ReviewAsync, AppointedOrganizationAsync and JurisdictionParishAsync prepare real workflows; AsAppointment selects capacity;
+// ProposeAsync, ReviewAsync, AppointedOrganizationAsync and JurisdictionParishAsync prepare real workflows; AsAppointment selects capacity; WithoutOperatorAsync leaves an operator with its grants alone;
 // DisposeAsync removes only the verified temporary fixture directory.
 
 using System.Security.Claims;
@@ -110,6 +110,22 @@ internal class LocalBackendFixture : IAsyncDisposable
             RequestServices = Services,
             User = new ClaimsPrincipal(new ClaimsIdentity(claims, "IsolatedFixture"))
         };
+    }
+
+    // Leaves an operator account with its parish grants alone. A current MFA operator passes every parish check (owner decision,
+    // 27 November 2026), so tests that need the registering parish owner without that bypass clear its PlatformOperator flag in this
+    // isolated store. It is not restored: call it only after the test's operator steps. The caller then selects the account with As
+    // (the principal is set synchronously, since a context set inside an awaited method does not flow back to the caller).
+    public async Task<string> WithoutOperatorAsync(string accountId)
+    {
+        var users = Services.GetRequiredService<UserManager<ParishUser>>();
+        var user = await users.FindByIdAsync(accountId) ?? throw new InvalidOperationException("Unknown fixture account.");
+        if (user.PlatformOperator)
+        {
+            user.PlatformOperator = false;
+            Assert.True((await users.UpdateAsync(user)).Succeeded);
+        }
+        return accountId;
     }
 
     public void AsRecovery(string accountId)

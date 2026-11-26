@@ -114,7 +114,7 @@ public class CareStatusNotificationOutcomeTests
 
         f.AsAppointment(recorderAccount, recorder.Id);
         await Assert.ThrowsAsync<DomainException>(() => service.NotificationOutcomeAsync(staff.Parish, receipt.Id, default));
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         await Assert.ThrowsAsync<DomainException>(() => service.NotificationOutcomeAsync(staff.Parish, receipt.Id, default));
         f.AsRecovery(f.Other);
         Assert.Equal("mfa_required", (await Assert.ThrowsAsync<DomainException>(() => service.NotificationOutcomeAsync(staff.Parish, receipt.Id, default))).Code);

@@ -1,5 +1,6 @@
 // Purpose: one capacity the signed-in account currently holds and may explicitly choose to act in. Choosing it never adds another capacity's duties.
-// Main members: Kind (Priest, ArchdioceseAdmin, Bishop, MinistryLeader, ParishGrant, PlatformOperator), AppointmentId (the value to send in
+// Main members: Kind (Priest, ArchdioceseAdmin, Bishop, MinistryLeader, ParishGrant, PlatformOperator: once without a parish, and
+// once per verified parish with every permission), AppointmentId (the value to send in
 // X-ParishLife-Appointment, or null when the capacity is used without that header), ArchdioceseId, ParishId, MinistryId, ScopeName, IsHead,
 // Capabilities (duties after explicit denials) and RequiresMfa.
 

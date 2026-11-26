@@ -59,7 +59,7 @@ public class MinistryApplicationTests
         var member = await s.LinkedApplicantAsync(); var leader = await s.LinkedApplicantAsync(true);
         await Appoint(s, group.Id, leader.AccountId);
         var app = await s.ApplyAsync(group.Id, member.AccountId);
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         await Assert.ThrowsAsync<DomainException>(() => s.Applications.ListAsync(s.Parish, group.Id, "Join", 25, null, default));
         f.As(leader.AccountId);
         await Assert.ThrowsAsync<DomainException>(() => s.Applications.ListAsync(s.Parish, otherGroup.Id, "Join", 25, null, default));

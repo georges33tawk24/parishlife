@@ -4,6 +4,8 @@
 // is sent per request (X-ParishLife-Appointment), so every tab keeps its own context. Office queues and records are not read here.
 // Main functions: HomeAsync and CapacitiesAsync; CapacitiesCoreAsync applies the same validity rules the authorization helpers enforce
 // (effective accepted appointment, verified archdiocese, matching jurisdiction, verified open parish, current seat or leader period).
+// CapacitiesAsync also gives a current MFA platform operator one PlatformOperator capacity per verified parish (bounded, one cross-partition
+// read) carrying every parish permission, matching the operator bypass in ParishAccess (owner decision, 27 November 2026).
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.DTOs.PersonalWorkspace;
@@ -18,9 +20,11 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.PersonalWorkspace;
 
 public class CombinedHomeService(IRecordTransactions records, IParishRepository parishes, IStaffAppointmentDirectory directory, IAccountDirectory accounts,
-    MfaAccountAccess proof, UserManager<ParishUser> users, IHttpContextAccessor context, ICurrentActor actor, TimeProvider clock)
+    MfaAccountAccess proof, UserManager<ParishUser> users, IHttpContextAccessor context, ICurrentActor actor, TimeProvider clock,
+    IPlatformAccess platform, IParishDirectory parishDirectory)
 {
     private const int MaximumStaffRows = 500;
+    private const int MaximumOperatorParishes = 500;
     private static DomainException Missing() => new("resource_not_found", "The requested home is unavailable.", FailureKind.NotFound);
 
     private sealed class Context
@@ -73,7 +77,20 @@ public class CombinedHomeService(IRecordTransactions records, IParishRepository 
     }
 
     public async Task<IReadOnlyList<CapacityDto>> CapacitiesAsync(CancellationToken ct)
-        => (await CapacitiesCoreAsync(await RequireAsync(ct), ct)).Capacities;
+    {
+        var state = await CapacitiesCoreAsync(await RequireAsync(ct), ct);
+        if (await platform.IsOperatorAsync(ct))
+        {
+            string[] everything = [.. Permissions.All.Order(StringComparer.Ordinal)];
+            foreach (var parish in (await parishDirectory.AllAsync(ct)).Where(p => p.Status == ParishStatus.Verified)
+                .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(p => p.Id, StringComparer.Ordinal).Take(MaximumOperatorParishes))
+                state.Capacities.Add(new CapacityDto
+                {
+                    Kind = "PlatformOperator", ParishId = parish.Id, ArchdioceseId = parish.JurisdictionArchdioceseId, ScopeName = parish.Name, Capabilities = everything
+                });
+        }
+        return state.Capacities;
+    }
 
     // The combined home is an account-level personal read: no selected appointment, no restricted recovery session, no locked or unverified account.
     private async Task<string> RequireAsync(CancellationToken ct)
