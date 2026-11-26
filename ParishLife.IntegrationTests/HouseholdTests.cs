@@ -1,6 +1,7 @@
 // Purpose: verifies households and person relationships (S09) through real local services and storage.
 // Main tests: one primary household, inherited versus own addresses, contact changes and history; unique envelope identifiers;
-// mirrored relationships, circular-parentage and guardian-evidence rules; read/write permission boundaries.
+// mirrored relationships, circular-parentage and guardian-evidence rules; read/write permission boundaries; digit-free names; a new
+// household's first members with a required contact; member roles on the membership (one head); the paged member search.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Organizations;
@@ -130,6 +131,142 @@ public class HouseholdTests
         await Assert.ThrowsAsync<DomainException>(() => x.Service.GetAsync(x.Parish, home.Id, default));
     }
 
+    [Fact]
+    public async Task Household_names_refuse_digits_on_create_and_when_changed()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        x.Use();
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() =>
+            x.Service.SaveAsync(x.Parish, null, Household("Family 2", null), default))).Code);
+        var arabic = Household("Haddad", null);
+        arabic.NameAr = "عائلة ٣";
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, null, arabic, default))).Code);
+        var home = await x.Service.SaveAsync(x.Parish, null, Household("Haddad", "1 Cedar Street"), default);
+        var rename = Household("Haddad 7", "1 Cedar Street");
+        rename.Version = (await x.Service.GetAsync(x.Parish, home.Id, default)).Version;
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, home.Id, rename, default))).Code);
+        rename.Name = "Haddad-Khoury";
+        rename.OperationId = Guid.NewGuid();
+        Assert.Equal("Haddad-Khoury", (await x.Service.SaveAsync(x.Parish, home.Id, rename, default)).Name);
+    }
+
+    [Fact]
+    public async Task A_new_household_brings_its_members_only_with_a_contact_among_them_in_one_operation()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var a = await PersonAsync(x, "Alpha");
+        var b = await PersonAsync(x, "Beta");
+        var outsider = await PersonAsync(x, "Gamma");
+        x.Use();
+        var noContact = Household("Alpha family", "1 Cedar Street");
+        noContact.Members = [new() { PersonId = Guid.Parse(a) }, new() { PersonId = Guid.Parse(b) }];
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, null, noContact, default))).Code);
+        noContact.ContactPersonId = Guid.Parse(outsider);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, null, noContact, default))).Code);
+        Assert.Empty((await x.Service.ListAsync(x.Parish, 25, null, default)).Items);
+
+        var request = Household("Alpha family", "1 Cedar Street");
+        request.Members = [new() { PersonId = Guid.Parse(a), Role = "Head" }, new() { PersonId = Guid.Parse(b), Role = "Spouse" }];
+        request.ContactPersonId = Guid.Parse(a);
+        var home = await x.Service.SaveAsync(x.Parish, null, request, default);
+        Assert.Equal(a, home.ContactPersonId);
+        Assert.Equal(("Head", "Spouse"), (home.Members.Single(m => m.PersonId == a).Role, home.Members.Single(m => m.PersonId == b).Role));
+        Assert.Equal("1 Cedar Street", home.Members.Single(m => m.PersonId == b).EffectiveAddress);
+        // The same operation replays; the members are not added twice.
+        Assert.Equal(home.Id, (await x.Service.SaveAsync(x.Parish, null, request, default)).Id);
+        Assert.Equal(2, (await x.Service.GetAsync(x.Parish, home.Id, default)).Value.Members.Length);
+        var history = (await x.Service.HistoryAsync(x.Parish, home.Id, 50, null, default)).Items;
+        Assert.Equal(2, history.Count(h => h.Action == "add"));
+
+        var taken = Household("Second family", null);
+        taken.Members = [new() { PersonId = Guid.Parse(b) }];
+        taken.ContactPersonId = Guid.Parse(b);
+        Assert.Equal("invalid_household_state", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, null, taken, default))).Code);
+        var edit = Household("Alpha family", "1 Cedar Street");
+        edit.Version = (await x.Service.GetAsync(x.Parish, home.Id, default)).Version;
+        edit.Members = [new() { PersonId = Guid.Parse(outsider) }];
+        edit.ContactPersonId = Guid.Parse(outsider);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.SaveAsync(x.Parish, home.Id, edit, default))).Code);
+    }
+
+    [Fact]
+    public async Task Member_roles_live_on_the_membership_with_one_head_and_history()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var a = await PersonAsync(x, "Alpha");
+        var b = await PersonAsync(x, "Beta");
+        var c = await PersonAsync(x, "Child");
+        x.Use();
+        var home = await x.Service.SaveAsync(x.Parish, null, Household("Alpha family", null), default);
+        await MemberAsync(x, home.Id, a, "add", inherits: true, role: "Head");
+        await MemberAsync(x, home.Id, b, "add", inherits: true);
+        var withChild = await MemberAsync(x, home.Id, c, "add", inherits: true, role: "Child");
+        Assert.Null(withChild.Members.Single(m => m.PersonId == b).Role);
+        Assert.Equal("Child", withChild.Members.Single(m => m.PersonId == c).Role);
+
+        Assert.Equal("Spouse", (await MemberAsync(x, home.Id, b, "set-role", role: "Spouse")).Members.Single(m => m.PersonId == b).Role);
+        Assert.Equal("invalid_household_state", (await Assert.ThrowsAsync<DomainException>(() => MemberAsync(x, home.Id, b, "set-role", role: "Head"))).Code);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => MemberAsync(x, home.Id, c, "set-role", role: "Guardian"))).Code);
+        Assert.Equal("OtherRelative", (await MemberAsync(x, home.Id, a, "set-role", role: "OtherRelative")).Members.Single(m => m.PersonId == a).Role);
+        Assert.Equal("Head", (await MemberAsync(x, home.Id, b, "set-role", role: "Head")).Members.Single(m => m.PersonId == b).Role);
+        Assert.Null((await MemberAsync(x, home.Id, c, "set-role", role: null)).Members.Single(m => m.PersonId == c).Role);
+        var history = (await x.Service.HistoryAsync(x.Parish, home.Id, 50, null, default)).Items;
+        Assert.Contains(history, h => h.Action == "role" && h.PersonId == b && h.Previous == "Spouse");
+        Assert.Contains(history, h => h.Action == "role" && h.PersonId == c && h.Previous == "Child");
+
+        // The role belongs to the membership: it leaves with the person and the Person record never carries it.
+        await MemberAsync(x, home.Id, b, "remove");
+        var other = await x.Service.SaveAsync(x.Parish, null, Household("Beta family", null), default);
+        Assert.Null((await MemberAsync(x, other.Id, b, "add", inherits: true)).Members.Single().Role);
+        var person = await f.Services.GetRequiredService<PeopleService>().GetAsync(x.Parish, b, default);
+        Assert.DoesNotContain("\"role\"", System.Text.Json.JsonSerializer.Serialize(person.Value).ToLowerInvariant(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Member_search_needs_two_characters_pages_on_the_server_and_names_the_current_household()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var ids = new List<string>();
+        foreach (var name in new[] { "Rana", "Rami", "Randa", "Ramez", "Rabih" })
+            ids.Add(await PersonAsync(x, name));
+        var unrelated = await PersonAsync(x, "Joseph");
+        x.Use();
+        var home = await x.Service.SaveAsync(x.Parish, null, Household("Rana family", null), default);
+        await MemberAsync(x, home.Id, ids[0], "add", inherits: true);
+
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CandidatesAsync(x.Parish, "r", 20, null, default))).Code);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CandidatesAsync(x.Parish, "  ", 20, null, default))).Code);
+        var first = await x.Service.CandidatesAsync(x.Parish, "ra", 2, null, default);
+        Assert.Equal(2, first.Items.Count);
+        Assert.NotNull(first.ContinuationToken);
+        var seen = first.Items.Select(i => i.Id).ToList();
+        var cursor = first.ContinuationToken;
+        while (cursor is not null)
+        {
+            var next = await x.Service.CandidatesAsync(x.Parish, "ra", 2, cursor, default);
+            seen.AddRange(next.Items.Select(i => i.Id));
+            cursor = next.ContinuationToken;
+        }
+        Assert.Equal(ids.OrderBy(i => i), seen.OrderBy(i => i));
+        Assert.DoesNotContain(unrelated, seen);
+        var member = Assert.Single((await x.Service.CandidatesAsync(x.Parish, "RANA isolated", 20, null, default)).Items);
+        Assert.Equal((home.Id, "Rana family"), (member.HouseholdId, member.HouseholdName));
+        Assert.Null((await x.Service.CandidatesAsync(x.Parish, "rami", 20, null, default)).Items.Single().HouseholdId);
+        Assert.Equal("invalid_cursor", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CandidatesAsync(x.Parish, "ra", 2, "not-a-cursor", default))).Code);
+
+        var outsider = await f.CreateVerifiedMemberAsync();
+        f.As(outsider);
+        await Assert.ThrowsAsync<DomainException>(() => x.Service.CandidatesAsync(x.Parish, "ra", 20, null, default));
+    }
+
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)
     {
         var staff = await StaffAppointmentScenario.CreateAsync(f);
@@ -150,11 +287,11 @@ public class HouseholdTests
     private static SaveHouseholdDto Household(string name, string? address, string? envelope = null)
         => new() { OperationId = Guid.NewGuid(), Name = name, Address = address, EnvelopeId = envelope };
 
-    private static async Task<HouseholdDto> MemberAsync(Setup x, string household, string person, string action, bool inherits = false, string? own = null)
+    private static async Task<HouseholdDto> MemberAsync(Setup x, string household, string person, string action, bool inherits = false, string? own = null, string? role = null)
         => await x.Service.MemberAsync(x.Parish, household, new HouseholdMemberActionDto
         {
             OperationId = Guid.NewGuid(), Version = (await x.Service.GetAsync(x.Parish, household, default)).Version, PersonId = Guid.Parse(person),
-            Action = action, InheritsAddress = inherits, OwnAddress = own
+            Action = action, InheritsAddress = inherits, OwnAddress = own, Role = role
         }, default);
 
     private static Task<RelationshipDto> RelateAsync(Setup x, string person, string related, string kind, string? evidence = null)

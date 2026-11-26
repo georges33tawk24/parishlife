@@ -1,6 +1,7 @@
 // Purpose: verifies sacramental cases and the official register (S12, S02.07) through real local services and storage.
 // Main tests: acceptance by a priest or a secretary-recorded priest instruction; actual celebration before registration; priest-supplied
-// numbering with sequential, never-reused numbers; returned entries; amendment-only corrections; pre-celebration decline and duplicates.
+// numbering with sequential, never-reused numbers; returned entries; amendment-only corrections; pre-celebration decline and duplicates;
+// group first communion/confirmation requests with per-person results and idempotent retry.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Ministries;
@@ -110,6 +111,62 @@ public class SacramentTests
         Assert.Equal("Rejected", (await DecideAsync(x, rejected.Id, false)).Status);
         Assert.Equal("Isolated church", (await x.Service.GetAsync(x.Parish, record.Id, default)).Value.CurrentFacts["place"]);
         Assert.Equal("invalid_sacrament_state", (await Assert.ThrowsAsync<DomainException>(() => ActAsync(x, record.Id, "cancel", r => r.Reason = "Erase it"))).Code);
+    }
+
+    [Fact]
+    public async Task Group_requests_open_one_case_per_candidate_report_each_failure_and_replay_without_duplicates()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var first = await PersonAsync(x);
+        var second = await PersonAsync(x);
+        var already = await PersonAsync(x);
+        var unknown = Guid.NewGuid().ToString("N");
+        f.As(x.Secretary);
+        var existing = await x.Service.CreateAsync(x.Parish, new CreateSacramentDto
+        {
+            OperationId = Guid.NewGuid(), Sacrament = "FirstCommunion", SubjectPersonId = Guid.Parse(already), Facts = new()
+        }, default);
+
+        var request = Batch("FirstCommunion", first, second, already, unknown);
+        var result = await x.Service.CreateBatchAsync(x.Parish, request, default);
+        Assert.Equal((2, 2, false), (result.CreatedCount, result.FailedCount, result.Replayed));
+        Assert.Equal([first, second, already, unknown], result.Items.Select(i => i.SubjectPersonId));
+        Assert.Equal("invalid_sacrament_state", result.Items[2].ErrorCode);
+        Assert.Equal("resource_not_found", result.Items[3].ErrorCode);
+        foreach (var item in result.Items.Take(2))
+        {
+            var record = item.Record!;
+            Assert.Equal(("FirstCommunion", "Received", item.SubjectPersonId, result.BatchId), (record.Sacrament, record.Status, record.SubjectPersonId, record.BatchId));
+            Assert.Equal(("2026-05-10", "Isolated celebrant", "Isolated church"), (record.TentativeDate, record.Facts["requestedCelebrant"], record.Facts["requestedPlace"]));
+        }
+        Assert.NotEqual(result.Items[0].Record!.Id, result.Items[1].Record!.Id);
+
+        // A retry of the same operation (a lost response, a double press) returns the stored results and opens nothing new.
+        var again = await x.Service.CreateBatchAsync(x.Parish, request, default);
+        Assert.True(again.Replayed);
+        Assert.Equal(result.BatchId, again.BatchId);
+        Assert.Equal(result.Items.Select(i => i.Record?.Id), again.Items.Select(i => i.Record?.Id));
+        Assert.Equal(result.Items.Select(i => i.ErrorCode), again.Items.Select(i => i.ErrorCode));
+        var all = await x.F.Services.GetRequiredService<IRecordTransactions>().CollectAsync<SacramentRecord>(
+            new RecordScope { Area = RecordArea.Parish, OwnerId = x.Parish }, "sacramentRecord", default);
+        Assert.Equal(3, all.Count);
+        Assert.Single(all, r => r.Value.Id == existing.Id);
+
+        // A new group naming the same candidates again opens nothing: each is now an active case.
+        var repeat = await x.Service.CreateBatchAsync(x.Parish, Batch("FirstCommunion", first, second), default);
+        Assert.Equal((0, 2, (string?)null), (repeat.CreatedCount, repeat.FailedCount, repeat.BatchId));
+        Assert.All(repeat.Items, i => Assert.Equal("invalid_sacrament_state", i.ErrorCode));
+        // Confirmation is a separate sacrament, so the same people may be requested for it.
+        Assert.Equal(2, (await x.Service.CreateBatchAsync(x.Parish, Batch("Confirmation", first, second), default)).CreatedCount);
+
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateBatchAsync(x.Parish, Batch("Baptism", first), default))).Code);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateBatchAsync(x.Parish, Batch("Confirmation", first, first), default))).Code);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateBatchAsync(x.Parish, Batch("Confirmation"), default))).Code);
+        var outsider = await f.CreateVerifiedMemberAsync();
+        f.As(outsider);
+        await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateBatchAsync(x.Parish, Batch("Confirmation", already), default));
     }
 
     [Fact]
@@ -232,6 +289,12 @@ public class SacramentTests
     private static CreateSacramentDto Create(string person) => new()
     {
         OperationId = Guid.NewGuid(), Sacrament = "Baptism", SubjectPersonId = Guid.Parse(person), Facts = new() { ["godparent"] = "Original Godparent" }
+    };
+
+    private static CreateSacramentBatchDto Batch(string sacrament, params string[] people) => new()
+    {
+        OperationId = Guid.NewGuid(), Sacrament = sacrament, SubjectPersonIds = people.Select(Guid.Parse).ToArray(), TentativeDate = "2026-05-10",
+        Facts = new() { ["requestedCelebrant"] = "Isolated celebrant", ["requestedPlace"] = "Isolated church" }
     };
 
     private static async Task<SacramentRecordDto> OpenAsync(Setup x, string person)

@@ -1,7 +1,7 @@
 // Purpose: returns a sacramental case with original facts, current (amended) facts, official registration, review, requirements, amendments
 // and timeline. Records saved before a field existed return null (or an empty list) for it.
 // Main members: Id, Sacrament, SubjectPersonId, RequestId, Facts, CurrentFacts, Status, dates, celebrant and celebration facts with Arabic twins,
-// OfficialNumber, BookReference, RegisterPage, office review, Requirements, RequestAmendments, Amendments, Timeline, CreatedBy and CreatedAt.
+// OfficialNumber, BookReference, RegisterPage, office review, Requirements, RequestAmendments, Amendments, Timeline, CreatedBy, CreatedAt and BatchId.
 
 using ParishLife.Api.Models;
 
@@ -78,4 +78,7 @@ public class SacramentRecordDto
 
     // When the request was opened.
     public DateTimeOffset CreatedAt { get; set; }
+
+    // The group request this case was opened with; null for a single request.
+    public string? BatchId { get; set; } = null;
 }

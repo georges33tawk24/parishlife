@@ -4,7 +4,8 @@
 // archdiocese's list where it set one, else the parish's own), and propose changes to an accepted request that apply only when a priest
 // approves them. Arabic twins of the celebrant,
 // place and witnesses, a celebrant person record and the register page are kept as typed.
-// Main functions: CreateAsync, ActAsync, SetPolicyAsync, RequirementSetsAsync, SaveRequirementSetAsync, ProposeCorrectionAsync,
+// First communion and confirmation may also be opened for several people in one idempotent group request with per-person results.
+// Main functions: CreateAsync, CreateBatchAsync, ActAsync, SetPolicyAsync, RequirementSetsAsync, SaveRequirementSetAsync, ProposeCorrectionAsync,
 // DecideCorrectionAsync, GetAsync, SearchAsync, PendingCorrectionsAsync, AnniversariesAsync and MyAnniversariesAsync; helpers check priest
 // authority, numbering, duplicates and requirements, and project current (amended) facts.
 
@@ -78,6 +79,94 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.open", item.Id, [Fence(root), RecordChange.Create(Key(item.Id), "sacramentRecord", item)],
             new CommandResult { Id = item.Id, Status = item.Status }, ct);
         return Project(item);
+    }
+
+    // A group request: first communion or confirmation cases for several people at once, sharing the facts and requested date. Each person
+    // is checked as a single request would be (an active, unarchived person of this parish without an active or registered case of that
+    // sacrament); the people who pass get one case each, all committed in one transaction together with the per-person results, and the
+    // others are reported with the reason. Resending the same operation returns the stored results and opens nothing new. When nobody
+    // passes nothing is stored, so the same operation may be sent again once the problems are fixed.
+    public async Task<SacramentBatchResultDto> CreateBatchAsync(string parish, CreateSacramentBatchDto request, CancellationToken ct)
+    {
+        var root = await OfficeAsync(parish, ct);
+        if (request.Sacrament is not ("FirstCommunion" or "Confirmation"))
+            throw new DomainException("invalid_input", "Only first communion and confirmation are requested for several people at once; request other sacraments one person at a time.");
+        var op = actor.CreateOperation(request.OperationId, request, clock, "sacrament-batch:v1:" + parish);
+        if (await records.ReplayAsync<CommandResult>(RecordScopes.Parish(parish), op, ct) is { } prior)
+            return await BatchResultAsync(parish, prior.Id, ct);
+        var people = (request.SubjectPersonIds ?? []).Select(Guard.Id).ToArray();
+        if (people.Length is < 1 or > MaximumBatch)
+            throw new DomainException("invalid_input", $"Choose between 1 and {MaximumBatch} people.");
+        if (people.Distinct(StringComparer.Ordinal).Count() != people.Length)
+            throw new DomainException("invalid_input", "Each person can be chosen once.");
+        var facts = Facts(request.Facts);
+        var tentative = string.IsNullOrWhiteSpace(request.TentativeDate) ? null : Guard.Text(request.TentativeDate, "Tentative date", 200);
+        var entries = new List<SacramentBatchEntry>();
+        var changes = new List<RecordChange> { Fence(root) };
+        var opened = new Dictionary<string, SacramentRecord>(StringComparer.Ordinal);
+        foreach (var person in people)
+        {
+            if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value is not { Archived: false } subject || subject.ParishId != parish)
+            {
+                entries.Add(new SacramentBatchEntry { PersonId = person, ErrorCode = "resource_not_found", Message = "This person is not an active person of this parish." });
+                continue;
+            }
+            if ((await CasesAsync(parish, person, ct)).Any(r => r.Kind == request.Sacrament && r.Status is not ("Declined" or "Cancelled")))
+            {
+                entries.Add(new SacramentBatchEntry
+                {
+                    PersonId = person, ErrorCode = "invalid_sacrament_state",
+                    Message = "This person already has an active or registered " + request.Sacrament + " case; review it instead of creating a duplicate."
+                });
+                continue;
+            }
+            var item = new SacramentRecord
+            {
+                Id = BatchRecordId(op.Id, person), ParishId = parish, Kind = request.Sacrament, PersonId = person,
+                Facts = new Dictionary<string, string>(facts, StringComparer.Ordinal), TentativeDate = tentative, CreatedBy = actor.AccountId, CreatedAt = op.At,
+                BatchId = op.Id
+            };
+            Step(item, "open", "", item.Status, op.At, null);
+            opened[person] = item;
+            changes.Add(RecordChange.Create(Key(item.Id), "sacramentRecord", item));
+            entries.Add(new SacramentBatchEntry { PersonId = person, RecordId = item.Id });
+        }
+        if (opened.Count == 0)
+            return Project(null, request.Sacrament, false, entries, opened);
+        var batch = new SacramentBatch { Id = op.Id, ParishId = parish, Kind = request.Sacrament, Entries = [.. entries], CreatedBy = actor.AccountId, CreatedAt = op.At };
+        changes.Add(RecordChange.Create(BatchKey(batch.Id), "sacramentBatch", batch));
+        await records.CommitAsync(RecordScopes.Parish(parish), op, "sacrament.open_batch", batch.Id, changes, new CommandResult { Id = batch.Id, Status = "Opened" }, ct);
+        return Project(batch.Id, batch.Kind, false, entries, opened);
+    }
+
+    private const int MaximumBatch = 90;
+
+    private static string BatchKey(string id) => "sacramentBatch:" + id;
+
+    // A case id derived from the group operation and the person, so the same group never yields two ids for one person.
+    private static string BatchRecordId(string batch, string person)
+        => new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("sacrament-batch:" + batch + ":" + person))[..16]).ToString("N");
+
+    private async Task<SacramentBatchResultDto> BatchResultAsync(string parish, string id, CancellationToken ct)
+    {
+        var batch = (await records.ReadAsync<SacramentBatch>(RecordScopes.Parish(parish), BatchKey(id), ct))?.Value ?? throw Missing();
+        var opened = new Dictionary<string, SacramentRecord>(StringComparer.Ordinal);
+        foreach (var entry in batch.Entries.Where(e => e.RecordId is not null))
+            opened[entry.PersonId] = (await ReadAsync(parish, entry.RecordId!, ct)).Value;
+        return Project(batch.Id, batch.Kind, true, batch.Entries, opened);
+    }
+
+    private static SacramentBatchResultDto Project(string? id, string kind, bool replayed, IReadOnlyList<SacramentBatchEntry> entries, Dictionary<string, SacramentRecord> opened)
+    {
+        var items = entries.Select(e => new SacramentBatchItemDto
+        {
+            SubjectPersonId = e.PersonId, Created = e.RecordId is not null, Record = opened.TryGetValue(e.PersonId, out var r) ? Project(r) : null,
+            ErrorCode = e.ErrorCode, Message = e.Message
+        }).ToArray();
+        return new SacramentBatchResultDto
+        {
+            BatchId = id, Sacrament = kind, Replayed = replayed, Items = items, CreatedCount = items.Count(i => i.Created), FailedCount = items.Count(i => !i.Created)
+        };
     }
 
     public async Task<SacramentRecordDto> ActAsync(string parish, string id, SacramentActionDto request, CancellationToken ct)
@@ -558,7 +647,7 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
         BookReference = x.BookReference, RegisterPage = x.RegisterPage, RegisteredBy = x.RegisteredBy, RegisteredAt = x.RegisteredAt,
         OfficeReviewedBy = x.OfficeReviewedBy, OfficeReviewedAt = x.OfficeReviewedAt, OfficeReviewNote = x.OfficeReviewNote,
         Requirements = [.. x.Requirements ?? []], RequirementsBlockScheduling = x.RequirementsBlockScheduling, RequestAmendments = [.. x.RequestAmendments ?? []],
-        Amendments = [.. x.Amendments], Timeline = [.. x.Timeline], CreatedBy = x.CreatedBy, CreatedAt = x.CreatedAt
+        Amendments = [.. x.Amendments], Timeline = [.. x.Timeline], CreatedBy = x.CreatedBy, CreatedAt = x.CreatedAt, BatchId = x.BatchId
     };
 
     private static RequirementSetDto Project(Versioned<SacramentRequirementSet> row) => new()

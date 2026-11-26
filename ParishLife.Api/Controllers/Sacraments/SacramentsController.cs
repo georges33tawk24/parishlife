@@ -1,5 +1,5 @@
 // Purpose: exposes sacramental cases, the register search, numbering policies, preparation requirement lists and official corrections over HTTP.
-// Main functions: Create, Act, Get, Search, SetPolicy, RequirementSets, SaveRequirementSet, ProposeCorrection, DecideCorrection,
+// Main functions: Create, CreateBatch (first communion or confirmation for several people), Act, Get, Search, SetPolicy, RequirementSets, SaveRequirementSet, ProposeCorrection, DecideCorrection,
 // PendingCorrections, Anniversaries and MyAnniversaries delegate rules to SacramentService.
 
 using Microsoft.AspNetCore.Authorization;
@@ -16,6 +16,10 @@ public class SacramentsController(SacramentService service) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<SacramentRecordDto>> Create(Guid parishId, CreateSacramentDto request, CancellationToken ct)
         => Ok(await service.CreateAsync(Guard.Id(parishId), request, ct));
+
+    [HttpPost("batch")]
+    public async Task<ActionResult<SacramentBatchResultDto>> CreateBatch(Guid parishId, CreateSacramentBatchDto request, CancellationToken ct)
+        => Ok(await service.CreateBatchAsync(Guard.Id(parishId), request, ct));
 
     [HttpPost("{recordId:guid}/actions")]
     public async Task<ActionResult<SacramentRecordDto>> Act(Guid parishId, Guid recordId, SacramentActionDto request, CancellationToken ct)

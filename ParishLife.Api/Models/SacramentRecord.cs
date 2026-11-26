@@ -1,7 +1,7 @@
 // Purpose: represents one person's sacramental case from priest acceptance through actual celebration to official registration.
 // Main members: Id, ParishId, Kind (sacrament), PersonId, RequestId, Facts, Status, dates, celebrant (account, parish person, name and Arabic
 // name), celebration facts with Arabic twins, official number, book and page, office review, preparation requirements, request amendments,
-// registered-entry amendments and timeline.
+// registered-entry amendments, timeline and BatchId (the group request it came from).
 
 namespace ParishLife.Api.Models;
 
@@ -81,4 +81,7 @@ public class SacramentRecord
     public string CreatedBy { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    // The group request (first communion or confirmation candidates opened together) this case came from; null for a single request.
+    public string? BatchId { get; set; } = null;
 }
