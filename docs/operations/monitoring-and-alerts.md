@@ -2,12 +2,20 @@
 
 Written 22 November 2026 (hardening run, Agent 08). The alert rules, uptime tests and budget are defined in `infra/monitoring.bicep`. **None of them exists in Azure yet**: the owner deploys the file (steps below). Nothing here was checked against the live Azure resources, because the hardening run may not touch Azure.
 
+**Deployed 26 November 2026** by the Azure session, at the owner's go-ahead ("Yes, create"):
+- Deployment `parishlife-monitoring` at 15:47:45–15:48:39 UTC: `Succeeded`. The what-if beforehand showed 14 Create and 10 Ignore, and nothing modified or deleted.
+- Created: budget `parishlife-monthly` (20 USD a month); action group `ag-parishlife-owner` emailing `parishlifeprimary@gmail.com`; 8 metric alerts; 2 log alerts; 2 free ping tests (`parishlife-ready`, `parishlife-signin-page`).
+- First compile fix: web tests and log alerts read `appInsights.location` from an `existing` resource (BCP120). The file now takes `appInsightsLocation`, which defaults to the resource group's region (France Central, the same as `insights-parishlife`).
+- Daily cap: the log workspace `DefaultWorkspace-32797b77-…-PAR` (resource group `DefaultResourceGroup-PAR`) now has `dailyQuotaGb` 0.15; before, there was no cap. Measured ingestion on 12–26 November was 19–76 MB a day. The workspace retention is 30 days; the Application Insights tables keep their own 90 days.
+- Spending when deployed: November to date was 9.90 USD (App Service 9.25, Cosmos 0.57, Key Vault 0.06, Storage 0.02), about 14 USD for a full month.
+- **Test email: not sent yet.** `createNotifications` returned "There are no valid receivers in the request" through the API. The owner presses **Test** in the portal (step 3 below).
+
 ## What exists today
 
 - **Application Insights** `insights-parishlife` receives requests, dependency calls, log traces and exceptions from the API through OpenTelemetry (`ParishLife.Api/Extensions/TelemetryExtensions.cs`), but only when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set. Ingestion was confirmed on 11 November 2026 (`docs/continuation/AZURE-CONNECTION.md`).
 - **App Service health check** on `/health/ready` (every minute, from inside Azure). It takes an unhealthy instance out of rotation. It alerts nobody on its own.
 - **Operator readiness** `GET /api/administration/readiness` and `dotnet run --project tools/ParishLife.Maintenance -- check-infrastructure`.
-- **No alert rules, uptime tests or budgets** are recorded anywhere (project map, open question 9).
+- **Alert rules, uptime tests and the budget**: deployed on 26 November 2026 (see the note above).
 
 ## Deploying the monitoring (owner)
 
