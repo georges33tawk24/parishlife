@@ -140,8 +140,7 @@ const toHousehold = (h, version) => ({
   branch: null
 });
 
-async function loadHouseholds(parish, d) {
-  const list = await soft(cursorPages(`parishes/${enc(parish.id)}/households`), []);
+function showHouseholds(list, d) {
   // The list carries each household's members, so no household is read on its own.
   state.households.clear();
   for (const row of list) state.households.set(row.value.id, { version: row.version, value: row.value });
@@ -152,8 +151,7 @@ async function loadHouseholds(parish, d) {
   for (const p of d.PEOPLE) p.hh = home.get(p.id) || null;
 }
 
-async function loadDuplicates(parish, d) {
-  const found = await soft(parishAPI('people/duplicates'), []);
+function showDuplicates(found, d) {
   const by = new Map(d.PEOPLE.map(p => [p.id, p]));
   const side = (id, name, linked) => {
     const p = by.get(id);
@@ -171,21 +169,25 @@ async function loadDuplicates(parish, d) {
 /* Every stored facts record and every given Directory consent of the parish, in pages. Both need an
    authenticator session; without one they stay as they were. */
 async function loadParishWide(parish) {
-  const facts = await optional(cursorPages(`parishes/${enc(parish.id)}/people/facts`, 20000), null);
+  const [facts, consents] = await Promise.all([
+    optional(cursorPages(`parishes/${enc(parish.id)}/people/facts`, 20000), null),
+    optional(cursorPages(`parishes/${enc(parish.id)}/consents?kind=Directory`, 20000), null)
+  ]);
   if (facts) for (const row of facts) state.facts.set(row.value.personId, { version: row.version, value: row.value });
-  const consents = await optional(cursorPages(`parishes/${enc(parish.id)}/consents?kind=Directory`, 20000), null);
   state.directory = consents ? directoryFields(consents) : null;
 }
 
 export async function load(parish, d) {
   if (!canRead(parish)) return;
   forParish(parish.id);
-  await loadParishWide(parish);
-  const people = (
-    await allPages(`parishes/${enc(parish.id)}/people?pageSize=100`).catch(e =>
-      e.status === 403 ? [] : Promise.reject(e)
-    )
-  ).map(p => [p, toPerson(p, state.facts.get(p.id)?.value)]);
+  // the five reads are independent, so they go out together; only the joining below needs them all
+  const [, rows, households, duplicates] = await Promise.all([
+    loadParishWide(parish),
+    allPages(`parishes/${enc(parish.id)}/people?pageSize=100`).catch(e => (e.status === 403 ? [] : Promise.reject(e))),
+    soft(cursorPages(`parishes/${enc(parish.id)}/households`), []),
+    soft(parishAPI('people/duplicates'), [])
+  ]);
+  const people = rows.map(p => [p, toPerson(p, state.facts.get(p.id)?.value)]);
   d.PEOPLE = people.filter(([p]) => !p.archived).map(([, x]) => x);
   d.ARCHIVED = people.filter(([p]) => p.archived).map(([, x]) => ({ ...x, archived: '' }));
   d.PARISH.people = d.PEOPLE.length;
@@ -193,8 +195,8 @@ export async function load(parish, d) {
     const extra = toExtra(p.id);
     if (extra) d.PERSON_EXTRA[p.id] = extra;
   }
-  await loadHouseholds(parish, d);
-  await loadDuplicates(parish, d);
+  showHouseholds(households, d);
+  showDuplicates(duplicates, d);
 }
 
 /* ---------- save ---------- */

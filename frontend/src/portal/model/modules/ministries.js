@@ -1,7 +1,7 @@
 /* Purpose: the Ministries module's connection to ParishLife.Api: groups (ministries) with their leaders,
    members, join applications, meetings, attendance, formation, belongings and volunteer sign-up sheets,
    and the member-facing ministry requests.
-   Main members: keys, routes, load (fills GROUPS, GROUP_DETAIL, VOLUNTEERS, SIGNUP_SHEETS and
+   Main members: keys, routes, needs, load (fills GROUPS, GROUP_DETAIL, VOLUNTEERS, SIGNUP_SHEETS and
    ATTENDANCE_SERIES), save (sends changes to groups, meeting times, meetings, attendance and belongings),
    and the workflows a diff cannot express: ministryAction, applicationAction, ministryRequests,
    requestDecision, requestMembership, addMembers, endMembership, appointLeader, endLeader, saveFormation,
@@ -17,6 +17,8 @@ import { loadNames, nameOf } from '../names.js';
 
 export const keys = ['GROUPS', 'GROUP_DETAIL', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'ATTENDANCE_SERIES'];
 export const routes = ['groups', 'ministryrequests', 'attendance', 'volunteers'];
+/* Loans name their borrower from the People module's list, so this module loads once People has. */
+export const needs = ['PEOPLE'];
 
 const enc = encodeURIComponent;
 const base = parishId => `parishes/${enc(parishId)}`;
@@ -132,6 +134,8 @@ export async function load(parish, d) {
     async ({ value: m, version }) => {
       const id = m.id,
         seat = `${root}/ministries/${enc(id)}`;
+      const meetingsLoad = loadMeetings(root, id); // alongside the lists below, not after them
+      meetingsLoad.catch(() => {});
       const [leaders, roster, applications, programs, enrollments, stock, loans, opportunities] = await Promise.all([
         quiet(pages(`${seat}/leadership`), []),
         quiet(pages(`${seat}/roster`), []),
@@ -144,7 +148,7 @@ export async function load(parish, d) {
         has(access, id, 'resources.custody') ? quiet(pages(`${seat}/loans`), []) : [],
         has(access, id, 'volunteers.coordinate') ? quiet(pages(`${seat}/volunteering/opportunities`), []) : []
       ]);
-      const meetings = await loadMeetings(root, id);
+      const meetings = await meetingsLoad;
       const attending = has(access, id, 'attendance.record', 'attendance.review');
       const team = await pool(
         opportunities.filter(o => o.value.status !== 'Cancelled'),

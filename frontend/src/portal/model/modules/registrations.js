@@ -126,16 +126,22 @@ const rollCallRow = ({ value: x, version }) => ({
 async function calendarActivities() {
   const now = Date.now(),
     events = new Map();
-  for (let from = -WINDOW_BEFORE; from < WINDOW_AFTER; from += WINDOW_STEP) {
-    const start = new Date(now + from * DAY).toISOString(),
-      end = new Date(now + (from + WINDOW_STEP) * DAY).toISOString();
-    const found = await soft(() => pages(`calendar/events?start=${enc(start)}&end=${enc(end)}`), null);
-    if (found === null) return []; // this account may not read the calendar
+  const starts = [];
+  for (let from = -WINDOW_BEFORE; from < WINDOW_AFTER; from += WINDOW_STEP) starts.push(from);
+  // the windows are independent: asked for together instead of one round trip after another
+  const lists = await Promise.all(
+    starts.map(from => {
+      const start = new Date(now + from * DAY).toISOString(),
+        end = new Date(now + (from + WINDOW_STEP) * DAY).toISOString();
+      return soft(() => pages(`calendar/events?start=${enc(start)}&end=${enc(end)}`), null);
+    })
+  );
+  if (lists.includes(null)) return []; // this account may not read the calendar
+  for (const found of lists)
     for (const row of found) {
       const e = row.value || row;
       if (e.kind === 'ParishActivity' && e.status !== 'Cancelled' && !e.redacted) events.set(e.id, e);
     }
-  }
   return [...events.values()].sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)));
 }
 

@@ -1,5 +1,5 @@
 /* Purpose: keeps the portal's shared view model (model/data.js) in step with ParishLife.Api.
-   Main functions: hydrate (each connected module loads its collections, People first and then the rest at once), persist (each module sends
+   Main functions: hydrate (every connected module loads its collections at once; those that need People wait for it), persist (each module sends
    its changes; changes no module can save are undone and reported), applyData, workflow, savedAt,
    savedSize, backupJSON. The modules are in model/modules/.
 
@@ -88,13 +88,18 @@ export async function hydrate() {
       for (const r of m.routes) loadFailures.set(r, error.message);
     }
   };
-  /* People first (other modules name people from d.PEOPLE), then every other module at once: each fills
-     only its own collections, so they need not wait for each other. One after another, a reload took the
-     sum of twelve modules' round trips. */
+  /* Every module at once: each fills only its own collections, so they need not wait for each other. A module
+     that names people from d.PEOPLE while loading says so (`needs = ['PEOPLE']`) and waits for People alone.
+     One after another, a reload took the sum of twelve modules' round trips; People first, the sum of two. */
   if (parish) {
     const first = MODULES.filter(m => m.keys.includes('PEOPLE'));
-    await Promise.all(first.map(load));
-    await Promise.all(MODULES.filter(m => !first.includes(m)).map(load));
+    const people = Promise.all(first.map(load));
+    await Promise.all([
+      people,
+      ...MODULES.filter(m => !first.includes(m)).map(m =>
+        m.needs?.includes('PEOPLE') ? people.then(() => load(m)) : load(m)
+      )
+    ]);
   } else await Promise.all(MODULES.filter(m => !m.keys.length).map(load)); // the account's own appearance needs no parish
   applyData(d);
   baseline = snapshot();
