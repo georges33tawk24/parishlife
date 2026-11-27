@@ -136,9 +136,10 @@ public class EndToEndFixture(IServiceProvider services)
             await membership.FollowAsync(parish.Id, ct);
         }
 
-        // The member applies; the priest (acting in the appointment) creates the person record and links the account.
+        // The member applies; the priest (acting in the appointment) creates the person record and links the account. Person names
+        // hold letters only (27 November 2026), so the applicant is "Endtoend Member".
         As(member, mfa: false);
-        var request = await membership.RequestAsync(parish.Id, new RequestMembershipDto { OperationId = Guid.NewGuid(), GivenName = "E2E", FamilyName = "Member" }, ct);
+        var request = await membership.RequestAsync(parish.Id, new RequestMembershipDto { OperationId = Guid.NewGuid(), GivenName = "Endtoend", FamilyName = "Member" }, ct);
         AsAppointment(priest, appointment.Id);
         var queued = (await membership.QueueAsync(parish.Id, ct)).Single(r => r.Value.Id == request.Id);
         await membership.DecideAsync(parish.Id, request.Id, new MembershipDecisionDto

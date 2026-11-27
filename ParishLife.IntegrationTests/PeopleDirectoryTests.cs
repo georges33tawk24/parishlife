@@ -35,11 +35,12 @@ public class PeopleDirectoryTests
         var people = f.Services.GetRequiredService<PeopleService>();
         var directory = f.Services.GetRequiredService<PeopleDirectoryService>();
         f.AsAppointment(f.Other, office.Id);
-        foreach (var (given, family, contact) in new[] { ("Élie", "Haddad", "=HYPERLINK(\"x\")"), ("مُحَمَّد", "Isolated", null), ("Eliana", "Other", "eliana@fixture.example") })
-            await people.CreateAsync(staff.Parish, new CreatePersonDto { OperationId = Guid.NewGuid(), GivenName = given, FamilyName = family, Contact = contact }, default);
+        // Arabic spellings live in the Arabic name twins (English names hold Latin letters only since 27 November 2026).
+        foreach (var (given, family, givenAr, contact) in new (string, string, string?, string?)[] { ("Élie", "Haddad", null, "=HYPERLINK(\"x\")"), ("Mohammad", "Isolated", "مُحَمَّد", null), ("Eliana", "Other", null, "eliana@fixture.example") })
+            await people.CreateAsync(staff.Parish, new CreatePersonDto { OperationId = Guid.NewGuid(), GivenName = given, FamilyName = family, GivenNameAr = givenAr, Contact = contact }, default);
 
         Assert.Equal("Élie", Assert.Single(await directory.SearchAsync(staff.Parish, "ELIE hadd", false, 25, default)).GivenName);
-        Assert.Equal("مُحَمَّد", Assert.Single(await directory.SearchAsync(staff.Parish, "محمد", false, 25, default)).GivenName);
+        Assert.Equal("مُحَمَّد", Assert.Single(await directory.SearchAsync(staff.Parish, "محمد", false, 25, default)).GivenNameAr);
         Assert.Equal(2, (await directory.SearchAsync(staff.Parish, "eli", false, 25, default)).Count);
         await Assert.ThrowsAsync<DomainException>(() => directory.PreviewExportAsync(staff.Parish, ["GivenName"], false, default));
 

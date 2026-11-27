@@ -1,4 +1,4 @@
-// Purpose: asks for a people export with an explicit purpose, columns and scope.
+// Purpose: asks for a people export with its columns and scope, and an optional purpose.
 // Main members: OperationId, Purpose, Columns and IncludeArchived.
 
 using System.ComponentModel.DataAnnotations;
@@ -11,9 +11,9 @@ public class PeopleExportDto
     [NotEmptyGuid]
     public Guid OperationId { get; set; }
 
-    [Required]
+    // Optional (owner, 27 November 2026): the export is logged with or without a stated purpose.
     [StringLength(500)]
-    public string Purpose { get; set; } = string.Empty;
+    public string? Purpose { get; set; } = null;
 
     [Required]
     [MinLength(1)]

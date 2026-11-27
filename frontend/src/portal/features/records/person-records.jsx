@@ -78,13 +78,13 @@ const Row = ({ label, children }) => (
     {children}
   </label>
 );
-const askReason = (id, title, label, run) =>
+const askReason = (id, title, label, run, required = true) =>
   openModal({
     title,
     body: (
       <Form id={id} submit={t('Confirm', 'تأكيد')} run={form => run(form.reason)}>
         <Row label={label}>
-          <textarea className="input" name="reason" maxLength={500} required />
+          <textarea className="input" name="reason" maxLength={500} required={required} />
         </Row>
       </Form>
     )
@@ -196,14 +196,15 @@ export function ConsentPanel({ id }) {
                         askReason(
                           id,
                           t('Withdraw this consent', 'سحب هذه الموافقة'),
-                          t('Reason', 'السبب'),
+                          t('Reason (optional)', 'السبب (اختياري)'),
                           async reason => {
                             await withdrawConsent(row, reason);
-                          }
+                          },
+                          false
                         )
                       }
                     >
-                      {t('Withdraw', 'سحب')}
+                      {t('Remove this consent', 'إزالة هذه الموافقة')}
                     </button>
                   ) : null}
                 </div>

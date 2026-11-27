@@ -74,11 +74,13 @@ export async function saveFacts(id, patch) {
     district: f.district || null,
     town: f.town || null,
     townAr: f.townAr || null,
+    sector: f.sector || null,
     addressDetail: f.addressDetail || null,
     localityNotListed: f.town || f.townAr ? null : f.localityNotListed || null,
     occupation: f.occupation || null,
     skills: f.skills || [],
     preferredLanguage: f.preferredLanguage || null,
+    languages: f.languages || [],
     deceasedOn: f.deceasedOn || null,
     deceasedPrecision: f.deceasedPrecision || null,
     deceasedEvidence: f.deceasedEvidence || null
@@ -216,8 +218,9 @@ export const previewExport = (columns, includeArchived) =>
     `people/export/preview?${columns.map(c => `columns=${enc(c)}`).join('&')}${columns.length ? '&' : ''}includeArchived=${!!includeArchived}`
   );
 
-/* The export answers with a CSV file, not JSON, so it is fetched here with the anti-forgery token. */
-export async function exportPeople({ purpose, columns, includeArchived }) {
+/* The export answers with a CSV file, not JSON, so it is fetched here with the anti-forgery token. The purpose
+   is optional (owner, 27 November 2026); the API logs a blank one as "Not stated". */
+export async function exportPeople({ purpose = '', columns, includeArchived }) {
   const { token } = await api('auth/csrf');
   const response = await fetch(`/api/parishes/${enc(state.parishId)}/people/export`, {
     method: 'POST',

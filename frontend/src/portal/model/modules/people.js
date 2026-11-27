@@ -6,11 +6,14 @@
 
    What the API holds, and so what the screens show:
    - PEOPLE / ARCHIVED: given and family name with their optional Arabic twins, birth date, one contact,
-     rite and register status (Member or Visitor) (GET people). The office edits them with PUT people/{id}.
-   - Person facts (country, region, district, town and its Arabic twin, address detail, occupation, skills,
-     preferred language, death) load for the whole parish with GET people/facts, and again for one person
-     when opened; the portal's town, address cascade, occupation, skills and language come from them.
-   - The directory flag comes from the parish's given Directory consents (GET consents?kind=Directory).
+     several phone numbers, rite and register status (Member or Visitor) (GET people). The office edits them
+     with PUT people/{id}.
+   - Person facts (country, region, district, town and its Arabic twin, sector, address detail, occupation,
+     skills, languages and the preferred one, death) load for the whole parish with GET people/facts, and again
+     for one person when opened; the portal's town, address cascade, occupation, skills and languages come
+     from them.
+   - The directory flag comes from the parish's given Directory consents (GET consents?kind=Directory). A new
+     person's consents (all ticked by default) are recorded with POST people/{id}/consents after the create.
    - HOUSEHOLDS: name and Arabic name, address, town and its Arabic twin, phone, envelope number, contact
      person and members with their roles (the list carries members); a person's hh is the household they
      belong to and their rel the role recorded on that membership. A new household is created with its
@@ -59,12 +62,31 @@ const words = s =>
     .split(/\s+/)
     .filter(Boolean);
 
+/* An older record's single contact that is really a phone number ("03 421 887", "+961 3 421 887"). */
+const looksLikePhone = v => /^\+?[\d\s().-]{6,}$/.test(String(v || '').trim());
+
+/* "+96171821056" → "+961 71 821 056"; other forms are shown as stored. */
+function phoneLabel(number) {
+  const m = /^\+961(\d+)$/.exec(number || '');
+  if (!m) return number || '';
+  const n = m[1];
+  return n.length === 8
+    ? `+961 ${n.slice(0, 2)} ${n.slice(2, 5)} ${n.slice(5)}`
+    : `+961 ${n.slice(0, 1)} ${n.slice(1, 4)} ${n.slice(4)}`;
+}
+
 /* PersonDto → the portal's person. ar shows the Latin name when no Arabic one is stored (display only);
-   arStored keeps what the API holds, so an untouched fallback is never saved as Arabic. Facts give the town. */
+   arStored keeps what the API holds, so an untouched fallback is never saved as Arabic. Facts give the town.
+   phones are the stored numbers; a record with none whose contact is a phone number shows that number as its
+   first phone (phoneFromContact), and it moves into phones only when the office saves a changed list.
+   phone is the main number for display, used by every screen that shows one. */
 function toPerson(p, facts) {
   const name = `${p.givenName || ''} ${p.familyName || ''}`.trim();
   const arabic = [p.givenNameAr, p.familyNameAr].filter(Boolean).join(' ');
   const town = facts?.town || facts?.localityNotListed || '';
+  const stored = (p.phones || []).map(x => ({ number: x.number, kind: x.kind || '' }));
+  const fromContact = !stored.length && looksLikePhone(p.contact);
+  const phones = fromContact ? [{ number: String(p.contact).trim(), kind: '' }] : stored;
   return {
     id: p.id,
     lat: name,
@@ -78,7 +100,10 @@ function toPerson(p, facts) {
     townAr: facts?.townAr || town,
     rite: p.rite || '',
     status: STATUS_IN[p.registerStatus] || '',
-    phone: p.contact || '—',
+    phone: phones.length ? phoneLabel(phones[0].number) : p.contact || '—',
+    phones,
+    phoneFromContact: fromContact,
+    contact: p.contact || '',
     born: p.birthDate || '',
     hh: null,
     tags: [],
@@ -101,12 +126,13 @@ function toExtra(id) {
     occupation: facts.occupation || '',
     skills: facts.skills || [],
     lang: facts.preferredLanguage || '',
+    languages: facts.languages?.length ? facts.languages : facts.preferredLanguage ? [facts.preferredLanguage] : [],
     address: {
       governorate: facts.region || '',
       district: facts.district || '',
       town: facts.town || facts.localityNotListed || '',
       townAr: facts.townAr || '',
-      sector: ''
+      sector: facts.sector || ''
     },
     country: facts.country || '',
     addressDetail: facts.addressDetail || '',
@@ -218,19 +244,37 @@ const omit = (o, ks) => Object.fromEntries(Object.entries(o || {}).filter(([k]) 
    households, and the core record (names, birth date, contact, rite, status) goes to PUT people/{id}. The
    relationship labels and emergency flag are portal-only. */
 const PERSON_OWNED = ['town', 'townAr', 'hh', 'rel', 'relativeTo', 'emergency'];
-const CORE = ['lat', 'ar', 'arStored', 'given', 'family', 'givenAr', 'familyAr', 'born', 'phone', 'rite', 'status'];
-/* What a PERSON_EXTRA entry sends to the API as facts. */
+const CORE = [
+  'lat',
+  'ar',
+  'arStored',
+  'given',
+  'family',
+  'givenAr',
+  'familyAr',
+  'born',
+  'phone',
+  'phones',
+  'phoneFromContact',
+  'contact',
+  'rite',
+  'status'
+];
+/* What a PERSON_EXTRA entry sends to the API as facts. The preferred language is the first one spoken. */
 const factsOf = (p, x) => ({
   region: x?.address?.governorate || '',
   district: x?.address?.district || '',
   town: p?.town || x?.address?.town || '',
   townAr: townArOf(p, x),
+  sector: x?.address?.sector || '',
   addressDetail: x?.addressDetail || '',
   occupation: x?.occupation || '',
   skills: x?.skills || [],
-  preferredLanguage: x?.lang || ''
+  languages: x?.languages || (x?.lang ? [x.lang] : []),
+  preferredLanguage: x?.languages ? x.languages.find(l => ['ar', 'en', 'fr'].includes(l)) || '' : x?.lang || ''
 });
-const EXTRA_OWNED = ['occupation', 'skills', 'lang', 'address', 'addressDetail'];
+/* grants (the consents a new person gives at registration) and directory are read on create only. */
+const EXTRA_OWNED = ['occupation', 'skills', 'lang', 'languages', 'address', 'addressDetail', 'grants'];
 /* Only the facts that changed are sent; the rest of the stored record is kept as it is. */
 const changedFacts = (a, b) => Object.fromEntries(Object.entries(b).filter(([k, v]) => !same(a?.[k], v)));
 
@@ -249,7 +293,7 @@ function dropped(p, x) {
   if (p.status && !STATUS_OUT[p.status]) out.push('the clergy status');
   if (x?.blood) out.push('the blood type');
   if (p.rel && !['relative', 'head'].includes(p.rel)) out.push('the relationship label');
-  if (x?.directory) out.push('the directory choice (record it as a consent on the Consent tab)');
+  if (x?.directory && !x?.grants) out.push('the directory choice (record it as a consent on the Consent tab)');
   return out;
 }
 
@@ -259,23 +303,68 @@ function nameParts(text) {
   return { given: w[0] || '', family: w.slice(1).join(' ') };
 }
 
-/* The core record as the API takes it, on a create and on an office edit. */
+const DIRECTORY_FIELDS = ['Name', 'Phone', 'Address', 'Household'];
+
+/* The consents a new person gave at registration (all ticked by default, owner 27 November 2026), recorded as
+   office entries with the person as the giver. They need an authenticator session; what could not be recorded
+   is reported. */
+async function recordGrants(id, p, grants, notes) {
+  const missed = [];
+  for (const kind of grants || []) {
+    try {
+      await parishAPI(`people/${enc(id)}/consents`, 'POST', {
+        operationId: newOperationId(),
+        kind,
+        purpose: 'Agreed when registered with the parish office',
+        policyVersion: 'registration-default',
+        fields: kind === 'Directory' ? DIRECTORY_FIELDS : [],
+        givenBy: (p.lat || '').trim() || 'The person'
+      });
+    } catch {
+      missed.push(kind);
+    }
+  }
+  if (missed.length) notes.add(`the consents ${missed.join(', ')} (record them on the Consent tab)`);
+}
+
+const PHONE_TEXT = list => (list || []).map(x => `${x.number}|${x.kind || ''}`).join(',');
+
+/* The core record as the API takes it, on a create and on an office edit. Separate first and last names
+   (given, family and their Arabic twins) are sent as typed; a screen that only changed the whole name (lat or ar)
+   has it split into the first word and the rest. */
 function coreBody(p, old) {
-  const latin =
-    old && old.lat === p.lat ? { given: p.given || old.given, family: p.family || old.family } : nameParts(p.lat);
+  const partsTyped = old ? p.given !== old.given || p.family !== old.family : !!(p.given && p.family);
+  const latin = partsTyped
+    ? { given: p.given || '', family: p.family || '' }
+    : old && old.lat === p.lat
+      ? { given: p.given || old.given, family: p.family || old.family }
+      : nameParts(p.lat);
   // Arabic is sent only as typed: an untouched display fallback (the Latin name) is never saved as Arabic.
+  const arPartsTyped = old
+    ? (p.givenAr || '') !== (old.givenAr || '') || (p.familyAr || '') !== (old.familyAr || '')
+    : !!(p.givenAr || p.familyAr);
   const arTyped = old ? p.ar !== old.ar : !!p.ar && p.ar !== p.lat;
-  const arabic = arTyped
-    ? nameParts(p.ar)
-    : { given: p.givenAr || old?.givenAr || '', family: p.familyAr || old?.familyAr || '' };
-  const contact = p.phone && p.phone !== '—' ? String(p.phone).trim() : null;
+  const arabic = arPartsTyped
+    ? { given: p.givenAr || '', family: p.familyAr || '' }
+    : arTyped
+      ? nameParts(p.ar)
+      : { given: p.givenAr || old?.givenAr || '', family: p.familyAr || old?.familyAr || '' };
+  // A number shown from an older contact moves into phones only when the list was changed; the contact is then cleared.
+  const phonesChanged = old ? PHONE_TEXT(p.phones) !== PHONE_TEXT(old.phones) : true;
+  const fromContact = !!(p.phoneFromContact && old?.phoneFromContact);
+  const phones = fromContact && !phonesChanged ? [] : p.phones || [];
+  let contact = p.contact !== undefined ? p.contact : p.phone && p.phone !== '—' ? p.phone : '';
+  if (fromContact && phonesChanged) contact = '';
+  // a screen that edited only the display phone (no phones list) keeps the older single-contact behaviour
+  if (!p.phones && p.phone !== old?.phone) contact = p.phone && p.phone !== '—' ? p.phone : '';
   return {
     givenName: latin.given.trim(),
     familyName: latin.family.trim(),
     givenNameAr: arabic.given || null,
     familyNameAr: arabic.family || null,
     birthDate: /^\d{4}-\d{2}-\d{2}$/.test(p.born || '') ? p.born : null,
-    contact,
+    contact: String(contact || '').trim() || null,
+    phones: phones.map(x => ({ number: x.number, kind: x.kind || null })),
     rite: (p.rite || '').trim() || null,
     registerStatus: STATUS_OUT[p.status] || null
   };
@@ -389,6 +478,7 @@ export async function save(before, now, parish) {
       Object.entries(factsOf(p, x)).filter(([, v]) => (Array.isArray(v) ? v.length : v))
     );
     if (Object.keys(given).length) await saveFacts(made.id, given);
+    await recordGrants(made.id, p, x?.grants, notes);
     dropped(p, x).forEach(n => notes.add(n));
   }
   for (const [id, p, old] of cores) await updatePerson(id, p, old);

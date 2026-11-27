@@ -1,4 +1,5 @@
-/* Parishioners: the searchable register with its filters, duplicates and CSV import, the printed
+/* Parishioners: the searchable register with its filters (Apply and Clear close the status filter), duplicates
+   with a side-by-side view, the CSV import with its column guide, the printed
    directory, adding a person, and each person's actions menu. */
 import { Select } from '../../ui/components.jsx';
 import { css, paint } from '../../ui/html.js';
@@ -10,14 +11,12 @@ import {
   Panel,
   Who,
   Status,
-  Pill,
   Table,
   Empty,
   openDrawer,
   openModal,
   closeOverlays,
   toast,
-  Stat,
   TabBar,
   openMenu,
   openPopover,
@@ -27,11 +26,23 @@ import * as C from '../../ui/components.jsx';
 import * as CR from '../../shared/record-editor.jsx';
 import { personEdit } from './people-dialogs.jsx';
 import { compose } from '../communicate/messaging-dialogs.jsx';
-import { needAll } from '../../shared/dialogs.jsx';
 import { download } from '../../shell/actions.jsx';
 import { persist } from '../../model/persist.js';
 import { createdId } from '../../model/modules/people.js';
-import { MergeHistory } from './people-duplicates.jsx';
+import { MergeHistory, dupCompare } from './people-duplicates.jsx';
+import {
+  BirthDateField,
+  ConsentChoices,
+  LanguagesField,
+  NameFields,
+  PhoneList,
+  phonesText,
+  readBirthDate,
+  readConsents,
+  readLanguages,
+  readNames,
+  readPhones
+} from './people-fields.jsx';
 import { accountStatus } from '../administration/workspace-platform.jsx';
 import { inviteWithRole, unlinkAccount } from './invite-with-role.jsx';
 import { directoryConsents, exportPeople, previewExport } from '../../model/modules/people-workflows.js';
@@ -56,25 +67,35 @@ import {
 } from '../../model/data.js';
 import {
   hh,
+  IMPORT_FIELDS,
   importDraft,
   importReview,
   occupationField,
   onlineNew,
   phoneText,
   riteLabel,
-  unverified,
   wireImport
 } from './people-shared.jsx';
 
+/* The register filters: status (Member, Visitor, or not recorded as 'none'), town, rite and the search over both
+   names and every phone number. Numbered offering envelopes are no longer shown here (owner, 27 November 2026). */
 const filteredPeople = () =>
   PEOPLE.filter(
     x =>
-      (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status)) &&
+      (!S.ui.peopleStatus || S.ui.peopleStatus.includes(x.status || 'none')) &&
       (!S.ui.peopleTown || x.town === S.ui.peopleTown) &&
       (!S.ui.peopleRite || x.rite === S.ui.peopleRite) &&
-      (!S.ui.peopleEnv || hh(x.hh)?.envelope) &&
-      matches(`${x.lat} ${x.ar} ${x.phone} ${hh(x.hh)?.envelope || ''}`, S.ui.peopleQ || '')
+      matches(
+        `${x.lat} ${x.ar} ${x.phone} ${(x.phones || []).map(n => `${n.number} ${phonesText([n])}`).join(' ')}`,
+        S.ui.peopleQ || ''
+      )
   );
+
+const STATUS_OPTIONS = () => [
+  ['member', t('Member', 'منتسب')],
+  ['visitor', t('Visitor', 'زائر')],
+  ['none', t('Not recorded', 'غير مسجّل')]
+];
 
 const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
@@ -83,24 +104,19 @@ function peopleExport() {
     ['GivenName', 'Given name', 'الاسم الأول'],
     ['FamilyName', 'Family name', 'اسم العائلة'],
     ['BirthDate', 'Date of birth', 'تاريخ الولادة'],
-    ['Contact', 'Contact', 'جهة الاتصال'],
+    ['Phones', 'Phone numbers', 'أرقام الهاتف'],
+    ['Contact', 'Other contact', 'جهة اتصال أخرى'],
     ['Archived', 'Archived', 'مؤرشف']
   ];
   openModal({
     title: t('Export people', 'تصدير المؤمنين'),
     sub: t(
-      'A CSV of the parish register. Each export is logged with its purpose.',
-      'ملف CSV بسجل الرعية. يُسجَّل كل تصدير مع غرضه.'
+      'A CSV of the parish register. Each export is logged with who made it and when.',
+      'ملف CSV بسجل الرعية. يُسجَّل كل تصدير مع اسم من أجراه ووقته.'
     ),
     body: (
       <>
-        <div className="formrow">
-          <label className="label" htmlFor="ex_purpose">
-            {t('Purpose of this export', 'غرض التصدير')}
-          </label>
-          <input className="input" id="ex_purpose" maxLength={500} />
-        </div>{' '}
-        <div className="label" style={{ margin: '16px 0 8px' }}>
+        <div className="label" style={{ margin: '0 0 8px' }}>
           {t('Fields to include (up to five)', 'الحقول المطلوبة (حتى خمسة)')}
         </div>{' '}
         <div className="choice-grid">
@@ -144,13 +160,12 @@ function peopleExport() {
       el.querySelectorAll('input[type=checkbox]').forEach(c => c.addEventListener('change', preview));
       preview();
       el.querySelector('#export-confirm').addEventListener('click', async e => {
-        const columns = chosen(),
-          purpose = el.querySelector('#ex_purpose').value.trim();
+        const columns = chosen();
         if (!columns.length) return toast(t('Choose at least one field', 'اختر حقلاً واحداً على الأقل'), '', 'warning');
-        if (!purpose) return toast(t('Say what the export is for', 'اذكر غرض التصدير'), '', 'warning');
+        if (columns.length > 5) return toast(t('Choose up to five fields', 'اختر حتى خمسة حقول'), '', 'warning');
         e.currentTarget.disabled = true;
         try {
-          const csv = await exportPeople({ purpose, columns, includeArchived: archived() });
+          const csv = await exportPeople({ columns, includeArchived: archived() });
           download('parishlife-people.csv', csv);
           closeOverlays();
           toast(t('People exported', 'صُدّر المؤمنون'), '', 'success');
@@ -248,7 +263,7 @@ export function people(tab = '') {
           <dd>{hh(p.hh) ? t(hh(p.hh).name, hh(p.hh).ar) : '—'}</dd>
           <dt>{t('Phone', 'الهاتف')}</dt>
           <dd className="mono" dir="ltr">
-            {phoneText(p.phone)}
+            {p.phones?.length ? phonesText(p.phones) : phoneText(p.phone)}
           </dd>
         </dl>{' '}
         <dl className="dl">
@@ -292,13 +307,13 @@ export function people(tab = '') {
       {head}{' '}
       <div className="toolbar" style={{ margin: '20px 0 16px' }}>
         <div className="grow" style={{ maxWidth: '320px' }}>
-          <C.SearchClear ph={t('Name, phone or envelope number', 'الاسم أو الهاتف أو رقم المظروف')} id="psearch" />
+          <C.SearchClear ph={t('Name or phone', 'الاسم أو الهاتف')} id="psearch" />
         </div>{' '}
         <button className="btn btn-secondary" data-filter="" aria-haspopup="true">
           <Icon name="filter" size={17} />
           {t('Status', 'الحالة')}
           <span className="badge" style={{ marginInlineStart: '6px' }}>
-            {(S.ui.peopleStatus || ['member', 'visitor']).length}
+            {S.ui.peopleStatus ? S.ui.peopleStatus.length : t('All', 'الكل')}
           </span>
         </button>{' '}
         <Select defaultValue={town} style={{ width: 'auto' }} id="ptown" aria-label={t('Town', 'البلدة')}>
@@ -316,27 +331,8 @@ export function people(tab = '') {
               {riteLabel(r)}
             </option>
           ))}
-        </Select>{' '}
-        <button
-          className="savedview"
-          data-act="people-env"
-          aria-pressed={!!S.ui.peopleEnv}
-          style={css(PEOPLE.some(unverified) || S.ui.peopleNew ? undefined : 'margin-inline-start:auto')}
-        >
-          <Icon name={S.ui.peopleEnv ? 'check' : 'filter'} size={14} />
-          {t('Household envelopes', 'مظاريف العائلات')}
-        </button>
+        </Select>
       </div>{' '}
-      {S.ui.peopleEnv ? (
-        <p className="help" style={{ marginBottom: '12px' }}>
-          {t(
-            'A numbered giving envelope belongs to a household. It connects counted gifts and statements to that household; its members are listed for lookup, not as individual donors.',
-            'المظروف المرقّم للعطاء يتبع العائلة المنزلية. يربط التقدمات وكشوفها بها؛ ويظهر أفرادها للبحث لا لأن كل فرد متبرّع.'
-          )}
-        </p>
-      ) : (
-        ''
-      )}{' '}
       <Table
         pick={true}
         cols={[
@@ -623,17 +619,21 @@ people.mount = host => {
         { width: 240 }
       )
     );
+  /* The status filter: the popover's content is React, so its buttons use onClick (openPopover has no onMount).
+     Apply keeps the ticked statuses and closes; Clear shows everyone again and closes. */
   host.querySelector('[data-filter]')?.addEventListener('click', e => {
     const btn = e.currentTarget,
-      current = S.ui.peopleStatus || ['member', 'visitor'];
-    const opts = [
-      ['member', t('Active', 'نشط')],
-      ['visitor', t('Visitor', 'زائر')],
-      ['clergy', t('Clergy', 'إكليروس')]
-    ];
+      opts = STATUS_OPTIONS(),
+      current = S.ui.peopleStatus || opts.map(([k]) => k);
+    const close = () => {
+      S.ui.peoplePage = 0;
+      closeMenu();
+      bus.refresh();
+      document.querySelector('[data-filter]')?.focus();
+    };
     openPopover(
       btn,
-      <div style={{ padding: '6px' }}>
+      <div style={{ padding: '6px' }} data-status-filter="">
         <div
           className="head"
           style={{
@@ -667,7 +667,7 @@ people.mount = host => {
               style={{ accentColor: 'var(--primary)', width: '16px', height: '16px' }}
             />{' '}
             <span style={{ flex: 1 }}>{lab}</span>
-            <span className="mono t-caption dimmer">{PEOPLE.filter(x => x.status === k).length}</span>
+            <span className="mono t-caption dimmer">{PEOPLE.filter(x => (x.status || 'none') === k).length}</span>
           </label>
         ))}{' '}
         <div
@@ -679,35 +679,36 @@ people.mount = host => {
             marginTop: '6px'
           }}
         >
-          <button className="btn btn-ghost btn-dense" id="fclear">
+          <button
+            type="button"
+            className="btn btn-ghost btn-dense"
+            id="fclear"
+            onClick={() => {
+              S.ui.peopleStatus = null;
+              close();
+            }}
+          >
             {t('Clear', 'مسح')}
           </button>{' '}
-          <button className="btn btn-primary btn-dense" id="fapply" style={{ marginInlineStart: 'auto' }}>
+          <button
+            type="button"
+            className="btn btn-primary btn-dense"
+            id="fapply"
+            style={{ marginInlineStart: 'auto' }}
+            onClick={ev => {
+              const ticked = [
+                ...ev.currentTarget.closest('[data-status-filter]').querySelectorAll('input:checked')
+              ].map(c => c.value);
+              // every status ticked is the same as no filter
+              S.ui.peopleStatus = ticked.length === opts.length ? null : ticked;
+              close();
+            }}
+          >
             {t('Apply', 'تطبيق')}
           </button>
         </div>
       </div>,
-      {
-        width: 260,
-        onMount(el) {
-          el.querySelector('#fclear').addEventListener('click', () => {
-            S.ui.peopleStatus = null;
-            closeMenu();
-            bus.refresh();
-          });
-          el.querySelector('#fapply').addEventListener('click', () => {
-            S.ui.peopleStatus = [...el.querySelectorAll('input:checked')].map(c => c.value);
-            S.ui.peoplePage = 0;
-            closeMenu();
-            bus.refresh();
-            toast(
-              t('Filter applied', 'طُبّق المرشّح'),
-              `${PEOPLE.filter(x => S.ui.peopleStatus.includes(x.status)).length} ${t('people', 'شخصاً')}`,
-              'success'
-            );
-          });
-        }
-      }
+      { width: 260 }
     );
   });
   /* search, town and rite filter the whole register (not just this page), then paging starts again */
@@ -770,32 +771,55 @@ function duplicates() {
             </div>{' '}
             <div className="panel-b">
               <div className="grid g2" style={{ gap: '16px' }}>
-                {[d.a, d.b].map((r, j) => (
-                  <div key={j} className="card card-flat">
-                    <div className="row" style={{ gap: '10px' }}>
-                      <span className="avatar">
-                        {r.lat
-                          .split(' ')
-                          .map(x => x[0])
-                          .slice(0, 2)}
-                      </span>{' '}
-                      <span>
-                        <b style={{ display: 'block' }}>{isAr() ? r.ar : r.lat}</b>{' '}
-                        <small className="t-caption dim">{isAr() ? r.lat : r.ar}</small>
-                      </span>
-                    </div>{' '}
-                    <dl className="dl" style={{ marginTop: '12px', fontSize: '13px' }}>
-                      <dt>{t('Town', 'البلدة')}</dt>
-                      <dd>{r.town}</dd>
-                      <dt>{t('Born', 'الولادة')}</dt>
-                      <dd className="mono">{r.born}</dd>
-                    </dl>{' '}
-                    <label className="check" style={{ marginTop: '12px' }}>
-                      <input type="radio" name={`keep${i}`} defaultChecked={!!(j === 0)} />{' '}
-                      <span>{t('Keep this one', 'احتفظ بهذا')}</span>
-                    </label>
-                  </div>
-                ))}
+                {[d.a, d.b].map((r, j) => {
+                  const full = person(r.id) || r;
+                  return (
+                    <div key={j} className="card card-flat">
+                      <div className="row" style={{ gap: '10px', alignItems: 'flex-start' }}>
+                        <span className="avatar">
+                          {(full.lat || '')
+                            .split(' ')
+                            .map(x => x[0])
+                            .slice(0, 2)}
+                        </span>{' '}
+                        <span className="grow">
+                          <b style={{ display: 'block' }}>{isAr() ? full.ar : full.lat}</b>{' '}
+                          <small className="t-caption dim">{isAr() ? full.lat : full.ar}</small>
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-dense"
+                          data-dup-compare={i}
+                          onClick={() => dupCompare(i)}
+                        >
+                          <Icon name="family" size={15} />
+                          {t('View side by side', 'عرض جنباً إلى جنب')}
+                        </button>
+                      </div>{' '}
+                      <dl className="dl" style={{ marginTop: '12px', fontSize: '13px' }}>
+                        <dt>{t('Town', 'البلدة')}</dt>
+                        <dd>{full.town ? t(full.town, full.townAr || full.town) : '—'}</dd>
+                        <dt>{t('Born', 'الولادة')}</dt>
+                        <dd className="mono" dir="ltr">
+                          {full.born ? fmtDate(full.born) : '—'}
+                        </dd>
+                        <dt>{t('Phone', 'الهاتف')}</dt>
+                        <dd className="mono" dir="ltr">
+                          {full.phones?.length ? phonesText(full.phones) : phoneText(full.phone)}
+                        </dd>
+                      </dl>{' '}
+                      <label className="check" style={{ marginTop: '12px' }}>
+                        <input type="radio" name={`keep${i}`} defaultChecked={!!(j === 0)} />{' '}
+                        <span>
+                          {t('Keep this record', 'الإبقاء على هذا السجل')}{' '}
+                          <span className="dim t-caption">
+                            {t('(the other is merged into it)', '(يُدمج الآخر فيه)')}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
               </div>{' '}
               <div className="row" style={{ gap: '8px', marginTop: '16px' }}>
                 <button className="btn btn-secondary" data-act={`dup-dismiss:${i}`}>
@@ -814,21 +838,14 @@ function duplicates() {
   );
 }
 
-const importFields = [
-  ['lat', 'English name'],
-  ['ar', 'Arabic name'],
-  ['phone', 'Phone'],
-  ['born', 'Birth date'],
-  ['town', 'Town'],
-  ['rite', 'Rite'],
-  ['occupation', 'Line of work']
-];
-
+/* The CSV import: a short guide to the expected columns, the column mapping, then the review with each row
+   marked Ready (green) or Needs correction (red) before anything is saved. */
 function importView() {
   const review = importReview(),
     valid = review.filter(x => !x.errors.length),
     invalid = review.filter(x => x.errors.length);
   const duplicates = importDraft?.map.filter(Boolean).filter((x, i, a) => a.indexOf(x) !== i) || [];
+  const small = { fontSize: '12px', lineHeight: '18px' };
   return (
     <div className="stack" style={{ marginTop: '20px', gap: '16px' }}>
       <Panel title={t('1 · Choose a CSV file', '١ · اختر ملف CSV')}>
@@ -843,14 +860,58 @@ function importView() {
           <p className="help">
             {importDraft.name} · {importDraft.rows.length} {t('data rows', 'صفوف بيانات')}
           </p>
-        ) : (
-          <p className="help">
-            {t(
-              'Use a CSV file with column headings. Nothing is saved until you review and confirm.',
-              'استخدم ملف CSV بعناوين أعمدة. لا يُحفظ شيء قبل المراجعة والتأكيد.'
-            )}
+        ) : null}
+        <details className="import-guide" open={!importDraft} style={{ marginTop: '12px' }} data-import-guide="">
+          <summary className="t-ui" style={{ cursor: 'pointer' }}>
+            {t('How to prepare the file', 'كيف تحضّر الملف')}
+          </summary>
+          <ol className="help" style={{ margin: '8px 0', paddingInlineStart: '20px', ...small }}>
+            <li>
+              {t(
+                'Save the spreadsheet as CSV (comma separated), with the column names on the first row and one person per row.',
+                'احفظ الجدول بصيغة CSV (مفصول بفواصل)، وأسماء الأعمدة في الصف الأول، وشخص واحد في كل صف.'
+              )}
+            </li>
+            <li>
+              {t(
+                'Columns with the names below are matched automatically; for any other name, choose what it holds in step 2, or Skip it.',
+                'تُطابق الأعمدة التي تحمل الأسماء أدناه تلقائياً؛ لأي اسم آخر اختر ما يحتويه في الخطوة ٢ أو تخطّه.'
+              )}
+            </li>
+            <li>
+              {t(
+                'Names hold letters only. Dates are dd/mm/yyyy (or yyyy-mm-dd). Several phone numbers go in one cell, separated by ";".',
+                'الأسماء أحرف فقط. التواريخ بصيغة يوم/شهر/سنة (أو سنة-شهر-يوم). أرقام الهاتف المتعددة في خانة واحدة يفصل بينها «;».'
+              )}
+            </li>
+          </ol>
+          <table className="tbl" style={{ ...small, marginTop: '6px' }}>
+            <thead>
+              <tr>
+                <th>{t('Field', 'الحقل')}</th>
+                <th>{t('Column names recognised', 'أسماء الأعمدة المعروفة')}</th>
+                <th>{t('Example', 'مثال')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {IMPORT_FIELDS.map(([key, en, ar, names, example]) => (
+                <tr key={key}>
+                  <td>
+                    {t(en, ar)}
+                    {['given', 'family'].includes(key) ? <span className="req">*</span> : null}
+                  </td>
+                  <td className="mono" dir="ltr">
+                    {names.join(', ')}
+                  </td>
+                  <td dir="auto">{example}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="help" style={small}>
+            {t('Nothing is saved until you review the rows and confirm.', 'لا يُحفظ شيء قبل مراجعة الصفوف والتأكيد.')}
           </p>
-        )}
+        </details>
       </Panel>{' '}
       {importDraft ? (
         <Panel title={t('2 · Map columns', '٢ · طابق الأعمدة')} tight={true}>
@@ -865,9 +926,9 @@ function importView() {
                   aria-label={`${t('Map column', 'طابق العمود')} ${name}`}
                 >
                   <option value="">{t('Skip', 'تخطّ')}</option>
-                  {importFields.map(([key, label], k) => (
-                    <option key={k} value={key}>
-                      {t(label, label)}
+                  {IMPORT_FIELDS.map(([key, en, ar]) => (
+                    <option key={key} value={key}>
+                      {t(en, ar)}
                     </option>
                   ))}
                 </Select>
@@ -890,27 +951,43 @@ function importView() {
           ) : (
             ''
           )}{' '}
-          <div className="stats">
-            <Stat k={t('Ready', 'جاهز')} v={valid.length} />
-            <Stat k={t('Needs correction', 'يحتاج تصحيحاً')} v={invalid.length} />
+          <div className="row" style={{ gap: '8px', padding: '12px 16px', flexWrap: 'wrap' }} data-import-counts="">
+            <span className="pill pill-success" style={small}>
+              <span className="dot" />
+              {t('Ready', 'جاهز')}: <b className="tnum">{valid.length}</b>
+            </span>
+            <span className={`pill ${invalid.length ? 'pill-danger' : ''}`} style={small}>
+              <span className="dot" />
+              {t('Needs correction', 'يحتاج تصحيحاً')}: <b className="tnum">{invalid.length}</b>
+            </span>
           </div>{' '}
           <Table
             cols={[
-              { label: t('Row', 'الصف') },
-              { label: t('English name', 'الاسم الإنكليزي') },
-              { label: t('Arabic name', 'الاسم العربي') },
+              { label: t('Row', 'الصف'), cls: 'shrink' },
+              { label: t('Name', 'الاسم') },
+              { label: t('Arabic name', 'الاسم بالعربية') },
               { label: t('Result', 'النتيجة') }
             ]}
-            rows={review
-              .slice(0, 100)
-              .map(item => ({
-                cells: [
-                  String(item.line),
-                  item.record.lat || '—',
-                  item.record.ar || '—',
-                  item.errors.length ? item.errors.join(' · ') : <Pill label={t('Ready', 'جاهز')} tone="success" />
-                ]
-              }))}
+            rows={review.slice(0, 100).map(item => ({
+              cells: [
+                <span className="mono" style={small}>
+                  {item.line}
+                </span>,
+                <span style={small}>{`${item.record.given || ''} ${item.record.family || ''}`.trim() || '—'}</span>,
+                <span style={small} dir="auto">
+                  {`${item.record.givenAr || ''} ${item.record.familyAr || ''}`.trim() || '—'}
+                </span>,
+                item.errors.length ? (
+                  <span style={{ ...small, color: 'var(--danger)' }} data-import-result="fix">
+                    {t('Needs correction', 'يحتاج تصحيحاً')}: {item.errors.join(' · ')}
+                  </span>
+                ) : (
+                  <span style={{ ...small, color: 'var(--success)' }} data-import-result="ready">
+                    {t('Ready', 'جاهز')}
+                  </span>
+                )
+              ]
+            }))}
           />{' '}
           {review.length > 100 ? (
             <p className="help">
@@ -922,7 +999,7 @@ function importView() {
           ) : (
             ''
           )}{' '}
-          <div className="row" style={{ justifyContent: 'flex-end', marginTop: '14px' }}>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: '14px', padding: '0 16px 16px' }}>
             <button
               className="btn btn-primary"
               id="people-import-save"
@@ -1003,33 +1080,24 @@ export function newPersonDrawer() {
     large: true,
     title: t('New parishioner', 'مؤمن جديد'),
     sub: t(
-      'Both names are required. The Arabic name is what a certificate prints.',
-      'الاسمان مطلوبان. الاسم العربي هو ما تطبعه الشهادة.'
+      'First and last name are required in English and in Arabic. The Arabic name is what a certificate prints.',
+      'الاسم الأول واسم العائلة مطلوبان بالإنكليزية وبالعربية. الاسم العربي هو ما تطبعه الشهادة.'
     ),
     body: (
       <>
-        <C.NamePair />
-        <C.PhoneField id="newphone" value="" required={false} />{' '}
+        <NameFields />
         <div className="formgrid">
-          <C.Field label={t('Date of birth', 'تاريخ الولادة')} type="date" id="newborn" />
-        </div>{' '}
-        {occupationField('newoccupation')} <div className="divider" />{' '}
+          <BirthDateField id="newborn" />
+          {occupationField('newoccupation')}
+        </div>
+        <PhoneList />
+        <div className="divider" />
         <h4 className="t-ui" style={{ marginBottom: '12px' }}>
           {t('Address', 'العنوان')}
-        </h4>{' '}
-        <C.AddressCascade /> <div className="divider" />{' '}
-        <div className="formgrid">
-          <div className="formrow">
-            <label htmlFor="newlang" className="label">
-              {t('Language', 'اللغة')}
-            </label>{' '}
-            <Select id="newlang">
-              <option value="ar">{t('Arabic', 'العربية')}</option>
-              <option value="en">{t('English', 'الإنكليزية')}</option>
-              <option value="fr">{t('French', 'الفرنسية')}</option>
-            </Select>
-          </div>
-        </div>{' '}
+        </h4>
+        <C.AddressCascade />
+        <div className="divider" />
+        <LanguagesField value={['ar']} />
         <div className="formrow">
           <label className="label">{t('Assign to existing groups', 'إسناد إلى مجموعات قائمة')}</label>
           <div className="choice-grid">
@@ -1046,24 +1114,13 @@ export function newPersonDrawer() {
               'يمكن الإسناد إلى المجموعات القائمة فقط عند التسجيل.'
             )}
           </span>
-        </div>{' '}
-        <C.AvatarUpload k="new" /> <div className="divider" />{' '}
-        <div className="stack" style={{ gap: '10px' }}>
-          <C.CheckRow
-            label={t('Send parish announcements on WhatsApp', 'إرسال إعلانات الرعية على واتساب')}
-            id="announce-optin"
-          />{' '}
-          <label className="row">
-            <input type="checkbox" id="directory-optin" />
-            <span>{t('Include in the printed parish directory', 'إدراج في دليل الرعية المطبوع')}</span>
-          </label>{' '}
-          <p className="help">
-            {t(
-              'This controls the printed parish people directory: English and Arabic names, household, town, and phone. It does not change private records or other exports.',
-              'يتحكّم هذا بدليل مؤمني الرعية المطبوع: الاسمان الإنكليزي والعربي والعائلة والبلدة والهاتف. لا يغيّر السجلات الخاصة أو الصادرات الأخرى.'
-            )}
-          </p>
         </div>
+        <C.AvatarUpload k="new" />
+        <div className="divider" />
+        <h4 className="t-ui" style={{ marginBottom: '12px' }}>
+          {t('Consents', 'الموافقات')}
+        </h4>
+        <ConsentChoices />
       </>
     ),
     foot: (
@@ -1083,15 +1140,15 @@ export function newPersonDrawer() {
       let saving = false;
       async function save(addNext) {
         if (saving) return;
-        const lat = el.querySelector('#latname')?.value.trim(),
-          ar = el.querySelector('#arname')?.value.trim();
-        if (
-          !needAll(el, [
-            ['#latname', t('Enter the English name', 'أدخل الاسم الإنكليزي')],
-            ['#arname', t('Enter the Arabic name', 'أدخل الاسم العربي')]
-          ])
-        )
-          return;
+        const names = readNames(el);
+        if (names.problem) return toast(t('Check the name', 'تحقّق من الاسم'), names.problem, 'warning');
+        const born = readBirthDate(el, 'newborn');
+        if (born.problem) {
+          el.querySelector('#newborn')?.focus();
+          return toast(t('Check the date of birth', 'تحقّق من تاريخ الولادة'), born.problem, 'warning');
+        }
+        const { phones, problem } = readPhones(el);
+        if (problem) return toast(t('Check the phone number', 'تحقّق من رقم الهاتف'), problem, 'warning');
         const address = readAddressCascade(el);
         if (
           (address.governorate || address.district || address.town) &&
@@ -1103,33 +1160,35 @@ export function newPersonDrawer() {
         const id = 'p' + Date.now().toString(36);
         const rec = {
           id,
-          lat,
-          ar,
+          lat: names.lat,
+          ar: names.ar,
+          given: names.given,
+          family: names.family,
+          givenAr: names.givenAr,
+          familyAr: names.familyAr,
           town: address.town || '',
-          townAr: address.townAr || '',
+          townAr: address.townAr || address.town || '',
           rite: '',
           status: '',
-          phone: el.querySelector('#newphone')?.value.trim() || '—',
-          born: el.querySelector('#newborn')?.value || '',
+          phones,
+          phone: phones.length ? phonesText(phones.slice(0, 1)) : '—',
+          contact: '',
+          born: born.iso,
           hh: null,
           tags: []
         };
         PEOPLE.unshift(rec);
-        const announcement = !!el.querySelector('#announce-optin')?.checked,
-          directory = !!el.querySelector('#directory-optin')?.checked;
+        const grants = readConsents(el),
+          languages = readLanguages(el);
         PERSON_EXTRA[id] = {
           address,
-          directory,
-          lang: el.querySelector('#newlang')?.value || 'ar',
+          grants,
+          languages,
+          lang: languages.find(l => ['ar', 'en', 'fr'].includes(l)) || '',
           occupation: el.querySelector('#newoccupation')?.value.trim() || '',
-          channel: announcement ? 'whatsapp' : '',
+          channel: grants.includes('Communications') ? 'whatsapp' : '',
           skills: [],
-          dates: [],
-          consent: [
-            ['Parish announcements on WhatsApp', 'إعلانات الرعية على واتساب', announcement],
-            ['Printed parish directory', 'الدليل المطبوع', directory],
-            ['Photos in parish media', 'الصور في وسائل الرعية', false]
-          ]
+          dates: []
         };
         el.querySelectorAll('input[id^="newgroup-"]:checked').forEach(input => {
           const gid = input.id.slice(9),
@@ -1165,7 +1224,7 @@ export function newPersonDrawer() {
         }
         D.PARISH.people = PEOPLE.length;
         closeOverlays();
-        toast(t('Parishioner saved', 'حُفظ المؤمن'), `${lat} · ${ar}`, 'success');
+        toast(t('Parishioner saved', 'حُفظ المؤمن'), `${names.lat} · ${names.ar}`, 'success');
         if (addNext) {
           bus.refresh();
           newPersonDrawer();

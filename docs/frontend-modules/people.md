@@ -29,11 +29,28 @@ Several routes need an authenticator (MFA) session; without one the API answers 
 - **Still undone and reported, nothing sent:** deleting a person or household, tags, the notification channel, blood type outside the medical declaration, relationship labels, important dates and parish fields.
 - The CSV import screen no longer fills an empty rite with a default rite or marks everyone a member.
 
+## Owner requests of 27 November 2026 (branch `agent/people-fixes`)
+
+- **Names.** Separate first and last name in English and in Arabic (`features/records/people-fields.jsx`, `NameFields`). Letters only: Latin letters for the English pair, Arabic letters for the Arabic pair; spaces, hyphens, apostrophes and full stops may join them. The API enforces the same rule (`Services/People/PersonRules.cs`, `Validation/PersonNameAttribute.cs`) on create, office edit and CSV import staging. Older records with digits or the other script must be corrected before their next office edit.
+- **Phones.** A person has up to five numbers (`Person.Phones`: international `Number`, `Kind` Mobile or Landline). The leading 0 is dropped; Lebanese 03 and landlines (01, 04 to 09) have 7 digits, 70, 71, 76, 78, 79 and 81 have 8, and the kind is derived from the prefix (a 7-digit number starting with 7 is a 07 landline). Foreign numbers need 8 to 15 digits with the country code and may state their kind. The form is `PhoneList` (country picker from `ui/phone-input.jsx`). An older record whose single `contact` is a phone number shows it as its first phone; it moves into `phones` (and the contact is cleared) only when the office saves a changed list. Phones travel through merges (field `Phones`), duplicate signals ("Same phone number"), search, export (column `Phones`) and own-data, and are cleared by an approved data closure.
+- **Date of birth** is typed as dd/mm/yyyy, never in the future and never more than 110 years ago (API too).
+- **Address.** All governorates and districts of Lebanon are offered (`ui/geography.jsx`). Towns are listed only where a verified list exists (Baabda); elsewhere, or with "Another town", the town and its Arabic spelling are typed. The sector is typed and stored in facts `Sector`.
+- **Languages.** Several languages (facts `Languages`, ISO codes); `PreferredLanguage` is the first of Arabic, English or French among them.
+- **Skills** are typed and added one at a time (no digits, API too); the "search existing skills" list is gone.
+- **Consents.** In the new-person drawer every consent (WhatsApp announcements = Communications, printed directory, photos, events) is ticked by default in the same control style; the ticked ones are recorded after the create as office entries (`PaperReceived`) with the person as the giver, purpose "Agreed when registered with the parish office", policy version `registration-default`, and Directory fields Name, Phone, Address and Household. They need an authenticator session; what could not be recorded is reported. Withdrawing ("Remove this consent") no longer requires a reason. Owner to confirm the policy version label.
+- **Export** asks for no purpose; the API logs a blank one as "Not stated".
+- **Status filter**: Member, Visitor, Not recorded; Apply and Clear close the popover (its buttons now use `onClick`, since `openPopover` has no `onMount`).
+- **Duplicates**: "View side by side" on each column opens both records field by field; the merge form names the kept record and the merged one and offers each differing value as "Keep the kept record's value" or "Use the value from the merged record".
+- **Import**: a guide lists the recognised column names (First name, Last name, their Arabic twins, Phone numbers separated by ";", Date of birth dd/mm/yyyy, Town, Rite, Line of work); rows are marked Ready (green) or Needs correction (red) in a smaller font, with the same name, date and phone checks.
+- **Profile page**: the record's facts use the whole width in a responsive grid; skills and languages, household and account sit side by side below. The portal-only "important dates" and "parish fields" (never stored by the API) are no longer shown.
+- **Family tab**: "Link or create a household" offers "+ New household" (name, optional Arabic name); the household is created with the person as its first member and contact.
+- **Offering envelopes** are no longer shown on the People and person screens (search, filter, header, Giving tab). The stored `envelopeId` is untouched; the household form (`shared/record-editor.jsx`, households area) still has its optional field.
+
 ## Fields with no API equivalent
 
 Tags, relationship labels (`rel`, `relativeTo`, emergency flag), notification channel, important dates and parish fields, a duplicate "similarity score" (the API gives signals and differences instead), the envelope on a duplicate card, the member-side "My parish records" correction form in `profile-reviews.jsx` (`RecordCorrections`, shown on My account, still calls the old route; it belongs with the account/member modules and `GET/POST profile-corrections`).
 
-The old sector level of the address has no field. Facts' region holds the portal's governorate.
+Facts' region holds the portal's governorate; the sector is facts `Sector` (since 27 November 2026).
 
 ## Fixed in the already-connected list
 
@@ -51,6 +68,6 @@ The first connection used `pageSize=200` (the API allows 100) and archived witho
 
 1. **Which rites exist.** Rite is free text so no list is invented; the screens' rite filter uses the values recorded. Say whether a fixed list (and its Arabic labels) should be enforced.
 2. **What Member and Visitor mean.** They are labels only: they grant no account membership, eligibility, voting, sacrament or registration rights. Say whether any rule should depend on them, and whether other values are needed.
-3. **Directory opt-in when adding a person.** Should the office's checkbox record a paper Directory consent, and if so which policy version, which fields and who is recorded as the giver?
+3. **Directory opt-in when adding a person.** Settled by the owner on 27 November 2026: consents are granted by default and recorded at registration (see above). Still to confirm: the policy version label `registration-default`, and whether existing people without consent records should also count as granted (not done: the printed directory still lists only people with a given Directory consent).
 4. The profile-correction list returns only pending items; decided ones cannot be listed.
 5. Merges now also offer the Arabic names, rite and status as fields to choose between; confirm that is the intended review.

@@ -190,6 +190,7 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
       familyNameAr: body.familyNameAr,
       birthDate: body.birthDate,
       contact: body.contact,
+      phones: body.phones || [],
       rite: body.rite,
       registerStatus: body.registerStatus
     };
@@ -523,9 +524,13 @@ assert.deepEqual([body.region, body.district, body.town, body.skills], ['Mount L
 assert.equal(D.PEOPLE.find(p => p.id === B).town, 'Baabda');
 
 // ---------- the office edit of the core record ----------
+// an older single contact that is a phone number is shown as the first phone, without being moved yet
+assert.deepEqual(
+  [fresh().phones, fresh().phoneFromContact, fresh().contact],
+  [[{ number: '03 421 887', kind: '' }], true, '03 421 887']
+);
 fresh().lat = 'Georges Haddad Jr';
 fresh().born = '1970-01-01';
-fresh().phone = '03 999 000';
 fresh().status = 'visitor';
 assert.equal(await persist(), true);
 [method, path, body] = lastWrite();
@@ -538,13 +543,43 @@ assert.deepEqual(
     body.familyNameAr,
     body.birthDate,
     body.contact,
+    body.phones,
     body.rite,
     body.registerStatus
   ],
-  ['Georges', 'Haddad Jr', 'جورج', 'حداد', '1970-01-01', '03 999 000', 'Maronite', 'Visitor'],
-  'an untouched Arabic name keeps its stored parts'
+  ['Georges', 'Haddad Jr', 'جورج', 'حداد', '1970-01-01', '03 421 887', [], 'Maronite', 'Visitor'],
+  'an untouched Arabic name keeps its stored parts; an unchanged contact stays a contact'
 );
 assert.deepEqual([fresh().lat, fresh().born, fresh().status], ['Georges Haddad Jr', '1970-01-01', 'visitor']);
+// separate first and last names are sent as typed; a changed phone list moves the number out of the contact
+Object.assign(fresh(), {
+  given: 'Georges',
+  family: 'Abou Haddad',
+  lat: 'Georges Abou Haddad',
+  phones: [
+    { number: '+96171821056', kind: 'Mobile' },
+    { number: '+33612345678', kind: '' }
+  ]
+});
+assert.equal(await persist(), true);
+[method, path, body] = lastWrite();
+assert.deepEqual(
+  [body.givenName, body.familyName, body.contact, body.phones],
+  [
+    'Georges',
+    'Abou Haddad',
+    null,
+    [
+      { number: '+96171821056', kind: 'Mobile' },
+      { number: '+33612345678', kind: null }
+    ]
+  ]
+);
+assert.deepEqual(
+  [fresh().phone, fresh().phoneFromContact, fresh().phones.length],
+  ['+961 71 821 056', false, 2],
+  'the screen shows what was stored'
+);
 // an Arabic name typed for someone who had none is sent as typed; the Latin one is never copied into it
 Object.assign(
   D.PEOPLE.find(p => p.id === B),
@@ -619,6 +654,65 @@ assert.ok(D.PEOPLE.some(p => p.id === maya.id && p.town === 'Hadath'));
 assert.equal(events.length, 0, 'the Arabic name, rite and status are all kept, so nothing is reported');
 const { createdId } = await import('../../src/portal/model/modules/people.js');
 assert.equal(createdId('draft'), maya.id);
+
+// the new-person drawer (27 November 2026): separate names, several phones, languages, a typed sector, and the
+// consents ticked by default recorded after the create, with the person as the giver
+D.PEOPLE.unshift({
+  id: 'draft2',
+  lat: 'Rita Abi Nader',
+  ar: 'ريتا أبي نادر',
+  given: 'Rita',
+  family: 'Abi Nader',
+  givenAr: 'ريتا',
+  familyAr: 'أبي نادر',
+  phones: [{ number: '+96171821056', kind: 'Mobile' }],
+  phone: '+961 71 821 056',
+  contact: '',
+  born: '1985-02-03',
+  town: 'Jounieh',
+  townAr: 'جونية',
+  rite: '',
+  status: '',
+  hh: null,
+  tags: []
+});
+D.PERSON_EXTRA.draft2 = {
+  address: {
+    governorate: 'Keserwan-Jbeil',
+    district: 'Keserwan',
+    town: 'Jounieh',
+    townAr: 'جونية',
+    sector: 'Haret Sakhr'
+  },
+  grants: ['Communications', 'Directory'],
+  languages: ['hy', 'fr', 'ar'],
+  occupation: '',
+  skills: []
+};
+events.length = 0;
+assert.equal(await persist(), true);
+const rita = people.find(p => p.givenName === 'Rita');
+const ritaPost = sent.find(([mth, p, bd]) => mth === 'POST' && p === 'parishes/P/people' && bd.givenName === 'Rita')[2];
+assert.deepEqual(
+  [ritaPost.familyName, ritaPost.givenNameAr, ritaPost.familyNameAr, ritaPost.contact, ritaPost.phones],
+  ['Abi Nader', 'ريتا', 'أبي نادر', null, [{ number: '+96171821056', kind: 'Mobile' }]]
+);
+[method, path, body] = sent.find(([mth, p]) => mth === 'PUT' && p === `parishes/P/people/${rita.id}/facts`);
+assert.deepEqual(
+  [body.languages, body.preferredLanguage, body.sector, body.district, body.townAr],
+  [['hy', 'fr', 'ar'], 'fr', 'Haret Sakhr', 'Keserwan', 'جونية']
+);
+const granted = sent
+  .filter(([mth, p]) => mth === 'POST' && p === `parishes/P/people/${rita.id}/consents`)
+  .map(x => x[2]);
+assert.deepEqual(
+  granted.map(c => [c.kind, c.givenBy, c.fields]),
+  [
+    ['Communications', 'Rita Abi Nader', []],
+    ['Directory', 'Rita Abi Nader', ['Name', 'Phone', 'Address', 'Household']]
+  ]
+);
+assert.equal(events.length, 0, 'every granted consent was recorded, so nothing is reported');
 
 const b = D.PEOPLE.find(p => p.id === B);
 D.PEOPLE.splice(D.PEOPLE.indexOf(b), 1);

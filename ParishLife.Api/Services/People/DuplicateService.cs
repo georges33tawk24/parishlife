@@ -15,7 +15,7 @@ namespace ParishLife.Api.Services.People;
 
 public class DuplicateService(IRecordTransactions records, IParishAccess access, IClergyAuthority clergy, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock)
 {
-    private static readonly string[] Fields = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Rite", "RegisterStatus"];
+    private static readonly string[] Fields = ["GivenName", "FamilyName", "GivenNameAr", "FamilyNameAr", "BirthDate", "Contact", "Phones", "Rite", "RegisterStatus"];
     // Records that keep pointing at the merged-away person; they stay individually traceable and are listed, never rewritten.
     private static readonly string[] DependentTypes = ["sacramentRecord", "registration", "volunteerAssignment", "householdMember", "personConsent"];
     private static DomainException Missing() => new("resource_not_found", "The requested person is unavailable.", FailureKind.NotFound);
@@ -50,6 +50,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
                 if (PeopleDirectoryService.Normalize(a.GivenName) == PeopleDirectoryService.Normalize(b.GivenName)) signals.Add("Same given name");
                 if (a.BirthDate is not null && a.BirthDate == b.BirthDate) signals.Add("Same birth date");
                 if (a.Contact is not null && PeopleDirectoryService.Normalize(a.Contact) == PeopleDirectoryService.Normalize(b.Contact ?? "")) signals.Add("Same contact");
+                if (a.Phones.Any(x => b.Phones.Any(y => y.Number == x.Number))) signals.Add("Same phone number");
                 if (signals.Count < 2 || decisions.GetValueOrDefault(PairKey(a.Id, b.Id)) == "different")
                     continue;
                 result.Add(new DuplicateSuggestionDto
@@ -193,6 +194,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
         "BirthDate" => p.BirthDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         "Rite" => p.Rite,
         "RegisterStatus" => p.RegisterStatus,
+        "Phones" => string.Join(" ", p.Phones.Select(x => x.Number)),
         _ => p.Contact
     };
 
@@ -206,6 +208,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
             case "FamilyNameAr": target.FamilyNameAr = from.FamilyNameAr; break;
             case "BirthDate": target.BirthDate = from.BirthDate; break;
             case "Contact": target.Contact = from.Contact; break;
+            case "Phones": target.Phones = [.. from.Phones.Select(x => new PersonPhone { Number = x.Number, Kind = x.Kind })]; break;
             case "Rite": target.Rite = from.Rite; break;
             case "RegisterStatus": target.RegisterStatus = from.RegisterStatus; break;
         }
@@ -214,7 +217,7 @@ public class DuplicateService(IRecordTransactions records, IParishAccess access,
     private static Person Copy(Person p) => new()
     {
         Id = p.Id, ParishId = p.ParishId, GivenName = p.GivenName, FamilyName = p.FamilyName, GivenNameAr = p.GivenNameAr, FamilyNameAr = p.FamilyNameAr,
-        BirthDate = p.BirthDate, Contact = p.Contact, Rite = p.Rite, RegisterStatus = p.RegisterStatus, CreatedBy = p.CreatedBy, CreatedAt = p.CreatedAt,
+        BirthDate = p.BirthDate, Contact = p.Contact, Phones = [.. p.Phones.Select(x => new PersonPhone { Number = x.Number, Kind = x.Kind })], Rite = p.Rite, RegisterStatus = p.RegisterStatus, CreatedBy = p.CreatedBy, CreatedAt = p.CreatedAt,
         UpdatedBy = p.UpdatedBy, UpdatedAt = p.UpdatedAt, Archived = p.Archived
     };
 

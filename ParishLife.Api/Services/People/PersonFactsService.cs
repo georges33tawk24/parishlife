@@ -1,4 +1,4 @@
-// Purpose: keeps optional person facts (structured locality, occupation/skills, language, deceased status), purpose-limited medical
+// Purpose: keeps optional person facts (structured locality with an optional typed sector, occupation/skills without digits, languages, deceased status), purpose-limited medical
 // declarations protected at rest for designated staff only, and separate consents with source, giver and recorded withdrawal.
 // Main functions: SaveFactsAsync, GetFactsAsync, ListFactsAsync (parish-wide page for lists), SaveMedicalAsync, GetMedicalAsync, RecordConsentAsync, RecordOwnConsentAsync,
 // WithdrawConsentAsync, WithdrawOwnConsentAsync, ConsentsAsync, ParishConsentsAsync (parish-wide, e.g. the printed directory) and OwnConsentsAsync.
@@ -46,7 +46,7 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
             return Project((await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person, ct))!.Value);
         await PersonAsync(parish, person, ct);
         var old = await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + person, ct);
-        var skills = request.Skills.Select(s => Guard.Text(s, "Skill", 80)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var skills = request.Skills.Select(PersonRules.Skill).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         // Partial dates keep their precision; nothing invents a day or month.
         var precision = request.DeceasedPrecision;
         string? on = null;
@@ -63,8 +63,9 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
         {
             PersonId = person, ParishId = parish, Country = Optional(request.Country, "Country", 100), Region = Optional(request.Region, "Region", 100),
             District = Optional(request.District, "District", 100), Town = Optional(request.Town, "Town", 100), TownAr = Optional(request.TownAr, "Arabic town", 100),
+            Sector = Optional(request.Sector, "Sector", 100),
             AddressDetail = Optional(request.AddressDetail, "Address detail", 300), LocalityNotListed = Optional(request.LocalityNotListed, "Locality not listed", 300),
-            Occupation = Optional(request.Occupation, "Occupation", 200), Skills = skills, PreferredLanguage = request.PreferredLanguage,
+            Occupation = Optional(request.Occupation, "Occupation", 200), Skills = skills, PreferredLanguage = request.PreferredLanguage, Languages = PersonRules.LanguageCodes(request.Languages),
             DeceasedOn = on, DeceasedPrecision = precision, DeceasedEvidence = evidence, UpdatedBy = actor.AccountId, UpdatedAt = op.At
         };
         if (item.LocalityNotListed is not null && (item.Town is not null || item.TownAr is not null))
@@ -234,10 +235,10 @@ public class PersonFactsService(IRecordTransactions records, IParishAccess acces
 
     internal static PersonFactsDto Project(PersonFacts x) => new()
     {
-        PersonId = x.PersonId, Country = x.Country, Region = x.Region, District = x.District, Town = x.Town, TownAr = x.TownAr, AddressDetail = x.AddressDetail,
+        PersonId = x.PersonId, Country = x.Country, Region = x.Region, District = x.District, Town = x.Town, TownAr = x.TownAr, Sector = x.Sector, AddressDetail = x.AddressDetail,
         LocalityNotListed = x.LocalityNotListed,
         LocalityStatus = x.LocalityNotListed is not null ? "PendingReview" : x.Town is not null || x.TownAr is not null ? "Listed" : "NotRecorded",
-        Occupation = x.Occupation, Skills = x.Skills, PreferredLanguage = x.PreferredLanguage, Deceased = x.DeceasedPrecision is not null,
+        Occupation = x.Occupation, Skills = x.Skills, PreferredLanguage = x.PreferredLanguage, Languages = x.Languages ?? [], Deceased = x.DeceasedPrecision is not null,
         DeceasedOn = x.DeceasedOn, DeceasedPrecision = x.DeceasedPrecision, DeceasedEvidence = x.DeceasedEvidence, UpdatedBy = x.UpdatedBy, UpdatedAt = x.UpdatedAt
     };
 

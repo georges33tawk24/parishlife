@@ -1,5 +1,5 @@
 // Purpose: saves a person's optional facts; Version is required when facts already exist.
-// Main members: OperationId, Version, locality fields (Town and TownAr), Occupation, Skills, PreferredLanguage and deceased fields.
+// Main members: OperationId, Version, locality fields (Town, TownAr and Sector), Occupation, Skills (free text without digits), PreferredLanguage, Languages and deceased fields.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -29,6 +29,9 @@ public class SavePersonFactsDto
     [StringLength(100)]
     public string? TownAr { get; set; } = null;
 
+    [StringLength(100)]
+    public string? Sector { get; set; } = null;
+
     [StringLength(300)]
     public string? AddressDetail { get; set; } = null;
 
@@ -43,6 +46,10 @@ public class SavePersonFactsDto
 
     [RegularExpression("^(en|fr|ar)$")]
     public string? PreferredLanguage { get; set; } = null;
+
+    // Every language the person speaks (two- or three-letter codes such as ar, en, fr); several are allowed.
+    [MaxLength(10)]
+    public string[] Languages { get; set; } = Array.Empty<string>();
 
     [StringLength(10)]
     public string? DeceasedOn { get; set; } = null;

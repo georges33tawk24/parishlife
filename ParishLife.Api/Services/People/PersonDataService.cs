@@ -38,6 +38,7 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
         return new OwnDataDto
         {
             PersonId = person.Id, GivenName = person.GivenName, FamilyName = person.FamilyName, BirthDate = person.BirthDate, Contact = person.Contact,
+            Phones = person.Phones.Select(p => new PersonPhoneDto { Number = p.Number, Kind = p.Kind }).ToArray(),
             Facts = facts is null ? null : PersonFactsService.Project(facts),
             Consents = (await records.CollectAsync<PersonConsent>(RecordScopes.Parish(parish), "personConsent", ct, 500, Person(person.Id))).Select(c => PersonFactsService.Project(c.Value)).ToArray(),
             Records = await CountsAsync(parish, person.Id, ct)
@@ -105,9 +106,10 @@ public class PersonDataService(IRecordTransactions records, IParishAccess access
         {
             var person = await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + item.PersonId, ct) ?? throw Missing();
             person.Value.Contact = null;
+            person.Value.Phones = [];
             person.Value.Archived = true;
             changes.Add(RecordChange.Replace("person:" + item.PersonId, "person", person.Value, person.Version));
-            outcome.Add("Contact removed and person archived; official, financial and participation history kept.");
+            outcome.Add("Contact and phone numbers removed and person archived; official, financial and participation history kept.");
             if (await records.ReadAsync<PersonFacts>(RecordScopes.Parish(parish), "personFacts:" + item.PersonId, ct) is { } facts)
             {
                 changes.Add(RecordChange.Remove("personFacts:" + item.PersonId, facts.Version));

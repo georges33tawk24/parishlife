@@ -1,6 +1,7 @@
 /* Dialogs about people: choosing a person, inviting them to an account, reviewing portal changes,
-   archiving and restoring, editing a record, family relations, photographs and adding people to a
-   group. */
+   archiving and restoring, editing a record (separate English and Arabic first and last names, several phone
+   numbers, a dd/mm/yyyy birth date), family relations (linking to a household, or creating one from the person's
+   Family tab), photographs and adding people to a group. */
 import { Select } from '../../ui/components.jsx';
 import { paint } from '../../ui/html.js';
 import { t, fmtDate, matches } from '../../../lib/i18n.js';
@@ -12,7 +13,15 @@ import { persist, hydrate } from '../../model/persist.js';
 import { openPerson } from '../../model/modules/people-workflows.js';
 import { readAddressCascade } from '../../ui/geography.jsx';
 import { nameOf, ok, refresh, rotaSlot, rotaTeam, today, val } from '../../shared/dialog-helpers.jsx';
-import { need } from '../../shared/dialogs.jsx';
+import {
+  BirthDateField,
+  NameFields,
+  PhoneList,
+  phonesText,
+  readBirthDate,
+  readNames,
+  readPhones
+} from './people-fields.jsx';
 
 const L = (en, ar) => t(en, ar);
 
@@ -368,16 +377,21 @@ export async function personEdit(id) {
   }
   const p = D.person(id);
   if (!p) return;
+  const parts = {
+    given: p.given ?? p.lat.split(' ')[0],
+    family: p.family ?? p.lat.split(' ').slice(1).join(' '),
+    givenAr: p.givenAr || '',
+    familyAr: p.familyAr || ''
+  };
   openDrawer({
     large: true,
     title: L('Edit record', 'تعديل السجل'),
-    sub: p.lat + ' · ' + p.ar,
+    sub: p.lat + (p.arStored ? ' · ' + p.arStored : ''),
     body: (
       <>
+        <NameFields p={parts} requireArabic={false} />
         <div className="formgrid">
-          <C.Field label={L('English name', 'الاسم الإنكليزي')} req={true} value={p.lat} dir="ltr" id="e_lat" />{' '}
-          <C.Field label={L('Arabic name', 'الاسم العربي')} req={true} value={p.ar} dir="rtl" ar={true} id="e_ar" />{' '}
-          <C.Field label={L('Date of birth', 'تاريخ الولادة')} type="date" value={p.born} id="e_born" />{' '}
+          <BirthDateField value={p.born} id="e_born" />
           <div className="formrow">
             <label htmlFor="e_st" className="label">
               {L('Status', 'الحالة')}
@@ -394,14 +408,14 @@ export async function personEdit(id) {
               ))}
             </Select>
           </div>
-        </div>{' '}
-        <C.PhoneField value={p.phone === '—' ? '' : p.phone} id="e_ph" />{' '}
-        <C.Field label={L('Line of work', 'المهنة')} value={D.PERSON_EXTRA[p.id]?.occupation || ''} id="e_occupation" />{' '}
+        </div>
+        <PhoneList phones={p.phones || []} />
+        <C.Field label={L('Line of work', 'المهنة')} value={D.PERSON_EXTRA[p.id]?.occupation || ''} id="e_occupation" />
         <div className="formrow">
           <label className="label">{L('Photo', 'الصورة')}</label>
           <C.AvatarUpload k={p.id} />
-        </div>{' '}
-        <C.AddressCascade value={{ town: p.town, ...(D.PERSON_EXTRA[p.id]?.address || {}) }} />
+        </div>
+        <C.AddressCascade value={{ town: p.town, townAr: p.townAr, ...(D.PERSON_EXTRA[p.id]?.address || {}) }} />
       </>
     ),
     foot: (
@@ -416,30 +430,41 @@ export async function personEdit(id) {
     ),
     onMount(el) {
       el.querySelector('#e_save').addEventListener('click', async e => {
-        // The Arabic name is optional: an empty one is saved as not recorded, never filled from the English.
-        if (!need(el, '#e_lat', L('Enter the English name', 'أدخل الاسم الإنكليزي'))) return;
-        e.currentTarget.disabled = true;
+        // The Arabic name is optional here: an empty one is saved as not recorded, never filled from the English.
+        const names = readNames(el, { requireArabic: false });
+        if (names.problem) return toast(L('Check the name', 'تحقّق من الاسم'), names.problem, 'warning');
+        const born = readBirthDate(el, 'e_born');
+        if (born.problem) return toast(L('Check the date of birth', 'تحقّق من تاريخ الولادة'), born.problem, 'warning');
+        const { phones, problem } = readPhones(el);
+        if (problem) return toast(L('Check the phone number', 'تحقّق من رقم الهاتف'), problem, 'warning');
+        const button = e.currentTarget;
+        button.disabled = true;
         const target = D.person(id),
           address = readAddressCascade(el);
         Object.assign(target, {
-          ar: val(el, '#e_ar') || (target.arStored ? '' : target.ar),
-          lat: val(el, '#e_lat'),
-          born: val(el, '#e_born'),
+          given: names.given,
+          family: names.family,
+          givenAr: names.givenAr,
+          familyAr: names.familyAr,
+          lat: names.lat,
+          ar: names.ar || (target.arStored ? '' : target.ar),
+          born: born.iso,
           status: el.querySelector('#e_st').value,
-          phone: val(el, '#e_ph') || '—',
+          phones,
+          phone: phones.length ? phonesText(phones.slice(0, 1)) : target.phoneFromContact ? '—' : target.phone,
           town: address.town,
-          townAr: address.townAr
+          townAr: address.townAr || address.town
         });
         D.PERSON_EXTRA[id] ||= {};
         D.PERSON_EXTRA[id].address = address;
         D.PERSON_EXTRA[id].occupation = val(el, '#e_occupation').slice(0, 120);
         if (!(await persist())) {
-          el.querySelector('#e_save').disabled = false;
+          button.disabled = false;
           return;
         }
         closeOverlays();
         refresh();
-        ok(L('Record saved', 'حُفظ السجل'), `${target.lat} · ${target.ar}`);
+        ok(L('Record saved', 'حُفظ السجل'), `${target.lat}${target.arStored ? ' · ' + target.arStored : ''}`);
       });
     }
   });
@@ -624,7 +649,10 @@ export function relationEdit(pid) {
   });
 }
 
-/** From a household: bring someone in. From a person (hid omitted): choose their household. */
+const NEW_HOUSEHOLD = '__new__';
+
+/** From a household: bring someone in. From a person (hid omitted): choose their household, or create a new one
+    there when it does not exist yet (owner, 27 November 2026). */
 export function familyAdd(hid, pid) {
   const fixedH = hid && D.HOUSEHOLDS.find(x => x.id === hid),
     fixedP = pid && D.person(pid);
@@ -660,13 +688,44 @@ export function familyAdd(hid, pid) {
             <label className="label" htmlFor="fa_h">
               {L('Household', 'العائلة')}
             </label>
-            <Select id="fa_h">
+            <Select id="fa_h" defaultValue={D.HOUSEHOLDS.length ? D.HOUSEHOLDS[0].id : NEW_HOUSEHOLD}>
+              <option value={NEW_HOUSEHOLD}>{L('+ New household', '+ عائلة جديدة')}</option>
               {D.HOUSEHOLDS.map((x, i) => (
                 <option key={i} value={x.id}>
-                  {L(x.name, x.ar)} · {L(x.town, x.townAr)}
+                  {L(x.name, x.ar)}
+                  {x.town ? ` · ${L(x.town, x.townAr)}` : ''}
                 </option>
               ))}
             </Select>
+          </div>
+        ) : (
+          ''
+        )}{' '}
+        {pickH ? (
+          <div className="formgrid" id="fa_new" hidden={!!D.HOUSEHOLDS.length}>
+            <C.Field
+              label={L('New household name', 'اسم العائلة الجديدة')}
+              req={true}
+              id="fa_hname"
+              dir="ltr"
+              value={fixedP?.family || ''}
+              maxLength={200}
+            />
+            <C.Field
+              label={L('Arabic name', 'الاسم بالعربية')}
+              opt={true}
+              id="fa_hnamear"
+              dir="rtl"
+              ar={true}
+              value={fixedP?.familyAr || ''}
+              maxLength={200}
+            />
+            <p className="help" style={{ gridColumn: '1/-1' }}>
+              {L(
+                'The household is created with this person in it, and takes their town.',
+                'تُنشأ العائلة وهذا الشخص فيها، وتأخذ بلدته.'
+              )}
+            </p>
           </div>
         ) : (
           ''
@@ -719,11 +778,41 @@ export function familyAdd(hid, pid) {
           </>
         );
       };
-      el.querySelector('#fa_h')?.addEventListener('change', fillRelated);
+      el.querySelector('#fa_h')?.addEventListener('change', e => {
+        el.querySelector('#fa_new').hidden = e.target.value !== NEW_HOUSEHOLD;
+        fillRelated();
+      });
       fillRelated();
       el.querySelector('#fa_go').addEventListener('click', () => {
-        const p = fixedP || D.person(el.querySelector('#fa_p')?.value),
-          h = fixedH || D.HOUSEHOLDS.find(x => x.id === el.querySelector('#fa_h')?.value);
+        const p = fixedP || D.person(el.querySelector('#fa_p')?.value);
+        let h = fixedH || D.HOUSEHOLDS.find(x => x.id === el.querySelector('#fa_h')?.value);
+        if (!fixedH && el.querySelector('#fa_h')?.value === NEW_HOUSEHOLD) {
+          // a household that does not exist yet is created here, with this person as its first member
+          const name = val(el, '#fa_hname');
+          if (!name) {
+            el.querySelector('#fa_hname')?.focus();
+            return toast(L('Name the new household', 'سمِّ العائلة الجديدة'), '', 'warning');
+          }
+          const nameAr = val(el, '#fa_hnamear');
+          h = {
+            id: 'h' + Date.now().toString(36),
+            name,
+            ar: nameAr || name,
+            arStored: '',
+            head: null,
+            members: [],
+            town: p?.town || '',
+            townAr: p?.townAr || p?.town || '',
+            townArStored: '',
+            envelope: '',
+            address: '',
+            addressAr: '',
+            phone: '',
+            family: null,
+            branch: null
+          };
+          D.HOUSEHOLDS.push(h);
+        }
         if (!p || !h) return toast(L('Choose who and where', 'اختر الشخص والعائلة'), '', 'warning');
         const oldHouse = D.HOUSEHOLDS.find(x => x.members.includes(p.id));
         if (oldHouse && oldHouse !== h && D.PEOPLE.some(m => m.hh === oldHouse.id && m.relativeTo === p.id))
@@ -737,6 +826,7 @@ export function familyAdd(hid, pid) {
           );
         const oldRelativeTo = p.relativeTo;
         const undo = joinHousehold(p, h, el.querySelector('#fa_rel').value, el.querySelector('#fa_em').checked);
+        if (!h.head) h.head = p.id; // the first member of a new household is its contact
         p.relativeTo = el.querySelector('#fa_to').value || null;
         closeOverlays();
         refresh();

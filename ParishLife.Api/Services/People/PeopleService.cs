@@ -1,6 +1,6 @@
 // Purpose: Applies access/entitlement checks to person creation, paging, office edits of the core record and archive/restore commands.
-// Main functions: Authorize, CreateAsync, GetAsync, ListAsync, UpdateAsync, SetArchiveAsync; helpers normalize the optional
-// Arabic name twins, rite and register status without translating or inventing values.
+// Main functions: Authorize, CreateAsync, GetAsync, ListAsync, UpdateAsync, SetArchiveAsync; names, birth date and phone numbers are
+// checked by PersonRules, and helpers normalize the rite and register status without translating or inventing values.
 
 using ParishLife.Api.DTOs.People;
 using ParishLife.Api.Interfaces.Repositories.People;
@@ -22,11 +22,8 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
         await access.RequireModuleAsync(parishId, "office", ct);
     }
 
-    private void RequirePastBirthDate(DateOnly? birthDate)
-    {
-        if (birthDate is { } date && date > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime))
-            throw new DomainException("invalid_birth_date", "Birth date cannot be in the future.");
-    }
+    // Not in the future and not more than 110 years ago (owner, 27 November 2026).
+    private void RequirePastBirthDate(DateOnly? birthDate) => PersonRules.RequireBirthDate(birthDate, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
 
     private static string? Status(string? value) => string.IsNullOrWhiteSpace(value) ? null : value is "Member" or "Visitor"
         ? value : throw new DomainException("invalid_input", "Register status is Member, Visitor or not recorded.");
@@ -40,12 +37,13 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
         {
             Id = op.Id,
             ParishId = parishId,
-            GivenName = Guard.Text(request.GivenName, "Given name"),
-            FamilyName = Guard.Text(request.FamilyName, "Family name"),
-            GivenNameAr = Optional(request.GivenNameAr, "Arabic given name"),
-            FamilyNameAr = Optional(request.FamilyNameAr, "Arabic family name"),
+            GivenName = PersonRules.Name(request.GivenName, "Given name", arabic: false),
+            FamilyName = PersonRules.Name(request.FamilyName, "Family name", arabic: false),
+            GivenNameAr = PersonRules.OptionalName(request.GivenNameAr, "Arabic given name", arabic: true),
+            FamilyNameAr = PersonRules.OptionalName(request.FamilyNameAr, "Arabic family name", arabic: true),
             BirthDate = request.BirthDate,
             Contact = Optional(request.Contact, "Contact", 320),
+            Phones = PersonRules.Phones(request.Phones),
             Rite = Optional(request.Rite, "Rite", 100),
             RegisterStatus = Status(request.RegisterStatus),
             CreatedBy = actor.AccountId,
@@ -81,12 +79,13 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
         {
             Id = current.Value.Id,
             ParishId = current.Value.ParishId,
-            GivenName = Guard.Text(request.GivenName, "Given name"),
-            FamilyName = Guard.Text(request.FamilyName, "Family name"),
-            GivenNameAr = Optional(request.GivenNameAr, "Arabic given name"),
-            FamilyNameAr = Optional(request.FamilyNameAr, "Arabic family name"),
+            GivenName = PersonRules.Name(request.GivenName, "Given name", arabic: false),
+            FamilyName = PersonRules.Name(request.FamilyName, "Family name", arabic: false),
+            GivenNameAr = PersonRules.OptionalName(request.GivenNameAr, "Arabic given name", arabic: true),
+            FamilyNameAr = PersonRules.OptionalName(request.FamilyNameAr, "Arabic family name", arabic: true),
             BirthDate = request.BirthDate,
             Contact = Optional(request.Contact, "Contact", 320),
+            Phones = PersonRules.Phones(request.Phones),
             Rite = Optional(request.Rite, "Rite", 100),
             RegisterStatus = Status(request.RegisterStatus),
             CreatedBy = current.Value.CreatedBy,

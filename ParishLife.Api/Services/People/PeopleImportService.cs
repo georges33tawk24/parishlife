@@ -1,4 +1,4 @@
-// Purpose: stages a CSV people import privately, validates the whole file before anything is written (names, unambiguous dates, repeated
+// Purpose: stages a CSV people import privately, validates the whole file before anything is written (letters-only names, unambiguous dates within the last 110 years, repeated
 // source identifiers, likely duplicates), and commits it in batches only after review, all-or-valid-rows-only by explicit choice.
 // Main functions: StageAsync, CommitAsync and GetAsync.
 
@@ -60,12 +60,14 @@ public class PeopleImportService(IRecordTransactions records, IParishAccess acce
                 row.Contact = string.IsNullOrWhiteSpace(cells[3]) ? null : cells[3].Trim();
                 row.SourceId = cells[4].Trim();
                 if (row.GivenName.Length is 0 or > 100 || row.FamilyName.Length is 0 or > 100) problems.Add("Given and family names are required (up to 100 characters).");
+                else if ((PersonRules.NameProblem(row.GivenName, "Given name", arabic: false) ?? PersonRules.NameProblem(row.FamilyName, "Family name", arabic: false)) is { } nameProblem) problems.Add(nameProblem);
                 if (row.Contact?.Length > 320) problems.Add("Contact is too long.");
                 if (row.SourceId.Length is 0 or > 100) problems.Add("Each row needs the source system's identifier.");
                 else if (!seen.Add(row.SourceId)) problems.Add("The source identifier repeats in this file.");
                 if (!string.IsNullOrWhiteSpace(cells[2]))
                 {
                     if (ParseDate(cells[2].Trim(), request.DateOrder, out var date) is { } dateProblem) problems.Add(dateProblem);
+                    else if (PersonRules.BirthDateProblem(date, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)) is { } ageProblem) problems.Add(ageProblem);
                     else row.BirthDate = date;
                 }
             }

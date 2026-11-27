@@ -1,5 +1,5 @@
 // Purpose: stores a parish-owned person separately from the global login account.
-// Main members: Id, ParishId, GivenName/FamilyName with optional Arabic twins (GivenNameAr, FamilyNameAr), BirthDate, Contact,
+// Main members: Id, ParishId, GivenName/FamilyName with optional Arabic twins (GivenNameAr, FamilyNameAr), BirthDate, Contact, Phones,
 // Rite and RegisterStatus (office-recorded labels with no eligibility effect), CreatedBy/CreatedAt, UpdatedBy/UpdatedAt and Archived.
 
 namespace ParishLife.Api.Models;
@@ -22,6 +22,9 @@ public class Person
     public DateOnly? BirthDate { get; set; }
 
     public string? Contact { get; set; }
+
+    // Mobile and landline numbers, Lebanese or foreign, in international form. Older records hold an empty list.
+    public PersonPhone[] Phones { get; set; } = Array.Empty<PersonPhone>();
 
     // The person's rite as the office records it; free text because the list of rites is an open owner decision.
     public string? Rite { get; set; } = null;
