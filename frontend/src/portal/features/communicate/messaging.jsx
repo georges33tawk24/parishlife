@@ -18,7 +18,8 @@ import {
   closeOverlays,
   toast,
   TabBar,
-  Paged
+  Paged,
+  ListSkeleton
 } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { persist } from '../../model/persist.js';
@@ -107,7 +108,7 @@ function AutomationsTab() {
   };
   const STATUS = { Active: ['Active', 'مفعّلة'], Paused: ['Paused', 'متوقّفة'], Ended: ['Ended', 'منتهية'] };
   if (error) return <p className="help-error">{error}</p>;
-  if (!rows) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!rows) return <ListSkeleton />;
   return (
     <>
       <div className="toolbar ministry-section-heading">

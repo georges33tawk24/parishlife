@@ -6,7 +6,7 @@ import { session } from '../../model/api.js';
 import { GROUPS, PARISH, PEOPLE } from '../../model/data.js';
 import { ministryRequests, requestDecision, requestMembership } from '../../model/modules/ministries.js';
 import { t } from '../../../lib/i18n.js';
-import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
+import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const L = t,
@@ -250,7 +250,7 @@ export function MinistryRequests() {
         {error ? (
           error
         ) : !data ? (
-          L('Loading…', 'جارٍ التحميل…')
+          <ListSkeleton />
         ) : (
           <>
             <div className="collection-toolbar">

@@ -5,7 +5,7 @@
    Main members: Oversight, Eparchy, MapView. */
 import { useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { PageHead, Table, Stat, Pill, Empty, Panel } from '../../ui/ui.jsx';
+import { PageHead, Table, Stat, Pill, Empty, Panel, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { bishopOverview, bishopMap, myScopes } from '../../model/modules/administration-api.js';
 import { useLoad } from '../administration/use-load.js';
@@ -61,7 +61,7 @@ function Shell({ title, sub, children }) {
 }
 
 function Gate({ scopes, children }) {
-  if (scopes.loading) return <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (scopes.loading) return <ListSkeleton />;
   if (scopes.error) return <p className="alert alert-danger">{scopes.error}</p>;
   if (!scopes.data.length)
     return (
@@ -244,7 +244,7 @@ export function Eparchy() {
             </p>
           </>
         ) : overview.loading ? (
-          <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>
+          <ListSkeleton />
         ) : null}
       </Gate>
     </Shell>
@@ -306,7 +306,7 @@ export function MapView() {
             />
           </>
         ) : map.loading ? (
-          <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>
+          <ListSkeleton />
         ) : null}
       </Gate>
     </Shell>

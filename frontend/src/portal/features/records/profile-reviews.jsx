@@ -9,7 +9,7 @@ import { person } from '../../model/data.js';
 import { correctionQueue, reviewCorrection } from '../../model/modules/people-workflows.js';
 import { loadRecords, proposeCorrection } from '../../model/account.js';
 import { t } from '../../../lib/i18n.js';
-import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
+import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged, ListSkeleton } from '../../ui/ui.jsx';
 
 const STATUS = () => ({
   Pending: t('Waiting for office review', 'بانتظار مراجعة المكتب'),
@@ -275,7 +275,7 @@ export function ProfileReviews() {
         {error ? (
           error
         ) : !rows ? (
-          t('Loading…', 'جارٍ التحميل…')
+          <ListSkeleton />
         ) : (
           <>
             <a className="btn btn-secondary" href="#/requests">

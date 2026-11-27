@@ -833,6 +833,9 @@ tr.flash > td,.listrow.flash{animation:pl-flash-bg 1.6s var(--ease)}
 }
 @keyframes plshimmer{0%{background-position:-320px 0}100%{background-position:320px 0}}
 .skel-row{height:var(--h-row);display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--border)}
+/* a list or panel still loading (ListSkeleton): the rows sit where the content will, never a bare "Loading…" */
+.list-skel{margin-block:8px}
+.list-skel .skel-row:last-child{border-bottom:0}
 
 /* ---------- alert variants ---------- */
 .alert-success{background:var(--success-subtle);border-color:var(--success-border);color:var(--success-ink)}

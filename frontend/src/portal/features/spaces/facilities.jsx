@@ -7,7 +7,19 @@
 import { css, paint } from '../../ui/html.js';
 import { t, fmtDate, fmtLong, month, dayShort } from '../../../lib/i18n.js';
 import { S } from '../../model/store.js';
-import { Icon, PageHead, Pill, Table, Empty, openDrawer, toast, TabBar, Paged, Status } from '../../ui/ui.jsx';
+import {
+  Icon,
+  PageHead,
+  Pill,
+  Table,
+  Empty,
+  openDrawer,
+  toast,
+  TabBar,
+  Paged,
+  Status,
+  ListSkeleton
+} from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { VENUES, EQUIPMENT, RESERVATIONS, MAINTENANCE, ISSUES, RENTALS, venue } from '../../model/data.js';
 import * as API from '../../model/modules/facilities.js';
@@ -227,7 +239,11 @@ function loansDrawer(eq) {
     large: true,
     title: L(`Loans — ${eq.name}`, `الإعارة — ${eq.ar}`),
     sub: L(`${eq.qty} in total, ${eq.out} out on loan`, `${eq.qty} في المجموع، ${eq.out} معارة`),
-    body: <div id="loans">{L('Loading…', 'جارٍ التحميل…')}</div>,
+    body: (
+      <div id="loans">
+        <ListSkeleton rows={3} />
+      </div>
+    ),
     foot: (
       <>
         <button className="btn btn-secondary" data-close="">

@@ -3,7 +3,7 @@
    /api/report-deliveries). The old finance, attendance and giving reports are not here: they depend on
    those modules' own data. Email delivery is recorded as requested but not sent until a delivery
    provider is configured. Main member: reports. */
-import { PageHead, Panel, Stat, Pill, Table, Empty, TabBar } from '../../ui/ui.jsx';
+import { PageHead, Panel, Stat, Pill, Table, Empty, TabBar, ListSkeleton } from '../../ui/ui.jsx';
 import { session } from '../../model/api.js';
 import * as A from '../../model/modules/administration-api.js';
 import { useLoad } from './use-load.js';
@@ -15,7 +15,7 @@ const when = v => (v ? new Date(v).toLocaleString() : '—');
 function Overview() {
   const { data, error, loading } = useLoad(() => A.workOverview(session.parishId), [session.parishId]);
   if (error) return <p className="alert alert-danger">{error}</p>;
-  if (loading && !data) return <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (loading && !data) return <ListSkeleton />;
   return (
     <>
       <p className="help">

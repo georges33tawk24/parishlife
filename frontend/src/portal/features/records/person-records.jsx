@@ -16,14 +16,24 @@ import {
   searchPeople,
   withdrawConsent
 } from '../../model/modules/people-workflows.js';
-import { Panel, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
+import { Panel, openModal, closeOverlays, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const opened = new Map(); // person id → when it was last read, so a refresh does not read it again at once
+const unread = new Set(); // person ids whose details could not be read: their panels say so instead of loading for ever
+
+/* While the details are on their way, skeleton rows; once a read failed, a line that says so. */
+const Waiting = ({ id }) =>
+  unread.has(id) ? (
+    <p className="help help-error">{t('These details could not be read.', 'تعذّرت قراءة هذه التفاصيل.')}</p>
+  ) : (
+    <ListSkeleton rows={2} />
+  );
 
 export async function reloadPerson(id) {
   opened.set(id, Date.now());
   const first = await openPerson(id);
+  unread.delete(id);
   if (first) await hydrate();
   bus.refresh();
 }
@@ -32,13 +42,15 @@ export async function reloadPerson(id) {
 export function PersonLoader({ id }) {
   useEffect(() => {
     if (Date.now() - (opened.get(id) || 0) < 15000) return;
-    reloadPerson(id).catch(error =>
+    reloadPerson(id).catch(error => {
+      unread.add(id);
+      bus.refresh();
       toast(
         t('This person’s details could not be read again', 'تعذّرت إعادة قراءة تفاصيل هذا الشخص'),
         error.message,
         'danger'
-      )
-    );
+      );
+    });
   }, [id]);
   return null;
 }
@@ -172,7 +184,7 @@ export function ConsentPanel({ id }) {
         </button>
       </div>
       {!rows ? (
-        <p className="t-caption dim">{t('Loading…', 'جارٍ التحميل…')}</p>
+        <Waiting id={id} />
       ) : rows.length ? (
         <div className="timeline">
           {rows.map(row => {
@@ -404,7 +416,7 @@ export function RelationshipPanel({ id }) {
         </button>
       </div>
       {!rows ? (
-        <p className="t-caption dim">{t('Loading…', 'جارٍ التحميل…')}</p>
+        <Waiting id={id} />
       ) : rows.length ? (
         rows.map(row => {
           const r = row.value;

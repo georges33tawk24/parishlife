@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { Select } from '../../ui/components.jsx';
-import { Pill, openDrawer, closeOverlays, toast } from '../../ui/ui.jsx';
+import { Pill, openDrawer, closeOverlays, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { is } from '../../model/store.js';
 import { session } from '../../model/api.js';
 import { loadNames, nameOf } from '../../model/names.js';
@@ -210,7 +210,7 @@ export function RequestCase({ id, onChange }) {
     };
   }, [id, round]);
   if (state.error) return <p className="help help-error">{state.error}</p>;
-  if (!state.c) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!state.c) return <ListSkeleton />;
 
   const { value: dto, version } = state.c,
     r = toOffice(dto, version),
