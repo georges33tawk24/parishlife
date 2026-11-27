@@ -3,7 +3,8 @@
    parishes by operating status and by jurisdiction. The CRM is the operator's worklist of parishes
    they follow (stage, next action, follow-up date, notes and history), from /api/administration/
    parish-crm/worklist and .../parishes/{id}/crm. Parish names come from GET /api/parishes/{id}.
-   Main member: InsightsPage. */
+   Main members: InsightsPage; Visits, Crm and Follow are also shown on the operator's Administration overview
+   (workspace-overview.jsx). */
 import { useRef, useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
 import { PageHead, TabBar, Stat, Empty, Panel, Pill, openDrawer, toast } from '../../ui/ui.jsx';
@@ -53,7 +54,7 @@ const days = (from, to) => {
   return out;
 };
 
-function Visits() {
+export function Visits() {
   const [from, setFrom] = useState(iso(-30)),
     [to, setTo] = useState(iso());
   const box = useRef(null);
@@ -256,7 +257,7 @@ function CrmDetail({ id, name, done }) {
   );
 }
 
-function Crm() {
+export function Crm() {
   const [stage, setStage] = useState(''),
     [dueOnly, setDueOnly] = useState(false);
   const { data, error, loading, reload } = useLoad(async () => {
@@ -353,7 +354,7 @@ function Crm() {
 }
 
 /* A parish opened by its reference, to start following it. */
-function Follow({ onDone }) {
+export function Follow({ onDone }) {
   const go = () =>
     openDrawer({
       title: L('Follow a parish', 'متابعة رعية'),
