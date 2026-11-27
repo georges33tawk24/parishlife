@@ -78,9 +78,9 @@ export async function hydrate() {
   const parish = session.parishes.find(p => p.id === session.parishId);
   const d = emptyParish(parish);
   loadFailures.clear();
-  const load = async m => {
+  const load = async (m, ready) => {
     try {
-      await m.load(parish, d);
+      await m.load(parish, d, ready);
     } catch (error) {
       if (error.status === 401) throw error;
       const fresh = emptyParish(parish);
@@ -89,18 +89,17 @@ export async function hydrate() {
     }
   };
   /* Every module at once: each fills only its own collections, so they need not wait for each other. A module
-     that names people from d.PEOPLE while loading says so (`needs = ['PEOPLE']`) and waits for People alone.
-     One after another, a reload took the sum of twelve modules' round trips; People first, the sum of two. */
+     that names people from d.PEOPLE while loading says so (`needs = ['PEOPLE']`) and gets `ready.people`, which
+     it awaits only where it reads them, so its own requests still start at once. One after another, a reload
+     took the sum of twelve modules' round trips; People first, the sum of two. */
   if (parish) {
     const first = MODULES.filter(m => m.keys.includes('PEOPLE'));
-    const people = Promise.all(first.map(load));
+    const people = Promise.all(first.map(m => load(m)));
     await Promise.all([
       people,
-      ...MODULES.filter(m => !first.includes(m)).map(m =>
-        m.needs?.includes('PEOPLE') ? people.then(() => load(m)) : load(m)
-      )
+      ...MODULES.filter(m => !first.includes(m)).map(m => load(m, m.needs?.includes('PEOPLE') ? { people } : {}))
     ]);
-  } else await Promise.all(MODULES.filter(m => !m.keys.length).map(load)); // the account's own appearance needs no parish
+  } else await Promise.all(MODULES.filter(m => !m.keys.length).map(m => load(m))); // the account's own appearance needs no parish
   applyData(d);
   baseline = snapshot();
   saveFailed = false;

@@ -222,6 +222,7 @@ export async function signOut() {
   } finally {
     csrf = '';
     unanswered.clear();
+    lastCapacities = { at: 0, list: null }; // never another account's
     Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
     forgetAccountStorage();
   }
@@ -279,12 +280,18 @@ const PARISH_ROLES = ['priest', 'parish_admin', 'secretary', 'treasurer', 'leade
 /* The account, the parishes it follows or belongs to, and its capacities (GET /api/me/capacities):
    Priest, ParishGrant and MinistryLeader in a parish; Bishop, ArchdioceseAdmin and PlatformOperator
    across parishes. */
+/* The capacities the session just read, for a module loading in the same moment (ministries' leader duties): one round
+   trip fewer on sign-in and parish switches. Anything older than a few seconds is read again. */
+let lastCapacities = { at: 0, list: null };
+export const recentCapacities = () => (Date.now() - lastCapacities.at < 10000 ? lastCapacities.list : null);
+
 export async function loadSession() {
   const account = await api('auth/me'); // signed out: 401, and nothing else is asked
   const [mine, capacities] = await Promise.all([
     api('me/parishes').catch(() => []),
     api('me/capacities').catch(() => [])
   ]);
+  lastCapacities = { at: Date.now(), list: capacities || [] };
   const parishes = new Map(
     (mine || []).map(p => [
       p.parishId,
