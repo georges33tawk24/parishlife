@@ -1,7 +1,8 @@
 /* Administration workspace for platform operators, bishops and archdiocese administrators, on
    ParishLife.Api. Tabs: Organizations (archdioceses and parishes: register, verify, operating status,
    location, association, jurisdiction, handing control to the priest, homepage), Appointments (workspace-appointments.jsx),
-   Access and billing (workspace-billing.jsx), and for platform operators Platform (workspace-platform.jsx:
+   Access and billing (workspace-billing.jsx), and for platform operators an overview on the main tab (the parish CRM
+   worklist and site analytics, workspace-overview.jsx) and Platform (workspace-platform.jsx:
    every parish, archdiocese and account, account status, clergy titles).
    Organizations shows what the account reaches through its capacities (GET /api/me/capacities), plus any
    parish or archdiocese opened by its reference or from the Platform lists (kept for this browser
@@ -17,6 +18,7 @@ import { L, Row, Section, ReferenceBox, openForm, shortDay } from './workspace-f
 import { Appointments } from './workspace-appointments.jsx';
 import { AccessAndBilling } from './workspace-billing.jsx';
 import { Platform } from './workspace-platform.jsx';
+import { PlatformOverview } from './workspace-overview.jsx';
 
 /* References opened by hand, kept for this browser session only. */
 const opened = (() => {
@@ -599,7 +601,7 @@ function Identity() {
 }
 
 const TABS = operator => [
-  ['', 'Organizations', 'المؤسسات'],
+  operator ? ['', 'Overview', 'نظرة عامة'] : ['', 'Organizations', 'المؤسسات'],
   ['appointments', 'Appointments', 'التعيينات'],
   ['access', 'Access and billing', 'الصلاحيات والاشتراك'],
   ...(operator ? [['platform', 'Platform', 'المنصة']] : [])
@@ -638,7 +640,10 @@ export function WorkspacePage({ params: [tab = ''] = [] }) {
           ) : tab === 'platform' ? (
             <Platform data={orgs.data} open={openFromPlatform(orgs.reload)} />
           ) : (
-            <Organizations data={orgs.data} reload={orgs.reload} />
+            <>
+              {orgs.data.scopes.operator ? <PlatformOverview /> : null}
+              <Organizations data={orgs.data} reload={orgs.reload} />
+            </>
           )
         ) : null}
         {orgs.data && !orgs.data.parishes.length && !orgs.data.archdioceses.length && tab === '' ? (

@@ -206,7 +206,11 @@ assert.deepEqual(
   ['q1', 'q2'],
   'archived and other parishes left out, all pages read'
 );
-assert.deepEqual([D.NOTIFICATIONS[0][3], D.NOTIFICATIONS[0][4], D.NOTIFICATIONS[1][3]], ['#/inbox', true, '']);
+// a new-message notice opens its own conversation (the API's link /api/parishes/P/inbox/c)
+assert.deepEqual([D.NOTIFICATIONS[0][3], D.NOTIFICATIONS[0][4], D.NOTIFICATIONS[1][3]], ['#/inbox/P/c', true, '']);
+const { inboxRoute } = await import('../../src/portal/model/modules/communications.js');
+assert.equal(inboxRoute('mymessages', '/api/parishes/P/inbox/c'), 'mymessages/P/c');
+assert.equal(inboxRoute('inbox', '/somewhere/else'), 'inbox', 'an unknown link opens the inbox itself');
 
 // marking read goes to the API; any other edit is undone and reported
 D.NOTIFICATIONS[0][4] = false;

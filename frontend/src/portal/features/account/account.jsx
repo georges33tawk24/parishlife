@@ -3,7 +3,7 @@
    signature image, my parish records
    (with corrections for office review), requests made before signing in, and the parishes someone follows, with
    the membership request form.
-   Routes: GET and PUT auth/profile, POST auth/profile/appearance/preview and /reset, GET auth/me,
+   Routes: GET and PUT auth/profile (the appearance panel, with its preview and reset, is account-appearance.jsx), GET auth/me,
    GET auth/mfa/status, GET auth/capabilities, GET/POST account/signature and POST account/signature/remove;
    the parishes use GET me/parishes, POST and DELETE parishes/{id}/follow, PUT parishes/{id}/primary,
    POST parishes/{id}/membership-requests and the public directory.
@@ -24,11 +24,8 @@ import {
   featuresOf,
   loadProfile,
   saveProfile,
-  previewAppearance,
-  resetAppearance,
   mfaStatus,
   themeOf,
-  appearanceOf,
   DETAILS,
   loadSignature,
   saveSignature,
@@ -41,7 +38,8 @@ import { SignerProfilePanel } from './signer-profile.jsx';
 import { Drawing, SignaturePad } from '../../ui/signature.jsx';
 import { PageHead, Panel, toast, openDrawer, closeOverlays, Icon, Paged } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
-import { SCHEMES, schemeOf, applyTheme, modeOf } from '../../../lib/theme.js';
+import { applyTheme } from '../../../lib/theme.js';
+import { Appearance } from './account-appearance.jsx';
 
 const RELATIONSHIP = () => ({ Following: t('Following', 'متابَعة'), Member: t('Member', 'عضو') });
 /* The optional personal details shown on the profile form: [field, English label, Arabic label, maximum, direction] */
@@ -79,7 +77,6 @@ export function AccountPage() {
   const [loaded, setLoaded] = useState(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(''),
-    [preview, setPreview] = useState(null),
     [mine, setMine] = useState([]);
   const [query, setQuery] = useState(''),
     [signature, setSignature] = useState(0);
@@ -138,17 +135,11 @@ export function AccountPage() {
         </div>
       </>
     );
-  const { profile, account, mfa, features, directory } = loaded,
-    theme = themeOf(profile.appearance, profile.configured);
+  const { profile, account, mfa, features, directory } = loaded;
   const store = (next, message) => {
     applyProfile(next);
     setLoaded(l => ({ ...l, profile: next }));
-    setPreview(null);
     return message;
-  };
-  const appearanceFrom = form => {
-    const data = Object.fromEntries(new FormData(form));
-    return appearanceOf({ scheme: data.scheme, mode: data.mode, primary: data.primary });
   };
   const run = async (form, work) => {
     const buttons = [...form.querySelectorAll('button')];
@@ -176,31 +167,6 @@ export function AccountPage() {
       settled(result, t('Saved', 'حُفظ'));
     });
   };
-  const saveLook = e => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    return run(form, async () => {
-      const result = await saveProfile(profile, {
-        displayName: profile.displayName,
-        preferredLanguage: profile.preferredLanguage,
-        appearance: appearanceFrom(form)
-      });
-      store(result.profile);
-      settled(result, t('Saved', 'حُفظ'));
-    });
-  };
-  const showPreview = form =>
-    run(form, async () => {
-      const result = await previewAppearance(appearanceFrom(form));
-      applyTheme(themeOf(result.appearance));
-      setPreview(result);
-    });
-  const resetLook = form =>
-    run(form, async () => {
-      const result = await resetAppearance(profile);
-      store(result.profile);
-      settled(result, t('Appearance reset', 'أُعيد المظهر إلى الأصل'));
-    });
   const affiliate = async (parish, action) => {
     setBusy(parish + action);
     try {
@@ -291,69 +257,7 @@ export function AccountPage() {
               <button className="btn btn-primary">{t('Save profile', 'حفظ الملف')}</button>
             </form>
           </Panel>
-          <Panel title={t('My appearance', 'المظهر الشخصي')}>
-            <p className="help">
-              {t(
-                'These colors apply only to your dashboard. Parish websites share one public theme.',
-                'تُطبّق هذه الألوان على حسابك فقط. للمواقع العامة مظهر موحّد.'
-              )}
-            </p>
-            <form data-theme="" key={profile.version + 'a'} onSubmit={saveLook}>
-              <div className="palette-options">
-                {SCHEMES.map(s => (
-                  <label key={s.id}>
-                    <input type="radio" name="scheme" value={s.id} defaultChecked={theme.scheme === s.id} />
-                    <span className="palette-dot" style={{ background: s.primary }} />
-                    {t(s.en, s.ar)}
-                  </label>
-                ))}
-                <label>
-                  <input type="radio" name="scheme" value="custom" defaultChecked={theme.scheme === 'custom'} />
-                  {t('Custom', 'مخصّص')}
-                  <input
-                    type="color"
-                    name="primary"
-                    defaultValue={schemeOf(theme).primary}
-                    aria-label={t('Choose color', 'اختر اللون')}
-                  />
-                </label>
-              </div>
-              <label className="formrow">
-                <span className="label">{t('Mode', 'الوضع')}</span>
-                <Select name="mode" defaultValue={modeOf(theme)}>
-                  <option value="light">{t('Light', 'فاتح')}</option>
-                  <option value="dark">{t('Dark', 'داكن')}</option>
-                </Select>
-              </label>
-              {preview ? (
-                <p className="help" role="status" data-preview="">
-                  {t(
-                    `Preview, not saved yet. Text on the main color: ${preview.primaryTextContrast.toFixed(1)}:1, links: ${preview.linkContrast.toFixed(1)}:1.`,
-                    `معاينة غير محفوظة بعد. تباين النص على اللون الأساسي ${preview.primaryTextContrast.toFixed(1)}:1 والروابط ${preview.linkContrast.toFixed(1)}:1.`
-                  )}
-                </p>
-              ) : null}
-              <div className="account-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  data-preview-appearance=""
-                  onClick={e => showPreview(e.currentTarget.form)}
-                >
-                  {t('Preview', 'معاينة')}
-                </button>
-                <button className="btn btn-primary">{t('Save appearance', 'حفظ المظهر')}</button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  data-reset-appearance=""
-                  onClick={e => resetLook(e.currentTarget.form)}
-                >
-                  {t('Reset to default', 'إعادة إلى الأصل')}
-                </button>
-              </div>
-            </form>
-          </Panel>
+          <Appearance profile={profile} store={store} />
         </div>
         <Panel title={t('Sign-in and security', 'الدخول والأمان')}>
           <p>

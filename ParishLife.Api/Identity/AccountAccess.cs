@@ -1,6 +1,7 @@
 // Purpose: Resolves verified account and current MFA-protected platform authority from stored facts rather than
 // client role claims.
-// Main functions: IsActiveVerifiedAsync, FindIdAsync (by username or email), RequireOperatorAsync.
+// Main functions: IsActiveVerifiedAsync, FindIdAsync (by username or email), RequireOperatorAsync and IsOperatorAsync (same rule as
+// a yes/no answer; a recovery session or a selected appointment is never an operator).
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -32,8 +33,17 @@ internal sealed class PlatformAccess(IHttpContextAccessor context, ICurrentActor
     {
         if (actor.ActingAppointmentId is not null)
             throw new DomainException("platform_capacity_required", "Leave the selected organizational appointment before performing a platform operation.", FailureKind.Forbidden);
-        var user = await store.FindByIdAsync(actor.AccountId, ct);
-        if (user is not { Active: true, PlatformOperator: true, TwoFactorEnabled: true } || !AccountVerification.IsVerified(user) || context.HttpContext?.User.HasClaim("amr", "mfa") != true)
+        if (!await IsOperatorAsync(ct))
             throw new DomainException("operator_required", "A current platform billing/verification operator with MFA is required.", FailureKind.Forbidden);
+    }
+
+    // Active, verified, PlatformOperator with two-factor enabled, signed in with the mfa method (a recovery cookie carries
+    // amr=recovery and never passes), and acting in personal capacity (no selected appointment).
+    public async Task<bool> IsOperatorAsync(CancellationToken ct)
+    {
+        if (actor.ActingAppointmentId is not null || context.HttpContext?.User.HasClaim("amr", "mfa") != true)
+            return false;
+        var user = await store.FindByIdAsync(actor.AccountId, ct);
+        return user is { Active: true, PlatformOperator: true, TwoFactorEnabled: true } && AccountVerification.IsVerified(user);
     }
 }

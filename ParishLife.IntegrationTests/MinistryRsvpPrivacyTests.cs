@@ -76,7 +76,7 @@ public class MinistryRsvpPrivacyTests
         var service = Privacy(f);
         f.As(s.Account, false);
         await service.SaveAsync(s.Scope.Parish, s.Group, s.Meeting.Id, new SaveRsvpReasonDto { OperationId = Guid.NewGuid(), Reason = PrivateReason }, default);
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         await Assert.ThrowsAsync<DomainException>(() => service.GetAsync(s.Scope.Parish, s.Group, s.Meeting.Id, s.Person, default));
         var reader = await f.CreateVerifiedStaffAsync();
         s.Scope.Use();

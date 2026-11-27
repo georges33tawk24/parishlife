@@ -4,6 +4,12 @@
    that is open on the right as chat bubbles with a reply box under them; on a phone the list and the chat
    take turns, with a way back. Writing a new message opens in the same place.
    Main members: InboxPage, ConversationRow, Conversation, Broadcast, Compose, Report.
+   A conversation opens with the whole thread, both sides, and the reply box; #/inbox/{parish}/{conversation}
+   (members: #/mymessages/...), the link a new-message notice carries, opens that conversation directly. The
+   list and the open thread follow the live updates (model/live.js): when a notice or the parish's
+   conversations change, the list is read again, and the open thread reloads when it has a newer message,
+   keeping a reply being typed. A platform operator, who reaches every parish, sees the inbox of the parishes
+   they belong to and of the parish open in the switcher, not of every parish.
 
    The API keeps conversations per parish; a member writes to the parish office, and office staff reply in
    it. Staff may also write directly to a linked parishioner. Senders are named through the shared
@@ -30,11 +36,17 @@ import {
 } from '../../model/modules/communications.js';
 import { useSubmit } from './messaging-dialogs.jsx';
 import { loadNames, nameOf } from '../../model/names.js';
+import { onLive } from '../../model/live.js';
 
 /* what the list shows, kept while the visitor moves around the portal */
 const filters = { box: 'open', query: '', parish: '' };
 
 const L = t;
+/* The parishes whose inbox is shown: the account's own, the one open in the switcher, and one a link names. */
+const inboxParishes = (wanted = '') =>
+  session.parishes.filter(p => p.own !== false || p.id === session.parishId || p.id === wanted);
+const newest = rows => rows.sort((a, b) => String(b.lastMessageAt).localeCompare(String(a.lastMessageAt)));
+const later = (a, b) => (Date.parse(a) || 0) > (Date.parse(b) || 0);
 const parishName = id => session.parishes.find(p => p.id === id)?.name || '';
 const kindLabel = kind => (kind === 'Direct' ? L('Direct message', 'رسالة مباشرة') : L('Parish office', 'مكتب الرعية'));
 const locale = () => (lang === 'ar' ? 'ar-LB' : 'en-GB');
@@ -127,7 +139,7 @@ function grow(el) {
 
 /* A member's new message to the parish office, in the reading pane. */
 function Compose({ done, onBack }) {
-  const parishes = session.parishes;
+  const parishes = inboxParishes();
   const { error, busy, submit } = useSubmit(async q => {
     const c = await startConversation(q.parish, q.subject.trim(), q.body.trim());
     closeOverlays();
@@ -206,6 +218,7 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
   const scroller = useRef(null),
     input = useRef(null);
   const me = session.accountUser?.id;
+  const loadedAt = useRef('');
   const load = () =>
     loadMessages(c.parishId, c.id).then(
       async m => {
@@ -213,6 +226,7 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
           c.parishId,
           m.map(x => x.authorAccountId)
         );
+        loadedAt.current = m.length ? m[m.length - 1].at : '';
         setList(m);
         onChange();
       },
@@ -222,6 +236,10 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
     load();
     ownReports(c.parishId).then(setReports);
   }, []);
+  /* a newer message than the ones shown (the other side wrote): read the thread again */
+  useEffect(() => {
+    if (list && later(c.lastMessageAt, loadedAt.current)) load();
+  }, [c.lastMessageAt]);
   /* the newest message is in view, as in any chat */
   useLayoutEffect(() => {
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
@@ -229,6 +247,10 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
   const reply = useSubmit(async q => {
     const sent = await postMessage(c.parishId, c.id, q.body.trim());
     toast(L('Reply stored in the app', 'حُفظ الرد داخل التطبيق'), sent.notificationOutcome?.meaning || '', 'success');
+    if (input.current) {
+      input.current.value = '';
+      grow(input.current);
+    }
     await load();
     input.current?.focus();
   });
@@ -365,7 +387,6 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
             required
             maxLength="10000"
             rows="1"
-            key={list?.length || 0}
             placeholder={L('Write a reply…', 'اكتب رداً…')}
             onInput={e => grow(e.currentTarget)}
             onKeyDown={e => {
@@ -476,38 +497,51 @@ function Report({ c, m, done }) {
   );
 }
 
-export function InboxPage() {
+/* One parish's conversations, with the names of the people in them. */
+const conversationsOf = id =>
+  conversations(id).then(async c => {
+    await loadNames(
+      id,
+      c.flatMap(x => [x.createdBy, ...(x.participantAccountIds || [])])
+    );
+    return c.map(x => ({ ...x, parishId: id }));
+  });
+
+export function InboxPage({ params = [] }) {
+  const [wanted = '', wantedId = ''] = params.map(x => decodeURIComponent(x));
   const [rows, setRows] = useState(null),
     [received, setReceived] = useState([]),
     [error, setError] = useState(''),
     [round, setRound] = useState(0),
     [busy, setBusy] = useState(''),
-    [open, setOpen] = useState(null); // { type: 'c' | 'b' | 'new', id }
+    [open, setOpen] = useState(() => (wantedId ? { type: 'c', id: wantedId } : null)); // { type: 'c' | 'b' | 'new', id }
   const [, redraw] = useState(0);
+  /* live updates: read the conversations again when something changed (the broadcasts stay as loaded) */
+  useEffect(
+    () =>
+      onLive(({ changed, inboxChanged }) => {
+        if (!changed && !inboxChanged) return;
+        Promise.all(inboxParishes(wanted).map(p => conversationsOf(p.id))).then(
+          all => setRows(newest(all.flat())),
+          () => {} // the next round tries again
+        );
+      }),
+    []
+  );
   useEffect(() => {
     let live = true;
-    const parishes = session.parishes.map(p => p.id);
+    const parishes = inboxParishes(wanted).map(p => p.id);
     Promise.all(
       parishes.map(id =>
-        Promise.all([conversations(id), receivedBroadcasts(id)]).then(async ([c, b]) => {
-          await loadNames(
-            id,
-            c.flatMap(x => [x.createdBy, ...(x.participantAccountIds || [])])
-          );
-          return {
-            conversations: c.map(x => ({ ...x, parishId: id })),
-            broadcasts: b.map(x => ({ ...x, parishId: id }))
-          };
-        })
+        Promise.all([conversationsOf(id), receivedBroadcasts(id)]).then(([c, b]) => ({
+          conversations: c,
+          broadcasts: b.map(x => ({ ...x, parishId: id }))
+        }))
       )
     ).then(
       all => {
         if (!live) return;
-        setRows(
-          all
-            .flatMap(x => x.conversations)
-            .sort((a, b) => String(b.lastMessageAt).localeCompare(String(a.lastMessageAt)))
-        );
+        setRows(newest(all.flatMap(x => x.conversations)));
         setReceived(all.flatMap(x => x.broadcasts).sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt))));
         setBusy('');
       },
@@ -638,7 +672,7 @@ export function InboxPage() {
               </button>
             ))}
           </div>
-          {session.parishes.length > 1 ? (
+          {inboxParishes(wanted).length > 1 ? (
             <div className="mail-parish">
               <Select
                 data-parish=""
@@ -647,7 +681,7 @@ export function InboxPage() {
                 onChange={e => set({ parish: e.target.value })}
               >
                 <option value="">{L('All parishes', 'كل الرعايا')}</option>
-                {session.parishes.map(p => (
+                {inboxParishes(wanted).map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>

@@ -177,7 +177,10 @@ public sealed class HttpWorkflowTests
         await Read<CashReceipt>(await platform.PostAsJsonAsync(route, payment));
         await Read<CashReceipt>(await platform.PostAsJsonAsync(route, payment));
         Assert.Equal(1, factory.Store.ReceiptCount);
-        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync($"/api/parishes/{parish.Id}/people")).StatusCode);
+        // Before activation the parish has no coverage. The registering operator signed in with MFA would pass every module check
+        // (owner decision, 27 November 2026), so the refusal is shown on the same account without the mfa claim, acting on its grant.
+        using (var grantOnly = factory.Client(ApiFactory.OperatorId))
+            Assert.Equal(HttpStatusCode.Forbidden, (await grantOnly.GetAsync($"/api/parishes/{parish.Id}/people")).StatusCode);
         using (var scope = factory.Services.CreateScope())
             Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<CoverageActivationProcessor>().ProcessAsync("scenario-worker", default));
         var result = await owner.PostAsJsonAsync($"/api/parishes/{parish.Id}/people", new CreatePersonDto { OperationId = Guid.NewGuid(), GivenName = "Marie", FamilyName = "Example", BirthDate = null, Contact = null });

@@ -1,7 +1,8 @@
 /* ParishLife application shell: the sign-in screen until someone signs in, then the rail, the top
    bar, the screen for the current route, and the dialogs the shell itself opens. The server owns
-   authentication, parish access and authoritative records; the browser shows them. */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+   authentication, parish access and authoritative records; the browser shows them. The bell's mark and list
+   follow the live updates (model/live.js), started after sign-in and stopped at sign-out. */
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../ui/icons.jsx';
 import { t, isAr, lang, setLang, num, matches } from '../../lib/i18n.js';
@@ -30,6 +31,7 @@ import { M, loadMember } from '../model/member-data.js';
 import { applyTheme } from '../../lib/theme.js';
 import { confirmPlanNavigation, planDirty } from '../model/planning.js';
 import { refresh, useVersion } from './version.js';
+import { startLive, stopLive, live, subscribe as liveSubscribe, snapshot as liveSnapshot } from '../model/live.js';
 import { Auth, externalMessage } from './Auth.jsx';
 import { takeExternalStatus } from '../model/account.js';
 import { ROUTES, allowed, MEMBER_ROUTES } from './routes.jsx';
@@ -469,8 +471,20 @@ function Palette({ open, onClose }) {
 }
 
 /* ---------------- notifications ---------------- */
+/* The bell's mark: unread notices or unread conversations, as the live updates last found them (model/live.js);
+   before the first answer, what the page loaded. */
+function LiveDot() {
+  useSyncExternalStore(liveSubscribe, liveSnapshot);
+  const unread = live.round
+    ? live.notices + live.conversations > 0
+    : S.role === 'member'
+      ? M.notifications.some(n => !n.read)
+      : D.NOTIFICATIONS.some(n => n[4]);
+  return unread ? <span className="dotmark" data-live-dot=""></span> : null;
+}
 function Notifications() {
   useVersion();
+  useSyncExternalStore(liveSubscribe, liveSnapshot);
   const visible = D.NOTIFICATIONS.map((note, index) => ({ note, index })).filter(
     ({ note }) =>
       !note[3] || (note[3] === 'rate' ? canSee('settings') : allowed(String(note[3]).replace(/^#\//, '').split('/')[0]))
@@ -496,6 +510,22 @@ function Notifications() {
         </button>
       </div>
       <div className="pop-b">
+        {live.conversations && canSee('inbox') ? (
+          <a className="notif unread" href="#/inbox" data-live-inbox="" onClick={() => closeMenu()}>
+            <span className="nico">
+              <Icon name="msg" size={17} />
+            </span>
+            <span className="ntxt">
+              <span>
+                {t(
+                  `${live.conversations} unread conversation${live.conversations === 1 ? '' : 's'} in the inbox`,
+                  `محادثات غير مقروءة في البريد: ${live.conversations}`
+                )}
+              </span>
+            </span>
+            <span className="ndot"></span>
+          </a>
+        ) : null}
         {visible.map(({ note: [ic, txt, when, href, unread], index: i }) => (
           <button
             key={i}
@@ -669,6 +699,7 @@ export function Portal() {
     if (parishId && session.parishes.some(p => p.id === parishId)) selectParish(parishId);
     S.role = session.user.role;
     await hydrate();
+    startLive(); // new notices and messages show without a reload (model/live.js)
     S.route =
       S.role === 'member' && !session.user.person_id
         ? 'activity'
@@ -721,6 +752,7 @@ export function Portal() {
         'danger'
       );
     closeOverlays();
+    stopLive();
     await endSession().catch(() => {}); // signOut() clears the session locally even when the API cannot be reached
     loginScreen();
   };
@@ -1171,7 +1203,7 @@ export function Portal() {
                   onClick={notifications}
                 >
                   <Icon name="bell" size={19} />
-                  {S.role !== 'member' || M.notifications.some(n => !n.read) ? <span className="dotmark"></span> : null}
+                  <LiveDot />
                 </button>
               )}
               {/* named by its visible words (2.5.3, label in name), then what it opens; on phones the words are hidden */}

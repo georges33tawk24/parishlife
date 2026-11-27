@@ -5,7 +5,8 @@
    sections the editor offers); and the workflow calls the screens use (saveBroadcast, broadcastAction,
    scheduleBroadcast, saveTemplate, templateAction, saveNotice, noticeAction, the automation calls
    (automations, saveAutomation, automationAction), saveWebsiteDraft, websiteAction, decideIntention,
-   listMinistries, the inbox calls and the exact-message review calls).
+   listMinistries, the inbox calls and the exact-message review calls); toBell and inboxRoute, which the live
+   updates (model/live.js) and the member pages share.
    People's names for the account ids these records carry come from model/names.js (loadNames in load,
    nameOf on the screens).
 
@@ -161,10 +162,18 @@ const toSection = dto => {
 };
 
 /* NotificationDto → the bell's tuple. A notice's link is an API path, not a portal page, so only the
-   topics whose page is known get a link; the others show without one. */
+   topics whose page is known get a link; the others show without one. A new-message notice links to its
+   conversation: the API's link is /api/parishes/{parish}/inbox/{conversation}, and the inbox page opens
+   #/inbox/{parish}/{conversation} (members: #/mymessages/...) with the whole thread and the reply box. */
 const bellIcon = n => (n.topic === 'inbox.message' ? 'msg' : 'bell');
+export const inboxRoute = (page, link) => {
+  const m = String(link || '').match(/^\/api\/parishes\/([^/]+)\/inbox\/([^/?#]+)$/);
+  return m ? `${page}/${m[1]}/${m[2]}` : page;
+};
 const bellLink = (n, parish) =>
-  n.topic === 'inbox.message' ? (parish?.effectiveRole === 'member' ? '#/mymessages' : '#/inbox') : '';
+  n.topic === 'inbox.message'
+    ? '#/' + inboxRoute(parish?.effectiveRole === 'member' ? 'mymessages' : 'inbox', n.link)
+    : '';
 const when = iso => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return ['', ''];
@@ -172,7 +181,7 @@ const when = iso => {
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Beirut' }).format(d);
   return [at('en-GB'), at('ar')];
 };
-const toBell = (n, parish) => [
+export const toBell = (n, parish) => [
   bellIcon(n),
   [n.title, n.title],
   when(n.createdAt),

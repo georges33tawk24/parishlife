@@ -477,4 +477,6 @@ public sealed class ScenarioPlatform : IPlatformAccess
     public bool Allowed { get; set; }
 
     public Task RequireOperatorAsync(CancellationToken ct) => Allowed ? Task.CompletedTask : throw new DomainException("operator_required", "Operator required.", FailureKind.Forbidden);
+
+    public Task<bool> IsOperatorAsync(CancellationToken ct) => Task.FromResult(Allowed);
 }

@@ -22,8 +22,9 @@ public class FreeCoverageTests
         var access = f.Services.GetRequiredService<IParishAccess>();
         GrantFreeCoverageDto Request() => new() { OperationId = Guid.NewGuid(), Modules = ["office"], StartsAt = f.Clock.Now, Reason = "Isolated first parish, free of charge" };
 
-        await Assert.ThrowsAsync<DomainException>(() => access.RequireModuleAsync(s.Parish, "office", default));
+        // Module checks are made as the parish controller: an MFA operator passes every module check (owner decision, 27 November 2026).
         f.As(f.Other);
+        await Assert.ThrowsAsync<DomainException>(() => access.RequireModuleAsync(s.Parish, "office", default));
         Assert.Equal("operator_required", (await Assert.ThrowsAsync<DomainException>(() => s.Billing.GrantFreeCoverageAsync(s.Parish, Request(), default))).Code);
 
         f.As(f.FirstAdmin);
@@ -36,6 +37,7 @@ public class FreeCoverageTests
         Assert.Equal(coverage.Id, (await s.Billing.GrantFreeCoverageAsync(s.Parish, request, default)).Id);
         Assert.Equal("coverage_overlap", (await Assert.ThrowsAsync<DomainException>(() => s.Billing.GrantFreeCoverageAsync(s.Parish, Request(), default))).Code);
 
+        f.As(f.Other);
         await access.RequireModuleAsync(s.Parish, "office", default);
         await access.RequireModuleAsync(s.Parish, "core", default);
         Assert.Equal("subscription_required", (await Assert.ThrowsAsync<DomainException>(() => access.RequireModuleAsync(s.Parish, "finance", default))).Code);

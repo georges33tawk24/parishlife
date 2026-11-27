@@ -47,7 +47,12 @@ export async function myScopes() {
     parishes = new Map();
   let operator = false;
   for (const c of capacities) {
-    if (c.kind === 'PlatformOperator') operator = true;
+    /* The operator's per-parish capacities (every verified parish) are not organizations the account itself holds;
+       the Platform tab lists every parish instead. */
+    if (c.kind === 'PlatformOperator') {
+      operator = true;
+      continue;
+    }
     if (c.archdioceseId) {
       const a = archdioceses.get(c.archdioceseId) || { id: c.archdioceseId, name: '', kinds: [], appointmentIds: [] };
       if (['Bishop', 'ArchdioceseAdmin'].includes(c.kind)) {

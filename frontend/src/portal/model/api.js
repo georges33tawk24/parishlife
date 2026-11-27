@@ -268,7 +268,8 @@ export async function loadSession() {
         primary: !!p.primary,
         relationship: p.relationship,
         roles: [],
-        capabilities: []
+        capabilities: [],
+        own: true
       }
     ])
   );
@@ -283,8 +284,11 @@ export async function loadSession() {
       name: c.scopeName,
       nameAr: c.scopeName,
       roles: [],
-      capabilities: []
+      capabilities: [],
+      own: false
     };
+    /* A platform operator holds every permission in every verified parish (owner, 27 November 2026); the API
+       lists those parishes as PlatformOperator capacities. "own" marks the parishes the account itself belongs to. */
     const role =
       c.kind === 'Priest'
         ? 'priest'
@@ -292,9 +296,12 @@ export async function loadSession() {
           ? 'leader'
           : c.kind === 'ParishGrant'
             ? officeRole(c.capabilities)
-            : null;
+            : c.kind === 'PlatformOperator'
+              ? 'parish_admin'
+              : null;
     p.capabilities = [...new Set([...p.capabilities, ...(c.capabilities || [])])];
     if (role) p.roles = [...new Set([...p.roles, role])];
+    if (c.kind !== 'PlatformOperator') p.own = true;
     parishes.set(c.parishId, p);
   }
   session.parishes = [...parishes.values()].map(p => ({
@@ -303,7 +310,7 @@ export async function loadSession() {
     canViewFinance: p.roles.includes('priest') || p.capabilities.includes('finance.read'),
     personId: null
   }));
-  session.parishes.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
+  session.parishes.sort((a, b) => Number(!!b.primary) - Number(!!a.primary) || Number(b.own) - Number(a.own));
   session.accountUser = {
     id: account.id,
     name: account.displayName,

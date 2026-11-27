@@ -1,5 +1,5 @@
 // Purpose: enforces current ministry, office, priest and personal boundaries without merging selected roles.
-// Main functions: OfficeAsync, PriestAsync, LeaderAsync, ReaderAsync, RequireAttendanceAsync, RequireFormationAsync, RequireCustodyAsync, RequireCoordinatorAsync, IsCurrentMemberAsync, PersonalAsync, OwnLinkAsync and RootAsync; Scope, Fence and MemberKey identify atomic parish records.
+// Main functions: OfficeAsync, PriestAsync, LeaderAsync, ReaderAsync, RequireAttendanceAsync, RequireFormationAsync, RequireCustodyAsync, RequireCoordinatorAsync, IsCurrentMemberAsync, PersonalAsync, OwnLinkAsync and RootAsync; Scope, Fence and MemberKey identify atomic parish records. A current MFA platform operator in personal capacity passes the leader and duty checks (owner decision, 27 November 2026); priest-only acts still need IClergyAuthority.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Identity;
@@ -14,7 +14,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Ministries;
 
 public class MinistryAccess(IRecordTransactions records, IParishRepository parishes, IParishAccess access,
-    ICurrentActor actor, IClergyAuthority clergy, MfaAccountAccess proof, UserManager<ParishUser> users, TimeProvider clock)
+    ICurrentActor actor, IClergyAuthority clergy, MfaAccountAccess proof, UserManager<ParishUser> users, TimeProvider clock, IPlatformAccess platform)
 {
     internal static RecordScope Scope(string parish) => new() { Area = RecordArea.Parish, OwnerId = parish };
     internal static string MemberKey(string ministry, string person) => "ministryMembership:" + ministry + ":" + person;
@@ -57,7 +57,7 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
         await proof.RequireMfaAsync(ct);
         await RootAsync(parish, ct);
         if (actor.ActingAppointmentId is not null) await PriestAsync(parish, ct, requireModule);
-        else
+        else if (!await platform.IsOperatorAsync(ct))
         {
             var grant = await parishes.GetGrantAsync(parish, actor.AccountId, ct);
             if (grant?.Denies.Contains(Permissions.MinistriesManage, StringComparer.Ordinal) == true) throw Missing();
@@ -115,6 +115,7 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
             }
             throw Missing();
         }
+        if (await platform.IsOperatorAsync(ct)) return group;
         var leader = await records.ReadAsync<MinistryLeader>(Scope(parish), "ministryLeader:" + ministry + ":" + actor.AccountId, ct);
         var grant = await parishes.GetGrantAsync(parish, actor.AccountId, ct);
         if (leader is null || !leader.Value.Current(clock.GetUtcNow())) throw Missing();
@@ -135,6 +136,7 @@ public class MinistryAccess(IRecordTransactions records, IParishRepository paris
             await access.RequireAsync(parish, Permissions.MinistriesRsvpPrivateRead, ct);
             return group;
         }
+        if (await platform.IsOperatorAsync(ct)) return group;
         var leader = await records.ReadAsync<MinistryLeader>(Scope(parish), "ministryLeader:" + ministry + ":" + actor.AccountId, ct);
         var grant = await parishes.GetGrantAsync(parish, actor.AccountId, ct);
         if (leader?.Value.Current(clock.GetUtcNow()) != true || leader.Value.Duties?.Contains("rsvp.private.read", StringComparer.Ordinal) != true

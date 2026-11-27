@@ -1,6 +1,6 @@
 /* Purpose: keeps the portal's shared view model (model/data.js) in step with ParishLife.Api.
    Main functions: hydrate (each connected module loads its collections, People first and then the rest at once), persist (each module sends
-   its changes; changes no module can save are undone and reported), applyData, workflow, savedAt,
+   its changes; changes no module can save are undone and reported), applyData, replaceLoaded, workflow, savedAt,
    savedSize, backupJSON. The modules are in model/modules/.
 
    The screens still change plain objects in place and then call persist(). The .NET API has no
@@ -39,6 +39,13 @@ function applyKey(k, value) {
     Object.keys(D[k]).forEach(x => delete D[k][x]);
     Object.assign(D[k], value);
   }
+}
+/* A collection read again from the API outside hydrate (the live updates, model/live.js): it becomes what was
+   loaded, so persist() does not take the fresher rows for an edit to undo. */
+export function replaceLoaded(k, value) {
+  if (!KEYS.includes(k)) return;
+  applyKey(k, value);
+  baseline[k] = JSON.parse(JSON.stringify(D[k]));
 }
 export function applyData(data) {
   for (const k of KEYS) applyKey(k, data[k] ?? (Array.isArray(D[k]) ? [] : {}));

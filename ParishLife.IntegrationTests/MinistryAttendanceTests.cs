@@ -192,7 +192,7 @@ public class MinistryAttendanceTests
         }, default);
         f.As(leader);
         await Assert.ThrowsAsync<DomainException>(() => Service(f).RecordAsync(s.Parish, group.Id, meeting.Id, write, default));
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         await Assert.ThrowsAsync<DomainException>(() => Service(f).GridAsync(s.Parish, group.Id, meeting.Id, 25, null, default));
     }
 

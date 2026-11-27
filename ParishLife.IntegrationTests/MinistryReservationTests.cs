@@ -67,7 +67,7 @@ public class MinistryReservationTests
             new SaveFacilityDto { OperationId = Guid.NewGuid(), Name = "Isolated room", Kind = "Room", Capacity = 10 }, default);
         var reservations = f.Services.GetRequiredService<ReservationService>();
         var request = new ReserveDto { OperationId = Guid.NewGuid(), EventId = Guid.Parse(meeting.EventId), ResourceId = Guid.Parse(room.Id), StartsAt = meeting.StartsAt, EndsAt = meeting.EndsAt };
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         await Assert.ThrowsAsync<DomainException>(() => reservations.RequestAsync(s.Parish, request, default));
         s.Use(); var booking = await reservations.RequestAsync(s.Parish, request, default);
         var pending = await reservations.ActAsync(s.Parish, booking.Id, new ReservationActionDto
@@ -76,7 +76,7 @@ public class MinistryReservationTests
         await f.Services.GetRequiredService<ReservationProcessor>().ProcessOneAsync(s.Parish, pending.CurrentWorkId!, "isolated-revoked-group-worker", default);
         var failed = (await reservations.GetAsync(s.Parish, booking.Id, default)).Value;
         Assert.Equal("Conflict", failed.Status); Assert.Equal("authorization_changed", failed.ErrorCode);
-        f.As(f.FirstAdmin);
+        f.As(await f.WithoutOperatorAsync(f.FirstAdmin)); // the parish owner without the operator bypass
         Assert.True((await reservations.GetAsync(s.Parish, booking.Id, default)).Value.Redacted);
     }
 

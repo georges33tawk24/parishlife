@@ -1,7 +1,7 @@
 /* Purpose: the signed-in member's own view of their parish (M), loaded from ParishLife.Api and changed
    through memberAction. The member pages (features/member/) read M and call memberAction(op, values).
    Main functions: loadMember (fills M from the member routes), memberAction (one portal action → API
-   calls), loadActivity (the cross-parish "My parish life" page), activityAction.
+   calls), loadActivity (the cross-parish "My parish life" page), activityAction, noticeOf (one notification).
 
    What is connected: the person linked to this account, ministries the parish lists publicly where the
    member belongs, their meetings, RSVP and attendance, formation, volunteering, announcements,
@@ -12,6 +12,7 @@
    document attachments); see docs/frontend-modules/member.md.
    Fields owned by the requests module (M.requests, M.requestOptions) are left alone here. */
 import { api, newOperationId, session, notConnected } from './api.js';
+import { inboxRoute } from './modules/communications.js';
 
 export const M = {
   parish: {},
@@ -114,6 +115,17 @@ const NOTIFICATION_ROUTES = [
 ];
 const routeFor = topic =>
   NOTIFICATION_ROUTES.find(([prefix]) => String(topic || '').startsWith(prefix))?.[1] || 'membernotifications';
+/* A NotificationDto as the member pages show it (also used by the live updates, model/live.js). A new-message
+   notice opens its conversation in Messages. */
+export const noticeOf = n => ({
+  id: n.id,
+  kind: n.topic,
+  title: n.title,
+  body: '',
+  at: n.createdAt,
+  read: n.status !== 'Unread',
+  route: n.topic === 'inbox.message' ? inboxRoute('mymessages', n.link) : routeFor(n.topic)
+});
 
 /* Concern categories are the ones the API accepts (SubmitConcernDto). */
 const CONCERN_CATEGORIES = ['Operational', 'Interpersonal', 'Safeguarding', 'Other'];
@@ -475,17 +487,7 @@ export async function loadMember() {
         version: c.version
       }))
     ),
-    notifications: (notifications || [])
-      .filter(n => n.status !== 'Archived')
-      .map(n => ({
-        id: n.id,
-        kind: n.topic,
-        title: n.title,
-        body: '',
-        at: n.createdAt,
-        read: n.status !== 'Unread',
-        route: routeFor(n.topic)
-      })),
+    notifications: (notifications || []).filter(n => n.status !== 'Archived').map(noticeOf),
     parishes: mine || [],
     home: { unreadNotifications: home?.unreadNotifications || 0, parishes: home?.parishes || [] },
     membershipRequests: applications || [],
