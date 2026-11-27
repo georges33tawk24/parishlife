@@ -199,14 +199,17 @@ export function personView(id, tab = '') {
             >
               {fact('First name', 'الاسم الأول', p.given || p.lat)}
               {fact('Last name', 'اسم العائلة', p.family)}
-              {fact('First name in Arabic', 'الاسم الأول بالعربية', p.givenAr, {
-                dir: 'rtl',
-                style: { fontFamily: 'var(--arabic)', fontSize: '16px' }
-              })}
-              {fact('Last name in Arabic', 'اسم العائلة بالعربية', p.familyAr, {
-                dir: 'rtl',
-                style: { fontFamily: 'var(--arabic)', fontSize: '16px' }
-              })}
+              {/* bdi keeps the Arabic text under its label instead of pushing it to the far side of the cell */}
+              {fact(
+                'First name in Arabic',
+                'الاسم الأول بالعربية',
+                p.givenAr ? <bdi style={{ fontFamily: 'var(--arabic)', fontSize: '16px' }}>{p.givenAr}</bdi> : ''
+              )}
+              {fact(
+                'Last name in Arabic',
+                'اسم العائلة بالعربية',
+                p.familyAr ? <bdi style={{ fontFamily: 'var(--arabic)', fontSize: '16px' }}>{p.familyAr}</bdi> : ''
+              )}
               {fact('Date of birth', 'تاريخ الولادة', isoToDmy(p.born), { dir: 'ltr', className: 'mono' })}
               {fact(
                 'Phone numbers',

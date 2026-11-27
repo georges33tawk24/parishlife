@@ -1,4 +1,4 @@
-/* Purpose: browser checks of the owner's People requests of 27 November 2026, as the parish priest, against the real API.
+/* Purpose: browser checks of the owner's People requests of 27 November 2026, as the parish secretary (office grants people.read and people.write), against the real API.
    Main checks: the new-person drawer refuses digits in a name and accepts "71 821 056" with a second number, sends separate
    English and Arabic first and last names, several phones and the consents ticked by default, and the record page shows them;
    the status filter's Apply and Clear close the popover; the export asks for no purpose; the import shows its column guide;
@@ -10,19 +10,19 @@ const M = manifest();
 const letters = n =>
   Array.from({ length: n }, () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]).join('');
 
-async function asPriest(page, n, lang = 'en') {
+async function asSecretary(page, n, lang = 'en') {
   await client(page, n);
   const state = watch(page);
   await page.addInitScript(l => localStorage.setItem('pl-lang', l), lang);
   await page.goto(M.baseUrl + '/index.html');
-  await signIn(page, state, M.accounts.priest, M.totpSecret, M.password, M.turnstile);
+  await signIn(page, state, M.accounts.secretary, M.totpSecret, M.password, M.turnstile);
   await page.evaluate(() => (location.hash = '#/people'));
   await settle(page, state);
   return state;
 }
 
 test('people: a new parishioner with separate names, several phones and default consents', async ({ page }) => {
-  const state = await asPriest(page, 140);
+  const state = await asSecretary(page, 140);
   const family = 'Haddad' + letters(5);
   await page.locator('[data-split="newp"]').click();
   await page.locator('#pf_given').fill('Rita2');
@@ -68,13 +68,15 @@ test('people: a new parishioner with separate names, several phones and default 
   await expect(record).toContainText('+961 71 821 056');
   await expect(record).toContainText('+961 1 234 567');
   await expect(record).toContainText('03/02/1985');
+  // kept for review by eye: the record page across the whole width
+  await page.screenshot({ path: test.info().outputPath('record-page.png'), fullPage: true });
   expect(state.problems, state.problems.join('\n')).toEqual([]);
 });
 
 test('people: the status filter closes on Apply and Clear, the export has no purpose, the import has a guide', async ({
   page
 }) => {
-  const state = await asPriest(page, 141);
+  const state = await asSecretary(page, 141);
   const filter = page.locator('[data-filter]');
   await filter.click();
   await expect(page.locator('[data-status-filter]')).toBeVisible();
@@ -101,7 +103,7 @@ test('people: the status filter closes on Apply and Clear, the export has no pur
 });
 
 test('people: the new-person drawer reads in Arabic', async ({ page }) => {
-  const state = await asPriest(page, 142, 'ar');
+  const state = await asSecretary(page, 142, 'ar');
   await page.locator('[data-split="newp"]').click();
   await expect(page.getByText('الاسم الأول بالعربية')).toBeVisible();
   await expect(page.getByText('أرقام الهاتف')).toBeVisible();
