@@ -1,14 +1,25 @@
-/* Households: the list (cards or table), one household with its members and envelope, and
-   exporting them. */
+/* Households: the list (cards or table), one household with its members, their roles and envelope, and
+   exporting them.
+   Main members: exportHouseholds, households (the list page), householdView (one household; the office sets
+   each member's role there, saved on the membership). */
 import { nodesOr } from '../../ui/html.js';
 import { t } from '../../../lib/i18n.js';
-import { S, bus } from '../../model/store.js';
+import { S, bus, is } from '../../model/store.js';
+import { Select } from '../../ui/components.jsx';
+import { hydrate } from '../../model/persist.js';
+import { setHouseholdRole } from '../../model/modules/people-workflows.js';
+import { RELS } from './people-dialogs.jsx';
 import { Icon, PageHead, Panel, Who, Table, Empty, SearchField, toast, Avatar, Paged } from '../../ui/ui.jsx';
 import * as CR from '../../shared/record-editor.jsx';
 import { saveBlob, fileName } from '../../shared/print.js';
 import { HOUSEHOLDS, person } from '../../model/data.js';
 import { label, relLabel } from './people-shared.jsx';
 import { familyTree } from './family-tree.jsx';
+
+/* The roles a member can hold in a household: the relationship labels without guardian (guardianship is a
+   recorded relationship with evidence, never a household label). */
+const HOUSEHOLD_ROLES = RELS.filter(([v]) => v !== 'guardian');
+const canEditRoles = () => is('priest', 'secretary');
 
 /* ---------------- households ---------------- */
 export function exportHouseholds(ids) {
@@ -313,13 +324,38 @@ export function householdView(id = '') {
           ) : (
             <Panel title={t('Members and relationships', 'الأفراد وصلاتهم')} tight={true}>
               {nodesOr(
-                members.map((m, i) => (
-                  <a key={i} className="listrow" href={`#/person/${m.id}`}>
-                    <Who p={m} />
-                    <span className="grow" />
-                    <span className="dim">{relLabel(m, h)}</span>
-                  </a>
-                )),
+                members.map((m, i) =>
+                  canEditRoles() ? (
+                    <div key={i} className="listrow" data-member-row={m.id}>
+                      <a href={`#/person/${m.id}`} style={{ minWidth: 0 }}>
+                        <Who p={m} />
+                      </a>
+                      <span className="grow" />
+                      <label className="sr" htmlFor={`hh-role-${m.id}`}>
+                        {t('Role in the household', 'الدور في العائلة') + ' — ' + t(m.lat, m.ar)}
+                      </label>
+                      <Select
+                        id={`hh-role-${m.id}`}
+                        data-hh-role={m.id}
+                        defaultValue={h.roles?.[m.id] || ''}
+                        style={{ maxWidth: '220px' }}
+                      >
+                        <option value="">{t('Not recorded', 'غير مسجّل')}</option>
+                        {HOUSEHOLD_ROLES.map(([v, en, ar]) => (
+                          <option key={v} value={v}>
+                            {t(en, ar)}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : (
+                    <a key={i} className="listrow" href={`#/person/${m.id}`}>
+                      <Who p={m} />
+                      <span className="grow" />
+                      <span className="dim">{relLabel(m, h)}</span>
+                    </a>
+                  )
+                ),
                 <Empty
                   glyph="family"
                   title={t('No members', 'لا أفراد')}
@@ -352,6 +388,32 @@ householdView.mount = host => {
   host
     .querySelector('[data-household-export-id]')
     ?.addEventListener('click', e => exportHouseholds([e.currentTarget.dataset.householdExportId]));
+  /* A member's role is saved on the membership as soon as it is chosen; a refusal (a second head, no
+     authenticator session) puts the previous choice back and says why. */
+  host.querySelectorAll('select[data-hh-role]').forEach(select => {
+    let before = select.value;
+    select.addEventListener('change', async () => {
+      const h = HOUSEHOLDS.find(x => x.members.includes(select.dataset.hhRole));
+      if (!h) return;
+      select.disabled = true;
+      try {
+        await setHouseholdRole(h.id, select.dataset.hhRole, select.value);
+        before = select.value;
+        await hydrate();
+        bus.refresh();
+        toast(
+          t('Role saved', 'حُفظ الدور'),
+          t(person(select.dataset.hhRole)?.lat, person(select.dataset.hhRole)?.ar),
+          'success'
+        );
+      } catch (e) {
+        select.value = before;
+        toast(t('Role not saved', 'لم يُحفظ الدور'), e.message, 'danger');
+      } finally {
+        select.disabled = false;
+      }
+    });
+  });
   host.querySelectorAll('[data-hh-detail-view]').forEach(button =>
     button.addEventListener('click', () => {
       S.ui.householdDetailView = button.dataset.hhDetailView;

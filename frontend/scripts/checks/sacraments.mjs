@@ -168,6 +168,19 @@ const { sent, events } = mockApi((method, path, body) => {
   if (path === `parishes/P/certificates/${CERT}/authorization` && method === 'POST') return json(200, certs[0].value);
   if (path === 'parishes/P/people' && method === 'POST') return json(200, { id: 'newchild' });
   if (path === 'parishes/P/sacraments' && method === 'POST') return json(200, { id: 'newcase' });
+  if (path === 'parishes/P/sacraments/batch' && method === 'POST')
+    return json(200, {
+      batchId: body.operationId,
+      sacrament: body.sacrament,
+      replayed: false,
+      createdCount: body.subjectPersonIds.length - 1,
+      failedCount: 1,
+      items: body.subjectPersonIds.map((id, i) => ({
+        subjectPersonId: id,
+        created: i > 0,
+        errorCode: i > 0 ? null : 'invalid_sacrament_state'
+      }))
+    });
 });
 
 // the multipart upload carries FormData, which the shared stand-in does not parse; it is answered here
@@ -299,6 +312,30 @@ await S.createChildAndSacrament({
 });
 assert.deepEqual(sent.at(-2).slice(0, 2), ['POST', 'parishes/P/people']);
 assert.equal(sent.at(-1)[2].subjectPersonId, 'newchild');
+// first communion and confirmation for several candidates: one call, the caller's operation id, per-person results
+const group = await S.createSacramentBatch({
+  operationId: '00000000-0000-4000-8000-0000000000b1',
+  kind: 'confirmation',
+  people: [PERSON, 'p2', 'p3'],
+  requestedDate: '2026-12-08',
+  facts: { requestedCelebrant: 'Fr. Elie', requestedPlace: '', requestNotes: 'class of 2026' }
+});
+[method, path, body] = sent.at(-1);
+assert.deepEqual(
+  [method, path, body.operationId, body.sacrament, body.subjectPersonIds, body.tentativeDate, body.facts],
+  [
+    'POST',
+    'parishes/P/sacraments/batch',
+    '00000000-0000-4000-8000-0000000000b1',
+    'Confirmation',
+    [PERSON, 'p2', 'p3'],
+    '2026-12-08',
+    { requestedCelebrant: 'Fr. Elie', requestNotes: 'class of 2026' }
+  ],
+  'empty shared details are not sent'
+);
+assert.deepEqual([group.createdCount, group.failedCount, group.items[0].errorCode], [2, 1, 'invalid_sacrament_state']);
+assert.deepEqual(S.GROUP_KINDS, ['communion', 'confirmation'], 'baptism stays one person per request');
 await S.createCertificate({
   kind: 'baptism',
   person: PERSON,

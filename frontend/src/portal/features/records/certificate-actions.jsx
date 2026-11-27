@@ -399,8 +399,21 @@ export const mountCertificate = (host, id, lang = '') => {
             />
             {timeSelect('cel_time', record.time || '')}
           </div>
-          {twinFields('cel_place', L('Place', 'المكان'), record.place, record.placeAr)}
-          {twinFields('cel_celebrant', L('Celebrant', 'المحتفل'), record.celebrantName, record.celebrantNameAr)}
+          {/* a group request may have named the church and celebrant for everyone: offered until recorded */}
+          {twinFields(
+            'cel_place',
+            L('Place', 'المكان'),
+            ...(record.place || record.placeAr
+              ? [record.place, record.placeAr]
+              : [record.requestedPlace, record.requestedPlaceAr])
+          )}
+          {twinFields(
+            'cel_celebrant',
+            L('Celebrant', 'المحتفل'),
+            ...(record.celebrantName || record.celebrantNameAr
+              ? [record.celebrantName, record.celebrantNameAr]
+              : [record.requestedCelebrant, record.requestedCelebrantAr])
+          )}
           {celebrantPick('cel_celebrant_person', record.celebrant)}
           {twinFields(
             'cel_witnesses',

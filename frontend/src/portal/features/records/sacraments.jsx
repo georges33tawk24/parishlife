@@ -2,10 +2,12 @@
    progress (with each case's checklist count), anniversaries and the register export; the priest's settings
    (preparation requirement lists, his signature image) open from the preparation tab. */
 import { Select } from '../../ui/components.jsx';
-import { t, isAr, fmtDate } from '../../../lib/i18n.js';
+import { t, isAr, fmtDate, matches } from '../../../lib/i18n.js';
 import { bus, S, save, is } from '../../model/store.js';
 import { openRequirementLists, openSignatureImage } from './sacrament-settings.jsx';
-import { session } from '../../model/api.js';
+import { session, newOperationId } from '../../model/api.js';
+import { paint } from '../../ui/html.js';
+import { PeopleSearch, selectedIds } from '../../shared/people-search.jsx';
 import {
   Icon,
   PageHead,
@@ -57,6 +59,66 @@ import {
 } from './records-shared.jsx';
 
 const L = (en, ar) => t(en, ar);
+
+/* Candidates for a group request, from the people the office already sees, twenty at a time. */
+async function searchCandidates(q, cursor) {
+  const hits = PEOPLE.filter(p => matches(`${p.lat} ${p.ar}`, q));
+  const start = Number(cursor || 0);
+  return {
+    items: hits
+      .slice(start, start + 20)
+      .map(p => ({
+        id: p.id,
+        name: isAr() ? p.ar : p.lat,
+        alt: p.ar && p.ar !== p.lat ? (isAr() ? p.lat : p.ar) : '',
+        note: p.born || ''
+      })),
+    next: start + 20 < hits.length ? String(start + 20) : null
+  };
+}
+
+const BATCH_ERRORS = {
+  invalid_sacrament_state: [
+    'Already has an open or registered request for this sacrament.',
+    'لديه طلب مفتوح أو مسجَّل لهذا السرّ.'
+  ],
+  resource_not_found: ['Not an active person of this parish.', 'ليس شخصاً فاعلاً في هذه الرعية.']
+};
+
+/* A group request that did not open a case for everyone: who got one and why the others did not. The form
+   then only closes, so the same request is not sent again by mistake. */
+function showBatchResults(el, result) {
+  const box = el.querySelector('#srq-results');
+  box.hidden = false;
+  paint(
+    box,
+    <C.InlineAlert
+      tone="warning"
+      title={L(
+        `${result.createdCount} requests opened, ${result.failedCount} not opened`,
+        `فُتح ${result.createdCount} طلباً، ولم يُفتح ${result.failedCount}`
+      )}
+      body={
+        <ul className="stack" style={{ gap: '4px', margin: '8px 0 0', paddingInlineStart: '18px' }}>
+          {result.items.map(item => {
+            const p = person(item.subjectPersonId);
+            return (
+              <li key={item.subjectPersonId} data-batch-result={item.created ? 'created' : 'failed'}>
+                <b>{(isAr() ? p?.ar : p?.lat) || item.subjectPersonId}</b> —{' '}
+                {item.created
+                  ? L('request opened', 'فُتح الطلب')
+                  : L(...(BATCH_ERRORS[item.errorCode] || [item.message || 'Not opened.', item.message || 'لم يُفتح.']))}
+              </li>
+            );
+          })}
+        </ul>
+      }
+    />
+  );
+  el.querySelector('#srq_save').hidden = true;
+  const cancel = el.querySelector('#srq_cancel');
+  if (cancel) cancel.textContent = L('Close', 'إغلاق');
+}
 
 /* Official entries are reached from the person's record and from Requests; there is no separate register page. */
 const STABS = () => [
@@ -903,6 +965,34 @@ sacraments.mount = host => {
               ))}
             </Select>
           </div>{' '}
+          {/* First communion and confirmation are usually celebrated for many at once: several candidates,
+              one request each, with the details they share. */}
+          <div id="srq-group" hidden className="stack" style={{ gap: '12px' }}>
+            <PeopleSearch
+              id="srq_people"
+              label={L('Candidates', 'المرشّحون')}
+              req={true}
+              help={L(
+                'Search and add each candidate. One request is opened for each person, with the details below.',
+                'ابحث وأضف كل مرشّح. يُفتح طلب لكل شخص بالتفاصيل أدناه.'
+              )}
+              search={searchCandidates}
+            />
+            <div className="formgrid">
+              <C.Field label={L('Celebrant (optional)', 'المحتفل (اختياري)')} id="srq_celebrant" />
+              <C.Field
+                label={L('Celebrant in Arabic (optional)', 'المحتفل بالعربية (اختياري)')}
+                id="srq_celebrantAr"
+                dir="rtl"
+              />
+              <C.Field label={L('Church (optional)', 'الكنيسة (اختياري)')} id="srq_place" />
+              <C.Field
+                label={L('Church in Arabic (optional)', 'الكنيسة بالعربية (اختياري)')}
+                id="srq_placeAr"
+                dir="rtl"
+              />
+            </div>
+          </div>{' '}
           <label className="check" id="srq-child-choice">
             <input type="checkbox" id="srq-new-child" />
             <span>{L('Baptism for a child not yet in People', 'معمودية لطفل غير مسجّل بعد في المؤمنين')}</span>
@@ -927,11 +1017,12 @@ sacraments.mount = host => {
           </div>{' '}
           <C.Field label={L('Preferred date (optional)', 'التاريخ المفضّل (اختياري)')} id="srq_date" type="date" />{' '}
           <C.Textarea label={L('Family request / notes', 'طلب العائلة / ملاحظات')} id="srq_notes" max={500} />
+          <div id="srq-results" hidden aria-live="polite" />
         </>
       ),
       foot: (
         <>
-          <button className="btn btn-secondary" data-close="">
+          <button className="btn btn-secondary" data-close="" id="srq_cancel">
             {L('Cancel', 'إلغاء')}
           </button>
           <button className="btn btn-primary" id="srq_save">
@@ -940,18 +1031,73 @@ sacraments.mount = host => {
         </>
       ),
       onMount(el) {
+        const group = () => API.GROUP_KINDS.includes(el.querySelector('#srq_kind').value);
         const mode = () => {
           const baptism = el.querySelector('#srq_kind').value === 'baptism';
           el.querySelector('#srq-child-choice').hidden = !baptism;
           if (!baptism) el.querySelector('#srq-new-child').checked = false;
           const manual = baptism && el.querySelector('#srq-new-child').checked;
           el.querySelector('#srq-child-fields').hidden = !manual;
-          el.querySelector('#srq-existing').hidden = manual;
+          el.querySelector('#srq-existing').hidden = manual || group();
+          el.querySelector('#srq-group').hidden = !group();
         };
         el.querySelector('#srq_kind').addEventListener('change', mode);
         el.querySelector('#srq-new-child').addEventListener('change', mode);
         mode();
+        /* One operation id per version of the group request: pressing again after a lost answer resends the
+           same id (the API returns the stored results), while any change to the form starts a new one. */
+        let operationId = newOperationId();
+        const renew = () => (operationId = newOperationId());
+        el.addEventListener('input', renew);
+        el.addEventListener('change', renew);
         el.querySelector('#srq_save').addEventListener('click', async () => {
+          if (!group()) return;
+          const people = selectedIds(el.querySelector('#srq_people'));
+          if (!people.length) return toast(L('Add at least one candidate', 'أضف مرشّحاً واحداً على الأقل'), '', 'warning');
+          const btn = el.querySelector('#srq_save');
+          btn.disabled = true;
+          const value = sel => el.querySelector(sel).value.trim();
+          try {
+            const result = await API.createSacramentBatch({
+              operationId,
+              kind: el.querySelector('#srq_kind').value,
+              people,
+              requestedDate: el.querySelector('#srq_date').value,
+              facts: {
+                requestNotes: value('#srq_notes'),
+                requestedCelebrant: value('#srq_celebrant'),
+                requestedCelebrantAr: value('#srq_celebrantAr'),
+                requestedPlace: value('#srq_place'),
+                requestedPlaceAr: value('#srq_placeAr')
+              }
+            });
+            if (!result.failedCount) {
+              closeOverlays();
+              location.hash = '#/requests';
+              bus.refresh();
+              return toast(
+                L(`${result.createdCount} requests submitted`, `قُدّم ${result.createdCount} طلباً`),
+                L('Each waits for the priest to accept or decline it.', 'ينتظر كل طلب قبول الكاهن أو رفضه.'),
+                'success'
+              );
+            }
+            showBatchResults(el, result);
+            bus.refresh();
+            toast(
+              L(
+                `${result.createdCount} submitted, ${result.failedCount} not`,
+                `قُدّم ${result.createdCount}، ولم يُقدَّم ${result.failedCount}`
+              ),
+              L('The list in the form says why for each person.', 'تبيّن القائمة في النموذج السبب لكل شخص.'),
+              'warning'
+            );
+          } catch (e) {
+            btn.disabled = false;
+            toast(L('Could not submit the requests', 'تعذّر تقديم الطلبات'), e.message, 'danger');
+          }
+        });
+        el.querySelector('#srq_save').addEventListener('click', async () => {
+          if (group()) return;
           const manual = el.querySelector('#srq-new-child').checked,
             personId = el.querySelector('#srq_person').value;
           if (!manual && !need(el, '#srq_person', L('Choose who receives the sacrament', 'اختر من سيقبل السرّ'))) return;
@@ -1040,11 +1186,15 @@ sacraments.mount = host => {
               {timeSelect('prep_time', record.time || '')}
             </div>
             <div className="formgrid">
-              <C.Field label={L('Celebrant', 'المحتفل')} id="prep_celebrant" value={record.celebrantName || ''} />
+              <C.Field
+                label={L('Celebrant', 'المحتفل')}
+                id="prep_celebrant"
+                value={record.celebrantName || (record.celebrantNameAr ? '' : record.requestedCelebrant) || ''}
+              />
               <C.Field
                 label={L('Celebrant · Arabic', 'المحتفل · بالعربية')}
                 id="prep_celebrantAr"
-                value={record.celebrantNameAr || ''}
+                value={record.celebrantNameAr || (record.celebrantName ? '' : record.requestedCelebrantAr) || ''}
                 ar={true}
                 dir="rtl"
               />

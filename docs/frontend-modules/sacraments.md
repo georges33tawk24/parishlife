@@ -34,6 +34,10 @@ Sacrament: Received → requested · Preparation → preparing · Scheduled → 
 
 The certificate is drawn from its frozen snapshot (`docRecord`), so a later register change never alters a prepared certificate. The electronic code and the API's copy statement are printed when present. The download menu adds the API's parish sheet (HTML, bishop-approved wording).
 
+## Group requests (27 Nov 2026)
+
+First communion and confirmation can be requested for several candidates at once (`POST sacraments/batch`): one case per person with the shared requested date, notes and optional celebrant and church (facts `requestedCelebrant(Ar)`, `requestedPlace(Ar)`, offered when the celebration is set and recorded). Each candidate is checked like a single request; the valid ones are opened in one transaction with the stored per-person results, the others are listed with the reason, and resending the same operation id returns the stored results without opening anything twice. Baptism and the other sacraments stay one person per request. Up to 90 candidates per request.
+
 ## Connected in the fullstack2-sacraments round
 
 - **Office review**: a secretary marks a received request "reviewed by the office" with an optional note (`office-review`). The API status stays `Received`; the portal shows `office-reviewed`. It is informative only: the priest may accept or decline with or without it, and a review is recorded once.

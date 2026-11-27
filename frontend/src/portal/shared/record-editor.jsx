@@ -12,6 +12,8 @@ import * as D from '../model/data.js';
 import { confirmAction, need } from './dialogs.jsx';
 import { hydrate, persist } from '../model/persist.js';
 import { withdrawMusic } from '../model/modules/calendar.js';
+import { householdCandidates } from '../model/modules/people-workflows.js';
+import { PeopleSearch, selectedIds } from './people-search.jsx';
 import { eligibleEvents, eventById } from '../model/event-workflows.js';
 
 const L = (en, ar) => t(en, ar);
@@ -124,6 +126,7 @@ export const ENT = {
   household: {
     list: () => D.HOUSEHOLDS,
     name: h => L(h.name, h.ar),
+    large: true,
     nw: ['New household', 'عائلة جديدة'],
     ed: ['Edit household', 'تعديل العائلة'],
     del: ['Delete this household?', 'حذف هذه العائلة؟'],
@@ -174,29 +177,55 @@ export const ENT = {
         { req: false }
       ),
       {
+        /* A search, not a list of everyone: the server answers from two characters, a page at a time, and
+           names the household a person already belongs to (they must leave it first). */
         k: 'members',
-        label: L('Choose existing members', 'اختر الأفراد المسجّلين'),
-        type: 'multi',
+        type: 'custom',
         full: true,
-        help: L(
-          'People with the same surname appear first. Review selections; no records are merged automatically.',
-          'يظهر أصحاب اسم العائلة نفسه أولاً. راجع الاختيارات؛ لا تُدمج السجلات تلقائياً.'
+        render: () => (
+          <PeopleSearch
+            id="cf_members"
+            label={L('Choose existing members', 'اختر الأفراد المسجّلين')}
+            help={L(
+              'Search by name in either script. Someone already in another household must be removed from it first. No records are merged automatically.',
+              'ابحث بالاسم بأي حرف. من ينتمي إلى عائلة أخرى يجب إخراجه منها أولاً. لا تُدمج السجلات تلقائياً.'
+            )}
+            initial={x.members.map(id => ({ id, name: L(D.person(id)?.lat || id, D.person(id)?.ar || id) }))}
+            search={async (q, cursor) => {
+              const page = await householdCandidates(q, cursor);
+              return {
+                next: page.continuationToken || null,
+                items: (page.items || []).map(p => {
+                  const lat = `${p.givenName} ${p.familyName}`.trim(),
+                    ar = [p.givenNameAr, p.familyNameAr].filter(Boolean).join(' ');
+                  const elsewhere = p.householdId && p.householdId !== x.id;
+                  return {
+                    id: p.id,
+                    name: L(lat, ar || lat),
+                    alt: ar && ar !== lat ? L(ar, lat) : '',
+                    note: elsewhere
+                      ? L('Already in ', 'منتمٍ إلى ') +
+                        L(p.householdName || '', p.householdNameAr || p.householdName || '')
+                      : p.birthDate || '',
+                    disabled: !!elsewhere
+                  };
+                })
+              };
+            }}
+          />
         ),
-        options: () =>
-          D.PEOPLE.filter(p => !p.hh || p.hh === x.id)
-            .sort(
-              (a, b) =>
-                Number(b.lat.toLowerCase().includes(x.name.toLowerCase())) -
-                  Number(a.lat.toLowerCase().includes(x.name.toLowerCase())) || a.lat.localeCompare(b.lat)
-            )
-            .map(p => [p.id, p.lat, p.ar]),
+        read: node => selectedIds(node),
         set: (record, v) => {
           record.members = [...new Set(v)];
         }
       },
       {
         k: 'head',
-        label: L('Household contact / head (optional)', 'المسؤول عن العائلة (اختياري)'),
+        label: L('Household contact / head', 'المسؤول عن العائلة'),
+        help: L(
+          'Required once members are chosen: pick the contact from them.',
+          'مطلوب بعد اختيار الأفراد: اختر المسؤول من بينهم.'
+        ),
         type: 'select',
         full: true,
         options: () => [
@@ -226,18 +255,27 @@ export const ENT = {
       address: '',
       addressAr: ''
     }),
+    /* The API refuses digits in a new or changed name and members without a contact among them; the form
+       says so first. */
     check: (v, x) =>
-      v.envelope && D.HOUSEHOLDS.some(h => h !== x && h.envelope === v.envelope)
-        ? [
-            'envelope',
-            L('Another household already uses this offering-envelope identifier', 'رمز مظروف العطاء مستخدم لعائلة أخرى')
-          ]
-        : v.head && !v.members.includes(v.head)
-          ? [
-              'head',
-              L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')
-            ]
-          : null,
+      /\p{Nd}/u.test(v.name) && v.name !== x.name
+        ? ['name', L('A household name cannot contain digits.', 'لا يمكن أن يحتوي اسم العائلة على أرقام.')]
+        : /\p{Nd}/u.test(v.ar) && v.ar !== x.ar
+          ? ['ar', L('A household name cannot contain digits.', 'لا يمكن أن يحتوي اسم العائلة على أرقام.')]
+          : v.envelope && D.HOUSEHOLDS.some(h => h !== x && h.envelope === v.envelope)
+            ? [
+                'envelope',
+                L(
+                  'Another household already uses this offering-envelope identifier',
+                  'رمز مظروف العطاء مستخدم لعائلة أخرى'
+                )
+              ]
+            : (v.head && !v.members.includes(v.head)) || (!D.HOUSEHOLDS.includes(x) && v.members.length && !v.head)
+              ? [
+                  'head',
+                  L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')
+                ]
+              : null,
     prepare: x => {
       const selected = new Set(x.members),
         was = priorHead.get(x);
@@ -268,26 +306,48 @@ export const ENT = {
         }
       }
     },
-    onMount: el => {
+    onMount: (el, x, isNew) => {
       const head = el.querySelector('#cf_head'),
-        memberInputs = [...el.querySelectorAll('#cf_members input')];
+        members = el.querySelector('#cf_members'),
+        save = el.querySelector('#cf_save');
+      /* Digits are refused as they are typed (and again on save and by the API). */
+      for (const id of ['#cf_name', '#cf_ar']) {
+        const input = el.querySelector(id);
+        input?.addEventListener('input', () => {
+          if (!/\p{Nd}/u.test(input.value)) return;
+          input.value = input.value.replace(/\p{Nd}/gu, '');
+          need(
+            el,
+            id,
+            L('A household name cannot contain digits.', 'لا يمكن أن يحتوي اسم العائلة على أرقام.'),
+            () => false,
+            false
+          );
+        });
+      }
+      /* A new household with members cannot be created before its contact is chosen from them. */
+      const gate = () => {
+        if (isNew) save.disabled = selectedIds(members).length > 0 && !head.value;
+      };
       const sync = () => {
         const keep = head.value,
-          chosen = memberInputs.filter(i => i.checked);
+          chosen = selectedIds(members);
         paint(
           head,
           <>
             <option value="">{L('Not set', 'غير محدّد')}</option>
-            {chosen.map((i, k) => (
-              <option key={k} value={i.value}>
-                {D.person(i.value)?.lat || i.value}
+            {chosen.map(id => (
+              <option key={id} value={id}>
+                {L(D.person(id)?.lat || id, D.person(id)?.ar || D.person(id)?.lat || id)}
               </option>
             ))}
           </>
         );
-        head.value = chosen.some(i => i.value === keep) ? keep : '';
+        head.value = chosen.includes(keep) ? keep : '';
+        gate();
       };
-      memberInputs.forEach(i => i.addEventListener('change', sync));
+      members.addEventListener('change', sync);
+      head.addEventListener('change', gate);
       sync();
     },
     delNote: [
@@ -1289,6 +1349,8 @@ function fieldHTML(f, x) {
       {f.opt ? <span className="opt">{L('(optional)', '(اختياري)')}</span> : ''}
     </label>
   );
+  /* a field that draws itself (f.render) and says what it holds (f.read) */
+  if (f.type === 'custom') return f.render(x);
   if (f.type === 'select')
     return (
       <div className="formrow" {...htmlAttrs(span)}>
@@ -1301,6 +1363,7 @@ function fieldHTML(f, x) {
             </option>
           ))}
         </Select>
+        {f.help ? <span className="help">{f.help}</span> : ''}
       </div>
     );
   if (f.type === 'textarea')
@@ -1358,7 +1421,8 @@ function read(el, fields) {
   const out = {};
   for (const f of fields) {
     const node = el.querySelector('#cf_' + f.k);
-    if (f.type === 'multi') out[f.k] = [...node.querySelectorAll('input:checked')].map(c => c.value);
+    if (f.type === 'custom') out[f.k] = f.read(node);
+    else if (f.type === 'multi') out[f.k] = [...node.querySelectorAll('input:checked')].map(c => c.value);
     else if (f.type === 'number') out[f.k] = node.value === '' ? 0 : +node.value;
     else out[f.k] = node.value.trim();
   }
@@ -1438,6 +1502,7 @@ function form(kind, x, isNew) {
   const [title, titleAr] = isNew ? ent.nw : ent.ed;
   openDrawer({
     title: L(title, titleAr),
+    large: !!ent.large,
     sub: ent.sub ? L(...ent.sub) : isNew ? '' : ent.name(x),
     body: (
       <>

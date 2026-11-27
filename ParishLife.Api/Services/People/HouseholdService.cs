@@ -1,7 +1,9 @@
 // Purpose: manages households (shared contact/residence units) and person-to-person relationships without conferring authority.
-// Main functions: SaveAsync, MemberAsync, GetAsync, ListAsync (with members), HistoryAsync, AddRelationshipAsync, EndRelationshipAsync and
-// RelationshipsAsync; helpers enforce one primary household per person, unique envelope identifiers, mirrored relationship pairs
-// and acyclic parentage. Household membership never grants guardianship, giving, message or certificate access.
+// Main functions: SaveAsync (a new household may bring its first members, their roles and the required contact atomically), MemberAsync
+// (add, update, remove, set-contact, set-role), GetAsync, ListAsync (with members), CandidatesAsync (paged member search), HistoryAsync,
+// AddRelationshipAsync, EndRelationshipAsync and RelationshipsAsync; helpers enforce digit-free household names, one primary household per
+// person, at most one head per household, unique envelope identifiers, mirrored relationship pairs and acyclic parentage. Household
+// membership and member roles never grant guardianship, giving, message or certificate access.
 
 using ParishLife.Api.DTOs.People;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -47,6 +49,9 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         var address = string.IsNullOrWhiteSpace(request.Address) ? null : Guard.Text(request.Address, "Address", 1000);
         var town = Optional(request.Town, "Town", 100);
         var townAr = Optional(request.TownAr, "Arabic town", 100);
+        var name = Guard.Text(request.Name, "Household name", 200);
+        var nameAr = Optional(request.NameAr, "Arabic household name", 200);
+        var initial = request.Members ?? [];
         var changes = new List<RecordChange> { Fence(root) };
         Household item;
         if (id is null)
@@ -54,14 +59,24 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             if (request.Version is not null)
                 throw State("A new household has no version.");
             item = new Household { Id = op.Id, ParishId = parish };
+            NoDigits(name, "household name");
+            NoDigits(nameAr, "Arabic household name");
             changes.Add(RecordChange.Create(HouseholdKey(item.Id), "household", item));
+            await AddInitialMembersAsync(parish, item, initial, request.ContactPersonId, op, changes, ct);
         }
         else
         {
+            if (initial.Length > 0 || request.ContactPersonId is not null)
+                throw new DomainException("invalid_input", "An existing household changes members and its contact one action at a time.");
             var row = await ReadAsync(parish, id, ct);
             item = row.Value;
             if (item.Status != "Active")
                 throw State("Only an active household can be edited.");
+            // Older names keep whatever they hold; a changed name follows the no-digits rule.
+            if (item.Name != name)
+                NoDigits(name, "household name");
+            if (item.NameAr != nameAr)
+                NoDigits(nameAr, "Arabic household name");
             if (item.Address != address)
                 changes.Add(History(item.Id, null, "address", item.Address, op));
             if (item.Town != town || item.TownAr != townAr)
@@ -82,8 +97,8 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             if (id is not null)
                 changes.Add(History(item.Id, null, "envelope", item.EnvelopeId, op));
         }
-        item.Name = Guard.Text(request.Name, "Household name", 200);
-        item.NameAr = Optional(request.NameAr, "Arabic household name", 200);
+        item.Name = name;
+        item.NameAr = nameAr;
         item.Address = address;
         item.Town = town;
         item.TownAr = townAr;
@@ -119,10 +134,13 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
                 // One primary household per person; a move is an explicit remove from the old household first.
                 if (member is not null && member.Value.HouseholdId.Length > 0)
                     throw State("This person already has a primary household; remove them from it first.");
+                var joinedRole = Role(request.Role);
+                await OneHeadAsync(parish, household, person, joinedRole, ct);
                 var joined = new HouseholdMember
                 {
                     PersonId = person, HouseholdId = household, InheritsAddress = request.InheritsAddress, JoinedAt = op.At, UpdatedBy = actor.AccountId,
-                    OwnAddress = string.IsNullOrWhiteSpace(request.OwnAddress) ? null : Guard.Text(request.OwnAddress, "Own address", 1000)
+                    OwnAddress = string.IsNullOrWhiteSpace(request.OwnAddress) ? null : Guard.Text(request.OwnAddress, "Own address", 1000),
+                    Role = joinedRole
                 };
                 changes.Add(member is null ? RecordChange.Create(MemberKey(person), "householdMember", joined)
                     : RecordChange.Replace(MemberKey(person), "householdMember", joined, member.Version));
@@ -139,6 +157,8 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
                 break;
             case "remove" when inHousehold:
                 member!.Value.HouseholdId = "";
+                // The role described this household; it does not follow the person anywhere else.
+                member.Value.Role = null;
                 member.Value.UpdatedBy = actor.AccountId;
                 if (item.ContactPersonId == person)
                     item.ContactPersonId = null;
@@ -148,6 +168,17 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             case "set-contact" when inHousehold:
                 changes.Add(History(household, person, "set-contact", item.ContactPersonId, op));
                 item.ContactPersonId = person;
+                break;
+            case "set-role" when inHousehold:
+                // Only this membership's label changes (an empty role clears it); the Person record is untouched.
+                var role = Role(request.Role);
+                await OneHeadAsync(parish, household, person, role, ct);
+                if (member!.Value.Role == role)
+                    throw State("This member already has that role.");
+                changes.Add(History(household, person, "role", member.Value.Role, op));
+                member.Value.Role = role;
+                member.Value.UpdatedBy = actor.AccountId;
+                changes.Add(RecordChange.Replace(MemberKey(person), "householdMember", member.Value, member.Version));
                 break;
             default:
                 throw State("This member action needs a person who is (or, for add, is not yet) in this household.");
@@ -175,6 +206,48 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         foreach (var row in page.Items.Where(r => r.Value.ParishId == parish))
             items.Add(new Versioned<HouseholdDto> { Version = row.Version, Value = await ProjectAsync(parish, row.Value, ct) });
         return new Page<Versioned<HouseholdDto>> { Items = [.. items], ContinuationToken = page.ContinuationToken };
+    }
+
+    // Search-as-you-type for the household member picker: at least two characters, case- and mark-insensitive over Latin and Arabic
+    // names and the contact, active people only, ordered by family then given name, paged by an offset cursor (size 1-50). Each result
+    // names the household the person already belongs to, so the office sees who must leave another household first.
+    public async Task<Page<HouseholdCandidateDto>> CandidatesAsync(string parish, string query, int size, string? cursor, CancellationToken ct)
+    {
+        await AuthorizeAsync(parish, Permissions.PeopleRead, ct);
+        var terms = PeopleDirectoryService.Normalize(Guard.Text(query, "Search", 200)).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (string.Concat(terms).Length < MinimumSearch)
+            throw new DomainException("invalid_input", $"Type at least {MinimumSearch} characters to search.");
+        var offset = 0;
+        if (cursor is not null && (!int.TryParse(cursor, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out offset) || offset > 20000))
+            throw new DomainException("invalid_cursor", "The cursor does not match this search.");
+        size = Math.Clamp(size, 1, 50);
+        // ponytail: scans the parish's people like PeopleDirectoryService.SearchAsync (cap 20000); add a normalized-name index when a parish outgrows it.
+        var matches = (await records.CollectAsync<Person>(RecordScopes.Parish(parish), "person", ct, 20000)).Select(r => r.Value)
+            .Where(p => !p.Archived && p.ParishId == parish)
+            .Where(p => terms.All(t => PeopleDirectoryService.Normalize(p.GivenName + " " + p.FamilyName + " " + p.GivenNameAr + " " + p.FamilyNameAr + " " + p.Contact)
+                .Contains(t, StringComparison.Ordinal)))
+            .OrderBy(p => p.FamilyName, StringComparer.CurrentCultureIgnoreCase).ThenBy(p => p.GivenName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(p => p.Id, StringComparer.Ordinal)
+            .ToList();
+        var households = new Dictionary<string, Household?>(StringComparer.Ordinal);
+        var items = new List<HouseholdCandidateDto>();
+        foreach (var p in matches.Skip(offset).Take(size))
+        {
+            var home = (await records.ReadAsync<HouseholdMember>(RecordScopes.Parish(parish), MemberKey(p.Id), ct))?.Value.HouseholdId;
+            Household? house = null;
+            if (!string.IsNullOrEmpty(home) && !households.TryGetValue(home, out house))
+                households[home] = house = (await records.ReadAsync<Household>(RecordScopes.Parish(parish), HouseholdKey(home), ct))?.Value;
+            items.Add(new HouseholdCandidateDto
+            {
+                Id = p.Id, GivenName = p.GivenName, FamilyName = p.FamilyName, GivenNameAr = p.GivenNameAr, FamilyNameAr = p.FamilyNameAr, BirthDate = p.BirthDate,
+                HouseholdId = string.IsNullOrEmpty(home) ? null : home, HouseholdName = house?.Name, HouseholdNameAr = house?.NameAr
+            });
+        }
+        return new Page<HouseholdCandidateDto>
+        {
+            Items = [.. items],
+            ContinuationToken = offset + size < matches.Count ? (offset + size).ToString(System.Globalization.CultureInfo.InvariantCulture) : null
+        };
     }
 
     public async Task<Page<HouseholdChangeDto>> HistoryAsync(string parish, string id, int size, string? cursor, CancellationToken ct)
@@ -296,12 +369,90 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
         return seen;
     }
 
-    private RecordChange History(string household, string? person, string action, string? previous, Operation op)
-        => RecordChange.Create("householdChange:" + op.Id + ":" + action, "householdChange", new HouseholdChange
+    // One operation normally records one change per action; a household created with several members passes each person's id as the
+    // discriminator so their "add" entries keep distinct ids.
+    private RecordChange History(string household, string? person, string action, string? previous, Operation op, string? discriminator = null)
+    {
+        var id = op.Id + ":" + action + (discriminator is null ? "" : ":" + discriminator);
+        return RecordChange.Create("householdChange:" + id, "householdChange", new HouseholdChange
         {
-            Id = op.Id + ":" + action, HouseholdId = household, PersonId = person, Action = action, Previous = previous,
+            Id = id, HouseholdId = household, PersonId = person, Action = action, Previous = previous,
             RecordedBy = actor.AccountId, RecordedAt = op.At
         });
+    }
+
+    // The first members of a new household, its contact and their roles, all in the household's own creating transaction. When members
+    // are named the contact is required and must be one of them; each person must be an active person of this parish without a household.
+    private async Task AddInitialMembersAsync(string parish, Household item, HouseholdInitialMemberDto[] initial, Guid? contact, Operation op,
+        List<RecordChange> changes, CancellationToken ct)
+    {
+        if (initial.Length == 0)
+        {
+            if (contact is not null)
+                throw new DomainException("invalid_input", "Choose the household contact from the selected members.");
+            return;
+        }
+        if (initial.Length > 40)
+            throw new DomainException("invalid_input", "Create a household with up to 40 members, then add the others one at a time.");
+        var people = initial.Select(m => Guard.Id(m.PersonId)).ToArray();
+        if (people.Distinct(StringComparer.Ordinal).Count() != people.Length)
+            throw new DomainException("invalid_input", "Each member can be selected once.");
+        var contactId = contact is { } c ? Guard.Id(c) : null;
+        if (contactId is null || !people.Contains(contactId))
+            throw new DomainException("invalid_input", "Choose the household contact from the selected members.");
+        var roles = initial.Select(m => Role(m.Role)).ToArray();
+        if (roles.Count(r => r == HouseholdRoles.Head) > 1)
+            throw new DomainException("invalid_input", "A household has one head; give the other members another role.");
+        for (var i = 0; i < initial.Length; i++)
+        {
+            var person = people[i];
+            var subject = (await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + person, ct))?.Value;
+            if (subject is null || subject.ParishId != parish)
+                throw Missing();
+            if (subject.Archived)
+                throw State("Restore or review an archived person before adding them to a household.");
+            var member = await records.ReadAsync<HouseholdMember>(RecordScopes.Parish(parish), MemberKey(person), ct);
+            if (member is not null && member.Value.HouseholdId.Length > 0)
+                throw State("A selected person already has a primary household; remove them from it first.");
+            var joined = new HouseholdMember
+            {
+                PersonId = person, HouseholdId = item.Id, InheritsAddress = initial[i].InheritsAddress, Role = roles[i], JoinedAt = op.At, UpdatedBy = actor.AccountId
+            };
+            changes.Add(member is null ? RecordChange.Create(MemberKey(person), "householdMember", joined)
+                : RecordChange.Replace(MemberKey(person), "householdMember", joined, member.Version));
+            changes.Add(History(item.Id, person, "add", null, op, person));
+        }
+        item.ContactPersonId = contactId;
+        changes.Add(History(item.Id, contactId, "set-contact", null, op));
+    }
+
+    private const int MinimumSearch = 2;
+
+    // Household names are family names: digits (in any script, Arabic-Indic included) are refused.
+    private static void NoDigits(string? value, string name)
+    {
+        if (value is not null && value.Any(char.IsDigit))
+            throw new DomainException("invalid_input", $"The {name} cannot contain digits.");
+    }
+
+    private static string? Role(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var role = value.Trim();
+        return HouseholdRoles.All.Contains(role, StringComparer.Ordinal) ? role
+            : throw new DomainException("invalid_input", "Choose a household role from " + string.Join(", ", HouseholdRoles.All) + ".");
+    }
+
+    // A household records at most one head; the current head's role must change first.
+    private async Task OneHeadAsync(string parish, string household, string person, string? role, CancellationToken ct)
+    {
+        if (role != HouseholdRoles.Head)
+            return;
+        var members = await records.CollectAsync<HouseholdMember>(RecordScopes.Parish(parish), "householdMember", ct, 200, RecordConditions.Equal("householdId", household));
+        if (members.Any(m => m.Value.PersonId != person && m.Value.Role == HouseholdRoles.Head))
+            throw State("Another member is already recorded as the head of this household; change their role first.");
+    }
 
     private async Task<Versioned<Household>> ReadAsync(string parish, string id, CancellationToken ct)
     {
@@ -347,7 +498,8 @@ public class HouseholdService(IRecordTransactions records, IParishAccess access,
             list.Add(new HouseholdMemberDto
             {
                 PersonId = member.PersonId, DisplayName = name, DisplayNameAr = nameAr, InheritsAddress = member.InheritsAddress,
-                EffectiveAddress = member.InheritsAddress ? item.Address : member.OwnAddress, IsContact = item.ContactPersonId == member.PersonId
+                EffectiveAddress = member.InheritsAddress ? item.Address : member.OwnAddress, IsContact = item.ContactPersonId == member.PersonId,
+                Role = member.Role
             });
         }
         result.Members = [.. list];

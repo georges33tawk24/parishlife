@@ -1,5 +1,6 @@
 // Purpose: exposes households, household membership/contact changes and history, and person-to-person relationships over HTTP.
-// Main functions: Create, Update, Member, Get, List, History, AddRelationship, EndRelationship and Relationships delegate rules to HouseholdService.
+// Main functions: Create, Update, Member, Get, List, MemberCandidates (paged member search), History, AddRelationship, EndRelationship and
+// Relationships delegate rules to HouseholdService.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +32,10 @@ public class HouseholdsController(HouseholdService service) : ControllerBase
     [HttpGet("households")]
     public async Task<ActionResult<Page<Versioned<HouseholdDto>>>> List(Guid parishId, CancellationToken ct, int size = 25, string? cursor = null)
         => Ok(await service.ListAsync(Guard.Id(parishId), size, cursor, ct));
+
+    [HttpGet("households/member-candidates")]
+    public async Task<ActionResult<Page<HouseholdCandidateDto>>> MemberCandidates(Guid parishId, string q, CancellationToken ct, int size = 20, string? cursor = null)
+        => Ok(await service.CandidatesAsync(Guard.Id(parishId), q, size, cursor, ct));
 
     [HttpGet("households/{householdId:guid}/history")]
     public async Task<ActionResult<Page<HouseholdChangeDto>>> History(Guid parishId, Guid householdId, CancellationToken ct, int size = 25, string? cursor = null)
