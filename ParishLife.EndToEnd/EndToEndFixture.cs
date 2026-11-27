@@ -1,6 +1,7 @@
 // Purpose: prepares the isolated, synthetic fixture the browser tests sign in to: one account per portal role, created through the real
 // services (bootstrap, appointments, grants, billing activation, membership, ministry leadership). Test-only setup, never an application seed.
-// Main functions: BuildAsync creates accounts and the parish/ministry workflows and returns the manifest; Code computes the fixture TOTP;
+// Main functions: BuildAsync creates accounts, the parish/ministry workflows and an independent parish (no archdiocese) and returns
+// the manifest; Code computes the fixture TOTP;
 // As/AsAppointment select the principal for each service call.
 
 using System.Buffers.Binary;
@@ -104,7 +105,21 @@ public class EndToEndFixture(IServiceProvider services)
             Reason = "Isolated e2e decision", CurrentPassword = Password, CurrentCode = Code()
         }, ct);
 
-        await ActivateModulesAsync(first, parish.Id, ct);
+        var plan = await PublishPlanAsync(first, ct);
+        await ActivateModulesAsync(first, plan, parish.Id, ct);
+
+        // An independent parish: verified and controlled by the first operator, never placed under an archdiocese, with its modules
+        // active. Archdiocese-only reads answer 409 or 403 there, and the portal must still open its screens.
+        As(first);
+        var independent = await parishes.RegisterAsync(new RegisterParishDto
+        {
+            OperationId = Guid.NewGuid(), Name = "E2E Independent Parish", Locality = "E2E locality", Contact = "e2e-independent.example"
+        }, ct);
+        await parishes.VerifyAsync(independent.Id, new VerifyParishDto
+        {
+            OperationId = Guid.NewGuid(), Version = (await repository.GetAsync(independent.Id, ct))!.Version, EvidenceReference = "isolated e2e independent verification"
+        }, ct);
+        await ActivateModulesAsync(first, plan, independent.Id, ct);
 
         // The head priest: invited by the bishop with every priest duty, then accepted.
         As(bishop);
@@ -170,6 +185,7 @@ public class EndToEndFixture(IServiceProvider services)
             ["totpSecret"] = Secret,
             ["archdioceseId"] = archdiocese.Id,
             ["parishId"] = parish.Id,
+            ["independentParishId"] = independent.Id,
             ["ministryId"] = ministry,
             ["accounts"] = accounts
         };
@@ -205,16 +221,22 @@ public class EndToEndFixture(IServiceProvider services)
         }, ct);
     }
 
-    private async Task ActivateModulesAsync(string operatorId, string parish, CancellationToken ct)
+    private async Task<string> PublishPlanAsync(string operatorId, CancellationToken ct)
     {
         As(operatorId);
-        var billing = services.GetRequiredService<BillingService>();
-        var plan = await billing.PublishPlanAsync(new PublishPlanDto
+        var plan = await services.GetRequiredService<BillingService>().PublishPlanAsync(new PublishPlanDto
         {
             OperationId = Guid.NewGuid(), Name = "E2E plan", Amount = 1, Currency = "USD", MinorUnits = 2, TermMonths = 1,
             Modules = ["core", "office", "facilities", "finance", "ministries", "requests", "sacraments"]
         }, ct);
-        var invoice = await billing.CreateInvoiceAsync(parish, new CreateInvoiceDto { OperationId = Guid.NewGuid(), PlanId = Guid.Parse(plan.Id), StartsAt = Now }, ct);
+        return plan.Id;
+    }
+
+    private async Task ActivateModulesAsync(string operatorId, string planId, string parish, CancellationToken ct)
+    {
+        As(operatorId);
+        var billing = services.GetRequiredService<BillingService>();
+        var invoice = await billing.CreateInvoiceAsync(parish, new CreateInvoiceDto { OperationId = Guid.NewGuid(), PlanId = Guid.Parse(planId), StartsAt = Now }, ct);
         var row = await billing.GetAsync(parish, invoice.Id, ct);
         await billing.RecordCashAsync(parish, invoice.Id, new RecordCashDto
         {

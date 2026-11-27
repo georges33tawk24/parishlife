@@ -9,7 +9,7 @@
    Main members: editPublicProfile (the draft drawer), PublicProfilePanel (status, publish, photos),
    loadProfile, toContent, saveProfile, actOnProfile, uploadPhoto, actOnPhoto (the API calls). */
 import { useState } from 'react';
-import { api, newOperationId } from '../../model/api.js';
+import { api, actingHeaders, newOperationId } from '../../model/api.js';
 import { t } from '../../../lib/i18n.js';
 import { openDrawer, toast, Panel, Pill } from '../../ui/ui.jsx';
 import { DrawerForm } from '../../ui/forms.jsx';
@@ -79,7 +79,7 @@ export async function uploadPhoto(parish, file) {
   const response = await fetch('/api/' + base(parish) + '/photos', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token, ...actingHeaders(base(parish)) },
     body: form
   });
   const data = await response.json().catch(() => null);

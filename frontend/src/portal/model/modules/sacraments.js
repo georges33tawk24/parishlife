@@ -22,7 +22,7 @@
    amendments decided by a priest, Arabic spellings kept beside the Latin ones (never copied across), book and
    page apart, the request date, actor names through names.js, and the priest's signature image (a picture for
    the printed paper; never an electronic signature). */
-import { api, parishAPI, session, newOperationId, connectionMessage } from '../api.js';
+import { api, actingHeaders, parishAPI, session, newOperationId, connectionMessage } from '../api.js';
 import { hydrate } from '../persist.js';
 import { loadNames, nameOf } from '../names.js';
 import * as D from '../data.js';
@@ -531,7 +531,7 @@ export async function authorizeCertificate(id, code) {
 export async function certificateSheet(id) {
   const response = await fetch(
     `/api/parishes/${encodeURIComponent(session.parishId)}/certificates/${encodeURIComponent(id)}/sheet`,
-    { credentials: 'same-origin', cache: 'no-store' }
+    { credentials: 'same-origin', cache: 'no-store', headers: actingHeaders(imageBase()) }
   );
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
@@ -587,7 +587,11 @@ async function asDataUrl(blob) {
 async function imageFrom(path) {
   let response;
   try {
-    response = await fetch(imageBase() + path, { credentials: 'same-origin', cache: 'no-store' });
+    response = await fetch(imageBase() + path, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: actingHeaders(imageBase())
+    });
   } catch {
     return '';
   }
@@ -605,7 +609,7 @@ export async function uploadSignatureImage(file) {
     response = await fetch(imageBase() + '/clergy-signature-image', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token, ...actingHeaders(imageBase()) },
       body: form
     });
   } catch {
