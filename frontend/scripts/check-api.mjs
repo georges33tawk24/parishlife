@@ -8,7 +8,8 @@ const sent = [],
   events = [];
 let csrfCalls = 0,
   rejectNextWrite = false,
-  dropNextWrite = false;
+  dropNextWrite = false,
+  operatorCapacities = false;
 const people = [
   {
     id: 'a1',
@@ -76,7 +77,18 @@ globalThis.fetch = async (url, options = {}) => {
     return json(200, [
       { kind: 'Priest', parishId: 'P', scopeName: 'Saint Test', capabilities: [] },
       { kind: 'ParishGrant', parishId: 'Q', scopeName: 'Saint Q', capabilities: ['finance.read', 'finance.enter'] },
-      { kind: 'Bishop', archdioceseId: 'A', scopeName: 'Archeparchy', capabilities: [] }
+      { kind: 'Bishop', archdioceseId: 'A', scopeName: 'Archeparchy', capabilities: [] },
+      ...(operatorCapacities
+        ? [
+            { kind: 'PlatformOperator', scopeName: 'Platform', capabilities: [] },
+            ...['Q', 'R'].map(id => ({
+              kind: 'PlatformOperator',
+              parishId: id,
+              scopeName: 'Saint ' + id,
+              capabilities: ['finance.read', 'people.read', 'people.write']
+            }))
+          ]
+        : [])
     ]);
   // the anonymous public routes the public site reads
   if (path === 'public/parishes')
@@ -260,5 +272,23 @@ assert.deepEqual(
   (await loadParish(directory[0])).ministries.map(m => [m.name, m.description]),
   [['Choir', 'Sings at Sunday Mass']]
 );
+
+// a platform operator: every verified parish, with every permission, in the switcher (owner, 27 November 2026);
+// the parishes the account belongs to come first and stay its "own"
+operatorCapacities = true;
+await loadSession();
+assert.equal(session.accountUser.role, 'super_admin');
+assert.deepEqual(
+  session.parishes.map(p => [p.id, p.own, p.effectiveRole, p.canViewFinance]),
+  [
+    ['P', true, 'priest', true],
+    ['Q', true, 'parish_admin', true],
+    ['R', false, 'parish_admin', true]
+  ]
+);
+assert.ok(session.parishes.find(p => p.id === 'R').capabilities.includes('people.write'));
+selectParish('R');
+assert.equal(session.user.role, 'super_admin', 'the administrator keeps the full view inside any parish');
+operatorCapacities = false;
 
 console.log('check-api: all assertions passed');
