@@ -21,7 +21,8 @@
    the parish's own preparation requirement lists (requirementSets) and each case's checklist, request
    amendments decided by a priest, Arabic spellings kept beside the Latin ones (never copied across), book and
    page apart, the request date, actor names through names.js, and the priest's signature image (a picture for
-   the printed paper; never an electronic signature). */
+   the printed paper; never an electronic signature). First communion and confirmation can be requested for
+   several people at once (createSacramentBatch: one case each, one retry-safe operation, per-person results). */
 import { api, parishAPI, session, newOperationId, connectionMessage } from '../api.js';
 import { hydrate } from '../persist.js';
 import { loadNames, nameOf } from '../names.js';
@@ -114,6 +115,12 @@ function toSacrament(row) {
     time: at ? localTime(at) : '',
     requestedDate: isoDay(x.tentativeDate),
     requestNotes: facts.requestNotes || '',
+    // what a group request named for everyone (a request detail, not a register fact)
+    requestedCelebrant: facts.requestedCelebrant || '',
+    requestedCelebrantAr: facts.requestedCelebrantAr || '',
+    requestedPlace: facts.requestedPlace || '',
+    requestedPlaceAr: facts.requestedPlaceAr || '',
+    batchId: x.batchId || '',
     requestedAt: x.createdAt || timeline.find(step => step.action === 'open')?.at || '',
     requestedBy: named(x.createdBy),
     celebrant: x.celebrantPersonId || null,
@@ -412,6 +419,23 @@ export async function createSacrament({ kind, person, requestedDate, facts = {} 
       operationId: newOperationId(),
       sacrament: apiKind(kind),
       subjectPersonId: person,
+      facts: clean(facts),
+      tentativeDate: requestedDate || null
+    })
+  );
+}
+
+/* First communion or confirmation for several people at once (baptism stays one person per request): one
+   case each with the shared details. operationId is the caller's, kept while the form is open, so pressing
+   again after a lost answer returns the stored results instead of opening cases twice. Returns the API's
+   per-person results ({ createdCount, failedCount, items: [{ subjectPersonId, created, errorCode, message }] }). */
+export const GROUP_KINDS = ['communion', 'confirmation'];
+export async function createSacramentBatch({ operationId, kind, people, requestedDate, facts = {} }) {
+  return done(
+    await parishAPI('sacraments/batch', 'POST', {
+      operationId,
+      sacrament: apiKind(kind),
+      subjectPersonIds: people,
       facts: clean(facts),
       tentativeDate: requestedDate || null
     })

@@ -316,12 +316,16 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
         town: body.town,
         townAr: body.townAr,
         phone: body.phone,
-        contactPersonId: null,
+        contactPersonId: body.contactPersonId || null,
         envelopeId: body.envelopeId,
         status: 'Active',
-        members: []
+        members: (body.members || []).map(q => ({ personId: q.personId, role: q.role || null }))
       }
     };
+    assert.ok(
+      !body.members?.length || body.members.some(q => q.personId === body.contactPersonId),
+      'a new household with members names its contact among them'
+    );
     households[h.value.id] = h;
     return json(200, h.value);
   }
@@ -331,8 +335,26 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
     if (body.action === 'add') h.value.members.push({ personId: body.personId });
     if (body.action === 'remove') h.value.members = h.value.members.filter(q => q.personId !== body.personId);
     if (body.action === 'set-contact') h.value.contactPersonId = body.personId;
+    if (body.action === 'set-role') h.value.members.find(q => q.personId === body.personId).role = body.role;
     h.version = `h${++version}`;
     return json(200, h.value);
+  }
+  if ((x = m(/^parishes\/P\/households\/member-candidates\?q=([^&]+)&size=20(?:&cursor=(\d+))?$/))) {
+    const q = decodeURIComponent(x[1]).toLowerCase();
+    const hits = people.filter(p => `${p.givenName} ${p.familyName}`.toLowerCase().includes(q));
+    const start = Number(x[2] || 0);
+    return json(200, {
+      items: hits
+        .slice(start, start + 20)
+        .map(p => ({
+          id: p.id,
+          givenName: p.givenName,
+          familyName: p.familyName,
+          householdId:
+            Object.values(households).find(h => h.value.members.some(q2 => q2.personId === p.id))?.value.id || null
+        })),
+      continuationToken: start + 20 < hits.length ? String(start + 20) : null
+    });
   }
   if ((x = m(/^parishes\/P\/households\/([\w-]+)\/history\?size=100$/)))
     return json(200, {
@@ -644,6 +666,15 @@ const karam = sent.find(([mth, p, bd]) => mth === 'POST' && p === 'parishes/P/ho
 assert.deepEqual([karam.nameAr, karam.town, karam.townAr], ['كرم', 'Hadath', null]);
 assert.equal(events.length, 0, 'the household Arabic name and town are kept');
 assert.equal(D.PEOPLE.find(p => p.id === D1).hh, newHousehold.id);
+assert.deepEqual(
+  [karam.members.map(q => q.personId).sort(), karam.contactPersonId],
+  [[D1, createdId(maya.id)].sort(), D1],
+  'a new household is created with its first members and contact in one call'
+);
+assert.ok(
+  !sent.some(([, p, bd]) => p === `parishes/P/households/${newHousehold.id}/members` && bd?.action === 'add'),
+  'no separate add follows the create'
+);
 
 // move a member: leave first, then join
 const mover = D.HOUSEHOLDS.find(h => h.id === newHousehold.id);
@@ -661,6 +692,26 @@ assert.equal(D.PEOPLE.find(p => p.id === maya.id).hh, H1);
 D.HOUSEHOLDS.find(h => h.id === H1).head = B;
 assert.equal(await persist(), true);
 assert.deepEqual([sent.at(-1)[2].action, sent.at(-1)[2].personId], ['set-contact', B]);
+
+// a member's role is kept on the membership (never on the person) and shown as their relationship
+await W.setHouseholdRole(H1, B, 'spouse');
+assert.deepEqual(
+  [sent.at(-1)[1], sent.at(-1)[2].action, sent.at(-1)[2].personId, sent.at(-1)[2].role],
+  [`parishes/P/households/${H1}/members`, 'set-role', B, 'Spouse']
+);
+await hydrate();
+assert.equal(D.HOUSEHOLDS.find(h => h.id === H1).roles[B], 'spouse');
+assert.equal(D.PEOPLE.find(p => p.id === B).rel, 'spouse', 'the relationship shown is the membership role');
+await W.setHouseholdRole(H1, B, '');
+assert.equal(sent.at(-1)[2].role, null, 'an empty role clears it');
+await hydrate();
+
+// the member search asks the server for a page of matches
+const found = await W.householdCandidates('nada');
+assert.deepEqual(
+  found.items.map(p => [p.id, p.householdId]),
+  [[B, H1]]
+);
 writes = sent.length;
 D.HOUSEHOLDS.splice(0, 1);
 assert.equal(await persist(), false);

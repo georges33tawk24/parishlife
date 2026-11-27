@@ -5,7 +5,8 @@
    Main members: state (what the module has loaded: facts, details, households, directory consents),
    openPerson, saveFacts, recordConsent, withdrawConsent, directoryFields, directoryConsents, saveMedical, addRelationship, endRelationship, searchPeople,
    previewExport, exportPeople, duplicateDecision, previewMerge, mergePeople, unmerge, listMerges,
-   membershipQueue, decideMembership, correctionQueue, reviewCorrection, householdHistory.
+   membershipQueue, decideMembership, correctionQueue, reviewCorrection, householdHistory, householdCandidates
+   (the paged member search), ROLE_OUT and setHouseholdRole (a member's role, kept on the membership).
 
    Every create carries an operation id and every change to an existing record sends the version the API
    returned with it. Routes and fields are the ones in ParishLife.Api/Controllers/People and DTOs/People. */
@@ -169,6 +170,41 @@ export async function householdHistory(id) {
     cursor = page?.continuationToken || '';
   } while (cursor && items.length < 1000);
   return items;
+}
+
+/* The household member search: the server needs at least two characters and answers a page (20) at a
+   time; each person names the household they already belong to. */
+export const householdCandidates = (q, cursor) =>
+  parishAPI(`households/member-candidates?q=${enc(q)}&size=20${cursor ? `&cursor=${enc(cursor)}` : ''}`);
+
+/* A member's role in the household (the portal's relationship key → the API's role; '' clears it). It is kept
+   on the membership, never on the person. The household's current version comes from the last read. */
+export const ROLE_OUT = {
+  head: 'Head',
+  spouse: 'Spouse',
+  parent: 'Parent',
+  father: 'Father',
+  mother: 'Mother',
+  child: 'Child',
+  son: 'Son',
+  daughter: 'Daughter',
+  sibling: 'Sibling',
+  grandchild: 'Grandchild',
+  relative: 'OtherRelative'
+};
+export async function setHouseholdRole(householdId, personId, role) {
+  const known = state.households.get(householdId) || (await parishAPI(`households/${enc(householdId)}`));
+  const result = await parishAPI(`households/${enc(householdId)}/members`, 'POST', {
+    operationId: newOperationId(),
+    version: known.version,
+    personId,
+    action: 'set-role',
+    inheritsAddress: true,
+    role: ROLE_OUT[role] || null
+  });
+  const full = await parishAPI(`households/${enc(householdId)}`);
+  state.households.set(householdId, { version: full.version, value: full.value });
+  return result;
 }
 
 /* ---------- search and export ---------- */

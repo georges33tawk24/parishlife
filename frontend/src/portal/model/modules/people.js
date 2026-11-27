@@ -12,12 +12,14 @@
      when opened; the portal's town, address cascade, occupation, skills and language come from them.
    - The directory flag comes from the parish's given Directory consents (GET consents?kind=Directory).
    - HOUSEHOLDS: name and Arabic name, address, town and its Arabic twin, phone, envelope number, contact
-     person and members (the list carries members); a person's hh is the household they belong to.
+     person and members with their roles (the list carries members); a person's hh is the household they
+     belong to and their rel the role recorded on that membership. A new household is created with its
+     first members and contact in one call; roles are changed with setHouseholdRole (people-workflows.js).
    - DUPLICATES: the API's suggestions with their signals and differences. There is no similarity score.
    Everything the API does not have (tags, relationship labels, a clergy status, the notification channel)
    stays empty or is undone and reported; see docs/frontend-modules/people.md. */
 import { allPages, api, parishAPI, newOperationId } from '../api.js';
-import { state, forParish, detail, saveFacts, directoryFields } from './people-workflows.js';
+import { state, forParish, detail, saveFacts, directoryFields, ROLE_OUT } from './people-workflows.js';
 
 export const keys = ['PEOPLE', 'ARCHIVED', 'PERSON_EXTRA', 'HOUSEHOLDS', 'DUPLICATES'];
 export const routes = ['people', 'person', 'households', 'household', 'membershipreviews', 'profilereviews'];
@@ -118,6 +120,8 @@ function toExtra(id) {
   };
 }
 
+const ROLE_IN = Object.fromEntries(Object.entries(ROLE_OUT).map(([k, v]) => [v, k]));
+
 /* HouseholdDto → the portal's household. ar shows the Latin name when no Arabic one is stored (display
    only); arStored keeps what the API holds. */
 const toHousehold = (h, version) => ({
@@ -127,6 +131,8 @@ const toHousehold = (h, version) => ({
   arStored: h.nameAr || '',
   head: h.contactPersonId || null,
   members: (h.members || []).map(m => m.personId),
+  // each member's recorded role (the portal's relationship key), kept on the membership
+  roles: Object.fromEntries((h.members || []).filter(m => ROLE_IN[m.role]).map(m => [m.personId, ROLE_IN[m.role]])),
   town: h.town || '',
   townAr: h.townAr || h.town || '',
   townArStored: h.townAr || '',
@@ -149,7 +155,12 @@ async function loadHouseholds(parish, d) {
     toHousehold(state.households.get(row.value.id).value, state.households.get(row.value.id).version)
   );
   const home = new Map(d.HOUSEHOLDS.flatMap(h => h.members.map(m => [m, h.id])));
-  for (const p of d.PEOPLE) p.hh = home.get(p.id) || null;
+  const roles = new Map(d.HOUSEHOLDS.flatMap(h => Object.entries(h.roles)));
+  for (const p of d.PEOPLE) {
+    p.hh = home.get(p.id) || null;
+    // the relationship shown everywhere (lists, tree, person page) is the role recorded on the membership
+    if (roles.has(p.id)) p.rel = roles.get(p.id);
+  }
 }
 
 async function loadDuplicates(parish, d) {
@@ -385,9 +396,35 @@ export async function save(before, now, parish) {
   for (const id of restore) await setArchived(id, false);
   for (const [id, patch] of edits) await saveFacts(id, patch);
 
-  // Households: create, change, then people leave before others join, so a move works.
+  /* Households: people leave existing households first (so a move works), then new households are created
+     with their first members and contact in one operation, then existing households change, and others join. */
+  const members = h => (h?.members || []).map(real);
+  const apply = [];
+  for (const h of hIs.values()) {
+    const id = real(h.id),
+      old = hWas.get(h.id);
+    for (const m of members(old)) if (!members(h).includes(m)) apply.push(['remove', id, m]);
+  }
+  for (const h of hIs.values()) {
+    const id = real(h.id),
+      old = hWas.get(h.id);
+    if (old) for (const m of members(h)) if (!members(old).includes(m)) apply.push(['add', id, m]);
+  }
+  for (const [action, id, person] of apply.filter(([action]) => action === 'remove'))
+    await householdStep(id, { action, personId: person });
   for (const h of hMakes) {
-    const made = await parishAPI('households', 'POST', { operationId: newOperationId(), ...householdBody(h) });
+    const first = members(h),
+      contact = h.head && first.includes(real(h.head)) ? real(h.head) : null;
+    const made = await parishAPI('households', 'POST', {
+      operationId: newOperationId(),
+      ...householdBody(h),
+      members: first.map(personId => ({
+        personId,
+        role: ROLE_OUT[h.roles?.[personId]] || null,
+        inheritsAddress: true
+      })),
+      contactPersonId: first.length ? contact : null
+    });
     created.set(h.id, made.id);
     await refreshHousehold(made.id);
   }
@@ -400,21 +437,10 @@ export async function save(before, now, parish) {
     });
     await refreshHousehold(h.id);
   }
-  const members = h => (h?.members || []).map(real);
-  const apply = [];
-  for (const h of hIs.values()) {
-    const id = real(h.id),
-      old = hWas.get(h.id);
-    for (const m of members(old)) if (!members(h).includes(m)) apply.push(['remove', id, m]);
-  }
-  for (const h of hIs.values()) {
-    const id = real(h.id),
-      old = hWas.get(h.id);
-    for (const m of members(h)) if (!members(old).includes(m)) apply.push(['add', id, m]);
-  }
-  for (const [action, id, person] of apply.sort((a, b) => (a[0] === 'remove' ? -1 : 1) - (b[0] === 'remove' ? -1 : 1)))
+  for (const [action, id, person] of apply.filter(([action]) => action === 'add'))
     await householdStep(id, { action, personId: person });
   for (const h of hIs.values()) {
+    if (!hWas.has(h.id)) continue; // a new household got its contact when it was created
     const id = real(h.id),
       old = hWas.get(h.id),
       head = h.head ? real(h.head) : null;
