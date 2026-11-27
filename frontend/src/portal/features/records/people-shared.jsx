@@ -1,8 +1,11 @@
-/* What the people screens share: household and rite names, phone formatting, sign-in status, and
-   the occupation and skill fields. */
+/* What the people screens share: household and rite names, phone formatting, sign-in status, the
+   occupation field, and the CSV import (IMPORT_FIELDS with the column names it recognises, importReview
+   with the same name, date and phone checks as the forms and the API, and wireImport). */
 import { t } from '../../../lib/i18n.js';
 import { bus } from '../../model/store.js';
 import { toast } from '../../ui/ui.jsx';
+import { lebaneseKind } from '../../ui/phone-input.jsx';
+import { nameProblem, parseBirthDate } from './people-fields.jsx';
 import { RELS, relOf } from './people-dialogs.jsx';
 import { persist } from '../../model/persist.js';
 import * as D from '../../model/data.js';
@@ -110,24 +113,68 @@ function parseCsv(source) {
   return rows;
 }
 
+/* [field, English, Arabic, column names recognised (compared without case, spaces or punctuation), example]. */
+export const IMPORT_FIELDS = [
+  ['given', 'First name', 'الاسم الأول', ['First name', 'Given name', 'FirstName', 'GivenName'], 'Georges'],
+  ['family', 'Last name', 'اسم العائلة', ['Last name', 'Family name', 'Surname', 'LastName', 'FamilyName'], 'Haddad'],
+  [
+    'givenAr',
+    'First name in Arabic',
+    'الاسم الأول بالعربية',
+    ['Arabic first name', 'First name Arabic', 'GivenNameAr'],
+    'جورج'
+  ],
+  [
+    'familyAr',
+    'Last name in Arabic',
+    'اسم العائلة بالعربية',
+    ['Arabic last name', 'Last name Arabic', 'FamilyNameAr'],
+    'حداد'
+  ],
+  ['phone', 'Phone numbers', 'أرقام الهاتف', ['Phone', 'Phones', 'Mobile', 'Phone number'], '71 821 056; 01 234 567'],
+  ['born', 'Date of birth', 'تاريخ الولادة', ['Date of birth', 'Birth date', 'DOB', 'BirthDate'], '14/03/1968'],
+  ['town', 'Town', 'البلدة', ['Town', 'Village', 'City'], 'Hadath'],
+  ['rite', 'Rite', 'الطقس', ['Rite'], 'Maronite'],
+  ['occupation', 'Line of work', 'المهنة', ['Line of work', 'Occupation', 'Job'], 'Teacher']
+];
+
+const squash = s =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/[^\p{L}]/gu, '');
+
 function importMapping(header) {
-  const normalized = header.toLowerCase().replace(/[^a-z]/g, '');
-  return (
-    {
-      englishname: 'lat',
-      name: 'lat',
-      arabicname: 'ar',
-      phone: 'phone',
-      phonenumber: 'phone',
-      birthdate: 'born',
-      dateofbirth: 'born',
-      town: 'town',
-      rite: 'rite',
-      lineofwork: 'occupation',
-      occupation: 'occupation'
-    }[normalized] || ''
-  );
+  const normalized = squash(header);
+  return IMPORT_FIELDS.find(([, , , names]) => names.some(n => squash(n) === normalized))?.[0] || '';
 }
+
+/* One phone cell → { phones: [{ number, kind }] } or { problem }; several numbers are separated by ";" or "/". */
+function importPhones(cell) {
+  const phones = [];
+  const parts = String(cell || '')
+    .split(/[;/]/)
+    .map(x => x.trim())
+    .filter(Boolean);
+  for (const part of parts) {
+    const international = part.startsWith('+') || part.startsWith('00');
+    const digits = part.replace(/\D/g, '').replace(/^00/, '');
+    if (!international || digits.startsWith('961')) {
+      const national = (international ? digits.slice(3) : digits).replace(/^0/, '');
+      const kind = lebaneseKind(national);
+      if (!kind) return { problem: `${t('Phone not valid', 'رقم هاتف غير صالح')}: ${part}` };
+      phones.push({ number: `+961${national}`, kind });
+    } else if (digits.length >= 8 && digits.length <= 15) phones.push({ number: `+${digits}`, kind: '' });
+    else return { problem: `${t('Phone not valid', 'رقم هاتف غير صالح')}: ${part}` };
+  }
+  return { phones: phones.slice(0, 5) };
+}
+
+const IMPORT_NAMES = [
+  ['given', 'First name', 'الاسم الأول', false],
+  ['family', 'Last name', 'اسم العائلة', false],
+  ['givenAr', 'Arabic first name', 'الاسم الأول بالعربية', true],
+  ['familyAr', 'Arabic last name', 'اسم العائلة بالعربية', true]
+];
 
 export function importReview() {
   if (!importDraft) return [];
@@ -138,15 +185,26 @@ export function importReview() {
       if (field) record[field] = (row[col] || '').trim();
     });
     const errors = [];
-    if (!record.lat || !record.ar) errors.push(t('Both names required', 'الاسمان مطلوبان'));
-    if (record.born && !/^\d{4}-\d{2}-\d{2}$/.test(record.born))
-      errors.push(t('Birth date must be YYYY-MM-DD', 'تاريخ الولادة يجب أن يكون YYYY-MM-DD'));
-    const key = `${(record.lat || '').toLowerCase()}|${record.born || ''}`;
+    if (!record.given || !record.family)
+      errors.push(t('First and last name required', 'الاسم الأول واسم العائلة مطلوبان'));
+    for (const [key, en, ar, arabic] of IMPORT_NAMES) {
+      const why = nameProblem(record[key], arabic);
+      if (why) errors.push(`${t(en, ar)}: ${why}`);
+    }
+    if (record.born) {
+      const born = parseBirthDate(record.born);
+      if (born.problem) errors.push(born.problem);
+      else record.born = born.iso;
+    }
+    const phones = importPhones(record.phone);
+    if (phones.problem) errors.push(phones.problem);
+    else record.phones = phones.phones;
+    record.lat = `${record.given || ''} ${record.family || ''}`.trim();
+    record.ar = `${record.givenAr || ''} ${record.familyAr || ''}`.trim();
+    const key = `${record.lat.toLowerCase()}|${record.born || ''}`;
     if (
       used.has(key) ||
-      PEOPLE.some(
-        p => p.lat.toLowerCase() === (record.lat || '').toLowerCase() && (!record.born || p.born === record.born)
-      )
+      PEOPLE.some(p => p.lat.toLowerCase() === record.lat.toLowerCase() && (!record.born || p.born === record.born))
     )
       errors.push(t('Possible duplicate', 'سجل محتمل مكرّر'));
     used.add(key);
@@ -188,7 +246,13 @@ export function wireImport(host) {
         id,
         lat: r.lat,
         ar: r.ar,
-        phone: r.phone || '—',
+        given: r.given,
+        family: r.family,
+        givenAr: r.givenAr || '',
+        familyAr: r.familyAr || '',
+        phones: r.phones || [],
+        phone: r.phones?.length ? r.phones[0].number : '—',
+        contact: '',
         born: r.born || '',
         town: r.town || '',
         townAr: '',

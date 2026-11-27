@@ -1,5 +1,6 @@
-/* One person's record: profile, family, groups, sacraments, attendance, account and the activity
-   linked to them. */
+/* One person's record: the profile (the record's facts across the whole width, skills and languages, household,
+   account and relationships), family (with linking to or creating a household), groups, sacraments, attendance,
+   giving, notes, files and consent. Numbered offering envelopes are no longer shown here (owner, 27 November 2026). */
 import { css, joinNodes, nodesOr } from '../../ui/html.js';
 import { t, isAr, num, fmtDate, usd } from '../../../lib/i18n.js';
 import { is, canSee, bus } from '../../model/store.js';
@@ -29,7 +30,6 @@ import {
   PLEDGES,
   BATCH,
   PERSON_EXTRA,
-  VOLUNTEERS,
   TODAY,
   GROUP_DETAIL,
   NOTES,
@@ -41,73 +41,26 @@ import { familyTree } from './family-tree.jsx';
 import { PersonLoader, ConsentPanel, MedicalPanel, RelationshipPanel } from './person-records.jsx';
 import { personMenu } from './people.jsx';
 import { exportHouseholds } from './households.jsx';
+import { GEOGRAPHY } from '../../ui/geography.jsx';
+import {
+  LanguagesField,
+  SkillsEditor,
+  isoToDmy,
+  languageLabel,
+  phonesText,
+  readLanguages,
+  readSkills
+} from './people-fields.jsx';
 
-const skillOptions = () =>
-  [
-    ...new Set([
-      ...Object.values(PERSON_EXTRA).flatMap(x => x.skills || []),
-      ...VOLUNTEERS.flatMap(v => v.skills || [])
-    ])
-  ]
-    .filter(Boolean)
-    .sort();
-
-function skillPicker(selected = []) {
-  const options = [...new Set([...skillOptions(), ...selected])].sort();
-  return (
-    <div className="formrow">
-      <label className="label" htmlFor="skill-search">
-        {t('Skills', 'المهارات')}
-      </label>{' '}
-      <input
-        className="input"
-        type="search"
-        id="skill-search"
-        placeholder={t('Search existing skills', 'ابحث عن مهارة موجودة')}
-      />{' '}
-      <div className="choice-grid skill-choices" style={{ maxHeight: '180px', overflow: 'auto', marginTop: '8px' }}>
-        {options.map((s, i) => (
-          <label key={i} className="check" data-skill-choice="">
-            <input type="checkbox" defaultValue={s} defaultChecked={!!selected.includes(s)} />
-            <span>{s}</span>
-          </label>
-        ))}
-      </div>{' '}
-      <label className="check" style={{ marginTop: '10px' }}>
-        <input type="checkbox" id="skill-other" />
-        <span>{t('Other skill', 'مهارة أخرى')}</span>
-      </label>{' '}
-      <input
-        className="input"
-        id="skill-custom"
-        maxLength="80"
-        placeholder={t('Enter another skill', 'أدخل مهارة أخرى')}
-        style={{ marginTop: '7px' }}
-        disabled
-      />
-    </div>
-  );
-}
-
-function wireSkillPicker(el) {
-  el.querySelector('#skill-search')?.addEventListener('input', e => {
-    const q = e.target.value.trim().toLocaleLowerCase();
-    el.querySelectorAll('[data-skill-choice]').forEach(row => {
-      row.hidden = !row.textContent.toLocaleLowerCase().includes(q);
-    });
-  });
-  el.querySelector('#skill-other')?.addEventListener('change', e => {
-    const custom = el.querySelector('#skill-custom');
-    custom.disabled = !e.target.checked;
-    if (e.target.checked) custom.focus();
-  });
-}
-
-function selectedSkills(el) {
-  const selected = [...el.querySelectorAll('[data-skill-choice] input:checked')].map(x => x.value);
-  const other = el.querySelector('#skill-other')?.checked ? el.querySelector('#skill-custom').value.trim() : '';
-  return [...new Set([...selected, ...(other ? [other] : [])])];
-}
+/* The Arabic name of a governorate or district from the address lists, or the stored text when unknown. */
+const geoName = id => {
+  for (const g of GEOGRAPHY) {
+    if (g.id === id) return g.ar;
+    const district = g.districts.find(x => x.id === id);
+    if (district) return district.ar;
+  }
+  return id;
+};
 
 const signInName = v => (/^\+\d+$/.test(v) ? phoneShow(v) : v);
 
@@ -189,14 +142,6 @@ export function personView(id, tab = '') {
                   ) : (
                     ''
                   ),
-                  house?.envelope ? (
-                    <>
-                      {t('Offering-envelope identifier', 'رمز مظروف العطاء')}{' '}
-                      <span className="mono">{house.envelope}</span>
-                    </>
-                  ) : (
-                    ''
-                  ),
                   p.town ? t(p.town, p.townAr) : ''
                 ].filter(Boolean),
                 ' · '
@@ -224,131 +169,143 @@ export function personView(id, tab = '') {
     </>
   );
   const T = {
-    '': () => (
-      <div className="splitview">
-        <div className="stack" style={{ gap: '16px' }}>
+    '': () => {
+      /* The record uses the whole width (owner, 27 November 2026): the facts in a responsive grid, then the
+         skills, household and account panels side by side, then the recorded relationships. */
+      const address = x.address || {};
+      const place = [
+        address.sector,
+        p.town ? t(p.town, p.townAr || p.town) : '',
+        address.district ? t(address.district, geoName(address.district)) : '',
+        address.governorate ? t(address.governorate, geoName(address.governorate)) : ''
+      ]
+        .filter(Boolean)
+        .join(', ');
+      const fact = (en, ar, value, props = {}) => (
+        <div className="person-fact" style={{ minWidth: 0 }}>
+          <div className="t-caption dim">{t(en, ar)}</div>
+          <div style={{ overflowWrap: 'anywhere' }} {...props}>
+            {value || '—'}
+          </div>
+        </div>
+      );
+      const languages = x.languages?.length ? x.languages : x.lang ? [x.lang] : [];
+      return (
+        <div className="stack" style={{ gap: '16px', marginTop: '16px' }}>
           <Panel title={t('Record', 'السجل')}>
-            <dl className="dl">
-              <dt>{t('English name', 'الاسم الإنكليزي')}</dt>
-              <dd>{p.lat}</dd>
-              <dt>{t('Arabic name', 'الاسم العربي')}</dt>
-              <dd style={{ fontFamily: 'var(--arabic)', fontSize: '16px' }}>{p.ar}</dd>
-              <dt>{t('Born', 'الولادة')}</dt>
-              <dd className="mono" dir="ltr">
-                {p.born || '—'}
-              </dd>
-              <dt>{t('Rite', 'الطقس')}</dt>
-              <dd>{p.rite ? riteLabel(p.rite) : '—'}</dd>
-              <dt>{t('Phone', 'الهاتف')}</dt>
-              <dd className="mono" dir="ltr">
-                {phoneText(p.phone)}
-              </dd>
-              {p.email ? (
-                <>
-                  <dt>{t('Email', 'البريد الإلكتروني')}</dt>
-                  <dd>
-                    <bdi dir="ltr">{p.email}</bdi>
-                  </dd>
-                </>
-              ) : (
-                ''
+            <div
+              data-person-record=""
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 24px' }}
+            >
+              {fact('First name', 'الاسم الأول', p.given || p.lat)}
+              {fact('Last name', 'اسم العائلة', p.family)}
+              {fact('First name in Arabic', 'الاسم الأول بالعربية', p.givenAr, {
+                dir: 'rtl',
+                style: { fontFamily: 'var(--arabic)', fontSize: '16px' }
+              })}
+              {fact('Last name in Arabic', 'اسم العائلة بالعربية', p.familyAr, {
+                dir: 'rtl',
+                style: { fontFamily: 'var(--arabic)', fontSize: '16px' }
+              })}
+              {fact('Date of birth', 'تاريخ الولادة', isoToDmy(p.born), { dir: 'ltr', className: 'mono' })}
+              {fact(
+                'Phone numbers',
+                'أرقام الهاتف',
+                p.phones?.length ? (
+                  <span className="stack" style={{ gap: '2px' }}>
+                    {p.phones.map(n => (
+                      <span key={n.number}>
+                        <bdi dir="ltr" className="mono">
+                          {phonesText([n])}
+                        </bdi>{' '}
+                        {n.kind ? (
+                          <span className="t-caption dim">
+                            {n.kind === 'Mobile' ? t('mobile', 'خلوي') : t('landline', 'أرضي')}
+                          </span>
+                        ) : null}
+                      </span>
+                    ))}
+                  </span>
+                ) : p.phone && p.phone !== '—' ? (
+                  <bdi dir="ltr">{phoneText(p.phone)}</bdi>
+                ) : (
+                  ''
+                )
               )}
-              <dt>{t('Address', 'العنوان')}</dt>
-              <dd>{house ? t(house.address, house.addressAr) : '—'}</dd>
-              <dt>{t('Line of work', 'المهنة')}</dt>
-              <dd>{x.occupation || '—'}</dd>
-              <dt>{t('Language', 'اللغة')}</dt>
-              <dd>
-                {{ ar: t('Arabic', 'العربية'), en: t('English', 'الإنكليزية'), fr: t('French', 'الفرنسية') }[x.lang] ||
-                  '—'}
-              </dd>
-              <dt>{t('Blood type', 'زمرة الدم')}</dt>
-              <dd className="mono">{x.blood || '—'}</dd>
-              <dt>{t('Directory', 'الدليل')}</dt>
-              <dd>
-                {x.directory === undefined
-                  ? '—'
+              {p.email ? fact('Email', 'البريد الإلكتروني', <bdi dir="ltr">{p.email}</bdi>) : null}
+              {p.contact && !p.phoneFromContact ? fact('Other contact', 'جهة اتصال أخرى', p.contact) : null}
+              {fact('Address', 'العنوان', place)}
+              {fact('Rite', 'الطقس', p.rite ? riteLabel(p.rite) : '')}
+              {fact('Line of work', 'المهنة', x.occupation)}
+              {fact('Languages', 'اللغات', languages.map(languageLabel).join(', '))}
+              {fact('Blood type', 'زمرة الدم', x.blood, { className: 'mono' })}
+              {fact(
+                'Printed directory',
+                'الدليل المطبوع',
+                x.directory === undefined
+                  ? ''
                   : x.directory
                     ? t('Listed, by consent', 'مدرَج بموافقته')
-                    : t('Not listed', 'غير مدرَج')}
-              </dd>
-            </dl>
-          </Panel>{' '}
-          <Panel title={t('Skills and important dates', 'المهارات والتواريخ المهمّة')}>
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-dense" id="edit-profile-extra">
-                <Icon name="edit" size={15} />
-                {t('Edit skills and occupation', 'تعديل المهارات والمهنة')}
-              </button>
-            </div>{' '}
-            <h4 className="t-ui">{t('Skills', 'المهارات')}</h4>{' '}
-            <div className="row" style={{ gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-              {(x.skills || []).length ? (
-                x.skills.map((s, i) => (
-                  <span key={i} className="chip">
-                    {s}
-                  </span>
-                ))
-              ) : (
-                <span className="dim">{t('No skills recorded.', 'لا مهارات مسجّلة.')}</span>
+                    : t('Not listed', 'غير مدرَج')
               )}
-            </div>{' '}
-            <div className="divider" /> <h4 className="t-ui">{t('Important dates', 'التواريخ المهمّة')}</h4>{' '}
-            {nodesOr(
-              (x.dates || []).map(([en, ar, d], i) => (
-                <div key={i} className="listrow" style={{ paddingInline: 0 }}>
-                  <span className="grow">
-                    <b>{t(en, ar)}</b>
-                  </span>
-                  <span className="mono dim">{d ? fmtDate(d) : '—'}</span>
-                </div>
-              )),
-              <p className="t-caption dim">{t('No dates recorded.', 'لا تواريخ مسجّلة.')}</p>
-            )}{' '}
-            {(x.fields || []).length ? (
-              <>
-                <div className="divider" />
-                <div className="ac-group" style={{ paddingInline: 0 }}>
-                  {t('Parish fields', 'حقول الرعية')}
-                </div>{' '}
-                {x.fields.map(([en, ar, v], i) => (
-                  <div key={i} className="listrow" style={{ paddingInline: 0 }}>
-                    <span className="grow">{t(en, ar)}</span>
-                    <b>{v}</b>
-                  </div>
-                ))}
-              </>
-            ) : (
-              ''
-            )}
+            </div>
           </Panel>{' '}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            <Panel
+              title={t('Skills and languages', 'المهارات واللغات')}
+              more={
+                <button className="btn btn-secondary btn-dense" id="edit-profile-extra">
+                  <Icon name="edit" size={15} />
+                  {t('Edit', 'تعديل')}
+                </button>
+              }
+            >
+              <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
+                {(x.skills || []).length ? (
+                  x.skills.map((s, i) => (
+                    <span key={i} className="chip">
+                      {s}
+                    </span>
+                  ))
+                ) : (
+                  <span className="dim">{t('No skills recorded.', 'لا مهارات مسجّلة.')}</span>
+                )}
+              </div>
+              <p className="t-caption dim" style={{ marginTop: '10px' }}>
+                {t('Languages', 'اللغات')}: {languages.map(languageLabel).join(', ') || '—'}
+              </p>
+            </Panel>
+            <Panel title={t('Household', 'العائلة')} tight={!!house}>
+              {house ? (
+                house.members
+                  .map(person)
+                  .filter(Boolean)
+                  .map((m, i) => (
+                    <a key={i} className="listrow" href={`#/person/${m.id}`}>
+                      <Who p={m} />
+                      <span className="grow" />{' '}
+                      {m.id === house.head ? <Pill label={t('Head', 'ربّ العائلة')} tone="info" /> : ''}
+                    </a>
+                  ))
+              ) : (
+                <Empty
+                  glyph="family"
+                  title={t('No household', 'لا عائلة')}
+                  body={t('Recorded on their own.', 'مسجّل بمفرده.')}
+                  action={
+                    <button className="btn btn-secondary btn-dense" data-act={`family-link:${p.id}`}>
+                      {t('Link or create a household', 'ربط بعائلة أو إنشاؤها')}
+                    </button>
+                  }
+                />
+              )}
+            </Panel>
+            {accountPanel(p)}
+          </div>{' '}
           <RelationshipPanel id={p.id} />
-        </div>{' '}
-        <div className="sidecol">
-          {accountPanel(p)}{' '}
-          <Panel title={t('Household', 'العائلة')} tight={!!house}>
-            {house ? (
-              house.members
-                .map(person)
-                .filter(Boolean)
-                .map((m, i) => (
-                  <a key={i} className="listrow" href={`#/person/${m.id}`}>
-                    <Who p={m} />
-                    <span className="grow" />{' '}
-                    {m.id === house.head ? <Pill label={t('Head', 'ربّ العائلة')} tone="info" /> : ''}
-                  </a>
-                ))
-            ) : (
-              <Empty
-                glyph="family"
-                title={t('No household', 'لا عائلة')}
-                body={t('Recorded on their own.', 'مسجّل بمفرده.')}
-              />
-            )}
-          </Panel>
         </div>
-      </div>
-    ),
+      );
+    },
     family: () =>
       house ? (
         <div className="splitview">
@@ -471,7 +428,7 @@ export function personView(id, tab = '') {
             action={
               <button className="btn btn-primary btn-dense" data-act={`family-link:${p.id}`}>
                 <Icon name="family" size={15} />
-                {t('Link to a household', 'ربط بعائلة')}
+                {t('Link or create a household', 'ربط بعائلة أو إنشاؤها')}
               </button>
             }
           />
@@ -624,15 +581,6 @@ export function personView(id, tab = '') {
       return (
         <div className="splitview">
           <div className="stack" style={{ gap: '16px' }}>
-            <Panel title={t('Offering-envelope identifier', 'رمز مظروف العطاء')}>
-              <b className="mono">{house?.envelope || '—'}</b>{' '}
-              <p className="help">
-                {t(
-                  'This optional identifier belongs to the household. Membership does not make each person a donor.',
-                  'هذا الرمز الاختياري يتبع العائلة. انتماء الشخص إليها لا يجعله متبرّعاً.'
-                )}
-              </p>
-            </Panel>{' '}
             <Panel title={t('Contributions', 'المساهمات')} tight={true}>
               <Table
                 cols={[
@@ -1070,13 +1018,15 @@ function editPersonGroups(id) {
   });
 }
 
+/* Skills are typed one at a time and added with Add (several, no digits); languages are ticked (several). */
 function editProfileExtra(id) {
   const x = PERSON_EXTRA[id] || {};
   openModal({
-    title: t('Skills and occupation', 'المهارات والمهنة'),
+    title: t('Skills, languages and occupation', 'المهارات واللغات والمهنة'),
     body: (
       <>
-        {skillPicker(x.skills || [])}
+        <SkillsEditor value={x.skills || []} />
+        <LanguagesField value={x.languages?.length ? x.languages : x.lang ? [x.lang] : []} />
         {occupationField('extra-occupation', x.occupation || '')}{' '}
       </>
     ),
@@ -1091,11 +1041,20 @@ function editProfileExtra(id) {
       </>
     ),
     onMount(el) {
-      wireSkillPicker(el);
       el.querySelector('#extra-save').addEventListener('click', async () => {
-        const skills = selectedSkills(el);
+        const { skills, pending } = readSkills(el);
+        if (pending)
+          return toast(
+            t('Add the skill first', 'أضف المهارة أولاً'),
+            t(
+              'Press Add to keep the skill you typed, or clear it.',
+              'اضغط «إضافة» للاحتفاظ بالمهارة المكتوبة أو امسحها.'
+            ),
+            'warning'
+          );
+        const languages = readLanguages(el);
         const occupation = el.querySelector('#extra-occupation').value.trim();
-        PERSON_EXTRA[id] = { ...x, skills, occupation };
+        PERSON_EXTRA[id] = { ...x, skills, languages, occupation };
         if (!(await persist())) return;
         closeOverlays();
         bus.refresh();

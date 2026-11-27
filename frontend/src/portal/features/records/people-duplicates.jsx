@@ -1,10 +1,13 @@
 /* Purpose: reviewing the API's duplicate suggestions: record that a pair are different people (or need
    more information), compare and merge them with an explicit choice for every differing field, and undo a
-   recent merge. Main members: dupDismiss, dupMerge, MergeHistory.
+   recent merge; dupCompare shows both records side by side, and the merge form says which record is kept and
+   which value each differing field takes. Main members: dupDismiss, dupCompare, dupMerge, MergeHistory.
    Connected to GET people/duplicates, duplicates/decisions, merges/preview, merges and merges/{id}/unmerge. */
 import { useEffect, useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { DUPLICATES, person } from '../../model/data.js';
+import { DUPLICATES, PERSON_EXTRA, person } from '../../model/data.js';
+import { hh } from './people-shared.jsx';
+import { phonesText } from './people-fields.jsx';
 import { hydrate } from '../../model/persist.js';
 import { bus } from '../../model/store.js';
 import {
@@ -18,14 +21,94 @@ import { openModal, closeOverlays, toast } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const FIELD = {
-  GivenName: ['Given name', 'الاسم الأول'],
-  FamilyName: ['Family name', 'اسم العائلة'],
+  GivenName: ['First name', 'الاسم الأول'],
+  FamilyName: ['Last name', 'اسم العائلة'],
+  GivenNameAr: ['First name in Arabic', 'الاسم الأول بالعربية'],
+  FamilyNameAr: ['Last name in Arabic', 'اسم العائلة بالعربية'],
   BirthDate: ['Date of birth', 'تاريخ الميلاد'],
-  Contact: ['Contact', 'جهة الاتصال']
+  Phones: ['Phone numbers', 'أرقام الهاتف'],
+  Contact: ['Other contact', 'جهة اتصال أخرى'],
+  Rite: ['Rite', 'الطقس'],
+  RegisterStatus: ['Status', 'الحالة']
 };
 const fieldName = f => (FIELD[f] ? t(...FIELD[f]) : f);
+const STATUS_LABEL = { member: ['Member', 'منتسب'], visitor: ['Visitor', 'زائر'] };
 const valueOf = (p, f) =>
-  p ? { GivenName: p.given, FamilyName: p.family, BirthDate: p.born, Contact: p.phone === '—' ? '' : p.phone }[f] : '';
+  p
+    ? {
+        GivenName: p.given,
+        FamilyName: p.family,
+        GivenNameAr: p.givenAr,
+        FamilyNameAr: p.familyAr,
+        BirthDate: p.born ? fmtDate(p.born) : '',
+        Phones: p.phoneFromContact ? '' : (p.phones || []).length ? phonesText(p.phones) : '',
+        Contact: p.contact,
+        Rite: p.rite,
+        RegisterStatus: STATUS_LABEL[p.status] ? t(...STATUS_LABEL[p.status]) : ''
+      }[f] || ''
+    : '';
+
+/* Every field of both people, next to each other, with the rows that differ marked. */
+const COMPARE = [
+  ['Name', 'الاسم', p => p.lat],
+  ['Arabic name', 'الاسم بالعربية', p => p.arStored || ''],
+  ['Date of birth', 'تاريخ الولادة', p => (p.born ? fmtDate(p.born) : '')],
+  ['Phone numbers', 'أرقام الهاتف', p => ((p.phones || []).length ? phonesText(p.phones) : '')],
+  ['Town', 'البلدة', p => (p.town ? t(p.town, p.townAr || p.town) : '')],
+  ['Household', 'العائلة', p => (hh(p.hh) ? t(hh(p.hh).name, hh(p.hh).ar) : '')],
+  ['Rite', 'الطقس', p => p.rite],
+  ['Status', 'الحالة', p => (STATUS_LABEL[p.status] ? t(...STATUS_LABEL[p.status]) : '')],
+  ['Line of work', 'المهنة', p => PERSON_EXTRA[p.id]?.occupation || ''],
+  ['Added on', 'أُضيف في', p => (p.createdAt ? fmtDate(String(p.createdAt).slice(0, 10)) : '')]
+];
+
+export function dupCompare(i) {
+  const d = DUPLICATES[+i];
+  if (!d) return;
+  const a = person(d.a.id) || d.a,
+    b = person(d.b.id) || d.b;
+  openModal({
+    wide: true,
+    title: t('Both records side by side', 'السجلّان جنباً إلى جنب'),
+    sub: (d.signals || []).join(' · '),
+    body: (
+      <table className="tbl" data-dup-side-by-side="">
+        <thead>
+          <tr>
+            <th>{t('Field', 'الحقل')}</th>
+            <th>
+              <a href={`#/person/${a.id}`}>{a.lat}</a>
+            </th>
+            <th>
+              <a href={`#/person/${b.id}`}>{b.lat}</a>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {COMPARE.map(([en, ar, get]) => {
+            const x = get(a) || '—',
+              y = get(b) || '—';
+            return (
+              <tr key={en} style={x !== y ? { background: 'var(--warning-subtle)' } : undefined}>
+                <th scope="row">
+                  {t(en, ar)}
+                  {x !== y ? <span className="t-caption dim"> · {t('differs', 'مختلف')}</span> : null}
+                </th>
+                <td dir="auto">{x}</td>
+                <td dir="auto">{y}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    ),
+    foot: (
+      <button className="btn btn-secondary" data-close="">
+        {t('Close', 'إغلاق')}
+      </button>
+    )
+  });
+}
 
 function Form({ submit, run, children }) {
   const [error, setError] = useState(''),
@@ -96,7 +179,7 @@ function MergeForm({ keep, drop, preview }) {
   const [survivor, source] = [keep, drop];
   return (
     <Form
-      submit={t('Merge', 'دمج')}
+      submit={t('Merge into the kept record', 'دمج في السجل الباقي')}
       run={f => {
         const choices = Object.fromEntries(preview.conflicts.map(c => [c, f['choice-' + c]]));
         return mergePeople(survivor.id, source.id, choices, f.reason).then(() =>
@@ -112,17 +195,58 @@ function MergeForm({ keep, drop, preview }) {
           )}
         </p>
       ) : null}
+      <div className="grid g2" style={{ gap: '12px', marginBottom: '12px' }} data-merge-sides="">
+        <div className="card card-flat" style={{ borderColor: 'var(--success-border)' }}>
+          <span className="pill pill-success">{t('Kept record', 'السجل الباقي')}</span>
+          <b style={{ display: 'block', marginTop: '6px' }}>{survivor.lat}</b>
+          <span className="t-caption dim">
+            {t('Stays in the register with its history.', 'يبقى في السجل مع تاريخه.')}
+          </span>
+        </div>
+        <div className="card card-flat">
+          <span className="pill pill-warning">{t('Merged into it', 'يُدمج فيه')}</span>
+          <b style={{ display: 'block', marginTop: '6px' }}>{source.lat}</b>
+          <span className="t-caption dim">
+            {t('Archived after the merge; it can be undone.', 'يُؤرشف بعد الدمج؛ ويمكن التراجع.')}
+          </span>
+        </div>
+      </div>
+      {preview.conflicts.length ? (
+        <p className="help">
+          {t(
+            'For each field that differs, choose which value the kept record will have.',
+            'لكل حقل مختلف، اختر القيمة التي سيحملها السجل الباقي.'
+          )}
+        </p>
+      ) : (
+        <p className="help">{t('The two records hold the same values.', 'يحمل السجلّان القيم نفسها.')}</p>
+      )}
       {preview.conflicts.map(c => (
-        <Row key={c} label={fieldName(c)}>
-          <Select name={'choice-' + c} defaultValue="survivor">
-            <option value="survivor">
-              {t('Keep', 'الإبقاء')}: {valueOf(person(survivor.id), c) || '—'}
-            </option>
-            <option value="source">
-              {t('Take', 'أخذ')}: {valueOf(person(source.id), c) || '—'}
-            </option>
-          </Select>
-        </Row>
+        <fieldset key={c} className="formrow" style={{ border: 0, padding: 0, margin: '0 0 12px' }}>
+          <legend className="label">{fieldName(c)}</legend>
+          <div className="grid g2" style={{ gap: '8px' }}>
+            <label className="check">
+              <input type="radio" name={'choice-' + c} value="survivor" defaultChecked />
+              <span>
+                <span className="t-caption dim">{t('Keep the kept record’s value', 'إبقاء قيمة السجل الباقي')}</span>
+                <b style={{ display: 'block' }} dir="auto">
+                  {valueOf(person(survivor.id), c) || t('(empty)', '(فارغ)')}
+                </b>
+              </span>
+            </label>
+            <label className="check">
+              <input type="radio" name={'choice-' + c} value="source" />
+              <span>
+                <span className="t-caption dim">
+                  {t('Use the value from the merged record', 'استعمال قيمة السجل المدموج')}
+                </span>
+                <b style={{ display: 'block' }} dir="auto">
+                  {valueOf(person(source.id), c) || t('(empty)', '(فارغ)')}
+                </b>
+              </span>
+            </label>
+          </div>
+        </fieldset>
       ))}
       {Object.keys(preview.dependents).length ? (
         <p className="help">

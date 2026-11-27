@@ -11,6 +11,7 @@ import { Avatar, toast, openPopover, closeMenu } from './ui.jsx';
 import { useVersion } from '../shell/version.js';
 import { safeRichText } from '../../lib/rich-text.js';
 export { AddressCascade } from './geography.jsx';
+import { lebaneseKind } from './phone-input.jsx';
 
 /* ---------------- buttons ---------------- */
 export const SplitBtn = ({ label, id, kind = 'primary', ico = 'plus' }) => (
@@ -300,7 +301,8 @@ export function PhoneField({
 }) {
   const [typed, setTyped] = useState(null);
   const digits = typed == null ? '' : typed.replace(/\D/g, '').replace(/^0/, '');
-  const ok = typed == null ? state !== 'error' : digits.length === 7 || digits.length === 0;
+  // 03 and landlines have 7 digits, 70/71/76/78/79/81 have 8 (owner, 27 November 2026); People forms use PhoneList.
+  const ok = typed == null ? state !== 'error' : !!lebaneseKind(digits) || digits.length === 0;
   return (
     <div className="formrow">
       <label className="label" htmlFor={id}>
@@ -329,7 +331,10 @@ export function PhoneField({
       </div>
       <span className={'help ' + (ok ? '' : 'help-error')} data-phonehelp>
         {!ok
-          ? t('A Lebanese mobile has 7 digits after the prefix.', 'الخلوي اللبناني ٧ أرقام بعد المقدّمة.')
+          ? t(
+              '03 and landlines have 7 digits; 70, 71, 76, 78, 79 and 81 have 8.',
+              '03 والأرضي ٧ أرقام؛ و70 و71 و76 و78 و79 و81 لها ٨.'
+            )
           : typed != null
             ? t('Leading zero is dropped automatically.', 'يُحذف الصفر تلقائياً.')
             : t(
