@@ -131,8 +131,8 @@ export const ENT = {
     ed: ['Edit household', 'تعديل العائلة'],
     del: ['Delete this household?', 'حذف هذه العائلة؟'],
     sub: [
-      'Select several existing people, enter the shared address once, and optionally add an offering-envelope identifier.',
-      'اختر عدة أشخاص مسجّلين وأدخل العنوان المشترك مرة واحدة، ويمكن إضافة رمز مظروف العطاء اختيارياً.'
+      'Select several existing people and enter the shared address once.',
+      'اختر عدة أشخاص مسجّلين وأدخل العنوان المشترك مرة واحدة.'
     ],
     fields: x => [
       ...pair(
@@ -143,15 +143,6 @@ export const ENT = {
         'Household name (Arabic)',
         'اسم العائلة (عربي)'
       ),
-      {
-        k: 'envelope',
-        label: L('Offering-envelope identifier (optional)', 'رمز مظروف العطاء (اختياري)'),
-        dir: 'ltr',
-        help: L(
-          'Use only if this household receives numbered offering envelopes. Leave blank otherwise.',
-          'استعمله فقط إذا كانت العائلة تتسلّم مظاريف عطاء مرقّمة؛ وإلا فاتركه فارغاً.'
-        )
-      },
       {
         k: 'town',
         label: L('Town', 'البلدة'),
@@ -262,20 +253,12 @@ export const ENT = {
         ? ['name', L('A household name cannot contain digits.', 'لا يمكن أن يحتوي اسم العائلة على أرقام.')]
         : /\p{Nd}/u.test(v.ar) && v.ar !== x.ar
           ? ['ar', L('A household name cannot contain digits.', 'لا يمكن أن يحتوي اسم العائلة على أرقام.')]
-          : v.envelope && D.HOUSEHOLDS.some(h => h !== x && h.envelope === v.envelope)
+          : (v.head && !v.members.includes(v.head)) || (!D.HOUSEHOLDS.includes(x) && v.members.length && !v.head)
             ? [
-                'envelope',
-                L(
-                  'Another household already uses this offering-envelope identifier',
-                  'رمز مظروف العطاء مستخدم لعائلة أخرى'
-                )
+                'head',
+                L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')
               ]
-            : (v.head && !v.members.includes(v.head)) || (!D.HOUSEHOLDS.includes(x) && v.members.length && !v.head)
-              ? [
-                  'head',
-                  L('Choose the household contact from selected members.', 'اختر مسؤول العائلة من الأفراد المحددين.')
-                ]
-              : null,
+            : null,
     prepare: x => {
       const selected = new Set(x.members),
         was = priorHead.get(x);
