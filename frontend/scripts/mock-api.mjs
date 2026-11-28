@@ -30,7 +30,14 @@ export function mockApi(handler) {
 
 // A priest here also holds the parish's grant for money, messages, audit and billing, as a priest handed control does; a priest's
 // appointment alone carries fewer duties (StaffAppointmentRules.PriestDuties), so pass capabilities to check that case.
-const CONTROL = ['finance.read', 'finance.enter', 'communications.manage', 'publishing.manage', 'audit.read', 'billing.read'];
+const CONTROL = [
+  'finance.read',
+  'finance.enter',
+  'communications.manage',
+  'publishing.manage',
+  'audit.read',
+  'billing.read'
+];
 export function signedIn(session, { roles = ['priest'], capabilities = roles.includes('priest') ? CONTROL : [] } = {}) {
   const role = roles[0] || 'member';
   Object.assign(session, {

@@ -227,6 +227,11 @@ export function messaging(tab = '') {
                 {L('Ready-made designs', 'تصاميم جاهزة')}
               </button>
             )}{' '}
+            {/* one person rather than a group or the whole parish: a chat in the Inbox */}
+            <a className="btn btn-secondary" href="#/inbox/new" data-one-person="">
+              <Icon name="msg" size={17} />
+              {L('Message one person', 'راسل شخصاً واحداً')}
+            </a>{' '}
             {<C.SplitBtn label={L('New message', 'رسالة جديدة')} id="newmsg" />}
           </>
         }

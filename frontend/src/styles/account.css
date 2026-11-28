@@ -129,6 +129,38 @@ html[data-mode=dark] .sig-card,html[data-mode=dark] .sig-pad{filter:none}
 .mail-compose .formrow{display:grid;gap:6px;margin-bottom:16px}
 .mail-compose-acts{display:flex;gap:8px}
 .mail-none{display:grid;flex:1;place-content:center;justify-items:center;gap:10px;padding:24px;color:var(--text-3);text-align:center}
+/* One chat per person: ticks on one's own messages, voice notes, the recorder, the To choice in New message. */
+.bubble-time{display:flex;align-items:center;justify-content:flex-end;gap:3px}
+.ticks{display:inline-flex;color:var(--text-3)}
+.ticks.is-read{color:var(--info)}
+.bubble-call{display:inline-flex;align-items:center;gap:6px;color:var(--text-2)}
+.voice{display:flex;align-items:center;gap:8px;min-width:min(260px,62vw)}
+.voice audio{flex:1;min-width:0;height:36px}
+.voice-len{flex:none;color:var(--text-2);font-size:12px;font-variant-numeric:tabular-nums}
+.composer-rec{align-items:center}
+.rec-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--danger);animation:rec-pulse 1.2s ease-in-out infinite}
+.rec-time{flex:none;font-variant-numeric:tabular-nums;font-weight:600}
+.rec-label{flex:1;min-width:0;color:var(--text-2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes rec-pulse{50%{opacity:.35}}
+.mail-to{margin:0 0 16px;padding:0;border:0}
+/* A call over the portal: the other person's picture (or their initials for a voice call), one's own picture in a
+   corner, the buttons at the bottom. Dark in both themes, as call screens are. */
+.call{position:fixed;inset:0;z-index:200;display:grid;grid-template-rows:1fr auto;justify-items:center;padding:calc(24px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));background:#14181d;color:#fff}
+.call-remote{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.call-self{position:absolute;inset-inline-end:16px;top:calc(16px + env(safe-area-inset-top));z-index:2;width:min(28vw,180px);aspect-ratio:3/4;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.4);transform:scaleX(-1)}
+.call-who{position:relative;z-index:1;display:grid;justify-items:center;align-content:center;gap:8px;text-align:center}
+.call-video .call-who{align-content:start;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.call-who h2{margin:0;font-size:24px;font-weight:600}
+.call-who p{margin:0;color:rgba(255,255,255,.75);font-variant-numeric:tabular-nums}
+.call-av{width:96px;height:96px;font-size:34px}
+.call-acts{position:relative;z-index:1;display:flex;gap:28px}
+.call-btn{display:grid;justify-items:center;gap:6px;border:0;background:none;color:#fff;font:500 12px var(--sans);cursor:pointer}
+.call-btn svg{box-sizing:content-box;padding:16px;border-radius:50%;background:rgba(255,255,255,.16)}
+.call-btn[aria-pressed=true] svg{background:#fff;color:#14181d}
+.call-ok svg{background:#1f9d55}
+.call-end svg{background:#d93025}
+.call-btn:focus-visible svg{outline:3px solid #fff;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.rec-dot{animation:none}}
 [dir=rtl] .mail-flip{transform:scaleX(-1)}
 @media(hover:hover) and (pointer:fine){.mail-row:hover:not([aria-current=true]){background:var(--muted)}.link-btn:hover{color:var(--text)}}
 @media(hover:none){.bubble-tools{opacity:1}}

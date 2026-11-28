@@ -24,6 +24,7 @@
    followed by hydrate(). Any other edit to these collections is undone and reported. */
 import { api, newOperationId } from '../api.js';
 import { loadNames } from '../names.js';
+import { t } from '../../../lib/i18n.js';
 
 export const keys = ['MESSAGES', 'TEMPLATES', 'NOTICES', 'NOTIFICATIONS', 'CONTENT', 'PRAYERS'];
 export const routes = ['inbox', 'mymessages', 'messaging', 'notices', 'portal'];
@@ -436,17 +437,43 @@ export const ownReports = parishId => soft(api(`${base(parishId)}/inbox/reports/
 export const messages = (parishId, id) => api(`${base(parishId)}/inbox/${enc(id)}`);
 /* A member writes to the parish office; office staff may write to a linked parishioner's account, or to a
    person from the people list (`{ personId }`, which needs people.read; the API finds the person's one
-   linked account and refuses when there is none). */
+   linked account and refuses when there is none). One chat per person: when these people already have a
+   chat, the API adds the message to it and answers with that chat. The subject is optional. */
 export const startConversation = (parishId, subject, body, recipient) =>
   api(`${base(parishId)}/inbox`, 'POST', {
     operationId: newOperationId(),
-    subject,
+    subject: subject || null,
     body,
     recipientAccountId: (typeof recipient === 'string' ? recipient : null) || null,
     recipientPersonId: recipient?.personId || null
   });
 export const postMessage = (parishId, id, body) =>
   api(`${base(parishId)}/inbox/${enc(id)}/messages`, 'POST', { operationId: newOperationId(), body });
+/* A voice note (the browser's recording, checked by the API by its content) and its audio, read with the session. */
+export async function postVoice(parishId, id, blob, seconds) {
+  const { token } = await api('auth/csrf');
+  const form = new FormData();
+  form.append('operationId', newOperationId());
+  form.append('seconds', String(Math.max(1, Math.round(seconds))));
+  form.append('file', blob, 'voice');
+  const response = await fetch(`/api/${base(parishId)}/inbox/${enc(id)}/voice`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+    body: form
+  }).catch(() => null);
+  const data = await response?.json().catch(() => null);
+  if (response?.ok) return data;
+  throw new Error(data?.detail || t('The voice message was not sent.', 'لم تُرسل الرسالة الصوتية.'));
+}
+export const voiceURL = (parishId, conversationId, id) =>
+  `/api/${base(parishId)}/inbox/${enc(conversationId)}/messages/${enc(id)}/voice`;
+/* Calls: the API only passes the WebRTC offer and answer between the two portals (features/communicate/calls.jsx). */
+export const callSettings = () => api('calls/settings');
+export const placeCall = (parishId, conversationId, video, sdp) =>
+  api(`${base(parishId)}/inbox/${enc(conversationId)}/calls`, 'POST', { video, sdp });
+export const answerCall = (id, sdp) => api(`calls/${enc(id)}/answer`, 'POST', { sdp });
+export const endCall = (id, reason) => api(`calls/${enc(id)}/end`, 'POST', { reason });
 export const archiveConversation = (parishId, id, archived) =>
   api(`${base(parishId)}/inbox/${enc(id)}/archive?archived=${archived ? 'true' : 'false'}`, 'POST');
 export const conversationOutcome = (parishId, id) => api(`${base(parishId)}/inbox/${enc(id)}/notification-outcome`);

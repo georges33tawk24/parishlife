@@ -3,7 +3,15 @@
    Laid out like a mail or chat app: the conversations on the left (search, folders, the parish), the one
    that is open on the right as chat bubbles with a reply box under them; on a phone the list and the chat
    take turns, with a way back. Writing a new message opens in the same place.
-   Main members: InboxPage, ConversationRow, Conversation, Broadcast, Compose, Report.
+   Main members: InboxPage, Conversation, Broadcast, Compose, Report, VoiceNote, Ticks, useVoice.
+
+   Like a chat app (owner, 28 November 2026): one chat per person. The API adds a new message to the chat the same
+   people already have; conversations from before that rule are shown together in the list and in one thread (by
+   parish, kind and the other person), and a reply goes to the newest. One's own messages carry ticks: one when
+   stored, two when the other side's inbox showed it, two in colour when they opened it. A microphone records a voice
+   note (stored privately with the conversation). A chat with one person has voice and video call buttons
+   (features/communicate/calls.jsx). Office staff may write to one parishioner of the open parish from New message
+   (#/inbox/new opens it there), besides the person's own page.
    A conversation opens with the whole thread, both sides, and the reply box; #/inbox/{parish}/{conversation}
    (members: #/mymessages/...), the link a new-message notice carries, opens that conversation directly. The
    list and the open thread follow the live updates (model/live.js): when a notice or the parish's
@@ -36,7 +44,12 @@ import {
 } from '../../model/modules/communications.js';
 import { useSubmit } from './messaging-dialogs.jsx';
 import { loadNames, nameOf } from '../../model/names.js';
-import { onLive } from '../../model/live.js';
+import { onLive, onPush } from '../../model/live.js';
+import { can, postVoice, voiceURL } from '../../model/modules/communications.js';
+import { PEOPLE } from '../../model/data.js';
+import { matches } from '../../../lib/i18n.js';
+import { PeopleSearch, selectedIds } from '../../shared/people-search.jsx';
+import { startCall } from './calls.jsx';
 
 /* what the list shows, kept while the visitor moves around the portal */
 const filters = { box: 'open', query: '', parish: '' };
@@ -137,15 +150,37 @@ function grow(el) {
   el.style.height = Math.min(el.scrollHeight, 220) + 'px';
 }
 
-/* A member's new message to the parish office, in the reading pane. */
-function Compose({ done, onBack }) {
+/* A new message, in the reading pane: members write to the parish office; office staff may also write to one
+   parishioner of the open parish, picked from the people list. A chat with that person (or that office) already
+   exists: the message joins it, one chat per person. */
+function Compose({ done, onBack, initialTo = 'office' }) {
   const parishes = inboxParishes();
+  const open = session.parishes.find(p => p.id === session.parishId);
+  const office = !!open && can(open, 'communications.manage') && can(open, 'people.read');
+  const [to, setTo] = useState(office ? initialTo : 'office');
+  const picker = useRef(null);
   const { error, busy, submit } = useSubmit(async q => {
-    const c = await startConversation(q.parish, q.subject.trim(), q.body.trim());
+    let c, parish;
+    if (to === 'person') {
+      const chosen = selectedIds(picker.current?.querySelector('[data-people-search]'));
+      if (chosen.length !== 1) throw new Error(L('Choose one person to write to.', 'اختر شخصاً واحداً لتراسله.'));
+      parish = open.id;
+      c = await startConversation(parish, '', q.body.trim(), { personId: chosen[0] });
+    } else {
+      parish = q.parish;
+      c = await startConversation(parish, '', q.body.trim());
+    }
     closeOverlays();
-    await done(c, q.parish);
+    await done(c, parish);
     toast(L('Message stored in the app', 'حُفظت الرسالة داخل التطبيق'), c.notificationOutcome?.meaning || '', 'success');
   });
+  const search = query =>
+    Promise.resolve({
+      items: PEOPLE.filter(p => matches(`${p.lat} ${p.ar}`, query))
+        .slice(0, 20)
+        .map(p => ({ id: p.id, name: L(p.lat, p.ar), alt: p.town || '' })),
+      next: null
+    });
   return (
     <div className="mail-read">
       <header className="mail-head">
@@ -159,11 +194,39 @@ function Compose({ done, onBack }) {
         </button>
         <div className="mail-head-text">
           <h2>{L('New message', 'رسالة جديدة')}</h2>
-          <p>{L('To the parish office, inside ParishLife', 'إلى مكتب الرعية، داخل ParishLife')}</p>
+          <p>
+            {to === 'person'
+              ? L('To one parishioner, inside ParishLife', 'إلى مؤمن واحد، داخل ParishLife')
+              : L('To the parish office, inside ParishLife', 'إلى مكتب الرعية، داخل ParishLife')}
+          </p>
         </div>
       </header>
       <form className="mail-compose" data-compose-form="" onSubmit={submit}>
-        {parishes.length > 1 ? (
+        {office ? (
+          <div className="mail-folders mail-to" role="group" aria-label={L('To', 'إلى')}>
+            <button type="button" aria-pressed={to === 'person'} onClick={() => setTo('person')} data-to="person">
+              {L('One person', 'شخص واحد')}
+            </button>
+            <button type="button" aria-pressed={to === 'office'} onClick={() => setTo('office')} data-to="office">
+              {L('Parish office', 'مكتب الرعية')}
+            </button>
+          </div>
+        ) : null}
+        {to === 'person' ? (
+          <div ref={picker}>
+            <PeopleSearch
+              id="compose-person"
+              label={L('To', 'إلى')}
+              req
+              minChars={1}
+              search={search}
+              help={L(
+                `A parishioner of ${open?.name || 'this parish'} with a ParishLife account linked to their record.`,
+                `مؤمن من ${open?.name || 'هذه الرعية'} له حساب في ParishLife مرتبط بسجلّه.`
+              )}
+            />
+          </div>
+        ) : parishes.length > 1 ? (
           <label className="formrow">
             <span className="label">{L('Parish office', 'مكتب الرعية')}</span>
             <Select name="parish" required defaultValue={session.parishId || ''}>
@@ -178,17 +241,13 @@ function Compose({ done, onBack }) {
           <input type="hidden" name="parish" value={parishes[0]?.id || ''} />
         )}
         <label className="formrow">
-          <span className="label">{L('Subject', 'الموضوع')}</span>
-          <input className="input" name="subject" required maxLength="300" />
-        </label>
-        <label className="formrow">
           <span className="label">{L('Message', 'الرسالة')}</span>
-          <textarea className="textarea" name="body" required maxLength="10000" rows="8" />
+          <textarea className="textarea" name="body" required maxLength="10000" rows="6" />
         </label>
         <p className="help">
           {L(
-            'The office reads it inside ParishLife. Nothing is sent by email or SMS.',
-            'يقرأها المكتب داخل ParishLife. لا يُرسل شيء بالبريد أو الرسائل القصيرة.'
+            'It is read inside ParishLife. Nothing is sent by email or SMS.',
+            'تُقرأ داخل ParishLife. لا يُرسل شيء بالبريد أو الرسائل القصيرة.'
           )}
         </p>
         <p className="help-error" role="alert">
@@ -208,20 +267,150 @@ function Compose({ done, onBack }) {
   );
 }
 
-/* A conversation as a chat: the bubbles by day (opening it marks it read), a reply box at the bottom, and
-   for each message the stored notice status or a way to report it. */
+const minutes = s => {
+  const n = Math.max(0, Math.round(s || 0));
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+};
+
+/* Sent, delivered (the other side's inbox showed it) or read (they opened it), as the ticks in a chat app. */
+const Ticks = ({ m }) => {
+  const label = m.read ? L('Read', 'مقروءة') : m.delivered ? L('Delivered', 'وصلت') : L('Sent', 'أُرسلت');
+  return (
+    <span className={'ticks' + (m.read ? ' is-read' : '')} role="img" aria-label={label} title={label}>
+      <svg
+        viewBox="0 0 18 12"
+        width="17"
+        height="11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M1.5 6.6l3 3 6.4-7" />
+        {m.read || m.delivered ? <path d="M8.4 9.1l.5.5 6.6-7" /> : null}
+      </svg>
+    </span>
+  );
+};
+
+/* A voice note: its audio is read with the session, then played from memory. */
+function VoiceNote({ c, m }) {
+  const [src, setSrc] = useState(''),
+    [error, setError] = useState('');
+  useEffect(() => {
+    let url = '',
+      alive = true;
+    fetch(voiceURL(c.parishId, m.conversationId, m.id), { credentials: 'same-origin', cache: 'no-store' })
+      .then(r => (r.ok ? r.blob() : Promise.reject(new Error())))
+      .then(
+        blob => {
+          if (!alive) return;
+          url = URL.createObjectURL(blob);
+          setSrc(url);
+        },
+        () => alive && setError(L('The voice message could not be loaded.', 'تعذّر تحميل الرسالة الصوتية.'))
+      );
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [m.id]);
+  return (
+    <div className="voice" data-voice={m.id}>
+      <Icon name="mic" size={16} />
+      {src ? (
+        <audio controls preload="metadata" src={src} />
+      ) : (
+        <span className="help">{error || L('Loading…', 'جارٍ التحميل…')}</span>
+      )}
+      <span className="voice-len">{minutes(m.voiceSeconds)}</span>
+    </div>
+  );
+}
+
+const MISSED = {
+  'Missed voice call': ['Missed voice call', 'مكالمة صوتية فائتة'],
+  'Missed video call': ['Missed video call', 'مكالمة فيديو فائتة']
+};
+
+/* Recording a voice note: the browser's own recorder (Opus in WebM or Ogg; AAC in MP4 on Safari), at most 10 minutes. */
+const MAX_VOICE_S = 600;
+function useVoice(send) {
+  const [rec, setRec] = useState(null),
+    [, tick] = useState(0);
+  useEffect(() => {
+    if (!rec) return;
+    const timer = setInterval(() => {
+      tick(n => n + 1);
+      if ((Date.now() - rec.started) / 1000 >= MAX_VOICE_S) stop(true);
+    }, 500);
+    return () => clearInterval(timer);
+  }, [rec]);
+  useEffect(() => () => rec?.stream.getTracks().forEach(track => track.stop()), [rec]);
+  const start = async () => {
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia)
+      return toast(
+        L('This browser cannot record a voice message.', 'هذا المتصفح لا يستطيع تسجيل رسالة صوتية.'),
+        '',
+        'danger'
+      );
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
+      const type = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find(x =>
+        MediaRecorder.isTypeSupported?.(x)
+      );
+      const recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+      const chunks = [];
+      recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+      recorder.start(250);
+      setRec({ recorder, chunks, stream, started: Date.now() });
+    } catch {
+      toast(
+        L('Allow the microphone for ParishLife to record.', 'اسمح لـ ParishLife باستخدام الميكروفون للتسجيل.'),
+        '',
+        'danger'
+      );
+    }
+  };
+  const stop = async keep => {
+    if (!rec) return;
+    const { recorder, chunks, stream, started } = rec;
+    setRec(null);
+    const seconds = Math.min(MAX_VOICE_S, (Date.now() - started) / 1000);
+    await new Promise(done => {
+      recorder.onstop = done;
+      recorder.stop();
+    });
+    stream.getTracks().forEach(track => track.stop());
+    if (keep && seconds >= 1) await send(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }), seconds);
+  };
+  return { rec, start, stop, elapsed: rec ? (Date.now() - rec.started) / 1000 : 0 };
+}
+
+const Mic = () => <Icon name="mic" size={20} />;
+
+/* A chat: every conversation with this person (or office), as one thread of bubbles by day (opening it marks it
+   read), the ticks on one's own messages, voice notes, a reply box with a microphone, call buttons where the chat is
+   with one person, and for each message the stored notice status or a way to report it. */
 function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
   const [list, setList] = useState(null),
     [error, setError] = useState(''),
     [reports, setReports] = useState([]),
-    [notes, setNotes] = useState({});
+    [notes, setNotes] = useState({}),
+    [sending, setSending] = useState(false);
   const scroller = useRef(null),
     input = useRef(null);
   const me = session.accountUser?.id;
   const loadedAt = useRef('');
+  const ids = c.ids || [c.id];
   const load = () =>
-    loadMessages(c.parishId, c.id).then(
-      async m => {
+    Promise.all(ids.map(id => loadMessages(c.parishId, id).then(m => m.map(x => ({ ...x, conversationId: id }))))).then(
+      async parts => {
+        const m = parts.flat().sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
         await loadNames(
           c.parishId,
           m.map(x => x.authorAccountId)
@@ -235,11 +424,16 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
   useEffect(() => {
     load();
     ownReports(c.parishId).then(setReports);
-  }, []);
+  }, [ids.join(',')]);
   /* a newer message than the ones shown (the other side wrote): read the thread again */
   useEffect(() => {
     if (list && later(c.lastMessageAt, loadedAt.current)) load();
   }, [c.lastMessageAt]);
+  /* the other side opened it: read again for the blue ticks */
+  useEffect(
+    () => onPush(e => e.type === 'inbox-read' && e.parishId === c.parishId && ids.includes(e.conversationId) && load()),
+    [ids.join(',')]
+  );
   /* the newest message is in view, as in any chat */
   useLayoutEffect(() => {
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
@@ -254,9 +448,20 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
     await load();
     input.current?.focus();
   });
+  const voice = useVoice(async (blob, seconds) => {
+    setSending(true);
+    try {
+      await postVoice(c.parishId, c.id, blob, seconds);
+      await load();
+    } catch (e) {
+      toast(e.message, '', 'danger');
+    } finally {
+      setSending(false);
+    }
+  });
   const note = async m => {
     try {
-      const r = await messageOutcome(c.parishId, c.id, m.id);
+      const r = await messageOutcome(c.parishId, m.conversationId, m.id);
       setNotes(n => ({ ...n, [m.id]: r.meaning }));
     } catch (e) {
       setNotes(n => ({ ...n, [m.id]: e.message }));
@@ -280,6 +485,11 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
       title: L('Report this message', 'الإبلاغ عن هذه الرسالة'),
       body: <Report c={c} m={m} done={() => ownReports(c.parishId).then(setReports)} />
     });
+  /* a call is with one person: a direct chat, or staff with the member of an office chat */
+  const others = (c.participantAccountIds || []).filter(id => id !== me);
+  const callable = others.length === 1 && (c.kind === 'Direct' || !(c.participantAccountIds || []).includes(me));
+  const call = video =>
+    startCall({ parishId: c.parishId, conversationId: c.id, name: who.name, peer: others[0], video });
   return (
     <div className="mail-read">
       <header className="mail-head">
@@ -293,14 +503,38 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
         </button>
         <Face id={who.key} name={who.name} />
         <div className="mail-head-text">
-          <h2 dir="auto">{c.subject}</h2>
+          <h2 dir="auto">{who.name}</h2>
           <p>
-            {[who.name, parishName(c.parishId), kindLabel(c.kind)]
-              .filter((x, i, a) => x && a.indexOf(x) === i)
+            {[parishName(c.parishId), kindLabel(c.kind)]
+              .filter((x, i, a) => x && x !== who.name && a.indexOf(x) === i)
               .join(' · ')}
           </p>
         </div>
         <div className="mail-head-acts">
+          {callable ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost btn-dense"
+                onClick={() => call(false)}
+                aria-label={L('Voice call', 'مكالمة صوتية')}
+                title={L('Voice call', 'مكالمة صوتية')}
+                data-call-voice=""
+              >
+                <Icon name="phone" size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-dense"
+                onClick={() => call(true)}
+                aria-label={L('Video call', 'مكالمة فيديو')}
+                title={L('Video call', 'مكالمة فيديو')}
+                data-call-video=""
+              >
+                <Icon name="video" size={16} />
+              </button>
+            </>
+          ) : null}
           <button type="button" className="btn btn-ghost btn-dense" onClick={status}>
             <Icon name="info" size={16} />
             <span className="mail-hide-sm">{L('Notice status', 'حالة الإشعار')}</span>
@@ -326,7 +560,8 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
             filed = reports.find(r => r.messageId === m.id),
             prev = list[i - 1],
             newDay = !prev || !sameDay(dateOf(prev.at) || new Date(0), dateOf(m.at) || new Date(0)),
-            sameAuthor = prev && !newDay && prev.authorAccountId === m.authorAccountId;
+            sameAuthor = prev && !newDay && prev.authorAccountId === m.authorAccountId,
+            missed = !m.voiceSeconds && MISSED[m.body];
           return (
             <Fragment key={m.id}>
               {newDay ? (
@@ -337,12 +572,22 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
               <div className={'chat-row' + (mine ? ' mine' : '') + (sameAuthor ? ' cont' : '')} data-message={m.id}>
                 <div className="bubble">
                   {!mine && !sameAuthor ? <span className="bubble-who">{author(m)}</span> : null}
-                  <div className="bubble-body" dir="auto">
-                    {m.body}
-                  </div>
-                  <time className="bubble-time" dateTime={m.at}>
-                    {clock(m.at)}
-                  </time>
+                  {m.voiceSeconds ? (
+                    <VoiceNote c={c} m={m} />
+                  ) : missed ? (
+                    <div className="bubble-body bubble-call">
+                      <Icon name="phone" size={15} />
+                      {L(missed[0], missed[1])}
+                    </div>
+                  ) : (
+                    <div className="bubble-body" dir="auto">
+                      {m.body}
+                    </div>
+                  )}
+                  <span className="bubble-time">
+                    <time dateTime={m.at}>{clock(m.at)}</time>
+                    {mine ? <Ticks m={m} /> : null}
+                  </span>
                 </div>
                 <div className="bubble-tools">
                   {mine ? (
@@ -374,6 +619,31 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
         <p className="help mail-archived">
           {L('This conversation is archived. Restore it to reply.', 'هذه المحادثة مؤرشفة. استعدها للرد.')}
         </p>
+      ) : voice.rec ? (
+        <div className="composer composer-rec" data-recording="">
+          <span className="rec-dot" aria-hidden="true"></span>
+          <span className="rec-time" aria-live="off">
+            {minutes(voice.elapsed)}
+          </span>
+          <span className="rec-label">{L('Recording a voice message', 'جارٍ تسجيل رسالة صوتية')}</span>
+          <button
+            type="button"
+            className="btn btn-ghost composer-send"
+            onClick={() => voice.stop(false)}
+            aria-label={L('Delete the recording', 'حذف التسجيل')}
+          >
+            <Icon name="trash" size={18} />
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary composer-send"
+            onClick={() => voice.stop(true)}
+            aria-label={L('Send the voice message', 'إرسال الرسالة الصوتية')}
+            data-voice-send=""
+          >
+            <Send />
+          </button>
+        </div>
       ) : (
         <form className="composer" onSubmit={reply.submit} data-reply-form="">
           <label className="sr-only" htmlFor={'reply-' + c.id}>
@@ -403,9 +673,20 @@ function Conversation({ c, who, onChange, onBack, onArchive, busy }) {
             }}
           />
           <button
+            type="button"
+            className="btn btn-ghost composer-send"
+            onClick={voice.start}
+            disabled={sending}
+            aria-label={L('Record a voice message', 'تسجيل رسالة صوتية')}
+            title={L('Record a voice message', 'تسجيل رسالة صوتية')}
+            data-voice-record=""
+          >
+            <Mic />
+          </button>
+          <button
             className="btn btn-primary composer-send"
             data-reply=""
-            disabled={reply.busy}
+            disabled={reply.busy || sending}
             aria-label={L('Send reply', 'إرسال الرد')}
           >
             <Send />
@@ -469,7 +750,7 @@ function Broadcast({ b, onBack }) {
 
 function Report({ c, m, done }) {
   const { error, busy, submit } = useSubmit(async q => {
-    await reportMessage(c.parishId, c.id, m.id, q.explanation.trim());
+    await reportMessage(c.parishId, m.conversationId || c.id, m.id, q.explanation.trim());
     closeOverlays();
     await done();
     toast(
@@ -508,13 +789,16 @@ const conversationsOf = id =>
   });
 
 export function InboxPage({ params = [] }) {
-  const [wanted = '', wantedId = ''] = params.map(x => decodeURIComponent(x));
+  const [first = '', second = ''] = params.map(x => decodeURIComponent(x));
+  const fresh = first === 'new'; // #/inbox/new: a new message to one person
+  const wanted = fresh ? '' : first,
+    wantedId = fresh ? '' : second;
   const [rows, setRows] = useState(null),
     [received, setReceived] = useState([]),
     [error, setError] = useState(''),
     [round, setRound] = useState(0),
     [busy, setBusy] = useState(''),
-    [open, setOpen] = useState(() => (wantedId ? { type: 'c', id: wantedId } : null)); // { type: 'c' | 'b' | 'new', id }
+    [open, setOpen] = useState(() => (wantedId ? { type: 'c', id: wantedId } : fresh ? { type: 'new' } : null)); // { type: 'c' | 'b' | 'new', id }
   const [, redraw] = useState(0);
   /* live updates: read the conversations again when something changed (the broadcasts stay as loaded) */
   useEffect(
@@ -586,11 +870,26 @@ export function InboxPage({ params = [] }) {
       ? { name, key }
       : { name: parishName(c.parishId) || L('Parish office', 'مكتب الرعية'), key: c.parishId };
   };
+  /* one chat per person: the conversations with the same person (or the same office), newest first */
+  const chats = [],
+    byKey = new Map();
+  for (const c of rows) {
+    const key = `${c.parishId}|${c.kind}|${withWhom(c).key}`;
+    let chat = byKey.get(key);
+    if (!chat) {
+      chat = { ...c, key, ids: [], unread: false, archived: true };
+      byKey.set(key, chat);
+      chats.push(chat);
+    }
+    chat.ids.push(c.id);
+    chat.unread = chat.unread || c.unread;
+    chat.archived = chat.archived && c.archived;
+  }
   const q = filters.query.toLowerCase().trim();
   const showBroadcasts = filters.box === 'parish';
   const shown = showBroadcasts
     ? []
-    : rows.filter(
+    : chats.filter(
         c =>
           inBox(c) &&
           (!filters.parish || c.parishId === filters.parish) &&
@@ -605,13 +904,13 @@ export function InboxPage({ params = [] }) {
             .includes(q)
       )
     : [];
-  const unread = rows.filter(c => c.unread && !c.archived).length;
-  const current = open?.type === 'c' ? rows.find(c => c.id === open.id) : null;
+  const unread = chats.filter(c => c.unread && !c.archived).length;
+  const current = open?.type === 'c' ? chats.find(c => c.ids.includes(open.id)) : null;
   const broadcast = open?.type === 'b' ? received.find(b => b.id === open.id) : null;
   const archive = async c => {
     setBusy(c.id);
     try {
-      await archiveConversation(c.parishId, c.id, !c.archived);
+      await Promise.all((c.ids || [c.id]).map(id => archiveConversation(c.parishId, id, !c.archived)));
       refresh();
     } catch (e) {
       toast(e.message, '', 'danger');
@@ -693,11 +992,11 @@ export function InboxPage({ params = [] }) {
             {shown.map(c => {
               const who = withWhom(c);
               return (
-                <li key={c.id}>
+                <li key={c.key}>
                   <button
                     type="button"
                     className={'mail-row' + (c.unread ? ' is-unread' : '')}
-                    aria-current={open?.type === 'c' && open.id === c.id ? 'true' : undefined}
+                    aria-current={open?.type === 'c' && c.ids.includes(open.id) ? 'true' : undefined}
                     data-open={c.id}
                     onClick={() => setOpen({ type: 'c', id: c.id })}
                   >
@@ -759,6 +1058,7 @@ export function InboxPage({ params = [] }) {
         <section className="mail-pane" aria-label={L('Reading pane', 'جزء القراءة')}>
           {open?.type === 'new' ? (
             <Compose
+              initialTo={fresh ? 'person' : 'office'}
               onBack={close}
               done={async (c, parishId) => {
                 if (c?.id) setOpen({ type: 'c', id: c.id });
@@ -769,7 +1069,7 @@ export function InboxPage({ params = [] }) {
             />
           ) : current ? (
             <Conversation
-              key={current.id}
+              key={current.key}
               c={current}
               who={withWhom(current)}
               onChange={refresh}
@@ -797,6 +1097,9 @@ export function InboxPage({ params = [] }) {
 const Head = () => (
   <PageHead
     title={L('Inbox', 'البريد')}
-    sub={L('Conversations with the parish office, inside ParishLife.', 'محادثات مع مكتب الرعية، داخل ParishLife.')}
+    sub={L(
+      'One chat per person: messages, voice notes and calls with the parish office and parishioners, inside ParishLife.',
+      'محادثة واحدة لكل شخص: رسائل ورسائل صوتية ومكالمات مع مكتب الرعية والمؤمنين، داخل ParishLife.'
+    )}
   />
 );

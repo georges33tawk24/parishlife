@@ -32,6 +32,7 @@ import { applyTheme } from '../../lib/theme.js';
 import { confirmPlanNavigation, planDirty } from '../model/planning.js';
 import { refresh, useVersion } from './version.js';
 import { startLive, stopLive, live, subscribe as liveSubscribe, snapshot as liveSnapshot } from '../model/live.js';
+import { CallLayer } from '../features/communicate/calls.jsx';
 import { Auth, externalMessage } from './Auth.jsx';
 import { takeExternalStatus } from '../model/account.js';
 import { ROUTES, allowed, MEMBER_ROUTES } from './routes.jsx';
@@ -1213,6 +1214,7 @@ export function Portal() {
         </nav>
       </div>
       <Palette open={palette} onClose={() => setPalette(false)} />
+      <CallLayer />
       <OverlayHost />
     </>
   );

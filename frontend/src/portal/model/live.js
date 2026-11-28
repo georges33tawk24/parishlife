@@ -6,8 +6,12 @@
    a hidden tab asks nothing. What changed is put where the bell reads it (the NOTIFICATIONS collection for staff,
    M.notifications for members) as freshly loaded data, and every listener is told, so the bell and the inbox draw
    the news without reloading the page.
+   The API also pushes over a live channel (GET api/me/live, server-sent events): a conversation that changed or was
+   read polls at once, so a new message or a read tick shows within a second, and calls are handed to their listener.
+   The 30-second poll stays as the fallback (a proxy that drops the stream, or several API instances).
    Main members: startLive, stopLive, pollNow, subscribe and snapshot (for useSyncExternalStore), onLive
-   (called after each poll with { changed }), live (the counts: unread notices, unread conversations). */
+   (called after each poll with { changed }), onPush (each pushed inbox event), onCall (each call event), live
+   (the counts: unread notices, unread conversations). */
 import { api, session } from './api.js';
 import { replaceLoaded } from './persist.js';
 import * as D from './data.js';
@@ -34,6 +38,37 @@ export const onLive = fn => {
   hooks.add(fn);
   return () => hooks.delete(fn);
 };
+
+const pushes = new Set(),
+  calls = new Set();
+/* fn({ type: 'inbox' | 'inbox-read', parishId, conversationId }) as the API pushes it */
+export const onPush = fn => {
+  pushes.add(fn);
+  return () => pushes.delete(fn);
+};
+/* fn({ type: 'call' | 'call-answer' | 'call-taken' | 'call-end', callId, … }) */
+export const onCall = fn => {
+  calls.add(fn);
+  return () => calls.delete(fn);
+};
+let stream = null;
+function connect() {
+  if (stream || typeof EventSource === 'undefined') return;
+  stream = new EventSource('/api/me/live'); // the browser reconnects on its own; a refusal (signed out) closes it
+  stream.onmessage = e => {
+    let event;
+    try {
+      event = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+    if (String(event.type).startsWith('call')) calls.forEach(fn => fn(event));
+    else {
+      pushes.forEach(fn => fn(event));
+      pollNow(true);
+    }
+  };
+}
 
 const visible = () => typeof document === 'undefined' || !document.hidden;
 
@@ -98,11 +133,14 @@ export function startLive() {
   document.addEventListener('visibilitychange', wake);
   addEventListener('focus', wake);
   pollNow(true);
+  connect();
 }
 
 export function stopLive() {
   clearInterval(timer);
   timer = 0;
+  stream?.close();
+  stream = null;
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', wake);
     removeEventListener('focus', wake);
