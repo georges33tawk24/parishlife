@@ -144,11 +144,7 @@ async function ministries(link) {
 
 async function meetingsOf(groups) {
   const now = Date.now();
-  const windows = [
-    [now - 31 * DAY, now],
-    [now, now + 31 * DAY],
-    [now + 31 * DAY, now + 62 * DAY]
-  ];
+  const windows = [[now - 31 * DAY, now + 62 * DAY]]; // one request per group (lists take up to 366 days)
   const rows = (
     await Promise.all(
       groups.flatMap(g =>

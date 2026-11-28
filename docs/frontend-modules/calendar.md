@@ -10,7 +10,7 @@ Everything under `/api/parishes/{id}` unless stated. List routes page with `size
 
 | Screen | Route |
 | --- | --- |
-| Calendar list | `GET calendar/events?start&end` (at most 31 days, so one request per month; the loaded months are the previous month to three ahead, widened when the calendar moves) |
+| Calendar list | `GET calendar/events?start&end` (at most 366 days per request, so one request; one event still lasts at most 31 days; the loaded months are the previous month to three ahead, widened when the calendar moves) |
 | Event create / edit draft | `POST calendar/events`, `PUT calendar/events/{id}` (with `version`; `titleAr`, `descriptionAr` optional) |
 | Event templates | `GET calendar/templates[?includeArchived=true]`, `POST calendar/templates`, `PUT calendar/templates/{id}` (with `version`), `POST calendar/templates/{id}/actions` (`archive` / `restore`) |
 | Recurring event | `POST calendar/series` (count 1–52, every 1–366 days) |

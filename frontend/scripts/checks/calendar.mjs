@@ -230,7 +230,7 @@ const { sent } = mockApi((method, path, body) => {
   if (route === 'parishes/P/calendar/events' && method === 'GET') {
     const start = Date.parse(q.get('start')),
       end = Date.parse(q.get('end'));
-    assert.ok(end - start <= 31 * 86400000, 'the API lists at most 31 days at a time');
+    assert.ok(end - start <= 366 * 86400000, 'the API lists at most 366 days at a time');
     return json(200, {
       items: events.filter(e => Date.parse(e.value.startsAt) < end && Date.parse(e.value.endsAt) > start),
       continuationToken: null

@@ -103,7 +103,7 @@ public class CalendarService(IRecordTransactions records, IParishRepository pari
     public async Task<Page<Versioned<CalendarEventDto>>> ListAsync(string parish, DateTimeOffset start, DateTimeOffset end, int size, string? cursor, CancellationToken ct)
     {
         await Authorize(parish, Permissions.ScheduleRead, ct);
-        ScheduleRules.ValidatePeriod(start, end);
+        ScheduleRules.ValidateListWindow(start, end);
         var page = await records.PageAsync<CalendarEvent>(SchedulingScope.For(parish), "event", size, cursor, ct, Window(start, end));
         return new() { Items = page.Items.Select(row => { var view = View(row.Value); return new Versioned<CalendarEventDto> { Value = view, Version = view.Redacted ? string.Empty : row.Version }; }).ToArray(), ContinuationToken = page.ContinuationToken };
     }

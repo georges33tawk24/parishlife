@@ -113,37 +113,34 @@ const { sent } = mockApi((method, path, body) => {
     return json(200, { ministryId: 'G1', current: true, joinedAt: '2026-01-01T00:00:00Z' });
   if (get('parishes/P/ministries/G2/membership/mine')) return json(404);
   if (get('parishes/P/ministries/G1/meetings')) {
-    const from = new URLSearchParams(query).get('start');
-    const inPast = Date.parse(from) < Date.now() - 86400000;
-    const inNext = !inPast && Date.parse(from) < Date.now() + 86400000;
+    // like the API: the meetings that start inside the asked range (one range of up to 366 days)
+    const q = new URLSearchParams(query),
+      from = Date.parse(q.get('start')),
+      to = Date.parse(q.get('end'));
+    const all = [
+      {
+        id: 'm0',
+        ministryId: 'G1',
+        title: 'Rehearsal',
+        startsAt: pastStart,
+        timeZone: 'Asia/Beirut',
+        status: 'Confirmed',
+        rsvpOpen: false
+      },
+      {
+        id: 'm1',
+        ministryId: 'G1',
+        title: 'Planning',
+        startsAt: meetingStart,
+        timeZone: 'Asia/Beirut',
+        locationDescription: 'Hall',
+        agenda: 'Feast',
+        status: 'Confirmed',
+        rsvpOpen: true
+      }
+    ];
     return json(200, {
-      items: inPast
-        ? [
-            {
-              id: 'm0',
-              ministryId: 'G1',
-              title: 'Rehearsal',
-              startsAt: pastStart,
-              timeZone: 'Asia/Beirut',
-              status: 'Confirmed',
-              rsvpOpen: false
-            }
-          ]
-        : inNext
-          ? [
-              {
-                id: 'm1',
-                ministryId: 'G1',
-                title: 'Planning',
-                startsAt: meetingStart,
-                timeZone: 'Asia/Beirut',
-                locationDescription: 'Hall',
-                agenda: 'Feast',
-                status: 'Confirmed',
-                rsvpOpen: true
-              }
-            ]
-          : [],
+      items: all.filter(m => Date.parse(m.startsAt) >= from && Date.parse(m.startsAt) < to),
       continuationToken: null
     });
   }

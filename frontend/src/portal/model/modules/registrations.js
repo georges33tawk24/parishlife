@@ -31,7 +31,7 @@ const enc = encodeURIComponent;
 const DAY = 24 * 3600 * 1000;
 const WINDOW_BEFORE = 30,
   WINDOW_AFTER = 120,
-  WINDOW_STEP = 30; // the API allows at most 31 days per calendar request
+  WINDOW_STEP = 150; // one request: the API lists up to 366 days since 27 November 2026 (it was 31)
 
 /* Calendar activities seen by the last load, for the "new form" list: activities with no policy yet. */
 export const availableEvents = [];

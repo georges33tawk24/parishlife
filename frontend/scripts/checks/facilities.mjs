@@ -269,12 +269,12 @@ assert.deepEqual(
 );
 assert.equal(D.MAINTENANCE[1].from, '', 'out of service has no dates in the API');
 assert.ok(
-  state.blockPages.length === 2 && state.blockPages.every(s => /size=100/.test(s)),
-  'blocks are read in two 31-day windows'
+  state.blockPages.length === 1 && state.blockPages.every(s => /size=100/.test(s)),
+  'blocks are read in one 62-day window (lists take up to 366 days)'
 );
 assert.equal(D.VENUES[0].ar, 'قاعة الرعية', 'the Arabic name is the API twin');
 assert.equal(D.VENUES[1].ar, 'Crypt', 'and falls back to the other language for display');
-assert.equal(D.RESERVATIONS.length, 2, 'reservations from both 31-day windows');
+assert.equal(D.RESERVATIONS.length, 2, 'reservations from the 62 days around today, in one window');
 const first = D.RESERVATIONS.find(r => r.id === R1);
 assert.equal(first.title, 'Choir rehearsal', 'the title is the calendar event title');
 assert.equal(first.status, 'pending');

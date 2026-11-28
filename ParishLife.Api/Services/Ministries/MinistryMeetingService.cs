@@ -106,7 +106,7 @@ public class MinistryMeetingService(IRecordTransactions records, MinistryAccess 
         int size, string? cursor, CancellationToken ct)
     {
         var reader = await ReaderAsync(parish, ministry, ct);
-        ScheduleRules.ValidatePeriod(start, end);
+        ScheduleRules.ValidateListWindow(start, end);
         var filters = new List<RecordCondition>
         {
             RecordConditions.Equal("ministryId", ministry), new() { Path = "startsAt", Comparison = "lt", Value = end },

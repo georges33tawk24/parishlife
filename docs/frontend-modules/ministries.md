@@ -9,7 +9,7 @@ Collections it owns: `GROUPS`, `GROUP_DETAIL`, `VOLUNTEERS`, `SIGNUP_SHEETS`, `A
 The API pages with `?size=&cursor=` (not `continuation`), and answers **404** (not 403) when an account lacks the duty for a read. Every per-ministry read is therefore optional: a refused read leaves that part empty.
 
 - **Which ministries:** the priest, or a grant with `ministries.manage`, lists all (`GET ministries`); archived ones are left out. A leader has no list route, so the ministry ids and duties come from `GET /api/me/capacities` (`MinistryLeader` entries) and each is read with `GET ministries/{id}`.
-- **Meetings** are read in 30-day windows (the API's limit): six months back, three ahead. Cancelled meetings are left out.
+- **Meetings** are read in one request per ministry (lists take up to 366 days): six months back, three ahead. Cancelled meetings are left out.
 - **Attendance** is read for confirmed meetings that started in the last 90 days, when the account has an attendance duty.
 
 ## Routes used
