@@ -6,7 +6,7 @@ Updated 10 November 2026. Source basis: S12.01–S12.13 and S02.07 (proposed). R
 
 | Action | From → to | Who |
 | --- | --- | --- |
-| (open) | → Received | Office, for an existing unarchived Person; a second active or registered Baptism, First Communion or Confirmation for the same person is refused |
+| (open) | → Received | Office, for an existing unarchived Person; a second active or registered Baptism, First Communion or Confirmation for the same person is refused. A Marriage is one case for the couple: opened directly by the office (no `requestId`) it must name the second spouse in `facts.partner`; `facts.partnerPersonId`, when given, must be another unarchived person of the parish |
 | accept | Received → Preparation | Priest, or a secretary recording a genuine prior instruction of a current priest (priest, basis, actual time; both identities are kept) |
 | schedule | Preparation → Scheduled | Office: future date and celebrant |
 | reschedule, decline, cancel | Pre-celebration only, with a reason | Priest or recorded instruction |

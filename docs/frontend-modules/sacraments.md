@@ -9,7 +9,7 @@ Files: `frontend/src/portal/model/modules/sacraments.js`, `features/records/sacr
 | Purpose | Route |
 | --- | --- |
 | Register, per sacrament (7 searches, `cursor` paging) | `GET sacraments?sacrament=&size=100` |
-| New case | `POST sacraments` |
+| New case | `POST sacraments` (a marriage is one case for the couple with the second spouse in `facts.partner` and, when picked from People, `facts.partnerPersonId`; `facts.partnerParish` is optional) |
 | accept, decline, cancel, schedule, reschedule, record-celebration, amend-facts, return-entry, register | `POST sacraments/{id}/actions` |
 | Corrections to a registered entry | `GET sacraments/corrections`, `POST sacraments/{id}/corrections`, `POST sacraments/corrections/{id}/decision` |
 | Anniversaries (next 92 days, registered dates only) | `GET sacraments/anniversaries?from=&days=92` |

@@ -1,7 +1,7 @@
 // Purpose: verifies sacramental cases and the official register (S12, S02.07) through real local services and storage.
 // Main tests: acceptance by a priest or a secretary-recorded priest instruction; actual celebration before registration; priest-supplied
 // numbering with sequential, never-reused numbers; returned entries; amendment-only corrections; pre-celebration decline and duplicates;
-// group first communion/confirmation requests with per-person results and idempotent retry.
+// group first communion/confirmation requests with per-person results and idempotent retry; a marriage naming its second spouse.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.Ministries;
@@ -111,6 +111,27 @@ public class SacramentTests
         Assert.Equal("Rejected", (await DecideAsync(x, rejected.Id, false)).Status);
         Assert.Equal("Isolated church", (await x.Service.GetAsync(x.Parish, record.Id, default)).Value.CurrentFacts["place"]);
         Assert.Equal("invalid_sacrament_state", (await Assert.ThrowsAsync<DomainException>(() => ActAsync(x, record.Id, "cancel", r => r.Reason = "Erase it"))).Code);
+    }
+
+    [Fact]
+    public async Task A_marriage_names_its_second_spouse()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        var bride = await PersonAsync(x);
+        var groom = await PersonAsync(x);
+        f.As(x.Secretary);
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() =>
+            x.Service.CreateAsync(x.Parish, Create(bride, "Marriage"), default))).Code);
+        var self = Create(bride, "Marriage", new() { ["partner"] = "Isolated Candidate", ["partnerPersonId"] = bride });
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateAsync(x.Parish, self, default))).Code);
+        var unknown = Create(bride, "Marriage", new() { ["partner"] = "Isolated Candidate", ["partnerPersonId"] = Guid.NewGuid().ToString("N") });
+        Assert.Equal("resource_not_found", (await Assert.ThrowsAsync<DomainException>(() => x.Service.CreateAsync(x.Parish, unknown, default))).Code);
+        var couple = await x.Service.CreateAsync(x.Parish, Create(bride, "Marriage", new() { ["partner"] = "Isolated Candidate", ["partnerPersonId"] = groom }), default);
+        Assert.Equal((bride, groom), (couple.SubjectPersonId, couple.Facts["partnerPersonId"]));
+        var outsider = await x.Service.CreateAsync(x.Parish, Create(groom, "Marriage", new() { ["partner"] = "Isolated spouse from another parish" }), default);
+        Assert.False(outsider.Facts.ContainsKey("partnerPersonId"));
     }
 
     [Fact]
@@ -286,9 +307,9 @@ public class SacramentTests
         }, default)).Id;
     }
 
-    private static CreateSacramentDto Create(string person) => new()
+    private static CreateSacramentDto Create(string person, string sacrament = "Baptism", Dictionary<string, string>? facts = null) => new()
     {
-        OperationId = Guid.NewGuid(), Sacrament = "Baptism", SubjectPersonId = Guid.Parse(person), Facts = new() { ["godparent"] = "Original Godparent" }
+        OperationId = Guid.NewGuid(), Sacrament = sacrament, SubjectPersonId = Guid.Parse(person), Facts = facts ?? new() { ["godparent"] = "Original Godparent" }
     };
 
     private static CreateSacramentBatchDto Batch(string sacrament, params string[] people) => new()
