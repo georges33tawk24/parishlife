@@ -25,7 +25,7 @@ Collections filled by `load` (when the account may read them; a 403 leaves them 
 
 ## Fields and features with no API equivalent (shown empty or not at all)
 
-- Lists of every parish, archdiocese and account exist for platform operators only (each read audited). Archdiocese admins and bishops still see what their capacities reach. Bishop appointments, jurisdiction proposals, invoices and MFA recovery requests can still only be read one at a time, by reference.
+- Lists of every parish, archdiocese and account exist for platform operators only (each read audited); an operator's Organizations tab lists every archdiocese and parish from them. Archdiocese admins and bishops still see what their capacities reach. A current super admin may decide (and link) their own membership request; everyone else needs a different reviewer. Bishop appointments, jurisdiction proposals, invoices and MFA recovery requests can still only be read one at a time, by reference.
 - Creating accounts, passwords, a parish secretary on creation, guest-request review, membership review and bishop certificate acceptance (all in the old workspace) are not in these controllers; membership, requests and certificates belong to other modules.
 - The audit trail covers the parish's main partition only: finance and restricted-case audit rows, and free-text reasons, are not returned. Rows are paged by id, so the screen reads up to 200 and sorts them by time.
 - `settings.manage` still has no route (see open decisions).

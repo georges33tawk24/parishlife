@@ -1,5 +1,6 @@
 // Purpose: records reviewed, unique person/account identity matches without granting ministry membership or staff authority.
-// Main functions: LinkAsync atomically claims the person and writes the reviewed link; GetOwnAsync, GetAsync and GetByPersonAsync return safe current projections.
+// Main functions: LinkAsync atomically claims the person and writes the reviewed link (a different reviewer, except for a current super
+// admin matching their own account); GetOwnAsync, GetAsync and GetByPersonAsync return safe current projections.
 
 using Microsoft.AspNetCore.Identity;
 using ParishLife.Api.Identity;
@@ -13,7 +14,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Ministries;
 
 public class MinistryPersonLinkService(IRecordTransactions records, MinistryAccess ministryAccess, IParishAccess access,
-    ICurrentActor actor, MfaAccountAccess proof, UserManager<ParishUser> users, TimeProvider clock)
+    ICurrentActor actor, MfaAccountAccess proof, UserManager<ParishUser> users, TimeProvider clock, IPlatformAccess platform)
 {
     public async Task<PersonAccountLinkDto> LinkAsync(string parish, LinkMinistryPersonDto request, CancellationToken ct)
     {
@@ -22,7 +23,9 @@ public class MinistryPersonLinkService(IRecordTransactions records, MinistryAcce
         await access.RequireModuleAsync(parish, "office", ct);
         var account = Guard.Id(request.AccountId);
         var personId = Guard.Id(request.PersonId);
-        if (account == actor.AccountId) throw MinistryAccess.State("A different authorized reviewer must match this account to a person.");
+        // A current super admin needs nobody's approval, so may match their own account (owner decision, 27 November 2026).
+        if (account == actor.AccountId && !await platform.IsOperatorAsync(ct))
+            throw MinistryAccess.State("A different authorized reviewer must match this account to a person.");
         var target = await users.FindByIdAsync(account);
         if (target is not { Active: true } || !AccountVerification.IsVerified(target) || await users.IsLockedOutAsync(target)) throw MinistryAccess.Missing();
         var op = actor.CreateOperation(request.OperationId, request, clock, "person-account-link:v2:" + account);

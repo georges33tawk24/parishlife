@@ -3,7 +3,8 @@
 // Main functions: FollowAsync, UnfollowAsync, SetPrimaryAsync, MyParishesAsync, RequestAsync, WithdrawRequestAsync, DecideAsync,
 // OwnRequestsAsync, QueueAsync, ProposeCorrectionAsync, WithdrawCorrectionAsync, ReviewCorrectionAsync, CorrectionsAsync,
 // MembershipNotificationOutcomeAsync and CorrectionNotificationOutcomeAsync expose source-authorized partial outcomes without recipient details.
-// Required membership/correction notices are staged in their final source transactions and dispatched after commit.
+// Required membership/correction notices are staged in their final source transactions and dispatched after commit. A current super admin
+// may decide their own membership request; everyone else needs a different reviewer.
 
 using ParishLife.Api.DTOs.Ministries;
 using ParishLife.Api.DTOs.People;
@@ -22,7 +23,7 @@ namespace ParishLife.Api.Services.People;
 
 public class MembershipService(IRecordTransactions records, IParishAccess access, IParishRepository parishes, MinistryAccess own,
     MinistryPersonLinkService links, PeopleService people, NotificationService notifications, ICurrentActor actor, MfaAccountAccess proof, TimeProvider clock,
-    NotificationOutcomeReader notificationOutcomes)
+    NotificationOutcomeReader notificationOutcomes, IPlatformAccess platform)
 {
     private static DomainException Missing() => new("resource_not_found", "The requested record is unavailable.", FailureKind.NotFound);
     private static DomainException State(string message) => new("invalid_membership_state", message, FailureKind.Conflict);
@@ -135,7 +136,8 @@ public class MembershipService(IRecordTransactions records, IParishAccess access
             throw State("This request has already been decided.");
         if (row.Version != Versions.Require(request.Version))
             throw new DomainException("write_conflict", "The request changed; reload it before deciding.", FailureKind.Conflict);
-        if (item.ApplicantAccountId == actor.AccountId)
+        // A super admin needs nobody's approval, so may decide their own request (owner decision, 27 November 2026).
+        if (item.ApplicantAccountId == actor.AccountId && !await platform.IsOperatorAsync(ct))
             throw State("A different authorized reviewer decides your own membership.");
         string? person = null;
         // A retry after the link committed but the request did not finds the existing link and only finishes the request.

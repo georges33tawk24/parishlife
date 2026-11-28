@@ -1,7 +1,8 @@
 // Purpose: verifies parish following, membership requests (A09/A10) and member profile corrections (A12) through real local services and storage.
 // Main tests: follow/primary/unfollow preferences; one waiting request, return with an applicant-visible reason, duplicate-safe linking,
 // stale decisions and create-person; evidence rules, field-by-field review applied atomically to the Person, and withdraw limits;
-// single-use, replaceable, expiring person invitations (A11) whose conflicting claims go to office review.
+// single-use, replaceable, expiring person invitations (A11) whose conflicting claims go to office review; only a current super admin
+// decides their own membership request.
 
 using Microsoft.Extensions.DependencyInjection;
 using ParishLife.Api.DTOs.People;
@@ -255,6 +256,25 @@ public class MembershipTests
         var again = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
         f.As(await f.CreateVerifiedMemberAsync());
         Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, again.Id, again.Token, default)).Status);
+    }
+
+    [Fact]
+    public async Task Only_a_super_admin_decides_their_own_membership_request()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        // An office reviewer cannot decide their own request.
+        f.As(f.Other);
+        var own = await x.Service.RequestAsync(x.Parish, Apply("Reviewer"), default);
+        x.Office();
+        Assert.Equal("invalid_membership_state", (await Assert.ThrowsAsync<DomainException>(() =>
+            DecideAsync(x, own.Id, "create-person", evidence: "Office identity check"))).Code);
+
+        // A current super admin needs nobody's approval.
+        f.As(f.SecondAdmin);
+        var mine = await x.Service.RequestAsync(x.Parish, Apply("Operator"), default);
+        Assert.Equal("Linked", (await DecideAsync(x, mine.Id, "create-person", evidence: "Office identity check")).Status);
     }
 
     private static async Task<Setup> CreateAsync(LocalBackendFixture f)

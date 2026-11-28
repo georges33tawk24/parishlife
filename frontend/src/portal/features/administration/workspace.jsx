@@ -6,7 +6,8 @@
    every parish, archdiocese and account, account status, clergy titles).
    Organizations shows what the account reaches through its capacities (GET /api/me/capacities), plus any
    parish or archdiocese opened by its reference or from the Platform lists (kept for this browser
-   session). Main member: WorkspacePage. */
+   session); for a platform operator it lists every archdiocese and parish (the Platform lists).
+   Main member: WorkspacePage. */
 import { useState } from 'react';
 import { PageHead, TabBar, Pill, Empty, openDrawer, toast } from '../../ui/ui.jsx';
 import { S, bus } from '../../model/store.js';
@@ -50,9 +51,15 @@ const StatusPill = ({ status }) => (
   <Pill label={(STATUS[status] || [status])[0]} tone={(STATUS[status] || [])[1] || ''} />
 );
 
-/* The organizations in reach: from capacities, then any opened by reference. Each is read with its version. */
+/* The organizations in reach: from capacities, then any opened by reference. Each is read with its version.
+   A super admin sees every archdiocese and church, straight from the platform lists (writes read the version
+   fresh). */
 async function loadOrganizations() {
   const scopes = await A.myScopes();
+  if (scopes.operator) {
+    const [archdioceses, parishes] = await Promise.all([A.platformArchdioceses(), A.platformParishes()]);
+    return { scopes, archdioceses, parishes };
+  }
   const archIds = new Set([...scopes.archdioceses.map(a => a.id), ...opened.archdioceses]),
     parishIds = new Set([...scopes.parishes.map(p => p.id), ...opened.parishes]);
   const read = (ids, get) =>
