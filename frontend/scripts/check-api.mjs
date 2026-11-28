@@ -86,7 +86,8 @@ globalThis.fetch = async (url, options = {}) => {
       ...(operatorCapacities
         ? [
             { kind: 'PlatformOperator', scopeName: 'Platform', capabilities: [] },
-            ...['P', 'Q', 'R'].map(id => ({ // every verified parish, as the API lists them
+            ...['P', 'Q', 'R'].map(id => ({
+              // every verified parish, as the API lists them
               kind: 'PlatformOperator',
               parishId: id,
               scopeName: 'Saint ' + id,
