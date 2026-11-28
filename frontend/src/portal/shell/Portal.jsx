@@ -304,7 +304,7 @@ function Palette({ open, onClose }) {
       : (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
   const households =
     q && canSee('households')
-      ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town || ''} ${h.envelope || ''}`, q)).slice(0, 5)
+      ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town || ''}`, q)).slice(0, 5)
       : [];
   const records =
     q && canSee('sacraments')
