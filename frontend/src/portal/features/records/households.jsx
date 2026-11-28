@@ -1,4 +1,4 @@
-/* Households: the list (cards or table), one household with its members, their roles and envelope, and
+/* Households: the list (cards or table), one household with its members and their roles, and
    exporting them.
    Main members: exportHouseholds, households (the list page), householdView (one household; the office sets
    each member's role there, saved on the membership). */
@@ -31,7 +31,6 @@ export function exportHouseholds(ids) {
     'Family (Arabic)',
     'Town',
     'Address',
-    'Envelope',
     'Contact person',
     'Person ID',
     'Name (English)',
@@ -49,7 +48,6 @@ export function exportHouseholds(ids) {
       h.ar,
       t(h.town, h.townAr),
       t(h.address, h.addressAr),
-      h.envelope || '',
       label(person(h.head)),
       p?.id || '',
       p?.lat || '',
@@ -97,17 +95,7 @@ export function households() {
             <span className="avatar avatar-lg">{t(h.name, h.ar).slice(0, 2)}</span>{' '}
             <div style={{ flex: 1, minWidth: 0 }}>
               <b style={{ display: 'block', font: '600 16px/22px var(--sans)' }}>{t(h.name, h.ar)}</b>{' '}
-              <small className="t-caption dim">
-                {t(h.town, h.townAr)}
-                {h.envelope ? (
-                  <>
-                    {' '}
-                    · {t('Offering envelope', 'مظروف العطاء')} <span className="mono">{h.envelope}</span>
-                  </>
-                ) : (
-                  ''
-                )}
-              </small>
+              <small className="t-caption dim">{t(h.town, h.townAr)}</small>
             </div>
             {CR.recBtn('household', h.id)}
           </div>{' '}
@@ -136,7 +124,6 @@ export function households() {
         { label: t('Select', 'اختيار'), cls: 'shrink' },
         { label: t('Family', 'العائلة'), sort: true },
         { label: t('Town', 'البلدة'), cls: 'hide-sm' },
-        { label: t('Offering envelope', 'مظروف العطاء'), cls: 'shrink' },
         { label: t('Members', 'الأفراد'), cls: 'num' },
         { label: '', cls: 'shrink' }
       ]}
@@ -146,7 +133,6 @@ export function households() {
           selectBox(h),
           <b>{t(h.name, h.ar)}</b>,
           <span className="dim">{t(h.town, h.townAr)}</span>,
-          <span className="mono">{h.envelope || '—'}</span>,
           <span className="num">{h.members.length}</span>,
           <span className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
             {open(h)}
@@ -159,8 +145,8 @@ export function households() {
           glyph="family"
           title={t('No households yet', 'لا عائلات بعد')}
           body={t(
-            'Add the first one — a household is linked by home and envelope number.',
-            'أضف الأولى — العائلة مرتبطة بالمنزل ورقم المظروف.'
+            'Add the first one: the people who live at one home.',
+            'أضف الأولى: الأشخاص الذين يسكنون في منزل واحد.'
           )}
           action={
             <button className="btn btn-primary btn-dense" data-act="household-new">
@@ -195,7 +181,7 @@ export function households() {
       />{' '}
       <div className="toolbar" style={{ marginBottom: '16px' }}>
         <div className="grow" style={{ maxWidth: '320px' }}>
-          <SearchField ph={t('Family name or envelope', 'اسم العائلة أو المظروف')} data-find="" />
+          <SearchField ph={t('Family name', 'اسم العائلة')} data-find="" />
         </div>{' '}
         <button className="btn btn-secondary btn-dense" data-household-export="selected" disabled={!selected.size}>
           {t('Export selected households', 'تصدير العائلات المحدّدة')}{' '}
@@ -222,15 +208,15 @@ export function households() {
       )}{' '}
       <p className="help" style={{ marginTop: '18px' }}>
         {t(
-          'New households reuse existing people. Review suggested surname matches, select several members, and enter one shared address. No people or households are merged automatically. An offering-envelope identifier is optional.',
-          'تستخدم العائلات الجديدة أشخاصاً مسجّلين. راجع اقتراحات اسم العائلة، واختر عدة أفراد، وأدخل عنواناً مشتركاً واحداً. لا تُدمج السجلات تلقائياً. رمز مظروف العطاء اختياري.'
+          'New households reuse existing people. Review suggested surname matches, select several members, and enter one shared address. No people or households are merged automatically.',
+          'تستخدم العائلات الجديدة أشخاصاً مسجّلين. راجع اقتراحات اسم العائلة، واختر عدة أفراد، وأدخل عنواناً مشتركاً واحداً. لا تُدمج السجلات تلقائياً.'
         )}
       </p>{' '}
       <div className="find-empty" hidden>
         <Empty
           glyph="search"
           title={t('No household matches', 'لا عائلة مطابقة')}
-          body={t('Try part of the family name or the envelope number.', 'جرّب جزءاً من اسم العائلة أو رقم المظروف.')}
+          body={t('Try part of the family name.', 'جرّب جزءاً من اسم العائلة.')}
         />
       </div>
     </>
@@ -370,8 +356,6 @@ export function householdView(id = '') {
             <dl className="dl">
               <dt>{t('Head', 'ربّ العائلة')}</dt>
               <dd>{h.head ? <a href={`#/person/${h.head}`}>{label(person(h.head))}</a> : '—'}</dd>
-              <dt>{t('Giving envelope number', 'رقم مظروف العطاء')}</dt>
-              <dd>{h.envelope || '—'}</dd>
               <dt>{t('Address', 'العنوان')}</dt>
               <dd>{t(h.address, h.addressAr)}</dd>
               <dt>{t('Town', 'البلدة')}</dt>
