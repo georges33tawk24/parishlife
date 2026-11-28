@@ -1,6 +1,6 @@
 // Purpose: Declares the IPeopleRepository boundary used by backend services without exposing provider
 // implementation details.
-// Main functions: CreateAsync, GetAsync, ListAsync, UpdateAsync, SetArchiveAsync.
+// Main functions: CreateAsync (the person with the consents recorded at registration), GetAsync, ListAsync, UpdateAsync, SetArchiveAsync.
 
 using ParishLife.Api.Models;
 
@@ -8,7 +8,7 @@ namespace ParishLife.Api.Interfaces.Repositories.People;
 
 public interface IPeopleRepository
 {
-    Task<Person> CreateAsync(Person person, Operation operation, CancellationToken ct);
+    Task<Person> CreateAsync(Person person, IReadOnlyList<PersonConsent> consents, Operation operation, CancellationToken ct);
     Task<Versioned<Person>?> GetAsync(string parishId, string personId, CancellationToken ct);
     Task<Page<Person>> ListAsync(string parishId, int pageSize, string? continuation, CancellationToken ct);
     Task<Person> UpdateAsync(Person person, string version, Operation operation, CancellationToken ct);

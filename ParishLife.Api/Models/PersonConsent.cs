@@ -21,7 +21,8 @@ public class PersonConsent
     // Directory consent names the exact fields it discloses.
     public string[] Fields { get; set; } = Array.Empty<string>();
 
-    // Digital (given by the signed-in person) or PaperReceived (recorded by the office from a paper form).
+    // Digital (given by the signed-in person), PaperReceived (recorded by the office from a paper form) or RegistrationDefault
+    // (granted by default when the office registered the person, recorded with the person in one transaction).
     public string Source { get; set; } = string.Empty;
 
     public string GivenBy { get; set; } = string.Empty;
