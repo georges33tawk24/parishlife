@@ -8,6 +8,7 @@ import { t, isAr, num, usd, month, dayShort, matches } from '../../lib/i18n.js';
 import { RATE, FEASTS, PEOPLE, PHOTOS, PREFS, person, initials } from '../model/data.js';
 import { listFiles, uploadFile, fileURL } from '../model/modules/requests.js';
 import { Avatar, toast, openPopover, closeMenu } from './ui.jsx';
+import { session, actingHeaders } from '../model/api.js';
 import { useVersion } from '../shell/version.js';
 import { safeRichText } from '../../lib/rich-text.js';
 export { AddressCascade } from './geography.jsx';
@@ -28,6 +29,29 @@ export const SplitBtn = ({ label, id, kind = 'primary', ico = 'plus' }) => (
 
 /* With `k`, the group is a real filter: a press stores its index in S.ui[k] and re-renders (the
    view verb); without it, the pressed button simply shows as chosen. */
+/* A case file. A plain link cannot carry a priest's appointment (X-ParishLife-Appointment), so where the church is worked
+   under an appointment alone the file is fetched with it and saved instead of opened in a new tab. */
+export function FileLink({ owner, file, children }) {
+  const href = fileURL(owner, file.id);
+  const save = async e => {
+    const parish = session.parishes.find(p => p.id === session.parishId);
+    if (!parish?.appointmentId || parish.grant) return;
+    e.preventDefault();
+    const get = headers => fetch(href, { credentials: 'same-origin', cache: 'no-store', headers });
+    let response = await get(actingHeaders(href));
+    if (response.status === 403 || response.status === 404) response = await get({});
+    if (!response.ok) return toast(t('The file could not be opened.', 'تعذّر فتح الملف.'), '', 'danger');
+    const url = URL.createObjectURL(await response.blob());
+    Object.assign(document.createElement('a'), { href: url, download: file.fileName || 'file' }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+  return (
+    <a className="btn btn-secondary btn-dense" href={href} target="_blank" rel="noopener" onClick={save}>
+      {children}
+    </a>
+  );
+}
+
 export function BGroup({ items, sel = 0, k = '' }) {
   const [chosen, setChosen] = useState(sel);
   const on = k ? sel : chosen;
@@ -779,9 +803,9 @@ export function Dropzone({ id = 'dz', scope = '', ownerId = '', readOnly = false
                     {(f.size / 1048576).toFixed(1)} MB · {String(f.uploadedAt).slice(0, 10)}
                   </small>
                 </span>
-                <a className="btn btn-secondary btn-dense" href={fileURL(ownerId, f.id)} target="_blank" rel="noopener">
+                <FileLink owner={ownerId} file={f}>
                   {t('Open', 'فتح')}
-                </a>
+                </FileLink>
               </div>
             ))
           ) : (

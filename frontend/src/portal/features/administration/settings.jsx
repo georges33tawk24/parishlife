@@ -116,6 +116,9 @@ const NotConnected = () => (
   </Panel>
 );
 
+/* The modules follow the parish's billing coverage, which needs billing.read (a priest's appointment does not carry it). */
+const billing = () => !!session.parishes.find(p => p.id === session.parishId)?.capabilities?.includes('billing.read');
+
 export function settings(tab = '') {
   return (
     <>
@@ -128,14 +131,14 @@ export function settings(tab = '') {
         base="settings"
         items={[
           ['', 'Parish', 'الرعية'],
-          ['modules', 'Modules', 'الوحدات'],
+          ...(billing() ? [['modules', 'Modules', 'الوحدات']] : []),
           ['other', 'Other settings', 'إعدادات أخرى']
         ]}
         active={tab}
       />
       {!session.parishId ? (
         <C.InlineAlert tone="info" title={L('Choose a parish', 'اختر رعية')} body="" />
-      ) : tab === 'modules' ? (
+      ) : tab === 'modules' && billing() ? (
         <Modules />
       ) : tab === 'other' ? (
         <NotConnected />

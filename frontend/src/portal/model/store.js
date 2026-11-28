@@ -209,6 +209,17 @@ export const MOBILE_NAV = {
   leader: ['dashboard', 'groups', 'calendar', 'messaging']
 };
 
+/* Pages whose API needs a permission a priest's appointment does not carry (StaffAppointmentRules.PriestDuties): shown
+   only when the account holds one of these in the open parish, through a grant or a super admin's reach. */
+const NEEDS = {
+  giving: ['finance.read'],
+  finance: ['finance.read'],
+  officeexpenses: ['finance.read'],
+  messaging: ['communications.manage'],
+  notices: ['communications.manage'],
+  audit: ['audit.read'],
+  settings: ['billing.read', 'publishing.manage', 'settings.manage']
+};
 export const role = () => {
   const base = ROLES[S.role] || { en: 'Administrator', ar: 'مدير', who: null, nav: [] };
   let nav = [...base.nav];
@@ -251,6 +262,11 @@ export const role = () => {
   if ((session.user?.roles || []).includes('treasurer') && !nav.some(item => item[0] === 'l' && item[1] === 'settings'))
     nav.push(L('settings'));
   nav.push(L('account'));
+  if (['priest', 'parish_admin', 'diocesan_admin', 'super_admin'].includes(S.role)) {
+    const held = session.parishes.find(p => p.id === session.parishId)?.capabilities || [];
+    nav = nav.filter(n => n[0] !== 'l' || !NEEDS[n[1]] || NEEDS[n[1]].some(c => held.includes(c)));
+    nav = nav.filter((n, i) => n[0] !== 'h' || nav[i + 1]?.[0] === 'l'); // no heading left over an emptied section
+  }
   // Without a parish only the screens that need none remain; the bishop's oversight spans every parish of the archdiocese.
   if (!session.parishId)
     nav = nav.filter(

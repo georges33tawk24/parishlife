@@ -11,7 +11,7 @@
    again after signing in or out, and once more when the API answers csrf_invalid. */
 import { t } from '../../lib/i18n.js';
 
-export const session = { user: null, parishes: [], parishId: null, accountUser: null };
+export const session = { user: null, parishes: [], parishId: null, accountUser: null, archAppointments: {} };
 
 /* What a person sees when a request fails: what happened and what to do next, in their language, never
    an internal detail. An unexpected server failure carries the API's trace id as a reference to quote. */
@@ -145,28 +145,35 @@ async function attempt(path, method, body, headers) {
   }
 }
 
-/* A priest works in his parish through his appointment, and the API wants that capacity named on each request
-   (X-ParishLife-Appointment); without it the request is read as the grant path and answers 404. An account that also
-   holds an office grant there, or is a super admin, asks once more without the header when the appointment does not cover the action. */
+/* A priest works in his parish through his appointment, and an archdiocese administrator in the archdiocese through
+   theirs; the API wants that capacity named on each request (X-ParishLife-Appointment), and without it reads the
+   request as the grant path (404). Any refusal (403/404) is asked once more without it: the account may also hold a
+   grant there or be a super admin, and personal routes refuse a selected appointment. The inbox and the account's own
+   lists ("…/mine") are personal, so they never carry it. */
 const APPOINTMENT = 'X-ParishLife-Appointment';
-const actingIn = path => {
-  const id = /^parishes\/([^/?]+)/.exec(path)?.[1];
-  return id ? session.parishes.find(p => p.id === decodeURIComponent(id)) : null;
+const PERSONAL = /\/inbox(\/|\?|$)|\/mine(\/|\?|$)/;
+const appointmentFor = path => {
+  const [, scope, raw] = /^(parishes|archdioceses)\/([^/?]+)/.exec(path) || [];
+  if (!scope || PERSONAL.test(path)) return null;
+  const id = decodeURIComponent(raw);
+  return scope === 'parishes'
+    ? session.parishes.find(p => p.id === id)?.appointmentId || null
+    : session.archAppointments?.[id] || null;
 };
 
 /* The same header for the few requests sent with fetch() directly (files, exports, images): '/api/parishes/…' or 'parishes/…'. */
 export const actingHeaders = path => {
-  const id = actingIn(String(path).replace(/^\/?api\//, ''))?.appointmentId;
+  const id = appointmentFor(String(path).replace(/^\/?api\//, ''));
   return id ? { [APPOINTMENT]: id } : {};
 };
 
 export async function api(path, method = 'GET', body, headers) {
-  const parish = actingIn(path);
-  if (!parish?.appointmentId || headers?.[APPOINTMENT] !== undefined) return attempt(path, method, body, headers);
+  const id = appointmentFor(path);
+  if (!id || headers?.[APPOINTMENT] !== undefined) return attempt(path, method, body, headers);
   try {
-    return await attempt(path, method, body, { ...headers, [APPOINTMENT]: parish.appointmentId });
+    return await attempt(path, method, body, { ...headers, [APPOINTMENT]: id });
   } catch (error) {
-    if (!parish.grant || ![403, 404].includes(error.status)) throw error;
+    if (![403, 404].includes(error.status)) throw error;
     return attempt(path, method, body, headers);
   }
 }
@@ -223,7 +230,7 @@ export async function signOut() {
     csrf = '';
     unanswered.clear();
     lastCapacities = { at: 0, list: null }; // never another account's
-    Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
+    Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null, archAppointments: {} });
     forgetAccountStorage();
   }
 }
@@ -259,7 +266,7 @@ export async function closeAccount({ currentPassword, currentCode, confirmation 
     confirmation
   });
   csrf = '';
-  Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
+  Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null, archAppointments: {} });
   forgetAccountStorage();
   return result;
 }
@@ -308,7 +315,10 @@ export async function loadSession() {
     ])
   );
   const across = new Set();
+  session.archAppointments = {};
   for (const c of capacities || []) {
+    if (c.kind === 'ArchdioceseAdmin' && c.appointmentId && c.archdioceseId)
+      session.archAppointments[c.archdioceseId] = c.appointmentId;
     if (c.kind === 'PlatformOperator') across.add('super_admin');
     if (c.kind === 'ArchdioceseAdmin') across.add('diocesan_admin');
     if (c.kind === 'Bishop') across.add('bishop');
@@ -344,7 +354,8 @@ export async function loadSession() {
   session.parishes = [...parishes.values()].map(p => ({
     ...p,
     effectiveRole: PARISH_ROLES.find(r => p.roles.includes(r)) || 'member',
-    canViewFinance: p.roles.includes('priest') || p.capabilities.includes('finance.read'),
+    // money is not a priest's duty (StaffAppointmentRules.PriestDuties): it needs finance.read from a grant or a super admin's reach
+    canViewFinance: p.capabilities.includes('finance.read'),
     personId: null
   }));
   session.parishes.sort((a, b) => Number(!!b.primary) - Number(!!a.primary) || Number(b.own) - Number(a.own));

@@ -110,14 +110,15 @@ const kindOf = action =>
 
 export async function load(parish, d) {
   const id = parish.id;
+  const holds = c => !!parish.capabilities?.includes(c); // asked only with the permission, so nothing is refused for nothing
   const [detail, defs, runs, statusChanges, trail] = await Promise.all([
-    getParish(id).catch(() => null),
+    holds('billing.read') ? getParish(id).catch(() => null) : null,
     orEmpty(listWorkflows(id)),
     orEmpty(listRuns(id).catch(error => (error.status === 403 ? runWorklist(id) : Promise.reject(error)))),
     /* operating-status history is the bishop's; a parish with no archdiocese has none (409) */
     orEmpty(parishStatusHistory(id).catch(error => (error.status === 409 ? [] : Promise.reject(error)))),
     /* the general trail needs audit.read; a refusal (403, or 404 for no grant) leaves it null */
-    parishAudit(id).catch(() => null)
+    holds('audit.read') ? parishAudit(id).catch(() => null) : null
   ]);
   /* the parish profile: only what the API holds (name, locality, contact, the archdiocese it declared) */
   if (detail?.value) {

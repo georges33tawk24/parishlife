@@ -42,9 +42,9 @@ export const SECTIONS = [
 ];
 export const LANGUAGES = ['en', 'fr', 'ar'];
 
-/* Priests hold every office permission; other accounts need the capability. The API decides in the end. */
-export const can = (parish, capability) =>
-  !!parish?.roles?.includes('priest') || !!parish?.capabilities?.includes(capability);
+/* The capability as the session holds it in this parish (a priest's appointment carries its duties, which do not include
+   communications.manage). The API decides in the end. */
+export const can = (parish, capability) => !!parish?.capabilities?.includes(capability);
 
 /* "Not allowed here" and "not there" leave a collection empty. */
 const soft = promise => promise.catch(e => (e.status === 403 || e.status === 404 ? null : Promise.reject(e)));

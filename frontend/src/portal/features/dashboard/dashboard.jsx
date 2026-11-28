@@ -292,15 +292,17 @@ function priest() {
           d={awaitingSig().length ? kinds(awaitingSig()) : t('nothing to sign', 'لا شيء للتوقيع')}
         />{' '}
         <Stat k={t('Reservations to decide', 'حجوزات بانتظار القرار')} v={pendingRes().length} d={clashNote()} />{' '}
-        <Stat
-          k={t('Sunday collection', 'تقدمة الأحد')}
-          v={usd(BATCH.lines.reduce((a, l) => a + (l.usd || 0), 0))}
-          d={
-            BATCH.status === 'closed'
-              ? t('session closed', 'الجلسة مقفلة')
-              : t('session still open', 'الجلسة ما زالت مفتوحة')
-          }
-        />
+        {session.user?.canViewFinance ? (
+          <Stat
+            k={t('Sunday collection', 'تقدمة الأحد')}
+            v={usd(BATCH.lines.reduce((a, l) => a + (l.usd || 0), 0))}
+            d={
+              BATCH.status === 'closed'
+                ? t('session closed', 'الجلسة مقفلة')
+                : t('session still open', 'الجلسة ما زالت مفتوحة')
+            }
+          />
+        ) : null}
       </div>{' '}
       {/* what is waiting for the priest leads; what is simply happening keeps it company */}
       <div className="dash-cols">

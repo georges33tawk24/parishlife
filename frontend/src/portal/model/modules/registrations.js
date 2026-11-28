@@ -95,8 +95,9 @@ const can = parish => {
   return {
     manage: has('registrations.manage'),
     door: has('registrations.checkin'),
-    enter: has('finance.enter'),
-    finance: has('finance.read'),
+    // money is not a priest duty: it needs the grant's own finance permission
+    enter: !!parish.capabilities?.includes('finance.enter'),
+    finance: !!parish.capabilities?.includes('finance.read'),
     incidents: has('incidents.manage')
   };
 };

@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { PREP_REQUIREMENTS } from '../../model/data.js';
 import { is } from '../../model/store.js';
-import { Select } from '../../ui/components.jsx';
+import { Select, FileLink } from '../../ui/components.jsx';
 import { Pill, toast } from '../../ui/ui.jsx';
 import { notConnected } from '../../model/api.js';
 import {
@@ -21,7 +21,6 @@ import {
   listFiles,
   uploadFile as sendFile,
   removeFile,
-  fileURL,
   setChecklist,
   TERMINAL
 } from '../../model/modules/requests.js';
@@ -236,9 +235,9 @@ function Files({ id, files, canRemove, canChange, run, checklist }) {
             </small>
           </span>
           {f.status !== 'Removed' ? (
-            <a className="btn btn-secondary btn-dense" href={fileURL(id, f.id)} target="_blank" rel="noopener">
+            <FileLink owner={id} file={f}>
               {L('Open / download', 'فتح / تنزيل')}
-            </a>
+            </FileLink>
           ) : null}
           {canChange && f.status === 'Active' ? (
             <button

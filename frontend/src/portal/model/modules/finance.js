@@ -38,8 +38,8 @@ export const routes = ['giving', 'finance', 'officeexpenses'];
 
 const base = parish => `parishes/${encodeURIComponent(parish.id)}`;
 const fin = (parish, path) => `${base(parish)}/finance/${path}`;
-const canRead = parish =>
-  !!parish && (parish.roles?.includes('priest') || parish.capabilities?.includes('finance.read'));
+// money is not a priest's duty: a priest reads it only through a grant
+const canRead = parish => !!parish?.capabilities?.includes('finance.read');
 const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
 const encode = encodeURIComponent;
 

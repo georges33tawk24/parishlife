@@ -5,7 +5,8 @@
 import assert from 'node:assert/strict';
 
 const sent = [],
-  events = [];
+  events = [],
+  heard = []; // [method, path, X-ParishLife-Appointment or null] of every request
 let csrfCalls = 0,
   rejectNextWrite = false,
   dropNextWrite = false,
@@ -34,6 +35,10 @@ globalThis.fetch = async (url, options = {}) => {
     path = url.replace(/^\/api\//, ''),
     body = options.body ? JSON.parse(options.body) : undefined;
   if (path === 'auth/csrf') return json(200, { token: `t${++csrfCalls}`, header: 'X-CSRF-TOKEN' });
+  const appointment = options.headers?.['X-ParishLife-Appointment'] ?? null;
+  heard.push([method, path, appointment]);
+  // a route the appointment does not cover: refused with it, answered by the grant path without it
+  if (path === 'parishes/P/clergy-signature-image') return appointment ? json(403) : json(200, { id: 'img' });
   if (method !== 'GET') {
     assert.equal(options.headers['X-CSRF-TOKEN'], `t${csrfCalls}`, 'every write carries the current token');
     if (dropNextWrite) {
@@ -75,13 +80,13 @@ globalThis.fetch = async (url, options = {}) => {
     return json(200, [{ parishId: 'P', name: 'Saint Test', relationship: 'Member', primary: true }]);
   if (path === 'me/capacities')
     return json(200, [
-      { kind: 'Priest', parishId: 'P', scopeName: 'Saint Test', capabilities: [] },
+      { kind: 'Priest', appointmentId: 'AP', parishId: 'P', scopeName: 'Saint Test', capabilities: [] },
       { kind: 'ParishGrant', parishId: 'Q', scopeName: 'Saint Q', capabilities: ['finance.read', 'finance.enter'] },
       { kind: 'Bishop', archdioceseId: 'A', scopeName: 'Archeparchy', capabilities: [] },
       ...(operatorCapacities
         ? [
             { kind: 'PlatformOperator', scopeName: 'Platform', capabilities: [] },
-            ...['Q', 'R'].map(id => ({
+            ...['P', 'Q', 'R'].map(id => ({ // every verified parish, as the API lists them
               kind: 'PlatformOperator',
               parishId: id,
               scopeName: 'Saint ' + id,
@@ -162,7 +167,7 @@ await loadSession();
 assert.deepEqual(
   session.parishes.map(p => [p.id, p.effectiveRole, p.canViewFinance]),
   [
-    ['P', 'priest', true],
+    ['P', 'priest', false], // an appointment carries no finance duty
     ['Q', 'treasurer', true]
   ]
 );
@@ -171,6 +176,46 @@ selectParish('Q');
 assert.equal(session.user.role, 'treasurer');
 assert.equal(session.accountUser.role, 'bishop');
 selectParish('P');
+
+// a priest's appointment is named on parish requests (an archdiocese administrator's on archdiocese requests); a refusal
+// is asked again without it; the inbox and "…/mine" lists are personal and never carry it
+session.archAppointments = { A: 'AA' }; // as loadSession keeps an ArchdioceseAdmin capacity's appointment
+heard.length = 0;
+await api('parishes/P/people/duplicates').catch(() => {});
+await api('me/parishes');
+await api('parishes/P/inbox').catch(() => {});
+await api('parishes/P/requests/mine').catch(() => {});
+await api('archdioceses/A/staff-appointments').catch(() => {});
+assert.deepEqual(await api('parishes/P/clergy-signature-image'), { id: 'img' });
+assert.deepEqual(
+  heard.map(h => h.join(' ')),
+  [
+    'GET parishes/P/people/duplicates AP', // answered: no second try
+    'GET me/parishes ',
+    'GET parishes/P/inbox ',
+    'GET parishes/P/requests/mine ',
+    'GET archdioceses/A/staff-appointments AA',
+    'GET archdioceses/A/staff-appointments ',
+    'GET parishes/P/clergy-signature-image AP',
+    'GET parishes/P/clergy-signature-image '
+  ]
+);
+session.archAppointments = {};
+
+// the menu offers an appointment-only priest no page the appointment cannot open (money, notices, audit, settings)
+{
+  const { S, role } = await import('../src/portal/model/store.js');
+  S.role = 'priest';
+  const pages = () => role().nav.map(n => (n[0] === 'l' ? n[1] : '#' + n[1]));
+  const gated = ['giving', 'finance', 'officeexpenses', 'messaging', 'notices', 'audit', 'settings'];
+  for (const id of gated) assert.ok(!pages().includes(id), id + ' is hidden from an appointment-only priest');
+  assert.ok(['people', 'sacraments', 'requests', 'calendar'].every(id => pages().includes(id)));
+  const P = session.parishes.find(p => p.id === 'P'),
+    duties = P.capabilities;
+  P.capabilities = ['finance.read', 'communications.manage', 'audit.read', 'billing.read'];
+  for (const id of gated) assert.ok(pages().includes(id), id + ' is offered with the grant');
+  P.capabilities = duties;
+}
 
 // loading: both pages, archived people apart, and no demo record left anywhere
 await hydrate();

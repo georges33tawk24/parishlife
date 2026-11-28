@@ -53,7 +53,7 @@ export const byCurrency = (rows, amount = r => r.amount) => {
 /* What this account may do in the selected parish. The API checks each action again. */
 export function can(capability) {
   const parish = session.parishes.find(p => p.id === session.parishId);
-  return !!parish && (parish.roles?.includes('priest') || parish.capabilities?.includes(capability));
+  return !!parish?.capabilities?.includes(capability); // a priest's appointment carries no finance duty
 }
 
 const STATES = {
