@@ -65,10 +65,21 @@ async function arabic(page, state) {
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 }
 
-/* An enhanced dropdown: its button opens the list, then the option is chosen by its text. */
+/* An enhanced dropdown: its button opens the list, then the option is chosen by its text. A background refresh can redraw the
+   page and close the list just as it opens (seen once in the full run), so it is opened again, as a person would click again. */
 async function choose(page, id, text) {
-  await page.locator(`#${id}-dd`).click();
-  await page.getByRole('option', { name: text, exact: true }).click();
+  const option = page.getByRole('option', { name: text, exact: true });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.locator(`#${id}-dd`).click();
+    if (
+      await option.waitFor({ state: 'visible', timeout: 4000 }).then(
+        () => true,
+        () => false
+      )
+    )
+      break;
+  }
+  await option.click();
 }
 
 test('households: wide drawer, digit-free name, server member search, contact before Create, member roles', async ({
