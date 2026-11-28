@@ -1615,3 +1615,14 @@ body:has(.drawer.open) .toasts{inset-inline-end:auto;inset-inline-start:24px}
 .dash-cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:20px;align-items:start}
 .dash-cols > div{display:grid;gap:20px;min-width:0}
 @media(max-width:1100px){.dash-cols{grid-template-columns:minmax(0,1fr)}}
+
+/* Rail sections (rail-nav.jsx): a header button per section, items shown when open; all items in the icon-only rail. */
+.navgroup-toggle{display:flex;align-items:center;justify-content:space-between;inline-size:100%;border:0;background:none;cursor:pointer;color:inherit;text-align:start}
+.navgroup-toggle svg{transition:transform .15s ease}
+.navsection:not(.open) .navgroup-toggle svg{transform:rotate(-90deg)}
+[dir="rtl"] .navsection:not(.open) .navgroup-toggle svg{transform:rotate(90deg)}
+.navsection:not(.open) .navsection-items{display:none}
+.app.collapsed .navsection .navsection-items{display:block}
+.navgroup-all{display:block;margin-inline-start:auto;margin-block:8px 0;padding:2px 10px;border:0;background:none;color:var(--text-2);font:500 11px/16px var(--sans);cursor:pointer}
+.navgroup-all:disabled{opacity:.4;cursor:default}
+.app.collapsed .navgroup-all{display:none}

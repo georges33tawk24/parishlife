@@ -35,6 +35,7 @@ import { startLive, stopLive, live, subscribe as liveSubscribe, snapshot as live
 import { Auth, externalMessage } from './Auth.jsx';
 import { takeExternalStatus } from '../model/account.js';
 import { ROUTES, allowed, MEMBER_ROUTES } from './routes.jsx';
+import { RailNav } from './rail-nav.jsx';
 
 /* An invitation link opened before signing in is kept for this tab, so a Google or Microsoft sign-up round trip does not lose it. */
 if (location.hash.startsWith('#invite='))
@@ -1110,36 +1111,7 @@ export function Portal() {
               <Icon name="chevD" size={16} />
             </span>
           </button>
-          <nav className="rail-nav" aria-label={t('Modules', 'الوحدات')}>
-            {r.nav.map((n, i) => {
-              if (n[0] === 'h')
-                return (
-                  <div key={i} className="navgroup">
-                    {t(n[1], n[2])}
-                  </div>
-                );
-              const rt = ROUTES[n[1]];
-              if (!rt) return null;
-              const on = S.route === n[1],
-                badge = rt.badge?.();
-              return (
-                <a
-                  key={i}
-                  className={'navitem ' + (on ? 'on' : '')}
-                  href={'#/' + n[1]}
-                  aria-current={on ? 'page' : undefined}
-                  data-tip={t(rt.en, rt.ar)}
-                  onClick={() => setRailOpen(false)}
-                >
-                  <Icon name={rt.ico} size={18} />
-                  <span className="nl">{t(rt.en, rt.ar)}</span>
-                  <span className="nb" hidden={!badge}>
-                    {String(badge || '')}
-                  </span>
-                </a>
-              );
-            })}
-          </nav>
+          <RailNav nav={r.nav} onPick={() => setRailOpen(false)} />
           <div className="rail-foot">
             {saveFailed ? (
               <div className="syncline offline">
