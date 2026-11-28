@@ -46,7 +46,11 @@ public class SecurityHardeningHttpTests
         var response = await client.GetAsync("/api/auth/csrf");
         Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
         Assert.Equal("same-origin", response.Headers.GetValues("Cross-Origin-Opener-Policy").Single());
-        Assert.Contains("camera=()", response.Headers.GetValues("Permissions-Policy").Single(), StringComparison.Ordinal);
+        // The microphone and camera are this origin's only (inbox voice notes and calls); payment and USB stay off.
+        var policy = response.Headers.GetValues("Permissions-Policy").Single();
+        Assert.Contains("camera=(self)", policy, StringComparison.Ordinal);
+        Assert.Contains("microphone=(self)", policy, StringComparison.Ordinal);
+        Assert.Contains("payment=()", policy, StringComparison.Ordinal);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.False(response.Headers.Contains("Server"));
         // No CORS: another site's origin gets no allow header, so cookies never go cross-origin with a readable answer.
