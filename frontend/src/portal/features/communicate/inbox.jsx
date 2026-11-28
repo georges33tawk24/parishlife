@@ -6,8 +6,8 @@
    Main members: InboxPage, Conversation, Broadcast, Compose, Report, VoiceNote, Ticks, useVoice.
 
    Like a chat app (owner, 28 November 2026): one chat per person. The API adds a new message to the chat the same
-   people already have; conversations from before that rule are shown together in the list and in one thread (by
-   parish, kind and the other person), and a reply goes to the newest. One's own messages carry ticks: one when
+   people already have; conversations from before that rule, and a parishioner's office conversation beside a direct one,
+   are shown together in the list and in one thread (by parish and the other person), and a reply goes to the newest. One's own messages carry ticks: one when
    stored, two when the other side's inbox showed it, two in colour when they opened it. A microphone records a voice
    note (stored privately with the conversation). A chat with one person has voice and video call buttons
    (features/communicate/calls.jsx). Office staff may write to one parishioner of the open parish from New message
@@ -218,7 +218,6 @@ function Compose({ done, onBack, initialTo = 'office' }) {
               id="compose-person"
               label={L('To', 'إلى')}
               req
-              minChars={1}
               search={search}
               help={L(
                 `A parishioner of ${open?.name || 'this parish'} with a ParishLife account linked to their record.`,
@@ -870,11 +869,12 @@ export function InboxPage({ params = [] }) {
       ? { name, key }
       : { name: parishName(c.parishId) || L('Parish office', 'مكتب الرعية'), key: c.parishId };
   };
-  /* one chat per person: the conversations with the same person (or the same office), newest first */
+  /* one chat per person: every conversation with the same person (or the same parish office), newest first; for
+     staff that joins a parishioner's office conversation and the direct one into the parishioner's single chat */
   const chats = [],
     byKey = new Map();
   for (const c of rows) {
-    const key = `${c.parishId}|${c.kind}|${withWhom(c).key}`;
+    const key = `${c.parishId}|${withWhom(c).key}`;
     let chat = byKey.get(key);
     if (!chat) {
       chat = { ...c, key, ids: [], unread: false, archived: true };

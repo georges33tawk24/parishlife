@@ -11,7 +11,7 @@ import { useEffect, useReducer, useSyncExternalStore } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { toast, Avatar } from '../../ui/ui.jsx';
 import { Icon } from '../../ui/icons.jsx';
-import { onCall } from '../../model/live.js';
+import { onCall, pollNow } from '../../model/live.js';
 import { callSettings, placeCall, answerCall, endCall } from '../../model/modules/communications.js';
 import { loadNames, nameOf } from '../../model/names.js';
 
@@ -121,6 +121,7 @@ export async function startCall({ parishId, conversationId, name, peer, video })
     const placed = await placeCall(parishId, conversationId, video, pc.localDescription.sdp);
     if (!placed.ringing) {
       cleanup();
+      pollNow(true); // the missed call is in the chat now
       return toast(
         L(`${name} does not have ParishLife open`, `${name} لا يفتح ParishLife الآن`),
         L('A missed call was left in your chat.', 'تُركت مكالمة فائتة في محادثتكما.'),
@@ -141,7 +142,10 @@ export function hangUp(reason) {
   const { id, state } = call;
   const why = reason || (state === 'ringing' ? 'Cancelled' : state === 'incoming' ? 'Declined' : 'Ended');
   cleanup();
-  if (id) endCall(id, why).catch(() => {});
+  if (id)
+    endCall(id, why)
+      .then(() => (why === 'Cancelled' || why === 'NoAnswer' ? pollNow(true) : null))
+      .catch(() => {});
 }
 
 async function accept() {
