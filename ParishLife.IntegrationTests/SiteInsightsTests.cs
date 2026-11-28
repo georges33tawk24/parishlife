@@ -74,6 +74,11 @@ public class SiteInsightsTests
         Assert.Equal(1, insights.ParishesByStatus.Single(c => c.Status == nameof(ParishStatus.PendingVerification)).Count);
         Assert.Equal((1, 1), (insights.ParishesWithJurisdiction, insights.ParishesWithoutJurisdiction));
         Assert.NotEmpty(insights.Notes);
+        // Account figures are counts only: the fixture's two super admins, nominee and other, by day of creation.
+        Assert.True(insights.Accounts.Total >= 4);
+        Assert.Equal(insights.Accounts.Total, insights.Accounts.Active + insights.Accounts.Suspended + insights.Accounts.Pending);
+        Assert.Equal(2, insights.Accounts.CreatedByDay.Length);
+        Assert.True(insights.Accounts.WithAuthenticator >= 2);
         var json = System.Text.Json.JsonSerializer.Serialize(insights);
         Assert.DoesNotContain("Isolated parish", json);
         Assert.DoesNotContain(f.Nominee, json);

@@ -203,3 +203,14 @@ html[data-mode=dark] .ins{
 .ins-tablewrap{overflow-x:auto}
 .ins-table{min-width:1080px}
 .ins-sort{white-space:nowrap}
+
+/* The accounts panel and the church follow-up list (27 November 2026): six account figures wrap to three, then two,
+   columns; the list's search, stage and due filters share one row; a due follow-up date stands out. */
+.stats.ins-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (min-width:1360px){.stats.ins-stats{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:600px){.stats.ins-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ins-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-block:12px}
+.ins-toolbar .input[type=search]{flex:1 1 220px;max-width:340px}
+.ins-toolbar .select{flex:0 1 220px;width:auto}
+.ins-sub{display:block;font-size:12px}
+.ins-due{color:var(--danger-ink);font-weight:600}
