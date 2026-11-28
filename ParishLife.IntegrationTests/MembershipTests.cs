@@ -249,9 +249,15 @@ public class MembershipTests
         f.As(wrong);
         Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, issued.Id, issued.Token, default)).Status);
         x.Office();
+        Assert.Contains(await invitations.AccountLinksAsync(x.Parish, default), l => l.PersonId == person && l.AccountId == wrong);
         Assert.Equal("Unlinked", (await invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Accepted by the wrong account" }, default)).Status);
         Assert.Equal("invalid_invitation_state", (await Assert.ThrowsAsync<DomainException>(() =>
             invitations.UnlinkAccountAsync(x.Parish, person, new UnlinkPersonAccountDto { OperationId = Guid.NewGuid(), Reason = "Again" }, default))).Code);
+        Assert.DoesNotContain(await invitations.AccountLinksAsync(x.Parish, default), l => l.PersonId == person);
+        // Only the office reads the links.
+        f.As(wrong);
+        await Assert.ThrowsAsync<DomainException>(() => invitations.AccountLinksAsync(x.Parish, default));
+        x.Office();
         var again = await invitations.CreateAsync(x.Parish, person, new CreatePersonInvitationDto { OperationId = Guid.NewGuid() }, default);
         f.As(await f.CreateVerifiedMemberAsync());
         Assert.Equal("Used", (await invitations.AcceptAsync(x.Parish, again.Id, again.Token, default)).Status);

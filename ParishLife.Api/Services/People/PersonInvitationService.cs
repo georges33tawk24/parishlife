@@ -4,7 +4,7 @@
 // decision, 23 November 2026). Passwords are always chosen by the person; a role never includes grant administration or clergy authority.
 // The account that issued an invitation can never accept it (24 November 2026: an issuer's own signed-in browser accepted a link meant for
 // someone else), and the office can undo a wrong link with UnlinkAccountAsync, which also removes the office access that invitation gave.
-// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, UnlinkAccountAsync, ListAsync and office-only NotificationOutcomeAsync.
+// Main functions: CreateAsync, PreviewAsync, AcceptAsync, RevokeAsync, UnlinkAccountAsync, AccountLinksAsync (which people are linked, for the office), ListAsync and office-only NotificationOutcomeAsync.
 // Invitation-conflict notices are staged with the source result and dispatched separately, without tokens or person details.
 
 using System.Security.Cryptography;
@@ -180,6 +180,19 @@ public class PersonInvitationService(IRecordTransactions records, IParishAccess 
         if (conflict)
             await notifications.DispatchAsync(parish, item.CreatedBy, "person-invitation:" + id, ct);
         return Project(item);
+    }
+
+    // The office (people.read, office module, authenticator) sees which person records are linked to an account and its display name.
+    public async Task<IReadOnlyList<PersonAccountLinkDto>> AccountLinksAsync(string parish, CancellationToken ct)
+    {
+        await proof.RequireMfaAsync(ct);
+        await access.RequireAsync(parish, Permissions.PeopleRead, ct);
+        await access.RequireModuleAsync(parish, "office", ct);
+        var links = new List<PersonAccountLinkDto>();
+        foreach (var row in await records.CollectAsync<PersonAccountLink>(RecordScopes.Parish(parish), "personAccountLink", ct, 5000))
+            if (row.Value is { Active: true } link && link.ParishId == parish)
+                links.Add(new PersonAccountLinkDto { PersonId = link.PersonId, AccountId = link.AccountId, DisplayName = (await users.FindByIdAsync(link.AccountId))?.DisplayName ?? string.Empty });
+        return links;
     }
 
     public async Task<CommandResult> UnlinkAccountAsync(string parish, string person, UnlinkPersonAccountDto request, CancellationToken ct)

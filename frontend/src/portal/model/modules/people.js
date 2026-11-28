@@ -24,7 +24,7 @@
 import { allPages, api, parishAPI, newOperationId } from '../api.js';
 import { state, forParish, detail, saveFacts, directoryFields, ROLE_OUT } from './people-workflows.js';
 
-export const keys = ['PEOPLE', 'ARCHIVED', 'PERSON_EXTRA', 'HOUSEHOLDS', 'DUPLICATES'];
+export const keys = ['PEOPLE', 'ARCHIVED', 'PERSON_EXTRA', 'HOUSEHOLDS', 'DUPLICATES', 'ACCOUNTS'];
 export const routes = ['people', 'person', 'households', 'household', 'membershipreviews', 'profilereviews'];
 
 const enc = encodeURIComponent;
@@ -218,12 +218,17 @@ export async function load(parish, d) {
   if (!canRead(parish)) return;
   forParish(parish.id);
   // the five reads are independent, so they go out together; only the joining below needs them all
-  const [, rows, households, duplicates] = await Promise.all([
+  const [, rows, households, duplicates, links] = await Promise.all([
     loadParishWide(parish),
     allPages(`parishes/${enc(parish.id)}/people?pageSize=100`).catch(e => (e.status === 403 ? [] : Promise.reject(e))),
     soft(cursorPages(`parishes/${enc(parish.id)}/households`), []),
-    soft(parishAPI('people/duplicates'), [])
+    soft(parishAPI('people/duplicates'), []),
+    // which records are linked to a sign-in account (office only): drives Invite, Unlink and the Online account panel
+    api(`parishes/${enc(parish.id)}/people/account-links`).catch(() => [])
   ]);
+  d.ACCOUNTS = Object.fromEntries(
+    (links || []).map(l => [l.personId, { id: l.accountId, name: l.displayName, inactive: false }])
+  );
   const people = rows.map(p => [p, toPerson(p, state.facts.get(p.id)?.value)]);
   d.PEOPLE = people.filter(([p]) => !p.archived).map(([, x]) => x);
   d.ARCHIVED = people.filter(([p]) => p.archived).map(([, x]) => ({ ...x, archived: '' }));

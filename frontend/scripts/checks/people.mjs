@@ -120,6 +120,8 @@ const { sent, events } = mockApi(async (method, path, body, options) => {
   if (method === 'GET') reads.push(path);
   // people
   let x;
+  if (path === 'parishes/P/people/account-links')
+    return json(200, [{ personId: B, accountId: 'acc-b', displayName: 'Linked B' }]);
   if (path === 'parishes/P/people/duplicates')
     return json(200, [
       {
@@ -426,6 +428,8 @@ assert.deepEqual(
   [A, B, D1],
   'both pages; archived people apart'
 );
+assert.equal(D.ACCOUNTS[B]?.id, 'acc-b', 'a linked record is known, so Unlink shows for it');
+assert.equal(D.ACCOUNTS[A], undefined, 'an unlinked record offers Invite');
 assert.deepEqual(
   D.ARCHIVED.map(p => p.id),
   [C]

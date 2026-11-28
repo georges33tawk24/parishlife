@@ -7,7 +7,7 @@ import { openDrawer, openModal, toast } from '../../ui/ui.jsx';
 import { bus } from '../../model/store.js';
 import { DrawerForm } from '../../ui/forms.jsx';
 import { t } from '../../../lib/i18n.js';
-import { api, session, newOperationId } from '../../model/api.js';
+import { api, loadSession, session, newOperationId } from '../../model/api.js';
 import { PermissionPicker } from '../administration/permission-picker.jsx';
 
 export const ROLE_PRESETS = {
@@ -127,7 +127,11 @@ export function unlinkAccount(p) {
             { operationId: newOperationId(), reason: v.reason }
           )
         }
-        done={() => bus.refresh()}
+        // The record is no longer linked; the account's own name returns at the top right without signing out.
+        done={async () => {
+          await loadSession().catch(() => {});
+          bus.refresh();
+        }}
       >
         <p className="help">
           {t(
