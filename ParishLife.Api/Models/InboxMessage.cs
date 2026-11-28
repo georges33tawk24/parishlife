@@ -1,5 +1,5 @@
 // Purpose: represents one sent inbox message; sent messages are never edited or deleted.
-// Main members: Id, ConversationId, AuthorAccountId, Capacity, Body, At and this message's tracked notice pointers.
+// Main members: Id, ConversationId, AuthorAccountId, Capacity, Body, At, Voice (a recorded voice note, or null) and this message's tracked notice pointers.
 
 namespace ParishLife.Api.Models;
 
@@ -19,4 +19,7 @@ public class InboxMessage
     public string Body { get; set; } = string.Empty;
 
     public DateTimeOffset At { get; set; }
+
+    // A voice note's private stored audio; Body then holds a plain placeholder for lists, search and reports.
+    public InboxVoice? Voice { get; set; } = null;
 }

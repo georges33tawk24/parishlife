@@ -1,5 +1,6 @@
 // Purpose: exposes the caller's in-app notifications and preferences, and parish inbox conversations, over HTTP.
-// Main functions: Notifications, SetNotificationState, Preferences, SavePreferences, Start, Conversations, Messages, Post, Archive and source-specific notice outcomes.
+// Main functions: Notifications, SetNotificationState, Preferences, SavePreferences, Start, Conversations, Messages, Post, PostVoice, Voice, Archive
+// and source-specific notice outcomes.
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -51,6 +52,23 @@ public class InboxController(NotificationService notifications, InboxService inb
     [HttpPost("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/messages")]
     public async Task<ActionResult<InboxMessageDto>> Post(Guid parishId, Guid conversationId, PostInboxMessageDto request, CancellationToken ct)
         => Ok(await inbox.PostAsync(Guard.Id(parishId), Guard.Id(conversationId), request, ct));
+
+    [HttpPost("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/voice"), RequestSizeLimit(InboxService.MaximumVoiceBytes + 64 * 1024)]
+    public async Task<ActionResult<InboxMessageDto>> PostVoice(Guid parishId, Guid conversationId, [FromForm] Guid operationId, [FromForm] int seconds, IFormFile file, CancellationToken ct)
+    {
+        if (file.Length > InboxService.MaximumVoiceBytes)
+            throw new DomainException("invalid_file", "A voice message must be between 1 byte and 5 MB.");
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer, ct);
+        return Ok(await inbox.PostVoiceAsync(Guard.Id(parishId), Guard.Id(conversationId), operationId, buffer.ToArray(), seconds, ct));
+    }
+
+    [HttpGet("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/messages/{messageId:guid}/voice")]
+    public async Task<IActionResult> Voice(Guid parishId, Guid conversationId, Guid messageId, CancellationToken ct)
+    {
+        var (content, type) = await inbox.VoiceAsync(Guard.Id(parishId), Guard.Id(conversationId), Guard.Id(messageId), ct);
+        return File(content, type, enableRangeProcessing: true);
+    }
 
     [HttpPost("api/parishes/{parishId:guid}/inbox/{conversationId:guid}/archive")]
     public async Task<ActionResult<ConversationDto>> Archive(Guid parishId, Guid conversationId, CancellationToken ct, bool archived = true)

@@ -133,6 +133,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationProcessor>();
         services.AddScoped<NotificationOutcomeReader>();
         services.AddScoped<InboxService>();
+        services.AddSingleton<LiveHub>();
+        services.AddScoped<CallService>();
         services.AddScoped<MessageReviewService>();
         services.AddScoped<BroadcastService>();
         services.AddScoped<BroadcastAudience>();

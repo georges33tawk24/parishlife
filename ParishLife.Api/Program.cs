@@ -122,8 +122,9 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"] = "same-origin";
     context.Response.Headers.XFrameOptions = "DENY";
     context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
-    // Geolocation stays for the public "near me" search; passkeys use the same-origin default.
-    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)";
+    // Geolocation stays for the public "near me" search; the microphone and camera for inbox voice notes and calls, on this origin only;
+    // passkeys use the same-origin default.
+    context.Response.Headers["Permissions-Policy"] = "camera=(self), microphone=(self), payment=(), usb=(), geolocation=(self)";
     if (context.Request.Path.StartsWithSegments("/api"))
         context.Response.Headers.CacheControl = "no-store";
     // Not for search results: the API, and a guest's request-tracking link (its token is private).

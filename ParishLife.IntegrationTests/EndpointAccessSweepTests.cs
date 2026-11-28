@@ -32,6 +32,8 @@ public class EndpointAccessSweepTests
         "GET api/auth/mfa/status", "GET api/auth/passkeys", "GET api/auth/profile", "GET api/auth/sessions", "GET api/auth/staff-appointments",
         "GET api/capabilities", "GET api/me/capacities", "GET api/me/home", "GET api/me/notification-topics", "GET api/me/parishes",
         "GET api/me/personal-workspace", "GET api/me/request-claims", "GET api/notifications", "GET api/notifications/preferences",
+        // The caller's own live channel (events for this account only) and the call STUN/TURN settings (configuration, nothing personal).
+        "GET api/me/live", "GET api/calls/settings",
         "PUT api/notifications/preferences",
         // Reviewed 24 November 2026 (merge of the notification channels): each acts only on the caller's account scope, takes no id from the request.
         "GET api/notifications/channels", "POST api/notifications/test", "POST api/notifications/whatsapp/remove",
@@ -91,7 +93,8 @@ public class EndpointAccessSweepTests
                 request.Content = new StringContent(type.Contains("json") ? "{}" : string.Empty);
                 request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(type.StartsWith("multipart/") ? type + "; boundary=sweep" : type);
             }
-            var response = await stranger.SendAsync(request);
+            // Headers only: the live channel (api/me/live) streams until the client goes away.
+            using var response = await stranger.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             var status = (int)response.StatusCode;
             statuses[status] = statuses.GetValueOrDefault(status) + 1;
             if (status < 300)

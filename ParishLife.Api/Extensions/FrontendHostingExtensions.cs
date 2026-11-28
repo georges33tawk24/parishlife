@@ -99,6 +99,7 @@ public static partial class FrontendHostingExtensions
             "style-src 'self' 'unsafe-inline'",
             "font-src 'self' data:",
             "img-src 'self' data: blob: https:",
+            "media-src 'self' blob:", // inbox voice notes and call video, fetched then played from memory
             $"connect-src 'self' {turnstile}",
             $"frame-src {turnstile}",
             "worker-src 'self'",
