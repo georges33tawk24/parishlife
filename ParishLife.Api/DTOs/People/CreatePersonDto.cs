@@ -1,5 +1,5 @@
 // Purpose: represents create person input data.
-// Main members: OperationId, GivenName, FamilyName, GivenNameAr, FamilyNameAr, BirthDate (not in the future, at most 110 years ago), Contact, Phones, Rite and RegisterStatus. Names hold letters only.
+// Main members: OperationId, GivenName, FamilyName, GivenNameAr, FamilyNameAr, BirthDate (not in the future, at most 110 years ago), Contact, Phones, Consents, Rite and RegisterStatus. Names hold letters only.
 
 using System.ComponentModel.DataAnnotations;
 using ParishLife.Api.Validation;
@@ -41,6 +41,11 @@ public class CreatePersonDto
     // Every number replaces the stored list; an empty list removes them all.
     [MaxLength(5)]
     public PersonPhoneDto[] Phones { get; set; } = Array.Empty<PersonPhoneDto>();
+
+    // Consents recorded at registration (Directory, Photo, Communications, Event), in the same transaction as the person: the office form
+    // grants all by default and the user unticks any (owner decision, 27 November 2026); each can be withdrawn later on the Consent tab.
+    [MaxLength(4)]
+    public string[] Consents { get; set; } = Array.Empty<string>();
 
     [StringLength(100)]
     public string? Rite { get; set; } = null;

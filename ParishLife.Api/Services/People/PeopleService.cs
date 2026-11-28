@@ -1,6 +1,7 @@
 // Purpose: Applies access/entitlement checks to person creation, paging, office edits of the core record and archive/restore commands.
-// Main functions: Authorize, CreateAsync, GetAsync, ListAsync, UpdateAsync, SetArchiveAsync; names, birth date and phone numbers are
-// checked by PersonRules, and helpers normalize the rite and register status without translating or inventing values.
+// Main functions: Authorize, CreateAsync (with the consents ticked at registration, in the same transaction), GetAsync, ListAsync,
+// UpdateAsync, SetArchiveAsync; names, birth date and phone numbers are checked by PersonRules, and helpers normalize the rite and
+// register status without translating or inventing values.
 
 using ParishLife.Api.DTOs.People;
 using ParishLife.Api.Interfaces.Repositories.People;
@@ -25,6 +26,20 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
     // Not in the future and not more than 110 years ago (owner, 27 November 2026).
     private void RequirePastBirthDate(DateOnly? birthDate) => PersonRules.RequireBirthDate(birthDate, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
 
+    private static readonly string[] RegistrationConsents = ["Directory", "Photo", "Communications", "Event"];
+
+    // The printed directory shows the name, phone, household and town (the registration form says so).
+    private static readonly string[] RegistrationDirectoryFields = ["Name", "Phone", "Address", "Household"];
+
+    // Recorded as granted by default at registration, never as a digital or paper acceptance by the person.
+    private static PersonConsent RegistrationConsent(Person person, string kind, string by) => new()
+    {
+        Id = Guid.NewGuid().ToString("N"), ParishId = person.ParishId, PersonId = person.Id, Kind = kind,
+        Purpose = kind switch { "Directory" => "Printed parish directory", "Photo" => "Photos in parish media", "Communications" => "Parish announcements", _ => "Parish events" },
+        PolicyVersion = "registration-default", Fields = kind == "Directory" ? RegistrationDirectoryFields : [], Source = "RegistrationDefault",
+        GivenBy = "Parish default at registration", RecordedBy = by, GivenAt = person.CreatedAt
+    };
+
     private static string? Status(string? value) => string.IsNullOrWhiteSpace(value) ? null : value is "Member" or "Visitor"
         ? value : throw new DomainException("invalid_input", "Register status is Member, Visitor or not recorded.");
 
@@ -32,6 +47,9 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
     {
         await Authorize(parishId, Permissions.PeopleWrite, ct);
         RequirePastBirthDate(request.BirthDate);
+        var kinds = (request.Consents ?? []).Distinct(StringComparer.Ordinal).ToArray();
+        if (kinds.Any(k => !RegistrationConsents.Contains(k)))
+            throw new DomainException("invalid_input", "Registration consents are Directory, Photo, Communications or Event.");
         var op = actor.CreateOperation(request.OperationId, request, clock);
         var person = new Person
         {
@@ -49,7 +67,7 @@ public sealed class PeopleService(IPeopleRepository people, IParishAccess access
             CreatedBy = actor.AccountId,
             CreatedAt = op.At
         };
-        return await people.CreateAsync(person, op, ct);
+        return await people.CreateAsync(person, [.. kinds.Select(k => RegistrationConsent(person, k, actor.AccountId))], op, ct);
     }
 
     public async Task<Versioned<Person>> GetAsync(string parishId, string personId, CancellationToken ct)

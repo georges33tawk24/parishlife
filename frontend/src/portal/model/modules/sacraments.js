@@ -412,7 +412,8 @@ const done = async result => {
   return result;
 };
 
-/* A new sacrament case (the family's request). Facts are the case's own details, by short keys. */
+/* A new sacrament case (the family's request). Facts are the case's own details, by short keys. A marriage
+   is one case for the couple: the second spouse goes in facts.partner (and partnerPersonId when in People). */
 export async function createSacrament({ kind, person, requestedDate, facts = {} }) {
   return done(
     await parishAPI('sacraments', 'POST', {

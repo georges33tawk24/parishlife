@@ -393,7 +393,8 @@ public sealed class ScenarioStore(TimeProvider clock) : IParishRepository, IBill
         }
     }
 
-    public Task<Person> CreateAsync(Person person, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + person.ParishId, op, () =>
+    // ponytail: the fake keeps no consents; the real repository commits them with the person.
+    public Task<Person> CreateAsync(Person person, IReadOnlyList<PersonConsent> consents, Operation op, CancellationToken ct) => Task.FromResult(Mutate("tenant:" + person.ParishId, op, () =>
     {
         var key = K(person.ParishId, person.Id);
         if (people.ContainsKey(key))

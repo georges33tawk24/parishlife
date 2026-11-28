@@ -1,10 +1,11 @@
 // Purpose: privacy-preserving public-site metrics and the Super Admin Insights page. Visitors' beacons add to anonymous daily counters for an
 // allowlisted kind, language and optional verified parish: no IP, visitor key, device, referrer, search text or location is stored. Insights are
-// read only by current MFA platform operators and contain aggregate site counts and parish setup coverage; they never include clergy, person,
+// read only by current MFA platform operators and contain aggregate site counts, parish setup coverage and account counts (no names or emails); they never include clergy, person,
 // case or finance records, and grant no access to any of them.
 // Main functions: RecordAsync (anonymous) and InsightsAsync (operator).
 
 using ParishLife.Api.DTOs.Reporting;
+using ParishLife.Api.Interfaces.Repositories.Administration;
 using ParishLife.Api.Interfaces.Repositories.Organizations;
 using ParishLife.Api.Interfaces.Repositories.Reporting;
 using ParishLife.Api.Interfaces.Services.Common;
@@ -15,7 +16,7 @@ using ParishLife.Api.Services.Accounts;
 namespace ParishLife.Api.Services.Reporting;
 
 public class SiteInsightsService(ISiteMetricStore metrics, IParishRepository parishes, IParishDirectory directory, IPlatformAccess platform,
-    MfaAccountAccess proof, TimeProvider clock)
+    MfaAccountAccess proof, TimeProvider clock, IPlatformDirectory platformDirectory)
 {
     // Kinds that need a parish carry one; the homepage kind must not.
     internal static readonly IReadOnlyDictionary<string, bool> Kinds = new Dictionary<string, bool>(StringComparer.Ordinal)
@@ -31,7 +32,8 @@ public class SiteInsightsService(ISiteMetricStore metrics, IParishRepository par
         "Site counts come from untrusted anonymous beacons: they are approximate lower bounds (an increment that keeps conflicting is dropped), not audited facts, and bots or blocked scripts are not distinguished.",
         "No IP address, visitor identifier, device, referrer, search text or location is stored with a count.",
         "No retention period is approved for these aggregates; nothing is purged automatically.",
-        "Parish counts describe platform setup only; they are not rankings or health scores and include no clergy, person, case or finance records."
+        "Parish counts describe platform setup only; they are not rankings or health scores and include no clergy, person, case or finance records.",
+        "Account counts exclude closed accounts; Pending means registration (the email code) is not finished."
     ];
 
     public async Task<bool> RecordAsync(RecordSiteMetricDto request, CancellationToken ct)
@@ -66,8 +68,23 @@ public class SiteInsightsService(ISiteMetricStore metrics, IParishRepository par
                 .Select(g => new SiteMetricCountDto { Day = day, Kind = g.Key.Kind, Language = g.Key.Language, ParishId = g.Key.ParishId, Count = g.Sum(m => m.Count) })
                 .OrderBy(c => c.Kind, StringComparer.Ordinal).ThenBy(c => c.Language, StringComparer.Ordinal).ThenBy(c => c.ParishId, StringComparer.Ordinal));
         var all = await directory.AllAsync(ct);
+        var accounts = (await platformDirectory.AccountsAsync(ct)).Select(r => r.Value).Where(a => !string.IsNullOrEmpty(a.Id) && a.ClosedAt is null).ToArray();
+        var created = accounts.Select(a => DateOnly.FromDateTime(a.CreatedAt.UtcDateTime)).Where(d => d >= from && d <= to)
+            .GroupBy(d => d).ToDictionary(g => g.Key, g => g.Count());
         return new PlatformInsightsDto
         {
+            Archdioceses = (await platformDirectory.ArchdiocesesAsync(ct)).Count,
+            Accounts = new AccountTotalsDto
+            {
+                Total = accounts.Length,
+                Active = accounts.Count(a => !a.Suspended && a.Active),
+                Suspended = accounts.Count(a => a.Suspended),
+                Pending = accounts.Count(a => !a.Suspended && !a.Active),
+                WithAuthenticator = accounts.Count(a => a.TwoFactorEnabled),
+                WithGoogleOrMicrosoft = accounts.Count(a => a.ExternalLogins.Count > 0),
+                CreatedByDay = [.. Enumerable.Range(0, to.DayNumber - from.DayNumber + 1).Select(i => from.AddDays(i))
+                    .Select(d => new DayCountDto { Day = d, Count = created.GetValueOrDefault(d) })]
+            },
             From = from, To = to, GeneratedAt = clock.GetUtcNow(), SiteMetrics = [.. counts], Notes = Notes,
             ParishesByStatus = [.. Enum.GetValues<ParishStatus>().Select(s => new ParishStatusCountDto { Status = s.ToString(), Count = all.Count(p => p.Status == s) })],
             ParishesWithJurisdiction = all.Count(p => p.JurisdictionArchdioceseId is not null),

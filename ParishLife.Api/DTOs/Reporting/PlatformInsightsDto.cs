@@ -1,5 +1,5 @@
 // Purpose: Super Admin insights: anonymous public-site counts for an explicit day range and platform parish setup coverage, with notes on what the numbers do and do not mean.
-// Main members: From, To, GeneratedAt, SiteMetrics, ParishesByStatus, ParishesWithJurisdiction, ParishesWithoutJurisdiction, Notes.
+// Main members: From, To, GeneratedAt, SiteMetrics, ParishesByStatus, ParishesWithJurisdiction, ParishesWithoutJurisdiction, Archdioceses, Accounts, Notes.
 
 namespace ParishLife.Api.DTOs.Reporting;
 
@@ -18,6 +18,10 @@ public class PlatformInsightsDto
     public int ParishesWithJurisdiction { get; set; }
 
     public int ParishesWithoutJurisdiction { get; set; }
+
+    public int Archdioceses { get; set; }
+
+    public AccountTotalsDto Accounts { get; set; } = new();
 
     public string[] Notes { get; set; } = Array.Empty<string>();
 }

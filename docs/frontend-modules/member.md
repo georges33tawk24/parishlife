@@ -25,7 +25,7 @@ All under `/api/`. `{p}` is `parishes/{parishId}`.
 | Membership | `GET {p}/membership-requests/mine`, `POST {p}/membership-requests`, `POST {p}/membership-requests/{id}/withdraw` |
 | My record and corrections (myprofile) | `GET {p}/me/data`, `GET {p}/profile-corrections/mine`, `POST {p}/profile-corrections`, `POST {p}/profile-corrections/{id}/withdraw` |
 | My ministries | `GET public/parishes/{id}/ministries`, then `GET {p}/ministries/{id}/membership/mine` for each |
-| Meetings, RSVP, attendance | `GET {p}/ministries/{id}/meetings?start&end` (31-day windows: the last 31 days and the next 62), `GET .../meetings/{id}/rsvp`, `PUT .../meetings/{id}/rsvp`, `GET .../meetings/{id}/attendance/mine` |
+| Meetings, RSVP, attendance | `GET {p}/ministries/{id}/meetings?start&end` (one request per ministry: the last 31 days and the next 62), `GET .../meetings/{id}/rsvp`, `PUT .../meetings/{id}/rsvp`, `GET .../meetings/{id}/attendance/mine` |
 | Private RSVP reason | `GET .../meetings/{id}/rsvp-private-reason` (upcoming meetings with a recorded reply), `PUT .../meetings/{id}/rsvp-private-reason` (set, replace or `clear`) |
 | My resources (myresources) | `GET {p}/me/ministry-resources` (new, member area) |
 | Notification preferences (myprofile card) | `GET me/notification-topics` (new, member area), `GET notifications/preferences`, `PUT notifications/preferences` |

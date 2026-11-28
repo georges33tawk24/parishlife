@@ -407,26 +407,18 @@ export async function load(parish, d, ready = {}) {
   d.VOLUNTEERS = [...volunteers.values()].map(({ ministries, ...v }) => v);
 }
 
-/* A ministry's meetings in the last six and next three months, 30 days per request (the API's limit), asked for together. */
+/* A ministry's meetings in the last six and next three months, in one request (the API lists up to 366 days since
+   27 November 2026; it was nine 30-day requests per ministry on every load). */
 async function loadMeetings(root, ministryId) {
   const now = Date.now(),
-    day30 = 30 * 86400000,
     out = new Map();
-  const windows = [];
-  for (let at = now - WINDOW_BACK_DAYS * 86400000; at < now + WINDOW_FORWARD_DAYS * 86400000; at += day30)
-    windows.push([at, at + day30]);
-  const lists = await pool(
-    windows,
-    ([from, to]) =>
-      quiet(
-        pages(
-          `${root}/ministries/${enc(ministryId)}/meetings?start=${enc(new Date(from).toISOString())}&end=${enc(new Date(to).toISOString())}`
-        ),
-        []
-      ),
-    windows.length // all windows together: they are independent
+  const from = new Date(now - WINDOW_BACK_DAYS * 86400000).toISOString(),
+    to = new Date(now + WINDOW_FORWARD_DAYS * 86400000).toISOString();
+  const list = await quiet(
+    pages(`${root}/ministries/${enc(ministryId)}/meetings?start=${enc(from)}&end=${enc(to)}`),
+    []
   );
-  for (const m of lists.flat()) out.set(m.id, m);
+  for (const m of list) out.set(m.id, m);
   const meetings = [...out.values()].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   return Promise.all(
     meetings.map(async m => {

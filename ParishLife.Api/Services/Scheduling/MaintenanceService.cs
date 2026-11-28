@@ -159,7 +159,7 @@ public class MaintenanceService(IRecordTransactions records, IParishAccess acces
     public async Task<Page<Versioned<MaintenanceBlockDto>>> ListAsync(string parish, DateTimeOffset start, DateTimeOffset end, int size, string? cursor, CancellationToken ct)
     {
         await Authorize(parish, Permissions.ScheduleRead, ct);
-        ScheduleRules.ValidatePeriod(start, end);
+        ScheduleRules.ValidateListWindow(start, end);
         var page = await records.PageAsync<MaintenanceBlock>(SchedulingScope.For(parish), "maintenanceBlock", size, cursor, ct,
             new RecordCondition { Path = "startsAt", Comparison = "lt", Value = end }, new RecordCondition { Path = "endsAt", Comparison = "gt", Value = start });
         return new() { Items = page.Items.Select(row => new Versioned<MaintenanceBlockDto> { Value = View(row.Value), Version = row.Version }).ToArray(), ContinuationToken = page.ContinuationToken };

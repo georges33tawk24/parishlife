@@ -167,8 +167,8 @@ function eventDetail(e) {
   };
 }
 
-/* The months the calendar has loaded. The API lists at most 31 days at a time, so each month is its own
-   request. Moving the calendar outside this range widens it (wantMonth). */
+/* The months the calendar has loaded, read in one request (the API lists up to 366 days since 27 November 2026;
+   a wider range is split into 366-day pieces). Moving the calendar outside this range widens it (wantMonth). */
 let range = null;
 const monthStart = (y, m) => Date.UTC(y, m, 1);
 const defaultRange = () => {
@@ -195,12 +195,7 @@ export function wantMonth(dateKey, reload) {
 async function loadEvents(parish) {
   range ||= defaultRange();
   const windows = [];
-  for (let at = range.from; at < range.to;) {
-    const d = new Date(at),
-      next = monthStart(d.getUTCFullYear(), d.getUTCMonth() + 1);
-    windows.push([at, Math.min(next, range.to)]);
-    at = next;
-  }
+  for (let at = range.from; at < range.to; at += 366 * DAY) windows.push([at, Math.min(at + 366 * DAY, range.to)]);
   const chunks = await Promise.all(
     windows.map(([from, to]) =>
       pages(

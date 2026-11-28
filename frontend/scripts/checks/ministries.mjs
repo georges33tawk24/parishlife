@@ -161,7 +161,7 @@ const { sent } = mockApi((method, path, body) => {
   if (route === `parishes/P/ministries/${M1}/meetings` && method === 'GET') {
     const from = Date.parse(q.get('start')),
       to = Date.parse(q.get('end'));
-    assert.ok(to - from <= 31 * 86400000, 'a meeting window is at most 31 days');
+    assert.ok(to - from <= 366 * 86400000, 'a meeting list window is at most 366 days');
     return page(
       [
         meeting(MEETING, at(past, 17), 'Confirmed'),

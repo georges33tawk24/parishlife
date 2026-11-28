@@ -1,5 +1,5 @@
 // Purpose: Reads and saves parish-owned people with scoped paging, ETags, and operation history.
-// Main functions: P, GetAsync, CreateAsync, ListAsync, UpdateAsync, SetArchiveAsync, ReplaceAsync, InvalidCursor.
+// Main functions: P, GetAsync, CreateAsync (person and registration consents in one batch), ListAsync, UpdateAsync, SetArchiveAsync, ReplaceAsync, InvalidCursor.
 
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -20,14 +20,17 @@ internal sealed class PeopleRepository(PartitionDocuments documents, IDataProtec
     private readonly IDataProtector protector = protection.CreateProtector("ParishLife.PeopleCursor.v1");
     private sealed record Cursor(string ParishId, int PageSize, string QueryVersion, string? Token);
     public Task<Versioned<Person>?> GetAsync(string parishId, string personId, CancellationToken ct) => documents.ReadAsync<Person>(C, P(parishId), "person:" + personId, ct);
-    public async Task<Person> CreateAsync(Person person, Operation operation, CancellationToken ct)
+    public async Task<Person> CreateAsync(Person person, IReadOnlyList<PersonConsent> consents, Operation operation, CancellationToken ct)
     {
         var key = P(person.ParishId);
         if (await documents.ReplayAsync<Person>(C, key, operation, ct) is { } prior)
             return prior;
         try
         {
-            await documents.CommitAsync(documents.Batch(C, key).CreateItem(Row("person:" + person.Id, key, "person", person)).CreateItem(Receipt(key, operation, person)).CreateItem(Audit(key, operation, "person.create", person.Id)), ct);
+            var batch = documents.Batch(C, key).CreateItem(Row("person:" + person.Id, key, "person", person));
+            foreach (var consent in consents)
+                batch.CreateItem(Row("personConsent:" + consent.Id, key, "personConsent", consent));
+            await documents.CommitAsync(batch.CreateItem(Receipt(key, operation, person)).CreateItem(Audit(key, operation, "person.create", person.Id)), ct);
             return person;
         }
         catch (DomainException ex) when (ex.Code == "write_conflict")

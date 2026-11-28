@@ -1,4 +1,5 @@
-/* Giving: the counting session (numbered envelopes, unattributed cash, the second count, closing),
+/* Giving: the counting session (gifts, unattributed cash, the second count, closing; numbered envelopes are no longer asked for,
+   owner QA 27 November 2026),
    posted contributions, pledges, campaigns, recurring gifts (stored schedules, never charged) and
    numbered receipts. Amounts are shown in the currency they were counted in and never converted. */
 import { Select } from '../../ui/components.jsx';
@@ -107,7 +108,7 @@ export function giving(tab = '') {
             {!tab && open && can('finance.enter') ? (
               <button className="btn btn-secondary" id="addenv">
                 <Icon name="plus" size={17} />
-                {L('Add envelope', 'إضافة مظروف')}
+                {L('Add a gift', 'إضافة عطاء')}
               </button>
             ) : null}{' '}
             {!tab && BATCH.apiStatus === 'Verified' && can('finance.post') ? (
@@ -565,7 +566,6 @@ export function giving(tab = '') {
     );
   const rows = BATCH.lines.map((l, li) => ({
     cells: [
-      l.env ? <span className="mono">{l.env}</span> : <span className="dimmer">—</span>,
       giverName(l),
       <span className="dim">{fundName(l.fund)}</span>,
       <span className="chip">{l.method}</span>,
@@ -599,8 +599,8 @@ export function giving(tab = '') {
                 <dd className="mono tnum">{fmt(value, currency)}</dd>
               </span>
             ))}
-            <dt>{L('Envelopes', 'المظاريف')}</dt>
-            <dd className="tnum">{BATCH.lines.filter(l => l.env).length}</dd>
+            <dt>{L('Gifts', 'العطايا')}</dt>
+            <dd className="tnum">{BATCH.lines.length}</dd>
             <dt>{L('Unattributed', 'غير مسمّى')}</dt>
             <dd className="tnum">{BATCH.lines.filter(l => !l.env && !l.p && !l.anonymous).length}</dd>
           </dl>{' '}
@@ -665,7 +665,6 @@ export function giving(tab = '') {
       </div>{' '}
       <Table
         cols={[
-          { label: L('Envelope', 'المظروف'), cls: 'shrink' },
           { label: L('Giver', 'المتبرّع') },
           { label: L('Fund', 'الصندوق'), cls: 'hide-sm' },
           { label: L('Method', 'الطريقة'), cls: 'hide-sm' },
@@ -678,8 +677,8 @@ export function giving(tab = '') {
             glyph="give"
             title={L('No lines yet', 'لا بنود بعد')}
             body={L(
-              'Add each envelope, and the loose cash, as it is counted.',
-              'أضف كل مظروف، والنقد غير المسمّى، أثناء العدّ.'
+              'Add each gift, and the loose cash, as it is counted.',
+              'أضف كل عطاء، والنقد غير المسمّى، أثناء العدّ.'
             )}
           />
         }
@@ -728,12 +727,11 @@ giving.mount = host => {
   );
   host.querySelector('#addenv')?.addEventListener('click', () =>
     openDrawer({
-      title: L('New envelope or cash line', 'مظروف أو نقد جديد'),
+      title: L('New gift', 'عطاء جديد'),
       sub: BATCH.ref,
       body: (
         <>
           <div className="formgrid">
-            <C.Field label={L('Envelope no. (if numbered)', 'رقم المظروف (إن وُجد)')} ph="0142" dir="ltr" id="envno" />{' '}
             <div className="formrow">
               <label className="label" htmlFor="envfund">
                 {L('Fund', 'الصندوق')}
@@ -827,7 +825,7 @@ giving.mount = host => {
               delete input.dataset.pid;
             }
           }
-          el.querySelector('#envno')?.focus();
+          el.querySelector('#giveamt')?.focus();
         });
       }
     })

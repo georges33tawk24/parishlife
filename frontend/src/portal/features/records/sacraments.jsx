@@ -954,7 +954,10 @@ sacraments.mount = host => {
           </div>{' '}
           <div className="formrow" id="srq-existing">
             <label className="label" htmlFor="srq_person">
-              {L('Person receiving the sacrament', 'الشخص الذي سيقبل السرّ')}
+              <span data-srq-label="one">{L('Person receiving the sacrament', 'الشخص الذي سيقبل السرّ')}</span>
+              <span data-srq-label="couple" hidden>
+                {L('First spouse', 'الزوج الأوّل')}
+              </span>
             </label>
             <Select id="srq_person">
               <option value="">{L('Choose a person', 'اختر شخصاً')}</option>
@@ -964,6 +967,26 @@ sacraments.mount = host => {
                 </option>
               ))}
             </Select>
+          </div>{' '}
+          {/* A marriage is one request for the couple, under the first spouse, naming the second spouse (from
+              People, or by name when they are not listed here). */}
+          <div id="srq-couple" hidden className="stack" style={{ gap: '12px' }}>
+            <PeopleSearch
+              id="srq_spouse"
+              label={L('Second spouse, if listed in People', 'الزوج الثاني إن كان مسجّلاً')}
+              search={searchCandidates}
+            />
+            <C.Field
+              label={L('Or their full name, if not listed in People', 'أو اسمه الكامل إن لم يكن مسجّلاً')}
+              id="srq_spouse_name"
+            />
+            <C.Field label={L('Their parish (optional)', 'رعيّته (اختياري)')} id="srq_spouse_parish" />
+            <p className="help">
+              {L(
+                'A marriage is one request for the couple, recorded under the first spouse.',
+                'الإكليل طلب واحد للزوجين، يُسجَّل باسم الزوج الأوّل.'
+              )}
+            </p>
           </div>{' '}
           {/* First communion and confirmation are usually celebrated for many at once: several candidates,
               one request each, with the details they share. */}
@@ -1040,6 +1063,10 @@ sacraments.mount = host => {
           el.querySelector('#srq-child-fields').hidden = !manual;
           el.querySelector('#srq-existing').hidden = manual || group();
           el.querySelector('#srq-group').hidden = !group();
+          const couple = el.querySelector('#srq_kind').value === 'marriage';
+          el.querySelector('#srq-couple').hidden = !couple;
+          el.querySelector('[data-srq-label="one"]').hidden = couple;
+          el.querySelector('[data-srq-label="couple"]').hidden = !couple;
         };
         el.querySelector('#srq_kind').addEventListener('change', mode);
         el.querySelector('#srq-new-child').addEventListener('change', mode);
@@ -1100,7 +1127,44 @@ sacraments.mount = host => {
           if (group()) return;
           const manual = el.querySelector('#srq-new-child').checked,
             personId = el.querySelector('#srq_person').value;
-          if (!manual && !need(el, '#srq_person', L('Choose who receives the sacrament', 'اختر من سيقبل السرّ'))) return;
+          const couple = el.querySelector('#srq_kind').value === 'marriage';
+          if (
+            !manual &&
+            !need(
+              el,
+              '#srq_person',
+              couple
+                ? L('Choose the first spouse', 'اختر الزوج الأوّل')
+                : L('Choose who receives the sacrament', 'اختر من سيقبل السرّ')
+            )
+          )
+            return;
+          const spouse = couple ? selectedIds(el.querySelector('#srq_spouse')) : [];
+          if (couple) {
+            if (spouse.length > 1) return toast(L('Choose one second spouse', 'اختر زوجاً ثانياً واحداً'), '', 'warning');
+            if (
+              !need(
+                el,
+                '#srq_spouse_name',
+                L(
+                  'Choose the second spouse from People or enter their full name',
+                  'اختر الزوج الثاني من المسجّلين أو أدخل اسمه الكامل'
+                ),
+                v => !!v || spouse.length === 1
+              )
+            )
+              return;
+            if (spouse[0] === personId)
+              return toast(L('Choose two different people', 'اختر شخصين مختلفين'), '', 'warning');
+          }
+          const linked = spouse[0] ? person(spouse[0]) : null;
+          const partner = couple
+            ? {
+                partner: linked ? linked.lat || linked.ar : el.querySelector('#srq_spouse_name').value.trim(),
+                partnerPersonId: linked?.id || '',
+                partnerParish: el.querySelector('#srq_spouse_parish').value.trim()
+              }
+            : {};
           const child = manual
             ? {
                 lat: el.querySelector('#srq-child-lat').value.trim(),
@@ -1138,7 +1202,7 @@ sacraments.mount = host => {
                 kind: el.querySelector('#srq_kind').value,
                 person: personId,
                 requestedDate,
-                facts: { requestNotes }
+                facts: { requestNotes, ...partner }
               });
             closeOverlays();
             location.hash = '#/requests';

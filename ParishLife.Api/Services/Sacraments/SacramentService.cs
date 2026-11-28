@@ -7,7 +7,8 @@
 // First communion and confirmation may also be opened for several people in one idempotent group request with per-person results.
 // Main functions: CreateAsync, CreateBatchAsync, ActAsync, SetPolicyAsync, RequirementSetsAsync, SaveRequirementSetAsync, ProposeCorrectionAsync,
 // DecideCorrectionAsync, GetAsync, SearchAsync, PendingCorrectionsAsync, AnniversariesAsync and MyAnniversariesAsync; helpers check priest
-// authority, numbering, duplicates and requirements, and project current (amended) facts.
+// authority, numbering, duplicates, requirements and a marriage's second spouse, and project current (amended) facts. A marriage is one
+// case naming the second spouse (facts.partner, and facts.partnerPersonId when that spouse is in this parish's People).
 
 using ParishLife.Api.DTOs.Sacraments;
 using ParishLife.Api.Interfaces.Repositories.Common;
@@ -69,10 +70,13 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             throw Missing();
         if (OnceOnly.Contains(request.Sacrament) && (await CasesAsync(parish, person, ct)).Any(r => r.Kind == request.Sacrament && r.Status is not ("Declined" or "Cancelled")))
             throw State("This person already has an active or registered " + request.Sacrament + " case; review it instead of creating a duplicate.");
+        var facts = Facts(request.Facts);
+        if (request.Sacrament == "Marriage")
+            await SpouseAsync(parish, person, facts, request.RequestId is null, ct);
         var item = new SacramentRecord
         {
             Id = op.Id, ParishId = parish, Kind = request.Sacrament, PersonId = person, RequestId = request.RequestId is { } r ? Guard.Id(r) : null,
-            Facts = Facts(request.Facts), TentativeDate = string.IsNullOrWhiteSpace(request.TentativeDate) ? null : Guard.Text(request.TentativeDate, "Tentative date", 200),
+            Facts = facts, TentativeDate = string.IsNullOrWhiteSpace(request.TentativeDate) ? null : Guard.Text(request.TentativeDate, "Tentative date", 200),
             CreatedBy = actor.AccountId, CreatedAt = op.At
         };
         Step(item, "open", "", item.Status, op.At, null);
@@ -602,6 +606,26 @@ public class SacramentService(IRecordTransactions records, IParishAccess access,
             InstructingPriestAccountId = instruction?.InstructingPriestAccountId, InstructionBasis = instruction?.InstructionBasis,
             InstructionGivenAt = instruction?.InstructionGivenAt
         }];
+    }
+
+    // A marriage is one case for a couple: the subject and the second spouse, named in facts.partner, and, when they are in this parish's
+    // People, linked by facts.partnerPersonId (an existing, unarchived person other than the subject). The office opening a case directly
+    // must name the second spouse; a case opened from a family's request keeps what that request carried.
+    private async Task SpouseAsync(string parish, string subject, Dictionary<string, string> facts, bool direct, CancellationToken ct)
+    {
+        if (facts.TryGetValue("partnerPersonId", out var linked) && !string.IsNullOrWhiteSpace(linked))
+        {
+            if (!Guid.TryParseExact(linked.Trim(), "N", out var id) || id == Guid.Empty)
+                throw new DomainException("invalid_input", "The second spouse's person reference is not valid.");
+            var spouse = id.ToString("N");
+            if (spouse == subject)
+                throw new DomainException("invalid_input", "A marriage joins two different people.");
+            if ((await records.ReadAsync<Person>(RecordScopes.Parish(parish), "person:" + spouse, ct))?.Value is not { Archived: false } row || row.ParishId != parish)
+                throw Missing();
+            facts["partnerPersonId"] = spouse;
+        }
+        if (direct && (!facts.TryGetValue("partner", out var name) || string.IsNullOrWhiteSpace(name)))
+            throw new DomainException("invalid_input", "A marriage names both spouses: record the second spouse's name.");
     }
 
     private static Dictionary<string, string> Facts(Dictionary<string, string>? facts)

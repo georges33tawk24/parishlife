@@ -1,10 +1,10 @@
 // Purpose: verifies the owner's People rules of 27 November 2026 through real local services, storage and HTTP: names hold letters only
 // (Latin for the English name, Arabic for the Arabic one), several Lebanese or foreign phone numbers with Lebanese prefixes and lengths
 // checked, birth dates neither in the future nor more than 110 years ago, skills without digits, several languages, a typed sector,
-// and a people export without a stated purpose.
+// consents ticked at registration recorded with the person as registration defaults, and a people export without a stated purpose.
 // Main tests: Names_reject_digits_symbols_and_the_other_script, Phones_follow_lebanese_prefixes_and_foreign_lengths,
 // Birth_date_is_not_in_the_future_or_more_than_110_years_ago, Facts_keep_languages_sector_and_digit_free_skills,
-// Export_needs_no_purpose_and_lists_phones, People_rules_are_enforced_over_http.
+// Registration_consents_are_recorded_with_the_create, Export_needs_no_purpose_and_lists_phones, People_rules_are_enforced_over_http.
 
 using System.Net;
 using System.Net.Http.Json;
@@ -162,6 +162,36 @@ public class PeopleValidationTests
         {
             OperationId = Guid.NewGuid(), Version = stored.Version, Languages = ["english"]
         }, default))).Code);
+    }
+
+    [Fact]
+    public async Task Registration_consents_are_recorded_with_the_create()
+    {
+        await using var f = new LocalBackendFixture();
+        await f.InitializeAsync();
+        var x = await CreateAsync(f);
+        x.Use();
+        var request = Person("Isolated", "Consents");
+        request.Consents = ["Directory", "Photo", "Communications", "Event"];
+        var created = await x.People.CreateAsync(x.Parish, request, default);
+        var consents = await x.Facts.ConsentsAsync(x.Parish, created.Id, default);
+        Assert.Equal(["Communications", "Directory", "Event", "Photo"], consents.Select(c => c.Value.Kind).Order().ToArray());
+        Assert.All(consents, c => Assert.Equal(("RegistrationDefault", "Given", "registration-default", "Parish default at registration"),
+            (c.Value.Source, c.Value.Status, c.Value.PolicyVersion, c.Value.GivenBy)));
+        Assert.Equal(["Name", "Phone", "Address", "Household"], consents.Single(c => c.Value.Kind == "Directory").Value.Fields);
+        // Replaying the same create records nothing twice.
+        await x.People.CreateAsync(x.Parish, request, default);
+        Assert.Equal(4, (await x.Facts.ConsentsAsync(x.Parish, created.Id, default)).Count);
+        // Any of them can be withdrawn afterwards like any other consent.
+        var photo = consents.Single(c => c.Value.Kind == "Photo");
+        Assert.Equal("Withdrawn", (await x.Facts.WithdrawConsentAsync(x.Parish, photo.Value.Id, new WithdrawConsentDto { OperationId = Guid.NewGuid(), Version = photo.Version }, default)).Status);
+
+        // Nothing ticked: no consent is recorded; a kind that is not a registration consent refuses the create.
+        var plain = await x.People.CreateAsync(x.Parish, Person("Isolated", "Plain"), default);
+        Assert.Empty(await x.Facts.ConsentsAsync(x.Parish, plain.Id, default));
+        var bad = Person("Isolated", "Representation");
+        bad.Consents = ["Representation"];
+        Assert.Equal("invalid_input", (await Assert.ThrowsAsync<DomainException>(() => x.People.CreateAsync(x.Parish, bad, default))).Code);
     }
 
     [Fact]

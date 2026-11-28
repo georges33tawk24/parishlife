@@ -13,7 +13,8 @@
      for one person when opened; the portal's town, address cascade, occupation, skills and languages come
      from them.
    - The directory flag comes from the parish's given Directory consents (GET consents?kind=Directory). A new
-     person's consents (all ticked by default) are recorded with POST people/{id}/consents after the create.
+     person's consents (all ticked by default) go with the create (POST people, consents) and are recorded in
+     the same transaction as registration defaults.
    - HOUSEHOLDS: name and Arabic name, address, town and its Arabic twin, phone, envelope number, contact
      person and members with their roles (the list carries members); a person's hh is the household they
      belong to and their rel the role recorded on that membership. A new household is created with its
@@ -305,29 +306,9 @@ function nameParts(text) {
   return { given: w[0] || '', family: w.slice(1).join(' ') };
 }
 
-const DIRECTORY_FIELDS = ['Name', 'Phone', 'Address', 'Household'];
-
-/* The consents a new person gave at registration (all ticked by default, owner 27 November 2026), recorded as
-   office entries with the person as the giver. They need an authenticator session; what could not be recorded
-   is reported. */
-async function recordGrants(id, p, grants, notes) {
-  const missed = [];
-  for (const kind of grants || []) {
-    try {
-      await parishAPI(`people/${enc(id)}/consents`, 'POST', {
-        operationId: newOperationId(),
-        kind,
-        purpose: 'Agreed when registered with the parish office',
-        policyVersion: 'registration-default',
-        fields: kind === 'Directory' ? DIRECTORY_FIELDS : [],
-        givenBy: (p.lat || '').trim() || 'The person'
-      });
-    } catch {
-      missed.push(kind);
-    }
-  }
-  if (missed.length) notes.add(`the consents ${missed.join(', ')} (record them on the Consent tab)`);
-}
+/* The consents a new person gave at registration (all ticked by default, owner 27 November 2026): the API
+   records them with the person, in the same transaction, as registration defaults. */
+const REGISTRATION_CONSENTS = ['Directory', 'Photo', 'Communications', 'Event'];
 
 const PHONE_TEXT = list => (list || []).map(x => `${x.number}|${x.kind || ''}`).join(',');
 
@@ -372,7 +353,11 @@ function coreBody(p, old) {
   };
 }
 
-const createBody = p => ({ operationId: newOperationId(), ...coreBody(p, null) });
+const createBody = (p, x) => ({
+  operationId: newOperationId(),
+  ...coreBody(p, null),
+  consents: (x?.grants || []).filter(k => REGISTRATION_CONSENTS.includes(k))
+});
 
 /* The office edit replaces the whole core record, so it starts from the current version. */
 async function updatePerson(id, p, old) {
@@ -473,14 +458,13 @@ export async function save(before, now, parish) {
   const real = id => created.get(id) || id;
   // People first, so a household can name them.
   for (const p of makes) {
-    const made = await parishAPI('people', 'POST', createBody(p));
-    created.set(p.id, made.id);
     const x = now.PERSON_EXTRA[p.id];
+    const made = await parishAPI('people', 'POST', createBody(p, x));
+    created.set(p.id, made.id);
     const given = Object.fromEntries(
       Object.entries(factsOf(p, x)).filter(([, v]) => (Array.isArray(v) ? v.length : v))
     );
     if (Object.keys(given).length) await saveFacts(made.id, given);
-    await recordGrants(made.id, p, x?.grants, notes);
     dropped(p, x).forEach(n => notes.add(n));
   }
   for (const [id, p, old] of cores) await updatePerson(id, p, old);

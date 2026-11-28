@@ -186,7 +186,7 @@ public class ReservationService(IRecordTransactions records, IParishAccess acces
     public async Task<Page<Versioned<ReservationDto>>> ListAsync(string parish, DateTimeOffset start, DateTimeOffset end, int size, string? cursor, CancellationToken ct)
     {
         await Authorize(parish, false, ct);
-        ScheduleRules.ValidatePeriod(start, end);
+        ScheduleRules.ValidateListWindow(start, end);
         var page = await records.PageAsync<Reservation>(SchedulingScope.For(parish), "reservation", size, cursor, ct,
             new RecordCondition { Path = "startsAt", Comparison = "lt", Value = end }, new RecordCondition { Path = "endsAt", Comparison = "gt", Value = start });
         var items = new List<Versioned<ReservationDto>>();

@@ -702,17 +702,17 @@ assert.deepEqual(
   [body.languages, body.preferredLanguage, body.sector, body.district, body.townAr],
   [['hy', 'fr', 'ar'], 'fr', 'Haret Sakhr', 'Keserwan', 'جونية']
 );
-const granted = sent
-  .filter(([mth, p]) => mth === 'POST' && p === `parishes/P/people/${rita.id}/consents`)
-  .map(x => x[2]);
 assert.deepEqual(
-  granted.map(c => [c.kind, c.givenBy, c.fields]),
-  [
-    ['Communications', 'Rita Abi Nader', []],
-    ['Directory', 'Rita Abi Nader', ['Name', 'Phone', 'Address', 'Household']]
-  ]
+  ritaPost.consents,
+  ['Communications', 'Directory'],
+  'the ticked consents go with the create (recorded in the same transaction)'
 );
-assert.equal(events.length, 0, 'every granted consent was recorded, so nothing is reported');
+assert.equal(
+  sent.filter(([mth, p]) => mth === 'POST' && p === `parishes/P/people/${rita.id}/consents`).length,
+  0,
+  'no separate consent posts after the create'
+);
+assert.equal(events.length, 0, 'nothing is reported');
 
 const b = D.PEOPLE.find(p => p.id === B);
 D.PEOPLE.splice(D.PEOPLE.indexOf(b), 1);

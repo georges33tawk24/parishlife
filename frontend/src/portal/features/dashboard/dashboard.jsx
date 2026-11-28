@@ -513,7 +513,7 @@ function treasurer() {
       <div className="stats">
         <Stat k={t('Counted so far', 'المعدود حتى الآن')} v={usd(total)} d={`L.L ${num(total * RATE.value)}`} />{' '}
         <Stat
-          k={t('Lira envelopes', 'مظاريف بالليرة')}
+          k={t('Gifts in lira', 'عطايا بالليرة')}
           v={`L.L ${num(liraOnly)}`}
           d={t('kept as lira, not converted', 'تبقى ليرة، بلا تحويل')}
         />{' '}
@@ -529,14 +529,14 @@ function treasurer() {
         />
       </div>{' '}
       <div className="grid g2">
-        <Panel title={t('Counting session 214', 'جلسة العدّ ٢١٤')}>
+        <Panel title={`${t('Counting session', 'جلسة العدّ')}${BATCH.ref ? ' · ' + BATCH.ref : ''}`}>
           <div className="row" style={{ gap: '24px', flexWrap: 'wrap' }}>
             <div>
               <Amount dollars={total} showRate={true} cls="amount-lg" />
             </div>{' '}
             <div style={{ marginInlineStart: 'auto', display: 'flex', gap: '8px' }}>
               <button className="btn btn-secondary" data-go="giving">
-                {t('Add envelope', 'إضافة مظروف')}
+                {t('Add a gift', 'إضافة عطاء')}
               </button>{' '}
               <button className="btn btn-primary" data-go="giving">
                 {t('Close session', 'إقفال الجلسة')}

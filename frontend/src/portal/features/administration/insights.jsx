@@ -1,12 +1,13 @@
 /* Insights and the parish CRM, for platform operators. Insights are the API's platform figures
    (GET /api/administration/insights): visits recorded on the public site by day, kind and language,
-   parishes by operating status and by jurisdiction. The CRM is the operator's worklist of parishes
-   they follow (stage, next action, follow-up date, notes and history), from /api/administration/
-   parish-crm/worklist and .../parishes/{id}/crm. Parish names come from GET /api/parishes/{id}.
+   parishes by operating status and by jurisdiction, and sign-in account counts with new accounts by day
+   (counts only, no names or emails). The CRM lists every church (GET /api/administration/parishes) with
+   its follow-up record when it has one (stage, next action, follow-up date, notes and history), from
+   /api/administration/parish-crm/worklist and .../parishes/{id}/crm; a church without one can be started.
    Main members: InsightsPage; Visits, Crm and Follow are also shown on the operator's Administration overview
    (workspace-overview.jsx). */
 import { useRef, useState } from 'react';
-import { t, fmtDate } from '../../../lib/i18n.js';
+import { t, fmtDate, matches } from '../../../lib/i18n.js';
 import { PageHead, TabBar, Stat, Empty, Panel, Pill, openDrawer, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { DrawerForm } from '../../ui/forms.jsx';
@@ -109,6 +110,7 @@ export function Visits() {
               d={`${number(data.parishesWithoutJurisdiction)} ${L('without', 'بلا')}`}
             />
           </div>
+          {data.accounts ? <AccountsPanel accounts={data.accounts} dates={dates} /> : null}
           <Panel title={L('Visits by day', 'الزيارات يومياً')}>
             <Trend
               dates={dates}
@@ -147,6 +149,33 @@ export function Visits() {
         </>
       ) : null}
     </div>
+  );
+}
+
+/* Sign-in accounts: counts only (the API sends no names or emails), and new accounts by day for the period. */
+function AccountsPanel({ accounts: a, dates }) {
+  const byDay = new Map((a.createdByDay || []).map(d => [d.day, d.count]));
+  const fresh = (a.createdByDay || []).reduce((n, d) => n + d.count, 0);
+  return (
+    <Panel title={L('Accounts', 'الحسابات')}>
+      <div className="stats ins-stats">
+        <Stat
+          k={L('Accounts', 'الحسابات')}
+          v={number(a.total)}
+          d={`${number(fresh)} ${L('new in this period', 'جديدة في هذه الفترة')}`}
+        />
+        <Stat k={L('Active', 'فعّالة')} v={number(a.active)} />
+        <Stat k={L('Registration not finished', 'التسجيل غير مكتمل')} v={number(a.pending)} />
+        <Stat k={L('Suspended', 'معلّقة')} v={number(a.suspended)} />
+        <Stat k={L('With an authenticator', 'مع تطبيق مصادقة')} v={number(a.withAuthenticator)} />
+        <Stat k={L('With Google or Microsoft', 'مع Google أو Microsoft')} v={number(a.withGoogleOrMicrosoft)} />
+      </div>
+      <Trend
+        dates={dates}
+        label={L('New accounts by day', 'الحسابات الجديدة يومياً')}
+        series={[{ label: L('New accounts', 'حسابات جديدة'), values: dates.map(d => byDay.get(d) || 0), area: true }]}
+      />
+    </Panel>
   );
 }
 
@@ -257,21 +286,30 @@ function CrmDetail({ id, name, done }) {
   );
 }
 
+/* Every church, with its follow-up record when it has one: stage, next action and follow-up date. A church
+   with no record shows "Not followed yet" and opens the same drawer to start one. */
 export function Crm() {
   const [stage, setStage] = useState(''),
-    [dueOnly, setDueOnly] = useState(false);
+    [dueOnly, setDueOnly] = useState(false),
+    [q, setQ] = useState('');
   const { data, error, loading, reload } = useLoad(async () => {
-    const rows = await A.crmWorklist({ stage, dueOnly: dueOnly ? 'true' : '' });
-    const names = await Promise.all(
-      rows.map(r =>
-        A.getParish(r.value.parishId).then(
-          p => p.value.name,
-          () => ''
-        )
-      )
-    );
-    return rows.map((r, i) => ({ ...r.value, version: r.version, name: names[i] }));
-  }, [stage, dueOnly]);
+    const [churches, rows] = await Promise.all([A.platformParishes(), A.crmWorklist({})]);
+    const crm = new Map(rows.map(r => [r.value.parishId, { ...r.value, version: r.version }]));
+    return churches
+      .map(c => ({ ...(crm.get(c.id) || {}), parishId: c.id, name: c.name, locality: c.locality, status: c.status }))
+      .sort(
+        (a, b) =>
+          Number(!!b.trackingStatus) - Number(!!a.trackingStatus) || String(a.name).localeCompare(String(b.name))
+      );
+  }, []);
+  const today = new Date().toISOString().slice(0, 10);
+  const due = r => r.followUpAt && r.followUpAt.slice(0, 10) <= today;
+  const shown = (data || []).filter(
+    r =>
+      (!stage || (stage === 'none' ? !r.trackingStatus : r.trackingStatus === stage)) &&
+      (!dueOnly || due(r)) &&
+      (!q || matches([r.name, r.locality].filter(Boolean).join(' '), q))
+  );
   const open = row =>
     openDrawer({
       large: true,
@@ -280,9 +318,18 @@ export function Crm() {
     });
   return (
     <>
-      <div className="toolbar" style={{ margin: '12px 0' }}>
+      <div className="toolbar ins-toolbar">
+        <input
+          className="input"
+          type="search"
+          aria-label={L('Search churches', 'ابحث عن كنيسة')}
+          placeholder={L('Search churches', 'ابحث عن كنيسة')}
+          value={q}
+          onChange={e => setQ(e.target.value)}
+        />
         <Select aria-label={L('Stage', 'المرحلة')} value={stage} onChange={e => setStage(e.target.value)}>
           <option value="">{L('Every stage', 'كل المراحل')}</option>
+          <option value="none">{L('Not followed yet', 'غير متابَعة بعد')}</option>
           {Object.keys(STAGES).map(k => (
             <option key={k} value={k}>
               {word(STAGES, k)}
@@ -294,22 +341,17 @@ export function Crm() {
           {L('Follow-up due', 'متابعة مستحقة')}
         </label>
       </div>
-      <p className="help">
-        {L(
-          'The parishes you follow. A parish appears here once it has a CRM record; there is no list of every parish.',
-          'الرعايا التي تتابعها. تظهر الرعية هنا حين يكون لها سجل متابعة؛ لا توجد قائمة بكل الرعايا.'
-        )}
-      </p>
       {error ? <p className="alert alert-danger">{error}</p> : null}
-      {loading && !data ? <ListSkeleton /> : null}
+      {loading && !data ? <ListSkeleton rows={6} /> : null}
       {data ? (
-        data.length ? (
+        shown.length ? (
           <div className="tablewrap">
             <div className="tablescroll">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>{L('Parish', 'الرعية')}</th>
+                    <th>{L('Church', 'الكنيسة')}</th>
+                    <th>{L('Status', 'الحالة')}</th>
                     <th>{L('Stage', 'المرحلة')}</th>
                     <th>{L('Next action', 'الإجراء التالي')}</th>
                     <th>{L('Follow-up', 'المتابعة')}</th>
@@ -317,26 +359,38 @@ export function Crm() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map(r => (
+                  {shown.map(r => (
                     <tr key={r.parishId}>
                       <td>
                         <b>{r.name || r.parishId}</b>
+                        {r.locality ? <small className="dim ins-sub">{r.locality}</small> : null}
                       </td>
+                      <td>{word(STATUS, r.status)}</td>
                       <td>
-                        <Pill
-                          label={word(STAGES, r.trackingStatus)}
-                          tone={r.trackingStatus === 'Attention' ? 'warning' : ''}
-                        />
+                        {r.trackingStatus ? (
+                          <Pill
+                            label={word(STAGES, r.trackingStatus)}
+                            tone={r.trackingStatus === 'Attention' ? 'warning' : ''}
+                          />
+                        ) : (
+                          <span className="dim">{L('Not followed yet', 'غير متابَعة بعد')}</span>
+                        )}
                       </td>
                       <td>{r.nextAction || <span className="dim">—</span>}</td>
-                      <td>{r.followUpAt ? fmtDate(r.followUpAt.slice(0, 10)) : <span className="dim">—</span>}</td>
+                      <td>
+                        {r.followUpAt ? (
+                          <span className={due(r) ? 'ins-due' : ''}>{fmtDate(r.followUpAt.slice(0, 10))}</span>
+                        ) : (
+                          <span className="dim">—</span>
+                        )}
+                      </td>
                       <td>
                         <button
                           className="btn btn-secondary btn-dense"
                           data-crm-open={r.parishId}
                           onClick={() => open(r)}
                         >
-                          {L('Open', 'فتح')}
+                          {r.trackingStatus ? L('Open', 'فتح') : L('Start following', 'ابدأ المتابعة')}
                         </button>
                       </td>
                     </tr>
@@ -346,23 +400,23 @@ export function Crm() {
             </div>
           </div>
         ) : (
-          <Empty glyph="portal" title={L('No parish followed yet', 'لا رعية قيد المتابعة')} />
+          <Empty glyph="portal" title={L('No church matches', 'لا كنيسة مطابقة')} />
         )
       ) : null}
     </>
   );
 }
 
-/* A parish opened by its reference, to start following it. */
+/* Start following a church chosen from the list of every church. */
 export function Follow({ onDone }) {
-  const go = () =>
+  const go = async () => {
+    const churches = await A.platformParishes().catch(() => []);
     openDrawer({
-      title: L('Follow a parish', 'متابعة رعية'),
+      title: L('Follow a church', 'متابعة كنيسة'),
       body: (
         <DrawerForm
           save={async v => {
-            const parish = await A.getParish(v.parishId.trim());
-            await A.saveCrm(parish.value.id, {
+            await A.saveCrm(v.parishId, {
               version: null,
               trackingStatus: 'Onboarding',
               nextAction: null,
@@ -371,20 +425,31 @@ export function Follow({ onDone }) {
             });
           }}
           done={() => {
-            toast(L('Parish added', 'أُضيفت الرعية'), '', 'success');
+            toast(L('Church added', 'أُضيفت الكنيسة'), '', 'success');
             return onDone?.();
           }}
         >
           <label className="formrow">
-            <span className="label">{L('Parish reference', 'مرجع الرعية')}</span>
-            <input className="input" name="parishId" required />
+            <span className="label">{L('Church', 'الكنيسة')}</span>
+            <Select name="parishId" required defaultValue="">
+              <option value="" disabled>
+                {L('Choose a church', 'اختر كنيسة')}
+              </option>
+              {churches.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.locality ? ` · ${c.locality}` : ''}
+                </option>
+              ))}
+            </Select>
           </label>
         </DrawerForm>
       )
     });
+  };
   return (
     <button className="btn btn-secondary" data-crm-follow="" onClick={go}>
-      {L('Follow a parish', 'متابعة رعية')}
+      {L('Follow a church', 'متابعة كنيسة')}
     </button>
   );
 }

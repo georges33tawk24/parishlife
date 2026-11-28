@@ -305,7 +305,7 @@ function Palette({ open, onClose }) {
       : (q ? PEOPLE.filter(p => matches(`${p.lat} ${p.ar} ${p.phone}`, q)) : PEOPLE.slice(0, 3)).slice(0, 5);
   const households =
     q && canSee('households')
-      ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town || ''} ${h.envelope || ''}`, q)).slice(0, 5)
+      ? D.HOUSEHOLDS.filter(h => matches(`${h.name} ${h.ar} ${h.town || ''}`, q)).slice(0, 5)
       : [];
   const records =
     q && canSee('sacraments')
@@ -563,6 +563,44 @@ function Notifications() {
 }
 
 /* ---------------- the shell ---------------- */
+
+/* The switcher's churches; with more than eight (a super admin sees every verified church) a search box narrows them. */
+function ParishChoices({ onPick }) {
+  const [q, setQ] = useState('');
+  const all = session.parishes;
+  const shown = q ? all.filter(x => matches([x.name, x.nameAr, x.town].filter(Boolean).join(' '), q)) : all;
+  return (
+    <>
+      {all.length > 8 ? (
+        <input
+          className="input"
+          type="search"
+          data-parish-search=""
+          aria-label={t('Search churches', 'ابحث عن كنيسة')}
+          placeholder={t('Search churches', 'ابحث عن كنيسة')}
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          style={{ marginBlockEnd: 'var(--s-3, 12px)' }}
+        />
+      ) : null}
+      {shown.slice(0, 200).map(x => (
+        <button key={x.id} className="ac-opt" data-parish={x.id} onClick={() => onPick(x.id)}>
+          <span className="avatar">{t(x.name, x.nameAr || x.name).slice(0, 1)}</span>
+          <span>
+            <b>{t(x.name, x.nameAr || x.name)}</b>
+            {x.town ? <small>{x.town}</small> : null}
+          </span>
+          {x.id === session.parishId ? (
+            <span style={{ marginInlineStart: 'auto', color: 'var(--primary)' }}>
+              <Icon name="check" size={16} />
+            </span>
+          ) : null}
+        </button>
+      ))}
+      {q && !shown.length ? <p className="help">{t('No church matches.', 'لا كنيسة مطابقة.')}</p> : null}
+    </>
+  );
+}
 export function Portal() {
   const version = useVersion();
   const [screen, setScreen] = useState({ kind: 'starting' });
@@ -783,9 +821,10 @@ export function Portal() {
       await hydrate();
       closeOverlays();
       renderAll();
+      const here = role();
       toast(
-        t(`Now working in ${x.name}`, `تعمل الآن في ${x.ar}`),
-        t(`Your role here: ${x.role}`, `دورك هنا: ${x.roleAr}`),
+        t(`Now working in ${x.name}`, `تعمل الآن في ${x.nameAr || x.name}`),
+        t(`Your role here: ${here.en}`, `دورك هنا: ${here.ar}`),
         'success'
       );
       return true;
@@ -834,22 +873,7 @@ export function Portal() {
               </span>
             </button>
           ) : null}
-          {session.parishes.map(x => (
-            <button key={x.id} className="ac-opt" data-parish={x.id} onClick={() => switchParish(x.id)}>
-              <span className="avatar">{t(x.name, x.ar).slice(0, 1)}</span>
-              <span>
-                <b>{t(x.name, x.ar)}</b>
-                <small>
-                  {t(x.town, x.townAr)} · {t(x.role, x.roleAr)}
-                </small>
-              </span>
-              {x.name === PARISH.name ? (
-                <span style={{ marginInlineStart: 'auto', color: 'var(--primary)' }}>
-                  <Icon name="check" size={16} />
-                </span>
-              ) : null}
-            </button>
-          ))}
+          <ParishChoices onPick={switchParish} />
           <div className="divider"></div>
           {S.role === 'bishop' ? (
             <a className="listrow" href="#/bishopeparchy" style={{ paddingInline: 0 }}>

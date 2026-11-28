@@ -19,7 +19,7 @@ All under `/api/parishes/{id}/`.
 | Exchange rates | `GET/POST finance/exchange-rates`, `GET finance/exchange-rates/current` |
 | Campaigns | `GET/POST finance/campaigns`, `PUT finance/campaigns/{id}` (the fund never changes) |
 | Pledges | `GET/POST finance/pledges`, `POST finance/pledges/{id}/allocations` |
-| Counting sessions | `GET finance/sessions` (list, with `countedBy`), `POST finance/sessions`, `GET finance/sessions/{id}`, `PUT .../lines`, `POST .../verify`, `POST .../post` |
+| Counting sessions | `GET finance/sessions` (list, with `countedBy`), `POST finance/sessions`, `GET finance/sessions/{id}`, `PUT .../lines`, `POST .../verify`, `POST .../post` (the session screen no longer asks for or shows an envelope number; a stored one is kept, and an older line with an envelope but no giver still says so) |
 | Posted gifts | `GET finance/contributions`, `POST finance/contributions/{id}/corrections` |
 | Recurring gifts | `GET/POST finance/recurring-gifts`, `PUT finance/recurring-gifts/{id}`, `POST .../actions` (pause, resume, end with a reason) |
 | Receipts | `GET/POST finance/receipts`, `POST finance/receipts/{id}/void` |

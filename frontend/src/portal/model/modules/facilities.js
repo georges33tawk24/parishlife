@@ -59,14 +59,11 @@ async function tolerant(area, read, fallback = []) {
   }
 }
 
-/* The API lists at most 31 days at a time: the 31 before today and the 31 after. */
+/* The 31 days before today and the 31 after, in one request (lists take up to 366 days since 27 November 2026). */
+const today = (now = new Date()) => Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 function windows(now = new Date()) {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const at = n => new Date(start.getTime() + n * DAY).toISOString();
-  return [
-    [at(-31), at(0)],
-    [at(0), at(31)]
-  ];
+  const at = n => new Date(today(now) + n * DAY).toISOString();
+  return [[at(-31), at(31)]];
 }
 const query = ([start, end]) => `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
 
@@ -432,14 +429,10 @@ export const availability = (id, start, end) =>
 
 /* Calendar events in the next 62 days that are not cancelled (equipment is booked for any of them). */
 export async function upcomingEvents() {
-  const start = Date.parse(windows()[1][0]);
-  const events = [];
-  for (const n of [0, 31])
-    events.push(
-      ...(await pages(
-        `${mine()}calendar/events?${query([new Date(start + n * DAY).toISOString(), new Date(start + (n + 31) * DAY).toISOString()])}`
-      ))
-    );
+  const start = today();
+  const events = await pages(
+    `${mine()}calendar/events?${query([new Date(start).toISOString(), new Date(start + 62 * DAY).toISOString()])}`
+  );
   return events
     .map(e => e.value)
     .filter(e => e.status !== 'Cancelled' && !e.redacted && Date.parse(e.endsAt) > Date.now());

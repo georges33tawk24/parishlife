@@ -19,9 +19,9 @@ in `shell/actions.jsx` and `shared/record-editor.jsx`) is no longer used by thes
 | Rooms list | `GET facilities` (size/cursor paging, 100 a page) |
 | Add / edit room | `POST facilities`, `PUT facilities/{id}` (`version`; `nameAr`, `publicDescriptionAr`) |
 | Out of service / back | `POST facilities/{id}/status` (`Serviceable`/`OutOfService`, reason required, `version`) |
-| Planned maintenance | `GET maintenance-blocks?start&end` (two 31-day windows around today), `POST maintenance-blocks`, `POST maintenance-blocks/{id}/actions` (`cancel`, reason, `version`) |
+| Planned maintenance | `GET maintenance-blocks?start&end` (one request: the 31 days before and after today; lists take up to 366 days), `POST maintenance-blocks`, `POST maintenance-blocks/{id}/actions` (`cancel`, reason, `version`) |
 | Availability drawer | `GET facilities/{id}/availability?start&end` (busy intervals; set-up, clean-up and maintenance blocks included; `Unavailable` when out of service) |
-| Reservations list | `GET reservations?start&end` (31-day windows: the 31 days before and after today) |
+| Reservations list | `GET reservations?start&end` (one request: the 31 days before and after today) |
 | Titles and clocks | `GET calendar/events?start&end` (read only, for the clock; the title also comes with the reservation as `eventTitle`) |
 | Request a room | `POST reservations` (exact period of a draft event; optional purpose, `purposeAr`, people expected, contact phone) |
 | Reservation details | `PUT reservations/{id}/details` (purpose, `purposeAr`, people expected, phone, notes, opening/closing checklist; `version`) |

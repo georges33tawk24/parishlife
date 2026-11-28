@@ -1,6 +1,7 @@
 /* Purpose: the parts of a person's record that come from their own ParishLife.Api routes rather than from
    the people list: the load of their facts, consents and relationships; consents (recorded from the paper
-   form, withdrawn with a reason); the medical declaration for designated staff; and relationships.
+   form or granted by default at registration, withdrawn with a reason); the medical declaration for designated
+   staff; and relationships.
    Main members: PersonLoader, ConsentPanel, MedicalPanel, RelationshipPanel, reloadPerson. */
 import { useEffect, useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
@@ -112,6 +113,14 @@ const KINDS = {
 };
 const DIRECTORY_FIELDS = ['Name', 'Phone', 'Email', 'Address', 'Photo', 'Household'];
 const STATUS = s => ({ Given: t('Given', 'مُعطاة'), Withdrawn: t('Withdrawn', 'مسحوبة') })[s] || s;
+/* Where a consent came from: online by the person, a paper form entered by the office, or granted by default when the
+   office registered the person (owner decision, 27 November 2026). */
+const SOURCE = s =>
+  ({
+    Digital: t('Given online', 'أُعطيت إلكترونياً'),
+    PaperReceived: t('Paper form', 'استمارة ورقية'),
+    RegistrationDefault: t('Granted by default at registration', 'ممنوحة افتراضياً عند التسجيل')
+  })[s] || s;
 
 function ConsentForm({ id }) {
   const [kind, setKind] = useState('Directory');
@@ -195,7 +204,10 @@ export function ConsentPanel({ id }) {
                 <div className="what">
                   <b>{t(...(KINDS[c.kind] || [c.kind, c.kind]))}</b> · {c.purpose}
                   <div className="t-caption dim">
-                    {STATUS(c.status)} · {c.source} · {c.givenBy} · {t('policy', 'السياسة')} {c.policyVersion}
+                    {STATUS(c.status)} · {SOURCE(c.source)}
+                    {c.source === 'RegistrationDefault'
+                      ? ''
+                      : ` · ${c.givenBy} · ${t('policy', 'السياسة')} ${c.policyVersion}`}
                     {c.fields.length ? ` · ${c.fields.join(', ')}` : ''}
                     {c.withdrawnAt
                       ? ` · ${t('withdrawn', 'سُحبت')} ${fmtDate(String(c.withdrawnAt).slice(0, 10))}${c.withdrawalReason ? ` (${c.withdrawalReason})` : ''}`
