@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { Select } from '../../ui/components.jsx';
-import { Pill, toast } from '../../ui/ui.jsx';
+import { Pill, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { is } from '../../model/store.js';
 import {
   listLetters,
@@ -88,7 +88,7 @@ export function RequestLetters({ dto }) {
       <p className="help">{REFERENCE_ONLY()}</p>
       {error ? <p className="help help-error">{error}</p> : null}
       {rows === null ? (
-        <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>
+        <ListSkeleton />
       ) : rows.length ? (
         rows.map(r => (
           <LetterRow
@@ -314,7 +314,7 @@ function SignLetter({ letter, version, run, busy, done }) {
     getSignerProfile().then(setProfile, () => setProfile(null));
   }, [letter.id, version]);
   if (error) return <p className="help help-error">{error}</p>;
-  if (!preview || profile === undefined) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!preview || profile === undefined) return <ListSkeleton />;
   if (!profile)
     return (
       <div className="formrow">
@@ -380,7 +380,7 @@ function ReleaseLetter({ letter, version, dto, run, busy, done }) {
     letterPreview(letter.id).then(setPreview, e => setError(e.message));
   }, [letter.id, version]);
   if (error) return <p className="help help-error">{error}</p>;
-  if (!preview) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!preview) return <ListSkeleton />;
   const ready = reference.trim() && addressee.trim() && (method === 'VerifiedAccount' || evidence.trim());
   return (
     <div className="formrow" data-release-letter={letter.id}>

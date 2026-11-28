@@ -5,7 +5,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { t } from '../../../lib/i18n.js';
 import { hydrate } from '../../model/persist.js';
 import { decideMembership, membershipQueue, searchPeople } from '../../model/modules/people-workflows.js';
-import { PageHead, openDrawer, closeOverlays, Paged, toast } from '../../ui/ui.jsx';
+import { PageHead, openDrawer, closeOverlays, Paged, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 
 const OPEN = ['Submitted', 'NeedsInformation'];
@@ -193,7 +193,7 @@ export function MembershipReviews() {
         {error ? (
           error
         ) : !rows ? (
-          t('Loading…', 'جارٍ التحميل…')
+          <ListSkeleton />
         ) : (
           <>
             <div className="account-actions">

@@ -4,7 +4,7 @@
    operator who asked; nothing here browses an inbox. */
 import { useEffect, useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { Pill, Empty, openModal, closeOverlays, toast } from '../../ui/ui.jsx';
+import { Pill, Empty, openModal, closeOverlays, toast, ListSkeleton } from '../../ui/ui.jsx';
 import * as C from '../../ui/components.jsx';
 import { session } from '../../model/api.js';
 import {
@@ -63,7 +63,7 @@ export function ReviewsTab({ parishId }) {
   const again = () => setRound(n => n + 1);
   const me = session.accountUser?.id;
   if (error) return <p className="help-error">{error}</p>;
-  if (!queue) return <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!queue) return <ListSkeleton />;
   const reports = queue.reports.map(r => r.value),
     versionOf = (list, id) => list.find(r => r.value.id === id)?.version;
   return (

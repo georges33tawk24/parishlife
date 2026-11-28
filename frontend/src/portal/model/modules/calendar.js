@@ -13,7 +13,7 @@
    What the API does not have stays empty or unsaved, and is listed in docs/frontend-modules/calendar.md:
    rooms on events, RSVP counts, capacity, tasks, the volunteer rota and swaps, setlists of their own,
    personal annotations on hymns, and choosing plan coordinators or item assignees. */
-import { api, parishAPI, newOperationId, session } from '../api.js';
+import { api, actingHeaders, parishAPI, newOperationId, session } from '../api.js';
 import { loadNames, nameOf } from '../names.js';
 
 export const keys = [
@@ -619,14 +619,23 @@ export async function load(parish, d) {
   d.ROTA = { date: '', service: '', serviceAr: '', teams: [] };
   d.SERVICE = blankService();
   // the liturgical calendar is public: everyone signed in sees the feasts
-  d.FEASTS = await loadFeasts(parish).catch(() => ({}));
-  if (!parish.roles?.includes('priest') && !parish.capabilities?.includes('schedule.read')) return;
-  const events = await loadEvents(parish);
+  const feasts = loadFeasts(parish).catch(() => ({}));
+  if (!parish.roles?.includes('priest') && !parish.capabilities?.includes('schedule.read')) {
+    d.FEASTS = await feasts;
+    return;
+  }
+  // the feasts, events, event templates and music do not depend on each other: asked for together
+  const musicLoad = loadMusic(parish);
+  musicLoad.catch(() => {}); // awaited below; an earlier failure must not leave it unhandled
+  const [feastDays, events, eventTemplates] = await Promise.all([
+    feasts,
+    loadEvents(parish),
+    pages(`parishes/${enc(parish.id)}/calendar/templates?size=100`).catch(allowed)
+  ]);
+  d.FEASTS = feastDays;
   d.EVENTS = events;
   d.EVENT_DETAIL = Object.fromEntries(events.map(e => [e.id, eventDetail(e)]));
-  d.EVENT_TEMPLATES = (
-    (await pages(`parishes/${enc(parish.id)}/calendar/templates?size=100`).catch(allowed)) || []
-  ).map(toEventTemplate);
+  d.EVENT_TEMPLATES = (eventTemplates || []).map(toEventTemplate);
   const { plans, templates } = await loadPlans(parish, events);
   // people on plans are accounts: their names come from the shared lookup
   await loadNames(
@@ -648,7 +657,7 @@ export async function load(parish, d) {
   d.SERVICE_PLANS = rest;
   d.SERVICE_TEMPLATES = templates;
   d.SETLISTS = setlistsOf(plans);
-  const music = await loadMusic(parish);
+  const music = await musicLoad;
   if (music) {
     d.MUSIC = music.map(x => x.hymn);
     d.MUSIC_DETAIL = Object.fromEntries(music.map(x => [x.hymn.id, x.detail]));
@@ -1011,7 +1020,11 @@ export function loadSchedule(from, to, { priest = false } = {}) {
 export async function downloadSchedule(from, to, { priest = false } = {}) {
   const query = `from=${enc(from.toISOString())}&to=${enc(to.toISOString())}&format=ics`;
   const path = priest ? `parishes/${enc(session.parishId)}/clergy/schedule?${query}` : `me/schedule?${query}`;
-  const response = await fetch('/api/' + path, { credentials: 'same-origin', cache: 'no-store' });
+  const response = await fetch('/api/' + path, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: actingHeaders(path)
+  });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
     throw new Error(problem?.detail || 'The schedule could not be downloaded.');

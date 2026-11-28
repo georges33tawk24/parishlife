@@ -10,7 +10,7 @@
 
    Every create carries an operation id and every change to an existing record sends the version the API
    returned with it. Routes and fields are the ones in ParishLife.Api/Controllers/People and DTOs/People. */
-import { api, parishAPI, newOperationId } from '../api.js';
+import { api, actingHeaders, parishAPI, newOperationId } from '../api.js';
 
 export const state = {
   parishId: '',
@@ -226,7 +226,12 @@ export async function exportPeople({ purpose = '', columns, includeArchived }) {
     method: 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
-    headers: { Accept: 'text/csv', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+    headers: {
+      Accept: 'text/csv',
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': token,
+      ...actingHeaders(`parishes/${enc(state.parishId)}`)
+    },
     body: JSON.stringify({ operationId: newOperationId(), purpose, columns, includeArchived: !!includeArchived })
   });
   if (!response.ok) {

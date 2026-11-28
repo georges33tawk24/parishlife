@@ -280,14 +280,21 @@ async function each(list, job, width = 6) {
 export async function load(parish, d) {
   denied.clear();
   const base = here(parish);
-  const facilities = await tolerant('facilities', () => pages(base + 'facilities'));
+  /* The lists below do not depend on each other, so they are asked for together; one after another they took
+     the sum of eleven round trips. Each window list keeps the API's 31-day limit. */
+  const across = (area, path) =>
+    tolerant(area, async () => (await Promise.all(windows().map(w => pages(`${base}${path}?${query(w)}`)))).flat());
+  const [facilities, blockRows, reservationRows, equipment, issues, renterList] = await Promise.all([
+    tolerant('facilities', () => pages(base + 'facilities')),
+    across('maintenance', 'maintenance-blocks'),
+    across('reservations', 'reservations'),
+    tolerant('equipment', () => pages(base + 'equipment')),
+    tolerant('issues', () => pages(base + 'facility-issues')),
+    tolerant('rentals', () => api(`${base}renters`))
+  ]);
   d.VENUES = facilities.map(toVenue);
   /* dated maintenance blocks in the 62 days around today, then rooms out of service (no dates) */
-  const blocks = new Map();
-  await tolerant('maintenance', async () => {
-    for (const w of windows())
-      for (const row of await pages(`${base}maintenance-blocks?${query(w)}`)) blocks.set(row.value.id, row);
-  });
+  const blocks = new Map(blockRows.map(row => [row.value.id, row]));
   d.MAINTENANCE = [
     ...[...blocks.values()].map(toBlock).sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1)),
     ...d.VENUES.filter(v => v.status !== 'Serviceable').map(toOutOfService)
@@ -295,41 +302,35 @@ export async function load(parish, d) {
   const venues = new Map(d.VENUES.map(v => [v.id, v]));
 
   /* reservations in the 62 days around today, with their event's title and clock */
-  const rows = new Map();
-  await tolerant('reservations', async () => {
-    for (const w of windows())
-      for (const row of await pages(`${base}reservations?${query(w)}`)) rows.set(row.value.id, row);
-  });
+  const rows = new Map(reservationRows.map(row => [row.value.id, row]));
   const events = new Map();
-  if (rows.size)
-    await tolerant('events', async () => {
-      for (const w of windows())
-        for (const e of await pages(`${base}calendar/events?${query(w)}`)) events.set(e.value.id, e.value);
-    });
+  d.EQUIPMENT = equipment.map(toEquipment);
+  await Promise.all([
+    rows.size
+      ? across('events', 'calendar/events').then(list => list.forEach(e => events.set(e.value.id, e.value)))
+      : null,
+    /* what is out on loan: units on a booking that was issued and not yet returned */
+    d.EQUIPMENT.length
+      ? each(d.EQUIPMENT, async item => {
+          const bookings = await tolerant('equipment', () =>
+            pages(`${base}equipment/${encodeURIComponent(item.id)}/bookings`)
+          );
+          for (const { value: b } of bookings)
+            if (b.status === 'Issued') {
+              item.out += b.quantity;
+              item.custody.push({ to: b.issuedTo || '', until: b.endsAt, quantity: b.quantity });
+            }
+        })
+      : null
+  ]);
   d.RESERVATIONS = [...rows.values()]
     .map(r => toReservation(r, venues, events))
     .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
 
-  const equipment = await tolerant('equipment', () => pages(base + 'equipment'));
-  d.EQUIPMENT = equipment.map(toEquipment);
-  /* what is out on loan: units on a booking that was issued and not yet returned */
-  if (d.EQUIPMENT.length)
-    await each(d.EQUIPMENT, async item => {
-      const bookings = await tolerant('equipment', () =>
-        pages(`${base}equipment/${encodeURIComponent(item.id)}/bookings`)
-      );
-      for (const { value: b } of bookings)
-        if (b.status === 'Issued') {
-          item.out += b.quantity;
-          item.custody.push({ to: b.issuedTo || '', until: b.endsAt, quantity: b.quantity });
-        }
-    });
-
-  const issues = await tolerant('issues', () => pages(base + 'facility-issues'));
   d.ISSUES = issues.map(toIssue);
 
   /* rentals: the agreement of each reservation that has one (404 where there is none) */
-  const renters = new Map((await tolerant('rentals', () => api(`${base}renters`))).map(r => [r.id, r]));
+  const renters = new Map(renterList.map(r => [r.id, r]));
   if (!denied.has('rentals')) {
     const found = await each(
       d.RESERVATIONS.filter(r => r.status !== 'rejected' && !r.redacted),

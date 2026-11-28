@@ -1,6 +1,7 @@
 /* Purpose: the frontend's one client for ParishLife.Api (.NET): same-origin JSON requests that carry the
    anti-forgery token, readable errors from the API's ProblemDetails, and the signed-in account's session
-   (account, parishes, role in each parish), and the bot-check token when the API asks for one.
+   (account, parishes, role in each parish), the priest's appointment on his parish's requests, and the bot-check
+   token when the API asks for one.
    Main functions: api, parishAPI, loadSession, selectParish, signIn, completeTwoFactor, signOut, register,
    requestPasswordReset, confirmPasswordReset, closeAccount, forgetAccountStorage, newOperationId.
 
@@ -134,13 +135,39 @@ async function send(path, method, body, extra = {}) {
   throw error;
 }
 
-export async function api(path, method = 'GET', body, headers) {
+async function attempt(path, method, body, headers) {
   try {
     return await send(path, method, body, headers);
   } catch (error) {
     if (error.code !== 'csrf_invalid') throw error;
     csrf = '';
     return send(path, method, body, headers);
+  }
+}
+
+/* A priest works in his parish through his appointment, and the API wants that capacity named on each request
+   (X-ParishLife-Appointment); without it the request is read as the grant path and answers 404. An account that also
+   holds an office grant there, or is a super admin, asks once more without the header when the appointment does not cover the action. */
+const APPOINTMENT = 'X-ParishLife-Appointment';
+const actingIn = path => {
+  const id = /^parishes\/([^/?]+)/.exec(path)?.[1];
+  return id ? session.parishes.find(p => p.id === decodeURIComponent(id)) : null;
+};
+
+/* The same header for the few requests sent with fetch() directly (files, exports, images): '/api/parishes/…' or 'parishes/…'. */
+export const actingHeaders = path => {
+  const id = actingIn(String(path).replace(/^\/?api\//, ''))?.appointmentId;
+  return id ? { [APPOINTMENT]: id } : {};
+};
+
+export async function api(path, method = 'GET', body, headers) {
+  const parish = actingIn(path);
+  if (!parish?.appointmentId || headers?.[APPOINTMENT] !== undefined) return attempt(path, method, body, headers);
+  try {
+    return await attempt(path, method, body, { ...headers, [APPOINTMENT]: parish.appointmentId });
+  } catch (error) {
+    if (!parish.grant || ![403, 404].includes(error.status)) throw error;
+    return attempt(path, method, body, headers);
   }
 }
 
@@ -195,6 +222,7 @@ export async function signOut() {
   } finally {
     csrf = '';
     unanswered.clear();
+    lastCapacities = { at: 0, list: null }; // never another account's
     Object.assign(session, { user: null, parishes: [], parishId: null, accountUser: null });
     forgetAccountStorage();
   }
@@ -252,12 +280,18 @@ const PARISH_ROLES = ['priest', 'parish_admin', 'secretary', 'treasurer', 'leade
 /* The account, the parishes it follows or belongs to, and its capacities (GET /api/me/capacities):
    Priest, ParishGrant and MinistryLeader in a parish; Bishop, ArchdioceseAdmin and PlatformOperator
    across parishes. */
+/* The capacities the session just read, for a module loading in the same moment (ministries' leader duties): one round
+   trip fewer on sign-in and parish switches. Anything older than a few seconds is read again. */
+let lastCapacities = { at: 0, list: null };
+export const recentCapacities = () => (Date.now() - lastCapacities.at < 10000 ? lastCapacities.list : null);
+
 export async function loadSession() {
   const account = await api('auth/me'); // signed out: 401, and nothing else is asked
   const [mine, capacities] = await Promise.all([
     api('me/parishes').catch(() => []),
     api('me/capacities').catch(() => [])
   ]);
+  lastCapacities = { at: Date.now(), list: capacities || [] };
   const parishes = new Map(
     (mine || []).map(p => [
       p.parishId,
@@ -302,6 +336,9 @@ export async function loadSession() {
     p.capabilities = [...new Set([...p.capabilities, ...(c.capabilities || [])])];
     if (role) p.roles = [...new Set([...p.roles, role])];
     if (c.kind !== 'PlatformOperator') p.own = true;
+    if (c.kind === 'Priest' && c.appointmentId) p.appointmentId = c.appointmentId;
+    // A super admin is allowed without an appointment (the API's operator path), so he too may retry without the header.
+    if (c.kind === 'ParishGrant' || c.kind === 'PlatformOperator') p.grant = true;
     parishes.set(c.parishId, p);
   }
   session.parishes = [...parishes.values()].map(p => ({

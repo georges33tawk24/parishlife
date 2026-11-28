@@ -675,7 +675,26 @@ export function dashboard() {
   if (is('secretary')) return secretary();
   if (is('treasurer')) return treasurer();
   if (is('leader')) return leader();
-  return '';
+  // A ParishLife, archdiocese or parish administrator opened in a parish (an independent one included) sees it as
+  // its priest would, from whatever the parish's modules loaded; never a blank page.
+  if (is('priest', 'secretary')) return priest();
+  return (
+    <>
+      <PageHead
+        crumbs={[{ label: t('Home', 'الرئيسية') }, { label: t('Dashboard', 'لوحة القيادة') }]}
+        title={greet()}
+        sub={sundayLine()}
+      />
+      <Empty
+        glyph="check"
+        title={t('Nothing waiting for you here', 'لا شيء بانتظارك هنا')}
+        body={t(
+          'Your menu lists the parts of this parish you can open.',
+          'تعرض قائمتك أقسام هذه الرعية التي يمكنك فتحها.'
+        )}
+      />
+    </>
+  );
 }
 
 dashboard.mount = host => {

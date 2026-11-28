@@ -2,6 +2,7 @@
    Main member: MODULES. Each module is a file in this folder exporting
      keys    the view-model collections (model/data.js) it owns,
      routes  the portal pages it feeds (the others show a "not connected" notice),
+     needs   (optional) collections of other modules it reads while loading, such as ['PEOPLE'],
      load(parish, d)    fills its collections in d from the API (d starts empty),
      save(before, now, parish)  sends what changed between two snapshots; returns
                                 { unsupported, saved } (unsupported changes are undone and reported).

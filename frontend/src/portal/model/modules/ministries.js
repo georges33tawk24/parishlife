@@ -1,7 +1,7 @@
 /* Purpose: the Ministries module's connection to ParishLife.Api: groups (ministries) with their leaders,
    members, join applications, meetings, attendance, formation, belongings and volunteer sign-up sheets,
    and the member-facing ministry requests.
-   Main members: keys, routes, load (fills GROUPS, GROUP_DETAIL, VOLUNTEERS, SIGNUP_SHEETS and
+   Main members: keys, routes, needs, load (fills GROUPS, GROUP_DETAIL, VOLUNTEERS, SIGNUP_SHEETS and
    ATTENDANCE_SERIES), save (sends changes to groups, meeting times, meetings, attendance and belongings),
    and the workflows a diff cannot express: ministryAction, applicationAction, ministryRequests,
    requestDecision, requestMembership, addMembers, endMembership, appointLeader, endLeader, saveFormation,
@@ -12,11 +12,13 @@
    duty for a read, and hides most ministry data behind a duty: office (ministries.manage), leader, or one
    of the leader's duties (attendance, formation, resources, volunteers). So every per-ministry read is
    optional: a refused read leaves that part empty instead of failing the load. */
-import { api, newOperationId, session } from '../api.js';
+import { api, newOperationId, recentCapacities, session } from '../api.js';
 import { loadNames, nameOf } from '../names.js';
 
 export const keys = ['GROUPS', 'GROUP_DETAIL', 'VOLUNTEERS', 'SIGNUP_SHEETS', 'ATTENDANCE_SERIES'];
 export const routes = ['groups', 'ministryrequests', 'attendance', 'volunteers'];
+/* Loans name their borrower from the People module's list: load() awaits ready.people just before it reads it. */
+export const needs = ['PEOPLE'];
 
 const enc = encodeURIComponent;
 const base = parishId => `parishes/${enc(parishId)}`;
@@ -102,7 +104,7 @@ const ATTENDANCE_OUT = { present: 'Present', excused: 'Excused', absent: 'Absent
 /* Which ministries this account can reach in the parish, and with which leader duties. */
 async function reach(parish) {
   const office = !!parish.roles?.includes('priest') || !!parish.capabilities?.includes('ministries.manage');
-  const capacities = await api('me/capacities').catch(() => []);
+  const capacities = recentCapacities() || (await api('me/capacities').catch(() => []));
   const led = new Map();
   for (const c of capacities || [])
     if (c.kind === 'MinistryLeader' && c.parishId === parish.id && c.ministryId)
@@ -116,7 +118,7 @@ const leads = (access, ministryId) => access.office || access.led.has(ministryId
 
 const personName = (d, id) => d.PEOPLE?.find(p => p.id === id);
 
-export async function load(parish, d) {
+export async function load(parish, d, ready = {}) {
   const access = await reach(parish);
   if (!access.office && !access.led.size) return;
   const root = base(parish.id);
@@ -132,6 +134,8 @@ export async function load(parish, d) {
     async ({ value: m, version }) => {
       const id = m.id,
         seat = `${root}/ministries/${enc(id)}`;
+      const meetingsLoad = loadMeetings(root, id); // alongside the lists below, not after them
+      meetingsLoad.catch(() => {});
       const [leaders, roster, applications, programs, enrollments, stock, loans, opportunities] = await Promise.all([
         quiet(pages(`${seat}/leadership`), []),
         quiet(pages(`${seat}/roster`), []),
@@ -144,7 +148,7 @@ export async function load(parish, d) {
         has(access, id, 'resources.custody') ? quiet(pages(`${seat}/loans`), []) : [],
         has(access, id, 'volunteers.coordinate') ? quiet(pages(`${seat}/volunteering/opportunities`), []) : []
       ]);
-      const meetings = await loadMeetings(root, id);
+      const meetings = await meetingsLoad;
       const attending = has(access, id, 'attendance.record', 'attendance.review');
       const team = await pool(
         opportunities.filter(o => o.value.status !== 'Cancelled'),
@@ -179,6 +183,7 @@ export async function load(parish, d) {
   const volunteers = new Map(),
     sheets = [],
     series = [];
+  await ready.people; // the loans below name their borrower from the People list
   for (const x of detail) {
     const { m } = x;
     const led = x.leaders.filter(l => l.value.effective);
@@ -402,7 +407,7 @@ export async function load(parish, d) {
   d.VOLUNTEERS = [...volunteers.values()].map(({ ministries, ...v }) => v);
 }
 
-/* A ministry's meetings in the last six and next three months, 30 days per request (the API's limit). */
+/* A ministry's meetings in the last six and next three months, 30 days per request (the API's limit), asked for together. */
 async function loadMeetings(root, ministryId) {
   const now = Date.now(),
     day30 = 30 * 86400000,
@@ -419,7 +424,7 @@ async function loadMeetings(root, ministryId) {
         ),
         []
       ),
-    4
+    windows.length // all windows together: they are independent
   );
   for (const m of lists.flat()) out.set(m.id, m);
   const meetings = [...out.values()].sort((a, b) => a.startsAt.localeCompare(b.startsAt));

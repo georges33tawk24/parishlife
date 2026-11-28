@@ -7,7 +7,7 @@ import { activityAction, directory, loadActivity } from '../../model/member-data
 import { hydrate } from '../../model/persist.js';
 import { bus } from '../../model/store.js';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged } from '../../ui/ui.jsx';
+import { PageHead, Panel, openDrawer, closeOverlays, toast, Paged, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { CalendarView } from '../../ui/collection.jsx';
 
@@ -158,7 +158,7 @@ export function ActivityPage() {
         {error ? (
           error
         ) : !data ? (
-          t('Loading…', 'جارٍ التحميل…')
+          <ListSkeleton />
         ) : (
           <>
             <Panel title={t('My parishes', 'رعاياي')}>

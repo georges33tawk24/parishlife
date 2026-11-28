@@ -9,7 +9,7 @@ import { t } from '../../../lib/i18n.js';
 import { session } from '../../model/api.js';
 import { bus } from '../../model/store.js';
 import { hydrate } from '../../model/persist.js';
-import { toast } from '../../ui/ui.jsx';
+import { toast, ListSkeleton } from '../../ui/ui.jsx';
 import { act, getMessages, postMessage } from '../../model/modules/requests.js';
 import { fmtStamp } from '../../model/sacrament-requests.js';
 import { RequestDocuments } from '../records/request-documents.jsx';
@@ -50,7 +50,7 @@ export function Follow({ r }) {
     <section className="member-card mr-messages" aria-labelledby="mr-messages-title">
       <h2 id="mr-messages-title">{L('Messages with the parish office', 'الرسائل مع مكتب الرعية')}</h2>
       {messages === null ? (
-        <p className="help">{L('Loading…', 'جارٍ التحميل…')}</p>
+        <ListSkeleton />
       ) : messages.length ? (
         messages.map(m => (
           <blockquote key={m.id} className="mr-quote">

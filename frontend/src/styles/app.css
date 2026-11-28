@@ -408,6 +408,18 @@ button.rota-swap:hover{background:color-mix(in srgb,var(--warning) 22%,var(--war
 .a4 .sig{margin-top:auto;width:100%;display:flex;gap:24px;align-items:flex-end;padding-top:24px}
 .a4 .sig div{flex:1;border-top:1px solid var(--border-strong);padding-top:6px;font:400 11px/16px var(--sans);color:var(--text-2)}
 
+/* ---------- room between neighbouring controls (27 November 2026) ----------
+   Found with a touching-boxes scan of every screen: 96 field rows are written as <label class="formrow">, an
+   inline element, so their bottom margin did nothing and the field touched the button or panel below;
+   panels stacked inside a plain wrapper <div> had no gap; and buttons separated only by a space sat 4px apart
+   and touched once they wrapped. Logical properties, so Arabic gets the same room. A rule with a class of its
+   own still wins: these are only the floor. */
+:where(label.formrow){display:block}
+.formrow > :is(.input,.select,select,textarea,.help) + :is(.btn,button){margin-block-start:var(--s2)}
+:is(.wellpad,.tabbody) > div:not([class]) > * + *,div:not([class]) > .panel + .panel{margin-block-start:var(--s3)}
+:where(.panel-b,.account-sessions,.account-mfa,.empty,div:not([class]),p,td,li) > .btn{margin-block:2px}
+:where(.panel-b,.account-sessions,.account-mfa,.empty,div:not([class]),p,td,li) > .btn + .btn{margin-inline-start:var(--s1)}
+
 /* ---------- misc screen bits ---------- */
 .splitview{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--s4);align-items:start}
 .sidecol{display:flex;flex-direction:column;gap:var(--s3)}

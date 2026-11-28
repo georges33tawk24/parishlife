@@ -7,7 +7,7 @@
    (workspace-overview.jsx). */
 import { useRef, useState } from 'react';
 import { t, fmtDate } from '../../../lib/i18n.js';
-import { PageHead, TabBar, Stat, Empty, Panel, Pill, openDrawer, toast } from '../../ui/ui.jsx';
+import { PageHead, TabBar, Stat, Empty, Panel, Pill, openDrawer, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { Select } from '../../ui/components.jsx';
 import { DrawerForm } from '../../ui/forms.jsx';
 import * as A from '../../model/modules/administration-api.js';
@@ -165,7 +165,7 @@ function CrmDetail({ id, name, done }) {
         {error}
       </p>
     );
-  if (!data) return <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>;
+  if (!data) return <ListSkeleton />;
   const { crm, history } = data;
   const value = crm?.value;
   return (
@@ -301,7 +301,7 @@ export function Crm() {
         )}
       </p>
       {error ? <p className="alert alert-danger">{error}</p> : null}
-      {loading && !data ? <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p> : null}
+      {loading && !data ? <ListSkeleton /> : null}
       {data ? (
         data.length ? (
           <div className="tablewrap">

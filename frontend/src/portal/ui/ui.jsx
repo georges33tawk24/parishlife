@@ -60,6 +60,24 @@ export function PageSkeleton({ label }) {
   );
 }
 
+/* A part of a page still loading (a panel, a list, a tab or a screen's own data): skeleton rows where the content
+   will be, so nothing jumps when it arrives. Screen readers hear `label` once. Screens show their error instead of
+   this once a load fails, so it never stays after a failure. */
+export function ListSkeleton({ rows = 4, label }) {
+  return (
+    <div className="list-skel" role="status" aria-busy="true">
+      <span className="sr">{label || t('Loading…', 'جارٍ التحميل…')}</span>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="skel-row" aria-hidden="true">
+          <span className="skel" style={{ width: 28, height: 28, borderRadius: 99 }}></span>
+          <span className="skel" style={{ width: '32%', height: 12 }}></span>
+          <span className="skel" style={{ width: '18%', height: 12 }}></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* A screen that throws while drawing, or whose file cannot be downloaded (offline, or a new version was
    deployed meanwhile), shows what happened and a way on instead of a blank page. The rail stays usable. */
 export class ScreenBoundary extends Component {

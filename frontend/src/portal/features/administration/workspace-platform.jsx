@@ -7,7 +7,7 @@
    Main members: Platform (the tab), accountStatus (the suspend/reinstate form, also used by the people
    list), PlatformParishes, PlatformArchdioceses, PlatformAccounts, ClergyTitles. */
 import { useState } from 'react';
-import { Pill, openDrawer, toast } from '../../ui/ui.jsx';
+import { Pill, openDrawer, toast, ListSkeleton } from '../../ui/ui.jsx';
 import { session } from '../../model/api.js';
 import * as A from '../../model/modules/administration-api.js';
 import { useLoad } from './use-load.js';
@@ -57,11 +57,7 @@ function Filter({ value, onChange, statuses }) {
 }
 
 const Loading = ({ state }) =>
-  state.error ? (
-    <p className="alert alert-danger">{state.error}</p>
-  ) : !state.data ? (
-    <p role="status">{L('Loading…', 'جارٍ التحميل…')}</p>
-  ) : null;
+  state.error ? <p className="alert alert-danger">{state.error}</p> : !state.data ? <ListSkeleton /> : null;
 
 function PlatformParishes({ open }) {
   const [filter, setFilter] = useState({ q: '', status: '' });
